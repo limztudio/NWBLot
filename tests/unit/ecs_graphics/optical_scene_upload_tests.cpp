@@ -88,7 +88,7 @@ struct UploadContext{
             .finalize = {},
             .upload = upload,
             .uploadState = control,
-            .descriptor = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 1u),
+            .descriptor = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 1u),
             .transparentCount = 1u,
             .boundsComplete = true,
         };

@@ -151,7 +151,7 @@ private:
 
 
 public:
-    [[nodiscard]] static GpuTaskGraphDeclarationReadView tryAcquire(const GpuTaskGraph& graph)noexcept;
+    [[nodiscard]] static GpuTaskGraphDeclarationReadView TryAcquire(const GpuTaskGraph& graph)noexcept;
 
 
 public:
@@ -792,32 +792,32 @@ private:
     static constexpr usize s_InlineImportIndexCount = 32u;
     static constexpr u32 s_InvalidImportIndex = Limit<u32>::s_Max;
 
-    [[nodiscard]] static u64 allocateGeneration()noexcept;
-    [[nodiscard]] static ResourcePointerKey resourcePointerKey(const GpuGraphResourceNode& resource)noexcept;
-    [[nodiscard]] static PipelinePointerKey pipelinePointerKey(const GpuGraphPipelineNode& pipeline)noexcept;
+    [[nodiscard]] static u64 AllocateGeneration()noexcept;
+    [[nodiscard]] static ResourcePointerKey MakeResourcePointerKey(const GpuGraphResourceNode& resource)noexcept;
+    [[nodiscard]] static PipelinePointerKey MakePipelinePointerKey(const GpuGraphPipelineNode& pipeline)noexcept;
 
 private:
     template<typename TaskT>
-    static bool recordTaskPayload(
+    static bool RecordTaskPayload(
         const void* const payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
     ){
         using Payload = typename TaskT::Payload;
-        return TaskT::record(*static_cast<const Payload*>(payload), commandList, context);
+        return TaskT::Record(*static_cast<const Payload*>(payload), commandList, context);
     }
     template<typename TaskT>
-    static void acceptTaskPayload(void* const payload, const QueueSubmissionToken& token){
+    static void AcceptTaskPayload(void* const payload, const QueueSubmissionToken& token){
         using Payload = typename TaskT::Payload;
-        TaskT::accepted(*static_cast<Payload*>(payload), token);
+        TaskT::Accepted(*static_cast<Payload*>(payload), token);
     }
     template<typename TaskT>
-    static void discardTaskPayload(void* const payload){
+    static void DiscardTaskPayload(void* const payload){
         using Payload = typename TaskT::Payload;
-        TaskT::discarded(*static_cast<Payload*>(payload));
+        TaskT::Discarded(*static_cast<Payload*>(payload));
     }
     template<typename PayloadT>
-    static void destroyTaskPayload(GraphicsArena& arena, void* payload)noexcept{
+    static void DestroyTaskPayload(GraphicsArena& arena, void* payload)noexcept{
         static_assert(noexcept(DestroyArenaObjectNoexcept(arena, static_cast<PayloadT*>(payload))));
         DestroyArenaObjectNoexcept(arena, static_cast<PayloadT*>(payload));
     }
@@ -883,15 +883,15 @@ public:
 
         GpuTaskRecordThunk recordPayload = nullptr;
         if constexpr(GpuGraphTaskContract::RecordApi<TaskT>)
-            recordPayload = &recordTaskPayload<TaskT>;
+            recordPayload = &RecordTaskPayload<TaskT>;
 
         GpuTaskAcceptedThunk acceptPayload = nullptr;
         if constexpr(GpuGraphTaskContract::AcceptedApi<TaskT>)
-            acceptPayload = &acceptTaskPayload<TaskT>;
+            acceptPayload = &AcceptTaskPayload<TaskT>;
 
         GpuTaskDiscardedThunk discardPayload = nullptr;
         if constexpr(GpuGraphTaskContract::DiscardedApi<TaskT>)
-            discardPayload = &discardTaskPayload<TaskT>;
+            discardPayload = &DiscardTaskPayload<TaskT>;
 
         const GpuTaskId task = appendTaskWithinMutation(
             desc,
@@ -900,14 +900,14 @@ public:
             recordPayload,
             acceptPayload,
             discardPayload,
-            &destroyTaskPayload<Payload>,
+            &DestroyTaskPayload<Payload>,
             sizeof(Payload),
             mutation
         );
         if(task.valid())
             storedPayload.publish();
         else
-            discardAndDestroyUnappendedPayload(storedPayload.release(), discardPayload, &destroyTaskPayload<Payload>);
+            discardAndDestroyUnappendedPayload(storedPayload.release(), discardPayload, &DestroyTaskPayload<Payload>);
         return task;
     }
 
@@ -918,8 +918,8 @@ public:
         using Payload = typename TaskT::Payload;
         discardAndDestroyUnappendedPayload(
             payload.release(),
-            &discardTaskPayload<TaskT>,
-            &destroyTaskPayload<Payload>
+            &DiscardTaskPayload<TaskT>,
+            &DestroyTaskPayload<Payload>
         );
         return {};
     }
@@ -936,10 +936,10 @@ public:
             resolvedDesc,
             commands,
             payload.get(),
-            &recordTaskPayload<TaskT>,
-            &acceptTaskPayload<TaskT>,
-            &discardTaskPayload<TaskT>,
-            &destroyTaskPayload<Payload>,
+            &RecordTaskPayload<TaskT>,
+            &AcceptTaskPayload<TaskT>,
+            &DiscardTaskPayload<TaskT>,
+            &DestroyTaskPayload<Payload>,
             sizeof(Payload),
             mutation
         );
@@ -948,8 +948,8 @@ public:
         else
             discardAndDestroyUnappendedPayload(
                 payload.release(),
-                &discardTaskPayload<TaskT>,
-                &destroyTaskPayload<Payload>
+                &DiscardTaskPayload<TaskT>,
+                &DestroyTaskPayload<Payload>
             );
         return task;
     }
@@ -1057,7 +1057,7 @@ private:
         bool& outRecordThunkInvoked
     )const;
 
-    [[nodiscard]] static bool resolvePacketView(
+    [[nodiscard]] static bool ResolvePacketView(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuSubmissionPacketId packet,
@@ -1072,7 +1072,7 @@ private:
         return outPacketView.valid();
     }
 
-    [[nodiscard]] static bool resolveLeasedPacketView(
+    [[nodiscard]] static bool ResolveLeasedPacketView(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuSubmissionPacketId packet,
@@ -1080,7 +1080,7 @@ private:
         GpuCompiledPacketView& outPacketView
     )noexcept{
         if(
-            !resolvePacketView(compiledGraph, planAccess, packet, outPacketView)
+            !ResolvePacketView(compiledGraph, planAccess, packet, outPacketView)
             || !lease.valid()
             || lease.m_packet != packet
             || lease.m_planGeneration != planAccess.planGeneration()
@@ -1089,7 +1089,7 @@ private:
         return true;
     }
 
-    [[nodiscard]] static bool resolveAttemptPacketView(
+    [[nodiscard]] static bool ResolveAttemptPacketView(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuSubmissionPacketId packet,
@@ -1098,7 +1098,7 @@ private:
         GpuCompiledPacketView& outPacketView
     )noexcept{
         if(
-            !resolvePacketView(compiledGraph, planAccess, packet, outPacketView)
+            !ResolvePacketView(compiledGraph, planAccess, packet, outPacketView)
             || recordingAttemptGeneration == 0u
             || outLeaseValid
         )

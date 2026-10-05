@@ -126,7 +126,7 @@ bool GpuGraphSubmissionTransaction::hasUnresolvedSubmissionBinding(const GpuComp
 
 
 bool GpuGraphSubmissionTransaction::waitForSubmissionPublicationAndHasAcceptedPacketsWithinSubmissionOperation()const noexcept{
-    if(!SubmissionOperation::activeExclusiveFor(*this))
+    if(!SubmissionOperation::ActiveExclusiveFor(*this))
         return false;
 
     NothrowScopedLock lock(m_mutex);
@@ -168,7 +168,7 @@ bool GpuGraphSubmissionTransaction::tryReset(const GpuCompiledGraph& compiledGra
 
     const u64 nextGeneration = planAccess.generation();
     const u64 nextPlanGeneration = planAccess.planGeneration();
-    const u64 nextResetGeneration = GpuTaskGraph::allocateGeneration();
+    const u64 nextResetGeneration = GpuTaskGraph::AllocateGeneration();
     const u16 nextDeviceGeneration = planAccess.deviceGeneration();
     const u64 nextAcceptanceRevision = nextValid
         ? GpuPacketRuntimeDetail::AllocateAcceptanceRevision()

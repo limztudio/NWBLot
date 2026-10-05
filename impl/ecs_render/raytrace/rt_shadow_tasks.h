@@ -50,7 +50,7 @@ struct ShadowVisibilityOpaqueGraphTask{
         bool graphOwnsOpaqueTemporalMergeEntryStates = false;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -156,7 +156,7 @@ struct ShadowVisibilityOpaqueGraphTask{
         return true;
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         if(payload.opaqueProduced)
             *payload.opaqueProduced = false;
         Core::DiscardGpuTimingMeasure(payload.shadowVisibilityTiming);
@@ -188,7 +188,7 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
         bool deferWavelet = false;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -262,7 +262,7 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
         return true;
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         if(payload.opaqueProduced)
             *payload.opaqueProduced = false;
         Core::DiscardGpuTimingMeasure(payload.asyncTiming);
@@ -288,7 +288,7 @@ struct ShadowVisibilityOpaqueResolveTailGraphTask{
         bool hardwareShadowSupported = false;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -346,7 +346,7 @@ struct ShadowVisibilityOpaqueResolveTailGraphTask{
         return true;
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         if(payload.opaqueProduced)
             *payload.opaqueProduced = false;
         Core::DiscardGpuTimingMeasure(payload.asyncTiming);
@@ -375,7 +375,7 @@ struct ShadowTransparentSoftTraceGraphTask{
         bool* transparentTraceProduced = nullptr;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -412,7 +412,7 @@ struct ShadowTransparentSoftTraceGraphTask{
         return true;
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         if(payload.transparentTraceProduced)
             *payload.transparentTraceProduced = false;
     }
@@ -439,7 +439,7 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
         bool hardwareShadowSupported = false;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -507,7 +507,7 @@ struct ShadowTransparentSoftTemporalMergeGraphTask{
         return recoverOpaqueTemporal();
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         if(payload.transparentTraceProduced)
             *payload.transparentTraceProduced = false;
         Core::DiscardGpuTimingMeasure(payload.transparentResolveTiming);
@@ -535,7 +535,7 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
         bool combinedWavelet = false;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -617,7 +617,7 @@ struct ShadowTransparentSoftFirstWaveletGraphTask{
         return true;
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         if(payload.transparentTraceProduced)
             *payload.transparentTraceProduced = false;
         Core::DiscardGpuTimingMeasure(payload.transparentResolveTiming);
@@ -642,7 +642,7 @@ struct ShadowTransparentSoftFoldGraphTask{
         bool combinedUpsample = false;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -728,7 +728,7 @@ struct ShadowTransparentSoftFoldGraphTask{
         return true;
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         if(payload.transparentTraceProduced)
             *payload.transparentTraceProduced = false;
         Core::DiscardGpuTimingMeasure(payload.asyncTiming);
@@ -758,7 +758,7 @@ struct ShadowVisibilityGraphTask{
         GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -823,7 +823,7 @@ struct ShadowVisibilityGraphTask{
         return true;
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         if(payload.raytracingSystem)
             payload.raytracingSystem->discardSoftShadowTemporalHistory();
     }

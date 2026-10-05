@@ -110,7 +110,7 @@ namespace __hidden_ui_list_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ListBehavior::reconcile(ListState& state, const IListDataSource& source){
+bool ListBehavior::Reconcile(ListState& state, const IListDataSource& source){
     using namespace __hidden_ui_list_behavior;
     const u64 inputGeneration = state.m_inputGeneration;
     const u64 generation = source.instanceGeneration();
@@ -143,7 +143,7 @@ bool ListBehavior::reconcile(ListState& state, const IListDataSource& source){
     return true;
 }
 
-bool ListBehavior::apply(ListState& state, const IListDataSource& source, const ListOptions& options,
+bool ListBehavior::Apply(ListState& state, const IListDataSource& source, const ListOptions& options,
     const ControlAction& action, ListResult& result){
     using namespace __hidden_ui_list_behavior;
     const u64 inputGeneration = state.m_inputGeneration;
@@ -198,7 +198,7 @@ bool ListBehavior::apply(ListState& state, const IListDataSource& source, const 
     return true;
 }
 
-bool ListBehavior::ensureCursor(ListState& state, const IListDataSource& source, const f32 rowHeight,
+bool ListBehavior::EnsureCursor(ListState& state, const IListDataSource& source, const f32 rowHeight,
     const f64 viewportHeight){
     using namespace __hidden_ui_list_behavior;
     const u64 inputGeneration = state.m_inputGeneration;

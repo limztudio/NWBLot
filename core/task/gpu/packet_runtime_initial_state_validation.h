@@ -25,7 +25,7 @@ private:
 
 
 public:
-    [[nodiscard]] static bool validBufferRange(const BufferRange& range, u64 bufferSize)noexcept;
+    [[nodiscard]] static bool ValidBufferRange(const BufferRange& range, u64 bufferSize)noexcept;
 
 
 public:

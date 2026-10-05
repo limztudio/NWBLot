@@ -72,7 +72,7 @@ bool WaylandClipboardService::initialize(){
     m_registry = wl_display_get_registry(&m_display);
     if(!m_registry)
         return false;
-    static const wl_registry_listener listener{ onRegistryGlobal, onRegistryRemove };
+    static const wl_registry_listener listener{ OnRegistryGlobal, OnRegistryRemove };
     if(wl_registry_add_listener(m_registry, &listener, this) != 0 || wl_display_roundtrip(&m_display) < 0)
         return false;
     return true;
@@ -156,7 +156,7 @@ void WaylandClipboardService::startNativeRequest(
     m_readToken = token;
     m_readDeadline = TimerAddMS(TimerNow(), s_TimeoutMs);
     m_received.clear();
-    const NotNull<const char*> mime = nativeMimeForRank(offer->rank);
+    const NotNull<const char*> mime = NativeMimeForRank(offer->rank);
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
     if(channel == ClipboardChannel::PrimarySelection)
         zwp_primary_selection_offer_v1_receive(static_cast<zwp_primary_selection_offer_v1*>(offer->handle), mime.get(), writeFd);

@@ -47,7 +47,7 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
     const usize attributeRefCount,
     MeshSkinningRuntimeInstance::AttributeSkinVector& outAttributeSkins
 ){
-    return MeshMeshletRefValidation::resolveMeshletAttributeSkins(
+    return MeshMeshletRefValidation::ResolveMeshletAttributeSkins(
         meshlets,
         positionRefs,
         localVertexRefs,
@@ -150,7 +150,7 @@ template<typename MeshT, typename SkinStreamT>
                     false,
                     sourceRef
                 )
-                || !MeshMeshletRefValidation::meshletPositionRefInRange(sourceRef, mesh.positionStream().size(), skinStream.size(), false)
+                || !MeshMeshletRefValidation::MeshletPositionRefInRange(sourceRef, mesh.positionStream().size(), skinStream.size(), false)
                 || sourceRef.position >= skinStream.size()
             ){
                 NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: source meshlet {} position ref {} is invalid")
@@ -177,7 +177,7 @@ template<typename MeshT, typename SkinStreamT>
                     localAttributeIndex,
                     sourceRef
                 )
-                || !MeshMeshletRefValidation::meshletAttributeRefInRange(
+                || !MeshMeshletRefValidation::MeshletAttributeRefInRange(
                     sourceRef,
                     mesh.normalStream().size(),
                     mesh.tangentStream().size(),

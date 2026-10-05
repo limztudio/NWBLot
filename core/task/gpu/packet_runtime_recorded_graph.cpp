@@ -198,13 +198,13 @@ GpuRecordedGraph::GpuRecordedGraph(GraphicsArena& arena)
     , m_candidateStorage(MakeGlobalUnique<ArtifactStorage>(arena, arena))
 {}
 GpuRecordedGraph::~GpuRecordedGraph(){
-    if(ArtifactOperation::activeFor(*this)){
+    if(ArtifactOperation::ActiveFor(*this)){
         GLB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph destruction requires active artifact operations to finish first");
         TerminateInvariant();
     }
 
     // Destruction normally joins existing readers. A callback that already owns another artifact or transaction cannot wait here without permitting a symmetric cross-object destruction deadlock.
-    if(ArtifactOperation::active() || GpuGraphSubmissionTransaction::SubmissionOperation::active()){
+    if(ArtifactOperation::Active() || GpuGraphSubmissionTransaction::SubmissionOperation::Active()){
         ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Exclusive);
         if(!artifactOperation.valid()){
             GLB_FATAL_ASSERT_MSG(false, "nested GpuRecordedGraph destruction cannot wait for active artifact operations");
@@ -247,7 +247,7 @@ GpuRecordedGraph::~GpuRecordedGraph(){
 
 
 bool GpuRecordedGraph::tryReset(const GpuCompiledGraph& compiledGraph){
-    if(ArtifactOperation::activeFor(*this))
+    if(ArtifactOperation::ActiveFor(*this))
         return false;
 
     ArtifactOperation artifactOperation(*this, ArtifactOperationMode::Exclusive);
@@ -305,7 +305,7 @@ void GpuRecordedGraph::revokeCommandListPublicationsWithoutCallbacks(ArtifactSto
     }
 }
 
-void GpuRecordedGraph::retireStorageWithoutCallbacks(ArtifactStorage& storage)noexcept{
+void GpuRecordedGraph::RetireStorageWithoutCallbacks(ArtifactStorage& storage)noexcept{
     static_assert(IsNothrowDestructible_V<GpuRecordedPacket>);
     static_assert(IsNothrowDestructible_V<GpuTimingSubmissionTicket>);
     static_assert(IsNothrowDestructible_V<CommandListResourceStateHandoff>);
@@ -359,7 +359,7 @@ bool GpuRecordedGraph::prepareStorageCandidateLayout(
         return false;
 
     ArtifactStorage& candidate = *m_candidateStorage;
-    retireStorageWithoutCallbacks(candidate);
+    RetireStorageWithoutCallbacks(candidate);
 
     const usize packetCount = planAccess.packetCount();
     if(candidate.packets.size() < packetCount)
@@ -465,7 +465,7 @@ void GpuRecordedGraph::publishStorageCandidate(
     const ArtifactOperation& artifactAccess
 )noexcept{
     const bool candidateValid = planAccess.validFor(compiledGraph)
-        && ArtifactOperation::activeExclusiveFor(*this)
+        && ArtifactOperation::ActiveExclusiveFor(*this)
         && artifactAccess.exclusiveFor(*this)
         && m_activeStorage
         && m_candidateStorage
@@ -484,7 +484,7 @@ void GpuRecordedGraph::publishStorageCandidate(
     revokeCommandListPublicationsWithoutCallbacks(*m_activeStorage);
     static_assert(noexcept(Swap(m_activeStorage, m_candidateStorage)), "artifact owner publication must be non-throwing");
     Swap(m_activeStorage, m_candidateStorage);
-    retireStorageWithoutCallbacks(*m_candidateStorage);
+    RetireStorageWithoutCallbacks(*m_candidateStorage);
 }
 
 bool GpuRecordedGraph::validForWithinArtifactOperation(

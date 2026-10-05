@@ -34,7 +34,7 @@ struct RayTracingSceneContentStamp{
 struct RayTracingSceneGraphResources{
     RayTracingSceneContentStamp contentStamp;
     Core::RayTracingAccelStructHandle sceneTlas;
-    Core::GpuDescriptorHandle tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
     Core::BufferHandle materialContextSlotsBuffer;
     Core::BufferHandle instanceMaterialBuffer;
     Core::BufferHandle materialTypedBuffer;

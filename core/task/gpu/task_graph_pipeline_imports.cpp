@@ -51,7 +51,7 @@ usize GpuTaskGraph::PipelinePointerHasher::operator()(const PipelinePointerKey& 
     return hash;
 }
 
-GpuTaskGraph::PipelinePointerKey GpuTaskGraph::pipelinePointerKey(const GpuGraphPipelineNode& pipeline)noexcept{
+GpuTaskGraph::PipelinePointerKey GpuTaskGraph::MakePipelinePointerKey(const GpuGraphPipelineNode& pipeline)noexcept{
     switch(pipeline.type){
     case GpuGraphPipelineType::Graphics:
         return { pipeline.graphicsPipeline.get(), pipeline.type };
@@ -213,7 +213,7 @@ GpuTaskGraph::PipelineImportMatch GpuTaskGraph::findPipelineImportMatch(
     }
     for(usize index = 0u; index < m_pipelines.size(); ++index){
         const GpuGraphPipelineNode& existing = m_pipelines[index];
-        if(existing.type == pointer.type && pipelinePointerKey(existing).pointer == pointer.pointer)
+        if(existing.type == pointer.type && MakePipelinePointerKey(existing).pointer == pointer.pointer)
             return { static_cast<u32>(index), true };
         if(existing.identity == identity)
             return { static_cast<u32>(index), false };
@@ -235,14 +235,14 @@ void GpuTaskGraph::preparePipelineIndexes(const PipelinePointerKey& pendingPoint
                 GLB_FATAL_ASSERT_MSG(false, "Pipeline import index requires unique retained identities");
                 TerminateInvariant();
             }
-            if(pipelinePointerKey(pipeline).pointer)
+            if(MakePipelinePointerKey(pipeline).pointer)
                 ++pointerCount;
         }
         Optional<PipelinePointerIndex> pointers;
         if(pointerCount != 0u){
             pointers.emplace(AddSize(pointerCount, pointerCount), m_arena);
             for(usize index = 0u; index < m_pipelines.size(); ++index){
-                const PipelinePointerKey key = pipelinePointerKey(m_pipelines[index]);
+                const PipelinePointerKey key = MakePipelinePointerKey(m_pipelines[index]);
                 if(key.pointer && !pointers->emplace(key, static_cast<u32>(index)).second){
                     GLB_FATAL_ASSERT_MSG(false, "Pipeline import index requires unique retained typed pointers");
                     TerminateInvariant();
@@ -288,7 +288,7 @@ GpuGraphPipelineId GpuTaskGraph::appendPipeline(const GpuGraphPipelineDesc& desc
         pipeline.meshletPipeline = *binding.meshletPipeline;
     if(binding.rayTracingPipeline)
         pipeline.rayTracingPipeline = *binding.rayTracingPipeline;
-    const PipelinePointerKey pointerKey = pipelinePointerKey(pipeline);
+    const PipelinePointerKey pointerKey = MakePipelinePointerKey(pipeline);
     const NameHash& identityKey = desc.identity.identityHash();
 
     ContainerDetail::ReserveGrowingCapacity(m_markerText, m_markerText.size() + desc.markerLabel.size());
@@ -325,7 +325,7 @@ GpuGraphPipelineId GpuTaskGraph::appendPipeline(const GpuGraphPipelineDesc& desc
         }
     }
     appendRollback.release();
-    m_declarationRevision = allocateGeneration();
+    m_declarationRevision = AllocateGeneration();
     return GpuGraphPipelineId{ .generation = m_generation, .index = index };
 }
 

@@ -61,14 +61,14 @@ struct RadioGroupPlacement{
 class RadioGroupLayout final{
 public:
     // A rejected measurement or placement preserves the caller's previous output.
-    [[nodiscard]] static bool measure(
+    [[nodiscard]] static bool Measure(
         u32 count,
         const Point& maximumLabel,
         const RadioGroupOptions& options,
         const RadioGroupStyle& style,
         RadioGroupMetrics& out
     );
-    [[nodiscard]] static bool place(
+    [[nodiscard]] static bool Place(
         const Rect& bounds,
         const Rect& clip,
         const RadioGroupChoices& choices,

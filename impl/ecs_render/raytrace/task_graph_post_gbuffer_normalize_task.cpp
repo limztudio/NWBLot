@@ -26,7 +26,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PostGbufferNormalizeGraphTask::record(
+bool PostGbufferNormalizeGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -57,7 +57,7 @@ bool PostGbufferNormalizeGraphTask::record(
 }
 
 
-void PostGbufferNormalizeGraphTask::accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+void PostGbufferNormalizeGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
     static_cast<void>(token);
     if(payload.raytracingSystem)
         payload.raytracingSystem->confirmPreparedShadowTraceGeometryNormalization();

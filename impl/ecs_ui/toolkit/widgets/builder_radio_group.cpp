@@ -101,7 +101,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
     frame->m_style = m_radioGroupStyle;
     frame->m_widgetStyle = m_style;
     // Reject options and style before invoking application callbacks or changing reconciliation state.
-    if(!RadioGroupLayout::measure(0u, {}, options, frame->m_style, frame->m_metrics)){
+    if(!RadioGroupLayout::Measure(0u, {}, options, frame->m_style, frame->m_metrics)){
         m_context.fail();
         return result;
     }
@@ -113,7 +113,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
             return result;
         }
     }
-    const bool reconciled = RadioGroupBehavior::reconcile(state, source, frame->m_choices, result, &guard);
+    const bool reconciled = RadioGroupBehavior::Reconcile(state, source, frame->m_choices, result, &guard);
     if(m_context.failed()){
         result.valid = false;
         return result;
@@ -139,7 +139,7 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
         m_context.input().invalidateTarget(widget->id);
     ControlAction action;
     while(m_context.takeControlAction(*widget, interactive, frame->m_token, action)){
-        if(!RadioGroupBehavior::apply(state, frame->m_choices, options, action, result)){
+        if(!RadioGroupBehavior::Apply(state, frame->m_choices, options, action, result)){
             result.valid = false;
             m_context.fail();
             return result;
@@ -210,7 +210,7 @@ bool Builder::prepareRadioGroup(RadioGroupFrame& frame){
         );
     }
     return
-        RadioGroupLayout::measure(frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style, frame.m_metrics)
+        RadioGroupLayout::Measure(frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style, frame.m_metrics)
         && radioGroupMatches(frame)
     ;
 }

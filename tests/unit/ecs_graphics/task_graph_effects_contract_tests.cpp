@@ -224,8 +224,8 @@ TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAc
     EXPECT_FALSE(ContainsText(system, "deferredStateBindings"));
     EXPECT_FALSE(ContainsText(system, "m_causticIrradianceLightingState"));
     // Check lifecycle-owned bodies in the concatenated system source, beyond the execute.cpp range.
-    EXPECT_TRUE(ContainsText(system, "FrameExecuteLifecycle::prepareHardwareCausticsTask("));
-    EXPECT_TRUE(ContainsText(system, "FrameExecuteLifecycle::acceptHardwareCausticsTask("));
+    EXPECT_TRUE(ContainsText(system, "FrameExecuteLifecycle::PrepareHardwareCausticsTask("));
+    EXPECT_TRUE(ContainsText(system, "FrameExecuteLifecycle::AcceptHardwareCausticsTask("));
     EXPECT_TRUE(ContainsText(hardwareLifecycle, "m_hardwareCausticAccumulatorPersistentState.buildFilteredResourceSubset("));
     EXPECT_TRUE(ContainsText(hardwareLifecycle, "m_hardwareCausticAccumulatorPersistentState.commit("));
     EXPECT_FALSE(ContainsText(hardwareLifecycle, "replaceTextureSubset("));
@@ -233,13 +233,13 @@ TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAc
         system,
         ".task = m_deferredHardwareCausticsTask,\n"
         "            .context = &hardwareCausticsStateLifecycle,\n"
-        "            .invoke = FrameExecuteLifecycle::prepareHardwareCausticsTask,"
+        "            .invoke = FrameExecuteLifecycle::PrepareHardwareCausticsTask,"
     ));
     EXPECT_TRUE(ContainsText(
         system,
         ".task = m_deferredHardwareCausticsTask,\n"
         "            .context = &hardwareCausticsStateLifecycle,\n"
-        "            .invoke = FrameExecuteLifecycle::acceptHardwareCausticsTask,"
+        "            .invoke = FrameExecuteLifecycle::AcceptHardwareCausticsTask,"
     ));
     EXPECT_TRUE(ContainsText(
         system,
@@ -287,8 +287,8 @@ TEST(EcsGraphics, SoftwareCausticsScratchRetainsAcceptedStateAcrossGraphicsRoute
     ASSERT_LT(candidatesOffset, callbacksOffset);
     EXPECT_FALSE(ContainsText(system, "m_causticIrradianceLightingState"));
     // Check lifecycle-owned bodies in the concatenated system source, beyond the execute.cpp range.
-    EXPECT_TRUE(ContainsText(system, "FrameExecuteLifecycle::prepareSoftwareCausticsTask("));
-    EXPECT_TRUE(ContainsText(system, "FrameExecuteLifecycle::acceptSoftwareCausticsTask("));
+    EXPECT_TRUE(ContainsText(system, "FrameExecuteLifecycle::PrepareSoftwareCausticsTask("));
+    EXPECT_TRUE(ContainsText(system, "FrameExecuteLifecycle::AcceptSoftwareCausticsTask("));
     EXPECT_TRUE(ContainsText(system, "if(context->runsOnCompute){"));
     EXPECT_TRUE(ContainsText(system, "m_causticIrradianceReturnState.buildFilteredResourceSubset("));
     EXPECT_TRUE(ContainsText(system, "m_causticsComputePersistentState.buildFilteredResourceSubset("));
@@ -298,13 +298,13 @@ TEST(EcsGraphics, SoftwareCausticsScratchRetainsAcceptedStateAcrossGraphicsRoute
         system,
         ".task = m_deferredSoftwareCausticsTask,\n"
         "            .context = &softwareCausticsStateLifecycle,\n"
-        "            .invoke = FrameExecuteLifecycle::prepareSoftwareCausticsTask,"
+        "            .invoke = FrameExecuteLifecycle::PrepareSoftwareCausticsTask,"
     ));
     EXPECT_TRUE(ContainsText(
         system,
         ".task = m_deferredSoftwareCausticsTask,\n"
         "            .context = &softwareCausticsStateLifecycle,\n"
-        "            .invoke = FrameExecuteLifecycle::acceptSoftwareCausticsTask,"
+        "            .invoke = FrameExecuteLifecycle::AcceptSoftwareCausticsTask,"
     ));
     EXPECT_TRUE(ContainsText(
         system,

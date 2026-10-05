@@ -16,7 +16,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool WindowLayout::measure(
+bool WindowLayout::Measure(
     const UiSkinRegion& frame, const UiSkinRegion& title, const UiSkinRegion* collapse,
     const UiSkinRegion* resize, const WidgetStyle& style, const WindowOptions& options,
     const Point& titleSize, const f32 density, WindowMetrics& metrics){
@@ -55,19 +55,19 @@ bool WindowLayout::measure(
         && metrics.titleHeight > 0.0f && metrics.minimumSize.x > 0.0f && metrics.minimumSize.y > 0.0f;
 }
 
-Rect WindowLayout::visible(const WindowState& state, const WindowMetrics& metrics){
+Rect WindowLayout::Visible(const WindowState& state, const WindowMetrics& metrics){
     Rect bounds = state.bounds;
     if(state.collapsed)
         bounds.height = metrics.titleHeight;
     return bounds;
 }
 
-Rect WindowLayout::content(const WindowState& state, const WindowMetrics& metrics){
+Rect WindowLayout::Content(const WindowState& state, const WindowMetrics& metrics){
     return { state.bounds.x, state.bounds.y + metrics.titleHeight, state.bounds.width,
         Max(0.0f, state.bounds.height - metrics.titleHeight) };
 }
 
-Rect WindowLayout::collapse(const WindowState& state, const WindowMetrics& metrics){
+Rect WindowLayout::Collapse(const WindowState& state, const WindowMetrics& metrics){
     return { state.bounds.x + metrics.titlePadding.left,
         state.bounds.y + metrics.titlePadding.top
             + Max(0.0f, (metrics.titleHeight - metrics.titlePadding.top - metrics.titlePadding.bottom
@@ -75,7 +75,7 @@ Rect WindowLayout::collapse(const WindowState& state, const WindowMetrics& metri
         metrics.collapseExtent, metrics.collapseExtent };
 }
 
-Rect WindowLayout::resize(const WindowState& state, const WindowMetrics& metrics){
+Rect WindowLayout::Resize(const WindowState& state, const WindowMetrics& metrics){
     const f32 extent = Min(metrics.resizeExtent, Min(state.bounds.width, state.bounds.height - metrics.titleHeight));
     return { state.bounds.x + state.bounds.width - extent, state.bounds.y + state.bounds.height - extent, extent, extent };
 }

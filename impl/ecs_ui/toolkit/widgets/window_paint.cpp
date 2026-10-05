@@ -19,7 +19,7 @@ NWB_IMPL_UI_BEGIN
 bool Builder::paintWindow(){
     const WindowState& state = *m_scope->m_window.state;
     const WidgetStyle& style = m_scope->m_window.style;
-    const Rect bounds = WindowLayout::visible(state, m_scope->m_window.metrics);
+    const Rect bounds = WindowLayout::Visible(state, m_scope->m_window.metrics);
     const Rect clip = visibleClip(bounds);
     m_paint.pushClip(clip);
     const bool painted = m_paint.drawRegion(style.window, bounds);
@@ -45,7 +45,7 @@ bool Builder::paintWindowTitle(){
     const InputRouter& input = m_context.input();
     const bool focused = input.focus() == m_scope->m_window.collapseState.id;
     if(m_scope->m_window.options.collapsible){
-        const Rect collapse = WindowLayout::collapse(state, metrics);
+        const Rect collapse = WindowLayout::Collapse(state, metrics);
         if(painted && (input.hover() == m_scope->m_window.collapseState.id || input.capture() == m_scope->m_window.collapseState.id)){
             const bool pressed = input.capture() == m_scope->m_window.collapseState.id && input.primaryDown();
             const UiSkinRegion* hover = region(
@@ -80,7 +80,7 @@ bool Builder::paintWindowTitle(){
         return false;
     if(m_scope->m_window.options.collapsible){
         HitTarget collapse;
-        collapse.rectangle = WindowLayout::collapse(state, metrics);
+        collapse.rectangle = WindowLayout::Collapse(state, metrics);
         collapse.clip = clip;
         collapse.focusable = true;
         collapse.activatable = true;
@@ -94,8 +94,8 @@ bool Builder::paintWindowResize(){
         return true;
     const WindowState& state = *m_scope->m_window.state;
     const WidgetStyle& style = m_scope->m_window.style;
-    const Rect corner = WindowLayout::resize(state, m_scope->m_window.metrics);
-    const Rect clip = visibleClip(WindowLayout::visible(state, m_scope->m_window.metrics));
+    const Rect corner = WindowLayout::Resize(state, m_scope->m_window.metrics);
+    const Rect clip = visibleClip(WindowLayout::Visible(state, m_scope->m_window.metrics));
     m_paint.pushClip(clip);
     const UiSkinRegion* resize = region(style.windowResize, style.windowResize);
     bool painted = true;

@@ -114,7 +114,7 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
     const Core::BufferHandle& bufferHandle,
     Core::GpuDescriptorHandle& outHandle
 ){
-    outHandle = Core::GpuDescriptorHandle::invalid();
+    outHandle = Core::GpuDescriptorHandle::Invalid();
     if(!bufferHandle)
         return false;
 

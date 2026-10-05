@@ -68,7 +68,7 @@ struct DeferredCompositeGraphTask{
         ReflectionCompositeInputs reflectionInputs;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -111,7 +111,7 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::Compute)
         ;
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0u, sizeof(__hidden_deferred_composite::CompositePushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_composite::CompositePushConstants)));
 
         m_deferredState.m_compositeComputeBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_deferredState.m_compositeComputeBindingLayout){
@@ -125,7 +125,7 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::Pixel)
         ;
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0u, sizeof(__hidden_deferred_composite::PresentPushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_composite::PresentPushConstants)));
 
         m_deferredState.m_presentBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_deferredState.m_presentBindingLayout){

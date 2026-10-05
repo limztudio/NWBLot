@@ -53,7 +53,7 @@ namespace __hidden_ui_scroll_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ScrollLayout::calculate(
+bool ScrollLayout::Calculate(
     const Rect& bounds,
     const Rect& inheritedClip,
     const Insets& padding,
@@ -113,7 +113,7 @@ bool ScrollLayout::calculate(
     return true;
 }
 
-bool ScrollLayout::rowBounds(const u64 index, const ScrollPlacement& placement, const f32 rowHeight, Rect& rectangle){
+bool ScrollLayout::RowBounds(const u64 index, const ScrollPlacement& placement, const f32 rowHeight, Rect& rectangle){
     using namespace __hidden_ui_scroll_layout;
     if(
         index < placement.firstRow || index >= placement.endRow || index >= placement.rowCount

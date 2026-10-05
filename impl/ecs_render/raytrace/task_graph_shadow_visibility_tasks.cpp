@@ -26,7 +26,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShadowVisibilityAllLitClearGraphTask::record(
+bool ShadowVisibilityAllLitClearGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context

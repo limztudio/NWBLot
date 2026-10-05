@@ -23,10 +23,10 @@ using EditBoundaryVector = Vector<usize, Core::Alloc::GlobalArena>;
 class GraphemeSegmentation final{
 public:
     // Output is unchanged for invalid UTF8. General segmentation accepts controls; single-line editing rejects line breaks and NUL.
-    [[nodiscard]] static bool build(AStringView text, EditBoundaryVector& output, bool singleLine = false);
-    [[nodiscard]] static bool validate(AStringView text, bool singleLine = false);
+    [[nodiscard]] static bool Build(AStringView text, EditBoundaryVector& output, bool singleLine = false);
+    [[nodiscard]] static bool Validate(AStringView text, bool singleLine = false);
     // The supplied text must have passed Validate; native preedit selections may use scalar boundaries inside graphemes.
-    [[nodiscard]] static bool isScalarBoundary(AStringView text, usize position);
+    [[nodiscard]] static bool IsScalarBoundary(AStringView text, usize position);
 };
 
 

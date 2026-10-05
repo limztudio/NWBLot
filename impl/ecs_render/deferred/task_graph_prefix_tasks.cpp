@@ -22,7 +22,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool SceneShadingSetupGraphTask::record(
+[[nodiscard]] bool SceneShadingSetupGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -38,7 +38,7 @@ namespace ECSRenderDetail{
 }
 
 
-void SceneShadingSetupGraphTask::accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+void SceneShadingSetupGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
     static_cast<void>(token);
     if(!payload.deferredSystem)
         return;
@@ -52,7 +52,7 @@ void SceneShadingSetupGraphTask::accepted(Payload& payload, const Core::QueueSub
 }
 
 
-void SceneShadingSetupGraphTask::discarded(Payload& payload){
+void SceneShadingSetupGraphTask::Discarded(Payload& payload){
     if(payload.ready)
         *payload.ready = false;
 }

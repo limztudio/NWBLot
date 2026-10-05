@@ -87,7 +87,7 @@ struct SurfelGiAgeFreeGraphTask{
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -133,7 +133,7 @@ struct SurfelGiAgeFreeGraphTask{
         return true;
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         DiscardGpuTimingMeasure(payload.asyncTiming);
     }
 };
@@ -150,7 +150,7 @@ struct SurfelGiHashBuildGraphTask{
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -186,7 +186,7 @@ struct SurfelGiHashBuildGraphTask{
         return true;
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         DiscardGpuTimingMeasure(payload.asyncTiming);
     }
 };
@@ -203,7 +203,7 @@ struct SurfelGiSpawnGraphTask{
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -239,7 +239,7 @@ struct SurfelGiSpawnGraphTask{
         return true;
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         DiscardGpuTimingMeasure(payload.asyncTiming);
     }
 };
@@ -256,7 +256,7 @@ struct SurfelGiTraceBuildArgsGraphTask{
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -292,7 +292,7 @@ struct SurfelGiTraceBuildArgsGraphTask{
         return true;
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         DiscardGpuTimingMeasure(payload.asyncTiming);
     }
 };
@@ -309,7 +309,7 @@ struct SurfelGiTraceGraphTask{
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -345,7 +345,7 @@ struct SurfelGiTraceGraphTask{
         return true;
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         DiscardGpuTimingMeasure(payload.asyncTiming);
     }
 };
@@ -362,7 +362,7 @@ struct SurfelGiResolveGraphTask{
         Optional<Core::GpuTimingMeasure>* asyncTiming = nullptr;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -398,7 +398,7 @@ struct SurfelGiResolveGraphTask{
         return true;
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         DiscardGpuTimingMeasure(payload.asyncTiming);
     }
 };
@@ -415,7 +415,7 @@ struct SurfelGiGraphTask{
 
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -448,7 +448,7 @@ struct SurfelGiGraphTask{
         return true;
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         DiscardGpuTimingMeasure(payload.asyncTiming);
     }
 };
@@ -472,7 +472,7 @@ struct RendererRayTracingSystem::SurfelGiInitializationLifecycleGraphTask{
         RendererRayTracingSystem* raytracingSystem = nullptr;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -483,12 +483,12 @@ struct RendererRayTracingSystem::SurfelGiInitializationLifecycleGraphTask{
             && payload.raytracingSystem->recordSurfelResourceInitializationLifecycle();
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         if(payload.raytracingSystem)
             payload.raytracingSystem->discardSurfelResourceInitialization();
     }
 
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         static_cast<void>(token);
         if(payload.raytracingSystem)
             payload.raytracingSystem->finalizeSurfelResourceInitialization();

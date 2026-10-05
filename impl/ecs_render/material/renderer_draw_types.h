@@ -27,7 +27,7 @@ struct MaterialPassMeshResourceSnapshot{
     // Retains the same unified generated buffer for both vertex and index consumption.
     Core::BufferHandle emulationVertexBuffer;
     ECSRenderDetail::ObjectGeometryCacheSnapshot objectGeometryCache;
-    Core::GpuDescriptorHandle emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle emulationVertexHeapHandle = Core::GpuDescriptorHandle::Invalid();
     u32 emulationIndexByteOffset = 0u;
     u32 meshletCount = 0u;
     u32 meshletPrimitiveIndexCount = 0u;

@@ -75,8 +75,8 @@ namespace __hidden_ui_edit_caret_geometry{
             if(
                 cluster.lineIndex != lineIndex || cluster.byteBegin != coveredByte
                 || cluster.byteEnd <= cluster.byteBegin || cluster.byteEnd > line.byteEnd
-                || !GraphemeSegmentation::isScalarBoundary(text, cluster.byteBegin)
-                || !GraphemeSegmentation::isScalarBoundary(text, cluster.byteEnd)
+                || !GraphemeSegmentation::IsScalarBoundary(text, cluster.byteBegin)
+                || !GraphemeSegmentation::IsScalarBoundary(text, cluster.byteEnd)
                 || cluster.firstGlyph != nextGlyph || cluster.glyphCount == 0u || cluster.glyphCount > glyphEnd - nextGlyph
                 || !IsFinite(cluster.leadingX) || !IsFinite(cluster.trailingX)
                 || cluster.leadingX != previousX || cluster.trailingX < cluster.leadingX || cluster.trailingX > line.advance
@@ -129,7 +129,7 @@ namespace __hidden_ui_edit_caret_geometry{
 
 [[nodiscard]] static bool CaretRect(const TextLayout& layout, const EditBoundaryVector& boundaries,
     const usize byte, Rect& output){
-    if(layout.lines().empty() || !GraphemeSegmentation::isScalarBoundary(layout.utf8(), byte))
+    if(layout.lines().empty() || !GraphemeSegmentation::IsScalarBoundary(layout.utf8(), byte))
         return false;
     const TextLine& line = layout.lines()[LineForByte(layout, byte)];
     if(byte < line.byteBegin || byte > line.byteEnd)
@@ -276,7 +276,7 @@ bool EditCaretGeometry::adoptLayout(TextLayout&& layout, const StringView expect
     )
         return false;
     EditBoundaryVector boundaries(*m_arena);
-    if(!GraphemeSegmentation::build(expectedText, boundaries, mode == EditTextMode::SingleLine))
+    if(!GraphemeSegmentation::Build(expectedText, boundaries, mode == EditTextMode::SingleLine))
         return false;
     PaintVector<EditBoxCaretStop> stops(*m_arena);
     PaintVector<EditCaretLine> lines(*m_arena);
@@ -348,8 +348,8 @@ bool EditCaretGeometry::rangeOnLine(const EditBoxRange range, const u32 lineInde
     if(
         !m_ready || lineIndex >= m_lines.size() || range.begin > range.end || range.end > m_layout.utf8().size()
         || !IsFinite(breakWidth) || breakWidth < 0.0f
-        || !GraphemeSegmentation::isScalarBoundary(m_layout.utf8(), range.begin)
-        || !GraphemeSegmentation::isScalarBoundary(m_layout.utf8(), range.end)
+        || !GraphemeSegmentation::IsScalarBoundary(m_layout.utf8(), range.begin)
+        || !GraphemeSegmentation::IsScalarBoundary(m_layout.utf8(), range.end)
     )
         return false;
     if(range.begin == range.end){

@@ -72,7 +72,7 @@ struct Box{
 
 class CsgShadowSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    static NotNullUniquePtr<NWB::Core::ECS::World> createWorld(NWB::ProjectRuntimeContext& context){
+    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorld(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, GLB_TEXT("CsgShadowSmokeProject"));
         auto& renderer = AddSmokeRenderSystems(*world, context);
         NWB::Impl::ReflectionSettings reflection;
@@ -289,7 +289,7 @@ private:
 public:
     explicit CsgShadowSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(createWorld(context))
+        , m_world(CreateWorld(context))
     {}
 
     virtual ~CsgShadowSmokeProject()override{ destroyWorld(); }

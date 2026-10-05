@@ -68,7 +68,7 @@ static constexpr u32 s_FramebufferCaptureDefaultFrameCount = 360u;
 
 class TextureSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
+    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, GLB_TEXT("TextureSmokeProject"));
         AddSmokeRenderSystems(*world, context);
         return world;
@@ -90,7 +90,7 @@ private:
 public:
     explicit TextureSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(createWorldOrDie(context))
+        , m_world(CreateWorldOrDie(context))
     {
         m_captureConfigurationValid = configureFramebufferCapture();
     }

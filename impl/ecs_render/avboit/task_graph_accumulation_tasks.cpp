@@ -29,7 +29,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AvboitAccumulationComputeEmulationGraphTask::record(
+[[nodiscard]] bool AvboitAccumulationComputeEmulationGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -44,7 +44,7 @@ namespace RendererTaskGraphDetail{
     return RecordAvboitComputeEmulationFromPayload(payload, commandList, context, &Payload::accumulationTiming, trait);
 }
 
-[[nodiscard]] bool AvboitAccumulationSharedComputeEmulationGraphTask::record(
+[[nodiscard]] bool AvboitAccumulationSharedComputeEmulationGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -59,7 +59,7 @@ namespace RendererTaskGraphDetail{
     return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, context, &Payload::accumulationTiming, payload.phase == AvboitAccumulationSharedComputeEmulationGraphTask::Phase::Raster, trait);
 }
 
-[[nodiscard]] bool AvboitAccumulationGraphTask::record(
+[[nodiscard]] bool AvboitAccumulationGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -101,7 +101,7 @@ namespace RendererTaskGraphDetail{
     );
 }
 
-[[nodiscard]] bool AvboitAccumulationFinalizeGraphTask::record(
+[[nodiscard]] bool AvboitAccumulationFinalizeGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context

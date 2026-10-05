@@ -49,17 +49,17 @@ namespace __hidden_ui_combo_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ComboBehavior::bind(ComboState& state, const WidgetId owner, const u64 declarationGeneration){
+bool ComboBehavior::Bind(ComboState& state, const WidgetId owner, const u64 declarationGeneration){
     if(!owner.valid() || declarationGeneration == 0u)
         return false;
     if(state.m_owner.valid() && (state.m_owner != owner || state.m_ownerDeclaration != declarationGeneration))
-        close(state);
+        Close(state);
     state.m_owner = owner;
     state.m_ownerDeclaration = declarationGeneration;
     return true;
 }
 
-bool ComboBehavior::reconcile(ComboState& state, const IListDataSource& source){
+bool ComboBehavior::Reconcile(ComboState& state, const IListDataSource& source){
     using namespace __hidden_ui_combo_behavior;
     const u64 inputGeneration = state.m_inputGeneration;
     const u64 generation = source.instanceGeneration();
@@ -80,22 +80,22 @@ bool ComboBehavior::reconcile(ComboState& state, const IListDataSource& source){
     state.m_sourceGeneration = generation;
     state.m_sourceRevision = revision;
     if(replacement)
-        close(state);
+        Close(state);
     return true;
 }
 
-void ComboBehavior::open(ComboState& state){
+void ComboBehavior::Open(ComboState& state){
     state.m_list.select(state.m_selectedKey);
     state.m_popup.close();
     state.m_popup.open();
 }
 
-void ComboBehavior::close(ComboState& state){
+void ComboBehavior::Close(ComboState& state){
     state.m_list.select(state.m_selectedKey);
     state.m_popup.close();
 }
 
-bool ComboBehavior::commit(ComboState& state, const IListDataSource& source, const u64 key){
+bool ComboBehavior::Commit(ComboState& state, const IListDataSource& source, const u64 key){
     using namespace __hidden_ui_combo_behavior;
     if(!state.m_popup.isOpen() || key == 0u)
         return false;
@@ -114,7 +114,7 @@ bool ComboBehavior::commit(ComboState& state, const IListDataSource& source, con
     )
         return false;
     state.m_selectedKey = key;
-    close(state);
+    Close(state);
     return true;
 }
 

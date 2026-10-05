@@ -25,19 +25,19 @@ using namespace NWB::UiTextVisibleTests;
 
 class TextVisibleBakedTests : public TextVisibleFixture{
 protected:
-    [[nodiscard]] static Rect outlineRectangle(const PlacedGlyph& glyph, const Point origin){
+    [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, const Point origin){
         return
             Rect{ origin.x + glyph.position.x + glyph.ink.x, origin.y + glyph.position.y + glyph.ink.y,
                 glyph.ink.width, glyph.ink.height }
         ;
     }
 
-    [[nodiscard]] static Rect outlineCenterClip(const PlacedGlyph& glyph, const Point origin){
-        const Rect outline = outlineRectangle(glyph, origin);
+    [[nodiscard]] static Rect OutlineCenterClip(const PlacedGlyph& glyph, const Point origin){
+        const Rect outline = OutlineRectangle(glyph, origin);
         return { outline.x + outline.width * 0.5f, outline.y + outline.height * 0.5f, 1.0f, 1.0f };
     }
 
-    [[nodiscard]] static Rect bakedRectangle(const PlacedGlyph& glyph, const Point origin){
+    [[nodiscard]] static Rect BakedRectangle(const PlacedGlyph& glyph, const Point origin){
         const BakedFontAtlas& atlas = *glyph.face->bakedAtlas();
         const FontAtlasGlyph& record = *atlas.glyph(glyph.glyphId);
         const f32 scale = 32.0f / static_cast<f32>(atlas.unitsPerEm());
@@ -154,8 +154,8 @@ TEST_F(TextVisibleBakedTests, PaddedSdfPlaneIntersectingClipSurvivesWhenShapingO
     ASSERT_GT(glyph.ink.width, 0.0f);
     ASSERT_GT(glyph.ink.height, 0.0f);
     const Point origin{ 40.0f, 40.0f };
-    const Rect outline = outlineRectangle(glyph, origin);
-    const Rect plane = bakedRectangle(glyph, origin);
+    const Rect outline = OutlineRectangle(glyph, origin);
+    const Rect plane = BakedRectangle(glyph, origin);
     const Rect clip{ outline.x - 4.0f, outline.y + outline.height * 0.5f, 2.0f, 1.0f };
     ASSERT_LT(clip.x + clip.width, outline.x);
     ASSERT_GE(clip.x, plane.x);
@@ -211,9 +211,9 @@ TEST_F(TextVisibleBakedTests, SixtyThreePriorImagesLeaveOneSlotForOnlyTheVisible
         prior.push_back(Move(page));
     }
     const Point origin{ 20.0f, 20.0f };
-    const Rect clip = outlineCenterClip(m_layout.glyphs()[0u], origin);
+    const Rect clip = OutlineCenterClip(m_layout.glyphs()[0u], origin);
     for(usize index = 1u; index < m_layout.glyphs().size(); ++index)
-        ASSERT_GT(bakedRectangle(m_layout.glyphs()[index], origin).y, clip.y + clip.height);
+        ASSERT_GT(BakedRectangle(m_layout.glyphs()[index], origin).y, clip.y + clip.height);
     beginPaint(1u);
     ASSERT_TRUE(m_paint.prepareGlyphPages(prior.data(), prior.size()));
     m_paint.pushClip(clip);

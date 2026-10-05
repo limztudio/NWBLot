@@ -41,7 +41,7 @@ static void SelectMime(const AStringView mime, u8& rank){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NotNull<const char*> WaylandClipboardService::nativeMimeForRank(const u8 rank){
+NotNull<const char*> WaylandClipboardService::NativeMimeForRank(const u8 rank){
     GLB_ASSERT(rank > 0u && rank <= __hidden_wayland_clipboard::s_Utf8Mimes.size());
     return MakeNotNull(__hidden_wayland_clipboard::s_Utf8Mimes[__hidden_wayland_clipboard::s_Utf8Mimes.size() - rank].data());
 }
@@ -57,21 +57,21 @@ void WaylandClipboardService::attachSeat(wl_seat* const seat, const u32 seatGlob
         return;
     if(m_manager){
         m_device = wl_data_device_manager_get_data_device(m_manager, seat);
-        static const wl_data_device_listener listener{ onDataOffer, onEnter, onLeave, onMotion, onDrop, onSelection };
+        static const wl_data_device_listener listener{ OnDataOffer, OnEnter, OnLeave, OnMotion, OnDrop, OnSelection };
         if(m_device && wl_data_device_add_listener(m_device, &listener, this) != 0)
             GLB_FATAL_ASSERT(false);
     }
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
     if(m_primaryManager){
         m_primaryDevice = zwp_primary_selection_device_manager_v1_get_device(m_primaryManager, seat);
-        static const zwp_primary_selection_device_v1_listener listener{ onPrimaryOffer, onPrimarySelection };
+        static const zwp_primary_selection_device_v1_listener listener{ OnPrimaryOffer, OnPrimarySelection };
         if(m_primaryDevice && zwp_primary_selection_device_v1_add_listener(m_primaryDevice, &listener, this) != 0)
             GLB_FATAL_ASSERT(false);
     }
 #endif
 }
 
-void WaylandClipboardService::onRegistryGlobal(
+void WaylandClipboardService::OnRegistryGlobal(
     void* const data,
     wl_registry* const registry,
     const u32 name,
@@ -94,7 +94,7 @@ void WaylandClipboardService::onRegistryGlobal(
 #endif
 }
 
-void WaylandClipboardService::onRegistryRemove(void* const data, wl_registry*, const u32 name){
+void WaylandClipboardService::OnRegistryRemove(void* const data, wl_registry*, const u32 name){
     auto& service = *static_cast<WaylandClipboardService*>(data);
     if(name == service.m_seatName){
         service.attachSeat(nullptr, 0u);
@@ -129,13 +129,13 @@ void WaylandClipboardService::addOffer(void* const handle, const ClipboardChanne
     if(m_offers.size() == s_MaxOffers)
         return;
     if(channel == ClipboardChannel::Clipboard){
-        static const wl_data_offer_listener listener{ onOfferMime, onOfferActions, onOfferAction };
+        static const wl_data_offer_listener listener{ OnOfferMime, OnOfferActions, OnOfferAction };
         if(wl_data_offer_add_listener(static_cast<wl_data_offer*>(handle), &listener, offer.get()) != 0)
             GLB_FATAL_ASSERT(false);
     }
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
     else{
-        static const zwp_primary_selection_offer_v1_listener listener{ onPrimaryMime };
+        static const zwp_primary_selection_offer_v1_listener listener{ OnPrimaryMime };
         if(zwp_primary_selection_offer_v1_add_listener(static_cast<zwp_primary_selection_offer_v1*>(handle), &listener, offer.get()) != 0)
             GLB_FATAL_ASSERT(false);
     }
@@ -155,7 +155,7 @@ ClipboardStatus::Enum WaylandClipboardService::writeSelection(const ClipboardCha
         if(!source->handle)
             return ClipboardStatus::NativeFailure;
         auto* const native = static_cast<wl_data_source*>(source->handle);
-        static const wl_data_source_listener listener{ onSourceTarget, onSourceSend, onSourceCancelled, onSourceDrop, onSourceFinished, onSourceAction };
+        static const wl_data_source_listener listener{ OnSourceTarget, OnSourceSend, OnSourceCancelled, OnSourceDrop, OnSourceFinished, OnSourceAction };
         if(wl_data_source_add_listener(native, &listener, source.get()) != 0)
             GLB_FATAL_ASSERT(false);
         for(const AStringView mime : __hidden_wayland_clipboard::s_Utf8Mimes)
@@ -168,7 +168,7 @@ ClipboardStatus::Enum WaylandClipboardService::writeSelection(const ClipboardCha
         if(!source->handle)
             return ClipboardStatus::NativeFailure;
         auto* const native = static_cast<zwp_primary_selection_source_v1*>(source->handle);
-        static const zwp_primary_selection_source_v1_listener listener{ onPrimarySend, onPrimaryCancelled };
+        static const zwp_primary_selection_source_v1_listener listener{ OnPrimarySend, OnPrimaryCancelled };
         if(zwp_primary_selection_source_v1_add_listener(native, &listener, source.get()) != 0)
             GLB_FATAL_ASSERT(false);
         for(const AStringView mime : __hidden_wayland_clipboard::s_Utf8Mimes)
@@ -187,34 +187,34 @@ ClipboardStatus::Enum WaylandClipboardService::writeSelection(const ClipboardCha
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void WaylandClipboardService::onDataOffer(void* const data, wl_data_device*, wl_data_offer* const offer){
+void WaylandClipboardService::OnDataOffer(void* const data, wl_data_device*, wl_data_offer* const offer){
     static_cast<WaylandClipboardService*>(data)->addOffer(offer, ClipboardChannel::Clipboard);
 }
 
-void WaylandClipboardService::onEnter(void*, wl_data_device*, u32, wl_surface*, wl_fixed_t, wl_fixed_t, wl_data_offer*){}
+void WaylandClipboardService::OnEnter(void*, wl_data_device*, u32, wl_surface*, wl_fixed_t, wl_fixed_t, wl_data_offer*){}
 
-void WaylandClipboardService::onLeave(void*, wl_data_device*){}
+void WaylandClipboardService::OnLeave(void*, wl_data_device*){}
 
-void WaylandClipboardService::onMotion(void*, wl_data_device*, u32, wl_fixed_t, wl_fixed_t){}
+void WaylandClipboardService::OnMotion(void*, wl_data_device*, u32, wl_fixed_t, wl_fixed_t){}
 
-void WaylandClipboardService::onDrop(void*, wl_data_device*){}
+void WaylandClipboardService::OnDrop(void*, wl_data_device*){}
 
-void WaylandClipboardService::onSelection(void* const data, wl_data_device*, wl_data_offer* const offer){
+void WaylandClipboardService::OnSelection(void* const data, wl_data_device*, wl_data_offer* const offer){
     static_cast<WaylandClipboardService*>(data)->selectOffer(offer, ClipboardChannel::Clipboard);
 }
 
-void WaylandClipboardService::onOfferMime(void* const data, wl_data_offer*, const char* const mime){
+void WaylandClipboardService::OnOfferMime(void* const data, wl_data_offer*, const char* const mime){
     auto& offer = *static_cast<Offer*>(data);
     __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), offer.rank);
 }
 
-void WaylandClipboardService::onOfferActions(void*, wl_data_offer*, u32){}
+void WaylandClipboardService::OnOfferActions(void*, wl_data_offer*, u32){}
 
-void WaylandClipboardService::onOfferAction(void*, wl_data_offer*, u32){}
+void WaylandClipboardService::OnOfferAction(void*, wl_data_offer*, u32){}
 
-void WaylandClipboardService::onSourceTarget(void*, wl_data_source*, const char*){}
+void WaylandClipboardService::OnSourceTarget(void*, wl_data_source*, const char*){}
 
-void WaylandClipboardService::onSourceSend(void* const data, wl_data_source*, const char* const mime, const int fd){
+void WaylandClipboardService::OnSourceSend(void* const data, wl_data_source*, const char* const mime, const int fd){
     auto& source = *static_cast<Source*>(data);
     u8 rank = 0u;
     __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), rank);
@@ -226,17 +226,17 @@ void WaylandClipboardService::onSourceSend(void* const data, wl_data_source*, co
     }
 }
 
-void WaylandClipboardService::onSourceCancelled(void* const data, wl_data_source* const native){
+void WaylandClipboardService::OnSourceCancelled(void* const data, wl_data_source* const native){
     auto& source = *static_cast<Source*>(data);
     wl_data_source_destroy(native);
     source.handle = nullptr;
 }
 
-void WaylandClipboardService::onSourceDrop(void*, wl_data_source*){}
+void WaylandClipboardService::OnSourceDrop(void*, wl_data_source*){}
 
-void WaylandClipboardService::onSourceFinished(void*, wl_data_source*){}
+void WaylandClipboardService::OnSourceFinished(void*, wl_data_source*){}
 
-void WaylandClipboardService::onSourceAction(void*, wl_data_source*, u32){}
+void WaylandClipboardService::OnSourceAction(void*, wl_data_source*, u32){}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -248,20 +248,20 @@ void WaylandClipboardService::onSourceAction(void*, wl_data_source*, u32){}
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void WaylandClipboardService::onPrimaryOffer(void* const data, zwp_primary_selection_device_v1*, zwp_primary_selection_offer_v1* const offer){
+void WaylandClipboardService::OnPrimaryOffer(void* const data, zwp_primary_selection_device_v1*, zwp_primary_selection_offer_v1* const offer){
     static_cast<WaylandClipboardService*>(data)->addOffer(offer, ClipboardChannel::PrimarySelection);
 }
 
-void WaylandClipboardService::onPrimarySelection(void* const data, zwp_primary_selection_device_v1*, zwp_primary_selection_offer_v1* const offer){
+void WaylandClipboardService::OnPrimarySelection(void* const data, zwp_primary_selection_device_v1*, zwp_primary_selection_offer_v1* const offer){
     static_cast<WaylandClipboardService*>(data)->selectOffer(offer, ClipboardChannel::PrimarySelection);
 }
 
-void WaylandClipboardService::onPrimaryMime(void* const data, zwp_primary_selection_offer_v1*, const char* const mime){
+void WaylandClipboardService::OnPrimaryMime(void* const data, zwp_primary_selection_offer_v1*, const char* const mime){
     auto& offer = *static_cast<Offer*>(data);
     __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), offer.rank);
 }
 
-void WaylandClipboardService::onPrimarySend(void* const data, zwp_primary_selection_source_v1*, const char* const mime, const int fd){
+void WaylandClipboardService::OnPrimarySend(void* const data, zwp_primary_selection_source_v1*, const char* const mime, const int fd){
     auto& source = *static_cast<Source*>(data);
     u8 rank = 0u;
     __hidden_wayland_clipboard::SelectMime(SafeStringView(mime), rank);
@@ -273,7 +273,7 @@ void WaylandClipboardService::onPrimarySend(void* const data, zwp_primary_select
     }
 }
 
-void WaylandClipboardService::onPrimaryCancelled(void* const data, zwp_primary_selection_source_v1* const native){
+void WaylandClipboardService::OnPrimaryCancelled(void* const data, zwp_primary_selection_source_v1* const native){
     auto& source = *static_cast<Source*>(data);
     zwp_primary_selection_source_v1_destroy(native);
     source.handle = nullptr;

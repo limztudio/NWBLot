@@ -75,10 +75,10 @@ private:
     CsgFrameState m_frameStateCache;
     usize m_receiverRangeBufferCapacity = 0u;
     usize m_cutterBufferCapacity = 0u;
-    Core::GpuDescriptorHandle m_receiverRangeBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_receiverRangeBufferHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::Invalid();
     bool m_frameStateCacheValid = false;
 };
 static constexpr usize s_RendererCsgStateByteSize = 328u;

@@ -108,7 +108,7 @@ bool RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth
             activity.descriptors[index] = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
         if(
             !activity.buffers[index] || !activity.descriptors[index].valid()
-            || !heap.write(activity.descriptors[index], Core::DescriptorWriteItem::rawBufferUav(0u, activity.buffers[index].get()))
+            || !heap.write(activity.descriptors[index], Core::DescriptorWriteItem::RawBufferUav(0u, activity.buffers[index].get()))
         ){
             releaseCausticResolveActivity();
             return false;

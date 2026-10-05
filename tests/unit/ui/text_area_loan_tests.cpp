@@ -84,28 +84,28 @@ struct AcceptedAreaFrame{
 
 class UiTextAreaLoanTests : public TextAreaFixture{
 protected:
-    [[nodiscard]] static TextAreaOptions areaOptions(){
+    [[nodiscard]] static TextAreaOptions AreaOptions(){
         TextAreaOptions options;
         options.height = { LayoutSizePolicy::Fixed, 96.0f };
         return options;
     }
 
-    [[nodiscard]] static PopupOptions parentOptions(){
+    [[nodiscard]] static PopupOptions ParentOptions(){
         PopupOptions options;
         options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
         options.size = { 340.0f, 420.0f };
         return options;
     }
 
-    [[nodiscard]] static PopupOptions childOptions(){
+    [[nodiscard]] static PopupOptions ChildOptions(){
         PopupOptions options;
         options.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
         options.size = { 340.0f, 420.0f };
         return options;
     }
 
-    [[nodiscard]] static ListOptions listOptions(){
-        ListOptions options;
+    [[nodiscard]] static ListOptions ListOptions(){
+        NWB::Impl::Ui::ListOptions options;
         options.height = { LayoutSizePolicy::Fixed, 140.0f };
         options.rowHeight = 24.0f;
         return options;
@@ -115,7 +115,7 @@ protected:
 protected:
     [[nodiscard]] bool acceptBaseline(){
         useHost();
-        if(!m_model.setText("alpha\nbeta") || !frameArea(1u, areaOptions()))
+        if(!m_model.setText("alpha\nbeta") || !frameArea(1u, AreaOptions()))
             return false;
         m_host.publications.clear();
         m_host.publishes = 0u;
@@ -124,7 +124,7 @@ protected:
     }
 
     [[nodiscard]] bool beginParent(const u64 generation){
-        return begin(generation) && m_builder.beginPopup("parent", m_parent, parentOptions());
+        return begin(generation) && m_builder.beginPopup("parent", m_parent, ParentOptions());
     }
 
     [[nodiscard]] bool finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }
@@ -177,7 +177,7 @@ TEST_F(UiTextAreaLoanTests, IdenticalScrollIntentRetiresAPreparedLoanWithoutChan
     ASSERT_TRUE(acceptBaseline());
     const AcceptedAreaFrame before = accepted();
     ASSERT_TRUE(beginArea(2u));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
     const Point scroll = m_state.scroll();
     const u64 revision = m_state.revision();
     const EditNavigationSnapshot navigation = m_state.navigation().snapshot();
@@ -195,7 +195,7 @@ TEST_F(UiTextAreaLoanTests, IdenticalSelectionIntentRetiresAPreparedLoanWithoutA
     ASSERT_TRUE(acceptBaseline());
     const AcceptedAreaFrame before = accepted();
     ASSERT_TRUE(beginArea(2u));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
     const u64 revision = m_model.revision();
     const u64 selection = m_model.selectionGeneration();
     ASSERT_TRUE(m_model.setSelection(m_model.anchor(), m_model.caret()));
@@ -211,7 +211,7 @@ TEST_F(UiTextAreaLoanTests, CancelledCompositionStillRetiresAPreparedLoan){
     ASSERT_TRUE(acceptBaseline());
     const AcceptedAreaFrame before = accepted();
     ASSERT_TRUE(beginArea(2u));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
     const u64 revision = m_model.revision();
     const u64 composition = m_model.compositionGeneration();
     ASSERT_TRUE(m_model.beginComposition());
@@ -237,7 +237,7 @@ TEST_F(UiTextAreaLoanTests, IdenticalScrollIntentDuringHostLoanRejectsBeforePrep
         EXPECT_TRUE(m_state.scrollTo(scroll));
     };
     ASSERT_TRUE(beginArea(2u));
-    EXPECT_FALSE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
+    EXPECT_FALSE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
     EXPECT_EQ(attempts, 1u);
     EXPECT_EQ(m_host.loans, 1u);
     EXPECT_EQ(m_host.ordinaryLoans, 0u);
@@ -256,8 +256,8 @@ TEST_F(UiTextAreaLoanTests, FirstPublicationScrollIntentRejectsBeforeTheSecondPu
     TextAreaState secondState;
     ASSERT_TRUE(secondModel.setText("second\narea"));
     ASSERT_TRUE(beginArea(2u));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
-    ASSERT_TRUE(m_builder.textArea("second", secondModel, secondState, areaOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea("second", secondModel, secondState, AreaOptions()).valid);
     Point scroll;
     u64 revision = 0u;
     EditNavigationSnapshot navigation;
@@ -285,8 +285,8 @@ TEST_F(UiTextAreaLoanTests, EndedChildLoanRejectsLaterStateIntentBeforeAnyPublic
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     EXPECT_EQ(m_host.publishes, 0u);
     const u64 revision = m_state.revision();
@@ -304,9 +304,9 @@ TEST_F(UiTextAreaLoanTests, ParentChildModelAliasRejectsBeforeTheSecondHostLoan)
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.textArea("parentArea", m_model, m_state, areaOptions()).valid);
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    EXPECT_FALSE(m_builder.textArea("childArea", m_model, secondState, areaOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea("parentArea", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    EXPECT_FALSE(m_builder.textArea("childArea", m_model, secondState, AreaOptions()).valid);
     EXPECT_EQ(m_host.loans, 1u);
     EXPECT_EQ(m_host.publishes, 0u);
     expectRejected(before);
@@ -321,11 +321,11 @@ TEST_F(UiTextAreaLoanTests, EndedChildSiblingStateAliasRejectsBeforeTheSecondHos
     m_child.open();
     sibling.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
-    ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, childOptions()));
-    EXPECT_FALSE(m_builder.textArea("other", secondModel, m_state, areaOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, ChildOptions()));
+    EXPECT_FALSE(m_builder.textArea("other", secondModel, m_state, AreaOptions()).valid);
     EXPECT_EQ(m_host.loans, 1u);
     EXPECT_EQ(m_host.publishes, 0u);
     expectRejected(before);
@@ -339,10 +339,10 @@ TEST_F(UiTextAreaLoanTests, ChildSourceSameTextReplacementRejectsTheAlreadyPaint
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
     const u64 external = m_model.externalRevision();
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    ASSERT_TRUE(m_builder.virtualList("list", source, list, listOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, ListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     source.rowHook = [&](){ EXPECT_TRUE(m_model.setText("alpha\nbeta")); };
     EXPECT_FALSE(m_builder.endPopup());
@@ -362,9 +362,9 @@ TEST_F(UiTextAreaLoanTests, ParentSourceStateIntentRejectsTheEndedChildBeforePub
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.virtualList("list", source, list, listOptions()).valid);
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, ListOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     const u64 revision = m_state.revision();
     source.rowHook = [&](){ EXPECT_TRUE(m_state.scrollTo(m_state.scroll())); };
@@ -385,11 +385,11 @@ TEST_F(UiTextAreaLoanTests, LaterSiblingStateScrollABARetiresAnAlreadyPaintedEnd
     m_child.open();
     sibling.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
-    ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, childOptions()));
-    ASSERT_TRUE(m_builder.virtualList("list", source, list, listOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, ChildOptions()));
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, ListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     Point scroll;
     u64 revision = 0u;
@@ -421,10 +421,10 @@ TEST_F(UiTextAreaLoanTests, FinalMetadataScrollIntentRejectsAfterParentAndChildP
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
-    ASSERT_TRUE(m_builder.virtualList("list", parentSource, parentList, listOptions()).valid);
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    ASSERT_TRUE(m_builder.virtualList("list", childSource, childList, listOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.virtualList("list", parentSource, parentList, ListOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.virtualList("list", childSource, childList, ListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     usize publicationsAtMutation = 0u;
     u64 revision = 0u;
@@ -451,9 +451,9 @@ TEST_F(UiTextAreaLoanTests, ReopenedAncestorSuppressesItsOldAreaAndSourceCallbac
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
-    ASSERT_TRUE(m_builder.virtualList("list", source, list, listOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, ListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     source.resetAllCounters();
     source.rowHook = [&](){ ADD_FAILURE() << "retired source callback"; };
@@ -480,8 +480,8 @@ TEST_F(UiTextAreaLoanTests, SuccessfulOuterEndReleasesLoansBeforeMutationAndNext
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     EXPECT_EQ(m_host.publishes, 0u);
     ASSERT_TRUE(m_builder.endPopup());
@@ -496,8 +496,8 @@ TEST_F(UiTextAreaLoanTests, SuccessfulOuterEndReleasesLoansBeforeMutationAndNext
     ASSERT_TRUE(finishRoot());
     ASSERT_TRUE(m_context.commitFrame(2u));
     ASSERT_TRUE(beginParent(3u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(finishRoot());

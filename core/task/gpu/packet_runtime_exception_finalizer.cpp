@@ -27,7 +27,7 @@ thread_local GpuTaskScheduler::SubmissionAttemptExceptionFinalizer* GpuTaskSched
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTaskScheduler::SubmissionAttemptExceptionFinalizer* GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::activeFor(
+GpuTaskScheduler::SubmissionAttemptExceptionFinalizer* GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::ActiveFor(
     const GpuTaskGraph& graph,
     const GpuCompiledGraph& compiledGraph,
     const GpuRecordedGraph& recordedGraph,
@@ -66,7 +66,7 @@ GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::SubmissionAttemptExceptio
         m_owner = this;
     }
     else{
-        m_owner = activeFor(graph, compiledGraph, recordedGraph, transaction);
+        m_owner = ActiveFor(graph, compiledGraph, recordedGraph, transaction);
         if(!m_owner)
             return;
     }
@@ -83,7 +83,7 @@ GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::~SubmissionAttemptExcepti
     if(m_owner != this || !m_armed || UncaughtExceptionCount() <= m_uncaughtExceptionCount)
         return;
 
-    if(GpuGraphSubmissionTransaction::waitForSubmissionExceptionClosing(
+    if(GpuGraphSubmissionTransaction::WaitForSubmissionExceptionClosing(
         m_transaction,
         m_graph,
         m_compiledGraph,
@@ -134,7 +134,7 @@ GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::~SubmissionAttemptExcepti
             return;
         TerminateInvariant();
     }
-    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(m_graph);
+    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(m_graph);
     if(!planAccess.validFor(declarationAccess)){
         if(m_transaction.submissionExceptionClosingResolved(
             m_compiledGraph,
@@ -210,7 +210,7 @@ GpuTaskScheduler::SubmissionAttemptExceptionScope::SubmissionAttemptExceptionSco
     GpuGraphSubmissionTransaction& transaction,
     GpuSubmissionPacketId* const outFailedPacket
 )noexcept
-    : m_finalizer(SubmissionAttemptExceptionFinalizer::activeFor(graph, compiledGraph, recordedGraph, transaction))
+    : m_finalizer(SubmissionAttemptExceptionFinalizer::ActiveFor(graph, compiledGraph, recordedGraph, transaction))
     , m_outFailedPacket(outFailedPacket)
     , m_uncaughtExceptionCount(UncaughtExceptionCount())
 {}

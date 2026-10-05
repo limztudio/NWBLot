@@ -192,10 +192,10 @@ bool LoadShaderArchiveRecords(
     NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& outRecords
 ){
     NWB::Core::Assets::AssetBytes indexBinary{outRecords.get_allocator().arena()};
-    if(!assetBinarySource.readAssetBinary(NWB::Core::ShaderArchive::indexVirtualPathName(), indexBinary))
+    if(!assetBinarySource.readAssetBinary(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary))
         return false;
 
-    return NWB::Core::ShaderArchive::deserializeIndex(indexBinary, outRecords);
+    return NWB::Core::ShaderArchive::DeserializeIndex(indexBinary, outRecords);
 }
 
 #if !defined(GLB_FINAL)
@@ -405,7 +405,7 @@ static int RunProjectRuntime(
                 {},
             };
             context.shaderPathResolver = [&shaderArchiveRecords](const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
-                return NWB::Core::ShaderArchive::findVirtualPath(
+                return NWB::Core::ShaderArchive::FindVirtualPath(
                     shaderArchiveRecords,
                     shaderName,
                     variantName,
@@ -499,7 +499,7 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
 template<typename CharT>
 static int EntryPoint(isize argc, CharT** argv, void* inst){
     // Capture early startup failures; configure uploads after CLI and logger setup.
-    const usize crashArenaReserveSize = __hidden_loader::CrashArena::structureAlignedSize(__hidden_loader::s_CrashArenaPayloadSize);
+    const usize crashArenaReserveSize = __hidden_loader::CrashArena::StructureAlignedSize(__hidden_loader::s_CrashArenaPayloadSize);
     __hidden_loader::CrashArena crashArena(__hidden_loader::s_CrashReportingArena, crashArenaReserveSize);
     const bool crashReportingInstalled = __hidden_loader::InstallCrashCapture(crashArena);
     ScopeExit crashCaptureGuard([crashReportingInstalled]()noexcept{

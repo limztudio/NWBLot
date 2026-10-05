@@ -44,7 +44,7 @@ bool Mesh::validatePayload()const{
         return false;
     }
 
-    if(!MeshRuntimeValidation::validateSharedMeshPayload(
+    if(!MeshRuntimeValidation::ValidateSharedMeshPayload(
         *this,
         0u,
         false,

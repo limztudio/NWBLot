@@ -80,7 +80,7 @@ struct SubsetContext{
     }
 
     void fillBufferStates(){
-        auto& states = Access::stateHandoffBuffers(source);
+        auto& states = Access::StateHandoffBuffers(source);
         states.reserve(buffers.size());
         for(const Core::BufferHandle& buffer : buffers){
             states.push_back({
@@ -91,13 +91,13 @@ struct SubsetContext{
                 .releaseDestinationQueue = s_ReleaseQueue,
             });
         }
-        Access::validateStateHandoff(source, s_DeviceGeneration);
+        Access::ValidateStateHandoff(source, s_DeviceGeneration);
     }
 
     void fillMixedStates(){
         addBuffers(3u);
         addTextures(3u);
-        auto& textureStates = Access::stateHandoffTextures(source);
+        auto& textureStates = Access::StateHandoffTextures(source);
         textureStates.push_back({
             .texture = textures[0u].get(), .mipLevel = 0u, .arraySlice = 1u,
             .state = Core::ResourceStates::ShaderResource,
@@ -116,27 +116,27 @@ struct SubsetContext{
             .queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
             .ownerQueue = {}, .releaseDestinationQueue = {},
         });
-        Access::stateHandoffPermanentTextures(source).push_back({
+        Access::StateHandoffPermanentTextures(source).push_back({
             .texture = textures[1u].get(), .state = Core::ResourceStates::ShaderResource,
             .queueSharing = Core::ResourceQueueSharing::Exclusive,
             .ownerQueue = s_OwnerQueue, .releaseDestinationQueue = s_ReleaseQueue,
         });
-        Access::stateHandoffBuffers(source).push_back({
+        Access::StateHandoffBuffers(source).push_back({
             .buffer = buffers[0u].get(), .state = Core::ResourceStates::UnorderedAccess,
             .queueSharing = Core::ResourceQueueSharing::Exclusive,
             .ownerQueue = s_OwnerQueue, .releaseDestinationQueue = s_ReleaseQueue,
         });
-        Access::stateHandoffBuffers(source).push_back({
+        Access::StateHandoffBuffers(source).push_back({
             .buffer = buffers[s_ThirdElementIndex].get(), .state = Core::ResourceStates::CopyDest,
             .queueSharing = Core::ResourceQueueSharing::Exclusive,
             .ownerQueue = {}, .releaseDestinationQueue = {},
         });
-        Access::stateHandoffPermanentBuffers(source).push_back({
+        Access::StateHandoffPermanentBuffers(source).push_back({
             .buffer = buffers[1u].get(), .state = Core::ResourceStates::CopySource,
             .queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
             .ownerQueue = {}, .releaseDestinationQueue = {},
         });
-        Access::validateStateHandoff(source, s_DeviceGeneration);
+        Access::ValidateStateHandoff(source, s_DeviceGeneration);
     }
 };
 
@@ -165,10 +165,10 @@ void ExpectSameRecords(const StateVector& actual, const StateVector& expected){
 void ExpectSameHandoff(const Handoff& actual, const Handoff& expected){
     EXPECT_EQ(actual.valid(), expected.valid());
     EXPECT_EQ(actual.deviceGeneration(), expected.deviceGeneration());
-    ExpectSameRecords(Access::stateHandoffTextures(actual), Access::stateHandoffTextures(expected));
-    ExpectSameRecords(Access::stateHandoffBuffers(actual), Access::stateHandoffBuffers(expected));
-    ExpectSameRecords(Access::stateHandoffPermanentTextures(actual), Access::stateHandoffPermanentTextures(expected));
-    ExpectSameRecords(Access::stateHandoffPermanentBuffers(actual), Access::stateHandoffPermanentBuffers(expected));
+    ExpectSameRecords(Access::StateHandoffTextures(actual), Access::StateHandoffTextures(expected));
+    ExpectSameRecords(Access::StateHandoffBuffers(actual), Access::StateHandoffBuffers(expected));
+    ExpectSameRecords(Access::StateHandoffPermanentTextures(actual), Access::StateHandoffPermanentTextures(expected));
+    ExpectSameRecords(Access::StateHandoffPermanentBuffers(actual), Access::StateHandoffPermanentBuffers(expected));
 }
 
 
@@ -181,7 +181,7 @@ TEST(PersistentStateSubset, PreservesSourceOrderSubresourcesAndAllFourStateCateg
     Core::Buffer* const buffers[] = { context.buffers[1u].get(), context.buffers[0u].get(), nullptr, context.buffers[0u].get() };
     ASSERT_TRUE(result.buildResourceSubset(context.source, textures, LengthOf(textures), buffers, LengthOf(buffers), scratch));
     EXPECT_EQ(result.deviceGeneration(), s_DeviceGeneration);
-    const auto& textureStates = Access::stateHandoffTextures(result);
+    const auto& textureStates = Access::StateHandoffTextures(result);
     ASSERT_EQ(textureStates.size(), s_ExpectedDualCount);
     EXPECT_EQ(textureStates[0u].texture, context.textures[0u].get());
     EXPECT_EQ(textureStates[0u].mipLevel, 0u);
@@ -193,19 +193,19 @@ TEST(PersistentStateSubset, PreservesSourceOrderSubresourcesAndAllFourStateCateg
     EXPECT_EQ(textureStates[1u].arraySlice, 0u);
     EXPECT_EQ(textureStates[1u].state, Core::ResourceStates::CopySource);
     EXPECT_EQ(textureStates[1u].queueSharing, Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
-    const auto& bufferStates = Access::stateHandoffBuffers(result);
+    const auto& bufferStates = Access::StateHandoffBuffers(result);
     ASSERT_EQ(bufferStates.size(), 1u);
     EXPECT_EQ(bufferStates[0u].buffer, context.buffers[0u].get());
     EXPECT_EQ(bufferStates[0u].state, Core::ResourceStates::UnorderedAccess);
     EXPECT_EQ(bufferStates[0u].ownerQueue, s_OwnerQueue);
     EXPECT_EQ(bufferStates[0u].releaseDestinationQueue, s_ReleaseQueue);
-    ASSERT_EQ(Access::stateHandoffPermanentTextures(result).size(), 1u);
-    EXPECT_EQ(Access::stateHandoffPermanentTextures(result)[0u].texture, context.textures[1u].get());
-    EXPECT_EQ(Access::stateHandoffPermanentTextures(result)[0u].ownerQueue, s_OwnerQueue);
-    EXPECT_EQ(Access::stateHandoffPermanentTextures(result)[0u].releaseDestinationQueue, s_ReleaseQueue);
-    ASSERT_EQ(Access::stateHandoffPermanentBuffers(result).size(), 1u);
-    EXPECT_EQ(Access::stateHandoffPermanentBuffers(result)[0u].buffer, context.buffers[1u].get());
-    EXPECT_EQ(Access::stateHandoffPermanentBuffers(result)[0u].queueSharing, Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
+    ASSERT_EQ(Access::StateHandoffPermanentTextures(result).size(), 1u);
+    EXPECT_EQ(Access::StateHandoffPermanentTextures(result)[0u].texture, context.textures[1u].get());
+    EXPECT_EQ(Access::StateHandoffPermanentTextures(result)[0u].ownerQueue, s_OwnerQueue);
+    EXPECT_EQ(Access::StateHandoffPermanentTextures(result)[0u].releaseDestinationQueue, s_ReleaseQueue);
+    ASSERT_EQ(Access::StateHandoffPermanentBuffers(result).size(), 1u);
+    EXPECT_EQ(Access::StateHandoffPermanentBuffers(result)[0u].buffer, context.buffers[1u].get());
+    EXPECT_EQ(Access::StateHandoffPermanentBuffers(result)[0u].queueSharing, Core::ResourceQueueSharing::GraphicsAndAsyncCompute);
 
     Handoff inPlace(context.arena);
     ASSERT_TRUE(inPlace.copyFrom(context.source));
@@ -230,7 +230,7 @@ TEST(PersistentStateSubset, InvalidRawInputsPreserveTheDestinationSnapshot){
     ExpectSameHandoff(destination, context.source);
     EXPECT_FALSE(destination.buildResourceSubset(context.source, nullptr, 0u, nullptr, 1u, scratch));
     ExpectSameHandoff(destination, context.source);
-    Access::validateStateHandoff(invalid, 0u);
+    Access::ValidateStateHandoff(invalid, 0u);
     EXPECT_FALSE(destination.buildResourceSubset(invalid, nullptr, 0u, nullptr, 0u, scratch));
     ExpectSameHandoff(destination, context.source);
 }
@@ -240,7 +240,7 @@ TEST(PersistentStateSubset, RetainsRequestedHandlesEvenWhenTheSourceHasNoMatchin
     SubsetContext context;
     context.addBuffers(s_ExpectedDualCount);
     context.addTextures(s_ExpectedDualCount);
-    Access::validateStateHandoff(context.source, s_DeviceGeneration);
+    Access::ValidateStateHandoff(context.source, s_DeviceGeneration);
     const Core::BufferHandle buffers[] = { context.buffers[1u], {}, context.buffers[0u], context.buffers[1u] };
     const Core::TextureHandle textures[] = { context.textures[1u], {}, context.textures[1u] };
     const u32 initialBufferReferences = context.buffers[1u]->getReferenceCount();
@@ -267,13 +267,13 @@ TEST(PersistentStateSubset, RetainsInactiveResourcesUntilReactivationOrAllocatio
     context.addBuffers(3u);
     context.addTextures(s_ExpectedDualCount);
     context.fillBufferStates();
-    for(auto& state : Access::stateHandoffBuffers(context.source)){
+    for(auto& state : Access::StateHandoffBuffers(context.source)){
         state.state = Core::ResourceStates::Common;
         state.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
         state.ownerQueue = {};
         state.releaseDestinationQueue = {};
     }
-    Access::stateHandoffTextures(context.source).push_back({
+    Access::StateHandoffTextures(context.source).push_back({
         .texture = context.textures[0u].get(), .mipLevel = 0u, .arraySlice = 0u,
         .state = Core::ResourceStates::Common,
         .queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
@@ -291,42 +291,42 @@ TEST(PersistentStateSubset, RetainsInactiveResourcesUntilReactivationOrAllocatio
     Handoff inactive(context.arena);
     Core::Buffer* const unrelated[] = { context.buffers[1u].get() };
     ASSERT_TRUE(inactive.buildResourceSubset(context.source, nullptr, 0u, unrelated, LengthOf(unrelated), scratch));
-    Access::stateHandoffBuffers(inactive)[0u].state = Core::ResourceStates::UnorderedAccess;
+    Access::StateHandoffBuffers(inactive)[0u].state = Core::ResourceStates::UnorderedAccess;
     Cache::Candidate filtered(cache);
     ASSERT_TRUE(cache.buildFilteredResourceSubset(
         filtered, inactive, liveTextures, LengthOf(liveTextures), liveBuffers, LengthOf(liveBuffers), scratch
     ));
-    EXPECT_TRUE(Access::stateHandoffTextures(*filtered.source()).empty());
-    ASSERT_EQ(Access::stateHandoffBuffers(*filtered.source()).size(), 1u);
-    EXPECT_EQ(Access::stateHandoffBuffers(*filtered.source())[0u].buffer, unrelated[0u]);
+    EXPECT_TRUE(Access::StateHandoffTextures(*filtered.source()).empty());
+    ASSERT_EQ(Access::StateHandoffBuffers(*filtered.source()).size(), 1u);
+    EXPECT_EQ(Access::StateHandoffBuffers(*filtered.source())[0u].buffer, unrelated[0u]);
     for(u32 frame = 0u; frame < s_ExpectedDualCount; ++frame){
         Cache::Candidate accepted(cache);
         ASSERT_TRUE(cache.buildMergedResourceSubset(
             accepted, inactive, liveTextures, LengthOf(liveTextures), liveBuffers, LengthOf(liveBuffers), scratch
         ));
         ASSERT_TRUE(cache.commit(accepted));
-        ASSERT_EQ(Access::stateHandoffTextures(*cache.source()).size(), 1u);
-        EXPECT_EQ(Access::stateHandoffTextures(*cache.source())[0u].texture, liveTextures[0u].get());
-        EXPECT_EQ(Access::stateHandoffTextures(*cache.source())[0u].state, Core::ResourceStates::Common);
-        ASSERT_EQ(Access::stateHandoffBuffers(*cache.source()).size(), s_ExpectedDualCount);
-        EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[0u].buffer, liveBuffers[0u].get());
-        EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[0u].state, Core::ResourceStates::Common);
-        EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[1u].state, Core::ResourceStates::UnorderedAccess);
+        ASSERT_EQ(Access::StateHandoffTextures(*cache.source()).size(), 1u);
+        EXPECT_EQ(Access::StateHandoffTextures(*cache.source())[0u].texture, liveTextures[0u].get());
+        EXPECT_EQ(Access::StateHandoffTextures(*cache.source())[0u].state, Core::ResourceStates::Common);
+        ASSERT_EQ(Access::StateHandoffBuffers(*cache.source()).size(), s_ExpectedDualCount);
+        EXPECT_EQ(Access::StateHandoffBuffers(*cache.source())[0u].buffer, liveBuffers[0u].get());
+        EXPECT_EQ(Access::StateHandoffBuffers(*cache.source())[0u].state, Core::ResourceStates::Common);
+        EXPECT_EQ(Access::StateHandoffBuffers(*cache.source())[1u].state, Core::ResourceStates::UnorderedAccess);
     }
 
     Handoff reactivated(context.arena);
     ASSERT_TRUE(reactivated.copyFrom(*cache.source()));
-    Access::stateHandoffTextures(reactivated)[0u].state = Core::ResourceStates::ShaderResource;
-    Access::stateHandoffBuffers(reactivated)[0u].state = Core::ResourceStates::ShaderResource;
+    Access::StateHandoffTextures(reactivated)[0u].state = Core::ResourceStates::ShaderResource;
+    Access::StateHandoffBuffers(reactivated)[0u].state = Core::ResourceStates::ShaderResource;
     {
         Cache::Candidate rejected(cache);
         ASSERT_TRUE(cache.buildMergedResourceSubset(
             rejected, reactivated, liveTextures, LengthOf(liveTextures), liveBuffers, LengthOf(liveBuffers), scratch
         ));
-        EXPECT_EQ(Access::stateHandoffTextures(*rejected.source())[0u].state, Core::ResourceStates::ShaderResource);
+        EXPECT_EQ(Access::StateHandoffTextures(*rejected.source())[0u].state, Core::ResourceStates::ShaderResource);
     }
-    EXPECT_EQ(Access::stateHandoffTextures(*cache.source())[0u].state, Core::ResourceStates::Common);
-    EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[0u].state, Core::ResourceStates::Common);
+    EXPECT_EQ(Access::StateHandoffTextures(*cache.source())[0u].state, Core::ResourceStates::Common);
+    EXPECT_EQ(Access::StateHandoffBuffers(*cache.source())[0u].state, Core::ResourceStates::Common);
     {
         Cache::Candidate accepted(cache);
         ASSERT_TRUE(cache.buildMergedResourceSubset(
@@ -345,9 +345,9 @@ TEST(PersistentStateSubset, RetainsInactiveResourcesUntilReactivationOrAllocatio
         replacementBuffers, LengthOf(replacementBuffers), scratch
     ));
     ASSERT_TRUE(cache.commit(replacement));
-    EXPECT_TRUE(Access::stateHandoffTextures(*cache.source()).empty());
-    ASSERT_EQ(Access::stateHandoffBuffers(*cache.source()).size(), 1u);
-    EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[0u].buffer, unrelated[0u]);
+    EXPECT_TRUE(Access::StateHandoffTextures(*cache.source()).empty());
+    ASSERT_EQ(Access::StateHandoffBuffers(*cache.source()).size(), 1u);
+    EXPECT_EQ(Access::StateHandoffBuffers(*cache.source())[0u].buffer, unrelated[0u]);
     EXPECT_EQ(cache.retainedTextureCount(), 1u);
     EXPECT_EQ(cache.retainedBufferCount(), s_ExpectedDualCount);
 }
@@ -371,14 +371,14 @@ TEST(PersistentStateSubset, CommitDefersDisplacedOwnershipUntilTheConsumedCandid
         EXPECT_EQ(context.arena.memoryStats().allocationCount, beforeCommit.allocationCount);
         EXPECT_EQ(context.buffers[0u]->getReferenceCount(), s_ExpectedDualCount);
         EXPECT_EQ(context.buffers[1u]->getReferenceCount(), s_ExpectedDualCount);
-        ASSERT_EQ(Access::stateHandoffBuffers(*cache.source()).size(), 1u);
-        EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[0u].buffer, context.buffers[1u].get());
+        ASSERT_EQ(Access::StateHandoffBuffers(*cache.source()).size(), 1u);
+        EXPECT_EQ(Access::StateHandoffBuffers(*cache.source())[0u].buffer, context.buffers[1u].get());
     }
     EXPECT_EQ(context.buffers[0u]->getReferenceCount(), 1u);
     Core::Buffer* const retained = context.buffers[1u].get();
     context.buffers.clear();
     EXPECT_EQ(retained->getReferenceCount(), 1u);
-    EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[0u].buffer, retained);
+    EXPECT_EQ(Access::StateHandoffBuffers(*cache.source())[0u].buffer, retained);
     cache.reset();
     EXPECT_FALSE(cache.valid());
 }
@@ -405,7 +405,7 @@ TEST(PersistentStateSubset, PreservesFilteredMergedAndReplacementFailureDistinct
 
     Handoff foreignGeneration(context.arena);
     ASSERT_TRUE(foreignGeneration.copyFrom(context.source));
-    Access::validateStateHandoff(foreignGeneration, s_DeviceGeneration + 1u);
+    Access::ValidateStateHandoff(foreignGeneration, s_DeviceGeneration + 1u);
     EXPECT_FALSE(cache.mergeBufferSubset(foreignGeneration, context.buffers.data(), context.buffers.size(), scratch));
     EXPECT_EQ(cache.source()->deviceGeneration(), s_DeviceGeneration);
     EXPECT_EQ(cache.retainedBufferCount(), s_ExpectedDualCount);
@@ -431,22 +431,22 @@ TEST(PersistentStateSubset, RebuildsLargeSelectionsAndMergesUpdatedStatesWithout
     Cache cache(context.arena);
     ASSERT_TRUE(cache.replaceBufferSubset(context.source, selection.data(), selection.size(), scratch));
     EXPECT_EQ(cache.retainedBufferCount(), 64u);
-    const auto& first = Access::stateHandoffBuffers(*cache.source());
+    const auto& first = Access::StateHandoffBuffers(*cache.source());
     ASSERT_EQ(first.size(), 64u);
     for(usize index = 0u; index < first.size(); ++index)
         EXPECT_EQ(first[index].buffer, context.buffers[index].get());
 
     Handoff updated(context.arena);
     ASSERT_TRUE(updated.copyFrom(context.source));
-    Access::stateHandoffBuffers(updated)[40u].state = Core::ResourceStates::CopyDest;
-    Access::stateHandoffBuffers(updated)[40u].releaseDestinationQueue = { .index = 9u, .deviceGeneration = s_DeviceGeneration };
+    Access::StateHandoffBuffers(updated)[40u].state = Core::ResourceStates::CopyDest;
+    Access::StateHandoffBuffers(updated)[40u].releaseDestinationQueue = { .index = 9u, .deviceGeneration = s_DeviceGeneration };
     selection.clear();
     for(usize index = 96u; index != 32u; --index)
         selection.push_back(context.buffers[index - 1u]);
     Cache::Candidate candidate(cache);
     ASSERT_TRUE(cache.buildMergedBufferSubset(candidate, updated, selection.data(), selection.size(), scratch));
     ASSERT_TRUE(cache.commit(candidate));
-    const auto& merged = Access::stateHandoffBuffers(*cache.source());
+    const auto& merged = Access::StateHandoffBuffers(*cache.source());
     ASSERT_EQ(merged.size(), 64u);
     for(usize index = 0u; index < merged.size(); ++index)
         EXPECT_EQ(merged[index].buffer, context.buffers[index + 32u].get());
@@ -455,7 +455,7 @@ TEST(PersistentStateSubset, RebuildsLargeSelectionsAndMergesUpdatedStatesWithout
     EXPECT_EQ(merged[8u].releaseDestinationQueue.deviceGeneration, s_DeviceGeneration);
     ASSERT_TRUE(cache.replaceBufferSubset(context.source, &context.buffers[1u], 1u, scratch));
     EXPECT_EQ(cache.retainedBufferCount(), 1u);
-    EXPECT_EQ(Access::stateHandoffBuffers(*cache.source())[0u].buffer, context.buffers[1u].get());
+    EXPECT_EQ(Access::StateHandoffBuffers(*cache.source())[0u].buffer, context.buffers[1u].get());
 }
 
 
@@ -463,7 +463,7 @@ TEST(PersistentStateSubset, MergeCapturesAnAliasedCandidateBeforeResetWhileFilte
     SubsetContext context;
     context.addBuffers(s_ExpectedDualCount);
     context.fillBufferStates();
-    Access::stateHandoffBuffers(context.source)[1u].state = Core::ResourceStates::CopyDest;
+    Access::StateHandoffBuffers(context.source)[1u].state = Core::ResourceStates::CopyDest;
     Core::Alloc::ScratchArena scratch(Name("tests/persistent_state_subset/candidate_alias"));
     Cache cache(context.arena);
     ASSERT_TRUE(cache.replaceBufferSubset(context.source, &context.buffers[0u], 1u, scratch));
@@ -472,7 +472,7 @@ TEST(PersistentStateSubset, MergeCapturesAnAliasedCandidateBeforeResetWhileFilte
     ASSERT_TRUE(cache.buildMergedBufferSubset(
         candidate, *candidate.source(), context.buffers.data(), context.buffers.size(), scratch
     ));
-    const auto& merged = Access::stateHandoffBuffers(*candidate.source());
+    const auto& merged = Access::StateHandoffBuffers(*candidate.source());
     ASSERT_EQ(merged.size(), s_ExpectedDualCount);
     EXPECT_EQ(merged[0u].buffer, context.buffers[0u].get());
     EXPECT_EQ(merged[1u].buffer, context.buffers[1u].get());
@@ -494,13 +494,13 @@ TEST(PersistentStateSubset, LargeTextureSelectionsRetainEverySubresourceAndPerma
     context.fillBufferStates();
     for(usize index = 0u; index < context.textures.size(); ++index){
         if(index % s_ExpectedDualCount == 0u){
-            Access::stateHandoffTextures(context.source).push_back({
+            Access::StateHandoffTextures(context.source).push_back({
                 .texture = context.textures[index].get(), .mipLevel = 0u, .arraySlice = 1u,
                 .state = Core::ResourceStates::ShaderResource,
                 .queueSharing = Core::ResourceQueueSharing::Exclusive,
                 .ownerQueue = s_OwnerQueue, .releaseDestinationQueue = s_ReleaseQueue,
             });
-            Access::stateHandoffTextures(context.source).push_back({
+            Access::StateHandoffTextures(context.source).push_back({
                 .texture = context.textures[index].get(), .mipLevel = 1u, .arraySlice = 0u,
                 .state = Core::ResourceStates::CopySource,
                 .queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
@@ -508,7 +508,7 @@ TEST(PersistentStateSubset, LargeTextureSelectionsRetainEverySubresourceAndPerma
             });
         }
         else{
-            Access::stateHandoffPermanentTextures(context.source).push_back({
+            Access::StateHandoffPermanentTextures(context.source).push_back({
                 .texture = context.textures[index].get(), .state = Core::ResourceStates::UnorderedAccess,
                 .queueSharing = Core::ResourceQueueSharing::Exclusive,
                 .ownerQueue = s_OwnerQueue, .releaseDestinationQueue = s_ReleaseQueue,
@@ -529,8 +529,8 @@ TEST(PersistentStateSubset, LargeTextureSelectionsRetainEverySubresourceAndPerma
     Handoff raw(context.arena);
     Core::Buffer* const buffers[] = { context.buffers[1u].get() };
     ASSERT_TRUE(raw.buildResourceSubset(context.source, pointers.data(), pointers.size(), buffers, LengthOf(buffers), scratch));
-    const auto& transientStates = Access::stateHandoffTextures(raw);
-    const auto& permanentStates = Access::stateHandoffPermanentTextures(raw);
+    const auto& transientStates = Access::StateHandoffTextures(raw);
+    const auto& permanentStates = Access::StateHandoffPermanentTextures(raw);
     ASSERT_EQ(transientStates.size(), 48u);
     ASSERT_EQ(permanentStates.size(), 24u);
     for(usize index = 0u; index < 24u; ++index){
@@ -563,9 +563,9 @@ TEST(PersistentStateSubset, LargeTextureSelectionsRetainEverySubresourceAndPerma
     ASSERT_TRUE(cache.replaceTextureSubset(context.source, context.textures[1u], scratch));
     EXPECT_EQ(cache.retainedTextureCount(), 1u);
     EXPECT_EQ(cache.retainedBufferCount(), 0u);
-    EXPECT_TRUE(Access::stateHandoffTextures(*cache.source()).empty());
-    ASSERT_EQ(Access::stateHandoffPermanentTextures(*cache.source()).size(), 1u);
-    EXPECT_EQ(Access::stateHandoffPermanentTextures(*cache.source())[0u].texture, context.textures[1u].get());
+    EXPECT_TRUE(Access::StateHandoffTextures(*cache.source()).empty());
+    ASSERT_EQ(Access::StateHandoffPermanentTextures(*cache.source()).size(), 1u);
+    EXPECT_EQ(Access::StateHandoffPermanentTextures(*cache.source())[0u].texture, context.textures[1u].get());
     EXPECT_EQ(context.textures[8u]->getReferenceCount(), originalReferences);
 }
 
@@ -574,9 +574,9 @@ TEST(PersistentStateSubset, SelectionResolvesForcedCollisionsGrowthAndFirstInput
     context.addBuffers(1024u);
     context.addTextures(1u);
     Vector<usize, Core::Alloc::GlobalArena> bucketCounts(context.arena);
-    bucketCounts.resize(Access::initialResourceSelectionBucketCount(), 0u);
+    bucketCounts.resize(Access::InitialResourceSelectionBucketCount(), 0u);
     for(const Core::BufferHandle& buffer : context.buffers)
-        ++bucketCounts[Access::initialResourceSelectionBucket(buffer.get())];
+        ++bucketCounts[Access::InitialResourceSelectionBucket(buffer.get())];
     usize collisionBucket = 0u;
     for(usize bucket = 1u; bucket < bucketCounts.size(); ++bucket){
         if(bucketCounts[bucket] > bucketCounts[collisionBucket])
@@ -586,13 +586,13 @@ TEST(PersistentStateSubset, SelectionResolvesForcedCollisionsGrowthAndFirstInput
     Vector<Core::Buffer*, Core::Alloc::GlobalArena> ordered(context.arena);
     ordered.reserve(96u);
     for(const Core::BufferHandle& buffer : context.buffers){
-        if(Access::initialResourceSelectionBucket(buffer.get()) == collisionBucket && ordered.size() != 96u)
+        if(Access::InitialResourceSelectionBucket(buffer.get()) == collisionBucket && ordered.size() != 96u)
             ordered.push_back(buffer.get());
     }
     const usize forcedCollisions = ordered.size();
     ASSERT_GT(forcedCollisions, 1u);
     for(const Core::BufferHandle& buffer : context.buffers){
-        if(Access::initialResourceSelectionBucket(buffer.get()) != collisionBucket && ordered.size() != 96u)
+        if(Access::InitialResourceSelectionBucket(buffer.get()) != collisionBucket && ordered.size() != 96u)
             ordered.push_back(buffer.get());
     }
     ASSERT_EQ(ordered.size(), 96u);
@@ -690,7 +690,7 @@ TEST(PersistentStateSubset, ReusesSelectionScratchBeforeMergedStateIndicesAcross
     context.addTextures(96u);
     context.fillBufferStates();
     for(const Core::TextureHandle& texture : context.textures){
-        Access::stateHandoffTextures(context.source).push_back({
+        Access::StateHandoffTextures(context.source).push_back({
             .texture = texture.get(), .mipLevel = 1u, .arraySlice = 1u,
             .state = Core::ResourceStates::ShaderResource,
             .queueSharing = Core::ResourceQueueSharing::Exclusive,
@@ -708,8 +708,8 @@ TEST(PersistentStateSubset, ReusesSelectionScratchBeforeMergedStateIndicesAcross
             candidate, context.source, context.textures.data(), count, context.buffers.data(), count, scratch
         ));
         ASSERT_TRUE(candidate.valid());
-        EXPECT_EQ(Access::stateHandoffTextures(*candidate.source()).size(), count);
-        EXPECT_EQ(Access::stateHandoffBuffers(*candidate.source()).size(), count);
+        EXPECT_EQ(Access::StateHandoffTextures(*candidate.source()).size(), count);
+        EXPECT_EQ(Access::StateHandoffBuffers(*candidate.source()).size(), count);
     };
     build(96u);
     build(1u);
@@ -765,7 +765,7 @@ void BenchmarkSubset(
         if(rawSubset){
             if(subset.buildResourceSubset(context.source, nullptr, 0u, pointers.data(), pointers.size(), scratch))
                 ++completed;
-            resultCount = Access::stateHandoffBuffers(subset).size();
+            resultCount = Access::StateHandoffBuffers(subset).size();
         }
         else{
             Cache::Candidate candidate(cache);
@@ -775,7 +775,7 @@ void BenchmarkSubset(
             ;
             if(built){
                 ++completed;
-                resultCount = Access::stateHandoffBuffers(*candidate.source()).size();
+                resultCount = Access::StateHandoffBuffers(*candidate.source()).size();
             }
         }
         scratchPeak = Max(scratchPeak, scratch.memoryStats().peakUsedBytes);

@@ -94,7 +94,7 @@ struct TemporalTask{
         bool hardwareEnabled = false;
     };
 
-    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         if(!payload.snapshot.history.eligible)
             return true;
         const bool ready = payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
@@ -124,11 +124,11 @@ struct TemporalTask{
         return !commandList.commandRecordingFailed();
     }
 
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         payload.reservation.accept(token, payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady);
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         payload.reservation.discard();
     }
 };
@@ -142,7 +142,7 @@ struct SpatialTask{
         SpatialParameters parameters;
     };
 
-    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         commandList.endRenderPass();
         Core::ComputeState state;
         state.setPipeline(payload.pipeline.get());

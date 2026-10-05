@@ -66,10 +66,10 @@ public:
 
 protected:
     void swapStorage(Storage& x)noexcept{ m_pair.swap(x.m_pair); }
-    static void assertDefaultConstructedDeleterValid()noexcept{
+    static void AssertDefaultConstructedDeleterValid()noexcept{
         static_assert(!IsPointer<deleter_type>::value, "UniquePtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
     }
-    static void assertRValueDeleterValid()noexcept{
+    static void AssertRValueDeleterValid()noexcept{
         static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
     }
     template<typename OtherDeleter, typename Owner>
@@ -97,12 +97,12 @@ private:
     constexpr UniquePtr()noexcept \
         : base_type(pointer()) \
     { \
-        base_type::assertDefaultConstructedDeleterValid(); \
+        base_type::AssertDefaultConstructedDeleterValid(); \
     } \
     constexpr UniquePtr(std::nullptr_t)noexcept \
         : base_type(pointer()) \
     { \
-        base_type::assertDefaultConstructedDeleterValid(); \
+        base_type::AssertDefaultConstructedDeleterValid(); \
     }
 
 template<typename T, typename Deleter = DefaultDeleter<T>>
@@ -123,7 +123,7 @@ public:
     explicit UniquePtr(pointer pValue)noexcept
         : base_type(pValue)
     {
-        base_type::assertDefaultConstructedDeleterValid();
+        base_type::AssertDefaultConstructedDeleterValid();
     }
     UniquePtr(pointer pValue, deleter_param_type deleter)noexcept
         : base_type(pValue, deleter)
@@ -131,7 +131,7 @@ public:
     UniquePtr(pointer pValue, deleter_rvalue_param_type deleter)noexcept
         : base_type(pValue, Move(deleter))
     {
-        base_type::assertRValueDeleterValid();
+        base_type::AssertRValueDeleterValid();
     }
     UniquePtr(this_type&& x)noexcept
         : base_type(x.release(), Forward<deleter_type>(x.getDeleter()))
@@ -195,7 +195,7 @@ public:
     explicit UniquePtr(P pArray)noexcept
         : base_type(pArray)
     {
-        base_type::assertDefaultConstructedDeleterValid();
+        base_type::AssertDefaultConstructedDeleterValid();
     }
     template<typename P>
     UniquePtr(P pArray, deleter_param_type deleter, typename EnableIf<SmartPtrDetail::IsArrayCvConvertible<P, pointer>::value>::type* = 0)noexcept
@@ -205,7 +205,7 @@ public:
     UniquePtr(P pArray, deleter_rvalue_param_type deleter, EnableIf_T<SmartPtrDetail::IsArrayCvConvertible<P, pointer>::value>* = 0)noexcept
         : base_type(pArray, Move(deleter))
     {
-        base_type::assertRValueDeleterValid();
+        base_type::AssertRValueDeleterValid();
     }
     UniquePtr(this_type&& x)noexcept
         : base_type(x.release(), Forward<deleter_type>(x.getDeleter()))

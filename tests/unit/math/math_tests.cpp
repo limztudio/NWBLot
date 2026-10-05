@@ -140,7 +140,7 @@ TEST(Math, DegeneratePlaneNormalUsesFallback){
 TEST(Math, MergingContainedSpherePreservesLargerBounds){
     BoundingSphere contained;
     const BoundingSphere larger(Float3U(0.0f, 0.0f, 0.0f), 3.0f);
-    BoundingSphere::createMerged(contained, larger, BoundingSphere(Float3U(1.0f, 0.0f, 0.0f), 1.0f));
+    BoundingSphere::CreateMerged(contained, larger, BoundingSphere(Float3U(1.0f, 0.0f, 0.0f), 1.0f));
     EXPECT_TRUE(NearlyEqual4(LoadFloat(contained.centerRadius), 0.0f, 0.0f, 0.0f, 3.0f));
 }
 

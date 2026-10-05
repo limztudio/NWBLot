@@ -85,7 +85,7 @@ namespace __hidden_ui_radio_group_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RadioGroupLayout::measure(
+bool RadioGroupLayout::Measure(
     const u32 count,
     const Point& maximumLabel,
     const RadioGroupOptions& options,
@@ -124,7 +124,7 @@ bool RadioGroupLayout::measure(
     return true;
 }
 
-bool RadioGroupLayout::place(
+bool RadioGroupLayout::Place(
     const Rect& bounds,
     const Rect& clip,
     const RadioGroupChoices& choices,

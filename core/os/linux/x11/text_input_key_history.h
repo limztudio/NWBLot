@@ -32,8 +32,8 @@ private:
     static constexpr usize s_KeyCount = 256u;
     static constexpr u32 s_HalfRange = 1u << 31u;
 
-    [[nodiscard]] static bool newer(u32 timestamp, u32 serial, const Stamp& previous);
-    [[nodiscard]] static bool current(const Stamp& stamp, u64 receivedAtMs);
+    [[nodiscard]] static bool Newer(u32 timestamp, u32 serial, const Stamp& previous);
+    [[nodiscard]] static bool Current(const Stamp& stamp, u64 receivedAtMs);
 
 
 public:

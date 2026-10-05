@@ -46,7 +46,7 @@ public:
     Value(i64 val, MetaArena& arena);
     Value(f64 val, MetaArena& arena);
     Value(MStringView val, MetaArena& arena);
-    [[nodiscard]] static Value reference(MStringView val, MetaArena& arena);
+    [[nodiscard]] static Value Reference(MStringView val, MetaArena& arena);
     ~Value();
     Value(const Value& other);
     Value(Value&& other)noexcept;

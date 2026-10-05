@@ -36,14 +36,14 @@ protected:
             state.open();
     }
 
-    [[nodiscard]] static PopupOptions parentOptions(){
+    [[nodiscard]] static PopupOptions ParentOptions(){
         PopupOptions options;
         options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
         options.size = { 300.0f, 380.0f };
         return options;
     }
 
-    [[nodiscard]] static PopupOptions childOptions(){
+    [[nodiscard]] static PopupOptions ChildOptions(){
         PopupOptions options;
         options.anchor = { 420.0f, 60.0f, 80.0f, 24.0f };
         options.size = { 340.0f, 380.0f };
@@ -56,7 +56,7 @@ protected:
     [[nodiscard]] WidgetId menuRows()const{ return MakeWidgetId(MakeWidgetId(parentId(), "menu"), "rows"); }
 
     [[nodiscard]] bool beginParent(const u64 generation){
-        if(!begin(generation) || !m_builder.beginPopup("parent", m_parent, parentOptions()))
+        if(!begin(generation) || !m_builder.beginPopup("parent", m_parent, ParentOptions()))
             return false;
         const bool activated = m_builder.button("before", "Before");
         return !activated;
@@ -71,7 +71,7 @@ protected:
     [[nodiscard]] bool acceptPlain(const u64 generation){
         if(!beginParent(generation))
             return false;
-        m_childVisible = m_builder.beginPopup("child", m_child, childOptions());
+        m_childVisible = m_builder.beginPopup("child", m_child, ChildOptions());
         if(m_childVisible){
             const bool activated = m_builder.button("apply", "Child");
             if(activated || !m_builder.endPopup())
@@ -85,14 +85,14 @@ protected:
     [[nodiscard]] bool acceptCombo(const u64 generation){
         if(!beginParent(generation))
             return false;
-        m_result = m_builder.comboBox("combo", m_source, m_state, Options());
+        m_result = m_builder.comboBox("combo", m_source, m_state, NWB::UiComboTests::Options());
         return m_result.valid && finishParent(generation);
     }
 
     [[nodiscard]] bool acceptSearch(const u64 generation){
         if(!beginParent(generation))
             return false;
-        m_searchResult = m_builder.searchComboBox("combo", m_searchSource, m_search, options());
+        m_searchResult = m_builder.searchComboBox("combo", m_searchSource, m_search, Options());
         return m_searchResult.combo.valid && finishParent(generation);
     }
 
@@ -107,20 +107,20 @@ protected:
     }
 
     [[nodiscard]] bool declareReserved(const u64 generation, const bool overflow){
-        if(!beginParent(generation) || !m_builder.comboBox("combo", m_source, m_state, Options()).valid)
+        if(!beginParent(generation) || !m_builder.comboBox("combo", m_source, m_state, NWB::UiComboTests::Options()).valid)
             return false;
         const bool activated = m_builder.button("anchor", "Commands");
         if(activated || !m_builder.contextMenu("menu", "anchor", m_menuSource, m_menu).valid)
             return false;
-        if(!m_builder.beginPopup("child", m_child, childOptions())
-            || !m_builder.comboBox("combo", m_source, m_childCombo, Options()).valid)
+        if(!m_builder.beginPopup("child", m_child, ChildOptions())
+            || !m_builder.comboBox("combo", m_source, m_childCombo, NWB::UiComboTests::Options()).valid)
             return false;
         for(usize index = 0u; index < 3u; ++index){
-            if(!m_builder.beginPopup("deep", m_deeper[index], childOptions()))
+            if(!m_builder.beginPopup("deep", m_deeper[index], ChildOptions()))
                 return false;
         }
         if(overflow)
-            return m_builder.beginPopup("deep", m_deeper[3u], childOptions());
+            return m_builder.beginPopup("deep", m_deeper[3u], ChildOptions());
         const bool leafActivated = m_builder.button("leaf", "Deepest");
         if(leafActivated)
             return false;

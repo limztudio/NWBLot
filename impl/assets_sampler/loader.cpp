@@ -57,7 +57,7 @@ bool SamplerAssetLoader::Create(
         NWB_LOGGER_ERROR(GLB_TEXT("{}: failed to allocate a bindless sampler slot for '{}'"), owner, StringConvert(samplerName.resolvedText()));
         return false;
     }
-    if(!heap.write(samplerHandle, Core::DescriptorWriteItem::sampler(0u, sampler.get()))){
+    if(!heap.write(samplerHandle, Core::DescriptorWriteItem::Sampler(0u, sampler.get()))){
         heap.free(samplerHandle);
         NWB_LOGGER_ERROR(GLB_TEXT("{}: failed to write the bindless sampler slot for '{}'"), owner, StringConvert(samplerName.resolvedText()));
         return false;
@@ -77,7 +77,7 @@ bool SamplerAssetLoader::Load(
     const TStringView ownerName
 ){
     const TStringView owner = ownerName;
-    if(!Core::Assets::AssetManager::checkLoaderEnter(samplerAsset, outResource, owner, Sampler::s_AssetTypeText))
+    if(!Core::Assets::AssetManager::CheckLoaderEnter(samplerAsset, outResource, owner, Sampler::s_AssetTypeText))
         return outResource.valid();
 
     const Name& samplerVirtualPath = samplerAsset.name();
@@ -100,7 +100,7 @@ void SamplerAssetLoader::Release(SamplerGpuResource& inOutResource, Core::Graphi
         Core::GpuDescriptorHeap& heap = graphics.getDevice().getDescriptorHeap();
         if(heap.isInitialized())
             heap.free(inOutResource.samplerHeapHandle);
-        inOutResource.samplerHeapHandle = Core::GpuDescriptorHandle::invalid();
+        inOutResource.samplerHeapHandle = Core::GpuDescriptorHandle::Invalid();
     }
 
     inOutResource.sampler.reset();

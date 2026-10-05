@@ -109,9 +109,9 @@ struct AliasPlanContext{
                 .meshletPrimitiveIndexBuffer = source,
             };
             for(u32 slot = 0u; slot < LengthOf(mesh.geometryHeapHandles); ++slot)
-                mesh.geometryHeapHandles[slot] = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, slot);
+                mesh.geometryHeapHandles[slot] = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, slot);
             mesh.emulationVertexBuffer = output;
-            mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, drawIndex);
+            mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, drawIndex);
             mesh.meshletCount = 1u;
             mesh.meshletPrimitiveIndexCount = 3u;
         }
@@ -191,7 +191,7 @@ TEST(ComputeEmulationAliasPlan, RegularCapturePreservesOrderOwnersAndCurrentDraw
     EXPECT_FALSE(MatchesPlan(plan, context, context.m_operationArena));
     --context.m_regular.computeDrawItems.back().instanceIndex;
     const auto previousHeapHandle = context.m_regular.computeDrawItems.back().meshResources.emulationVertexHeapHandle;
-    context.m_regular.computeDrawItems.back().meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
+    context.m_regular.computeDrawItems.back().meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::Invalid();
     EXPECT_FALSE(MatchesPlan(plan, context, context.m_operationArena));
     context.m_regular.computeDrawItems.back().meshResources.emulationVertexHeapHandle = previousHeapHandle;
     {
@@ -237,11 +237,11 @@ TEST(ComputeEmulationAliasPlan, PointerAndHeapSlotAliasPoliciesRemainDistinctAnd
     context.m_regular.computeDrawItems.back().meshResources.emulationVertexBuffer = regularLast;
     context.m_receivers.computeDrawItems.back().meshResources.emulationVertexBuffer = receiverLast;
     // Slot identity, rather than the whole encoded descriptor, is the existing AVBOIT/interval alias contract.
-    context.m_regular.computeDrawItems.back().meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::make(
+    context.m_regular.computeDrawItems.back().meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::Make(
         Core::GpuDescriptorClass::SampledImage,
         context.m_regular.computeDrawItems.front().meshResources.emulationVertexHeapHandle.slot()
     );
-    context.m_receivers.computeDrawItems.back().meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::make(
+    context.m_receivers.computeDrawItems.back().meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::Make(
         Core::GpuDescriptorClass::SampledImage,
         context.m_receivers.computeDrawItems.front().meshResources.emulationVertexHeapHandle.slot()
     );
@@ -273,8 +273,8 @@ TEST(ComputeEmulationAliasPlan, EmptyAndLateInvalidInputsClearEveryCapturedPlan)
             context.m_receivers.computeDrawItems.back().meshResources.emulationVertexBuffer = nullptr;
         }
         else if(invalidKind == s_ExpectedDualCount){
-            context.m_regular.computeDrawItems.back().meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
-            context.m_receivers.computeDrawItems.back().meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
+            context.m_regular.computeDrawItems.back().meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::Invalid();
+            context.m_receivers.computeDrawItems.back().meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::Invalid();
         }
         else{
             context.m_regular.computeDrawItems.back().pipelineKey.csgMode = MaterialPipelineCsgMode::ClipOnly;
@@ -384,10 +384,10 @@ TEST(ComputeEmulationAliasPlan, AvboitAndIntervalMatchesObserveCurrentBuffersSlo
     EXPECT_TRUE(MatchesPlan(interval, context, context.m_operationArena));
     const auto avboitHandle = avboit.drawItems.back().meshResources.emulationVertexHeapHandle;
     const auto intervalHandle = interval.drawItems.back().meshResources.emulationVertexHeapHandle;
-    avboit.drawItems.back().meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::make(
+    avboit.drawItems.back().meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::Make(
         Core::GpuDescriptorClass::StorageBuffer, avboitHandle.slot() + 100u
     );
-    interval.drawItems.back().meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::make(
+    interval.drawItems.back().meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::Make(
         Core::GpuDescriptorClass::StorageBuffer, intervalHandle.slot() + 100u
     );
     EXPECT_FALSE(MatchesPlan(avboit, context, context.m_operationArena));
@@ -596,7 +596,7 @@ TEST(ComputeEmulationAliasPlan, SharedPlanRejectsChangedDrawMetadataAndOutput){
     const u32 sharedSlot = context.m_regular.computeDrawItems.front().meshResources.emulationVertexHeapHandle.slot();
     for(auto& drawItem : context.m_regular.computeDrawItems){
         drawItem.meshResources.emulationVertexBuffer = sharedOutput;
-        drawItem.meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::make(
+        drawItem.meshResources.emulationVertexHeapHandle = Core::GpuDescriptorHandle::Make(
             Core::GpuDescriptorClass::StorageBuffer, sharedSlot
         );
     }

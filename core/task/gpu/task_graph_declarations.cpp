@@ -28,7 +28,7 @@ inline constexpr Name s_DeclarationScratchArena("core/task/gpu/declaration_scrat
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 GpuTaskGraph::allocateGeneration()noexcept{
+u64 GpuTaskGraph::AllocateGeneration()noexcept{
     static Atomic<u64> s_NextGeneration{ 1u };
 
     u64 nextGeneration = s_NextGeneration.load(MemoryOrder::relaxed);
@@ -68,9 +68,9 @@ GpuTaskGraph::GpuTaskGraph(GraphicsArena& arena)
     , m_externalCompletions(arena)
     , m_uploadBlobs(arena)
     , m_markerText(arena)
-    , m_generation(allocateGeneration())
-    , m_declarationRevision(allocateGeneration())
-    , m_activeRecordingAttemptGeneration(allocateGeneration())
+    , m_generation(AllocateGeneration())
+    , m_declarationRevision(AllocateGeneration())
+    , m_activeRecordingAttemptGeneration(AllocateGeneration())
 {}
 
 GpuTaskGraph::~GpuTaskGraph()noexcept(false){
@@ -150,7 +150,7 @@ bool GpuTaskGraph::setNormalExecutionPrelude(const GpuTaskId& task){
         return false;
 
     m_normalExecutionPrelude = task;
-    m_declarationRevision = allocateGeneration();
+    m_declarationRevision = AllocateGeneration();
     return true;
 }
 

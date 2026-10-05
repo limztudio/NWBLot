@@ -40,7 +40,7 @@ Value::Value(MStringView val, MetaArena& arena)
     m_data.m_string = NewArenaObject<StringType>(m_arena, val.data(), val.size(), m_arena);
 }
 
-Value Value::reference(MStringView val, MetaArena& arena){
+Value Value::Reference(MStringView val, MetaArena& arena){
     Value out(arena);
     out.setReference(val);
     return out;

@@ -34,10 +34,10 @@ namespace DeferredDescriptorRegisterDetail{
     handle = heap.allocate(descriptorClass);
     if(!handle.valid())
         return false;
-    if(heap.write(handle, Core::DescriptorWriteItem::textureSrv(0u, texture, format, subresources, dimension)))
+    if(heap.write(handle, Core::DescriptorWriteItem::TextureSrv(0u, texture, format, subresources, dimension)))
         return true;
     heap.free(handle);
-    handle = Core::GpuDescriptorHandle::invalid();
+    handle = Core::GpuDescriptorHandle::Invalid();
     return false;
 }
 
@@ -51,7 +51,7 @@ namespace DeferredDescriptorRegisterDetail{
     handle = heap.allocate(Core::GpuDescriptorClass::StorageImage);
     if(!handle.valid())
         return false;
-    if(heap.write(handle, Core::DescriptorWriteItem::textureUav(
+    if(heap.write(handle, Core::DescriptorWriteItem::TextureUav(
         0u,
         texture,
         format,
@@ -60,7 +60,7 @@ namespace DeferredDescriptorRegisterDetail{
     )))
         return true;
     heap.free(handle);
-    handle = Core::GpuDescriptorHandle::invalid();
+    handle = Core::GpuDescriptorHandle::Invalid();
     return false;
 }
 
@@ -68,10 +68,10 @@ namespace DeferredDescriptorRegisterDetail{
     handle = heap.allocate(Core::GpuDescriptorClass::Sampler);
     if(!handle.valid())
         return false;
-    if(heap.write(handle, Core::DescriptorWriteItem::sampler(0u, sampler)))
+    if(heap.write(handle, Core::DescriptorWriteItem::Sampler(0u, sampler)))
         return true;
     heap.free(handle);
-    handle = Core::GpuDescriptorHandle::invalid();
+    handle = Core::GpuDescriptorHandle::Invalid();
     return false;
 }
 
@@ -79,10 +79,10 @@ namespace DeferredDescriptorRegisterDetail{
     handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(!handle.valid())
         return false;
-    if(heap.write(handle, Core::DescriptorWriteItem::structuredBufferSrv(0u, buffer)))
+    if(heap.write(handle, Core::DescriptorWriteItem::StructuredBufferSrv(0u, buffer)))
         return true;
     heap.free(handle);
-    handle = Core::GpuDescriptorHandle::invalid();
+    handle = Core::GpuDescriptorHandle::Invalid();
     return false;
 }
 
@@ -90,10 +90,10 @@ namespace DeferredDescriptorRegisterDetail{
     handle = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
     if(!handle.valid())
         return false;
-    if(heap.write(handle, Core::DescriptorWriteItem::constantBuffer(0u, buffer)))
+    if(heap.write(handle, Core::DescriptorWriteItem::ConstantBuffer(0u, buffer)))
         return true;
     heap.free(handle);
-    handle = Core::GpuDescriptorHandle::invalid();
+    handle = Core::GpuDescriptorHandle::Invalid();
     return false;
 }
 

@@ -20,7 +20,7 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
         return true;
     const Core::AcquiredPresentationFrame& current = m_graphics.acquiredPresentationFrame();
     const Core::AcquiredPresentationFrame& prepared = m_pending->m_acquired;
-    if(!matchesAcquired(current, prepared))
+    if(!MatchesAcquired(current, prepared))
         return true;
     u64 generation = 0u;
     {

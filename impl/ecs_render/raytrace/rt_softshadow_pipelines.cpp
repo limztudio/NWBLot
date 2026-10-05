@@ -84,7 +84,7 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
     if(!m_rayTracingState.m_shadowGeometryDownsampleBindingLayout){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(ShadowGeometryDownsamplePushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowGeometryDownsamplePushConstants)));
         m_rayTracingState.m_shadowGeometryDownsampleBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_shadowGeometryDownsampleBindingLayout){
             m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed = true;
@@ -129,7 +129,7 @@ bool RendererRayTracingSystem::ensureSoftShadowResolvePipeline(){
     if(!resolve.m_bindingLayout){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(ShadowResolvePushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowResolvePushConstants)));
         resolve.m_bindingLayout = device.createBindingLayout(layoutDesc);
         if(!resolve.m_bindingLayout){
             resolve.m_scalar.m_failed = true;
@@ -315,7 +315,7 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
     if(!m_rayTracingState.m_shadowReprojectMergeBindingLayout){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(ShadowReprojectMergePushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowReprojectMergePushConstants)));
         m_rayTracingState.m_shadowReprojectMergeBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_shadowReprojectMergeBindingLayout){
             m_rayTracingState.m_shadowReprojectMergePipelineFailed = true;

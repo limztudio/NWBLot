@@ -51,7 +51,7 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
     if(!m_rayTracingState.m_refractionBindingLayout){
         Core::BindingLayoutDesc desc(m_arena);
         desc.setVisibility(Core::ShaderType::Compute);
-        desc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(__hidden_rt_refraction::RefractionPushConstants)));
+        desc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(__hidden_rt_refraction::RefractionPushConstants)));
         m_rayTracingState.m_refractionBindingLayout = device.createBindingLayout(desc);
         if(!m_rayTracingState.m_refractionBindingLayout)
             return false;

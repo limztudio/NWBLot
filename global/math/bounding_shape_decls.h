@@ -33,17 +33,17 @@ struct BoundingSphere{
         : centerRadius(centerRadiusValue)
     {}
 
-    [[nodiscard]] static SIMDVector GLB_SIMD_CALL transformSphereValue(SIMDVector sphereValue, const SIMDMatrix& matrix)noexcept;
-    [[nodiscard]] static SIMDVector GLB_SIMD_CALL transformSphereValue(SIMDVector sphereValue, f32 scale, SIMDVector rotation, SIMDVector translation)noexcept;
-    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL containsPointValue(SIMDVector sphereValue, SIMDVector point)noexcept;
-    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL containsTriangleValue(SIMDVector sphereValue, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
-    [[nodiscard]] static bool GLB_SIMD_CALL intersectsTriangleValue(SIMDVector sphereValue, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
-    [[nodiscard]] static PlaneIntersectionType::Enum GLB_SIMD_CALL intersectsPlaneValue(SIMDVector sphereValue, SIMDVector plane)noexcept;
-    [[nodiscard]] static bool GLB_SIMD_CALL intersectsRayValue(SIMDVector sphereValue, SIMDVector origin, SIMDVector direction, f32& outDistance)noexcept;
-    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL containedByValue(SIMDVector sphereValue, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept;
-    [[nodiscard]] static SIMDVector GLB_SIMD_CALL mergeSphereValues(SIMDVector sphereValue0, SIMDVector sphereValue1, bool& outDirectCopy, bool& outCopyFirst)noexcept;
-    [[nodiscard]] static SIMDVector GLB_SIMD_CALL sphereFromCenterExtentsValue(SIMDVector centerValue, SIMDVector extentsValue)noexcept;
-    [[nodiscard]] static SIMDVector GLB_SIMD_CALL sphereFromCornersValue(const SIMDVector* corners, usize cornerCount)noexcept;
+    [[nodiscard]] static SIMDVector GLB_SIMD_CALL TransformSphereValue(SIMDVector sphereValue, const SIMDMatrix& matrix)noexcept;
+    [[nodiscard]] static SIMDVector GLB_SIMD_CALL TransformSphereValue(SIMDVector sphereValue, f32 scale, SIMDVector rotation, SIMDVector translation)noexcept;
+    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL ContainsPointValue(SIMDVector sphereValue, SIMDVector point)noexcept;
+    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL ContainsTriangleValue(SIMDVector sphereValue, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
+    [[nodiscard]] static bool GLB_SIMD_CALL IntersectsTriangleValue(SIMDVector sphereValue, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
+    [[nodiscard]] static PlaneIntersectionType::Enum GLB_SIMD_CALL IntersectsPlaneValue(SIMDVector sphereValue, SIMDVector plane)noexcept;
+    [[nodiscard]] static bool GLB_SIMD_CALL IntersectsRayValue(SIMDVector sphereValue, SIMDVector origin, SIMDVector direction, f32& outDistance)noexcept;
+    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL ContainedByValue(SIMDVector sphereValue, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept;
+    [[nodiscard]] static SIMDVector GLB_SIMD_CALL MergeSphereValues(SIMDVector sphereValue0, SIMDVector sphereValue1, bool& outDirectCopy, bool& outCopyFirst)noexcept;
+    [[nodiscard]] static SIMDVector GLB_SIMD_CALL SphereFromCenterExtentsValue(SIMDVector centerValue, SIMDVector extentsValue)noexcept;
+    [[nodiscard]] static SIMDVector GLB_SIMD_CALL SphereFromCornersValue(const SIMDVector* corners, usize cornerCount)noexcept;
 
     void GLB_SIMD_CALL transform(BoundingSphere& outSphere, const SIMDMatrix& matrix)const noexcept;
     void GLB_SIMD_CALL transform(BoundingSphere& outSphere, f32 scale, SIMDVector rotation, SIMDVector translation)const noexcept;
@@ -80,11 +80,11 @@ struct BoundingSphere{
         SIMDVector plane5
     )const noexcept;
 
-    static void createMerged(BoundingSphere& outSphere, const BoundingSphere& sphere0, const BoundingSphere& sphere1)noexcept;
-    static void createFromBoundingBox(BoundingSphere& outSphere, const BoundingBox& box)noexcept;
-    static void createFromBoundingBox(BoundingSphere& outSphere, const BoundingOrientedBox& box)noexcept;
-    static void createFromPoints(BoundingSphere& outSphere, usize count, const Float3U* points, usize stride)noexcept;
-    static void createFromFrustum(BoundingSphere& outSphere, const BoundingFrustum& frustum)noexcept;
+    static void CreateMerged(BoundingSphere& outSphere, const BoundingSphere& sphere0, const BoundingSphere& sphere1)noexcept;
+    static void CreateFromBoundingBox(BoundingSphere& outSphere, const BoundingBox& box)noexcept;
+    static void CreateFromBoundingBox(BoundingSphere& outSphere, const BoundingOrientedBox& box)noexcept;
+    static void CreateFromPoints(BoundingSphere& outSphere, usize count, const Float3U* points, usize stride)noexcept;
+    static void CreateFromFrustum(BoundingSphere& outSphere, const BoundingFrustum& frustum)noexcept;
 };
 
 
@@ -106,16 +106,16 @@ struct BoundingBox{
         , extents(extentsValue)
     {}
 
-    static void GLB_SIMD_CALL transformBoxValue(SIMDVector boxCenter, SIMDVector boxExtents, const SIMDMatrix& matrix, SIMDVector& outCenter, SIMDVector& outExtents)noexcept;
-    static void GLB_SIMD_CALL transformBoxValue(SIMDVector boxCenter, SIMDVector boxExtents, f32 scale, SIMDVector rotation, SIMDVector translation, SIMDVector& outCenter, SIMDVector& outExtents)noexcept;
-    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL containsPointValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector point)noexcept;
-    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL containsTriangleValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
-    [[nodiscard]] static bool GLB_SIMD_CALL intersectsTriangleValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
-    [[nodiscard]] static PlaneIntersectionType::Enum GLB_SIMD_CALL intersectsPlaneValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector plane)noexcept;
-    [[nodiscard]] static bool GLB_SIMD_CALL intersectsRayValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector origin, SIMDVector direction, f32& outDistance)noexcept;
-    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL containedByValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept;
-    static void GLB_SIMD_CALL mergeBoxValues(SIMDVector boxCenter0, SIMDVector boxExtents0, SIMDVector boxCenter1, SIMDVector boxExtents1, SIMDVector& outCenter, SIMDVector& outExtents)noexcept;
-    static void GLB_SIMD_CALL cornersValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector* outCorners)noexcept;
+    static void GLB_SIMD_CALL TransformBoxValue(SIMDVector boxCenter, SIMDVector boxExtents, const SIMDMatrix& matrix, SIMDVector& outCenter, SIMDVector& outExtents)noexcept;
+    static void GLB_SIMD_CALL TransformBoxValue(SIMDVector boxCenter, SIMDVector boxExtents, f32 scale, SIMDVector rotation, SIMDVector translation, SIMDVector& outCenter, SIMDVector& outExtents)noexcept;
+    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL ContainsPointValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector point)noexcept;
+    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL ContainsTriangleValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
+    [[nodiscard]] static bool GLB_SIMD_CALL IntersectsTriangleValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
+    [[nodiscard]] static PlaneIntersectionType::Enum GLB_SIMD_CALL IntersectsPlaneValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector plane)noexcept;
+    [[nodiscard]] static bool GLB_SIMD_CALL IntersectsRayValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector origin, SIMDVector direction, f32& outDistance)noexcept;
+    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL ContainedByValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept;
+    static void GLB_SIMD_CALL MergeBoxValues(SIMDVector boxCenter0, SIMDVector boxExtents0, SIMDVector boxCenter1, SIMDVector boxExtents1, SIMDVector& outCenter, SIMDVector& outExtents)noexcept;
+    static void GLB_SIMD_CALL CornersValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector* outCorners)noexcept;
 
     void GLB_SIMD_CALL transform(BoundingBox& outBox, const SIMDMatrix& matrix)const noexcept;
     void GLB_SIMD_CALL transform(BoundingBox& outBox, f32 scale, SIMDVector rotation, SIMDVector translation)const noexcept;
@@ -152,10 +152,10 @@ struct BoundingBox{
         SIMDVector plane5
     )const noexcept;
 
-    static void createMerged(BoundingBox& outBox, const BoundingBox& box0, const BoundingBox& box1)noexcept;
-    static void createFromSphere(BoundingBox& outBox, const BoundingSphere& sphere)noexcept;
-    static void GLB_SIMD_CALL createFromPoints(BoundingBox& outBox, SIMDVector point0, SIMDVector point1)noexcept;
-    static void createFromPoints(BoundingBox& outBox, usize count, const Float3U* points, usize stride)noexcept;
+    static void CreateMerged(BoundingBox& outBox, const BoundingBox& box0, const BoundingBox& box1)noexcept;
+    static void CreateFromSphere(BoundingBox& outBox, const BoundingSphere& sphere)noexcept;
+    static void GLB_SIMD_CALL CreateFromPoints(BoundingBox& outBox, SIMDVector point0, SIMDVector point1)noexcept;
+    static void CreateFromPoints(BoundingBox& outBox, usize count, const Float3U* points, usize stride)noexcept;
 };
 
 
@@ -188,15 +188,15 @@ struct BoundingOrientedBox{
         , orientation(orientationValue)
     {}
 
-    static void GLB_SIMD_CALL transformOrientedBoxValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, const SIMDMatrix& matrix, SIMDVector& outCenter, SIMDVector& outExtents, SIMDVector& outOrientation, bool& outCollapsedToAxisAligned)noexcept;
-    static void GLB_SIMD_CALL transformOrientedBoxValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, f32 scale, SIMDVector rotation, SIMDVector translation, SIMDVector& outCenter, SIMDVector& outExtents, SIMDVector& outOrientation)noexcept;
-    static void GLB_SIMD_CALL cornersValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector* outCorners)noexcept;
-    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL containsPointValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector point)noexcept;
-    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL containsTriangleValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
-    [[nodiscard]] static bool GLB_SIMD_CALL intersectsTriangleValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
-    [[nodiscard]] static PlaneIntersectionType::Enum GLB_SIMD_CALL intersectsPlaneValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector plane)noexcept;
-    [[nodiscard]] static bool GLB_SIMD_CALL intersectsRayValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector origin, SIMDVector direction, f32& outDistance)noexcept;
-    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL containedByValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept;
+    static void GLB_SIMD_CALL TransformOrientedBoxValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, const SIMDMatrix& matrix, SIMDVector& outCenter, SIMDVector& outExtents, SIMDVector& outOrientation, bool& outCollapsedToAxisAligned)noexcept;
+    static void GLB_SIMD_CALL TransformOrientedBoxValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, f32 scale, SIMDVector rotation, SIMDVector translation, SIMDVector& outCenter, SIMDVector& outExtents, SIMDVector& outOrientation)noexcept;
+    static void GLB_SIMD_CALL CornersValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector* outCorners)noexcept;
+    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL ContainsPointValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector point)noexcept;
+    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL ContainsTriangleValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
+    [[nodiscard]] static bool GLB_SIMD_CALL IntersectsTriangleValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
+    [[nodiscard]] static PlaneIntersectionType::Enum GLB_SIMD_CALL IntersectsPlaneValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector plane)noexcept;
+    [[nodiscard]] static bool GLB_SIMD_CALL IntersectsRayValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector origin, SIMDVector direction, f32& outDistance)noexcept;
+    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL ContainedByValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept;
 
     void GLB_SIMD_CALL transform(BoundingOrientedBox& outBox, const SIMDMatrix& matrix)const noexcept;
     void GLB_SIMD_CALL transform(BoundingOrientedBox& outBox, f32 scale, SIMDVector rotation, SIMDVector translation)const noexcept;
@@ -233,8 +233,8 @@ struct BoundingOrientedBox{
         SIMDVector plane5
     )const noexcept;
 
-    static void createFromBoundingBox(BoundingOrientedBox& outBox, const BoundingBox& box)noexcept;
-    static void createFromPoints(BoundingOrientedBox& outBox, usize count, const Float3U* points, usize stride)noexcept;
+    static void CreateFromBoundingBox(BoundingOrientedBox& outBox, const BoundingBox& box)noexcept;
+    static void CreateFromPoints(BoundingOrientedBox& outBox, usize count, const Float3U* points, usize stride)noexcept;
 };
 
 
@@ -293,14 +293,14 @@ struct BoundingFrustum{
     {}
     explicit BoundingFrustum(const SIMDMatrix& projection, bool rightHandedCoordinates = false)noexcept;
 
-    static void GLB_SIMD_CALL transformFrustumValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, const SIMDMatrix& matrix, SIMDVector& outOrigin, SIMDVector& outOrientation, f32& outRightSlope, f32& outLeftSlope, f32& outTopSlope, f32& outBottomSlope, f32& outNearPlane, f32& outFarPlane)noexcept;
-    static void GLB_SIMD_CALL transformFrustumValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, f32 scale, SIMDVector rotation, SIMDVector translation, SIMDVector& outOrigin, SIMDVector& outOrientation, f32& outRightSlope, f32& outLeftSlope, f32& outTopSlope, f32& outBottomSlope, f32& outNearPlane, f32& outFarPlane)noexcept;
-    static void GLB_SIMD_CALL cornersValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector* outCorners)noexcept;
-    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL containsPointValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector point)noexcept;
-    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL containsTriangleValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
-    [[nodiscard]] static PlaneIntersectionType::Enum GLB_SIMD_CALL intersectsPlaneValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector plane)noexcept;
-    [[nodiscard]] static bool GLB_SIMD_CALL intersectsRayValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector rayOrigin, SIMDVector direction, f32& outDistance)noexcept;
-    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL containedByValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept;
+    static void GLB_SIMD_CALL TransformFrustumValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, const SIMDMatrix& matrix, SIMDVector& outOrigin, SIMDVector& outOrientation, f32& outRightSlope, f32& outLeftSlope, f32& outTopSlope, f32& outBottomSlope, f32& outNearPlane, f32& outFarPlane)noexcept;
+    static void GLB_SIMD_CALL TransformFrustumValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, f32 scale, SIMDVector rotation, SIMDVector translation, SIMDVector& outOrigin, SIMDVector& outOrientation, f32& outRightSlope, f32& outLeftSlope, f32& outTopSlope, f32& outBottomSlope, f32& outNearPlane, f32& outFarPlane)noexcept;
+    static void GLB_SIMD_CALL CornersValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector* outCorners)noexcept;
+    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL ContainsPointValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector point)noexcept;
+    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL ContainsTriangleValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
+    [[nodiscard]] static PlaneIntersectionType::Enum GLB_SIMD_CALL IntersectsPlaneValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector plane)noexcept;
+    [[nodiscard]] static bool GLB_SIMD_CALL IntersectsRayValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector rayOrigin, SIMDVector direction, f32& outDistance)noexcept;
+    [[nodiscard]] static ContainmentType::Enum GLB_SIMD_CALL ContainedByValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept;
 
     void GLB_SIMD_CALL transform(BoundingFrustum& outFrustum, const SIMDMatrix& matrix)const noexcept;
     void GLB_SIMD_CALL transform(BoundingFrustum& outFrustum, f32 scale, SIMDVector rotation, SIMDVector translation)const noexcept;
@@ -348,7 +348,7 @@ struct BoundingFrustum{
         SIMDVector* bottomPlaneOut
     )const noexcept;
 
-    static void GLB_SIMD_CALL createFromMatrix(
+    static void GLB_SIMD_CALL CreateFromMatrix(
         BoundingFrustum& outFrustum,
         const SIMDMatrix& projection,
         bool rightHandedCoordinates = false

@@ -814,7 +814,7 @@ private:
             text.append(path[i].data(), path[i].size());
         }
 
-        return Value::reference(MStringView(text.data(), text.size()), m_arena);
+        return Value::Reference(MStringView(text.data(), text.size()), m_arena);
     }
 
     [[nodiscard]] bool isNameInList(const ScratchNameList& names, MStringView name)const{

@@ -59,29 +59,29 @@ public:
 
 class UiNumericEditLoanTests : public NumericFixture{
 protected:
-    [[nodiscard]] static PopupOptions parentOptions(){
+    [[nodiscard]] static PopupOptions ParentOptions(){
         PopupOptions options;
         options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
         options.size = { 340.0f, 420.0f };
         return options;
     }
 
-    [[nodiscard]] static PopupOptions childOptions(){
+    [[nodiscard]] static PopupOptions ChildOptions(){
         PopupOptions options;
         options.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
         options.size = { 340.0f, 420.0f };
         return options;
     }
 
-    [[nodiscard]] static ListOptions listOptions(){
-        ListOptions options;
+    [[nodiscard]] static ListOptions ListOptions(){
+        NWB::Impl::Ui::ListOptions options;
         options.height = { LayoutSizePolicy::Fixed, 140.0f };
         options.rowHeight = 24.0f;
         return options;
     }
 
     [[nodiscard]] bool beginParent(const u64 generation){
-        return begin(generation) && m_builder.beginPopup("parent", m_parent, parentOptions());
+        return begin(generation) && m_builder.beginPopup("parent", m_parent, ParentOptions());
     }
 
     [[nodiscard]] bool finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }
@@ -185,7 +185,7 @@ TEST_F(UiNumericEditLoanTests, LaterVirtualListCallbackRejectsAnAlreadyPaintedNu
     ListState list;
     ASSERT_TRUE(beginNumeric(1u));
     ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
-    ASSERT_TRUE(m_builder.virtualList("list", source, list, listOptions()).valid);
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, ListOptions()).valid);
     source.onText = &m_integer;
     EXPECT_FALSE(m_builder.endPanel());
     EXPECT_TRUE(source.mutationApplied);
@@ -199,7 +199,7 @@ TEST_F(UiNumericEditLoanTests, NumericLoanRemainsLiveAfterItsChildPopupEnds){
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(1u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
     ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_builder.endPopup());
     EXPECT_EQ(m_host.publishes, 0u);
@@ -217,8 +217,8 @@ TEST_F(UiNumericEditLoanTests, ChildSourceCallbackRejectsAnAlreadyPaintedParentN
     m_child.open();
     ASSERT_TRUE(beginParent(1u));
     ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    ASSERT_TRUE(m_builder.virtualList("list", source, list, listOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, ListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     source.onText = &m_integer;
     EXPECT_FALSE(m_builder.endPopup());
@@ -234,8 +234,8 @@ TEST_F(UiNumericEditLoanTests, ParentSourceCallbackRejectsTheEndedChildNumericLo
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(1u));
-    ASSERT_TRUE(m_builder.virtualList("list", source, list, listOptions()).valid);
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, ListOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
     ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_builder.endPopup());
     source.onText = &m_integer;
@@ -255,9 +255,9 @@ TEST_F(UiNumericEditLoanTests, FinalSourceValidationCannotMutateAParentNumericLo
     m_child.open();
     ASSERT_TRUE(beginParent(1u));
     ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
-    ASSERT_TRUE(m_builder.virtualList("list", parentSource, parentList, listOptions()).valid);
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    ASSERT_TRUE(m_builder.virtualList("list", childSource, childList, listOptions()).valid);
+    ASSERT_TRUE(m_builder.virtualList("list", parentSource, parentList, ListOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.virtualList("list", childSource, childList, ListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     childSource.armSource = &parentSource;
     childSource.armModel = &m_integer;
@@ -277,11 +277,11 @@ TEST_F(UiNumericEditLoanTests, LaterSiblingSourceRejectsAnAlreadyPaintedEndedChi
     m_child.open();
     sibling.open();
     ASSERT_TRUE(beginParent(1u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
     ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
     ASSERT_TRUE(m_builder.endPopup());
-    ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, childOptions()));
-    ASSERT_TRUE(m_builder.virtualList("list", source, list, listOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, ChildOptions()));
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, ListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     source.onText = &m_integer;
     EXPECT_FALSE(m_builder.endPopup());
@@ -297,9 +297,9 @@ TEST_F(UiNumericEditLoanTests, ClosedAncestorSuppressesNumericPublicationAndHidd
     m_parent.open();
     m_child.open();
     ASSERT_TRUE(beginParent(1u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
     ASSERT_TRUE(m_builder.integerEdit("integer", m_integer, m_integerState).edit.valid);
-    ASSERT_TRUE(m_builder.virtualList("list", source, list, listOptions()).valid);
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, ListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     const usize loans = m_host.loans;
     source.resetCounters();

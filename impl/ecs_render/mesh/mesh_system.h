@@ -71,13 +71,13 @@ namespace ECSRenderDetail{
         Core::BufferHandle swBvhNodeBuffer;
         Core::BufferHandle swBvhParentBuffer;
         CsgReceiverCpuBounds csgLocalBounds;
-        Core::GpuDescriptorHandle runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle meshletDescHeapHandle = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle meshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle swBvhPositionHeapHandle = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle swBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle meshletDescHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle meshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle swBvhPositionHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle swBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle swBvhParentHeapHandle = Core::GpuDescriptorHandle::Invalid();
         u32 meshletCount = 0u;
         u32 meshletPrimitiveIndexCount = 0u;
         u32 blasRefitsSinceRebuild = 0u;
@@ -123,7 +123,7 @@ private:
 
 public:
     template<typename BindingHandler>
-    static void forEachMeshSourceBindingSlot(BindingHandler&& handler){
+    static void ForEachMeshSourceBindingSlot(BindingHandler&& handler){
         handler(s_MeshPositionBindingSlot, false);
         handler(s_MeshNormalBindingSlot, false);
         handler(s_MeshTangentBindingSlot, false);
@@ -136,7 +136,7 @@ public:
         handler(s_MeshletLocalVertexRefBindingSlot, false);
         handler(s_MeshletPrimitiveIndexBindingSlot, true);
     }
-    [[nodiscard]] static const Core::BufferHandle& meshSourceBuffer(const MeshResources& mesh, u32 bindingSlot){
+    [[nodiscard]] static const Core::BufferHandle& MeshSourceBuffer(const MeshResources& mesh, u32 bindingSlot){
         switch(bindingSlot){
         case s_MeshPositionBindingSlot: return mesh.positionBuffer;
         case s_MeshNormalBindingSlot: return mesh.normalBuffer;
@@ -155,9 +155,9 @@ public:
         }
     }
     template<typename BufferHandler>
-    static void forEachMeshSourceBuffer(const MeshResources& mesh, BufferHandler&& handler){
-        forEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool rawView){
-            handler(bindingSlot, meshSourceBuffer(mesh, bindingSlot), rawView);
+    static void ForEachMeshSourceBuffer(const MeshResources& mesh, BufferHandler&& handler){
+        ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool rawView){
+            handler(bindingSlot, MeshSourceBuffer(mesh, bindingSlot), rawView);
         });
     }
 
@@ -182,7 +182,7 @@ public:
     [[nodiscard]] bool findRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
     [[nodiscard]] bool prepareComputeEmulationResources(MeshResources& mesh);
     [[nodiscard]] bool prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline);
-    [[nodiscard]] static ECSRenderDetail::ObjectGeometryCacheSnapshot objectGeometryCacheSnapshot(const MeshResources& mesh);
+    [[nodiscard]] static ECSRenderDetail::ObjectGeometryCacheSnapshot ObjectGeometryCacheSnapshot(const MeshResources& mesh);
     [[nodiscard]] bool confirmObjectGeometryCache(
         const Name& meshKey,
         const RuntimeMeshBuffers& sourceBuffers,

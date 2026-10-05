@@ -68,7 +68,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
     sampler.setDescription(description);
 
     NWB::Impl::SamplerAssetCodec codec;
-    NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::makeAssetBytes(testArena);
+    NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     ASSERT_TRUE(codec.serialize(sampler, binary));
     ASSERT_EQ(binary.size(), sizeof(NWB::Impl::SamplerBinaryPayload::HeaderBinary));
     const NWB::Core::Assets::AssetBytes validBinary(binary);
@@ -130,7 +130,7 @@ TEST(AssetsGraphics, SamplerCookerBuildsSamplerAsset){
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::prepareAssetsGraphicsCookCase(
+    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
         testArena,
         "sampler_cooker_round_trip",
         root,
@@ -138,11 +138,11 @@ TEST(AssetsGraphics, SamplerCookerBuildsSamplerAsset){
     ));
 
     const Path assetRoot = root / "assets";
-    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(assetRoot / "samplers" / "linear_clamp.nwb", s_SamplerTestMetadata));
-    ASSERT_TRUE(AssetsGraphicsFixture::cookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "linear_clamp.nwb", s_SamplerTestMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    ASSERT_TRUE(AssetsGraphicsFixture::loadCookedAsset<NWB::Impl::SamplerAssetCodec>(
+    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(
         testArena,
         outputDirectory,
         Name("project/samplers/linear_clamp"),
@@ -192,7 +192,7 @@ TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReduction
 
         NWB::Core::Metascript::Document document(testArena.arena);
         ASSERT_TRUE(document.parse(AStringView(metadata)));
-        const Path assetRoot = AssetsGraphicsFixture::assetsGraphicsTestCaseRoot(testArena, "sampler_unsupported_metadata") / "assets";
+        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "sampler_unsupported_metadata") / "assets";
         const Path metadataPath = assetRoot / "samplers" / "linear_clamp.nwb";
         NWB::Impl::SamplerCookEntry entry(testArena.arena);
         NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
@@ -226,7 +226,7 @@ TEST(AssetsGraphics, SamplerCookerRejectsDeprecatedVersionMetadata){
     NWB::Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(document.parse(AStringView(metadata.data(), metadata.size())));
 
-    const Path assetRoot = AssetsGraphicsFixture::assetsGraphicsTestCaseRoot(testArena, "sampler_unsupported_metadata") / "assets";
+    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "sampler_unsupported_metadata") / "assets";
     const Path metadataPath = assetRoot / "samplers" / "linear_clamp.nwb";
     NWB::Impl::SamplerCookEntry entry(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);

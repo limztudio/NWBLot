@@ -42,7 +42,7 @@ using FrameData = BasicFrameData<s_FrameStoragePointerSlotCount>;
 
 class Frame{
 public:
-    static void print(BasicStringView<tchar> str, Log::Type::Enum type);
+    static void Print(BasicStringView<tchar> str, Log::Type::Enum type);
 
 
 public:

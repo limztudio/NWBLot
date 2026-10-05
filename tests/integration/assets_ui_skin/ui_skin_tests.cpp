@@ -360,7 +360,7 @@ TEST(AssetsUiSkin, CookedMetadataLoadsThroughRuntimeAssetRegistry){
     Core::Assets::AssetRegistry runtimeRegistry(testArena.arena);
     Core::Assets::RegisterAutoCollectedAssetCodecs(runtimeRegistry);
     UniquePtr<Core::Assets::IAsset> loadedAsset;
-    ASSERT_TRUE(runtimeRegistry.deserializeAsset(UiSkin::assetTypeName(), skin.virtualPath(), binary, loadedAsset));
+    ASSERT_TRUE(runtimeRegistry.deserializeAsset(UiSkin::AssetTypeName(), skin.virtualPath(), binary, loadedAsset));
     EXPECT_NE(Core::Assets::CastAsset<UiSkin>(loadedAsset.get()), nullptr);
     EXPECT_EQ(logger.errorCount(), 0u);
 }

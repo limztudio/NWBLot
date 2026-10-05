@@ -48,7 +48,7 @@ struct FinalizeTask{
         Core::GpuUploadBlobId inputUpload;
     };
 
-    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         usize inputBytes = 0u;
         const void* const inputs = context.declarations.uploadBlobData(payload.inputUpload, inputBytes);
         if(!payload.source || !payload.finalize || !inputs || context.commandIrCapture)

@@ -281,7 +281,7 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
 
     Perf::Session perfSession(testArena.arena);
     Telemetry::CaptureSession capture(testArena.arena);
-    capture.setCaptureOptions(Telemetry::CaptureOptions::perfOnly());
+    capture.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
     perfSession.beginFrame(40u);
     perfSession.publishFrame();
     const Telemetry::PerfSessionRecordResult disabled = capture.recordPerfReport(perfSession.report(), 23u);
@@ -318,12 +318,12 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
     EXPECT_EQ(scratch.allocationCount, scratchLiveStats.allocationCount);
     EXPECT_EQ(scratch.reallocationCount, scratchLiveStats.reallocationCount);
     EXPECT_EQ(scratch.deallocationCount, scratchLiveStats.allocationCount);
-    capture.setCaptureOptions(Telemetry::CaptureOptions::disabled());
+    capture.setCaptureOptions(Telemetry::CaptureOptions::Disabled());
     const Telemetry::PerfSessionRecordResult filtered = capture.recordPerfReport(perfSession.report(), 23u);
     EXPECT_FALSE(filtered.ok());
     EXPECT_EQ(filtered.memoryEvents, 0u);
     EXPECT_EQ(capture.eventCount(), 0u);
-    capture.setCaptureOptions(Telemetry::CaptureOptions::perfOnly());
+    capture.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
     const Telemetry::PerfSessionRecordResult firstRecorded = capture.recordPerfReport(perfSession.report(), 23u);
     ASSERT_TRUE(firstRecorded.ok());
     EXPECT_GT(firstRecorded.memoryEvents, 0u);
@@ -454,7 +454,7 @@ TEST(AllocationOwnerTelemetry, SharedNameSumsLiveUsageAndPreservesLargestIndivid
     EXPECT_EQ(delta.peakUsedBytes, 0);
 
     Telemetry::CaptureSession capture(testArena.arena);
-    capture.setCaptureOptions(Telemetry::CaptureOptions::perfOnly());
+    capture.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
     const Telemetry::PerfSessionRecordResult recorded = capture.recordPerfReport(perfSession.report(), 17u);
     ASSERT_TRUE(recorded.ok());
     Log::TelemetryReport report(testArena.arena);
@@ -472,7 +472,7 @@ TEST(AllocationOwnerTelemetry, SharedNameSumsLiveUsageAndPreservesLargestIndivid
 TEST(AllocationOwnerTelemetry, KeepsHeapBackingRecordsWithoutCountingTheirUsageAgain){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::perfOnly());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
     const Name owner("tests/telemetry/shared_source_identity");
     const Perf::MemorySource::Enum sources[] = {
         Perf::MemorySource::ExplicitScope, Perf::MemorySource::Arena, Perf::MemorySource::HeapBacking,
@@ -534,7 +534,7 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
     NameDetail::HashToDebugString(unknownHash, unknownHashText, sizeof(unknownHashText));
 
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::perfOnly());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
     // Exact hash fallback text reproduces an opt/fin producer that has no local symbol sidecar loaded.
     ASSERT_TRUE(Telemetry::RecordPerfMemory(
         recorder, firstOwner, firstHashText, MakeSnapshot(firstOwner, Perf::MemorySource::Arena), TelemetryTestDetail::MakeTestMemoryDelta(-1), 91u
@@ -584,7 +584,7 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
 TEST(AllocationOwnerTelemetry, ReportsRawOnlyHeapBackingInItsOwnSummaryDomain){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::perfOnly());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
     const Name owner("core/alloc/heap_backing");
     const Perf::MemorySnapshot snapshot = MakeSnapshot(owner, Perf::MemorySource::HeapBacking);
     const Perf::MemoryDelta delta = TelemetryTestDetail::MakeTestMemoryDelta(-1);

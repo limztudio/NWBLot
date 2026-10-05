@@ -61,14 +61,14 @@ struct RangeContext{
         const Core::GpuPhysicalQueueId owner = s_Owner,
         const Core::GpuPhysicalQueueId destination = {}
     ){
-        Access::stateHandoffBuffers(handoff).push_back({
+        Access::StateHandoffBuffers(handoff).push_back({
             .buffer = buffer.get(),
             .state = state,
             .ownerQueue = owner,
             .releaseDestinationQueue = destination,
             .range = range,
         });
-        Access::validateStateHandoff(handoff, s_DeviceGeneration);
+        Access::ValidateStateHandoff(handoff, s_DeviceGeneration);
     }
 };
 
@@ -88,7 +88,7 @@ TEST(BufferRangeHandoff, FanInCombinesDisjointBranchChangesAgainstWholeBufferBas
     const Handoff* const branches[] = { &first, &second };
 
     ASSERT_TRUE(result.buildFanIn(base, branches, LengthOf(branches), scratch));
-    const auto& states = Access::stateHandoffBuffers(result);
+    const auto& states = Access::StateHandoffBuffers(result);
     ASSERT_EQ(states.size(), 3u);
     EXPECT_EQ(states[0u].range, Core::BufferRange(0u, 64u));
     EXPECT_EQ(states[0u].state, Core::ResourceStates::CopyDest);
@@ -113,16 +113,16 @@ TEST(BufferRangeHandoff, FanInRejectsConflictingOverlapAndKeepsIdenticalOverlap)
     Handoff first(context.arena);
     Handoff second(context.arena);
     Handoff result(context.arena);
-    Access::validateStateHandoff(base, s_DeviceGeneration);
+    Access::ValidateStateHandoff(base, s_DeviceGeneration);
     context.addState(first, { 0u, 128u }, Core::ResourceStates::CopyDest);
     context.addState(second, { 64u, 128u }, Core::ResourceStates::CopySource);
     const Handoff* const branches[] = { &first, &second };
     EXPECT_FALSE(result.buildFanIn(base, branches, LengthOf(branches), scratch));
     EXPECT_FALSE(result.valid());
 
-    Access::stateHandoffBuffers(second)[0u].state = Core::ResourceStates::CopyDest;
+    Access::StateHandoffBuffers(second)[0u].state = Core::ResourceStates::CopyDest;
     ASSERT_TRUE(result.buildFanIn(base, branches, LengthOf(branches), scratch));
-    const auto& states = Access::stateHandoffBuffers(result);
+    const auto& states = Access::StateHandoffBuffers(result);
     ASSERT_EQ(states.size(), 1u);
     EXPECT_EQ(states[0u].range, Core::BufferRange(0u, 192u));
     EXPECT_FALSE(result.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Owner));
@@ -135,13 +135,13 @@ TEST(BufferRangeHandoff, FanInPreservesOwnershipOnDifferentIntervals){
     Handoff first(context.arena);
     Handoff second(context.arena);
     Handoff result(context.arena);
-    Access::validateStateHandoff(base, s_DeviceGeneration);
+    Access::ValidateStateHandoff(base, s_DeviceGeneration);
     context.addState(first, { 0u, 128u }, Core::ResourceStates::CopyDest, s_Owner, s_Destination);
     context.addState(second, { 128u, 128u }, Core::ResourceStates::CopyDest, s_Destination, {});
     const Handoff* const branches[] = { &first, &second };
 
     ASSERT_TRUE(result.buildFanIn(base, branches, LengthOf(branches), scratch));
-    ASSERT_EQ(Access::stateHandoffBuffers(result).size(), s_ExpectedDualCount);
+    ASSERT_EQ(Access::StateHandoffBuffers(result).size(), s_ExpectedDualCount);
     EXPECT_TRUE(result.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Destination, { 0u, 128u }));
     EXPECT_TRUE(result.coversBufferWithOwnership(context.buffer.get(), s_Destination, s_Destination, { 128u, 128u }));
     EXPECT_FALSE(result.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Destination));
@@ -153,7 +153,7 @@ TEST(BufferRangeHandoff, FanInRejectsOverlappingStatesWithinOneSnapshot){
     Handoff base(context.arena);
     Handoff branch(context.arena);
     Handoff result(context.arena);
-    Access::validateStateHandoff(base, s_DeviceGeneration);
+    Access::ValidateStateHandoff(base, s_DeviceGeneration);
     context.addState(branch, { 0u, 128u }, Core::ResourceStates::CopyDest);
     context.addState(branch, { 64u, 128u }, Core::ResourceStates::CopyDest);
     const Handoff* const branches[] = { &branch };
@@ -170,7 +170,7 @@ TEST(BufferRangeHandoff, SubsetClipsIntervalsAndSupportsInPlaceSelection){
     context.addState(source, { 192u, 64u }, Core::ResourceStates::CopySource);
 
     ASSERT_TRUE(result.buildBufferRangeSubset(source, context.buffer.get(), { 32u, 192u }));
-    const auto& states = Access::stateHandoffBuffers(result);
+    const auto& states = Access::StateHandoffBuffers(result);
     ASSERT_EQ(states.size(), 3u);
     EXPECT_EQ(states[0u].range, Core::BufferRange(32u, 32u));
     EXPECT_EQ(states[1u].range, Core::BufferRange(64u, 128u));
@@ -180,7 +180,7 @@ TEST(BufferRangeHandoff, SubsetClipsIntervalsAndSupportsInPlaceSelection){
     ASSERT_TRUE(source.buildBufferRangeSubset(source, context.buffer.get(), { 32u, 192u }));
     EXPECT_TRUE(result.equivalentTo(source));
 
-    Access::stateHandoffBuffers(source)[0u].range.byteOffset = 33u;
+    Access::StateHandoffBuffers(source)[0u].range.byteOffset = 33u;
     EXPECT_FALSE(result.equivalentTo(source));
 }
 
@@ -205,9 +205,9 @@ TEST(BufferRangeHandoff, OwnershipRequiresGapFreeAndNonoverlappingCoverage){
     context.addState(source, { 0u, 128u }, Core::ResourceStates::ShaderResource);
     EXPECT_TRUE(source.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Owner));
 
-    Access::stateHandoffBuffers(source)[1u].range.byteSize = 127u;
+    Access::StateHandoffBuffers(source)[1u].range.byteSize = 127u;
     EXPECT_FALSE(source.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Owner));
-    Access::stateHandoffBuffers(source)[1u].range.byteSize = 129u;
+    Access::StateHandoffBuffers(source)[1u].range.byteSize = 129u;
     EXPECT_FALSE(source.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Owner));
     EXPECT_FALSE(source.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Owner, { 256u, 1u }));
     EXPECT_FALSE(source.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Owner, { 0u, 0u }));
@@ -219,28 +219,28 @@ TEST(BufferRangeHandoff, SymbolicWholeBufferStateIsClippedToRequestedTail){
     Handoff result(context.arena);
     context.addState(source, Core::s_EntireBuffer, Core::ResourceStates::ShaderResource);
     ASSERT_TRUE(result.buildBufferRangeSubset(source, context.buffer.get(), { 192u, Core::BufferRange::s_AllBytes }));
-    ASSERT_EQ(Access::stateHandoffBuffers(result).size(), 1u);
-    EXPECT_EQ(Access::stateHandoffBuffers(result)[0u].range, Core::BufferRange(192u, 64u));
+    ASSERT_EQ(Access::StateHandoffBuffers(result).size(), 1u);
+    EXPECT_EQ(Access::StateHandoffBuffers(result)[0u].range, Core::BufferRange(192u, 64u));
     EXPECT_TRUE(result.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Owner, { 192u, 64u }));
 
     EXPECT_FALSE(result.buildBufferRangeSubset(source, context.buffer.get(), { 256u, 1u }));
-    EXPECT_EQ(Access::stateHandoffBuffers(result)[0u].range, Core::BufferRange(192u, 64u));
+    EXPECT_EQ(Access::StateHandoffBuffers(result)[0u].range, Core::BufferRange(192u, 64u));
 }
 
 TEST(BufferRangeHandoff, PermanentBufferStateRemainsWholeResourceInRangeSubset){
     RangeContext context;
     Handoff source(context.arena);
     Handoff result(context.arena);
-    Access::stateHandoffPermanentBuffers(source).push_back({
+    Access::StateHandoffPermanentBuffers(source).push_back({
         .buffer = context.buffer.get(),
         .state = Core::ResourceStates::ShaderResource,
         .ownerQueue = s_Owner,
         .releaseDestinationQueue = s_Destination,
     });
-    Access::validateStateHandoff(source, s_DeviceGeneration);
+    Access::ValidateStateHandoff(source, s_DeviceGeneration);
     ASSERT_TRUE(result.buildBufferRangeSubset(source, context.buffer.get(), { 64u, 64u }));
-    ASSERT_EQ(Access::stateHandoffPermanentBuffers(result).size(), 1u);
-    EXPECT_EQ(Access::stateHandoffPermanentBuffers(result)[0u].range, Core::s_EntireBuffer);
+    ASSERT_EQ(Access::StateHandoffPermanentBuffers(result).size(), 1u);
+    EXPECT_EQ(Access::StateHandoffPermanentBuffers(result)[0u].range, Core::s_EntireBuffer);
     EXPECT_TRUE(result.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Destination));
 }
 
@@ -253,12 +253,12 @@ TEST(BufferRangeHandoff, PendingReleaseIntervalsRemainDistinctAndCannotBeClipped
     Handoff second(context.arena);
     Handoff result(context.arena);
     Handoff subset(context.arena);
-    Access::validateStateHandoff(base, s_DeviceGeneration);
+    Access::ValidateStateHandoff(base, s_DeviceGeneration);
     context.addState(first, { 0u, 128u }, Core::ResourceStates::CopyDest, s_Owner, s_Destination);
     context.addState(second, { 128u, 128u }, Core::ResourceStates::CopyDest, s_Owner, s_Destination);
     const Handoff* const branches[] = { &first, &second };
     ASSERT_TRUE(result.buildFanIn(base, branches, LengthOf(branches), scratch));
-    const auto& states = Access::stateHandoffBuffers(result);
+    const auto& states = Access::StateHandoffBuffers(result);
     ASSERT_EQ(states.size(), s_ExpectedDualCount);
     EXPECT_EQ(states[0u].range, Core::BufferRange(0u, 128u));
     EXPECT_EQ(states[1u].range, Core::BufferRange(128u, 128u));
@@ -267,7 +267,7 @@ TEST(BufferRangeHandoff, PendingReleaseIntervalsRemainDistinctAndCannotBeClipped
     ASSERT_TRUE(subset.buildBufferRangeSubset(result, context.buffer.get(), { 0u, 128u }));
     EXPECT_TRUE(subset.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Destination, { 0u, 128u }));
 
-    Access::stateHandoffBuffers(second)[0u].range = { 64u, 64u };
+    Access::StateHandoffBuffers(second)[0u].range = { 64u, 64u };
     EXPECT_FALSE(result.buildFanIn(base, branches, LengthOf(branches), scratch));
     EXPECT_FALSE(result.valid());
 }

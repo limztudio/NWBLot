@@ -16,7 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool FrameTimingBeginGraphTask::record(
+bool FrameTimingBeginGraphTask::Record(
     const Payload& payload,
     CommandList& commandList,
     const GpuTaskRecordContext& context
@@ -28,7 +28,7 @@ bool FrameTimingBeginGraphTask::record(
     ;
 }
 
-void FrameTimingBeginGraphTask::accepted(Payload& payload, const QueueSubmissionToken& token){
+void FrameTimingBeginGraphTask::Accepted(Payload& payload, const QueueSubmissionToken& token){
     if(!payload.frameTimingTransaction)
         return;
     if(!payload.frameTimingTransaction->confirmBeginSubmission(token)){

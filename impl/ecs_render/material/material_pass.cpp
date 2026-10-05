@@ -51,7 +51,7 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
     for(u32 slotIndex = 0u; slotIndex < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++slotIndex)
         snapshot.geometryHeapHandles[slotIndex] = mesh.geometryHeapHandles[slotIndex];
     snapshot.emulationVertexBuffer = mesh.emulationVertexBuffer;
-    snapshot.objectGeometryCache = RendererMeshSystem::objectGeometryCacheSnapshot(mesh);
+    snapshot.objectGeometryCache = RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh);
     snapshot.emulationVertexHeapHandle = mesh.emulationVertexHeapHandle;
     snapshot.emulationIndexByteOffset = mesh.emulationIndexByteOffset;
     snapshot.meshletCount = mesh.meshletCount;
@@ -556,7 +556,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                     && !m_meshSystem.prepareObjectGeometryCache(mesh, resources.objectGeometryDecodePipeline)
                 )
                     return false;
-                const auto cache = RendererMeshSystem::objectGeometryCacheSnapshot(mesh);
+                const auto cache = RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh);
                 return cache.valid() && cache.decoderPipeline == resources.objectGeometryDecodePipeline;
             }
             case RenderPath::ComputeEmulation:

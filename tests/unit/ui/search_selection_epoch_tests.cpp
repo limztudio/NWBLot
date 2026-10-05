@@ -149,7 +149,7 @@ protected:
     [[nodiscard]] bool declareEpochSearch(const u64 generation){
         if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 280.0f }))
             return false;
-        m_searchResult = m_builder.searchComboBox("combo", m_epochSource, m_search, options());
+        m_searchResult = m_builder.searchComboBox("combo", m_epochSource, m_search, Options());
         return m_searchResult.combo.valid;
     }
 

@@ -99,14 +99,14 @@ void ExpectSliderRect(const Rect& actual, const Rect& expected){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SliderOptions SliderFixture::options(){
+SliderOptions SliderFixture::Options(){
     SliderOptions settings;
     settings.width = { LayoutSizePolicy::Fixed, 280.0f };
     settings.keyStep = 0.125;
     return settings;
 }
 
-ListOptions SliderFixture::siblingOptions(){
+ListOptions SliderFixture::SiblingOptions(){
     ListOptions settings;
     settings.width = { LayoutSizePolicy::Fixed, 280.0f };
     settings.height = { LayoutSizePolicy::Fixed, 48.0f };
@@ -156,7 +156,7 @@ bool SliderFixture::accept(const u64 generation, const SliderOptions& settings, 
 }
 
 bool SliderFixture::sibling(const AStringView key){
-    return m_builder.virtualList(key, m_laterSource, m_laterState, siblingOptions()).valid;
+    return m_builder.virtualList(key, m_laterSource, m_laterState, SiblingOptions()).valid;
 }
 
 WidgetId SliderFixture::host()const{

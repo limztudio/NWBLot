@@ -109,7 +109,7 @@ struct GpuTimingSubscriptionCapture{
     u32 sampleCount = 0u;
 
 
-    static void invoke(void* const context, const Core::GpuTimingSample&){
+    static void Invoke(void* const context, const Core::GpuTimingSample&){
         GpuTimingSubscriptionCapture* const capture = static_cast<GpuTimingSubscriptionCapture*>(context);
         if(!capture)
             return;
@@ -142,11 +142,11 @@ TEST(GpuTimingSampleSubscriptions, ScopedDemandsReplaceAtomicallyAndRemainSubscr
     const Name duplicateScopes[] = { firstScope, firstScope };
     const Core::GpuTimingSampleSubscription first = recorder.subscribeSampleListener(Core::GpuTimingSampleListener{
         .context = &firstCapture,
-        .invoke = &GpuTimingSubscriptionCapture::invoke,
+        .invoke = &GpuTimingSubscriptionCapture::Invoke,
     });
     const Core::GpuTimingSampleSubscription second = recorder.subscribeSampleListener(Core::GpuTimingSampleListener{
         .context = &secondCapture,
-        .invoke = &GpuTimingSubscriptionCapture::invoke,
+        .invoke = &GpuTimingSubscriptionCapture::Invoke,
     });
 
     ASSERT_TRUE(first.valid());

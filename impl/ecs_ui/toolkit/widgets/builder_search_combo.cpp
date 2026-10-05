@@ -59,15 +59,15 @@ bool Builder::prepareComboSearch(const WidgetState& field, ComboFrame& frame){
     frame.queryChanged = result.textChanged;
     frame.editorSubmitted = result.submitted;
     if(result.cancelled){
-        ComboBehavior::close(*frame.state);
+        ComboBehavior::Close(*frame.state);
         m_context.input().closePopup(frame.popupToken);
         frame.open = false;
     }
     snapshotComboQuery(frame);
-    if(!SearchComboBehavior::filter(state, *frame.searchSource))
+    if(!SearchComboBehavior::Filter(state, *frame.searchSource))
         return false;
     frame.results = &frame.searchSource->filtered();
-    if(!ListBehavior::reconcile(frame.state->m_list, *frame.results))
+    if(!ListBehavior::Reconcile(frame.state->m_list, *frame.results))
         return false;
     frame.listToken = { frame.state->m_list.inputGeneration(), frame.results->instanceGeneration(), frame.results->revision() };
     frame.resultCount = frame.results->rowCount();

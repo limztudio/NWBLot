@@ -134,36 +134,36 @@ struct SourceMeshBuildContext{
 
 class FbxSourceMeshStreams final : NoCopy{
 public:
-    static void reserveSourceMeshStreams(
+    static void ReserveSourceMeshStreams(
         SourceMeshStreams& mesh,
         const usize estimatedTriangleCorners,
         const bool wantsSkinning
     );
-    static void reserveSourceMeshBuildContext(
+    static void ReserveSourceMeshBuildContext(
         SourceMeshBuildContext& context,
         const usize estimatedTriangleCorners,
         const bool wantsSkinning
     );
-    [[nodiscard]] static bool sourceMeshHasCompleteTangents(const SourceMeshStreams& mesh);
-    static void dropSourceMeshTangents(SourceMeshStreams& mesh);
-    [[nodiscard]] static bool ensureTriangleIndexScratchCapacity(
+    [[nodiscard]] static bool SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh);
+    static void DropSourceMeshTangents(SourceMeshStreams& mesh);
+    [[nodiscard]] static bool EnsureTriangleIndexScratchCapacity(
         const ufbx_mesh& mesh,
         UtilityVector<u32>& inOutTriangleIndices
     );
     template<typename Value, typename Lookup>
-    [[nodiscard]] static bool internSourceValue(
+    [[nodiscard]] static bool InternSourceValue(
         UtilityVector<Value>& stream,
         Lookup& lookup,
         const Value& value,
         const AStringView streamName,
         u32& outIndex
     );
-    [[nodiscard]] static bool generateSourceMeshTangents(
+    [[nodiscard]] static bool GenerateSourceMeshTangents(
         SourceMeshStreams& mesh,
         const bool usedDefaultUvs,
         SourceTangentReport& outTangentReport
     );
-    [[nodiscard]] static bool internSourceCorner(
+    [[nodiscard]] static bool InternSourceCorner(
         SourceMeshBuildContext& context,
         const SourceTriangleCorner& corner,
         const bool wantsSkinning,
@@ -180,7 +180,7 @@ public:
 
 
 template<typename Value, typename Lookup>
-[[nodiscard]] bool FbxSourceMeshStreams::internSourceValue(
+[[nodiscard]] bool FbxSourceMeshStreams::InternSourceValue(
     UtilityVector<Value>& stream,
     Lookup& lookup,
     const Value& value,

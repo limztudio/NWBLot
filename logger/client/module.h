@@ -67,7 +67,7 @@ class Client final : public ClientBase<Client, s_ClientName>{
 
 
 private:
-    static bool globalInit();
+    static bool GlobalInit();
 
 
 public:
@@ -136,7 +136,7 @@ class ClientStandalone final : public ClientBase<ClientStandalone, s_ClientStand
 
 
 private:
-    static bool globalInit();
+    static bool GlobalInit();
 
 
 public:

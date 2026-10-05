@@ -50,9 +50,9 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
     TestArena testArena;
     Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
     Path root(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::prepareAssetsGraphicsCaseRoot(testArena, "object_geometry_metadata", root));
+    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "object_geometry_metadata", root));
     const Path metadataPath = root / "shader.nwb";
-    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(root / "shader.slang", "void main(){}\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "void main(){}\n"));
     struct MetadataCase{
         AStringView stage;
         AStringView fields;
@@ -77,7 +77,7 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
         metadata.append(testCase.stage.data(), testCase.stage.size());
         metadata.append("\";\nasset.entry_point = \"main\";\n");
         metadata.append(testCase.fields.data(), testCase.fields.size());
-        ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(metadataPath, AStringView(metadata.data(), metadata.size())));
+        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, AStringView(metadata.data(), metadata.size())));
         const u32 priorErrors = logger.errorCount();
         EXPECT_EQ(shaderCook.parseShaderMeta(metadataPath, entry, scratchArena), testCase.accepted);
         if(testCase.accepted){
@@ -97,11 +97,11 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     TestArena testArena;
     Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
     Path root(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::prepareAssetsGraphicsCaseRoot(testArena, "object_geometry_plan", root));
+    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "object_geometry_plan", root));
     const Path meshRoot = root / "impl" / "assets" / "graphics" / "mesh";
-    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(meshRoot / "shared_ms.slang", "void main(){}\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(meshRoot / "object_shared.slangi", "static const uint NWB_TEST_OBJECT_SHARED_VALUE = 1u;\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(meshRoot / "object_vs.slang", "#include \"object_shared.slangi\"\nvoid main(){}\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "shared_ms.slang", "void main(){}\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_shared.slangi", "static const uint NWB_TEST_OBJECT_SHARED_VALUE = 1u;\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_vs.slang", "#include \"object_shared.slangi\"\nvoid main(){}\n"));
     Plan::ResolvedCookPaths paths(testArena.arena);
     paths.repoRoot = root;
     paths.cacheDirectory = root / "cache";
@@ -167,7 +167,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     EXPECT_TRUE(standalonePlan.preparedEntries.empty());
     EXPECT_EQ(standalonePlan.plannedFileCount, 3u);
     const u64 oldChecksum = plan.preparedEntries[0].dependencyChecksum;
-    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(meshRoot / "object_shared.slangi", s_SharedSlangiValueSnippet));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_shared.slangi", s_SharedSlangiValueSnippet));
     Plan::PreparedShaderPlan changedPlan(testArena.arena);
     ASSERT_TRUE(Plan::AppendMeshObjectShaderEntries(testArena.arena, shaderCook, paths, mesh, changedPlan, scratchArena));
     ASSERT_EQ(changedPlan.preparedEntries.size(), 1u);

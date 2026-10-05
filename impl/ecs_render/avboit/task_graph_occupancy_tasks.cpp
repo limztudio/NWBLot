@@ -31,7 +31,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AvboitPreGraphTask::record(
+[[nodiscard]] bool AvboitPreGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -67,7 +67,7 @@ namespace RendererTaskGraphDetail{
     return true;
 }
 
-[[nodiscard]] bool AvboitOccupancyComputeEmulationGraphTask::record(
+[[nodiscard]] bool AvboitOccupancyComputeEmulationGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -82,7 +82,7 @@ namespace RendererTaskGraphDetail{
     return RecordAvboitComputeEmulationFromPayload(payload, commandList, context, &Payload::occupancyTiming, trait);
 }
 
-[[nodiscard]] bool AvboitOccupancySharedComputeEmulationGraphTask::record(
+[[nodiscard]] bool AvboitOccupancySharedComputeEmulationGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -97,7 +97,7 @@ namespace RendererTaskGraphDetail{
     return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, context, &Payload::occupancyTiming, payload.phase == AvboitOccupancySharedComputeEmulationGraphTask::Phase::Raster, trait);
 }
 
-[[nodiscard]] bool AvboitOccupancyGraphTask::record(
+[[nodiscard]] bool AvboitOccupancyGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -139,7 +139,7 @@ namespace RendererTaskGraphDetail{
     );
 }
 
-[[nodiscard]] bool AvboitDepthWarpGraphTask::record(
+[[nodiscard]] bool AvboitDepthWarpGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -163,13 +163,13 @@ namespace RendererTaskGraphDetail{
     return true;
 }
 
-void AvboitDepthWarpGraphTask::accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
+void AvboitDepthWarpGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
     if(payload.timingFeedback)
         payload.timingFeedback->acceptSubmission(payload.timingAttribution, token);
     payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
 }
 
-void AvboitDepthWarpGraphTask::discarded(Payload& payload){
+void AvboitDepthWarpGraphTask::Discarded(Payload& payload){
     if(payload.timingFeedback)
         payload.timingFeedback->discardRecording(payload.timingAttribution);
     payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;

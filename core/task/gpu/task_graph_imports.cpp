@@ -91,7 +91,7 @@ usize GpuTaskGraph::ResourcePointerHasher::operator()(const ResourcePointerKey& 
     return hash;
 }
 
-GpuTaskGraph::ResourcePointerKey GpuTaskGraph::resourcePointerKey(const GpuGraphResourceNode& resource)noexcept{
+GpuTaskGraph::ResourcePointerKey GpuTaskGraph::MakeResourcePointerKey(const GpuGraphResourceNode& resource)noexcept{
     switch(resource.type){
     case GpuGraphResourceType::Texture:
         return { resource.texture.get(), resource.type };
@@ -375,7 +375,7 @@ bool GpuTaskGraph::declarePresentEndpoint(const GpuPresentEndpoint& endpoint){
         return false;
 
     m_presentEndpoint = endpoint;
-    m_declarationRevision = allocateGeneration();
+    m_declarationRevision = AllocateGeneration();
     m_hasPresentEndpoint = true;
     return true;
 }
@@ -470,14 +470,14 @@ void GpuTaskGraph::prepareResourceIndexes(const ResourcePointerKey& pendingPoint
             const GpuGraphResourceNode& resource = m_resources[index];
             // Insertion retains the first ordinal; later declarations must never replace earlier lookup priority.
             identities.emplace(resource.identity.identityHash(), static_cast<u32>(index));
-            if(resourcePointerKey(resource).pointer)
+            if(MakeResourcePointerKey(resource).pointer)
                 ++pointerCount;
         }
         Optional<ResourcePointerIndex> pointers;
         if(pointerCount != 0u){
             pointers.emplace(AddSize(pointerCount, pointerCount), m_arena);
             for(usize index = 0u; index < m_resources.size(); ++index){
-                const ResourcePointerKey key = resourcePointerKey(m_resources[index]);
+                const ResourcePointerKey key = MakeResourcePointerKey(m_resources[index]);
                 if(key.pointer)
                     pointers->emplace(key, static_cast<u32>(index));
             }

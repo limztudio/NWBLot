@@ -302,7 +302,7 @@ Server* g_ServerLogger = nullptr;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Server::crashIngestUpdate(Server* self){
+void Server::CrashIngestUpdate(Server* self){
     for(;;){
         self->m_crashIngestSemaphore.acquire();
 
@@ -329,7 +329,7 @@ void Server::crashIngestUpdate(Server* self){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MHD_Result Server::requestCallback(void* serverContext, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* uploadData, size_t* uploadDataSizeAddress, void** connectionContextAddress){
+MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* uploadData, size_t* uploadDataSizeAddress, void** connectionContextAddress){
     static_cast<void>(version);
 
     if(!serverContext || !connection || !url || !method || !uploadDataSizeAddress || !connectionContextAddress)
@@ -515,7 +515,7 @@ bool Server::internalInit(
         0u,
         nullptr,
         nullptr,
-        &Server::requestCallback,
+        &Server::RequestCallback,
         this,
         MHD_OPTION_SOCK_ADDR_LEN,
         static_cast<socklen_t>(sizeof(listenAddress)),
@@ -527,7 +527,7 @@ bool Server::internalInit(
         return false;
 
     m_crashIngestExit.store(false, MemoryOrder::release);
-    m_crashIngestThread = Thread(Server::crashIngestUpdate, this);
+    m_crashIngestThread = Thread(Server::CrashIngestUpdate, this);
     return true;
 }
 
@@ -573,7 +573,7 @@ bool Server::internalUpdate(){
         LogString formattedMessage = FormatMessageForProcessing(BaseType::arena(), msg);
         Core::Common::NameSymbols::DecodeHashTokens(BaseType::arena(), formattedMessage);
 
-        Frame::print(formattedMessage, type);
+        Frame::Print(formattedMessage, type);
         m_processedMessageFile.writeLine(formattedMessage);
     }
 

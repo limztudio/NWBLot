@@ -43,11 +43,11 @@ public:
     };
 
 
-    [[nodiscard]] static bool prepareReadbackFinalState(
+    [[nodiscard]] static bool PrepareReadbackFinalState(
         void* rawContext,
         const Core::CommandListResourceStateHandoff* finalState
     );
-    [[nodiscard]] static bool acceptReadbackFinalState(
+    [[nodiscard]] static bool AcceptReadbackFinalState(
         void* rawContext,
         const Core::QueueSubmissionToken& token
     );

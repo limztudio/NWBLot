@@ -48,7 +48,7 @@ TEST(OutputLayerShape, PreservesUploadOnlyAndCompleteColorForms){
     EXPECT_FALSE(layer.validShape());
     layer.colorVersion = { 3u, 2u };
     EXPECT_FALSE(layer.validShape());
-    layer.sampledImage = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::SampledImage, 4u);
+    layer.sampledImage = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::SampledImage, 4u);
     EXPECT_TRUE(layer.validShape());
 
     layer.readyTask = {};
@@ -65,7 +65,7 @@ TEST(OutputLayerShape, RejectsPartialColorWithoutAReadyTask){
     EXPECT_FALSE(layer.validShape());
 
     layer.colorVersion = {};
-    layer.sampledImage = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::SampledImage, 4u);
+    layer.sampledImage = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::SampledImage, 4u);
     EXPECT_FALSE(layer.validShape());
 }
 

@@ -70,7 +70,7 @@ CpuTaskScheduler::Execution::~Execution(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 CpuTaskScheduler::allocateDomainIdentity()noexcept{
+u64 CpuTaskScheduler::AllocateDomainIdentity()noexcept{
     static Atomic<u64> next{ 1u };
     const u64 identity = next.fetch_add(1u, MemoryOrder::relaxed);
     if(identity == 0u)
@@ -78,23 +78,23 @@ u64 CpuTaskScheduler::allocateDomainIdentity()noexcept{
     return identity;
 }
 
-CpuTaskSchedulerConfig CpuTaskScheduler::workerConfig(const u32 workerCount){
+CpuTaskSchedulerConfig CpuTaskScheduler::WorkerConfig(const u32 workerCount){
     CpuTaskSchedulerConfig config;
     config.workerCount = workerCount;
     return config;
 }
 
-usize CpuTaskScheduler::queueIndex(const CpuTaskOptions& options)noexcept{
+usize CpuTaskScheduler::QueueIndex(const CpuTaskOptions& options)noexcept{
     const usize target = options.target == CpuTaskTarget::MainThread ? s_MainThreadTargetSlot : static_cast<usize>(options.cost);
     return static_cast<usize>(options.priority) * s_CostSlotCount + target;
 }
 
 
 CpuTaskScheduler::CpuTaskScheduler(const u32 workerCount)
-    : CpuTaskScheduler(workerConfig(workerCount))
+    : CpuTaskScheduler(WorkerConfig(workerCount))
 {}
 CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
-    : m_domainIdentity(allocateDomainIdentity())
+    : m_domainIdentity(AllocateDomainIdentity())
     , m_mainThread(QueryCurrentThreadId())
     , m_profileEventCapacity(config.profileEventCapacity)
     , m_arena(TaskArenaScope::s_CpuTaskScheduler)
@@ -364,7 +364,7 @@ bool CpuTaskScheduler::wasCanceledLocked(const TaskHandle handle)const noexcept{
 
 void CpuTaskScheduler::enqueueLocked(const u32 index)noexcept{
     TaskNode& node = m_nodes[index];
-    ReadyQueue& queue = m_ready[queueIndex(node.options)];
+    ReadyQueue& queue = m_ready[QueueIndex(node.options)];
     node.state = TaskState::Ready;
     if(m_profileEnabled.load(MemoryOrder::relaxed))
         profileReadyLocked(index);

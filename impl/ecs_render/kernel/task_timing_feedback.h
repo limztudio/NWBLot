@@ -120,7 +120,7 @@ private:
 // Renderer owns timing lifetime; compiler consumes only an immutable history snapshot.
 class RendererTaskTimingFeedback final : NoCopy{
 private:
-    static void onGpuTimingSampleCallback(void* context, const Core::GpuTimingSample& sample)noexcept;
+    static void OnGpuTimingSampleCallback(void* context, const Core::GpuTimingSample& sample)noexcept;
 
 
 public:

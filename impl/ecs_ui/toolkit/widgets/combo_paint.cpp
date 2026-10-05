@@ -90,7 +90,7 @@ bool Builder::paintComboPopup(ComboFrame& frame){
     const Rect& anchor = frame.state->bounds();
     if(frame.visibleField.width <= 0.0f || frame.visibleField.height <= 0.0f){
         m_context.discardPopupScope(frame.popupToken);
-        ComboBehavior::close(*frame.state);
+        ComboBehavior::Close(*frame.state);
         frame.open = false;
         if(frame.search){
             frame.search->m_editor.focused = false;
@@ -105,7 +105,7 @@ bool Builder::paintComboPopup(ComboFrame& frame){
     options.anchor = anchor;
     options.size = { anchor.width, frame.options.popupHeight };
     PopupPlacement placement;
-    if(!PopupLayout::place(options, m_paint.displayMetrics(), placement))
+    if(!PopupLayout::Place(options, m_paint.displayMetrics(), placement))
         return false;
     const Insets padding{ Max(frame.popupStyle.padding.left, background->padding.left),
         Max(frame.popupStyle.padding.top, background->padding.top), Max(frame.popupStyle.padding.right, background->padding.right),

@@ -80,7 +80,7 @@ public:
 
 
 private:
-    static void writeMemory(OutputFileStream& output, const Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount>& snapshots);
+    static void WriteMemory(OutputFileStream& output, const Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount>& snapshots);
 
 
 private:

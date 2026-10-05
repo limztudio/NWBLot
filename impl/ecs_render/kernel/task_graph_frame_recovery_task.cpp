@@ -22,7 +22,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameRecoveryGraphTask::record(
+[[nodiscard]] bool FrameRecoveryGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -36,7 +36,7 @@ namespace ECSRenderDetail{
     ;
 }
 
-void FrameRecoveryGraphTask::accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+void FrameRecoveryGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
     if(
         payload.armed
         && payload.retiresFrameTiming
@@ -54,7 +54,7 @@ void FrameRecoveryGraphTask::accepted(Payload& payload, const Core::QueueSubmiss
         *payload.retiresFrameTiming = false;
 }
 
-void FrameRecoveryGraphTask::discarded(Payload& payload){
+void FrameRecoveryGraphTask::Discarded(Payload& payload){
     if(payload.armed && *payload.armed && payload.frameTimingTransaction)
         payload.frameTimingTransaction->discard();
     if(payload.armed)

@@ -234,8 +234,8 @@ struct GpuRasterTask{
         GpuSdfGraphResources sdfPages;
         GpuTextureGraphResources textureImages;
     };
-    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token);
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
 };
 
 struct GpuOutputTask{
@@ -249,8 +249,8 @@ struct GpuOutputTask{
         Core::GraphicsPipelineHandle pipeline;
         u32 presentationMode = NWB_UI_PRESENTATION_SDR;
     };
-    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token);
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
 };
 
 
@@ -264,13 +264,13 @@ struct GpuRendererState final : NoCopy{
         Core::Assets::AssetManager& assets,
         GpuRenderer::ShaderPathResolveCallback resolver
     );
-    [[nodiscard]] static bool matchesAcquired(
+    [[nodiscard]] static bool MatchesAcquired(
         const Core::AcquiredPresentationFrame& first,
         const Core::AcquiredPresentationFrame& second
     );
-    [[nodiscard]] static bool validateGlyphPages(const DrawSnapshot& snapshot);
-    [[nodiscard]] static bool validateSdfPages(const DrawSnapshot& snapshot);
-    [[nodiscard]] static bool validateTextureImages(const DrawSnapshot& snapshot);
+    [[nodiscard]] static bool ValidateGlyphPages(const DrawSnapshot& snapshot);
+    [[nodiscard]] static bool ValidateSdfPages(const DrawSnapshot& snapshot);
+    [[nodiscard]] static bool ValidateTextureImages(const DrawSnapshot& snapshot);
     [[nodiscard]] bool createResources();
     [[nodiscard]] GpuVersion<GpuTargetVersion> createTarget(u32 width, u32 height);
     [[nodiscard]] GpuVersion<GpuGlyphVersion> prepareGlyphPage(const SharedGlyphPage& page);

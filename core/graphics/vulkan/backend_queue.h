@@ -120,7 +120,7 @@ private:
         {}
     };
 
-    static void updateCommandBufferHighWater(Atomic<u64>& highWaterCount, u64 currentCount)noexcept;
+    static void UpdateCommandBufferHighWater(Atomic<u64>& highWaterCount, u64 currentCount)noexcept;
     [[nodiscard]] u64 nextRecordingID()noexcept;
     void registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept;
     [[nodiscard]] bool validateCommandBufferSubmissionState(const TrackedCommandBuffer& commandBuffer)const;

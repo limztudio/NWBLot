@@ -56,13 +56,13 @@ struct PacketLifecycleTask{
         Graphics::QueueSubmissionToken* acceptedToken = nullptr;
     };
 
-    static void accepted(Payload& payload, const Graphics::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Graphics::QueueSubmissionToken& token){
         if(payload.acceptedCount)
             ++*payload.acceptedCount;
         if(payload.acceptedToken)
             *payload.acceptedToken = token;
     }
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         if(payload.discardedCount)
             ++*payload.discardedCount;
     }
@@ -97,7 +97,7 @@ struct ReentrantCompileDuringDeclarationTask{
                 *compileAttempted = true;
             const Graphics::GpuTaskGraphCompiler compiler;
             const Graphics::GpuTaskGraph::DeclarationReadView declarations =
-                Graphics::GpuTaskGraph::DeclarationReadView::tryAcquire(*graph);
+                Graphics::GpuTaskGraph::DeclarationReadView::TryAcquire(*graph);
             bool succeeded = false;
             if(declarations.valid())
                 succeeded = compiler.analyze(declarations, *analysis, *scratchArena);
@@ -150,7 +150,7 @@ struct ReentrantTelemetryDuringDeclarationTask{
                 return;
 
             const Graphics::GpuTaskGraph::DeclarationReadView declarations =
-                Graphics::GpuTaskGraph::DeclarationReadView::tryAcquire(*state->graph);
+                Graphics::GpuTaskGraph::DeclarationReadView::TryAcquire(*state->graph);
             const Graphics::GpuCompiledGraph::ReadView compiledPlan(*state->compiledGraph);
             state->trackerValidationAttempted = true;
             state->trackerValidationSucceeded = state->tracker->validFor(
@@ -189,16 +189,16 @@ struct NoexceptLifecycleTask{
         u32* discardedCount = nullptr;
     };
 
-    static bool record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&)noexcept{
+    static bool Record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&)noexcept{
         if(payload.recordCount)
             ++*payload.recordCount;
         return true;
     }
 
-    static void accepted(Payload&, const Graphics::QueueSubmissionToken&)noexcept{
+    static void Accepted(Payload&, const Graphics::QueueSubmissionToken&)noexcept{
     }
 
-    static void discarded(Payload& payload)noexcept{
+    static void Discarded(Payload& payload)noexcept{
         if(payload.discardedCount)
             ++*payload.discardedCount;
     }
@@ -210,7 +210,7 @@ struct NativeRecordProbeTask{
         u32* recordCount = nullptr;
     };
 
-    static bool record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&){
+    static bool Record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&){
         if(payload.recordCount)
             ++*payload.recordCount;
         return true;
@@ -224,7 +224,7 @@ struct MalformedLifecycleTask{
         u32* discardedCount = nullptr;
     };
 
-    static bool record(
+    static bool Record(
         const Payload& payload,
         Graphics::CommandList&,
         const Graphics::GpuTaskRecordContext&,
@@ -235,12 +235,12 @@ struct MalformedLifecycleTask{
             ++*payload.recordCount;
         return true;
     }
-    static bool accepted(Payload& payload, const Graphics::QueueSubmissionToken&){
+    static bool Accepted(Payload& payload, const Graphics::QueueSubmissionToken&){
         if(payload.acceptedCount)
             ++*payload.acceptedCount;
         return true;
     }
-    static void discarded(const Payload& payload){
+    static void Discarded(const Payload& payload){
         if(payload.discardedCount)
             ++*payload.discardedCount;
     }

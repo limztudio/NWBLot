@@ -50,7 +50,7 @@ static constexpr Array<StringView, Section::kCount> s_SectionNames{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB::Impl::Ui::Rect TestbedUiWidgetGallery::layoutBounds(const NWB::Impl::Ui::DisplayMetrics& display){
+NWB::Impl::Ui::Rect TestbedUiWidgetGallery::LayoutBounds(const NWB::Impl::Ui::DisplayMetrics& display){
     using namespace __hidden_testbed_ui_gallery;
     const f32 height = s_SelectorHeight + s_ContentGap + s_ContentHeight;
     return {
@@ -79,7 +79,7 @@ void TestbedUiWidgetGallery::paint(NWB::Impl::UiPaintContext& context){
     using namespace NWB::Impl::Ui;
     using namespace __hidden_testbed_ui_gallery;
     Builder& ui = context.ui;
-    const Rect bounds = layoutBounds(context.display);
+    const Rect bounds = LayoutBounds(context.display);
     const u32 previous = m_selectedGallery;
     if(!ui.beginPanel("gallery_selector", { bounds.x, bounds.y, bounds.width, s_SelectorHeight }))
         return;

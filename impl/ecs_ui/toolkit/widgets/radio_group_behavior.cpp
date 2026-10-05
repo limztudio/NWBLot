@@ -128,7 +128,7 @@ namespace __hidden_ui_radio_group_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RadioGroupBehavior::reconcile(
+bool RadioGroupBehavior::Reconcile(
     RadioGroupState& state,
     const IListDataSource& source,
     RadioGroupChoices& choices,
@@ -207,7 +207,7 @@ bool RadioGroupBehavior::reconcile(
     return true;
 }
 
-bool RadioGroupBehavior::apply(
+bool RadioGroupBehavior::Apply(
     RadioGroupState& state,
     const RadioGroupChoices& choices,
     const RadioGroupOptions& options,

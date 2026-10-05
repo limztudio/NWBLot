@@ -27,7 +27,7 @@ namespace __hidden_graphics_gather{
 
 
 static bool ValidateRecordIdentity(const Core::ShaderArchive::Record& record){
-    const Name expectedPath = Core::ShaderArchive::buildVirtualPathName(record.shaderName, record.variantName, record.stage);
+    const Name expectedPath = Core::ShaderArchive::BuildVirtualPathName(record.shaderName, record.variantName, record.stage);
     if(expectedPath && expectedPath.hash() == record.virtualPathHash)
         return true;
 
@@ -50,7 +50,7 @@ bool MergeGatheredGraphicsAsset(
     Core::Assets::AssetBytes& existingPayload,
     const void* incomingPayload,
     const usize incomingSize){
-    if(virtualPath != Core::ShaderArchive::indexVirtualPathName())
+    if(virtualPath != Core::ShaderArchive::IndexVirtualPathName())
         return false;
     if(incomingSize > 0u && incomingPayload == nullptr)
         return false;
@@ -63,8 +63,8 @@ bool MergeGatheredGraphicsAsset(
 
     Core::GraphicsVector<Core::ShaderArchive::Record> records(arena);
     Core::GraphicsVector<Core::ShaderArchive::Record> incomingRecords(arena);
-    if(!Core::ShaderArchive::deserializeIndex(existingPayload, records)
-        || !Core::ShaderArchive::deserializeIndex(incomingBytes, incomingRecords))
+    if(!Core::ShaderArchive::DeserializeIndex(existingPayload, records)
+        || !Core::ShaderArchive::DeserializeIndex(incomingBytes, incomingRecords))
         return false;
     if(AddOverflows<usize>(records.size(), incomingRecords.size())){
         NWB_LOGGER_ERROR(GLB_TEXT("AssetGatherer: merged shader index size overflows"));
@@ -108,7 +108,7 @@ bool MergeGatheredGraphicsAsset(
     }
 
     Core::GraphicsBytes merged(arena);
-    if(!Core::ShaderArchive::serializeIndex(records, merged))
+    if(!Core::ShaderArchive::SerializeIndex(records, merged))
         return false;
     existingPayload = Move(merged);
     return true;

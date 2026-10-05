@@ -46,7 +46,7 @@ public:
 TEST(Telemetry, PendingNameEdgesChooseFirstDuplicateAndOmitMissingTargets){
     TestArena testArena;
     Telemetry::CaptureSession session(testArena.arena);
-    session.setCaptureOptions(Telemetry::CaptureOptions::frameGraphOnly());
+    session.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
 
     Telemetry::FrameGraphRegistry registry(testArena.arena);
     PendingNameFrameGraphContributor contributor;

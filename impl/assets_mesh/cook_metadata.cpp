@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshCookMetadata::buildDiscoveredNwbFile(
+bool MeshCookMetadata::BuildDiscoveredNwbFile(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
@@ -33,10 +33,10 @@ bool MeshCookMetadata::buildDiscoveredNwbFile(
 }
 
 
-bool MeshCookMetadata::accumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize& inOutCount){
+bool MeshCookMetadata::AccumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize& inOutCount){
     if(value.isList()){
         for(const Core::Metascript::Value& child : value.asList()){
-            if(!accumulateFlattenedValueLeafCount(child, inOutCount))
+            if(!AccumulateFlattenedValueLeafCount(child, inOutCount))
                 return false;
         }
         return true;
@@ -50,13 +50,13 @@ bool MeshCookMetadata::accumulateFlattenedValueLeafCount(const Core::Metascript:
 }
 
 
-bool MeshCookMetadata::countFlattenedValueLeaves(const Core::Metascript::Value& value, usize& outCount){
+bool MeshCookMetadata::CountFlattenedValueLeaves(const Core::Metascript::Value& value, usize& outCount){
     outCount = 0u;
-    return accumulateFlattenedValueLeafCount(value, outCount);
+    return AccumulateFlattenedValueLeafCount(value, outCount);
 }
 
 
-ScratchString MeshCookMetadata::makeIndexedLabel(
+ScratchString MeshCookMetadata::MakeIndexedLabel(
     Core::Alloc::ScratchArena& arena,
     const AStringView baseLabel,
     const usize index
@@ -75,7 +75,7 @@ ScratchString MeshCookMetadata::makeIndexedLabel(
 }
 
 
-const Core::Metascript::Value* MeshCookMetadata::findRequiredMetadataListField(
+const Core::Metascript::Value* MeshCookMetadata::FindRequiredMetadataListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& map,
     const TStringView metaKind,
@@ -93,7 +93,7 @@ const Core::Metascript::Value* MeshCookMetadata::findRequiredMetadataListField(
 }
 
 
-MetadataF32ValueFailure::Enum MeshCookMetadata::validateMetadataFiniteF32Value(
+MetadataF32ValueFailure::Enum MeshCookMetadata::ValidateMetadataFiniteF32Value(
     const Core::Metascript::Value& value,
     f32& outValue
 ){
@@ -111,7 +111,7 @@ MetadataF32ValueFailure::Enum MeshCookMetadata::validateMetadataFiniteF32Value(
 }
 
 
-void MeshCookMetadata::logMetadataFiniteF32ValueFailure(
+void MeshCookMetadata::LogMetadataFiniteF32ValueFailure(
     const Path& nwbFilePath,
     const TStringView metaKind,
     const AStringView label,
@@ -148,7 +148,7 @@ void MeshCookMetadata::logMetadataFiniteF32ValueFailure(
 }
 
 
-MetadataU32ValueFailure::Enum MeshCookMetadata::validateMetadataU32Value(const Core::Metascript::Value& value, u32& outValue){
+MetadataU32ValueFailure::Enum MeshCookMetadata::ValidateMetadataU32Value(const Core::Metascript::Value& value, u32& outValue){
     if(!value.isNumeric())
         return MetadataU32ValueFailure::NotNumeric;
 
@@ -163,7 +163,7 @@ MetadataU32ValueFailure::Enum MeshCookMetadata::validateMetadataU32Value(const C
 }
 
 
-void MeshCookMetadata::logMetadataU32ValueFailure(
+void MeshCookMetadata::LogMetadataU32ValueFailure(
     const Path& nwbFilePath,
     const TStringView metaKind,
     const AStringView label,
@@ -200,18 +200,18 @@ void MeshCookMetadata::logMetadataU32ValueFailure(
 }
 
 
-bool MeshCookMetadata::parseMetadataU32Value(
+bool MeshCookMetadata::ParseMetadataU32Value(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
     const TStringView metaKind,
     const AStringView label,
     u32& outValue
 ){
-    const MetadataU32ValueFailure::Enum failure = validateMetadataU32Value(value, outValue);
+    const MetadataU32ValueFailure::Enum failure = ValidateMetadataU32Value(value, outValue);
     if(failure == MetadataU32ValueFailure::None)
         return true;
 
-    logMetadataU32ValueFailure(nwbFilePath, metaKind, label, failure);
+    LogMetadataU32ValueFailure(nwbFilePath, metaKind, label, failure);
     return false;
 }
 

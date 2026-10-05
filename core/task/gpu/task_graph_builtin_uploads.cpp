@@ -36,7 +36,7 @@ struct UploadBufferPayload{
 };
 
 struct UploadBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<UploadBufferPayload>{
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
@@ -98,7 +98,7 @@ struct UploadTexturePayload{
 };
 
 struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<UploadTexturePayload>{
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
@@ -197,7 +197,7 @@ GpuUploadBlobId GpuTaskGraph::copyUploadData(
 
     const u32 index = static_cast<u32>(m_uploadBlobs.size());
     m_uploadBlobs.push_back(Move(blob));
-    m_declarationRevision = allocateGeneration();
+    m_declarationRevision = AllocateGeneration();
     return GpuUploadBlobId{ .generation = m_generation, .index = index };
 }
 

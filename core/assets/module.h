@@ -28,7 +28,7 @@ using AssetBytes = AssetVector<u8>;
 #define NWB_DEFINE_ASSET_TYPE(assetTypeLiteral) \
     static constexpr AStringView s_AssetTypeText = assetTypeLiteral; \
     inline static constexpr Name s_AssetTypeName = Name(assetTypeLiteral); \
-    [[nodiscard]] static const Name& assetTypeName(){ \
+    [[nodiscard]] static const Name& AssetTypeName(){ \
         return s_AssetTypeName; \
     }
 
@@ -99,16 +99,16 @@ template<typename AssetT>
 class TypedAsset : public IAsset{
 protected:
     TypedAsset()
-        : IAsset(AssetT::assetTypeName())
+        : IAsset(AssetT::AssetTypeName())
     {}
     explicit TypedAsset(const Name& virtualPath)
-        : IAsset(AssetT::assetTypeName(), virtualPath)
+        : IAsset(AssetT::AssetTypeName(), virtualPath)
     {}
 };
 
 template<typename AssetT>
 [[nodiscard]] inline const AssetT* CastAsset(const IAsset* asset){
-    if(!asset || asset->assetType() != AssetT::assetTypeName())
+    if(!asset || asset->assetType() != AssetT::AssetTypeName())
         return nullptr;
     return checked_cast<const AssetT*>(asset);
 }
@@ -162,7 +162,7 @@ template<typename AssetT>
 class AssetCodec : public IAssetCodec{
 protected:
     AssetCodec()
-        : IAssetCodec(AssetT::assetTypeName())
+        : IAssetCodec(AssetT::AssetTypeName())
     {}
 
 

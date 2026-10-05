@@ -135,10 +135,10 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     if(
         !planAccess.validFor(compiledGraph)
         || !artifactAccess.validFor(recordedGraph)
-        || !GpuGraphSubmissionTransaction::SubmissionOperation::activeFor(transaction)
+        || !GpuGraphSubmissionTransaction::SubmissionOperation::ActiveFor(transaction)
     )
         return false;
-    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
     if(!declarationAccess.valid())
         return false;
 

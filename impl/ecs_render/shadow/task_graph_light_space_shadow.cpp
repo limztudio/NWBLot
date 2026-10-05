@@ -91,7 +91,7 @@ struct ViewTask{
         LightSpaceShadowSnapshot snapshot;
     };
 
-    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(context.commandIrCapture)
             return false;
         if(!payload.shadowPrepared)
@@ -109,7 +109,7 @@ struct ShadeTask{
 
     using Payload = ViewTask::Payload;
 
-    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(context.commandIrCapture)
             return false;
         if(!payload.shadowPrepared)
@@ -156,7 +156,7 @@ struct CullTask{
 
     using Payload = CasterPayload;
 
-    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(context.commandIrCapture)
             return false;
         if(!payload.shadowPrepared)
@@ -181,7 +181,7 @@ struct CaptureTask{
         {}
     };
 
-    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(context.commandIrCapture)
             return false;
         if(!payload.shadowPrepared)

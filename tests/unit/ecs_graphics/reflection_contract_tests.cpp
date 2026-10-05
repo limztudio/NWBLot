@@ -123,7 +123,7 @@ TEST(EcsGraphics, ReflectionTemporalNoUpdatePreservesTheTaskAndSkipsNativeRecord
     const usize taskEnd = graph.find("\nstruct SpatialTask{", taskBegin);
     ASSERT_NE(taskEnd, AStringView::npos);
     const AStringView task = graph.substr(taskBegin, taskEnd - taskBegin);
-    const usize recordBegin = task.find("static bool record(");
+    const usize recordBegin = task.find("static bool Record(");
     ASSERT_NE(recordBegin, AStringView::npos);
     const usize recordEnd = task.find("\n    }", recordBegin);
     ASSERT_NE(recordEnd, AStringView::npos);
@@ -175,7 +175,7 @@ TEST(EcsGraphics, ReflectionUnavailableHardwareDisablesQueueingAndSkipsTlasDispa
     EXPECT_LT(upload.find("parameters.hardwareEnabled = 0u;"), upload.find("commandList.writeBuffer("));
 
     const usize dispatchBegin = graph.find("struct DispatchTask{");
-    const usize acceptedBegin = graph.find("static void accepted(", dispatchBegin);
+    const usize acceptedBegin = graph.find("static void Accepted(", dispatchBegin);
     ASSERT_NE(dispatchBegin, AStringView::npos);
     ASSERT_NE(acceptedBegin, AStringView::npos);
     const AStringView dispatch = graph.substr(dispatchBegin, acceptedBegin - dispatchBegin);

@@ -175,7 +175,7 @@ Impl::Ui::Rect UiComboSmokeScene::cursorRow()const{
     if(
         !m_visible || !m_state.isOpen() || !m_source.indexOf(list.cursorKey(), index)
         || index < placement.firstRow || index >= placement.endRow
-        || !Impl::Ui::ScrollLayout::rowBounds(index, placement, __hidden_ui_combo_smoke::s_RowHeight, rectangle)
+        || !Impl::Ui::ScrollLayout::RowBounds(index, placement, __hidden_ui_combo_smoke::s_RowHeight, rectangle)
     )
         return {};
     return rectangle;

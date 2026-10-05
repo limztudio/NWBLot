@@ -44,33 +44,33 @@ public:
     };
 
 
-    static void restorePrefixCpuState(
+    static void RestorePrefixCpuState(
         RendererMeshSystem& meshSystem,
         RendererDeferredSystem& deferredSystem
     );
-    static void restoreShadowCpuState(
+    static void RestoreShadowCpuState(
         RendererRayTracingState& rayTracingState,
         const RayTracingFrameCpuStateSnapshot& snapshot
     );
-    static void restoreCausticsCpuState(
+    static void RestoreCausticsCpuState(
         RendererRayTracingState& rayTracingState,
         const RayTracingFrameCpuStateSnapshot& snapshot
     );
-    static void restoreSurfelGiCpuState(
+    static void RestoreSurfelGiCpuState(
         RendererRayTracingState& rayTracingState,
         const RayTracingFrameCpuStateSnapshot& snapshot
     );
-    static void restoreAvboitCpuState(
+    static void RestoreAvboitCpuState(
         RendererAvboitSystem& avboitSystem,
         bool targetsNeedClear
     );
-    static void restorePostGbufferEffectsCpuState(
+    static void RestorePostGbufferEffectsCpuState(
         RendererRayTracingState& rayTracingState,
         RendererAvboitSystem& avboitSystem,
         const RayTracingFrameCpuStateSnapshot& snapshot,
         bool avboitTargetsNeedClear
     );
-    static void restorePostGbufferPacketCpuState(
+    static void RestorePostGbufferPacketCpuState(
         RendererMeshSystem& meshSystem,
         RendererDeferredSystem& deferredSystem,
         RendererRayTracingState& rayTracingState,

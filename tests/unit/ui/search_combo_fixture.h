@@ -259,9 +259,9 @@ protected:
         m_builder.setEditHost(&m_host);
     }
 
-    [[nodiscard]] static SearchComboOptions options(){
+    [[nodiscard]] static SearchComboOptions Options(){
         SearchComboOptions value;
-        value.combo = Options();
+        value.combo = NWB::UiComboTests::Options();
         value.combo.popupHeight = 220.0f;
         return value;
     }
@@ -269,7 +269,7 @@ protected:
     [[nodiscard]] bool declareSearch(const u64 generation){
         if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 280.0f }))
             return false;
-        m_searchResult = m_builder.searchComboBox("combo", m_searchSource, m_search, options());
+        m_searchResult = m_builder.searchComboBox("combo", m_searchSource, m_search, Options());
         return m_searchResult.combo.valid;
     }
 

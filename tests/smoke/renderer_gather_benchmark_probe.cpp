@@ -101,7 +101,7 @@ bool RendererGatherBenchmarkProbe::write(const AStringView path, const AStringVi
         << ",\"fixed_delta_seconds\":0.016666667,\"sampling_seed\":0,\"refraction\":true}\n";
     if(memoryEnabled){
         output << "{\"type\":\"memory_baseline\",\"arenas\":";
-        writeMemory(output, m_memoryBaseline);
+        WriteMemory(output, m_memoryBaseline);
         output << "}\n";
     }
     for(const CpuSample& sample : m_cpu){
@@ -115,7 +115,7 @@ bool RendererGatherBenchmarkProbe::write(const AStringView path, const AStringVi
         output << '}';
         if(memoryEnabled){
             output << ",\"arenas\":";
-            writeMemory(output, sample.memory);
+            WriteMemory(output, sample.memory);
         }
         output << "}\n";
     }
@@ -133,7 +133,7 @@ bool RendererGatherBenchmarkProbe::write(const AStringView path, const AStringVi
     return output.good() && complete;
 }
 
-void RendererGatherBenchmarkProbe::writeMemory(OutputFileStream& output, const Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount>& snapshots){
+void RendererGatherBenchmarkProbe::WriteMemory(OutputFileStream& output, const Array<Core::Perf::MemorySnapshot, s_ArenaScopeCount>& snapshots){
     output << '{';
     for(u32 scope = 0u; scope < s_ArenaScopeCount; ++scope){
         if(scope != 0u)

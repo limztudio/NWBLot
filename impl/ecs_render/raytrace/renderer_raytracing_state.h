@@ -38,7 +38,7 @@ class RendererRayTracingSystem;
 // Cross-frame Buffer* cache. keepAlive prevents key reuse; failed registrations stay uncached.
 struct RtMeshHeapHandleCacheEntry{
     Core::BufferHandle keepAlive; // Pins the Buffer* key.
-    Core::GpuDescriptorHandle handle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle handle = Core::GpuDescriptorHandle::Invalid();
     bool seenThisFrame = false;
 };
 
@@ -91,18 +91,18 @@ struct RtSceneBvhState{
     Core::RayTracingShaderTableHandle m_hwCausticShaderTable;
 
     // Replacement TLASs get fresh handles so recorded work retains the old generation.
-    Core::GpuDescriptorHandle m_tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
     u32 m_tlasInstanceCount = 0u;
     u32 m_sceneBvhInstanceCount = 0u;
     // Capacity replacement gives sort buffers fresh heap generations.
-    Core::GpuDescriptorHandle m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_bvhSortPayloadHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_bvhSortPayloadHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
     // Global StorageBuffer heap views selected by the common trace-context slot cbuffer for SW shadow, GI, and caustics.
-    Core::GpuDescriptorHandle m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
     // One context-slot descriptor shared by all ray-tracing effects.
-    Core::GpuDescriptorHandle m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
     // Previous-frame transform for soft-shadow reprojection; invalid after target recreation.
     Float44U m_prevWorldToClip = {};
 
@@ -186,18 +186,18 @@ struct RtShadowState{
     RtMeshHeapHandleCache m_swMeshHeapHandleCache;
 
     // Fresh heap views preserve old buffers for in-flight work.
-    Core::GpuDescriptorHandle m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::Invalid();
     u32 m_shadowMeshCount = 0u;
     u32 m_shadowMeshHeapHighWater = 0u;
     u32 m_swShadowMeshCount = 0u;
     u32 m_swShadowMeshHeapHighWater = 0u;
     f32 m_swShadowEdgeThreshold = ECSRenderDetail::s_DefaultSwShadowEdgeThreshold;
     u32 m_swShadowEdgeListCapacity = 0u;
-    Core::GpuDescriptorHandle m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
 
     bool m_shadowPipelineFailed = false;
     bool m_swShadowPipelineFailed = false;
@@ -288,7 +288,7 @@ struct RtCausticState{
     Core::ComputePipelineHandle m_causticAccumulatorDecayPipeline;
 
     // Fresh heap views preserve old buffers for recorded dispatches.
-    Core::GpuDescriptorHandle m_causticEmissionTargetHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_causticEmissionTargetHeapHandle = Core::GpuDescriptorHandle::Invalid();
     u32 m_causticRefractiveInstanceCount = 0u;
     // Producer runs only when refractive instances and caustic lights exist.
     u32 m_causticLightCount = 0u;
@@ -353,17 +353,17 @@ struct RtSurfelGiState{
     Core::BufferHandle m_surfelConstants;
 
     // Descriptor generations retire before their backing buffers.
-    Core::GpuDescriptorHandle m_surfelConstantsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_surfelPoolHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_surfelGuidePoolHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_surfelCellHeadHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_surfelCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_surfelTraceIndirectArgsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_surfelFreeListHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_surfelPoolSnapshotHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_surfelCellHeadSnapshotHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_surfelConstantsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_surfelPoolHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_surfelGuidePoolHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_surfelCellHeadHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_surfelCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_surfelTraceIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_surfelFreeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_surfelPoolSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_surfelCellHeadSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
     // Surfel owns its shared material-context heap view.
-    Core::GpuDescriptorHandle m_surfelMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_surfelMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
 
     Core::QueueSubmissionToken m_surfelCountReadbackSubmissionToken;
     u32 m_surfelCountReadbackFrame = 0u;

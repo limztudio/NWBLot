@@ -81,7 +81,7 @@ GpuExternalCompletionId GpuTaskGraph::importExternalCompletion(const GpuExternal
                 existing.token = desc.token;
                 existing.hasToken = true;
                 m_externalCompletionDeviceGeneration = desc.token.deviceGeneration;
-                m_declarationRevision = allocateGeneration();
+                m_declarationRevision = AllocateGeneration();
             }
         }
         return GpuExternalCompletionId{ .generation = m_generation, .index = completionIndex };

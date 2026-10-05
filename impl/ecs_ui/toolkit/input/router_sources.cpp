@@ -29,7 +29,7 @@ bool InputRouter::wantsKeyboard()const{
 }
 
 bool InputRouter::ownsKey(const i32 key)const{
-    return InputBindings::validKey(key) && ownsSource({ 0u, static_cast<u64>(key) + 1u });
+    return InputBindings::ValidKey(key) && ownsSource({ 0u, static_cast<u64>(key) + 1u });
 }
 
 bool InputRouter::ownsSource(const InputSource& source)const{
@@ -66,7 +66,7 @@ bool InputRouter::resolveSourceEvent(const InputEvent& event, InputEvent& resolv
         return true;
     }
     if(physical){
-        if(!InputBindings::validKey(event.key))
+        if(!InputBindings::ValidKey(event.key))
             return false;
         resolved.type = event.type == InputEventType::KeyDown ? InputEventType::CommandDown : InputEventType::CommandUp;
         resolved.source = { 0u, static_cast<u64>(event.key) + 1u };

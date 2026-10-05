@@ -39,7 +39,7 @@ struct CopyTextureCopy{
 struct CopyTextureTask : public GpuTaskGraphBuiltinDetail::CopiesTaskBase<CopyTextureCopy>{
     using Copy = CopyTextureCopy;
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
@@ -94,7 +94,7 @@ struct ResolveTexturePayload{
 struct ResolveTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<ResolveTexturePayload>{
     using Resolve = ResolveTextureResolve;
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context

@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameExecuteSurfelReadback::prepareReadbackFinalState(
+[[nodiscard]] bool FrameExecuteSurfelReadback::PrepareReadbackFinalState(
     void* const rawContext,
     const Core::CommandListResourceStateHandoff* const finalState
 ){
@@ -36,7 +36,7 @@ NWB_IMPL_BEGIN
 }
 
 
-[[nodiscard]] bool FrameExecuteSurfelReadback::acceptReadbackFinalState(
+[[nodiscard]] bool FrameExecuteSurfelReadback::AcceptReadbackFinalState(
     void* const rawContext,
     const Core::QueueSubmissionToken& token
 ){

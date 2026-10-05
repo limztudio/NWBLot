@@ -31,7 +31,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AvboitExtinctionComputeEmulationGraphTask::record(
+[[nodiscard]] bool AvboitExtinctionComputeEmulationGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -46,7 +46,7 @@ namespace RendererTaskGraphDetail{
     return RecordAvboitComputeEmulationFromPayload(payload, commandList, context, &Payload::extinctionTiming, trait);
 }
 
-[[nodiscard]] bool AvboitExtinctionSharedComputeEmulationGraphTask::record(
+[[nodiscard]] bool AvboitExtinctionSharedComputeEmulationGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -61,7 +61,7 @@ namespace RendererTaskGraphDetail{
     return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, context, &Payload::extinctionTiming, payload.phase == AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Raster, trait);
 }
 
-[[nodiscard]] bool AvboitExtinctionGraphTask::record(
+[[nodiscard]] bool AvboitExtinctionGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -103,7 +103,7 @@ namespace RendererTaskGraphDetail{
     );
 }
 
-[[nodiscard]] bool AvboitIntegrationGraphTask::record(
+[[nodiscard]] bool AvboitIntegrationGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -127,13 +127,13 @@ namespace RendererTaskGraphDetail{
     return true;
 }
 
-void AvboitIntegrationGraphTask::accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
+void AvboitIntegrationGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
     if(payload.timingFeedback)
         payload.timingFeedback->acceptSubmission(payload.timingAttribution, token);
     payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;
 }
 
-void AvboitIntegrationGraphTask::discarded(Payload& payload){
+void AvboitIntegrationGraphTask::Discarded(Payload& payload){
     if(payload.timingFeedback)
         payload.timingFeedback->discardRecording(payload.timingAttribution);
     payload.timingAttribution = Core::s_NoGpuTimingSampleAttribution;

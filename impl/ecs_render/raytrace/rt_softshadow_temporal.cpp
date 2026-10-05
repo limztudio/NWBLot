@@ -30,7 +30,7 @@ bool RendererRayTracingSystem::ensureSoftCombinedTemporalPipeline(){
     if(!resolve.m_combinedTemporalBindingLayout){
         Core::BindingLayoutDesc layout(m_arena);
         layout.setVisibility(Core::ShaderType::Compute);
-        layout.addItem(Core::BindingLayoutItem::pushConstants(0u, sizeof(ShadowCombinedTemporalPushConstants)));
+        layout.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(ShadowCombinedTemporalPushConstants)));
         resolve.m_combinedTemporalBindingLayout = device.createBindingLayout(layout);
         if(!resolve.m_combinedTemporalBindingLayout){
             resolve.m_combinedTemporalFailed = true;

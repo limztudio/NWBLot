@@ -143,9 +143,9 @@ void GpuTaskGraph::completeResetWithoutCallbacks()noexcept{
         m_uploadBlobs.clear();
         m_markerText.clear();
         m_presentEndpoint = {};
-        m_generation = allocateGeneration();
-        m_declarationRevision = allocateGeneration();
-        m_activeRecordingAttemptGeneration = allocateGeneration();
+        m_generation = AllocateGeneration();
+        m_declarationRevision = AllocateGeneration();
+        m_activeRecordingAttemptGeneration = AllocateGeneration();
         m_activeRecordingPlanGeneration = 0u;
         m_activeRecordingPreparationSerial = 0u;
         GLB_FATAL_ASSERT_MSG(

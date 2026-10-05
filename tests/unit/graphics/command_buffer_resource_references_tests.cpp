@@ -96,17 +96,17 @@ TEST(CommandBufferResourceReferences, PreservesIndependentOwningAndTypedMembersh
     context.references.retainTexture(*context.textures[1u]);
     context.recordResources();
 
-    const auto& owners = Access::retainedResources(context.references);
+    const auto& owners = Access::RetainedResources(context.references);
     ASSERT_EQ(owners.size(), 4u);
     EXPECT_EQ(owners[0u].get(), context.textures[1u].get());
     EXPECT_EQ(owners[1u].get(), context.buffers[0u].get());
     EXPECT_EQ(owners[s_ThirdElementIndex].get(), context.textures[0u].get());
     EXPECT_EQ(owners[3u].get(), context.buffers[1u].get());
-    const auto& buffers = Access::retainedBuffers(context.references);
+    const auto& buffers = Access::RetainedBuffers(context.references);
     ASSERT_EQ(buffers.size(), s_ExpectedDualCount);
     EXPECT_EQ(buffers[0u], context.buffers[1u].get());
     EXPECT_EQ(buffers[1u], context.buffers[0u].get());
-    const auto& textures = Access::retainedTextures(context.references);
+    const auto& textures = Access::RetainedTextures(context.references);
     ASSERT_EQ(textures.size(), s_ExpectedDualCount);
     EXPECT_EQ(textures[0u], context.textures[0u].get());
     EXPECT_EQ(textures[1u], context.textures[1u].get());
@@ -124,7 +124,7 @@ TEST(CommandBufferResourceReferences, IndirectOwnershipDoesNotPreventLaterOwning
     context.references.trackRetainedTexture(*context.textures[0u]);
     context.references.trackRetainedBuffer(*context.buffers[0u]);
     context.references.trackRetainedTexture(*context.textures[0u]);
-    EXPECT_TRUE(Access::retainedResources(context.references).empty());
+    EXPECT_TRUE(Access::RetainedResources(context.references).empty());
     EXPECT_EQ(context.buffers[0u]->getReferenceCount(), 1u);
     EXPECT_EQ(context.textures[0u]->getReferenceCount(), 1u);
 
@@ -140,9 +140,9 @@ TEST(CommandBufferResourceReferences, IndirectOwnershipDoesNotPreventLaterOwning
     EXPECT_EQ(retainedBuffer->getCreationDescription().byteSize, 256u);
     context.references.clear();
     EXPECT_EQ(context.textures[0u]->getReferenceCount(), 1u);
-    EXPECT_TRUE(Access::retainedResources(context.references).empty());
-    EXPECT_TRUE(Access::retainedBuffers(context.references).empty());
-    EXPECT_TRUE(Access::retainedTextures(context.references).empty());
+    EXPECT_TRUE(Access::RetainedResources(context.references).empty());
+    EXPECT_TRUE(Access::RetainedBuffers(context.references).empty());
+    EXPECT_TRUE(Access::RetainedTextures(context.references).empty());
 }
 
 TEST(CommandBufferResourceReferences, PendingStateDiscardAllowsFreshOrderedJournalWithoutReleasingOwners){
@@ -151,24 +151,24 @@ TEST(CommandBufferResourceReferences, PendingStateDiscardAllowsFreshOrderedJourn
     context.references.appendBufferStateCommit(*context.buffers[s_ThirdElementIndex]);
     context.references.appendBufferStateCommit(*context.buffers[0u]);
     context.references.appendBufferStateCommit(*context.buffers[s_ThirdElementIndex]);
-    const auto& first = Access::retainedBufferStateCommits(context.references);
+    const auto& first = Access::RetainedBufferStateCommits(context.references);
     ASSERT_EQ(first.size(), s_ExpectedDualCount);
     EXPECT_EQ(first[0u].buffer, context.buffers[s_ThirdElementIndex].get());
     EXPECT_EQ(first[1u].buffer, context.buffers[0u].get());
     context.references.discardBufferStateCommits();
-    EXPECT_TRUE(Access::retainedBufferStateCommits(context.references).empty());
+    EXPECT_TRUE(Access::RetainedBufferStateCommits(context.references).empty());
     EXPECT_EQ(context.buffers[s_ThirdElementIndex]->getReferenceCount(), s_ExpectedDualCount);
     EXPECT_EQ(context.buffers[0u]->getReferenceCount(), s_ExpectedDualCount);
     context.references.appendBufferStateCommit(*context.buffers[0u]);
     context.references.appendBufferStateCommit(*context.buffers[s_ThirdElementIndex]);
     context.references.appendBufferStateCommit(*context.buffers[1u]);
-    const auto& second = Access::retainedBufferStateCommits(context.references);
+    const auto& second = Access::RetainedBufferStateCommits(context.references);
     ASSERT_EQ(second.size(), 3u);
     EXPECT_EQ(second[0u].buffer, context.buffers[0u].get());
     EXPECT_EQ(second[1u].buffer, context.buffers[s_ThirdElementIndex].get());
     EXPECT_EQ(second[s_ThirdElementIndex].buffer, context.buffers[1u].get());
     context.references.clear();
-    EXPECT_TRUE(Access::retainedBufferStateCommits(context.references).empty());
+    EXPECT_TRUE(Access::RetainedBufferStateCommits(context.references).empty());
     for(const Core::BufferHandle& buffer : context.buffers)
         EXPECT_EQ(buffer->getReferenceCount(), 1u);
 }
@@ -179,8 +179,8 @@ TEST(CommandBufferResourceReferences, ClearAndReusePreserveMembershipAcrossGrowt
     context.addTextures(32u);
     context.recordResources();
     context.recordResources();
-    EXPECT_EQ(Access::retainedResources(context.references).size(), 160u);
-    EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), 128u);
+    EXPECT_EQ(Access::RetainedResources(context.references).size(), 160u);
+    EXPECT_EQ(Access::RetainedBufferStateCommits(context.references).size(), 128u);
     context.references.clear();
     context.references.clear();
     for(const Core::BufferHandle& buffer : context.buffers)
@@ -191,14 +191,14 @@ TEST(CommandBufferResourceReferences, ClearAndReusePreserveMembershipAcrossGrowt
     context.addBuffers(64u);
     for(usize index = context.buffers.size(); index > 0u; --index)
         context.references.appendBufferStateCommit(*context.buffers[index - 1u]);
-    ASSERT_EQ(Access::retainedBuffers(context.references).size(), 192u);
-    EXPECT_EQ(Access::retainedBuffers(context.references).front(), context.buffers.back().get());
-    EXPECT_EQ(Access::retainedBuffers(context.references).back(), context.buffers.front().get());
-    EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), 192u);
+    ASSERT_EQ(Access::RetainedBuffers(context.references).size(), 192u);
+    EXPECT_EQ(Access::RetainedBuffers(context.references).front(), context.buffers.back().get());
+    EXPECT_EQ(Access::RetainedBuffers(context.references).back(), context.buffers.front().get());
+    EXPECT_EQ(Access::RetainedBufferStateCommits(context.references).size(), 192u);
     EXPECT_EQ(context.buffers[0u]->getReferenceCount(), 3u);
     context.references.clear();
     EXPECT_EQ(context.buffers[0u]->getReferenceCount(), s_ExpectedDualCount);
-    EXPECT_EQ(Access::retainedResources(independent).size(), 1u);
+    EXPECT_EQ(Access::RetainedResources(independent).size(), 1u);
     independent.clear();
     EXPECT_EQ(context.buffers[0u]->getReferenceCount(), 1u);
 }
@@ -227,35 +227,35 @@ TEST(CommandBufferResourceReferences, TexturePromotionPreservesEveryPreexistingM
     context.references.appendBufferStateCommit(*context.buffers[0u]);
     for(usize index = 0u; index < 32u; ++index)
         context.references.trackRetainedTexture(*context.textures[index]);
-    ASSERT_FALSE(Access::hasResourceReferenceIndex(context.references));
+    ASSERT_FALSE(Access::HasResourceReferenceIndex(context.references));
     context.references.trackRetainedTexture(*context.textures[32u]);
-    ASSERT_TRUE(Access::hasResourceReferenceIndex(context.references));
-    EXPECT_EQ(Access::resourceReferenceIndexSize(context.references), 65u);
-    EXPECT_EQ(Access::retainedResources(context.references).size(), 1u);
+    ASSERT_TRUE(Access::HasResourceReferenceIndex(context.references));
+    EXPECT_EQ(Access::ResourceReferenceIndexSize(context.references), 65u);
+    EXPECT_EQ(Access::RetainedResources(context.references).size(), 1u);
     context.references.appendBufferStateCommit(*context.buffers[0u]);
-    EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), 1u);
+    EXPECT_EQ(Access::RetainedBufferStateCommits(context.references).size(), 1u);
     EXPECT_EQ(context.buffers[0u]->getReferenceCount(), s_ExpectedDualCount);
     context.references.retainTexture(*context.textures[0u]);
-    EXPECT_EQ(Access::retainedTextures(context.references).size(), 33u);
+    EXPECT_EQ(Access::RetainedTextures(context.references).size(), 33u);
     EXPECT_EQ(context.textures[0u]->getReferenceCount(), s_ExpectedDualCount);
     context.references.retainBuffer(*context.buffers[32u]);
-    EXPECT_EQ(Access::resourceReferenceIndexSize(context.references), 66u);
+    EXPECT_EQ(Access::ResourceReferenceIndexSize(context.references), 66u);
 
     context.references.discardBufferStateCommits();
     for(usize index = context.buffers.size(); index > 0u; --index)
         context.references.appendBufferStateCommit(*context.buffers[index - 1u]);
-    const auto& commits = Access::retainedBufferStateCommits(context.references);
+    const auto& commits = Access::RetainedBufferStateCommits(context.references);
     ASSERT_EQ(commits.size(), 33u);
     EXPECT_EQ(commits.front().buffer, context.buffers.back().get());
     EXPECT_EQ(commits.back().buffer, context.buffers.front().get());
     for(const Core::BufferHandle& buffer : context.buffers)
         EXPECT_EQ(buffer->getReferenceCount(), s_ExpectedDualCount);
     context.references.clear();
-    EXPECT_EQ(Access::resourceReferenceIndexSize(context.references), 0u);
+    EXPECT_EQ(Access::ResourceReferenceIndexSize(context.references), 0u);
     context.recordResources();
-    EXPECT_EQ(Access::resourceReferenceIndexSize(context.references), 66u);
-    EXPECT_EQ(Access::retainedResources(context.references).size(), 66u);
-    EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), 33u);
+    EXPECT_EQ(Access::ResourceReferenceIndexSize(context.references), 66u);
+    EXPECT_EQ(Access::RetainedResources(context.references).size(), 66u);
+    EXPECT_EQ(Access::RetainedBufferStateCommits(context.references).size(), 33u);
 }
 
 TEST(CommandBufferResourceReferences, OwningPromotionKeepsUntypedOwnersAliveUntilClear){
@@ -263,14 +263,14 @@ TEST(CommandBufferResourceReferences, OwningPromotionKeepsUntypedOwnersAliveUnti
     context.addBuffers(33u);
     for(const Core::BufferHandle& buffer : context.buffers)
         context.references.retainResource(*buffer);
-    ASSERT_TRUE(Access::hasResourceReferenceIndex(context.references));
-    ASSERT_EQ(Access::retainedResources(context.references).size(), 33u);
-    EXPECT_TRUE(Access::retainedBuffers(context.references).empty());
-    EXPECT_EQ(Access::resourceReferenceIndexSize(context.references), 33u);
+    ASSERT_TRUE(Access::HasResourceReferenceIndex(context.references));
+    ASSERT_EQ(Access::RetainedResources(context.references).size(), 33u);
+    EXPECT_TRUE(Access::RetainedBuffers(context.references).empty());
+    EXPECT_EQ(Access::ResourceReferenceIndexSize(context.references), 33u);
     context.references.appendBufferStateCommit(*context.buffers[0u]);
     context.references.appendBufferStateCommit(*context.buffers[0u]);
-    EXPECT_EQ(Access::retainedBuffers(context.references).size(), 1u);
-    EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), 1u);
+    EXPECT_EQ(Access::RetainedBuffers(context.references).size(), 1u);
+    EXPECT_EQ(Access::RetainedBufferStateCommits(context.references).size(), 1u);
     EXPECT_EQ(context.buffers[0u]->getReferenceCount(), s_ExpectedDualCount);
 
     Core::Buffer* const retainedBuffer = context.buffers[0u].get();
@@ -279,9 +279,9 @@ TEST(CommandBufferResourceReferences, OwningPromotionKeepsUntypedOwnersAliveUnti
     EXPECT_EQ(retainedBuffer->getCreationDescription().byteSize, 256u);
     const u64 usedBeforeClear = context.testArena.arena.memoryStats().usedBytes;
     context.references.clear();
-    EXPECT_TRUE(Access::retainedResources(context.references).empty());
-    EXPECT_TRUE(Access::retainedBufferStateCommits(context.references).empty());
-    EXPECT_EQ(Access::resourceReferenceIndexSize(context.references), 0u);
+    EXPECT_TRUE(Access::RetainedResources(context.references).empty());
+    EXPECT_TRUE(Access::RetainedBufferStateCommits(context.references).empty());
+    EXPECT_EQ(Access::ResourceReferenceIndexSize(context.references), 0u);
     EXPECT_LT(context.testArena.arena.memoryStats().usedBytes, usedBeforeClear);
 }
 
@@ -298,18 +298,18 @@ static void BenchmarkReferences(const usize bufferCount, const usize textureCoun
     for(usize iteration = 0u; iteration < repeatCount; ++iteration)
         context.recordResources();
     const u64 repeatedNanoseconds = DurationInNS<u64>(TimerNow(), repeatedBegin);
-    EXPECT_EQ(Access::retainedResources(context.references).size(), bufferCount + textureCount);
-    EXPECT_EQ(Access::retainedBuffers(context.references).size(), bufferCount);
-    EXPECT_EQ(Access::retainedTextures(context.references).size(), textureCount);
-    EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), bufferCount);
+    EXPECT_EQ(Access::RetainedResources(context.references).size(), bufferCount + textureCount);
+    EXPECT_EQ(Access::RetainedBuffers(context.references).size(), bufferCount);
+    EXPECT_EQ(Access::RetainedTextures(context.references).size(), textureCount);
+    EXPECT_EQ(Access::RetainedBufferStateCommits(context.references).size(), bufferCount);
     const Timer clearBegin = TimerNow();
     context.references.clear();
     const u64 clearNanoseconds = DurationInNS<u64>(TimerNow(), clearBegin);
     const Timer recycleBegin = TimerNow();
     context.recordResources();
     const u64 recycleNanoseconds = DurationInNS<u64>(TimerNow(), recycleBegin);
-    EXPECT_EQ(Access::retainedResources(context.references).size(), bufferCount + textureCount);
-    EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), bufferCount);
+    EXPECT_EQ(Access::RetainedResources(context.references).size(), bufferCount + textureCount);
+    EXPECT_EQ(Access::RetainedBufferStateCommits(context.references).size(), bufferCount);
     for(const Core::BufferHandle& buffer : context.buffers)
         EXPECT_EQ(buffer->getReferenceCount(), s_ExpectedDualCount);
     for(const Core::TextureHandle& texture : context.textures)
@@ -337,9 +337,9 @@ TEST(CommandBufferResourceReferences, SmallRepeatedAndRecycledRecordingsNeedNoAd
     ReferencesContext context;
     context.addBuffers(4u);
     context.addTextures(1u);
-    EXPECT_FALSE(Access::hasResourceReferenceIndex(context.references));
+    EXPECT_FALSE(Access::HasResourceReferenceIndex(context.references));
     context.recordResources();
-    EXPECT_FALSE(Access::hasResourceReferenceIndex(context.references));
+    EXPECT_FALSE(Access::HasResourceReferenceIndex(context.references));
     const ArenaMemoryStats before = context.testArena.arena.memoryStats();
     for(usize iteration = 0u; iteration < 32u; ++iteration){
         context.recordResources();
@@ -349,12 +349,12 @@ TEST(CommandBufferResourceReferences, SmallRepeatedAndRecycledRecordingsNeedNoAd
         context.recordResources();
     }
     const ArenaMemoryStats after = context.testArena.arena.memoryStats();
-    EXPECT_FALSE(Access::hasResourceReferenceIndex(context.references));
+    EXPECT_FALSE(Access::HasResourceReferenceIndex(context.references));
     EXPECT_EQ(after.allocationCount, before.allocationCount);
     EXPECT_EQ(after.reallocationCount, before.reallocationCount);
     EXPECT_EQ(after.usedBytes, before.usedBytes);
-    EXPECT_EQ(Access::retainedResources(context.references).size(), 5u);
-    EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), 4u);
+    EXPECT_EQ(Access::RetainedResources(context.references).size(), 5u);
+    EXPECT_EQ(Access::RetainedBufferStateCommits(context.references).size(), 4u);
 }
 
 TEST(CommandBufferResourceReferences, IndexedRepeatedAndRecycledRecordingsReuseCapacity){
@@ -362,7 +362,7 @@ TEST(CommandBufferResourceReferences, IndexedRepeatedAndRecycledRecordingsReuseC
     context.addBuffers(128u);
     context.addTextures(32u);
     context.recordResources();
-    ASSERT_TRUE(Access::hasResourceReferenceIndex(context.references));
+    ASSERT_TRUE(Access::HasResourceReferenceIndex(context.references));
     context.references.clear();
     context.recordResources();
     const ArenaMemoryStats before = context.testArena.arena.memoryStats();
@@ -377,9 +377,9 @@ TEST(CommandBufferResourceReferences, IndexedRepeatedAndRecycledRecordingsReuseC
     EXPECT_EQ(after.allocationCount, before.allocationCount);
     EXPECT_EQ(after.reallocationCount, before.reallocationCount);
     EXPECT_EQ(after.usedBytes, before.usedBytes);
-    EXPECT_EQ(Access::resourceReferenceIndexSize(context.references), 160u);
-    EXPECT_EQ(Access::retainedResources(context.references).size(), 160u);
-    EXPECT_EQ(Access::retainedBufferStateCommits(context.references).size(), 128u);
+    EXPECT_EQ(Access::ResourceReferenceIndexSize(context.references), 160u);
+    EXPECT_EQ(Access::RetainedResources(context.references).size(), 160u);
+    EXPECT_EQ(Access::RetainedBufferStateCommits(context.references).size(), 128u);
 }
 
 

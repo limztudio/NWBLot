@@ -76,7 +76,7 @@ namespace __hidden_ui_popup_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PopupLayout::place(const PopupOptions& options, const DisplayMetrics& display, PopupPlacement& placement){
+bool PopupLayout::Place(const PopupOptions& options, const DisplayMetrics& display, PopupPlacement& placement){
     using namespace __hidden_ui_popup_layout;
     if(!ValidOptions(options, display))
         return false;

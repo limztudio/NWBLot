@@ -57,7 +57,7 @@ struct ScrollModelRecord{
 
 class UiTextAreaInputScrollTests : public TextAreaFixture{
 protected:
-    [[nodiscard]] static TextAreaOptions scrollOptions(){
+    [[nodiscard]] static TextAreaOptions ScrollOptions(){
         TextAreaOptions options;
         options.width = { LayoutSizePolicy::Fixed, 180.0f };
         options.height = { LayoutSizePolicy::Fixed, 96.0f };
@@ -86,7 +86,7 @@ protected:
         ;
     }
 
-    [[nodiscard]] bool prepareScroll(const TextAreaOptions& options = scrollOptions(), const Point scroll = {}){
+    [[nodiscard]] bool prepareScroll(const TextAreaOptions& options = ScrollOptions(), const Point scroll = {}){
         return prepareDocument(scroll) && frameArea(1u, options);
     }
 
@@ -110,7 +110,7 @@ protected:
         options.size = { 300.0f, 180.0f };
         if(!begin(generation) || !m_builder.beginPopup("popup", popup, options))
             return false;
-        m_result = m_builder.textArea("area", m_model, m_state, scrollOptions());
+        m_result = m_builder.textArea("area", m_model, m_state, ScrollOptions());
         return
             m_result.valid && m_builder.endPopup() && m_context.endRoot() && m_context.finishFrame()
             && m_context.commitFrame(generation)
@@ -171,7 +171,7 @@ TEST_F(UiTextAreaInputScrollTests, InvalidWheelLinesRejectTheCandidateBeforeBorr
     const f32 invalid[]{ 0.0f, -1.0f, Limit<f32>::s_QuietNaN };
     u64 generation = 1u;
     for(const f32 wheelLines : invalid){
-        ASSERT_TRUE(frameArea(generation++, scrollOptions()));
+        ASSERT_TRUE(frameArea(generation++, ScrollOptions()));
         const ScrollModelRecord model(m_arena, m_model);
         const Point scroll = m_state.scroll();
         const EditBoxPlacement placement = m_state.placement();
@@ -183,7 +183,7 @@ TEST_F(UiTextAreaInputScrollTests, InvalidWheelLinesRejectTheCandidateBeforeBorr
         const HitTarget* displayed = target(area());
         ASSERT_TRUE(displayed);
         const HitTarget accepted = *displayed;
-        TextAreaOptions options = scrollOptions();
+        TextAreaOptions options = ScrollOptions();
         options.wheelLines = wheelLines;
         ASSERT_TRUE(beginArea(generation));
         const EditBoxResult result = m_builder.textArea("area", m_model, m_state, options);
@@ -225,7 +225,7 @@ TEST_F(UiTextAreaInputScrollTests, CopiedVerticalWheelAppliesOnlyAtFinalPaintAnd
     ASSERT_EQ(m_context.input().controlActions().size(), 1u);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     ASSERT_TRUE(beginArea(2u));
-    m_result = m_builder.textArea("area", m_model, m_state, scrollOptions());
+    m_result = m_builder.textArea("area", m_model, m_state, ScrollOptions());
     ASSERT_TRUE(m_result.valid);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     ASSERT_TRUE(acceptArea());
@@ -246,9 +246,9 @@ TEST_F(UiTextAreaInputScrollTests, PureHorizontalWheelUsesItsPublishedStepWithou
     ASSERT_TRUE(host);
     const f64 step = host->scrollStepX;
     ASSERT_GT(step, 0.0);
-    EXPECT_NEAR(step, m_builder.style().fontSize * scrollOptions().wheelLines, 0.001);
+    EXPECT_NEAR(step, m_builder.style().fontSize * ScrollOptions().wheelLines, 0.001);
     ASSERT_TRUE(wheel(1.0, 0.0));
-    ASSERT_TRUE(frameArea(2u, scrollOptions()));
+    ASSERT_TRUE(frameArea(2u, ScrollOptions()));
     EXPECT_NEAR(m_state.scroll().x, step, 0.001);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     EXPECT_FALSE(m_state.focused());
@@ -265,7 +265,7 @@ TEST_F(UiTextAreaInputScrollTests, FractionalDiagonalWheelMovesBothAxesAsOneCopi
     const f64 y = host->scrollStep * 0.25;
     ASSERT_TRUE(wheel(0.5, -0.25));
     ASSERT_EQ(m_context.input().controlActions().size(), 1u);
-    ASSERT_TRUE(frameArea(2u, scrollOptions()));
+    ASSERT_TRUE(frameArea(2u, ScrollOptions()));
     EXPECT_NEAR(m_state.scroll().x, x, 0.001);
     EXPECT_NEAR(m_state.scroll().y, y, 0.001);
     EXPECT_FALSE(m_result.textChanged || m_result.selectionChanged);
@@ -279,18 +279,18 @@ TEST_F(UiTextAreaInputScrollTests, LargeWheelDeltasClampBothEndpointsWithoutChan
     ASSERT_GT(bars.horizontal.maximum, 0.0);
     ASSERT_GT(bars.vertical.maximum, 0.0);
     ASSERT_TRUE(wheel(1000000.0, -1000000.0));
-    ASSERT_TRUE(frameArea(2u, scrollOptions()));
+    ASSERT_TRUE(frameArea(2u, ScrollOptions()));
     EXPECT_NEAR(m_state.scroll().x, bars.horizontal.maximum, 0.001);
     EXPECT_NEAR(m_state.scroll().y, bars.vertical.maximum, 0.001);
     ASSERT_TRUE(wheel(-1000000.0, 1000000.0));
-    ASSERT_TRUE(frameArea(3u, scrollOptions()));
+    ASSERT_TRUE(frameArea(3u, ScrollOptions()));
     EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     model.expect(m_model);
 }
 
 TEST_F(UiTextAreaInputScrollTests, ReadOnlyWheelAndThumbScrollingLeaveUndoAndRedoIntact){
-    TextAreaOptions options = scrollOptions();
+    TextAreaOptions options = ScrollOptions();
     options.readOnly = true;
     ASSERT_TRUE(prepareScroll(options));
     const ScrollModelRecord model(m_arena, m_model);
@@ -314,7 +314,7 @@ TEST_F(UiTextAreaInputScrollTests, ReadOnlyWheelAndThumbScrollingLeaveUndoAndRed
 }
 
 TEST_F(UiTextAreaInputScrollTests, DisabledEditorUsesTheContainingPanelBarrierAndCannotScroll){
-    TextAreaOptions options = scrollOptions();
+    TextAreaOptions options = ScrollOptions();
     options.enabled = false;
     ASSERT_TRUE(prepareScroll(options));
     const ScrollModelRecord model(m_arena, m_model);
@@ -339,17 +339,17 @@ TEST_F(UiTextAreaInputScrollTests, WheelViewportPersistsUntilAnAcceptedIdentical
     const u64 revision = m_model.revision();
     const u64 selection = m_model.selectionGeneration();
     ASSERT_TRUE(wheel(1.0, -1.0));
-    ASSERT_TRUE(frameArea(2u, scrollOptions()));
+    ASSERT_TRUE(frameArea(2u, ScrollOptions()));
     const Point scroll = m_state.scroll();
     ASSERT_GT(scroll.x, 0.0f);
     ASSERT_GT(scroll.y, 0.0f);
-    ASSERT_TRUE(frameArea(3u, scrollOptions()));
+    ASSERT_TRUE(frameArea(3u, ScrollOptions()));
     EXPECT_FLOAT_EQ(m_state.scroll().x, scroll.x);
     EXPECT_FLOAT_EQ(m_state.scroll().y, scroll.y);
     EXPECT_EQ(m_model.revision(), revision);
     EXPECT_EQ(m_model.selectionGeneration(), selection);
     ASSERT_TRUE(m_model.setSelection(m_model.anchor(), m_model.caret()));
-    ASSERT_TRUE(frameArea(4u, scrollOptions()));
+    ASSERT_TRUE(frameArea(4u, ScrollOptions()));
     EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     EXPECT_GT(m_model.selectionGeneration(), selection);
@@ -358,7 +358,7 @@ TEST_F(UiTextAreaInputScrollTests, WheelViewportPersistsUntilAnAcceptedIdentical
 }
 
 TEST_F(UiTextAreaInputScrollTests, UnfocusedThumbPressPreservesGrabOffsetAndTheBaselineAcrossRepaints){
-    ASSERT_TRUE(prepareScroll(scrollOptions(), { 30.0f, 50.0f }));
+    ASSERT_TRUE(prepareScroll(ScrollOptions(), { 30.0f, 50.0f }));
     const ScrollModelRecord model(m_arena, m_model);
     const HitTarget* found = target(part("scroll.y.thumb"));
     ASSERT_TRUE(found);
@@ -370,7 +370,7 @@ TEST_F(UiTextAreaInputScrollTests, UnfocusedThumbPressPreservesGrabOffsetAndTheB
     ASSERT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
     EXPECT_EQ(m_context.input().capture(), thumb.id);
     EXPECT_EQ(m_context.input().focus(), area());
-    ASSERT_TRUE(frameArea(2u, scrollOptions()));
+    ASSERT_TRUE(frameArea(2u, ScrollOptions()));
     EXPECT_NEAR(m_state.scroll().y, 50.0, 0.001);
     EXPECT_NEAR(m_state.scroll().x, 30.0, 0.001);
     const HitTarget* afterPress = target(part("scroll.y.thumb"));
@@ -378,7 +378,7 @@ TEST_F(UiTextAreaInputScrollTests, UnfocusedThumbPressPreservesGrabOffsetAndTheB
     EXPECT_EQ(afterPress->control, thumb.control);
     const Point quarter{ origin.x, origin.y + travel * 0.25f };
     ASSERT_TRUE(send({ InputEventType::PointerMove, quarter }).pointerConsumed);
-    ASSERT_TRUE(frameArea(3u, scrollOptions()));
+    ASSERT_TRUE(frameArea(3u, ScrollOptions()));
     EXPECT_NEAR(m_state.scroll().y, 50.0 + thumb.gestureMaximum * 0.25, 0.001);
     const HitTarget* afterMove = target(part("scroll.y.thumb"));
     ASSERT_TRUE(afterMove);
@@ -387,7 +387,7 @@ TEST_F(UiTextAreaInputScrollTests, UnfocusedThumbPressPreservesGrabOffsetAndTheB
     const Point half{ origin.x, origin.y + travel * 0.5f };
     ASSERT_TRUE(send({ InputEventType::PointerMove, half }).pointerConsumed);
     ASSERT_TRUE(send({ InputEventType::PrimaryUp, half }).pointerConsumed);
-    ASSERT_TRUE(frameArea(4u, scrollOptions()));
+    ASSERT_TRUE(frameArea(4u, ScrollOptions()));
     EXPECT_NEAR(m_state.scroll().y, 50.0 + thumb.gestureMaximum * 0.5, 0.001);
     EXPECT_FLOAT_EQ(m_state.scroll().x, 30.0f);
     EXPECT_FALSE(m_context.input().capture().valid());
@@ -408,14 +408,14 @@ TEST_F(UiTextAreaInputScrollTests, CompletedHorizontalThumbDragKeepsOutsideRelea
     ASSERT_TRUE(send({ InputEventType::PrimaryUp, outside }).pointerConsumed);
     EXPECT_FALSE(m_context.input().capture().valid());
     EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
-    ASSERT_TRUE(frameArea(2u, scrollOptions()));
+    ASSERT_TRUE(frameArea(2u, ScrollOptions()));
     EXPECT_NEAR(m_state.scroll().x, thumb.gestureMaximum, 0.001);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     model.expect(m_model);
 }
 
 TEST_F(UiTextAreaInputScrollTests, TrackPagesOnlyOnReleaseByTheAcceptedViewport){
-    ASSERT_TRUE(prepareScroll(scrollOptions(), { 0.0f, 100.0f }));
+    ASSERT_TRUE(prepareScroll(ScrollOptions(), { 0.0f, 100.0f }));
     const ScrollModelRecord model(m_arena, m_model);
     const f64 page = m_state.scrollbars().vertical.viewportExtent;
     const HitTarget* found = target(part("scroll.y.after"));
@@ -425,16 +425,16 @@ TEST_F(UiTextAreaInputScrollTests, TrackPagesOnlyOnReleaseByTheAcceptedViewport)
     EXPECT_FALSE(after.pointerGesture);
     const Point point = Center(after.rectangle);
     ASSERT_TRUE(send({ InputEventType::PrimaryDown, point }).pointerConsumed);
-    ASSERT_TRUE(frameArea(2u, scrollOptions()));
+    ASSERT_TRUE(frameArea(2u, ScrollOptions()));
     EXPECT_NEAR(m_state.scroll().y, 100.0, 0.001);
     ASSERT_TRUE(send({ InputEventType::PrimaryUp, point }).pointerConsumed);
     EXPECT_NEAR(m_state.scroll().y, 100.0, 0.001);
-    ASSERT_TRUE(frameArea(3u, scrollOptions()));
+    ASSERT_TRUE(frameArea(3u, ScrollOptions()));
     EXPECT_NEAR(m_state.scroll().y, 100.0 + page, 0.001);
     const HitTarget* before = target(part("scroll.y.before"));
     ASSERT_TRUE(before);
     click(Center(before->rectangle));
-    ASSERT_TRUE(frameArea(4u, scrollOptions()));
+    ASSERT_TRUE(frameArea(4u, ScrollOptions()));
     EXPECT_NEAR(m_state.scroll().y, 100.0, 0.001);
     model.expect(m_model);
 }
@@ -454,7 +454,7 @@ TEST_F(UiTextAreaInputScrollTests, LaterCoalescedThumbUpdateRunsAfterAnInterveni
     const Point quarter{ origin.x, origin.y + travel * 0.25f };
     ASSERT_TRUE(send({ InputEventType::PointerMove, quarter }).pointerConsumed);
     ASSERT_TRUE(send({ InputEventType::PrimaryUp, quarter }).pointerConsumed);
-    ASSERT_TRUE(frameArea(2u, scrollOptions()));
+    ASSERT_TRUE(frameArea(2u, ScrollOptions()));
     EXPECT_NEAR(m_state.scroll().y, thumb.gestureMaximum * 0.25, 0.001);
     EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
     EXPECT_TRUE(m_context.input().controlActions().empty());

@@ -90,7 +90,7 @@ public:
 
 public:
     template<typename TAsset, typename TResource>
-    [[nodiscard]] static bool checkLoaderEnter(
+    [[nodiscard]] static bool CheckLoaderEnter(
         const AssetRef<TAsset>& assetRef,
         const TResource& resource,
         const TStringView owner,
@@ -110,7 +110,7 @@ public:
         const TStringView ownerName,
         const AStringView assetKindText
     )const{
-        if(!loadSync(AssetT::assetTypeName(), virtualPath, outLoadedAsset)){
+        if(!loadSync(AssetT::AssetTypeName(), virtualPath, outLoadedAsset)){
             NWB_LOGGER_ERROR(GLB_TEXT("{}: failed to load {} asset '{}'")
                 , ownerName
                 , StringConvert(assetKindText)

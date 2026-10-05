@@ -44,7 +44,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool validKey(i32 key);
+    [[nodiscard]] static bool ValidKey(i32 key);
 
 
 public:

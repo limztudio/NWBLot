@@ -68,13 +68,13 @@ struct AvboitAccumulationComputeEmulationGraphTask{
         {}
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.accumulationTiming);
     }
 };
@@ -108,17 +108,17 @@ struct AvboitAccumulationSharedComputeEmulationGraphTask{
         Phase::Enum phase = Phase::Generate;
     };
 
-    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements commandRequirements(const Payload& payload)noexcept{
+    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{
         return { payload.phase == Phase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
     }
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.accumulationTiming);
     }
 };
@@ -148,13 +148,13 @@ struct AvboitAccumulationGraphTask{
         {}
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.accumulationComputeEmulationTiming);
     }
 };
@@ -166,7 +166,7 @@ struct AvboitAccumulationFinalizeGraphTask{
 
     struct Payload{};
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context

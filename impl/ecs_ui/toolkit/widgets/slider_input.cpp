@@ -36,7 +36,7 @@ bool Builder::applySliderInput(SliderFrame& frame, const SliderPlacement& placem
         ){
             if(
                 control.control != frame.m_token
-                || !SliderBehavior::apply(frame.m_state, frame.m_options, control, frame.m_result)
+                || !SliderBehavior::Apply(frame.m_state, frame.m_options, control, frame.m_result)
             )
                 return false;
             frame.m_snapshot = frame.m_state.snapshot();
@@ -45,7 +45,7 @@ bool Builder::applySliderInput(SliderFrame& frame, const SliderPlacement& placem
         else if(hasTrack && (!hasThumb || trackGesture.updateSequence < thumbGesture.updateSequence)){
             if(
                 trackGesture.control != frame.m_token
-                || !SliderBehavior::seek(frame.m_state, frame.m_options, trackGesture, frame.m_result)
+                || !SliderBehavior::Seek(frame.m_state, frame.m_options, trackGesture, frame.m_result)
             )
                 return false;
             frame.m_snapshot = frame.m_state.snapshot();
@@ -54,7 +54,7 @@ bool Builder::applySliderInput(SliderFrame& frame, const SliderPlacement& placem
         else{
             if(
                 thumbGesture.control != frame.m_token
-                || !SliderBehavior::drag(frame.m_state, frame.m_options, thumbGesture, frame.m_result)
+                || !SliderBehavior::Drag(frame.m_state, frame.m_options, thumbGesture, frame.m_result)
             )
                 return false;
             frame.m_snapshot = frame.m_state.snapshot();

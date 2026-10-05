@@ -30,7 +30,7 @@ using namespace TelemetryTestDetail;
 TEST(Telemetry, RecorderFiltersOwnsCallerPayloadAndRejectsEndIndex){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::frameGraphOnly());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
 
     const u8 perfPayload[] = { 1u, s_ExpectedDualCount };
     EXPECT_FALSE(recorder.recordBinary(Telemetry::EventKind::PerfFrame, 12u, perfPayload, sizeof(perfPayload)));
@@ -112,7 +112,7 @@ TEST(Telemetry, EventStreamCodecHandlesEmptyStreams){
 TEST(Telemetry, EventStreamCodecRejectsInvalidInput){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::perfOnly());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
 
     const u8 payload[] = { 7u, 8u };
     EXPECT_TRUE(recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, payload, sizeof(payload)));
@@ -190,7 +190,7 @@ TEST(Telemetry, EventCodecRejectsNonCurrentVersionsAndRecovers){
 TEST(Telemetry, EventStreamRejectsNonCurrentStreamAndNestedEventVersionsAndRecovers){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::perfOnly());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
     const u8 payload[] = { 7u, 8u };
     ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, payload, sizeof(payload)));
     Telemetry::TelemetryBytes encoded(testArena.arena);
@@ -269,7 +269,7 @@ TEST(Telemetry, DiagnosticPayloadRejectsNonCurrentVersionsAndRecovers){
 TEST(Telemetry, RecorderAcceptsConcurrentRecords){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::all());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
     constexpr u32 s_ThreadCount = 4u;
     constexpr u32 s_EventsPerThread = 64u;

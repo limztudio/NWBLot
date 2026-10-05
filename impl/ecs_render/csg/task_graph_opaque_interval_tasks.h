@@ -82,7 +82,7 @@ struct CsgReceiverSpanBuildGraphTask{
         {}
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -101,7 +101,7 @@ struct CsgIntervalCombineGraphTask{
         {}
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -135,13 +135,13 @@ struct CsgIntervalSampleGraphTask{
         explicit Payload(Core::Alloc::GlobalArena& arena);
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.opaqueCsgComputeEmulationTiming);
     }
 };

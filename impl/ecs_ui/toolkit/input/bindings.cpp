@@ -22,7 +22,7 @@ namespace __hidden_ui_input_bindings{
 
 static bool ValidBinding(const InputKeyBinding& binding){
     return
-        InputBindings::validKey(binding.key) && binding.command != InputCommand::None && binding.command <= InputCommand::ContextMenu
+        InputBindings::ValidKey(binding.key) && binding.command != InputCommand::None && binding.command <= InputCommand::ContextMenu
         && binding.selection <= InputSelectionPolicy::Shift
         && ((binding.modifiers | binding.ignoredModifiers) & ~s_InputBindingModifierMask) == 0
         && (binding.modifiers & binding.ignoredModifiers) == 0
@@ -44,7 +44,7 @@ static bool Overlaps(const InputKeyBinding& first, const InputKeyBinding& second
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputBindings::validKey(const i32 key){
+bool InputBindings::ValidKey(const i32 key){
     return
         key == Core::Key::Space || key == Core::Key::Apostrophe || (key >= Core::Key::Comma && key <= Core::Key::Number9)
         || key == Core::Key::Semicolon || key == Core::Key::Equal || (key >= Core::Key::A && key <= Core::Key::RightBracket)
@@ -87,7 +87,7 @@ bool InputBindings::set(const InputKeyBinding* bindings, const usize count){
 
 InputCommandIntent InputBindings::resolve(const i32 key, const i32 modifiers)const{
     constexpr i32 s_LockModifiers = Core::InputModifier::CapsLock | Core::InputModifier::NumLock;
-    if(!validKey(key) || (modifiers & ~(s_InputBindingModifierMask | s_LockModifiers)) != 0)
+    if(!ValidKey(key) || (modifiers & ~(s_InputBindingModifierMask | s_LockModifiers)) != 0)
         return {};
     const i32 chord = modifiers & s_InputBindingModifierMask;
     for(const auto& binding : m_bindings){

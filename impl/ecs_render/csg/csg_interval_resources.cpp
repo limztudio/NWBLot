@@ -43,7 +43,7 @@ namespace CsgIntervalDetail{
     Core::BindingLayoutDesc bindingLayoutDesc(arena);
     bindingLayoutDesc.setVisibility(visibility);
     // Push range selects the CSG context and mesh view; the rest is heap-owned.
-    bindingLayoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(CsgIntervalDispatchPushConstants)));
+    bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CsgIntervalDispatchPushConstants)));
 
     layout = device.createBindingLayout(bindingLayoutDesc);
     return layout != nullptr;

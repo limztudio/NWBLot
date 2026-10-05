@@ -51,7 +51,7 @@ CpuTaskScheduler::ProfileMeasure::~ProfileMeasure()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 CpuTaskScheduler::allocateProfileLabelIdentity()noexcept{
+u64 CpuTaskScheduler::AllocateProfileLabelIdentity()noexcept{
     static Atomic<u64> next{ 1u };
     const u64 identity = next.fetch_add(1u, MemoryOrder::relaxed);
     if(identity == 0u)
@@ -68,7 +68,7 @@ CpuTaskProfileLabel CpuTaskScheduler::registerProfileLabel(const Name& name){
         if(record.name == name)
             return record.label;
     }
-    const CpuTaskProfileLabel label{ allocateProfileLabelIdentity() };
+    const CpuTaskProfileLabel label{ AllocateProfileLabelIdentity() };
     m_profileLabels.push_back(ProfileLabelRecord{ label, name });
     return label;
 }

@@ -62,9 +62,9 @@ struct RayTracingOpticalBoundsFinalizeSnapshot{
     Vector<RayTracingOpticalRuntimeInputGpu, Core::Alloc::GlobalArena> inputs;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> boundsBuffers;
     Core::GraphicsRuntime& graphics;
-    Core::GpuDescriptorHandle inputDescriptor = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle outputDescriptor = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle sourceDescriptor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle inputDescriptor = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle outputDescriptor = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle sourceDescriptor = Core::GpuDescriptorHandle::Invalid();
     Core::GpuPhysicalQueueId queue;
     u32 instanceCount = 0u;
     bool staticBoundsComplete = false;
@@ -95,8 +95,8 @@ private:
     Core::GraphicsRuntime& m_graphics;
     Core::BufferHandle m_inputBuffer;
     Core::BufferHandle m_outputBuffer;
-    Core::GpuDescriptorHandle m_inputDescriptor = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle m_outputDescriptor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_inputDescriptor = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle m_outputDescriptor = Core::GpuDescriptorHandle::Invalid();
     Core::BindingLayoutHandle m_bindingLayout;
     Core::ShaderHandle m_shader;
     Core::ComputePipelineHandle m_pipeline;

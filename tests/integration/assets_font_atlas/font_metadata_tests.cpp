@@ -89,12 +89,12 @@ struct CaptureWriter final : Core::Assets::ICookedAssetWriter{
         const Core::Assets::IAsset& asset,
         const Core::Assets::IAssetCodec& codec
     )override{
-        if(codec.assetType() == Font::assetTypeName()){
+        if(codec.assetType() == Font::AssetTypeName()){
             fontPath = virtualPath;
             ++writes;
             return codec.serialize(asset, fontBinary);
         }
-        if(codec.assetType() == FontAtlas::assetTypeName()){
+        if(codec.assetType() == FontAtlas::AssetTypeName()){
             atlasPath = virtualPath;
             ++writes;
             return codec.serialize(asset, atlasBinary);
@@ -124,8 +124,8 @@ TEST(AssetsFontMetadata, BunchPublishesTypedLocalReferenceAndRejectsDuplicateChi
     ASSERT_TRUE(initializers.initialize());
     Core::Assets::CookEntryRegistry registry(testArena.arena);
     ASSERT_TRUE(Core::Assets::RegisterAutoCollectedCookEntryTypes(registry));
-    ASSERT_NE(registry.find(Font::assetTypeName()), nullptr);
-    ASSERT_NE(registry.find(FontAtlas::assetTypeName()), nullptr);
+    ASSERT_NE(registry.find(Font::AssetTypeName()), nullptr);
+    ASSERT_NE(registry.find(FontAtlas::AssetTypeName()), nullptr);
     Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(LoadMetadata(testArena, document));
     Core::CpuTaskScheduler scheduler(1u);
@@ -138,7 +138,7 @@ TEST(AssetsFontMetadata, BunchPublishesTypedLocalReferenceAndRejectsDuplicateChi
     Core::Assets::CookEntryParseContext parseContext{ testArena.arena, scheduler, scratchArena, parsedPaths };
     const Core::Assets::ExpandedAssetMetadata* atlasChild = nullptr;
     for(const Core::Assets::ExpandedAssetMetadata& child : expanded){
-        if(child.assetType == FontAtlas::assetTypeName())
+        if(child.assetType == FontAtlas::AssetTypeName())
             atlasChild = &child;
     }
     ASSERT_NE(atlasChild, nullptr);

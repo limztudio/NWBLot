@@ -34,7 +34,7 @@ OpaqueCsgReceiverComputeEmulationGraphTask::Payload::Payload(Core::Alloc::Global
 {}
 
 
-bool OpaqueCsgReceiverComputeEmulationGraphTask::record(
+bool OpaqueCsgReceiverComputeEmulationGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -114,7 +114,7 @@ OpaqueCsgIntervalSampleComputeEmulationGraphTask::Payload::Payload(Core::Alloc::
 {}
 
 
-bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::record(
+bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context

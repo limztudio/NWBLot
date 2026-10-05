@@ -48,7 +48,7 @@ bool RendererRayTracingSystem::ensureSoftCombinedWaveletPipeline(){
     if(!resolve.m_combinedWaveletBindingLayout){
         Core::BindingLayoutDesc layout(m_arena);
         layout.setVisibility(Core::ShaderType::Compute);
-        layout.addItem(Core::BindingLayoutItem::pushConstants(0u, sizeof(ShadowCombinedWaveletPushConstants)));
+        layout.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(ShadowCombinedWaveletPushConstants)));
         resolve.m_combinedWaveletBindingLayout = device.createBindingLayout(layout);
         if(!resolve.m_combinedWaveletBindingLayout){
             resolve.m_combinedWaveletFailed = true;

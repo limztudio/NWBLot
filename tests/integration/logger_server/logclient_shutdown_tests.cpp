@@ -32,7 +32,7 @@ inline constexpr u32 s_FirstRequestDelayMilliseconds = 250u;
 
 class ShutdownCaptureServer final : NoCopy{
 private:
-    static MHD_Result requestCallback(
+    static MHD_Result RequestCallback(
         void* serverContext,
         MHD_Connection* connection,
         const char* url,
@@ -63,7 +63,7 @@ private:
 };
 
 
-MHD_Result ShutdownCaptureServer::requestCallback(
+MHD_Result ShutdownCaptureServer::RequestCallback(
     void* const serverContext,
     MHD_Connection* const connection,
     const char* const url,
@@ -127,7 +127,7 @@ bool ShutdownCaptureServer::start(){
         0u,
         nullptr,
         nullptr,
-        &ShutdownCaptureServer::requestCallback,
+        &ShutdownCaptureServer::RequestCallback,
         this,
         MHD_OPTION_SOCK_ADDR_LEN,
         static_cast<socklen_t>(sizeof(listenAddress)),

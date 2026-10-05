@@ -83,9 +83,9 @@ void RendererRayTracingSystem::releaseSwBvhScratchHeapHandles(){
         RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_bvhVisitCounterHeapHandle);
         return;
     }
-    m_rayTracingState.m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_bvhSortPayloadHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_bvhSortKeysHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_bvhSortPayloadHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_bvhVisitCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
 

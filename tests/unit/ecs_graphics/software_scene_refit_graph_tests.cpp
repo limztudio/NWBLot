@@ -62,8 +62,8 @@ struct RefitContext{
         snapshot->inputBuffer = makeBuffer(Name("software_scene_refit_inputs"));
         snapshot->sceneNodes = makeBuffer(Name("tests/software_scene_refit/scene"));
         root = makeBuffer(Name("tests/software_scene_refit/root"));
-        snapshot->inputDescriptor = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 1u);
-        snapshot->sceneDescriptor = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, s_ExpectedDualCount);
+        snapshot->inputDescriptor = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 1u);
+        snapshot->sceneDescriptor = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, s_ExpectedDualCount);
         snapshot->queue = { .index = 0u, .deviceGeneration = 1u };
         snapshot->nodeCount = 3u;
         for(u32 instance = 0u; instance < s_ExpectedDualCount; ++instance){

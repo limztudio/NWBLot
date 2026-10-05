@@ -115,8 +115,8 @@ struct BoundaryState{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GraphemeSegmentation::build(const AStringView text, EditBoundaryVector& output, const bool singleLine){
-    if(!validate(text, singleLine))
+bool GraphemeSegmentation::Build(const AStringView text, EditBoundaryVector& output, const bool singleLine){
+    if(!Validate(text, singleLine))
         return false;
     EditBoundaryVector candidate(output.get_allocator());
     candidate.reserve(text.size() + 1u);
@@ -140,7 +140,7 @@ bool GraphemeSegmentation::build(const AStringView text, EditBoundaryVector& out
     return true;
 }
 
-bool GraphemeSegmentation::validate(const AStringView text, const bool singleLine){
+bool GraphemeSegmentation::Validate(const AStringView text, const bool singleLine){
     if(text.size() > Limit<i32>::s_Max || (!text.empty() && text.data() == nullptr))
         return false;
     usize offset = 0u;
@@ -156,7 +156,7 @@ bool GraphemeSegmentation::validate(const AStringView text, const bool singleLin
     return true;
 }
 
-bool GraphemeSegmentation::isScalarBoundary(const AStringView text, const usize position){
+bool GraphemeSegmentation::IsScalarBoundary(const AStringView text, const usize position){
     if(position > text.size())
         return false;
     return position == text.size() || !IsUtf8Continuation(static_cast<u8>(text[position]));

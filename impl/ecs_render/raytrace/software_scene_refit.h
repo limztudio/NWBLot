@@ -61,8 +61,8 @@ struct SoftwareSceneRefitSnapshot{
     Vector<SoftwareSceneRefitInstanceGpu, Core::Alloc::GlobalArena> inputs;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> meshNodes;
     Core::GraphicsRuntime& graphics;
-    Core::GpuDescriptorHandle inputDescriptor = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle sceneDescriptor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle inputDescriptor = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle sceneDescriptor = Core::GpuDescriptorHandle::Invalid();
     Core::GpuPhysicalQueueId queue;
     u32 nodeCount = 0u;
 
@@ -90,7 +90,7 @@ private:
     Core::Alloc::GlobalArena& m_arena;
     Core::GraphicsRuntime& m_graphics;
     Core::BufferHandle m_inputBuffer;
-    Core::GpuDescriptorHandle m_inputDescriptor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle m_inputDescriptor = Core::GpuDescriptorHandle::Invalid();
     Core::BindingLayoutHandle m_bindingLayout;
     Core::ShaderHandle m_shader;
     Core::ComputePipelineHandle m_pipeline;

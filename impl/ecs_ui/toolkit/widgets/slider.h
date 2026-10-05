@@ -107,24 +107,24 @@ private:
 
 class SliderBehavior final{
 public:
-    [[nodiscard]] static bool validate(const SliderOptions& options);
-    [[nodiscard]] static bool normalize(f64 minimum, f64 maximum, f64 value, f64& out);
-    [[nodiscard]] static bool interpolate(f64 minimum, f64 maximum, f64 normalized, f64& out);
+    [[nodiscard]] static bool Validate(const SliderOptions& options);
+    [[nodiscard]] static bool Normalize(f64 minimum, f64 maximum, f64 value, f64& out);
+    [[nodiscard]] static bool Interpolate(f64 minimum, f64 maximum, f64 normalized, f64& out);
     // Admission includes stable geometry and policy, while thumb position and repaint-only value changes preserve its token.
-    [[nodiscard]] static bool admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement);
-    [[nodiscard]] static bool apply(
+    [[nodiscard]] static bool Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement);
+    [[nodiscard]] static bool Apply(
         SliderState& state,
         const SliderOptions& options,
         const ControlAction& action,
         SliderResult& result
     );
-    [[nodiscard]] static bool seek(
+    [[nodiscard]] static bool Seek(
         SliderState& state,
         const SliderOptions& options,
         const PointerGesture& gesture,
         SliderResult& result
     );
-    [[nodiscard]] static bool drag(
+    [[nodiscard]] static bool Drag(
         SliderState& state,
         const SliderOptions& options,
         const PointerGesture& gesture,

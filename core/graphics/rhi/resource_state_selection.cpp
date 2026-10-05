@@ -16,16 +16,16 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize CommandListResourceSelection::hashIdentity(void* const resource, const bool texture)noexcept{
+usize CommandListResourceSelection::HashIdentity(void* const resource, const bool texture)noexcept{
     return Hasher<void*>()(resource) ^ (texture ? static_cast<usize>(CommandListResourceSelection::s_TextureIdentitySeed) : 0u);
 }
 
-void CommandListResourceSelection::insertIndex(void* const storage, const usize capacity, const usize entryIndex)noexcept{
+void CommandListResourceSelection::InsertIndex(void* const storage, const usize capacity, const usize entryIndex)noexcept{
     const Entry* const entries = static_cast<const Entry*>(storage);
     usize* const buckets = reinterpret_cast<usize*>(static_cast<u8*>(storage) + capacity * sizeof(Entry));
     const usize bucketCount = capacity * s_BucketCountFactor;
     const usize mask = bucketCount - 1u;
-    usize bucket = hashIdentity(entries[entryIndex].resource, entries[entryIndex].texture) & mask;
+    usize bucket = HashIdentity(entries[entryIndex].resource, entries[entryIndex].texture) & mask;
     for(usize probe = 0u; probe < bucketCount; ++probe){
         if(buckets[bucket] == 0u){
             buckets[bucket] = entryIndex + 1u;
@@ -65,7 +65,7 @@ bool CommandListResourceSelection::addResource(void* const resource, const usize
     Entry* const entries = m_storage ? static_cast<Entry*>(m_storage) : m_inlineEntries;
     new(entries + m_size) Entry{ resource, inputIndex, texture };
     if(m_storage)
-        insertIndex(m_storage, m_capacity, m_size);
+        InsertIndex(m_storage, m_capacity, m_size);
     else if(texture){
         // Keep each kind contiguous for small lookups without changing the first-occurrence entry order.
         for(usize index = m_size; index > m_textureCount; --index)
@@ -85,7 +85,7 @@ bool CommandListResourceSelection::containsIndexedResource(void* const resource,
     const usize* const buckets = reinterpret_cast<const usize*>(static_cast<const u8*>(m_storage) + m_capacity * sizeof(Entry));
     const usize bucketCount = m_capacity * s_BucketCountFactor;
     const usize mask = bucketCount - 1u;
-    usize bucket = hashIdentity(resource, texture) & mask;
+    usize bucket = HashIdentity(resource, texture) & mask;
     for(usize probe = 0u; probe < bucketCount; ++probe){
         const usize encodedIndex = buckets[bucket];
         if(encodedIndex == 0u)
@@ -128,7 +128,7 @@ bool CommandListResourceSelection::grow(){
     usize* const buckets = reinterpret_cast<usize*>(static_cast<u8*>(storage) + capacity * sizeof(Entry));
     new(buckets) usize[capacity * s_BucketCountFactor]{};
     for(usize index = 0u; index < m_size; ++index)
-        insertIndex(storage, capacity, index);
+        InsertIndex(storage, capacity, index);
     m_storage = storage;
     m_capacity = capacity;
     return true;

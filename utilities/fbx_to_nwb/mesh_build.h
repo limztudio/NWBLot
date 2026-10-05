@@ -25,24 +25,24 @@ NWB_FBX_TO_NWB_BEGIN
 
 class FbxMeshBuild final : NoCopy{
 public:
-    [[nodiscard]] static SIMDVector toVector(const ufbx_vec3 value, const f32 w = 0.0f);
-    [[nodiscard]] static PositionKey makePositionKey(const Vec3& position);
-    [[nodiscard]] static PositionKey makePositionKey(const SIMDVector position);
-    [[nodiscard]] static SIMDVector buildCornerOutputPositionVector(
+    [[nodiscard]] static SIMDVector ToVector(const ufbx_vec3 value, const f32 w = 0.0f);
+    [[nodiscard]] static PositionKey MakePositionKey(const Vec3& position);
+    [[nodiscard]] static PositionKey MakePositionKey(const SIMDVector position);
+    [[nodiscard]] static SIMDVector BuildCornerOutputPositionVector(
         const ufbx_mesh& mesh,
         const ufbx_node& node,
         const ImportOptions& options,
         const bool wantsSkinning,
         const u32 cornerIndex
     );
-    [[nodiscard]] static SIMDVector buildCornerOutputNormalVector(
+    [[nodiscard]] static SIMDVector BuildCornerOutputNormalVector(
         const ufbx_mesh& mesh,
         const ufbx_matrix& normalToWorld,
         const ImportOptions& options,
         const bool wantsSkinning,
         const u32 cornerIndex
     );
-    [[nodiscard]] static bool buildCornerOutputTangentVector(
+    [[nodiscard]] static bool BuildCornerOutputTangentVector(
         const ufbx_mesh& mesh,
         const ufbx_matrix& normalToWorld,
         const ImportOptions& options,
@@ -51,8 +51,8 @@ public:
         const SIMDVector normal,
         SIMDVector& outTangent
     );
-    [[nodiscard]] static bool isFiniteSkinInfluence(const SIMDVector weights);
-    [[nodiscard]] static bool isFiniteSourceTriangleCorner(
+    [[nodiscard]] static bool IsFiniteSkinInfluence(const SIMDVector weights);
+    [[nodiscard]] static bool IsFiniteSourceTriangleCorner(
         const SIMDVector position,
         const SIMDVector normal,
         const SIMDVector tangent,
@@ -63,13 +63,13 @@ public:
         const SIMDVector skinWeights
     );
     template<typename VisitTriangle>
-    [[nodiscard]] static bool visitTriangulatedMeshTriangles(
+    [[nodiscard]] static bool VisitTriangulatedMeshTriangles(
         const ufbx_mesh& mesh,
         const bool flipWinding,
         UtilityVector<u32>& inOutTriangleIndices,
         VisitTriangle&& visitTriangle
     );
-    [[nodiscard]] static bool buildSmoothPositionNormals(
+    [[nodiscard]] static bool BuildSmoothPositionNormals(
         const ufbx_mesh& mesh,
         const ufbx_node& node,
         const ImportOptions& options,
@@ -77,7 +77,7 @@ public:
         UtilityVector<u32>& inOutTriangleIndices,
         PositionNormalMap& outNormals
     );
-    static bool appendInstanceMesh(
+    static bool AppendInstanceMesh(
         const MeshInstance& instance,
         const ImportOptions& options,
         const bool wantsSkinning,
@@ -90,7 +90,7 @@ public:
         bool& inOutSawVertexUvs,
         bool& inOutUsedDefaultUvs
     );
-    static bool estimateSelectedTriangleCorners(
+    static bool EstimateSelectedTriangleCorners(
         const UtilityVector<MeshInstance>& instances,
         const UtilityVector<usize>& selection,
         usize& outTriangleCorners
@@ -106,13 +106,13 @@ public:
 
 
 template<typename VisitTriangle>
-[[nodiscard]] bool FbxMeshBuild::visitTriangulatedMeshTriangles(
+[[nodiscard]] bool FbxMeshBuild::VisitTriangulatedMeshTriangles(
     const ufbx_mesh& mesh,
     const bool flipWinding,
     UtilityVector<u32>& inOutTriangleIndices,
     VisitTriangle&& visitTriangle
 ){
-    if(!FbxSourceMeshStreams::ensureTriangleIndexScratchCapacity(mesh, inOutTriangleIndices))
+    if(!FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(mesh, inOutTriangleIndices))
         return false;
     for(usize faceIndex = 0u; faceIndex < mesh.num_faces; ++faceIndex){
         const ufbx_face face = mesh.faces.data[faceIndex];

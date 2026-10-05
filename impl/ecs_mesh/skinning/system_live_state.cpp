@@ -33,7 +33,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshSkinningSystem::resolveRestToSkinnedCopyByteCounts(
+bool MeshSkinningSystem::ResolveRestToSkinnedCopyByteCounts(
     const MeshSkinningRuntimeInstance& instance,
     usize& outPositionBytes,
     usize& outNormalBytes,

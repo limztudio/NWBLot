@@ -16,7 +16,7 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void FbxSourceMeshStreams::reserveSourceMeshStreams(
+void FbxSourceMeshStreams::ReserveSourceMeshStreams(
     SourceMeshStreams& mesh,
     const usize estimatedTriangleCorners,
     const bool wantsSkinning
@@ -33,7 +33,7 @@ void FbxSourceMeshStreams::reserveSourceMeshStreams(
 }
 
 
-void FbxSourceMeshStreams::reserveSourceMeshBuildContext(
+void FbxSourceMeshStreams::ReserveSourceMeshBuildContext(
     SourceMeshBuildContext& context,
     const usize estimatedTriangleCorners,
     const bool wantsSkinning
@@ -49,7 +49,7 @@ void FbxSourceMeshStreams::reserveSourceMeshBuildContext(
 }
 
 
-bool FbxSourceMeshStreams::sourceMeshHasCompleteTangents(const SourceMeshStreams& mesh){
+bool FbxSourceMeshStreams::SourceMeshHasCompleteTangents(const SourceMeshStreams& mesh){
     if(mesh.vertexRefs.empty() || mesh.tangents.empty())
         return false;
 
@@ -61,7 +61,7 @@ bool FbxSourceMeshStreams::sourceMeshHasCompleteTangents(const SourceMeshStreams
 }
 
 
-void FbxSourceMeshStreams::dropSourceMeshTangents(SourceMeshStreams& mesh){
+void FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh){
     mesh.tangents.clear();
 
     SourceVertexRefIndexMap compactLookup;
@@ -94,7 +94,7 @@ void FbxSourceMeshStreams::dropSourceMeshTangents(SourceMeshStreams& mesh){
 }
 
 
-bool FbxSourceMeshStreams::ensureTriangleIndexScratchCapacity(
+bool FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(
     const ufbx_mesh& mesh,
     UtilityVector<u32>& inOutTriangleIndices
 ){
@@ -110,7 +110,7 @@ bool FbxSourceMeshStreams::ensureTriangleIndexScratchCapacity(
 }
 
 
-bool FbxSourceMeshStreams::generateSourceMeshTangents(
+bool FbxSourceMeshStreams::GenerateSourceMeshTangents(
     SourceMeshStreams& mesh,
     const bool usedDefaultUvs,
     SourceTangentReport& outTangentReport
@@ -199,7 +199,7 @@ bool FbxSourceMeshStreams::generateSourceMeshTangents(
         const f32 handedness = ::FrameTangentHandedness(rebuildVertices[vertexRefIndex].tangent.w, 1.0f);
         Vec4 generatedTangent;
         StoreFloat(VectorSetW(tangent, handedness), generatedTangent);
-        if(!internSourceValue(mesh.tangents, tangentLookup, generatedTangent, s_SourceTangentLabel, ref.tangent))
+        if(!InternSourceValue(mesh.tangents, tangentLookup, generatedTangent, s_SourceTangentLabel, ref.tangent))
             return false;
     }
     outTangentReport.degenerateUvTriangleCount = rebuildResult.degenerateUvTriangleCount;
@@ -213,31 +213,31 @@ bool FbxSourceMeshStreams::generateSourceMeshTangents(
 }
 
 
-bool FbxSourceMeshStreams::internSourceCorner(
+bool FbxSourceMeshStreams::InternSourceCorner(
     SourceMeshBuildContext& context,
     const SourceTriangleCorner& corner,
     const bool wantsSkinning,
     u32& outVertexRefIndex
 ){
     SourceVertexRef ref;
-    if(!internSourceValue(context.mesh.positions, context.positions, corner.position, s_SourcePositionLabel, ref.position))
+    if(!InternSourceValue(context.mesh.positions, context.positions, corner.position, s_SourcePositionLabel, ref.position))
         return false;
-    if(!internSourceValue(context.mesh.normals, context.normals, corner.normal, s_SourceNormalLabel, ref.normal))
+    if(!InternSourceValue(context.mesh.normals, context.normals, corner.normal, s_SourceNormalLabel, ref.normal))
         return false;
     if(corner.hasTangent){
-        if(!internSourceValue(context.mesh.tangents, context.tangents, corner.tangent, s_SourceTangentLabel, ref.tangent))
+        if(!InternSourceValue(context.mesh.tangents, context.tangents, corner.tangent, s_SourceTangentLabel, ref.tangent))
             return false;
     }
-    if(!internSourceValue(context.mesh.uv0, context.uv0, corner.uv0, s_SourceUv0Label, ref.uv0))
+    if(!InternSourceValue(context.mesh.uv0, context.uv0, corner.uv0, s_SourceUv0Label, ref.uv0))
         return false;
-    if(!internSourceValue(context.mesh.colors, context.colors, corner.color, s_SourceColorLabel, ref.color))
+    if(!InternSourceValue(context.mesh.colors, context.colors, corner.color, s_SourceColorLabel, ref.color))
         return false;
     if(wantsSkinning){
-        if(!internSourceValue(context.mesh.skin, context.skin, corner.skin, s_SkinAssetTypeText, ref.skin))
+        if(!InternSourceValue(context.mesh.skin, context.skin, corner.skin, s_SkinAssetTypeText, ref.skin))
             return false;
     }
 
-    return internSourceValue(context.mesh.vertexRefs, context.vertexRefs, ref, s_SourceVertexRefLabel, outVertexRefIndex);
+    return InternSourceValue(context.mesh.vertexRefs, context.vertexRefs, ref, s_SourceVertexRefLabel, outVertexRefIndex);
 }
 
 

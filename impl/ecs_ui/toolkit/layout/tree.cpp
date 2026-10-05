@@ -16,7 +16,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool LayoutTree::isValidDescription(const LayoutNodeDesc& description){
+bool LayoutTree::IsValidDescription(const LayoutNodeDesc& description){
     const auto validSize = [](const LayoutSize& size){
         return size.policy <= LayoutSizePolicy::Stretch && IsFinite(size.value) && size.value >= 0.0f
             && (size.policy != LayoutSizePolicy::Stretch || size.value > 0.0f);
@@ -33,7 +33,7 @@ bool LayoutTree::isValidDescription(const LayoutNodeDesc& description){
     ;
 }
 
-bool LayoutTree::isValidRectangle(const Rect& rectangle){
+bool LayoutTree::IsValidRectangle(const Rect& rectangle){
     return
         IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height)
         && rectangle.width >= 0.0f && rectangle.height >= 0.0f
@@ -41,7 +41,7 @@ bool LayoutTree::isValidRectangle(const Rect& rectangle){
     ;
 }
 
-Rect LayoutTree::intersect(const Rect& lhs, const Rect& rhs){
+Rect LayoutTree::Intersect(const Rect& lhs, const Rect& rhs){
     const f32 left = Max(lhs.x, rhs.x);
     const f32 top = Max(lhs.y, rhs.y);
     const f32 right = Min(lhs.x + lhs.width, rhs.x + rhs.width);
@@ -49,7 +49,7 @@ Rect LayoutTree::intersect(const Rect& lhs, const Rect& rhs){
     return { left, top, Max(0.0f, right - left), Max(0.0f, bottom - top) };
 }
 
-Rect LayoutTree::inset(const Rect& rectangle, const Insets& padding){
+Rect LayoutTree::Inset(const Rect& rectangle, const Insets& padding){
     const f32 left = Min(padding.left, rectangle.width);
     const f32 top = Min(padding.top, rectangle.height);
     const f64 width = static_cast<f64>(rectangle.width) - padding.left - padding.right;
@@ -83,7 +83,7 @@ void LayoutTree::reset(){
 
 bool LayoutTree::addNode(const u32 parent, const LayoutNodeDesc& description, u32& outIndex){
     if(
-        m_buildFailed || m_nodes.size() >= m_maxNodes || !isValidDescription(description)
+        m_buildFailed || m_nodes.size() >= m_maxNodes || !IsValidDescription(description)
         || (m_nodes.empty() ? parent != s_LayoutNoParent : parent >= m_nodes.size())
         || (parent != s_LayoutNoParent && m_nodes[parent].description.direction == LayoutDirection::Leaf)
     ){

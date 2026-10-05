@@ -178,7 +178,7 @@ GpuCommandArenaWorkerStatistics Queue::commandArenaWorkerStatistics(
     };
 }
 
-void Queue::updateCommandBufferHighWater(Atomic<u64>& highWaterCount, const u64 currentCount)noexcept{
+void Queue::UpdateCommandBufferHighWater(Atomic<u64>& highWaterCount, const u64 currentCount)noexcept{
     u64 highWater = highWaterCount.load(MemoryOrder::relaxed);
     while(highWater < currentCount){
         if(highWaterCount.compare_exchange_weak(highWater, currentCount, MemoryOrder::relaxed))
@@ -208,7 +208,7 @@ void Queue::registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
         const u64 directCurrentCount = m_directCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
         m_directLeasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
         m_directCommandBufferGrowthEventCount.fetch_add(1u, MemoryOrder::relaxed);
-        updateCommandBufferHighWater(m_directHighWaterCommandBufferCount, directCurrentCount);
+        UpdateCommandBufferHighWater(m_directHighWaterCommandBufferCount, directCurrentCount);
     }
     else{
         WorkerCommandArena* const arena = findWorkerCommandArena(
@@ -220,9 +220,9 @@ void Queue::registerCommandBuffer(TrackedCommandBuffer& commandBuffer)noexcept{
         const u64 workerCurrentCount = arena->currentCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed) + 1u;
         arena->leasedCommandBufferCount.fetch_add(1u, MemoryOrder::relaxed);
         arena->growthEventCount.fetch_add(1u, MemoryOrder::relaxed);
-        updateCommandBufferHighWater(arena->highWaterCommandBufferCount, workerCurrentCount);
+        UpdateCommandBufferHighWater(arena->highWaterCommandBufferCount, workerCurrentCount);
     }
-    updateCommandBufferHighWater(m_highWaterCommandBufferCount, currentCount);
+    UpdateCommandBufferHighWater(m_highWaterCommandBufferCount, currentCount);
 }
 
 bool Queue::validateCommandBufferSubmissionState(const TrackedCommandBuffer& commandBuffer)const{

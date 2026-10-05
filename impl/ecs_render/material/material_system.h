@@ -105,7 +105,7 @@ public:
     );
 
 public:
-    [[nodiscard]] static bool splitMaterialTypedBytesByClass(
+    [[nodiscard]] static bool SplitMaterialTypedBytesByClass(
         const Material& material,
         const Name& materialPath,
         MaterialTypedByteVector& outConstantTypedBytes,
@@ -190,13 +190,13 @@ public:
         // CSG graph preparation uses the immutable view payload; other gathers use the accepted CPU view.
         const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState
     );
-    [[nodiscard]] static bool findMaterialInstanceOverrideField(
+    [[nodiscard]] static bool FindMaterialInstanceOverrideField(
         Core::ECS::EntityID entity,
         const MaterialSurfaceInfo& materialInfo,
         const MaterialInstanceParameter& parameter,
         MaterialInstanceOverrideField& outField
     );
-    [[nodiscard]] static bool applyMaterialInstanceOverrides(
+    [[nodiscard]] static bool ApplyMaterialInstanceOverrides(
         Core::ECS::EntityID entity,
         const MaterialSurfaceInfo& materialInfo,
         const MaterialInstanceComponent& materialInstance,

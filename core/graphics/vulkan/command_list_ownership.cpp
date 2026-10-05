@@ -29,7 +29,7 @@ CommandList::GraphPublicationReadOwnership::GraphPublicationReadOwnership(const 
             return;
         }
         if(publicationState == s_GraphPublicationRecording){
-            m_readable = GraphRecordingOwnership::hasCapability(
+            m_readable = GraphRecordingOwnership::HasCapability(
                 m_commandList,
                 m_commandList.m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire)
             );
@@ -72,16 +72,16 @@ CommandList::GraphPublicationReadOwnership::~GraphPublicationReadOwnership()noex
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-CommandList::GraphRecordingOwnership::Capability*& CommandList::GraphRecordingOwnership::currentCapability()noexcept{
+CommandList::GraphRecordingOwnership::Capability*& CommandList::GraphRecordingOwnership::CurrentCapability()noexcept{
     thread_local Capability* capability = nullptr;
     return capability;
 }
 
-bool CommandList::GraphRecordingOwnership::hasCapability(
+bool CommandList::GraphRecordingOwnership::HasCapability(
     const CommandList& commandList,
     const u64 recordingLeaseSerial
 )noexcept{
-    for(const Capability* capability = currentCapability(); capability; capability = capability->previous){
+    for(const Capability* capability = CurrentCapability(); capability; capability = capability->previous){
         if(
             capability->commandList == &commandList
             && capability->recordingLeaseSerial == recordingLeaseSerial
@@ -153,7 +153,7 @@ void CommandList::GraphRecordingOwnership::attachCapability()noexcept{
     if(m_capabilityAttached)
         TerminateInvariant();
 
-    Capability*& capability = currentCapability();
+    Capability*& capability = CurrentCapability();
     m_capability.commandList = &m_commandList;
     m_capability.recordingLeaseSerial = m_recordingLeaseSerial;
     m_capability.previous = capability;
@@ -165,7 +165,7 @@ void CommandList::GraphRecordingOwnership::detachCapability()noexcept{
     if(!m_capabilityAttached)
         return;
 
-    Capability** capability = &currentCapability();
+    Capability** capability = &CurrentCapability();
     while(*capability && *capability != &m_capability)
         capability = &(*capability)->previous;
     const bool capabilityFound = *capability == &m_capability;

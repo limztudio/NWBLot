@@ -101,11 +101,11 @@ struct CaptureDrawTask{
         explicit Payload(Core::Alloc::GlobalArena& arena) : drawItems(arena){}
     };
 
-    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements commandRequirements(const Payload& payload)noexcept{
+    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{
         return { payload.generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
     }
 
-    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         if(!payload.materialSystem || !payload.deferredTargets || !payload.avboitTargets.refractionFramebuffer
             || !payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount)
             || (payload.csg && !payload.csgResources.bindingValid()))
@@ -165,7 +165,7 @@ struct FinalizeTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
     struct Payload{};
-    [[nodiscard]] static bool record(const Payload&, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static bool Record(const Payload&, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         commandList.endRenderPass();
         return true;
     }

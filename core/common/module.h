@@ -75,7 +75,7 @@ public:
 
 class Initializer{
 public:
-    static Initializer& instance();
+    static Initializer& Instance();
 
 
 private:
@@ -182,7 +182,7 @@ public:
         if(m_active)
             return true;
 
-        if(!Initializer::instance().acquire())
+        if(!Initializer::Instance().acquire())
             return false;
 
         m_active = true;
@@ -192,7 +192,7 @@ public:
         if(!m_active)
             return;
 
-        Initializer::instance().release();
+        Initializer::Instance().release();
         m_active = false;
     }
 

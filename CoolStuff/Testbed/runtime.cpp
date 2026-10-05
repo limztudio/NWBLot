@@ -249,7 +249,7 @@ static void CreateStaticGroundPlaneEntity(NWB::Core::ECS::World& world){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(NWB::ProjectRuntimeContext& context){
+NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::CreateInitialWorldOrDie(NWB::ProjectRuntimeContext& context){
     UniquePtr<NWB::Core::ECS::World> world;
     if(!NWB::CreateInitialProjectWorld(context, world)){
         NWB_LOGGER_FATAL(__hidden_runtime::s_InitWorldFailedText);
@@ -260,7 +260,7 @@ NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::createInitialWorldOrDie(
 
 ProjectTestbed::ProjectTestbed(NWB::ProjectRuntimeContext& context)
     : m_context(context)
-    , m_world(createInitialWorldOrDie(context))
+    , m_world(CreateInitialWorldOrDie(context))
     , m_uiPreview(context.objectArena, context.assetManager)
 {}
 

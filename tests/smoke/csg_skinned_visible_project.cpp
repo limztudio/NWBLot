@@ -147,16 +147,16 @@ static constexpr Float4 s_WarmDirectionalLightColor = Float4(1.0f, 0.96f, 0.88f)
 
 class CsgSkinnedVisibleSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    [[nodiscard]] static u32 rendererBaselineCaptureFreezeFrame(){
-        return RendererBaselineCaptureFreezeFrame();
+    [[nodiscard]] static u32 RendererBaselineCaptureFreezeFrame(){
+        return NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame();
     }
 
-    [[nodiscard]] static f32 rendererBaselineFixedDelta(){
-        return RendererBaselineFixedDelta();
+    [[nodiscard]] static f32 RendererBaselineFixedDelta(){
+        return NWB::Tests::Smoke::RendererBaselineFixedDelta();
     }
 
 
-    static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
+    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = NWB::Tests::Smoke::CreateSmokeWorldOrDie(context, GLB_TEXT("CsgSkinnedVisibleSmokeProject"));
 
         AddSmokeSkinnedRenderSystems(*world, context);
@@ -229,7 +229,7 @@ private:
         const SIMDVector fallback = VectorSet(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
 
         UniquePtr<NWB::Core::Assets::IAsset> modelAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Model::assetTypeName(), s_Model.name(), modelAsset)){
+        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name(), modelAsset)){
             NWB_LOGGER_ERROR(GLB_TEXT("CsgSkinnedVisibleSmokeProject: failed to load model for cutter anchor"));
             return fallback;
         }
@@ -241,7 +241,7 @@ private:
             return fallback;
 
         UniquePtr<NWB::Core::Assets::IAsset> skeletonAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::assetTypeName(), model->skeletonObjects().front().skeleton.name(), skeletonAsset)){
+        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model->skeletonObjects().front().skeleton.name(), skeletonAsset)){
             NWB_LOGGER_ERROR(GLB_TEXT("CsgSkinnedVisibleSmokeProject: failed to load skeleton for cutter anchor"));
             return fallback;
         }
@@ -331,7 +331,7 @@ private:
 public:
     explicit CsgSkinnedVisibleSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(createWorldOrDie(context))
+        , m_world(CreateWorldOrDie(context))
     {}
 
     virtual ~CsgSkinnedVisibleSmokeProject()override{
@@ -391,7 +391,7 @@ public:
     }
 
     virtual bool onUpdate(const f32 delta)override{
-        const u32 captureFreezeFrame = rendererBaselineCaptureFreezeFrame();
+        const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
         if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
             if(!m_rendererBaselineCapturePaused){
                 // This test-only suspension freezes the animated skinned receiver and CSG cutter at the exact
@@ -406,7 +406,7 @@ public:
             return true;
         }
 
-        const f32 fixedDelta = rendererBaselineFixedDelta();
+        const f32 fixedDelta = RendererBaselineFixedDelta();
         const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
         m_fpsProbe.recordFrame(safeDelta);
         m_animationTime += Min(safeDelta, s_MaxAnimationDelta) * s_CutterAnimationSpeed;

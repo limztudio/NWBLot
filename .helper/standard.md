@@ -50,7 +50,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 
 ## 3. Naming conventions
 - Types (`class`, `struct`, `enum namespaces`) use `PascalCase`.
-- Member functions, including static helpers and factories, parameters, and local variables use `lowerCamelCase`.
+- Non-static C++ member functions, parameters, and local variables use `lowerCamelCase`. Static C++ class/struct member functions, including static helpers and factories, use `UpperCamelCase`, starting with an uppercase letter.
 - Internal/class state fields use the `m_` prefix. Public aggregate, descriptor, and serialized-layout fields use semantic `lowerCamelCase` names; preserve their layout and authored field contracts.
 - Non-static global variables use `g_` prefix.
 - Constants use `s_` prefix and are usually `constexpr`.
@@ -58,7 +58,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - `namespace SomeEnum { enum Enum : u8 { ... }; };`
 - For engine public/module-facing enums, use the namespace-enum pattern (`namespace X { enum Enum : u8 { ... }; };`) and do not use `enum class`.
 - Handle aliases follow `<Type>Handle` naming.
-- C++ free functions at global or namespace scope use `UpperCamelCase`, starting with an uppercase letter. This includes templates, namespace helpers, and translation-unit-local `static` functions and callbacks. Class member functions, including static member functions, use `lowerCamelCase`.
+- C++ free functions at global or namespace scope use `UpperCamelCase`, starting with an uppercase letter. This includes templates, namespace helpers, and translation-unit-local `static` functions and callbacks.
 - Exception: keep `checked_cast` in `snake_case` to align with the C++ cast names.
 - Global and class static variables start with `s_Uppercase`; function-local static variables retain the `s_` prefix.
 - Macros owned by `global/` use the `GLB_` prefix. Keep `NWB_` for project-owned namespace, graphics configuration, logger, and shader macros.

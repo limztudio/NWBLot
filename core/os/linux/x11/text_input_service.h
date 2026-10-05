@@ -26,11 +26,11 @@ NWB_CORE_BEGIN
 
 class X11TextInputService final : public QueuedTextInputService{
 private:
-    static Bool onPreeditStart(XIC context, XPointer data, XPointer callData);
-    static Bool onPreeditDone(XIC context, XPointer data, XPointer callData);
-    static Bool onPreeditDraw(XIC context, XPointer data, XPointer callData);
-    static Bool onPreeditCaret(XIC context, XPointer data, XPointer callData);
-    static void onInputMethodDestroyed(XIM method, XPointer data, XPointer callData);
+    static Bool OnPreeditStart(XIC context, XPointer data, XPointer callData);
+    static Bool OnPreeditDone(XIC context, XPointer data, XPointer callData);
+    static Bool OnPreeditDraw(XIC context, XPointer data, XPointer callData);
+    static Bool OnPreeditCaret(XIC context, XPointer data, XPointer callData);
+    static void OnInputMethodDestroyed(XIM method, XPointer data, XPointer callData);
 
 
 public:

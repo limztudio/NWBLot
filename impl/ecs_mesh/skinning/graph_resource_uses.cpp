@@ -61,7 +61,7 @@ struct ResourceUseCollector : NoCopy{
     usize m_count = 0u;
     Optional<Index> m_index;
 
-    [[nodiscard]] static bool mergeUse(ResourceUseInfo& info, const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access){
+    [[nodiscard]] static bool MergeUse(ResourceUseInfo& info, const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access){
         if(info.requiredState != state)
             return false;
         if(info.access != access)
@@ -81,7 +81,7 @@ struct ResourceUseCollector : NoCopy{
         for(usize index = 0u; index < m_count; ++index){
             ResourceUseEntry& entry = m_inline[index];
             if(entry.resource == resource)
-                return mergeUse(entry.info, state, access);
+                return MergeUse(entry.info, state, access);
         }
         if(m_count < InlineCapacity){
             m_inline[m_count] = { resource, { m_count, state, access } };
@@ -108,7 +108,7 @@ struct ResourceUseCollector : NoCopy{
             ++m_count;
             return true;
         }
-        return mergeUse(found.value(), state, access);
+        return MergeUse(found.value(), state, access);
     }
 
     void writeTo(Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outUses)const{

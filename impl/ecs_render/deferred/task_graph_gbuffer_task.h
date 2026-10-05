@@ -67,13 +67,13 @@ struct GbufferGraphTask{
         {}
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.regularSharedComputeEmulationTiming);
     }
 };

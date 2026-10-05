@@ -36,13 +36,13 @@ struct FrameRecoveryGraphTask{
         bool* retiresFrameTiming = nullptr;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token);
-    static void discarded(Payload& payload);
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
+    static void Discarded(Payload& payload);
 };
 
 

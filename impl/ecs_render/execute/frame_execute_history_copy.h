@@ -45,11 +45,11 @@ public:
     };
 
 
-    [[nodiscard]] static bool prepareHistoryCopyFinalState(
+    [[nodiscard]] static bool PrepareHistoryCopyFinalState(
         void* rawContext,
         const Core::CommandListResourceStateHandoff* finalState
     );
-    [[nodiscard]] static bool acceptHistoryCopyFinalState(
+    [[nodiscard]] static bool AcceptHistoryCopyFinalState(
         void* rawContext,
         const Core::QueueSubmissionToken& token
     );

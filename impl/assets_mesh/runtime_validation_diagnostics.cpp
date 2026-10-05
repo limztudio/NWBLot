@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool MeshPayloadValidationDiagnostics::failMeshPayloadValidation(
+[[nodiscard]] bool MeshPayloadValidationDiagnostics::FailMeshPayloadValidation(
     const TStringView contextText,
     const TStringView meshPathText,
     const TStringView detailText
@@ -28,7 +28,7 @@ NWB_IMPL_BEGIN
 }
 
 
-[[nodiscard]] bool MeshPayloadValidationDiagnostics::failMeshPayloadIndexedValidation(
+[[nodiscard]] bool MeshPayloadValidationDiagnostics::FailMeshPayloadIndexedValidation(
     const TStringView contextText,
     const TStringView meshPathText,
     const TStringView itemText,
@@ -46,7 +46,7 @@ NWB_IMPL_BEGIN
 }
 
 
-[[nodiscard]] bool MeshPayloadValidationDiagnostics::failMeshletPayloadValidation(
+[[nodiscard]] bool MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(
     const TStringView contextText,
     const TStringView meshPathText,
     const usize meshletIndex,
@@ -62,7 +62,7 @@ NWB_IMPL_BEGIN
 }
 
 
-[[nodiscard]] bool MeshPayloadValidationDiagnostics::failMeshletAttributePayloadValidation(
+[[nodiscard]] bool MeshPayloadValidationDiagnostics::FailMeshletAttributePayloadValidation(
     const TStringView contextText,
     const TStringView meshPathText,
     const usize meshletIndex,
@@ -80,7 +80,7 @@ NWB_IMPL_BEGIN
 }
 
 
-[[nodiscard]] bool MeshPayloadValidationDiagnostics::failMeshletPrimitivePayloadValidation(
+[[nodiscard]] bool MeshPayloadValidationDiagnostics::FailMeshletPrimitivePayloadValidation(
     const TStringView contextText,
     const TStringView meshPathText,
     const usize meshletIndex,

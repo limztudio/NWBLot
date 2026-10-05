@@ -39,7 +39,7 @@ struct CopyBufferCopy{
 struct CopyBufferTask : public GpuTaskGraphBuiltinDetail::CopiesTaskBase<CopyBufferCopy>{
     using Copy = CopyBufferCopy;
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context

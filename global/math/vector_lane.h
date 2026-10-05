@@ -134,30 +134,30 @@ GLB_INLINE u32 TruncateBits(f32 value)noexcept{
 
 #if defined(GLB_HAS_SSE4)
 struct SllEpi32 final{
-    static GLB_INLINE __m128i apply(__m128i value, __m128i count)noexcept{ return _mm_sll_epi32(value, count); }
+    static GLB_INLINE __m128i Apply(__m128i value, __m128i count)noexcept{ return _mm_sll_epi32(value, count); }
 };
 
 struct SrlEpi32 final{
-    static GLB_INLINE __m128i apply(__m128i value, __m128i count)noexcept{ return _mm_srl_epi32(value, count); }
+    static GLB_INLINE __m128i Apply(__m128i value, __m128i count)noexcept{ return _mm_srl_epi32(value, count); }
 };
 
 template<typename ShiftOp>
 GLB_INLINE __m128i MultiShiftEpi32(__m128i value, __m128i count)noexcept{
     __m128i v = _mm_shuffle_epi32(value, _MM_SHUFFLE(0, 0, 0, 0));
     __m128i c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(0, 0, 0, 0)), s_SIMDMaskX);
-    const __m128i r0 = ShiftOp::apply(v, c);
+    const __m128i r0 = ShiftOp::Apply(v, c);
 
     v = _mm_shuffle_epi32(value, _MM_SHUFFLE(1, 1, 1, 1));
     c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(1, 1, 1, 1)), s_SIMDMaskX);
-    const __m128i r1 = ShiftOp::apply(v, c);
+    const __m128i r1 = ShiftOp::Apply(v, c);
 
     v = _mm_shuffle_epi32(value, _MM_SHUFFLE(2, 2, 2, 2));
     c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(2, 2, 2, 2)), s_SIMDMaskX);
-    const __m128i r2 = ShiftOp::apply(v, c);
+    const __m128i r2 = ShiftOp::Apply(v, c);
 
     v = _mm_shuffle_epi32(value, _MM_SHUFFLE(3, 3, 3, 3));
     c = _mm_and_si128(_mm_shuffle_epi32(count, _MM_SHUFFLE(3, 3, 3, 3)), s_SIMDMaskX);
-    const __m128i r3 = ShiftOp::apply(v, c);
+    const __m128i r3 = ShiftOp::Apply(v, c);
 
     const __m128 r01 = _mm_shuffle_ps(_mm_castsi128_ps(r0), _mm_castsi128_ps(r1), _MM_SHUFFLE(0, 0, 0, 0));
     const __m128 r23 = _mm_shuffle_ps(_mm_castsi128_ps(r2), _mm_castsi128_ps(r3), _MM_SHUFFLE(0, 0, 0, 0));

@@ -121,7 +121,7 @@ protected:
     }
 
     [[nodiscard]] bool identityMapping(const StringView text){
-        if(!GraphemeSegmentation::build(text, m_boundaries))
+        if(!GraphemeSegmentation::Build(text, m_boundaries))
             return false;
         m_mapping.clear();
         m_mapping.reserve(m_boundaries.size());

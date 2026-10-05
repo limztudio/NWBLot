@@ -29,12 +29,12 @@ struct FrameTimingBeginGraphTask{
         GpuTimingScopeDefinition scopeDefinition;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
     );
-    static void accepted(Payload& payload, const QueueSubmissionToken& token);
+    static void Accepted(Payload& payload, const QueueSubmissionToken& token);
 };
 
 

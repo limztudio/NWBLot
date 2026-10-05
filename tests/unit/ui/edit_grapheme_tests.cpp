@@ -46,7 +46,7 @@ TEST_F(UiEditGraphemeTests, PassesEveryPinnedOfficialUnicode17ExtendedGraphemeCa
     for(usize index = 0u; index < 766u; ++index){
         SCOPED_TRACE(index);
         const GraphemeCase& test = s_ConformanceCases[index];
-        ASSERT_TRUE(GraphemeSegmentation::build(test.text, actual));
+        ASSERT_TRUE(GraphemeSegmentation::Build(test.text, actual));
         const AStringView expectedOffsets = test.expectedOffsets;
         usize cursor = 0u;
         usize offsetIndex = 0u;
@@ -70,14 +70,14 @@ TEST_F(UiEditGraphemeTests, RegionalIndicatorsPairAndEmojiModifierZwjSequencesRe
     const AStringView flags("\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7\xF0\x9F\x87\xBA\xF0\x9F\x87\xB8"
         "\xF0\x9F\x87\xAF");
     EditBoundaryVector boundaries(m_arena);
-    ASSERT_TRUE(GraphemeSegmentation::build(flags, boundaries));
+    ASSERT_TRUE(GraphemeSegmentation::Build(flags, boundaries));
     ASSERT_EQ(boundaries.size(), 4u);
     EXPECT_EQ(boundaries[0], 0u);
     EXPECT_EQ(boundaries[1], 8u);
     EXPECT_EQ(boundaries[2], 16u);
     EXPECT_EQ(boundaries[3], 20u);
     const AStringView emoji("\xF0\x9F\x91\xA9\xF0\x9F\x8F\xBD\xE2\x80\x8D\xF0\x9F\x92\xBB");
-    ASSERT_TRUE(GraphemeSegmentation::build(emoji, boundaries));
+    ASSERT_TRUE(GraphemeSegmentation::Build(emoji, boundaries));
     ASSERT_EQ(boundaries.size(), 2u);
     EXPECT_EQ(boundaries[1], 15u);
     ASSERT_TRUE(m_model.setText(emoji));
@@ -87,24 +87,24 @@ TEST_F(UiEditGraphemeTests, RegionalIndicatorsPairAndEmojiModifierZwjSequencesRe
 
 TEST_F(UiEditGraphemeTests, GeneralSegmentationAcceptsCrLfButSingleLineValidationRejectsIt){
     EditBoundaryVector boundaries(m_arena);
-    ASSERT_TRUE(GraphemeSegmentation::build("x\r\ny", boundaries));
+    ASSERT_TRUE(GraphemeSegmentation::Build("x\r\ny", boundaries));
     ASSERT_EQ(boundaries.size(), 4u);
     EXPECT_EQ(boundaries[0], 0u);
     EXPECT_EQ(boundaries[1], 1u);
     EXPECT_EQ(boundaries[2], 3u);
     EXPECT_EQ(boundaries[3], 4u);
-    EXPECT_FALSE(GraphemeSegmentation::build("x\r\ny", boundaries, true));
+    EXPECT_FALSE(GraphemeSegmentation::Build("x\r\ny", boundaries, true));
     EXPECT_EQ(boundaries[2], 3u);
-    EXPECT_TRUE(GraphemeSegmentation::validate(AStringView("\0", 1u)));
-    EXPECT_FALSE(GraphemeSegmentation::validate(AStringView("\0", 1u), true));
+    EXPECT_TRUE(GraphemeSegmentation::Validate(AStringView("\0", 1u)));
+    EXPECT_FALSE(GraphemeSegmentation::Validate(AStringView("\0", 1u), true));
 }
 
 TEST_F(UiEditGraphemeTests, InvalidUtf8PreservesExistingBoundaries){
     EditBoundaryVector boundaries(m_arena);
-    ASSERT_TRUE(GraphemeSegmentation::build("ok", boundaries));
-    EXPECT_FALSE(GraphemeSegmentation::build("\xED\xA0\x80", boundaries));
-    EXPECT_FALSE(GraphemeSegmentation::build("\xF5\x80\x80\x80", boundaries));
-    EXPECT_FALSE(GraphemeSegmentation::build("\x80", boundaries));
+    ASSERT_TRUE(GraphemeSegmentation::Build("ok", boundaries));
+    EXPECT_FALSE(GraphemeSegmentation::Build("\xED\xA0\x80", boundaries));
+    EXPECT_FALSE(GraphemeSegmentation::Build("\xF5\x80\x80\x80", boundaries));
+    EXPECT_FALSE(GraphemeSegmentation::Build("\x80", boundaries));
     ASSERT_EQ(boundaries.size(), 3u);
     EXPECT_EQ(boundaries[0], 0u);
     EXPECT_EQ(boundaries[1], 1u);
@@ -113,13 +113,13 @@ TEST_F(UiEditGraphemeTests, InvalidUtf8PreservesExistingBoundaries){
 
 TEST_F(UiEditGraphemeTests, ScalarPositionsDifferFromGraphemePositionsWithoutSplittingUtf8){
     const AStringView text("a\xCC\x81");
-    ASSERT_TRUE(GraphemeSegmentation::validate(text));
-    EXPECT_TRUE(GraphemeSegmentation::isScalarBoundary(text, 0u));
-    EXPECT_TRUE(GraphemeSegmentation::isScalarBoundary(text, 1u));
-    EXPECT_FALSE(GraphemeSegmentation::isScalarBoundary(text, 2u));
-    EXPECT_TRUE(GraphemeSegmentation::isScalarBoundary(text, 3u));
-    EXPECT_FALSE(GraphemeSegmentation::isScalarBoundary(text, 4u));
-    EXPECT_TRUE(GraphemeSegmentation::isScalarBoundary({}, 0u));
+    ASSERT_TRUE(GraphemeSegmentation::Validate(text));
+    EXPECT_TRUE(GraphemeSegmentation::IsScalarBoundary(text, 0u));
+    EXPECT_TRUE(GraphemeSegmentation::IsScalarBoundary(text, 1u));
+    EXPECT_FALSE(GraphemeSegmentation::IsScalarBoundary(text, 2u));
+    EXPECT_TRUE(GraphemeSegmentation::IsScalarBoundary(text, 3u));
+    EXPECT_FALSE(GraphemeSegmentation::IsScalarBoundary(text, 4u));
+    EXPECT_TRUE(GraphemeSegmentation::IsScalarBoundary({}, 0u));
 }
 
 

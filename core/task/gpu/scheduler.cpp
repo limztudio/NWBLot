@@ -142,7 +142,7 @@ bool GpuTaskScheduler::submitGraph(
     GpuSubmissionPacketRange normalRange;
     GpuSubmissionPacketId failedPacket;
     {
-        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
         if(
             !declarationAccess.valid()
             || !planAccess.validFor(declarationAccess)
@@ -328,7 +328,7 @@ bool GpuTaskScheduler::recordAndSubmitAcceptedFrontierTask(
     };
     GpuSubmissionPacketId packet;
     {
-        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
         if(!declarationAccess.valid())
             return false;
         packet = planAccess.packetForTask(task);
@@ -359,7 +359,7 @@ bool GpuTaskScheduler::recordAndSubmitAcceptedFrontierTask(
     if(!transaction.waitForSubmissionPublicationAndHasAcceptedPacketsWithinSubmissionOperation()){
         if(outFailedPacket)
             *outFailedPacket = packet;
-        GpuTaskGraph::DeclarationReadView rejectionDeclarations = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+        GpuTaskGraph::DeclarationReadView rejectionDeclarations = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
         rejectTask(rejectionDeclarations);
         return false;
     }
@@ -419,7 +419,7 @@ bool GpuTaskScheduler::recordAndSubmitTask(
     SubmissionAttemptExceptionScope exceptionScope(graph, compiledGraph, recordedGraph, transaction, outFailedPacket);
 
     {
-        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
         if(
             !declarationAccess.valid()
             || !planAccess.validFor(declarationAccess)
@@ -479,11 +479,11 @@ bool GpuTaskScheduler::recordAndSubmitTaskWithinSubmissionOperation(
     if(
         !planAccess.validFor(compiledGraph)
         || !artifactAccess.exclusiveFor(recordedGraph)
-        || !GpuGraphSubmissionTransaction::SubmissionOperation::activeExclusiveFor(transaction)
+        || !GpuGraphSubmissionTransaction::SubmissionOperation::ActiveExclusiveFor(transaction)
     )
         return false;
 
-    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
     if(
         !declarationAccess.valid()
         || !planAccess.validFor(declarationAccess)
@@ -586,7 +586,7 @@ bool GpuTaskScheduler::prepareRecordingAttemptAndBindTransactionWithinSubmission
     if(
         !planAccess.validFor(compiledGraph)
         || !artifactAccess.exclusiveFor(recordedGraph)
-        || !GpuGraphSubmissionTransaction::SubmissionOperation::activeExclusiveFor(transaction)
+        || !GpuGraphSubmissionTransaction::SubmissionOperation::ActiveExclusiveFor(transaction)
         || !declarationAccess.validFor(graph)
         || !planAccess.validFor(declarationAccess)
         || !planAccess.validPacket(packet)

@@ -24,7 +24,7 @@ thread_local X11CheckedOperation* g_Operation = nullptr;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-int X11CheckedOperation::onError(Display* const display, XErrorEvent* const event){
+int X11CheckedOperation::OnError(Display* const display, XErrorEvent* const event){
     X11CheckedOperation* const operation = __hidden_x11_checked::g_Operation;
     if(operation && display == &operation->m_display){
         operation->m_error = event->error_code;
@@ -40,7 +40,7 @@ X11CheckedOperation::X11CheckedOperation(Display& display)
     GLB_FATAL_ASSERT(!__hidden_x11_checked::g_Operation);
     XSync(&m_display, False);
     __hidden_x11_checked::g_Operation = this;
-    m_previous = XSetErrorHandler(&X11CheckedOperation::onError);
+    m_previous = XSetErrorHandler(&X11CheckedOperation::OnError);
 }
 
 X11CheckedOperation::~X11CheckedOperation(){

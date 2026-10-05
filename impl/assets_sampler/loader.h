@@ -23,7 +23,7 @@ NWB_IMPL_BEGIN
 
 struct SamplerGpuResource final : NoCopy{
     Core::SamplerHandle sampler;
-    Core::GpuDescriptorHandle samplerHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle samplerHeapHandle = Core::GpuDescriptorHandle::Invalid();
 
     [[nodiscard]] bool valid()const{
         return sampler != nullptr && samplerHeapHandle.valid();

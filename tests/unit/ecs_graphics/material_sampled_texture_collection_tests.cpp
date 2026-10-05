@@ -63,7 +63,7 @@ struct CollectionContext{
         auto resource = MakeUnique<TextureGpuResource>();
         resource->texture = texture;
         resource->format = Core::Format::RGBA8_UNORM;
-        resource->sampledImageHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::SampledImage, static_cast<u32>(index));
+        resource->sampledImageHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::SampledImage, static_cast<u32>(index));
         EXPECT_TRUE(resources.textureAssetCache.try_emplace(asset.name(), Move(resource)).second);
         textures.push_back(Move(texture));
         textureAssets.push_back(asset);
@@ -196,8 +196,8 @@ TEST(MaterialSampledTextureCollection, SurfaceRechecksEveryCurrentResourceAndPre
         case 4u: EXPECT_EQ(context.resources.textureAssetCache.erase(reference.textureAsset.name()), 1u); break;
         case 5u: context.resources.textureAssetCache.at(reference.textureAsset.name()).reset(); break;
         case 6u: resource.texture = nullptr; break;
-        case 7u: resource.sampledImageHeapHandle = Core::GpuDescriptorHandle::invalid(); break;
-        case 8u: resource.sampledImageHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 1u); break;
+        case 7u: resource.sampledImageHeapHandle = Core::GpuDescriptorHandle::Invalid(); break;
+        case 8u: resource.sampledImageHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 1u); break;
         case 9u: resource.format = Core::Format::UNKNOWN; break;
         }
         Core::Alloc::ScratchArena scratch(Name("tests/material_texture_collection/resource_failure"));
@@ -278,10 +278,10 @@ TEST(MaterialSampledTextureCollection, RepeatedMaterialCallsObserveReplacementHa
     ASSERT_TRUE(context.appendShadow(material, collector));
     const auto original = output[0u];
     TextureGpuResource& resource = *context.resources.textureAssetCache.at(context.textureAssets[0u].name());
-    resource.sampledImageHeapHandle = Core::GpuDescriptorHandle::invalid();
+    resource.sampledImageHeapHandle = Core::GpuDescriptorHandle::Invalid();
     EXPECT_FALSE(context.appendShadow(material, collector));
     ASSERT_EQ(output.size(), 1u);
-    resource.sampledImageHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::SampledImage, 0u);
+    resource.sampledImageHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::SampledImage, 0u);
     resource.texture = context.makeTexture(original->getCreationDescription().name);
     ASSERT_TRUE(context.appendShadow(material, collector));
     ASSERT_EQ(output.size(), s_ExpectedDualCount);
@@ -351,7 +351,7 @@ TEST(MaterialSampledTextureCollection, PromotedPassPreservesFirstPointersAndReva
         EXPECT_EQ(output[index], context.textures[79u - index]);
 
     context.resources.textureAssetCache.at(context.textureAssets[80u].name())->sampledImageHeapHandle =
-        Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle::Invalid();
     EXPECT_FALSE(GatherPreparedMaterialPassSampledTextures(context.materials, context.resources, context.fixtures, sets, 1u, output, scratch));
     ASSERT_EQ(output.size(), 80u);
     for(usize index = 0u; index < output.size(); ++index)

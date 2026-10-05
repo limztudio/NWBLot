@@ -69,10 +69,10 @@ struct HandoffContext{
     }
 
     void fillDistinctStates(const usize count, const bool permanent){
-        auto& textureStates = Access::stateHandoffTextures(states);
-        auto& bufferStates = Access::stateHandoffBuffers(states);
-        auto& permanentTextures = Access::stateHandoffPermanentTextures(states);
-        auto& permanentBuffers = Access::stateHandoffPermanentBuffers(states);
+        auto& textureStates = Access::StateHandoffTextures(states);
+        auto& bufferStates = Access::StateHandoffBuffers(states);
+        auto& permanentTextures = Access::StateHandoffPermanentTextures(states);
+        auto& permanentBuffers = Access::StateHandoffPermanentBuffers(states);
         textureStates.reserve(count);
         bufferStates.reserve(count);
         if(permanent){
@@ -108,7 +108,7 @@ struct HandoffContext{
                 });
             }
         }
-        Access::validateStateHandoff(states, 1u);
+        Access::ValidateStateHandoff(states, 1u);
     }
 };
 
@@ -160,7 +160,7 @@ TEST(GpuPacketPreflight, TextureConflictsRequireExactResourceAndSubresourceState
         SCOPED_TRACE(stateCount);
         HandoffContext context;
         context.addResources(2u);
-        auto& states = Access::stateHandoffTextures(context.states);
+        auto& states = Access::StateHandoffTextures(context.states);
         for(u32 index = 0u; index < stateCount; ++index){
             states.push_back({
                 .texture = context.textures[0u].get(),
@@ -179,7 +179,7 @@ TEST(GpuPacketPreflight, TextureConflictsRequireExactResourceAndSubresourceState
         });
         states.push_back({});
         states.push_back(states[0u]);
-        Access::validateStateHandoff(context.states, 1u);
+        Access::ValidateStateHandoff(context.states, 1u);
         Graphics::CommandListResourceStateHandoff snapshot(context.testArena.arena);
         ASSERT_TRUE(snapshot.copyFrom(context.states));
         EXPECT_TRUE(Validation(context.states, context.validationScratch).validate());
@@ -198,7 +198,7 @@ TEST(GpuPacketPreflight, BufferConflictsRejectOverlapAndWrappedRangesWithoutChan
         SCOPED_TRACE(stateCount);
         HandoffContext context;
         context.addResources(2u);
-        auto& states = Access::stateHandoffBuffers(context.states);
+        auto& states = Access::StateHandoffBuffers(context.states);
         for(u32 index = 0u; index < stateCount; ++index){
             const u32 rangeIndex = (index * 5u) % stateCount;
             states.push_back({
@@ -217,7 +217,7 @@ TEST(GpuPacketPreflight, BufferConflictsRejectOverlapAndWrappedRangesWithoutChan
             .range = Graphics::BufferRange(0u, 32u),
         });
         states.push_back({});
-        Access::validateStateHandoff(context.states, 1u);
+        Access::ValidateStateHandoff(context.states, 1u);
         Graphics::CommandListResourceStateHandoff snapshot(context.testArena.arena);
         ASSERT_TRUE(snapshot.copyFrom(context.states));
         EXPECT_TRUE(Validation(context.states, context.validationScratch).validate());
@@ -269,8 +269,8 @@ TEST(GpuPacketPreflight, PermanentStatesRequireAgreementWithTransientStatesAndDu
         HandoffContext context;
         context.addResources(stateCount + 1u);
         context.fillDistinctStates(stateCount, true);
-        auto& permanentTextures = Access::stateHandoffPermanentTextures(context.states);
-        auto& permanentBuffers = Access::stateHandoffPermanentBuffers(context.states);
+        auto& permanentTextures = Access::StateHandoffPermanentTextures(context.states);
+        auto& permanentBuffers = Access::StateHandoffPermanentBuffers(context.states);
         permanentTextures.push_back({});
         permanentBuffers.push_back({});
         permanentTextures.push_back(permanentTextures[0u]);
@@ -293,7 +293,7 @@ TEST(GpuPacketPreflight, PermanentStatesRequireAgreementWithTransientStatesAndDu
         EXPECT_FALSE(Validation(context.states, context.validationScratch).validate());
         EXPECT_TRUE(context.states.equivalentTo(snapshot));
         permanentTextures.back().state = Graphics::ResourceStates::CopySource;
-        auto& transientTextures = Access::stateHandoffTextures(context.states);
+        auto& transientTextures = Access::StateHandoffTextures(context.states);
         transientTextures[0u].state = Graphics::ResourceStates::CopyDest;
         ASSERT_TRUE(snapshot.copyFrom(context.states));
         EXPECT_FALSE(Validation(context.states, context.validationScratch).validate());
@@ -304,7 +304,7 @@ TEST(GpuPacketPreflight, PermanentStatesRequireAgreementWithTransientStatesAndDu
         EXPECT_FALSE(Validation(context.states, context.validationScratch).validate());
         EXPECT_TRUE(context.states.equivalentTo(snapshot));
         permanentBuffers.back().state = Graphics::ResourceStates::CopySource;
-        auto& transientBuffers = Access::stateHandoffBuffers(context.states);
+        auto& transientBuffers = Access::StateHandoffBuffers(context.states);
         transientBuffers[0u].state = Graphics::ResourceStates::CopyDest;
         ASSERT_TRUE(snapshot.copyFrom(context.states));
         EXPECT_FALSE(Validation(context.states, context.validationScratch).validate());

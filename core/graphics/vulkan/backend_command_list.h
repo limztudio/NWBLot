@@ -103,8 +103,8 @@ private:
 
 
     private:
-        [[nodiscard]] static Capability*& currentCapability()noexcept;
-        [[nodiscard]] static bool hasCapability(const CommandList& commandList, u64 recordingLeaseSerial)noexcept;
+        [[nodiscard]] static Capability*& CurrentCapability()noexcept;
+        [[nodiscard]] static bool HasCapability(const CommandList& commandList, u64 recordingLeaseSerial)noexcept;
 
 
     private:

@@ -37,7 +37,7 @@ struct TextureDescription{
 
 class UiImageSourceTests : public testing::Test{
 protected:
-    static void install(
+    static void Install(
         Texture& texture, const TextureDescription& description,
         Texture::MipLevelVector&& mips, Core::Assets::AssetBytes&& bytes){
         texture.setPayload(
@@ -47,7 +47,7 @@ protected:
         );
     }
 
-    [[nodiscard]] static bool prepare(
+    [[nodiscard]] static bool Prepare(
         Core::Alloc::GlobalArena& arena, Texture& texture, const TextureDescription& description = {}){
         u32 count = 0u;
         if(!TextureFormat::ComputeCompleteMipCount(
@@ -85,13 +85,13 @@ protected:
         bytes.resize(static_cast<usize>(byteCount));
         for(usize index = 0u; index < bytes.size(); ++index)
             bytes[index] = static_cast<u8>(static_cast<u32>(description.seed) + index * 17u);
-        install(texture, description, Move(mips), Move(bytes));
+        Install(texture, description, Move(mips), Move(bytes));
         return true;
     }
 
-    static void expectCopy(const Texture& original, const Texture& copied){
+    static void ExpectCopy(const Texture& original, const Texture& copied){
         EXPECT_EQ(copied.virtualPath(), original.virtualPath());
-        EXPECT_EQ(copied.assetType(), Texture::assetTypeName());
+        EXPECT_EQ(copied.assetType(), Texture::AssetTypeName());
         EXPECT_EQ(copied.width(), original.width());
         EXPECT_EQ(copied.height(), original.height());
         EXPECT_EQ(copied.depth(), original.depth());
@@ -150,7 +150,7 @@ static_assert(!IsAssignable_V<ImageSource&, ImageSource&&>);
 
 TEST_F(UiImageSourceTests, NonPowerOfTwoMipsKeepPaddedBlockAndPayloadBounds){
     Texture texture(m_inputArena, Name("tests/ui/image/paint"));
-    ASSERT_TRUE(prepare(m_inputArena, texture));
+    ASSERT_TRUE(Prepare(m_inputArena, texture));
     ASSERT_TRUE(texture.validatePayload());
     const auto source = MakeImageSource(m_sourceArena, texture);
     ASSERT_TRUE(source);
@@ -175,10 +175,10 @@ TEST_F(UiImageSourceTests, RetainedSourceOutlivesCallerReplacementTextureAndItsA
     {
         Core::Alloc::GlobalArena callerArena(Name("tests/ui/image_source/temporary"));
         Texture texture(callerArena, Name("tests/ui/image/temporary"));
-        ASSERT_TRUE(prepare(callerArena, texture));
+        ASSERT_TRUE(Prepare(callerArena, texture));
         source = MakeImageSource(m_sourceArena, texture);
         ASSERT_TRUE(source);
-        expectCopy(texture, source->texture());
+        ExpectCopy(texture, source->texture());
         TextureDescription replacement;
         replacement.width = 1u;
         replacement.height = 1u;
@@ -186,7 +186,7 @@ TEST_F(UiImageSourceTests, RetainedSourceOutlivesCallerReplacementTextureAndItsA
         replacement.alphaMode = TextureAlphaMode::Opaque;
         replacement.hasAlpha = false;
         replacement.seed = 91u;
-        ASSERT_TRUE(prepare(callerArena, texture, replacement));
+        ASSERT_TRUE(Prepare(callerArena, texture, replacement));
         EXPECT_EQ(texture.payloadBytes().size(), 16u);
         EXPECT_EQ(source->texture().payloadBytes().size(), 144u);
         EXPECT_EQ(source->texture().width(), 9u);
@@ -202,7 +202,7 @@ TEST_F(UiImageSourceTests, RetainedSourceOutlivesCallerReplacementTextureAndItsA
 
 TEST_F(UiImageSourceTests, IdenticalLoadsAndSamePathReplacementReceiveFreshGenerations){
     Texture texture(m_inputArena, Name("tests/ui/image/shared_path"));
-    ASSERT_TRUE(prepare(m_inputArena, texture));
+    ASSERT_TRUE(Prepare(m_inputArena, texture));
     const auto original = MakeImageSource(m_sourceArena, texture);
     const auto identical = MakeImageSource(m_sourceArena, texture);
     ASSERT_TRUE(original);
@@ -213,7 +213,7 @@ TEST_F(UiImageSourceTests, IdenticalLoadsAndSamePathReplacementReceiveFreshGener
     EXPECT_NE(&original->texture(), &identical->texture());
     TextureDescription changed;
     changed.seed = 149u;
-    ASSERT_TRUE(prepare(m_inputArena, texture, changed));
+    ASSERT_TRUE(Prepare(m_inputArena, texture, changed));
     const auto replacement = MakeImageSource(m_sourceArena, texture);
     ASSERT_TRUE(replacement);
     EXPECT_EQ(replacement->identity(), original->identity());
@@ -226,7 +226,7 @@ TEST_F(UiImageSourceTests, IdenticalLoadsAndSamePathReplacementReceiveFreshGener
 
 TEST_F(UiImageSourceTests, CopiedSharedHandleRetainsTheSameImmutableVersionAfterOriginalRelease){
     Texture texture(m_inputArena, Name("tests/ui/image/retained"));
-    ASSERT_TRUE(prepare(m_inputArena, texture));
+    ASSERT_TRUE(Prepare(m_inputArena, texture));
     auto original = MakeImageSource(m_sourceArena, texture);
     ASSERT_TRUE(original);
     const u64 generation = original->generation();
@@ -246,7 +246,7 @@ TEST_F(UiImageSourceTests, SeparateHdrAlphaOwnsTheCompleteTrailingPayloadStream)
     description.alphaMode = TextureAlphaMode::SeparateUastcLdr4x4;
     description.hasAlpha = true;
     Texture texture(m_inputArena, Name("tests/ui/image/hdr"));
-    ASSERT_TRUE(prepare(m_inputArena, texture, description));
+    ASSERT_TRUE(Prepare(m_inputArena, texture, description));
     ASSERT_TRUE(texture.validatePayload());
     const auto source = MakeImageSource(m_sourceArena, texture);
     ASSERT_TRUE(source);
@@ -267,7 +267,7 @@ TEST_F(UiImageSourceTests, RejectsValidCubeAndVolumeAssetsRatherThanFlatteningTh
         description.height = dimension == TextureDimension::TextureCube ? 9u : 5u;
         description.depth = dimension == TextureDimension::Texture3D ? 4u : 1u;
         Texture texture(m_inputArena, Name("tests/ui/image/spatial"));
-        ASSERT_TRUE(prepare(m_inputArena, texture, description));
+        ASSERT_TRUE(Prepare(m_inputArena, texture, description));
         ASSERT_TRUE(texture.validatePayload());
         EXPECT_FALSE(MakeImageSource(m_sourceArena, texture));
     }
@@ -275,23 +275,23 @@ TEST_F(UiImageSourceTests, RejectsValidCubeAndVolumeAssetsRatherThanFlatteningTh
 
 TEST_F(UiImageSourceTests, RejectsMissingAssetIdentityAndEmptyTexturePayload){
     Texture unnamed(m_inputArena);
-    ASSERT_TRUE(prepare(m_inputArena, unnamed));
+    ASSERT_TRUE(Prepare(m_inputArena, unnamed));
     EXPECT_FALSE(MakeImageSource(m_sourceArena, unnamed));
     Texture empty(m_inputArena, Name("tests/ui/image/empty"));
     EXPECT_FALSE(MakeImageSource(m_sourceArena, empty));
     Texture texture(m_inputArena, Name("tests/ui/image/no_bytes"));
-    ASSERT_TRUE(prepare(m_inputArena, texture));
+    ASSERT_TRUE(Prepare(m_inputArena, texture));
     Texture::MipLevelVector mips(m_inputArena);
     mips.assign(texture.mipLevels().begin(), texture.mipLevels().end());
     Core::Assets::AssetBytes bytes(m_inputArena);
-    install(texture, {}, Move(mips), Move(bytes));
+    Install(texture, {}, Move(mips), Move(bytes));
     EXPECT_FALSE(MakeImageSource(m_sourceArena, texture));
 }
 
 TEST_F(UiImageSourceTests, RejectsInvalidShapeAndUnknownMetadataWithoutMintingUsableVersions){
     for(u32 variant = 0u; variant < 8u; ++variant){
         Texture texture(m_inputArena, Name("tests/ui/image/invalid_metadata"));
-        ASSERT_TRUE(prepare(m_inputArena, texture));
+        ASSERT_TRUE(Prepare(m_inputArena, texture));
         TextureDescription description;
         switch(variant){
         case 0u: description.width = 0u; break;
@@ -307,7 +307,7 @@ TEST_F(UiImageSourceTests, RejectsInvalidShapeAndUnknownMetadataWithoutMintingUs
         mips.assign(texture.mipLevels().begin(), texture.mipLevels().end());
         Core::Assets::AssetBytes bytes(m_inputArena);
         bytes.assign(texture.payloadBytes().begin(), texture.payloadBytes().end());
-        install(texture, description, Move(mips), Move(bytes));
+        Install(texture, description, Move(mips), Move(bytes));
         EXPECT_FALSE(MakeImageSource(m_sourceArena, texture)) << variant;
     }
 }
@@ -315,7 +315,7 @@ TEST_F(UiImageSourceTests, RejectsInvalidShapeAndUnknownMetadataWithoutMintingUs
 TEST_F(UiImageSourceTests, RejectsIncompleteDiscontiguousOrMalformedMipMetadata){
     for(u32 variant = 0u; variant < 7u; ++variant){
         Texture texture(m_inputArena, Name("tests/ui/image/invalid_mips"));
-        ASSERT_TRUE(prepare(m_inputArena, texture));
+        ASSERT_TRUE(Prepare(m_inputArena, texture));
         Texture::MipLevelVector mips(m_inputArena);
         mips.assign(texture.mipLevels().begin(), texture.mipLevels().end());
         Core::Assets::AssetBytes bytes(m_inputArena);
@@ -329,7 +329,7 @@ TEST_F(UiImageSourceTests, RejectsIncompleteDiscontiguousOrMalformedMipMetadata)
         case 5u: mips[0u].sliceCount = 2u; break;
         case 6u: mips.push_back(mips.back()); break;
         }
-        install(texture, {}, Move(mips), Move(bytes));
+        Install(texture, {}, Move(mips), Move(bytes));
         EXPECT_FALSE(MakeImageSource(m_sourceArena, texture)) << variant;
     }
 }
@@ -337,7 +337,7 @@ TEST_F(UiImageSourceTests, RejectsIncompleteDiscontiguousOrMalformedMipMetadata)
 TEST_F(UiImageSourceTests, RejectsPayloadLengthAndAlphaTransportMismatches){
     for(u32 variant = 0u; variant < 8u; ++variant){
         Texture texture(m_inputArena, Name("tests/ui/image/invalid_transport"));
-        ASSERT_TRUE(prepare(m_inputArena, texture));
+        ASSERT_TRUE(Prepare(m_inputArena, texture));
         TextureDescription description;
         Texture::MipLevelVector mips(m_inputArena);
         mips.assign(texture.mipLevels().begin(), texture.mipLevels().end());
@@ -363,14 +363,14 @@ TEST_F(UiImageSourceTests, RejectsPayloadLengthAndAlphaTransportMismatches){
             break;
         case 7u: description.alphaConstant = 77u; break;
         }
-        install(texture, description, Move(mips), Move(bytes));
+        Install(texture, description, Move(mips), Move(bytes));
         EXPECT_FALSE(MakeImageSource(m_sourceArena, texture)) << variant;
     }
 }
 
 TEST_F(UiImageSourceTests, RejectedSamePathReplacementPreservesPreviouslyAcceptedOwnedVersion){
     Texture texture(m_inputArena, Name("tests/ui/image/replace"));
-    ASSERT_TRUE(prepare(m_inputArena, texture));
+    ASSERT_TRUE(Prepare(m_inputArena, texture));
     const auto accepted = MakeImageSource(m_sourceArena, texture);
     ASSERT_TRUE(accepted);
     const u64 generation = accepted->generation();
@@ -379,7 +379,7 @@ TEST_F(UiImageSourceTests, RejectedSamePathReplacementPreservesPreviouslyAccepte
     Core::Assets::AssetBytes bytes(m_inputArena);
     bytes.assign(texture.payloadBytes().begin(), texture.payloadBytes().end());
     bytes.pop_back();
-    install(texture, {}, Move(mips), Move(bytes));
+    Install(texture, {}, Move(mips), Move(bytes));
     EXPECT_FALSE(MakeImageSource(m_sourceArena, texture));
     EXPECT_EQ(accepted->generation(), generation);
     EXPECT_EQ(accepted->identity().name(), texture.virtualPath());
@@ -387,7 +387,7 @@ TEST_F(UiImageSourceTests, RejectedSamePathReplacementPreservesPreviouslyAccepte
     EXPECT_EQ(accepted->texture().payloadBytes()[143u], static_cast<u8>(37u + 143u * 17u));
     TextureDescription replacement;
     replacement.seed = 73u;
-    ASSERT_TRUE(prepare(m_inputArena, texture, replacement));
+    ASSERT_TRUE(Prepare(m_inputArena, texture, replacement));
     const auto next = MakeImageSource(m_sourceArena, texture);
     ASSERT_TRUE(next);
     EXPECT_NE(next->generation(), generation);

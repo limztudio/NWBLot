@@ -88,7 +88,7 @@ public:
         : m_pair(pValue)
     {
         static_assert(!IsPointer<deleter_type>::value, "RefCountPtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
-        internalAddRef(pValue);
+        InternalAddRef(pValue);
     }
     constexpr RefCountPtr(pointer pValue, AdoptRefT)noexcept
         : m_pair(pValue)
@@ -98,7 +98,7 @@ public:
     RefCountPtr(pointer pValue, typename Conditional<IsLValueReference<deleter_type>::value, deleter_type, typename AddLValueReference<const deleter_type>::type>::type deleter)noexcept
         : m_pair(pValue, deleter)
     {
-        internalAddRef(pValue);
+        InternalAddRef(pValue);
     }
     constexpr RefCountPtr(pointer pValue, typename Conditional<IsLValueReference<deleter_type>::value, deleter_type, typename AddLValueReference<const deleter_type>::type>::type deleter, AdoptRefT)noexcept
         : m_pair(pValue, deleter)
@@ -107,7 +107,7 @@ public:
         : m_pair(pValue, Move(deleter))
     {
         static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
-        internalAddRef(pValue);
+        InternalAddRef(pValue);
     }
     constexpr RefCountPtr(pointer pValue, typename RemoveReference<deleter_type>::type&& deleter, AdoptRefT)noexcept
         : m_pair(pValue, Move(deleter))
@@ -119,7 +119,7 @@ public:
         : m_pair(pointer(p))
     {
         static_assert(!IsPointer<deleter_type>::value, "RefCountPtr deleter default-constructed with null pointer. Use a different constructor or change your deleter to a class.");
-        internalAddRef(m_pair.first());
+        InternalAddRef(m_pair.first());
     }
     template<typename U, typename = EnableUFromRawPtr<U>>
     constexpr RefCountPtr(U* p, AdoptRefT)noexcept
@@ -131,7 +131,7 @@ public:
     RefCountPtr(U* pValue, typename Conditional<IsLValueReference<deleter_type>::value, deleter_type, typename AddLValueReference<const deleter_type>::type>::type deleter)noexcept
         : m_pair(pValue, deleter)
     {
-        internalAddRef(pValue);
+        InternalAddRef(pValue);
     }
     template<typename U, typename = EnableUFromRawPtr<U>>
     constexpr RefCountPtr(U* pValue, typename Conditional<IsLValueReference<deleter_type>::value, deleter_type, typename AddLValueReference<const deleter_type>::type>::type deleter, AdoptRefT)noexcept
@@ -142,7 +142,7 @@ public:
         : m_pair(pValue, Move(deleter))
     {
         static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
-        internalAddRef(pValue);
+        InternalAddRef(pValue);
     }
     template<typename U, typename = EnableUFromRawPtr<U>>
     constexpr RefCountPtr(U* pValue, typename RemoveReference<deleter_type>::type&& deleter, AdoptRefT)noexcept
@@ -160,13 +160,13 @@ public:
     RefCountPtr(const RefCountPtr& rhs)noexcept
         : m_pair(rhs.m_pair.first(), rhs.m_pair.second())
     {
-        internalAddRef(m_pair.first());
+        InternalAddRef(m_pair.first());
     }
     template<typename U, typename E>
     RefCountPtr(const RefCountPtr<U, E>& u, typename EnableIf<!IsArray<U>::value && IsConvertible<typename RefCountPtr<U, E>::pointer, pointer>::value && IsConvertible<E, deleter_type>::value && (IsSame<deleter_type, E>::value || !IsLValueReference<deleter_type>::value)>::type* = 0)noexcept
         : m_pair(u.get(), Forward<E>(u.getDeleter()))
     {
-        internalAddRef(m_pair.first());
+        InternalAddRef(m_pair.first());
     }
 
     ~RefCountPtr()noexcept{ reset(); }
@@ -191,7 +191,7 @@ public:
     this_type& operator=(const this_type& x)noexcept{
         if(this != &x){
             pointer newp = x.get();
-            internalAddRef(newp);
+            InternalAddRef(newp);
 
             pointer oldp = Exchange(m_pair.first(), newp);
             internalRelease(oldp);
@@ -203,7 +203,7 @@ public:
     template<typename U, typename E>
     typename EnableIf<!IsArray<U>::value && IsConvertible<typename RefCountPtr<U, E>::pointer, pointer>::value && IsAssignable<deleter_type&, const E&>::value, this_type&>::type operator=(const RefCountPtr<U, E>& u)noexcept{
         pointer newp = u.get();
-        internalAddRef(newp);
+        InternalAddRef(newp);
 
         pointer oldp = Exchange(m_pair.first(), newp);
         internalRelease(oldp);
@@ -235,7 +235,7 @@ public:
     u32 reset(pointer pValue = pointer())noexcept{
         u32 ref = 0;
         if(pValue != m_pair.first()){
-            internalAddRef(pValue);
+            InternalAddRef(pValue);
 
             pointer oldp = Exchange(m_pair.first(), pValue);
             ref = internalRelease(oldp);
@@ -269,7 +269,7 @@ public:
 
 
 protected:
-    static void internalAddRef(pointer p)noexcept{
+    static void InternalAddRef(pointer p)noexcept{
         if(p){
             using RefCountPtrDetail::RefCountAddReference;
             RefCountAddReference(p);

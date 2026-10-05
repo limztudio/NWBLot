@@ -87,18 +87,18 @@ void ExpectSliderRect(const Rect& actual, const Rect& expected);
 
 class SliderFixture : public WidgetFixture{
 protected:
-    [[nodiscard]] static SliderOptions options();
-    [[nodiscard]] static ListOptions siblingOptions();
+    [[nodiscard]] static SliderOptions Options();
+    [[nodiscard]] static ListOptions SiblingOptions();
 
 
 protected:
     virtual void SetUp()override;
     void configureSliderSkin();
-    [[nodiscard]] bool declare(u64 generation, const SliderOptions& settings = options(),
+    [[nodiscard]] bool declare(u64 generation, const SliderOptions& settings = Options(),
         const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
-    [[nodiscard]] bool prepare(u64 generation, const SliderOptions& settings = options(),
+    [[nodiscard]] bool prepare(u64 generation, const SliderOptions& settings = Options(),
         const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
-    [[nodiscard]] bool accept(u64 generation, const SliderOptions& settings = options(),
+    [[nodiscard]] bool accept(u64 generation, const SliderOptions& settings = Options(),
         const Rect& bounds = { 10.0f, 10.0f, 360.0f, 240.0f });
     [[nodiscard]] bool sibling(AStringView key = "later");
     [[nodiscard]] WidgetId host()const;

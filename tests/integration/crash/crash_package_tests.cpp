@@ -327,7 +327,7 @@ TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){
     auto& arena = testArena.arena;
     NWB::Core::Alloc::PersistentArena installArena(
         s_InstallArena,
-        NWB::Core::Alloc::PersistentArena::structureAlignedSize(64u * 1024u)
+        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
     );
     constexpr AStringView s_Group("crash_handler_handle_inheritance_test");
     RemoveTestArtifacts(arena, s_Group);
@@ -374,7 +374,7 @@ TEST(Crash, DesktopInstalledHandlerWritesManualDumpPackage){
     auto& arena = testArena.arena;
     NWB::Core::Alloc::PersistentArena installArena(
         s_InstallArena,
-        NWB::Core::Alloc::PersistentArena::structureAlignedSize(64u * 1024u)
+        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
     );
     constexpr AStringView s_Group("crash_desktop_handler_runtime_test");
     RemoveTestArtifacts(arena, s_Group);
@@ -431,7 +431,7 @@ TEST(Crash, DesktopInstalledHandlerWritesRadeonGpuDetectiveDumpPackage){
     auto& arena = testArena.arena;
     NWB::Core::Alloc::PersistentArena installArena(
         s_InstallArena,
-        NWB::Core::Alloc::PersistentArena::structureAlignedSize(64u * 1024u)
+        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
     );
     constexpr AStringView s_Group("crash_gpu_rgd_dump_runtime_test");
     RemoveTestArtifacts(arena, s_Group);
@@ -485,7 +485,7 @@ TEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage){
     auto& arena = testArena.arena;
     NWB::Core::Alloc::PersistentArena installArena(
         s_InstallArena,
-        NWB::Core::Alloc::PersistentArena::structureAlignedSize(64u * 1024u)
+        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
     );
     constexpr AStringView s_Group("crash_gpu_text_only_runtime_test");
     RemoveTestArtifacts(arena, s_Group);
@@ -546,7 +546,7 @@ TEST(Crash, LinuxSignalHandlerWritesCrashPackage){
     if(childPid == 0){
         NWB::Core::Alloc::PersistentArena installArena(
             s_SignalChildInstallArena,
-            NWB::Core::Alloc::PersistentArena::structureAlignedSize(64u * 1024u)
+            NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
         );
         NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
         config.applicationName = AStringView(s_CRASH_TESTS);

@@ -96,7 +96,7 @@ struct UploadParametersTask{
         const bool* hardwarePreparationReady = nullptr;
     };
 
-    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         ReflectionFrameParameters parameters = payload.parameters;
         if(!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady)
             parameters.hardwareEnabled = 0u;
@@ -135,7 +135,7 @@ struct DepthReduceTask{
         DepthReduceParameters parameters;
     };
 
-    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         if(!payload.pipeline)
             return false;
         commandList.endRenderPass();
@@ -176,7 +176,7 @@ struct DispatchTask{
         bool* fallbackDispatchLogged = nullptr;
     };
 
-    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         const ReflectionFrameSnapshot& resources = payload.resources;
         const bool hardware = payload.stage == DispatchStage::Hardware;
         if(hardware && (!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady))
@@ -196,7 +196,7 @@ struct DispatchTask{
         commandList.setComputeState(state);
         payload.graphics.getDevice().getDescriptorHeap().bindCompute(
             commandList, *pipeline,
-            hardware ? resources.scene.tlasHeapHandle : Core::GpuDescriptorHandle::invalid()
+            hardware ? resources.scene.tlasHeapHandle : Core::GpuDescriptorHandle::Invalid()
         );
         commandList.setPushConstants(&resources.frameParametersSlot, sizeof(resources.frameParametersSlot));
 
@@ -221,7 +221,7 @@ struct DispatchTask{
         return true;
     }
 
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         const bool hardware = payload.resources.parameters.hardwareEnabled != 0u && payload.resources.parameters.maxHardwareRays > 0u
             && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
         const bool sceneReady = payload.resources.parameters.hardwareEnabled != 0u
@@ -246,7 +246,7 @@ struct DispatchTask{
         }
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         payload.feedbackReservation.discard();
     }
 };
@@ -267,7 +267,7 @@ struct StatisticsReadbackTask{
         bool hardwareEnabled = false;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context){
@@ -286,7 +286,7 @@ struct StatisticsReadbackTask{
         return !commandList.commandRecordingFailed();
     }
 
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         const bool hardwareReady = payload.hardwareEnabled && payload.hardwarePreparationReady && *payload.hardwarePreparationReady;
         const ReflectionHistoryOutcome history = ResolveReflectionHistoryOutcome(payload.history, hardwareReady);
         ReflectionFeedbackOutcome feedback = ResolveReflectionFeedbackOutcome(payload.feedback, hardwareReady);
@@ -297,7 +297,7 @@ struct StatisticsReadbackTask{
         payload.reservation.accept(token, hardwareReady, &history, &feedback);
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         payload.reservation.discard();
     }
 };
@@ -306,7 +306,7 @@ struct FinalizeTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
     struct Payload{};
-    [[nodiscard]] static bool record(const Payload&, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static bool Record(const Payload&, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         commandList.endRenderPass();
         return true;
     }

@@ -425,7 +425,7 @@ TEST(Global, GlobalArenaReallocationPreservesAlignment){
 TEST(Global, PersistentArenaReallocationPreservesAlignment){
     NWB::Core::Alloc::PersistentArena arena(
         NWB::Tests::s_TestArena,
-        NWB::Core::Alloc::PersistentArena::structureAlignedSize(16u * 1024u)
+        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(16u * 1024u)
     );
     VerifyAlignedReallocation(arena);
 }

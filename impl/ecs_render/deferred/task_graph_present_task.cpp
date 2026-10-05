@@ -26,7 +26,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool DeferredPresentGraphTask::record(
+[[nodiscard]] bool DeferredPresentGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -83,7 +83,7 @@ namespace RendererTaskGraphDetail{
 }
 
 
-void DeferredPresentGraphTask::accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+void DeferredPresentGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
     if(payload.outputLayerContributor && payload.outputLayer.frameGeneration != 0u && token.valid())
         payload.outputLayerContributor->acceptTaskGraphOutputLayer(payload.outputLayer.frameGeneration, token);
 }

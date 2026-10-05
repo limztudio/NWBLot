@@ -21,14 +21,14 @@ using namespace NWB::UiRadioGroupTests;
 
 class UiRadioGroupPopupTests : public RadioGroupFixture{
 protected:
-    [[nodiscard]] static PopupOptions parentOptions(){
+    [[nodiscard]] static PopupOptions ParentOptions(){
         PopupOptions options;
         options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
         options.size = { 300.0f, 280.0f };
         return options;
     }
 
-    [[nodiscard]] static PopupOptions childOptions(){
+    [[nodiscard]] static PopupOptions ChildOptions(){
         PopupOptions options;
         options.anchor = { 320.0f, 64.0f, 8.0f, 24.0f };
         options.side = PopupPlacementSide::Right;
@@ -56,14 +56,14 @@ protected:
     }
 
     [[nodiscard]] bool beginParent(const u64 generation){
-        if(!begin(generation) || !m_builder.beginPopup("parent", m_parent, parentOptions()))
+        if(!begin(generation) || !m_builder.beginPopup("parent", m_parent, ParentOptions()))
             return false;
         m_result = m_builder.radioGroup("radio", m_source, m_state);
         return m_result.valid;
     }
 
     [[nodiscard]] bool declareFamily(const u64 generation){
-        if(!beginParent(generation) || !m_builder.beginPopup("child", m_child, childOptions()))
+        if(!beginParent(generation) || !m_builder.beginPopup("child", m_child, ChildOptions()))
             return false;
         m_childResult = m_builder.radioGroup("radio", m_childSource, m_childState);
         return m_childResult.valid && m_builder.endPopup();
@@ -179,7 +179,7 @@ TEST_F(UiRadioGroupPopupTests, AParentStateCannotBeAliasedByItsLiveChildRadioGro
     ASSERT_TRUE(acceptFamily(1u));
     const RadioAcceptedFrame displayed = accepted();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
     m_childSource.resetCounters();
     EXPECT_FALSE(m_builder.radioGroup("radio", m_childSource, m_state).valid);
     EXPECT_TRUE(m_context.failed());
@@ -208,7 +208,7 @@ TEST_F(UiRadioGroupPopupTests, AncestorClosureSuppressesMetadataAndRetiresCaptur
     EXPECT_EQ(m_childState.selectedKey(), 20u);
     m_parent.open();
     ASSERT_TRUE(beginParent(3u));
-    EXPECT_FALSE(m_builder.beginPopup("child", m_child, childOptions()));
+    EXPECT_FALSE(m_builder.beginPopup("child", m_child, ChildOptions()));
     EXPECT_FALSE(m_child.isOpen());
     ASSERT_TRUE(finishParent());
     ASSERT_TRUE(m_context.commitFrame(3u));

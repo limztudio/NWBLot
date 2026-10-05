@@ -85,8 +85,8 @@ void CaptureRayTracingResourceSnapshot(
         .swBvhParentBuffer = mesh.swBvhParentBuffer,
         .csgLocalBounds = mesh.csgLocalBounds,
         .runtimeLocalBoundsHeapHandle = mesh.runtimeLocalBoundsHeapHandle,
-        .meshletDescHeapHandle = Core::GpuDescriptorHandle::invalid(),
-        .meshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid(),
+        .meshletDescHeapHandle = Core::GpuDescriptorHandle::Invalid(),
+        .meshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid(),
         .swBvhPositionHeapHandle = mesh.swBvhPositionHeapHandle,
         .swBvhTriangleIndexHeapHandle = mesh.swBvhTriangleIndexHeapHandle,
         .swBvhNodeHeapHandle = mesh.swBvhNodeHeapHandle,
@@ -257,11 +257,11 @@ bool RendererMeshSystem::commitRayTracingResourceSnapshot(
         Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
         const Core::GpuDescriptorHandle currentNodeHandle = found != m_meshState.m_meshes.end()
             ? found.value().swBvhNodeHeapHandle
-            : Core::GpuDescriptorHandle::invalid()
+            : Core::GpuDescriptorHandle::Invalid()
         ;
         const Core::GpuDescriptorHandle currentParentHandle = found != m_meshState.m_meshes.end()
             ? found.value().swBvhParentHeapHandle
-            : Core::GpuDescriptorHandle::invalid()
+            : Core::GpuDescriptorHandle::Invalid()
         ;
         const Core::GpuDescriptorHandle candidateNodeHandle = desired.swBvhNodeHeapHandle;
         if(
@@ -273,9 +273,9 @@ bool RendererMeshSystem::commitRayTracingResourceSnapshot(
             && candidateNodeHandle != currentParentHandle
         ){
             heap.free(candidateNodeHandle);
-            desired.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
+            desired.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
             if(desired.swBvhParentHeapHandle == candidateNodeHandle)
-                desired.swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
+                desired.swBvhParentHeapHandle = Core::GpuDescriptorHandle::Invalid();
         }
         const Core::GpuDescriptorHandle candidateParentHandle = desired.swBvhParentHeapHandle;
         if(
@@ -287,7 +287,7 @@ bool RendererMeshSystem::commitRayTracingResourceSnapshot(
             && candidateParentHandle != currentParentHandle
         ){
             heap.free(candidateParentHandle);
-            desired.swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
+            desired.swBvhParentHeapHandle = Core::GpuDescriptorHandle::Invalid();
         }
         return false;
     }

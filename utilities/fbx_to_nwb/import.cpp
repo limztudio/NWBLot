@@ -43,7 +43,7 @@ bool BuildMesh(
     outTangentReport = SourceTangentReport{};
 
     usize estimatedTriangleCorners = 0u;
-    if(!FbxMeshBuild::estimateSelectedTriangleCorners(
+    if(!FbxMeshBuild::EstimateSelectedTriangleCorners(
         instances,
         selection,
         estimatedTriangleCorners
@@ -57,16 +57,16 @@ bool BuildMesh(
     }
 
     bool usedDefaultUvs = false;
-    FbxSourceMeshStreams::reserveSourceMeshStreams(outMesh, estimatedTriangleCorners, wantsSkinning);
+    FbxSourceMeshStreams::ReserveSourceMeshStreams(outMesh, estimatedTriangleCorners, wantsSkinning);
     SourceMeshBuildContext meshContext{ outMesh };
-    FbxSourceMeshStreams::reserveSourceMeshBuildContext(meshContext, estimatedTriangleCorners, wantsSkinning);
+    FbxSourceMeshStreams::ReserveSourceMeshBuildContext(meshContext, estimatedTriangleCorners, wantsSkinning);
 
     UtilityVector<u32> triangleIndices;
     FbxSkinDetail::ExportContext skinContext;
     for(const usize instanceIndex : selection){
         GLB_ASSERT(instanceIndex < instances.size());
         if(
-            !FbxMeshBuild::appendInstanceMesh(
+            !FbxMeshBuild::AppendInstanceMesh(
                 instances[instanceIndex],
                 options,
                 wantsSkinning,
@@ -88,9 +88,9 @@ bool BuildMesh(
         NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: selected meshes produced no triangles"));
         return false;
     }
-    if(normalMode != NormalMode::Imported || !FbxSourceMeshStreams::sourceMeshHasCompleteTangents(outMesh)){
-        FbxSourceMeshStreams::dropSourceMeshTangents(outMesh);
-        if(!FbxSourceMeshStreams::generateSourceMeshTangents(outMesh, usedDefaultUvs, outTangentReport))
+    if(normalMode != NormalMode::Imported || !FbxSourceMeshStreams::SourceMeshHasCompleteTangents(outMesh)){
+        FbxSourceMeshStreams::DropSourceMeshTangents(outMesh);
+        if(!FbxSourceMeshStreams::GenerateSourceMeshTangents(outMesh, usedDefaultUvs, outTangentReport))
             return false;
     }
     if(wantsSkinning){

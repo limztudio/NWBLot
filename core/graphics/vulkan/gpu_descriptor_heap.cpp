@@ -191,16 +191,16 @@ void GpuDescriptorHeap::releaseRetainedDescriptorResource(const GpuDescriptorHan
 bool GpuDescriptorHeap::initializeStorage(const u32 resourceCapacity, const u32 samplerCapacity, const u32 accelStructCapacity){
     const usize retirementJournalCapacity = AddSize(AddSize(resourceCapacity, samplerCapacity), accelStructCapacity);
     const usize tableBytes[] = {
-        SlotAllocator::requiredBytes(resourceCapacity),
-        SlotAllocator::requiredBytes(samplerCapacity),
-        SlotAllocator::requiredBytes(accelStructCapacity),
-        FixedTable<DescriptorBufferSegment>::requiredBytes(accelStructCapacity),
-        FixedTable<RayTracingAccelStructHandle>::requiredBytes(accelStructCapacity),
-        FixedTable<BufferHandle>::requiredBytes(resourceCapacity),
-        FixedTable<TextureHandle>::requiredBytes(resourceCapacity),
-        FixedTable<SamplerHandle>::requiredBytes(samplerCapacity),
-        FixedTable<GpuDescriptorHandle>::requiredBytes(retirementJournalCapacity),
-        FixedTable<RetiredSlot>::requiredBytes(retirementJournalCapacity),
+        SlotAllocator::RequiredBytes(resourceCapacity),
+        SlotAllocator::RequiredBytes(samplerCapacity),
+        SlotAllocator::RequiredBytes(accelStructCapacity),
+        FixedTable<DescriptorBufferSegment>::RequiredBytes(accelStructCapacity),
+        FixedTable<RayTracingAccelStructHandle>::RequiredBytes(accelStructCapacity),
+        FixedTable<BufferHandle>::RequiredBytes(resourceCapacity),
+        FixedTable<TextureHandle>::RequiredBytes(resourceCapacity),
+        FixedTable<SamplerHandle>::RequiredBytes(samplerCapacity),
+        FixedTable<GpuDescriptorHandle>::RequiredBytes(retirementJournalCapacity),
+        FixedTable<RetiredSlot>::RequiredBytes(retirementJournalCapacity),
     };
     usize arenaBytes = 0u;
     for(const usize bytes : tableBytes)
@@ -362,15 +362,15 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .setMaxCapacity(resourceCapacity)
         .setVisibility(ShaderType::All)
         .setDescriptorSetIndex(m_desc.bindlessHeapAbi.resourceSetIndex)
-        .addRegisterSpace(BindingLayoutItem::textureSrv(getRegisterSlot(GpuDescriptorClass::SampledImage), resourceCapacity))
-        .addRegisterSpace(BindingLayoutItem::textureUav(getRegisterSlot(GpuDescriptorClass::StorageImage), resourceCapacity))
-        .addRegisterSpace(BindingLayoutItem::typedBufferSrv(getRegisterSlot(GpuDescriptorClass::SampledBuffer), resourceCapacity))
-        .addRegisterSpace(BindingLayoutItem::structuredBufferUav(getRegisterSlot(GpuDescriptorClass::StorageBuffer), resourceCapacity))
-        .addRegisterSpace(BindingLayoutItem::constantBuffer(getRegisterSlot(GpuDescriptorClass::UniformBuffer), resourceCapacity))
-        .addRegisterSpace(BindingLayoutItem::textureSrv(getRegisterSlot(GpuDescriptorClass::SampledImage2DArray), resourceCapacity))
-        .addRegisterSpace(BindingLayoutItem::textureSrv(getRegisterSlot(GpuDescriptorClass::SampledImage3D), resourceCapacity))
-        .addRegisterSpace(BindingLayoutItem::textureSrv(getRegisterSlot(GpuDescriptorClass::SampledImage2DArrayUint), resourceCapacity))
-        .addRegisterSpace(BindingLayoutItem::textureSrv(getRegisterSlot(GpuDescriptorClass::SampledImageCube), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::TextureSrv(getRegisterSlot(GpuDescriptorClass::SampledImage), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::TextureUav(getRegisterSlot(GpuDescriptorClass::StorageImage), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::TypedBufferSrv(getRegisterSlot(GpuDescriptorClass::SampledBuffer), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::StructuredBufferUav(getRegisterSlot(GpuDescriptorClass::StorageBuffer), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::ConstantBuffer(getRegisterSlot(GpuDescriptorClass::UniformBuffer), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::TextureSrv(getRegisterSlot(GpuDescriptorClass::SampledImage2DArray), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::TextureSrv(getRegisterSlot(GpuDescriptorClass::SampledImage3D), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::TextureSrv(getRegisterSlot(GpuDescriptorClass::SampledImage2DArrayUint), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::TextureSrv(getRegisterSlot(GpuDescriptorClass::SampledImageCube), resourceCapacity))
     ;
 
     m_resourceLayout = m_device.createBindlessLayout(resourceLayoutDesc);
@@ -389,7 +389,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .setMaxCapacity(samplerCapacity)
         .setVisibility(ShaderType::All)
         .setDescriptorSetIndex(m_desc.bindlessHeapAbi.samplerSetIndex)
-        .addRegisterSpace(BindingLayoutItem::sampler(getRegisterSlot(GpuDescriptorClass::Sampler), samplerCapacity))
+        .addRegisterSpace(BindingLayoutItem::Sampler(getRegisterSlot(GpuDescriptorClass::Sampler), samplerCapacity))
     ;
 
     m_samplerLayout = m_device.createBindlessLayout(samplerLayoutDesc);
@@ -409,7 +409,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
             .setMaxCapacity(1u)
             .setVisibility(ShaderType::All)
             .setDescriptorSetIndex(m_desc.bindlessHeapAbi.accelStructSetIndex)
-            .addRegisterSpace(BindingLayoutItem::rayTracingAccelStruct(getRegisterSlot(GpuDescriptorClass::AccelStruct), 1u))
+            .addRegisterSpace(BindingLayoutItem::RayTracingAccelStruct(getRegisterSlot(GpuDescriptorClass::AccelStruct), 1u))
         ;
         m_accelStructLayout = m_device.createBindlessLayout(accelStructLayoutDesc);
         if(!m_accelStructLayout || !m_accelStructLayout->isDescriptorBufferCompatible()){
@@ -591,21 +591,21 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
 
     if(!m_initialized){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: GpuDescriptorHeap::allocate called before initialize."));
-        return GpuDescriptorHandle::invalid();
+        return GpuDescriptorHandle::Invalid();
     }
     if(descriptorClass >= GpuDescriptorClass::kCount){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: GpuDescriptorHeap::allocate called with invalid class {}."), static_cast<u32>(descriptorClass));
-        return GpuDescriptorHandle::invalid();
+        return GpuDescriptorHandle::Invalid();
     }
     if(descriptorClass == GpuDescriptorClass::AccelStruct && !m_accelStructLayout){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: GpuDescriptorHeap::allocate: AccelStruct requires the descriptor-buffer TLAS layout."));
-        return GpuDescriptorHandle::invalid();
+        return GpuDescriptorHandle::Invalid();
     }
 
     DescriptorBufferManager* const manager = m_context.descriptorBufferManager;
     if(!manager || manager != &m_device.m_descriptorBufferManager){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: GpuDescriptorHeap::allocate rejected an unavailable manager."));
-        return GpuDescriptorHandle::invalid();
+        return GpuDescriptorHandle::Invalid();
     }
     ScopedLock lifecycleLock(manager->m_lifecycleMutex);
     if(
@@ -615,7 +615,7 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
         || manager->m_bindingGeneration != m_descriptorBufferGeneration
     ){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: GpuDescriptorHeap::allocate rejected a stale descriptor generation."));
-        return GpuDescriptorHandle::invalid();
+        return GpuDescriptorHandle::Invalid();
     }
 
     SlotAllocator& allocator = allocatorForClass(descriptorClass);
@@ -637,7 +637,7 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
             , namespaceName
             , allocator.capacity
         );
-        return GpuDescriptorHandle::invalid();
+        return GpuDescriptorHandle::Invalid();
     }
 
     if(
@@ -650,7 +650,7 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
             , static_cast<u32>(descriptorClass)
             , slot
         );
-        return GpuDescriptorHandle::invalid();
+        return GpuDescriptorHandle::Invalid();
     }
     if(recycled)
         --allocator.freeCount;
@@ -659,7 +659,7 @@ GpuDescriptorHandle GpuDescriptorHeap::allocate(const GpuDescriptorClass::Enum d
     allocator.slotStates[slot] = SlotState::Live;
     allocator.allocatedClasses[slot] = static_cast<u8>(descriptorClass);
 
-    return GpuDescriptorHandle::make(descriptorClass, slot);
+    return GpuDescriptorHandle::Make(descriptorClass, slot);
 }
 
 void GpuDescriptorHeap::free(const GpuDescriptorHandle handle){

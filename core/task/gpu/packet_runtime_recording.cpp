@@ -178,7 +178,7 @@ bool GpuNativePacketRecorder::recordPacket(
     }
     if(!planAccess.validFor(compiledGraph) || !artifactAccess.exclusiveFor(outRecordedGraph))
         return false;
-    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
     if(!declarationAccess.valid())
         return false;
 

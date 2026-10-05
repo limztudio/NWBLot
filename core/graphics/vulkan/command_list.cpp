@@ -115,7 +115,7 @@ bool CommandList::publicCommandStateAccessible()const noexcept{
     const u8 publicationState = m_graphPublicationState.load(MemoryOrder::acquire);
     return publicationState == s_GraphPublicationUnowned || (
         publicationState == s_GraphPublicationRecording
-        && GraphRecordingOwnership::hasCapability(
+        && GraphRecordingOwnership::HasCapability(
             *this,
             m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire)
         )
@@ -270,7 +270,7 @@ void CommandList::open(const CommandListResourceStateHandoff* initialStates){
     if(publicationState != s_GraphPublicationUnowned){
         if(
             publicationState == s_GraphPublicationRecording
-            && GraphRecordingOwnership::hasCapability(
+            && GraphRecordingOwnership::HasCapability(
                 *this,
                 m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire)
             )
@@ -385,7 +385,7 @@ void CommandList::close(CommandListResourceStateHandoff* finalStates){
             finalStates->reset();
         if(
             publicationState == s_GraphPublicationRecording
-            && GraphRecordingOwnership::hasCapability(
+            && GraphRecordingOwnership::HasCapability(
                 *this,
                 m_graphRecordingOwnershipSerial.load(MemoryOrder::acquire)
             )

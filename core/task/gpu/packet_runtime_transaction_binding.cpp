@@ -27,7 +27,7 @@ bool GpuGraphSubmissionTransaction::bindRecordingAttemptWithinSubmissionOperatio
     const u64 recordingAttemptGeneration,
     const GpuTaskGraph::RecordingAttemptScope* const preparationAttempt
 )noexcept{
-    if(!SubmissionOperation::activeFor(*this) || recordingAttemptGeneration == 0u)
+    if(!SubmissionOperation::ActiveFor(*this) || recordingAttemptGeneration == 0u)
         return false;
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     if(!planAccess.valid())

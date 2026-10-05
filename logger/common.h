@@ -259,7 +259,7 @@ private:
 template<typename T, const TStringView& loggerName>
 class LoggerWorkerBase{
 protected:
-    static inline bool globalInit(){ return true; }
+    static inline bool GlobalInit(){ return true; }
 
 
 public:
@@ -301,7 +301,7 @@ public:
     template<typename... Args>
     inline bool init(Args&&... args){
         if(!static_cast<T*>(this)->s_GlobalInit){
-            if(!static_cast<T*>(this)->globalInit()){
+            if(!static_cast<T*>(this)->GlobalInit()){
                 static_cast<T*>(this)->T::enqueue(StringFormat(m_arena, GLB_TEXT("Failed to global initialization on {}"), loggerName), Type::Fatal);
                 return false;
             }
@@ -312,7 +312,7 @@ public:
         if(!initialized)
             return false;
 
-        m_thread = Thread(T::globalUpdate, static_cast<T*>(this));
+        m_thread = Thread(T::GlobalUpdate, static_cast<T*>(this));
 
         return true;
     }
@@ -351,7 +351,7 @@ private:
 
 
 private:
-    static void globalUpdate(T* self){
+    static void GlobalUpdate(T* self){
         for(;;){
             const Timer currentTime = TimerNow();
             const f32 elapsedSeconds = DurationInSeconds<f32>(currentTime, self->m_lastUpdateTime);
@@ -401,7 +401,7 @@ private:
 
 
 private:
-    static void globalUpdate(T* self){
+    static void GlobalUpdate(T* self){
         for(;;){
             self->m_semaphore.acquire();
 

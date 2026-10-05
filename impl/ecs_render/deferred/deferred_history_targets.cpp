@@ -171,7 +171,7 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
         !history.slotsBufferDescriptor.valid()
         || !heap.write(
             history.slotsBufferDescriptor,
-            Core::DescriptorWriteItem::constantBuffer(0u, history.slotsBuffer.get())
+            Core::DescriptorWriteItem::ConstantBuffer(0u, history.slotsBuffer.get())
         )
     ){
         NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register lagged lighting-history slot buffer in the descriptor heap"));

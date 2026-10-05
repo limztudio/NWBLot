@@ -20,7 +20,7 @@
 
 class ProjectTestbed final : public NWB::IProjectEntryCallbacks, public NWB::Core::IInputEventHandler{
 private:
-    static NotNullUniquePtr<NWB::Core::ECS::World> createInitialWorldOrDie(NWB::ProjectRuntimeContext& context);
+    static NotNullUniquePtr<NWB::Core::ECS::World> CreateInitialWorldOrDie(NWB::ProjectRuntimeContext& context);
     static constexpr usize s_KeyStateCount = static_cast<usize>(NWB::Core::Key::Menu) + 1u;
 
 

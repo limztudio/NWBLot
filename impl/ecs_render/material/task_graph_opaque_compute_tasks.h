@@ -55,7 +55,7 @@ struct OpaqueRegularComputeEmulationGraphTask{
         explicit Payload(Core::Alloc::GlobalArena& arena);
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -91,17 +91,17 @@ struct OpaqueRegularSharedComputeEmulationGraphTask{
         Phase::Enum phase = Phase::Generate;
     };
 
-    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements commandRequirements(const Payload& payload)noexcept{
+    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{
         return { payload.phase == Phase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
     }
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.opaqueRegularTiming);
     }
 };

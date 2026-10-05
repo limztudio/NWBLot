@@ -51,14 +51,14 @@ struct SetupUploadReadinessBridgeGraphTask{
         GpuPhysicalQueueId consumerQueue;
     };
 
-    [[nodiscard]] static GpuTaskCommandRequirements commandRequirements(const Payload& payload){
+    [[nodiscard]] static GpuTaskCommandRequirements CommandRequirements(const Payload& payload){
         GpuTaskCommandRequirements commands;
         commands.externalQueue = payload.consumerQueue;
         return commands;
     }
 
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
@@ -79,7 +79,7 @@ struct StandaloneTaskGraphRecoveryTask{
     };
 
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
@@ -202,7 +202,7 @@ struct FrameTimingResetGraphTask{
     };
 
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
@@ -215,12 +215,12 @@ struct FrameTimingResetGraphTask{
         return true;
     }
 
-    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const QueueSubmissionToken& token){
         if(payload.timing && token.valid())
             payload.timing->confirmFrameReset(token);
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         if(payload.timing)
             payload.timing->discardFrameReset();
     }

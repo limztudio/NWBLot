@@ -25,7 +25,7 @@ bool GpuTaskGraph::packetReadyForSubmission(
 )const noexcept{
     GpuCompiledPacketView packetView;
     if(
-        !resolvePacketView(compiledGraph, planAccess, packet, packetView)
+        !ResolvePacketView(compiledGraph, planAccess, packet, packetView)
         || recordingAttemptGeneration == 0u
     )
         return false;
@@ -67,7 +67,7 @@ bool GpuTaskGraph::beginPacketSubmission(
 )const noexcept{
     GpuCompiledPacketView packetView;
     if(
-        !resolvePacketView(compiledGraph, planAccess, packet, packetView)
+        !ResolvePacketView(compiledGraph, planAccess, packet, packetView)
         || recordingAttemptGeneration == 0u
         || !submissionBinding.valid()
         || outLease.valid()
@@ -102,7 +102,7 @@ bool GpuTaskGraph::beginPacketSubmission(
             return false;
     }
 
-    const u64 claimGeneration = allocateGeneration();
+    const u64 claimGeneration = AllocateGeneration();
     if(claimGeneration == 0u)
         return false;
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
@@ -281,7 +281,7 @@ void GpuTaskGraph::abortPacketSubmission(
     const GpuTaskId* const tasks = packetView.tasks;
 
     DiscardNotificationScope notification(*this);
-    const u64 notificationGeneration = allocateGeneration();
+    const u64 notificationGeneration = AllocateGeneration();
     {
         ScopedLock lock(m_lifecycleMutex);
         if(
@@ -336,7 +336,7 @@ bool GpuTaskGraph::abandonPacketSubmissionWithoutCallbacks(
 )const noexcept{
     GpuCompiledPacketView packetView;
     if(
-        !resolvePacketView(compiledGraph, planAccess, packet, packetView)
+        !ResolvePacketView(compiledGraph, planAccess, packet, packetView)
         || !lease.valid()
         || lease.m_packet != packet
         || lease.m_planGeneration != planAccess.planGeneration()

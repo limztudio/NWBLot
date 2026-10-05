@@ -45,7 +45,7 @@ private:
     static constexpr u64 s_OwnerHashMixSecond = 0xc4ceb9fe1a85ec53ull;
     static constexpr u64 s_OwnerHashFinalShift = 33u;
 
-    [[nodiscard]] static usize hashOwner(const TrackedCommandBuffer& owner)noexcept{
+    [[nodiscard]] static usize HashOwner(const TrackedCommandBuffer& owner)noexcept{
         u64 value = static_cast<u64>(reinterpret_cast<usize>(&owner));
         value ^= value >> s_OwnerHashFinalShift;
         value *= s_OwnerHashMixFirst;
@@ -54,7 +54,7 @@ private:
         value ^= value >> s_OwnerHashFinalShift;
         return static_cast<usize>(value);
     }
-    [[nodiscard]] static usize resolveTableCapacity(const usize ownerCount)noexcept{
+    [[nodiscard]] static usize ResolveTableCapacity(const usize ownerCount)noexcept{
         if(ownerCount <= s_LinearSearchThreshold || ownerCount > Limit<usize>::s_Max / 2u)
             return 0u;
 
@@ -83,7 +83,7 @@ public:
         m_ownerEntryMask = 0u;
         m_indexed = false;
 
-        const usize tableCapacity = resolveTableCapacity(ownerCount);
+        const usize tableCapacity = ResolveTableCapacity(ownerCount);
         if(tableCapacity == 0u)
             return;
 
@@ -97,7 +97,7 @@ public:
         if(!m_indexed || nativeRecordingID == 0u)
             return;
 
-        usize index = hashOwner(owner) & m_ownerEntryMask;
+        usize index = HashOwner(owner) & m_ownerEntryMask;
         for(usize probe = 0u; probe < m_ownerEntryCapacity; ++probe){
             OwnerEntry& entry = m_ownerEntriesData[index];
             if(!entry.owner || entry.owner == &owner){
@@ -114,7 +114,7 @@ public:
         if(!m_indexed || !m_ownerEntriesData || nativeRecordingID == 0u)
             return false;
 
-        usize index = hashOwner(owner) & m_ownerEntryMask;
+        usize index = HashOwner(owner) & m_ownerEntryMask;
         for(usize probe = 0u; probe < m_ownerEntryCapacity; ++probe){
             const OwnerEntry& entry = m_ownerEntriesData[index];
             if(!entry.owner)

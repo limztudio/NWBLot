@@ -28,7 +28,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshViewSetupGraphTask::record(
+bool MeshViewSetupGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -74,7 +74,7 @@ bool MeshViewSetupGraphTask::record(
 }
 
 
-bool MeshViewUploadCommitGraphTask::record(
+bool MeshViewUploadCommitGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -88,14 +88,14 @@ bool MeshViewUploadCommitGraphTask::record(
 }
 
 
-void MeshViewUploadCommitGraphTask::accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+void MeshViewUploadCommitGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
     static_cast<void>(token);
     if(payload.meshSystem && payload.uploadRequired)
         payload.meshSystem->confirmMeshViewBufferUpload(payload.viewState);
 }
 
 
-void MeshViewUploadCommitGraphTask::discarded(Payload& payload){
+void MeshViewUploadCommitGraphTask::Discarded(Payload& payload){
     if(payload.ready)
         *payload.ready = false;
 }

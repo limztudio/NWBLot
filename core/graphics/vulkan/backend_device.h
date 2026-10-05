@@ -62,15 +62,15 @@ private:
 private:
     class SubmissionOperationLease final : NoCopy{
     private:
-        [[nodiscard]] static const SubmissionOperationLease*& activeLease()noexcept{
+        [[nodiscard]] static const SubmissionOperationLease*& ActiveLease()noexcept{
             static thread_local const SubmissionOperationLease* value = nullptr;
             return value;
         }
 
 
     public:
-        [[nodiscard]] static bool activeFor(const Device& device)noexcept{
-            for(const SubmissionOperationLease* lease = activeLease(); lease; lease = lease->m_previousActiveLease){
+        [[nodiscard]] static bool ActiveFor(const Device& device)noexcept{
+            for(const SubmissionOperationLease* lease = ActiveLease(); lease; lease = lease->m_previousActiveLease){
                 if(lease->m_device == &device)
                     return true;
             }
@@ -83,8 +83,8 @@ private:
             if(!device.beginSubmissionOperation())
                 return;
             m_device = &device;
-            m_previousActiveLease = activeLease();
-            activeLease() = this;
+            m_previousActiveLease = ActiveLease();
+            ActiveLease() = this;
         }
         ~SubmissionOperationLease()noexcept;
 
@@ -170,11 +170,11 @@ private:
             )
                 return false;
 
-            const usize slotRecordAllocationBytes = Alloc::PersistentArena::structureAlignedSize(
+            const usize slotRecordAllocationBytes = Alloc::PersistentArena::StructureAlignedSize(
                 slotRecordBytes,
                 alignof(AmdBreadcrumbSlotRecord)
             );
-            const usize nextSerialAllocationBytes = Alloc::PersistentArena::structureAlignedSize(
+            const usize nextSerialAllocationBytes = Alloc::PersistentArena::StructureAlignedSize(
                 nextSerialBytes,
                 alignof(u64)
             );
@@ -452,7 +452,7 @@ private:
     [[nodiscard]] bool beginSubmissionOperation()noexcept;
     void endSubmissionOperation()noexcept;
     [[nodiscard]] bool submissionOperationActiveOnCurrentThread()const noexcept{
-        return SubmissionOperationLease::activeFor(*this);
+        return SubmissionOperationLease::ActiveFor(*this);
     }
     [[nodiscard]] bool beginLifecycleDrain()noexcept;
     void endLifecycleDrain()noexcept;

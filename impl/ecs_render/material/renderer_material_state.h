@@ -52,8 +52,8 @@ struct RendererMaterialResourceState{
 struct RendererMaterialResourceFixtureState{
     Core::TextureHandle checkerRgba8Texture;
     Core::SamplerHandle linearClampSampler;
-    Core::GpuDescriptorHandle checkerRgba8HeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle linearClampHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle checkerRgba8HeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle linearClampHeapHandle = Core::GpuDescriptorHandle::Invalid();
 };
 
 

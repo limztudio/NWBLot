@@ -348,7 +348,7 @@ bool RendererMaterialSystem::ensureMaterialResourceFixtures(){
     fixtures.checkerRgba8HeapHandle = heap.allocate(Core::GpuDescriptorClass::SampledImage);
     if(
         !fixtures.checkerRgba8HeapHandle.valid()
-        || !heap.write(fixtures.checkerRgba8HeapHandle, Core::DescriptorWriteItem::textureSrv(
+        || !heap.write(fixtures.checkerRgba8HeapHandle, Core::DescriptorWriteItem::TextureSrv(
             0u,
             fixtures.checkerRgba8Texture.get(),
             Core::Format::RGBA8_UNORM,
@@ -363,7 +363,7 @@ bool RendererMaterialSystem::ensureMaterialResourceFixtures(){
     fixtures.linearClampHeapHandle = heap.allocate(Core::GpuDescriptorClass::Sampler);
     if(
         !fixtures.linearClampHeapHandle.valid()
-        || !heap.write(fixtures.linearClampHeapHandle, Core::DescriptorWriteItem::sampler(0u, fixtures.linearClampSampler.get()))
+        || !heap.write(fixtures.linearClampHeapHandle, Core::DescriptorWriteItem::Sampler(0u, fixtures.linearClampSampler.get()))
     ){
         NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register material clamp sampler fixture in the descriptor heap"));
         __hidden_material_surface::ReleaseFixtureHeapHandles(graphicsModule, fixtures);
@@ -445,7 +445,7 @@ void RendererMaterialSystem::releaseMaterialResourceFixtures(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererMaterialSystem::splitMaterialTypedBytesByClass(
+bool RendererMaterialSystem::SplitMaterialTypedBytesByClass(
     const Material& material,
     const Name& materialPath,
     MaterialTypedByteVector& outConstantTypedBytes,
@@ -546,7 +546,7 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     createdInfo.typedLayoutFields.assign(material.typedLayoutFields().begin(), material.typedLayoutFields().end());
     createdInfo.resourceReferences.reserve(material.resourceReferences().size());
     createdInfo.resourceReferences.assign(material.resourceReferences().begin(), material.resourceReferences().end());
-    if(!splitMaterialTypedBytesByClass(
+    if(!SplitMaterialTypedBytesByClass(
         material,
         materialPath,
         createdInfo.constantTypedBytes,

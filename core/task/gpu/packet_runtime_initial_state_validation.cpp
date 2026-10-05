@@ -98,7 +98,7 @@ static void FindPermanentState(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuInitialStateHandoffValidation::validBufferRange(const BufferRange& range, const u64 bufferSize)noexcept{
+bool GpuInitialStateHandoffValidation::ValidBufferRange(const BufferRange& range, const u64 bufferSize)noexcept{
     return
         range.hasExtent()
         && range.byteOffset < bufferSize
@@ -204,7 +204,7 @@ bool GpuInitialStateHandoffValidation::validate(){
             return false;
     }
     for(const auto& state : m_states.m_bufferStates){
-        if(state.buffer && !validBufferRange(state.range, state.buffer->getCreationDescription().byteSize))
+        if(state.buffer && !ValidBufferRange(state.range, state.buffer->getCreationDescription().byteSize))
             return false;
     }
     if(m_states.m_bufferStates.size() > s_LinearStateCountLimit){

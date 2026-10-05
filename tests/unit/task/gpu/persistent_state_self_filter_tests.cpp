@@ -57,50 +57,50 @@ struct FilterContext{
             );
             texture = Core::TextureHandle(resource, Core::TextureHandle::deleter_type(&arena), s_AdoptRef);
         }
-        Access::stateHandoffTextures(source).push_back({
+        Access::StateHandoffTextures(source).push_back({
             .texture = textures[0u].get(), .mipLevel = 0u, .arraySlice = 0u,
             .state = Core::ResourceStates::CopyDest,
             .ownerQueue = {}, .releaseDestinationQueue = {},
         });
-        Access::stateHandoffTextures(source).push_back({
+        Access::StateHandoffTextures(source).push_back({
             .texture = textures[1u].get(), .mipLevel = 1u, .arraySlice = 0u,
             .state = Core::ResourceStates::ShaderResource,
             .queueSharing = Core::ResourceQueueSharing::Exclusive,
             .ownerQueue = s_OwnerQueue, .releaseDestinationQueue = s_ReleaseQueue,
         });
-        Access::stateHandoffTextures(source).push_back({
+        Access::StateHandoffTextures(source).push_back({
             .texture = textures[1u].get(), .mipLevel = 0u, .arraySlice = 1u,
             .state = Core::ResourceStates::CopySource,
             .queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
             .ownerQueue = {}, .releaseDestinationQueue = {},
         });
-        Access::stateHandoffPermanentTextures(source).push_back({
+        Access::StateHandoffPermanentTextures(source).push_back({
             .texture = textures[2u].get(), .state = Core::ResourceStates::ShaderResource,
             .queueSharing = Core::ResourceQueueSharing::Exclusive,
             .ownerQueue = s_OwnerQueue, .releaseDestinationQueue = s_ReleaseQueue,
         });
-        Access::stateHandoffBuffers(source).push_back({
+        Access::StateHandoffBuffers(source).push_back({
             .buffer = buffers[0u].get(), .state = Core::ResourceStates::CopyDest,
             .ownerQueue = {}, .releaseDestinationQueue = {},
         });
-        Access::stateHandoffBuffers(source).push_back({
+        Access::StateHandoffBuffers(source).push_back({
             .buffer = buffers[1u].get(), .state = Core::ResourceStates::ShaderResource,
             .queueSharing = Core::ResourceQueueSharing::Exclusive,
             .ownerQueue = s_OwnerQueue, .releaseDestinationQueue = s_ReleaseQueue,
             .range = { 16u, 64u },
         });
-        Access::stateHandoffBuffers(source).push_back({
+        Access::StateHandoffBuffers(source).push_back({
             .buffer = buffers[1u].get(), .state = Core::ResourceStates::CopySource,
             .queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
             .ownerQueue = {}, .releaseDestinationQueue = {},
             .range = { 192u, 32u },
         });
-        Access::stateHandoffPermanentBuffers(source).push_back({
+        Access::StateHandoffPermanentBuffers(source).push_back({
             .buffer = buffers[2u].get(), .state = Core::ResourceStates::CopySource,
             .queueSharing = Core::ResourceQueueSharing::Exclusive,
             .ownerQueue = s_OwnerQueue, .releaseDestinationQueue = s_ReleaseQueue,
         });
-        Access::validateStateHandoff(source, s_DeviceGeneration);
+        Access::ValidateStateHandoff(source, s_DeviceGeneration);
     }
 };
 
@@ -112,10 +112,10 @@ TEST(PersistentStateSelfFilter, PreservesAllStateCategoriesAndRetainsNewLiveHand
     ASSERT_TRUE(cache.replaceResourceSubset(context.source, context.textures, 3u, context.buffers, 3u, scratch));
     const Handoff* const previous = cache.source();
     ASSERT_NE(previous, nullptr);
-    const auto* const textureStorage = Access::stateHandoffTextures(*previous).data();
-    const auto* const bufferStorage = Access::stateHandoffBuffers(*previous).data();
-    const auto* const permanentTextureStorage = Access::stateHandoffPermanentTextures(*previous).data();
-    const auto* const permanentBufferStorage = Access::stateHandoffPermanentBuffers(*previous).data();
+    const auto* const textureStorage = Access::StateHandoffTextures(*previous).data();
+    const auto* const bufferStorage = Access::StateHandoffBuffers(*previous).data();
+    const auto* const permanentTextureStorage = Access::StateHandoffPermanentTextures(*previous).data();
+    const auto* const permanentBufferStorage = Access::StateHandoffPermanentBuffers(*previous).data();
     const Core::TextureHandle textures[] = { context.textures[2u], context.textures[1u], {}, context.textures[3u], context.textures[1u] };
     const Core::BufferHandle buffers[] = { context.buffers[3u], {}, context.buffers[1u], context.buffers[2u], context.buffers[1u] };
     Core::Texture* const texturePointers[] = { context.textures[1u].get(), context.textures[2u].get(), context.textures[3u].get() };
@@ -137,10 +137,10 @@ TEST(PersistentStateSelfFilter, PreservesAllStateCategoriesAndRetainsNewLiveHand
     EXPECT_TRUE(cache.source()->equivalentTo(expected));
     EXPECT_EQ(cache.retainedBufferCount(), 3u);
     EXPECT_EQ(cache.retainedTextureCount(), 3u);
-    EXPECT_EQ(Access::stateHandoffTextures(*cache.source()).data(), textureStorage);
-    EXPECT_EQ(Access::stateHandoffBuffers(*cache.source()).data(), bufferStorage);
-    EXPECT_EQ(Access::stateHandoffPermanentTextures(*cache.source()).data(), permanentTextureStorage);
-    EXPECT_EQ(Access::stateHandoffPermanentBuffers(*cache.source()).data(), permanentBufferStorage);
+    EXPECT_EQ(Access::StateHandoffTextures(*cache.source()).data(), textureStorage);
+    EXPECT_EQ(Access::StateHandoffBuffers(*cache.source()).data(), bufferStorage);
+    EXPECT_EQ(Access::StateHandoffPermanentTextures(*cache.source()).data(), permanentTextureStorage);
+    EXPECT_EQ(Access::StateHandoffPermanentBuffers(*cache.source()).data(), permanentBufferStorage);
     EXPECT_EQ(context.buffers[0u]->getReferenceCount(), removedBufferReferences - 1u);
     EXPECT_EQ(context.textures[0u]->getReferenceCount(), removedTextureReferences - 1u);
     EXPECT_EQ(context.buffers[1u]->getReferenceCount(), retainedBufferReferences);
@@ -217,14 +217,14 @@ TEST(PersistentStateSelfFilter, ForeignSourceStillReplacesRatherThanMergingAccep
     ASSERT_TRUE(cache.replaceResourceSubset(context.source, context.textures, 3u, context.buffers, 3u, scratch));
     Handoff foreign(context.arena);
     constexpr u16 s_ForeignGeneration = s_DeviceGeneration + 1u;
-    Access::stateHandoffBuffers(foreign).push_back({
+    Access::StateHandoffBuffers(foreign).push_back({
         .buffer = context.buffers[3u].get(), .state = Core::ResourceStates::CopyDest,
         .queueSharing = Core::ResourceQueueSharing::Exclusive,
         .ownerQueue = { .index = 1u, .deviceGeneration = s_ForeignGeneration },
         .releaseDestinationQueue = {},
         .range = { 32u, 96u },
     });
-    Access::validateStateHandoff(foreign, s_ForeignGeneration);
+    Access::ValidateStateHandoff(foreign, s_ForeignGeneration);
     const Core::BufferHandle selected[] = { context.buffers[0u], context.buffers[3u], {}, context.buffers[3u] };
 
     ASSERT_TRUE(cache.replaceBufferSubset(foreign, selected, LengthOf(selected), scratch));
@@ -238,7 +238,7 @@ TEST(PersistentStateSelfFilter, ForeignSourceStillReplacesRatherThanMergingAccep
     EXPECT_EQ(context.buffers[1u]->getReferenceCount(), 1u);
     EXPECT_EQ(context.buffers[2u]->getReferenceCount(), 1u);
     EXPECT_EQ(context.source.deviceGeneration(), s_DeviceGeneration);
-    EXPECT_EQ(Access::stateHandoffBuffers(context.source).size(), 3u);
+    EXPECT_EQ(Access::StateHandoffBuffers(context.source).size(), 3u);
 }
 
 

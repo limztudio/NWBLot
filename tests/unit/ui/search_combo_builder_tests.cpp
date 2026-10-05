@@ -400,7 +400,7 @@ TEST_F(UiSearchComboBuilderTests, PlainToSearchSwitchRetiresTheOldPopupAndReopen
     m_search.combo().open();
     ASSERT_TRUE(begin(1u));
     ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 280.0f }));
-    ASSERT_TRUE(m_builder.comboBox("combo", m_searchSource, m_search.combo(), options().combo).valid);
+    ASSERT_TRUE(m_builder.comboBox("combo", m_searchSource, m_search.combo(), Options().combo).valid);
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(1u));
     ASSERT_NE(target(list()), nullptr);
@@ -434,7 +434,7 @@ TEST_F(UiSearchComboBuilderTests, SearchToPlainSwitchRetiresTheEditorAndCannotRe
     ASSERT_FALSE(m_context.input().controlActions().empty());
     ASSERT_TRUE(begin(2u));
     ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 280.0f }));
-    const ComboResult switched = m_builder.comboBox("combo", m_searchSource, m_search.combo(), options().combo);
+    const ComboResult switched = m_builder.comboBox("combo", m_searchSource, m_search.combo(), Options().combo);
     EXPECT_TRUE(switched.valid);
     EXPECT_TRUE(switched.closed);
     EXPECT_FALSE(switched.committed);
@@ -448,7 +448,7 @@ TEST_F(UiSearchComboBuilderTests, SearchToPlainSwitchRetiresTheEditorAndCannotRe
     click(Center(target(host())->rectangle));
     ASSERT_TRUE(begin(3u));
     ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 280.0f }));
-    const ComboResult reopened = m_builder.comboBox("combo", m_searchSource, m_search.combo(), options().combo);
+    const ComboResult reopened = m_builder.comboBox("combo", m_searchSource, m_search.combo(), Options().combo);
     EXPECT_TRUE(reopened.valid);
     EXPECT_TRUE(reopened.opened);
     EXPECT_FALSE(reopened.committed);

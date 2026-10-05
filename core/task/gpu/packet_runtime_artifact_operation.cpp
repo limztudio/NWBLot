@@ -23,7 +23,7 @@ NWB_CORE_BEGIN
 thread_local GpuRecordedGraph::ArtifactOperation* GpuRecordedGraph::ArtifactOperation::s_ActiveOperation = nullptr;
 
 
-bool GpuRecordedGraph::ArtifactOperation::activeFor(const GpuRecordedGraph& recordedGraph)noexcept{
+bool GpuRecordedGraph::ArtifactOperation::ActiveFor(const GpuRecordedGraph& recordedGraph)noexcept{
     for(const ArtifactOperation* operation = s_ActiveOperation; operation; operation = operation->m_previousOperation){
         if(operation->m_recordedGraph == &recordedGraph)
             return true;
@@ -31,7 +31,7 @@ bool GpuRecordedGraph::ArtifactOperation::activeFor(const GpuRecordedGraph& reco
     return false;
 }
 
-bool GpuRecordedGraph::ArtifactOperation::activeExclusiveFor(const GpuRecordedGraph& recordedGraph)noexcept{
+bool GpuRecordedGraph::ArtifactOperation::ActiveExclusiveFor(const GpuRecordedGraph& recordedGraph)noexcept{
     for(const ArtifactOperation* operation = s_ActiveOperation; operation; operation = operation->m_previousOperation){
         if(operation->m_recordedGraph == &recordedGraph)
             return operation->m_exclusive;
@@ -61,7 +61,7 @@ GpuRecordedGraph::ArtifactOperation::ArtifactOperation(
 
     // Mutating cross-artifact/transaction reentry is rejected even when the target happens to be idle.
     // This keeps blocking cleanup outside every unrelated scheduler gate and removes the symmetric ABBA shape entirely.
-    if(s_ActiveOperation || GpuGraphSubmissionTransaction::SubmissionOperation::active())
+    if(s_ActiveOperation || GpuGraphSubmissionTransaction::SubmissionOperation::Active())
         return;
     const bool acquireExclusive = exclusive;
     if(acquireExclusive){

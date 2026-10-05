@@ -304,7 +304,7 @@ TEST(CsgShadowSnapshot, PacksShadowContextWithAlignedRangesCuttersAndInstanceMet
     ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
     ASSERT_TRUE(state.snapshot.hasCsg);
     constexpr u32 s_SoftwareRootSlot = 17u;
-    mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, s_SoftwareRootSlot);
+    mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, s_SoftwareRootSlot);
     BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, true);
     AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), mesh);
     ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
@@ -437,7 +437,7 @@ TEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBind
     expectRefresh([&](){ mesh.meshletPrimitiveIndexCount += 3u; });
     expectRefresh([&](){ mesh.meshName = Name("tests/csg_shadow/replacement_mesh"); });
     expectRefresh([&](){
-        mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 17u);
+        mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 17u);
     });
     expectRefresh([&](){ materials[0].surfaceDispatchId = 5u; });
     expectRefresh([&](){ materials[0].positionSlot = 9u; });

@@ -32,7 +32,7 @@ public:
 
 public:
     template<typename T>
-    static void destroyObject(AssetArena& arena, void* value)noexcept{
+    static void DestroyObject(AssetArena& arena, void* value)noexcept{
         DestroyArenaObjectNoexcept(arena, static_cast<T*>(value));
     }
 
@@ -63,7 +63,7 @@ template<typename T, typename... Args>
     if(!created)
         throw RuntimeException("AssetCook metadata extension allocation failed");
 
-    return ParsedMetadataExtension(created.release(), ParsedMetadataExtensionDeleter(arena, MakeNotNull(&ParsedMetadataExtensionDeleter::destroyObject<T>)));
+    return ParsedMetadataExtension(created.release(), ParsedMetadataExtensionDeleter(arena, MakeNotNull(&ParsedMetadataExtensionDeleter::DestroyObject<T>)));
 }
 
 

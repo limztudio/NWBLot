@@ -40,11 +40,11 @@ public:
 
 
 public:
-    [[nodiscard]] static const Name& indexVirtualPathName();
-    [[nodiscard]] static Name buildVirtualPathName(const Name& shaderName, AStringView variantName, const Name& stageName);
-    static bool serializeIndex(const GraphicsVector<Record>& records, GraphicsBytes& outBinary);
-    static bool deserializeIndex(const GraphicsBytes& binary, GraphicsVector<Record>& outRecords);
-    static bool findVirtualPath(const GraphicsVector<Record>& records, const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath);
+    [[nodiscard]] static const Name& IndexVirtualPathName();
+    [[nodiscard]] static Name BuildVirtualPathName(const Name& shaderName, AStringView variantName, const Name& stageName);
+    static bool SerializeIndex(const GraphicsVector<Record>& records, GraphicsBytes& outBinary);
+    static bool DeserializeIndex(const GraphicsBytes& binary, GraphicsVector<Record>& outRecords);
+    static bool FindVirtualPath(const GraphicsVector<Record>& records, const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath);
 };
 
 

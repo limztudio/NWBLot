@@ -48,7 +48,7 @@ GpuTaskGraph::DeclarationMutationScope::~DeclarationMutationScope(){
 }
 
 
-GpuTaskGraphDeclarationReadView GpuTaskGraphDeclarationReadView::tryAcquire(const GpuTaskGraph& graph)noexcept{
+GpuTaskGraphDeclarationReadView GpuTaskGraphDeclarationReadView::TryAcquire(const GpuTaskGraph& graph)noexcept{
     return GpuTaskGraphDeclarationReadView(graph, TryAcquireTag{});
 }
 

@@ -145,7 +145,7 @@ namespace __hidden_ui_scrollbar{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ScrollbarLayout::calculate(
+bool ScrollbarLayout::Calculate(
     const Rect& bounds,
     const Rect& clip,
     const Insets& padding,
@@ -227,7 +227,7 @@ bool ScrollbarLayout::calculate(
     return true;
 }
 
-bool ScrollbarLayout::updateOffsets(const Point& scroll, ScrollViewportPlacement& out){
+bool ScrollbarLayout::UpdateOffsets(const Point& scroll, ScrollViewportPlacement& out){
     using namespace __hidden_ui_scrollbar;
     if(
         !IsValidUiExtent(scroll) || !IsValidUiRect(out.viewport) || !IsValidUiRect(out.contentClip) || !IsValidUiRect(out.corner)

@@ -30,7 +30,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CsgReceiverSpanBuildGraphTask::record(
+bool CsgReceiverSpanBuildGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -100,7 +100,7 @@ bool CsgReceiverSpanBuildGraphTask::record(
 }
 
 
-bool CsgIntervalCombineGraphTask::record(
+bool CsgIntervalCombineGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -175,7 +175,7 @@ CsgIntervalSampleGraphTask::Payload::Payload(Core::Alloc::GlobalArena& arena)
 {}
 
 
-bool CsgIntervalSampleGraphTask::record(
+bool CsgIntervalSampleGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context

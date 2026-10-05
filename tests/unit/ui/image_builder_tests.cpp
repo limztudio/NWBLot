@@ -31,7 +31,7 @@ struct ImagePaintSample{
 
 class UiImageBuilderTests : public WidgetFixture{
 protected:
-    [[nodiscard]] static ImageOptions fixed(const f32 width = 96.0f, const f32 height = 40.0f){
+    [[nodiscard]] static ImageOptions Fixed(const f32 width = 96.0f, const f32 height = 40.0f){
         ImageOptions options;
         options.width = { LayoutSizePolicy::Fixed, width };
         options.height = { LayoutSizePolicy::Fixed, height };
@@ -129,11 +129,11 @@ protected:
 TEST_F(UiImageBuilderTests, DeclarationCopiesNameSizeAndStraightTintBeforePaint){
     ASSERT_TRUE(panel(1u));
     Name name("image.sprite");
-    ImageOptions options = fixed(80.0f, 32.0f);
+    ImageOptions options = Fixed(80.0f, 32.0f);
     options.tint = { 0.8f, 1.0f, 0.6f, 0.5f };
     ASSERT_TRUE(m_builder.image("image", name, options));
     name = Name("white");
-    options = fixed(20.0f, 20.0f);
+    options = Fixed(20.0f, 20.0f);
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
     ImagePaintSample sprite;
@@ -148,7 +148,7 @@ TEST_F(UiImageBuilderTests, DeclarationCopiesNameSizeAndStraightTintBeforePaint)
 
 TEST_F(UiImageBuilderTests, ExternalClipUpdatesSpriteUvsAndRestoresThePaintStack){
     ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.image("image", Name("image.sprite"), fixed()));
+    ASSERT_TRUE(m_builder.image("image", Name("image.sprite"), Fixed()));
     m_paint.pushClip({ 20.0f, 0.0f, 20.0f, 600.0f });
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_paint.popClip());
@@ -171,10 +171,10 @@ TEST_F(UiImageBuilderTests, ExternalClipUpdatesSpriteUvsAndRestoresThePaintStack
 
 TEST_F(UiImageBuilderTests, FullyTransparentAndEmptyImagesRemainValidWithoutQuads){
     ASSERT_TRUE(panel(1u));
-    ImageOptions transparent = fixed();
+    ImageOptions transparent = Fixed();
     transparent.tint.a = 0.0f;
     ASSERT_TRUE(m_builder.image("transparent", Name("image.sprite"), transparent));
-    ASSERT_TRUE(m_builder.image("empty", Name("image.sprite"), fixed(0.0f, 20.0f)));
+    ASSERT_TRUE(m_builder.image("empty", Name("image.sprite"), Fixed(0.0f, 20.0f)));
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
     ImagePaintSample sprite;

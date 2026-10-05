@@ -77,7 +77,7 @@ private:
 class TooltipBehavior final{
 public:
     // A new hover starts at zero; only contiguous accepted hover updates accrue time. Invalid inputs preserve the state.
-    [[nodiscard]] static bool update(TooltipState& state, WidgetId anchor, u64 declarationGeneration,
+    [[nodiscard]] static bool Update(TooltipState& state, WidgetId anchor, u64 declarationGeneration,
         const PopupToken& popup, u64 focusLossGeneration, u64 hoverActivityGeneration,
         bool hovered, f32 deltaSeconds, const TooltipOptions& options);
 };

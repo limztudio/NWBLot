@@ -49,7 +49,7 @@ struct RayTracingOpticalSceneSnapshot{
     RayTracingOpticalBoundsFinalizeHandle finalize;
     RayTracingOpticalSceneUploadHandle upload;
     RayTracingOpticalUploadControlHandle uploadState;
-    Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::Invalid();
     u32 transparentCount = 0u;
     bool boundsComplete = false;
     bool unspecifiedBoundariesOnly = false;

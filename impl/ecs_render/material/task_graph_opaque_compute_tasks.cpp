@@ -33,7 +33,7 @@ OpaqueRegularComputeEmulationGraphTask::Payload::Payload(Core::Alloc::GlobalAren
 {}
 
 
-bool OpaqueRegularComputeEmulationGraphTask::record(
+bool OpaqueRegularComputeEmulationGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -96,7 +96,7 @@ bool OpaqueRegularComputeEmulationGraphTask::record(
 }
 
 
-bool OpaqueRegularSharedComputeEmulationGraphTask::record(
+bool OpaqueRegularSharedComputeEmulationGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context

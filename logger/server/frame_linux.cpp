@@ -48,7 +48,7 @@ static void SignalHandler(i32){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){
+void Frame::Print(BasicStringView<tchar> str, Log::Type::Enum type){
     ScopedLock lock(FrameDetail::s_PrintMutex);
 
     auto& stream = Log::MessageTypeWritesToErrorStream(type) ? GLB_TCERR : GLB_TCOUT;

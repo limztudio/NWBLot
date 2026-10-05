@@ -30,21 +30,21 @@ protected:
         m_child.open();
     }
 
-    [[nodiscard]] static PopupOptions parentOptions(){
+    [[nodiscard]] static PopupOptions ParentOptions(){
         PopupOptions options;
         options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
         options.size = { 280.0f, 360.0f };
         return options;
     }
 
-    [[nodiscard]] static PopupOptions childOptions(){
+    [[nodiscard]] static PopupOptions ChildOptions(){
         PopupOptions options;
         options.anchor = { 460.0f, 80.0f, 80.0f, 24.0f };
         options.size = { 300.0f, 300.0f };
         return options;
     }
 
-    [[nodiscard]] static WidgetOptions control(const f32 width = 120.0f){
+    [[nodiscard]] static WidgetOptions Control(const f32 width = 120.0f){
         WidgetOptions options;
         options.width = { LayoutSizePolicy::Fixed, width };
         options.height = { LayoutSizePolicy::Fixed, 30.0f };
@@ -55,7 +55,7 @@ protected:
     [[nodiscard]] WidgetId childId()const{ return MakeWidgetId(parentId(), "child"); }
 
     [[nodiscard]] bool beginParent(const u64 generation){
-        return begin(generation) && m_builder.beginPopup("parent", m_parent, parentOptions());
+        return begin(generation) && m_builder.beginPopup("parent", m_parent, ParentOptions());
     }
 
     [[nodiscard]] bool finishRoot(){ return m_context.endRoot() && m_context.finishFrame(); }
@@ -63,15 +63,15 @@ protected:
     [[nodiscard]] bool prepareButtons(const u64 generation){
         if(!beginParent(generation))
             return false;
-        m_beforeActivated = m_builder.button("before", "Before", control());
-        if(m_builder.beginPopup("child", m_child, childOptions())){
-            m_childActivated = m_builder.button("apply", "Child", control());
+        m_beforeActivated = m_builder.button("before", "Before", Control());
+        if(m_builder.beginPopup("child", m_child, ChildOptions())){
+            m_childActivated = m_builder.button("apply", "Child", Control());
             if(!m_builder.endPopup())
                 return false;
         }
         else if(m_context.failed())
             return false;
-        m_afterActivated = m_builder.button("after", "After", control());
+        m_afterActivated = m_builder.button("after", "After", Control());
         return m_builder.endPopup() && finishRoot();
     }
 
@@ -95,15 +95,15 @@ protected:
 TEST_F(UiNestedPopupBuilderTests, ChildLayoutDoesNotConsumeParentSpaceAndRestoresItsPopupToken){
     ASSERT_TRUE(beginParent(1u));
     const PopupToken parent = m_context.popupToken();
-    EXPECT_FALSE(m_builder.button("before", "Before", control()));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
+    EXPECT_FALSE(m_builder.button("before", "Before", Control()));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
     const PopupToken child = m_context.popupToken();
     EXPECT_NE(child, parent);
-    EXPECT_FALSE(m_builder.button("apply", "Child", control()));
+    EXPECT_FALSE(m_builder.button("apply", "Child", Control()));
     ASSERT_TRUE(m_builder.endPopup());
     EXPECT_EQ(m_context.popupToken(), parent);
     EXPECT_FALSE(m_builder.balanced());
-    EXPECT_FALSE(m_builder.button("after", "After", control()));
+    EXPECT_FALSE(m_builder.button("after", "After", Control()));
     ASSERT_TRUE(m_builder.endPopup());
     EXPECT_TRUE(m_builder.balanced());
     EXPECT_FALSE(m_context.popupToken().valid());
@@ -133,12 +133,12 @@ TEST_F(UiNestedPopupBuilderTests, ChildOpenedInsideARowRestoresTheSameParentCont
     rowOptions.gap = 5.0f;
     ASSERT_TRUE(m_builder.beginRow("row", rowOptions));
     const WidgetId row = MakeWidgetId(parentId(), "row");
-    EXPECT_FALSE(m_builder.button("before", "Before", control(100.0f)));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    EXPECT_FALSE(m_builder.button("apply", "Child", control()));
+    EXPECT_FALSE(m_builder.button("before", "Before", Control(100.0f)));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    EXPECT_FALSE(m_builder.button("apply", "Child", Control()));
     ASSERT_TRUE(m_builder.endPopup());
     EXPECT_EQ(m_context.scopeId(), row);
-    EXPECT_FALSE(m_builder.button("after", "After", control(100.0f)));
+    EXPECT_FALSE(m_builder.button("after", "After", Control(100.0f)));
     ASSERT_TRUE(m_builder.endContainer());
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(finishRoot());
@@ -160,12 +160,12 @@ TEST_F(UiNestedPopupBuilderTests, ClosedChildBeginLeavesParentScopeAndFollowingC
     m_child.close();
     ASSERT_TRUE(beginParent(1u));
     const PopupToken parent = m_context.popupToken();
-    EXPECT_FALSE(m_builder.button("before", "Before", control()));
-    EXPECT_FALSE(m_builder.beginPopup("child", m_child, childOptions()));
+    EXPECT_FALSE(m_builder.button("before", "Before", Control()));
+    EXPECT_FALSE(m_builder.beginPopup("child", m_child, ChildOptions()));
     EXPECT_FALSE(m_context.failed());
     EXPECT_EQ(m_context.popupToken(), parent);
     EXPECT_EQ(m_context.scopeId(), parentId());
-    EXPECT_FALSE(m_builder.button("after", "After", control()));
+    EXPECT_FALSE(m_builder.button("after", "After", Control()));
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(finishRoot());
     ASSERT_TRUE(m_context.commitFrame(1u));
@@ -228,10 +228,10 @@ TEST_F(UiNestedPopupBuilderTests, NestedScopeCapacityRejectsTheNextChildWithoutP
     ASSERT_TRUE(begin(1u));
     for(usize index = 0u; index < s_InputMaxPopups; ++index){
         states[index].open();
-        ASSERT_TRUE(m_builder.beginPopup("level", states[index], parentOptions()));
+        ASSERT_TRUE(m_builder.beginPopup("level", states[index], ParentOptions()));
     }
     states[s_InputMaxPopups].open();
-    EXPECT_FALSE(m_builder.beginPopup("level", states[s_InputMaxPopups], childOptions()));
+    EXPECT_FALSE(m_builder.beginPopup("level", states[s_InputMaxPopups], ChildOptions()));
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_context.finishFrame());
     EXPECT_FALSE(m_context.commitFrame(1u));
@@ -240,8 +240,8 @@ TEST_F(UiNestedPopupBuilderTests, NestedScopeCapacityRejectsTheNextChildWithoutP
 
 TEST_F(UiNestedPopupBuilderTests, WrongPanelEndCannotCloseTheChildPopupOrPublishIt){
     ASSERT_TRUE(beginParent(1u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    EXPECT_FALSE(m_builder.button("apply", "Child", control()));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    EXPECT_FALSE(m_builder.button("apply", "Child", Control()));
     EXPECT_FALSE(m_builder.endPanel());
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_context.finishFrame());
@@ -251,7 +251,7 @@ TEST_F(UiNestedPopupBuilderTests, WrongPanelEndCannotCloseTheChildPopupOrPublish
 
 TEST_F(UiNestedPopupBuilderTests, UnbalancedChildContainerPreventsTheOuterFrameFromPublishing){
     ASSERT_TRUE(beginParent(1u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
     ASSERT_TRUE(m_builder.beginColumn("unbalanced"));
     EXPECT_FALSE(m_builder.endPopup());
     EXPECT_TRUE(m_context.failed());

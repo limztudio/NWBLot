@@ -386,7 +386,7 @@ bool GpuTaskGraph::beginPacketRecording(
     PacketRecordingLease& outLease
 )const noexcept{
     GpuCompiledPacketView packetView;
-    if(!resolveAttemptPacketView(compiledGraph, planAccess, packet, recordingAttemptGeneration, outLease.valid(), packetView))
+    if(!ResolveAttemptPacketView(compiledGraph, planAccess, packet, recordingAttemptGeneration, outLease.valid(), packetView))
         return false;
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;
@@ -412,7 +412,7 @@ bool GpuTaskGraph::beginPacketRecording(
         )
             return false;
     }
-    const u64 claimGeneration = allocateGeneration();
+    const u64 claimGeneration = AllocateGeneration();
     if(claimGeneration == 0u)
         return false;
     const u32 activeClaimCount = m_activePacketRecordingClaimCount.load(MemoryOrder::relaxed);
@@ -442,7 +442,7 @@ bool GpuTaskGraph::completePacketRecording(
     PacketRecordingLease& lease
 )const noexcept{
     GpuCompiledPacketView packetView;
-    if(!resolveLeasedPacketView(compiledGraph, planAccess, packet, lease, packetView))
+    if(!ResolveLeasedPacketView(compiledGraph, planAccess, packet, lease, packetView))
         return false;
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;
@@ -525,7 +525,7 @@ bool GpuTaskGraph::completePacketRecordingAbort(
     const GpuTaskId* const tasks = packetView.tasks;
 
     DiscardNotificationScope notification(*this);
-    const u64 notificationGeneration = allocateGeneration();
+    const u64 notificationGeneration = AllocateGeneration();
     {
         ScopedLock lock(m_lifecycleMutex);
         if(

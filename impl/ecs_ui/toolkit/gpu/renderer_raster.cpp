@@ -19,7 +19,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRasterTask::record(
+bool GpuRasterTask::Record(
     const Payload& payload,
     Core::CommandList& commands,
     const Core::GpuTaskRecordContext& context){
@@ -106,7 +106,7 @@ bool GpuRasterTask::record(
     return true;
 }
 
-void GpuRasterTask::accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+void GpuRasterTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
     payload.frame->m_raster = token;
 }
 
@@ -114,7 +114,7 @@ void GpuRasterTask::accepted(Payload& payload, const Core::QueueSubmissionToken&
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuOutputTask::record(
+bool GpuOutputTask::Record(
     const Payload& payload,
     Core::CommandList& commands,
     const Core::GpuTaskRecordContext& context){
@@ -145,7 +145,7 @@ bool GpuOutputTask::record(
     return true;
 }
 
-void GpuOutputTask::accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+void GpuOutputTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
     payload.frame->m_finalConsumer = token;
 }
 

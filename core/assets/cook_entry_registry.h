@@ -550,7 +550,7 @@ template<typename EntryT, typename AssetT, typename CodecT>
     const bool logBuildFailure = true
 ){
     return registry.registerType<EntryT, AssetT, CodecT>(
-        AssetT::assetTypeName(),
+        AssetT::AssetTypeName(),
         assetKindText,
         parseDocument,
         parseValue,

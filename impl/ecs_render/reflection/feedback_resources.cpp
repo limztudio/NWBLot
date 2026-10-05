@@ -141,7 +141,7 @@ bool RendererReflectionFeedback::prepareBank(ReflectionFeedbackBinding& bank, co
         return false;
     }
     const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!descriptor.valid() || !heap.write(descriptor, Core::DescriptorWriteItem::rawBufferUav(0u, buffer.get()))){
+    if(!descriptor.valid() || !heap.write(descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, buffer.get()))){
         if(descriptor.valid())
             heap.free(descriptor);
         NWB_LOGGER_ERROR(GLB_TEXT("Reflection feedback: failed to register storage buffer"));

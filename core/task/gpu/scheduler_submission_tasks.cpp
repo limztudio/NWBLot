@@ -41,12 +41,12 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
     if(!artifactOperation.valid()){
         return false;
     }
-    if(!GpuGraphSubmissionTransaction::SubmissionOperation::activeExclusiveFor(transaction))
+    if(!GpuGraphSubmissionTransaction::SubmissionOperation::ActiveExclusiveFor(transaction))
         return false;
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     if(!planAccess.valid())
         return false;
-    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
     if(!declarationAccess.valid())
         return false;
 

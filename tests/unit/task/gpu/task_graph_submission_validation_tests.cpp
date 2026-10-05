@@ -114,7 +114,7 @@ void CheckInitialOwnershipFanIn(const usize count, const bool benchmark){
     queues[1u].queueIndex = 1u;
     const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
     Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
-    Graphics::GraphicsBackend::BackendTestDispatchAccess::validateStateHandoff(stateSource, queues[0u].id.deviceGeneration);
+    Graphics::GraphicsBackend::BackendTestDispatchAccess::ValidateStateHandoff(stateSource, queues[0u].id.deviceGeneration);
     Graphics::GraphicsVector<Graphics::GpuTaskResourceUse> uses(testArena.arena);
     uses.reserve(count);
     Graphics::GpuExternalCompletionId firstCompletion;

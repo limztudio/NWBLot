@@ -154,8 +154,8 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
 
             AStringView includeName;
             ShaderIncludeKind::Enum includeKind = ShaderIncludeKind::Relative;
-            if(SlangShaderCompiler::extractIncludeDirective(line, includeName, includeKind)){
-                if(!SlangShaderCompiler::resolveIncludeFile(includeName, includeKind, absolutePath.parentPath(), includeDirectories, includePath)){
+            if(SlangShaderCompiler::ExtractIncludeDirective(line, includeName, includeKind)){
+                if(!SlangShaderCompiler::ResolveIncludeFile(includeName, includeKind, absolutePath.parentPath(), includeDirectories, includePath)){
                     NWB_LOGGER_ERROR(GLB_TEXT("Unable to resolve include '{}' from '{}'")
                         , StringConvert(includeName)
                         , PathToString<tchar>(absolutePath)

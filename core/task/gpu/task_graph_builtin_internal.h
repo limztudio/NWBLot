@@ -71,11 +71,11 @@ template<typename PayloadT>
 struct SingletonTokenTaskBase{
     using Payload = PayloadT;
 
-    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const QueueSubmissionToken& token){
         PublishAcceptedToken(payload.acceptedToken, token);
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         ClearAcceptedToken(payload.acceptedToken);
     }
 };
@@ -88,11 +88,11 @@ struct CopiesTaskBase{
         {}
     };
 
-    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const QueueSubmissionToken& token){
         PublishAcceptedToken(payload.acceptedToken, token);
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         ClearAcceptedToken(payload.acceptedToken);
     }
 };

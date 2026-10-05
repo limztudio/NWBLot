@@ -42,12 +42,12 @@ struct PostGbufferNormalizeGraphTask{
         const Core::GpuTaskId* shadowVisibilityTask = nullptr;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token);
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
 };
 
 

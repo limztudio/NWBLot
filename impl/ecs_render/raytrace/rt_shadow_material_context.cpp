@@ -132,15 +132,15 @@ void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
         heap.free(m_rayTracingState.m_swShadowEdgeListHeapHandle);
         heap.free(m_rayTracingState.m_swShadowIndirectArgsHeapHandle);
     }
-    m_rayTracingState.m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_sceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_shadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
 

@@ -286,7 +286,7 @@ bool GpuNativePacketRecorder::preflightPacketResources(
         ;
     };
     const auto validateBufferRange = [](Buffer* const buffer, const BufferRange& range){
-        return buffer && GpuInitialStateHandoffValidation::validBufferRange(range, buffer->getCreationDescription().byteSize);
+        return buffer && GpuInitialStateHandoffValidation::ValidBufferRange(range, buffer->getCreationDescription().byteSize);
     };
     const auto validateResourceReady = [&](const GpuGraphResourceId resourceID,
                                            ResourceStates::Mask& outPermanentState,

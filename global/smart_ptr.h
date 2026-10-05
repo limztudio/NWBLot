@@ -42,14 +42,14 @@ template<typename T, typename Deleter>
 class UniquePointerType{
 private:
     template<typename U>
-    static typename U::pointer test(typename U::pointer*);
+    static typename U::pointer Test(typename U::pointer*);
 
     template<typename U>
-    static T* test(...);
+    static T* Test(...);
 
 
 public:
-    typedef decltype(test<typename RemoveReference<Deleter>::type>(0)) type;
+    typedef decltype(Test<typename RemoveReference<Deleter>::type>(0)) type;
 };
 
 template<typename P1, typename P2, bool = IsScalar_V<P1> && !IsPointer_V<P1>>

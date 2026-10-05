@@ -53,7 +53,7 @@ struct ReflectionFeedbackExtent{
 
 struct ReflectionFeedbackBinding{
     Core::BufferHandle buffer;
-    Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::Invalid();
 
     [[nodiscard]] bool valid()const noexcept{ return buffer && descriptor.valid(); }
 };

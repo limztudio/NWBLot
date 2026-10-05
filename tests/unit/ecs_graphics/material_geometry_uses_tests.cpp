@@ -100,7 +100,7 @@ struct GeometryContext{
         .meshletPrimitiveIndexBuffer = buffers[firstBuffer + 10u],
     };
     for(u32 bindingSlot = 0u; bindingSlot < LengthOf(mesh.geometryHeapHandles); ++bindingSlot)
-        mesh.geometryHeapHandles[bindingSlot] = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, bindingSlot);
+        mesh.geometryHeapHandles[bindingSlot] = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, bindingSlot);
     mesh.meshletCount = 1u;
     mesh.meshletPrimitiveIndexCount = 3u;
     return drawItem;
@@ -226,9 +226,9 @@ TEST(MaterialGeometryUses, RejectsInvalidInputsBeforeImportAndClearsOutput){
         Impl::MaterialPassMeshResourceSnapshot& mesh = drawItems.meshDrawItems.back().meshResources;
         switch(invalidCase){
         case 0u: mesh.sourceBuffers.normalBuffer = nullptr; break;
-        case 1u: mesh.geometryHeapHandles[NWB_MESH_BINDING_NORMAL] = Core::GpuDescriptorHandle::invalid(); break;
+        case 1u: mesh.geometryHeapHandles[NWB_MESH_BINDING_NORMAL] = Core::GpuDescriptorHandle::Invalid(); break;
         case s_ExpectedDualCount:
-            mesh.geometryHeapHandles[NWB_MESH_BINDING_NORMAL] = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::SampledImage, 1u);
+            mesh.geometryHeapHandles[NWB_MESH_BINDING_NORMAL] = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::SampledImage, 1u);
             break;
         case 3u: mesh.meshletCount = 0u; break;
         case 4u: mesh.meshletPrimitiveIndexCount = 0u; break;

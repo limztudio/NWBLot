@@ -115,7 +115,7 @@ namespace __hidden_ui_progress_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ProgressLayout::measure(
+bool ProgressLayout::Measure(
     const ProgressOptions& options,
     const ProgressStyle& style,
     const UiSkinRegion& track,
@@ -155,7 +155,7 @@ bool ProgressLayout::measure(
     return true;
 }
 
-bool ProgressLayout::place(
+bool ProgressLayout::Place(
     const Rect& bounds,
     const Rect& clip,
     const ProgressMetrics& metrics,

@@ -65,13 +65,13 @@ struct MeshResources : public RuntimeMeshBuffers{
     ECSRenderDetail::ObjectGeometryCacheState objectGeometryCache;
     Core::BufferHandle triangleIndexBuffer;
     Core::BufferHandle runtimeLocalBoundsBuffer;
-    Core::GpuDescriptorHandle runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
     Core::BufferHandle runtimeMeshletLocalBoundsBuffer;
-    Core::GpuDescriptorHandle runtimeMeshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle runtimeMeshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
     Core::BufferHandle attributeBuffer;     // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
     Core::RayTracingAccelStructHandle blas;
     // The typed vertex and raw index UAV views share this fourth mesh push-lane selector.
-    Core::GpuDescriptorHandle emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle emulationVertexHeapHandle = Core::GpuDescriptorHandle::Invalid();
     // One heap handle per ABI slot; retired before runtime meshes are replaced.
     Core::GpuDescriptorHandle geometryHeapHandles[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
     // SW-BVH streams stay separate; triangle index is the reconstructed RT stream.

@@ -23,7 +23,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShadowPrepareGraphTask::record(
+bool ShadowPrepareGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -61,7 +61,7 @@ bool ShadowPrepareGraphTask::record(
 }
 
 
-void ShadowPrepareGraphTask::accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+void ShadowPrepareGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
     static_cast<void>(token);
     if(payload.targets && payload.currentBindlessSlotsGraphOwned)
         payload.targets->bindless.slotsUploaded = true;
@@ -74,7 +74,7 @@ void ShadowPrepareGraphTask::accepted(Payload& payload, const Core::QueueSubmiss
 }
 
 
-void ShadowPrepareGraphTask::discarded(Payload& payload){
+void ShadowPrepareGraphTask::Discarded(Payload& payload){
     if(payload.timingTicket)
         payload.timingTicket->discard();
     if(!payload.raytracingSystem || !payload.outcome)
@@ -89,7 +89,7 @@ void ShadowPrepareGraphTask::discarded(Payload& payload){
 }
 
 
-bool ShadowPrepareSoftwareBvhBuildGraphTask::record(
+bool ShadowPrepareSoftwareBvhBuildGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context

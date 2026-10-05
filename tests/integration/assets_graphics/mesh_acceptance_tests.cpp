@@ -236,7 +236,7 @@ static bool CookAndLoadSmokeMesh(
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset
 ){
     Path outputDirectory(testArena.arena);
-    const bool cooked = AssetsGraphicsFixture::cookSmokeMeshMeta(
+    const bool cooked = AssetsGraphicsFixture::CookSmokeMeshMeta(
         assetFilename,
         caseName,
         testArena,
@@ -246,7 +246,7 @@ static bool CookAndLoadSmokeMesh(
     EXPECT_TRUE(cooked);
     if(!cooked)
         return false;
-    return AssetsGraphicsFixture::loadCookedMesh(testArena, outputDirectory, assetName, outLoadedAsset);
+    return AssetsGraphicsFixture::LoadCookedMesh(testArena, outputDirectory, assetName, outLoadedAsset);
 }
 
 struct MeshletAcceptanceVertexKey{
@@ -327,7 +327,7 @@ static void ForEachMeshletAcceptanceAlternatingConeTriangle(FuncT&& func){
 template<typename... Args>
 static void AppendMeshletAcceptanceFormattedMeta(AString& meta, AFormatString<Args...> format, Args&&... args){
     const auto line = StringFormat(NWB::Tests::TestDetail::Arena(), format, Forward<Args>(args)...);
-    AssetsGraphicsFixture::appendTestMeta(meta, AStringView(line.data(), line.size()));
+    AssetsGraphicsFixture::AppendTestMeta(meta, AStringView(line.data(), line.size()));
 }
 
 static void AppendMeshletAcceptanceVertexRefMeta(AString& meta, const MeshletAcceptanceVertexKey& vertexRef){
@@ -362,7 +362,7 @@ static MeshletAcceptanceTriangleKey BuildMeshletAcceptanceTriangleKey(const u32 
 static AString BuildMeshletAcceptanceAlternatingConeMeshMeta(){
     AString meta;
     meta.reserve(8192u);
-    AssetsGraphicsFixture::appendTestMeta(meta, R"(mesh asset;
+    AssetsGraphicsFixture::AppendTestMeta(meta, R"(mesh asset;
 
 asset.positions = [
     [0.0, 0.0, 0.0],
@@ -399,7 +399,7 @@ asset.vertex_refs = [
     for(const MeshletAcceptanceVertexKey& vertexRef : s_MeshletAcceptanceAlternatingConeVertexRefs)
         AppendMeshletAcceptanceVertexRefMeta(meta, vertexRef);
 
-    AssetsGraphicsFixture::appendTestMeta(meta, R"(];
+    AssetsGraphicsFixture::AppendTestMeta(meta, R"(];
 
 asset.indices = [
 )");
@@ -408,7 +408,7 @@ asset.indices = [
         AppendMeshletAcceptanceTriangleMeta(meta, triangle);
     });
 
-    AssetsGraphicsFixture::appendTestMeta(meta, "];\n");
+    AssetsGraphicsFixture::AppendTestMeta(meta, "];\n");
     return meta;
 }
 
@@ -547,7 +547,7 @@ static void RunSmokeMeshAcceptance(
     Path root(testArena.arena);
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
     if(CookAndLoadSmokeMesh(testArena, assetFilename, caseName, assetName, root, loadedAsset)){
-        EXPECT_EQ(loadedAsset->assetType(), NWB::Impl::Mesh::assetTypeName());
+        EXPECT_EQ(loadedAsset->assetType(), NWB::Impl::Mesh::AssetTypeName());
         const NWB::Impl::Mesh& loadedMesh = static_cast<const NWB::Impl::Mesh&>(*loadedAsset);
         Forward<CallbackT>(callback)(loadedMesh);
     }
@@ -650,7 +650,7 @@ TEST(AssetsGraphics, MeshAcceptanceQualityBuilderChecks){
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
     const AString meta = BuildMeshletAcceptanceAlternatingConeMeshMeta();
-    const bool cooked = AssetsGraphicsFixture::cookSingleMeshMeta(
+    const bool cooked = AssetsGraphicsFixture::CookSingleMeshMeta(
         AStringView(meta.data(), meta.size()),
         "quality_builder_acceptance",
         testArena,
@@ -660,9 +660,9 @@ TEST(AssetsGraphics, MeshAcceptanceQualityBuilderChecks){
     EXPECT_TRUE(cooked);
     if(cooked){
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        if(AssetsGraphicsFixture::loadCookedMinimalMesh(testArena, outputDirectory, loadedAsset)){
+        if(AssetsGraphicsFixture::LoadCookedMinimalMesh(testArena, outputDirectory, loadedAsset)){
             const NWB::Impl::Mesh& loadedMesh = static_cast<const NWB::Impl::Mesh&>(*loadedAsset);
-            auto sourceTriangles = AssetsGraphicsFixture::makeAssetVector<MeshletAcceptanceTriangleKey>(testArena);
+            auto sourceTriangles = AssetsGraphicsFixture::MakeAssetVector<MeshletAcceptanceTriangleKey>(testArena);
             BuildMeshletAcceptanceAlternatingConeSourceTriangles(sourceTriangles);
             const MeshletAcceptanceQualityMetrics cookedMetrics = BuildCookedMeshletAcceptanceQualityMetrics(loadedMesh);
 

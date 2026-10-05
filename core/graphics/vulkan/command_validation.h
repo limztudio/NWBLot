@@ -112,7 +112,7 @@ namespace VulkanDetail{
     if(!IsImplicitScissorValid(viewport))
         return false;
 
-    const Rect rect = Rect::fromViewport(viewport);
+    const Rect rect = Rect::FromViewport(viewport);
     outScissor = {};
     outScissor.offset = { rect.minX, rect.minY };
     outScissor.extent = {

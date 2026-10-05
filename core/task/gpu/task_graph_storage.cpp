@@ -304,7 +304,7 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
     resourceUseRollback.commit();
     resourceVersionUseRollback.commit();
     taskRollback.commit();
-    m_declarationRevision = allocateGeneration();
+    m_declarationRevision = AllocateGeneration();
     return GpuTaskId{ .generation = m_generation, .index = index };
 }
 
@@ -584,7 +584,7 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
     markerRollback.commit();
     resourceRollback.commit();
     indexRollback.release();
-    m_declarationRevision = allocateGeneration();
+    m_declarationRevision = AllocateGeneration();
     return GpuGraphResourceId{ .generation = m_generation, .index = index };
 }
 
@@ -603,7 +603,7 @@ GpuGraphResourceVersionId GpuTaskGraph::appendResourceVersion(const GpuGraphReso
 
     const u32 index = static_cast<u32>(m_resourceVersions.size());
     m_resourceVersions.push_back(version);
-    m_declarationRevision = allocateGeneration();
+    m_declarationRevision = AllocateGeneration();
     return GpuGraphResourceVersionId{ .generation = m_generation, .index = index };
 }
 
@@ -692,7 +692,7 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
     memberRollback.commit();
     setRollback.commit();
     indexRollback.release();
-    m_declarationRevision = allocateGeneration();
+    m_declarationRevision = AllocateGeneration();
     return GpuGraphResourceSetId{ .generation = m_generation, .index = index };
 }
 
@@ -748,7 +748,7 @@ GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternal
     indexRollback.release();
     if(tokenDeviceGeneration != 0u)
         m_externalCompletionDeviceGeneration = tokenDeviceGeneration;
-    m_declarationRevision = allocateGeneration();
+    m_declarationRevision = AllocateGeneration();
     return GpuExternalCompletionId{ .generation = m_generation, .index = index };
 }
 

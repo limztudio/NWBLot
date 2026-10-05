@@ -67,7 +67,7 @@ TEST_F(UiSliderLifetimeTests, ChangingKeyStepRetiresAHeldKeyBeforeApplyingItsCop
     EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
     held.repeat = true;
     EXPECT_TRUE(send(held).keyboardConsumed);
-    SliderOptions coarse = options();
+    SliderOptions coarse = Options();
     coarse.keyStep = 0.25;
     ASSERT_TRUE(accept(3u, coarse));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.375);
@@ -88,7 +88,7 @@ TEST_F(UiSliderLifetimeTests, ChangedRangeDropsTheOldDragAndRetainsAnAuthoritati
     const Point origin = thumbPoint();
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
     EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x - 50.0f, origin.y } }).pointerConsumed);
-    SliderOptions narrow = options();
+    SliderOptions narrow = Options();
     narrow.maximum = 0.5;
     ASSERT_TRUE(accept(2u, narrow));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.75);
@@ -106,7 +106,7 @@ TEST_F(UiSliderLifetimeTests, ChangedFinalTrackGeometryFencesTheCopiedDragBefore
     const u64 admission = m_state.admissionGeneration();
     EXPECT_TRUE(send({ InputEventType::PrimaryDown, origin }).pointerConsumed);
     EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x + 60.0f, origin.y } }).pointerConsumed);
-    SliderOptions wider = options();
+    SliderOptions wider = Options();
     wider.width = { LayoutSizePolicy::Fixed, 340.0f };
     ASSERT_TRUE(accept(2u, wider, { 10.0f, 10.0f, 420.0f, 240.0f }));
     EXPECT_NE(m_state.admissionGeneration(), admission);
@@ -123,7 +123,7 @@ TEST_F(UiSliderLifetimeTests, ChangedClipRetiresOldPointerGeometryEvenWhenTheFul
     EXPECT_TRUE(send({ InputEventType::PointerMove, { origin.x + 30.0f, origin.y } }).pointerConsumed);
     ASSERT_TRUE(begin(2u, { 180.0f, 600.0f, 1.0f, 1.0f }));
     ASSERT_TRUE(m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 240.0f }));
-    ASSERT_TRUE(m_builder.slider("slider", m_state, options()));
+    ASSERT_TRUE(m_builder.slider("slider", m_state, Options()));
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_FLOAT_EQ(m_state.placement().track.width, before.track.width);
@@ -149,7 +149,7 @@ TEST_F(UiSliderLifetimeTests, AStateCannotBeAliasedByTwoDeclarationsInTheSameLiv
     ASSERT_TRUE(accept(1u));
     const SliderAcceptedFrame displayed = accepted();
     ASSERT_TRUE(declare(2u));
-    EXPECT_FALSE(m_builder.slider("alias", m_state, options()));
+    EXPECT_FALSE(m_builder.slider("alias", m_state, Options()));
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_state.result().valid);
     EXPECT_FALSE(m_context.commitFrame(2u));
@@ -178,7 +178,7 @@ TEST_F(UiSliderLifetimeTests, FinalWholeScopeValidationCannotPublishAnEarlierSli
     SliderState other;
     ASSERT_TRUE(other.setValue(0.5));
     ASSERT_TRUE(declare(2u));
-    ASSERT_TRUE(m_builder.slider("other", other, options()));
+    ASSERT_TRUE(m_builder.slider("other", other, Options()));
     const u64 token = m_state.inputGeneration();
     m_laterSource.arm(SliderCallbackMutation::AwayAndBack, &m_state);
     ASSERT_TRUE(sibling());

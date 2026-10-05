@@ -51,7 +51,7 @@ bool Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, Combo
     input.fencePopup(frame.popupToken);
     if(!frame.options.enabled){
         input.invalidateTarget(field.id);
-        ComboBehavior::close(state);
+        ComboBehavior::Close(state);
         input.closePopup(frame.popupToken);
         if(frame.search){
             frame.search->query().cancelComposition();
@@ -61,11 +61,11 @@ bool Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, Combo
     }
     PopupDismissReason::Enum reason = PopupDismissReason::None;
     if(input.consumePopupDismissal(frame.popupToken, reason))
-        ComboBehavior::close(state);
+        ComboBehavior::Close(state);
     if(!state.isOpen())
         input.closePopup(frame.popupToken);
     if(m_context.takeActivation(field, true))
-        ComboBehavior::open(state);
+        ComboBehavior::Open(state);
     ControlAction action;
     while(m_context.takeControlAction(field, true, frame.token, action)){
         if(state.isOpen())
@@ -75,8 +75,8 @@ bool Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, Combo
             && action.kind != ControlActionKind::Down
         )
             continue;
-        ComboBehavior::open(state);
-        if(!ListBehavior::reconcile(state.m_list, *frame.results))
+        ComboBehavior::Open(state);
+        if(!ListBehavior::Reconcile(state.m_list, *frame.results))
             return false;
         if(action.kind != ControlActionKind::Submit){
             action.control = { state.m_list.inputGeneration(), frame.results->instanceGeneration(), frame.results->revision() };
@@ -85,11 +85,11 @@ bool Builder::applyComboInput(const WidgetState& field, ComboFrame& frame, Combo
             options.wheelRows = frame.options.wheelRows;
             options.selectOnNavigate = false;
             ListResult preview;
-            if(!ListBehavior::apply(state.m_list, *frame.results, options, action, preview))
+            if(!ListBehavior::Apply(state.m_list, *frame.results, options, action, preview))
                 return false;
         }
     }
-    if(!ListBehavior::reconcile(state.m_list, *frame.results))
+    if(!ListBehavior::Reconcile(state.m_list, *frame.results))
         return false;
     frame.popupToken.openGeneration = state.m_popup.openGeneration();
     frame.listToken.instanceGeneration = state.m_list.inputGeneration();
@@ -137,10 +137,10 @@ bool Builder::applyComboListInput(ComboFrame& frame, ComboResult& result){
                 continue;
             }
             ListResult preview;
-            if(!ListBehavior::apply(state.m_list, *frame.results, options, action, preview) || !comboMatches(frame))
+            if(!ListBehavior::Apply(state.m_list, *frame.results, options, action, preview) || !comboMatches(frame))
                 return false;
             if(preview.activated){
-                if(!ComboBehavior::commit(state, *frame.source, state.m_list.selectedKey()))
+                if(!ComboBehavior::Commit(state, *frame.source, state.m_list.selectedKey()))
                     return false;
                 result.committed = true;
                 input.closePopup(frame.popupToken);

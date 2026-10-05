@@ -25,7 +25,7 @@ using MessageTypeId = usize;
 
 template<typename T>
 inline MessageTypeId MessageType(){
-    return ECSDetail::TypeCounter<ECSDetail::MessageTypeTag>::id<Decay_T<T>>();
+    return ECSDetail::TypeCounter<ECSDetail::MessageTypeTag>::Id<Decay_T<T>>();
 }
 
 
@@ -157,11 +157,11 @@ private:
 
 
 private:
-    static ChannelLock readChannelLock(SharedMutex& mutex){
+    static ChannelLock ReadChannelLock(SharedMutex& mutex){
         return ChannelLock(mutex, false);
     }
 
-    static ChannelLock writeChannelLock(SharedMutex& mutex){
+    static ChannelLock WriteChannelLock(SharedMutex& mutex){
         return ChannelLock(mutex, true);
     }
 
@@ -229,7 +229,7 @@ private:
         if(!m_hasChannels.load(MemoryOrder::acquire))
             return;
 
-        ChannelLock lock = readChannelLock(m_channelsMutex);
+        ChannelLock lock = ReadChannelLock(m_channelsMutex);
 
         for(auto& channel : m_channels){
             if(!channel)
@@ -243,7 +243,7 @@ private:
         const MessageTypeId typeId = MessageType<T>();
 
         if(m_hasChannels.load(MemoryOrder::acquire)){
-            ChannelLock readLock = readChannelLock(m_channelsMutex);
+            ChannelLock readLock = ReadChannelLock(m_channelsMutex);
             if(typeId < m_channels.size()){
                 auto& channel = m_channels[typeId];
                 if(channel)
@@ -251,7 +251,7 @@ private:
             }
         }
 
-        ChannelLock writeLock = writeChannelLock(m_channelsMutex);
+        ChannelLock writeLock = WriteChannelLock(m_channelsMutex);
         if(typeId >= m_channels.size())
             m_channels.resize(typeId + 1u);
 
@@ -273,7 +273,7 @@ private:
 
         const MessageTypeId typeId = MessageType<T>();
 
-        ChannelLock lock = readChannelLock(m_channelsMutex);
+        ChannelLock lock = ReadChannelLock(m_channelsMutex);
 
         if(typeId >= m_channels.size())
             return nullptr;

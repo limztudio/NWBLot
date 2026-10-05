@@ -20,13 +20,13 @@ struct ExampleComputeTask{
         // Task-specific data.
     };
 
-    static bool record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context);
+    static bool Record(const Payload& payload, CommandList& commandList, const GpuTaskRecordContext& context);
 };
 
 const GpuTaskId task = graph.addTask<ExampleComputeTask>(taskDesc, Move(payload));
 ```
 
-When a task implementation records different command kinds depending on its payload, provide `static GpuTaskCommandRequirements commandRequirements(const Payload&)` instead. Every required capability must be supported; each nonempty alternative mask additionally requires at least one alternative. Built-ins preserve native and hook alternatives independently. A task that records native commands must declare one of these contracts. The metadata-only `addTask` overload accepts command requirements for analysis and tooling.
+When a task implementation records different command kinds depending on its payload, provide `static GpuTaskCommandRequirements CommandRequirements(const Payload&)` instead. Every required capability must be supported; each nonempty alternative mask additionally requires at least one alternative. Built-ins preserve native and hook alternatives independently. A task that records native commands must declare one of these contracts. The metadata-only `addTask` overload accepts command requirements for analysis and tooling.
 
 Framework contracts for presentation, existing external submission timelines, and imported ownership remain hard constraints. They express real synchronization requirements and are owned by the task implementation or resource import. `GpuGraphResourceDesc::directConsumerQueue` keeps an exclusive native resource in the family of a consumer that cannot process graph ownership handoffs.
 

@@ -91,7 +91,7 @@ struct FramebufferCapture::ReadbackTask{
         u64 graphicsFrameIndex = 0u;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -108,14 +108,14 @@ struct FramebufferCapture::ReadbackTask{
         return !commandList.commandRecordingFailed();
     }
 
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         if(payload.completionState){
             payload.completionState->acceptedToken = token;
             payload.completionState->graphicsFrameIndex = payload.graphicsFrameIndex;
         }
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         if(payload.completionState)
             payload.completionState->acceptedToken = {};
     }

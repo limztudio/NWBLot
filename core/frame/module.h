@@ -34,7 +34,7 @@ private:
 
 
 private:
-    static void applyPointerScale(void* userData, f32 scaleX, f32 scaleY);
+    static void ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY);
 
 
 public:

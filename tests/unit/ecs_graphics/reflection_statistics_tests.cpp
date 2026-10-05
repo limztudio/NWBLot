@@ -63,7 +63,7 @@ struct LeaseTask{
         ReflectionStatisticsReservation reservation;
     };
 
-    static void discarded(Payload& payload){ payload.reservation.discard(); }
+    static void Discarded(Payload& payload){ payload.reservation.discard(); }
 };
 
 struct DestructorLeaseTask{

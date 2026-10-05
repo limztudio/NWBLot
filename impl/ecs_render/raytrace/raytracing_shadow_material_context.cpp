@@ -25,9 +25,9 @@ void RendererRayTracingSystem::clearPreparedShadowMaterialContext()noexcept{
     m_preparedShadowInstanceMaterialBuffer = nullptr;
     m_preparedShadowInstanceBuffer = nullptr;
     m_preparedShadowMaterialTypedBuffer = nullptr;
-    m_preparedShadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_preparedShadowInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_preparedShadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_preparedShadowInstanceMaterialHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_preparedShadowInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_preparedShadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_preparedShadowInstanceMaterialCount = 0u;
     m_preparedShadowInstanceCount = 0u;
     m_preparedShadowMaterialTypedUploadBytes = 0u;

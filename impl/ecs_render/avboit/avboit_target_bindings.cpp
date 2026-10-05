@@ -25,14 +25,14 @@ static bool RegisterWorkBuffer(
     Core::GpuDescriptorHandle& outHandle,
     Core::Buffer* buffer
 ){
-    outHandle = Core::GpuDescriptorHandle::invalid();
+    outHandle = Core::GpuDescriptorHandle::Invalid();
     if(!buffer)
         return false;
 
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(!handle.valid())
         return false;
-    if(!heap.write(handle, Core::DescriptorWriteItem::structuredBufferUav(0u, buffer))){
+    if(!heap.write(handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, buffer))){
         heap.free(handle);
         return false;
     }
@@ -47,14 +47,14 @@ static bool RegisterTransmittanceStorageTexture(
     Core::Texture* texture,
     const Core::Format::Enum format
 ){
-    outHandle = Core::GpuDescriptorHandle::invalid();
+    outHandle = Core::GpuDescriptorHandle::Invalid();
     if(!texture)
         return false;
 
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageImage);
     if(!handle.valid())
         return false;
-    if(!heap.write(handle, Core::DescriptorWriteItem::textureUav(
+    if(!heap.write(handle, Core::DescriptorWriteItem::TextureUav(
         0u,
         texture,
         format,
@@ -76,12 +76,12 @@ static void RetireTargetDescriptors(Core::GpuDescriptorHeap& heap, AvboitFrameTa
     heap.free(targets.extinctionBufferDescriptor);
     heap.free(targets.extinctionOverflowBufferDescriptor);
     heap.free(targets.transmittanceTextureStorageDescriptor);
-    targets.coverageBufferDescriptor = Core::GpuDescriptorHandle::invalid();
-    targets.depthWarpBufferDescriptor = Core::GpuDescriptorHandle::invalid();
-    targets.controlBufferDescriptor = Core::GpuDescriptorHandle::invalid();
-    targets.extinctionBufferDescriptor = Core::GpuDescriptorHandle::invalid();
-    targets.extinctionOverflowBufferDescriptor = Core::GpuDescriptorHandle::invalid();
-    targets.transmittanceTextureStorageDescriptor = Core::GpuDescriptorHandle::invalid();
+    targets.coverageBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
+    targets.depthWarpBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
+    targets.controlBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
+    targets.extinctionBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
+    targets.extinctionOverflowBufferDescriptor = Core::GpuDescriptorHandle::Invalid();
+    targets.transmittanceTextureStorageDescriptor = Core::GpuDescriptorHandle::Invalid();
 }
 
 

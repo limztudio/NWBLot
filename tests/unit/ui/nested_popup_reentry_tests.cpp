@@ -197,22 +197,22 @@ protected:
         m_siblingList.select(2u);
     }
 
-    [[nodiscard]] static PopupOptions parentOptions(){
+    [[nodiscard]] static PopupOptions ParentOptions(){
         PopupOptions options;
         options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
         options.size = { 300.0f, 380.0f };
         return options;
     }
 
-    [[nodiscard]] static PopupOptions childOptions(){
+    [[nodiscard]] static PopupOptions ChildOptions(){
         PopupOptions options;
         options.anchor = { 420.0f, 60.0f, 80.0f, 24.0f };
         options.size = { 300.0f, 300.0f };
         return options;
     }
 
-    [[nodiscard]] static ListOptions listOptions(){
-        ListOptions options;
+    [[nodiscard]] static ListOptions ListOptions(){
+        NWB::Impl::Ui::ListOptions options;
         options.height = { LayoutSizePolicy::Fixed, 150.0f };
         options.rowHeight = 24.0f;
         return options;
@@ -226,20 +226,20 @@ protected:
         return finishPanel() && m_context.commitFrame(1u);
     }
 
-    [[nodiscard]] bool beginParent(){ return begin(2u) && m_builder.beginPopup("parent", m_parent, parentOptions()); }
+    [[nodiscard]] bool beginParent(){ return begin(2u) && m_builder.beginPopup("parent", m_parent, ParentOptions()); }
 
     [[nodiscard]] bool declareChild(){
         return
-            m_builder.beginPopup("child", m_child, childOptions())
-            && m_builder.virtualList("list", m_childSource, m_childList, listOptions()).valid
+            m_builder.beginPopup("child", m_child, ChildOptions())
+            && m_builder.virtualList("list", m_childSource, m_childList, ListOptions()).valid
             && m_builder.endPopup()
         ;
     }
 
     [[nodiscard]] bool declareSibling(){
         return
-            m_builder.beginPopup("sibling", m_sibling, childOptions())
-            && m_builder.virtualList("list", m_siblingSource, m_siblingList, listOptions()).valid
+            m_builder.beginPopup("sibling", m_sibling, ChildOptions())
+            && m_builder.virtualList("list", m_siblingSource, m_siblingList, ListOptions()).valid
             && m_builder.endPopup()
         ;
     }
@@ -418,7 +418,7 @@ TEST_F(UiNestedPopupReentryTests, LateParentRevisionScopeReentryRejectsAfterAllR
     ASSERT_TRUE(acceptBase());
     const AcceptedFrame frame = accepted();
     ASSERT_TRUE(beginParent());
-    ASSERT_TRUE(m_builder.virtualList("list", m_parentSource, m_parentList, listOptions()).valid);
+    ASSERT_TRUE(m_builder.virtualList("list", m_parentSource, m_parentList, ListOptions()).valid);
     ASSERT_TRUE(declareChild());
     ASSERT_TRUE(declareSibling());
     const u64 parentGeneration = m_parentList.inputGeneration();

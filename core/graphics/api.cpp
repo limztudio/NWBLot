@@ -432,10 +432,10 @@ BufferRange BufferRange::intersect(const BufferRange& other)const noexcept{
     return BufferRange(rangeBegin, rangeEnd == s_AllBytes ? s_AllBytes : rangeEnd - rangeBegin);
 }
 
-DescriptorWriteItem DescriptorWriteItem::constantBuffer(u32 slot, Buffer* buffer, BufferRange range){
+DescriptorWriteItem DescriptorWriteItem::ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range){
     const bool isVolatile = buffer && buffer->getCreationDescription().isVolatile;
 
-    DescriptorWriteItem result = base(
+    DescriptorWriteItem result = Base(
         slot,
         isVolatile ? ResourceType::VolatileConstantBuffer : ResourceType::ConstantBuffer,
         buffer,

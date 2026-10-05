@@ -55,7 +55,7 @@ protected:
         m_builder.setSkin(m_skin);
     }
 
-    [[nodiscard]] static u32 glyphQuads(const DrawSnapshot& snapshot){
+    [[nodiscard]] static u32 GlyphQuads(const DrawSnapshot& snapshot){
         u32 count = 0u;
         for(const DrawCommand& command : snapshot.commands()){
             if(command.material == PaintMaterial::Glyph || command.material == PaintMaterial::SdfGlyph)
@@ -87,7 +87,7 @@ TEST_F(UiBuilderTextShapingTests, InvalidPolicyPreservesPreviousShapingAndOpenSc
     ASSERT_TRUE(m_builder.editBox("edit", model, state).valid);
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    EXPECT_EQ(glyphQuads(snapshot), 2u);
+    EXPECT_EQ(GlyphQuads(snapshot), 2u);
     ASSERT_TRUE(m_context.commitFrame(1u));
 
     ASSERT_TRUE(begin(2u));

@@ -380,7 +380,7 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
     EXPECT_TRUE(ContainsText(system, "presentationEndpoint->queue != primaryGraphicsQueue"));
     EXPECT_TRUE(ContainsText(system, "taskIsCompiled(m_deferredFrameTimingEndTask)"));
 
-    const usize shadowPrepareAcceptanceOffset = system.find("FrameExecuteLifecycle::acceptShadowPrepareTask(");
+    const usize shadowPrepareAcceptanceOffset = system.find("FrameExecuteLifecycle::AcceptShadowPrepareTask(");
     ASSERT_NE(shadowPrepareAcceptanceOffset, AStringView::npos);
     const usize normalTimingCallbacksOffset = system.find(
         "Core::GpuTaskGraphTaskTimingTicket normalTimingTickets[",
@@ -393,7 +393,7 @@ TEST(EcsGraphics, FrameTimingUsesGraphOwnedTerminalPresentationEndpoint){
     );
     EXPECT_FALSE(ContainsText(shadowPrepareAcceptance, "confirmBeginSubmission(token)"));
     EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, ".task = m_deferredShadowPrepareTask,"));
-    EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, ".invoke = FrameExecuteLifecycle::acceptShadowPrepareTask,"));
+    EXPECT_TRUE(ContainsText(shadowPrepareAcceptance, ".invoke = FrameExecuteLifecycle::AcceptShadowPrepareTask,"));
     EXPECT_TRUE(ContainsText(system, "frameTimingBeginQueue->id != primaryGraphicsQueue"));
     EXPECT_TRUE(ContainsText(system, "frameTimingBeginPacket.index != 0u"));
     EXPECT_TRUE(ContainsText(system, "frameTimingBeginSubmissionToken.matchesPhysicalQueue("));

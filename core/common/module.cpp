@@ -15,10 +15,10 @@ NWB_COMMON_BEGIN
 
 
 Initializerable::Initializerable(){
-    Initializer::instance().enqueue(*this);
+    Initializer::Instance().enqueue(*this);
 }
 
-Initializer& Initializer::instance(){
+Initializer& Initializer::Instance(){
     static Initializer inst;
     return inst;
 }

@@ -142,10 +142,10 @@ private:
 
 
 private:
-    static u64 allocateDomainIdentity()noexcept;
-    static u64 allocateProfileLabelIdentity()noexcept;
-    static CpuTaskSchedulerConfig workerConfig(u32 workerCount);
-    static usize queueIndex(const CpuTaskOptions& options)noexcept;
+    static u64 AllocateDomainIdentity()noexcept;
+    static u64 AllocateProfileLabelIdentity()noexcept;
+    static CpuTaskSchedulerConfig WorkerConfig(u32 workerCount);
+    static usize QueueIndex(const CpuTaskOptions& options)noexcept;
 
 
 public:

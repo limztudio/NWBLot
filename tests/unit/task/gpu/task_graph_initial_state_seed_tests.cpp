@@ -27,7 +27,7 @@ public:
 
 public:
     template<usize sourceCount>
-    [[nodiscard]] static bool build(
+    [[nodiscard]] static bool Build(
         GpuRecordedGraph& recorded,
         const GpuTaskGraph& graph,
         const GpuCompiledGraph& compiled,
@@ -192,14 +192,14 @@ struct SeedContext{
         const Core::ResourceStates::Mask state,
         const Core::GpuPhysicalQueueId destination = {},
         const Core::GpuPhysicalQueueId owner = s_Owner){
-        Access::stateHandoffBuffers(states).push_back({
+        Access::StateHandoffBuffers(states).push_back({
             .buffer = m_buffers[buffer].get(),
             .state = state,
             .ownerQueue = owner,
             .releaseDestinationQueue = destination,
             .range = range,
         });
-        Access::validateStateHandoff(states, s_DeviceGeneration);
+        Access::ValidateStateHandoff(states, s_DeviceGeneration);
     }
 };
 
@@ -400,7 +400,7 @@ TEST(GpuPacketInitialStateSeed, ReleasedAccelStorageRejectsPartialPrefixBeforeSa
     Handoff result(context.m_testArena.arena);
     ASSERT_TRUE(result.copyFrom(naive));
     const SeedAccess::Source sources[] = { { producer, source } };
-    EXPECT_FALSE(SeedAccess::build(context.m_recorded, context.m_graph, context.m_compiled, consumer, sources, result));
+    EXPECT_FALSE(SeedAccess::Build(context.m_recorded, context.m_graph, context.m_compiled, consumer, sources, result));
     EXPECT_FALSE(result.valid());
     EXPECT_TRUE(result.empty());
     EXPECT_TRUE(source.equivalentTo(sourceBefore));
@@ -443,7 +443,7 @@ TEST(GpuPacketInitialStateSeed, ReversedRangesAcrossBatchBoundaryMatchSequential
     Handoff sourceBefore(context.m_testArena.arena);
     ASSERT_TRUE(sourceBefore.copyFrom(source));
     ASSERT_TRUE(SequentialFold(context, consumer, sources, expected));
-    ASSERT_TRUE(SeedAccess::build(context.m_recorded, context.m_graph, context.m_compiled, consumer, sources, result));
+    ASSERT_TRUE(SeedAccess::Build(context.m_recorded, context.m_graph, context.m_compiled, consumer, sources, result));
     EXPECT_TRUE(result.equivalentTo(expected));
     EXPECT_TRUE(source.equivalentTo(sourceBefore));
 }
@@ -474,14 +474,14 @@ TEST(GpuPacketInitialStateSeed, MissingRangeReturnsNoPartialSeedAndRetryReusesTh
     const SeedAccess::Source sources[] = { { producer, source } };
     Handoff result(context.m_testArena.arena);
     ASSERT_TRUE(result.copyFrom(source));
-    EXPECT_FALSE(SeedAccess::build(context.m_recorded, context.m_graph, context.m_compiled, consumer, sources, result));
+    EXPECT_FALSE(SeedAccess::Build(context.m_recorded, context.m_graph, context.m_compiled, consumer, sources, result));
     EXPECT_FALSE(result.valid());
     EXPECT_TRUE(result.empty());
     EXPECT_TRUE(source.equivalentTo(sourceBefore));
     context.addState(source, 0u, { 0u, s_HalfBytes }, Core::ResourceStates::CopySource);
     Handoff expected(context.m_testArena.arena);
     ASSERT_TRUE(SequentialFold(context, consumer, sources, expected));
-    ASSERT_TRUE(SeedAccess::build(context.m_recorded, context.m_graph, context.m_compiled, consumer, sources, result));
+    ASSERT_TRUE(SeedAccess::Build(context.m_recorded, context.m_graph, context.m_compiled, consumer, sources, result));
     EXPECT_TRUE(result.equivalentTo(expected));
 }
 
@@ -551,7 +551,7 @@ TEST(GpuPacketInitialStateSeed, SameSourceRunsDoNotCrossInterleavedProducerBound
     Handoff expected(context.m_testArena.arena);
     Handoff result(context.m_testArena.arena);
     ASSERT_TRUE(SequentialFold(context, consumer, sources, expected));
-    ASSERT_TRUE(SeedAccess::build(context.m_recorded, context.m_graph, context.m_compiled, consumer, sources, result));
+    ASSERT_TRUE(SeedAccess::Build(context.m_recorded, context.m_graph, context.m_compiled, consumer, sources, result));
     EXPECT_TRUE(result.equivalentTo(expected));
     EXPECT_TRUE(firstSource.equivalentTo(firstBefore));
     EXPECT_TRUE(secondSource.equivalentTo(secondBefore));

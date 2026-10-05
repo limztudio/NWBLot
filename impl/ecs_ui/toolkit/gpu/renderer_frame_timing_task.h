@@ -33,7 +33,7 @@ struct GpuFrameTimingEndTask{
         Core::GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context

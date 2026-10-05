@@ -105,7 +105,7 @@ struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
         Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -137,7 +137,7 @@ struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
         Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -170,7 +170,7 @@ struct MeshSkinningSystem::TaskGraphSkinningFinalizerTask{
         {}
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -212,7 +212,7 @@ struct MeshSkinningSystem::TaskGraphSkinningFinalizerTask{
         return true;
     }
 
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         if(!token.valid())
             return;
         for(const MeshSkinningGraphDispatchPlan& plan : payload.plans)
@@ -663,7 +663,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                 usize normalBytes = 0u;
                 usize tangentBytes = 0u;
                 if(
-                    !resolveRestToSkinnedCopyByteCounts(*instance, positionBytes, normalBytes, tangentBytes)
+                    !ResolveRestToSkinnedCopyByteCounts(*instance, positionBytes, normalBytes, tangentBytes)
                     || positionBytes == 0u
                     || normalBytes == 0u
                     || tangentBytes == 0u

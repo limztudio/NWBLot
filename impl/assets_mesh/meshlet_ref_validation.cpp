@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool MeshMeshletRefValidation::meshletPositionRefInRange(
+[[nodiscard]] bool MeshMeshletRefValidation::MeshletPositionRefInRange(
     const MeshletPositionStreamRef& ref,
     const usize positionCount,
     const usize skinCount,
@@ -24,7 +24,7 @@ NWB_IMPL_BEGIN
 }
 
 
-[[nodiscard]] bool MeshMeshletRefValidation::meshletAttributeRefInRange(
+[[nodiscard]] bool MeshMeshletRefValidation::MeshletAttributeRefInRange(
     const MeshletAttributeStreamRef& ref,
     const usize normalCount,
     const usize tangentCount,

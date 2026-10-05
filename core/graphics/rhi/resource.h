@@ -274,7 +274,7 @@ struct TextureSubresourceSet{
     constexpr TextureSubresourceSet& setNumArraySlices(ArraySlice value){ numArraySlices = value; return *this; }
     constexpr TextureSubresourceSet& setArraySlices(ArraySlice base, ArraySlice num){ baseArraySlice = base; numArraySlices = num; return *this; }
 
-    [[nodiscard]] static constexpr u64 rangeEnd(const u32 base, const u32 count, const u32 all)noexcept{
+    [[nodiscard]] static constexpr u64 RangeEnd(const u32 base, const u32 count, const u32 all)noexcept{
         return count == all ? Limit<u64>::s_Max : static_cast<u64>(base) + static_cast<u64>(count);
     }
 
@@ -283,11 +283,11 @@ struct TextureSubresourceSet{
     }
 
     [[nodiscard]] constexpr u64 mipEnd()const noexcept{
-        return rangeEnd(baseMipLevel, numMipLevels, s_AllMipLevels);
+        return RangeEnd(baseMipLevel, numMipLevels, s_AllMipLevels);
     }
 
     [[nodiscard]] constexpr u64 arrayEnd()const noexcept{
-        return rangeEnd(baseArraySlice, numArraySlices, s_AllArraySlices);
+        return RangeEnd(baseArraySlice, numArraySlices, s_AllArraySlices);
     }
 
     [[nodiscard]] constexpr bool contains(const TextureSubresourceSet& inner)const noexcept{

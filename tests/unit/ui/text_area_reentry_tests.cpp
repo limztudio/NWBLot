@@ -87,28 +87,28 @@ struct AcceptedAreaFrame{
 
 class UiTextAreaReentryTests : public TextAreaFixture{
 protected:
-    [[nodiscard]] static TextAreaOptions areaOptions(){
+    [[nodiscard]] static TextAreaOptions AreaOptions(){
         TextAreaOptions options;
         options.height = { LayoutSizePolicy::Fixed, 96.0f };
         return options;
     }
 
-    [[nodiscard]] static PopupOptions parentOptions(){
+    [[nodiscard]] static PopupOptions ParentOptions(){
         PopupOptions options;
         options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
         options.size = { 340.0f, 420.0f };
         return options;
     }
 
-    [[nodiscard]] static PopupOptions childOptions(){
+    [[nodiscard]] static PopupOptions ChildOptions(){
         PopupOptions options;
         options.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
         options.size = { 340.0f, 420.0f };
         return options;
     }
 
-    [[nodiscard]] static ListOptions listOptions(){
-        ListOptions options;
+    [[nodiscard]] static ListOptions ListOptions(){
+        NWB::Impl::Ui::ListOptions options;
         options.height = { LayoutSizePolicy::Fixed, 140.0f };
         options.rowHeight = 24.0f;
         return options;
@@ -118,7 +118,7 @@ protected:
 protected:
     [[nodiscard]] bool acceptBaseline(){
         useHost();
-        if(!m_model.setText("alpha\nbeta") || !frameArea(1u, areaOptions()))
+        if(!m_model.setText("alpha\nbeta") || !frameArea(1u, AreaOptions()))
             return false;
         m_host.publications.clear();
         m_host.publishes = 0u;
@@ -127,7 +127,7 @@ protected:
     }
 
     [[nodiscard]] bool beginParent(const u64 generation){
-        return begin(generation) && m_builder.beginPopup("parent", m_parent, parentOptions());
+        return begin(generation) && m_builder.beginPopup("parent", m_parent, ParentOptions());
     }
 
     [[nodiscard]] AcceptedAreaFrame accepted()const{
@@ -186,7 +186,7 @@ TEST_F(UiTextAreaReentryTests, HostLoanResetRejectsWithoutClearingTheLentModel){
         failedAtAttempt = m_builder.failed();
     };
     ASSERT_TRUE(beginArea(2u));
-    EXPECT_FALSE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
+    EXPECT_FALSE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
     EXPECT_EQ(attempts, 1u);
     EXPECT_TRUE(failedAtAttempt);
     EXPECT_EQ(m_host.loans, 1u);
@@ -207,10 +207,10 @@ TEST_F(UiTextAreaReentryTests, HostLoanNestedDeclarationRejectsBeforeASecondLoan
     EditBoxResult nested;
     m_host.loanHook = [&](){
         ++attempts;
-        nested = m_builder.textArea("reentered", otherModel, otherState, areaOptions());
+        nested = m_builder.textArea("reentered", otherModel, otherState, AreaOptions());
     };
     ASSERT_TRUE(beginArea(2u));
-    EXPECT_FALSE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
+    EXPECT_FALSE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
     EXPECT_EQ(attempts, 1u);
     EXPECT_FALSE(nested.valid);
     EXPECT_EQ(m_host.loans, 1u);
@@ -227,8 +227,8 @@ TEST_F(UiTextAreaReentryTests, PublicationResetRejectsBeforeLaterAreaPublication
     TextAreaState otherState;
     ASSERT_TRUE(otherModel.setText("other\narea"));
     ASSERT_TRUE(beginArea(2u));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, areaOptions()).valid);
-    ASSERT_TRUE(m_builder.textArea("other", otherModel, otherState, areaOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea("other", otherModel, otherState, AreaOptions()).valid);
     usize attempts = 0u;
     bool failedAtAttempt = false;
     m_host.publishHook = [&](){
@@ -261,12 +261,12 @@ TEST_F(UiTextAreaReentryTests, ChildRowScopeReentryRejectsBeforeSiblingAreaPubli
     m_child.open();
     sibling.open();
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.textArea("parentArea", m_model, m_state, areaOptions()).valid);
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    ASSERT_TRUE(m_builder.virtualList("list", source, list, listOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea("parentArea", m_model, m_state, AreaOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.virtualList("list", source, list, ListOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
-    ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, childOptions()));
-    ASSERT_TRUE(m_builder.textArea("siblingArea", siblingModel, siblingState, areaOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("sibling", sibling, ChildOptions()));
+    ASSERT_TRUE(m_builder.textArea("siblingArea", siblingModel, siblingState, AreaOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     bool beginAccepted = true;
     bool endAccepted = true;

@@ -54,7 +54,7 @@ static bool ParseSourceMeshMeta(
     Core::Alloc::ScratchArena& scratchArena
 ){
     SourceMeshStreams streams(outEntry.positions.get_allocator().arena(), scratchArena);
-    if(!MeshCookSourceStreams::parseCommonSourceMeshStreams(
+    if(!MeshCookSourceStreams::ParseCommonSourceMeshStreams(
         discoveredFile,
         asset,
         s_MeshMetaKind,
@@ -65,8 +65,8 @@ static bool ParseSourceMeshMeta(
     ))
         return false;
 
-    MeshCookSourceStreams::copySourceStreams(streams, outEntry);
-    return MeshCookMeshlets::buildMeshlets(
+    MeshCookSourceStreams::CopySourceStreams(streams, outEntry);
+    return MeshCookMeshlets::BuildMeshlets(
         discoveredFile.filePath,
         s_MeshMetaKind,
         streams.indices,
@@ -136,9 +136,9 @@ static bool ParseMeshMeta(
 
 static bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
     Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_BuildMeshAssetArena);
-    if(!MeshCookStreamReorder::reorderMeshStreamsByMeshletTraversal(meshEntry, scratchArena))
+    if(!MeshCookStreamReorder::ReorderMeshStreamsByMeshletTraversal(meshEntry, scratchArena))
         return false;
-    if(!MeshCookRefEncoding::encodeMeshletRefs(meshEntry, false, s_MeshMetaKind))
+    if(!MeshCookRefEncoding::EncodeMeshletRefs(meshEntry, false, s_MeshMetaKind))
         return false;
 
     outMesh = Mesh(meshEntry.positions.get_allocator().arena(), meshEntry.virtualPath);
@@ -178,7 +178,7 @@ bool ParseMeshCookMetadata(
     Core::Alloc::ScratchArena& scratchArena
 ){
     DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
-    if(!MeshCookMetadata::buildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
+    if(!MeshCookMetadata::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
         return false;
     return __hidden_assets_mesh_cook::ParseMeshMeta(discoveredFile, doc, outEntry, cpuScheduler, scratchArena);
 }

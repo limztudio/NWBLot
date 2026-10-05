@@ -39,7 +39,7 @@ static constexpr AStringView s_MaterialInterface = "project/shaders/smoke_surfac
 
 class RefractionSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
+    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, GLB_TEXT("RefractionSmokeProject"));
         auto& renderer = AddSmokeRenderSystems(*world, context);
         // These comparisons isolate transmission. Reflection has its own combined optical capture matrix.
@@ -88,7 +88,7 @@ private:
 
 public:
     explicit RefractionSmokeProject(NWB::ProjectRuntimeContext& context)
-        : m_context(context), m_world(createWorldOrDie(context)){}
+        : m_context(context), m_world(CreateWorldOrDie(context)){}
 
     virtual ~RefractionSmokeProject()override{ destroyWorld(); }
 

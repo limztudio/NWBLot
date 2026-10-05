@@ -58,7 +58,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
     )
         return false;
     const Rect clip = paint.currentClip();
-    const TextGlyphIntersection::Enum clipStatus = TextGlyphVisibility::intersect(clip, clip);
+    const TextGlyphIntersection::Enum clipStatus = TextGlyphVisibility::Intersect(clip, clip);
     if(clipStatus == TextGlyphIntersection::Invalid)
         return false;
     if(clipStatus == TextGlyphIntersection::Invisible || color.a == 0.0f)
@@ -72,8 +72,8 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
     // Validate every conservative candidate before raster preparation mutates the coverage cache.
     for(usize index = 0u; index < layout.glyphs().size(); ++index){
         const PlacedGlyph& glyph = layout.glyphs()[index];
-        const BakedFontAtlas* atlas = TextGlyphVisibility::selectAtlas(glyph, physicalSize);
-        const TextGlyphIntersection::Enum status = TextGlyphVisibility::candidate(
+        const BakedFontAtlas* atlas = TextGlyphVisibility::SelectAtlas(glyph, physicalSize);
+        const TextGlyphIntersection::Enum status = TextGlyphVisibility::Candidate(
             glyph, atlas, layout.fontSize(), rasterPpem, topLeft, clip, deviceScale
         );
         if(status == TextGlyphIntersection::Invalid)
@@ -85,7 +85,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
         return true;
     for(const usize index : candidates){
         const PlacedGlyph& glyph = layout.glyphs()[index];
-        if(!TextGlyphVisibility::selectAtlas(glyph, physicalSize) && !m_atlas->prepare(glyph.face, glyph.glyphId, pixelSize))
+        if(!TextGlyphVisibility::SelectAtlas(glyph, physicalSize) && !m_atlas->prepare(glyph.face, glyph.glyphId, pixelSize))
             return false;
     }
     // Exact rectangles remove conservative overinclusion before image admission; painter order remains unchanged.
@@ -94,8 +94,8 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
     for(const usize index : candidates){
         const PlacedGlyph& glyph = layout.glyphs()[index];
         __hidden_ui_text_paint::PreparedGlyph item;
-        if(const BakedFontAtlas* atlas = TextGlyphVisibility::selectAtlas(glyph, physicalSize)){
-            if(!TextGlyphVisibility::atlasRectangle(glyph, *atlas, layout.fontSize(), topLeft, item.rectangle))
+        if(const BakedFontAtlas* atlas = TextGlyphVisibility::SelectAtlas(glyph, physicalSize)){
+            if(!TextGlyphVisibility::AtlasRectangle(glyph, *atlas, layout.fontSize(), topLeft, item.rectangle))
                 return false;
             if(item.rectangle.width > 0.0f && item.rectangle.height > 0.0f){
                 const FontAtlasGlyph& record = *atlas->glyph(glyph.glyphId);
@@ -112,13 +112,13 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
                 GLB_FATAL_ASSERT_MSG(false, GLB_TEXT("Prepared UI glyph must be present"));
                 return false;
             }
-            if(!TextGlyphVisibility::coverageRectangle(glyph, *record, rasterScale, topLeft, item.rectangle, deviceScale))
+            if(!TextGlyphVisibility::CoverageRectangle(glyph, *record, rasterScale, topLeft, item.rectangle, deviceScale))
                 return false;
             item.pageIndex = record->pageIndex;
             item.uv = { record->pixels.x / s_GlyphAtlasPageExtent, record->pixels.y / s_GlyphAtlasPageExtent,
                 record->pixels.width / s_GlyphAtlasPageExtent, record->pixels.height / s_GlyphAtlasPageExtent };
         }
-        const TextGlyphIntersection::Enum status = TextGlyphVisibility::intersect(item.rectangle, clip);
+        const TextGlyphIntersection::Enum status = TextGlyphVisibility::Intersect(item.rectangle, clip);
         if(status == TextGlyphIntersection::Invalid)
             return false;
         if(status == TextGlyphIntersection::Visible)

@@ -112,7 +112,7 @@ void WaylandTextInputService::receiveDone(const u32 serial){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void WaylandTextInputService::onRegistryGlobal(
+void WaylandTextInputService::OnRegistryGlobal(
     void* const data,
     wl_registry* const registry,
     const u32 name,
@@ -134,7 +134,7 @@ void WaylandTextInputService::onRegistryGlobal(
     }
 }
 
-void WaylandTextInputService::onRegistryRemove(void* const data, wl_registry*, const u32 name){
+void WaylandTextInputService::OnRegistryRemove(void* const data, wl_registry*, const u32 name){
     auto& service = *static_cast<WaylandTextInputService*>(data);
     if(name == service.m_seatName){
         service.attachSeat(nullptr, 0u);
@@ -151,7 +151,7 @@ void WaylandTextInputService::onRegistryRemove(void* const data, wl_registry*, c
     service.m_managerName = 0u;
 }
 
-void WaylandTextInputService::onEnter(void* const data, zwp_text_input_v3* const input, wl_surface* const surface){
+void WaylandTextInputService::OnEnter(void* const data, zwp_text_input_v3* const input, wl_surface* const surface){
     auto& service = *static_cast<WaylandTextInputService*>(data);
     if(input != service.m_input)
         return;
@@ -159,7 +159,7 @@ void WaylandTextInputService::onEnter(void* const data, zwp_text_input_v3* const
     service.clearPending();
 }
 
-void WaylandTextInputService::onLeave(void* const data, zwp_text_input_v3* const input, wl_surface* const surface){
+void WaylandTextInputService::OnLeave(void* const data, zwp_text_input_v3* const input, wl_surface* const surface){
     auto& service = *static_cast<WaylandTextInputService*>(data);
     if(input != service.m_input || surface != &service.m_surface)
         return;
@@ -171,7 +171,7 @@ void WaylandTextInputService::onLeave(void* const data, zwp_text_input_v3* const
         NWB_LOGGER_WARNING(GLB_TEXT("Wayland text input: protocol focus loss could not cancel current session"));
 }
 
-void WaylandTextInputService::onPreedit(
+void WaylandTextInputService::OnPreedit(
     void* const data,
     zwp_text_input_v3* const input,
     const char* const text,
@@ -194,7 +194,7 @@ void WaylandTextInputService::onPreedit(
     service.m_hasPreedit = true;
 }
 
-void WaylandTextInputService::onCommit(void* const data, zwp_text_input_v3* const input, const char* const text){
+void WaylandTextInputService::OnCommit(void* const data, zwp_text_input_v3* const input, const char* const text){
     auto& service = *static_cast<WaylandTextInputService*>(data);
     if(input != service.m_input || !service.m_enabled)
         return;
@@ -206,7 +206,7 @@ void WaylandTextInputService::onCommit(void* const data, zwp_text_input_v3* cons
     service.m_hasCommit = true;
 }
 
-void WaylandTextInputService::onDelete(
+void WaylandTextInputService::OnDelete(
     void* const data,
     zwp_text_input_v3* const input,
     const u32 before,
@@ -219,18 +219,18 @@ void WaylandTextInputService::onDelete(
     service.m_hasDelete = true;
 }
 
-void WaylandTextInputService::onDone(void* const data, zwp_text_input_v3* const input, const u32 serial){
+void WaylandTextInputService::OnDone(void* const data, zwp_text_input_v3* const input, const u32 serial){
     auto& service = *static_cast<WaylandTextInputService*>(data);
     if(input == service.m_input)
         service.receiveDone(serial);
 }
 
 #if defined(ZWP_TEXT_INPUT_V3_ACTION_SINCE_VERSION)
-void WaylandTextInputService::onAction(void*, zwp_text_input_v3*, u32, u32){}
+void WaylandTextInputService::OnAction(void*, zwp_text_input_v3*, u32, u32){}
 
-void WaylandTextInputService::onLanguage(void*, zwp_text_input_v3*, const char*){}
+void WaylandTextInputService::OnLanguage(void*, zwp_text_input_v3*, const char*){}
 
-void WaylandTextInputService::onPreeditHint(void*, zwp_text_input_v3*, u32, u32, u32){}
+void WaylandTextInputService::OnPreeditHint(void*, zwp_text_input_v3*, u32, u32, u32){}
 #endif
 
 

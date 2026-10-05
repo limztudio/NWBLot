@@ -312,16 +312,16 @@ static void ApplyTransparentCsgSceneTransform(
 
 class TransparentMultiSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    [[nodiscard]] static u32 rendererBaselineCaptureFreezeFrame(){
-        return RendererBaselineCaptureFreezeFrame();
+    [[nodiscard]] static u32 RendererBaselineCaptureFreezeFrame(){
+        return NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame();
     }
 
-    [[nodiscard]] static f32 rendererBaselineFixedDelta(){
-        return RendererBaselineFixedDelta();
+    [[nodiscard]] static f32 RendererBaselineFixedDelta(){
+        return NWB::Tests::Smoke::RendererBaselineFixedDelta();
     }
 
 
-    static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
+    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, GLB_TEXT("TransparentMultiSmokeProject"));
 
         const bool rayQueryHardwareAvailable =
@@ -438,7 +438,7 @@ private:
 public:
     explicit TransparentMultiSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(createWorldOrDie(context))
+        , m_world(CreateWorldOrDie(context))
     {}
 
     virtual ~TransparentMultiSmokeProject()override{
@@ -455,7 +455,7 @@ public:
 public:
     virtual bool onStartup()override{
         // Enable both the timing sink and graphics recorder for per-pass observations.
-        m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::gpuTimingOnly());
+        m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
         bool causticTiming = false;
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
@@ -504,8 +504,8 @@ public:
                 , s_CameraTargetY
             );
             NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("CausticTimingProbe: fixed delta {} yaw {} sphere scale {}")
-                , rendererBaselineFixedDelta()
-                , effectiveFrozenAngle()
+                , RendererBaselineFixedDelta()
+                , EffectiveFrozenAngle()
                 , s_CausticSphereScale
             );
             NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("CausticTimingProbe: photon phases bootstrap {} converged {} warmup {}")
@@ -686,9 +686,9 @@ public:
         if(m_framebufferCapture)
             m_framebufferCapture->update();
         // The observer counts graphics presentation frames; a baseline update-count freeze must not stop it early.
-        const u32 captureFreezeFrame = m_framebufferCapture ? 0u : rendererBaselineCaptureFreezeFrame();
+        const u32 captureFreezeFrame = m_framebufferCapture ? 0u : RendererBaselineCaptureFreezeFrame();
 #else
-        const u32 captureFreezeFrame = rendererBaselineCaptureFreezeFrame();
+        const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
 #endif
         if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
             if(!m_rendererBaselineCapturePaused){
@@ -705,7 +705,7 @@ public:
             return true;
         }
 
-        const f32 fixedDelta = rendererBaselineFixedDelta();
+        const f32 fixedDelta = RendererBaselineFixedDelta();
         const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
         m_fpsProbe.recordFrame(safeDelta);
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
@@ -723,8 +723,8 @@ public:
         }
 #endif
         // Yaw: env freeze > arrow-scrub (latches off auto-spin) > auto-spin default.
-        const f32 frozenAngle = effectiveFrozenAngle();
-        m_sceneYaw.update(safeDelta, frozenAngle, IsFinite(frozenAngle), m_arrowYawInput, s_ManualYawSpeed, effectiveRotationSpeed(), s_MaxAnimationDelta);
+        const f32 frozenAngle = EffectiveFrozenAngle();
+        m_sceneYaw.update(safeDelta, frozenAngle, IsFinite(frozenAngle), m_arrowYawInput, s_ManualYawSpeed, EffectiveRotationSpeed(), s_MaxAnimationDelta);
         updateTransparentSceneTransforms();
         SetSmokeYawWindowTitle(m_context, m_sceneYaw.yaw(), m_sceneYaw.manualControl(), s_2PI);
         m_world->tick(safeDelta);
@@ -733,7 +733,7 @@ public:
     }
 
     // Vary spin speed from one build to compare caustic motion-vector reprojection.
-    static f32 effectiveRotationSpeed(){
+    static f32 EffectiveRotationSpeed(){
         static const f32 s_speed = [](){
             f32 parsed = 0.0f;
             if(!ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_SPEED", parsed))
@@ -744,7 +744,7 @@ public:
     }
 
     // Pin yaw for deterministic captures; an unset override leaves normal spin active.
-    static f32 effectiveFrozenAngle(){
+    static f32 EffectiveFrozenAngle(){
         static const f32 s_angle = [](){
             f32 parsed = 0.0f;
             if(!ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_ANGLE", parsed))

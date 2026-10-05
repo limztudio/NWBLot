@@ -21,10 +21,10 @@ NWB_VULKAN_BEGIN
 Device::SubmissionOperationLease::~SubmissionOperationLease()noexcept{
     if(!m_device)
         return;
-    GLB_FATAL_ASSERT(activeLease() == this);
-    if(activeLease() != this)
+    GLB_FATAL_ASSERT(ActiveLease() == this);
+    if(ActiveLease() != this)
         TerminateInvariant();
-    activeLease() = m_previousActiveLease;
+    ActiveLease() = m_previousActiveLease;
     m_device->endSubmissionOperation();
 }
 

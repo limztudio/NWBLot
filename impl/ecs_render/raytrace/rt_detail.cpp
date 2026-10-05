@@ -62,17 +62,17 @@ RenderableMeshResolution::Enum ResolveRenderableMeshResources(
     const bool writable,
     Core::GpuDescriptorHandle& outHandle
 ){
-    outHandle = Core::GpuDescriptorHandle::invalid();
+    outHandle = Core::GpuDescriptorHandle::Invalid();
 
     const Core::GpuDescriptorHandle handle = heap.allocate(descriptorClass);
     if(!handle.valid())
         return false;
 
     const Core::DescriptorWriteItem item = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
-        ? Core::DescriptorWriteItem::constantBuffer(0u, &buffer)
+        ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
         : (writable
-            ? Core::DescriptorWriteItem::structuredBufferUav(0u, &buffer)
-            : Core::DescriptorWriteItem::structuredBufferSrv(0u, &buffer)
+            ? Core::DescriptorWriteItem::StructuredBufferUav(0u, &buffer)
+            : Core::DescriptorWriteItem::StructuredBufferSrv(0u, &buffer)
         )
     ;
     if(!heap.write(handle, item)){
@@ -119,7 +119,7 @@ RenderableMeshResolution::Enum ResolveRenderableMeshResources(
 void RetireHeapHandle(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle){
     if(handle.valid())
         heap.free(handle);
-    handle = Core::GpuDescriptorHandle::invalid();
+    handle = Core::GpuDescriptorHandle::Invalid();
 }
 
 // Binned-SAH binary BVH over indices[lo, hi); node 0 is the root. Splits on the minimum SAH boundary, median fallback

@@ -82,7 +82,7 @@ struct DecodeTask{
         Core::GpuTimingSubmissionTicket** rebindableTimingTicket = nullptr;
     };
 
-    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
         Core::GpuTimingSubmissionTicket* ticket = payload.rebindableTimingTicket
             ? *payload.rebindableTimingTicket : payload.timingTicket;
         Optional<Core::GpuTimingSubmissionTicket::RecordingScope> timing;
@@ -101,7 +101,7 @@ struct DecodeTask{
         return true;
     }
 
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken&){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken&){
         // A replaced generation may reject content publication after accepted work; its output state still belongs to the mesh owner.
         if(!payload.meshSystem.confirmObjectGeometryCache(
             payload.draw.meshKey, payload.draw.meshResources.sourceBuffers,
@@ -115,7 +115,7 @@ struct ReadyTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
     struct Payload{};
-    [[nodiscard]] static bool record(const Payload&, Core::CommandList&, const Core::GpuTaskRecordContext&){ return true; }
+    [[nodiscard]] static bool Record(const Payload&, Core::CommandList&, const Core::GpuTaskRecordContext&){ return true; }
 };
 
 

@@ -45,7 +45,7 @@ TEST(AssetsGraphics, MeshletRefEncodingWidthRules){
 
 TEST(AssetsGraphics, MeshletRefEncodingCrossesIndexWidthBoundaries){
     TestArena testArena;
-    auto meshlets = AssetsGraphicsFixture::makeAssetVector<NWB::Impl::MeshletDesc>(testArena);
+    auto meshlets = AssetsGraphicsFixture::MakeAssetVector<NWB::Impl::MeshletDesc>(testArena);
     meshlets.push_back(NWB::Impl::MeshletDesc{
         0u,
         0u,
@@ -54,19 +54,19 @@ TEST(AssetsGraphics, MeshletRefEncodingCrossesIndexWidthBoundaries){
         NWB::Impl::PackMeshletCounts(3u, 1u, 3u, 3u),
     });
 
-    auto positionRefs = AssetsGraphicsFixture::makeAssetVector<NWB::Impl::MeshletPositionStreamRef>(testArena);
+    auto positionRefs = AssetsGraphicsFixture::MakeAssetVector<NWB::Impl::MeshletPositionStreamRef>(testArena);
     positionRefs.push_back(NWB::Impl::MeshletPositionStreamRef{ 0u, 1000u });
     positionRefs.push_back(NWB::Impl::MeshletPositionStreamRef{ 256u, 1001u });
     positionRefs.push_back(NWB::Impl::MeshletPositionStreamRef{ 65536u, 1002u });
 
-    auto attributeRefs = AssetsGraphicsFixture::makeAssetVector<NWB::Impl::MeshletAttributeStreamRef>(testArena);
+    auto attributeRefs = AssetsGraphicsFixture::MakeAssetVector<NWB::Impl::MeshletAttributeStreamRef>(testArena);
     attributeRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{ 5u, 1000u, 0u, 20u });
     attributeRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{ 6u, 1256u, 65536u, 21u });
     attributeRefs.push_back(NWB::Impl::MeshletAttributeStreamRef{ 7u, 1257u, 65537u, 22u });
 
-    auto positionRefDeltas = AssetsGraphicsFixture::makeAssetVector<u8>(testArena);
-    auto attributeRefDeltas = AssetsGraphicsFixture::makeAssetVector<u8>(testArena);
-    const bool encoded = AssetsGraphicsFixture::encodeTestMeshletRefs(
+    auto positionRefDeltas = AssetsGraphicsFixture::MakeAssetVector<u8>(testArena);
+    auto attributeRefDeltas = AssetsGraphicsFixture::MakeAssetVector<u8>(testArena);
+    const bool encoded = AssetsGraphicsFixture::EncodeTestMeshletRefs(
         meshlets,
         positionRefs,
         attributeRefs,

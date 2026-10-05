@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameExecuteHistoryCopy::prepareHistoryCopyFinalState(
+[[nodiscard]] bool FrameExecuteHistoryCopy::PrepareHistoryCopyFinalState(
     void* const rawContext,
     const Core::CommandListResourceStateHandoff* const finalState
 ){
@@ -70,7 +70,7 @@ NWB_IMPL_BEGIN
 }
 
 
-[[nodiscard]] bool FrameExecuteHistoryCopy::acceptHistoryCopyFinalState(
+[[nodiscard]] bool FrameExecuteHistoryCopy::AcceptHistoryCopyFinalState(
     void* const rawContext,
     const Core::QueueSubmissionToken& token
 ){

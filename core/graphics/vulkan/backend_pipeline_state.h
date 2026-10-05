@@ -270,8 +270,8 @@ private:
     template<typename T>
     class FixedTable final : NoCopy{
     public:
-        [[nodiscard]] static usize requiredBytes(usize count){
-            return count == 0u ? 0u : Alloc::PersistentArena::structureAlignedSize(SizeOf<sizeof(T)>(count), alignof(T));
+        [[nodiscard]] static usize RequiredBytes(usize count){
+            return count == 0u ? 0u : Alloc::PersistentArena::StructureAlignedSize(SizeOf<sizeof(T)>(count), alignof(T));
         }
         [[nodiscard]] bool initialize(Alloc::PersistentArena& arena, usize count){
             clear();
@@ -319,7 +319,7 @@ private:
         // Keeps the allocated class authoritative while a slot is live or quarantined.
         FixedTable<u8> allocatedClasses;
 
-        [[nodiscard]] static usize requiredBytes(u32 capacity);
+        [[nodiscard]] static usize RequiredBytes(u32 capacity);
         [[nodiscard]] bool initialize(Alloc::PersistentArena& arena, u32 newCapacity);
         void clear()noexcept;
     };
@@ -394,7 +394,7 @@ public:
     void bindCompute(
         CommandList& commandList,
         const ComputePipeline& pipeline,
-        GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::invalid()
+        GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::Invalid()
     );
 
     // Graphics equivalents of bindCompute.
@@ -405,7 +405,7 @@ public:
     void bindRayTracing(
         CommandList& commandList,
         const RayTracingPipeline& pipeline,
-        GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::invalid()
+        GpuDescriptorHandle accelStructHandle = GpuDescriptorHandle::Invalid()
     );
 
     // Resource and sampler layouts at sets 0 and 1.

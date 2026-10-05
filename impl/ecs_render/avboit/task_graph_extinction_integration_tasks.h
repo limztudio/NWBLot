@@ -70,13 +70,13 @@ struct AvboitExtinctionComputeEmulationGraphTask{
         {}
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.extinctionTiming);
     }
 };
@@ -110,17 +110,17 @@ struct AvboitExtinctionSharedComputeEmulationGraphTask{
         Phase::Enum phase = Phase::Generate;
     };
 
-    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements commandRequirements(const Payload& payload)noexcept{
+    [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{
         return { payload.phase == Phase::Generate ? Core::GpuQueueCapability::Compute : Core::GpuQueueCapability::Graphics };
     }
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.extinctionTiming);
     }
 };
@@ -150,13 +150,13 @@ struct AvboitExtinctionGraphTask{
         {}
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         Core::DiscardGpuTimingMeasure(payload.extinctionComputeEmulationTiming);
     }
 };
@@ -174,15 +174,15 @@ struct AvboitIntegrationGraphTask{
         mutable Core::GpuTimingSampleAttribution timingAttribution = Core::s_NoGpuTimingSampleAttribution;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     );
 
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
 
-    static void discarded(Payload& payload);
+    static void Discarded(Payload& payload);
 };
 
 

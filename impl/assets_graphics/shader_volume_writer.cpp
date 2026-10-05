@@ -285,7 +285,7 @@ static bool AppendShaderIndexToManifest(
     Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
-    const Name& shaderIndexVirtualPath = Core::ShaderArchive::indexVirtualPathName();
+    const Name& shaderIndexVirtualPath = Core::ShaderArchive::IndexVirtualPathName();
     if(!inOutSeenVirtualPathHashes.insert(shaderIndexVirtualPath.hash()).second){
         NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: duplicate shader archive index virtual path '{}'"),
             StringConvert(shaderIndexVirtualPath.resolvedText())
@@ -294,7 +294,7 @@ static bool AppendShaderIndexToManifest(
     }
 
     Core::GraphicsBytes indexBinary{cookArena};
-    if(!Core::ShaderArchive::serializeIndex(shaderIndexRecords, indexBinary)){
+    if(!Core::ShaderArchive::SerializeIndex(shaderIndexRecords, indexBinary)){
         NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to serialize shader index"));
         return false;
     }
@@ -408,7 +408,7 @@ bool AppendPreparedShadersToManifest(
             ))
                 return false;
 
-            const Name virtualPath = Core::ShaderArchive::buildVirtualPathName(shaderName, generatedVariantName, stageName);
+            const Name virtualPath = Core::ShaderArchive::BuildVirtualPathName(shaderName, generatedVariantName, stageName);
             if(!virtualPath){
                 NWB_LOGGER_ERROR(GLB_TEXT("Shader cook failed to build virtual path for '{}' stage '{}' variant '{}'")
                     , StringConvert(entry.name)

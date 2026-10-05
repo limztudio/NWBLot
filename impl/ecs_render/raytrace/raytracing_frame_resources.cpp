@@ -44,7 +44,7 @@ void RendererRayTracingSystem::releaseSceneTlasHeapHandle(){
         RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_tlasHeapHandle);
         return;
     }
-    m_rayTracingState.m_tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
 RayTracingLightingClassificationInput RendererRayTracingSystem::snapshotLightingClassificationInput()const noexcept{

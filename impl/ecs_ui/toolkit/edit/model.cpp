@@ -170,13 +170,13 @@ bool EditModel::replaceRange(const usize begin, const usize end, const AStringVi
 }
 
 bool EditModel::validateText(const AStringView value)const{
-    return m_textMode == EditTextMode::SingleLine ? GraphemeSegmentation::validate(value, true) : ValidateMultilineText(value);
+    return m_textMode == EditTextMode::SingleLine ? GraphemeSegmentation::Validate(value, true) : ValidateMultilineText(value);
 }
 
 bool EditModel::buildBoundaries(const AStringView value, Vector<usize, Core::Alloc::GlobalArena>& output)const{
     if(m_textMode == EditTextMode::Multiline && !ValidateMultilineText(value))
         return false;
-    return GraphemeSegmentation::build(value, output, m_textMode == EditTextMode::SingleLine);
+    return GraphemeSegmentation::Build(value, output, m_textMode == EditTextMode::SingleLine);
 }
 
 void EditModel::advanceRevision(){

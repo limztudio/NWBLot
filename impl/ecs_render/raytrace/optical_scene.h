@@ -52,7 +52,7 @@ static_assert(offsetof(RayTracingOpticalInstanceGpu, flags) == NWB_RT_OPTICAL_IN
 
 struct RayTracingOpticalRuntimeBounds{
     Core::BufferHandle buffer;
-    Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle descriptor = Core::GpuDescriptorHandle::Invalid();
     Float34U objectToWorld = {};
     u32 instanceIndex = 0u;
 };

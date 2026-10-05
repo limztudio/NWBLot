@@ -78,16 +78,16 @@ void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
         return;
     }
 
-    m_rayTracingState.m_surfelConstantsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_surfelPoolHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_surfelGuidePoolHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_surfelCellHeadHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_surfelCounterHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_surfelFreeListHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_surfelPoolSnapshotHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_rayTracingState.m_surfelMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_surfelConstantsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_surfelPoolHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_surfelGuidePoolHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_surfelCellHeadHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_surfelCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_surfelFreeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_surfelPoolSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_surfelMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
 bool RendererRayTracingSystem::hasSurfelWork()const noexcept{

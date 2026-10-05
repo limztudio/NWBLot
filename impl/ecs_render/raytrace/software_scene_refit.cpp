@@ -45,7 +45,7 @@ void SoftwareSceneRefitResources::invalidate(){
     if(heap.isInitialized() && m_inputBuffer && m_inputDescriptor.valid() && m_inputBuffer->getDeviceGeneration() == device.getDeviceGeneration())
         heap.free(m_inputDescriptor);
     m_inputBuffer.reset();
-    m_inputDescriptor = Core::GpuDescriptorHandle::invalid();
+    m_inputDescriptor = Core::GpuDescriptorHandle::Invalid();
     m_pipeline.reset();
     m_shader.reset();
     m_bindingLayout.reset();
@@ -87,7 +87,7 @@ SoftwareSceneRefitHandle SoftwareSceneRefitResources::prepare(
         const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
         if(!descriptor.valid())
             return {};
-        if(!heap.write(descriptor, Core::DescriptorWriteItem::rawBufferSrv(0u, replacement.get()))){
+        if(!heap.write(descriptor, Core::DescriptorWriteItem::RawBufferSrv(0u, replacement.get()))){
             heap.free(descriptor);
             return {};
         }
@@ -132,7 +132,7 @@ bool SoftwareSceneRefitResources::ensurePipeline(RendererShaderSystem& shaderSys
     if(!m_bindingLayout){
         Core::BindingLayoutDesc desc(m_arena);
         desc.setVisibility(Core::ShaderType::Compute);
-        desc.addItem(Core::BindingLayoutItem::pushConstants(0u, NWB_SCENE_BVH_REFIT_PUSH_BYTES));
+        desc.addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_SCENE_BVH_REFIT_PUSH_BYTES));
         m_bindingLayout = device.createBindingLayout(desc);
         if(!m_bindingLayout)
             return false;

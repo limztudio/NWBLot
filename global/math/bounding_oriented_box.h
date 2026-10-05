@@ -23,7 +23,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void GLB_SIMD_CALL BoundingOrientedBox::transformOrientedBoxValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, const SIMDMatrix& matrix, SIMDVector& outCenter, SIMDVector& outExtents, SIMDVector& outOrientation, bool& outCollapsedToAxisAligned)noexcept{
+inline void GLB_SIMD_CALL BoundingOrientedBox::TransformOrientedBoxValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, const SIMDMatrix& matrix, SIMDVector& outCenter, SIMDVector& outExtents, SIMDVector& outOrientation, bool& outCollapsedToAxisAligned)noexcept{
     outCollapsedToAxisAligned = false;
     SIMDVector scale{};
     SIMDVector rotation{};
@@ -56,7 +56,7 @@ inline void GLB_SIMD_CALL BoundingOrientedBox::transform(BoundingOrientedBox& ou
     SIMDVector extentsVector{};
     SIMDVector orientationVector{};
     bool collapsedToAxisAligned = false;
-    transformOrientedBoxValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), matrix, centerVector, extentsVector, orientationVector, collapsedToAxisAligned);
+    TransformOrientedBoxValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), matrix, centerVector, extentsVector, orientationVector, collapsedToAxisAligned);
     if(collapsedToAxisAligned){
         StoreFloat(centerVector, outBox.center);
         StoreFloat(extentsVector, outBox.extents);
@@ -73,7 +73,7 @@ inline void GLB_SIMD_CALL BoundingOrientedBox::transform(BoundingOrientedBox& ou
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void GLB_SIMD_CALL BoundingOrientedBox::transformOrientedBoxValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, f32 scale, SIMDVector rotation, SIMDVector translation, SIMDVector& outCenter, SIMDVector& outExtents, SIMDVector& outOrientation)noexcept{
+inline void GLB_SIMD_CALL BoundingOrientedBox::TransformOrientedBoxValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, f32 scale, SIMDVector rotation, SIMDVector translation, SIMDVector& outCenter, SIMDVector& outExtents, SIMDVector& outOrientation)noexcept{
     outCenter = VectorAdd(Vector3Rotate(VectorScale(boxCenter, scale), rotation), translation);
     outExtents = VectorScale(boxExtents, Abs(scale));
     outOrientation = QuaternionNormalize(QuaternionMultiply(boxOrientation, rotation));
@@ -92,7 +92,7 @@ inline void GLB_SIMD_CALL BoundingOrientedBox::transform(
     SIMDVector centerVector{};
     SIMDVector extentsVector{};
     SIMDVector orientationVector{};
-    transformOrientedBoxValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), scale, rotation, translation, centerVector, extentsVector, orientationVector);
+    TransformOrientedBoxValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), scale, rotation, translation, centerVector, extentsVector, orientationVector);
     StoreFloat(VectorSetW(centerVector, 0.0f), outBox.center);
     StoreFloat(VectorSetW(extentsVector, 0.0f), outBox.extents);
     StoreFloat(orientationVector, outBox.orientation);
@@ -102,7 +102,7 @@ inline void GLB_SIMD_CALL BoundingOrientedBox::transform(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void GLB_SIMD_CALL BoundingOrientedBox::cornersValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector* outCorners)noexcept{
+inline void GLB_SIMD_CALL BoundingOrientedBox::CornersValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector* outCorners)noexcept{
     CollisionDetail::ObbCorners(boxCenter, boxExtents, boxOrientation, outCorners);
 }
 
@@ -113,7 +113,7 @@ inline void GLB_SIMD_CALL BoundingOrientedBox::cornersValue(SIMDVector boxCenter
 inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{
     GLB_ASSERT(corners != nullptr);
     SIMDVector cornerVectors[s_CornerCount];
-    cornersValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), cornerVectors);
+    CornersValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), cornerVectors);
     for(u32 i = 0u; i < s_CornerCount; ++i)
         StoreFloat(VectorSetW(cornerVectors[i], 0.0f), corners[i]);
 }
@@ -122,7 +122,7 @@ inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum GLB_SIMD_CALL BoundingOrientedBox::containsPointValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector point)noexcept{
+[[nodiscard]] inline ContainmentType::Enum GLB_SIMD_CALL BoundingOrientedBox::ContainsPointValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector point)noexcept{
     return CollisionDetail::PointInsideObb(point, boxCenter, boxExtents, boxOrientation) ? ContainmentType::Contains : ContainmentType::Disjoint;
 }
 
@@ -131,14 +131,14 @@ inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{
 
 
 [[nodiscard]] inline ContainmentType::Enum GLB_SIMD_CALL BoundingOrientedBox::contains(const SIMDVector point)const noexcept{
-    return containsPointValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), point);
+    return ContainsPointValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), point);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum GLB_SIMD_CALL BoundingOrientedBox::containsTriangleValue(
+[[nodiscard]] inline ContainmentType::Enum GLB_SIMD_CALL BoundingOrientedBox::ContainsTriangleValue(
     SIMDVector boxCenter,
     SIMDVector boxExtents,
     SIMDVector boxOrientation,
@@ -149,7 +149,7 @@ inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{
     const SIMDVector points[CollisionDetail::s_TriangleVertexCount] = { v0, v1, v2 };
     if(CollisionDetail::PointsInsideObb(points, CollisionDetail::s_TriangleVertexCount, boxCenter, boxExtents, boxOrientation))
         return ContainmentType::Contains;
-    return intersectsTriangleValue(boxCenter, boxExtents, boxOrientation, v0, v1, v2) ? ContainmentType::Intersects : ContainmentType::Disjoint;
+    return IntersectsTriangleValue(boxCenter, boxExtents, boxOrientation, v0, v1, v2) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
 
@@ -161,7 +161,7 @@ inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{
     const SIMDVector v1,
     const SIMDVector v2
 )const noexcept{
-    return containsTriangleValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), v0, v1, v2);
+    return ContainsTriangleValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), v0, v1, v2);
 }
 
 
@@ -326,7 +326,7 @@ inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool GLB_SIMD_CALL BoundingOrientedBox::intersectsTriangleValue(
+[[nodiscard]] inline bool GLB_SIMD_CALL BoundingOrientedBox::IntersectsTriangleValue(
     SIMDVector boxCenter,
     SIMDVector boxExtents,
     SIMDVector boxOrientation,
@@ -349,14 +349,14 @@ inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{
     const SIMDVector v1,
     const SIMDVector v2
 )const noexcept{
-    return intersectsTriangleValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), v0, v1, v2);
+    return IntersectsTriangleValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), v0, v1, v2);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline PlaneIntersectionType::Enum GLB_SIMD_CALL BoundingOrientedBox::intersectsPlaneValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector plane)noexcept{
+[[nodiscard]] inline PlaneIntersectionType::Enum GLB_SIMD_CALL BoundingOrientedBox::IntersectsPlaneValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector plane)noexcept{
     SIMDVector outside{};
     SIMDVector inside{};
     SIMDVector axis0{};
@@ -385,14 +385,14 @@ inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{
 
 
 [[nodiscard]] inline PlaneIntersectionType::Enum GLB_SIMD_CALL BoundingOrientedBox::intersects(const SIMDVector plane)const noexcept{
-    return intersectsPlaneValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), plane);
+    return IntersectsPlaneValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), plane);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool GLB_SIMD_CALL BoundingOrientedBox::intersectsRayValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector origin, SIMDVector direction, f32& outDistance)noexcept{
+[[nodiscard]] inline bool GLB_SIMD_CALL BoundingOrientedBox::IntersectsRayValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector origin, SIMDVector direction, f32& outDistance)noexcept{
     const SIMDVector localOrigin = CollisionDetail::PointToObbLocal(origin, boxCenter, boxOrientation);
     const SIMDVector localDirection = Vector3InverseRotate(direction, boxOrientation);
     return CollisionDetail::RayIntersectsMinMax(localOrigin, localDirection, VectorNegate(boxExtents), boxExtents, outDistance);
@@ -407,14 +407,14 @@ inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{
     SIMDVector direction,
     f32& outDistance
 )const noexcept{
-    return intersectsRayValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), origin, direction, outDistance);
+    return IntersectsRayValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), origin, direction, outDistance);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum GLB_SIMD_CALL BoundingOrientedBox::containedByValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept{
+[[nodiscard]] inline ContainmentType::Enum GLB_SIMD_CALL BoundingOrientedBox::ContainedByValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept{
     SIMDVector corners[s_CornerCount];
     CollisionDetail::ObbCorners(boxCenter, boxExtents, boxOrientation, corners);
     const SIMDVector planes[CollisionDetail::s_FrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
@@ -433,14 +433,14 @@ inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{
     SIMDVector plane4,
     SIMDVector plane5
 )const noexcept{
-    return containedByValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), plane0, plane1, plane2, plane3, plane4, plane5);
+    return ContainedByValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), plane0, plane1, plane2, plane3, plane4, plane5);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingOrientedBox::createFromBoundingBox(BoundingOrientedBox& outBox, const BoundingBox& box)noexcept{
+inline void BoundingOrientedBox::CreateFromBoundingBox(BoundingOrientedBox& outBox, const BoundingBox& box)noexcept{
     outBox.center = box.center;
     outBox.extents = box.extents;
     outBox.orientation = Float4(0.0f, 0.0f, 0.0f, 1.0f);
@@ -450,15 +450,15 @@ inline void BoundingOrientedBox::createFromBoundingBox(BoundingOrientedBox& outB
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingOrientedBox::createFromPoints(
+inline void BoundingOrientedBox::CreateFromPoints(
     BoundingOrientedBox& outBox,
     const usize count,
     const Float3U* points,
     const usize stride
 )noexcept{
     BoundingBox box;
-    BoundingBox::createFromPoints(box, count, points, stride);
-    createFromBoundingBox(outBox, box);
+    BoundingBox::CreateFromPoints(box, count, points, stride);
+    CreateFromBoundingBox(outBox, box);
 }
 
 

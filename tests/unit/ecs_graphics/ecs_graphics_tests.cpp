@@ -91,7 +91,7 @@ TEST(EcsGraphics, MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPresent
     targets.lowHeight = 270u;
     targets.virtualSliceCount = 128u;
     targets.physicalSliceCount = 64u;
-    targets.deferredSlotsBufferDescriptor = NWB::Core::GpuDescriptorHandle::make(
+    targets.deferredSlotsBufferDescriptor = NWB::Core::GpuDescriptorHandle::Make(
         NWB::Core::GpuDescriptorClass::UniformBuffer,
         23u
     );

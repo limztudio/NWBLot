@@ -27,7 +27,7 @@ struct SelectablePaintFlags{
 
 class SelectablePainter final{
 public:
-    [[nodiscard]] static bool paint(
+    [[nodiscard]] static bool Paint(
         PaintBuilder& paint, TextService& text, const UiSkin& skin, const TextLayout& layout,
         const Rect& bounds, const Rect& clip, const SelectableStyle& style,
         const SelectablePaintFlags& flags, const Color& textColor, const Color& disabledTextColor

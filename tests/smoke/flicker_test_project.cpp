@@ -90,7 +90,7 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 class FlickerTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
+    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, GLB_TEXT("FlickerTestSmokeProject"));
 
         AddSmokeSkinnedRenderSystems(*world, context);
@@ -102,7 +102,7 @@ private:
     }
 
     // Pin yaw for A/B captures that isolate flicker from motion.
-    static f32 frozenYaw(){
+    static f32 FrozenYaw(){
         static const f32 s_yaw = ReadSmokeFrozenYawFromEnvironment("NWB_FLICKER_TEST_SPIN_ANGLE");
         return s_yaw;
     }
@@ -120,7 +120,7 @@ private:
 public:
     explicit FlickerTestSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(createWorldOrDie(context))
+        , m_world(CreateWorldOrDie(context))
     {}
 
     virtual ~FlickerTestSmokeProject()override{
@@ -226,7 +226,7 @@ public:
         const f32 safeDelta = IsFinite(delta) ? Max(delta, 0.0f) : 0.0f;
         m_fpsProbe.recordFrame(safeDelta);
         // Yaw priority: fixed override, manual scrub, then automatic spin.
-        const f32 frozen = frozenYaw();
+        const f32 frozen = FrozenYaw();
         m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
         spinCharacters();
         SetSmokeYawWindowTitle(m_context, m_yaw.yaw(), m_yaw.manualControl(), s_TwoPi);

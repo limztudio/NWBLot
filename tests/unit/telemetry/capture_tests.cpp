@@ -32,7 +32,7 @@ static void ExistingDiagnosticCallback(const DiagnosticEventRecord&)noexcept{
 TEST(Telemetry, CaptureScopeRestoresLoggerAndStopsDiagnosticsAfterDestruction){
     TestArena testArena;
     Telemetry::CaptureSession session(testArena.arena);
-    session.setCaptureOptions(Telemetry::CaptureOptions::all());
+    session.setCaptureOptions(Telemetry::CaptureOptions::All());
 
     NWB::Tests::CapturingLogger previousLogger;
     {
@@ -113,7 +113,7 @@ TEST(Telemetry, DiagnosticPayloadPreservesBoundedTextAndRejectsCorruptedHeader){
 TEST(Telemetry, DiagnosticCaptureGuardDestructionStopsGlobalCapture){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::all());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
     {
         Telemetry::DiagnosticCaptureGuard guard(recorder);
@@ -139,7 +139,7 @@ TEST(Telemetry, DiagnosticCaptureGuardDestructionStopsGlobalCapture){
 TEST(Telemetry, DiagnosticCaptureGuardDoesNotReplaceExistingCallback){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::all());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
     s_ExistingDiagnosticCallbackCount = 0u;
     SetDiagnosticEventCallback(ExistingDiagnosticCallback);
@@ -160,7 +160,7 @@ TEST(Telemetry, DiagnosticCaptureGuardDoesNotReplaceExistingCallback){
 TEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::all());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
     AtomicFlag captureThreadStarted;
     AtomicFlag stopCaptureThread;

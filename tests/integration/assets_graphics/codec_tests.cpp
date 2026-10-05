@@ -50,8 +50,8 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 
 TEST(AssetsGraphics, FilesystemAcceptsScratchBytes){
     TestArena testArena;
-    const Path root = AssetsGraphicsFixture::assetsGraphicsTestCaseRoot(testArena, "volume_scratch_bytes");
-    const bool prepared = AssetsGraphicsFixture::prepareCleanDirectory(root);
+    const Path root = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "volume_scratch_bytes");
+    const bool prepared = AssetsGraphicsFixture::PrepareCleanDirectory(root);
     EXPECT_TRUE(prepared);
 
     if(prepared){
@@ -84,7 +84,7 @@ TEST(AssetsGraphics, FilesystemAcceptsScratchBytes){
                 const bool flushed = filesystem->flush();
                 EXPECT_TRUE(flushed);
                 if(flushed){
-                    NWB::Core::Assets::AssetBytes readback = AssetsGraphicsFixture::makeAssetBytes(testArena);
+                    NWB::Core::Assets::AssetBytes readback = AssetsGraphicsFixture::MakeAssetBytes(testArena);
                     const bool loaded = filesystem->readFile(virtualPath, readback);
                     EXPECT_TRUE(loaded);
                     if(loaded){
@@ -108,7 +108,7 @@ TEST(AssetsGraphics, FilesystemAcceptsScratchBytes){
                     const bool reloaded = static_cast<bool>(reloadedFilesystem);
                     EXPECT_TRUE(reloaded);
                     if(reloaded){
-                        NWB::Core::Assets::AssetBytes reloadedReadback = AssetsGraphicsFixture::makeAssetBytes(testArena);
+                        NWB::Core::Assets::AssetBytes reloadedReadback = AssetsGraphicsFixture::MakeAssetBytes(testArena);
                         const bool reloadedData = reloadedFilesystem->readFile(virtualPath, reloadedReadback);
                         EXPECT_TRUE(reloadedData);
                         if(reloadedData){
@@ -226,7 +226,7 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    EXPECT_TRUE(AssetsGraphicsFixture::prepareAssetsGraphicsCookCase(
+    EXPECT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
         testArena,
         "asset_volume_registry_object_cache",
         root,
@@ -235,39 +235,39 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
 
     const Path assetRoot = root / "assets";
     const Path metaPath = assetRoot / "meshes" / "minimal_mesh.nwb";
-    EXPECT_TRUE(AssetsGraphicsFixture::writeTextFile(metaPath, AssetsGraphicsFixture::s_MinimalMeshMeta));
-    EXPECT_TRUE(AssetsGraphicsFixture::cookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
+    EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(metaPath, AssetsGraphicsFixture::s_MinimalMeshMeta));
+    EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
 
     Path objectPath(testArena.arena);
     ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / s_CACHE, objectPath));
 
-    NWB::Core::Assets::AssetBytes firstObjectBytes = AssetsGraphicsFixture::makeAssetBytes(testArena);
+    NWB::Core::Assets::AssetBytes firstObjectBytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     ASSERT_TRUE(ReadAssetObjectCacheBytes(objectPath, firstObjectBytes));
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    EXPECT_TRUE(AssetsGraphicsFixture::loadCookedMinimalMesh(testArena, outputDirectory, loadedAsset));
+    EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMinimalMesh(testArena, outputDirectory, loadedAsset));
 
-    EXPECT_TRUE(AssetsGraphicsFixture::cookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
+    EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
     Path unchangedObjectPath(testArena.arena);
     ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / s_CACHE, unchangedObjectPath));
     EXPECT_EQ(unchangedObjectPath, objectPath);
 
-    NWB::Core::Assets::AssetBytes unchangedObjectBytes = AssetsGraphicsFixture::makeAssetBytes(testArena);
+    NWB::Core::Assets::AssetBytes unchangedObjectBytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     ASSERT_TRUE(ReadAssetObjectCacheBytes(unchangedObjectPath, unchangedObjectBytes));
     EXPECT_TRUE(AssetBytesEqual(firstObjectBytes, unchangedObjectBytes));
 
-    EXPECT_TRUE(AssetsGraphicsFixture::writeTextFile(metaPath, AssetsGraphicsFixture::s_DefaultColorMeshMeta));
-    EXPECT_TRUE(AssetsGraphicsFixture::cookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
+    EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(metaPath, AssetsGraphicsFixture::s_DefaultColorMeshMeta));
+    EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
     Path changedObjectPath(testArena.arena);
     ASSERT_TRUE(FindNewAssetObjectCachePath(testArena, root / s_CACHE, objectPath, changedObjectPath));
     EXPECT_NE(changedObjectPath, objectPath);
 
-    NWB::Core::Assets::AssetBytes changedObjectBytes = AssetsGraphicsFixture::makeAssetBytes(testArena);
+    NWB::Core::Assets::AssetBytes changedObjectBytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     ASSERT_TRUE(ReadAssetObjectCacheBytes(changedObjectPath, changedObjectBytes));
     EXPECT_FALSE(AssetBytesEqual(firstObjectBytes, changedObjectBytes));
 
     loadedAsset.reset();
-    EXPECT_TRUE(AssetsGraphicsFixture::loadCookedMinimalMesh(testArena, outputDirectory, loadedAsset));
+    EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMinimalMesh(testArena, outputDirectory, loadedAsset));
 
     ErrorCode errorCode;
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));

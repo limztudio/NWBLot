@@ -120,9 +120,9 @@ struct TextureImagePaintSample{
 
 class UiTextureImageBuilderTests : public WidgetFixture{
 protected:
-    [[nodiscard]] static ImageOptions fixed(f32 width = 96.0f, f32 height = 40.0f);
-    [[nodiscard]] static PopupOptions parentOptions();
-    [[nodiscard]] static PopupOptions childOptions();
+    [[nodiscard]] static ImageOptions Fixed(f32 width = 96.0f, f32 height = 40.0f);
+    [[nodiscard]] static PopupOptions ParentOptions();
+    [[nodiscard]] static PopupOptions ChildOptions();
 
 
 protected:
@@ -133,21 +133,21 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ImageOptions UiTextureImageBuilderTests::fixed(const f32 width, const f32 height){
+ImageOptions UiTextureImageBuilderTests::Fixed(const f32 width, const f32 height){
     ImageOptions options;
     options.width = { LayoutSizePolicy::Fixed, width };
     options.height = { LayoutSizePolicy::Fixed, height };
     return options;
 }
 
-PopupOptions UiTextureImageBuilderTests::parentOptions(){
+PopupOptions UiTextureImageBuilderTests::ParentOptions(){
     PopupOptions options;
     options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
     options.size = { 300.0f, 280.0f };
     return options;
 }
 
-PopupOptions UiTextureImageBuilderTests::childOptions(){
+PopupOptions UiTextureImageBuilderTests::ChildOptions(){
     PopupOptions options;
     options.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
     options.size = { 280.0f, 240.0f };
@@ -166,7 +166,7 @@ TEST_F(UiTextureImageBuilderTests, DeclarationRetainsSourceAndOptionsAcrossCalle
     SharedImageSource source = MakeImage(m_arena, "tests/ui/copied_builder_image", 37u);
     ASSERT_TRUE(source);
     const u64 generation = source->generation();
-    ImageOptions options = fixed(80.0f, 32.0f);
+    ImageOptions options = Fixed(80.0f, 32.0f);
     options.tint = { 2.0f, 0.8f, 0.6f, 0.5f };
     ASSERT_TRUE(panel(1u));
     ASSERT_TRUE(m_builder.image("image", source, options));
@@ -174,7 +174,7 @@ TEST_F(UiTextureImageBuilderTests, DeclarationRetainsSourceAndOptionsAcrossCalle
     ASSERT_TRUE(source);
     ASSERT_NE(source->generation(), generation);
     source.reset();
-    options = fixed(5.0f, 6.0f);
+    options = Fixed(5.0f, 6.0f);
     options.tint = { 0.0f, 0.0f, 0.0f, 0.0f };
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
@@ -261,7 +261,7 @@ TEST_F(UiTextureImageBuilderTests, ExternalClipTrimsFullImageUvsAndRestoresThePa
     const SharedImageSource source = MakeImage(m_arena);
     ASSERT_TRUE(source);
     ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.image("image", source, fixed()));
+    ASSERT_TRUE(m_builder.image("image", source, Fixed()));
     m_paint.pushClip({ 20.0f, 0.0f, 20.0f, 600.0f });
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_paint.popClip());
@@ -287,11 +287,11 @@ TEST_F(UiTextureImageBuilderTests, TransparentAndZeroAxisImagesAreValidWithoutBi
     const SharedImageSource source = MakeImage(m_arena);
     ASSERT_TRUE(source);
     ASSERT_TRUE(panel(1u));
-    ImageOptions transparent = fixed();
+    ImageOptions transparent = Fixed();
     transparent.tint.a = 0.0f;
     ASSERT_TRUE(m_builder.image("transparent", source, transparent));
-    ASSERT_TRUE(m_builder.image("zero_width", source, fixed(0.0f, 20.0f)));
-    ASSERT_TRUE(m_builder.image("zero_height", source, fixed(20.0f, 0.0f)));
+    ASSERT_TRUE(m_builder.image("zero_width", source, Fixed(0.0f, 20.0f)));
+    ASSERT_TRUE(m_builder.image("zero_height", source, Fixed(20.0f, 0.0f)));
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
     EXPECT_TRUE(snapshot.textureImages().empty());
@@ -315,7 +315,7 @@ TEST_F(UiTextureImageBuilderTests, ActiveNullSourceRejectsEvenTransparentPolicyW
     EXPECT_TRUE(send({ InputEventType::KeyUp, {}, Core::Key::Tab }).keyboardConsumed);
     ASSERT_EQ(m_context.input().focus(), before);
     ASSERT_TRUE(panel(2u));
-    ImageOptions options = fixed(0.0f, 0.0f);
+    ImageOptions options = Fixed(0.0f, 0.0f);
     options.tint.a = 0.0f;
     EXPECT_FALSE(m_builder.image("image", SharedImageSource{}, options));
     EXPECT_TRUE(m_context.failed());
@@ -340,7 +340,7 @@ TEST_F(UiTextureImageBuilderTests, InvalidOptionsDoNotReplaceTheAcceptedInputFra
     const HitTarget accepted = *target(before);
     const usize count = m_context.input().targets().size();
     ASSERT_TRUE(panel(2u));
-    ImageOptions options = fixed();
+    ImageOptions options = Fixed();
     options.tint.r = Limit<f32>::s_QuietNaN;
     EXPECT_FALSE(m_builder.image("image", source, options));
     EXPECT_TRUE(m_context.failed());
@@ -359,15 +359,15 @@ TEST_F(UiTextureImageBuilderTests, EndedNestedChildRetainsSourceAndOptionsUntilT
     SharedImageSource source = MakeImage(m_arena, "tests/ui/nested_builder_image", 37u);
     ASSERT_TRUE(source);
     const u64 generation = source->generation();
-    ImageOptions options = fixed(80.0f, 32.0f);
+    ImageOptions options = Fixed(80.0f, 32.0f);
     options.tint = { 0.8f, 1.0f, 0.6f, 0.5f };
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPopup("parent", parent, parentOptions()));
-    ASSERT_TRUE(m_builder.beginPopup("child", child, childOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("parent", parent, ParentOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("child", child, ChildOptions()));
     ASSERT_TRUE(m_builder.image("image", source, options));
     ASSERT_TRUE(m_builder.endPopup());
     source.reset();
-    options = fixed(0.0f, 0.0f);
+    options = Fixed(0.0f, 0.0f);
     options.tint.a = 0.0f;
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(m_context.endRoot());
@@ -396,9 +396,9 @@ TEST_F(UiTextureImageBuilderTests, AncestorClosureSuppressesEndedChildImageAndAn
     SharedImageSource source = MakeImage(m_arena);
     ASSERT_TRUE(source);
     ASSERT_TRUE(begin(1u));
-    ASSERT_TRUE(m_builder.beginPopup("parent", parent, parentOptions()));
-    ASSERT_TRUE(m_builder.beginPopup("child", child, childOptions()));
-    ASSERT_TRUE(m_builder.image("image", source, fixed()));
+    ASSERT_TRUE(m_builder.beginPopup("parent", parent, ParentOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("child", child, ChildOptions()));
+    ASSERT_TRUE(m_builder.image("image", source, Fixed()));
     ASSERT_TRUE(m_builder.tooltip("hint", "image", "Child image", tooltip));
     ASSERT_TRUE(m_builder.endPopup());
     source.reset();
@@ -425,7 +425,7 @@ TEST_F(UiTextureImageBuilderTests, VisibleImageAtFullBindingCapacityRejectsDefer
     ASSERT_TRUE(addition);
     ASSERT_TRUE(panel(1u));
     ASSERT_TRUE(m_paint.prepareTextureImages(images.data(), images.size()));
-    ASSERT_TRUE(m_builder.image("image", addition, fixed()));
+    ASSERT_TRUE(m_builder.image("image", addition, Fixed()));
     EXPECT_FALSE(m_builder.endPanel());
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_context.commitFrame(1u));
@@ -446,7 +446,7 @@ TEST_F(UiTextureImageBuilderTests, FullyClippedImageAtFullBindingCapacityConsume
     ASSERT_TRUE(addition);
     ASSERT_TRUE(panel(1u));
     ASSERT_TRUE(m_paint.prepareTextureImages(images.data(), images.size()));
-    ASSERT_TRUE(m_builder.image("image", addition, fixed()));
+    ASSERT_TRUE(m_builder.image("image", addition, Fixed()));
     m_paint.pushClip({ 0.0f, 0.0f, 1.0f, 1.0f });
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_paint.popClip());

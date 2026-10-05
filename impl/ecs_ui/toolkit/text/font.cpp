@@ -92,24 +92,24 @@ class FontFaceState final : NoCopy{
 
 
 private:
-    [[nodiscard]] static void* allocate(FT_Memory memory, FT_Long size){
+    [[nodiscard]] static void* Allocate(FT_Memory memory, FT_Long size){
         if(size <= 0)
             return nullptr;
         auto& arena = *static_cast<Core::Alloc::GlobalArena*>(memory->user);
         return arena.allocate(alignof(MaxAlign), static_cast<usize>(size));
     }
 
-    static void release(FT_Memory memory, void* block){
+    static void Release(FT_Memory memory, void* block){
         if(block){
             auto& arena = *static_cast<Core::Alloc::GlobalArena*>(memory->user);
             arena.deallocate(block, alignof(MaxAlign), 0u);
         }
     }
 
-    [[nodiscard]] static void* reallocate(FT_Memory memory, FT_Long oldSize, FT_Long newSize, void* block){
+    [[nodiscard]] static void* Reallocate(FT_Memory memory, FT_Long oldSize, FT_Long newSize, void* block){
         static_cast<void>(oldSize);
         if(newSize <= 0){
-            release(memory, block);
+            Release(memory, block);
             return nullptr;
         }
         auto& arena = *static_cast<Core::Alloc::GlobalArena*>(memory->user);
@@ -126,9 +126,9 @@ public:
         const Core::Assets::AssetBytes& sourceBytes = source.font.fontBytes();
         m_bytes.assign(sourceBytes.begin(), sourceBytes.end());
         m_memory.user = &arena;
-        m_memory.alloc = &allocate;
-        m_memory.free = &release;
-        m_memory.realloc = &reallocate;
+        m_memory.alloc = &Allocate;
+        m_memory.free = &Release;
+        m_memory.realloc = &Reallocate;
         if(FT_New_Library(&m_memory, &m_library) != 0){
             NWB_LOGGER_ERROR(GLB_TEXT("UI FreeType initialization failed"));
             return;

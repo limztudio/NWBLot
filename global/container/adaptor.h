@@ -243,7 +243,7 @@ public:
 
 
 public:
-    [[nodiscard]] static size_type alignment()noexcept{
+    [[nodiscard]] static size_type Alignment()noexcept{
         return AdaptorDetail::CacheAlignedAlignment(static_cast<size_type>(alignof(value_type)));
     }
 
@@ -267,7 +267,7 @@ public:
 
 public:
     [[nodiscard]] size_type max_size()const noexcept{
-        return (Limit<size_type>::s_Max - alignment()) / sizeof(value_type);
+        return (Limit<size_type>::s_Max - Alignment()) / sizeof(value_type);
     }
 
     constexpr void deallocate(pointer const buffer, const size_type count)noexcept{
@@ -280,7 +280,7 @@ public:
             return;
 
         const size_type bytes = sizeof(value_type) * count;
-        m_arena->deallocate(buffer, alignment(), bytes);
+        m_arena->deallocate(buffer, Alignment(), bytes);
     }
 
     [[nodiscard]] constexpr pointer allocate(const size_type count){
@@ -292,7 +292,7 @@ public:
         if(m_arena == nullptr)
             throw std::bad_alloc{};
 
-        pointer const output = static_cast<pointer>(m_arena->allocate(alignment(), bytes));
+        pointer const output = static_cast<pointer>(m_arena->allocate(Alignment(), bytes));
         if(output == nullptr)
             throw std::bad_alloc{};
 

@@ -48,7 +48,7 @@ namespace __hidden_ui_gpu_sdf{
     const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::SampledImage);
     if(!descriptor.valid())
         return false;
-    if(!heap.write(descriptor, Core::DescriptorWriteItem::textureSrv(
+    if(!heap.write(descriptor, Core::DescriptorWriteItem::TextureSrv(
         0u, version.m_texture.get(), version.m_texture->getDescription().format, Core::s_AllSubresources, Core::TextureDimension::Texture2D
     ))){
         heap.free(descriptor);
@@ -82,7 +82,7 @@ GpuSdfAtlasVersion::~GpuSdfAtlasVersion()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRendererState::validateSdfPages(const DrawSnapshot& snapshot){
+bool GpuRendererState::ValidateSdfPages(const DrawSnapshot& snapshot){
     const auto& pages = snapshot.sdfPages();
     if(pages.size() + snapshot.glyphPages().size() + snapshot.textureImages().size() > s_PaintMaxImages)
         return false;

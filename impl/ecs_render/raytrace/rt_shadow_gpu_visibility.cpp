@@ -374,7 +374,7 @@ bool RendererRayTracingSystem::softTransparentShadowReady()const noexcept{
 void RendererRayTracingSystem::appendShadowTraceBindingLayout(Core::BindingLayoutDesc& layoutDesc)const{
     // Trace layouts are push-only; resources come from the global heap.
     static_assert(sizeof(ShadowRqSoftPushConstants) >= sizeof(ShadowRqPushConstants), "shadow-trace push-constant range must cover both the hard and soft trace push structs");
-    layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(ShadowRqSoftPushConstants)));
+    layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ShadowRqSoftPushConstants)));
 }
 
 

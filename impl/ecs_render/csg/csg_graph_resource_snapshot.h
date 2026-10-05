@@ -30,10 +30,10 @@ namespace ECSRenderDetail{
         Core::BufferHandle intervalSampleState;
         usize receiverRangeCapacity = 0u;
         usize cutterCapacity = 0u;
-        Core::GpuDescriptorHandle receiverRangeHeapHandle = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle cutterHeapHandle = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle receiverRangeHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle cutterHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::Invalid();
 
         [[nodiscard]] bool bindingValid()const noexcept;
         [[nodiscard]] bool frameReady(const CsgFrameGpuData& csgFrameData)const noexcept;

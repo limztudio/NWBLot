@@ -89,7 +89,7 @@ GpuTextureImageVersion::~GpuTextureImageVersion()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRendererState::validateTextureImages(const DrawSnapshot& snapshot){
+bool GpuRendererState::ValidateTextureImages(const DrawSnapshot& snapshot){
     const auto& images = snapshot.textureImages();
     if(
         images.size() > s_PaintMaxImages || snapshot.glyphPages().size() > s_PaintMaxImages

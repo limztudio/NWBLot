@@ -446,7 +446,7 @@ bool Frame::mainLoop(){
     );
 }
 
-void Frame::print(BasicStringView<tchar> str, Log::Type::Enum type){
+void Frame::Print(BasicStringView<tchar> str, Log::Type::Enum type){
     HWND listHwnd = nullptr;
     TStringView itemText;
     {

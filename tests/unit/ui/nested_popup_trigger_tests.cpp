@@ -34,21 +34,21 @@ protected:
         m_child.open();
     }
 
-    [[nodiscard]] static PopupOptions parentOptions(){
+    [[nodiscard]] static PopupOptions ParentOptions(){
         PopupOptions options;
         options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
         options.size = { 300.0f, 380.0f };
         return options;
     }
 
-    [[nodiscard]] static PopupOptions childOptions(){
+    [[nodiscard]] static PopupOptions ChildOptions(){
         PopupOptions options;
         options.anchor = { 420.0f, 60.0f, 80.0f, 24.0f };
         options.size = { 340.0f, 380.0f };
         return options;
     }
 
-    [[nodiscard]] static WidgetOptions control(){
+    [[nodiscard]] static WidgetOptions Control(){
         WidgetOptions options;
         options.width = { LayoutSizePolicy::Fixed, 220.0f };
         options.height = { LayoutSizePolicy::Fixed, 32.0f };
@@ -67,17 +67,17 @@ protected:
     }
 
     [[nodiscard]] bool beginChild(const u64 generation){
-        if(!begin(generation) || !m_builder.beginPopup("parent", m_parent, parentOptions()))
+        if(!begin(generation) || !m_builder.beginPopup("parent", m_parent, ParentOptions()))
             return false;
-        if(m_builder.button("before", "Parent before", control()))
+        if(m_builder.button("before", "Parent before", Control()))
             return false;
-        return m_builder.beginPopup("child", m_child, childOptions());
+        return m_builder.beginPopup("child", m_child, ChildOptions());
     }
 
     [[nodiscard]] bool finishChild(const u64 generation){
-        if(m_builder.button("after", "Child after", control()) || !m_builder.endPopup())
+        if(m_builder.button("after", "Child after", Control()) || !m_builder.endPopup())
             return false;
-        if(m_builder.button("after", "Parent after", control()) || !m_builder.endPopup())
+        if(m_builder.button("after", "Parent after", Control()) || !m_builder.endPopup())
             return false;
         return m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation);
     }
@@ -92,7 +92,7 @@ protected:
     [[nodiscard]] bool acceptChildMenu(const u64 generation){
         if(!beginChild(generation))
             return false;
-        m_anchorActivated = m_builder.button("anchor", "Commands", control());
+        m_anchorActivated = m_builder.button("anchor", "Commands", Control());
         m_menuResult = m_builder.contextMenu("menu", "anchor", m_menuSource, m_menu);
         return m_menuResult.valid && finishChild(generation);
     }

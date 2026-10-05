@@ -35,7 +35,7 @@ struct SurfelIrradianceClearGraphTask{
         Core::GpuGraphResourceId destination;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context

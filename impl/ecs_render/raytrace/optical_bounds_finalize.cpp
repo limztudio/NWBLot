@@ -54,8 +54,8 @@ void RayTracingOpticalBoundsFinalizeResources::invalidate(){
     retire(m_outputBuffer, m_outputDescriptor);
     m_inputBuffer.reset();
     m_outputBuffer.reset();
-    m_inputDescriptor = Core::GpuDescriptorHandle::invalid();
-    m_outputDescriptor = Core::GpuDescriptorHandle::invalid();
+    m_inputDescriptor = Core::GpuDescriptorHandle::Invalid();
+    m_outputDescriptor = Core::GpuDescriptorHandle::Invalid();
     m_pipeline.reset();
     m_shader.reset();
     m_bindingLayout.reset();
@@ -100,8 +100,8 @@ RayTracingOpticalBoundsFinalizeHandle RayTracingOpticalBoundsFinalizeResources::
         if(!slot.valid())
             return false;
         const Core::DescriptorWriteItem write = output
-            ? Core::DescriptorWriteItem::rawBufferUav(0u, replacement.get())
-            : Core::DescriptorWriteItem::rawBufferSrv(0u, replacement.get())
+            ? Core::DescriptorWriteItem::RawBufferUav(0u, replacement.get())
+            : Core::DescriptorWriteItem::RawBufferSrv(0u, replacement.get())
         ;
         if(!heap.write(slot, write)){
             heap.free(slot);
@@ -171,7 +171,7 @@ bool RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSyst
     if(!m_bindingLayout){
         Core::BindingLayoutDesc desc(m_arena);
         desc.setVisibility(Core::ShaderType::Compute);
-        desc.addItem(Core::BindingLayoutItem::pushConstants(0u, NWB_OPTICAL_BOUNDS_FINALIZE_PUSH_BYTES));
+        desc.addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_OPTICAL_BOUNDS_FINALIZE_PUSH_BYTES));
         m_bindingLayout = device.createBindingLayout(desc);
         if(!m_bindingLayout){
             NWB_LOGGER_ERROR(GLB_TEXT("Ray optical bounds: failed to create finalize binding layout"));

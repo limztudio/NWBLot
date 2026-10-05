@@ -65,7 +65,7 @@ template<>
 struct MaterialInstanceValueTraits<f32>{
     static constexpr MaterialLayoutFieldType::Enum s_FieldType = MaterialLayoutFieldType::Float;
 
-    [[nodiscard]] static UInt4U pack(const f32 value){
+    [[nodiscard]] static UInt4U Pack(const f32 value){
         return PackMaterialInstanceBytes(&value, sizeof(value));
     }
 };
@@ -74,7 +74,7 @@ template<>
 struct MaterialInstanceValueTraits<Float4>{
     static constexpr MaterialLayoutFieldType::Enum s_FieldType = MaterialLayoutFieldType::Float4;
 
-    [[nodiscard]] static UInt4U pack(const Float4& value){
+    [[nodiscard]] static UInt4U Pack(const Float4& value){
         return PackMaterialInstanceBytes(value.raw, sizeof(f32) * 4u);
     }
 };
@@ -83,7 +83,7 @@ template<>
 struct MaterialInstanceValueTraits<Half4U>{
     static constexpr MaterialLayoutFieldType::Enum s_FieldType = MaterialLayoutFieldType::Half4;
 
-    [[nodiscard]] static UInt4U pack(const Half4U& value){
+    [[nodiscard]] static UInt4U Pack(const Half4U& value){
         return PackMaterialInstanceBytes(value.raw, sizeof(Half) * 4u);
     }
 };
@@ -213,7 +213,7 @@ template<typename TValue>
         materialInterface,
         parameterName,
         MaterialInstanceValueTraits<TValue>::s_FieldType,
-        MaterialInstanceValueTraits<TValue>::pack(value)
+        MaterialInstanceValueTraits<TValue>::Pack(value)
     );
 }
 

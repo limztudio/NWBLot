@@ -85,7 +85,7 @@ namespace __hidden_material_instance{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererMaterialSystem::findMaterialInstanceOverrideField(
+bool RendererMaterialSystem::FindMaterialInstanceOverrideField(
     const Core::ECS::EntityID entity,
     const MaterialSurfaceInfo& materialInfo,
     const MaterialInstanceParameter& parameter,
@@ -135,7 +135,7 @@ bool RendererMaterialSystem::findMaterialInstanceOverrideField(
     return false;
 }
 
-bool RendererMaterialSystem::applyMaterialInstanceOverrides(
+bool RendererMaterialSystem::ApplyMaterialInstanceOverrides(
     const Core::ECS::EntityID entity,
     const MaterialSurfaceInfo& materialInfo,
     const MaterialInstanceComponent& materialInstance,
@@ -166,7 +166,7 @@ bool RendererMaterialSystem::applyMaterialInstanceOverrides(
         }
 
         MaterialInstanceOverrideField resolvedField;
-        if(!findMaterialInstanceOverrideField(entity, materialInfo, parameter, resolvedField))
+        if(!FindMaterialInstanceOverrideField(entity, materialInfo, parameter, resolvedField))
             return false;
 
         const MaterialTypedLayoutField& field = *resolvedField.field;
@@ -234,7 +234,7 @@ bool RendererMaterialSystem::prepareMaterialInstanceMutableTypedBytes(
     MaterialTypedByteDataVector mutableTypedBytes{scratchArena};
     mutableTypedBytes.reserve(materialInfo.mutableDefaultTypedBytes.size());
     mutableTypedBytes.assign(materialInfo.mutableDefaultTypedBytes.begin(), materialInfo.mutableDefaultTypedBytes.end());
-    if(!applyMaterialInstanceOverrides(entity, materialInfo, *materialInstance, mutableTypedBytes)){
+    if(!ApplyMaterialInstanceOverrides(entity, materialInfo, *materialInstance, mutableTypedBytes)){
         m_materialState.m_instanceMutableCache.erase(it);
         return false;
     }

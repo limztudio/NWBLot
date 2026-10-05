@@ -74,7 +74,7 @@ bool GpuTaskGraph::destroyTaskPayloads(){
                 hasUnacceptedTask = true;
         }
         if(hasUnacceptedTask){
-            notificationGeneration = allocateGeneration();
+            notificationGeneration = AllocateGeneration();
             notification.activateWithinLock();
         }
         for(GpuTaskNode& task : m_tasks){

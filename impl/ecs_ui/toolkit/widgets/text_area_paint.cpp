@@ -27,7 +27,7 @@ bool Builder::paintTextArea(const Item& item, const LayoutBox& box){
     ScrollViewportPlacement viewport;
     const Rect clip = visibleClip(box.clip);
     const f32 caretWidth = 1.0f / m_paint.displayMetrics().pixelScaleX;
-    if(!ScrollbarLayout::calculate(
+    if(!ScrollbarLayout::Calculate(
         box.rectangle, clip, item.padding, item.editView.layout().measure(), caretWidth,
         state.scroll(), item.scrollbarStyle.thickness, item.scrollbarStyle.minimumThumb, viewport
     ))

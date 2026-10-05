@@ -235,7 +235,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         }
         const Core::GpuDescriptorHandle tlasHeapHandle = m_rayTracingState.m_surfelUseHwTrace
             ? m_rayTracingState.m_tlasHeapHandle
-            : Core::GpuDescriptorHandle::invalid();
+            : Core::GpuDescriptorHandle::Invalid();
         heap.bindCompute(commandList, *tracePipeline, tlasHeapHandle);
         commandList.setPushConstants(&surfelPush, sizeof(surfelPush));
         commandList.dispatchIndirect(0u);

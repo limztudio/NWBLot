@@ -274,8 +274,8 @@ bool GpuRenderer::submit(DrawSnapshot&& snapshot){
     )
         return false;
     if(
-        !GpuRendererState::validateGlyphPages(snapshot) || !GpuRendererState::validateSdfPages(snapshot)
-        || !GpuRendererState::validateTextureImages(snapshot)
+        !GpuRendererState::ValidateGlyphPages(snapshot) || !GpuRendererState::ValidateSdfPages(snapshot)
+        || !GpuRendererState::ValidateTextureImages(snapshot)
     )
         return false;
     m_state->m_pending = MakeGpuVersion<GpuFrameData>(

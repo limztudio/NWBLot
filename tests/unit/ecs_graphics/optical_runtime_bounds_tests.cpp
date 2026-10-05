@@ -67,7 +67,7 @@ TEST(OpticalRuntimeBounds, CurrentPoseBindingPreservesStaticUnionButRequiresGpuV
     Context context;
     RendererComponent renderer;
     const auto buffer = context.makeBounds();
-    const auto descriptor = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 4u);
+    const auto descriptor = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 4u);
     context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, true, {-8.f, -3.f, -2.f}, {-5.f, 2.f, 7.f}, true);
     context.gather.appendRuntime(Core::ECS::EntityID(s_ExpectedDualCount, 0u), renderer, buffer, descriptor, {});
 
@@ -89,7 +89,7 @@ TEST(OpticalRuntimeBounds, FrozenInputsRetainBufferTransformPolicyAndExactEmitte
     renderer.opticalMediumPriority = -11;
     auto buffer = context.makeBounds();
     auto* const identity = buffer.get();
-    const auto descriptor = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 7u);
+    const auto descriptor = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 7u);
     Float34U transform{};
     transform.m[0][0] = -2.f;
     transform.m[1][1] = 0.5f;
@@ -123,7 +123,7 @@ TEST(OpticalRuntimeBounds, InvalidContributorBeforeOrAfterRuntimeCannotRecoverCo
         Context context;
         RendererComponent renderer;
         const auto buffer = context.makeBounds();
-        const auto descriptor = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 3u);
+        const auto descriptor = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 3u);
         if(invalidFirst)
             context.gather.markIncomplete();
         context.gather.appendRuntime(Core::ECS::EntityID(1u, 0u), renderer, buffer, descriptor, {});
@@ -141,8 +141,8 @@ TEST(OpticalRuntimeBounds, MissingOrWrongDescriptorPoisonsUnionWithoutDroppingIn
         Context context;
         RendererComponent renderer;
         const auto buffer = invalidKind == 0u ? Core::BufferHandle{} : context.makeBounds();
-        const auto descriptor = invalidKind == 1u ? Core::GpuDescriptorHandle::invalid()
-            : Core::GpuDescriptorHandle::make(invalidKind == s_ExpectedDualCount ? Core::GpuDescriptorClass::UniformBuffer : Core::GpuDescriptorClass::StorageBuffer, 5u);
+        const auto descriptor = invalidKind == 1u ? Core::GpuDescriptorHandle::Invalid()
+            : Core::GpuDescriptorHandle::Make(invalidKind == s_ExpectedDualCount ? Core::GpuDescriptorClass::UniformBuffer : Core::GpuDescriptorClass::StorageBuffer, 5u);
         context.gather.appendRuntime(Core::ECS::EntityID(1u, 0u), renderer, buffer, descriptor, {});
         EXPECT_EQ(context.gather.instances.size(), 1u);
         EXPECT_EQ(context.gather.header.transparentCount, 1u);
@@ -156,7 +156,7 @@ TEST(OpticalRuntimeBounds, CpuUploadNeverPublishesUnvalidatedRuntimeBounds){
     Context context;
     RendererComponent renderer;
     const auto buffer = context.makeBounds();
-    const auto descriptor = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, s_ExpectedDualCount);
+    const auto descriptor = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, s_ExpectedDualCount);
     context.gather.appendRuntime(Core::ECS::EntityID(1u, 0u), renderer, buffer, descriptor, {});
     RayTracingOpticalSceneUpload upload(context.testArena.arena, context.gather);
     u32 headerFlags = Limit<u32>::s_Max;

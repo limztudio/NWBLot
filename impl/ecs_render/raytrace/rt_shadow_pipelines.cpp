@@ -154,7 +154,7 @@ bool RendererRayTracingSystem::ensureSwShadowPipeline(){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // All pass resources are selected through the fixed push ABI.
-        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(SwShadowHeapPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SwShadowHeapPushConstants)));
 
         m_rayTracingState.m_swShadowBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_swShadowBindingLayout){

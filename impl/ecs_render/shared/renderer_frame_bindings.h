@@ -34,7 +34,7 @@ namespace ECSRenderDetail{
 
     struct MeshViewBufferSnapshot{
         Core::BufferHandle buffer;
-        Core::GpuDescriptorHandle heapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle heapHandle = Core::GpuDescriptorHandle::Invalid();
 
         [[nodiscard]] bool valid()const noexcept{ return static_cast<bool>(buffer); }
         [[nodiscard]] bool bindingValid()const noexcept{
@@ -51,8 +51,8 @@ namespace ECSRenderDetail{
         Core::BufferHandle instanceBuffer;
         Core::BufferHandle materialTypedBuffer;
         MeshViewBufferSnapshot meshView;
-        Core::GpuDescriptorHandle instanceHeapHandle = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle materialTypedHeapHandle = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle instanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle materialTypedHeapHandle = Core::GpuDescriptorHandle::Invalid();
         usize instanceBufferCapacity = 0u;
         usize materialTypedBufferCapacity = 0u;
 

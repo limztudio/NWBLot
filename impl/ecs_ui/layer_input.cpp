@@ -41,7 +41,7 @@ inline constexpr u8 s_Custom = 1u;
 
 bool UiLayerSystem::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
     static_cast<void>(scancode);
-    if(!Ui::InputBindings::validKey(key) || action < Core::InputAction::Release || action > Core::InputAction::Repeat)
+    if(!Ui::InputBindings::ValidKey(key) || action < Core::InputAction::Release || action > Core::InputAction::Repeat)
         return false;
     synchronizeNativeInput();
     const usize slot = static_cast<usize>(key + 1);

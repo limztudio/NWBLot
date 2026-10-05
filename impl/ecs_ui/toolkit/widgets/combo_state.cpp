@@ -41,17 +41,17 @@ ComboState::ComboState()
 void ComboState::select(const u64 key){
     m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_combo_state::s_NextIdentity);
     m_selectedKey = key;
-    ComboBehavior::close(*this);
+    ComboBehavior::Close(*this);
 }
 
 void ComboState::open(){
     m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_combo_state::s_NextIdentity);
-    ComboBehavior::open(*this);
+    ComboBehavior::Open(*this);
 }
 
 void ComboState::close(){
     m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_combo_state::s_NextIdentity);
-    ComboBehavior::close(*this);
+    ComboBehavior::Close(*this);
 }
 
 

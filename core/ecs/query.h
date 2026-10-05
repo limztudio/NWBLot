@@ -36,17 +36,17 @@ using ViewEntityVector = Vector<EntityID, Alloc::GlobalArena>;
 
 struct ViewTupleAccess{
     template<usize I, typename... Ts>
-    static const ViewEntityVector* entityVector(const Tuple<ComponentPool<Ts>*...>& pools){
+    static const ViewEntityVector* EntityVector(const Tuple<ComponentPool<Ts>*...>& pools){
         return &Get<I>(pools)->m_dense;
     }
 
-    static EntityID entityAt(const ViewEntityVector& entities, const usize denseIndex){
+    static EntityID EntityAt(const ViewEntityVector& entities, const usize denseIndex){
         GLB_ASSERT(denseIndex < entities.size());
         return entities[denseIndex];
     }
 
     template<usize I, typename... Ts>
-    static bool findDenseIndex(const Tuple<ComponentPool<Ts>*...>& pools, usize anchorPoolIndex, usize anchorDenseIndex, EntityID entityId, u32& outDenseIndex){
+    static bool FindDenseIndex(const Tuple<ComponentPool<Ts>*...>& pools, usize anchorPoolIndex, usize anchorDenseIndex, EntityID entityId, u32& outDenseIndex){
         if(I == anchorPoolIndex){
             outDenseIndex = static_cast<u32>(anchorDenseIndex);
             return true;
@@ -57,7 +57,7 @@ struct ViewTupleAccess{
     }
 
     template<usize I, typename... Ts>
-    static auto& componentAtDense(const Tuple<ComponentPool<Ts>*...>& pools, u32 denseIndex){
+    static auto& ComponentAtDense(const Tuple<ComponentPool<Ts>*...>& pools, u32 denseIndex){
         return Get<I>(pools)->m_components[denseIndex];
     }
 };
@@ -131,11 +131,11 @@ struct ViewIterator{
     }
     template<usize... Is>
     bool resolveDenseIndicesImpl(EntityID entityId, usize anchorDenseIndex, IndexSequence<Is...>){
-        return (ViewTupleAccess::findDenseIndex<Is>(pools, anchorPoolIndex, anchorDenseIndex, entityId, Get<Is>(denseIndices)) && ...);
+        return (ViewTupleAccess::FindDenseIndex<Is>(pools, anchorPoolIndex, anchorDenseIndex, entityId, Get<Is>(denseIndices)) && ...);
     }
 
     EntityID entityAt(usize denseIndex)const{
-        return ViewTupleAccess::entityAt(*anchorEntities, denseIndex);
+        return ViewTupleAccess::EntityAt(*anchorEntities, denseIndex);
     }
 
     ValueTuple operator*()const{
@@ -143,7 +143,7 @@ struct ViewIterator{
     }
     template<usize... Is>
     ValueTuple deref(IndexSequence<Is...>)const{
-        return ::ForwardAsTuple(entity, ViewTupleAccess::componentAtDense<Is>(pools, Get<Is>(denseIndices))...);
+        return ::ForwardAsTuple(entity, ViewTupleAccess::ComponentAtDense<Is>(pools, Get<Is>(denseIndices))...);
     }
 
     ViewIterator& operator++(){
@@ -228,7 +228,7 @@ private:
     void applyFunc(Func& func, const usize denseIndex)const{
         const EntityID entityId = entityAt(denseIndex);
         if constexpr(sizeof...(Ts) == 1u){
-            auto& component = ECSDetail::ViewTupleAccess::componentAtDense<0>(m_pools, static_cast<u32>(denseIndex));
+            auto& component = ECSDetail::ViewTupleAccess::ComponentAtDense<0>(m_pools, static_cast<u32>(denseIndex));
             func(entityId, component);
         }
         else{
@@ -277,23 +277,23 @@ private:
         const usize poolSize = pool->size();
         if(poolSize < m_count){
             m_count = poolSize;
-            m_anchorEntities = ECSDetail::ViewTupleAccess::entityVector<I>(m_pools);
+            m_anchorEntities = ECSDetail::ViewTupleAccess::EntityVector<I>(m_pools);
             m_anchorPoolIndex = I;
         }
     }
 
     EntityID entityAt(usize denseIndex)const{
-        return ECSDetail::ViewTupleAccess::entityAt(*m_anchorEntities, denseIndex);
+        return ECSDetail::ViewTupleAccess::EntityAt(*m_anchorEntities, denseIndex);
     }
 
     template<usize I = 0, typename Func, typename... Args>
     void tryApplyFunc(Func& func, EntityID entityId, usize denseIndex, Args&... args)const{
         if constexpr(I < sizeof...(Ts)){
             u32 componentDenseIndex = 0;
-            if(!ECSDetail::ViewTupleAccess::findDenseIndex<I>(m_pools, m_anchorPoolIndex, denseIndex, entityId, componentDenseIndex))
+            if(!ECSDetail::ViewTupleAccess::FindDenseIndex<I>(m_pools, m_anchorPoolIndex, denseIndex, entityId, componentDenseIndex))
                 return;
 
-            auto& component = ECSDetail::ViewTupleAccess::componentAtDense<I>(m_pools, componentDenseIndex);
+            auto& component = ECSDetail::ViewTupleAccess::ComponentAtDense<I>(m_pools, componentDenseIndex);
             tryApplyFunc<I + 1u>(func, entityId, denseIndex, args..., component);
         }
         else{

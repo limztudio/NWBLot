@@ -255,7 +255,7 @@ static void RewriteAbsoluteCompilerIncludes(
         const AStringView line = sourceView.substr(lineBegin, lineEnd - lineBegin);
         AStringView includeName;
         ShaderIncludeKind::Enum includeKind;
-        if(!SlangShaderCompiler::extractIncludeDirective(line, includeName, includeKind)){
+        if(!SlangShaderCompiler::ExtractIncludeDirective(line, includeName, includeKind)){
             rewrittenSource.append(line.data(), line.size());
         }
         else{
@@ -428,7 +428,7 @@ static bool PrepareBomStrippedCompilerInputs(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SlangShaderCompiler::extractIncludeDirective(const AStringView line, AStringView& outIncludeName, ShaderIncludeKind::Enum& outKind){
+bool SlangShaderCompiler::ExtractIncludeDirective(const AStringView line, AStringView& outIncludeName, ShaderIncludeKind::Enum& outKind){
     outIncludeName = {};
     outKind = ShaderIncludeKind::Relative;
 
@@ -481,7 +481,7 @@ bool SlangShaderCompiler::extractIncludeDirective(const AStringView line, AStrin
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SlangShaderCompiler::resolveIncludeFile(const AStringView includeName, const ShaderIncludeKind::Enum kind, const Path& sourceDirectory, const ShaderCook::CookVector<Path>& includeDirectories, Path& outPath){
+bool SlangShaderCompiler::ResolveIncludeFile(const AStringView includeName, const ShaderIncludeKind::Enum kind, const Path& sourceDirectory, const ShaderCook::CookVector<Path>& includeDirectories, Path& outPath){
     ErrorCode errorCode;
 
     if(kind == ShaderIncludeKind::Relative){
@@ -542,12 +542,12 @@ bool SlangShaderCompiler::compileVariant(const ShaderCook::ShaderCompilerRequest
         }
 
         AStringView slangStage;
-        if(!tryMapStageToSlangStage(request.stage, slangStage)){
+        if(!TryMapStageToSlangStage(request.stage, slangStage)){
             NWB_LOGGER_ERROR(GLB_TEXT("Unknown shader stage '{}' in entry '{}'"), StringConvert(request.stage), StringConvert(request.shaderName));
             return false;
         }
 
-        const AStringView optimizationArgument = slangOptimizationArgument(request.optimizationLevel);
+        const AStringView optimizationArgument = SlangOptimizationArgument(request.optimizationLevel);
         if(request.optimizationLevel >= ShaderOptimizationLevel::kCount){
             NWB_LOGGER_ERROR(GLB_TEXT("Shader '{}' uses an invalid optimization level {}")
                 , StringConvert(request.shaderName)
@@ -735,7 +735,7 @@ bool SlangShaderCompiler::compileVariant(const ShaderCook::ShaderCompilerRequest
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SlangShaderCompiler::tryMapStageToSlangStage(const AStringView stage, AStringView& outStage){
+bool SlangShaderCompiler::TryMapStageToSlangStage(const AStringView stage, AStringView& outStage){
     struct SlangStageMapping{
         AStringView name;
         AStringView slangStage;
@@ -769,7 +769,7 @@ bool SlangShaderCompiler::tryMapStageToSlangStage(const AStringView stage, AStri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AStringView SlangShaderCompiler::slangOptimizationArgument(const ShaderOptimizationLevel::Enum optimizationLevel){
+AStringView SlangShaderCompiler::SlangOptimizationArgument(const ShaderOptimizationLevel::Enum optimizationLevel){
     switch(optimizationLevel){
     case ShaderOptimizationLevel::None: return "-O0";
     case ShaderOptimizationLevel::Default: return {};

@@ -36,7 +36,7 @@ bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
             return false;
         }
         const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::rawBufferSrv(0u, mesh.runtimeLocalBoundsBuffer.get()))){
+        if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeLocalBoundsBuffer.get()))){
             if(handle.valid())
                 heap.free(handle);
             releaseMeshGeometryHeapHandles(mesh);
@@ -56,7 +56,7 @@ bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
         if(heap.isInitialized() && requiredBytes != 0u && desc.byteSize >= requiredBytes && desc.canHaveRawViews){
             const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
             if(handle.valid()){
-                if(heap.write(handle, Core::DescriptorWriteItem::rawBufferSrv(0u, mesh.runtimeMeshletLocalBoundsBuffer.get())))
+                if(heap.write(handle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.runtimeMeshletLocalBoundsBuffer.get())))
                     mesh.runtimeMeshletLocalBoundsHeapHandle = handle;
                 else
                     heap.free(handle);
@@ -140,7 +140,7 @@ bool RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(
         !handle.valid()
-        || !heap.write(handle, Core::DescriptorWriteItem::structuredBufferUav(0u, mesh.emulationVertexBuffer.get()))
+        || !heap.write(handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, mesh.emulationVertexBuffer.get()))
     ){
         if(handle.valid())
             heap.free(handle);
@@ -176,12 +176,12 @@ bool RendererMeshSystem::prepareMeshFrameBindings(const ECSRenderDetail::Materia
         instanceHandle.valid()
         && materialTypedHandle.valid()
         && viewHandle.valid()
-        && heap.write(instanceHandle, Core::DescriptorWriteItem::structuredBufferSrv(0u, materialBuffers.instanceBuffer.get()))
+        && heap.write(instanceHandle, Core::DescriptorWriteItem::StructuredBufferSrv(0u, materialBuffers.instanceBuffer.get()))
         && heap.write(
             materialTypedHandle,
-            Core::DescriptorWriteItem::structuredBufferSrv(0u, materialBuffers.materialTypedBuffer.get())
+            Core::DescriptorWriteItem::StructuredBufferSrv(0u, materialBuffers.materialTypedBuffer.get())
         )
-        && heap.write(viewHandle, Core::DescriptorWriteItem::constantBuffer(0u, m_meshState.m_meshViewBuffer.get()))
+        && heap.write(viewHandle, Core::DescriptorWriteItem::ConstantBuffer(0u, m_meshState.m_meshViewBuffer.get()))
     ;
     if(!registered){
         if(instanceHandle.valid())
@@ -259,7 +259,7 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
 
     Core::GpuDescriptorHandle acquired[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
     bool registered = true;
-    forEachMeshSourceBuffer(mesh, [&](const u32 bindingSlot, const Core::BufferHandle& buffer, const bool){
+    ForEachMeshSourceBuffer(mesh, [&](const u32 bindingSlot, const Core::BufferHandle& buffer, const bool){
         if(!registered)
             return;
         if(!buffer){
@@ -276,7 +276,7 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
             registered = false;
             return;
         }
-        if(!heap.write(handle, Core::DescriptorWriteItem::structuredBufferSrv(0u, buffer.get()))){
+        if(!heap.write(handle, Core::DescriptorWriteItem::StructuredBufferSrv(0u, buffer.get()))){
             heap.free(handle);
             registered = false;
             return;
@@ -292,7 +292,7 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
         return false;
     }
 
-    forEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool){
+    ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool){
         mesh.geometryHeapHandles[bindingSlot] = acquired[bindingSlot];
     });
     GLB_ASSERT(meshGeometryHeapHandlesReady(mesh));
@@ -301,7 +301,7 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
 
 bool RendererMeshSystem::meshGeometryHeapHandlesReady(const MeshResources& mesh)const{
     bool ready = true;
-    forEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool){
+    ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool){
         const Core::GpuDescriptorHandle handle = mesh.geometryHeapHandles[bindingSlot];
         ready = ready
             && handle.valid()
@@ -315,7 +315,7 @@ void RendererMeshSystem::populateMeshGeometryHeapSlots(InstanceGpuData& outInsta
     GLB_ASSERT(meshGeometryHeapHandlesReady(mesh));
     for(u32 slotIndex = 0u; slotIndex < NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT; ++slotIndex)
         outInstance.geometryHeapSlots[slotIndex] = 0u;
-    forEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool){
+    ForEachMeshSourceBindingSlot([&](const u32 bindingSlot, const bool){
         outInstance.geometryHeapSlots[bindingSlot] = mesh.geometryHeapHandles[bindingSlot].slot();
     });
 }
@@ -355,8 +355,8 @@ bool RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(MeshResources& mesh){
     const bool registered =
         positionHandle.valid()
         && triangleIndexHandle.valid()
-        && heap.write(positionHandle, Core::DescriptorWriteItem::rawBufferSrv(0u, mesh.positionBuffer.get()))
-        && heap.write(triangleIndexHandle, Core::DescriptorWriteItem::rawBufferSrv(0u, mesh.triangleIndexBuffer.get()))
+        && heap.write(positionHandle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.positionBuffer.get()))
+        && heap.write(triangleIndexHandle, Core::DescriptorWriteItem::RawBufferSrv(0u, mesh.triangleIndexBuffer.get()))
     ;
     if(!registered){
         if(positionHandle.valid())
@@ -382,7 +382,7 @@ void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
         for(Core::GpuDescriptorHandle& handle : mesh.geometryHeapHandles){
             if(handle.valid())
                 heap.free(handle);
-            handle = Core::GpuDescriptorHandle::invalid();
+            handle = Core::GpuDescriptorHandle::Invalid();
         }
         if(mesh.swBvhPositionHeapHandle.valid())
             heap.free(mesh.swBvhPositionHeapHandle);
@@ -400,28 +400,28 @@ void RendererMeshSystem::releaseMeshGeometryHeapHandles(MeshResources& mesh){
             heap.free(mesh.runtimeMeshletLocalBoundsHeapHandle);
         if(mesh.objectGeometryCache.heapHandle.valid())
             heap.free(mesh.objectGeometryCache.heapHandle);
-        mesh.swBvhPositionHeapHandle = Core::GpuDescriptorHandle::invalid();
-        mesh.swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::invalid();
-        mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
-        mesh.swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
-        mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
-        mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
-        mesh.runtimeMeshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
-        mesh.objectGeometryCache.heapHandle = Core::GpuDescriptorHandle::invalid();
+        mesh.swBvhPositionHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        mesh.swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        mesh.swBvhParentHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        mesh.runtimeMeshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+        mesh.objectGeometryCache.heapHandle = Core::GpuDescriptorHandle::Invalid();
         mesh.objectGeometryCache.acceptedContent = false;
         return;
     }
 
     for(Core::GpuDescriptorHandle& handle : mesh.geometryHeapHandles)
-        handle = Core::GpuDescriptorHandle::invalid();
-    mesh.swBvhPositionHeapHandle = Core::GpuDescriptorHandle::invalid();
-    mesh.swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::invalid();
-    mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
-    mesh.swBvhParentHeapHandle = Core::GpuDescriptorHandle::invalid();
-    mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::invalid();
-    mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    mesh.runtimeMeshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    mesh.objectGeometryCache.heapHandle = Core::GpuDescriptorHandle::invalid();
+        handle = Core::GpuDescriptorHandle::Invalid();
+    mesh.swBvhPositionHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    mesh.swBvhTriangleIndexHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    mesh.swBvhParentHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    mesh.runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    mesh.runtimeMeshletLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    mesh.objectGeometryCache.heapHandle = Core::GpuDescriptorHandle::Invalid();
     mesh.objectGeometryCache.acceptedContent = false;
 }
 

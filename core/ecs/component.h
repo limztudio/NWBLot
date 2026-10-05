@@ -44,7 +44,7 @@ struct ViewTupleAccess;
 
 template<typename T>
 inline ComponentTypeId ComponentType(){
-    return ECSDetail::TypeCounter<ECSDetail::ComponentTypeTag>::id<Decay_T<T>>();
+    return ECSDetail::TypeCounter<ECSDetail::ComponentTypeTag>::Id<Decay_T<T>>();
 }
 
 template<typename... Ts>

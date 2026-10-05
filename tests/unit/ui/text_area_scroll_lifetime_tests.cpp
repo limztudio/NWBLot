@@ -51,21 +51,21 @@ struct AreaModelSnapshot{
 
 class UiTextAreaScrollLifetimeTests : public TextAreaFixture{
 protected:
-    [[nodiscard]] static TextAreaOptions smallOptions(){
+    [[nodiscard]] static TextAreaOptions SmallOptions(){
         TextAreaOptions options;
         options.width = { LayoutSizePolicy::Fixed, 180.0f };
         options.height = { LayoutSizePolicy::Fixed, 100.0f };
         return options;
     }
 
-    [[nodiscard]] static PopupOptions parentOptions(){
+    [[nodiscard]] static PopupOptions ParentOptions(){
         PopupOptions options;
         options.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
         options.size = { 340.0f, 420.0f };
         return options;
     }
 
-    [[nodiscard]] static PopupOptions childOptions(){
+    [[nodiscard]] static PopupOptions ChildOptions(){
         PopupOptions options;
         options.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
         options.size = { 340.0f, 420.0f };
@@ -91,7 +91,7 @@ protected:
         return m_model.setText(AStringView(m_dense)) && m_model.setSelection(0u, 0u) && m_state.scrollTo({});
     }
 
-    [[nodiscard]] bool prepareOverflow(const u64 generation = 1u, const TextAreaOptions& options = smallOptions(),
+    [[nodiscard]] bool prepareOverflow(const u64 generation = 1u, const TextAreaOptions& options = SmallOptions(),
         const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }){
         return
             seedModel() && frameArea(generation, options, bounds)
@@ -106,11 +106,11 @@ protected:
 
     [[nodiscard]] bool popupFrame(const u64 generation){
         if(
-            !begin(generation) || !m_builder.beginPopup("parent", m_parent, parentOptions())
-            || !m_builder.beginPopup("child", m_child, childOptions())
+            !begin(generation) || !m_builder.beginPopup("parent", m_parent, ParentOptions())
+            || !m_builder.beginPopup("child", m_child, ChildOptions())
         )
             return false;
-        m_result = m_builder.textArea("area", m_model, m_state, smallOptions());
+        m_result = m_builder.textArea("area", m_model, m_state, SmallOptions());
         return
             m_result.valid && m_builder.endPopup() && m_builder.endPopup()
             && m_context.endRoot() && m_context.finishFrame() && m_context.commitFrame(generation)
@@ -177,14 +177,14 @@ TEST_F(UiTextAreaScrollLifetimeTests, IdenticalExternalScrollIntentRetiresAnAcce
     const u64 revision = m_state.revision();
     ASSERT_TRUE(m_state.scrollTo(scroll));
     EXPECT_GT(m_state.revision(), revision);
-    ASSERT_TRUE(frameArea(2u, smallOptions()));
+    ASSERT_TRUE(frameArea(2u, SmallOptions()));
     EXPECT_FLOAT_EQ(m_state.scroll().x, scroll.x);
     EXPECT_FLOAT_EQ(m_state.scroll().y, scroll.y);
     expectModel(m_model, model);
     after = target(afterId);
     ASSERT_NE(after, nullptr);
     click(UiComboTests::Center(after->rectangle));
-    ASSERT_TRUE(frameArea(3u, smallOptions()));
+    ASSERT_TRUE(frameArea(3u, SmallOptions()));
     EXPECT_GT(m_state.scroll().y, scroll.y);
     expectModel(m_model, model);
 }
@@ -205,17 +205,17 @@ TEST_F(UiTextAreaScrollLifetimeTests, IdenticalAndAwayBackSelectionIntentsRetire
         const AreaModelSnapshot model(m_arena, m_model);
         EXPECT_EQ(m_model.revision(), revision);
         EXPECT_GT(m_model.selectionGeneration(), selection);
-        ASSERT_TRUE(frameArea(generation, smallOptions()));
+        ASSERT_TRUE(frameArea(generation, SmallOptions()));
         ++generation;
         EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
         expectModel(m_model, model);
         ASSERT_TRUE(wheel());
-        ASSERT_TRUE(frameArea(generation, smallOptions()));
+        ASSERT_TRUE(frameArea(generation, SmallOptions()));
         ++generation;
         EXPECT_GT(m_state.scroll().y, 0.0f);
         expectModel(m_model, model);
         ASSERT_TRUE(m_state.scrollTo({}));
-        ASSERT_TRUE(frameArea(generation, smallOptions()));
+        ASSERT_TRUE(frameArea(generation, SmallOptions()));
         ++generation;
         EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     }
@@ -224,7 +224,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, IdenticalAndAwayBackSelectionIntentsRetire
 TEST_F(UiTextAreaScrollLifetimeTests, SameTextReplacementAndModelRebindingRetireCopiedWheel){
     ASSERT_TRUE(prepareOverflow());
     ASSERT_TRUE(m_model.setSelection(m_model.text().size(), m_model.text().size()));
-    ASSERT_TRUE(frameArea(2u, smallOptions()));
+    ASSERT_TRUE(frameArea(2u, SmallOptions()));
     ASSERT_GT(m_state.scroll().y, 0.0f);
     ASSERT_TRUE(wheel(1.0));
     const u64 revision = m_model.revision();
@@ -233,18 +233,18 @@ TEST_F(UiTextAreaScrollLifetimeTests, SameTextReplacementAndModelRebindingRetire
     const AreaModelSnapshot replaced(m_arena, m_model);
     EXPECT_EQ(m_model.revision(), revision);
     EXPECT_GT(m_model.externalRevision(), external);
-    ASSERT_TRUE(frameArea(3u, smallOptions()));
+    ASSERT_TRUE(frameArea(3u, SmallOptions()));
     EXPECT_NEAR(m_state.scroll().y, m_state.scrollbars().vertical.maximum, 0.001);
     expectModel(m_model, replaced);
     const f32 maximum = m_state.scroll().y;
     ASSERT_TRUE(wheel(1.0));
-    ASSERT_TRUE(frameArea(4u, smallOptions()));
+    ASSERT_TRUE(frameArea(4u, SmallOptions()));
     EXPECT_LT(m_state.scroll().y, maximum);
     expectModel(m_model, replaced);
 
     ASSERT_TRUE(m_model.setSelection(0u, 0u));
     ASSERT_TRUE(m_state.scrollTo({}));
-    ASSERT_TRUE(frameArea(5u, smallOptions()));
+    ASSERT_TRUE(frameArea(5u, SmallOptions()));
     ASSERT_TRUE(wheel());
     const AreaModelSnapshot original(m_arena, m_model);
     EditModel replacement(m_arena, {}, EditTextMode::Multiline);
@@ -252,14 +252,14 @@ TEST_F(UiTextAreaScrollLifetimeTests, SameTextReplacementAndModelRebindingRetire
     ASSERT_TRUE(replacement.setSelection(0u, 0u));
     const AreaModelSnapshot rebound(m_arena, replacement);
     ASSERT_TRUE(beginArea(6u));
-    ASSERT_TRUE(m_builder.textArea("area", replacement, m_state, smallOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea("area", replacement, m_state, SmallOptions()).valid);
     ASSERT_TRUE(acceptArea());
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     expectModel(m_model, original);
     expectModel(replacement, rebound);
     ASSERT_TRUE(wheel());
     ASSERT_TRUE(beginArea(7u));
-    ASSERT_TRUE(m_builder.textArea("area", replacement, m_state, smallOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea("area", replacement, m_state, SmallOptions()).valid);
     ASSERT_TRUE(acceptArea());
     EXPECT_GT(m_state.scroll().y, 0.0f);
     expectModel(m_model, original);
@@ -267,7 +267,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, SameTextReplacementAndModelRebindingRetire
 }
 
 TEST_F(UiTextAreaScrollLifetimeTests, ActualViewportResizeRetiresWheelWithUnchangedOptions){
-    TextAreaOptions options = smallOptions();
+    TextAreaOptions options = SmallOptions();
     options.width = { LayoutSizePolicy::Stretch, 1.0f };
     const Rect narrow{ 20.0f, 20.0f, 240.0f, 160.0f };
     const Rect wider{ 20.0f, 20.0f, 320.0f, 160.0f };
@@ -298,7 +298,7 @@ TEST_F(UiTextAreaScrollLifetimeTests, ChangedWheelLinesRetiresTheCopiedStepAndAc
     const f64 oldStep = host->scrollStep;
     ASSERT_GT(oldStep, 0.0);
     ASSERT_TRUE(wheel());
-    TextAreaOptions options = smallOptions();
+    TextAreaOptions options = SmallOptions();
     options.wheelLines = 7.0f;
     ASSERT_TRUE(frameArea(2u, options));
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
@@ -322,9 +322,9 @@ TEST_F(UiTextAreaScrollLifetimeTests, ClosingAnAncestorRetiresWheelAndCaptureBef
     ASSERT_TRUE(startThumb(popupArea()));
     const Point release = UiComboTests::Center(m_state.scrollbars().vertical.thumb);
     ASSERT_TRUE(begin(2u));
-    ASSERT_TRUE(m_builder.beginPopup("parent", m_parent, parentOptions()));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, smallOptions()).valid);
+    ASSERT_TRUE(m_builder.beginPopup("parent", m_parent, ParentOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    ASSERT_TRUE(m_builder.textArea("area", m_model, m_state, SmallOptions()).valid);
     ASSERT_TRUE(m_builder.endPopup());
     m_parent.close();
     ASSERT_TRUE(m_builder.endPopup());
@@ -337,8 +337,8 @@ TEST_F(UiTextAreaScrollLifetimeTests, ClosingAnAncestorRetiresWheelAndCaptureBef
     expectModel(m_model, model);
     m_parent.open();
     ASSERT_TRUE(begin(3u));
-    ASSERT_TRUE(m_builder.beginPopup("parent", m_parent, parentOptions()));
-    EXPECT_FALSE(m_builder.beginPopup("child", m_child, childOptions()));
+    ASSERT_TRUE(m_builder.beginPopup("parent", m_parent, ParentOptions()));
+    EXPECT_FALSE(m_builder.beginPopup("child", m_child, ChildOptions()));
     EXPECT_FALSE(m_child.isOpen());
     ASSERT_TRUE(m_builder.endPopup());
     ASSERT_TRUE(m_context.endRoot());
@@ -359,14 +359,14 @@ TEST_F(UiTextAreaScrollLifetimeTests, CaptureLossCancelsTheUnfinishedThumbAndPre
     ASSERT_TRUE(wheel());
     ASSERT_TRUE(startThumb(id("area", "panel")));
     EXPECT_FALSE(send({ InputEventType::PointerCaptureLost }).capture.valid());
-    ASSERT_TRUE(frameArea(2u, smallOptions()));
+    ASSERT_TRUE(frameArea(2u, SmallOptions()));
     ASSERT_GT(m_state.scroll().y, 0.0f);
     const f32 wheelOnly = m_state.scroll().y;
     expectModel(m_model, model);
     ASSERT_TRUE(m_state.scrollTo({}));
-    ASSERT_TRUE(frameArea(3u, smallOptions()));
+    ASSERT_TRUE(frameArea(3u, SmallOptions()));
     ASSERT_TRUE(wheel());
-    ASSERT_TRUE(frameArea(4u, smallOptions()));
+    ASSERT_TRUE(frameArea(4u, SmallOptions()));
     EXPECT_FLOAT_EQ(m_state.scroll().y, wheelOnly);
     expectModel(m_model, model);
 }
@@ -377,13 +377,13 @@ TEST_F(UiTextAreaScrollLifetimeTests, NativeFocusLossCancelsCopiedWheelAndAnActi
     ASSERT_TRUE(wheel());
     ASSERT_TRUE(startThumb(id("area", "panel")));
     EXPECT_FALSE(send({ InputEventType::FocusLost }).wantsKeyboard);
-    ASSERT_TRUE(frameArea(2u, smallOptions()));
+    ASSERT_TRUE(frameArea(2u, SmallOptions()));
     EXPECT_FALSE(m_context.input().capture().valid());
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     expectModel(m_model, model);
     EXPECT_FALSE(send({ InputEventType::FocusGained }).wantsKeyboard);
     ASSERT_TRUE(wheel());
-    ASSERT_TRUE(frameArea(3u, smallOptions()));
+    ASSERT_TRUE(frameArea(3u, SmallOptions()));
     EXPECT_GT(m_state.scroll().y, 0.0f);
     expectModel(m_model, model);
 }
@@ -394,17 +394,17 @@ TEST_F(UiTextAreaScrollLifetimeTests, DisablingRetiresPendingWheelAndThumbWithou
     ASSERT_TRUE(wheel());
     ASSERT_TRUE(startThumb(id("area", "panel")));
     const Point release = UiComboTests::Center(m_state.scrollbars().vertical.thumb);
-    TextAreaOptions disabled = smallOptions();
+    TextAreaOptions disabled = SmallOptions();
     disabled.enabled = false;
     ASSERT_TRUE(frameArea(2u, disabled));
     EXPECT_FALSE(m_context.input().capture().valid());
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     EXPECT_TRUE(send({ InputEventType::PrimaryUp, release }).pointerConsumed);
     expectModel(m_model, model);
-    ASSERT_TRUE(frameArea(3u, smallOptions()));
+    ASSERT_TRUE(frameArea(3u, SmallOptions()));
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     ASSERT_TRUE(wheel());
-    ASSERT_TRUE(frameArea(4u, smallOptions()));
+    ASSERT_TRUE(frameArea(4u, SmallOptions()));
     EXPECT_GT(m_state.scroll().y, 0.0f);
     expectModel(m_model, model);
 }

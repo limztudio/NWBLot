@@ -567,7 +567,7 @@ bool RendererFramePipeline::prepareResources(Core::Framebuffer* framebuffer){
     if(!m_refractionEnabled){
         m_preparedRefractionResources.pipeline = m_preparedRefractionResources.screenFallbackPipeline;
         m_preparedRefractionResources.usesHardwareTrace = false;
-        m_preparedRefractionResources.tlasHeapHandle = Core::GpuDescriptorHandle::invalid();
+        m_preparedRefractionResources.tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
     }
 
     if(Core::IGpuTaskGraphOutputLayerContributor* const contributor = m_graphics.taskGraphOutputLayerContributor()){

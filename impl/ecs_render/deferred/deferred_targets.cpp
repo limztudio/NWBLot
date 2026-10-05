@@ -228,7 +228,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
         !bindless.slotsBufferDescriptor.valid()
         || !heap.write(
             bindless.slotsBufferDescriptor,
-            Core::DescriptorWriteItem::constantBuffer(0u, bindless.slotsBuffer.get())
+            Core::DescriptorWriteItem::ConstantBuffer(0u, bindless.slotsBuffer.get())
         )
     ){
         NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register deferred bindless slot buffer in the descriptor heap"));

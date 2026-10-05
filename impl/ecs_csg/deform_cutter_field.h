@@ -35,16 +35,16 @@ namespace CsgDeformShapeKind{
 class CsgDeformCutterField final : NoCopy{
 public:
     // SIMD-domain cores: inputs and outputs stay on vector lanes (replicated distance), never touch storage.
-    [[nodiscard]] static SIMDVector planeSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0);
-    [[nodiscard]] static SIMDVector boxSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0);
-    [[nodiscard]] static SIMDVector sphereSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0);
-    [[nodiscard]] static SIMDVector capsuleSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0);
-    [[nodiscard]] static CsgDeformShapeKind::Enum classifyDeformShape(const Name& shapeType);
-    [[nodiscard]] static f32 planeSignedDistance(SIMDVector shapePosition, SIMDVector parameter0);
-    [[nodiscard]] static f32 boxSignedDistance(SIMDVector shapePosition, SIMDVector parameter0);
-    [[nodiscard]] static f32 sphereSignedDistance(SIMDVector shapePosition, SIMDVector parameter0);
-    [[nodiscard]] static f32 capsuleSignedDistance(SIMDVector shapePosition, SIMDVector parameter0);
-    [[nodiscard]] static bool shapeDistances(
+    [[nodiscard]] static SIMDVector PlaneSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0);
+    [[nodiscard]] static SIMDVector BoxSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0);
+    [[nodiscard]] static SIMDVector SphereSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0);
+    [[nodiscard]] static SIMDVector CapsuleSignedDistanceVec(SIMDVector shapePosition, SIMDVector parameter0);
+    [[nodiscard]] static CsgDeformShapeKind::Enum ClassifyDeformShape(const Name& shapeType);
+    [[nodiscard]] static f32 PlaneSignedDistance(SIMDVector shapePosition, SIMDVector parameter0);
+    [[nodiscard]] static f32 BoxSignedDistance(SIMDVector shapePosition, SIMDVector parameter0);
+    [[nodiscard]] static f32 SphereSignedDistance(SIMDVector shapePosition, SIMDVector parameter0);
+    [[nodiscard]] static f32 CapsuleSignedDistance(SIMDVector shapePosition, SIMDVector parameter0);
+    [[nodiscard]] static bool ShapeDistances(
         const CsgDeformShape& shape,
         const CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices,
         const f32 epsilon,

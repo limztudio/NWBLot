@@ -76,7 +76,7 @@ struct ClearBufferPayload{
 };
 
 struct ClearBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBase<ClearBufferPayload>{
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
@@ -107,7 +107,7 @@ struct ClearTextureTask{
         GpuClearTextureTaskDesc clearDesc;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
@@ -194,11 +194,11 @@ struct ClearTextureTask{
         ;
     }
 
-    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const QueueSubmissionToken& token){
         GpuTaskGraphBuiltinDetail::PublishAcceptedToken(payload.clearDesc.acceptedToken, token);
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         GpuTaskGraphBuiltinDetail::ClearAcceptedToken(payload.clearDesc.acceptedToken);
         if(payload.clearDesc.recordHooks.discarded)
             payload.clearDesc.recordHooks.discarded(payload.clearDesc.recordHooks.context);
@@ -212,7 +212,7 @@ struct ClearTextureRectUIntTask{
         GpuClearTextureRectUIntTaskDesc clearDesc;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
@@ -262,11 +262,11 @@ struct ClearTextureRectUIntTask{
         ;
     }
 
-    static void accepted(Payload& payload, const QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const QueueSubmissionToken& token){
         GpuTaskGraphBuiltinDetail::PublishAcceptedToken(payload.clearDesc.acceptedToken, token);
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         GpuTaskGraphBuiltinDetail::ClearAcceptedToken(payload.clearDesc.acceptedToken);
         if(payload.clearDesc.recordHooks.discarded)
             payload.clearDesc.recordHooks.discarded(payload.clearDesc.recordHooks.context);

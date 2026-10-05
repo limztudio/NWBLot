@@ -32,7 +32,7 @@ bool Builder::image(const AStringView stableKey, const SharedImageSource& source
     ImageFrame frame;
     frame.source = source;
     frame.options = options;
-    if(!widget || !frame.source || !ImageLayout::measure(frame.options, *frame.source, frame.metrics)){
+    if(!widget || !frame.source || !ImageLayout::Measure(frame.options, *frame.source, frame.metrics)){
         m_context.fail();
         return false;
     }

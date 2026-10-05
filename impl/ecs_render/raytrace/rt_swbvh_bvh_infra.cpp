@@ -40,7 +40,7 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // Push-only layout; sort resources use the global heap.
-        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(BvhSortPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhSortPushConstants)));
 
         m_rayTracingState.m_bvhSortBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_bvhSortBindingLayout){
@@ -99,8 +99,8 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
             return true;
 
         // Register only missing handles to preserve live generations.
-        Core::GpuDescriptorHandle acquiredKeys = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle acquiredPayload = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle acquiredKeys = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle acquiredPayload = Core::GpuDescriptorHandle::Invalid();
         if(
             (!m_rayTracingState.m_bvhSortKeysHeapHandle.valid()
                 && !RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *m_rayTracingState.m_bvhSortKeysBuffer.get(), acquiredKeys))
@@ -269,7 +269,7 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // Push-only layout; build resources use the global heap.
-        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(BvhBuildPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhBuildPushConstants)));
 
         m_rayTracingState.m_bvhBuildBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_bvhBuildBindingLayout){
@@ -323,7 +323,7 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
         if(RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhVisitCounterHeapHandle))
             return true;
 
-        Core::GpuDescriptorHandle acquired = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle acquired = Core::GpuDescriptorHandle::Invalid();
         if(!m_rayTracingState.m_bvhVisitCounterHeapHandle.valid()
             && RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *m_rayTracingState.m_bvhVisitCounterBuffer.get(), acquired)){
             m_rayTracingState.m_bvhVisitCounterHeapHandle = acquired;
@@ -356,7 +356,7 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
         return false;
     }
 
-    Core::GpuDescriptorHandle counterHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle counterHeapHandle = Core::GpuDescriptorHandle::Invalid();
     if(!RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *counterBuffer.get(), counterHeapHandle)){
         NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register BVH visit counter in the descriptor heap"));
         return false;
@@ -388,8 +388,8 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
         )
             return true;
 
-        Core::GpuDescriptorHandle acquiredNode = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle acquiredParent = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle acquiredNode = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle acquiredParent = Core::GpuDescriptorHandle::Invalid();
         if(
             (!nodeHeapHandle.valid() && !RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *nodeBuffer.get(), acquiredNode))
             || (!parentHeapHandle.valid() && !RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *parentBuffer.get(), acquiredParent))
@@ -446,8 +446,8 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
         return false;
     }
 
-    Core::GpuDescriptorHandle newNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
-    Core::GpuDescriptorHandle newParentHeapHandle = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle newNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::GpuDescriptorHandle newParentHeapHandle = Core::GpuDescriptorHandle::Invalid();
     if(
         !RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *newNodeBuffer.get(), newNodeHeapHandle)
         || !RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *newParentBuffer.get(), newParentHeapHandle)

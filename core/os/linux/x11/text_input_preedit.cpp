@@ -20,7 +20,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Bool X11TextInputService::onPreeditStart(XIC context, const XPointer data, XPointer){
+Bool X11TextInputService::OnPreeditStart(XIC context, const XPointer data, XPointer){
     auto& service = *reinterpret_cast<X11TextInputService*>(data);
     if(service.m_resetting || context != service.m_context || service.m_nativeToken != service.activeSession())
         return 0;
@@ -30,7 +30,7 @@ Bool X11TextInputService::onPreeditStart(XIC context, const XPointer data, XPoin
     return static_cast<int>(s_TextInputMaxEventTextBytes);
 }
 
-Bool X11TextInputService::onPreeditDone(XIC context, const XPointer data, XPointer){
+Bool X11TextInputService::OnPreeditDone(XIC context, const XPointer data, XPointer){
     auto& service = *reinterpret_cast<X11TextInputService*>(data);
     if(service.m_resetting || context != service.m_context || service.m_nativeToken != service.activeSession())
         return 0;
@@ -39,7 +39,7 @@ Bool X11TextInputService::onPreeditDone(XIC context, const XPointer data, XPoint
     return 0;
 }
 
-Bool X11TextInputService::onPreeditDraw(XIC context, const XPointer data, const XPointer callData){
+Bool X11TextInputService::OnPreeditDraw(XIC context, const XPointer data, const XPointer callData){
     auto& service = *reinterpret_cast<X11TextInputService*>(data);
     if(service.m_resetting || context != service.m_context || service.m_nativeToken != service.activeSession() || !callData)
         return 0;
@@ -70,7 +70,7 @@ Bool X11TextInputService::onPreeditDraw(XIC context, const XPointer data, const 
     return 0;
 }
 
-Bool X11TextInputService::onPreeditCaret(XIC context, const XPointer data, const XPointer callData){
+Bool X11TextInputService::OnPreeditCaret(XIC context, const XPointer data, const XPointer callData){
     auto& service = *reinterpret_cast<X11TextInputService*>(data);
     if(service.m_resetting || context != service.m_context || service.m_nativeToken != service.activeSession() || !callData)
         return 0;

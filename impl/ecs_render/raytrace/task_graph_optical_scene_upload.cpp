@@ -38,7 +38,7 @@ struct OpticalUploadTask{
         Core::GpuPhysicalQueueId queue;
     };
 
-    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         usize byteSize = 0u;
         const void* const bytes = context.declarations.uploadBlobData(payload.source, byteSize);
         if(
@@ -59,12 +59,12 @@ struct OpticalUploadTask{
         return true;
     }
 
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         if(!payload.reservation.accept(token))
             NWB_LOGGER_ERROR(GLB_TEXT("Ray optical scene: accepted upload has invalid residency provenance"));
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         payload.reservation.discard();
     }
 };

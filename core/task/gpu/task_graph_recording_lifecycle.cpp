@@ -184,8 +184,8 @@ bool GpuTaskGraph::beginRecordingAttempt(
     }
 
     const bool previousPlanWasActive = m_activeRecordingPlanGeneration != 0u;
-    const u64 nextRecordingAttemptGeneration = allocateGeneration();
-    const u64 preparationSerial = allocateGeneration();
+    const u64 nextRecordingAttemptGeneration = AllocateGeneration();
+    const u64 preparationSerial = AllocateGeneration();
     if(nextRecordingAttemptGeneration == 0u || preparationSerial == 0u)
         return false;
     const u64 previousRecordingAttemptGeneration = samePlan
@@ -291,7 +291,7 @@ void GpuTaskGraph::cancelRecordingAttempt(RecordingAttemptScope& attempt)const n
     const bool restoreDiscardedTasks = attempt.m_previousPlanWasActive;
     m_activeCompiledGraph = nullptr;
     m_activeRecordingPlanGeneration = 0u;
-    m_activeRecordingAttemptGeneration = allocateGeneration();
+    m_activeRecordingAttemptGeneration = AllocateGeneration();
     m_activeRecordingPreparationSerial = 0u;
     m_activeSubmissionBinding = {};
     m_submissionBindingState = SubmissionBindingState::None;

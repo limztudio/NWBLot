@@ -63,7 +63,7 @@ struct CausticAccumulatorDecayGraphTask{
         bool hardwareCaustics = false;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -111,7 +111,7 @@ struct CausticAccumulatorDecayGraphTask{
         return true;
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         DiscardGpuTimingMeasure(payload.causticPhotonTiming);
     }
 };
@@ -134,7 +134,7 @@ struct SoftwareCausticsGraphTask{
         bool* causticProducerDispatched = nullptr;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -164,12 +164,12 @@ struct SoftwareCausticsGraphTask{
         return true;
     }
 
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         static_cast<void>(token);
         ConfirmCausticAccumulatorClears(payload);
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         if(payload.causticProducerDispatched)
             *payload.causticProducerDispatched = false;
         Core::DiscardGpuTimingMeasure(payload.causticPhotonTiming);
@@ -193,7 +193,7 @@ struct HardwareCausticsGraphTask{
         bool* causticProducerDispatched = nullptr;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -223,12 +223,12 @@ struct HardwareCausticsGraphTask{
         return true;
     }
 
-    static void accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
         static_cast<void>(token);
         ConfirmCausticAccumulatorClears(payload);
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         if(payload.causticProducerDispatched)
             *payload.causticProducerDispatched = false;
         Core::DiscardGpuTimingMeasure(payload.causticPhotonTiming);
@@ -249,7 +249,7 @@ struct CausticGeometryDownsampleGraphTask{
         Optional<Core::GpuTimingMeasure>* causticResolveTiming = nullptr;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -276,7 +276,7 @@ struct CausticGeometryDownsampleGraphTask{
         return Core::FinishSplitGpuTimingMarker(payload.causticResolveTiming);
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         DiscardGpuTimingMeasure(payload.causticResolveTiming);
     }
 };
@@ -293,7 +293,7 @@ struct CausticResolvePrepareGraphTask{
         CausticResolveActivitySnapshot activity;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -325,7 +325,7 @@ struct CausticResolveWaveletGraphTask{
         CausticResolveActivitySnapshot activity;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -355,7 +355,7 @@ struct CausticResolveSecondWaveletGraphTask{
         CausticResolveActivitySnapshot activity;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -385,7 +385,7 @@ struct CausticResolveThirdWaveletGraphTask{
         CausticResolveActivitySnapshot activity;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -415,7 +415,7 @@ struct CausticResolveFourthWaveletGraphTask{
         CausticResolveActivitySnapshot activity;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -445,7 +445,7 @@ struct CausticResolveFifthWaveletGraphTask{
         CausticResolveActivitySnapshot activity;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -474,7 +474,7 @@ struct CausticResolveUpsampleGraphTask{
         CausticResolveActivitySnapshot activity;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -505,7 +505,7 @@ struct CausticResolveGraphTask{
         Optional<Core::GpuTimingMeasure>* causticResolveTiming = nullptr;
     };
 
-    [[nodiscard]] static bool record(
+    [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
@@ -527,7 +527,7 @@ struct CausticResolveGraphTask{
         return true;
     }
 
-    static void discarded(Payload& payload){
+    static void Discarded(Payload& payload){
         DiscardGpuTimingMeasure(payload.causticResolveTiming);
     }
 };

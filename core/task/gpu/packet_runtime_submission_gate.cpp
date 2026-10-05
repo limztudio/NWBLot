@@ -150,14 +150,14 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(
     if(s_ActiveOperation)
         return;
     if(
-        GpuRecordedGraph::ArtifactOperation::active()
+        GpuRecordedGraph::ArtifactOperation::Active()
         && (
             !borrowedArtifact
-            || !GpuRecordedGraph::ArtifactOperation::activeScopeIs(*borrowedArtifact)
+            || !GpuRecordedGraph::ArtifactOperation::ActiveScopeIs(*borrowedArtifact)
         )
     )
         return;
-    if(borrowedArtifact && !GpuRecordedGraph::ArtifactOperation::activeScopeIs(*borrowedArtifact))
+    if(borrowedArtifact && !GpuRecordedGraph::ArtifactOperation::ActiveScopeIs(*borrowedArtifact))
         return;
     if(transaction.m_compositeOperationActive.test(MemoryOrder::acquire))
         return;

@@ -120,8 +120,8 @@ Device::Device(const DeviceDesc& desc)
     , m_deviceGeneration(__hidden_vulkan_device::AllocateDeviceGeneration())
     , m_gpuCrashDiagnosticsEnabled(desc.gpuCrashDiagnosticsEnabled)
     , m_gpuCrashTracker(desc.allocator.getObjectArena())
-    , m_gpuCrashReportArena(VulkanArenaScope::s_GpuCrashReportArena, Alloc::PersistentArena::structureAlignedSize(s_GpuCrashReportArenaSize))
-    , m_gpuCrashVendorBinaryArena(VulkanArenaScope::s_GpuCrashVendorBinaryArena, Alloc::PersistentArena::structureAlignedSize(s_MaxDeviceFaultVendorBinaryBytes))
+    , m_gpuCrashReportArena(VulkanArenaScope::s_GpuCrashReportArena, Alloc::PersistentArena::StructureAlignedSize(s_GpuCrashReportArenaSize))
+    , m_gpuCrashVendorBinaryArena(VulkanArenaScope::s_GpuCrashVendorBinaryArena, Alloc::PersistentArena::StructureAlignedSize(s_MaxDeviceFaultVendorBinaryBytes))
     , m_context(
         desc.allocator,
         desc.cpuScheduler,

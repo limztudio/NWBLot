@@ -332,7 +332,7 @@ Impl::Ui::Rect UiNestedPopupSmokeScene::rowBounds(const Impl::Ui::ListState& sta
     const auto& placement = state.placement();
     if(
         !source.indexOf(key, index) || index < placement.firstRow || index >= placement.endRow
-        || !Impl::Ui::ScrollLayout::rowBounds(index, placement, rowHeight, result)
+        || !Impl::Ui::ScrollLayout::RowBounds(index, placement, rowHeight, result)
     )
         return {};
     return result;

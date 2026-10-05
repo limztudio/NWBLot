@@ -105,7 +105,7 @@ MeshSkinningLocalBoundsTask::Payload::Payload(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshSkinningLocalBoundsTask::record(
+bool MeshSkinningLocalBoundsTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context){

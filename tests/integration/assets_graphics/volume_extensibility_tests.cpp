@@ -134,7 +134,7 @@ static bool BuildProjectProbeAsset(ProjectProbeCookEntry& entry, ProjectProbeAss
 
 static bool RegisterProjectProbeCookEntry(NWB::Core::Assets::CookEntryRegistry& registry){
     return registry.registerType<ProjectProbeCookEntry, ProjectProbeAsset, ProjectProbeAssetCodec>(
-        ProjectProbeAsset::assetTypeName(),
+        ProjectProbeAsset::AssetTypeName(),
         GLB_TEXT("project probe asset"),
         &ParseProjectProbeDocument,
         &ParseProjectProbeValue,
@@ -153,7 +153,7 @@ static bool LoadProjectProbeAsset(
     const u32 expectedMarker
 ){
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    if(!AssetsGraphicsFixture::loadCookedAsset<ProjectProbeAssetCodec>(
+    if(!AssetsGraphicsFixture::LoadCookedAsset<ProjectProbeAssetCodec>(
         testArena,
         outputDirectory,
         assetName,
@@ -178,7 +178,7 @@ TEST(AssetsGraphics, ProjectCookEntryDocumentCook){
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    const bool cooked = AssetsGraphicsFixture::cookSingleGraphicsMeta(
+    const bool cooked = AssetsGraphicsFixture::CookSingleGraphicsMeta(
         "project_probe asset;\n\n"
         "asset.label = \"document\";\n",
         "project_cook_entry_document",
@@ -208,7 +208,7 @@ TEST(AssetsGraphics, ProjectCookEntryAssetBunchCook){
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    const bool cooked = AssetsGraphicsFixture::cookSingleGraphicsMeta(
+    const bool cooked = AssetsGraphicsFixture::CookSingleGraphicsMeta(
         "project_probe probe;\n"
         "probe.label = \"bunch\";\n\n"
         "asset_bunch bunch = [\n"

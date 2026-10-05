@@ -23,31 +23,31 @@ using ScratchArena = Core::Alloc::ScratchArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SIMDVector CsgDeformWallBuilder::mixAttributeVec(SIMDVector firstVec, SIMDVector secondVec, SIMDVector blendVec, SIMDVector otherVec){
+SIMDVector CsgDeformWallBuilder::MixAttributeVec(SIMDVector firstVec, SIMDVector secondVec, SIMDVector blendVec, SIMDVector otherVec){
     return VectorAdd(VectorMultiply(firstVec, blendVec), VectorMultiply(secondVec, otherVec));
 }
 
-SIMDVector CsgDeformWallBuilder::normalizeDirectionVec(SIMDVector direction){
+SIMDVector CsgDeformWallBuilder::NormalizeDirectionVec(SIMDVector direction){
     return Vector3Normalize(direction);
 }
 
-SIMDVector CsgDeformWallBuilder::keepWVec(SIMDVector normalizedVec, SIMDVector sourceVec){
+SIMDVector CsgDeformWallBuilder::KeepWVec(SIMDVector normalizedVec, SIMDVector sourceVec){
     return VectorSelect(normalizedVec, sourceVec, s_SIMDMaskW);
 }
 
-SIMDVector CsgDeformWallBuilder::tangentHandednessVec(SIMDVector normalizedTangent, SIMDVector tangentVec){
+SIMDVector CsgDeformWallBuilder::TangentHandednessVec(SIMDVector normalizedTangent, SIMDVector tangentVec){
     const SIMDVector wNegative = VectorLess(VectorSplatW(tangentVec), VectorZero());
     const SIMDVector sign = VectorSelect(VectorReplicate(s_OneWeight), VectorReplicate(s_NegativeOne), wNegative);
     return VectorSelect(normalizedTangent, sign, s_SIMDMaskW);
 }
 
-SIMDVector CsgDeformWallBuilder::upAxisVec(){
+SIMDVector CsgDeformWallBuilder::UpAxisVec(){
     return VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 }
 
-CsgDeformVertex CsgDeformWallBuilder::mixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight){
+CsgDeformVertex CsgDeformWallBuilder::MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight){
     // Preserve first*blend + second*(1-blend) operation order.
-    const SIMDVector blendVec = CsgDeformValidator::saturateVec(VectorReplicate(firstWeight));
+    const SIMDVector blendVec = CsgDeformValidator::SaturateVec(VectorReplicate(firstWeight));
     const SIMDVector otherVec = VectorSubtract(s_SIMDOne, blendVec);
     const SIMDVector firstPosition = LoadFloat(first.position);
     const SIMDVector secondPosition = LoadFloat(second.position);
@@ -60,38 +60,38 @@ CsgDeformVertex CsgDeformWallBuilder::mixVertices(const CsgDeformVertex& first, 
     const SIMDVector firstColor = LoadFloat(first.color);
     const SIMDVector secondColor = LoadFloat(second.color);
     CsgDeformVertex mixed;
-    StoreFloat(CsgDeformWallBuilder::mixAttributeVec(firstPosition, secondPosition, blendVec, otherVec), mixed.position);
-    StoreFloat(CsgDeformWallBuilder::mixAttributeVec(firstNormal, secondNormal, blendVec, otherVec), mixed.normal);
-    StoreFloat(CsgDeformWallBuilder::mixAttributeVec(firstTangent, secondTangent, blendVec, otherVec), mixed.tangent);
-    StoreFloat(CsgDeformWallBuilder::mixAttributeVec(firstUv, secondUv, blendVec, otherVec), mixed.uv0);
-    StoreFloat(CsgDeformWallBuilder::mixAttributeVec(firstColor, secondColor, blendVec, otherVec), mixed.color);
+    StoreFloat(CsgDeformWallBuilder::MixAttributeVec(firstPosition, secondPosition, blendVec, otherVec), mixed.position);
+    StoreFloat(CsgDeformWallBuilder::MixAttributeVec(firstNormal, secondNormal, blendVec, otherVec), mixed.normal);
+    StoreFloat(CsgDeformWallBuilder::MixAttributeVec(firstTangent, secondTangent, blendVec, otherVec), mixed.tangent);
+    StoreFloat(CsgDeformWallBuilder::MixAttributeVec(firstUv, secondUv, blendVec, otherVec), mixed.uv0);
+    StoreFloat(CsgDeformWallBuilder::MixAttributeVec(firstColor, secondColor, blendVec, otherVec), mixed.color);
     return mixed;
 }
 
-bool CsgDeformWallBuilder::normalizeDeformVertex(CsgDeformVertex& vertex){
+bool CsgDeformWallBuilder::NormalizeDeformVertex(CsgDeformVertex& vertex){
     // Preview and commit share the same degenerate fallback and tangent handedness.
     const SIMDVector normalVec = LoadFloat(vertex.normal);
     const f32 normalLengthSq = VectorGetX(Vector3LengthSq(normalVec));
     if(normalLengthSq > s_NormalizeEpsilonSq){
-        const SIMDVector normalized = CsgDeformWallBuilder::keepWVec(CsgDeformWallBuilder::normalizeDirectionVec(normalVec), normalVec);
+        const SIMDVector normalized = CsgDeformWallBuilder::KeepWVec(CsgDeformWallBuilder::NormalizeDirectionVec(normalVec), normalVec);
         StoreFloat(normalized, vertex.normal);
     }
     else{
-        StoreFloat(VectorSelect(LoadFloat(vertex.normal), CsgDeformWallBuilder::upAxisVec(), s_SIMDMask3), vertex.normal);
+        StoreFloat(VectorSelect(LoadFloat(vertex.normal), CsgDeformWallBuilder::UpAxisVec(), s_SIMDMask3), vertex.normal);
     }
     const SIMDVector tangentVec = LoadFloat(vertex.tangent);
     const f32 tangentLengthSq = VectorGetX(Vector3LengthSq(tangentVec));
     if(tangentLengthSq > s_NormalizeEpsilonSq){
-        const SIMDVector normalized = CsgDeformWallBuilder::tangentHandednessVec(CsgDeformWallBuilder::normalizeDirectionVec(tangentVec), tangentVec);
+        const SIMDVector normalized = CsgDeformWallBuilder::TangentHandednessVec(CsgDeformWallBuilder::NormalizeDirectionVec(tangentVec), tangentVec);
         StoreFloat(normalized, vertex.tangent);
     }
     else{
         vertex.tangent = s_FallbackTangent;
     }
-    return CsgDeformValidator::finiteVertex(vertex);
+    return CsgDeformValidator::FiniteVertex(vertex);
 }
 
-bool CsgDeformWallBuilder::splitEdgeVertex(
+bool CsgDeformWallBuilder::SplitEdgeVertex(
     CsgDeformVertexVector<ScratchArena>& vertices,
     CsgDeformEdgeSplitMap& edgeSplits,
     const u32 first,
@@ -110,14 +110,14 @@ bool CsgDeformWallBuilder::splitEdgeVertex(
         return true;
     }
     const f32 denominator = firstDistance - secondDistance;
-    if(!CsgDeformValidator::finiteFloat(denominator) || Abs(denominator) < s_SplitDenominatorEpsilon)
+    if(!CsgDeformValidator::FiniteFloat(denominator) || Abs(denominator) < s_SplitDenominatorEpsilon)
         return false;
     // A zero secondDistance selects the second endpoint.
-    const f32 firstWeight = VectorGetX(CsgDeformValidator::saturateVec(
-        CsgDeformValidator::absDivideVec(VectorReplicate(secondDistance), VectorReplicate(denominator))
+    const f32 firstWeight = VectorGetX(CsgDeformValidator::SaturateVec(
+        CsgDeformValidator::AbsDivideVec(VectorReplicate(secondDistance), VectorReplicate(denominator))
     ));
-    CsgDeformVertex mixed = CsgDeformWallBuilder::mixVertices(vertices[first], vertices[second], firstWeight);
-    if(!CsgDeformWallBuilder::normalizeDeformVertex(mixed))
+    CsgDeformVertex mixed = CsgDeformWallBuilder::MixVertices(vertices[first], vertices[second], firstWeight);
+    if(!CsgDeformWallBuilder::NormalizeDeformVertex(mixed))
         return false;
     const u32 created = static_cast<u32>(vertices.size());
     vertices.push_back(mixed);
@@ -126,7 +126,7 @@ bool CsgDeformWallBuilder::splitEdgeVertex(
     return true;
 }
 
-void CsgDeformWallBuilder::emitTriangle(
+void CsgDeformWallBuilder::EmitTriangle(
     CsgDeformTriangleVector<ScratchArena>& triangles,
     const u32 first,
     const u32 second,
@@ -140,7 +140,7 @@ void CsgDeformWallBuilder::emitTriangle(
 }
 
 // Keep side is distance >= 0; caller snaps |distance| <= epsilon to zero first.
-bool CsgDeformWallBuilder::clipShell(
+bool CsgDeformWallBuilder::ClipShell(
     ScratchArena& scratchArena,
     const CsgDeformShape& shape,
     const f32 epsilon,
@@ -151,7 +151,7 @@ bool CsgDeformWallBuilder::clipShell(
     CsgDeformViabilityReason::Enum& outReason
 ){
     outReason = CsgDeformViabilityReason::Ok;
-    if(!CsgDeformCutterField::shapeDistances(shape, inOutVertices, epsilon, scratchDistances, outReason))
+    if(!CsgDeformCutterField::ShapeDistances(shape, inOutVertices, epsilon, scratchDistances, outReason))
         return false;
 
     CsgDeformEdgeSplitMap edgeSplits(0, CsgDeformEdgeSplitKeyHash(), EqualTo<u64>(), scratchArena);
@@ -173,7 +173,7 @@ bool CsgDeformWallBuilder::clipShell(
         const bool kept[s_TriangleCornerCount] = { distances[0u] >= s_KeepDistanceZero, distances[1u] >= s_KeepDistanceZero, distances[2u] >= s_KeepDistanceZero };
         const u32 keepCount = (kept[0u] ? 1u : 0u) + (kept[1u] ? 1u : 0u) + (kept[2u] ? 1u : 0u);
         if(keepCount == 3u){
-            CsgDeformWallBuilder::emitTriangle(scratchKept, triangle.indices[0u], triangle.indices[1u], triangle.indices[2u]);
+            CsgDeformWallBuilder::EmitTriangle(scratchKept, triangle.indices[0u], triangle.indices[1u], triangle.indices[2u]);
             continue;
         }
         if(keepCount == 0u)
@@ -194,11 +194,11 @@ bool CsgDeformWallBuilder::clipShell(
             const f32 dropDistanceB = distances[(keepCorner + 2u) % s_TriangleCornerCount];
             u32 splitA = 0u;
             u32 splitB = 0u;
-            if(!CsgDeformWallBuilder::splitEdgeVertex(inOutVertices, edgeSplits, keepVertex, dropA, keepDistance, dropDistanceA, splitA))
+            if(!CsgDeformWallBuilder::SplitEdgeVertex(inOutVertices, edgeSplits, keepVertex, dropA, keepDistance, dropDistanceA, splitA))
                 return false;
-            if(!CsgDeformWallBuilder::splitEdgeVertex(inOutVertices, edgeSplits, keepVertex, dropB, keepDistance, dropDistanceB, splitB))
+            if(!CsgDeformWallBuilder::SplitEdgeVertex(inOutVertices, edgeSplits, keepVertex, dropB, keepDistance, dropDistanceB, splitB))
                 return false;
-            CsgDeformWallBuilder::emitTriangle(scratchKept, keepVertex, splitA, splitB);
+            CsgDeformWallBuilder::EmitTriangle(scratchKept, keepVertex, splitA, splitB);
             continue;
         }
         u32 dropCorner = 0u;
@@ -216,12 +216,12 @@ bool CsgDeformWallBuilder::clipShell(
         const f32 keepDistanceB = distances[(dropCorner + 2u) % s_TriangleCornerCount];
         u32 splitA = 0u;
         u32 splitB = 0u;
-        if(!CsgDeformWallBuilder::splitEdgeVertex(inOutVertices, edgeSplits, keepA, dropVertex, keepDistanceA, dropDistance, splitA))
+        if(!CsgDeformWallBuilder::SplitEdgeVertex(inOutVertices, edgeSplits, keepA, dropVertex, keepDistanceA, dropDistance, splitA))
             return false;
-        if(!CsgDeformWallBuilder::splitEdgeVertex(inOutVertices, edgeSplits, keepB, dropVertex, keepDistanceB, dropDistance, splitB))
+        if(!CsgDeformWallBuilder::SplitEdgeVertex(inOutVertices, edgeSplits, keepB, dropVertex, keepDistanceB, dropDistance, splitB))
             return false;
-        CsgDeformWallBuilder::emitTriangle(scratchKept, keepA, splitA, splitB);
-        CsgDeformWallBuilder::emitTriangle(scratchKept, keepA, splitB, keepB);
+        CsgDeformWallBuilder::EmitTriangle(scratchKept, keepA, splitA, splitB);
+        CsgDeformWallBuilder::EmitTriangle(scratchKept, keepA, splitB, keepB);
         if(scratchKept.size() > s_MaxDeformTriangles)
             return false;
     }

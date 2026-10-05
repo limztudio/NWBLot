@@ -20,14 +20,14 @@ using namespace NWB::UiSliderTests;
 
 class UiSliderPopupTests : public SliderFixture{
 protected:
-    [[nodiscard]] static PopupOptions parentOptions(){
+    [[nodiscard]] static PopupOptions ParentOptions(){
         PopupOptions popup;
         popup.anchor = { 20.0f, 20.0f, 80.0f, 20.0f };
         popup.size = { 340.0f, 360.0f };
         return popup;
     }
 
-    [[nodiscard]] static PopupOptions childOptions(){
+    [[nodiscard]] static PopupOptions ChildOptions(){
         PopupOptions popup;
         popup.anchor = { 420.0f, 20.0f, 80.0f, 20.0f };
         popup.size = { 340.0f, 300.0f };
@@ -50,15 +50,15 @@ protected:
 
     [[nodiscard]] bool beginParent(const u64 generation){
         return
-            begin(generation) && m_builder.beginPopup("parent", m_parent, parentOptions())
-            && m_builder.slider("slider", m_state, options())
+            begin(generation) && m_builder.beginPopup("parent", m_parent, ParentOptions())
+            && m_builder.slider("slider", m_state, Options())
         ;
     }
 
     [[nodiscard]] bool beginChild(){
         return
-            m_builder.beginPopup("child", m_child, childOptions())
-            && m_builder.slider("slider", m_childState, options())
+            m_builder.beginPopup("child", m_child, ChildOptions())
+            && m_builder.slider("slider", m_childState, Options())
         ;
     }
 
@@ -146,8 +146,8 @@ TEST_F(UiSliderPopupTests, ChildCallbackRejectsTheEarlierParentLoanInTheFinalCal
 TEST_F(UiSliderPopupTests, ParentAndChildCannotBorrowTheSameSliderStateAtTheSameTime){
     ASSERT_TRUE(acceptFamily(1u));
     ASSERT_TRUE(beginParent(2u));
-    ASSERT_TRUE(m_builder.beginPopup("child", m_child, childOptions()));
-    EXPECT_FALSE(m_builder.slider("alias", m_state, options()));
+    ASSERT_TRUE(m_builder.beginPopup("child", m_child, ChildOptions()));
+    EXPECT_FALSE(m_builder.slider("alias", m_state, Options()));
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_state.result().valid);
     EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
@@ -173,7 +173,7 @@ TEST_F(UiSliderPopupTests, AncestorClosureBeforePaintSuppressesCallbacksAndRetir
     EXPECT_FALSE(m_context.input().capture().valid());
     m_parent.open();
     ASSERT_TRUE(beginParent(3u));
-    EXPECT_FALSE(m_builder.beginPopup("child", m_child, childOptions()));
+    EXPECT_FALSE(m_builder.beginPopup("child", m_child, ChildOptions()));
     EXPECT_FALSE(m_child.isOpen());
     ASSERT_TRUE(finishParent());
     ASSERT_TRUE(m_context.commitFrame(3u));

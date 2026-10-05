@@ -81,14 +81,14 @@ using QueueSubmissionResolvedCallback = bool(*) (
 
 struct QueueSubmissionPreSubmitHook{
 private:
-    [[nodiscard]] static bool ignoreResolution(void*, u64, const QueueSubmissionToken&)noexcept{ return true; }
+    [[nodiscard]] static bool IgnoreResolution(void*, u64, const QueueSubmissionToken&)noexcept{ return true; }
 
 
 public:
     void* context = nullptr;
     u64 identity = 0u;
     QueueSubmissionPreSubmitCallback invoke = nullptr;
-    QueueSubmissionResolvedCallback resolved = &QueueSubmissionPreSubmitHook::ignoreResolution;
+    QueueSubmissionResolvedCallback resolved = &QueueSubmissionPreSubmitHook::IgnoreResolution;
 
     [[nodiscard]] constexpr bool valid()const noexcept{ return invoke != nullptr && resolved != nullptr; }
 };

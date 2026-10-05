@@ -222,7 +222,7 @@ void RendererTaskTimingFeedbackState::retirePendingSample(const usize pendingInd
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererTaskTimingFeedback::onGpuTimingSampleCallback(
+void RendererTaskTimingFeedback::OnGpuTimingSampleCallback(
     void* const context,
     const Core::GpuTimingSample& sample
 )noexcept{
@@ -268,7 +268,7 @@ void RendererTaskTimingFeedback::activate(){
     Core::GpuTimingRecorder& timing = m_graphics.gpuTiming();
     const Core::GpuTimingSampleSubscription subscription = timing.subscribeSampleListener(Core::GpuTimingSampleListener{
         .context = this,
-        .invoke = &onGpuTimingSampleCallback,
+        .invoke = &OnGpuTimingSampleCallback,
     });
     if(!subscription.valid()){
         NWB_LOGGER_WARNING(GLB_TEXT("Renderer task timing feedback failed to subscribe to GPU timing samples."));

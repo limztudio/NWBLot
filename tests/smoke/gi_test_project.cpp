@@ -162,16 +162,16 @@ static constexpr ComplexSceneBox s_ComplexFrontEnclosureBoxes[] = {
 
 class GiTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    [[nodiscard]] static u32 rendererBaselineCaptureFreezeFrame(){
-        return RendererBaselineCaptureFreezeFrame();
+    [[nodiscard]] static u32 RendererBaselineCaptureFreezeFrame(){
+        return NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame();
     }
 
-    [[nodiscard]] static f32 rendererBaselineFixedDelta(){
-        return RendererBaselineFixedDelta();
+    [[nodiscard]] static f32 RendererBaselineFixedDelta(){
+        return NWB::Tests::Smoke::RendererBaselineFixedDelta();
     }
 
 
-    static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
+    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, GLB_TEXT("GiTestSmokeProject"));
 
         AddSmokeRenderSystems(*world, context);
@@ -186,7 +186,7 @@ private:
 public:
     explicit GiTestSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(createWorldOrDie(context))
+        , m_world(CreateWorldOrDie(context))
     {}
 
     virtual ~GiTestSmokeProject()override{
@@ -220,7 +220,7 @@ public:
         }
 
         // Emit per-pass GPU timings (render.surfel_*) for A/B capture via NWB_GPU_TIMING_FILE.
-        m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::gpuTimingOnly());
+        m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(
             *m_world,
@@ -319,7 +319,7 @@ public:
             }
             elapsedSeconds = DurationInSeconds<f64>(now, m_complexSceneStartTime);
         }
-        const u32 captureFreezeFrame = rendererBaselineCaptureFreezeFrame();
+        const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
         const u64 successfulPresentations = m_context.graphics.getSuccessfulPresentationCount();
         const u64 captureProgress = m_complexSceneEnabled ? successfulPresentations : m_rendererBaselineRenderedFrameCount;
         if(captureFreezeFrame != 0u && captureProgress >= captureFreezeFrame && elapsedSeconds >= m_complexMinSettleSeconds){
@@ -375,7 +375,7 @@ public:
             );
         }
 
-        const f32 fixedDelta = rendererBaselineFixedDelta();
+        const f32 fixedDelta = RendererBaselineFixedDelta();
         const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
         m_world->tick(safeDelta);

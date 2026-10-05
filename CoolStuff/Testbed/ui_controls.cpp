@@ -22,7 +22,7 @@ void ProjectTestbed::drawUiControls(NWB::Impl::UiPaintContext& context){
     NWB::Impl::Ui::WindowOptions options;
     options.initialBounds = { 18.0f, 18.0f, 360.0f, 160.0f };
     options.contentHeightFirstUse = true;
-    const auto gallery = TestbedUiWidgetGallery::layoutBounds(context.display);
+    const auto gallery = TestbedUiWidgetGallery::LayoutBounds(context.display);
     const auto& overview = options.initialBounds;
     if(gallery.x < overview.x + overview.width && gallery.y < overview.y + overview.height)
         return;

@@ -26,7 +26,7 @@ bool GpuTaskGraph::discardUnacceptedPacket(
 )const{
     GpuCompiledPacketView packetView;
     if(
-        !resolvePacketView(compiledGraph, planAccess, packet, packetView)
+        !ResolvePacketView(compiledGraph, planAccess, packet, packetView)
         || recordingAttemptGeneration == 0u
         || !submissionBinding.valid()
     )
@@ -68,7 +68,7 @@ bool GpuTaskGraph::discardUnacceptedPacket(
         if(!hasUnacceptedTask)
             return true;
 
-        notificationGeneration = allocateGeneration();
+        notificationGeneration = AllocateGeneration();
         notification.activateWithinLock();
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
             const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];
@@ -106,7 +106,7 @@ bool GpuTaskGraph::abandonUnacceptedPacketWithoutCallbacks(
 )const noexcept{
     GpuCompiledPacketView packetView;
     if(
-        !resolvePacketView(compiledGraph, planAccess, packet, packetView)
+        !ResolvePacketView(compiledGraph, planAccess, packet, packetView)
         || recordingAttemptGeneration == 0u
         || !submissionBinding.valid()
     )

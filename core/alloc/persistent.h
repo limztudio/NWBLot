@@ -33,8 +33,8 @@ public:
 
 
 public:
-    [[nodiscard]] static usize structureAlignedSize(usize byte);
-    [[nodiscard]] static usize structureAlignedSize(usize byte, usize align);
+    [[nodiscard]] static usize StructureAlignedSize(usize byte);
+    [[nodiscard]] static usize StructureAlignedSize(usize byte, usize align);
 
 
 public:

@@ -22,21 +22,21 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void* FontSource::allocate(FT_Memory memory, FT_Long size){
+void* FontSource::Allocate(FT_Memory memory, FT_Long size){
     if(size <= 0)
         return nullptr;
     return static_cast<Core::Assets::AssetArena*>(memory->user)->allocate(alignof(MaxAlign), static_cast<usize>(size));
 }
 
-void FontSource::release(FT_Memory memory, void* block){
+void FontSource::Release(FT_Memory memory, void* block){
     if(block)
         static_cast<Core::Assets::AssetArena*>(memory->user)->deallocate(block, alignof(MaxAlign), 0u);
 }
 
-void* FontSource::reallocate(FT_Memory memory, FT_Long oldSize, FT_Long newSize, void* block){
+void* FontSource::Reallocate(FT_Memory memory, FT_Long oldSize, FT_Long newSize, void* block){
     static_cast<void>(oldSize);
     if(newSize <= 0){
-        release(memory, block);
+        Release(memory, block);
         return nullptr;
     }
     return
@@ -48,9 +48,9 @@ FontSource::FontSource(Core::Assets::AssetArena& arena)
     : m_bytes(arena)
 {
     m_memory.user = &arena;
-    m_memory.alloc = &allocate;
-    m_memory.free = &release;
-    m_memory.realloc = &reallocate;
+    m_memory.alloc = &Allocate;
+    m_memory.free = &Release;
+    m_memory.realloc = &Reallocate;
 }
 
 FontSource::~FontSource(){

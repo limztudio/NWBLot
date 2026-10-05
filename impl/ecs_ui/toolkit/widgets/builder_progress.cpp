@@ -40,7 +40,7 @@ bool Builder::progress(const AStringView stableKey, const f64 fraction, const Pr
     const UiSkinRegion* fill = region(frame.style.fill, frame.style.fillFallback);
     if(
         !IsFinite(fraction) || !track || !fill
-        || !ProgressLayout::measure(options, frame.style, *track, *fill, m_skin->referenceDensity(), frame.metrics)
+        || !ProgressLayout::Measure(options, frame.style, *track, *fill, m_skin->referenceDensity(), frame.metrics)
     ){
         m_context.fail();
         return false;

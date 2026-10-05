@@ -26,7 +26,7 @@ NWB_CORE_BEGIN
 // Foreign selection requestors can disappear between Xlib calls. Check those errors without a fatal Xlib handler.
 class X11CheckedOperation final : NoCopy{
 private:
-    static int onError(Display* display, XErrorEvent* event);
+    static int OnError(Display* display, XErrorEvent* event);
 
 
 public:

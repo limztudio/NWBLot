@@ -19,12 +19,12 @@ using namespace NWB::UiTextAreaTests;
 
 class UiTextAreaScrollTests : public TextAreaFixture{
 protected:
-    [[nodiscard]] static AStringView denseText(){
+    [[nodiscard]] static AStringView DenseText(){
         return "aaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\n"
             "aaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa";
     }
 
-    [[nodiscard]] static TextAreaOptions smallOptions(){
+    [[nodiscard]] static TextAreaOptions SmallOptions(){
         TextAreaOptions options;
         options.width = { LayoutSizePolicy::Fixed, 90.0f };
         options.height = { LayoutSizePolicy::Fixed, 42.0f };
@@ -37,10 +37,10 @@ protected:
 
 
 TEST_F(UiTextAreaScrollTests, ExplicitTwoAxisScrollSurvivesTheFirstModelBinding){
-    ASSERT_TRUE(m_model.setText(denseText()));
+    ASSERT_TRUE(m_model.setText(DenseText()));
     ASSERT_TRUE(m_state.scrollTo({ 17.0f, 19.0f }));
     const u64 revision = m_state.revision();
-    ASSERT_TRUE(frameArea(1u, smallOptions()));
+    ASSERT_TRUE(frameArea(1u, SmallOptions()));
     EXPECT_FLOAT_EQ(m_state.scroll().x, 17.0f);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 19.0f);
     EXPECT_EQ(m_state.revision(), revision);
@@ -48,17 +48,17 @@ TEST_F(UiTextAreaScrollTests, ExplicitTwoAxisScrollSurvivesTheFirstModelBinding)
     EXPECT_FLOAT_EQ(m_state.placement().textOrigin.y, m_state.placement().content.y - 19.0f);
     EXPECT_GT(m_state.placement().caret.x, m_state.placement().content.x + m_state.placement().content.width);
     EXPECT_GT(m_state.placement().caret.y, m_state.placement().content.y + m_state.placement().content.height);
-    EXPECT_EQ(m_model.caret(), denseText().size());
+    EXPECT_EQ(m_model.caret(), DenseText().size());
     EXPECT_FALSE(m_model.canUndo());
 }
 
 TEST_F(UiTextAreaScrollTests, IdleAndResizeClampExplicitViewportWithoutAdvancingItsIntentEpoch){
     useHost();
-    ASSERT_TRUE(m_model.setText(denseText()));
+    ASSERT_TRUE(m_model.setText(DenseText()));
     ASSERT_TRUE(m_state.scrollTo({ 17.0f, 19.0f }));
     const u64 revision = m_state.revision();
-    ASSERT_TRUE(frameArea(1u, smallOptions()));
-    ASSERT_TRUE(frameArea(2u, smallOptions()));
+    ASSERT_TRUE(frameArea(1u, SmallOptions()));
+    ASSERT_TRUE(frameArea(2u, SmallOptions()));
     EXPECT_FLOAT_EQ(m_state.scroll().x, 17.0f);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 19.0f);
     EXPECT_EQ(m_state.revision(), revision);
@@ -74,12 +74,12 @@ TEST_F(UiTextAreaScrollTests, IdleAndResizeClampExplicitViewportWithoutAdvancing
     ASSERT_EQ(m_host.publications.size(), 3u);
     EXPECT_FLOAT_EQ(m_host.publications[0u].placement.scroll, 17.0f);
     EXPECT_FLOAT_EQ(m_host.publications[0u].placement.scrollY, 19.0f);
-    EXPECT_EQ(m_host.publications[0u].text, denseText());
+    EXPECT_EQ(m_host.publications[0u].text, DenseText());
 }
 
 TEST_F(UiTextAreaScrollTests, AutomaticRevealSurvivesIdleViewportShrinkWithoutNewModelIntent){
     useHost();
-    ASSERT_TRUE(m_model.setText(denseText()));
+    ASSERT_TRUE(m_model.setText(DenseText()));
     TextAreaOptions larger;
     larger.width = { LayoutSizePolicy::Fixed, 500.0f };
     larger.height = { LayoutSizePolicy::Fixed, 300.0f };
@@ -89,7 +89,7 @@ TEST_F(UiTextAreaScrollTests, AutomaticRevealSurvivesIdleViewportShrinkWithoutNe
     const u64 revision = m_model.revision();
     const u64 selection = m_model.selectionGeneration();
     const u64 stateRevision = m_state.revision();
-    TextAreaOptions compact = smallOptions();
+    TextAreaOptions compact = SmallOptions();
     compact.height.value += m_builder.scrollbarStyle().thickness;
     ASSERT_TRUE(frameArea(2u, compact));
     EXPECT_GT(m_state.scroll().x, 0.0f);
@@ -108,10 +108,10 @@ TEST_F(UiTextAreaScrollTests, AutomaticRevealSurvivesIdleViewportShrinkWithoutNe
 }
 
 TEST_F(UiTextAreaScrollTests, ExplicitOverscrollClampsToBothContentExtents){
-    ASSERT_TRUE(m_model.setText(denseText()));
+    ASSERT_TRUE(m_model.setText(DenseText()));
     ASSERT_TRUE(m_state.scrollTo({ 10000.0f, 10000.0f }));
     const u64 revision = m_state.revision();
-    ASSERT_TRUE(frameArea(1u, smallOptions()));
+    ASSERT_TRUE(frameArea(1u, SmallOptions()));
     const EditBoxPlacement& placement = m_state.placement();
     EXPECT_GT(m_state.scroll().x, 0.0f);
     EXPECT_GT(m_state.scroll().y, 0.0f);
@@ -123,47 +123,47 @@ TEST_F(UiTextAreaScrollTests, ExplicitOverscrollClampsToBothContentExtents){
 }
 
 TEST_F(UiTextAreaScrollTests, AcceptedIdenticalSelectionResumesRevealAfterManualScrolling){
-    ASSERT_TRUE(m_model.setText(denseText()));
-    ASSERT_TRUE(frameArea(1u, smallOptions()));
+    ASSERT_TRUE(m_model.setText(DenseText()));
+    ASSERT_TRUE(frameArea(1u, SmallOptions()));
     EXPECT_GT(m_state.scroll().x, 0.0f);
     EXPECT_GT(m_state.scroll().y, 0.0f);
     ASSERT_TRUE(m_state.scrollTo({ 0.0f, 0.0f }));
     const u64 revision = m_state.revision();
-    ASSERT_TRUE(frameArea(2u, smallOptions()));
+    ASSERT_TRUE(frameArea(2u, SmallOptions()));
     EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     const u64 selectionGeneration = m_model.selectionGeneration();
     ASSERT_TRUE(m_model.setSelection(m_model.anchor(), m_model.caret()));
     EXPECT_GT(m_model.selectionGeneration(), selectionGeneration);
-    ASSERT_TRUE(frameArea(3u, smallOptions()));
+    ASSERT_TRUE(frameArea(3u, SmallOptions()));
     EXPECT_GT(m_state.scroll().x, 0.0f);
     EXPECT_GT(m_state.scroll().y, 0.0f);
     EXPECT_EQ(m_state.revision(), revision);
-    EXPECT_EQ(m_model.text(), denseText());
+    EXPECT_EQ(m_model.text(), DenseText());
     EXPECT_FALSE(m_model.canUndo());
 }
 
 TEST_F(UiTextAreaScrollTests, CopyAndUnchangedSubmitPreserveTheExplicitViewport){
     useHost();
-    ASSERT_TRUE(m_model.setText(denseText()));
-    ASSERT_TRUE(frameArea(1u, smallOptions()));
+    ASSERT_TRUE(m_model.setText(DenseText()));
+    ASSERT_TRUE(frameArea(1u, SmallOptions()));
     ASSERT_TRUE(m_state.scrollTo({ 0.0f, 0.0f }));
     const u64 revision = m_state.revision();
     const u64 selectionGeneration = m_model.selectionGeneration();
     m_host.key(Core::Key::C, true);
     m_host.key(Core::Key::Enter, true);
-    ASSERT_TRUE(frameArea(2u, smallOptions()));
+    ASSERT_TRUE(frameArea(2u, SmallOptions()));
     EXPECT_TRUE(m_result.submitted);
     EXPECT_FALSE(m_result.textChanged || m_result.selectionChanged);
     EXPECT_FLOAT_EQ(m_state.scroll().x, 0.0f);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
     EXPECT_EQ(m_state.revision(), revision);
     EXPECT_EQ(m_model.selectionGeneration(), selectionGeneration);
-    EXPECT_EQ(m_model.text(), denseText());
+    EXPECT_EQ(m_model.text(), DenseText());
     ASSERT_EQ(m_host.actionTexts.size(), 1u);
-    EXPECT_EQ(m_host.actionTexts.front(), denseText());
+    EXPECT_EQ(m_host.actionTexts.front(), DenseText());
     m_host.selection(m_model.anchor(), m_model.caret());
-    ASSERT_TRUE(frameArea(3u, smallOptions()));
+    ASSERT_TRUE(frameArea(3u, SmallOptions()));
     EXPECT_FALSE(m_result.selectionChanged);
     EXPECT_GT(m_model.selectionGeneration(), selectionGeneration);
     EXPECT_GT(m_state.scroll().x, 0.0f);
@@ -172,54 +172,54 @@ TEST_F(UiTextAreaScrollTests, CopyAndUnchangedSubmitPreserveTheExplicitViewport)
 
 TEST_F(UiTextAreaScrollTests, AcceptedTextResumesRevealAndPublicationOwnsItsBytes){
     useHost();
-    ASSERT_TRUE(m_model.setText(denseText()));
-    ASSERT_TRUE(frameArea(1u, smallOptions()));
+    ASSERT_TRUE(m_model.setText(DenseText()));
+    ASSERT_TRUE(frameArea(1u, SmallOptions()));
     ASSERT_TRUE(m_state.scrollTo({ 0.0f, 0.0f }));
-    ASSERT_TRUE(frameArea(2u, smallOptions()));
+    ASSERT_TRUE(frameArea(2u, SmallOptions()));
     m_host.text("b");
-    ASSERT_TRUE(frameArea(3u, smallOptions()));
+    ASSERT_TRUE(frameArea(3u, SmallOptions()));
     EXPECT_TRUE(m_result.textChanged);
     EXPECT_GT(m_state.scroll().x, 0.0f);
     EXPECT_GT(m_state.scroll().y, 0.0f);
     AString<Core::Alloc::GlobalArena> displayed(m_arena);
-    displayed.assign(denseText().data(), denseText().size());
+    displayed.assign(DenseText().data(), DenseText().size());
     displayed.push_back('b');
     ASSERT_EQ(m_host.publications.size(), 3u);
     EXPECT_EQ(m_host.publications.back().text, displayed);
     ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), denseText());
+    EXPECT_EQ(m_model.text(), DenseText());
     EXPECT_EQ(m_host.publications.back().text, displayed);
     EXPECT_FALSE(m_model.canUndo());
 }
 
 TEST_F(UiTextAreaScrollTests, KnownModelRebindingResetsAndRevealsTheNewCaret){
-    ASSERT_TRUE(m_model.setText(denseText()));
+    ASSERT_TRUE(m_model.setText(DenseText()));
     ASSERT_TRUE(m_state.scrollTo({ 17.0f, 19.0f }));
-    ASSERT_TRUE(frameArea(1u, smallOptions()));
+    ASSERT_TRUE(frameArea(1u, SmallOptions()));
     EditModel replacement(m_arena, {}, EditTextMode::Multiline);
-    ASSERT_TRUE(replacement.setText(denseText()));
+    ASSERT_TRUE(replacement.setText(DenseText()));
     const u64 revision = m_state.revision();
     ASSERT_TRUE(beginArea(2u));
-    ASSERT_TRUE(m_builder.textArea("area", replacement, m_state, smallOptions()).valid);
+    ASSERT_TRUE(m_builder.textArea("area", replacement, m_state, SmallOptions()).valid);
     ASSERT_TRUE(acceptArea());
     EXPECT_GT(m_state.scroll().x, 17.0f);
     EXPECT_GT(m_state.scroll().y, 19.0f);
     EXPECT_EQ(m_state.revision(), revision);
-    EXPECT_EQ(replacement.caret(), denseText().size());
-    EXPECT_EQ(m_model.text(), denseText());
+    EXPECT_EQ(replacement.caret(), DenseText().size());
+    EXPECT_EQ(m_model.text(), DenseText());
 }
 
 TEST_F(UiTextAreaScrollTests, ResetThenScrollSeedsANewInitialBinding){
-    ASSERT_TRUE(m_model.setText(denseText()));
-    ASSERT_TRUE(frameArea(1u, smallOptions()));
+    ASSERT_TRUE(m_model.setText(DenseText()));
+    ASSERT_TRUE(frameArea(1u, SmallOptions()));
     m_state.reset();
     ASSERT_TRUE(m_state.scrollTo({ 17.0f, 19.0f }));
     const u64 revision = m_state.revision();
-    ASSERT_TRUE(frameArea(2u, smallOptions()));
+    ASSERT_TRUE(frameArea(2u, SmallOptions()));
     EXPECT_FLOAT_EQ(m_state.scroll().x, 17.0f);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 19.0f);
     EXPECT_EQ(m_state.revision(), revision);
-    EXPECT_EQ(m_model.caret(), denseText().size());
+    EXPECT_EQ(m_model.caret(), DenseText().size());
     EXPECT_FALSE(m_model.canUndo());
 }
 

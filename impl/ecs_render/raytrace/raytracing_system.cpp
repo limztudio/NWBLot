@@ -70,8 +70,8 @@ void RendererRayTracingSystem::clearPreparedSceneBvh()noexcept{
     m_preparedSceneBvhInstanceBytes.clear();
     m_preparedSceneBvhNodeBuffer = nullptr;
     m_preparedSceneBvhInstanceBuffer = nullptr;
-    m_preparedSceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_preparedSceneBvhInstanceHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_preparedSceneBvhNodeHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_preparedSceneBvhInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_preparedSceneBvhNodeCount = 0u;
     m_preparedSceneBvhInstanceCount = 0u;
     m_preparedSceneBvhNodeCapacity = 0u;
@@ -488,7 +488,7 @@ void RendererRayTracingSystem::clearPreparedSceneTlasBuild()noexcept{
     m_preparedSceneTlasBlases.clear();
     m_preparedSceneTlas = nullptr;
     m_preparedSceneTlasBackingBuffer = nullptr;
-    m_preparedSceneTlasHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_preparedSceneTlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_preparedSceneTlasMaxInstances = 0u;
     m_preparedSceneTlasStaticSceneHash = 0u;
     m_preparedSceneTlasStatic = false;

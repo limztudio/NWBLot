@@ -50,7 +50,7 @@ static constexpr Array<XIMStyle, 3u> s_PreferredStyles{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void X11TextInputService::onInputMethodDestroyed(const XIM method, const XPointer data, XPointer){
+void X11TextInputService::OnInputMethodDestroyed(const XIM method, const XPointer data, XPointer){
     auto& service = *reinterpret_cast<X11TextInputService*>(data);
     if(service.m_method != method)
         return;
@@ -246,7 +246,7 @@ void X11TextInputService::openMethod(){
     }
     if(styles)
         XFree(styles);
-    XIMCallback destroyed{ reinterpret_cast<XPointer>(this), &onInputMethodDestroyed };
+    XIMCallback destroyed{ reinterpret_cast<XPointer>(this), &OnInputMethodDestroyed };
     if(XSetIMValues(m_method, XNDestroyCallback, &destroyed, nullptr))
         NWB_LOGGER_WARNING(GLB_TEXT("X11 text input: input method destruction notification unavailable"));
 }
@@ -256,10 +256,10 @@ bool X11TextInputService::createContext(){
         m_context = XCreateIC(m_method, XNInputStyle, m_style, XNClientWindow, m_window, XNFocusWindow, m_window, nullptr);
     }
     else{
-        XICCallback start{ reinterpret_cast<XPointer>(this), &onPreeditStart };
-        XICCallback done{ reinterpret_cast<XPointer>(this), &onPreeditDone };
-        XICCallback draw{ reinterpret_cast<XPointer>(this), &onPreeditDraw };
-        XICCallback caret{ reinterpret_cast<XPointer>(this), &onPreeditCaret };
+        XICCallback start{ reinterpret_cast<XPointer>(this), &OnPreeditStart };
+        XICCallback done{ reinterpret_cast<XPointer>(this), &OnPreeditDone };
+        XICCallback draw{ reinterpret_cast<XPointer>(this), &OnPreeditDraw };
+        XICCallback caret{ reinterpret_cast<XPointer>(this), &OnPreeditCaret };
         XVaNestedList attributes = XVaCreateNestedList(
             0, XNPreeditStartCallback, &start, XNPreeditDoneCallback, &done,
             XNPreeditDrawCallback, &draw, XNPreeditCaretCallback, &caret, nullptr

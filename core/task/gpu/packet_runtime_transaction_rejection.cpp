@@ -134,7 +134,7 @@ public:
         if(!m_armed || UncaughtExceptionCount() <= m_uncaughtExceptionCount)
             return;
 
-        if(GpuGraphSubmissionTransaction::waitForSubmissionExceptionClosing(
+        if(GpuGraphSubmissionTransaction::WaitForSubmissionExceptionClosing(
             m_transaction,
             m_graph,
             m_compiledGraph,
@@ -246,7 +246,7 @@ void GpuGraphSubmissionTransaction::rejectTask(
     if(!submissionOperation.valid())
         return;
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
-    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
     if(!planAccess.validFor(declarationAccess) || !validFor(planAccess))
         return;
     UnacceptedPacketsUnwindScope unwindScope(finalizationScope);
@@ -277,7 +277,7 @@ bool GpuGraphSubmissionTransaction::discardUnaccepted(
         || recordingAttemptGeneration == 0u
     )
         return false;
-    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+    GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
     if(!planAccess.validFor(declarationAccess))
         return false;
 
@@ -350,7 +350,7 @@ void GpuGraphSubmissionTransaction::rejectTaskWithinSubmissionOperation(
     const u64 recordingAttemptGeneration
 ){
     if(
-        !SubmissionOperation::activeExclusiveFor(*this)
+        !SubmissionOperation::ActiveExclusiveFor(*this)
         || !declarationAccess.validFor(graph)
         || !planAccess.validFor(declarationAccess)
         || !planAccess.findTask(task).valid()
@@ -369,7 +369,7 @@ void GpuGraphSubmissionTransaction::rejectPacket(
     const u64 recordingAttemptGeneration
 ){
     if(
-        !SubmissionOperation::activeFor(*this)
+        !SubmissionOperation::ActiveFor(*this)
         || !planAccess.validFor(compiledGraph)
         || !validFor(planAccess)
         || !planAccess.validPacket(packetID)
@@ -429,7 +429,7 @@ void GpuGraphSubmissionTransaction::rejectSubmittingPacket(
     GpuTaskGraph::PacketSubmissionLease& lease
 ){
     if(
-        !SubmissionOperation::activeFor(*this)
+        !SubmissionOperation::ActiveFor(*this)
         || !planAccess.validFor(compiledGraph)
         || !validFor(planAccess)
         || !planAccess.validPacket(packetID)
@@ -480,7 +480,7 @@ void GpuGraphSubmissionTransaction::abandonSubmittingPacketAfterExceptionWithinS
     const GpuSubmissionPacketId packetID,
     GpuTaskGraph::PacketSubmissionLease& lease
 )noexcept{
-    const bool inputValid = SubmissionOperation::activeFor(*this)
+    const bool inputValid = SubmissionOperation::ActiveFor(*this)
         && planAccess.validFor(compiledGraph)
         && validFor(planAccess)
         && planAccess.validPacket(packetID)
@@ -530,7 +530,7 @@ void GpuGraphSubmissionTransaction::completeRejectedPacketWithinSubmissionOperat
     const bool nativeSubmissionRejected
 )noexcept{
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
-    const bool inputValid = SubmissionOperation::activeFor(*this)
+    const bool inputValid = SubmissionOperation::ActiveFor(*this)
         && planAccess.validFor(compiledGraph)
         && packetView.valid()
     ;
@@ -562,7 +562,7 @@ void GpuGraphSubmissionTransaction::abandonUnacceptedPacketsAfterExceptionWithin
     const GpuCompiledGraph& compiledGraph,
     const GpuCompiledGraph::ReadView& planAccess
 )noexcept{
-    const bool operationValid = SubmissionOperation::activeExclusiveFor(*this)
+    const bool operationValid = SubmissionOperation::ActiveExclusiveFor(*this)
         && planAccess.validFor(compiledGraph)
     ;
     GLB_FATAL_ASSERT_MSG(operationValid, "exception cleanup requires exclusive graph submission ownership");

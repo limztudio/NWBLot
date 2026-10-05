@@ -25,12 +25,12 @@ using namespace NWB::UiTextVisibleTests;
 
 class TextVisibleCoverageTests : public TextVisibleFixture{
 protected:
-    [[nodiscard]] static Rect outlineRectangle(const PlacedGlyph& glyph, const Point origin){
+    [[nodiscard]] static Rect OutlineRectangle(const PlacedGlyph& glyph, const Point origin){
         return { origin.x + glyph.position.x + glyph.ink.x, origin.y + glyph.position.y + glyph.ink.y,
             glyph.ink.width, glyph.ink.height };
     }
 
-    [[nodiscard]] static Rect rasterFringe(const Rect& raster, const Rect& outline){
+    [[nodiscard]] static Rect RasterFringe(const Rect& raster, const Rect& outline){
         if(raster.x + 0.001f < outline.x)
             return { raster.x, raster.y, Min(0.05f, (outline.x - raster.x) * 0.5f), raster.height };
         if(raster.y + 0.001f < outline.y)
@@ -110,7 +110,7 @@ TEST_F(TextVisibleCoverageTests, MoreThan4096DistinctHiddenHangulDoNotExhaustThe
         EXPECT_TRUE(glyph.coverage.known);
         EXPECT_GT(glyph.coverage.ink.width, 0.0f);
         EXPECT_GT(glyph.coverage.ink.height, 0.0f);
-        EXPECT_GE(outlineRectangle(glyph, { 20.0f, 20.0f }).y, clip.height);
+        EXPECT_GE(OutlineRectangle(glyph, { 20.0f, 20.0f }).y, clip.height);
         ids.push_back(glyph.glyphId);
     }
     Sort(ids.begin(), ids.end());
@@ -227,7 +227,7 @@ TEST_F(TextVisibleCoverageTests, FractionalUnequalDpiKeepsAHintedRasterSliverOut
     ASSERT_EQ(m_layout.glyphs().size(), 1u);
     Rect raster;
     ASSERT_TRUE(rasterRectangle(m_layout.glyphs()[0u], m_layout.fontSize(), display, origin, raster));
-    const Rect clip = rasterFringe(raster, outlineRectangle(m_layout.glyphs()[0u], origin));
+    const Rect clip = RasterFringe(raster, OutlineRectangle(m_layout.glyphs()[0u], origin));
     ASSERT_GT(clip.width, 0.0f);
     ASSERT_GT(clip.height, 0.0f);
     const Point measured = m_layout.measure();

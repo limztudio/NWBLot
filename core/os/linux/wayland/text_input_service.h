@@ -32,18 +32,18 @@ NWB_CORE_BEGIN
 class WaylandTextInputService final : public QueuedTextInputService{
 private:
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
-    static void onRegistryGlobal(void* data, wl_registry* registry, u32 name, const char* interfaceName, u32 version);
-    static void onRegistryRemove(void* data, wl_registry* registry, u32 name);
-    static void onEnter(void* data, zwp_text_input_v3* input, wl_surface* surface);
-    static void onLeave(void* data, zwp_text_input_v3* input, wl_surface* surface);
-    static void onPreedit(void* data, zwp_text_input_v3* input, const char* text, i32 begin, i32 end);
-    static void onCommit(void* data, zwp_text_input_v3* input, const char* text);
-    static void onDelete(void* data, zwp_text_input_v3* input, u32 before, u32 after);
-    static void onDone(void* data, zwp_text_input_v3* input, u32 serial);
+    static void OnRegistryGlobal(void* data, wl_registry* registry, u32 name, const char* interfaceName, u32 version);
+    static void OnRegistryRemove(void* data, wl_registry* registry, u32 name);
+    static void OnEnter(void* data, zwp_text_input_v3* input, wl_surface* surface);
+    static void OnLeave(void* data, zwp_text_input_v3* input, wl_surface* surface);
+    static void OnPreedit(void* data, zwp_text_input_v3* input, const char* text, i32 begin, i32 end);
+    static void OnCommit(void* data, zwp_text_input_v3* input, const char* text);
+    static void OnDelete(void* data, zwp_text_input_v3* input, u32 before, u32 after);
+    static void OnDone(void* data, zwp_text_input_v3* input, u32 serial);
 #if defined(ZWP_TEXT_INPUT_V3_ACTION_SINCE_VERSION)
-    static void onAction(void* data, zwp_text_input_v3* input, u32 action, u32 serial);
-    static void onLanguage(void* data, zwp_text_input_v3* input, const char* language);
-    static void onPreeditHint(void* data, zwp_text_input_v3* input, u32 start, u32 end, u32 hint);
+    static void OnAction(void* data, zwp_text_input_v3* input, u32 action, u32 serial);
+    static void OnLanguage(void* data, zwp_text_input_v3* input, const char* language);
+    static void OnPreeditHint(void* data, zwp_text_input_v3* input, u32 start, u32 end, u32 hint);
 #endif
 #endif
 

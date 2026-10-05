@@ -78,11 +78,11 @@ public:
         snapshot.casters = &caster;
         snapshot.casterCount = 1u;
         snapshot.ready = true;
-        auto& states = Access::stateHandoffTextures(acceptedState);
+        auto& states = Access::StateHandoffTextures(acceptedState);
         states.push_back({ .texture = snapshot.depth.get(), .mipLevel = 0u, .arraySlice = 0u,
             .state = Core::ResourceStates::ShaderResource, .queueSharing = Core::ResourceQueueSharing::Exclusive,
             .ownerQueue = { .index = 0u, .deviceGeneration = 1u }, .releaseDestinationQueue = {} });
-        Access::validateStateHandoff(acceptedState, 1u);
+        Access::ValidateStateHandoff(acceptedState, 1u);
     }
 
 
@@ -241,7 +241,7 @@ TEST(LightSpaceCaptureGraph, ReuseCompilesWithoutCaptureOnlyImportsAndRetainsAcc
         // Graph declarations own their handoff snapshot; invalidating the caller's source cannot change this proof.
         context.acceptedState.reset();
         ASSERT_TRUE(retained->validForDeviceGeneration(1u));
-        const auto& states = Access::stateHandoffTextures(*retained);
+        const auto& states = Access::StateHandoffTextures(*retained);
         ASSERT_EQ(states.size(), 1u);
         EXPECT_EQ(states[0u].texture, context.snapshot.depth.get());
         EXPECT_EQ(states[0u].mipLevel, 0u);

@@ -129,25 +129,25 @@ private:
     static_assert(offsetof(MeshletRepackPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_BINDLESS_RESOURCES_SLOT, "MeshSkinning repack bindless-resource slot push offset drifted");
 
     struct RuntimeBindlessHeapHandles{
-        Core::GpuDescriptorHandle resourceSlots = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle restPosition = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle skinnedPosition = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle restNormal = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle skinnedNormal = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle restTangent = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle skinnedTangent = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle meshletDesc = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle positionRefDeltas = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle attributeRefDeltas = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle attributeSkins = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle skinInfluences = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle jointPalette = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle localVertexRefs = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle primitiveIndices = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle meshletBounds = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle attributeBuffer = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle meshletLocalBounds = Core::GpuDescriptorHandle::invalid();
-        Core::GpuDescriptorHandle localBounds = Core::GpuDescriptorHandle::invalid();
+        Core::GpuDescriptorHandle resourceSlots = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle restPosition = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle skinnedPosition = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle restNormal = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle skinnedNormal = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle restTangent = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle skinnedTangent = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle meshletDesc = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle positionRefDeltas = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle attributeRefDeltas = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle attributeSkins = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle skinInfluences = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle jointPalette = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle localVertexRefs = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle primitiveIndices = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle meshletBounds = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle attributeBuffer = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle meshletLocalBounds = Core::GpuDescriptorHandle::Invalid();
+        Core::GpuDescriptorHandle localBounds = Core::GpuDescriptorHandle::Invalid();
     };
 
     struct RuntimeResources{
@@ -212,7 +212,7 @@ public:
 
 
 private:
-    [[nodiscard]] static bool resolveRestToSkinnedCopyByteCounts(
+    [[nodiscard]] static bool ResolveRestToSkinnedCopyByteCounts(
         const MeshSkinningRuntimeInstance& instance,
         usize& outPositionBytes,
         usize& outNormalBytes,

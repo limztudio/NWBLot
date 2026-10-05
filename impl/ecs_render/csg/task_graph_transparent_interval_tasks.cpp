@@ -34,7 +34,7 @@ AvboitCsgReceiverSpanGraphTask::Payload::Payload(Core::Alloc::GlobalArena& arena
 {}
 
 
-bool AvboitCsgReceiverSpanGraphTask::record(
+bool AvboitCsgReceiverSpanGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
@@ -101,7 +101,7 @@ AvboitCsgIntervalCombineGraphTask::Payload::Payload(Core::Alloc::GlobalArena& ar
 {}
 
 
-bool AvboitCsgIntervalCombineGraphTask::record(
+bool AvboitCsgIntervalCombineGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context

@@ -175,7 +175,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInCompileOrder(
 
     const Timer recordingOperationBegin = TimerNow();
     {
-        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
         if(
             !declarationAccess.valid()
             || !prepareRecordingAttempt(
@@ -283,7 +283,7 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     const bool usesParallelRecording = !commandIrCapture && cpuScheduler.isParallelEnabled() && range.packetCount >= 2u;
     bool recordingFrontiersAreMonotonic = true;
     {
-        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::tryAcquire(graph);
+        GpuTaskGraph::DeclarationReadView declarationAccess = GpuTaskGraph::DeclarationReadView::TryAcquire(graph);
         if(!declarationAccess.valid())
             return false;
 

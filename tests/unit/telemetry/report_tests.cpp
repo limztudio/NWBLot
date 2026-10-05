@@ -34,7 +34,7 @@ using namespace TelemetryTestDetail;
 TEST(Telemetry, TelemetryReportKeepsCaptureOrderAndCorrelatesTimingByFrame){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::all());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
     const Name gbufferScopeName{s_GBUFFER};
     NWB::Core::Perf::TimingStats firstTiming = MakeTestTimingStats();
@@ -114,7 +114,7 @@ TEST(Telemetry, TelemetryReportKeepsCaptureOrderAndCorrelatesTimingByFrame){
 TEST(Telemetry, TelemetryReportDoesNotAttachAggregatedTimingToOneGraph){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::all());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
     NWB::Core::Perf::TimingStats aggregatedTiming = MakeTestTimingStats();
     aggregatedTiming.seconds = 0.043;
@@ -168,7 +168,7 @@ TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromAbsen
     packetSubmissionStatistics.clear();
 
     Telemetry::Recorder exactRecorder(testArena.arena);
-    exactRecorder.setCaptureOptions(Telemetry::CaptureOptions::all());
+    exactRecorder.setCaptureOptions(Telemetry::CaptureOptions::All());
     ASSERT_TRUE(Telemetry::RecordFrameGraph(
         exactRecorder,
         58u,
@@ -186,7 +186,7 @@ TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromAbsen
     EXPECT_TRUE(ContainsText(exactDot, "runtime_packet_submission_count=0"));
 
     Telemetry::Recorder absentRecorder(testArena.arena);
-    absentRecorder.setCaptureOptions(Telemetry::CaptureOptions::all());
+    absentRecorder.setCaptureOptions(Telemetry::CaptureOptions::All());
     ASSERT_TRUE(Telemetry::RecordFrameGraph(absentRecorder, 59u, nodes, edges, 19u));
     Log::TelemetryReport absentReport(testArena.arena);
     ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, absentRecorder.view(), absentReport));
@@ -205,7 +205,7 @@ TEST(Telemetry, TelemetryReportRejectsNonCurrentFrameGraphPayloads){
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 55u, nodes, edges, payload));
 
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::all());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 55u, nodes, edges, 15u));
 
     const u16 unsupportedVersions[] = {
@@ -241,7 +241,7 @@ TEST(Telemetry, TelemetryReportRejectsNonCurrentFrameGraphPayloads){
 TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::all());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
 
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);

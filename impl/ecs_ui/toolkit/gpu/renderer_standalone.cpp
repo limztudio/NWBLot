@@ -130,15 +130,15 @@ Core::GpuTaskId GpuRendererState::declareStandalone(
 
 
 bool GpuRenderer::renderStandalone(const Core::AcquiredPresentationFrame& frame){
-    if(!GpuRendererState::matchesAcquired(m_state->m_graphics.acquiredPresentationFrame(), frame))
+    if(!GpuRendererState::MatchesAcquired(m_state->m_graphics.acquiredPresentationFrame(), frame))
         return false;
     // Only the exact accepted acquired image is already produced. A rejected claimed scene graph owns its recovery tail.
-    if(GpuRendererState::matchesAcquired(m_state->m_lastAcceptedAcquired, frame))
+    if(GpuRendererState::MatchesAcquired(m_state->m_lastAcceptedAcquired, frame))
         return true;
     if(!m_state->m_pending)
         return false;
     const Core::AcquiredPresentationFrame& prepared = m_state->m_pending->m_acquired;
-    if(m_state->m_claimed && GpuRendererState::matchesAcquired(prepared, frame))
+    if(m_state->m_claimed && GpuRendererState::MatchesAcquired(prepared, frame))
         return true;
     if(!m_state->prepare(frame))
         return false;

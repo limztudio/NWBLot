@@ -25,13 +25,13 @@ NWB_IMPL_BEGIN
 
 class MeshMeshletRefValidation final : NoCopy{
 public:
-    [[nodiscard]] static bool meshletPositionRefInRange(
+    [[nodiscard]] static bool MeshletPositionRefInRange(
     const MeshletPositionStreamRef& ref,
     const usize positionCount,
     const usize skinCount,
     const bool skinRequired
     );
-    [[nodiscard]] static bool meshletAttributeRefInRange(
+    [[nodiscard]] static bool MeshletAttributeRefInRange(
     const MeshletAttributeStreamRef& ref,
     const usize normalCount,
     const usize tangentCount,
@@ -46,7 +46,7 @@ public:
     typename ConflictHandler,
     typename UnreferencedHandler
     >
-    [[nodiscard]] static bool resolveMeshletAttributeSkinsFromLocalVertices(
+    [[nodiscard]] static bool ResolveMeshletAttributeSkinsFromLocalVertices(
     const MeshletContainer& meshlets,
     const LocalVertexRefContainer& localVertexRefs,
     const usize attributeCount,
@@ -63,7 +63,7 @@ public:
     typename ConflictHandler,
     typename UnreferencedHandler
     >
-    [[nodiscard]] static bool resolveMeshletAttributeSkins(
+    [[nodiscard]] static bool ResolveMeshletAttributeSkins(
     const MeshletContainer& meshlets,
     const PositionRefContainer& positionRefs,
     const LocalVertexRefContainer& localVertexRefs,
@@ -90,7 +90,7 @@ template<
     typename ConflictHandler,
     typename UnreferencedHandler
 >
-[[nodiscard]] bool MeshMeshletRefValidation::resolveMeshletAttributeSkinsFromLocalVertices(
+[[nodiscard]] bool MeshMeshletRefValidation::ResolveMeshletAttributeSkinsFromLocalVertices(
     const MeshletContainer& meshlets,
     const LocalVertexRefContainer& localVertexRefs,
     const usize attributeCount,
@@ -146,7 +146,7 @@ template<
     typename ConflictHandler,
     typename UnreferencedHandler
 >
-[[nodiscard]] bool MeshMeshletRefValidation::resolveMeshletAttributeSkins(
+[[nodiscard]] bool MeshMeshletRefValidation::ResolveMeshletAttributeSkins(
     const MeshletContainer& meshlets,
     const PositionRefContainer& positionRefs,
     const LocalVertexRefContainer& localVertexRefs,
@@ -155,7 +155,7 @@ template<
     ConflictHandler onConflict,
     UnreferencedHandler onUnreferenced
 ){
-    return resolveMeshletAttributeSkinsFromLocalVertices(
+    return ResolveMeshletAttributeSkinsFromLocalVertices(
         meshlets,
         localVertexRefs,
         attributeCount,

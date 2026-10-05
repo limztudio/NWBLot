@@ -19,7 +19,7 @@ bool Builder::paintProgress(const Item& item, const LayoutBox& box){
         return false;
     const ProgressFrame& frame = m_scope->m_progress[item.progress];
     ProgressPlacement placement;
-    if(!ProgressLayout::place(box.rectangle, visibleClip(box.clip), frame.metrics, frame.fraction, placement))
+    if(!ProgressLayout::Place(box.rectangle, visibleClip(box.clip), frame.metrics, frame.fraction, placement))
         return false;
     m_paint.pushClip(placement.clip);
     bool painted = m_paint.drawRegion(frame.style.track, placement.bounds, frame.style.trackTint);

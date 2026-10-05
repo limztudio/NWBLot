@@ -82,7 +82,7 @@ private:
 class SearchComboBehavior final{
 public:
     // Reconcile the committed combo against the full source first; reconcile its preview against filtered() afterward.
-    [[nodiscard]] static bool filter(SearchComboState& state, ISearchableListDataSource& source);
+    [[nodiscard]] static bool Filter(SearchComboState& state, ISearchableListDataSource& source);
 };
 
 

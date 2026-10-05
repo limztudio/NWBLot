@@ -139,7 +139,7 @@ void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const Graphi
         heap,
         VK_PIPELINE_BIND_POINT_GRAPHICS,
         pipeline,
-        GpuDescriptorHandle::invalid(),
+        GpuDescriptorHandle::Invalid(),
         s_OperationName
     );
 }
@@ -174,7 +174,7 @@ void CommandList::bindDescriptorBufferHeap(GpuDescriptorHeap& heap, const Meshle
         heap,
         VK_PIPELINE_BIND_POINT_GRAPHICS,
         pipeline,
-        GpuDescriptorHandle::invalid(),
+        GpuDescriptorHandle::Invalid(),
         s_OperationName
     );
 }

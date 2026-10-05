@@ -51,7 +51,7 @@ bool WaylandTextInputService::initialize(){
     m_registry = wl_display_get_registry(&m_display);
     if(!m_registry)
         return false;
-    static const wl_registry_listener listener{ &onRegistryGlobal, &onRegistryRemove };
+    static const wl_registry_listener listener{ &OnRegistryGlobal, &OnRegistryRemove };
     if(wl_registry_add_listener(m_registry, &listener, this) != 0)
         return false;
     if(wl_display_roundtrip(&m_display) < 0)
@@ -77,9 +77,9 @@ void WaylandTextInputService::attachSeat(wl_seat* const seat, const u32 seatGlob
     if(!m_input)
         return;
     static const zwp_text_input_v3_listener listener{
-        &onEnter, &onLeave, &onPreedit, &onCommit, &onDelete, &onDone,
+        &OnEnter, &OnLeave, &OnPreedit, &OnCommit, &OnDelete, &OnDone,
 #if defined(ZWP_TEXT_INPUT_V3_ACTION_SINCE_VERSION)
-        &onAction, &onLanguage, &onPreeditHint,
+        &OnAction, &OnLanguage, &OnPreeditHint,
 #endif
     };
     if(zwp_text_input_v3_add_listener(m_input, &listener, this) != 0)

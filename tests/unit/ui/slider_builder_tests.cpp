@@ -82,7 +82,7 @@ TEST_F(UiSliderBuilderTests, DisabledSliderKeepsAPointerBarrierWithoutApplyingQu
     ASSERT_TRUE(accept(1u));
     press(Core::Key::Tab);
     press(Core::Key::Right);
-    SliderOptions disabled = options();
+    SliderOptions disabled = Options();
     disabled.enabled = false;
     ASSERT_TRUE(accept(2u, disabled));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
@@ -98,7 +98,7 @@ TEST_F(UiSliderBuilderTests, DisabledSliderKeepsAPointerBarrierWithoutApplyingQu
 }
 
 TEST_F(UiSliderBuilderTests, ConstantRangeIsValidAndNoninteractiveWithoutRewritingTheApplicationValue){
-    SliderOptions constant = options();
+    SliderOptions constant = Options();
     constant.minimum = 0.5;
     constant.maximum = 0.5;
     ASSERT_TRUE(accept(1u, constant));
@@ -117,7 +117,7 @@ TEST_F(UiSliderBuilderTests, InvalidPolicyRejectsTheCandidateWithoutReplacingIts
     ASSERT_TRUE(accept(1u));
     const SliderAcceptedFrame displayed = accepted();
     const SliderSnapshot before = m_state.snapshot();
-    SliderOptions invalid = options();
+    SliderOptions invalid = Options();
     invalid.minimum = 2.0;
     EXPECT_FALSE(declare(2u, invalid));
     EXPECT_TRUE(m_context.failed());

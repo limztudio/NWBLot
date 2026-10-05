@@ -42,7 +42,7 @@ struct RefitTask{
         SoftwareSceneRefitHandle snapshot;
     };
 
-    [[nodiscard]] static bool record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
         if(!payload.snapshot || context.commandIrCapture)
             return false;
         const auto& snapshot = *payload.snapshot;

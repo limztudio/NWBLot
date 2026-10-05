@@ -106,7 +106,7 @@ public:
 class MisdirectedImageCodec final : public IAssetCodec{
 public:
     explicit MisdirectedImageCodec(const bool wrongType)
-        : IAssetCodec(Texture::assetTypeName())
+        : IAssetCodec(Texture::AssetTypeName())
         , m_wrongType(wrongType)
     {}
 
@@ -234,7 +234,7 @@ TEST_F(ImageLoaderTests, MissingPathAndFailedBinaryReadReturnNoSource){
 }
 
 TEST_F(ImageLoaderTests, MissingTextureCodecFailsAfterReadingAValidBinary){
-    ASSERT_TRUE(m_registry.unregisterCodec(Texture::assetTypeName()));
+    ASSERT_TRUE(m_registry.unregisterCodec(Texture::AssetTypeName()));
     EXPECT_FALSE(LoadImageSource(m_arena, m_assets, m_identity));
     EXPECT_EQ(m_source.m_readCount, 1u);
     EXPECT_TRUE(m_logger.sawErrorContaining(GLB_TEXT("failed to deserialize")));

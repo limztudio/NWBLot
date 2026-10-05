@@ -29,7 +29,7 @@ bool GpuGraphSubmissionTransaction::beginSubmissionExceptionClosingWithinSubmiss
 )noexcept{
     outRecordingAttemptGeneration = 0u;
     outSubmissionBinding = {};
-    if(!SubmissionOperation::activeFor(*this))
+    if(!SubmissionOperation::ActiveFor(*this))
         return false;
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     if(!planAccess.valid())
@@ -112,7 +112,7 @@ void GpuGraphSubmissionTransaction::completeSubmissionExceptionClosingWithinSubm
     const u64 recordingAttemptGeneration,
     const GpuGraphSubmissionBinding& submissionBinding
 )noexcept{
-    if(!SubmissionOperation::activeExclusiveFor(*this))
+    if(!SubmissionOperation::ActiveExclusiveFor(*this))
         TerminateInvariant();
     {
         NothrowScopedLock lock(m_mutex);

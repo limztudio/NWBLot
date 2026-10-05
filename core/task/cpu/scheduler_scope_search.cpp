@@ -27,7 +27,7 @@ u32 CpuTaskScheduler::findScopeReadyLocked(const usize queue, ScopeWait& wait, u
     }
     TaskHandle& anchor = wait.m_unrelatedAnchors[queue];
     if(const TaskNode* const node = resolveLocked(anchor)){
-        if(node->state == TaskState::Ready && queueIndex(node->options) == queue)
+        if(node->state == TaskState::Ready && QueueIndex(node->options) == queue)
             previous = anchor.index;
     }
     // Publication can add paths to the joined scope. Retirement only removes paths, so a

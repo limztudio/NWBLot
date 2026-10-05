@@ -55,11 +55,11 @@ public:
                 .meshletPrimitiveIndexBuffer = source,
             };
             for(u32 slot = 0u; slot < LengthOf(mesh.geometryHeapHandles); ++slot){
-                mesh.geometryHeapHandles[slot] = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, slot);
+                mesh.geometryHeapHandles[slot] = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, slot);
                 instances[index].geometryHeapSlots[slot] = slot;
             }
             mesh.emulationVertexBuffer = makeBuffer(index == 0u ? "tests/geometry_reuse/output_a" : "tests/geometry_reuse/output_b");
-            mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 20u + index);
+            mesh.emulationVertexHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 20u + index);
             mesh.meshletCount = 1u;
             mesh.meshletPrimitiveIndexCount = 3u;
             mesh.runtimeMesh = true;
@@ -71,9 +71,9 @@ public:
         bindings.instanceBuffer = makeBuffer("tests/geometry_reuse/instances");
         bindings.materialTypedBuffer = makeBuffer("tests/geometry_reuse/material_bytes");
         bindings.meshView.buffer = makeBuffer("tests/geometry_reuse/view");
-        bindings.meshView.heapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::UniformBuffer, 1u);
-        bindings.instanceHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 30u);
-        bindings.materialTypedHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 31u);
+        bindings.meshView.heapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::UniformBuffer, 1u);
+        bindings.instanceHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 30u);
+        bindings.materialTypedHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 31u);
         bindings.instanceBufferCapacity = 3u;
         bindings.materialTypedBufferCapacity = 256u;
     }
@@ -248,11 +248,11 @@ TEST(AvboitGeneratedGeometryReuse, EverySourceBufferAndFullDescriptorIdentityPar
     ReuseContext fixture;
     ASSERT_TRUE(fixture.captureAndPublish());
     fixture.draws.regular.computeDrawItems[0u].meshResources.geometryHeapHandles[0u] =
-        Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 50u);
+        Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 50u);
     EXPECT_FALSE(fixture.matches());
     ASSERT_TRUE(fixture.captureAndPublish());
     fixture.draws.regular.computeDrawItems[0u].meshResources.emulationVertexHeapHandle =
-        Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::UniformBuffer, 20u);
+        Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::UniformBuffer, 20u);
     EXPECT_FALSE(fixture.matches());
 }
 
@@ -265,7 +265,7 @@ TEST(AvboitGeneratedGeometryReuse, ViewContentsAndFrameBindingReplacementInvalid
     fixture.bindings.meshView.buffer = fixture.alternate;
     EXPECT_FALSE(fixture.matches());
     ASSERT_TRUE(fixture.captureAndPublish());
-    fixture.bindings.instanceHeapHandle = Core::GpuDescriptorHandle::make(Core::GpuDescriptorClass::StorageBuffer, 42u);
+    fixture.bindings.instanceHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 42u);
     EXPECT_FALSE(fixture.matches());
 }
 

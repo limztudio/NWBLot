@@ -84,7 +84,7 @@ namespace __hidden_ui_glyph_visibility{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const BakedFontAtlas* TextGlyphVisibility::selectAtlas(const PlacedGlyph& glyph, const f32 physicalSize){
+const BakedFontAtlas* TextGlyphVisibility::SelectAtlas(const PlacedGlyph& glyph, const f32 physicalSize){
     if(!glyph.face || !glyph.face->valid() || !IsFinite(physicalSize) || physicalSize <= 0.0f)
         return nullptr;
     const SharedBakedFontAtlas& atlas = glyph.face->bakedAtlas();
@@ -96,7 +96,7 @@ const BakedFontAtlas* TextGlyphVisibility::selectAtlas(const PlacedGlyph& glyph,
     return atlas.get();
 }
 
-TextGlyphIntersection::Enum TextGlyphVisibility::candidate(
+TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(
     const PlacedGlyph& glyph,
     const BakedFontAtlas* const selectedAtlas,
     const f32 fontSize,
@@ -115,9 +115,9 @@ TextGlyphIntersection::Enum TextGlyphVisibility::candidate(
         return TextGlyphIntersection::Invisible;
     if(selectedAtlas){
         Rect rectangle;
-        if(!atlasRectangle(glyph, *selectedAtlas, fontSize, topLeft, rectangle))
+        if(!AtlasRectangle(glyph, *selectedAtlas, fontSize, topLeft, rectangle))
             return TextGlyphIntersection::Invalid;
-        return intersect(rectangle, clip);
+        return Intersect(rectangle, clip);
     }
     if(!IsValidUiRect(glyph.ink) || (glyph.coverage.known && !IsValidUiRect(glyph.coverage.ink)))
         return TextGlyphIntersection::Invalid;
@@ -149,7 +149,7 @@ TextGlyphIntersection::Enum TextGlyphVisibility::candidate(
     return IntersectBounds(left, top, right, bottom, clip);
 }
 
-bool TextGlyphVisibility::atlasRectangle(
+bool TextGlyphVisibility::AtlasRectangle(
     const PlacedGlyph& glyph,
     const BakedFontAtlas& atlas,
     const f32 fontSize,
@@ -179,7 +179,7 @@ bool TextGlyphVisibility::atlasRectangle(
     return MakeRect(x, y, width, height, out);
 }
 
-bool TextGlyphVisibility::coverageRectangle(
+bool TextGlyphVisibility::CoverageRectangle(
     const PlacedGlyph& glyph,
     const AtlasGlyph& record,
     const f32 rasterScale,
@@ -210,7 +210,7 @@ bool TextGlyphVisibility::coverageRectangle(
     );
 }
 
-TextGlyphIntersection::Enum TextGlyphVisibility::intersect(const Rect& rectangle, const Rect& clip){
+TextGlyphIntersection::Enum TextGlyphVisibility::Intersect(const Rect& rectangle, const Rect& clip){
     using namespace __hidden_ui_glyph_visibility;
     if(!IsValidUiRect(rectangle) || !IsValidUiRect(clip))
         return TextGlyphIntersection::Invalid;

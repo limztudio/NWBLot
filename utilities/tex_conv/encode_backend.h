@@ -72,7 +72,7 @@ struct LdrPlaneLoader{
     static constexpr TStringView s_DecodeFailureLabel = GLB_TEXT("tex_conv: failed to decode input image '{}'.");
     static constexpr TStringView s_ResolutionFailureLabel = GLB_TEXT("tex_conv: input image '{}' has an invalid resolution.");
     static constexpr TStringView s_MismatchFailureLabel = GLB_TEXT("tex_conv: all LDR texture inputs must have the same resolution.");
-    [[nodiscard]] static bool decode(const AString& inputPathText, Plane& outPlane){
+    [[nodiscard]] static bool Decode(const AString& inputPathText, Plane& outPlane){
         return basisu::load_image(inputPathText.c_str(), outPlane);
     }
 };
@@ -81,7 +81,7 @@ struct HdrPlaneLoader{
     static constexpr TStringView s_DecodeFailureLabel = GLB_TEXT("tex_conv: failed to decode HDR image '{}'.");
     static constexpr TStringView s_ResolutionFailureLabel = GLB_TEXT("tex_conv: HDR image '{}' has an invalid resolution.");
     static constexpr TStringView s_MismatchFailureLabel = GLB_TEXT("tex_conv: all HDR texture inputs must have the same resolution.");
-    [[nodiscard]] static bool decode(const AString& inputPathText, Plane& outPlane){
+    [[nodiscard]] static bool Decode(const AString& inputPathText, Plane& outPlane){
         return basisu::load_image_hdr(inputPathText.c_str(), outPlane, false);
     }
 };
@@ -97,7 +97,7 @@ template<typename PlaneLoader, typename PlaneVector>
     for(const Path& inputPath : inputPaths){
         const AString inputPathText = PathToGenericString<AString>(inputPath);
         Plane plane;
-        if(!PlaneLoader::decode(inputPathText, plane)){
+        if(!PlaneLoader::Decode(inputPathText, plane)){
             NWB_LOGGER_ERROR(PlaneLoader::s_DecodeFailureLabel, PathToString<tchar>(inputPath));
             return false;
         }

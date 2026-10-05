@@ -137,7 +137,7 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 class StressTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    [[nodiscard]] static u32 m4PixelCaptureFreezeFrame(){
+    [[nodiscard]] static u32 M4PixelCaptureFreezeFrame(){
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
         static const u32 s_captureFrame = [](){
             f32 configuredFrame = 0.0f;
@@ -156,16 +156,16 @@ private:
 #endif
     }
 
-    [[nodiscard]] static u32 rendererBaselineCaptureFreezeFrame(){
-        return RendererBaselineCaptureFreezeFrame();
+    [[nodiscard]] static u32 RendererBaselineCaptureFreezeFrame(){
+        return NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame();
     }
 
-    [[nodiscard]] static f32 rendererBaselineFixedDelta(){
-        return RendererBaselineFixedDelta();
+    [[nodiscard]] static f32 RendererBaselineFixedDelta(){
+        return NWB::Tests::Smoke::RendererBaselineFixedDelta();
     }
 
     // The benchmark compares hardware transparent shadows against an opaque-only scene.
-    [[nodiscard]] static bool hardwareShadowOpaqueBaseline(){
+    [[nodiscard]] static bool HardwareShadowOpaqueBaseline(){
 #if defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
         static const bool s_enabled = ReadSmokeEnvironmentFlag("NWB_HARDWARE_SHADOW_BOUNDARY_OPAQUE_BASELINE");
         return s_enabled;
@@ -174,7 +174,7 @@ private:
 #endif
     }
 
-    [[nodiscard]] static bool readCharactersPerClass(u32& count){
+    [[nodiscard]] static bool ReadCharactersPerClass(u32& count){
         count = s_DefaultCharactersPerClass;
         NWB::Core::Alloc::GlobalArena arena(Name("tests/stress/workload"));
         NWB::Tests::Smoke::SmokeEnvironmentString value(arena);
@@ -190,7 +190,7 @@ private:
         return true;
     }
 
-    static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
+    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, GLB_TEXT("StressTestSmokeProject"));
 
         NWB::Tests::Smoke::SmokeRenderQualitySettings settings;
@@ -212,7 +212,7 @@ private:
     [[nodiscard]] NWB::Core::ECS::EntityID createCharacter(const u32 index){
         // Comparison mode pins the zigzag layout; the full crowd uses staggered material rows.
         const bool transparentMaterialClass = (index % 2u) == 0u;
-        const bool transparent = !hardwareShadowOpaqueBaseline() && transparentMaterialClass;
+        const bool transparent = !HardwareShadowOpaqueBaseline() && transparentMaterialClass;
         const u32 classIndex = index / 2u;
         const bool comparison = m_charactersPerClass == s_ComparisonCharactersPerClass;
         const f32 x = comparison
@@ -287,7 +287,7 @@ private:
 
     // Spin bind-pose bodies about Y with staggered phases (BVH + shadows re-resolve per frame).
     // NWB_STRESS_TEST_SPIN_ANGLE freezes yaw for deterministic A/B.
-    static f32 frozenYaw(){
+    static f32 FrozenYaw(){
         static const f32 s_yaw = ReadSmokeFrozenYawFromEnvironment("NWB_STRESS_TEST_SPIN_ANGLE");
         return s_yaw;
     }
@@ -394,7 +394,7 @@ private:
 public:
     explicit StressTestSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(createWorldOrDie(context))
+        , m_world(CreateWorldOrDie(context))
         , m_renderer([this]() -> NWB::Impl::RendererSystem&{
             auto* const renderer = m_world->getSystem<NWB::Impl::RendererSystem>();
             GLB_FATAL_ASSERT(renderer);
@@ -412,7 +412,7 @@ public:
 
 public:
     virtual bool onStartup()override{
-        if(!readCharactersPerClass(m_charactersPerClass))
+        if(!ReadCharactersPerClass(m_charactersPerClass))
             return false;
         NWB::Impl::ReflectionSettings reflectionSettings;
         reflectionSettings.diagnosticsEnabled = m_reflectionDiagnosticsEnabled;
@@ -423,11 +423,11 @@ public:
         // GPU durations are sampled diagnostics; FPS comes only from accepted native presentations and steady wall time.
         if(!m_cpuTimingProbe.initialize(m_cpuDiagnosticsEnabled, m_timingEnabled))
             return false;
-        NWB::Core::Perf::CaptureOptions capture = NWB::Core::Perf::CaptureOptions::gpuTimingOnly();
+        NWB::Core::Perf::CaptureOptions capture = NWB::Core::Perf::CaptureOptions::GpuTimingOnly();
         capture.cpuTiming = m_cpuDiagnosticsEnabled;
         m_context.setPerfCapture(capture);
         if(m_timingEnabled){
-            if(m4PixelCaptureFreezeFrame() != 0u || rendererBaselineCaptureFreezeFrame() != 0u || !m_context.requestQuit){
+            if(M4PixelCaptureFreezeFrame() != 0u || RendererBaselineCaptureFreezeFrame() != 0u || !m_context.requestQuit){
                 NWB_LOGGER_ERROR(GLB_TEXT("StressTestSmokeProject: timing requires continuous submissions and a quit callback"));
                 return false;
             }
@@ -503,7 +503,7 @@ public:
 
         SyncSmokeModelRuntimes(*m_world);
         if(!m_csgScene.initialize(
-            *m_world, m_context.objectArena, m_characterOwners.data(), m_characterOwners.size(), hardwareShadowOpaqueBaseline()
+            *m_world, m_context.objectArena, m_characterOwners.data(), m_characterOwners.size(), HardwareShadowOpaqueBaseline()
         ))
             return false;
 
@@ -530,14 +530,14 @@ public:
             NWB_LOGGER_ESSENTIAL_INFO(
                 GLB_TEXT("StressTestSmokeProject: RayQuery-capable hardware shadow route available")
             );
-            if(hardwareShadowOpaqueBaseline())
+            if(HardwareShadowOpaqueBaseline())
                 NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("StressTestSmokeProject: enabled natural opaque hardware-shadow baseline"));
             else
                 NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("StressTestSmokeProject: enabled healthy hardware transparent-shadow benchmark"));
         }
 #endif
 
-        const u32 transparentCharacterCount = hardwareShadowOpaqueBaseline() ? 0u : m_charactersPerClass;
+        const u32 transparentCharacterCount = HardwareShadowOpaqueBaseline() ? 0u : m_charactersPerClass;
         NWB_LOGGER_ESSENTIAL_INFO(
             GLB_TEXT("StressTestSmokeProject: spawned {} spinning characters ({} transparent + {} opaque) over ground, directional + point light")
             , m_characterOwners.size()
@@ -580,7 +580,7 @@ public:
     }
 
     virtual bool onUpdate(const f32 delta)override{
-        const u32 m4CaptureFreezeFrame = m4PixelCaptureFreezeFrame();
+        const u32 m4CaptureFreezeFrame = M4PixelCaptureFreezeFrame();
         if(m4CaptureFreezeFrame != 0u && m_m4RenderedFrameCount >= m4CaptureFreezeFrame){
             if(!m_m4PixelCapturePaused){
                 // Stop runFrame before publishing the marker. The external M4 harness can therefore settle and capture
@@ -595,7 +595,7 @@ public:
             return true;
         }
 
-        const u32 baselineCaptureFreezeFrame = rendererBaselineCaptureFreezeFrame();
+        const u32 baselineCaptureFreezeFrame = RendererBaselineCaptureFreezeFrame();
         if(baselineCaptureFreezeFrame != 0u && m_m4RenderedFrameCount >= baselineCaptureFreezeFrame){
             if(!m_rendererBaselineCapturePaused){
                 // Keep the M4-specific capture contract above intact. Ordinary baseline captures use their own
@@ -610,13 +610,13 @@ public:
             return true;
         }
 
-        const f32 fixedDelta = rendererBaselineFixedDelta();
+        const f32 fixedDelta = RendererBaselineFixedDelta();
         const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
         if(!samplePresentationFps())
             return false;
         m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
         // Yaw priority: fixed override, manual scrub, then automatic spin.
-        const f32 frozen = frozenYaw();
+        const f32 frozen = FrozenYaw();
         m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
         spinCharacters();
         if(!m_csgScene.update(*m_world, m_yaw.yaw()))

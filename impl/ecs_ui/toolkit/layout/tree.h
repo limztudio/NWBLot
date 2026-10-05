@@ -74,10 +74,10 @@ private:
 
 
 private:
-    [[nodiscard]] static bool isValidDescription(const LayoutNodeDesc& description);
-    [[nodiscard]] static bool isValidRectangle(const Rect& rectangle);
-    [[nodiscard]] static Rect intersect(const Rect& lhs, const Rect& rhs);
-    [[nodiscard]] static Rect inset(const Rect& rectangle, const Insets& padding);
+    [[nodiscard]] static bool IsValidDescription(const LayoutNodeDesc& description);
+    [[nodiscard]] static bool IsValidRectangle(const Rect& rectangle);
+    [[nodiscard]] static Rect Intersect(const Rect& lhs, const Rect& rhs);
+    [[nodiscard]] static Rect Inset(const Rect& rectangle, const Insets& padding);
 
 
 public:

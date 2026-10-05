@@ -159,7 +159,7 @@ void RendererRayTracingSystem::releaseCausticEmissionTargetHeapHandle(){
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(heap.isInitialized())
         heap.free(m_rayTracingState.m_causticEmissionTargetHeapHandle);
-    m_rayTracingState.m_causticEmissionTargetHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_rayTracingState.m_causticEmissionTargetHeapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
 bool RendererRayTracingSystem::createCausticTargets(DeferredFrameTargets& targets){

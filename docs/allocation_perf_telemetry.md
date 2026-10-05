@@ -3,7 +3,7 @@
 Enable the existing perf capture on `Core::Frame`:
 
 ```cpp
-frame.setTelemetryCapture(Core::Telemetry::CaptureOptions::perfOnly());
+frame.setTelemetryCapture(Core::Telemetry::CaptureOptions::PerfOnly());
 ```
 
 `Frame` publishes named allocation owners automatically at the end of each successful frame. The existing telemetry upload flow stores the binary stream and the logger creates its JSON report under the configured telemetry report directory. Memory data is in `perf.memoryRecords`; timing CSV output remains timing data.

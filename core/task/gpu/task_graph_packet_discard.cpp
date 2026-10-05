@@ -24,7 +24,7 @@ bool GpuTaskGraph::abandonPacketRecordingWithoutCallbacks(
     PacketRecordingLease& lease
 )const noexcept{
     GpuCompiledPacketView packetView;
-    if(!resolveLeasedPacketView(compiledGraph, planAccess, packet, lease, packetView))
+    if(!ResolveLeasedPacketView(compiledGraph, planAccess, packet, lease, packetView))
         return false;
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
     const GpuTaskId* const tasks = packetView.tasks;

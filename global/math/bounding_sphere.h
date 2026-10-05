@@ -24,7 +24,7 @@
 
 
 inline void GLB_SIMD_CALL BoundingSphere::transform(BoundingSphere& outSphere, const SIMDMatrix& matrix)const noexcept{
-    StoreFloat(transformSphereValue(LoadFloat(centerRadius), matrix), outSphere.centerRadius);
+    StoreFloat(TransformSphereValue(LoadFloat(centerRadius), matrix), outSphere.centerRadius);
 }
 
 
@@ -37,14 +37,14 @@ inline void GLB_SIMD_CALL BoundingSphere::transform(
     const SIMDVector rotation,
     const SIMDVector translation
 )const noexcept{
-    StoreFloat(transformSphereValue(LoadFloat(centerRadius), scale, rotation, translation), outSphere.centerRadius);
+    StoreFloat(TransformSphereValue(LoadFloat(centerRadius), scale, rotation, translation), outSphere.centerRadius);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum GLB_SIMD_CALL BoundingSphere::containsPointValue(SIMDVector sphereValue, SIMDVector point)noexcept{
+[[nodiscard]] inline ContainmentType::Enum GLB_SIMD_CALL BoundingSphere::ContainsPointValue(SIMDVector sphereValue, SIMDVector point)noexcept{
     const SIMDVector delta = VectorSubtract(point, CollisionDetail::SphereCenter(sphereValue));
     const SIMDVector sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     return CollisionDetail::Vector4AllTrue(VectorLessOrEqual(Vector3LengthSq(delta), VectorMultiply(sphereRadius, sphereRadius))) ? ContainmentType::Contains : ContainmentType::Disjoint;
@@ -55,14 +55,14 @@ inline void GLB_SIMD_CALL BoundingSphere::transform(
 
 
 [[nodiscard]] inline ContainmentType::Enum GLB_SIMD_CALL BoundingSphere::contains(const SIMDVector point)const noexcept{
-    return containsPointValue(LoadFloat(centerRadius), point);
+    return ContainsPointValue(LoadFloat(centerRadius), point);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum GLB_SIMD_CALL BoundingSphere::containsTriangleValue(
+[[nodiscard]] inline ContainmentType::Enum GLB_SIMD_CALL BoundingSphere::ContainsTriangleValue(
     SIMDVector sphereValue,
     SIMDVector v0,
     SIMDVector v1,
@@ -71,7 +71,7 @@ inline void GLB_SIMD_CALL BoundingSphere::transform(
     const SIMDVector points[CollisionDetail::s_TriangleVertexCount] = { v0, v1, v2 };
     if(CollisionDetail::PointsInsideSphere(points, CollisionDetail::s_TriangleVertexCount, CollisionDetail::SphereCenter(sphereValue), CollisionDetail::SphereRadius(sphereValue)))
         return ContainmentType::Contains;
-    return intersectsTriangleValue(sphereValue, v0, v1, v2) ? ContainmentType::Intersects : ContainmentType::Disjoint;
+    return IntersectsTriangleValue(sphereValue, v0, v1, v2) ? ContainmentType::Intersects : ContainmentType::Disjoint;
 }
 
 
@@ -83,7 +83,7 @@ inline void GLB_SIMD_CALL BoundingSphere::transform(
     const SIMDVector v1,
     const SIMDVector v2
 )const noexcept{
-    return containsTriangleValue(LoadFloat(centerRadius), v0, v1, v2);
+    return ContainsTriangleValue(LoadFloat(centerRadius), v0, v1, v2);
 }
 
 
@@ -264,7 +264,7 @@ inline void GLB_SIMD_CALL BoundingSphere::transform(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool GLB_SIMD_CALL BoundingSphere::intersectsTriangleValue(
+[[nodiscard]] inline bool GLB_SIMD_CALL BoundingSphere::IntersectsTriangleValue(
     SIMDVector sphereValue,
     SIMDVector v0,
     SIMDVector v1,
@@ -285,14 +285,14 @@ inline void GLB_SIMD_CALL BoundingSphere::transform(
     const SIMDVector v1,
     const SIMDVector v2
 )const noexcept{
-    return intersectsTriangleValue(LoadFloat(centerRadius), v0, v1, v2);
+    return IntersectsTriangleValue(LoadFloat(centerRadius), v0, v1, v2);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline PlaneIntersectionType::Enum GLB_SIMD_CALL BoundingSphere::intersectsPlaneValue(SIMDVector sphereValue, SIMDVector plane)noexcept{
+[[nodiscard]] inline PlaneIntersectionType::Enum GLB_SIMD_CALL BoundingSphere::IntersectsPlaneValue(SIMDVector sphereValue, SIMDVector plane)noexcept{
     const SIMDVector distance = CollisionDetail::PlaneDistance(plane, CollisionDetail::SphereCenter(sphereValue));
     const SIMDVector sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     if(CollisionDetail::Vector4AllTrue(VectorGreater(distance, sphereRadius)))
@@ -307,14 +307,14 @@ inline void GLB_SIMD_CALL BoundingSphere::transform(
 
 
 [[nodiscard]] inline PlaneIntersectionType::Enum GLB_SIMD_CALL BoundingSphere::intersects(const SIMDVector plane)const noexcept{
-    return intersectsPlaneValue(LoadFloat(centerRadius), plane);
+    return IntersectsPlaneValue(LoadFloat(centerRadius), plane);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool GLB_SIMD_CALL BoundingSphere::intersectsRayValue(SIMDVector sphereValue, SIMDVector origin, SIMDVector direction, f32& outDistance)noexcept{
+[[nodiscard]] inline bool GLB_SIMD_CALL BoundingSphere::IntersectsRayValue(SIMDVector sphereValue, SIMDVector origin, SIMDVector direction, f32& outDistance)noexcept{
     const SIMDVector sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     const SIMDVector localOrigin = VectorSubtract(origin, CollisionDetail::SphereCenter(sphereValue));
     const SIMDVector bVector = Vector3Dot(localOrigin, direction);
@@ -340,14 +340,14 @@ inline void GLB_SIMD_CALL BoundingSphere::transform(
     SIMDVector direction,
     f32& outDistance
 )const noexcept{
-    return intersectsRayValue(LoadFloat(centerRadius), origin, direction, outDistance);
+    return IntersectsRayValue(LoadFloat(centerRadius), origin, direction, outDistance);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum GLB_SIMD_CALL BoundingSphere::containedByValue(SIMDVector sphereValue, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept{
+[[nodiscard]] inline ContainmentType::Enum GLB_SIMD_CALL BoundingSphere::ContainedByValue(SIMDVector sphereValue, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept{
     const SIMDVector planes[CollisionDetail::s_FrustumPlaneCount] = { plane0, plane1, plane2, plane3, plane4, plane5 };
     return CollisionDetail::ContainmentFromSpherePlaneTests(sphereValue, planes);
 }
@@ -364,14 +364,14 @@ inline void GLB_SIMD_CALL BoundingSphere::transform(
     SIMDVector plane4,
     SIMDVector plane5
 )const noexcept{
-    return containedByValue(LoadFloat(centerRadius), plane0, plane1, plane2, plane3, plane4, plane5);
+    return ContainedByValue(LoadFloat(centerRadius), plane0, plane1, plane2, plane3, plane4, plane5);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline SIMDVector GLB_SIMD_CALL BoundingSphere::mergeSphereValues(SIMDVector sphereValue0, SIMDVector sphereValue1, bool& outDirectCopy, bool& outCopyFirst)noexcept{
+[[nodiscard]] inline SIMDVector GLB_SIMD_CALL BoundingSphere::MergeSphereValues(SIMDVector sphereValue0, SIMDVector sphereValue1, bool& outDirectCopy, bool& outCopyFirst)noexcept{
     outDirectCopy = false;
     outCopyFirst = true;
     const SIMDVector center0 = CollisionDetail::SphereCenter(sphereValue0);
@@ -404,14 +404,14 @@ inline void GLB_SIMD_CALL BoundingSphere::transform(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingSphere::createMerged(
+inline void BoundingSphere::CreateMerged(
     BoundingSphere& outSphere,
     const BoundingSphere& sphere0,
     const BoundingSphere& sphere1
 )noexcept{
     bool directCopy = false;
     bool copyFirst = true;
-    const SIMDVector mergedValue = mergeSphereValues(LoadFloat(sphere0.centerRadius), LoadFloat(sphere1.centerRadius), directCopy, copyFirst);
+    const SIMDVector mergedValue = MergeSphereValues(LoadFloat(sphere0.centerRadius), LoadFloat(sphere1.centerRadius), directCopy, copyFirst);
     if(directCopy){
         outSphere = copyFirst ? sphere0 : sphere1;
         return;
@@ -424,7 +424,7 @@ inline void BoundingSphere::createMerged(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline SIMDVector GLB_SIMD_CALL BoundingSphere::sphereFromCenterExtentsValue(SIMDVector centerValue, SIMDVector extentsValue)noexcept{
+[[nodiscard]] inline SIMDVector GLB_SIMD_CALL BoundingSphere::SphereFromCenterExtentsValue(SIMDVector centerValue, SIMDVector extentsValue)noexcept{
     return CollisionDetail::SphereCenterRadius(centerValue, Vector3Length(extentsValue));
 }
 
@@ -432,7 +432,7 @@ inline void BoundingSphere::createMerged(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline SIMDVector GLB_SIMD_CALL BoundingSphere::sphereFromCornersValue(const SIMDVector* corners, usize cornerCount)noexcept{
+[[nodiscard]] inline SIMDVector GLB_SIMD_CALL BoundingSphere::SphereFromCornersValue(const SIMDVector* corners, usize cornerCount)noexcept{
     return CollisionDetail::CreateSphereFromVectorPoints(corners, cornerCount);
 }
 
@@ -440,23 +440,23 @@ inline void BoundingSphere::createMerged(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingSphere::createFromBoundingBox(BoundingSphere& outSphere, const BoundingBox& box)noexcept{
-    StoreFloat(sphereFromCenterExtentsValue(LoadFloat(box.center), LoadFloat(box.extents)), outSphere.centerRadius);
+inline void BoundingSphere::CreateFromBoundingBox(BoundingSphere& outSphere, const BoundingBox& box)noexcept{
+    StoreFloat(SphereFromCenterExtentsValue(LoadFloat(box.center), LoadFloat(box.extents)), outSphere.centerRadius);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingSphere::createFromBoundingBox(BoundingSphere& outSphere, const BoundingOrientedBox& box)noexcept{
-    StoreFloat(sphereFromCenterExtentsValue(LoadFloat(box.center), LoadFloat(box.extents)), outSphere.centerRadius);
+inline void BoundingSphere::CreateFromBoundingBox(BoundingSphere& outSphere, const BoundingOrientedBox& box)noexcept{
+    StoreFloat(SphereFromCenterExtentsValue(LoadFloat(box.center), LoadFloat(box.extents)), outSphere.centerRadius);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingSphere::createFromPoints(
+inline void BoundingSphere::CreateFromPoints(
     BoundingSphere& outSphere,
     const usize count,
     const Float3U* points,
@@ -482,7 +482,7 @@ inline void BoundingSphere::createFromPoints(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void BoundingSphere::createFromFrustum(BoundingSphere& outSphere, const BoundingFrustum& frustum)noexcept{
+inline void BoundingSphere::CreateFromFrustum(BoundingSphere& outSphere, const BoundingFrustum& frustum)noexcept{
     SIMDVector corners[BoundingFrustum::s_CornerCount];
     CollisionDetail::FrustumCorners(
         LoadFloat(frustum.origin),
@@ -495,7 +495,7 @@ inline void BoundingSphere::createFromFrustum(BoundingSphere& outSphere, const B
         frustum.farPlane,
         corners
     );
-    StoreFloat(sphereFromCornersValue(corners, BoundingFrustum::s_CornerCount), outSphere.centerRadius);
+    StoreFloat(SphereFromCornersValue(corners, BoundingFrustum::s_CornerCount), outSphere.centerRadius);
 }
 
 

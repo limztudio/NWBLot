@@ -49,7 +49,7 @@ private:
 
 
     public:
-        [[nodiscard]] static SubmissionAttemptExceptionFinalizer* activeFor(
+        [[nodiscard]] static SubmissionAttemptExceptionFinalizer* ActiveFor(
             const GpuTaskGraph& graph,
             const GpuCompiledGraph& compiledGraph,
             const GpuRecordedGraph& recordedGraph,

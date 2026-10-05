@@ -102,16 +102,16 @@ static constexpr f32 s_MaxSpinDelta = 1.0f / 15.0f;
 
 class SoftShadowTestSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
-    [[nodiscard]] static u32 rendererBaselineCaptureFreezeFrame(){
-        return RendererBaselineCaptureFreezeFrame();
+    [[nodiscard]] static u32 RendererBaselineCaptureFreezeFrame(){
+        return NWB::Tests::Smoke::RendererBaselineCaptureFreezeFrame();
     }
 
-    [[nodiscard]] static f32 rendererBaselineFixedDelta(){
-        return RendererBaselineFixedDelta();
+    [[nodiscard]] static f32 RendererBaselineFixedDelta(){
+        return NWB::Tests::Smoke::RendererBaselineFixedDelta();
     }
 
 
-    static NotNullUniquePtr<NWB::Core::ECS::World> createWorldOrDie(NWB::ProjectRuntimeContext& context){
+    static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
         auto world = CreateSmokeWorldOrDie(context, GLB_TEXT("SoftShadowTestSmokeProject"));
 
         AddSmokeSkinnedRenderSystems(*world, context);
@@ -124,7 +124,7 @@ private:
     }
 
     // Angular radius is in radians; larger sources soften the penumbra.
-    static f32 configuredAngularRadius(){
+    static f32 ConfiguredAngularRadius(){
         static const f32 s_angle = [](){
             f32 parsed = s_DefaultAngularRadius;
             if(!ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE", parsed))
@@ -135,7 +135,7 @@ private:
     }
 
     // Point/spot softness depends on source radius in world units and light distance: asin(radius / distance).
-    static f32 configuredSourceRadius(){
+    static f32 ConfiguredSourceRadius(){
         static const f32 s_radius = [](){
             f32 parsed = s_DefaultSourceRadius;
             if(!ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS", parsed))
@@ -146,7 +146,7 @@ private:
     }
 
     // Pin yaw for captures that isolate shimmer from motion.
-    static f32 frozenYaw(){
+    static f32 FrozenYaw(){
         static const f32 s_yaw = ReadSmokeFrozenYawFromEnvironment("NWB_SOFT_SHADOW_TEST_SPIN_ANGLE");
         return s_yaw;
     }
@@ -163,7 +163,7 @@ private:
 public:
     explicit SoftShadowTestSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
-        , m_world(createWorldOrDie(context))
+        , m_world(CreateWorldOrDie(context))
     {}
 
     virtual ~SoftShadowTestSmokeProject()override{
@@ -177,7 +177,7 @@ public:
     virtual bool onStartup()override{
         m_timingEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SOFT_SHADOW_TEST_TIMING");
         if(m_timingEnabled){
-            m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::gpuTimingOnly());
+            m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
             if(!m_timingRenderPass.start())
                 return false;
         }
@@ -195,7 +195,7 @@ public:
             s_DirectionalLightIntensity
         );
         if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(directionalLight)){
-            light->angularRadius = configuredAngularRadius();
+            light->angularRadius = ConfiguredAngularRadius();
             if(m_timingEnabled)
                 light->enableCaustics = false;
         }
@@ -208,7 +208,7 @@ public:
             s_PointLightRange
         );
         if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(pointLight)){
-            light->sourceRadius = configuredSourceRadius();
+            light->sourceRadius = ConfiguredSourceRadius();
             if(m_timingEnabled)
                 light->enableCaustics = false;
         }
@@ -226,7 +226,7 @@ public:
             s_SpotOuterConeCos
         );
         if(auto* light = m_world->tryGetComponent<NWB::Impl::Scene::LightComponent>(spotLight)){
-            light->sourceRadius = configuredSourceRadius();
+            light->sourceRadius = ConfiguredSourceRadius();
             if(m_timingEnabled)
                 light->enableCaustics = false;
         }
@@ -303,13 +303,13 @@ public:
             NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("ShadowTimingProbe: caustic emission 0"));
             NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("ShadowTimingProbe: indirect response hemi-ambient"));
             NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("ShadowTimingProbe: source extents angular={} radius={}")
-                , static_cast<f64>(configuredAngularRadius())
-                , static_cast<f64>(configuredSourceRadius())
+                , static_cast<f64>(ConfiguredAngularRadius())
+                , static_cast<f64>(ConfiguredSourceRadius())
             );
         }
         NWB_LOGGER_ESSENTIAL_INFO(
             GLB_TEXT("SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius={} rad")
-            , static_cast<f64>(configuredAngularRadius())
+            , static_cast<f64>(ConfiguredAngularRadius())
         );
         return true;
     }
@@ -323,7 +323,7 @@ public:
     }
 
     virtual bool onUpdate(const f32 delta)override{
-        const u32 captureFreezeFrame = rendererBaselineCaptureFreezeFrame();
+        const u32 captureFreezeFrame = RendererBaselineCaptureFreezeFrame();
         if(captureFreezeFrame != 0u && m_rendererBaselineRenderedFrameCount >= captureFreezeFrame){
             if(!m_rendererBaselineCapturePaused){
                 // Freeze the requested update-callback phase; this is not an accepted GPU submission counter.
@@ -338,13 +338,13 @@ public:
             return true;
         }
 
-        const f32 fixedDelta = rendererBaselineFixedDelta();
+        const f32 fixedDelta = RendererBaselineFixedDelta();
         const f32 safeDelta = fixedDelta > 0.0f ? fixedDelta : (IsFinite(delta) ? Max(delta, 0.0f) : 0.0f);
         m_fpsProbe.recordFrame(safeDelta);
         if(m_timingEnabled)
             m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
         // Yaw priority: fixed override, manual scrub, then automatic spin.
-        const f32 frozen = frozenYaw();
+        const f32 frozen = FrozenYaw();
         m_yaw.update(safeDelta, frozen, frozen >= 0.0f, m_arrowYawInput, s_ManualYawSpeed, s_SpinSpeed, s_MaxSpinDelta);
         spinCasters();
         updateWindowTitle();
@@ -355,14 +355,14 @@ public:
 
     void updateWindowTitle(){
         const auto yawDisplay = MakeSmokeYawDisplay(m_yaw.yaw(), s_TwoPi);
-        const f32 angleDegrees = configuredAngularRadius() * (360.0f / s_TwoPi);
+        const f32 angleDegrees = ConfiguredAngularRadius() * (360.0f / s_TwoPi);
 
         static constexpr usize s_TitleCapacity = 256u;
         tchar title[s_TitleCapacity];
         GLB_TSPRINTF(
             title, s_TitleCapacity,
             GLB_TEXT("%.*s  |  yaw %.2f deg  |  sun %.2f deg  |  src r %.3f%s"),
-            static_cast<i32>(NWB::QueryProjectWindowTitle().size()), NWB::QueryProjectWindowTitle().data(), yawDisplay.degrees, angleDegrees, configuredSourceRadius(),
+            static_cast<i32>(NWB::QueryProjectWindowTitle().size()), NWB::QueryProjectWindowTitle().data(), yawDisplay.degrees, angleDegrees, ConfiguredSourceRadius(),
             m_yaw.manualControl() ? GLB_TEXT("  [manual: <- ->]") : GLB_TEXT("")
         );
         m_context.graphics.setWindowTitle(TStringView(title));

@@ -76,7 +76,7 @@ namespace __hidden_csg_resources{
     const Core::GpuDescriptorClass::Enum descriptorClass,
     Core::GpuDescriptorHandle& outHandle
 ){
-    outHandle = Core::GpuDescriptorHandle::invalid();
+    outHandle = Core::GpuDescriptorHandle::Invalid();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
@@ -91,8 +91,8 @@ namespace __hidden_csg_resources{
     )
         return false;
     const Core::DescriptorWriteItem descriptorWrite = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
-        ? Core::DescriptorWriteItem::constantBuffer(0u, &buffer)
-        : Core::DescriptorWriteItem::structuredBufferSrv(0u, &buffer)
+        ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
+        : Core::DescriptorWriteItem::StructuredBufferSrv(0u, &buffer)
     ;
     const Core::GpuDescriptorHandle acquired = heap.allocate(descriptorClass);
     if(!acquired.valid() || !heap.write(acquired, descriptorWrite)){
@@ -116,7 +116,7 @@ namespace __hidden_csg_resources{
         Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
         if(inOutHandle.valid() && heap.isInitialized())
             heap.free(inOutHandle);
-        inOutHandle = Core::GpuDescriptorHandle::invalid();
+        inOutHandle = Core::GpuDescriptorHandle::Invalid();
         return false;
     }
 
@@ -154,7 +154,7 @@ bool RendererCsgSystem::createCsgClipResources(){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Mesh | Core::ShaderType::Compute | Core::ShaderType::Pixel);
         // Push-only layout for the cap-fill path.
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
         m_csgState.m_clipBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_csgState.m_clipBindingLayout){
@@ -336,10 +336,10 @@ void RendererCsgSystem::releaseCsgClipContextHeapHandles(){
         heap.free(m_csgState.m_clipContextSlotsHeapHandle);
         heap.free(m_csgState.m_intervalSampleStateHeapHandle);
     }
-    m_csgState.m_receiverRangeBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_csgState.m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_csgState.m_clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_csgState.m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_csgState.m_receiverRangeBufferHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_csgState.m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_csgState.m_clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_csgState.m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
 

@@ -117,7 +117,7 @@ public:
 class RadioGroupBehavior final{
 public:
     // Copy the complete bounded source before atomically committing reconciliation; callbacks cannot reenter this state.
-    [[nodiscard]] static bool reconcile(
+    [[nodiscard]] static bool Reconcile(
         RadioGroupState& state,
         const IListDataSource& source,
         RadioGroupChoices& choices,
@@ -125,7 +125,7 @@ public:
         const IRadioGroupReconcileGuard* guard = nullptr
     );
     // Navigation consumes copied choices and never calls the source; accepted internal intents preserve the input token.
-    [[nodiscard]] static bool apply(
+    [[nodiscard]] static bool Apply(
         RadioGroupState& state,
         const RadioGroupChoices& choices,
         const RadioGroupOptions& options,

@@ -88,7 +88,7 @@ struct MeshSkinningGraphDispatchPlan{
     u32 skinningMode = SkeletonSkinningMode::LinearBlend;
     u32 attributeCount = 0u;
     u32 bindlessResourceSlots = 0u;
-    Core::GpuDescriptorHandle bindlessResourceSlotsDescriptor = Core::GpuDescriptorHandle::invalid();
+    Core::GpuDescriptorHandle bindlessResourceSlotsDescriptor = Core::GpuDescriptorHandle::Invalid();
     MeshSkinningSubmissionCommit submissionCommit;
     // Acceptance validates this exact selector generation before setting its residency bit.
     MeshSkinningBindlessResourceSlots bindlessResourceSlotsPayload;

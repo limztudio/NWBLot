@@ -183,10 +183,10 @@ private:
 
 
     public:
-        [[nodiscard]] static bool active()noexcept{ return s_ActiveOperation != nullptr; }
-        [[nodiscard]] static bool activeFor(const GpuRecordedGraph& recordedGraph)noexcept;
-        [[nodiscard]] static bool activeExclusiveFor(const GpuRecordedGraph& recordedGraph)noexcept;
-        [[nodiscard]] static bool activeScopeIs(const ArtifactOperation& operation)noexcept{
+        [[nodiscard]] static bool Active()noexcept{ return s_ActiveOperation != nullptr; }
+        [[nodiscard]] static bool ActiveFor(const GpuRecordedGraph& recordedGraph)noexcept;
+        [[nodiscard]] static bool ActiveExclusiveFor(const GpuRecordedGraph& recordedGraph)noexcept;
+        [[nodiscard]] static bool ActiveScopeIs(const ArtifactOperation& operation)noexcept{
             if(
                 !operation.m_ownsAdmission
                 || !operation.m_recordedGraph
@@ -265,7 +265,7 @@ public:
 
 private:
     void revokeCommandListPublicationsWithoutCallbacks(ArtifactStorage& storage)noexcept;
-    static void retireStorageWithoutCallbacks(ArtifactStorage& storage)noexcept;
+    static void RetireStorageWithoutCallbacks(ArtifactStorage& storage)noexcept;
     [[nodiscard]] bool prepareStorageCandidateLayout(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess
@@ -653,12 +653,12 @@ private:
 
 
     public:
-        [[nodiscard]] static bool active()noexcept{ return s_ActiveOperation != nullptr; }
-        [[nodiscard]] static bool activeFor(const GpuGraphSubmissionTransaction& transaction)noexcept{
+        [[nodiscard]] static bool Active()noexcept{ return s_ActiveOperation != nullptr; }
+        [[nodiscard]] static bool ActiveFor(const GpuGraphSubmissionTransaction& transaction)noexcept{
             return s_ActiveOperation && s_ActiveOperation->m_transaction == &transaction;
         }
-        [[nodiscard]] static bool activeExclusiveFor(const GpuGraphSubmissionTransaction& transaction)noexcept{
-            return activeFor(transaction) && s_ActiveOperation->m_exclusive;
+        [[nodiscard]] static bool ActiveExclusiveFor(const GpuGraphSubmissionTransaction& transaction)noexcept{
+            return ActiveFor(transaction) && s_ActiveOperation->m_exclusive;
         }
     public:
         SubmissionOperation(
@@ -703,7 +703,7 @@ public:
         , m_packets(arena)
         , m_latestAcceptedQueueTokens(arena)
         , m_externalResourceHandoffBuildScratch(GpuPacketRuntimeDetail::s_ExternalResourceHandoffScratchArena)
-        , m_transactionIdentity(GpuTaskGraph::allocateGeneration())
+        , m_transactionIdentity(GpuTaskGraph::AllocateGeneration())
     {}
     ~GpuGraphSubmissionTransaction()noexcept;
 
@@ -813,7 +813,7 @@ private:
         const GpuGraphSubmissionBinding& submissionBinding
     )noexcept;
     // Wait for in-flight recording claims; false requires terminal handling of the unresolved exception close.
-    [[nodiscard]] static bool waitForSubmissionExceptionClosing(
+    [[nodiscard]] static bool WaitForSubmissionExceptionClosing(
         GpuGraphSubmissionTransaction& transaction,
         GpuTaskGraph& graph,
         const GpuCompiledGraph& compiledGraph,

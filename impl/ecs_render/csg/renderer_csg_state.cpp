@@ -30,11 +30,11 @@ void RendererCsgState::invalidateResources(){
     m_receiverRangeBuffer.reset();
     m_cutterBuffer.reset();
     m_clipContextSlotsBuffer.reset();
-    m_receiverRangeBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::invalid();
-    m_clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_receiverRangeBufferHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_cutterBufferHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_clipContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_intervalSampleStateBuffer.reset();
-    m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::invalid();
+    m_intervalSampleStateHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_frameStateCacheSignature = CsgFrameStateCacheSignature{};
     m_frameStateCache = CsgFrameState{};
     m_receiverRangeBufferCapacity = 0u;

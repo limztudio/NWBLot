@@ -101,7 +101,7 @@ void TestbedUiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
     const f32 x = Max(__hidden_ui_skin_preview::s_Margin, context.display.logicalWidth - __hidden_ui_skin_preview::s_PanelWidth - __hidden_ui_skin_preview::s_Margin);
     const f32 y = __hidden_ui_skin_preview::s_Margin;
     m_widgets.paint(context);
-    const auto gallery = TestbedUiWidgetGallery::layoutBounds(context.display);
+    const auto gallery = TestbedUiWidgetGallery::LayoutBounds(context.display);
     if(gallery.y < y + __hidden_ui_skin_preview::s_PanelHeight + 12.0f || x < 390.0f)
         return;
     if(!__hidden_ui_skin_preview::DrawSkinGallery(context.paint, x, y)){

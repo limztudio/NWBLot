@@ -57,7 +57,7 @@ namespace __hidden_ui_gpu_glyphs{
     const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::SampledImage);
     if(!descriptor.valid())
         return false;
-    if(!heap.write(descriptor, Core::DescriptorWriteItem::textureSrv(
+    if(!heap.write(descriptor, Core::DescriptorWriteItem::TextureSrv(
         0u, version.m_texture.get(), Core::Format::R8_UNORM, Core::s_AllSubresources, Core::TextureDimension::Texture2D
     ))){
         heap.free(descriptor);
@@ -91,7 +91,7 @@ GpuGlyphVersion::~GpuGlyphVersion()noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRendererState::validateGlyphPages(const DrawSnapshot& snapshot){
+bool GpuRendererState::ValidateGlyphPages(const DrawSnapshot& snapshot){
     const auto& pages = snapshot.glyphPages();
     if(pages.size() + snapshot.sdfPages().size() + snapshot.textureImages().size() > s_PaintMaxImages)
         return false;

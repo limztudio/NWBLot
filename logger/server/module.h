@@ -41,8 +41,8 @@ class Server final : public IntervalLoggerWorkerBase<Server, s_ServerUpdateInter
 
 
 private:
-    static MHD_Result requestCallback(void* serverContext, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* uploadData, size_t* uploadDataSizeAddress, void** connectionContextAddress);
-    static void crashIngestUpdate(Server* self);
+    static MHD_Result RequestCallback(void* serverContext, MHD_Connection* connection, const char* url, const char* method, const char* version, const char* uploadData, size_t* uploadDataSizeAddress, void** connectionContextAddress);
+    static void CrashIngestUpdate(Server* self);
 
 
 public:

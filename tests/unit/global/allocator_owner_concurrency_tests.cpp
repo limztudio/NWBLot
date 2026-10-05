@@ -48,7 +48,7 @@ TEST(AllocationOwnerConcurrency, CapturesLiveAndRetiringArenasWithoutLosingHisto
     constexpr usize s_ThreadCount = 4u;
     constexpr usize s_Iterations = 256u;
     constexpr u64 s_Allocations = s_ThreadCount * s_Iterations * 5u;
-    const usize poolBytes = PersistentArena::StructureAlignedSize(4096u);
+    const usize poolBytes = PersistentArena::structureAlignedSize(4096u);
     const ArenaMemoryStats before = OwnerStats(s_Owner);
     Atomic<bool> failed{ false };
     Atomic<bool> releaseFirstAllocations{ false };

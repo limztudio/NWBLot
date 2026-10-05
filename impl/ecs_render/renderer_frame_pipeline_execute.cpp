@@ -1177,36 +1177,36 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
         .task = m_deferredShadowPrepareTask,
         .context = &shadowPrepareStateLifecycle,
-        .invoke = FrameExecuteLifecycle::PrepareShadowPrepareTask,
+        .invoke = FrameExecuteLifecycle::prepareShadowPrepareTask,
     };
     normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
         .task = m_deferredShadowVisibilityTask,
         .context = &shadowVisibilityStateLifecycle,
-        .invoke = FrameExecuteLifecycle::PrepareShadowVisibilityTask,
+        .invoke = FrameExecuteLifecycle::prepareShadowVisibilityTask,
     };
     if(!hardwareShadowSupported){
         normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
             .task = m_deferredSoftwareCausticsTask,
             .context = &softwareCausticsStateLifecycle,
-            .invoke = FrameExecuteLifecycle::PrepareSoftwareCausticsTask,
+            .invoke = FrameExecuteLifecycle::prepareSoftwareCausticsTask,
         };
     }
     normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
         .task = m_deferredSurfelGiTask,
         .context = &surfelGiStateLifecycle,
-        .invoke = FrameExecuteLifecycle::PrepareSurfelGiTask,
+        .invoke = FrameExecuteLifecycle::prepareSurfelGiTask,
     };
     if(hardwareShadowSupported){
         normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
             .task = m_deferredHardwareCausticsTask,
             .context = &hardwareCausticsStateLifecycle,
-            .invoke = FrameExecuteLifecycle::PrepareHardwareCausticsTask,
+            .invoke = FrameExecuteLifecycle::prepareHardwareCausticsTask,
         };
     }
     normalRecordedCallbacks[normalRecordedCallbackCount++] = Core::GpuTaskGraphTaskRecordedCallback{
         .task = m_deferredLightingTask,
         .context = &deferredLightingStateLifecycle,
-        .invoke = FrameExecuteLifecycle::PrepareDeferredLightingTask,
+        .invoke = FrameExecuteLifecycle::prepareDeferredLightingTask,
     };
     GLB_ASSERT(normalRecordedCallbackCount <= LengthOf(normalRecordedCallbacks));
 
@@ -1217,36 +1217,36 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
         .task = m_deferredShadowPrepareTask,
         .context = &shadowPrepareStateLifecycle,
-        .invoke = FrameExecuteLifecycle::AcceptShadowPrepareTask,
+        .invoke = FrameExecuteLifecycle::acceptShadowPrepareTask,
     };
     normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
         .task = m_deferredShadowVisibilityTask,
         .context = &shadowVisibilityStateLifecycle,
-        .invoke = FrameExecuteLifecycle::AcceptShadowVisibilityTask,
+        .invoke = FrameExecuteLifecycle::acceptShadowVisibilityTask,
     };
     if(!hardwareShadowSupported){
         normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
             .task = m_deferredSoftwareCausticsTask,
             .context = &softwareCausticsStateLifecycle,
-            .invoke = FrameExecuteLifecycle::AcceptSoftwareCausticsTask,
+            .invoke = FrameExecuteLifecycle::acceptSoftwareCausticsTask,
         };
     }
     normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
         .task = m_deferredSurfelGiTask,
         .context = &surfelGiStateLifecycle,
-        .invoke = FrameExecuteLifecycle::AcceptSurfelGiTask,
+        .invoke = FrameExecuteLifecycle::acceptSurfelGiTask,
     };
     if(hardwareShadowSupported){
         normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
             .task = m_deferredHardwareCausticsTask,
             .context = &hardwareCausticsStateLifecycle,
-            .invoke = FrameExecuteLifecycle::AcceptHardwareCausticsTask,
+            .invoke = FrameExecuteLifecycle::acceptHardwareCausticsTask,
         };
     }
     normalAcceptedCallbacks[normalAcceptedCallbackCount++] = Core::GpuTaskGraphTaskAcceptedCallback{
         .task = m_deferredLightingTask,
         .context = &deferredLightingStateLifecycle,
-        .invoke = FrameExecuteLifecycle::AcceptDeferredLightingTask,
+        .invoke = FrameExecuteLifecycle::acceptDeferredLightingTask,
     };
     GLB_ASSERT(normalAcceptedCallbackCount <= LengthOf(normalAcceptedCallbacks));
 

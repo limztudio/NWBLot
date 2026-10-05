@@ -626,7 +626,7 @@ void CommandList::setTextureState(
                         mipLevel,
                         oldState,
                         stateBits,
-                        m_context.extensions.KHR_ray_tracing_pipeline
+                        m_context.extensions.khrRayTracingPipeline
                     );
                 }
             }
@@ -648,7 +648,7 @@ void CommandList::setTextureState(
                         mipLevel,
                         subresourceOldState,
                         stateBits,
-                        m_context.extensions.KHR_ray_tracing_pipeline
+                        m_context.extensions.khrRayTracingPipeline
                     );
                 }
             }
@@ -666,7 +666,7 @@ void CommandList::setTextureState(
             resolvedSubresources,
             oldState,
             stateBits,
-            m_context.extensions.KHR_ray_tracing_pipeline
+            m_context.extensions.khrRayTracingPipeline
         );
 
         if(permanentState == ResourceStates::Unknown)

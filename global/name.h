@@ -646,10 +646,10 @@ inline constexpr bool operator<(const Name& a, const Name& b)noexcept{
     return LessNameHash(a.m_hash, b.m_hash);
 }
 
-inline constexpr Name NAME_NONE = {};
-static_assert(Name(nullptr) == NAME_NONE, "Name(nullptr) must produce NAME_NONE");
+inline constexpr Name s_NameNone = {};
+static_assert(Name(nullptr) == s_NameNone, "Name(nullptr) must produce s_NameNone");
 static_assert(!static_cast<bool>(Name(nullptr)), "Name(nullptr) must be invalid");
-static_assert(Name("") != NAME_NONE, "Empty string hash must not be NAME_NONE");
+static_assert(Name("") != s_NameNone, "Empty string hash must not be s_NameNone");
 static_assert(Name("A\\B") == Name("a/b"), "Name canonicalization must map '\\\\' to '/' and uppercase to lowercase");
 static_assert(Name("PATH/TO/FILE") == Name("path/to/file"), "Name canonicalization must be case-insensitive");
 
@@ -660,7 +660,7 @@ static_assert(Name("PATH/TO/FILE") == Name("path/to/file"), "Name canonicalizati
 template<typename CharT>
 [[nodiscard]] inline Name ToName(const BasicStringView<CharT> text){
     if(text.empty())
-        return NAME_NONE;
+        return s_NameNone;
 
     return Name(text);
 }
@@ -734,13 +734,13 @@ template<typename CharT>
 template<typename CharT>
 [[nodiscard]] inline Name DeriveName(const Name& baseName, const BasicStringView<CharT> suffix){
     if(!baseName || suffix.empty())
-        return NAME_NONE;
+        return s_NameNone;
 
     NameHash derivedHash = {};
     if(!BeginDerivedNameHash(baseName, derivedHash))
-        return NAME_NONE;
+        return s_NameNone;
     if(!UpdateDerivedNameHashText(derivedHash, suffix))
-        return NAME_NONE;
+        return s_NameNone;
 
     return FinishDerivedNameHash(derivedHash);
 }

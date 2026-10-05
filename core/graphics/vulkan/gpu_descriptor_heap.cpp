@@ -191,16 +191,16 @@ void GpuDescriptorHeap::releaseRetainedDescriptorResource(const GpuDescriptorHan
 bool GpuDescriptorHeap::initializeStorage(const u32 resourceCapacity, const u32 samplerCapacity, const u32 accelStructCapacity){
     const usize retirementJournalCapacity = AddSize(AddSize(resourceCapacity, samplerCapacity), accelStructCapacity);
     const usize tableBytes[] = {
-        SlotAllocator::RequiredBytes(resourceCapacity),
-        SlotAllocator::RequiredBytes(samplerCapacity),
-        SlotAllocator::RequiredBytes(accelStructCapacity),
-        FixedTable<DescriptorBufferSegment>::RequiredBytes(accelStructCapacity),
-        FixedTable<RayTracingAccelStructHandle>::RequiredBytes(accelStructCapacity),
-        FixedTable<BufferHandle>::RequiredBytes(resourceCapacity),
-        FixedTable<TextureHandle>::RequiredBytes(resourceCapacity),
-        FixedTable<SamplerHandle>::RequiredBytes(samplerCapacity),
-        FixedTable<GpuDescriptorHandle>::RequiredBytes(retirementJournalCapacity),
-        FixedTable<RetiredSlot>::RequiredBytes(retirementJournalCapacity),
+        SlotAllocator::requiredBytes(resourceCapacity),
+        SlotAllocator::requiredBytes(samplerCapacity),
+        SlotAllocator::requiredBytes(accelStructCapacity),
+        FixedTable<DescriptorBufferSegment>::requiredBytes(accelStructCapacity),
+        FixedTable<RayTracingAccelStructHandle>::requiredBytes(accelStructCapacity),
+        FixedTable<BufferHandle>::requiredBytes(resourceCapacity),
+        FixedTable<TextureHandle>::requiredBytes(resourceCapacity),
+        FixedTable<SamplerHandle>::requiredBytes(samplerCapacity),
+        FixedTable<GpuDescriptorHandle>::requiredBytes(retirementJournalCapacity),
+        FixedTable<RetiredSlot>::requiredBytes(retirementJournalCapacity),
     };
     usize arenaBytes = 0u;
     for(const usize bytes : tableBytes)
@@ -283,7 +283,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
     }
 
     if(
-        !m_context.extensions.EXT_descriptor_buffer
+        !m_context.extensions.extDescriptorBuffer
         || !m_context.descriptorBufferManager
         || !m_context.descriptorBufferManager->isEnabled()
     ){
@@ -349,7 +349,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         return failInitialization();
     }
 
-    const u32 accelStructCapacity = m_context.extensions.KHR_acceleration_structure ? s_AccelStructCapacity : 0u;
+    const u32 accelStructCapacity = m_context.extensions.khrAccelerationStructure ? s_AccelStructCapacity : 0u;
     if(!initializeStorage(resourceCapacity, samplerCapacity, accelStructCapacity)){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: GpuDescriptorHeap failed to initialize persistent metadata storage."));
         return failInitialization();
@@ -362,15 +362,15 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .setMaxCapacity(resourceCapacity)
         .setVisibility(ShaderType::All)
         .setDescriptorSetIndex(m_desc.bindlessHeapAbi.resourceSetIndex)
-        .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImage), resourceCapacity))
-        .addRegisterSpace(BindingLayoutItem::Texture_UAV(getRegisterSlot(GpuDescriptorClass::StorageImage), resourceCapacity))
-        .addRegisterSpace(BindingLayoutItem::TypedBuffer_SRV(getRegisterSlot(GpuDescriptorClass::SampledBuffer), resourceCapacity))
-        .addRegisterSpace(BindingLayoutItem::StructuredBuffer_UAV(getRegisterSlot(GpuDescriptorClass::StorageBuffer), resourceCapacity))
-        .addRegisterSpace(BindingLayoutItem::ConstantBuffer(getRegisterSlot(GpuDescriptorClass::UniformBuffer), resourceCapacity))
-        .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImage2DArray), resourceCapacity))
-        .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImage3D), resourceCapacity))
-        .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImage2DArrayUint), resourceCapacity))
-        .addRegisterSpace(BindingLayoutItem::Texture_SRV(getRegisterSlot(GpuDescriptorClass::SampledImageCube), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::textureSrv(getRegisterSlot(GpuDescriptorClass::SampledImage), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::textureUav(getRegisterSlot(GpuDescriptorClass::StorageImage), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::typedBufferSrv(getRegisterSlot(GpuDescriptorClass::SampledBuffer), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::structuredBufferUav(getRegisterSlot(GpuDescriptorClass::StorageBuffer), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::constantBuffer(getRegisterSlot(GpuDescriptorClass::UniformBuffer), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::textureSrv(getRegisterSlot(GpuDescriptorClass::SampledImage2DArray), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::textureSrv(getRegisterSlot(GpuDescriptorClass::SampledImage3D), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::textureSrv(getRegisterSlot(GpuDescriptorClass::SampledImage2DArrayUint), resourceCapacity))
+        .addRegisterSpace(BindingLayoutItem::textureSrv(getRegisterSlot(GpuDescriptorClass::SampledImageCube), resourceCapacity))
     ;
 
     m_resourceLayout = m_device.createBindlessLayout(resourceLayoutDesc);
@@ -389,7 +389,7 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         .setMaxCapacity(samplerCapacity)
         .setVisibility(ShaderType::All)
         .setDescriptorSetIndex(m_desc.bindlessHeapAbi.samplerSetIndex)
-        .addRegisterSpace(BindingLayoutItem::Sampler(getRegisterSlot(GpuDescriptorClass::Sampler), samplerCapacity))
+        .addRegisterSpace(BindingLayoutItem::sampler(getRegisterSlot(GpuDescriptorClass::Sampler), samplerCapacity))
     ;
 
     m_samplerLayout = m_device.createBindlessLayout(samplerLayoutDesc);
@@ -402,14 +402,14 @@ bool GpuDescriptorHeap::initialize(const GpuDescriptorHeapDesc& desc){
         return failInitialization();
     }
     // TLAS uses immutable one-descriptor generation blocks at set 2.
-    if(m_context.extensions.KHR_acceleration_structure){
+    if(m_context.extensions.khrAccelerationStructure){
         BindlessLayoutDesc accelStructLayoutDesc;
         accelStructLayoutDesc
             .setLayoutType(BindlessLayoutType::Immutable)
             .setMaxCapacity(1u)
             .setVisibility(ShaderType::All)
             .setDescriptorSetIndex(m_desc.bindlessHeapAbi.accelStructSetIndex)
-            .addRegisterSpace(BindingLayoutItem::RayTracingAccelStruct(getRegisterSlot(GpuDescriptorClass::AccelStruct), 1u))
+            .addRegisterSpace(BindingLayoutItem::rayTracingAccelStruct(getRegisterSlot(GpuDescriptorClass::AccelStruct), 1u))
         ;
         m_accelStructLayout = m_device.createBindlessLayout(accelStructLayoutDesc);
         if(!m_accelStructLayout || !m_accelStructLayout->isDescriptorBufferCompatible()){

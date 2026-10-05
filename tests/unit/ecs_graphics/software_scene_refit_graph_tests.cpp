@@ -57,7 +57,7 @@ struct RefitContext{
     RefitContext(){
         snapshot = SoftwareSceneRefitHandle(
             NewArenaObject<SoftwareSceneRefitControl>(testArena.arena, testArena.arena, graphics),
-            ArenaRefDeleter<SoftwareSceneRefitControl, Core::Alloc::GlobalArena>(&testArena.arena), AdoptRef
+            ArenaRefDeleter<SoftwareSceneRefitControl, Core::Alloc::GlobalArena>(&testArena.arena), s_AdoptRef
         );
         snapshot->inputBuffer = makeBuffer(Name("software_scene_refit_inputs"));
         snapshot->sceneNodes = makeBuffer(Name("tests/software_scene_refit/scene"));
@@ -82,7 +82,7 @@ struct RefitContext{
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
         Core::Buffer* const buffer = Tests::NewMetadataOnlyBuffer(testArena.arena, context, allocator, desc, true);
-        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
     }
 
     [[nodiscard]] Core::GpuGraphResourceId importBuffer(const Core::BufferHandle& buffer){

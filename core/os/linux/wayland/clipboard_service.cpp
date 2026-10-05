@@ -260,15 +260,15 @@ GlobalUniquePtr<IClipboardService> CreateWaylandClipboardService(
 }
 
 void AttachWaylandClipboardSeat(IClipboardService& service, wl_seat* const seat, const u32 seatGlobalName){
-    checked_cast<WaylandClipboardService*>(&service)->attachSeat(seat, seatGlobalName);
+    CheckedCast<WaylandClipboardService*>(&service)->attachSeat(seat, seatGlobalName);
 }
 
 void ObserveWaylandClipboardInputSerial(IClipboardService& service, const u32 serial){
-    checked_cast<WaylandClipboardService*>(&service)->observeSerial(serial);
+    CheckedCast<WaylandClipboardService*>(&service)->observeSerial(serial);
 }
 
 void SetWaylandClipboardKeyboardFocus(IClipboardService& service, const bool focused){
-    checked_cast<WaylandClipboardService*>(&service)->setKeyboardFocus(focused);
+    CheckedCast<WaylandClipboardService*>(&service)->setKeyboardFocus(focused);
 }
 
 

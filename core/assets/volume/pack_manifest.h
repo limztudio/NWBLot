@@ -43,7 +43,7 @@ struct AssetVolumePayloadIdentity{
 };
 
 struct AssetVolumePackEntry{
-    Name virtualPath = NAME_NONE;
+    Name virtualPath = s_NameNone;
     AssetVolumePayloadIdentity identity;
     AssetVolumePackEntrySource::Enum source = AssetVolumePackEntrySource::PayloadBytes;
     Path objectPath;

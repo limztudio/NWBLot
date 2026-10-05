@@ -19,7 +19,7 @@ bool nwbLightSpaceBoundsOutside(
     if(view.depthRange.w == 0.0)
         return false;
     const NwbRtInstanceMaterial material = nwbLightSpaceMaterial(instanceIndex);
-    const NwbMeshInstanceData transform = NwbHeapMeshInstances(nwbMeshFrameInstanceHeapSlot())[material.meshInstanceIndex];
+    const NwbMeshInstanceData transform = nwbHeapMeshInstances(nwbMeshFrameInstanceHeapSlot())[material.meshInstanceIndex];
     if(
         !all(isfinite(minimum)) || !all(isfinite(maximum)) || any(minimum > maximum)
         || !all(isfinite(transform.scale.xyz)) || !all(isfinite(transform.rotation)) || !all(isfinite(transform.translation))

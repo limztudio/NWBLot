@@ -233,7 +233,7 @@ bool RendererRayTracingSystem::capturePreparedSceneSwBvhTraversal(
     for(usize index = 0u; index < meshCount; ++index){
         const PreparedSceneSwBvhMesh& mesh = meshes[index];
         if(
-            mesh.meshName == NAME_NONE
+            mesh.meshName == s_NameNone
             || !mesh.nodeBuffer
             || !mesh.positionBuffer
             || !mesh.triangleIndexBuffer

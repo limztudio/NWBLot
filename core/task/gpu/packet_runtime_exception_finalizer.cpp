@@ -21,7 +21,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-thread_local GpuTaskScheduler::SubmissionAttemptExceptionFinalizer* GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::s_activeFinalizer = nullptr;
+thread_local GpuTaskScheduler::SubmissionAttemptExceptionFinalizer* GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::s_ActiveFinalizer = nullptr;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -34,7 +34,7 @@ GpuTaskScheduler::SubmissionAttemptExceptionFinalizer* GpuTaskScheduler::Submiss
     const GpuGraphSubmissionTransaction& transaction
 )noexcept{
     for(
-        SubmissionAttemptExceptionFinalizer* finalizer = s_activeFinalizer;
+        SubmissionAttemptExceptionFinalizer* finalizer = s_ActiveFinalizer;
         finalizer;
         finalizer = finalizer->m_previousFinalizer
     ){
@@ -62,7 +62,7 @@ GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::SubmissionAttemptExceptio
     , m_transaction(transaction)
     , m_uncaughtExceptionCount(UncaughtExceptionCount())
 {
-    if(!s_activeFinalizer){
+    if(!s_ActiveFinalizer){
         m_owner = this;
     }
     else{
@@ -70,16 +70,16 @@ GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::SubmissionAttemptExceptio
         if(!m_owner)
             return;
     }
-    m_previousFinalizer = s_activeFinalizer;
-    s_activeFinalizer = this;
+    m_previousFinalizer = s_ActiveFinalizer;
+    s_ActiveFinalizer = this;
     m_installed = true;
 }
 GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::~SubmissionAttemptExceptionFinalizer()noexcept{
     if(!m_installed)
         return;
-    if(s_activeFinalizer != this)
+    if(s_ActiveFinalizer != this)
         TerminateInvariant();
-    s_activeFinalizer = m_previousFinalizer;
+    s_ActiveFinalizer = m_previousFinalizer;
     if(m_owner != this || !m_armed || UncaughtExceptionCount() <= m_uncaughtExceptionCount)
         return;
 

@@ -21,7 +21,7 @@ using ScratchArena = Core::Alloc::ScratchArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CsgDeformCapBuilder::CollectBoundaryEdges(
+void CsgDeformCapBuilder::collectBoundaryEdges(
     ScratchArena& scratchArena,
     const CsgDeformTriangleVector<ScratchArena>& triangles,
     Vector<CsgDeformCutLoopEdge, ScratchArena>& outEdges
@@ -61,7 +61,7 @@ void CsgDeformCapBuilder::CollectBoundaryEdges(
     // Deterministic boundary order: traversal input matches emitted triangle order.
 }
 
-bool CsgDeformCapBuilder::OrderBoundaryLoop(
+bool CsgDeformCapBuilder::orderBoundaryLoop(
     ScratchArena& scratchArena,
     const Vector<CsgDeformCutLoopEdge, ScratchArena>& edges,
     Vector<u32, ScratchArena>& outLoop
@@ -123,19 +123,19 @@ bool CsgDeformCapBuilder::OrderBoundaryLoop(
     return true;
 }
 
-SIMDVector CsgDeformCapBuilder::AccumulateFanAreaVec(SIMDVector inAreaVec, SIMDVector originVec, SIMDVector firstVec, SIMDVector secondVec){
+SIMDVector CsgDeformCapBuilder::accumulateFanAreaVec(SIMDVector inAreaVec, SIMDVector originVec, SIMDVector firstVec, SIMDVector secondVec){
     return VectorAdd(inAreaVec, Vector3Cross(VectorSubtract(firstVec, originVec), VectorSubtract(secondVec, originVec)));
 }
 
-SIMDVector CsgDeformCapBuilder::ScaleCenterVec(SIMDVector sumVec, SIMDVector loopSizeVec){
+SIMDVector CsgDeformCapBuilder::scaleCenterVec(SIMDVector sumVec, SIMDVector loopSizeVec){
     return VectorDivide(sumVec, loopSizeVec);
 }
 
-SIMDVector CsgDeformCapBuilder::CapCenterNormalVec(SIMDVector loopNormalVec){
+SIMDVector CsgDeformCapBuilder::capCenterNormalVec(SIMDVector loopNormalVec){
     return loopNormalVec;
 }
 
-bool CsgDeformCapBuilder::CapNormal(
+bool CsgDeformCapBuilder::capNormal(
     const CsgDeformVertexVector<ScratchArena>& vertices,
     const Vector<u32, ScratchArena>& loop,
     Float4& outNormal
@@ -148,18 +148,18 @@ bool CsgDeformCapBuilder::CapNormal(
     for(usize vertexIndex = 1u; vertexIndex + 1u < loop.size(); ++vertexIndex){
         const SIMDVector firstVec = LoadFloat(vertices[loop[vertexIndex]].position);
         const SIMDVector secondVec = LoadFloat(vertices[loop[vertexIndex + 1u]].position);
-        areaVec = CsgDeformCapBuilder::AccumulateFanAreaVec(areaVec, originVec, firstVec, secondVec);
+        areaVec = CsgDeformCapBuilder::accumulateFanAreaVec(areaVec, originVec, firstVec, secondVec);
     }
     const f32 areaLengthSq = VectorGetX(Vector3LengthSq(areaVec));
     if(!(areaLengthSq > s_LoopAreaEpsilonSq))
         return false;
     const SIMDVector normalized = Vector3Normalize(areaVec);
-    const SIMDVector packed = VectorSelect(normalized, CsgDeformWallBuilder::UpAxisVec(), s_SIMDMaskW);
+    const SIMDVector packed = VectorSelect(normalized, CsgDeformWallBuilder::upAxisVec(), s_SIMDMaskW);
     StoreFloat(packed, outNormal);
     return true;
 }
 
-bool CsgDeformCapBuilder::FillCapLoop(
+bool CsgDeformCapBuilder::fillCapLoop(
     const Float4& loopNormal,
     CsgDeformVertexVector<ScratchArena>& inOutVertices,
     CsgDeformTriangleVector<ScratchArena>& inOutTriangles,
@@ -183,14 +183,14 @@ bool CsgDeformCapBuilder::FillCapLoop(
     }
     const SIMDVector loopNormalVec = LoadFloat(loopNormal);
     const SIMDVector loopSizeVec = VectorReplicate(static_cast<f32>(loop.size()));
-    const SIMDVector centerNormalVec = CsgDeformCapBuilder::CapCenterNormalVec(loopNormalVec);
+    const SIMDVector centerNormalVec = CsgDeformCapBuilder::capCenterNormalVec(loopNormalVec);
     CsgDeformVertex center;
-    StoreFloat(CsgDeformCapBuilder::ScaleCenterVec(centerPositionVec, loopSizeVec), center.position);
+    StoreFloat(CsgDeformCapBuilder::scaleCenterVec(centerPositionVec, loopSizeVec), center.position);
     StoreFloat(centerNormalVec, center.normal);
     center.tangent = s_FallbackTangent;
-    StoreFloat(CsgDeformCapBuilder::ScaleCenterVec(centerUvVec, loopSizeVec), center.uv0);
-    StoreFloat(CsgDeformCapBuilder::ScaleCenterVec(centerColorVec, loopSizeVec), center.color);
-    if(!CsgDeformWallBuilder::NormalizeDeformVertex(center))
+    StoreFloat(CsgDeformCapBuilder::scaleCenterVec(centerUvVec, loopSizeVec), center.uv0);
+    StoreFloat(CsgDeformCapBuilder::scaleCenterVec(centerColorVec, loopSizeVec), center.color);
+    if(!CsgDeformWallBuilder::normalizeDeformVertex(center))
         return false;
     const u32 centerIndex = static_cast<u32>(inOutVertices.size());
     inOutVertices.push_back(center);
@@ -201,13 +201,13 @@ bool CsgDeformCapBuilder::FillCapLoop(
             return false;
         const u32 first = loop[vertexIndex];
         const u32 second = loop[(vertexIndex + 1u) % loop.size()];
-        CsgDeformWallBuilder::EmitTriangle(inOutTriangles, centerIndex, second, first);
+        CsgDeformWallBuilder::emitTriangle(inOutTriangles, centerIndex, second, first);
         ++outCapTriangles;
     }
     return true;
 }
 
-bool CsgDeformCapBuilder::FillCutCaps(
+bool CsgDeformCapBuilder::fillCutCaps(
     ScratchArena& scratchArena,
     CsgDeformVertexVector<ScratchArena>& inOutVertices,
     CsgDeformTriangleVector<ScratchArena>& inOutTriangles,
@@ -215,7 +215,7 @@ bool CsgDeformCapBuilder::FillCutCaps(
     u32& outCapTriangles
 ){
     outCapTriangles = 0u;
-    CsgDeformCapBuilder::CollectBoundaryEdges(scratchArena, inOutTriangles, scratchEdges);
+    CsgDeformCapBuilder::collectBoundaryEdges(scratchArena, inOutTriangles, scratchEdges);
     if(scratchEdges.empty())
         return true;
     // Peel one closed loop at a time from the boundary set; open chains stay cap-free while a closed but degenerate loop fails viability.
@@ -251,13 +251,13 @@ bool CsgDeformCapBuilder::FillCutCaps(
             }
         }
         // Open boundary chains (e.g. cuts across an open sheet) carry no closable volume loop; they stay viable cap-free. Only a closed but degenerate loop fails viability.
-        if(!CsgDeformCapBuilder::OrderBoundaryLoop(scratchArena, loopEdges, loop))
+        if(!CsgDeformCapBuilder::orderBoundaryLoop(scratchArena, loopEdges, loop))
             continue;
         Float4 loopNormal;
-        if(!CsgDeformCapBuilder::CapNormal(inOutVertices, loop, loopNormal))
+        if(!CsgDeformCapBuilder::capNormal(inOutVertices, loop, loopNormal))
             return false;
         u32 loopCaps = 0u;
-        if(!CsgDeformCapBuilder::FillCapLoop(loopNormal, inOutVertices, inOutTriangles, loop, loopCaps))
+        if(!CsgDeformCapBuilder::fillCapLoop(loopNormal, inOutVertices, inOutTriangles, loop, loopCaps))
             return false;
         outCapTriangles += loopCaps;
     }

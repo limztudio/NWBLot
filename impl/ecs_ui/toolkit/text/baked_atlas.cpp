@@ -78,7 +78,7 @@ SharedBakedFontAtlas CreateBakedFontAtlas(Core::Alloc::GlobalArena& arena, const
     SharedBakedFontAtlas result(
         NewArenaObject<RefCounter<BakedFontAtlas>>(arena, arena, atlas, fontGeneration),
         ArenaRefDeleter<RefCounter<BakedFontAtlas>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
     return result->valid() ? result : SharedBakedFontAtlas{};
 }

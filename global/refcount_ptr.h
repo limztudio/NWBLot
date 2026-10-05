@@ -55,7 +55,7 @@ u32 RefCountRelease(T* p)noexcept{
 
 
 struct AdoptRefT{ explicit AdoptRefT() = default; };
-inline constexpr AdoptRefT AdoptRef{};
+inline constexpr AdoptRefT s_AdoptRef{};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -151,11 +151,11 @@ public:
         static_assert(!IsLValueReference<deleter_type>::value, "deleter_type reference refers to an rvalue deleter. The reference will probably become invalid before used. Change the deleter_type to not be a reference or construct with permanent deleter.");
     }
     constexpr RefCountPtr(this_type&& x)noexcept
-        : m_pair(x.detach(), Forward<deleter_type>(x.get_deleter()))
+        : m_pair(x.detach(), Forward<deleter_type>(x.getDeleter()))
     {}
     template<typename U, typename E>
     constexpr RefCountPtr(RefCountPtr<U, E>&& u, typename EnableIf<!IsArray<U>::value && IsConvertible<typename RefCountPtr<U, E>::pointer, pointer>::value && IsConvertible<E, deleter_type>::value && (IsSame<deleter_type, E>::value || !IsLValueReference<deleter_type>::value)>::type* = 0)noexcept
-        : m_pair(u.detach(), Forward<E>(u.get_deleter()))
+        : m_pair(u.detach(), Forward<E>(u.getDeleter()))
     {}
     RefCountPtr(const RefCountPtr& rhs)noexcept
         : m_pair(rhs.m_pair.first(), rhs.m_pair.second())
@@ -164,7 +164,7 @@ public:
     }
     template<typename U, typename E>
     RefCountPtr(const RefCountPtr<U, E>& u, typename EnableIf<!IsArray<U>::value && IsConvertible<typename RefCountPtr<U, E>::pointer, pointer>::value && IsConvertible<E, deleter_type>::value && (IsSame<deleter_type, E>::value || !IsLValueReference<deleter_type>::value)>::type* = 0)noexcept
-        : m_pair(u.get(), Forward<E>(u.get_deleter()))
+        : m_pair(u.get(), Forward<E>(u.getDeleter()))
     {
         internalAddRef(m_pair.first());
     }
@@ -177,7 +177,7 @@ public:
         if(this != &x){
             reset();
             m_pair.first() = x.detach();
-            m_pair.second() = Move(Forward<deleter_type>(x.get_deleter()));
+            m_pair.second() = Move(Forward<deleter_type>(x.getDeleter()));
         }
         return *this;
     }
@@ -185,7 +185,7 @@ public:
     typename EnableIf<!IsArray<U>::value && IsConvertible<typename RefCountPtr<U, E>::pointer, pointer>::value && IsAssignable<deleter_type&, E&&>::value, this_type&>::type operator=(RefCountPtr<U, E>&& u)noexcept{
         reset();
         m_pair.first() = u.detach();
-        m_pair.second() = Move(Forward<E>(u.get_deleter()));
+        m_pair.second() = Move(Forward<E>(u.getDeleter()));
         return *this;
     }
     this_type& operator=(const this_type& x)noexcept{
@@ -196,7 +196,7 @@ public:
             pointer oldp = Exchange(m_pair.first(), newp);
             internalRelease(oldp);
 
-            m_pair.second() = x.get_deleter();
+            m_pair.second() = x.getDeleter();
         }
         return *this;
     }
@@ -208,7 +208,7 @@ public:
         pointer oldp = Exchange(m_pair.first(), newp);
         internalRelease(oldp);
 
-        m_pair.second() = u.get_deleter();
+        m_pair.second() = u.getDeleter();
         return *this;
     }
     this_type& operator=(T* newp){
@@ -264,8 +264,8 @@ public:
 
     pointer get()const noexcept{ return m_pair.first(); }
 
-    deleter_type& get_deleter()noexcept{ return m_pair.second(); }
-    const deleter_type& get_deleter()const noexcept{ return m_pair.second(); }
+    deleter_type& getDeleter()noexcept{ return m_pair.second(); }
+    const deleter_type& getDeleter()const noexcept{ return m_pair.second(); }
 
 
 protected:
@@ -284,7 +284,7 @@ protected:
             using RefCountPtrDetail::RefCountRelease;
             newCount = RefCountRelease(p);
             if(!newCount)
-                get_deleter()(p);
+                getDeleter()(p);
         }
         return newCount;
     }
@@ -330,7 +330,7 @@ private:
 
 template<typename T, typename... Args>
 inline typename EnableIf<!IsArray<T>::value, RefCountPtr<T>>::type MakeRefCount(Args&&... args){
-    return RefCountPtr<T>(new T(Forward<Args>(args)...), AdoptRef);
+    return RefCountPtr<T>(new T(Forward<Args>(args)...), s_AdoptRef);
 }
 template<typename T, typename... Args>
 typename EnableIf<IsBoundedArray<T>::value>::type

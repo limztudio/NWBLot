@@ -79,10 +79,10 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     float depth = 1.0;
     if(insideImage){
         const int3 sourceTexel = int3(pixel, 0);
-        center = half4(NwbHeapSampledImage2D(g_NwbReflectionSpatial.sourceRadianceSrvSlot).Load(sourceTexel));
+        center = half4(nwbHeapSampledImage2D(g_NwbReflectionSpatial.sourceRadianceSrvSlot).Load(sourceTexel));
         if(radius != 0u){
-            specular = half4(NwbHeapSampledImage2D(g_NwbReflectionSpatial.opaqueSpecularSlot).Load(sourceTexel));
-            depth = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.w).Load(sourceTexel).r;
+            specular = half4(nwbHeapSampledImage2D(g_NwbReflectionSpatial.opaqueSpecularSlot).Load(sourceTexel));
+            depth = nwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.w).Load(sourceTexel).r;
         }
     }
     const bool filterEligible = insideImage && !(
@@ -99,7 +99,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     // they cannot consume neighbors, so no halo, position or normal fetch is needed.
     if(g_NwbReflectionSpatialTileEligible == 0u){
         if(insideImage)
-            NwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(center);
+            nwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(center);
         return;
     }
 
@@ -112,8 +112,8 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     float4 centerNormal = float4(0.0);
     if(insideImage){
         const int3 sourceTexel = int3(pixel, 0);
-        centerPositionDepth.xyz = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.z).Load(sourceTexel).xyz;
-        centerNormal = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.y).Load(sourceTexel);
+        centerPositionDepth.xyz = nwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.z).Load(sourceTexel).xyz;
+        centerNormal = nwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.y).Load(sourceTexel);
     }
     // Reuse each lane's eligibility inputs; every center entry has one writer, including partial-image tails.
     g_NwbReflectionSpatialRadiance[centerIndex] = center;
@@ -137,11 +137,11 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             && sourcePixel.y < int(g_NwbReflectionSpatial.height)
         ){
             const int3 sourceTexel = int3(sourcePixel, 0);
-            radiance = half4(NwbHeapSampledImage2D(g_NwbReflectionSpatial.sourceRadianceSrvSlot).Load(sourceTexel));
-            neighborSpecular = half4(NwbHeapSampledImage2D(g_NwbReflectionSpatial.opaqueSpecularSlot).Load(sourceTexel));
-            positionDepth.xyz = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.z).Load(sourceTexel).xyz;
-            positionDepth.w = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.w).Load(sourceTexel).r;
-            normal = NwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.y).Load(sourceTexel);
+            radiance = half4(nwbHeapSampledImage2D(g_NwbReflectionSpatial.sourceRadianceSrvSlot).Load(sourceTexel));
+            neighborSpecular = half4(nwbHeapSampledImage2D(g_NwbReflectionSpatial.opaqueSpecularSlot).Load(sourceTexel));
+            positionDepth.xyz = nwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.z).Load(sourceTexel).xyz;
+            positionDepth.w = nwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.w).Load(sourceTexel).r;
+            normal = nwbHeapSampledImage2D(g_NwbReflectionSpatialResources.gbufferSlots.y).Load(sourceTexel);
         }
         g_NwbReflectionSpatialRadiance[tileIndex] = radiance;
         g_NwbReflectionSpatialSpecular[tileIndex] = neighborSpecular;
@@ -154,7 +154,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     if(!insideImage)
         return;
     if(!filterEligible){
-        NwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(center);
+        nwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(center);
         return;
     }
 
@@ -164,7 +164,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
     );
     const float4 clip = mul(g_NwbReflectionSpatialView.worldToClip, float4(position, 1.0));
     if(!all(isfinite(position)) || !all(isfinite(clip))){
-        NwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(center);
+        nwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(center);
         return;
     }
     const float focalX = length(g_NwbReflectionSpatialView.worldToClip[0].xyz);
@@ -257,7 +257,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint3 groupId : SV_Group
             weightSum += float(weight);
         }
     }
-    NwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(sum / weightSum, center.a);
+    nwbHeapStorageImage2DFloat4(g_NwbReflectionSpatial.destinationRadianceUavSlot)[pixel] = float4(sum / weightSum, center.a);
 }
 
 

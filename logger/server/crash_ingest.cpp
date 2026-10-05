@@ -113,7 +113,7 @@ static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, c
 
 [[nodiscard]] static bool WriteExtractedFile(LogArena& arena, const Path& packageDirectory, const AStringView relativePath, const u8* bytes, const usize byteCount){
     const Path outputPath = packageDirectory / Path(arena, relativePath);
-    const Path outputDirectory = outputPath.parent_path();
+    const Path outputDirectory = outputPath.parentPath();
     ErrorCode error;
     if(!outputDirectory.empty()){
         if(!EnsureDirectories(outputDirectory, error))

@@ -310,7 +310,7 @@ namespace SIMDConvertDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE SIMDVector SIMDCALL MakeF32(f32 x, f32 y, f32 z, f32 w)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL MakeF32(f32 x, f32 y, f32 z, f32 w)noexcept{
 #if defined(GLB_HAS_SCALAR)
     SIMDVector result{};
     result.f[0] = x;
@@ -328,7 +328,7 @@ GLB_INLINE SIMDVector SIMDCALL MakeF32(f32 x, f32 y, f32 z, f32 w)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDVector SIMDCALL MakeU32(u32 x, u32 y, u32 z, u32 w)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL MakeU32(u32 x, u32 y, u32 z, u32 w)noexcept{
 #if defined(GLB_HAS_SCALAR)
     SIMDVector result{};
     result.u[0] = x;
@@ -346,7 +346,7 @@ GLB_INLINE SIMDVector SIMDCALL MakeU32(u32 x, u32 y, u32 z, u32 w)noexcept{
 #endif
 }
 
-GLB_INLINE void SIMDCALL StoreF32(f32* out, SIMDVector value)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreF32(f32* out, SIMDVector value)noexcept{
 #if defined(GLB_HAS_SCALAR)
     out[0] = value.f[0];
     out[1] = value.f[1];
@@ -359,7 +359,7 @@ GLB_INLINE void SIMDCALL StoreF32(f32* out, SIMDVector value)noexcept{
 #endif
 }
 
-GLB_INLINE void SIMDCALL StoreU32(u32* out, SIMDVector value)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreU32(u32* out, SIMDVector value)noexcept{
 #if defined(GLB_HAS_SCALAR)
     out[0] = value.u[0];
     out[1] = value.u[1];
@@ -373,19 +373,19 @@ GLB_INLINE void SIMDCALL StoreU32(u32* out, SIMDVector value)noexcept{
 }
 
 #if defined(GLB_HAS_SSE4)
-GLB_INLINE void SIMDCALL StoreInt3Bits(SIMDVector value, i32* out)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreInt3Bits(SIMDVector value, i32* out)noexcept{
     _mm_store_sd(reinterpret_cast<f64*>(out), _mm_castps_pd(value));
     out[2] = _mm_extract_ps(value, 2);
 }
 
-GLB_INLINE void SIMDCALL StoreUInt3Bits(SIMDVector value, u32* out)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreUInt3Bits(SIMDVector value, u32* out)noexcept{
     _mm_store_sd(reinterpret_cast<f64*>(out), _mm_castps_pd(value));
     out[2] = static_cast<u32>(_mm_extract_ps(value, 2));
 }
 #endif
 
-template<typename T>
-GLB_INLINE SIMDVector SIMDCALL LoadFloat3Components(const T& src)noexcept{
+template<typename secondRow>
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadFloat3Components(const secondRow& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return MakeF32(src.x, src.y, src.z, 0.0f);
 #elif defined(GLB_HAS_NEON)
@@ -400,8 +400,8 @@ GLB_INLINE SIMDVector SIMDCALL LoadFloat3Components(const T& src)noexcept{
 #endif
 }
 
-template<typename T>
-GLB_INLINE void SIMDCALL StoreFloat3Components(SIMDVector src, T& dst)noexcept{
+template<typename secondRow>
+GLB_INLINE void GLB_SIMD_CALL StoreFloat3Components(SIMDVector src, secondRow& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     dst.x = src.f[0];
     dst.y = src.f[1];
@@ -417,8 +417,8 @@ GLB_INLINE void SIMDCALL StoreFloat3Components(SIMDVector src, T& dst)noexcept{
 }
 
 #if defined(GLB_HAS_SCALAR)
-template<typename T>
-GLB_INLINE void StoreFloat34Scalar(SIMDMatrix src, T& dst)noexcept{
+template<typename secondRow>
+GLB_INLINE void StoreFloat34Scalar(SIMDMatrix src, secondRow& dst)noexcept{
     dst._11 = src._11;
     dst._12 = src._12;
     dst._13 = src._13;
@@ -435,8 +435,8 @@ GLB_INLINE void StoreFloat34Scalar(SIMDMatrix src, T& dst)noexcept{
     dst._34 = src._34;
 }
 
-template<typename T>
-GLB_INLINE void StoreFloat44Scalar(SIMDMatrix src, T& dst)noexcept{
+template<typename secondRow>
+GLB_INLINE void StoreFloat44Scalar(SIMDMatrix src, secondRow& dst)noexcept{
     StoreFloat34Scalar(src, dst);
 
     dst._41 = src._41;
@@ -446,8 +446,8 @@ GLB_INLINE void StoreFloat44Scalar(SIMDMatrix src, T& dst)noexcept{
 }
 #endif
 
-template<typename T>
-GLB_INLINE SIMDMatrix SIMDCALL LoadFloat34Scalar(const T& src)noexcept{
+template<typename secondRow>
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL LoadFloat34Scalar(const secondRow& src)noexcept{
     SIMDMatrix result{};
     result.v[0] = MakeF32(src._11, src._12, src._13, src._14);
     result.v[1] = MakeF32(src._21, src._22, src._23, src._24);
@@ -456,16 +456,16 @@ GLB_INLINE SIMDMatrix SIMDCALL LoadFloat34Scalar(const T& src)noexcept{
     return result;
 }
 
-template<typename T>
-GLB_INLINE SIMDMatrix SIMDCALL LoadFloat44Scalar(const T& src)noexcept{
+template<typename secondRow>
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL LoadFloat44Scalar(const secondRow& src)noexcept{
     SIMDMatrix result = LoadFloat34Scalar(src);
     result.v[3] = MakeF32(src._41, src._42, src._43, src._44);
     return result;
 }
 
 #if defined(GLB_HAS_NEON)
-template<typename T>
-GLB_INLINE SIMDMatrix SIMDCALL LoadFloat34Neon(const T& src)noexcept{
+template<typename secondRow>
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL LoadFloat34Neon(const secondRow& src)noexcept{
     SIMDMatrix result;
     result.v[0] = vld1q_f32(&src._11);
     result.v[1] = vld1q_f32(&src._21);
@@ -474,16 +474,16 @@ GLB_INLINE SIMDMatrix SIMDCALL LoadFloat34Neon(const T& src)noexcept{
     return result;
 }
 
-template<typename T>
-GLB_INLINE SIMDMatrix SIMDCALL LoadFloat44Neon(const T& src)noexcept{
+template<typename secondRow>
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL LoadFloat44Neon(const secondRow& src)noexcept{
     SIMDMatrix result = LoadFloat34Neon(src);
     result.v[3] = vld1q_f32(&src._41);
     return result;
 }
 
 #if defined(_MSC_VER) && !defined(__clang__) && !defined(_ARM64_DISTINCT_NEON_TYPES)
-template<typename T>
-GLB_INLINE SIMDMatrix SIMDCALL LoadFloat34NeonAligned(const T& src)noexcept{
+template<typename secondRow>
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL LoadFloat34NeonAligned(const secondRow& src)noexcept{
     SIMDMatrix result;
     result.v[0] = vld1q_f32_ex(&src._11, 128);
     result.v[1] = vld1q_f32_ex(&src._21, 128);
@@ -492,8 +492,8 @@ GLB_INLINE SIMDMatrix SIMDCALL LoadFloat34NeonAligned(const T& src)noexcept{
     return result;
 }
 
-template<typename T>
-GLB_INLINE SIMDMatrix SIMDCALL LoadFloat44NeonAligned(const T& src)noexcept{
+template<typename secondRow>
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL LoadFloat44NeonAligned(const secondRow& src)noexcept{
     SIMDMatrix result = LoadFloat34NeonAligned(src);
     result.v[3] = vld1q_f32_ex(&src._41, 128);
     return result;
@@ -503,15 +503,15 @@ GLB_INLINE SIMDMatrix SIMDCALL LoadFloat44NeonAligned(const T& src)noexcept{
 
 #if defined(GLB_HAS_SSE4)
 template<bool Aligned>
-GLB_INLINE SIMDVector SIMDCALL LoadMatrixRow4(const f32* row)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadMatrixRow4(const f32* row)noexcept{
     if constexpr(Aligned)
         return _mm_load_ps(row);
     else
         return _mm_loadu_ps(row);
 }
 
-template<bool Aligned, typename T>
-GLB_INLINE SIMDMatrix SIMDCALL LoadFloat34Sse(const T& src)noexcept{
+template<bool Aligned, typename secondRow>
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL LoadFloat34Sse(const secondRow& src)noexcept{
     SIMDMatrix result;
     result.v[0] = LoadMatrixRow4<Aligned>(&src._11);
     result.v[1] = LoadMatrixRow4<Aligned>(&src._21);
@@ -520,8 +520,8 @@ GLB_INLINE SIMDMatrix SIMDCALL LoadFloat34Sse(const T& src)noexcept{
     return result;
 }
 
-template<bool Aligned, typename T>
-GLB_INLINE SIMDMatrix SIMDCALL LoadFloat44Sse(const T& src)noexcept{
+template<bool Aligned, typename secondRow>
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL LoadFloat44Sse(const secondRow& src)noexcept{
     SIMDMatrix result = LoadFloat34Sse<Aligned>(src);
     result.v[3] = LoadMatrixRow4<Aligned>(&src._41);
     return result;
@@ -529,8 +529,8 @@ GLB_INLINE SIMDMatrix SIMDCALL LoadFloat44Sse(const T& src)noexcept{
 #endif
 
 #if defined(GLB_HAS_SCALAR)
-template<typename T>
-GLB_INLINE void SIMDCALL StoreInt4Scalar(SIMDVector src, T& dst)noexcept{
+template<typename secondRow>
+GLB_INLINE void GLB_SIMD_CALL StoreInt4Scalar(SIMDVector src, secondRow& dst)noexcept{
     dst.x = static_cast<i32>(src.u[0]);
     dst.y = static_cast<i32>(src.u[1]);
     dst.z = static_cast<i32>(src.u[2]);
@@ -540,7 +540,7 @@ GLB_INLINE void SIMDCALL StoreInt4Scalar(SIMDVector src, T& dst)noexcept{
 
 #if defined(GLB_HAS_SSE4)
 template<bool Aligned>
-GLB_INLINE void SIMDCALL StoreInt4Sse(SIMDVector src, i32* dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreInt4Sse(SIMDVector src, i32* dst)noexcept{
     if constexpr(Aligned)
         _mm_store_si128(reinterpret_cast<__m128i*>(dst), _mm_castps_si128(src));
     else
@@ -558,7 +558,7 @@ GLB_INLINE void SIMDCALL StoreInt4Sse(SIMDVector src, i32* dst)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE SIMDVector SIMDCALL LoadHalf(const Half2U& value)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadHalf(const Half2U& value)noexcept{
 #if defined(GLB_HAS_F16C)
     return _mm_cvtph_ps(_mm_cvtsi32_si128(static_cast<i32>(value.packed)));
 #else
@@ -566,7 +566,7 @@ GLB_INLINE SIMDVector SIMDCALL LoadHalf(const Half2U& value)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDVector SIMDCALL LoadHalf(const Half4U& value)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadHalf(const Half4U& value)noexcept{
 #if defined(GLB_HAS_F16C)
     const __m128i halfValue = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(value.raw));
     return _mm_cvtph_ps(halfValue);
@@ -585,7 +585,7 @@ GLB_INLINE SIMDVector SIMDCALL LoadHalf(const Half4U& value)noexcept{
 
 
 // SIMD types are calculation values; persistent data uses typed layouts via these boundaries.
-GLB_INLINE SIMDVector SIMDCALL LoadFloat(const Float4& src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadFloat(const Float4& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(src.x, src.y, src.z, src.w);
 #elif defined (GLB_HAS_NEON)
@@ -599,7 +599,7 @@ GLB_INLINE SIMDVector SIMDCALL LoadFloat(const Float4& src)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDVector SIMDCALL LoadFloat(f32 src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadFloat(f32 src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(src, 0.0f, 0.0f, 0.0f);
 #elif defined (GLB_HAS_NEON)
@@ -609,7 +609,7 @@ GLB_INLINE SIMDVector SIMDCALL LoadFloat(f32 src)noexcept{
     return _mm_load_ss(&src);
 #endif
 }
-GLB_INLINE SIMDVector SIMDCALL LoadFloat(const Float2U& src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadFloat(const Float2U& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(src.x, src.y, 0.0f, 0.0f);
 #elif defined (GLB_HAS_NEON)
@@ -620,16 +620,16 @@ GLB_INLINE SIMDVector SIMDCALL LoadFloat(const Float2U& src)noexcept{
     return _mm_castpd_ps(_mm_load_sd(reinterpret_cast<const f64*>(src.raw)));
 #endif
 }
-GLB_INLINE SIMDVector SIMDCALL LoadFloat(const Float3U& src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadFloat(const Float3U& src)noexcept{
     return SIMDConvertDetail::LoadFloat3Components(src);
 }
-GLB_INLINE SIMDVector SIMDCALL LoadFloatInt(const Float3Int& src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadFloatInt(const Float3Int& src)noexcept{
     return SIMDConvertDetail::LoadFloat3Components(src);
 }
-GLB_INLINE SIMDVector SIMDCALL LoadFloatInt(const Float3UInt& src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadFloatInt(const Float3UInt& src)noexcept{
     return SIMDConvertDetail::LoadFloat3Components(src);
 }
-GLB_INLINE SIMDVector SIMDCALL LoadFloat(const Float4U& src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadFloat(const Float4U& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(src.x, src.y, src.z, src.w);
 #elif defined (GLB_HAS_NEON)
@@ -639,7 +639,7 @@ GLB_INLINE SIMDVector SIMDCALL LoadFloat(const Float4U& src)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL LoadFloat(const Float34& src)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL LoadFloat(const Float34& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::LoadFloat34Scalar(src);
 #elif defined (GLB_HAS_NEON)
@@ -652,7 +652,7 @@ GLB_INLINE SIMDMatrix SIMDCALL LoadFloat(const Float34& src)noexcept{
     return SIMDConvertDetail::LoadFloat34Sse<true>(src);
 #endif
 }
-GLB_INLINE SIMDMatrix SIMDCALL LoadFloat(const Float44& src)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL LoadFloat(const Float44& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::LoadFloat44Scalar(src);
 #elif defined (GLB_HAS_NEON)
@@ -666,7 +666,7 @@ GLB_INLINE SIMDMatrix SIMDCALL LoadFloat(const Float44& src)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL LoadFloat(const Float33U& src)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL LoadFloat(const Float33U& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     SIMDMatrix result{};
     result.v[0] = SIMDConvertDetail::MakeF32(src._11, src._12, src._13, 0.0f);
@@ -678,36 +678,36 @@ GLB_INLINE SIMDMatrix SIMDCALL LoadFloat(const Float33U& src)noexcept{
     float32x4_t v0 = vld1q_f32(&src.m[0][0]);
     float32x4_t v1 = vld1q_f32(&src.m[1][1]);
     float32x2_t v2 = vcreate_f32(static_cast<u64>(BitCast<u32>(src.m[2][2])));
-    float32x4_t T = vextq_f32(v0, v1, 3);
+    float32x4_t secondRow = vextq_f32(v0, v1, 3);
 
-    SIMDMatrix M;
-    M.v[0] = vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(v0), s_SIMDMask3));
-    M.v[1] = vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(T), s_SIMDMask3));
-    M.v[2] = vcombine_f32(vget_high_f32(v1), v2);
-    M.v[3] = s_SIMDIdentityR3;
-    return M;
+    SIMDMatrix matrix;
+    matrix.v[0] = vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(v0), s_SIMDMask3));
+    matrix.v[1] = vreinterpretq_f32_u32(vandq_u32(vreinterpretq_u32_f32(secondRow), s_SIMDMask3));
+    matrix.v[2] = vcombine_f32(vget_high_f32(v1), v2);
+    matrix.v[3] = s_SIMDIdentityR3;
+    return matrix;
 #elif defined(GLB_HAS_SSE4)
-    __m128 Z = _mm_setzero_ps();
+    __m128 zero = _mm_setzero_ps();
 
-    __m128 V1 = _mm_loadu_ps(&src.m[0][0]);
-    __m128 V2 = _mm_loadu_ps(&src.m[1][1]);
-    __m128 V3 = _mm_load_ss(&src.m[2][2]);
+    __m128 firstValues = _mm_loadu_ps(&src.m[0][0]);
+    __m128 middleValues = _mm_loadu_ps(&src.m[1][1]);
+    __m128 lastValue = _mm_load_ss(&src.m[2][2]);
 
-    __m128 T1 = _mm_unpackhi_ps(V1, Z);
-    __m128 T2 = _mm_unpacklo_ps(V2, Z);
-    __m128 T3 = _mm_shuffle_ps(V3, T2, _MM_SHUFFLE(0, 1, 0, 0));
-    __m128 T4 = _mm_movehl_ps(T2, T3);
-    __m128 T5 = _mm_movehl_ps(Z, T1);
+    __m128 firstHighValues = _mm_unpackhi_ps(firstValues, zero);
+    __m128 middleLowValues = _mm_unpacklo_ps(middleValues, zero);
+    __m128 shuffledLastValue = _mm_shuffle_ps(lastValue, middleLowValues, _MM_SHUFFLE(0, 1, 0, 0));
+    __m128 secondRowTail = _mm_movehl_ps(middleLowValues, shuffledLastValue);
+    __m128 secondRowHead = _mm_movehl_ps(zero, firstHighValues);
 
-    SIMDMatrix M;
-    M.v[0] = _mm_movelh_ps(V1, T1);
-    M.v[1] = _mm_add_ps(T4, T5);
-    M.v[2] = _mm_shuffle_ps(V2, V3, _MM_SHUFFLE(1, 0, 3, 2));
-    M.v[3] = s_SIMDIdentityR3;
-    return M;
+    SIMDMatrix matrix;
+    matrix.v[0] = _mm_movelh_ps(firstValues, firstHighValues);
+    matrix.v[1] = _mm_add_ps(secondRowTail, secondRowHead);
+    matrix.v[2] = _mm_shuffle_ps(middleValues, lastValue, _MM_SHUFFLE(1, 0, 3, 2));
+    matrix.v[3] = s_SIMDIdentityR3;
+    return matrix;
 #endif
 }
-GLB_INLINE SIMDMatrix SIMDCALL LoadFloat(const Float34U& src)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL LoadFloat(const Float34U& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::LoadFloat34Scalar(src);
 #elif defined (GLB_HAS_NEON)
@@ -716,7 +716,7 @@ GLB_INLINE SIMDMatrix SIMDCALL LoadFloat(const Float34U& src)noexcept{
     return SIMDConvertDetail::LoadFloat34Sse<false>(src);
 #endif
 }
-GLB_INLINE SIMDMatrix SIMDCALL LoadFloat(const Float44U& src)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL LoadFloat(const Float44U& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::LoadFloat44Scalar(src);
 #elif defined (GLB_HAS_NEON)
@@ -726,18 +726,18 @@ GLB_INLINE SIMDMatrix SIMDCALL LoadFloat(const Float44U& src)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDVector SIMDCALL LoadInt(const Int4& src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadInt(const Int4& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(static_cast<u32>(src.x), static_cast<u32>(src.y), static_cast<u32>(src.z), static_cast<u32>(src.w));
 #elif defined (GLB_HAS_NEON)
     return vreinterpretq_f32_s32(vld1q_s32(src.raw));
 #elif defined(GLB_HAS_SSE4)
-    __m128i V = _mm_load_si128(reinterpret_cast<const __m128i*>(src.raw));
-    return _mm_castsi128_ps(V);
+    __m128i vector = _mm_load_si128(reinterpret_cast<const __m128i*>(src.raw));
+    return _mm_castsi128_ps(vector);
 #endif
 }
 
-GLB_INLINE SIMDVector SIMDCALL LoadInt(i32 src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadInt(i32 src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(static_cast<u32>(src), 0, 0, 0);
 #elif defined (GLB_HAS_NEON)
@@ -748,7 +748,7 @@ GLB_INLINE SIMDVector SIMDCALL LoadInt(i32 src)noexcept{
     return _mm_castsi128_ps(_mm_cvtsi32_si128(src));
 #endif
 }
-GLB_INLINE SIMDVector SIMDCALL LoadInt(const Int2U& src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadInt(const Int2U& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(static_cast<u32>(src.x), static_cast<u32>(src.y), 0, 0);
 #elif defined (GLB_HAS_NEON)
@@ -759,7 +759,7 @@ GLB_INLINE SIMDVector SIMDCALL LoadInt(const Int2U& src)noexcept{
     return _mm_castpd_ps(_mm_load_sd(reinterpret_cast<const f64*>(src.raw)));
 #endif
 }
-GLB_INLINE SIMDVector SIMDCALL LoadInt(const Int3U& src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadInt(const Int3U& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(static_cast<u32>(src.x), static_cast<u32>(src.y), static_cast<u32>(src.z), 0);
 #elif defined (GLB_HAS_NEON)
@@ -773,29 +773,29 @@ GLB_INLINE SIMDVector SIMDCALL LoadInt(const Int3U& src)noexcept{
     return _mm_movelh_ps(xy, z);
 #endif
 }
-GLB_INLINE SIMDVector SIMDCALL LoadInt(const Int4U& src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadInt(const Int4U& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(static_cast<u32>(src.x), static_cast<u32>(src.y), static_cast<u32>(src.z), static_cast<u32>(src.w));
 #elif defined (GLB_HAS_NEON)
     return vreinterpretq_f32_s32(vld1q_s32(src.raw));
 #elif defined(GLB_HAS_SSE4)
-    __m128i V = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src.raw));
-    return _mm_castsi128_ps(V);
+    __m128i vector = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src.raw));
+    return _mm_castsi128_ps(vector);
 #endif
 }
 
-GLB_INLINE SIMDVector SIMDCALL LoadInt(const UInt4& src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadInt(const UInt4& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(src.x, src.y, src.z, src.w);
 #elif defined (GLB_HAS_NEON)
     return vreinterpretq_f32_u32(vld1q_u32(src.raw));
 #elif defined(GLB_HAS_SSE4)
-    __m128i V = _mm_load_si128(reinterpret_cast<const __m128i*>(src.raw));
-    return _mm_castsi128_ps(V);
+    __m128i vector = _mm_load_si128(reinterpret_cast<const __m128i*>(src.raw));
+    return _mm_castsi128_ps(vector);
 #endif
 }
 
-GLB_INLINE SIMDVector SIMDCALL LoadInt(u32 src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadInt(u32 src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(src, 0, 0, 0);
 #elif defined (GLB_HAS_NEON)
@@ -806,7 +806,7 @@ GLB_INLINE SIMDVector SIMDCALL LoadInt(u32 src)noexcept{
     return _mm_castsi128_ps(_mm_cvtsi32_si128(static_cast<i32>(src)));
 #endif
 }
-GLB_INLINE SIMDVector SIMDCALL LoadInt(const UInt2U& src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadInt(const UInt2U& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(src.x, src.y, 0, 0);
 #elif defined (GLB_HAS_NEON)
@@ -817,7 +817,7 @@ GLB_INLINE SIMDVector SIMDCALL LoadInt(const UInt2U& src)noexcept{
     return _mm_castpd_ps(_mm_load_sd(reinterpret_cast<const f64*>(src.raw)));
 #endif
 }
-GLB_INLINE SIMDVector SIMDCALL LoadInt(const UInt3U& src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadInt(const UInt3U& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(src.x, src.y, src.z, 0);
 #elif defined (GLB_HAS_NEON)
@@ -832,14 +832,14 @@ GLB_INLINE SIMDVector SIMDCALL LoadInt(const UInt3U& src)noexcept{
     return _mm_movelh_ps(xy, z);
 #endif
 }
-GLB_INLINE SIMDVector SIMDCALL LoadInt(const UInt4U& src)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL LoadInt(const UInt4U& src)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::MakeU32(src.x, src.y, src.z, src.w);
 #elif defined (GLB_HAS_NEON)
     return vreinterpretq_f32_u32(vld1q_u32(src.raw));
 #elif defined(GLB_HAS_SSE4)
-    __m128i V = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src.raw));
-    return _mm_castsi128_ps(V);
+    __m128i vector = _mm_loadu_si128(reinterpret_cast<const __m128i*>(src.raw));
+    return _mm_castsi128_ps(vector);
 #endif
 }
 
@@ -854,7 +854,7 @@ GLB_INLINE void StreamFloatFence()noexcept{
 }
 
 
-GLB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float4& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreFloat(SIMDVector src, Float4& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     dst.x = src.f[0];
     dst.y = src.f[1];
@@ -871,7 +871,7 @@ GLB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float4& dst)noexcept{
 #endif
 }
 
-GLB_INLINE void SIMDCALL StreamFloat(SIMDVector src, Float4& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StreamFloat(SIMDVector src, Float4& dst)noexcept{
 #if defined(GLB_HAS_SSE4)
     _mm_stream_ps(dst.raw, src);
 #else
@@ -879,7 +879,7 @@ GLB_INLINE void SIMDCALL StreamFloat(SIMDVector src, Float4& dst)noexcept{
 #endif
 }
 
-GLB_INLINE void SIMDCALL StoreFloat(SIMDVector src, f32& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreFloat(SIMDVector src, f32& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     dst = src.f[0];
 #elif defined (GLB_HAS_NEON)
@@ -888,29 +888,29 @@ GLB_INLINE void SIMDCALL StoreFloat(SIMDVector src, f32& dst)noexcept{
     _mm_store_ss(&dst, src);
 #endif
 }
-GLB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float2U& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreFloat(SIMDVector src, Float2U& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     dst.x = src.f[0];
     dst.y = src.f[1];
 #elif defined (GLB_HAS_NEON)
-    float32x2_t VL = vget_low_f32(src);
-    vst1_f32(dst.raw, VL);
+    float32x2_t lowValues = vget_low_f32(src);
+    vst1_f32(dst.raw, lowValues);
 #elif defined(GLB_HAS_SSE4)
     _mm_store_sd(reinterpret_cast<f64*>(&dst), _mm_castps_pd(src));
 #endif
 }
-GLB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float3U& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreFloat(SIMDVector src, Float3U& dst)noexcept{
     SIMDConvertDetail::StoreFloat3Components(src, dst);
 }
-GLB_INLINE void SIMDCALL StoreFloatInt(SIMDVector src, i32 w, Float3Int& dst)noexcept{
-    SIMDConvertDetail::StoreFloat3Components(src, dst);
-    dst.w = w;
-}
-GLB_INLINE void SIMDCALL StoreFloatInt(SIMDVector src, u32 w, Float3UInt& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreFloatInt(SIMDVector src, i32 w, Float3Int& dst)noexcept{
     SIMDConvertDetail::StoreFloat3Components(src, dst);
     dst.w = w;
 }
-GLB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float4U& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreFloatInt(SIMDVector src, u32 w, Float3UInt& dst)noexcept{
+    SIMDConvertDetail::StoreFloat3Components(src, dst);
+    dst.w = w;
+}
+GLB_INLINE void GLB_SIMD_CALL StoreFloat(SIMDVector src, Float4U& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     dst.x = src.f[0];
     dst.y = src.f[1];
@@ -923,7 +923,7 @@ GLB_INLINE void SIMDCALL StoreFloat(SIMDVector src, Float4U& dst)noexcept{
 #endif
 }
 
-GLB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float34& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreFloat(SIMDMatrix src, Float34& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     SIMDConvertDetail::StoreFloat34Scalar(src, dst);
 #elif defined (GLB_HAS_NEON)
@@ -943,7 +943,7 @@ GLB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float34& dst)noexcept{
 #endif
 }
 
-GLB_INLINE void SIMDCALL StreamFloat(SIMDMatrix src, Float34& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StreamFloat(SIMDMatrix src, Float34& dst)noexcept{
 #if defined(GLB_HAS_SSE4)
     _mm_stream_ps(&dst._11, src.v[0]);
     _mm_stream_ps(&dst._21, src.v[1]);
@@ -953,7 +953,7 @@ GLB_INLINE void SIMDCALL StreamFloat(SIMDMatrix src, Float34& dst)noexcept{
 #endif
 }
 
-GLB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float44& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreFloat(SIMDMatrix src, Float44& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     SIMDConvertDetail::StoreFloat44Scalar(src, dst);
 #elif defined (GLB_HAS_NEON)
@@ -976,7 +976,7 @@ GLB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float44& dst)noexcept{
 #endif
 }
 
-GLB_INLINE void SIMDCALL StreamFloat(SIMDMatrix src, Float44& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StreamFloat(SIMDMatrix src, Float44& dst)noexcept{
 #if defined(GLB_HAS_SSE4)
     _mm_stream_ps(&dst._11, src.v[0]);
     _mm_stream_ps(&dst._21, src.v[1]);
@@ -987,7 +987,7 @@ GLB_INLINE void SIMDCALL StreamFloat(SIMDMatrix src, Float44& dst)noexcept{
 #endif
 }
 
-GLB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float33U& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreFloat(SIMDMatrix src, Float33U& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     dst._11 = src._11;
     dst._12 = src._12;
@@ -1001,13 +1001,13 @@ GLB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float33U& dst)noexcept{
     dst._32 = src._32;
     dst._33 = src._33;
 #elif defined (GLB_HAS_NEON)
-    float32x4_t T1 = vextq_f32(src.v[0], src.v[1], 1);
-    float32x4_t T2 = vbslq_f32(s_SIMDMask3, src.v[0], T1);
-    vst1q_f32(&dst.m[0][0], T2);
+    float32x4_t shiftedValues = vextq_f32(src.v[0], src.v[1], 1);
+    float32x4_t packedValues = vbslq_f32(s_SIMDMask3, src.v[0], shiftedValues);
+    vst1q_f32(&dst.m[0][0], packedValues);
 
-    T1 = vextq_f32(src.v[1], src.v[1], 1);
-    T2 = vcombine_f32(vget_low_f32(T1), vget_low_f32(src.v[2]));
-    vst1q_f32(&dst.m[1][1], T2);
+    shiftedValues = vextq_f32(src.v[1], src.v[1], 1);
+    packedValues = vcombine_f32(vget_low_f32(shiftedValues), vget_low_f32(src.v[2]));
+    vst1q_f32(&dst.m[1][1], packedValues);
 
     vst1q_lane_f32(&dst.m[2][2], src.v[2], 2);
 #elif defined(GLB_HAS_SSE4)
@@ -1023,7 +1023,7 @@ GLB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float33U& dst)noexcept{
     _mm_store_ss(&dst.m[2][2], vTemp3);
 #endif
 }
-GLB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float34U& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreFloat(SIMDMatrix src, Float34U& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     SIMDConvertDetail::StoreFloat34Scalar(src, dst);
 #elif defined (GLB_HAS_NEON)
@@ -1036,7 +1036,7 @@ GLB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float34U& dst)noexcept{
     _mm_storeu_ps(&dst._31, src.v[2]);
 #endif
 }
-GLB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float44U& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreFloat(SIMDMatrix src, Float44U& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     SIMDConvertDetail::StoreFloat44Scalar(src, dst);
 #elif defined (GLB_HAS_NEON)
@@ -1052,7 +1052,7 @@ GLB_INLINE void SIMDCALL StoreFloat(SIMDMatrix src, Float44U& dst)noexcept{
 #endif
 }
 
-GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, Int4& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreInt(SIMDVector src, Int4& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     SIMDConvertDetail::StoreInt4Scalar(src, dst);
 #elif defined (GLB_HAS_NEON)
@@ -1062,7 +1062,7 @@ GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, Int4& dst)noexcept{
 #endif
 }
 
-GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, i32& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreInt(SIMDVector src, i32& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     dst = static_cast<i32>(src.u[0]);
 #elif defined (GLB_HAS_NEON)
@@ -1071,7 +1071,7 @@ GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, i32& dst)noexcept{
     _mm_store_ss(reinterpret_cast<f32*>(&dst), src);
 #endif
 }
-GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, Int2U& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreInt(SIMDVector src, Int2U& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     dst.x = static_cast<i32>(src.u[0]);
     dst.y = static_cast<i32>(src.u[1]);
@@ -1081,7 +1081,7 @@ GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, Int2U& dst)noexcept{
     _mm_store_sd(reinterpret_cast<f64*>(dst.raw), _mm_castps_pd(src));
 #endif
 }
-GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, Int3U& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreInt(SIMDVector src, Int3U& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     dst.x = static_cast<i32>(src.u[0]);
     dst.y = static_cast<i32>(src.u[1]);
@@ -1094,7 +1094,7 @@ GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, Int3U& dst)noexcept{
     SIMDConvertDetail::StoreInt3Bits(src, dst.raw);
 #endif
 }
-GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, Int4U& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreInt(SIMDVector src, Int4U& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     SIMDConvertDetail::StoreInt4Scalar(src, dst);
 #elif defined (GLB_HAS_NEON)
@@ -1104,7 +1104,7 @@ GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, Int4U& dst)noexcept{
 #endif
 }
 
-GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, UInt4& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreInt(SIMDVector src, UInt4& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     dst.x = src.u[0];
     dst.y = src.u[1];
@@ -1117,7 +1117,7 @@ GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, UInt4& dst)noexcept{
 #endif
 }
 
-GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, u32& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreInt(SIMDVector src, u32& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     dst = src.u[0];
 #elif defined (GLB_HAS_NEON)
@@ -1126,7 +1126,7 @@ GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, u32& dst)noexcept{
     _mm_store_ss(reinterpret_cast<f32*>(&dst), src);
 #endif
 }
-GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, UInt2U& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreInt(SIMDVector src, UInt2U& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     dst.x = src.u[0];
     dst.y = src.u[1];
@@ -1136,7 +1136,7 @@ GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, UInt2U& dst)noexcept{
     _mm_store_sd(reinterpret_cast<f64*>(dst.raw), _mm_castps_pd(src));
 #endif
 }
-GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, UInt3U& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreInt(SIMDVector src, UInt3U& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     dst.x = src.u[0];
     dst.y = src.u[1];
@@ -1149,7 +1149,7 @@ GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, UInt3U& dst)noexcept{
     SIMDConvertDetail::StoreUInt3Bits(src, dst.raw);
 #endif
 }
-GLB_INLINE void SIMDCALL StoreInt(SIMDVector src, UInt4U& dst)noexcept{
+GLB_INLINE void GLB_SIMD_CALL StoreInt(SIMDVector src, UInt4U& dst)noexcept{
 #if defined(GLB_HAS_SCALAR)
     dst.x = src.u[0];
     dst.y = src.u[1];

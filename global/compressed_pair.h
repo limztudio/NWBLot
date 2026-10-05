@@ -42,7 +42,7 @@ namespace ImplementationKind{
 
 
 template<typename T>
-inline void internalSwap(T& t1, T& t2)noexcept(noexcept(Swap(t1, t2))){
+inline void InternalSwap(T& t1, T& t2)noexcept(noexcept(Swap(t1, t2))){
     Swap(t1, t2);
 }
 
@@ -106,11 +106,11 @@ public:
     typename Types::second_const_reference second()const noexcept{ return m_second; }
 
     void swap(::CompressedPair<T1, T2>& y)noexcept(
-        noexcept(internalSwap(m_first, y.first()))
-        && noexcept(internalSwap(m_second, y.second()))
+        noexcept(InternalSwap(m_first, y.first()))
+        && noexcept(InternalSwap(m_second, y.second()))
     ){
-        internalSwap(m_first, y.first());
-        internalSwap(m_second, y.second());
+        InternalSwap(m_first, y.first());
+        InternalSwap(m_second, y.second());
     }
 
 
@@ -192,8 +192,8 @@ public:
     typename Types::second_reference second()noexcept{ return m_second; }
     typename Types::second_const_reference second()const noexcept{ return m_second; }
 
-    void swap(::CompressedPair<T1,T2>& y)noexcept(noexcept(internalSwap(m_second, y.second()))){
-        internalSwap(m_second, y.second());
+    void swap(::CompressedPair<T1,T2>& y)noexcept(noexcept(InternalSwap(m_second, y.second()))){
+        InternalSwap(m_second, y.second());
     }
 
 
@@ -227,8 +227,8 @@ public:
     typename Types::second_reference second()noexcept{ return *this; }
     typename Types::second_const_reference second()const noexcept{ return *this; }
 
-    void swap(::CompressedPair<T1,T2>& y)noexcept(noexcept(internalSwap(m_first, y.first()))){
-        internalSwap(m_first, y.first());
+    void swap(::CompressedPair<T1,T2>& y)noexcept(noexcept(InternalSwap(m_first, y.first()))){
+        InternalSwap(m_first, y.first());
     }
 
 

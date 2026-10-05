@@ -27,9 +27,9 @@ bool Builder::paintSlider(const Item& item, const LayoutBox& box){
     SliderPlacement placement;
     const Rect clip = visibleClip(box.clip);
     if(
-        !SliderBehavior::Normalize(frame.m_options.minimum, frame.m_options.maximum, frame.m_state.value(), normalized)
-        || !SliderLayout::Place(box.rectangle, clip, frame.m_metrics, normalized, placement)
-        || !SliderBehavior::Admit(frame.m_state, frame.m_options, placement)
+        !SliderBehavior::normalize(frame.m_options.minimum, frame.m_options.maximum, frame.m_state.value(), normalized)
+        || !SliderLayout::place(box.rectangle, clip, frame.m_metrics, normalized, placement)
+        || !SliderBehavior::admit(frame.m_state, frame.m_options, placement)
     )
         return false;
     frame.m_snapshot = frame.m_state.snapshot();
@@ -47,8 +47,8 @@ bool Builder::paintSlider(const Item& item, const LayoutBox& box){
     frame.m_interactive = interactive;
     if(
         !applySliderInput(frame, placement, interactive)
-        || !SliderBehavior::Normalize(frame.m_options.minimum, frame.m_options.maximum, frame.m_state.value(), normalized)
-        || !SliderLayout::Place(box.rectangle, clip, frame.m_metrics, normalized, placement)
+        || !SliderBehavior::normalize(frame.m_options.minimum, frame.m_options.maximum, frame.m_state.value(), normalized)
+        || !SliderLayout::place(box.rectangle, clip, frame.m_metrics, normalized, placement)
     )
         return false;
     const WidgetId trackId = MakeWidgetId(item.state.id, "track");

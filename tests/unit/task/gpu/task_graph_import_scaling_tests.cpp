@@ -53,7 +53,7 @@ namespace ImportScenario{
     Graphics::ComputePipeline* const pipeline = NewArenaObject<Graphics::ComputePipeline>(arena, context);
     if(!pipeline)
         return {};
-    return Graphics::ComputePipelineHandle(pipeline, Graphics::ComputePipelineHandle::deleter_type(&arena), AdoptRef);
+    return Graphics::ComputePipelineHandle(pipeline, Graphics::ComputePipelineHandle::deleter_type(&arena), s_AdoptRef);
 }
 
 static void CheckImportScaling(const usize importCount, const ImportScenario::Enum scenario){

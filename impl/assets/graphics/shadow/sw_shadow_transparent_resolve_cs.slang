@@ -21,7 +21,7 @@
 #include "sw_shadow_coarse.slangi"
 
 // The full-res visibility array: read the opaque mask, fold the transmittance onto it, write back.
-#define g_NwbSwShadowVisibility NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
+#define g_NwbSwShadowVisibility nwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
 
 #include "sw_shadow_coarse_samples.slangi"
 

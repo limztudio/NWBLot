@@ -221,7 +221,7 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline Path<ArenaT> LexicallyNormal(const Path<ArenaT>& path)noexcept{
-    return path.lexically_normal();
+    return path.lexicallyNormal();
 }
 
 template<typename ArenaT>
@@ -229,11 +229,11 @@ template<typename ArenaT>
     if(normalizedPath.empty() || normalizedDirectory.empty())
         return false;
 
-    for(Path<ArenaT> parent = normalizedPath.parent_path(); !parent.empty();){
+    for(Path<ArenaT> parent = normalizedPath.parentPath(); !parent.empty();){
         if(parent == normalizedDirectory)
             return true;
 
-        const Path<ArenaT> nextParent = parent.parent_path();
+        const Path<ArenaT> nextParent = parent.parentPath();
         if(nextParent == parent)
             break;
         parent = nextParent;
@@ -276,7 +276,7 @@ template<typename ArenaT>
     if(!GetExecutablePath(executablePath))
         return false;
 
-    outDirectory = executablePath.parent_path();
+    outDirectory = executablePath.parentPath();
     return !outDirectory.empty();
 }
 
@@ -445,9 +445,9 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline Path<ArenaT> AbsolutePath(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
-    if(path.is_absolute()){
+    if(path.isAbsolute()){
         GlobalFilesystemDetail::ClearError(outError);
-        return path.lexically_normal();
+        return path.lexicallyNormal();
     }
 
     Path<ArenaT> currentPath(path.arena());
@@ -455,7 +455,7 @@ template<typename ArenaT>
         return Path<ArenaT>(path.arena());
 
     GlobalFilesystemDetail::ClearError(outError);
-    return (currentPath / path).lexically_normal();
+    return (currentPath / path).lexicallyNormal();
 }
 
 
@@ -514,7 +514,7 @@ template<typename ArenaT>
 
     bool createdAny = false;
     Path<ArenaT> current(path.arena());
-    const Path<ArenaT> normalized = path.lexically_normal();
+    const Path<ArenaT> normalized = path.lexicallyNormal();
 
     for(const Path<ArenaT> component : normalized){
         if(GlobalFilesystemDetail::IsRootComponent(component)){

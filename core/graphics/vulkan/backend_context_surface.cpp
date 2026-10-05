@@ -437,7 +437,7 @@ bool BackendContext::createVulkanSwapChain(){
         };
 
         sci.rhiHandle = m_rhiDevice->createHandleForNativeTexture(
-            ObjectTypes::VK_Image,
+            ObjectTypes::s_Image,
             Object(sci.image),
             textureDesc,
             nativeProvenance

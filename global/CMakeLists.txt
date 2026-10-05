@@ -14,7 +14,7 @@ if(NWB_OBFUSCATE_STRING_LITERALS)
     endif()
 endif()
 
-global_declare_static_library(global_foundation)
+nwb_declare_static_library(global_foundation)
 target_sources(global_foundation PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/base64.h"
     "${CMAKE_CURRENT_LIST_DIR}/allocation_size.h"

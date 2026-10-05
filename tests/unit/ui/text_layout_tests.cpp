@@ -139,8 +139,8 @@ TEST_F(TextLayoutTests, LigatureAndCombiningClustersHaveOnlyRealSourceEdges){
 }
 
 TEST_F(TextLayoutTests, NonBmpAndHangulClustersMapUtf8BytesRatherThanScalarIndices){
-    constexpr StringView text = "A\xed\x95\x9c\xf0\x9f\x98\x80";
-    ASSERT_EQ(m_builder.layout({ text }, m_layout), TextLayoutStatus::Success);
+    constexpr StringView s_Text = "A\xed\x95\x9c\xf0\x9f\x98\x80";
+    ASSERT_EQ(m_builder.layout({ s_Text }, m_layout), TextLayoutStatus::Success);
     ASSERT_EQ(m_layout.clusters().size(), 3u);
     EXPECT_EQ(m_layout.clusters()[0].byteEnd, 1u);
     EXPECT_EQ(m_layout.clusters()[1].byteBegin, 1u);

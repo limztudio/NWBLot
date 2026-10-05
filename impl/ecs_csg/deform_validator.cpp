@@ -20,11 +20,11 @@ using ScratchArena = Core::Alloc::ScratchArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CsgDeformValidator::FiniteFloat(const f32 value){
+bool CsgDeformValidator::finiteFloat(const f32 value){
     return value == value && value != Limit<f32>::s_Infinity && value != -Limit<f32>::s_Infinity;
 }
 
-bool CsgDeformValidator::FiniteVertex(const CsgDeformVertex& vertex){
+bool CsgDeformValidator::finiteVertex(const CsgDeformVertex& vertex){
     return VectorIsFinite(LoadFloat(vertex.position), VectorComponentMask::s_XYZ)
         && VectorIsFinite(LoadFloat(vertex.normal), VectorComponentMask::s_XYZW)
         && VectorIsFinite(LoadFloat(vertex.tangent), VectorComponentMask::s_XYZW)
@@ -33,27 +33,27 @@ bool CsgDeformValidator::FiniteVertex(const CsgDeformVertex& vertex){
     ;
 }
 
-f32 CsgDeformValidator::SaturateFloat(const f32 value){
+f32 CsgDeformValidator::saturateFloat(const f32 value){
     return VectorGetX(VectorSaturate(VectorReplicate(value)));
 }
 
-SIMDVector CsgDeformValidator::SaturateVec(const SIMDVector value){
+SIMDVector CsgDeformValidator::saturateVec(const SIMDVector value){
     return VectorSaturate(value);
 }
 
-SIMDVector CsgDeformValidator::AbsDivideVec(const SIMDVector numerator, const SIMDVector denominator){
+SIMDVector CsgDeformValidator::absDivideVec(const SIMDVector numerator, const SIMDVector denominator){
     return VectorAbs(VectorDivide(numerator, denominator));
 }
 
-f32 CsgDeformValidator::ShapeEpsilon(const CsgDeformBuildOptions& options){
+f32 CsgDeformValidator::shapeEpsilon(const CsgDeformBuildOptions& options){
     return options.distanceEpsilon > s_MinEpsilon ? options.distanceEpsilon : s_MinEpsilon;
 }
 
-bool CsgDeformValidator::ValidOptions(const CsgDeformBuildOptions& options){
+bool CsgDeformValidator::validOptions(const CsgDeformBuildOptions& options){
     return options.distanceEpsilon > s_OptionEpsilonLow && options.distanceEpsilon < s_OptionEpsilonHigh;
 }
 
-bool CsgDeformValidator::ValidTopology(
+bool CsgDeformValidator::validTopology(
     NotNull<const CsgDeformTriangle*> triangles,
     const usize triangleCount,
     const usize vertexCount
@@ -68,14 +68,14 @@ bool CsgDeformValidator::ValidTopology(
     return true;
 }
 
-bool CsgDeformValidator::FiniteInput(
+bool CsgDeformValidator::finiteInput(
     NotNull<const CsgDeformVertex*> vertices,
     const usize vertexCount,
     CsgDeformViabilityReason::Enum& outReason
 ){
     outReason = CsgDeformViabilityReason::Ok;
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
-        if(!CsgDeformValidator::FiniteVertex(vertices.get()[vertexIndex])){
+        if(!CsgDeformValidator::finiteVertex(vertices.get()[vertexIndex])){
             outReason = CsgDeformViabilityReason::NonFiniteInput;
             return false;
         }

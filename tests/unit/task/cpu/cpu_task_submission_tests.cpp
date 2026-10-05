@@ -217,8 +217,8 @@ TEST(CpuTaskSubmissionTests, ParallelRangeWorkerFailureTerminatesWithoutDeferred
                         workerEntered.wait(false, MemoryOrder::acquire);
                     return;
                 }
-                workerEntered.test_and_set(MemoryOrder::release);
-                workerEntered.notify_all();
+                workerEntered.testAndSet(MemoryOrder::release);
+                workerEntered.notifyAll();
                 throw s_WorkerException;
             });
             return 0;

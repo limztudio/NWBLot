@@ -32,7 +32,7 @@ static void ExistingDiagnosticCallback(const DiagnosticEventRecord&)noexcept{
 TEST(Telemetry, CaptureScopeRestoresLoggerAndStopsDiagnosticsAfterDestruction){
     TestArena testArena;
     Telemetry::CaptureSession session(testArena.arena);
-    session.setCaptureOptions(Telemetry::CaptureOptions::All());
+    session.setCaptureOptions(Telemetry::CaptureOptions::all());
 
     NWB::Tests::CapturingLogger previousLogger;
     {
@@ -113,7 +113,7 @@ TEST(Telemetry, DiagnosticPayloadPreservesBoundedTextAndRejectsCorruptedHeader){
 TEST(Telemetry, DiagnosticCaptureGuardDestructionStopsGlobalCapture){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::all());
 
     {
         Telemetry::DiagnosticCaptureGuard guard(recorder);
@@ -139,7 +139,7 @@ TEST(Telemetry, DiagnosticCaptureGuardDestructionStopsGlobalCapture){
 TEST(Telemetry, DiagnosticCaptureGuardDoesNotReplaceExistingCallback){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::all());
 
     s_ExistingDiagnosticCallbackCount = 0u;
     SetDiagnosticEventCallback(ExistingDiagnosticCallback);
@@ -160,13 +160,13 @@ TEST(Telemetry, DiagnosticCaptureGuardDoesNotReplaceExistingCallback){
 TEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::all());
 
     AtomicFlag captureThreadStarted;
     AtomicFlag stopCaptureThread;
     Thread captureThread([&captureThreadStarted, &stopCaptureThread](){
-        captureThreadStarted.test_and_set(MemoryOrder::release);
-        captureThreadStarted.notify_all();
+        captureThreadStarted.testAndSet(MemoryOrder::release);
+        captureThreadStarted.notifyAll();
         while(!stopCaptureThread.test(MemoryOrder::acquire)){
             CaptureDiagnosticEvent(DiagnosticEventRecord{
                 .event = DiagnosticEventName::s_Error.data(),
@@ -196,7 +196,7 @@ TEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress){
         }
     }
 
-    stopCaptureThread.test_and_set(MemoryOrder::release);
+    stopCaptureThread.testAndSet(MemoryOrder::release);
     captureThread.join();
     EXPECT_TRUE(allGuardsInstalled);
     EXPECT_GE(recorder.eventCount(), s_IterationCount);

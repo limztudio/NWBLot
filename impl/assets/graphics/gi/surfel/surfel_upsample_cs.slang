@@ -15,22 +15,22 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define g_NwbSurfelUpsampleOutput (NwbHeapStorageImage2DFloat4(g_NwbSurfelHeapPushConstants.outputStorageHeapSlot))
+#define g_NwbSurfelUpsampleOutput (nwbHeapStorageImage2DFloat4(g_NwbSurfelHeapPushConstants.outputStorageHeapSlot))
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 Texture2D<float4> nwbSurfelUpsampleHalfIrradiance(){
-    return NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.halfIrradianceSlot);
+    return nwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.halfIrradianceSlot);
 }
 
 Texture2D<float4> nwbSurfelUpsampleGbufferNormal(){
-    return NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.normalSlot);
+    return nwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.normalSlot);
 }
 
 Texture2D<float4> nwbSurfelUpsampleGbufferWorldPosition(){
-    return NwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.worldPositionSlot);
+    return nwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.worldPositionSlot);
 }
 
 

@@ -129,7 +129,7 @@ private:
 
     [[nodiscard]] bool loadSkeletonBindJoints(){
         UniquePtr<NWB::Core::Assets::IAsset> modelAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name(), modelAsset)){
+        if(!m_context.assetManager.loadSync(NWB::Impl::Model::assetTypeName(), s_Model.name(), modelAsset)){
             NWB_LOGGER_ERROR(GLB_TEXT("SkinnedCausticSmokeProject: failed to load model for skeleton bind joints"));
             return false;
         }
@@ -145,7 +145,7 @@ private:
         }
 
         UniquePtr<NWB::Core::Assets::IAsset> skeletonAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model->skeletonObjects().front().skeleton.name(), skeletonAsset)){
+        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::assetTypeName(), model->skeletonObjects().front().skeleton.name(), skeletonAsset)){
             NWB_LOGGER_ERROR(GLB_TEXT("SkinnedCausticSmokeProject: failed to load skeleton for bind joints"));
             return false;
         }
@@ -215,7 +215,7 @@ public:
     virtual bool onStartup()override{
         // Opt into per-pass GPU timing so m_gpuPassTimingProbe can report the caustic photon/resolve + shadow +
         // skinning pass GPU times each interval (flips the GPU-timing double gate via the Frame).
-        m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+        m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::gpuTimingOnly());
 
         if(!loadSkeletonBindJoints())
             return false;

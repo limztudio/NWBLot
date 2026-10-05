@@ -153,7 +153,7 @@ SharedUiTextAreaSmokeScene CreateUiTextAreaSmokeScene(Core::Alloc::GlobalArena& 
     return SharedUiTextAreaSmokeScene(
         NewArenaObject<RefCounter<UiTextAreaSmokeScene>>(arena, arena, clipboard),
         ArenaRefDeleter<RefCounter<UiTextAreaSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

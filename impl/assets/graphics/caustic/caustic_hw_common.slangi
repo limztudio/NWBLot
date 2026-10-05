@@ -97,18 +97,18 @@ ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> g_NwbHeapCausticHwViews[]
 // record through the UniformBuffer heap payload. Per-corner attributes remain separately addressed by that record's
 // heap slot.
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> nwbCausticHwInstanceMaterials(){
-    return NwbHeapRtInstanceMaterials(g_NwbCausticHwMaterialContextSlots.sceneSlots.z);
+    return nwbHeapRtInstanceMaterials(g_NwbCausticHwMaterialContextSlots.sceneSlots.z);
 }
 
 // The closest-hit reads corner attributes through the material record's global heap slot. The shared backing buffers
 // remain transitioned for those heap reads; the world hit point comes from WorldRayOrigin()+RayTCurrent()*WorldRayDirection().
 
 Texture2D<float4> nwbCausticHwGbufferDepth(){
-    return NwbHeapSampledImage2D(g_NwbCausticHwPushConstants.depthSlot);
+    return nwbHeapSampledImage2D(g_NwbCausticHwPushConstants.depthSlot);
 }
 
 Texture2D<float4> nwbCausticHwGbufferWorldPosition(){
-    return NwbHeapSampledImage2D(g_NwbCausticHwPushConstants.worldPositionSlot);
+    return nwbHeapSampledImage2D(g_NwbCausticHwPushConstants.worldPositionSlot);
 }
 
 StructuredBuffer<NwbCausticEmissionTarget, Std430DataLayout> nwbCausticHwEmissionTargets(){
@@ -125,9 +125,9 @@ ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> nwbCausticHwView(){
 
 // Per-corner attributes use the shared 16-byte normal/uv0 ABI, matching software and shadow surface inputs.
 NwbRayTraceVertexAttrib nwbCausticHwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
-    // attributeSlot is non-uniform across the ray wave: NwbHeapRawBuffer() tags NonUniformResourceIndex per Load.
+    // attributeSlot is non-uniform across the ray wave: nwbHeapRawBuffer() tags NonUniformResourceIndex per Load.
     // One Load4 covers the 16-byte record (packed normal .xy, uv0 .zw); mirrors the SW producer.
-    return nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    return nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
 }
 
 
@@ -138,7 +138,7 @@ NwbRayTraceVertexAttrib nwbCausticHwLoadVertexAttrib(const uint attributeSlot, c
 #define NWB_CAUSTIC_SPLAT_PUSH g_NwbCausticHwPushConstants
 #define NWB_CAUSTIC_SPLAT_GBUFFER_DEPTH nwbCausticHwGbufferDepth()
 #define NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION nwbCausticHwGbufferWorldPosition()
-#define NWB_CAUSTIC_SPLAT_ACCUMULATOR NwbHeapStorageImage2DArrayUint(g_NwbCausticHwPushConstants.accumulatorStorageSlot)
+#define NWB_CAUSTIC_SPLAT_ACCUMULATOR nwbHeapStorageImage2DArrayUint(g_NwbCausticHwPushConstants.accumulatorStorageSlot)
 #include "splat.slangi"
 #undef NWB_CAUSTIC_SPLAT_ACCUMULATOR
 #undef NWB_CAUSTIC_SPLAT_GBUFFER_WORLD_POSITION

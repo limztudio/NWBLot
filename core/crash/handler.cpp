@@ -43,7 +43,7 @@ inline constexpr int s_ProcessSuccessExitCode = 0;
 inline constexpr int s_ProcessFailureExitCode = -1;
 
 
-[[nodiscard]] static u64 __hidden_parse_u64(const TStringView text)noexcept{
+[[nodiscard]] static u64 ParseU64(const TStringView text)noexcept{
     u64 value = 0u;
     for(const tchar ch : text){
         if(ch < static_cast<tchar>(s_DecimalDigitFirst) || ch > static_cast<tchar>(s_DecimalDigitLast))
@@ -53,14 +53,14 @@ inline constexpr int s_ProcessFailureExitCode = -1;
     return value;
 }
 
-static Detail::CrashAck __hidden_make_ack(const Detail::CrashRequest& request, const bool packageWritten)noexcept{
+static Detail::CrashAck MakeAck(const Detail::CrashRequest& request, const bool packageWritten)noexcept{
     Detail::CrashAck ack;
     ack.packageWritten = packageWritten ? 1u : 0u;
     CopyFixedBuffer(ack.crashId, request.crashId);
     return ack;
 }
 
-static void __hidden_silence_process()noexcept{
+static void SilenceProcess()noexcept{
 #if defined(GLB_PLATFORM_WINDOWS)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
 #if defined(_MSC_VER) && defined(GLB_DEBUG)
@@ -87,7 +87,7 @@ static void __hidden_silence_process()noexcept{
 
 
 int RunCrashHandlerProcess(const isize argc, tchar** argv){
-    __hidden_crash_handler::__hidden_silence_process();
+    __hidden_crash_handler::SilenceProcess();
     Detail::InitializeDumpArena();
 
 #if defined(GLB_PLATFORM_WINDOWS)
@@ -97,11 +97,11 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
 
     for(isize i = 1; i + 1 < argc; ++i){
         if(SafeStringView(argv[i]) == Detail::s_RequestHandleArgument)
-            requestReadHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(__hidden_crash_handler::__hidden_parse_u64(SafeStringView(argv[++i]))));
+            requestReadHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(__hidden_crash_handler::ParseU64(SafeStringView(argv[++i]))));
         else if(SafeStringView(argv[i]) == Detail::s_AckHandleArgument)
-            ackWriteHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(__hidden_crash_handler::__hidden_parse_u64(SafeStringView(argv[++i]))));
+            ackWriteHandle = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(__hidden_crash_handler::ParseU64(SafeStringView(argv[++i]))));
         else if(SafeStringView(argv[i]) == Detail::s_AckEventArgument)
-            ackEvent = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(__hidden_crash_handler::__hidden_parse_u64(SafeStringView(argv[++i]))));
+            ackEvent = reinterpret_cast<HANDLE>(static_cast<uintptr_t>(__hidden_crash_handler::ParseU64(SafeStringView(argv[++i]))));
     }
 
     if(requestReadHandle == INVALID_HANDLE_VALUE)
@@ -117,7 +117,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
 
         const bool packageWritten = Detail::WriteCrashPackage(request);
         if(ackWriteHandle != INVALID_HANDLE_VALUE){
-            const Detail::CrashAck ack = __hidden_crash_handler::__hidden_make_ack(request, packageWritten);
+            const Detail::CrashAck ack = __hidden_crash_handler::MakeAck(request, packageWritten);
             if(!WriteAllWin32Handle(ackWriteHandle, &ack, sizeof(ack)))
                 break;
         }
@@ -135,9 +135,9 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
     int ackWriteFd = -1;
     for(isize i = 1; i + 1 < argc; ++i){
         if(SafeStringView(argv[i]) == Detail::s_RequestFdArgument)
-            requestReadFd = static_cast<int>(__hidden_crash_handler::__hidden_parse_u64(SafeStringView(argv[++i])));
+            requestReadFd = static_cast<int>(__hidden_crash_handler::ParseU64(SafeStringView(argv[++i])));
         else if(SafeStringView(argv[i]) == Detail::s_AckFdArgument)
-            ackWriteFd = static_cast<int>(__hidden_crash_handler::__hidden_parse_u64(SafeStringView(argv[++i])));
+            ackWriteFd = static_cast<int>(__hidden_crash_handler::ParseU64(SafeStringView(argv[++i])));
     }
 
     if(requestReadFd < 0)
@@ -153,7 +153,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
 
         const bool packageWritten = Detail::WriteCrashPackage(request);
         if(ackWriteFd >= 0){
-            const Detail::CrashAck ack = __hidden_crash_handler::__hidden_make_ack(request, packageWritten);
+            const Detail::CrashAck ack = __hidden_crash_handler::MakeAck(request, packageWritten);
             if(!WriteAllFileDescriptor(ackWriteFd, &ack, sizeof(ack)))
                 break;
         }

@@ -55,15 +55,15 @@ CpuTaskScheduler::Execution::Execution(
     CpuAffinity::Enum workerAffinity
 )noexcept
     : scheduler(owner)
-    , previous(s_execution)
+    , previous(s_Execution)
     , task(handle)
     , workerIndex(index)
     , affinity(workerAffinity)
 {
-    s_execution = this;
+    s_Execution = this;
 }
 CpuTaskScheduler::Execution::~Execution(){
-    s_execution = previous;
+    s_Execution = previous;
 }
 
 
@@ -248,7 +248,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
         if(node->latestCanceledGeneration != 0u)
             ContainerDetail::ReserveGrowingCapacity(node->olderCanceledGenerations, AddSize(node->olderCanceledGenerations.size(), 1u));
         u64 dependencySearchGeneration = 0u;
-        if(dependencyCount != 0u && s_execution && &s_execution->scheduler == this && s_execution->task.valid()){
+        if(dependencyCount != 0u && s_Execution && &s_Execution->scheduler == this && s_Execution->task.valid()){
             beginLockedSearch();
             dependencySearchGeneration = m_searchGeneration;
             const auto visit = [this](const TaskHandle candidate){
@@ -257,7 +257,7 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
                     m_searchStack.push_back(candidate.index);
                 }
             };
-            visit(s_execution->task);
+            visit(s_Execution->task);
             for(usize cursor = 0u; cursor < m_searchStack.size(); ++cursor){
                 const u32 candidateIndex = m_searchStack[cursor];
                 const TaskNode& reachable = m_nodes[candidateIndex];
@@ -292,9 +292,9 @@ CpuTaskScheduler::TaskHandle CpuTaskScheduler::submitTask(
         node->dependencies = 0u;
         node->children = 0u;
         node->canceled = false;
-        if(s_execution && &s_execution->scheduler == this){
-            if(TaskNode* parent = resolveLocked(s_execution->task)){
-                node->parent = s_execution->task;
+        if(s_Execution && &s_Execution->scheduler == this){
+            if(TaskNode* parent = resolveLocked(s_Execution->task)){
+                node->parent = s_Execution->task;
                 ++parent->children;
                 node->canceled = parent->canceled;
             }

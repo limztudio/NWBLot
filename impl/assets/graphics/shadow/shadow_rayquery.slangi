@@ -27,8 +27,8 @@
 #ifndef NWB_SHADOW_RQ_DEFERRED_RESOURCES_HEAP_SLOT
 #error "shadow RayQuery sources must provide the deferred-resource heap slot expression"
 #endif
-#define NWB_SCENE_SHADING_HEAP_SLOT NwbHeapDeferredBindlessResources(NWB_SHADOW_RQ_DEFERRED_RESOURCES_HEAP_SLOT).avboitSlots.z
-#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT NwbHeapDeferredBindlessResources(NWB_SHADOW_RQ_DEFERRED_RESOURCES_HEAP_SLOT).avboitSlots.w
+#define NWB_SCENE_SHADING_HEAP_SLOT nwbHeapDeferredBindlessResources(NWB_SHADOW_RQ_DEFERRED_RESOURCES_HEAP_SLOT).avboitSlots.z
+#define NWB_SCENE_LIGHT_LIST_HEAP_SLOT nwbHeapDeferredBindlessResources(NWB_SHADOW_RQ_DEFERRED_RESOURCES_HEAP_SLOT).avboitSlots.w
 
 #include "occlusion.slangi"
 #include "../scene/buffer.slangi"
@@ -58,7 +58,7 @@ half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, c
     // Opaque fast path: non-transparent occluders are FORCE_OPAQUE, so first-hit commit ends traversal with no
     // callbacks/material loads. Transparent candidates are skipped (software tints them); a commit means opaque block.
     RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
-    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, NWB_RT_SHADOW_BASE_INSTANCE_MASK, ray);
+    query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, NWB_RT_SHADOW_BASE_INSTANCE_MASK, ray);
     // Drain the non-opaque (transparent) candidates without committing any of them; opaque occluders never reach
     // this loop (the intersector commits them and ends the search). The body is intentionally empty.
     while(query.Proceed()){

@@ -192,7 +192,7 @@ ReflectionStatisticsControlHandle CreateReflectionStatisticsControl(Core::Alloc:
     return ReflectionStatisticsControlHandle(
         NewArenaObject<ReflectionStatisticsControl>(arena, deviceGeneration),
         ArenaRefDeleter<ReflectionStatisticsControl, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

@@ -40,7 +40,7 @@ ListResult Builder::virtualList(
         return result;
     const bool previouslyFocused = m_context.input().focus() == widget->id;
     const u64 previousSelection = state.selectedKey();
-    if(!ListBehavior::Reconcile(state, source)){
+    if(!ListBehavior::reconcile(state, source)){
         m_context.fail();
         return result;
     }
@@ -68,7 +68,7 @@ ListResult Builder::virtualList(
                 && gesture.control == token;
         }
         else{
-            if(!ListBehavior::Apply(state, source, options, action, result)){
+            if(!ListBehavior::apply(state, source, options, action, result)){
                 m_context.fail();
                 result.valid = false;
                 return result;

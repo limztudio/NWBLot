@@ -138,7 +138,7 @@ Impl::Ui::Rect UiListSmokeScene::selectedRow()const{
     if(
         !m_visible || !m_source.indexOf(m_state.selectedKey(), index)
         || index < placement.firstRow || index >= placement.endRow
-        || !Impl::Ui::ScrollLayout::RowBounds(index, placement, __hidden_ui_list_smoke::s_RowHeight, rectangle)
+        || !Impl::Ui::ScrollLayout::rowBounds(index, placement, __hidden_ui_list_smoke::s_RowHeight, rectangle)
     )
         return {};
     return rectangle;
@@ -199,7 +199,7 @@ SharedUiListSmokeScene CreateUiListSmokeScene(Core::Alloc::GlobalArena& arena, C
     return SharedUiListSmokeScene(
         NewArenaObject<RefCounter<UiListSmokeScene>>(arena, input),
         ArenaRefDeleter<RefCounter<UiListSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

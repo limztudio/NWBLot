@@ -26,7 +26,7 @@ usize Context::StateClaimHash::operator()(const StateClaim& claim)const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Context::ContainsRoot(const WidgetRoot* roots, const usize count, const WidgetRoot& root){
+bool Context::containsRoot(const WidgetRoot* roots, const usize count, const WidgetRoot& root){
     for(usize index = 0u; index < count; ++index){
         if(roots[index] == root)
             return true;
@@ -254,17 +254,17 @@ void Context::retainRoots(const WidgetRoot* roots, const usize count){
         return;
     for(usize index = m_states.entries().size(); index > 0u; --index){
         const auto& state = m_states.entries()[index - 1u];
-        if(!ContainsRoot(roots, count, state.root)){
+        if(!containsRoot(roots, count, state.root)){
             m_input.invalidateTarget(state.id);
             m_states.erase(index - 1u);
         }
     }
     for(usize index = m_targets.size(); index > 0u; --index){
-        if(!ContainsRoot(roots, count, m_targets[index - 1u].root))
+        if(!containsRoot(roots, count, m_targets[index - 1u].root))
             m_targets.erase(m_targets.begin() + index - 1u);
     }
     for(usize index = m_popups.size(); index > 0u; --index){
-        if(!ContainsRoot(roots, count, m_popups[index - 1u].root))
+        if(!containsRoot(roots, count, m_popups[index - 1u].root))
             m_popups.erase(m_popups.begin() + static_cast<isize>(index - 1u));
     }
 }

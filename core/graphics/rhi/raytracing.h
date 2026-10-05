@@ -88,7 +88,7 @@ typedef GraphicsBackend::Handle<RayTracingOpacityMicromap> RayTracingOpacityMicr
 using AffineTransform = Float34;
 inline constexpr usize s_AffineTransformFloatCount = 12u;
 
-inline constexpr AffineTransform s_identityTransform = []()constexpr noexcept{
+inline constexpr AffineTransform s_IdentityTransform = []()constexpr noexcept{
     AffineTransform value{};
     value._11 = 1.f;
     value._22 = 1.f;
@@ -324,7 +324,7 @@ struct RayTracingInstanceDesc{
         , flags(RayTracingInstanceFlags::None)
         , bottomLevelAS(nullptr)
     {
-        setTransform(s_identityTransform);
+        setTransform(s_IdentityTransform);
     }
 
     constexpr RayTracingInstanceDesc& setInstanceID(u32 value){ instanceID = value; return *this; }

@@ -171,7 +171,7 @@ struct Rect{
         , maxY(static_cast<i32>(Ceil(viewport.maxY)))
     {}
 
-    [[nodiscard]] static Rect FromViewport(const Viewport& viewport)noexcept{
+    [[nodiscard]] static Rect fromViewport(const Viewport& viewport)noexcept{
         const SIMDVector bounds = VectorSet(viewport.minX, viewport.maxX, viewport.minY, viewport.maxY);
         const SIMDVector flooredBounds = VectorFloor(bounds);
         const SIMDVector ceiledBounds = VectorCeiling(bounds);

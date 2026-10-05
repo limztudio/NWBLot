@@ -169,7 +169,7 @@ AccelStruct::~AccelStruct()noexcept{
 }
 
 Object AccelStruct::getNativeHandle(ObjectType objectType){
-    if(objectType == ObjectTypes::VK_AccelerationStructureKHR)
+    if(objectType == ObjectTypes::s_AccelerationStructureKHR)
         return Object(m_accelStruct);
     return Object(nullptr);
 }
@@ -206,7 +206,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
 
     VkResult res = VK_SUCCESS;
 
-    if(!m_context.extensions.KHR_acceleration_structure || !m_context.accelerationStructureFeatureEnabled){
+    if(!m_context.extensions.khrAccelerationStructure || !m_context.accelerationStructureFeatureEnabled){
         NWB_LOGGER_ERROR(
             GLB_TEXT("Vulkan: Enabled acceleration structure feature support is required to create ray tracing acceleration structures.")
         );
@@ -295,7 +295,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
                 }
                 continue;
             }
-            if(!m_context.extensions.EXT_opacity_micromap || !m_context.opacityMicromapFeatureEnabled){
+            if(!m_context.extensions.extOpacityMicromap || !m_context.opacityMicromapFeatureEnabled){
                 NWB_LOGGER_ERROR(
                     GLB_TEXT("Vulkan: Failed to create BLAS: triangle OMM geometry requires VK_EXT_opacity_micromap")
                 );
@@ -497,7 +497,7 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         as->m_deviceAddress = m_context.deviceDispatch.vkGetAccelerationStructureDeviceAddressKHR(m_context.device, &addressInfo);
     }
 
-    return RayTracingAccelStructHandle(as, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return RayTracingAccelStructHandle(as, RayTracingAccelStructHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 MemoryRequirements Device::getAccelStructMemoryRequirements(RayTracingAccelStruct& accelerationStructure){
@@ -528,7 +528,7 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
     RayTracingClusterOperationSizeInfo info{};
 
     if(
-        !m_context.extensions.NV_cluster_acceleration_structure
+        !m_context.extensions.nvClusterAccelerationStructure
         || !m_context.clusterAccelerationStructureFeatureEnabled
         || !m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV
     )
@@ -556,7 +556,7 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
     if(
         (params.flags & RayTracingClusterOperationFlags::AllowOMM)
         && (
-            !m_context.extensions.EXT_opacity_micromap
+            !m_context.extensions.extOpacityMicromap
             || !m_context.opacityMicromapFeatureEnabled
         )
     )

@@ -90,7 +90,7 @@ inline constexpr u32 s_BlasMaxRefitsBeforeRebuildCap = 64u;
 inline constexpr u32 s_BlasRefitBudgetLog2ExponentStep = 3u;
 
 // Cube-root-scaled refit budget.
-[[nodiscard]] inline constexpr u32 adaptiveRefitsBeforeRebuild(const u32 primitiveCount)noexcept{
+[[nodiscard]] inline constexpr u32 AdaptiveRefitsBeforeRebuild(const u32 primitiveCount)noexcept{
     u32 log2 = 0u;
     u32 n = primitiveCount;
     while(n > 1u){ n >>= 1u; ++log2; }

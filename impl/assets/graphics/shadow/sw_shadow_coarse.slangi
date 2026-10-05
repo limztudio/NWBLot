@@ -23,7 +23,7 @@
 
 // The coarse transmittance workset is a heap-selected StorageImage. It is writable by the coarse trace and read via
 // the same storage view by classify/resolve, so no pass owns a local UAV binding.
-#define g_NwbSwShadowCoarse NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.coarseStorageSlot)
+#define g_NwbSwShadowCoarse nwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.coarseStorageSlot)
 
 
 // One thread per coarse texel: trace ONE occlusion ray from the block's top-left full-res G-buffer texel and store the

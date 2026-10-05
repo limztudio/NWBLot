@@ -63,10 +63,10 @@ protected:
     void addFile(AStringView relativePath){
         const NWB::Path path = m_root / relativePath;
         ErrorCode error;
-        ASSERT_TRUE(EnsureDirectories(path.parent_path(), error));
+        ASSERT_TRUE(EnsureDirectories(path.parentPath(), error));
         GlobalFilesystemDetail::OutputFileStream stream(path, GlobalFilesystemDetail::OutputFileStream::binary);
         ASSERT_TRUE(stream);
-        Assets::AssetString normalized = PathToString(m_testArena.arena, path.lexically_normal());
+        Assets::AssetString normalized = PathToString(m_testArena.arena, path.lexicallyNormal());
         CanonicalizeTextInPlace(normalized);
         m_files.emplace_back(m_testArena.arena, m_root / s_ASSETS, path, normalized, ACompactString(s_PROJECT));
     }

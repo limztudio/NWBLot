@@ -25,7 +25,7 @@ struct NwbRtInstanceMaterial{
     uint materialConstantByteOffset;
     uint meshInstanceIndex;
     // Per-buffer descriptor-heap slots for this occluder's mesh geometry. The host registers each backing buffer and
-    // stores the returned slot here; shaders read through NwbHeapRawBuffer(<x>Slot). indexSlot, attributeSlot, and
+    // stores the returned slot here; shaders read through nwbHeapRawBuffer(<x>Slot). indexSlot, attributeSlot, and
     // positionSlot are set by both shadow builders; nodeSlot is SW-only and stays invalid on hardware-built records.
     uint indexSlot;
     uint attributeSlot;

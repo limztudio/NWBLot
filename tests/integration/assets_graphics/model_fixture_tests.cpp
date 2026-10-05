@@ -131,16 +131,16 @@ skin.inverse_bind_matrices = [
 )";
 
 static void AppendModelFixtureBase(AString& inOutMeta){
-    AssetsGraphicsFixture::AppendTestMeta(inOutMeta, s_ModelFixtureMeshMeta);
-    AssetsGraphicsFixture::AppendTestMeta(inOutMeta, s_ModelFixtureSkeletonMeta);
-    AssetsGraphicsFixture::AppendTestMeta(inOutMeta, s_ModelFixtureSkinMeta);
+    AssetsGraphicsFixture::appendTestMeta(inOutMeta, s_ModelFixtureMeshMeta);
+    AssetsGraphicsFixture::appendTestMeta(inOutMeta, s_ModelFixtureSkeletonMeta);
+    AssetsGraphicsFixture::appendTestMeta(inOutMeta, s_ModelFixtureSkinMeta);
 }
 
 static AString BuildValidModelBunchFixture(){
     AString meta;
     meta.reserve(4096u);
     AppendModelFixtureBase(meta);
-    AssetsGraphicsFixture::AppendTestMeta(meta, R"(model model;
+    AssetsGraphicsFixture::appendTestMeta(meta, R"(model model;
 
 model.skeletons = {
     "rig": {
@@ -197,7 +197,7 @@ static bool LoadCookedModel(
     const Name assetName,
     UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset
 ){
-    return AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::ModelAssetCodec>(
+    return AssetsGraphicsFixture::loadCookedAsset<NWB::Impl::ModelAssetCodec>(
         testArena,
         outputDirectory,
         assetName,
@@ -214,7 +214,7 @@ TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
     const AString meta = BuildValidModelBunchFixture();
-    const bool cooked = AssetsGraphicsFixture::CookSingleGraphicsMeta(
+    const bool cooked = AssetsGraphicsFixture::cookSingleGraphicsMeta(
         AStringView(meta.data(), meta.size()),
         "model_bunch_local_references",
         "characters",
@@ -236,7 +236,7 @@ TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
     ))
         return;
 
-    EXPECT_EQ(loadedAsset->assetType(), NWB::Impl::Model::AssetTypeName());
+    EXPECT_EQ(loadedAsset->assetType(), NWB::Impl::Model::assetTypeName());
     const NWB::Impl::Model& model = static_cast<const NWB::Impl::Model&>(*loadedAsset);
     EXPECT_EQ(model.skeletonObjects().size(), 1u);
     EXPECT_EQ(model.skinnedMeshObjects().size(), s_ExpectedDualCount);
@@ -266,9 +266,9 @@ TEST(AssetsGraphics, ModelBunchLocalReferencesAndWrapperExpansion){
 static AString BuildStaticAttachmentModelBunchFixture(){
     AString meta;
     meta.reserve(4096u);
-    AssetsGraphicsFixture::AppendTestMeta(meta, s_ModelFixtureMeshMeta);
-    AssetsGraphicsFixture::AppendTestMeta(meta, s_ModelFixtureSkeletonMeta);
-    AssetsGraphicsFixture::AppendTestMeta(meta, R"(model model;
+    AssetsGraphicsFixture::appendTestMeta(meta, s_ModelFixtureMeshMeta);
+    AssetsGraphicsFixture::appendTestMeta(meta, s_ModelFixtureSkeletonMeta);
+    AssetsGraphicsFixture::appendTestMeta(meta, R"(model model;
 
 model.skeletons = {
     "rig": {
@@ -306,7 +306,7 @@ TEST(AssetsGraphics, ModelBunchStaticMeshAttachmentToNamedJoint){
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
     const AString meta = BuildStaticAttachmentModelBunchFixture();
-    const bool cooked = AssetsGraphicsFixture::CookSingleGraphicsMeta(
+    const bool cooked = AssetsGraphicsFixture::cookSingleGraphicsMeta(
         AStringView(meta.data(), meta.size()),
         "model_bunch_static_attachment",
         "characters",
@@ -328,7 +328,7 @@ TEST(AssetsGraphics, ModelBunchStaticMeshAttachmentToNamedJoint){
     ))
         return;
 
-    EXPECT_EQ(loadedAsset->assetType(), NWB::Impl::Model::AssetTypeName());
+    EXPECT_EQ(loadedAsset->assetType(), NWB::Impl::Model::assetTypeName());
     const NWB::Impl::Model& model = static_cast<const NWB::Impl::Model&>(*loadedAsset);
     EXPECT_EQ(model.skeletonObjects().size(), 1u);
     EXPECT_EQ(model.staticMeshObjects().size(), 1u);
@@ -355,8 +355,8 @@ TEST(AssetsGraphics, ModelBunchRejectsFourRowTransform){
 
     AString meta;
     meta.reserve(2048u);
-    AssetsGraphicsFixture::AppendTestMeta(meta, s_ModelFixtureMeshMeta);
-    AssetsGraphicsFixture::AppendTestMeta(meta, R"(model model;
+    AssetsGraphicsFixture::appendTestMeta(meta, s_ModelFixtureMeshMeta);
+    AssetsGraphicsFixture::appendTestMeta(meta, R"(model model;
 
 model.static_meshes = {
     "tool": {
@@ -379,7 +379,7 @@ asset_bunch bunch = [
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    EXPECT_FALSE(AssetsGraphicsFixture::CookSingleGraphicsMeta(
+    EXPECT_FALSE(AssetsGraphicsFixture::cookSingleGraphicsMeta(
         AStringView(meta.data(), meta.size()),
         "model_bunch_four_row_transform",
         "characters",
@@ -404,7 +404,7 @@ static bool ExpandModelBunchFixture(
     if(!doc.parse(meta))
         return false;
 
-    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, caseName) / "assets";
+    const Path assetRoot = AssetsGraphicsFixture::assetsGraphicsTestCaseRoot(testArena, caseName) / "assets";
     const Path nwbFilePath = assetRoot / "characters" / s_MODEL_FIXTURE_NWB;
     return NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunch(
         assetRoot,
@@ -424,8 +424,8 @@ TEST(AssetsGraphics, ModelBunchRejectsDuplicateLocalReference){
 
     AString meta;
     meta.reserve(2048u);
-    AssetsGraphicsFixture::AppendTestMeta(meta, s_ModelFixtureMeshMeta);
-    AssetsGraphicsFixture::AppendTestMeta(meta, R"(model model;
+    AssetsGraphicsFixture::appendTestMeta(meta, s_ModelFixtureMeshMeta);
+    AssetsGraphicsFixture::appendTestMeta(meta, R"(model model;
 
 model.skeletons = {
     "rig": {
@@ -465,8 +465,8 @@ TEST(AssetsGraphics, ModelBunchRejectsMissingLocalReference){
 
     AString meta;
     meta.reserve(2048u);
-    AssetsGraphicsFixture::AppendTestMeta(meta, s_ModelFixtureMeshMeta);
-    AssetsGraphicsFixture::AppendTestMeta(meta, R"(model model;
+    AssetsGraphicsFixture::appendTestMeta(meta, s_ModelFixtureMeshMeta);
+    AssetsGraphicsFixture::appendTestMeta(meta, R"(model model;
 
 model.skeletons = {
     "rig": {

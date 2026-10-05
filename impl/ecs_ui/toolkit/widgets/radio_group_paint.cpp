@@ -23,7 +23,7 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
     RadioGroupPlacement placement;
     if(
         !radioGroupMatches(frame) || frame.m_labels.size() != frame.m_choices.count
-        || !RadioGroupLayout::Place(box.rectangle, visibleClip(box.clip), frame.m_choices, frame.m_metrics, placement)
+        || !RadioGroupLayout::place(box.rectangle, visibleClip(box.clip), frame.m_choices, frame.m_metrics, placement)
     )
         return false;
     HitTarget host;

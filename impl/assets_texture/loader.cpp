@@ -393,7 +393,7 @@ bool TextureAssetLoader::Create(
     }
     ScopeExit releaseDescriptor([&heap, sampledImageHandle]()noexcept{ heap.free(sampledImageHandle); });
 
-    if(!heap.write(sampledImageHandle, Core::DescriptorWriteItem::Texture_SRV(
+    if(!heap.write(sampledImageHandle, Core::DescriptorWriteItem::textureSrv(
         0u,
         texture.get(),
         format,
@@ -436,7 +436,7 @@ bool TextureAssetLoader::Load(
     const TStringView ownerName
 ){
     const TStringView owner = ownerName;
-    if(!Core::Assets::AssetManager::CheckLoaderEnter(textureAsset, outResource, owner, Texture::s_AssetTypeText))
+    if(!Core::Assets::AssetManager::checkLoaderEnter(textureAsset, outResource, owner, Texture::s_AssetTypeText))
         return outResource.valid();
 
     const Name& textureVirtualPath = textureAsset.name();

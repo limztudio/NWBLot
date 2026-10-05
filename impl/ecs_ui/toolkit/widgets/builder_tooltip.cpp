@@ -41,7 +41,7 @@ bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, 
     const bool eligible = options.enabled && anchor->enabled && input.windowFocused() && input.pointerKnown()
         && !m_pointerBusy && !input.primaryDown() && !input.secondaryDown() && !input.capture().valid()
         && accepted && accepted->enabled && accepted->popup == m_context.popupToken() && overAnchor;
-    if(!TooltipBehavior::Update(state, anchor->state.id, anchor->state.declarationGeneration,
+    if(!TooltipBehavior::update(state, anchor->state.id, anchor->state.declarationGeneration,
         m_context.popupToken(), input.focusLossGeneration(), input.hoverActivityGeneration(),
         eligible, m_deltaSeconds, options)){
         m_context.fail();
@@ -89,7 +89,7 @@ bool Builder::paintTooltips(){
             || (m_context.topPopupToken().valid() && m_context.topPopupToken() != frame.state->m_popup)
             || pointer.x < left || pointer.y < top || pointer.x >= right || pointer.y >= bottom
         ){
-            if(!TooltipBehavior::Update(*frame.state, frame.anchor.id, frame.anchor.declarationGeneration,
+            if(!TooltipBehavior::update(*frame.state, frame.anchor.id, frame.anchor.declarationGeneration,
                 frame.state->m_popup, input.focusLossGeneration(), input.hoverActivityGeneration(),
                 false, 0.0f, frame.options))
                 return false;
@@ -111,7 +111,7 @@ bool Builder::paintTooltips(){
         options.side = frame.options.side;
         PopupPlacement placement;
         if(
-            !PopupLayout::Place(options, m_paint.displayMetrics(), placement)
+            !PopupLayout::place(options, m_paint.displayMetrics(), placement)
             || !m_paint.beginOverlay(frame.layer)
         )
             return false;

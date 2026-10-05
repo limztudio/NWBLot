@@ -38,7 +38,7 @@ bool nwbOpticalCheckBoundary(
     ray.TMin = max(0.0, hit.distance - tolerance);
     ray.TMax = hit.distance + tolerance;
     RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
-    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK, ray);
+    query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK, ray);
     bool found = false;
     [loop]
     for(uint candidate = 0u; candidate < NWB_OPTICAL_MAX_CANDIDATE_EVENTS; ++candidate){
@@ -57,7 +57,7 @@ bool nwbOpticalCheckBoundary(
             found = true;
             continue;
         }
-        const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[hit.instance];
+        const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[hit.instance];
         const float3 normal = nwbRayTraceTriangleGeometricNormal(
             material, query.CandidatePrimitiveIndex(), query.CandidateWorldToObject3x4()
         );

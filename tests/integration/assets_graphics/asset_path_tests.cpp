@@ -234,13 +234,13 @@ TEST(AssetPaths, DerivedPathRejectsOutsideAndEmptyLogicalPathsAndClearsBothOutpu
     EXPECT_TRUE(output.empty());
     Name identity(s_STALE_NAME);
     EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_PROJECT), outside, identity, scratchArena));
-    EXPECT_EQ(identity, NAME_NONE);
+    EXPECT_EQ(identity, s_NameNone);
     output = s_STALE_OUTPUT;
     EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_PROJECT), fixture.assetRoot, output));
     EXPECT_TRUE(output.empty());
     identity = Name(s_STALE_NAME);
     EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_PROJECT), fixture.assetRoot, identity, scratchArena));
-    EXPECT_EQ(identity, NAME_NONE);
+    EXPECT_EQ(identity, s_NameNone);
     EXPECT_EQ(logger.errorCount(), 4u);
 }
 

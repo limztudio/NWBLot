@@ -27,9 +27,9 @@ struct NwbCsgIntervalPeelEntry{
 
 // Local bindings 0..2 are ABI gaps. The CSG context selects target-generation Texture2DArray UAVs
 // from the StorageImage heap; the device's required formatless-storage-image support permits the two float formats.
-#define g_NwbCsgBackCapNormal (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.x))
-#define g_NwbCsgIntervalDepth (NwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.y))
-#define g_NwbCsgIntervalId (NwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgPeelSlots.z))
+#define g_NwbCsgBackCapNormal (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.x))
+#define g_NwbCsgIntervalDepth (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.y))
+#define g_NwbCsgIntervalId (nwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgPeelSlots.z))
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -198,19 +198,19 @@ bool nwbCsgTryAnalyticCutterInterval(
     )
         return false;
 #if defined(NWB_CSG_HAS_SHAPE_ID_PLANE)
-    if(cutter.shapeType == s_NwbCsgPlaneShapeId)
+    if(cutter.shapeType == NWB_CSG_PLANE_SHAPE_ID)
         return nwbCsgAnalyticPlaneInterval(origin, direction, cutter.parameter0, interval);
 #endif
 #if defined(NWB_CSG_HAS_SHAPE_ID_BOX)
-    if(cutter.shapeType == s_NwbCsgBoxShapeId)
+    if(cutter.shapeType == NWB_CSG_BOX_SHAPE_ID)
         return nwbCsgAnalyticBoxInterval(origin, direction, cutter.parameter0.xyz, interval);
 #endif
 #if defined(NWB_CSG_HAS_SHAPE_ID_SPHERE)
-    if(cutter.shapeType == s_NwbCsgSphereShapeId)
+    if(cutter.shapeType == NWB_CSG_SPHERE_SHAPE_ID)
         return nwbCsgAnalyticSphereInterval(origin, direction, cutter.parameter0.x, interval);
 #endif
 #if defined(NWB_CSG_HAS_SHAPE_ID_CAPSULE)
-    if(cutter.shapeType == s_NwbCsgCapsuleShapeId)
+    if(cutter.shapeType == NWB_CSG_CAPSULE_SHAPE_ID)
         return nwbCsgAnalyticCapsuleInterval(origin, direction, cutter.parameter0.x, cutter.parameter0.y, interval);
 #endif
     return false;

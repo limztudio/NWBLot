@@ -111,11 +111,11 @@ struct GraphicsPipelineDesc{
     u32 patchControlPoints = 0;
     InputLayoutHandle inputLayout;
 
-    ShaderHandle VS;
-    ShaderHandle HS;
-    ShaderHandle DS;
-    ShaderHandle GS;
-    ShaderHandle PS;
+    ShaderHandle vertexShader;
+    ShaderHandle hullShader;
+    ShaderHandle domainShader;
+    ShaderHandle geometryShader;
+    ShaderHandle pixelShader;
 
     RenderState renderState;
     VariableRateShadingState shadingRateState;
@@ -143,7 +143,7 @@ struct GraphicsPipelineDesc{
 typedef GraphicsBackend::Handle<GraphicsPipeline> GraphicsPipelineHandle;
 
 struct ComputePipelineDesc{
-    ShaderHandle CS;
+    ShaderHandle computeShader;
 
     BindingLayoutVector bindingLayouts;
 
@@ -158,9 +158,9 @@ typedef GraphicsBackend::Handle<ComputePipeline> ComputePipelineHandle;
 struct MeshletPipelineDesc{
     BindingLayoutVector bindingLayouts;
 
-    ShaderHandle AS;
-    ShaderHandle MS;
-    ShaderHandle PS;
+    ShaderHandle amplificationShader;
+    ShaderHandle meshShader;
+    ShaderHandle pixelShader;
 
     RenderState renderState;
 

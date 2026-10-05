@@ -26,7 +26,7 @@ inline constexpr WStringView s_ClassName = L"NWBTextInputUnitTest";
 
 class Win32TextInputFixture : public testing::Test{
 public:
-    static LRESULT CALLBACK WindowProc(const HWND window, const UINT message, const WPARAM wParam, const LPARAM lParam){
+    static LRESULT CALLBACK windowProc(const HWND window, const UINT message, const WPARAM wParam, const LPARAM lParam){
         if(message == WM_NCCREATE){
             const auto* const creation = reinterpret_cast<const CREATESTRUCTW*>(lParam);
             SetLastError(ERROR_SUCCESS);
@@ -76,7 +76,7 @@ protected:
     virtual void SetUp()override{
         const HINSTANCE instance = GetModuleHandleW(nullptr);
         WNDCLASSW nativeClass = {};
-        nativeClass.lpfnWndProc = WindowProc;
+        nativeClass.lpfnWndProc = windowProc;
         nativeClass.hInstance = instance;
         nativeClass.lpszClassName = s_ClassName.data();
         const ATOM registered = RegisterClassW(&nativeClass);

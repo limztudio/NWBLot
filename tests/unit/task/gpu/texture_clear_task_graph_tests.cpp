@@ -70,7 +70,7 @@ struct TextureClearTestContext{
         Graphics::TextureHandle texture(
             textureObject,
             Graphics::TextureHandle::deleter_type(&testArena.arena),
-            AdoptRef
+            s_AdoptRef
         );
         return texture;
     }

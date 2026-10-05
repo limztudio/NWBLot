@@ -116,7 +116,7 @@ bool Builder::reserveCompoundPopup(const WidgetState& widget, const PopupToken& 
     PopupOptions options;
     options.size = { 1.0f, 1.0f };
     PopupPlacement placement;
-    if(!PopupLayout::Place(options, m_paint.displayMetrics(), placement))
+    if(!PopupLayout::place(options, m_paint.displayMetrics(), placement))
         return false;
     PopupScope scope;
     scope.token = token;

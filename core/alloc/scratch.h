@@ -136,10 +136,10 @@ private:
         usize size;
     };
 
-    [[nodiscard]] static constexpr bool IsValidAlignment(usize align)noexcept{
+    [[nodiscard]] static constexpr bool isValidAlignment(usize align)noexcept{
         return align != 0u && align <= s_MaxAlignSize && (align & (align - 1u)) == 0u;
     }
-    [[nodiscard]] static constexpr usize AlignedSize(usize align, usize size){
+    [[nodiscard]] static constexpr usize alignedSize(usize align, usize size){
         // All callers validate a power-of-two alignment before using this fast path.
         return AddSize(size, align - 1u) & ~(align - 1u);
     }
@@ -158,7 +158,7 @@ public:
             auto& bucket = m_bucket[i];
             bucket.active = nullptr;
             bucket.cached = nullptr;
-            bucket.size = AlignedSize(static_cast<usize>(1) << i, initSize);
+            bucket.size = alignedSize(static_cast<usize>(1) << i, initSize);
         }
     }
     ~ScratchArena(){
@@ -177,14 +177,14 @@ public:
 
 public:
     inline void* allocate(usize align, usize size){
-        GLB_ASSERT_MSG(IsValidAlignment(align), GLB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
-        if(!IsValidAlignment(align))
+        GLB_ASSERT_MSG(isValidAlignment(align), GLB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
+        if(!isValidAlignment(align))
             return nullptr;
 
         const usize bucketIndex = static_cast<usize>(CountTrailingZeros(align));
         auto& bucket = m_bucket[bucketIndex];
 
-        size = AlignedSize(align, size);
+        size = alignedSize(align, size);
         if(!bucket.active || size > bucket.active->m_remaining){
             if(!acquireChunk(bucket, align, size))
                 return nullptr;
@@ -200,8 +200,8 @@ public:
     // LIFO reclaim only: p must be the bucket's most-recent allocation (same contract as deallocate);
     // resizes the top in place, or relocates to a fresh block and copies when it cannot grow in place.
     inline void* reallocate(void* p, usize align, usize size){
-        GLB_ASSERT_MSG(IsValidAlignment(align), GLB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
-        if(!IsValidAlignment(align))
+        GLB_ASSERT_MSG(isValidAlignment(align), GLB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
+        if(!isValidAlignment(align))
             return nullptr;
         if(!p)
             return allocate(align, size);
@@ -212,7 +212,7 @@ public:
         if(!bucket.active)
             return nullptr;
 
-        size = AlignedSize(align, size);
+        size = alignedSize(align, size);
 
         Chunk* chunk = bucket.active;
         const usize oldSize = chunk->lifoTopSpan(p);
@@ -243,8 +243,8 @@ public:
     // LIFO reclaim spans chunks: empty chunks are cached and expose the previous live allocation;
     // any out-of-order free is a no-op and is reclaimed in bulk when the arena is destroyed.
     inline void deallocate(void* p, usize align, usize size){
-        GLB_ASSERT_MSG(IsValidAlignment(align), GLB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
-        if(!IsValidAlignment(align) || size == 0u)
+        GLB_ASSERT_MSG(isValidAlignment(align), GLB_TEXT("ScratchArena alignment must be a non-zero power of two up to s_MaxAlignSize"));
+        if(!isValidAlignment(align) || size == 0u)
             return;
 
         const usize bucketIndex = static_cast<usize>(CountTrailingZeros(align));
@@ -253,7 +253,7 @@ public:
         if(!bucket.active)
             return;
 
-        size = AlignedSize(align, size);
+        size = alignedSize(align, size);
         Chunk* chunk = bucket.active;
         if(chunk->tryPopLifo(p, size)){
             m_memoryStats.recordDeallocation(size);

@@ -54,7 +54,7 @@ struct UiSkinInsets{
 };
 
 struct UiSkinRegion{
-    Name name = NAME_NONE;
+    Name name = s_NameNone;
     UiSkinRect rectangle;
     UiSkinSliceInsets sliceInsets;
     UiSkinInsets padding;

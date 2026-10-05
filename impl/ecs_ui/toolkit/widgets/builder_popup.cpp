@@ -41,7 +41,7 @@ bool Builder::beginPopup(const AStringView stableKey, PopupState& state, const P
     }
     PopupPlacement placement;
     const UiSkinRegion* background = region(m_popupStyle.background, m_popupStyle.fallback);
-    if(!background || !PopupLayout::Place(options, m_paint.displayMetrics(), placement)){
+    if(!background || !PopupLayout::place(options, m_paint.displayMetrics(), placement)){
         m_context.fail();
         return false;
     }

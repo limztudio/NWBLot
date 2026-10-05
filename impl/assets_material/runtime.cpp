@@ -325,7 +325,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
 
     m_shaderVariant.clear();
-    m_materialInterface = NAME_NONE;
+    m_materialInterface = s_NameNone;
     m_shadingModelId = 0u;
     m_surfaceDispatchId = 0u;
     m_typedLayoutHash = 0u;

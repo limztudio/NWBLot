@@ -51,7 +51,7 @@ struct RangeContext{
     Core::BufferHandle buffer{
         Tests::NewMetadataOnlyBuffer(arena, context, allocator, Core::BufferDesc{}.setByteSize(256u)),
         Core::BufferHandle::deleter_type(&arena),
-        AdoptRef
+        s_AdoptRef
     };
 
     void addState(

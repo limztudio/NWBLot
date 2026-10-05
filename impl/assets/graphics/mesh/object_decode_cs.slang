@@ -45,7 +45,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         return;
 
     nwbMeshLoadGeometryHeapSlots(groupThreadID.x);
-    const NwbMeshletDesc meshlet = NwbHeapMeshletDescs(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_DESC))[meshletIndex];
+    const NwbMeshletDesc meshlet = nwbHeapMeshletDescs(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_DESC))[meshletIndex];
     const NwbMeshletRefDecodeInfo decodeInfo = nwbMeshletBuildRefDecodeInfo(meshlet);
     const uint vertexCount = nwbMeshletVertexCount(meshlet);
     for(uint vertexIndex = groupThreadID.x; vertexIndex < vertexCount; vertexIndex += NWB_MESH_SHADER_GROUP_SIZE_X){
@@ -54,7 +54,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
             meshlet, decodeInfo, nwbMeshletLocalDeformedPosition(localRef)
         );
         const float3 objectPosition = nwbMeshLoadPosition(
-            NwbHeapMeshPositions(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_POSITION))[positionRef.position]
+            nwbHeapMeshPositions(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_POSITION))[positionRef.position]
         );
         const NwbMeshSourceVertex source = nwbMeshLoadSourceVertex(
             meshlet, decodeInfo, vertexIndex, objectPosition, float3(0.0), float4(0.0)

@@ -21,17 +21,17 @@ TEST(RgdDecode, MissingFileFailsGracefully){
 }
 
 TEST(RgdDecode, GarbageInputFailsGracefully){
-    constexpr AStringView path = "nwb_rgd_smoke_garbage.rgd";
+    constexpr AStringView s_Path = "nwb_rgd_smoke_garbage.rgd";
     {
-        OutputFileStream f(path.data(), s_FileOpenBinary);
+        OutputFileStream f(s_Path.data(), s_FileOpenBinary);
         ASSERT_TRUE(f.is_open());
         f << "not a valid radeon gpu detective capture\n";
     }
     AInteropString out;
-    EXPECT_FALSE(nwb_rgd::DecodeCrashDumpToText(path.data(), out));
+    EXPECT_FALSE(nwb_rgd::DecodeCrashDumpToText(s_Path.data(), out));
 
     NWB::Tests::TestArena<> testArena;
-    Path<NWB::Core::Alloc::GlobalArena> inputPath(testArena.arena, path);
+    Path<NWB::Core::Alloc::GlobalArena> inputPath(testArena.arena, s_Path);
     ErrorCode error;
     EXPECT_TRUE(RemoveFile(inputPath, error));
 }

@@ -23,7 +23,7 @@ NWB_IMPL_BEGIN
 
 
 bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchArena& scratchArena){
-    using namespace __hidden_rt_swbvh;
+    using namespace RayTracingSoftwareBvhDetail;
 
     m_preparedSceneContentStamp = {};
 
@@ -360,7 +360,7 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         const Core::GpuDescriptorHandle tlasHeapHandle = heap.allocate(Core::GpuDescriptorClass::AccelStruct);
         if(
             !tlasHeapHandle.valid()
-            || !heap.write(tlasHeapHandle, Core::DescriptorWriteItem::RayTracingAccelStruct(0u, m_rayTracingState.m_tlas.get()))
+            || !heap.write(tlasHeapHandle, Core::DescriptorWriteItem::rayTracingAccelStruct(0u, m_rayTracingState.m_tlas.get()))
         ){
             NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register scene TLAS in the descriptor-buffer heap"));
             if(tlasHeapHandle.valid())

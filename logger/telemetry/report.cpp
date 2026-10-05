@@ -31,7 +31,7 @@ namespace Telemetry = Core::Telemetry;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_telemetry_report{
+namespace TelemetryReportDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -161,8 +161,8 @@ AStringView PerfTimingSourceText(const Telemetry::PerfTimingSource::Enum source)
 bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& events, TelemetryReport& outReport){
     outReport = TelemetryReport(arena);
     if(events.valid())
-        outReport.perfCsv.reserve(__hidden_telemetry_report::EstimatePerfCsvReserve(events.eventCount()));
-    __hidden_telemetry_report::AppendPerfCsvHeader(outReport.perfCsv);
+        outReport.perfCsv.reserve(TelemetryReportDetail::EstimatePerfCsvReserve(events.eventCount()));
+    TelemetryReportDetail::AppendPerfCsvHeader(outReport.perfCsv);
 
     if(!events.valid())
         return false;
@@ -170,14 +170,14 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
     outReport.summary.eventCount = events.eventCount();
     AString<TelemetryArena> memoryRecords(arena);
 
-    __hidden_telemetry_report::GraphTimingMap timingByFrameAndScope(
+    TelemetryReportDetail::GraphTimingMap timingByFrameAndScope(
         0,
-        __hidden_telemetry_report::GraphTimingKeyHasher(),
-        EqualTo<__hidden_telemetry_report::GraphTimingKey>(),
+        TelemetryReportDetail::GraphTimingKeyHasher(),
+        EqualTo<TelemetryReportDetail::GraphTimingKey>(),
         arena
     );
     timingByFrameAndScope.reserve(events.eventCount());
-    __hidden_telemetry_report::FrameGraphReportRecords frameGraphs(arena);
+    TelemetryReportDetail::FrameGraphReportRecords frameGraphs(arena);
     frameGraphs.reserve(events.eventCount());
 
     for(usize i = 0u; i < events.eventCount(); ++i){
@@ -187,8 +187,8 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
             continue;
         }
 
-        ++outReport.summary.eventKindCounts[__hidden_telemetry_report::EventKindBucket(event->header.kind)];
-        __hidden_telemetry_report::RecordFrameRange(outReport.summary, event->header.frameIndex);
+        ++outReport.summary.eventKindCounts[TelemetryReportDetail::EventKindBucket(event->header.kind)];
+        TelemetryReportDetail::RecordFrameRange(outReport.summary, event->header.frameIndex);
 
         switch(event->header.kind){
         case Telemetry::EventKind::TextLog: {
@@ -209,8 +209,8 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
                 ++outReport.summary.parseFailureCount;
                 break;
             }
-            __hidden_telemetry_report::AddTiming(outReport.summary, payload);
-            __hidden_telemetry_report::AppendPerfCsvRow(outReport.perfCsv, payload.source, payload);
+            TelemetryReportDetail::AddTiming(outReport.summary, payload);
+            TelemetryReportDetail::AppendPerfCsvRow(outReport.perfCsv, payload.source, payload);
             // first/last are arrival endpoints, so only one sample proves an exact source-frame association when
             // different queues complete out of order. Aggregated windows remain available in the Perf CSV.
             if(
@@ -218,7 +218,7 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
                 && payload.stats.firstSampleFrameIndex == payload.stats.lastSampleFrameIndex
             ){
                 timingByFrameAndScope.insert_or_assign(
-                    __hidden_telemetry_report::GraphTimingKey{ payload.stats.firstSampleFrameIndex, payload.scopeName },
+                    TelemetryReportDetail::GraphTimingKey{ payload.stats.firstSampleFrameIndex, payload.scopeName },
                     payload.stats.seconds
                 );
             }
@@ -235,14 +235,14 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
             break;
         }
         case Telemetry::EventKind::FrameGraphFrame: {
-            __hidden_telemetry_report::FrameGraphReportRecord& record = frameGraphs.emplace_back(arena);
+            TelemetryReportDetail::FrameGraphReportRecord& record = frameGraphs.emplace_back(arena);
             record.streamId = event->header.streamId;
             if(!Telemetry::ParseFrameGraphPayload(arena, event->payload.data(), event->payload.size(), record.payload)){
                 frameGraphs.pop_back();
                 ++outReport.summary.parseFailureCount;
                 break;
             }
-            __hidden_telemetry_report::AddFrameGraph(outReport.summary, record.payload);
+            TelemetryReportDetail::AddFrameGraph(outReport.summary, record.payload);
             break;
         }
         default:
@@ -250,8 +250,8 @@ bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& eve
         }
     }
 
-    __hidden_telemetry_report::BuildTimedGraphsDot(arena, frameGraphs, timingByFrameAndScope, outReport.graph);
-    __hidden_telemetry_report::BuildJson(outReport.summary, frameGraphs, memoryRecords, outReport.json);
+    TelemetryReportDetail::BuildTimedGraphsDot(arena, frameGraphs, timingByFrameAndScope, outReport.graph);
+    TelemetryReportDetail::BuildJson(outReport.summary, frameGraphs, memoryRecords, outReport.json);
     return true;
 }
 

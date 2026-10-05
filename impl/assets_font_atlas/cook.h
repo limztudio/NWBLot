@@ -29,7 +29,7 @@ NWB_IMPL_BEGIN
 struct FontAtlasCookEntry{
     Core::Assets::AssetArena& arena;
     FontAtlasPayload payload;
-    Name virtualPath = NAME_NONE;
+    Name virtualPath = s_NameNone;
 
 
     explicit FontAtlasCookEntry(Core::Assets::AssetArena& memoryArena)

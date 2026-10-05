@@ -17,7 +17,7 @@ NwbLightSpaceCaptureVertex main(uint vertex : SV_VertexID, uint primitiveBase : 
         return output;
     const NwbRtInstanceMaterial material = nwbLightSpaceMaterial(g_NwbLightSpacePush.instanceIndex);
     // SV_VertexID is the canonical position index fetched by the native index buffer.
-    const float3 local = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(vertex * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 local = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(vertex * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
     output.worldPosition = nwbLightSpaceWorldPosition(local, g_NwbLightSpacePush.instanceIndex);
     output.position = nwbLightSpaceProject(view, output.worldPosition);
     output.primitiveBase = primitiveBase;

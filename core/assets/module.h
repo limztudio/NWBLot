@@ -28,7 +28,7 @@ using AssetBytes = AssetVector<u8>;
 #define NWB_DEFINE_ASSET_TYPE(assetTypeLiteral) \
     static constexpr AStringView s_AssetTypeText = assetTypeLiteral; \
     inline static constexpr Name s_AssetTypeName = Name(assetTypeLiteral); \
-    [[nodiscard]] static const Name& AssetTypeName(){ \
+    [[nodiscard]] static const Name& assetTypeName(){ \
         return s_AssetTypeName; \
     }
 
@@ -58,7 +58,7 @@ public: \
 class IAsset{
 protected:
     IAsset() = delete;
-    explicit IAsset(const Name& assetType, const Name& virtualPath = NAME_NONE)
+    explicit IAsset(const Name& assetType, const Name& virtualPath = s_NameNone)
         : m_assetType(assetType)
         , m_virtualPath(virtualPath)
     {}
@@ -83,8 +83,8 @@ public:
 
 
 private:
-    Name m_assetType = NAME_NONE;
-    Name m_virtualPath = NAME_NONE;
+    Name m_assetType = s_NameNone;
+    Name m_virtualPath = s_NameNone;
 };
 
 template<typename ArenaT>
@@ -99,18 +99,18 @@ template<typename AssetT>
 class TypedAsset : public IAsset{
 protected:
     TypedAsset()
-        : IAsset(AssetT::AssetTypeName())
+        : IAsset(AssetT::assetTypeName())
     {}
     explicit TypedAsset(const Name& virtualPath)
-        : IAsset(AssetT::AssetTypeName(), virtualPath)
+        : IAsset(AssetT::assetTypeName(), virtualPath)
     {}
 };
 
 template<typename AssetT>
 [[nodiscard]] inline const AssetT* CastAsset(const IAsset* asset){
-    if(!asset || asset->assetType() != AssetT::AssetTypeName())
+    if(!asset || asset->assetType() != AssetT::assetTypeName())
         return nullptr;
-    return checked_cast<const AssetT*>(asset);
+    return CheckedCast<const AssetT*>(asset);
 }
 
 
@@ -155,14 +155,14 @@ public:
 
 
 private:
-    Name m_assetType = NAME_NONE;
+    Name m_assetType = s_NameNone;
 };
 
 template<typename AssetT>
 class AssetCodec : public IAssetCodec{
 protected:
     AssetCodec()
-        : IAssetCodec(AssetT::AssetTypeName())
+        : IAssetCodec(AssetT::assetTypeName())
     {}
 
 

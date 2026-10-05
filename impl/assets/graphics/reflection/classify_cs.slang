@@ -21,10 +21,10 @@
 
 
 // Four seven-bit additive observation fields each hold at most 64 lanes without carrying into their neighbor.
-static const uint s_NwbReflectionPotentialObservation = 1u;
-static const uint s_NwbReflectionRoughObservation = 1u << 7u;
-static const uint s_NwbReflectionAttemptObservation = 1u << 14u;
-static const uint s_NwbReflectionReturnObservation = 1u << 21u;
+static const uint NWB_REFLECTION_POTENTIAL_OBSERVATION = 1u;
+static const uint NWB_REFLECTION_ROUGH_OBSERVATION = 1u << 7u;
+static const uint NWB_REFLECTION_ATTEMPT_OBSERVATION = 1u << 14u;
+static const uint NWB_REFLECTION_RETURN_OBSERVATION = 1u << 21u;
 
 // Shared integer operations do not require optional subgroup ballot or 64-bit atomic support. Screen work packs
 // iterations in 16 bits (at most 128*256), then limit misses and bypassed pixels in 8 bits each (at most 128 each).
@@ -53,7 +53,7 @@ NwbReflectionFeedbackTile nwbReflectionLoadFeedbackTile(const uint2 pixel, const
         / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
     // The CPU declares this previous-bank read only for a compatible accepted observation. Check the published
     // header before accessing tile entries; invalid selectors are never touched when the frame flag is absent.
-    const uint4 header = NwbHeapRawBuffer(g_NwbReflectionParameters.feedbackReadSlot).Load4(0u);
+    const uint4 header = nwbHeapRawBuffer(g_NwbReflectionParameters.feedbackReadSlot).Load4(0u);
     if(
         (header.w & NWB_REFLECTION_FEEDBACK_HEADER_VALID) == 0u || header.z != tilesX * tilesY
         || header.y != g_NwbReflectionParameters.feedbackProbeIndex - 1u
@@ -62,7 +62,7 @@ NwbReflectionFeedbackTile nwbReflectionLoadFeedbackTile(const uint2 pixel, const
     const uint tileIndex = (pixel.y / NWB_REFLECTION_FEEDBACK_GROUP_SIZE) * tilesX
         + pixel.x / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
     const uint entryIndex = tileIndex * NWB_REFLECTION_FEEDBACK_SURFACE_COUNT + (glass ? 1u : 0u);
-    const uint entry = NwbHeapRawBuffer(g_NwbReflectionParameters.feedbackReadSlot).Load(
+    const uint entry = nwbHeapRawBuffer(g_NwbReflectionParameters.feedbackReadSlot).Load(
         NWB_REFLECTION_FEEDBACK_HEADER_BYTES + entryIndex * NWB_REFLECTION_FEEDBACK_ENTRY_BYTES
     );
     if(entry > NWB_REFLECTION_FEEDBACK_DORMANT)
@@ -112,9 +112,9 @@ bool nwbReflectionClassifySurface(
     bool stableTraceEligible;
     const bool valid = nwbReflectionLoadSurface(pixel, glass, surface, stableTraceEligible);
     if(stableTraceEligible){
-        observations = s_NwbReflectionPotentialObservation;
+        observations = NWB_REFLECTION_POTENTIAL_OBSERVATION;
         if(!glass && surface.roughness > 0.0)
-            observations |= s_NwbReflectionRoughObservation;
+            observations |= NWB_REFLECTION_ROUGH_OBSERVATION;
     }
     if(!valid)
         return false;
@@ -134,7 +134,7 @@ bool nwbReflectionClassifySurface(
         if(tile.bypass && surface.roughness == 0.0)
             screenWork = 1u << 24u;
         else{
-            observations |= s_NwbReflectionAttemptObservation;
+            observations |= NWB_REFLECTION_ATTEMPT_OBSERVATION;
             nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_SCREEN_ATTEMPTS, 1u);
             half3 radiance;
             half confidence;
@@ -143,7 +143,7 @@ bool nwbReflectionClassifySurface(
             const bool returned = nwbReflectionTraceScreen(pixel, surface, radiance, confidence, iterations, limited);
             screenWork = iterations | (limited ? 1u << 16u : 0u);
             if(returned){
-                observations |= s_NwbReflectionReturnObservation;
+                observations |= NWB_REFLECTION_RETURN_OBSERVATION;
                 // Even provisional low-confidence radiance keeps the tile active. Hardware replaces it only
                 // through the ordinary fallback route; feedback never drops a useful screen return.
                 // Weighted blend is half color math: weight/environment/radiance/confidence all fit FP16.

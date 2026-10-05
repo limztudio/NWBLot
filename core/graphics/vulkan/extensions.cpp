@@ -113,7 +113,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     if(!recordAndValidateAnyCommandCapability(s_ConvertCapabilities, s_OperationName))
         return;
     if(
-        !m_context.extensions.NV_cooperative_vector
+        !m_context.extensions.nvCooperativeVector
         || !m_context.coopVecFeatures.cooperativeVector
         || !m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV
         || !m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV

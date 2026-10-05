@@ -13,8 +13,8 @@
 
 
 // The append counter and indirect arguments are both heap-selected writable uint buffers.
-#define g_NwbSwShadowEdgeCounter NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeCounterStorageSlot)
-#define g_NwbSwShadowIndirectArgs NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.indirectArgsStorageSlot)
+#define g_NwbSwShadowEdgeCounter nwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeCounterStorageSlot)
+#define g_NwbSwShadowIndirectArgs nwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.indirectArgsStorageSlot)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

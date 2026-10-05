@@ -48,7 +48,7 @@ int RunPipelineTool(const int argc, char** argv){
         }
         ErrorCode error;
         const Path output = AbsolutePath(Path(arena, parsed.outputPath), error);
-        if(error || !EnsureDirectories(output.parent_path(), error) || !WriteTextFile(output, AStringView(text))){
+        if(error || !EnsureDirectories(output.parentPath(), error) || !WriteTextFile(output, AStringView(text))){
             NWB_LOGGER_ERROR(GLB_TEXT("DependencyComputer: failed to write output '{}'"), StringConvert(parsed.outputPath));
             return s_PipelineExitFailure;
         }

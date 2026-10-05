@@ -40,7 +40,7 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // Push-only layout; sort resources use the global heap.
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhSortPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(BvhSortPushConstants)));
 
         m_rayTracingState.m_bvhSortBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_bvhSortBindingLayout){
@@ -85,8 +85,8 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
 
     const auto sortHandlesReady = [this](){
         return
-            __hidden_rt_swbvh::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle)
-            && __hidden_rt_swbvh::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle)
+            RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle)
+            && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle)
         ;
     };
 
@@ -103,9 +103,9 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
         Core::GpuDescriptorHandle acquiredPayload = Core::GpuDescriptorHandle::invalid();
         if(
             (!m_rayTracingState.m_bvhSortKeysHeapHandle.valid()
-                && !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *m_rayTracingState.m_bvhSortKeysBuffer.get(), acquiredKeys))
+                && !RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *m_rayTracingState.m_bvhSortKeysBuffer.get(), acquiredKeys))
             || (!m_rayTracingState.m_bvhSortPayloadHeapHandle.valid()
-                && !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *m_rayTracingState.m_bvhSortPayloadBuffer.get(), acquiredPayload))
+                && !RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *m_rayTracingState.m_bvhSortPayloadBuffer.get(), acquiredPayload))
         ){
             RayTracingDetail::RetireHeapHandle(heap, acquiredKeys);
             RayTracingDetail::RetireHeapHandle(heap, acquiredPayload);
@@ -158,8 +158,8 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
     Core::GpuDescriptorHandle keysHeapHandle;
     Core::GpuDescriptorHandle payloadHeapHandle;
     if(
-        !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *keysBuffer.get(), keysHeapHandle)
-        || !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *payloadBuffer.get(), payloadHeapHandle)
+        !RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *keysBuffer.get(), keysHeapHandle)
+        || !RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *payloadBuffer.get(), payloadHeapHandle)
     ){
         RayTracingDetail::RetireHeapHandle(heap, keysHeapHandle);
         RayTracingDetail::RetireHeapHandle(heap, payloadHeapHandle);
@@ -181,8 +181,8 @@ bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u3
     GLB_ASSERT(m_rayTracingState.m_bvhSortPipeline);
     GLB_ASSERT(m_rayTracingState.m_bvhSortKeysBuffer);
     GLB_ASSERT(m_rayTracingState.m_bvhSortPayloadBuffer);
-    GLB_ASSERT(__hidden_rt_swbvh::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle));
-    GLB_ASSERT(__hidden_rt_swbvh::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle));
+    GLB_ASSERT(RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle));
+    GLB_ASSERT(RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle));
 
     // Padded count is power-of-two and group-aligned.
     if(paddedCount < static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE))
@@ -269,7 +269,7 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // Push-only layout; build resources use the global heap.
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(BvhBuildPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(BvhBuildPushConstants)));
 
         m_rayTracingState.m_bvhBuildBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_bvhBuildBindingLayout){
@@ -320,12 +320,12 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
         return false;
 
     if(m_rayTracingState.m_bvhVisitCounterBuffer && m_rayTracingState.m_bvhBuildCapacity >= primitiveCount){
-        if(__hidden_rt_swbvh::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhVisitCounterHeapHandle))
+        if(RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhVisitCounterHeapHandle))
             return true;
 
         Core::GpuDescriptorHandle acquired = Core::GpuDescriptorHandle::invalid();
         if(!m_rayTracingState.m_bvhVisitCounterHeapHandle.valid()
-            && __hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *m_rayTracingState.m_bvhVisitCounterBuffer.get(), acquired)){
+            && RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *m_rayTracingState.m_bvhVisitCounterBuffer.get(), acquired)){
             m_rayTracingState.m_bvhVisitCounterHeapHandle = acquired;
             return true;
         }
@@ -357,7 +357,7 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
     }
 
     Core::GpuDescriptorHandle counterHeapHandle = Core::GpuDescriptorHandle::invalid();
-    if(!__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *counterBuffer.get(), counterHeapHandle)){
+    if(!RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *counterBuffer.get(), counterHeapHandle)){
         NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register BVH visit counter in the descriptor heap"));
         return false;
     }
@@ -383,16 +383,16 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
 
     if(nodeBuffer && parentBuffer){
         if(
-            __hidden_rt_swbvh::IsStorageBufferHeapHandle(nodeHeapHandle)
-            && __hidden_rt_swbvh::IsStorageBufferHeapHandle(parentHeapHandle)
+            RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(nodeHeapHandle)
+            && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(parentHeapHandle)
         )
             return true;
 
         Core::GpuDescriptorHandle acquiredNode = Core::GpuDescriptorHandle::invalid();
         Core::GpuDescriptorHandle acquiredParent = Core::GpuDescriptorHandle::invalid();
         if(
-            (!nodeHeapHandle.valid() && !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *nodeBuffer.get(), acquiredNode))
-            || (!parentHeapHandle.valid() && !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *parentBuffer.get(), acquiredParent))
+            (!nodeHeapHandle.valid() && !RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *nodeBuffer.get(), acquiredNode))
+            || (!parentHeapHandle.valid() && !RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *parentBuffer.get(), acquiredParent))
         ){
             RayTracingDetail::RetireHeapHandle(heap, acquiredNode);
             RayTracingDetail::RetireHeapHandle(heap, acquiredParent);
@@ -404,8 +404,8 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
         if(acquiredParent.valid())
             parentHeapHandle = acquiredParent;
         return
-            __hidden_rt_swbvh::IsStorageBufferHeapHandle(nodeHeapHandle)
-            && __hidden_rt_swbvh::IsStorageBufferHeapHandle(parentHeapHandle)
+            RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(nodeHeapHandle)
+            && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(parentHeapHandle)
         ;
     }
     if(nodeBuffer || parentBuffer){
@@ -449,8 +449,8 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
     Core::GpuDescriptorHandle newNodeHeapHandle = Core::GpuDescriptorHandle::invalid();
     Core::GpuDescriptorHandle newParentHeapHandle = Core::GpuDescriptorHandle::invalid();
     if(
-        !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *newNodeBuffer.get(), newNodeHeapHandle)
-        || !__hidden_rt_swbvh::RegisterWritableBvhBuffer(heap, *newParentBuffer.get(), newParentHeapHandle)
+        !RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *newNodeBuffer.get(), newNodeHeapHandle)
+        || !RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *newParentBuffer.get(), newParentHeapHandle)
     ){
         RayTracingDetail::RetireHeapHandle(heap, newNodeHeapHandle);
         RayTracingDetail::RetireHeapHandle(heap, newParentHeapHandle);
@@ -503,18 +503,18 @@ bool RendererRayTracingSystem::meshSwBvhResourcesReady(
     return
         nodeBuffer
         && parentBuffer
-        && __hidden_rt_swbvh::IsStorageBufferHeapHandle(nodeHeapHandle)
-        && __hidden_rt_swbvh::IsStorageBufferHeapHandle(parentHeapHandle)
+        && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(nodeHeapHandle)
+        && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(parentHeapHandle)
         && m_rayTracingState.m_bvhSortPipeline
         && m_rayTracingState.m_bvhSortKeysBuffer
         && m_rayTracingState.m_bvhSortPayloadBuffer
-        && __hidden_rt_swbvh::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle)
-        && __hidden_rt_swbvh::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle)
+        && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle)
+        && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle)
         && m_rayTracingState.m_bvhMortonPipeline
         && m_rayTracingState.m_bvhTopologyPipeline
         && m_rayTracingState.m_bvhFitPipeline
         && m_rayTracingState.m_bvhVisitCounterBuffer
-        && __hidden_rt_swbvh::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhVisitCounterHeapHandle)
+        && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhVisitCounterHeapHandle)
     ;
 }
 

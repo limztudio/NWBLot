@@ -154,7 +154,7 @@ bool RendererReflectionPostprocess::preparePipeline(
     if(!m_layout){
         Core::BindingLayoutDesc desc(m_arena);
         desc.setVisibility(Core::ShaderType::Compute);
-        desc.addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES));
+        desc.addItem(Core::BindingLayoutItem::pushConstants(0u, NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES));
         m_layout = device.createBindingLayout(desc);
         if(!m_layout)
             return false;
@@ -194,8 +194,8 @@ bool RendererReflectionPostprocess::prepareImage(ReflectionRadianceBinding& imag
     Core::GpuDescriptorHandle storage = heap.allocate(Core::GpuDescriptorClass::StorageImage);
     if(
         !sampled.valid() || !storage.valid()
-        || !heap.write(sampled, Core::DescriptorWriteItem::Texture_SRV(0u, texture.get()))
-        || !heap.write(storage, Core::DescriptorWriteItem::Texture_UAV(0u, texture.get()))
+        || !heap.write(sampled, Core::DescriptorWriteItem::textureSrv(0u, texture.get()))
+        || !heap.write(storage, Core::DescriptorWriteItem::textureUav(0u, texture.get()))
     ){
         if(sampled.valid())
             heap.free(sampled);

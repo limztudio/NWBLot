@@ -1,4 +1,4 @@
-global_declare_static_library(nwb_ecs_scene)
+nwb_declare_static_library(nwb_ecs_scene)
 target_sources(nwb_ecs_scene PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/camera.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/lighting.cpp"

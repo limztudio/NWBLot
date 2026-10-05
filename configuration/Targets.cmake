@@ -21,7 +21,7 @@ function(nwb_apply_internal_target_defaults target)
     nwb_apply_simd_avx2(${target})
 endfunction()
 
-function(global_declare_static_library target)
+function(nwb_declare_static_library target)
     add_library(${target} STATIC)
     if(target MATCHES "^nwb_(.+)$")
         set_target_properties(${target} PROPERTIES OUTPUT_NAME "${CMAKE_MATCH_1}")

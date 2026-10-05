@@ -73,7 +73,7 @@ struct AliasPlanContext{
         Core::Buffer* const buffer = Tests::NewMetadataOnlyBuffer(
             m_testArena.arena, m_context, m_allocator, Core::BufferDesc{}.setByteSize(512u).setDebugName(identity)
         );
-        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&m_testArena.arena), AdoptRef);
+        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&m_testArena.arena), s_AdoptRef);
     }
 
     void appendDraws(MaterialPassDrawItems& draws, const usize count, const MaterialPipelineCsgMode::Enum csgMode){

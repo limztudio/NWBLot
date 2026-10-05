@@ -51,19 +51,19 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     const bool previouslyFocused = m_context.input().focus() == field.id;
     if(
         !m_context.claimState(field, state.m_popup.instanceGeneration())
-        || !ComboBehavior::Bind(state, field.id, field.declarationGeneration)
+        || !ComboBehavior::bind(state, field.id, field.declarationGeneration)
     )
         return result;
     state.m_popup.bindParent(m_context.popupToken());
     if(previouslyOpen && !state.isOpen())
-        ComboBehavior::Close(state);
+        ComboBehavior::close(state);
     const u64 queryRevision = search ? search->query().revision() : 0u;
     const u64 queryExternalRevision = search ? search->query().externalRevision() : 0u;
     const u64 queryCompositionGeneration = search ? search->query().compositionGeneration() : 0u;
     const u64 querySelectionGeneration = search ? search->query().selectionGeneration() : 0u;
     const usize queryAnchor = search ? search->query().anchor() : 0u;
     const usize queryCaret = search ? search->query().caret() : 0u;
-    if(!ComboBehavior::Reconcile(state, source)){
+    if(!ComboBehavior::reconcile(state, source)){
         m_context.fail();
         return result;
     }
@@ -77,7 +77,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         return result;
     }
     if(
-        search && (!SearchComboBehavior::Filter(*search, *searchSource) || search->query().revision() != queryRevision
+        search && (!SearchComboBehavior::filter(*search, *searchSource) || search->query().revision() != queryRevision
             || search->query().externalRevision() != queryExternalRevision
             || search->query().compositionGeneration() != queryCompositionGeneration
             || search->query().selectionGeneration() != querySelectionGeneration
@@ -87,7 +87,7 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         return result;
     }
     const IListDataSource& results = search ? searchSource->filtered() : source;
-    if(!ListBehavior::Reconcile(state.m_list, results)){
+    if(!ListBehavior::reconcile(state.m_list, results)){
         m_context.fail();
         return result;
     }

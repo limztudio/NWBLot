@@ -39,7 +39,7 @@ struct MemoryScopeId{
 };
 
 struct MemorySnapshot{
-    Name scopeName = NAME_NONE;
+    Name scopeName = s_NameNone;
     u64 frameIndex = 0u;
     u64 reservedBytes = 0u;
     u64 usedBytes = 0u;
@@ -49,7 +49,7 @@ struct MemorySnapshot{
     u64 deallocationCount = 0u;
     MemorySource::Enum source = MemorySource::ExplicitScope;
 
-    [[nodiscard]] bool valid()const{ return scopeName != NAME_NONE; }
+    [[nodiscard]] bool valid()const{ return scopeName != s_NameNone; }
 };
 
 struct MemoryDelta{
@@ -114,7 +114,7 @@ template<typename Arena>
 class MemoryRecorder final : NoCopy{
 private:
     struct ScopeKey{
-        Name name = NAME_NONE;
+        Name name = s_NameNone;
         MemorySource::Enum source = MemorySource::ExplicitScope;
     };
     struct ScopeKeyHash{
@@ -129,7 +129,7 @@ private:
     };
 
     struct ScopeRecord : NoCopy{
-        Name name = NAME_NONE;
+        Name name = s_NameNone;
         MemorySnapshot previousSnapshot;
         MemorySnapshot lastSnapshot;
         MemoryDelta lastDelta;

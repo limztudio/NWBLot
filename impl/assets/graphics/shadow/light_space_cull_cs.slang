@@ -26,11 +26,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const uint firstMeshlet = commandIndex * NWB_LIGHT_SPACE_MESHLETS_PER_DRAW;
         const uint endMeshlet = firstMeshlet
             + min(NWB_LIGHT_SPACE_MESHLETS_PER_DRAW, g_NwbLightSpacePush.meshletCount - firstMeshlet);
-        const NwbMeshletDesc first = NwbHeapMeshletDescs(g_NwbLightSpacePush.meshletDescSlot)[firstMeshlet];
-        const NwbMeshletDesc last = NwbHeapMeshletDescs(g_NwbLightSpacePush.meshletDescSlot)[endMeshlet - 1u];
+        const NwbMeshletDesc first = nwbHeapMeshletDescs(g_NwbLightSpacePush.meshletDescSlot)[firstMeshlet];
+        const NwbMeshletDesc last = nwbHeapMeshletDescs(g_NwbLightSpacePush.meshletDescSlot)[endMeshlet - 1u];
         firstIndex = first.primitiveOffset;
         indexCount = last.primitiveOffset + nwbMeshletPrimitiveCount(last) * NWB_MESHLET_TRIANGLE_INDEX_COUNT - firstIndex;
-        const ByteAddressBuffer bounds = NwbHeapRawBuffer(g_NwbLightSpacePush.meshletBoundsSlot);
+        const ByteAddressBuffer bounds = nwbHeapRawBuffer(g_NwbLightSpacePush.meshletBoundsSlot);
         float3 minimum = float3(asfloat(0x7f7fffffu));
         float3 maximum = -minimum;
         bool boundsValid = true;

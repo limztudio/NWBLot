@@ -101,14 +101,14 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
     TestArena testArena;
     Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
     Path root(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "evaluator_dependency_plan", root));
+    ASSERT_TRUE(AssetsGraphicsFixture::prepareAssetsGraphicsCaseRoot(testArena, "evaluator_dependency_plan", root));
     const Path bindRoot = root / "bind";
     const Path csgRoot = root / "csg";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(bindRoot / "unused.slangi", "// Empty bind root.\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "#include \"common.slangi\"\nvoid main(){}\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "common.slangi", "static const uint sharedValue = 1u;\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(csgRoot / "first.slangi", "#include \"../common.slangi\"\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(csgRoot / "second.slangi", "#include \"../common.slangi\"\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(bindRoot / "unused.slangi", "// Empty bind root.\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(root / "shader.slang", "#include \"common.slangi\"\nvoid main(){}\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(root / "common.slangi", "static const uint sharedValue = 1u;\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(csgRoot / "first.slangi", "#include \"../common.slangi\"\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(csgRoot / "second.slangi", "#include \"../common.slangi\"\n"));
 
     namespace Plan = Impl::AssetsGraphicsCookDetail;
     using ShaderCook = Impl::ShaderCook;
@@ -188,7 +188,7 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
             ASSERT_EQ(inherited.value().values.size(), 2u);
             EXPECT_EQ(inherited.value().values[0], "0");
             EXPECT_EQ(inherited.value().values[1], "1");
-            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(csgRoot / "second.slangi", "#include \"../common.slangi\"\n// Changed module.\n"));
+            ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(csgRoot / "second.slangi", "#include \"../common.slangi\"\n// Changed module.\n"));
             Plan::PreparedShaderPlan changedPlan(testArena.arena);
             ASSERT_TRUE(prepare(mode, changedPlan));
             ASSERT_EQ(changedPlan.preparedEntries.size(), 1u);
@@ -260,7 +260,7 @@ TEST(AssetsGraphics, CsgShapeCookRejectsGeneratedModuleIncludeCollisions){
     );
 
     Path root(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "csg_module_include_collision", root));
+    ASSERT_TRUE(AssetsGraphicsFixture::prepareAssetsGraphicsCaseRoot(testArena, "csg_module_include_collision", root));
 
     Path includeRoot(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);

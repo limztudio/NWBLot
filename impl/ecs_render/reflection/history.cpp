@@ -179,7 +179,7 @@ ReflectionHistoryControlHandle CreateReflectionHistoryControl(Core::Alloc::Globa
     return ReflectionHistoryControlHandle(
         NewArenaObject<ReflectionHistoryControl>(arena, deviceGeneration),
         ArenaRefDeleter<ReflectionHistoryControl, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

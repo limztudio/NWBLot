@@ -186,7 +186,7 @@ bool ParseTextureCookMetadata(
     if(!ValidateTextureDataFileName(nwbFilePath, dataFileName, scratchArena))
         return false;
 
-    Path dataPath(nwbFilePath.parent_path());
+    Path dataPath(nwbFilePath.parentPath());
     dataPath /= dataFileName;
     ErrorCode errorCode;
     if(!ReadBinaryFile(dataPath, outEntry.payloadBytes, errorCode)){

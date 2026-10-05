@@ -58,7 +58,7 @@ inline void DestroyPipelineResource(const VulkanContext& context, PipelineBindin
 }
 
 inline Object GetPipelineNativeHandle(const VkPipeline pipeline, const ObjectType objectType){
-    if(objectType == ObjectTypes::VK_Pipeline)
+    if(objectType == ObjectTypes::s_Pipeline)
         return Object(pipeline);
     return Object(nullptr);
 }
@@ -270,8 +270,8 @@ private:
     template<typename T>
     class FixedTable final : NoCopy{
     public:
-        [[nodiscard]] static usize RequiredBytes(usize count){
-            return count == 0u ? 0u : Alloc::PersistentArena::StructureAlignedSize(SizeOf<sizeof(T)>(count), alignof(T));
+        [[nodiscard]] static usize requiredBytes(usize count){
+            return count == 0u ? 0u : Alloc::PersistentArena::structureAlignedSize(SizeOf<sizeof(T)>(count), alignof(T));
         }
         [[nodiscard]] bool initialize(Alloc::PersistentArena& arena, usize count){
             clear();
@@ -319,7 +319,7 @@ private:
         // Keeps the allocated class authoritative while a slot is live or quarantined.
         FixedTable<u8> allocatedClasses;
 
-        [[nodiscard]] static usize RequiredBytes(u32 capacity);
+        [[nodiscard]] static usize requiredBytes(u32 capacity);
         [[nodiscard]] bool initialize(Alloc::PersistentArena& arena, u32 newCapacity);
         void clear()noexcept;
     };

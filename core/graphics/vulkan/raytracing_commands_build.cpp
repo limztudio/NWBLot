@@ -138,7 +138,7 @@ void CommandList::setRayTracingState(const RayTracingState& state){
             || &pipeline->m_device != &m_device
             || pipeline->m_pipeline == VK_NULL_HANDLE
             || pipeline->m_pipelineLayout == VK_NULL_HANDLE
-            || !m_context.extensions.KHR_ray_tracing_pipeline
+            || !m_context.extensions.khrRayTracingPipeline
             || !m_context.rayTracingPipelineFeatureEnabled
             || !m_context.deviceDispatch.vkCmdTraceRaysKHR
         )
@@ -472,7 +472,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         return;
     }
 
-    if(!m_context.extensions.KHR_acceleration_structure || !m_context.accelerationStructureFeatureEnabled)
+    if(!m_context.extensions.khrAccelerationStructure || !m_context.accelerationStructureFeatureEnabled)
         return;
 
     auto* as = accelStructResource;
@@ -539,7 +539,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
             }
             continue;
         }
-        if(!m_context.extensions.EXT_opacity_micromap || !m_context.opacityMicromapFeatureEnabled){
+        if(!m_context.extensions.extOpacityMicromap || !m_context.opacityMicromapFeatureEnabled){
             NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to build BLAS: triangle OMM geometry requires VK_EXT_opacity_micromap"));
             return;
         }

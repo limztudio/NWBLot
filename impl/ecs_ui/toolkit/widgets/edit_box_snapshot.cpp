@@ -42,7 +42,7 @@ bool EditBoxView::snapshot(const EditModel& model){
         display.assign(committed.data(), committed.size());
     const AStringView candidateText(display.data(), display.size());
     const bool admitted = model.textMode() == EditTextMode::Multiline
-        ? ValidateMultilineText(candidateText) : GraphemeSegmentation::Validate(candidateText, true)
+        ? ValidateMultilineText(candidateText) : GraphemeSegmentation::validate(candidateText, true)
     ;
     if(!admitted)
         return false;

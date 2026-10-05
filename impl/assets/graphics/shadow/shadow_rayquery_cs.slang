@@ -60,7 +60,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const int3 texel = int3(int2(pixel), 0);
 
     // Background (no geometry) is fully lit; the lighting pass ignores it anyway.
-    if(NwbHeapSampledImage2D(g_NwbShadowRqPushConstants.depthSlot).Load(texel).r >= NWB_SCENE_BACKGROUND_DEPTH){
+    if(nwbHeapSampledImage2D(g_NwbShadowRqPushConstants.depthSlot).Load(texel).r >= NWB_SCENE_BACKGROUND_DEPTH){
         for(uint slot = 0u; slot < NWB_SCENE_SHADOW_SLOT_COUNT; ++slot)
             g_NwbShadowVisibility[uint3(pixel, slot)] = float4(1.0, 1.0, 1.0, 1.0);
         return;
@@ -68,8 +68,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     // The deferred vector attachments are RGBA16F. Preserve their fetch payload as half before promoting to the
     // FP32 ray origin and normalized direction required by RayQuery.
-    const half3 worldPositionSample = half3(NwbHeapSampledImage2D(g_NwbShadowRqPushConstants.worldPositionSlot).Load(texel).xyz);
-    const half3 normalSample = half3(NwbHeapSampledImage2D(g_NwbShadowRqPushConstants.normalSlot).Load(texel).xyz);
+    const half3 worldPositionSample = half3(nwbHeapSampledImage2D(g_NwbShadowRqPushConstants.worldPositionSlot).Load(texel).xyz);
+    const half3 normalSample = half3(nwbHeapSampledImage2D(g_NwbShadowRqPushConstants.normalSlot).Load(texel).xyz);
     const float3 worldPosition = float3(worldPositionSample);
     const float3 normal = normalize(float3(normalSample) * 2.0 - 1.0);
 

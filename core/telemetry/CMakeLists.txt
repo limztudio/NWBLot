@@ -1,4 +1,4 @@
-global_declare_static_library(nwb_telemetry)
+nwb_declare_static_library(nwb_telemetry)
 target_sources(nwb_telemetry PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/codec.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/diagnostic.cpp"

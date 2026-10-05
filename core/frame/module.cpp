@@ -38,7 +38,7 @@ inline constexpr Name s_ProjectUpdateCpuTimingScope("frame.project_update");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Frame::ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY){
+void Frame::applyPointerScale(void* userData, f32 scaleX, f32 scaleY){
     auto* frame = static_cast<Frame*>(userData);
     GLB_ASSERT(frame);
     frame->m_input.setMousePositionScale(scaleX, scaleY);
@@ -70,7 +70,7 @@ Frame::Frame(void* inst, u16 width, u16 height, const CpuTaskSchedulerConfig& cp
     frameData.width() = width;
     frameData.height() = height;
     setupPlatform(inst);
-    m_graphics.setPointerScaleChangedCallback(&Frame::ApplyPointerScale, this);
+    m_graphics.setPointerScaleChangedCallback(&Frame::applyPointerScale, this);
     m_projectUpdateTimingScope = m_perfSession.cpuTimingSink().registerScope(__hidden_frame::s_ProjectUpdateCpuTimingScope);
 }
 Frame::~Frame()noexcept(false){
@@ -142,7 +142,7 @@ void Frame::setPerfCapture(const Perf::CaptureOptions& options){
 void Frame::setTelemetryCapture(const Telemetry::CaptureOptions& options){
     m_telemetrySession.setCaptureOptions(options);
     if(options.perfEnabled())
-        setPerfCapture(Perf::CaptureOptions::All());
+        setPerfCapture(Perf::CaptureOptions::all());
 }
 void Frame::setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData){
     m_telemetryUploadCallback = callback;

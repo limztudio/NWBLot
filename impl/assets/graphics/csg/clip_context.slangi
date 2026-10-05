@@ -37,7 +37,7 @@ struct NwbCsgClipContextSlots{
 ConstantBuffer<NwbCsgClipContextSlots, Std140DataLayout> g_NwbHeapCsgClipContextSlots[];
 #pragma warning(pop)
 
-ConstantBuffer<NwbCsgClipContextSlots, Std140DataLayout> NwbHeapCsgClipContextSlots(const uint slot){
+ConstantBuffer<NwbCsgClipContextSlots, Std140DataLayout> nwbHeapCsgClipContextSlots(const uint slot){
     return g_NwbHeapCsgClipContextSlots[slot];
 }
 

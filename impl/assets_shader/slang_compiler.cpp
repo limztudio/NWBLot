@@ -209,7 +209,7 @@ private:
 
 static bool BuildCompilerOverlayPath(const Path& overlayRoot, const Path& absolutePath, Path& outPath){
     outPath.clear();
-    if(!absolutePath.is_absolute())
+    if(!absolutePath.isAbsolute())
         return false;
 
     const auto rootIt = absolutePath.begin();
@@ -217,7 +217,7 @@ static bool BuildCompilerOverlayPath(const Path& overlayRoot, const Path& absolu
         return false;
 
     const Path rootPath(absolutePath.arena(), (*rootIt).native());
-    const Path relativePath = absolutePath.lexically_relative(rootPath);
+    const Path relativePath = absolutePath.lexicallyRelative(rootPath);
     if(relativePath.empty())
         return false;
 
@@ -260,12 +260,12 @@ static void RewriteAbsoluteCompilerIncludes(
         }
         else{
             Path includePath(sourcePath.arena(), includeName);
-            if(!includePath.is_absolute()){
+            if(!includePath.isAbsolute()){
                 rewrittenSource.append(line.data(), line.size());
             }
             else{
                 ErrorCode errorCode;
-                const Path absoluteIncludePath = AbsolutePath(includePath, errorCode).lexically_normal();
+                const Path absoluteIncludePath = AbsolutePath(includePath, errorCode).lexicallyNormal();
                 Path overlayIncludePath(sourcePath.arena());
                 if(
                     errorCode
@@ -362,9 +362,9 @@ static bool PrepareBomStrippedCompilerInputs(
         }
 
         errorCode.clear();
-        if(!EnsureDirectories(overlayDependencyPath.parent_path(), errorCode)){
+        if(!EnsureDirectories(overlayDependencyPath.parentPath(), errorCode)){
             NWB_LOGGER_ERROR(GLB_TEXT("ShaderCook: failed to create temporary compiler source parent '{}' : {}")
-                , PathToString<tchar>(overlayDependencyPath.parent_path())
+                , PathToString<tchar>(overlayDependencyPath.parentPath())
                 , StringConvert(errorCode.message())
             );
             return false;
@@ -386,7 +386,7 @@ static bool PrepareBomStrippedCompilerInputs(
     }
 
     ErrorCode sourcePathError;
-    const Path absoluteSourcePath = AbsolutePath(request.sourcePath, sourcePathError).lexically_normal();
+    const Path absoluteSourcePath = AbsolutePath(request.sourcePath, sourcePathError).lexicallyNormal();
     if(sourcePathError || !IsCompilerDependency(request.dependencies, absoluteSourcePath) || !BuildCompilerOverlayPath(overlayRoot, absoluteSourcePath, outSourcePath)){
         NWB_LOGGER_ERROR(GLB_TEXT("ShaderCook: failed to map source '{}' into the temporary compiler source directory")
             , PathToString<tchar>(request.sourcePath)
@@ -402,7 +402,7 @@ static bool PrepareBomStrippedCompilerInputs(
     outIncludeDirectories.reserve(request.includeDirectories.size() * 2u);
     for(const Path& includeDirectory : request.includeDirectories){
         errorCode.clear();
-        const Path absoluteIncludeDirectory = AbsolutePath(includeDirectory, errorCode).lexically_normal();
+        const Path absoluteIncludeDirectory = AbsolutePath(includeDirectory, errorCode).lexicallyNormal();
         Path overlayIncludeDirectory(includeDirectory.arena());
         if(errorCode || !BuildCompilerOverlayPath(overlayRoot, absoluteIncludeDirectory, overlayIncludeDirectory)){
             NWB_LOGGER_ERROR(GLB_TEXT("ShaderCook: failed to map include directory '{}' into the temporary compiler source directory")
@@ -485,7 +485,7 @@ bool SlangShaderCompiler::resolveIncludeFile(const AStringView includeName, cons
     ErrorCode errorCode;
 
     if(kind == ShaderIncludeKind::Relative){
-        const Path localCandidate = (sourceDirectory / includeName).lexically_normal();
+        const Path localCandidate = (sourceDirectory / includeName).lexicallyNormal();
         errorCode.clear();
         if(IsRegularFile(localCandidate, errorCode)){
             outPath = localCandidate;
@@ -501,7 +501,7 @@ bool SlangShaderCompiler::resolveIncludeFile(const AStringView includeName, cons
     }
 
     for(const Path& includeDirectory : includeDirectories){
-        const Path includeCandidate = (includeDirectory / includeName).lexically_normal();
+        const Path includeCandidate = (includeDirectory / includeName).lexicallyNormal();
         errorCode.clear();
         if(IsRegularFile(includeCandidate, errorCode)){
             outPath = includeCandidate;

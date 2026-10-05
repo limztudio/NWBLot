@@ -53,7 +53,7 @@ struct DescriptorBufferStartupPrerequisites{
     const VulkanContext& context
 )noexcept{
     return {
-        .descriptorBufferExtensionEnabled = context.extensions.EXT_descriptor_buffer,
+        .descriptorBufferExtensionEnabled = context.extensions.extDescriptorBuffer,
         .bufferDeviceAddressFeatureEnabled = context.extensions.bufferDeviceAddress,
         .getBufferDeviceAddressAvailable = context.deviceDispatch.vkGetBufferDeviceAddress != nullptr,
         .getDescriptorAvailable = context.deviceDispatch.vkGetDescriptorEXT != nullptr,

@@ -1,4 +1,4 @@
-global_declare_static_library(nwb_font_builder_bake)
+nwb_declare_static_library(nwb_font_builder_bake)
 target_sources(nwb_font_builder_bake PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/bake.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/font_source.cpp"

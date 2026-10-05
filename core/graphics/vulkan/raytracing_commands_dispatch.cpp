@@ -70,7 +70,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         m_context.device == VK_NULL_HANDLE
         || m_context.deviceGeneration == 0u
         || m_device.getDeviceGeneration() != m_context.deviceGeneration
-        || !m_context.extensions.KHR_ray_tracing_pipeline
+        || !m_context.extensions.khrRayTracingPipeline
         || !m_context.extensions.bufferDeviceAddress
         || !m_context.rayTracingPipelineFeatureEnabled
         || !m_context.deviceDispatch.vkCmdTraceRaysKHR

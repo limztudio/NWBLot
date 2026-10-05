@@ -176,7 +176,7 @@ OpacityMicromap::~OpacityMicromap(){
 RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOpacityMicromapDesc& desc){
     VkResult res = VK_SUCCESS;
 
-    if(!m_context.extensions.EXT_opacity_micromap || !m_context.opacityMicromapFeatureEnabled){
+    if(!m_context.extensions.extOpacityMicromap || !m_context.opacityMicromapFeatureEnabled){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Enabled opacity micromap feature support is required to create opacity micromaps."));
         return nullptr;
     }
@@ -261,13 +261,13 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
         return nullptr;
     }
 
-    return RayTracingOpacityMicromapHandle(om, RayTracingOpacityMicromapHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return RayTracingOpacityMicromapHandle(om, RayTracingOpacityMicromapHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicromapResource, const RayTracingOpacityMicromapDesc& ommDesc){
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, GLB_TEXT("build opacity micromap")))
         return;
-    if(!m_context.extensions.EXT_opacity_micromap || !m_context.opacityMicromapFeatureEnabled){
+    if(!m_context.extensions.extOpacityMicromap || !m_context.opacityMicromapFeatureEnabled){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to build opacity micromap: enabled opacity micromap feature support is unavailable"));
         return;
     }

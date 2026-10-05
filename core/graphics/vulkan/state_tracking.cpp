@@ -235,7 +235,7 @@ void StateTracker::appendKeepInitialStateBarriers(
             TextureSubresourceSet(key.mipLevel, 1u, key.arraySlice, 1u),
             currentState,
             desc.initialState,
-            m_context.extensions.KHR_ray_tracing_pipeline
+            m_context.extensions.khrRayTracingPipeline
         ));
         it.value() = desc.initialState;
         commandBuffer.appendRetainedTextureStateCommit(*texture, key.mipLevel, key.arraySlice);
@@ -254,7 +254,7 @@ void StateTracker::appendKeepInitialStateBarriers(
                     entry.range,
                     entry.state,
                     desc.initialState,
-                    m_context.extensions.KHR_ray_tracing_pipeline
+                    m_context.extensions.khrRayTracingPipeline
                 ));
                 entry.state = desc.initialState;
             }

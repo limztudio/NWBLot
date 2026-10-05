@@ -72,7 +72,7 @@ bool Builder::slider(const AStringView stableKey, SliderState& state, const Slid
     frame->m_snapshot = state.snapshot();
     frame->m_widget = *widget;
     if(
-        !SliderBehavior::Validate(options) || !SliderLayout::Measure(options, frame->m_style, frame->m_metrics)
+        !SliderBehavior::validate(options) || !SliderLayout::measure(options, frame->m_style, frame->m_metrics)
         || !prepareSlider(*frame)
     ){
         m_context.fail();
@@ -116,7 +116,7 @@ bool Builder::prepareSlider(SliderFrame& frame){
         frame.m_style.thumbExtent.x = Max(frame.m_style.thumbExtent.x, minimum.x);
         frame.m_style.thumbExtent.y = Max(frame.m_style.thumbExtent.y, minimum.y);
     }
-    if(!SliderLayout::Measure(frame.m_options, frame.m_style, frame.m_metrics))
+    if(!SliderLayout::measure(frame.m_options, frame.m_style, frame.m_metrics))
         return false;
     const f64 width = static_cast<f64>(frame.m_metrics.padding.left) + frame.m_metrics.padding.right
         + frame.m_metrics.thumbExtent.x + trackMinimum.x;

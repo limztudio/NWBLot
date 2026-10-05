@@ -84,29 +84,29 @@ public:
     static constexpr AStringView s_TangentsFieldNameView = "tangents";
     static constexpr AStringView s_Uv0FieldNameView = "uv0";
     static constexpr AStringView s_ColorsFieldNameView = "colors";
-    static bool BuildDiscoveredNwbFile(
+    static bool buildDiscoveredNwbFile(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     DiscoveredNwbFile& outFile
     );
-    static bool AccumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize& inOutCount);
-    static bool CountFlattenedValueLeaves(const Core::Metascript::Value& value, usize& outCount);
-    static ScratchString MakeIndexedLabel(Core::Alloc::ScratchArena& arena, const AStringView baseLabel, const usize index);
-    static const Core::Metascript::Value* FindRequiredMetadataListField(
+    static bool accumulateFlattenedValueLeafCount(const Core::Metascript::Value& value, usize& inOutCount);
+    static bool countFlattenedValueLeaves(const Core::Metascript::Value& value, usize& outCount);
+    static ScratchString makeIndexedLabel(Core::Alloc::ScratchArena& arena, const AStringView baseLabel, const usize index);
+    static const Core::Metascript::Value* findRequiredMetadataListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& map,
     const TStringView metaKind,
     const AStringView fieldName);
-    static MetadataF32ValueFailure::Enum ValidateMetadataFiniteF32Value(const Core::Metascript::Value& value, f32& outValue);
-    static void LogMetadataFiniteF32ValueFailure(
+    static MetadataF32ValueFailure::Enum validateMetadataFiniteF32Value(const Core::Metascript::Value& value, f32& outValue);
+    static void logMetadataFiniteF32ValueFailure(
     const Path& nwbFilePath,
     const TStringView metaKind,
     const AStringView label,
     const MetadataF32ValueFailure::Enum failure
     );
     template<usize ComponentCount>
-    static bool ParseMetadataF32TupleWithLabel(
+    static bool parseMetadataF32TupleWithLabel(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
     const TStringView metaKind,
@@ -115,7 +115,7 @@ public:
     Core::Alloc::ScratchArena& scratchArena
     );
     template<usize ComponentCount>
-    static bool ParseMetadataF32TupleListElement(
+    static bool parseMetadataF32TupleListElement(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
     const TStringView metaKind,
@@ -125,7 +125,7 @@ public:
     Core::Alloc::ScratchArena& scratchArena
     );
     template<typename ElementT, usize ComponentCount, typename ElementVectorT>
-    static bool ParseMetadataFloatListField(
+    static bool parseMetadataFloatListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const TStringView metaKind,
@@ -133,14 +133,14 @@ public:
     ElementVectorT& outValues,
     Core::Alloc::ScratchArena& scratchArena
     );
-    static MetadataU32ValueFailure::Enum ValidateMetadataU32Value(const Core::Metascript::Value& value, u32& outValue);
-    static void LogMetadataU32ValueFailure(
+    static MetadataU32ValueFailure::Enum validateMetadataU32Value(const Core::Metascript::Value& value, u32& outValue);
+    static void logMetadataU32ValueFailure(
     const Path& nwbFilePath,
     const TStringView metaKind,
     const AStringView label,
     const MetadataU32ValueFailure::Enum failure
     );
-    static bool ParseMetadataU32Value(
+    static bool parseMetadataU32Value(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
     const TStringView metaKind,
@@ -148,7 +148,7 @@ public:
     u32& outValue
     );
     template<typename IndexVectorT>
-    static bool FillMetadataIndexRecursive(
+    static bool fillMetadataIndexRecursive(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
     const TStringView metaKind,
@@ -157,7 +157,7 @@ public:
     Core::Alloc::ScratchArena& scratchArena
     );
     template<typename IndexVectorT>
-    static bool ParseMetadataIndexField(
+    static bool parseMetadataIndexField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const TStringView metaKind,
@@ -175,7 +175,7 @@ public:
 
 
 template<usize ComponentCount>
-bool MeshCookMetadata::ParseMetadataF32TupleWithLabel(
+bool MeshCookMetadata::parseMetadataF32TupleWithLabel(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
     const TStringView metaKind,
@@ -195,12 +195,12 @@ bool MeshCookMetadata::ParseMetadataF32TupleWithLabel(
 
     const auto& list = value.asList();
     for(usize i = 0u; i < ComponentCount; ++i){
-        const MetadataF32ValueFailure::Enum failure = ValidateMetadataFiniteF32Value(list[i], outValues[i]);
+        const MetadataF32ValueFailure::Enum failure = validateMetadataFiniteF32Value(list[i], outValues[i]);
         if(failure == MetadataF32ValueFailure::None)
             continue;
 
-        const ScratchString componentLabel = MakeIndexedLabel(scratchArena, label, i);
-        LogMetadataFiniteF32ValueFailure(nwbFilePath, metaKind, componentLabel, failure);
+        const ScratchString componentLabel = makeIndexedLabel(scratchArena, label, i);
+        logMetadataFiniteF32ValueFailure(nwbFilePath, metaKind, componentLabel, failure);
         return false;
     }
     return true;
@@ -208,7 +208,7 @@ bool MeshCookMetadata::ParseMetadataF32TupleWithLabel(
 
 
 template<usize ComponentCount>
-bool MeshCookMetadata::ParseMetadataF32TupleListElement(
+bool MeshCookMetadata::parseMetadataF32TupleListElement(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
     const TStringView metaKind,
@@ -217,13 +217,13 @@ bool MeshCookMetadata::ParseMetadataF32TupleListElement(
     f32 (&outValues)[ComponentCount],
     Core::Alloc::ScratchArena& scratchArena
 ){
-    const ScratchString label = MakeIndexedLabel(scratchArena, fieldName, elementIndex);
-    return ParseMetadataF32TupleWithLabel(nwbFilePath, value, metaKind, label, outValues, scratchArena);
+    const ScratchString label = makeIndexedLabel(scratchArena, fieldName, elementIndex);
+    return parseMetadataF32TupleWithLabel(nwbFilePath, value, metaKind, label, outValues, scratchArena);
 }
 
 
 template<typename ElementT, usize ComponentCount, typename ElementVectorT>
-bool MeshCookMetadata::ParseMetadataFloatListField(
+bool MeshCookMetadata::parseMetadataFloatListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const TStringView metaKind,
@@ -233,7 +233,7 @@ bool MeshCookMetadata::ParseMetadataFloatListField(
 ){
     outValues.clear();
 
-    const Core::Metascript::Value* field = FindRequiredMetadataListField(nwbFilePath, asset, metaKind, fieldName);
+    const Core::Metascript::Value* field = findRequiredMetadataListField(nwbFilePath, asset, metaKind, fieldName);
     if(!field)
         return false;
 
@@ -241,7 +241,7 @@ bool MeshCookMetadata::ParseMetadataFloatListField(
     outValues.reserve(list.size());
     for(usize i = 0u; i < list.size(); ++i){
         alignas(s_MetadataTupleAlignment) f32 tuple[ComponentCount] = {};
-        if(!ParseMetadataF32TupleListElement(nwbFilePath, list[i], metaKind, fieldName, i, tuple, scratchArena)){
+        if(!parseMetadataF32TupleListElement(nwbFilePath, list[i], metaKind, fieldName, i, tuple, scratchArena)){
             outValues.clear();
             return false;
         }
@@ -270,7 +270,7 @@ bool MeshCookMetadata::ParseMetadataFloatListField(
 
 
 template<typename IndexVectorT>
-bool MeshCookMetadata::FillMetadataIndexRecursive(
+bool MeshCookMetadata::fillMetadataIndexRecursive(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
     const TStringView metaKind,
@@ -281,15 +281,15 @@ bool MeshCookMetadata::FillMetadataIndexRecursive(
     if(value.isList()){
         const auto& list = value.asList();
         for(usize i = 0u; i < list.size(); ++i){
-            const ScratchString childLabel = MakeIndexedLabel(scratchArena, label, i);
-            if(!FillMetadataIndexRecursive(nwbFilePath, list[i], metaKind, childLabel, outIndices, scratchArena))
+            const ScratchString childLabel = makeIndexedLabel(scratchArena, label, i);
+            if(!fillMetadataIndexRecursive(nwbFilePath, list[i], metaKind, childLabel, outIndices, scratchArena))
                 return false;
         }
         return true;
     }
 
     u32 index = 0;
-    if(!ParseMetadataU32Value(nwbFilePath, value, metaKind, label, index))
+    if(!parseMetadataU32Value(nwbFilePath, value, metaKind, label, index))
         return false;
 
     using IndexValue = typename IndexVectorT::value_type;
@@ -299,7 +299,7 @@ bool MeshCookMetadata::FillMetadataIndexRecursive(
 
 
 template<typename IndexVectorT>
-bool MeshCookMetadata::ParseMetadataIndexField(
+bool MeshCookMetadata::parseMetadataIndexField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const TStringView metaKind,
@@ -308,12 +308,12 @@ bool MeshCookMetadata::ParseMetadataIndexField(
 ){
     outIndices.clear();
 
-    const Core::Metascript::Value* field = FindRequiredMetadataListField(nwbFilePath, asset, metaKind, MeshCookMetadata::s_IndicesFieldNameView);
+    const Core::Metascript::Value* field = findRequiredMetadataListField(nwbFilePath, asset, metaKind, MeshCookMetadata::s_IndicesFieldNameView);
     if(!field)
         return false;
 
     usize indexCount = 0u;
-    if(!CountFlattenedValueLeaves(*field, indexCount)){
+    if(!countFlattenedValueLeaves(*field, indexCount)){
         NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': 'indices' scalar count overflows")
             , metaKind
             , PathToString<tchar>(nwbFilePath)
@@ -322,7 +322,7 @@ bool MeshCookMetadata::ParseMetadataIndexField(
     }
 
     outIndices.reserve(indexCount);
-    if(!FillMetadataIndexRecursive(nwbFilePath, *field, metaKind, MeshCookMetadata::s_IndicesFieldNameView, outIndices, scratchArena)){
+    if(!fillMetadataIndexRecursive(nwbFilePath, *field, metaKind, MeshCookMetadata::s_IndicesFieldNameView, outIndices, scratchArena)){
         outIndices.clear();
         return false;
     }

@@ -134,9 +134,9 @@ bool EmitMaterialPixelShadersImpl(
         relativeFile += ".slang";
         const Path outputPath = generatedRoot / AStringView(relativeFile);
         errorCode.clear();
-        if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
+        if(!EnsureDirectories(outputPath.parentPath(), errorCode)){
             NWB_LOGGER_ERROR(GLB_TEXT("Material pixel shader generation: failed to create generated parent '{}': {}")
-                , PathToString<tchar>(outputPath.parent_path())
+                , PathToString<tchar>(outputPath.parentPath())
                 , StringConvert(errorCode.message())
             );
             return false;
@@ -235,10 +235,10 @@ static bool EmitMaterialAvboitPassPixelShadersImpl(
         relativeFile += ".slang";
         const Path outputPath = generatedRoot / AStringView(relativeFile);
         errorCode.clear();
-        if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
+        if(!EnsureDirectories(outputPath.parentPath(), errorCode)){
             NWB_LOGGER_ERROR(GLB_TEXT("Material AVBOIT {} pixel shader generation: failed to create generated parent '{}': {}")
                 , StringConvert(passLabel)
-                , PathToString<tchar>(outputPath.parent_path())
+                , PathToString<tchar>(outputPath.parentPath())
                 , StringConvert(errorCode.message())
             );
             return false;

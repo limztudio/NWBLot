@@ -27,7 +27,7 @@ namespace __hidden_device_query{
 
 [[nodiscard]] VulkanDetail::RayTracingCapabilityInputs CollectRayTracingCapabilityInputs(const VulkanContext& context)noexcept{
     VulkanDetail::RayTracingCapabilityInputs inputs;
-    inputs.accelerationStructureExtensionEnabled = context.extensions.KHR_acceleration_structure;
+    inputs.accelerationStructureExtensionEnabled = context.extensions.khrAccelerationStructure;
     inputs.accelerationStructureFeatureEnabled = context.accelerationStructureFeatureEnabled;
     inputs.createAccelerationStructureEntryPointAvailable = context.deviceDispatch.vkCreateAccelerationStructureKHR != nullptr;
     inputs.destroyAccelerationStructureEntryPointAvailable = context.deviceDispatch.vkDestroyAccelerationStructureKHR != nullptr;
@@ -35,15 +35,15 @@ namespace __hidden_device_query{
     inputs.getAccelerationStructureDeviceAddressEntryPointAvailable = context.deviceDispatch.vkGetAccelerationStructureDeviceAddressKHR != nullptr;
     inputs.cmdBuildAccelerationStructuresEntryPointAvailable = context.deviceDispatch.vkCmdBuildAccelerationStructuresKHR != nullptr;
 
-    inputs.rayTracingPipelineExtensionEnabled = context.extensions.KHR_ray_tracing_pipeline;
+    inputs.rayTracingPipelineExtensionEnabled = context.extensions.khrRayTracingPipeline;
     inputs.rayTracingPipelineFeatureEnabled = context.rayTracingPipelineFeatureEnabled;
     inputs.createRayTracingPipelinesEntryPointAvailable = context.deviceDispatch.vkCreateRayTracingPipelinesKHR != nullptr;
     inputs.getRayTracingShaderGroupHandlesEntryPointAvailable = context.deviceDispatch.vkGetRayTracingShaderGroupHandlesKHR != nullptr;
     inputs.cmdTraceRaysEntryPointAvailable = context.deviceDispatch.vkCmdTraceRaysKHR != nullptr;
 
-    inputs.opacityMicromapExtensionEnabled = context.extensions.EXT_opacity_micromap;
+    inputs.opacityMicromapExtensionEnabled = context.extensions.extOpacityMicromap;
     inputs.opacityMicromapFeatureEnabled = context.opacityMicromapFeatureEnabled;
-    inputs.synchronization2ExtensionEnabled = context.extensions.KHR_synchronization2;
+    inputs.synchronization2ExtensionEnabled = context.extensions.khrSynchronization2;
     inputs.createMicromapEntryPointAvailable = context.deviceDispatch.vkCreateMicromapEXT != nullptr;
     inputs.destroyMicromapEntryPointAvailable = context.deviceDispatch.vkDestroyMicromapEXT != nullptr;
     inputs.getMicromapBuildSizesEntryPointAvailable = context.deviceDispatch.vkGetMicromapBuildSizesEXT != nullptr;
@@ -74,24 +74,24 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
         return VulkanDetail::SupportsRayTracingPipeline(rayTracingCapabilities);
     case Feature::RayQuery:
         return
-            m_context.extensions.KHR_ray_query
+            m_context.extensions.khrRayQuery
             && m_context.rayQueryFeatureEnabled
             && VulkanDetail::SupportsRayTracingAccelStruct(rayTracingCapabilities)
         ;
     case Feature::ShaderExecutionReordering:
         return
-            (m_context.extensions.EXT_ray_tracing_invocation_reorder && m_context.rayTracingInvocationReorderExtFeatureEnabled)
-            || (m_context.extensions.NV_ray_tracing_invocation_reorder && m_context.rayTracingInvocationReorderFeatureEnabled)
+            (m_context.extensions.extRayTracingInvocationReorder && m_context.rayTracingInvocationReorderExtFeatureEnabled)
+            || (m_context.extensions.nvRayTracingInvocationReorder && m_context.rayTracingInvocationReorderFeatureEnabled)
         ;
     case Feature::Spheres:
         return
-            m_context.extensions.NV_ray_tracing_linear_swept_spheres
+            m_context.extensions.nvRayTracingLinearSweptSpheres
             && m_context.rayTracingLinearSweptSpheresFeatures.spheres == VK_TRUE
             && queryFeatureSupport(Feature::RayTracingPipeline)
         ;
     case Feature::LinearSweptSpheres:
         return
-            m_context.extensions.NV_ray_tracing_linear_swept_spheres
+            m_context.extensions.nvRayTracingLinearSweptSpheres
             && m_context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres == VK_TRUE
             && queryFeatureSupport(Feature::RayTracingPipeline)
         ;
@@ -99,7 +99,7 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
         return VulkanDetail::SupportsRayTracingOpacityMicromap(rayTracingCapabilities);
     case Feature::RayTracingClusters:
         return
-            m_context.extensions.NV_cluster_acceleration_structure
+            m_context.extensions.nvClusterAccelerationStructure
             && m_context.clusterAccelerationStructureFeatureEnabled
             && VulkanDetail::SupportsRayTracingPipeline(rayTracingCapabilities)
             && m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV
@@ -107,7 +107,7 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
         ;
     case Feature::CooperativeVectorInferencing:
         return
-            m_context.extensions.NV_cooperative_vector
+            m_context.extensions.nvCooperativeVector
             && m_context.coopVecFeatures.cooperativeVector == VK_TRUE
             && m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV
             && m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV
@@ -115,7 +115,7 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
         ;
     case Feature::CooperativeVectorTraining:
         return
-            m_context.extensions.NV_cooperative_vector
+            m_context.extensions.nvCooperativeVector
             && m_context.coopVecFeatures.cooperativeVector == VK_TRUE
             && m_context.coopVecFeatures.cooperativeVectorTraining == VK_TRUE
             && m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV
@@ -123,9 +123,9 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
             && m_context.deviceDispatch.vkCmdConvertCooperativeVectorMatrixNV
         ;
     case Feature::Meshlets:
-        return m_context.extensions.EXT_mesh_shader && m_context.meshShaderFeatures.meshShader == VK_TRUE && m_context.deviceDispatch.vkCmdDrawMeshTasksEXT;
+        return m_context.extensions.extMeshShader && m_context.meshShaderFeatures.meshShader == VK_TRUE && m_context.deviceDispatch.vkCmdDrawMeshTasksEXT;
     case Feature::VariableRateShading:
-        return m_context.extensions.KHR_fragment_shading_rate;
+        return m_context.extensions.khrFragmentShadingRate;
     case Feature::WaveLaneCountMinMax:{
         auto* out = static_cast<WaveLaneCountMinMaxFeatureInfo*>(featureInfo);
         if(out && featureInfoSize >= sizeof(WaveLaneCountMinMaxFeatureInfo)){
@@ -282,7 +282,7 @@ Object Device::getNativeQueue(ObjectType objectType, CommandQueue::Enum queue){
 }
 
 Object Device::getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue){
-    if(objectType == ObjectTypes::VK_Queue){
+    if(objectType == ObjectTypes::s_Queue){
         Queue* q = getQueue(queue);
         return q ? Object(q->m_nativeQueue.queue) : Object(nullptr);
     }
@@ -312,7 +312,7 @@ Heap::~Heap(){
 }
 
 Object Heap::getNativeHandle(ObjectType objectType){
-    if(objectType == ObjectTypes::VK_DeviceMemory)
+    if(objectType == ObjectTypes::s_DeviceMemory)
         return Object(m_memory);
     return Object(nullptr);
 }
@@ -364,7 +364,7 @@ HeapHandle Device::createHeap(const HeapDesc& d){
         return nullptr;
     }
 
-    return HeapHandle(heap, HeapHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return HeapHandle(heap, HeapHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 
@@ -376,7 +376,7 @@ CooperativeVectorDeviceFeatures Device::queryCoopVecFeatures(){
 
     CooperativeVectorDeviceFeatures output(m_context.objectArena);
 
-    if(!m_context.extensions.NV_cooperative_vector || !m_context.coopVecFeatures.cooperativeVector)
+    if(!m_context.extensions.nvCooperativeVector || !m_context.coopVecFeatures.cooperativeVector)
         return output;
 
     uint32_t propertyCount = 0;
@@ -444,7 +444,7 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
     )
         return 0;
     if(
-        !m_context.extensions.NV_cooperative_vector
+        !m_context.extensions.nvCooperativeVector
         || m_context.coopVecFeatures.cooperativeVector != VK_TRUE
         || !m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV
         || !m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV

@@ -52,7 +52,7 @@ void nwbMeshBuildMeshletPositions(
     ){
         const NwbMeshletPositionStreamRef positionRef = nwbMeshLoadMeshletPositionRef(meshlet, decodeInfo, localPositionIndex);
         const float3 objectPosition = nwbMeshLoadPosition(
-            NwbHeapMeshPositions(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_POSITION))[positionRef.position]
+            nwbHeapMeshPositions(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_POSITION))[positionRef.position]
         );
         const float3 worldPosition = nwbMeshTransformPosition(objectPosition, instance);
         g_NwbMeshletSourcePositions[localPositionIndex] = objectPosition;

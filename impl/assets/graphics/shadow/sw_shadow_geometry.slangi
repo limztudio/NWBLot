@@ -19,7 +19,7 @@
 #include "instance_material.slangi"
 
 // Global descriptor-heap accessors for per-mesh geometry. The material record carries the slots; this include provides
-// NwbHeapBvhNodes() for nodes and NwbHeapRawBuffer() for positions, indices, and attributes.
+// nwbHeapBvhNodes() for nodes and nwbHeapRawBuffer() for positions, indices, and attributes.
 #include "../bindless/bindless_heap_bvh.slangi"
 #include "../bindless/bindless_heap_rt.slangi"
 
@@ -38,7 +38,7 @@
 StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> g_NwbHeapSwShadowSceneInstanceBuffers[];
 #pragma warning(pop)
 
-StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> NwbHeapSwShadowSceneInstances(const uint slot){
+StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> nwbHeapSwShadowSceneInstances(const uint slot){
     return g_NwbHeapSwShadowSceneInstanceBuffers[slot];
 }
 
@@ -56,10 +56,10 @@ float3 nwbSwShadowTransformNormal(const NwbSwBvhInstance instance, const float3 
 // Unpacks a per-triangle-corner shadow-trace attribute (AttribGpu) from a per-mesh attribute byte buffer: Half4U
 // normal (two packed-half uints) at +0, Float2U uv0 (two floats) at +8. Returns object-space normal in .xyz, uv0.
 NwbRayTraceVertexAttrib nwbSwShadowLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
-    // attributeSlot is a non-uniform global heap slot; NwbHeapRawBuffer() applies the required decoration per load.
+    // attributeSlot is a non-uniform global heap slot; nwbHeapRawBuffer() applies the required decoration per load.
     const uint base = attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES;
-    const uint2 packedNormal = NwbHeapRawBuffer(attributeSlot).Load2(base);
-    const uint2 packedUv0 = NwbHeapRawBuffer(attributeSlot).Load2(base + NWB_RAYTRACE_VERTEX_ATTRIBUTE_UV0_BYTE_OFFSET);
+    const uint2 packedNormal = nwbHeapRawBuffer(attributeSlot).Load2(base);
+    const uint2 packedUv0 = nwbHeapRawBuffer(attributeSlot).Load2(base + NWB_RAYTRACE_VERTEX_ATTRIBUTE_UV0_BYTE_OFFSET);
     return nwbRayTraceDecodeVertexAttrib(uint4(packedNormal.x, packedNormal.y, packedUv0.x, packedUv0.y));
 }
 

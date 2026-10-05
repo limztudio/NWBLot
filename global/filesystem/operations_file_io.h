@@ -49,7 +49,7 @@ template<typename ArenaT>
         return false;
 
     Path<ArenaT> candidate(outPath.arena(), relativeOrAbsolute);
-    if(!candidate.is_absolute())
+    if(!candidate.isAbsolute())
         candidate = baseDirectory / candidate;
 
     const Path<ArenaT> absolutePath = AbsolutePath(candidate, outError);

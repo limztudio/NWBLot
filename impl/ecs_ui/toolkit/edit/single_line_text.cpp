@@ -55,7 +55,7 @@ static bool ReadStep(const AStringView source, const usize offset, TextStep& ste
 
 EditTextStatus::Enum NormalizeSingleLineText(
     const AStringView source, AString<Core::Alloc::GlobalArena>& output, const usize maxBytes){
-    if(!GraphemeSegmentation::Validate(source, false))
+    if(!GraphemeSegmentation::validate(source, false))
         return EditTextStatus::InvalidText;
     usize normalizedBytes = 0u;
     usize offset = 0u;

@@ -27,7 +27,7 @@ NWB_IMPL_BEGIN
 
 
 struct TextureCookEntry{
-    Name virtualPath = NAME_NONE;
+    Name virtualPath = s_NameNone;
     u32 width = 0u;
     u32 height = 0u;
     u32 depth = 1u;

@@ -26,7 +26,7 @@ struct FrameGraphNodeHandle{
 };
 
 struct FrameGraphPendingNameEdge{
-    Name toName = NAME_NONE;
+    Name toName = s_NameNone;
     u32 fromNodeIndex = 0u;
     FrameGraphEdgeKind::Enum kind = FrameGraphEdgeKind::Unknown;
     u8 flags = 0u;

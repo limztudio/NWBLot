@@ -76,11 +76,11 @@ bool UiRadioGroupSmokeSource::findEnabled(const u64 start, const bool reverseVal
 StringView UiRadioGroupSmokeSource::text(const u64 index)const{
     invalidateText();
     ++m_labelReads;
-    constexpr StringView labels[]{ "Alpha", "Beta", "Gamma (disabled)", "Delta", "Epsilon" };
+    constexpr StringView s_Labels[]{ "Alpha", "Beta", "Gamma (disabled)", "Delta", "Epsilon" };
     const u64 choice = rawKey(index);
     if(choice == 0u)
         return {};
-    const StringView label = labels[choice / 10u - 1u];
+    const StringView label = s_Labels[choice / 10u - 1u];
     GLB_MEMCPY(m_label.data(), m_label.size(), label.data(), label.size());
     return { m_label.data(), label.size() };
 }

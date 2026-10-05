@@ -78,7 +78,7 @@ TEST(UiProgressLayoutTests, LogicalRegionMinimumsCanExceedSliceBordersWithoutDen
     fill.minimumWidth = 30.0f;
     fill.minimumHeight = 20.0f;
     ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, track, fill, 4.0f, metrics));
+    ASSERT_TRUE(ProgressLayout::measure({}, {}, track, fill, 4.0f, metrics));
     ExpectPoint(metrics.fillMinimum, { 30.0f, 20.0f });
     ExpectPoint(metrics.contentSize, { 80.0f, 60.0f });
 }
@@ -88,7 +88,7 @@ TEST(UiProgressLayoutTests, FillMetadataPaddingDoesNotInsetTheProgressAmountTwic
     UiSkinRegion fill = NineSlice();
     fill.padding = { 100.0f, 200.0f, 300.0f, 400.0f };
     ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, track, fill, 1.0f, metrics));
+    ASSERT_TRUE(ProgressLayout::measure({}, {}, track, fill, 1.0f, metrics));
     ExpectPadding(metrics.padding, { 8.0f, 8.0f, 8.0f, 8.0f });
     ExpectPoint(metrics.contentSize, { 28.0f, 32.0f });
 }
@@ -96,12 +96,12 @@ TEST(UiProgressLayoutTests, FillMetadataPaddingDoesNotInsetTheProgressAmountTwic
 TEST(UiProgressLayoutTests, ZeroSkipsFillAndFullCopiesTheExactContentEndpoints){
     const UiSkinRegion region = NineSlice();
     ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, region, region, 1.0f, metrics));
+    ASSERT_TRUE(ProgressLayout::measure({}, {}, region, region, 1.0f, metrics));
     const Rect bounds{ 10.0f, 20.0f, 200.0f, 32.0f };
     ProgressPlacement zero;
     ProgressPlacement full;
-    ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, 0.0, zero));
-    ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, 1.0, full));
+    ASSERT_TRUE(ProgressLayout::place(bounds, bounds, metrics, 0.0, zero));
+    ASSERT_TRUE(ProgressLayout::place(bounds, bounds, metrics, 1.0, full));
     UiWidgetTests::ExpectRectExact(zero.fillReveal, { 18.0f, 28.0f, 0.0f, 16.0f });
     UiWidgetTests::ExpectRectExact(zero.fillCanvas, zero.fillReveal);
     UiWidgetTests::ExpectRectExact(full.fillReveal, full.content);
@@ -112,11 +112,11 @@ TEST(UiProgressLayoutTests, ZeroSkipsFillAndFullCopiesTheExactContentEndpoints){
 TEST(UiProgressLayoutTests, FiniteFractionsOutsideTheUnitIntervalClampVisually){
     const UiSkinRegion region = NineSlice();
     ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, region, region, 1.0f, metrics));
+    ASSERT_TRUE(ProgressLayout::measure({}, {}, region, region, 1.0f, metrics));
     const Rect bounds{ 10.0f, 20.0f, 200.0f, 32.0f };
     for(const f64 fraction : { -Limit<f64>::s_Max, -0.1, 1.1, Limit<f64>::s_Max }){
         ProgressPlacement placement;
-        ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, fraction, placement));
+        ASSERT_TRUE(ProgressLayout::place(bounds, bounds, metrics, fraction, placement));
         if(fraction < 0.0){
             EXPECT_FLOAT_EQ(placement.fillReveal.width, 0.0f);
             EXPECT_FLOAT_EQ(placement.fillCanvas.width, 0.0f);
@@ -131,10 +131,10 @@ TEST(UiProgressLayoutTests, FiniteFractionsOutsideTheUnitIntervalClampVisually){
 TEST(UiProgressLayoutTests, SmallFractionsRevealOnlyPartOfAMinimumSizedSkinCanvas){
     const UiSkinRegion region = NineSlice();
     ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, region, region, 1.0f, metrics));
+    ASSERT_TRUE(ProgressLayout::measure({}, {}, region, region, 1.0f, metrics));
     const Rect bounds{ 10.0f, 20.0f, 200.0f, 32.0f };
     ProgressPlacement placement;
-    ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, 0.01, placement));
+    ASSERT_TRUE(ProgressLayout::place(bounds, bounds, metrics, 0.01, placement));
     EXPECT_FLOAT_EQ(placement.fillReveal.width, 1.84f);
     UiWidgetTests::ExpectRectExact(placement.fillCanvas, { 18.0f, 28.0f, 12.0f, 16.0f });
     EXPECT_GT(placement.fillCanvas.width, placement.fillReveal.width);
@@ -144,10 +144,10 @@ TEST(UiProgressLayoutTests, SmallFractionsRevealOnlyPartOfAMinimumSizedSkinCanva
 TEST(UiProgressLayoutTests, AMinimumCanvasNeverExtendsPastContentNarrowerThanTheSkinMinimum){
     const UiSkinRegion region = NineSlice();
     ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, region, region, 1.0f, metrics));
+    ASSERT_TRUE(ProgressLayout::measure({}, {}, region, region, 1.0f, metrics));
     const Rect bounds{ 10.0f, 20.0f, 20.0f, 32.0f };
     ProgressPlacement placement;
-    ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, 0.5, placement));
+    ASSERT_TRUE(ProgressLayout::place(bounds, bounds, metrics, 0.5, placement));
     UiWidgetTests::ExpectRectExact(placement.content, { 18.0f, 28.0f, 4.0f, 16.0f });
     UiWidgetTests::ExpectRectExact(placement.fillReveal, { 18.0f, 28.0f, 2.0f, 16.0f });
     UiWidgetTests::ExpectRectExact(placement.fillCanvas, placement.content);
@@ -156,12 +156,12 @@ TEST(UiProgressLayoutTests, AMinimumCanvasNeverExtendsPastContentNarrowerThanThe
 TEST(UiProgressLayoutTests, ClippingChangesVisibilityWithoutChangingTheProgressAmountOrCanvas){
     const UiSkinRegion region = NineSlice();
     ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, region, region, 1.0f, metrics));
+    ASSERT_TRUE(ProgressLayout::measure({}, {}, region, region, 1.0f, metrics));
     const Rect bounds{ 10.0f, 20.0f, 200.0f, 32.0f };
     ProgressPlacement full;
     ProgressPlacement clipped;
-    ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, 0.25, full));
-    ASSERT_TRUE(ProgressLayout::Place(bounds, { 40.0f, 24.0f, 60.0f, 12.0f }, metrics, 0.25, clipped));
+    ASSERT_TRUE(ProgressLayout::place(bounds, bounds, metrics, 0.25, full));
+    ASSERT_TRUE(ProgressLayout::place(bounds, { 40.0f, 24.0f, 60.0f, 12.0f }, metrics, 0.25, clipped));
     UiWidgetTests::ExpectRectExact(clipped.clip, { 40.0f, 24.0f, 60.0f, 12.0f });
     UiWidgetTests::ExpectRectExact(clipped.content, full.content);
     UiWidgetTests::ExpectRectExact(clipped.fillReveal, full.fillReveal);
@@ -171,10 +171,10 @@ TEST(UiProgressLayoutTests, ClippingChangesVisibilityWithoutChangingTheProgressA
 TEST(UiProgressLayoutTests, ACompletelyDisjointClipProducesValidEmptyVisibility){
     const UiSkinRegion region = NineSlice();
     ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, region, region, 1.0f, metrics));
+    ASSERT_TRUE(ProgressLayout::measure({}, {}, region, region, 1.0f, metrics));
     const Rect bounds{ 10.0f, 20.0f, 200.0f, 32.0f };
     ProgressPlacement placement;
-    ASSERT_TRUE(ProgressLayout::Place(bounds, { 300.0f, 20.0f, 10.0f, 10.0f }, metrics, 0.5, placement));
+    ASSERT_TRUE(ProgressLayout::place(bounds, { 300.0f, 20.0f, 10.0f, 10.0f }, metrics, 0.5, placement));
     EXPECT_FLOAT_EQ(placement.clip.width, 0.0f);
     EXPECT_FLOAT_EQ(placement.fillReveal.width, 92.0f);
     EXPECT_FLOAT_EQ(placement.fillCanvas.width, 92.0f);
@@ -183,10 +183,10 @@ TEST(UiProgressLayoutTests, ACompletelyDisjointClipProducesValidEmptyVisibility)
 TEST(UiProgressLayoutTests, TinyAndEmptyAreasBoundPaddingWithoutNegativeContent){
     const UiSkinRegion region = NineSlice();
     ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, region, region, 1.0f, metrics));
+    ASSERT_TRUE(ProgressLayout::measure({}, {}, region, region, 1.0f, metrics));
     for(const Rect bounds : { Rect{ 10.0f, 20.0f, 4.0f, 3.0f }, Rect{ 10.0f, 20.0f, 0.0f, 0.0f } }){
         ProgressPlacement placement;
-        ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, 0.5, placement));
+        ASSERT_TRUE(ProgressLayout::place(bounds, bounds, metrics, 0.5, placement));
         EXPECT_FLOAT_EQ(placement.content.width, 0.0f);
         EXPECT_FLOAT_EQ(placement.content.height, 0.0f);
         EXPECT_FLOAT_EQ(placement.fillReveal.width, 0.0f);
@@ -199,11 +199,11 @@ TEST(UiProgressLayoutTests, TinyAndEmptyAreasBoundPaddingWithoutNegativeContent)
 TEST(UiProgressLayoutTests, PositiveSubnormalAndUnrepresentableRevealEdgesRemainValidEmptyFill){
     const UiSkinRegion region = NineSlice();
     ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, region, region, 1.0f, metrics));
+    ASSERT_TRUE(ProgressLayout::measure({}, {}, region, region, 1.0f, metrics));
     const Rect bounds{ 10.0f, 20.0f, 200.0f, 32.0f };
     for(const f64 fraction : { BitCast<f64>(u64{ 1u }), 1.0e-15 }){
         ProgressPlacement placement;
-        ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, fraction, placement));
+        ASSERT_TRUE(ProgressLayout::place(bounds, bounds, metrics, fraction, placement));
         EXPECT_FLOAT_EQ(placement.fillReveal.width, 0.0f);
         EXPECT_FLOAT_EQ(placement.fillCanvas.width, 0.0f);
         UiWidgetTests::ExpectRectExact(placement.content, { 18.0f, 28.0f, 184.0f, 16.0f });
@@ -216,7 +216,7 @@ TEST(UiProgressLayoutTests, RepresentableFloatSubnormalRevealIsPreservedAtTheOri
     const Rect bounds{ 0.0f, 0.0f, 1.0f, 1.0f };
     ProgressPlacement placement;
     const f32 leastPositive = BitCast<f32>(u32{ 1u });
-    ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, leastPositive, placement));
+    ASSERT_TRUE(ProgressLayout::place(bounds, bounds, metrics, leastPositive, placement));
     EXPECT_EQ(BitCast<u32>(placement.fillReveal.width), u32{ 1u });
     UiWidgetTests::ExpectRectExact(placement.fillCanvas, placement.fillReveal);
 }
@@ -227,10 +227,10 @@ TEST(UiProgressLayoutTests, ZeroIntrinsicMetricsAndEmptyBoundsAreValid){
     ProgressOptions options;
     options.height = 0.0f;
     ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure(options, {}, region, region, 1.0f, metrics));
+    ASSERT_TRUE(ProgressLayout::measure(options, {}, region, region, 1.0f, metrics));
     ExpectPoint(metrics.contentSize, {});
     ProgressPlacement placement;
-    ASSERT_TRUE(ProgressLayout::Place({}, {}, metrics, 1.0, placement));
+    ASSERT_TRUE(ProgressLayout::place({}, {}, metrics, 1.0, placement));
     UiWidgetTests::ExpectRectExact(placement.content, {});
     UiWidgetTests::ExpectRectExact(placement.fillReveal, {});
     UiWidgetTests::ExpectRectExact(placement.fillCanvas, {});
@@ -239,7 +239,7 @@ TEST(UiProgressLayoutTests, ZeroIntrinsicMetricsAndEmptyBoundsAreValid){
 TEST(UiProgressLayoutTests, InvalidOptionsPaddingAndTintsPreserveAllPreviouslyMeasuredMetrics){
     const UiSkinRegion region = NineSlice();
     ProgressMetrics measured;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, region, region, 1.0f, measured));
+    ASSERT_TRUE(ProgressLayout::measure({}, {}, region, region, 1.0f, measured));
     for(u32 field = 0u; field < 14u; ++field){
         ProgressOptions options;
         ProgressStyle style;
@@ -260,7 +260,7 @@ TEST(UiProgressLayoutTests, InvalidOptionsPaddingAndTintsPreserveAllPreviouslyMe
         default: style.trackTint.a = Limit<f32>::s_QuietNaN; break;
         }
         ProgressMetrics output = measured;
-        EXPECT_FALSE(ProgressLayout::Measure(options, style, region, region, 1.0f, output));
+        EXPECT_FALSE(ProgressLayout::measure(options, style, region, region, 1.0f, output));
         ExpectMetrics(output, measured);
     }
 }
@@ -268,7 +268,7 @@ TEST(UiProgressLayoutTests, InvalidOptionsPaddingAndTintsPreserveAllPreviouslyMe
 TEST(UiProgressLayoutTests, InvalidRegionMetricsSlicesModesAndDensityRejectAtomically){
     const UiSkinRegion valid = NineSlice();
     ProgressMetrics measured;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, valid, valid, 1.0f, measured));
+    ASSERT_TRUE(ProgressLayout::measure({}, {}, valid, valid, 1.0f, measured));
     for(u32 field = 0u; field < 15u; ++field){
         UiSkinRegion track = valid;
         UiSkinRegion fill = valid;
@@ -291,7 +291,7 @@ TEST(UiProgressLayoutTests, InvalidRegionMetricsSlicesModesAndDensityRejectAtomi
         default: fill.minimumWidth = Limit<f32>::s_Infinity; break;
         }
         ProgressMetrics output = measured;
-        EXPECT_FALSE(ProgressLayout::Measure({}, {}, track, fill, density, output));
+        EXPECT_FALSE(ProgressLayout::measure({}, {}, track, fill, density, output));
         ExpectMetrics(output, measured);
     }
 }
@@ -299,7 +299,7 @@ TEST(UiProgressLayoutTests, InvalidRegionMetricsSlicesModesAndDensityRejectAtomi
 TEST(UiProgressLayoutTests, OverflowingLogicalSumsAndDensityScaledBordersPreserveMetrics){
     const UiSkinRegion valid = NineSlice();
     ProgressMetrics measured;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, valid, valid, 1.0f, measured));
+    ASSERT_TRUE(ProgressLayout::measure({}, {}, valid, valid, 1.0f, measured));
     for(u32 field = 0u; field < 4u; ++field){
         UiSkinRegion region = valid;
         ProgressStyle style;
@@ -323,7 +323,7 @@ TEST(UiProgressLayoutTests, OverflowingLogicalSumsAndDensityScaledBordersPreserv
             break;
         }
         ProgressMetrics output = measured;
-        EXPECT_FALSE(ProgressLayout::Measure({}, style, region, region, density, output));
+        EXPECT_FALSE(ProgressLayout::measure({}, style, region, region, density, output));
         ExpectMetrics(output, measured);
     }
 }
@@ -331,10 +331,10 @@ TEST(UiProgressLayoutTests, OverflowingLogicalSumsAndDensityScaledBordersPreserv
 TEST(UiProgressLayoutTests, InvalidProspectiveRectanglesMetricsAndFractionsPreserveEveryOutputRectangle){
     const UiSkinRegion region = NineSlice();
     ProgressMetrics metrics;
-    ASSERT_TRUE(ProgressLayout::Measure({}, {}, region, region, 1.0f, metrics));
+    ASSERT_TRUE(ProgressLayout::measure({}, {}, region, region, 1.0f, metrics));
     const Rect normal{ 10.0f, 20.0f, 200.0f, 32.0f };
     ProgressPlacement measured;
-    ASSERT_TRUE(ProgressLayout::Place(normal, normal, metrics, 0.25, measured));
+    ASSERT_TRUE(ProgressLayout::place(normal, normal, metrics, 0.25, measured));
     for(u32 field = 0u; field < 13u; ++field){
         Rect bounds = normal;
         Rect clip = normal;
@@ -356,7 +356,7 @@ TEST(UiProgressLayoutTests, InvalidProspectiveRectanglesMetricsAndFractionsPrese
         default: fraction = Limit<f64>::s_QuietNaN; break;
         }
         ProgressPlacement output = measured;
-        EXPECT_FALSE(ProgressLayout::Place(bounds, clip, invalid, fraction, output));
+        EXPECT_FALSE(ProgressLayout::place(bounds, clip, invalid, fraction, output));
         ExpectPlacement(output, measured);
     }
 }
@@ -366,11 +366,11 @@ TEST(UiProgressLayoutTests, FiniteExtremeCoordinatesRetainValidExactFullEndpoint
     metrics.contentSize = { Limit<f32>::s_Max, 32.0f };
     const Rect bounds{ -Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 32.0f };
     ProgressPlacement placement;
-    ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, 1.0, placement));
+    ASSERT_TRUE(ProgressLayout::place(bounds, bounds, metrics, 1.0, placement));
     UiWidgetTests::ExpectRectExact(placement.content, bounds);
     UiWidgetTests::ExpectRectExact(placement.fillReveal, bounds);
     UiWidgetTests::ExpectRectExact(placement.fillCanvas, bounds);
-    ASSERT_TRUE(ProgressLayout::Place(bounds, bounds, metrics, 0.5, placement));
+    ASSERT_TRUE(ProgressLayout::place(bounds, bounds, metrics, 0.5, placement));
     EXPECT_FLOAT_EQ(placement.fillReveal.width, Limit<f32>::s_Max * 0.5f);
     EXPECT_FLOAT_EQ(placement.fillReveal.x, -Limit<f32>::s_Max);
 }
@@ -380,16 +380,16 @@ TEST(UiProgressLayoutTests, OverflowingAndCollapsedPositiveInputEndpointsRejectA
     metrics.contentSize = { 1.0f, 1.0f };
     const Rect normal{ 0.0f, 0.0f, 20.0f, 10.0f };
     ProgressPlacement measured;
-    ASSERT_TRUE(ProgressLayout::Place(normal, normal, metrics, 0.5, measured));
+    ASSERT_TRUE(ProgressLayout::place(normal, normal, metrics, 0.5, measured));
     for(const Rect invalid : {
         Rect{ Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 1.0f },
         Rect{ Limit<f32>::s_Max, 0.0f, 1.0f, 1.0f },
         Rect{ 0.0f, Limit<f32>::s_Max, 1.0f, 1.0f }
     }){
         ProgressPlacement output = measured;
-        EXPECT_FALSE(ProgressLayout::Place(invalid, normal, metrics, 0.5, output));
+        EXPECT_FALSE(ProgressLayout::place(invalid, normal, metrics, 0.5, output));
         ExpectPlacement(output, measured);
-        EXPECT_FALSE(ProgressLayout::Place(normal, invalid, metrics, 0.5, output));
+        EXPECT_FALSE(ProgressLayout::place(normal, invalid, metrics, 0.5, output));
         ExpectPlacement(output, measured);
     }
 }

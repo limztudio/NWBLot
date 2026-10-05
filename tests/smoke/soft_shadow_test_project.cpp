@@ -177,7 +177,7 @@ public:
     virtual bool onStartup()override{
         m_timingEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_SOFT_SHADOW_TEST_TIMING");
         if(m_timingEnabled){
-            m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+            m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::gpuTimingOnly());
             if(!m_timingRenderPass.start())
                 return false;
         }

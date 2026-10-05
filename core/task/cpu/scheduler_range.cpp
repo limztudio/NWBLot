@@ -73,7 +73,7 @@ void CpuTaskScheduler::parallelRange(
             node.function = [context, invoke, first, last](){ invoke(context, first, last); };
         }
         const usize outstanding = AddSize(m_outstanding, chunkCount);
-        const TaskHandle parentHandle = s_execution && &s_execution->scheduler == this ? s_execution->task : TaskHandle{};
+        const TaskHandle parentHandle = s_Execution && &s_Execution->scheduler == this ? s_Execution->task : TaskHandle{};
         TaskNode* const parent = resolveLocked(parentHandle);
         const usize children = parent ? AddSize(parent->children, chunkCount) : 0u;
         const bool runInline =

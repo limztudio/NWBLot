@@ -33,26 +33,26 @@ GraphicsAllocator::GraphicsAllocator(Alloc::GlobalArena& objectArena)
 
 GraphicsPipelineDesc::~GraphicsPipelineDesc() = default;
 GraphicsPipelineDesc& GraphicsPipelineDesc::setInputLayout(const InputLayoutHandle& value){ inputLayout = value; return *this; }
-GraphicsPipelineDesc& GraphicsPipelineDesc::setVertexShader(const ShaderHandle& value){ VS = value; return *this; }
-GraphicsPipelineDesc& GraphicsPipelineDesc::setHullShader(const ShaderHandle& value){ HS = value; return *this; }
-GraphicsPipelineDesc& GraphicsPipelineDesc::setTessellationControlShader(const ShaderHandle& value){ HS = value; return *this; }
-GraphicsPipelineDesc& GraphicsPipelineDesc::setDomainShader(const ShaderHandle& value){ DS = value; return *this; }
-GraphicsPipelineDesc& GraphicsPipelineDesc::setTessellationEvaluationShader(const ShaderHandle& value){ DS = value; return *this; }
-GraphicsPipelineDesc& GraphicsPipelineDesc::setGeometryShader(const ShaderHandle& value){ GS = value; return *this; }
-GraphicsPipelineDesc& GraphicsPipelineDesc::setPixelShader(const ShaderHandle& value){ PS = value; return *this; }
-GraphicsPipelineDesc& GraphicsPipelineDesc::setFragmentShader(const ShaderHandle& value){ PS = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setVertexShader(const ShaderHandle& value){ vertexShader = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setHullShader(const ShaderHandle& value){ hullShader = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setTessellationControlShader(const ShaderHandle& value){ hullShader = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setDomainShader(const ShaderHandle& value){ domainShader = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setTessellationEvaluationShader(const ShaderHandle& value){ domainShader = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setGeometryShader(const ShaderHandle& value){ geometryShader = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setPixelShader(const ShaderHandle& value){ pixelShader = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setFragmentShader(const ShaderHandle& value){ pixelShader = value; return *this; }
 GraphicsPipelineDesc& GraphicsPipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
 
 ComputePipelineDesc::~ComputePipelineDesc() = default;
-ComputePipelineDesc& ComputePipelineDesc::setComputeShader(const ShaderHandle& value){ CS = value; return *this; }
+ComputePipelineDesc& ComputePipelineDesc::setComputeShader(const ShaderHandle& value){ computeShader = value; return *this; }
 ComputePipelineDesc& ComputePipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
 
 MeshletPipelineDesc::~MeshletPipelineDesc() = default;
-MeshletPipelineDesc& MeshletPipelineDesc::setTaskShader(const ShaderHandle& value){ AS = value; return *this; }
-MeshletPipelineDesc& MeshletPipelineDesc::setAmplificationShader(const ShaderHandle& value){ AS = value; return *this; }
-MeshletPipelineDesc& MeshletPipelineDesc::setMeshShader(const ShaderHandle& value){ MS = value; return *this; }
-MeshletPipelineDesc& MeshletPipelineDesc::setPixelShader(const ShaderHandle& value){ PS = value; return *this; }
-MeshletPipelineDesc& MeshletPipelineDesc::setFragmentShader(const ShaderHandle& value){ PS = value; return *this; }
+MeshletPipelineDesc& MeshletPipelineDesc::setTaskShader(const ShaderHandle& value){ amplificationShader = value; return *this; }
+MeshletPipelineDesc& MeshletPipelineDesc::setAmplificationShader(const ShaderHandle& value){ amplificationShader = value; return *this; }
+MeshletPipelineDesc& MeshletPipelineDesc::setMeshShader(const ShaderHandle& value){ meshShader = value; return *this; }
+MeshletPipelineDesc& MeshletPipelineDesc::setPixelShader(const ShaderHandle& value){ pixelShader = value; return *this; }
+MeshletPipelineDesc& MeshletPipelineDesc::setFragmentShader(const ShaderHandle& value){ pixelShader = value; return *this; }
 MeshletPipelineDesc& MeshletPipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
 
 RayTracingPipelineShaderDesc::~RayTracingPipelineShaderDesc() = default;
@@ -432,10 +432,10 @@ BufferRange BufferRange::intersect(const BufferRange& other)const noexcept{
     return BufferRange(rangeBegin, rangeEnd == s_AllBytes ? s_AllBytes : rangeEnd - rangeBegin);
 }
 
-DescriptorWriteItem DescriptorWriteItem::ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range){
+DescriptorWriteItem DescriptorWriteItem::constantBuffer(u32 slot, Buffer* buffer, BufferRange range){
     const bool isVolatile = buffer && buffer->getCreationDescription().isVolatile;
 
-    DescriptorWriteItem result = Base(
+    DescriptorWriteItem result = base(
         slot,
         isVolatile ? ResourceType::VolatileConstantBuffer : ResourceType::ConstantBuffer,
         buffer,

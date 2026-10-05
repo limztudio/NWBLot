@@ -59,12 +59,12 @@ half3 nwbSurfelBounceGather(const float3 worldPosition, const float3 queryNormal
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-groupshared float4 s_surfelShR[NWB_SURFEL_RAYS_PER_SURFEL];
-groupshared float4 s_surfelShG[NWB_SURFEL_RAYS_PER_SURFEL];
-groupshared float4 s_surfelShB[NWB_SURFEL_RAYS_PER_SURFEL];
-groupshared uint s_surfelGuideBin[NWB_SURFEL_RAYS_PER_SURFEL];
-groupshared float s_surfelGuideObservation[NWB_SURFEL_RAYS_PER_SURFEL];
-groupshared float s_surfelGuideUpdated[NWB_SURFEL_GUIDE_BIN_COUNT];
+groupshared float4 g_surfelShR[NWB_SURFEL_RAYS_PER_SURFEL];
+groupshared float4 g_surfelShG[NWB_SURFEL_RAYS_PER_SURFEL];
+groupshared float4 g_surfelShB[NWB_SURFEL_RAYS_PER_SURFEL];
+groupshared uint g_surfelGuideBin[NWB_SURFEL_RAYS_PER_SURFEL];
+groupshared float g_surfelGuideObservation[NWB_SURFEL_RAYS_PER_SURFEL];
+groupshared float g_surfelGuideUpdated[NWB_SURFEL_GUIDE_BIN_COUNT];
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -81,9 +81,9 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     const uint cursor = frameIndex % updateDivisor;
     const uint surfelIndex = cursor + groupID.x * updateDivisor;
 
-    s_surfelShR[rayIndex] = float4(0.0, 0.0, 0.0, 0.0);
-    s_surfelShG[rayIndex] = float4(0.0, 0.0, 0.0, 0.0);
-    s_surfelShB[rayIndex] = float4(0.0, 0.0, 0.0, 0.0);
+    g_surfelShR[rayIndex] = float4(0.0, 0.0, 0.0, 0.0);
+    g_surfelShG[rayIndex] = float4(0.0, 0.0, 0.0, 0.0);
+    g_surfelShB[rayIndex] = float4(0.0, 0.0, 0.0, 0.0);
     // On training visits, each traced ray writes its guide slot before the update scans [0, rayCount).
 
     if(surfelIndex >= poolCapacity)
@@ -156,13 +156,13 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
 
         // Both ray classes use the same mixture PDF. Its uniform component bounds weights and continues discovering light outside previously bright cells; the 1/N factor is applied after the workgroup reduction.
         const float4 weightedBasis = float4(nwbSurfelShBasis(rayDir)) * inversePdf;
-        s_surfelShR[rayIndex] = float(radiance.r) * weightedBasis;
-        s_surfelShG[rayIndex] = float(radiance.g) * weightedBasis;
-        s_surfelShB[rayIndex] = float(radiance.b) * weightedBasis;
+        g_surfelShR[rayIndex] = float(radiance.r) * weightedBasis;
+        g_surfelShG[rayIndex] = float(radiance.g) * weightedBasis;
+        g_surfelShB[rayIndex] = float(radiance.b) * weightedBasis;
         if(updateGuide){
-            s_surfelGuideBin[rayIndex] = bin;
+            g_surfelGuideBin[rayIndex] = bin;
             const float luminance = dot(float3(radiance), float3(0.2126, 0.7152, 0.0722));
-            s_surfelGuideObservation[rayIndex] = sqrt(min(max(luminance, 0.0), NWB_SURFEL_GUIDE_LUMINANCE_CLAMP));
+            g_surfelGuideObservation[rayIndex] = sqrt(min(max(luminance, 0.0), NWB_SURFEL_GUIDE_LUMINANCE_CLAMP));
         }
     }
 
@@ -171,9 +171,9 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     [unroll]
     for(uint stride = NWB_SURFEL_RAYS_PER_SURFEL >> 1; stride > 0u; stride >>= 1){
         if(rayIndex < stride){
-            s_surfelShR[rayIndex] += s_surfelShR[rayIndex + stride];
-            s_surfelShG[rayIndex] += s_surfelShG[rayIndex + stride];
-            s_surfelShB[rayIndex] += s_surfelShB[rayIndex + stride];
+            g_surfelShR[rayIndex] += g_surfelShR[rayIndex + stride];
+            g_surfelShG[rayIndex] += g_surfelShG[rayIndex + stride];
+            g_surfelShB[rayIndex] += g_surfelShB[rayIndex + stride];
         }
         GroupMemoryBarrierWithGroupSync();
     }
@@ -183,14 +183,14 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         uint observations = 0u;
         [loop]
         for(uint sample = 0u; sample < rayCount; ++sample){
-            if(s_surfelGuideBin[sample] == rayIndex){
-                observed += s_surfelGuideObservation[sample];
+            if(g_surfelGuideBin[sample] == rayIndex){
+                observed += g_surfelGuideObservation[sample];
                 ++observations;
             }
         }
         const float4 oldGuideLane = g_NwbSurfelGuidePool[surfelIndex * NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL + (rayIndex >> 2u)];
         const float oldWeight = max(oldGuideLane[rayIndex & 3u], NWB_SURFEL_GUIDE_INITIAL_WEIGHT);
-        s_surfelGuideUpdated[rayIndex] = observations != 0u
+        g_surfelGuideUpdated[rayIndex] = observations != 0u
             ? lerp(oldWeight, max(observed / float(observations), NWB_SURFEL_GUIDE_INITIAL_WEIGHT), NWB_SURFEL_GUIDE_OBSERVED_BLEND)
             : lerp(oldWeight, NWB_SURFEL_GUIDE_INITIAL_WEIGHT, NWB_SURFEL_GUIDE_UNOBSERVED_DECAY)
         ;
@@ -201,9 +201,9 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
 
     if(rayIndex == 0u){
         const float projectionScale = 1.0 / float(rayCount);
-        const float4 frameShR = s_surfelShR[0] * projectionScale;
-        const float4 frameShG = s_surfelShG[0] * projectionScale;
-        const float4 frameShB = s_surfelShB[0] * projectionScale;
+        const float4 frameShR = g_surfelShR[0] * projectionScale;
+        const float4 frameShG = g_surfelShG[0] * projectionScale;
+        const float4 frameShB = g_surfelShB[0] * projectionScale;
 
         const uint accumCap = max(uint(g_NwbSurfelConstants.coverageRadiusBiasHyst.w), 1u);
         const uint n = min(sampleCount, accumCap);
@@ -218,10 +218,10 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
             for(uint guideLane = 0u; guideLane < NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL; ++guideLane){
                 const uint guideBin = guideLane * 4u;
                 g_NwbSurfelGuidePool[surfelIndex * NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL + guideLane] = float4(
-                    s_surfelGuideUpdated[guideBin + 0u],
-                    s_surfelGuideUpdated[guideBin + 1u],
-                    s_surfelGuideUpdated[guideBin + 2u],
-                    s_surfelGuideUpdated[guideBin + 3u]
+                    g_surfelGuideUpdated[guideBin + 0u],
+                    g_surfelGuideUpdated[guideBin + 1u],
+                    g_surfelGuideUpdated[guideBin + 2u],
+                    g_surfelGuideUpdated[guideBin + 3u]
                 );
             }
         }

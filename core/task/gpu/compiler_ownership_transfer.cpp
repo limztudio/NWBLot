@@ -37,7 +37,7 @@ namespace GpuTaskGraphCompilerDetail{
     if(
         !plan.graph.validResource(resource.id)
         || resource.id.generation != compiledPlan.graphGeneration
-        || resource.identity == NAME_NONE
+        || resource.identity == s_NameNone
         || resource.type >= GpuGraphResourceType::HazardDomain
         || !ResourceQueueSharing::IsValid(resource.queueSharing)
     )

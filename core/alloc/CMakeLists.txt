@@ -1,4 +1,4 @@
-global_declare_static_library(nwb_alloc)
+nwb_declare_static_library(nwb_alloc)
 target_sources(nwb_alloc PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/core.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/persistent.cpp"

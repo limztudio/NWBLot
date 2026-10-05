@@ -131,18 +131,18 @@ TEST(UiListBehaviorTests, ReorderingRetainsStableSelectionAndCursorKeysAndReveal
     RangeSource source;
     ListState state;
     state.select(5u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     ListOptions options;
     options.selectOnNavigate = false;
     ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, options, Action(state, source, ControlActionKind::Down), result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, options, Action(state, source, ControlActionKind::Down), result));
     ASSERT_EQ(state.cursorKey(), 6u);
     source.reversed = true;
     ++source.revisionValue;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 5u);
     EXPECT_EQ(state.cursorKey(), 6u);
-    ASSERT_TRUE(ListBehavior::EnsureCursor(state, source, 32.0f, 64.0));
+    ASSERT_TRUE(ListBehavior::ensureCursor(state, source, 32.0f, 64.0));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 96.0);
 }
 
@@ -150,14 +150,14 @@ TEST(UiListBehaviorTests, RemovedCursorClearsIndependentlyOfSurvivingSelection){
     RangeSource source;
     ListState state;
     state.select(5u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     ListOptions options;
     options.selectOnNavigate = false;
     ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, options, Action(state, source, ControlActionKind::Down), result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, options, Action(state, source, ControlActionKind::Down), result));
     source.count = 5u;
     ++source.revisionValue;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 5u);
     EXPECT_EQ(state.cursorKey(), 0u);
 }
@@ -166,15 +166,15 @@ TEST(UiListBehaviorTests, DisabledSelectionClearsIndependentlyOfEnabledCursor){
     RangeSource source;
     ListState state;
     state.select(5u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     ListOptions options;
     options.selectOnNavigate = false;
     ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, options, Action(state, source, ControlActionKind::Down), result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, options, Action(state, source, ControlActionKind::Down), result));
     source.disabledBegin = 4u;
     source.disabledEnd = 5u;
     ++source.revisionValue;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.cursorKey(), 6u);
 }
@@ -184,10 +184,10 @@ TEST(UiListBehaviorTests, ReplacingAnEstablishedSourceClearsSelectionCursorAndOf
     ListState state;
     state.select(5u);
     ASSERT_TRUE(state.scrollTo(90.0));
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     const u64 inputGeneration = state.inputGeneration();
     ++source.generation;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.cursorKey(), 0u);
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 0.0);
@@ -200,21 +200,21 @@ TEST(UiListBehaviorTests, InvalidSourceIdentitiesAndMalformedLookupFailWithoutPa
     state.select(5u);
     ASSERT_TRUE(state.scrollTo(90.0));
     source.generation = 0u;
-    EXPECT_FALSE(ListBehavior::Reconcile(state, source));
+    EXPECT_FALSE(ListBehavior::reconcile(state, source));
     source.generation = 41u;
     source.revisionValue = 0u;
-    EXPECT_FALSE(ListBehavior::Reconcile(state, source));
+    EXPECT_FALSE(ListBehavior::reconcile(state, source));
     source.revisionValue = 1u;
     source.badLookup = true;
-    EXPECT_FALSE(ListBehavior::Reconcile(state, source));
+    EXPECT_FALSE(ListBehavior::reconcile(state, source));
     source.badLookup = false;
     source.wrongLookup = true;
-    EXPECT_FALSE(ListBehavior::Reconcile(state, source));
+    EXPECT_FALSE(ListBehavior::reconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 5u);
     EXPECT_EQ(state.cursorKey(), 5u);
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 90.0);
     source.wrongLookup = false;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
 }
 
 TEST(UiListBehaviorTests, SourceRevisionChangingDuringLookupFailsAtomically){
@@ -222,13 +222,13 @@ TEST(UiListBehaviorTests, SourceRevisionChangingDuringLookupFailsAtomically){
     ListState state;
     state.select(5u);
     source.changeRevisionOnLookup = true;
-    EXPECT_FALSE(ListBehavior::Reconcile(state, source));
+    EXPECT_FALSE(ListBehavior::reconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 5u);
     EXPECT_EQ(state.cursorKey(), 5u);
     ListResult result;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Down), result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Down), result));
     EXPECT_FALSE(result.valid);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
 }
 
 TEST(UiListBehaviorTests, EmptySourceClearsKeysAndNavigationAndSubmitAreValidNoOps){
@@ -236,12 +236,12 @@ TEST(UiListBehaviorTests, EmptySourceClearsKeysAndNavigationAndSubmitAreValidNoO
     source.count = 0u;
     ListState state;
     state.select(5u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.cursorKey(), 0u);
     ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Down), result));
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Submit), result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Down), result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Submit), result));
     EXPECT_TRUE(result.valid);
     EXPECT_FALSE(result.selectionChanged);
     EXPECT_FALSE(result.activated);
@@ -256,17 +256,17 @@ TEST(UiListBehaviorTests, HundredThousandRowsSkipALargeDisabledRangeWithBoundedS
     source.disabledEnd = 99999u;
     ListState state;
     state.select(49999u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     source.clearCalls();
     ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Down), result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Down), result));
     EXPECT_EQ(state.selectedKey(), 100000u);
     EXPECT_EQ(state.cursorKey(), 100000u);
     EXPECT_EQ(source.findCalls, 1u);
     EXPECT_LE(source.lookupCalls, 2u);
     EXPECT_LE(source.keyCalls, 3u);
     EXPECT_LE(source.enabledCalls, 2u);
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Up), result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Up), result));
     EXPECT_EQ(state.cursorKey(), 49999u);
     EXPECT_TRUE(result.selectionChanged);
     EXPECT_FALSE(result.activated);
@@ -276,11 +276,11 @@ TEST(UiListBehaviorTests, NoCursorStartsAtTheEnabledBoundaryInTheNavigationDirec
     RangeSource source;
     ListState forward;
     ListState reverse;
-    ASSERT_TRUE(ListBehavior::Reconcile(forward, source));
-    ASSERT_TRUE(ListBehavior::Reconcile(reverse, source));
+    ASSERT_TRUE(ListBehavior::reconcile(forward, source));
+    ASSERT_TRUE(ListBehavior::reconcile(reverse, source));
     ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(forward, source, {}, Action(forward, source, ControlActionKind::Down), result));
-    ASSERT_TRUE(ListBehavior::Apply(reverse, source, {}, Action(reverse, source, ControlActionKind::Up), result));
+    ASSERT_TRUE(ListBehavior::apply(forward, source, {}, Action(forward, source, ControlActionKind::Down), result));
+    ASSERT_TRUE(ListBehavior::apply(reverse, source, {}, Action(reverse, source, ControlActionKind::Up), result));
     EXPECT_EQ(forward.cursorKey(), 1u);
     EXPECT_EQ(reverse.cursorKey(), 10u);
 }
@@ -288,13 +288,13 @@ TEST(UiListBehaviorTests, NoCursorStartsAtTheEnabledBoundaryInTheNavigationDirec
 TEST(UiListBehaviorTests, HomeEndAndBoundaryNavigationNeverWrap){
     RangeSource source;
     ListState state;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Home), result));
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Up), result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Home), result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Up), result));
     EXPECT_EQ(state.cursorKey(), 1u);
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::End), result));
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Down), result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::End), result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Down), result));
     EXPECT_EQ(state.cursorKey(), 10u);
     EXPECT_FALSE(result.activated);
 }
@@ -303,21 +303,21 @@ TEST(UiListBehaviorTests, PageNavigationUsesAcceptedRowsAndSaturatesWithoutInteg
     RangeSource source;
     ListState state;
     state.select(3u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     ListResult result;
     ControlAction action = Action(state, source, ControlActionKind::PageDown);
     action.pageRows = 4u;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, action, result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, action, result));
     EXPECT_EQ(state.cursorKey(), 7u);
     action.kind = ControlActionKind::PageUp;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, action, result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, action, result));
     EXPECT_EQ(state.cursorKey(), 3u);
     action.kind = ControlActionKind::PageDown;
     action.pageRows = Limit<u64>::s_Max;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, action, result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, action, result));
     EXPECT_EQ(state.cursorKey(), 10u);
     action.kind = ControlActionKind::PageUp;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, action, result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, action, result));
     EXPECT_EQ(state.cursorKey(), 1u);
 }
 
@@ -327,14 +327,14 @@ TEST(UiListBehaviorTests, PageNavigationSkipsDisabledRowsBeyondTheRequestedBound
     source.disabledEnd = 7u;
     ListState state;
     state.select(2u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     ListResult result;
     ControlAction action = Action(state, source, ControlActionKind::PageDown);
     action.pageRows = 3u;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, action, result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, action, result));
     EXPECT_EQ(state.cursorKey(), 8u);
     action.kind = ControlActionKind::PageUp;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, action, result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, action, result));
     EXPECT_EQ(state.cursorKey(), 4u);
 }
 
@@ -343,10 +343,10 @@ TEST(UiListBehaviorTests, AllDisabledNavigationAndUnselectedSubmitAreValidNoOps)
     source.disabledBegin = 0u;
     source.disabledEnd = source.count;
     ListState state;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Home), result));
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Submit), result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Home), result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Submit), result));
     EXPECT_EQ(state.cursorKey(), 0u);
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_FALSE(result.activated);
@@ -358,17 +358,17 @@ TEST(UiListBehaviorTests, MissingDisabledOrMalformedActivationDoesNotModifyState
     source.disabledEnd = 4u;
     ListState state;
     state.select(2u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     const ListResult previous{ true, true, false, true };
     ListResult result = previous;
     ControlAction action = Action(state, source, ControlActionKind::Activate);
     action.value = 99u;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, action, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, action, result));
     action.value = 4u;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, action, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, action, result));
     action.value = 5u;
     source.badLookup = true;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, action, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, action, result));
     EXPECT_EQ(state.selectedKey(), 2u);
     EXPECT_EQ(state.cursorKey(), 2u);
     ExpectResult(result, previous);
@@ -378,10 +378,10 @@ TEST(UiListBehaviorTests, MalformedEnabledSearchFailsAtomically){
     RangeSource source;
     ListState state;
     state.select(2u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     source.badFind = true;
     ListResult result;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Down), result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Down), result));
     EXPECT_EQ(state.cursorKey(), 2u);
     EXPECT_EQ(state.selectedKey(), 2u);
     EXPECT_FALSE(result.valid);
@@ -391,23 +391,23 @@ TEST(UiListBehaviorTests, InputSourceAndRevisionTokensRejectStaleActions){
     RangeSource source;
     ListState state;
     state.select(2u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     ListResult result;
     const ControlAction valid = Action(state, source, ControlActionKind::Down);
     ControlAction action = valid;
     ++action.control.instanceGeneration;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, action, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, action, result));
     action = valid;
     ++action.control.contentGeneration;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, action, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, action, result));
     action = valid;
     ++action.control.contentRevision;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, action, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, action, result));
     ++source.revisionValue;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Down), result));
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, valid, result));
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Down), result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Down), result));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, valid, result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Down), result));
     EXPECT_EQ(state.selectedKey(), 3u);
 }
 
@@ -415,14 +415,14 @@ TEST(UiListBehaviorTests, ApplicationChangesFenceEvenAnUnchangedSelectionValue){
     RangeSource source;
     ListState state;
     state.select(2u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     const ControlAction action = Action(state, source, ControlActionKind::Down);
     state.select(2u);
     ListResult result;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, action, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, action, result));
     EXPECT_EQ(state.cursorKey(), 2u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Down), result));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Down), result));
     EXPECT_EQ(state.cursorKey(), 3u);
 }
 
@@ -430,16 +430,16 @@ TEST(UiListBehaviorTests, RevisionChangeRequestsEnsureVisibleExactlyUntilItSucce
     RangeSource source;
     ListState state;
     state.select(5u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    ASSERT_TRUE(ListBehavior::EnsureCursor(state, source, 32.0f, 64.0));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::ensureCursor(state, source, 32.0f, 64.0));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 96.0);
     ASSERT_TRUE(state.scrollTo(0.0));
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    ASSERT_TRUE(ListBehavior::EnsureCursor(state, source, 32.0f, 64.0));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::ensureCursor(state, source, 32.0f, 64.0));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 0.0);
     ++source.revisionValue;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    ASSERT_TRUE(ListBehavior::EnsureCursor(state, source, 32.0f, 64.0));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::ensureCursor(state, source, 32.0f, 64.0));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 96.0);
 }
 
@@ -447,14 +447,14 @@ TEST(UiListBehaviorTests, EnsureVisibleFailureKeepsItsRequestForTheNextValidAtte
     RangeSource source;
     ListState state;
     state.select(5u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    EXPECT_FALSE(ListBehavior::EnsureCursor(state, source, 0.0f, 64.0));
-    EXPECT_FALSE(ListBehavior::EnsureCursor(state, source, 32.0f, Limit<f64>::s_QuietNaN));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
+    EXPECT_FALSE(ListBehavior::ensureCursor(state, source, 0.0f, 64.0));
+    EXPECT_FALSE(ListBehavior::ensureCursor(state, source, 32.0f, Limit<f64>::s_QuietNaN));
     source.badLookup = true;
-    EXPECT_FALSE(ListBehavior::EnsureCursor(state, source, 32.0f, 64.0));
+    EXPECT_FALSE(ListBehavior::ensureCursor(state, source, 32.0f, 64.0));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 0.0);
     source.badLookup = false;
-    ASSERT_TRUE(ListBehavior::EnsureCursor(state, source, 32.0f, 64.0));
+    ASSERT_TRUE(ListBehavior::ensureCursor(state, source, 32.0f, 64.0));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 96.0);
 }
 
@@ -462,7 +462,7 @@ TEST(UiListBehaviorTests, WheelUsesAcceptedStepAndMaximumWithoutSelectingOrRevea
     RangeSource source;
     ListState state;
     state.select(5u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     ListOptions options;
     options.rowHeight = 128.0f;
     options.wheelRows = 7.0f;
@@ -471,13 +471,13 @@ TEST(UiListBehaviorTests, WheelUsesAcceptedStepAndMaximumWithoutSelectingOrRevea
     action.step = 8.0;
     action.maximum = 64.0;
     ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, options, action, result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, options, action, result));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 16.0);
     EXPECT_EQ(state.selectedKey(), 5u);
     EXPECT_EQ(state.cursorKey(), 5u);
     EXPECT_FALSE(result.selectionChanged);
     EXPECT_FALSE(result.activated);
-    ASSERT_TRUE(ListBehavior::EnsureCursor(state, source, 32.0f, 64.0));
+    ASSERT_TRUE(ListBehavior::ensureCursor(state, source, 32.0f, 64.0));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 16.0);
 }
 
@@ -485,20 +485,20 @@ TEST(UiListBehaviorTests, HugeWheelDeltasClampWithoutMultiplicationOverflow){
     RangeSource source;
     ListState state;
     ASSERT_TRUE(state.scrollTo(500.0));
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     ControlAction action = Action(state, source, ControlActionKind::Wheel);
     action.delta = Limit<f64>::s_Max;
     action.step = Limit<f64>::s_Max;
     action.maximum = 1000.0;
     ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, action, result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, action, result));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 0.0);
     action.delta = -Limit<f64>::s_Max;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, action, result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, action, result));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 1000.0);
     action.delta = 0.0;
     action.maximum = 20.0;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, action, result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, action, result));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 20.0);
 }
 
@@ -506,7 +506,7 @@ TEST(UiListBehaviorTests, InvalidWheelMetricsFailWithoutChangingOffsetOrResult){
     RangeSource source;
     ListState state;
     ASSERT_TRUE(state.scrollTo(50.0));
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     ControlAction valid = Action(state, source, ControlActionKind::Wheel);
     valid.delta = -1.0;
     valid.step = 32.0;
@@ -514,16 +514,16 @@ TEST(UiListBehaviorTests, InvalidWheelMetricsFailWithoutChangingOffsetOrResult){
     ListResult result;
     ControlAction action = valid;
     action.delta = Limit<f64>::s_QuietNaN;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, action, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, action, result));
     action = valid;
     action.step = 0.0;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, action, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, action, result));
     action = valid;
     action.maximum = -1.0;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, action, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, action, result));
     action = valid;
     action.maximum = Limit<f64>::s_Infinity;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, action, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, action, result));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 50.0);
     EXPECT_FALSE(result.valid);
 }
@@ -532,24 +532,24 @@ TEST(UiListBehaviorTests, InvalidOptionsKindsAndZeroPageSizeRejectWithoutChangin
     RangeSource source;
     ListState state;
     state.select(2u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     const ControlAction valid = Action(state, source, ControlActionKind::Down);
     ListOptions options;
     options.enabled = false;
     ListResult result;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, options, valid, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, options, valid, result));
     options = {};
     options.rowHeight = 0.0f;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, options, valid, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, options, valid, result));
     options = {};
     options.wheelRows = Limit<f32>::s_QuietNaN;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, options, valid, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, options, valid, result));
     ControlAction action = valid;
     action.kind = static_cast<ControlActionKind::Enum>(255u);
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, action, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, action, result));
     action.kind = ControlActionKind::PageDown;
     action.pageRows = 0u;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, action, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, action, result));
     EXPECT_EQ(state.cursorKey(), 2u);
     EXPECT_EQ(state.selectedKey(), 2u);
 }
@@ -558,18 +558,18 @@ TEST(UiListBehaviorTests, InternalChangesKeepInputLifetimeAndAccumulateResultFla
     RangeSource source;
     ListState state;
     const u64 inputGeneration = state.inputGeneration();
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Home), result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Home), result));
     EXPECT_TRUE(result.selectionChanged);
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Home), result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Home), result));
     EXPECT_TRUE(result.selectionChanged);
     EXPECT_FALSE(result.activated);
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Submit), result));
+    ASSERT_TRUE(ListBehavior::apply(state, source, {}, Action(state, source, ControlActionKind::Submit), result));
     EXPECT_TRUE(result.activated);
-    ASSERT_TRUE(ListBehavior::EnsureCursor(state, source, 32.0f, 64.0));
+    ASSERT_TRUE(ListBehavior::ensureCursor(state, source, 32.0f, 64.0));
     ++source.generation;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     EXPECT_EQ(state.inputGeneration(), inputGeneration);
     EXPECT_TRUE(result.selectionChanged);
     EXPECT_TRUE(result.activated);

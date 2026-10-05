@@ -47,7 +47,7 @@ public:
         if(pValue != m_pair.first()){
             pointer previousValue = Exchange(m_pair.first(), pValue);
             if(previousValue)
-                get_deleter()(previousValue);
+                getDeleter()(previousValue);
         }
     }
 
@@ -60,8 +60,8 @@ public:
 
     pointer get()const noexcept{ return m_pair.first(); }
 
-    deleter_type& get_deleter()noexcept{ return m_pair.second(); }
-    const deleter_type& get_deleter()const noexcept{ return m_pair.second(); }
+    deleter_type& getDeleter()noexcept{ return m_pair.second(); }
+    const deleter_type& getDeleter()const noexcept{ return m_pair.second(); }
 
 
 protected:
@@ -75,7 +75,7 @@ protected:
     template<typename OtherDeleter, typename Owner>
     void moveAssignFrom(Owner& owner)noexcept{
         reset(owner.release());
-        get_deleter() = Move(Forward<OtherDeleter>(owner.get_deleter()));
+        getDeleter() = Move(Forward<OtherDeleter>(owner.getDeleter()));
     }
 
 
@@ -134,11 +134,11 @@ public:
         base_type::assertRValueDeleterValid();
     }
     UniquePtr(this_type&& x)noexcept
-        : base_type(x.release(), Forward<deleter_type>(x.get_deleter()))
+        : base_type(x.release(), Forward<deleter_type>(x.getDeleter()))
     {}
     template<typename U, typename E>
     UniquePtr(UniquePtr<U, E>&& u, typename EnableIf<!IsArray<U>::value&& IsConvertible<typename UniquePtr<U, E>::pointer, pointer>::value&& IsConvertible<E, deleter_type>::value && (IsSame<deleter_type, E>::value || !IsLValueReference<deleter_type>::value)>::type* = 0)noexcept
-        : base_type(u.release(), Forward<E>(u.get_deleter()))
+        : base_type(u.release(), Forward<E>(u.getDeleter()))
     {}
     UniquePtr(const this_type&) = delete;
     UniquePtr& operator=(const this_type&) = delete;
@@ -173,7 +173,7 @@ public:
     using base_type::release;
     using base_type::detach;
     using base_type::get;
-    using base_type::get_deleter;
+    using base_type::getDeleter;
 
     void swap(this_type& x)noexcept{ base_type::swapStorage(x); }
 };
@@ -208,11 +208,11 @@ public:
         base_type::assertRValueDeleterValid();
     }
     UniquePtr(this_type&& x)noexcept
-        : base_type(x.release(), Forward<deleter_type>(x.get_deleter()))
+        : base_type(x.release(), Forward<deleter_type>(x.getDeleter()))
     {}
     template<typename U, typename E>
     UniquePtr(UniquePtr<U, E>&& u, typename EnableIf<SmartPtrDetail::IsSafeArrayConversion<T, pointer, U, typename UniquePtr<U, E>::pointer>::value && IsConvertible<E, deleter_type>::value && (!IsLValueReference<deleter_type>::value || IsSame<E, deleter_type>::value)>::type* = 0)noexcept
-        : base_type(u.release(), Forward<E>(u.get_deleter()))
+        : base_type(u.release(), Forward<E>(u.getDeleter()))
     {}
     UniquePtr(const this_type&) = delete;
     UniquePtr& operator=(const this_type&) = delete;
@@ -246,7 +246,7 @@ public:
     using base_type::release;
     using base_type::detach;
     using base_type::get;
-    using base_type::get_deleter;
+    using base_type::getDeleter;
 
     void swap(this_type& x)noexcept{ base_type::swapStorage(x); }
 };

@@ -90,8 +90,8 @@ public:
             selectListOnText = nullptr;
             state->select(selectListKey);
         }
-        constexpr StringView labels[]{ "One", "Two", "Three", "Four", "Five" };
-        return index < count && index < 5u ? labels[index] : StringView{};
+        constexpr StringView s_Labels[]{ "One", "Two", "Three", "Four", "Five" };
+        return index < count && index < 5u ? s_Labels[index] : StringView{};
     }
 
     [[nodiscard]] virtual bool enabled(const u64 index)const override{ return index < count && index + 1u != 3u; }

@@ -15,7 +15,7 @@ import sys
 LIT_ERROR_INVALID_X11_WINDOW_ID = "error: invalid X11 window ID '{v}'"
 LIT_MAIN = "__main__"
 
-XLib = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
+xlib = ctypes.CDLL(ctypes.util.find_library("X11") or "libX11.so.6")
 
 DisplayP = ctypes.c_void_p
 Window = ctypes.c_ulong
@@ -23,12 +23,12 @@ Atom = ctypes.c_ulong
 Bool = ctypes.c_int
 
 # Explicit result types prevent ctypes from truncating 64-bit pointers and atoms.
-XLib.XOpenDisplay.restype = DisplayP
-XLib.XOpenDisplay.argtypes = [ctypes.c_char_p]
-XLib.XCloseDisplay.argtypes = [DisplayP]
-XLib.XFlush.argtypes = [DisplayP]
-XLib.XInternAtom.restype = Atom
-XLib.XInternAtom.argtypes = [DisplayP, ctypes.c_char_p, Bool]
+xlib.XOpenDisplay.restype = DisplayP
+xlib.XOpenDisplay.argtypes = [ctypes.c_char_p]
+xlib.XCloseDisplay.argtypes = [DisplayP]
+xlib.XFlush.argtypes = [DisplayP]
+xlib.XInternAtom.restype = Atom
+xlib.XInternAtom.argtypes = [DisplayP, ctypes.c_char_p, Bool]
 
 
 class XClientMessageEvent(ctypes.Structure):
@@ -45,11 +45,11 @@ class XClientMessageEvent(ctypes.Structure):
 
 
 def send_wm_delete(disp, win):
-    protocols = XLib.XInternAtom(disp, b"WM_PROTOCOLS", False)
-    delete_window = XLib.XInternAtom(disp, b"WM_DELETE_WINDOW", False)
+    protocols = xlib.XInternAtom(disp, b"WM_PROTOCOLS", False)
+    delete_window = xlib.XInternAtom(disp, b"WM_DELETE_WINDOW", False)
     if not protocols or not delete_window:
         return False
-    XLib.XSendEvent.argtypes = [DisplayP, Window, Bool, ctypes.c_long, ctypes.POINTER(XClientMessageEvent)]
+    xlib.XSendEvent.argtypes = [DisplayP, Window, Bool, ctypes.c_long, ctypes.POINTER(XClientMessageEvent)]
     # NoEventMask delivers directly even without a window manager. Send once: a retry can race window destruction.
     ev = XClientMessageEvent()
     ctypes.memset(ctypes.byref(ev), 0, ctypes.sizeof(ev))
@@ -60,9 +60,9 @@ def send_wm_delete(disp, win):
     ev.format = 32
     ev.data_l[0] = delete_window
     ev.data_l[1] = 0  # timestamp
-    if XLib.XSendEvent(disp, win, False, 0, ctypes.byref(ev)) == 0:
+    if xlib.XSendEvent(disp, win, False, 0, ctypes.byref(ev)) == 0:
         return False
-    XLib.XFlush(disp)
+    xlib.XFlush(disp)
     return True
 
 
@@ -80,13 +80,13 @@ def main():
         print(LIT_ERROR_INVALID_X11_WINDOW_ID.format(v=sys.argv[1]), file=sys.stderr)
         return 2
 
-    disp = XLib.XOpenDisplay(None)
+    disp = xlib.XOpenDisplay(None)
     if not disp:
         print("error: cannot open X display", file=sys.stderr)
         return 3
 
     sent = send_wm_delete(disp, Window(window_id))
-    XLib.XCloseDisplay(disp)
+    xlib.XCloseDisplay(disp)
     if not sent:
         print(f"error: failed to send WM_DELETE_WINDOW to 0x{window_id:x}", file=sys.stderr)
         return 1

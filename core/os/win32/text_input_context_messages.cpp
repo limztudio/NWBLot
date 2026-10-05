@@ -60,7 +60,7 @@ bool ResolveWin32TextInputContextMessage(
     isize& forwardedLParam){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Win32Imm32)
         return false;
-    return checked_cast<Win32TextInputService*>(&service)->resolveContextMessage(
+    return CheckedCast<Win32TextInputService*>(&service)->resolveContextMessage(
         message, wParam, lParam, forwardedLParam
     );
 }

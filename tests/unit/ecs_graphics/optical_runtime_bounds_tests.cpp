@@ -55,7 +55,7 @@ struct Context{
             .enableAutomaticStateTracking(Core::ResourceStates::ShaderResource)
         ;
         Core::Buffer* const buffer = Tests::NewMetadataOnlyBuffer(testArena.arena, context, allocator, desc, true);
-        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
     }
 };
 

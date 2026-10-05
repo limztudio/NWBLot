@@ -32,7 +32,7 @@ inline constexpr DWORD s_HandlerExitWaitMilliseconds = 3000u;
 inline constexpr DWORD s_CrashWaitHandleCount = 2u;
 
 
-static void __hidden_drain_pending_acks(const HANDLE ackReadHandle)noexcept{
+static void DrainPendingAcks(const HANDLE ackReadHandle)noexcept{
     if(ackReadHandle == INVALID_HANDLE_VALUE)
         return;
 
@@ -49,7 +49,7 @@ static void __hidden_drain_pending_acks(const HANDLE ackReadHandle)noexcept{
     }
 }
 
-static LONG WINAPI __hidden_unhandled_exception_filter(EXCEPTION_POINTERS* exceptionInfo){
+static LONG WINAPI UnhandledExceptionFilter(EXCEPTION_POINTERS* exceptionInfo){
     const u32 exceptionCode = exceptionInfo && exceptionInfo->ExceptionRecord
         ? static_cast<u32>(exceptionInfo->ExceptionRecord->ExceptionCode)
         : 0u
@@ -69,12 +69,12 @@ static LONG WINAPI __hidden_unhandled_exception_filter(EXCEPTION_POINTERS* excep
     return EXCEPTION_EXECUTE_HANDLER;
 }
 
-[[noreturn]] static void __hidden_terminate_handler(){
+[[noreturn]] static void TerminateHandler(){
     Detail::NotifyCrashHandler(Detail::CrashReasonKind::Terminate, 0u);
     std::abort();
 }
 
-static u64 __hidden_context_instruction_pointer(const CONTEXT& context)noexcept{
+static u64 ContextInstructionPointer(const CONTEXT& context)noexcept{
 #if defined(_M_X64) || defined(__x86_64__)
     return static_cast<u64>(context.Rip);
 #elif defined(_M_IX86) || defined(__i386__)
@@ -86,7 +86,7 @@ static u64 __hidden_context_instruction_pointer(const CONTEXT& context)noexcept{
 #endif
 }
 
-static u64 __hidden_context_stack_pointer(const CONTEXT& context)noexcept{
+static u64 ContextStackPointer(const CONTEXT& context)noexcept{
 #if defined(_M_X64) || defined(__x86_64__)
     return static_cast<u64>(context.Rsp);
 #elif defined(_M_IX86) || defined(__i386__)
@@ -98,7 +98,7 @@ static u64 __hidden_context_stack_pointer(const CONTEXT& context)noexcept{
 #endif
 }
 
-static u64 __hidden_context_frame_pointer(const CONTEXT& context)noexcept{
+static u64 ContextFramePointer(const CONTEXT& context)noexcept{
 #if defined(_M_X64) || defined(__x86_64__)
     return static_cast<u64>(context.Rbp);
 #elif defined(_M_IX86) || defined(__i386__)
@@ -132,15 +132,15 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
     storage.exceptionRecord = EXCEPTION_RECORD{};
     storage.exceptionRecord.ExceptionCode = s_ManualDumpExceptionCode;
     storage.exceptionRecord.ExceptionAddress = reinterpret_cast<void*>(static_cast<usize>(
-        __hidden_crash_win32::__hidden_context_instruction_pointer(storage.context)
+        __hidden_crash_win32::ContextInstructionPointer(storage.context)
     ));
     storage.exceptionPointers.ExceptionRecord = &storage.exceptionRecord;
     storage.exceptionPointers.ContextRecord = &storage.context;
 
     outOptions.exceptionPointers = static_cast<u64>(reinterpret_cast<usize>(&storage.exceptionPointers));
-    outOptions.instructionPointer = __hidden_crash_win32::__hidden_context_instruction_pointer(storage.context);
-    outOptions.stackPointer = __hidden_crash_win32::__hidden_context_stack_pointer(storage.context);
-    outOptions.framePointer = __hidden_crash_win32::__hidden_context_frame_pointer(storage.context);
+    outOptions.instructionPointer = __hidden_crash_win32::ContextInstructionPointer(storage.context);
+    outOptions.stackPointer = __hidden_crash_win32::ContextStackPointer(storage.context);
+    outOptions.framePointer = __hidden_crash_win32::ContextFramePointer(storage.context);
 
     // Capture in-process (all modules loaded); server only resolves symbols, never unwinds (no .pdata needed).
     // Leading capture frames dropped via options.callstackFramesToSkip.
@@ -175,7 +175,7 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
 
     CrashDumpTransportStatus::Enum status = CrashDumpTransportStatus::Failed;
     do{
-        __hidden_crash_win32::__hidden_drain_pending_acks(g_State.ackReadHandle);
+        __hidden_crash_win32::DrainPendingAcks(g_State.ackReadHandle);
 
         if(g_State.crashHandledEvent)
             ResetEvent(g_State.crashHandledEvent);
@@ -395,8 +395,8 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
 template bool StartDesktopHandler(const ::Path<Alloc::PersistentArena>& handlerExecutablePath);
 
 void InstallPlatformHandlers(){
-    g_State.previousExceptionFilter = SetUnhandledExceptionFilter(__hidden_crash_win32::__hidden_unhandled_exception_filter);
-    std::set_terminate(__hidden_crash_win32::__hidden_terminate_handler);
+    g_State.previousExceptionFilter = SetUnhandledExceptionFilter(__hidden_crash_win32::UnhandledExceptionFilter);
+    std::set_terminate(__hidden_crash_win32::TerminateHandler);
 }
 
 void UninstallPlatformResources(){

@@ -28,7 +28,7 @@ inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
 
 static void AddRoot(const NWB::Path& path, Assets::CookVector<Assets::ResolvedAssetRoot>& roots,
     Assets::ScratchArena& scratchArena){
-    Assets::ScratchString pathText = PathToString(scratchArena, path.lexically_normal());
+    Assets::ScratchString pathText = PathToString(scratchArena, path.lexicallyNormal());
 #if defined(GLB_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(pathText);
 #endif
@@ -40,7 +40,7 @@ static void AddRoot(const NWB::Path& path, Assets::CookVector<Assets::ResolvedAs
         if(existing == pathText)
             return;
     }
-    Assets::ScratchString parentName = PathToString(scratchArena, path.parent_path().filename());
+    Assets::ScratchString parentName = PathToString(scratchArena, path.parentPath().filename());
     CanonicalizeTextInPlace(parentName);
     const AStringView rootName = parentName == s_ImplDirectoryName ? Assets::s_EngineVirtualRoot : Assets::s_ProjectVirtualRoot;
     const ACompactString virtualRoot(rootName);
@@ -65,7 +65,7 @@ static void AddRoot(const NWB::Path& path, Assets::CookVector<Assets::ResolvedAs
                 return false;
             }
             if(!directory)
-                path = path.parent_path();
+                path = path.parentPath();
             NWB::Path ancestor = path;
             while(!ancestor.empty()){
                 Assets::ScratchString name = PathToString(scratchArena, ancestor.filename());
@@ -74,7 +74,7 @@ static void AddRoot(const NWB::Path& path, Assets::CookVector<Assets::ResolvedAs
                     path = ancestor;
                     break;
                 }
-                const NWB::Path parent = ancestor.parent_path();
+                const NWB::Path parent = ancestor.parentPath();
                 if(parent == ancestor)
                     break;
                 ancestor = parent;
@@ -104,7 +104,7 @@ static void AddRoot(const NWB::Path& path, Assets::CookVector<Assets::ResolvedAs
     for(usize index = 0u; index < files.size(); ++index){
         const auto& file = files[index];
         if(directory){
-            Assets::ScratchString physical = PathToString(scratchArena, file.filePath.lexically_normal());
+            Assets::ScratchString physical = PathToString(scratchArena, file.filePath.lexicallyNormal());
 #if defined(GLB_PLATFORM_WINDOWS)
             CanonicalizeTextInPlace(physical);
 #endif
@@ -149,7 +149,7 @@ bool DependencyProviderCatalog::discover(const PipelineOptions& options, NWB::Co
         NWB_LOGGER_ERROR(GLB_TEXT("DependencyComputer: failed to resolve repository root"));
         return false;
     }
-    repoRoot = repoRoot.lexically_normal();
+    repoRoot = repoRoot.lexicallyNormal();
     Assets::CookVector<Assets::ResolvedAssetRoot> roots(m_arena);
     if(!ResolveRoots(options, repoRoot, roots, scratchArena))
         return false;

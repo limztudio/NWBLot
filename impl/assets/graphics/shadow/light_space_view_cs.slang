@@ -4,7 +4,7 @@
 
 #include "light_space_scene.slangi"
 
-#define NWB_LIGHT_SPACE_DEFERRED NwbHeapDeferredBindlessResources(g_NwbLightSpacePush.deferredResourcesSlot)
+#define NWB_LIGHT_SPACE_DEFERRED nwbHeapDeferredBindlessResources(g_NwbLightSpacePush.deferredResourcesSlot)
 #define NWB_SCENE_SHADING_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.w
 #include "../scene/buffer.slangi"

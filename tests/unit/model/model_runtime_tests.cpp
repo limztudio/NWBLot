@@ -144,7 +144,7 @@ TEST(ModelRuntime, FailedReplacementLoadClearsOnlyThatOwnersObjectsAndCanRetry){
     EXPECT_FALSE(world.entity(changedObject).alive());
     EXPECT_TRUE(world.entity(retainedObject).alive());
     ASSERT_NE(world.tryGetComponent<ModelRuntimeComponent>(changedOwner), nullptr);
-    EXPECT_EQ(world.tryGetComponent<ModelRuntimeComponent>(changedOwner)->model, NAME_NONE);
+    EXPECT_EQ(world.tryGetComponent<ModelRuntimeComponent>(changedOwner)->model, s_NameNone);
     EXPECT_EQ(world.tryGetComponent<ModelRuntimeComponent>(changedOwner)->objectCount, 0u);
     EXPECT_EQ(context.source.readCount, 1u);
 

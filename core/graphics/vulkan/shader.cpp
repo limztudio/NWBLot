@@ -207,7 +207,7 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
     key.entryName = shader->m_entryPointName;
     m_shaders.emplace(
         Move(key),
-        Handle<Shader>(shader, Handle<Shader>::deleter_type(&m_context.objectArena), AdoptRef)
+        Handle<Shader>(shader, Handle<Shader>::deleter_type(&m_context.objectArena), s_AdoptRef)
     );
     return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena));
 }
@@ -243,7 +243,7 @@ ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
-    return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 ShaderHandle Device::createShaderSpecialization(Shader& baseShader, const ShaderSpecialization* constants, u32 numConstants){
@@ -304,7 +304,7 @@ ShaderHandle Device::createShaderSpecialization(Shader& baseShader, const Shader
         }
     }
 
-    return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return ShaderHandle(shader, ShaderHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binarySize){
@@ -315,7 +315,7 @@ ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binary
         return nullptr;
     }
 
-    return ShaderLibraryHandle(lib, ShaderLibraryHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return ShaderLibraryHandle(lib, ShaderLibraryHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 
@@ -490,7 +490,7 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
             fillVkAttribute(i);
     }
 
-    return InputLayoutHandle(layout, InputLayoutHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return InputLayoutHandle(layout, InputLayoutHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 

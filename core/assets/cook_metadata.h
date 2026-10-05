@@ -117,7 +117,7 @@ namespace AssetMetadataParseResult{
 struct AssetDocumentMetadataParseContext{
     CookArena& cookArena;
     const DiscoveredNwbFile& discoveredNwbFile;
-    Name assetType = NAME_NONE;
+    Name assetType = s_NameNone;
     const Core::Metascript::Document& doc;
     ParsedAssetMetadata& parsedMetadata;
     ScratchArena& scratchArena;
@@ -126,8 +126,8 @@ struct AssetDocumentMetadataParseContext{
 struct AssetValueMetadataParseContext{
     CookArena& cookArena;
     const DiscoveredNwbFile& discoveredNwbFile;
-    Name assetType = NAME_NONE;
-    Name virtualPath = NAME_NONE;
+    Name assetType = s_NameNone;
+    Name virtualPath = s_NameNone;
     const Core::Metascript::Value& value;
     ParsedAssetMetadata& parsedMetadata;
     ScratchArena& scratchArena;

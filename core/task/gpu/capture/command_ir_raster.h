@@ -211,7 +211,7 @@ private:
 // The arena backing an owner box must outlive every capture/exported stream that retains the returned anchor.
 template<typename T>
 [[nodiscard]] GpuCommandIrOwnerAnchor MakeGpuCommandIrOwnerAnchor(GraphicsArena& arena, T owner){
-    return GpuCommandIrOwnerAnchor(NewArenaObject<GpuCommandIrRetainedOwnerBox<T>>(arena, arena, Move(owner)), AdoptRef);
+    return GpuCommandIrOwnerAnchor(NewArenaObject<GpuCommandIrRetainedOwnerBox<T>>(arena, arena, Move(owner)), s_AdoptRef);
 }
 
 struct GpuCommandIrRasterStateOwner{

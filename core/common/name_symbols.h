@@ -82,7 +82,7 @@ template<typename ArenaT>
 
     for(const ::DirectoryEntry<ArenaT>& entry : directory){
         ErrorCode fileError;
-        if(!entry.is_regular_file(fileError) || fileError)
+        if(!entry.isRegularFile(fileError) || fileError)
             continue;
 
         const ::Path<ArenaT> extensionPath = entry.path().extension();

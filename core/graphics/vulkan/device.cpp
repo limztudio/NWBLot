@@ -120,8 +120,8 @@ Device::Device(const DeviceDesc& desc)
     , m_deviceGeneration(__hidden_vulkan_device::AllocateDeviceGeneration())
     , m_gpuCrashDiagnosticsEnabled(desc.gpuCrashDiagnosticsEnabled)
     , m_gpuCrashTracker(desc.allocator.getObjectArena())
-    , m_gpuCrashReportArena(VulkanArenaScope::s_GpuCrashReportArena, Alloc::PersistentArena::StructureAlignedSize(s_GpuCrashReportArenaSize))
-    , m_gpuCrashVendorBinaryArena(VulkanArenaScope::s_GpuCrashVendorBinaryArena, Alloc::PersistentArena::StructureAlignedSize(s_MaxDeviceFaultVendorBinaryBytes))
+    , m_gpuCrashReportArena(VulkanArenaScope::s_GpuCrashReportArena, Alloc::PersistentArena::structureAlignedSize(s_GpuCrashReportArenaSize))
+    , m_gpuCrashVendorBinaryArena(VulkanArenaScope::s_GpuCrashVendorBinaryArena, Alloc::PersistentArena::structureAlignedSize(s_MaxDeviceFaultVendorBinaryBytes))
     , m_context(
         desc.allocator,
         desc.cpuScheduler,
@@ -247,8 +247,8 @@ Device::Device(const DeviceDesc& desc)
     m_context.textureCompressionBcFeatureEnabled = desc.textureCompressionBcFeatureEnabled;
     m_context.textureCompressionAstcLdrFeatureEnabled = desc.textureCompressionAstcLdrFeatureEnabled;
     m_context.textureCompressionAstcHdrFeatureEnabled = desc.textureCompressionAstcHdrFeatureEnabled;
-    m_context.extensions.KHR_dynamic_rendering = desc.dynamicRenderingSupported;
-    m_context.extensions.KHR_synchronization2 = desc.synchronization2Supported;
+    m_context.extensions.khrDynamicRendering = desc.dynamicRenderingSupported;
+    m_context.extensions.khrSynchronization2 = desc.synchronization2Supported;
     m_context.independentBlendFeatureEnabled = desc.independentBlendFeatureEnabled;
     m_context.fullDrawIndexUint32FeatureEnabled = desc.fullDrawIndexUint32FeatureEnabled;
     m_context.multiDrawIndirectFeatureEnabled = desc.multiDrawIndirectFeatureEnabled;
@@ -264,58 +264,58 @@ Device::Device(const DeviceDesc& desc)
     for(usize i = 0u; i < desc.numInstanceExtensions; ++i){
         const AStringView ext = desc.instanceExtensions[i];
         if(ext == VK_EXT_DEBUG_UTILS_EXTENSION_NAME)
-            m_context.extensions.EXT_debug_utils = true;
+            m_context.extensions.extDebugUtils = true;
     }
 
     for(usize i = 0u; i < desc.numDeviceExtensions; ++i){
         const AStringView ext = desc.deviceExtensions[i];
         if(ext == VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME)
-            m_context.extensions.KHR_synchronization2 = true;
+            m_context.extensions.khrSynchronization2 = true;
         else if(ext == VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)
-            m_context.extensions.KHR_calibrated_timestamps = true;
+            m_context.extensions.khrCalibratedTimestamps = true;
         else if(ext == VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME)
-            m_context.extensions.KHR_ray_tracing_pipeline = true;
+            m_context.extensions.khrRayTracingPipeline = true;
         else if(ext == VK_KHR_RAY_QUERY_EXTENSION_NAME)
-            m_context.extensions.KHR_ray_query = true;
+            m_context.extensions.khrRayQuery = true;
         else if(ext == VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME)
-            m_context.extensions.KHR_acceleration_structure = true;
+            m_context.extensions.khrAccelerationStructure = true;
         else if(ext == VK_KHR_SWAPCHAIN_EXTENSION_NAME)
-            m_context.extensions.KHR_swapchain = true;
+            m_context.extensions.khrSwapchain = true;
         else if(ext == VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME)
-            m_context.extensions.KHR_dynamic_rendering = true;
+            m_context.extensions.khrDynamicRendering = true;
         else if(ext == VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME)
-            m_context.extensions.EXT_descriptor_buffer = true;
+            m_context.extensions.extDescriptorBuffer = true;
         else if(ext == VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)
-            m_context.extensions.EXT_calibrated_timestamps = true;
+            m_context.extensions.extCalibratedTimestamps = true;
         else if(ext == VK_EXT_OPACITY_MICROMAP_EXTENSION_NAME)
-            m_context.extensions.EXT_opacity_micromap = true;
+            m_context.extensions.extOpacityMicromap = true;
         else if(ext == VK_NV_COOPERATIVE_VECTOR_EXTENSION_NAME)
-            m_context.extensions.NV_cooperative_vector = true;
+            m_context.extensions.nvCooperativeVector = true;
         else if(ext == VK_NV_CLUSTER_ACCELERATION_STRUCTURE_EXTENSION_NAME)
-            m_context.extensions.NV_cluster_acceleration_structure = true;
+            m_context.extensions.nvClusterAccelerationStructure = true;
         else if(ext == VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME)
-            m_context.extensions.NV_device_diagnostic_checkpoints = true;
+            m_context.extensions.nvDeviceDiagnosticCheckpoints = true;
         else if(ext == VK_EXT_DEVICE_FAULT_EXTENSION_NAME)
-            m_context.extensions.EXT_device_fault = true;
+            m_context.extensions.extDeviceFault = true;
         else if(ext == VK_EXT_TEXTURE_COMPRESSION_ASTC_HDR_EXTENSION_NAME)
-            m_context.extensions.EXT_texture_compression_astc_hdr = true;
+            m_context.extensions.extTextureCompressionAstcHdr = true;
         else if(ext == VK_AMD_BUFFER_MARKER_EXTENSION_NAME)
-            m_context.extensions.AMD_buffer_marker = true;
+            m_context.extensions.amdBufferMarker = true;
         else if(ext == VK_EXT_MESH_SHADER_EXTENSION_NAME)
-            m_context.extensions.EXT_mesh_shader = true;
+            m_context.extensions.extMeshShader = true;
         else if(ext == VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME)
-            m_context.extensions.KHR_fragment_shading_rate = true;
+            m_context.extensions.khrFragmentShadingRate = true;
         else if(ext == VK_EXT_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME)
-            m_context.extensions.EXT_ray_tracing_invocation_reorder = true;
+            m_context.extensions.extRayTracingInvocationReorder = true;
         else if(ext == VK_NV_RAY_TRACING_INVOCATION_REORDER_EXTENSION_NAME)
-            m_context.extensions.NV_ray_tracing_invocation_reorder = true;
+            m_context.extensions.nvRayTracingInvocationReorder = true;
         else if(ext == VK_NV_RAY_TRACING_LINEAR_SWEPT_SPHERES_EXTENSION_NAME)
-            m_context.extensions.NV_ray_tracing_linear_swept_spheres = true;
+            m_context.extensions.nvRayTracingLinearSweptSpheres = true;
     }
 
     Alloc::ScratchArena calibratedTimestampProbeArena(VulkanArenaScope::s_DeviceExtensionSetupArena);
     bool comparableGpuTimestamps = false;
-    if(m_context.extensions.KHR_calibrated_timestamps){
+    if(m_context.extensions.khrCalibratedTimestamps){
         comparableGpuTimestamps = __hidden_vulkan_device::ProbeComparableGpuTimestamps(
             m_context.physicalDevice,
             m_context.device,
@@ -324,7 +324,7 @@ Device::Device(const DeviceDesc& desc)
             calibratedTimestampProbeArena
         );
     }
-    if(!comparableGpuTimestamps && m_context.extensions.EXT_calibrated_timestamps){
+    if(!comparableGpuTimestamps && m_context.extensions.extCalibratedTimestamps){
         comparableGpuTimestamps = __hidden_vulkan_device::ProbeComparableGpuTimestamps(
             m_context.physicalDevice,
             m_context.device,
@@ -336,48 +336,48 @@ Device::Device(const DeviceDesc& desc)
     m_context.comparableGpuTimestamps = comparableGpuTimestamps;
 
     m_context.meshShaderFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT;
-    if(m_context.extensions.EXT_mesh_shader){
+    if(m_context.extensions.extMeshShader){
         m_context.meshShaderFeatures.meshShader = desc.meshShaderFeatureEnabled ? VK_TRUE : VK_FALSE;
         m_context.meshShaderFeatures.taskShader = desc.meshTaskShaderSupported ? VK_TRUE : VK_FALSE;
     }
 
     m_context.rayTracingLinearSweptSpheresFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_LINEAR_SWEPT_SPHERES_FEATURES_NV;
-    if(m_context.extensions.NV_ray_tracing_linear_swept_spheres){
+    if(m_context.extensions.nvRayTracingLinearSweptSpheres){
         m_context.rayTracingLinearSweptSpheresFeatures.spheres = desc.rayTracingSpheresSupported ? VK_TRUE : VK_FALSE;
         m_context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres = desc.rayTracingLinearSweptSpheresSupported ? VK_TRUE : VK_FALSE;
     }
 
     m_context.coopVecFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_FEATURES_NV;
-    if(m_context.extensions.NV_cooperative_vector){
+    if(m_context.extensions.nvCooperativeVector){
         m_context.coopVecFeatures.cooperativeVector = desc.cooperativeVectorFeatureEnabled ? VK_TRUE : VK_FALSE;
         m_context.coopVecFeatures.cooperativeVectorTraining = desc.cooperativeVectorTrainingFeatureEnabled ? VK_TRUE : VK_FALSE;
     }
 
-    if(m_context.extensions.EXT_debug_utils && (!m_context.instanceDispatch.vkCmdBeginDebugUtilsLabelEXT || !m_context.instanceDispatch.vkCmdEndDebugUtilsLabelEXT)){
+    if(m_context.extensions.extDebugUtils && (!m_context.instanceDispatch.vkCmdBeginDebugUtilsLabelEXT || !m_context.instanceDispatch.vkCmdEndDebugUtilsLabelEXT)){
         NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Debug utils marker entry points are unavailable."));
-        m_context.extensions.EXT_debug_utils = false;
+        m_context.extensions.extDebugUtils = false;
     }
 
-    if(m_context.extensions.NV_device_diagnostic_checkpoints && (!m_context.deviceDispatch.vkCmdSetCheckpointNV || !m_context.deviceDispatch.vkGetQueueCheckpointDataNV)){
+    if(m_context.extensions.nvDeviceDiagnosticCheckpoints && (!m_context.deviceDispatch.vkCmdSetCheckpointNV || !m_context.deviceDispatch.vkGetQueueCheckpointDataNV)){
         NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Device diagnostic checkpoint entry points are unavailable."));
-        m_context.extensions.NV_device_diagnostic_checkpoints = false;
+        m_context.extensions.nvDeviceDiagnosticCheckpoints = false;
     }
 
-    if(m_context.extensions.EXT_device_fault && !m_context.deviceDispatch.vkGetDeviceFaultInfoEXT){
+    if(m_context.extensions.extDeviceFault && !m_context.deviceDispatch.vkGetDeviceFaultInfoEXT){
         NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Device fault info entry point is unavailable."));
-        m_context.extensions.EXT_device_fault = false;
+        m_context.extensions.extDeviceFault = false;
     }
 
-    if(m_context.extensions.AMD_buffer_marker && !m_context.deviceDispatch.vkCmdWriteBufferMarkerAMD){
+    if(m_context.extensions.amdBufferMarker && !m_context.deviceDispatch.vkCmdWriteBufferMarkerAMD){
         NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Buffer marker entry point is unavailable."));
-        m_context.extensions.AMD_buffer_marker = false;
+        m_context.extensions.amdBufferMarker = false;
     }
 
     if(
         m_gpuCrashDiagnosticsEnabled
-        && !m_context.extensions.NV_device_diagnostic_checkpoints
-        && !m_context.extensions.AMD_buffer_marker
-        && !m_context.extensions.EXT_device_fault
+        && !m_context.extensions.nvDeviceDiagnosticCheckpoints
+        && !m_context.extensions.amdBufferMarker
+        && !m_context.extensions.extDeviceFault
     ){
         NWB_LOGGER_ESSENTIAL_INFO(
             GLB_TEXT("Vulkan: GPU crash diagnostics will use minimal text reports; device checkpoints, buffer markers, ")
@@ -386,7 +386,7 @@ Device::Device(const DeviceDesc& desc)
     }
 
     if(
-        m_context.extensions.KHR_acceleration_structure
+        m_context.extensions.khrAccelerationStructure
         && (
             !m_context.deviceDispatch.vkCreateAccelerationStructureKHR
             || !m_context.deviceDispatch.vkDestroyAccelerationStructureKHR
@@ -396,12 +396,12 @@ Device::Device(const DeviceDesc& desc)
         )
     ){
         NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Acceleration structure entry points are unavailable."));
-        m_context.extensions.KHR_acceleration_structure = false;
+        m_context.extensions.khrAccelerationStructure = false;
         m_context.accelerationStructureFeatureEnabled = false;
     }
 
     if(
-        m_context.extensions.KHR_ray_tracing_pipeline
+        m_context.extensions.khrRayTracingPipeline
         && (
             !m_context.deviceDispatch.vkCreateRayTracingPipelinesKHR
             || !m_context.deviceDispatch.vkGetRayTracingShaderGroupHandlesKHR
@@ -409,12 +409,12 @@ Device::Device(const DeviceDesc& desc)
         )
     ){
         NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Ray tracing pipeline entry points are unavailable."));
-        m_context.extensions.KHR_ray_tracing_pipeline = false;
+        m_context.extensions.khrRayTracingPipeline = false;
         m_context.rayTracingPipelineFeatureEnabled = false;
     }
 
     if(
-        m_context.extensions.EXT_opacity_micromap
+        m_context.extensions.extOpacityMicromap
         && (
             !m_context.deviceDispatch.vkCreateMicromapEXT
             || !m_context.deviceDispatch.vkDestroyMicromapEXT
@@ -423,24 +423,24 @@ Device::Device(const DeviceDesc& desc)
         )
     ){
         NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Opacity micromap entry points are unavailable."));
-        m_context.extensions.EXT_opacity_micromap = false;
+        m_context.extensions.extOpacityMicromap = false;
         m_context.opacityMicromapFeatureEnabled = false;
     }
 
     if(
-        m_context.extensions.NV_cluster_acceleration_structure
+        m_context.extensions.nvClusterAccelerationStructure
         && (
             !m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV
             || !m_context.deviceDispatch.vkCmdBuildClusterAccelerationStructureIndirectNV
         )
     ){
         NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Cluster acceleration structure entry points are unavailable."));
-        m_context.extensions.NV_cluster_acceleration_structure = false;
+        m_context.extensions.nvClusterAccelerationStructure = false;
         m_context.clusterAccelerationStructureFeatureEnabled = false;
     }
 
     if(
-        m_context.extensions.NV_cooperative_vector
+        m_context.extensions.nvCooperativeVector
         && (
             !m_context.instanceDispatch.vkGetPhysicalDeviceCooperativeVectorPropertiesNV
             || !m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV
@@ -448,14 +448,14 @@ Device::Device(const DeviceDesc& desc)
         )
     ){
         NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Cooperative vector entry points are unavailable."));
-        m_context.extensions.NV_cooperative_vector = false;
+        m_context.extensions.nvCooperativeVector = false;
         m_context.coopVecFeatures.cooperativeVector = VK_FALSE;
         m_context.coopVecFeatures.cooperativeVectorTraining = VK_FALSE;
     }
 
-    if(m_context.extensions.EXT_mesh_shader && !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT){
+    if(m_context.extensions.extMeshShader && !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT){
         NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Mesh shader draw entry point is unavailable."));
-        m_context.extensions.EXT_mesh_shader = false;
+        m_context.extensions.extMeshShader = false;
         m_context.meshShaderFeatures.meshShader = VK_FALSE;
         m_context.meshShaderFeatures.taskShader = VK_FALSE;
     }
@@ -468,37 +468,37 @@ Device::Device(const DeviceDesc& desc)
         m_context.subgroupProperties.pNext = pNext;
         pNext = &m_context.subgroupProperties;
 
-        if(m_context.extensions.KHR_ray_tracing_pipeline){
+        if(m_context.extensions.khrRayTracingPipeline){
             m_context.rayTracingPipelineProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
             m_context.rayTracingPipelineProperties.pNext = pNext;
             pNext = &m_context.rayTracingPipelineProperties;
         }
 
-        if(m_context.extensions.KHR_acceleration_structure){
+        if(m_context.extensions.khrAccelerationStructure){
             m_context.accelStructProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR;
             m_context.accelStructProperties.pNext = pNext;
             pNext = &m_context.accelStructProperties;
         }
 
-        if(m_context.extensions.EXT_descriptor_buffer){
+        if(m_context.extensions.extDescriptorBuffer){
             m_context.descriptorBufferProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT;
             m_context.descriptorBufferProperties.pNext = pNext;
             pNext = &m_context.descriptorBufferProperties;
         }
 
-        if(m_context.extensions.EXT_mesh_shader){
+        if(m_context.extensions.extMeshShader){
             m_context.meshShaderProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT;
             m_context.meshShaderProperties.pNext = pNext;
             pNext = &m_context.meshShaderProperties;
         }
 
-        if(m_context.extensions.NV_cluster_acceleration_structure){
+        if(m_context.extensions.nvClusterAccelerationStructure){
             m_context.nvClusterAccelerationStructureProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_CLUSTER_ACCELERATION_STRUCTURE_PROPERTIES_NV;
             m_context.nvClusterAccelerationStructureProperties.pNext = pNext;
             pNext = &m_context.nvClusterAccelerationStructureProperties;
         }
 
-        if(m_context.extensions.NV_cooperative_vector){
+        if(m_context.extensions.nvCooperativeVector){
             m_context.coopVecProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_VECTOR_PROPERTIES_NV;
             m_context.coopVecProperties.pNext = pNext;
             pNext = &m_context.coopVecProperties;
@@ -529,7 +529,7 @@ Device::Device(const DeviceDesc& desc)
     if(!m_allocator.initialize())
         GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to initialize VMA allocator"));
 
-    if(m_gpuCrashDiagnosticsEnabled && m_context.extensions.AMD_buffer_marker){
+    if(m_gpuCrashDiagnosticsEnabled && m_context.extensions.amdBufferMarker){
         VulkanDetail::AmdBreadcrumbRingLayout breadcrumbLayout;
         if(!VulkanDetail::TryBuildAmdBreadcrumbRingLayout(
             getPhysicalQueueTopology(),
@@ -537,7 +537,7 @@ Device::Device(const DeviceDesc& desc)
             breadcrumbLayout
         )){
             NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Invalid AMD breadcrumb ring layout; AMD GPU breadcrumbs disabled."));
-            m_context.extensions.AMD_buffer_marker = false;
+            m_context.extensions.amdBufferMarker = false;
         }
         else{
             if(!m_amdBreadcrumb.initializeMetadata(
@@ -545,7 +545,7 @@ Device::Device(const DeviceDesc& desc)
                 VulkanArenaScope::s_AmdBreadcrumbMetadataArena
             )){
                 NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to reserve AMD breadcrumb metadata; AMD GPU breadcrumbs disabled."));
-                m_context.extensions.AMD_buffer_marker = false;
+                m_context.extensions.amdBufferMarker = false;
             }
             else{
 
@@ -586,7 +586,7 @@ Device::Device(const DeviceDesc& desc)
                         GLB_TEXT("Vulkan: Failed to allocate AMD breadcrumb buffer ({}); breadcrumbs disabled."),
                         ResultToString(breadcrumbRes)
                     );
-                    m_context.extensions.AMD_buffer_marker = false;
+                    m_context.extensions.amdBufferMarker = false;
                 }
             }
         }

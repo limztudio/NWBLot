@@ -451,8 +451,8 @@ TEST(EcsGraphics, ShadowTemporalScratchRetainsAcceptedStateAcrossGraphicsRoute){
         "FrameExecuteLifecycle::ShadowVisibilityStateLifecycleContext shadowVisibilityStateLifecycle{",
         acceptedShadowOffset
     );
-    const usize scratchStateOffset = shadowLifecycle.find("FrameExecuteLifecycle::PrepareShadowVisibilityTask(");
-    const usize acceptedCallbackOffset = shadowLifecycle.find("FrameExecuteLifecycle::AcceptShadowVisibilityTask(", scratchStateOffset);
+    const usize scratchStateOffset = shadowLifecycle.find("FrameExecuteLifecycle::prepareShadowVisibilityTask(");
+    const usize acceptedCallbackOffset = shadowLifecycle.find("FrameExecuteLifecycle::acceptShadowVisibilityTask(", scratchStateOffset);
     const usize returnCommitOffset = shadowLifecycle.find("m_shadowVisibilityReturnState.commit(", acceptedCallbackOffset);
     const usize scratchCommitOffset = shadowLifecycle.find("m_shadowComputePersistentState.commit(", returnCommitOffset);
     const usize temporalFinalizeOffset = shadowLifecycle.find(

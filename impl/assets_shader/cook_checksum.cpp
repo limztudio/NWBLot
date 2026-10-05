@@ -71,9 +71,9 @@ static usize PathDepth(const Path& path){
 }
 
 static Path NormalizeDependencyRootAliasPath(Path path){
-    path = path.lexically_normal();
-    while(!path.empty() && !path.has_filename()){
-        const Path parentPath = path.parent_path();
+    path = path.lexicallyNormal();
+    while(!path.empty() && !path.hasFilename()){
+        const Path parentPath = path.parentPath();
         if(parentPath.empty() || parentPath == path)
             break;
         path = parentPath;
@@ -154,7 +154,7 @@ bool ShaderCook::computeDependencyChecksum(
     for(const Path& dependency : dependencies){
         SortedDependencyItem item(m_memoryArena);
         errorCode.clear();
-        Path normalizedDependency = AbsolutePath(dependency, errorCode).lexically_normal();
+        Path normalizedDependency = AbsolutePath(dependency, errorCode).lexicallyNormal();
         if(errorCode){
             NWB_LOGGER_ERROR(GLB_TEXT("Failed to resolve dependency path '{}' : {}")
                 , PathToString<tchar>(dependency)
@@ -177,7 +177,7 @@ bool ShaderCook::computeDependencyChecksum(
             return false;
         }
 
-        __hidden_cook_checksum::ScratchString relativePathText = PathToString(scratchArena, normalizedDependency.lexically_relative(bestRootAlias->root));
+        __hidden_cook_checksum::ScratchString relativePathText = PathToString(scratchArena, normalizedDependency.lexicallyRelative(bestRootAlias->root));
         CanonicalizeTextInPlace(relativePathText);
 
         item.canonicalPath = bestRootAlias->key;

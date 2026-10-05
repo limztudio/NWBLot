@@ -128,7 +128,7 @@ TEST(Telemetry, PerfMemoryPayloadRejectsInvalidInput){
 
     EXPECT_FALSE(Telemetry::BuildPerfMemoryPayload(
         testArena.arena,
-        NAME_NONE,
+        s_NameNone,
         s_PROJECT_ARENA_TEXT,
         snapshot,
         delta,

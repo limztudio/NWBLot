@@ -71,7 +71,7 @@ struct DeformationContext{
             Core::Buffer* const raw = Tests::NewMetadataOnlyBuffer(
                 arena, context, allocator, Core::BufferDesc{}.setByteSize(256u)
             );
-            buffer = Core::BufferHandle(raw, Core::BufferHandle::deleter_type(&arena), AdoptRef);
+            buffer = Core::BufferHandle(raw, Core::BufferHandle::deleter_type(&arena), s_AdoptRef);
         }
         instance.handle.value = 17u;
         instance.entity = Core::ECS::EntityID(3u);

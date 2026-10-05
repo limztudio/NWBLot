@@ -64,7 +64,7 @@ struct ReflectionFrameParameters{
 static_assert(sizeof(ReflectionFrameParameters) == 192u);
 
 struct ReflectionDepthPyramidMip{
-    Name taskIdentity = NAME_NONE;
+    Name taskIdentity = s_NameNone;
     u32 sampledSlot = 0u;
     u32 storageSlot = 0u;
     u32 width = 0u;

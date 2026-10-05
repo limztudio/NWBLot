@@ -186,7 +186,7 @@ TimingScopeId TimingView::scopeAt(const usize index)const{
 }
 
 Name TimingView::scopeNameAt(const usize index)const{
-    return m_recorder ? m_recorder->scopeNameAt(index) : NAME_NONE;
+    return m_recorder ? m_recorder->scopeNameAt(index) : s_NameNone;
 }
 
 const TimingStats& TimingView::statsAt(const usize index)const{

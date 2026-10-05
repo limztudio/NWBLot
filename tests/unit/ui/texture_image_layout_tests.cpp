@@ -35,13 +35,13 @@ TEST_F(TextureImageLayoutFixture, SameIdentityVersionsMeasureTheirOwnImmutableDi
     ASSERT_EQ(first->identity(), second->identity());
     ASSERT_NE(first->generation(), second->generation());
     ImageMetrics metrics;
-    ASSERT_TRUE(ImageLayout::Measure({}, *first, metrics));
+    ASSERT_TRUE(ImageLayout::measure({}, *first, metrics));
     EXPECT_FLOAT_EQ(metrics.contentSize.x, 20.0f);
     EXPECT_FLOAT_EQ(metrics.contentSize.y, 12.0f);
-    ASSERT_TRUE(ImageLayout::Measure({}, *second, metrics));
+    ASSERT_TRUE(ImageLayout::measure({}, *second, metrics));
     EXPECT_FLOAT_EQ(metrics.contentSize.x, 9.0f);
     EXPECT_FLOAT_EQ(metrics.contentSize.y, 7.0f);
-    ASSERT_TRUE(ImageLayout::Measure({}, *first, metrics));
+    ASSERT_TRUE(ImageLayout::measure({}, *first, metrics));
     EXPECT_FLOAT_EQ(metrics.contentSize.x, 20.0f);
     EXPECT_FLOAT_EQ(metrics.contentSize.y, 12.0f);
 }
@@ -54,11 +54,11 @@ TEST_F(TextureImageLayoutFixture, EmptyFixedExtentAndTransparentHdrTintRemainVal
     options.height = { LayoutSizePolicy::Fixed, 0.0f };
     options.tint = { 2.0f, 0.0f, 0.5f, 0.0f };
     ImageMetrics metrics;
-    ASSERT_TRUE(ImageLayout::Measure(options, *image, metrics));
+    ASSERT_TRUE(ImageLayout::measure(options, *image, metrics));
     EXPECT_FLOAT_EQ(metrics.contentSize.x, 8.0f);
     EXPECT_FLOAT_EQ(metrics.contentSize.y, 4.0f);
     ImagePlacement placement;
-    ASSERT_TRUE(ImageLayout::Place({ 10.0f, 20.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 100.0f, 100.0f }, placement));
+    ASSERT_TRUE(ImageLayout::place({ 10.0f, 20.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 100.0f, 100.0f }, placement));
     EXPECT_FLOAT_EQ(placement.bounds.width, 0.0f);
     EXPECT_FLOAT_EQ(placement.clip.height, 0.0f);
 }
@@ -80,7 +80,7 @@ TEST_F(TextureImageLayoutFixture, InvalidSizePoliciesAndValuesPreserveBothOutput
         default: options.height.value = Limit<f32>::s_Infinity; break;
         }
         ImageMetrics output = accepted;
-        EXPECT_FALSE(ImageLayout::Measure(options, *image, output));
+        EXPECT_FALSE(ImageLayout::measure(options, *image, output));
         EXPECT_EQ(BitCast<u32>(output.contentSize.x), BitCast<u32>(accepted.contentSize.x));
         EXPECT_EQ(BitCast<u32>(output.contentSize.y), BitCast<u32>(accepted.contentSize.y));
     }
@@ -90,7 +90,7 @@ TEST_F(TextureImageLayoutFixture, InvalidTintPreservesThePreviousMeasuredExtent)
     const SharedImageSource image = makeImage();
     ASSERT_TRUE(image);
     ImageMetrics accepted;
-    ASSERT_TRUE(ImageLayout::Measure({}, *image, accepted));
+    ASSERT_TRUE(ImageLayout::measure({}, *image, accepted));
     for(u32 field = 0u; field < 8u; ++field){
         ImageOptions options;
         switch(field){
@@ -104,7 +104,7 @@ TEST_F(TextureImageLayoutFixture, InvalidTintPreservesThePreviousMeasuredExtent)
         default: options.tint.a = 1.01f; break;
         }
         ImageMetrics output = accepted;
-        EXPECT_FALSE(ImageLayout::Measure(options, *image, output));
+        EXPECT_FALSE(ImageLayout::measure(options, *image, output));
         EXPECT_EQ(BitCast<u32>(output.contentSize.x), BitCast<u32>(accepted.contentSize.x));
         EXPECT_EQ(BitCast<u32>(output.contentSize.y), BitCast<u32>(accepted.contentSize.y));
     }

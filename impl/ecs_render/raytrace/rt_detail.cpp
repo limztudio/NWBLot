@@ -69,10 +69,10 @@ RenderableMeshResolution::Enum ResolveRenderableMeshResources(
         return false;
 
     const Core::DescriptorWriteItem item = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
-        ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
+        ? Core::DescriptorWriteItem::constantBuffer(0u, &buffer)
         : (writable
-            ? Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, &buffer)
-            : Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, &buffer)
+            ? Core::DescriptorWriteItem::structuredBufferUav(0u, &buffer)
+            : Core::DescriptorWriteItem::structuredBufferSrv(0u, &buffer)
         )
     ;
     if(!heap.write(handle, item)){

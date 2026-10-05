@@ -360,7 +360,7 @@ TEST(AssetsUiSkin, CookedMetadataLoadsThroughRuntimeAssetRegistry){
     Core::Assets::AssetRegistry runtimeRegistry(testArena.arena);
     Core::Assets::RegisterAutoCollectedAssetCodecs(runtimeRegistry);
     UniquePtr<Core::Assets::IAsset> loadedAsset;
-    ASSERT_TRUE(runtimeRegistry.deserializeAsset(UiSkin::AssetTypeName(), skin.virtualPath(), binary, loadedAsset));
+    ASSERT_TRUE(runtimeRegistry.deserializeAsset(UiSkin::assetTypeName(), skin.virtualPath(), binary, loadedAsset));
     EXPECT_NE(Core::Assets::CastAsset<UiSkin>(loadedAsset.get()), nullptr);
     EXPECT_EQ(logger.errorCount(), 0u);
 }
@@ -551,7 +551,7 @@ TEST(AssetsUiSkin, RejectsOverLimitCountsBeforeReadingOrCopyingRegions){
     EXPECT_FALSE(ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("regions exceed schema limit 4096")));
     EXPECT_TRUE(entry.regions.empty());
-    EXPECT_EQ(entry.virtualPath, NAME_NONE);
+    EXPECT_EQ(entry.virtualPath, s_NameNone);
 
     UiSkin::RegionVector oversized(testArena.arena);
     oversized.reserve(s_UiSkinMaxRegionCount + 1u);
@@ -597,7 +597,7 @@ TEST(AssetsUiSkin, CookRejectsObsoleteMetadataUnknownFieldsAndMalformedArrays){
         UiSkinCookEntry entry(testArena.arena);
         EXPECT_FALSE(ParseMetadata(testArena, metadata, entry)) << overrideText;
         EXPECT_TRUE(entry.regions.empty());
-        EXPECT_EQ(entry.virtualPath, NAME_NONE);
+        EXPECT_EQ(entry.virtualPath, s_NameNone);
     }
     EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("unsupported asset field")));
     EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("toolkit_contract must be 'widgets'")));

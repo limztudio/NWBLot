@@ -55,7 +55,7 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForTexturePrimitives){
         Graphics::TextureHandle texture(
             textureObject,
             Graphics::TextureHandle::deleter_type(&testArena.arena),
-            AdoptRef
+            s_AdoptRef
         );
         return texture;
     };
@@ -505,7 +505,7 @@ TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPubli
     Graphics::TextureHandle texture(
         textureObject,
         Graphics::TextureHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     // An all-unknown fresh retained texture keeps the long-standing descriptor-state import behavior.
     Graphics::GpuTaskGraph freshImportGraph(testArena.arena);
@@ -608,7 +608,7 @@ TEST(GpuTaskGraph, AllowsExplicitUnknownRetainedTextureFirstWriteDestinations){
         Graphics::TextureHandle texture(
             textureObject,
             Graphics::TextureHandle::deleter_type(&testArena.arena),
-            AdoptRef
+            s_AdoptRef
         );
         return texture;
     };
@@ -625,7 +625,7 @@ TEST(GpuTaskGraph, AllowsExplicitUnknownRetainedTextureFirstWriteDestinations){
         Graphics::BufferHandle buffer(
             bufferObject,
             Graphics::BufferHandle::deleter_type(&testArena.arena),
-            AdoptRef
+            s_AdoptRef
         );
         return buffer;
     };

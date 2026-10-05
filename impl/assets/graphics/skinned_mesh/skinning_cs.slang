@@ -277,7 +277,7 @@ void nwbSkinnedMeshSkinPosition(
     const uint localPositionIndex
 ){
     const NwbMeshletPositionStreamRef positionRef = nwbMeshletDecodePositionRef(
-        NwbHeapRawBuffer(g_NwbSkinnedMeshBindlessResources.streamSlots1.w),
+        nwbHeapRawBuffer(g_NwbSkinnedMeshBindlessResources.streamSlots1.w),
         meshlet,
         decodeInfo,
         localPositionIndex,
@@ -298,7 +298,7 @@ void nwbSkinnedMeshSkinAttribute(
     const uint localAttributeIndex
 ){
     const NwbMeshletAttributeStreamRef attributeRef = nwbMeshletDecodeAttributeRef(
-        NwbHeapRawBuffer(g_NwbSkinnedMeshBindlessResources.streamSlots2.x),
+        nwbHeapRawBuffer(g_NwbSkinnedMeshBindlessResources.streamSlots2.x),
         meshlet,
         decodeInfo,
         localAttributeIndex

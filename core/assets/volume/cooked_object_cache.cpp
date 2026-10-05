@@ -184,9 +184,9 @@ static bool WriteObjectFile(
     BinaryDetail::AppendBytesNoReserveUnchecked(objectBytes, payload.data(), payload.size());
 
     ErrorCode errorCode;
-    if(!EnsureDirectories(objectPath.parent_path(), errorCode)){
+    if(!EnsureDirectories(objectPath.parentPath(), errorCode)){
         NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to create object cache directory '{}': {}")
-            , PathToString<tchar>(objectPath.parent_path())
+            , PathToString<tchar>(objectPath.parentPath())
             , StringConvert(errorCode.message())
         );
         return false;

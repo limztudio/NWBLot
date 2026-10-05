@@ -67,7 +67,7 @@ struct TextStep{
 
 
 bool ValidateMultilineText(const AStringView text){
-    if(!GraphemeSegmentation::Validate(text))
+    if(!GraphemeSegmentation::validate(text))
         return false;
     usize offset = 0u;
     while(offset < text.size()){
@@ -82,7 +82,7 @@ bool ValidateMultilineText(const AStringView text){
 
 EditTextStatus::Enum NormalizeMultilineText(
     const AStringView source, AString<Core::Alloc::GlobalArena>& output, const usize maxBytes){
-    if(!GraphemeSegmentation::Validate(source))
+    if(!GraphemeSegmentation::validate(source))
         return EditTextStatus::InvalidText;
     usize normalizedBytes = 0u;
     usize offset = 0u;

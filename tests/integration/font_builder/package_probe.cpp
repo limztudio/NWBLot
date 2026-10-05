@@ -79,7 +79,7 @@ inline constexpr int s_EntryFailure = -1;
         return false;
     NWB::Core::Assets::ExpandedAssetMetadataVector expanded(scratch);
     if(!NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunch(
-        sourcePath.parent_path(), "probe", sourcePath, document, expanded, scratch
+        sourcePath.parentPath(), "probe", sourcePath, document, expanded, scratch
     ) || expanded.size() != 2u)
         return false;
 

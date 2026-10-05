@@ -45,17 +45,17 @@ namespace ECSRenderDetail{
     struct MeshViewGpuData;
     struct MeshSoftwareBvhParentBuildState{
         Core::BufferHandle buffer;
-        Name identity = NAME_NONE;
+        Name identity = s_NameNone;
     };
     struct MeshBlasGraphState{
-        Name meshName = NAME_NONE;
+        Name meshName = s_NameNone;
         Core::RayTracingAccelStructHandle blas;
         bool backingFresh = false;
         bool nativeBuildsBlas = false;
     };
     // Cross-domain view of accel resources; only RendererMeshSystem publishes changes.
     struct MeshRayTracingResourceSnapshot{
-        Name meshName = NAME_NONE;
+        Name meshName = s_NameNone;
         u64 runtimeMeshVersion = 0u;
         u64 runtimeGeometryContentRevision = 0u;
         u64 blasGeometryContentRevision = 0u;

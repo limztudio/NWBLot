@@ -30,7 +30,7 @@ struct ProgressPaintSample{
 
 class UiProgressBuilderTests : public WidgetFixture{
 protected:
-    [[nodiscard]] static ProgressOptions Options(){
+    [[nodiscard]] static ProgressOptions makeOptions(){
         ProgressOptions options;
         options.width = { LayoutSizePolicy::Fixed, 240.0f };
         return options;
@@ -127,7 +127,7 @@ protected:
 TEST_F(UiProgressBuilderTests, DeclarationCopiesFractionOptionsStyleAndResolvedNames){
     ASSERT_TRUE(panel(1u));
     f64 fraction = 0.25;
-    ProgressOptions options = Options();
+    ProgressOptions options = makeOptions();
     m_builder.progressStyle().fillTint = { 0.8f, 0.6f, 0.4f, 0.5f };
     ASSERT_TRUE(m_builder.progress("amount", fraction, options));
     fraction = 0.75;
@@ -159,7 +159,7 @@ TEST_F(UiProgressBuilderTests, DeclarationCopiesFractionOptionsStyleAndResolvedN
 TEST_F(UiProgressBuilderTests, ExplicitFallbackRegionsResolveBeforeDeferredPaint){
     configureProgress(false, true);
     ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.progress("amount", 0.5, Options()));
+    ASSERT_TRUE(m_builder.progress("amount", 0.5, makeOptions()));
     m_builder.progressStyle().trackFallback = Name("missing.track");
     m_builder.progressStyle().fillFallback = Name("missing.fill");
     ASSERT_TRUE(finishPanel());
@@ -175,7 +175,7 @@ TEST_F(UiProgressBuilderTests, FiniteFractionsClampAtExactEmptyAndFullGeometry){
     const f64 fractions[]{ -4.0, 0.0, 1.0, 4.0 };
     for(u64 index = 0u; index < 4u; ++index){
         ASSERT_TRUE(panel(index + 1u));
-        ASSERT_TRUE(m_builder.progress("amount", fractions[index], Options()));
+        ASSERT_TRUE(m_builder.progress("amount", fractions[index], makeOptions()));
         ASSERT_TRUE(finishPanel());
         const DrawSnapshot snapshot = m_paint.freeze();
         ProgressPaintSample track;
@@ -193,7 +193,7 @@ TEST_F(UiProgressBuilderTests, FiniteFractionsClampAtExactEmptyAndFullGeometry){
 
 TEST_F(UiProgressBuilderTests, TinyFillClipsNaturalBorderTexelsWithoutCompressingBothCaps){
     ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.progress("amount", 0.01, Options()));
+    ASSERT_TRUE(m_builder.progress("amount", 0.01, makeOptions()));
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
     ProgressPaintSample track;
@@ -208,7 +208,7 @@ TEST_F(UiProgressBuilderTests, TinyFillClipsNaturalBorderTexelsWithoutCompressin
 
 TEST_F(UiProgressBuilderTests, SubresolutionPositiveFractionRemainsAValidEmptyFill){
     ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.progress("amount", BitCast<f64>(1ull), Options()));
+    ASSERT_TRUE(m_builder.progress("amount", BitCast<f64>(1ull), makeOptions()));
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
     ProgressPaintSample sampleOut;
@@ -218,7 +218,7 @@ TEST_F(UiProgressBuilderTests, SubresolutionPositiveFractionRemainsAValidEmptyFi
 
 TEST_F(UiProgressBuilderTests, ExternalClipConstrainsPaintAndBothNestedClipsAreRestored){
     ASSERT_TRUE(panel(1u));
-    ASSERT_TRUE(m_builder.progress("amount", 0.25, Options()));
+    ASSERT_TRUE(m_builder.progress("amount", 0.25, makeOptions()));
     m_paint.pushClip({ 20.0f, 0.0f, 20.0f, 600.0f });
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_paint.popClip());
@@ -241,7 +241,7 @@ TEST_F(UiProgressBuilderTests, ExternalClipConstrainsPaintAndBothNestedClipsAreR
 TEST_F(UiProgressBuilderTests, InvalidFractionLeavesTheAcceptedTargetsAvailable){
     ASSERT_TRUE(panel(1u));
     EXPECT_FALSE(m_builder.button("before", "Before"));
-    ASSERT_TRUE(m_builder.progress("amount", 0.5, Options()));
+    ASSERT_TRUE(m_builder.progress("amount", 0.5, makeOptions()));
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_context.commitFrame(1u));
     const WidgetId before = id("before", "panel");
@@ -249,7 +249,7 @@ TEST_F(UiProgressBuilderTests, InvalidFractionLeavesTheAcceptedTargetsAvailable)
     const HitTarget accepted = *target(before);
     const usize count = m_context.input().targets().size();
     ASSERT_TRUE(panel(2u));
-    EXPECT_FALSE(m_builder.progress("amount", BitCast<f64>(0x7ff8000000000001ull), Options()));
+    EXPECT_FALSE(m_builder.progress("amount", BitCast<f64>(0x7ff8000000000001ull), makeOptions()));
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_context.commitFrame(2u));
     ASSERT_NE(target(before), nullptr);
@@ -262,7 +262,7 @@ TEST_F(UiProgressBuilderTests, InvalidFractionLeavesTheAcceptedTargetsAvailable)
 TEST_F(UiProgressBuilderTests, MissingPreferredAndFallbackRegionsRejectTheCandidate){
     configureProgress(false, false);
     ASSERT_TRUE(panel(1u));
-    EXPECT_FALSE(m_builder.progress("amount", 0.5, Options()));
+    EXPECT_FALSE(m_builder.progress("amount", 0.5, makeOptions()));
     EXPECT_TRUE(m_context.failed());
     EXPECT_FALSE(m_builder.endPanel());
     EXPECT_FALSE(m_context.commitFrame(1u));

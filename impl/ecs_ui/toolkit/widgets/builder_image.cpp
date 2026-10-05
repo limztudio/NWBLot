@@ -34,7 +34,7 @@ bool Builder::image(const AStringView stableKey, const Name& regionName, const I
     frame.options = options;
     if(
         !widget || !skinRegion
-        || !ImageLayout::Measure(options, *skinRegion, m_skin->referenceDensity(), frame.metrics)
+        || !ImageLayout::measure(options, *skinRegion, m_skin->referenceDensity(), frame.metrics)
     ){
         m_context.fail();
         return false;

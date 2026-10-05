@@ -1,4 +1,4 @@
-global_declare_static_library(nwb_logtelemetry)
+nwb_declare_static_library(nwb_logtelemetry)
 target_sources(nwb_logtelemetry PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/ingest.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/ingest.h"

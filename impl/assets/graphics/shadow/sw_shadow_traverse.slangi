@@ -60,8 +60,8 @@ uint nwbSwShadowInstanceCount(){
 // The caller combines completed optics into persistent ray state; temporary crossings never cross instances.
 // Returns the traversal outcome so the scene walk knows whether optics are complete, absent, or conservatively blocked.
 NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, const float3 worldOrigin, const float3 worldDirection, const float tMin, const float tMax, inout NwbShadowInstanceOptics optics){
-    const NwbSwBvhInstance instance = NwbHeapSwShadowSceneInstances(g_NwbSwShadowMaterialContextSlots.sceneSlots.y)[instanceIndex];
-    const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbSwShadowMaterialContextSlots.sceneSlots.z)[instanceIndex];
+    const NwbSwBvhInstance instance = nwbHeapSwShadowSceneInstances(g_NwbSwShadowMaterialContextSlots.sceneSlots.y)[instanceIndex];
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbSwShadowMaterialContextSlots.sceneSlots.z)[instanceIndex];
 #if defined(NWB_SW_SHADOW_SKIP_CSG)
 #if NWB_SW_SHADOW_SKIP_CSG
     if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW) != 0u)
@@ -95,21 +95,21 @@ NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, cons
 
     // Child nodes are prevalidated by parent ranking; test only the root at loop entry.
     {
-        const NwbBvhNode root = NwbHeapBvhNodes(material.nodeSlot)[nodeIndex];
+        const NwbBvhNode root = nwbHeapBvhNodes(material.nodeSlot)[nodeIndex];
         if(!nwbSwShadowRayAabb(origin, invDir, tMin, tMax, root.aabbMin, root.aabbMax))
             return NwbShadowInstanceStatus::NoIntersection; // whole mesh missed: no occluder
     }
 
     while(true){
-        const NwbBvhNode node = NwbHeapBvhNodes(material.nodeSlot)[nodeIndex];
+        const NwbBvhNode node = nwbHeapBvhNodes(material.nodeSlot)[nodeIndex];
 
         if(nwbBvhNodeIsLeaf(node)){
             const uint triangle = nwbBvhLeafPrimitive(node);
             const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-            const uint3 indices = NwbHeapRawBuffer(material.indexSlot).Load3(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
-            const float3 v0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-            const float3 v1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-            const float3 v2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const uint3 indices = nwbHeapRawBuffer(material.indexSlot).Load3(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+            const float3 v0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const float3 v1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const float3 v2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
             const NwbSwShadowTriangleHit triangleHit = nwbSwShadowRayTriangle(origin, direction, tMin, tMax, v0, v1, v2);
             if(triangleHit.hit){
                 if(!transparent)
@@ -149,8 +149,8 @@ NwbShadowInstanceStatus nwbSwShadowInstanceOptics(const uint instanceIndex, cons
         else{
             const uint left = node.leftChild;
             const uint right = nwbBvhNodeRightChildIndex(node);
-            const NwbBvhNode leftNode = NwbHeapBvhNodes(material.nodeSlot)[left];
-            const NwbBvhNode rightNode = NwbHeapBvhNodes(material.nodeSlot)[right];
+            const NwbBvhNode leftNode = nwbHeapBvhNodes(material.nodeSlot)[left];
+            const NwbBvhNode rightNode = nwbHeapBvhNodes(material.nodeSlot)[right];
             const float tLeft = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, leftNode.aabbMin, leftNode.aabbMax);
             const float tRight = nwbSwShadowRayAabbEntryT(origin, invDir, tMin, tMax, rightNode.aabbMin, rightNode.aabbMax);
             const bool leftMiss = (tLeft >= NWB_SW_SHADOW_AABB_MISS);
@@ -212,7 +212,7 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
     uint nodeIndex = stack[stackPointer]; // root
 
     {
-        const NwbBvhNode root = NwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[nodeIndex];
+        const NwbBvhNode root = nwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[nodeIndex];
 #if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
         if(!nwbBvhNodeContainsTransparentOccluder(root))
             return; // every scene leaf is opaque, so this compile-time transparent pass has no work
@@ -222,7 +222,7 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
     }
 
     while(true){
-        const NwbBvhNode node = NwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[nodeIndex];
+        const NwbBvhNode node = nwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[nodeIndex];
 
         if(nwbBvhNodeIsLeaf(node)){
             nwbSwShadowInstanceOccluded(nwbBvhLeafPrimitive(node), origin, direction, tMin, tMax, acc);
@@ -236,8 +236,8 @@ void nwbSwShadowOccluded(const float3 origin, const float3 direction, const floa
         else{
             const uint left = node.leftChild;
             const uint right = nwbBvhNodeRightChildIndex(node);
-            const NwbBvhNode leftNode = NwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[left];
-            const NwbBvhNode rightNode = NwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[right];
+            const NwbBvhNode leftNode = nwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[left];
+            const NwbBvhNode rightNode = nwbHeapBvhNodes(g_NwbSwShadowMaterialContextSlots.sceneSlots.x)[right];
 #if NWB_SW_SHADOW_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
             // Prune opaque-only subtrees for transparent-only traces.
             const bool leftTransparent = nwbBvhNodeContainsTransparentOccluder(leftNode);

@@ -96,7 +96,7 @@ static_assert(IsStandardLayout_V<EncodedPerfMemoryPayloadHeader>, "EncodedPerfMe
 static_assert(IsTriviallyCopyable_V<EncodedPerfMemoryPayloadHeader>, "EncodedPerfMemoryPayloadHeader must stay binary-serializable");
 
 struct PerfTimingPayload{
-    Name scopeName = NAME_NONE;
+    Name scopeName = s_NameNone;
     AString<TelemetryArena> scopeText;
     Perf::TimingStats stats;
     PerfTimingSource::Enum source = PerfTimingSource::Unknown;
@@ -107,7 +107,7 @@ struct PerfTimingPayload{
 };
 
 struct PerfMemoryPayload{
-    Name scopeName = NAME_NONE;
+    Name scopeName = s_NameNone;
     AString<TelemetryArena> scopeText;
     Perf::MemorySnapshot snapshot;
     Perf::MemoryDelta delta;

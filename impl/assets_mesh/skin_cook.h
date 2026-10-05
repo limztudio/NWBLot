@@ -27,7 +27,7 @@ NWB_IMPL_BEGIN
 
 
 struct SkinCookEntry{
-    Name virtualPath = NAME_NONE;
+    Name virtualPath = s_NameNone;
     Core::Assets::AssetRef<Mesh> mesh;
     Core::Assets::AssetRef<Skeleton> skeleton;
     Core::Assets::AssetVector<SkinInfluence4> influences;

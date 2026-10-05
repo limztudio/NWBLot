@@ -98,12 +98,12 @@ void UiRadioGroupSmokeScene::observeState(Impl::UiPaintContext& context){
     u32 focusCode = 0u;
     u32 focusScope = 0u;
     u32 rootButton = 0u;
-    constexpr u32 rootSlots[]{ 0u, 2u, 3u };
+    constexpr u32 s_RootSlots[]{ 0u, 2u, 3u };
     for(const HitTarget& target : input.targets()){
         u32 code = 0u;
         if(!target.control.valid() && target.activatable){
             if(!target.popup.valid() && rootButton < 3u){
-                const u32 slot = rootSlots[rootButton++];
+                const u32 slot = s_RootSlots[rootButton++];
                 current.rectangles[slot] = target.rectangle;
                 code = slot + 1u;
             }

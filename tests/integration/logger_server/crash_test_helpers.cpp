@@ -72,7 +72,7 @@ CrashTestPath ArchiveInputDirectory(Core::Alloc::GlobalArena& arena, const AStri
 
 CrashTestPath ArchiveFileName(Core::Alloc::GlobalArena& arena, const AStringView stem){
     CrashTestPath fileName(arena, stem);
-    fileName.replace_extension(Log::s_CrashUploadArchiveFileExtension);
+    fileName.replaceExtension(Log::s_CrashUploadArchiveFileExtension);
     return fileName;
 }
 
@@ -332,7 +332,7 @@ static CrashTestPath ObservedReportPath(Core::Alloc::GlobalArena& arena, const C
     fileName += ".";
     fileName += suffix;
     fileName += AStringView(extension.data(), extension.size());
-    return basePath.parent_path() / AStringView(fileName.data(), fileName.size());
+    return basePath.parentPath() / AStringView(fileName.data(), fileName.size());
 }
 
 void PreserveObservedReport(Core::Alloc::GlobalArena& arena, const CrashTestText& report, const AStringView suffix){
@@ -343,7 +343,7 @@ void PreserveObservedReport(Core::Alloc::GlobalArena& arena, const CrashTestText
     const CrashTestPath baseOutputPath(arena, AStringView(outputPathText.data(), outputPathText.size()));
     const CrashTestPath outputPath = ObservedReportPath(arena, baseOutputPath, suffix);
     ErrorCode error;
-    EXPECT_TRUE(EnsureDirectories(outputPath.parent_path(), error));
+    EXPECT_TRUE(EnsureDirectories(outputPath.parentPath(), error));
     EXPECT_TRUE(WriteTextFile(outputPath, AStringView(report.data(), report.size())));
 }
 

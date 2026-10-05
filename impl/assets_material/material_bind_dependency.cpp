@@ -37,7 +37,7 @@ static bool TryResolveMaterialBindDependencyInterface(
         return true;
 
     ErrorCode errorCode;
-    Path normalizedDependency = AbsolutePath(dependency, errorCode).lexically_normal();
+    Path normalizedDependency = AbsolutePath(dependency, errorCode).lexicallyNormal();
     if(errorCode){
         NWB_LOGGER_ERROR(GLB_TEXT("Material bind dependency: failed to normalize shader dependency '{}': {}")
             , PathToString<tchar>(dependency)
@@ -54,8 +54,8 @@ static bool TryResolveMaterialBindDependencyInterface(
     if(extension != MaterialBindNames::SourceExtensionText())
         return true;
 
-    Path relativePath = normalizedDependency.lexically_relative(normalizedMaterialBindIncludeRoot);
-    relativePath.replace_extension();
+    Path relativePath = normalizedDependency.lexicallyRelative(normalizedMaterialBindIncludeRoot);
+    relativePath.replaceExtension();
     if(!Core::Assets::AssetPathsDetail::BuildRelativeAssetPathText(relativePath, outInterfacePath)){
         NWB_LOGGER_ERROR(GLB_TEXT("Material bind dependency: failed to derive interface from generated include '{}'")
             , PathToString<tchar>(normalizedDependency)
@@ -80,13 +80,13 @@ bool ResolveMaterialBindDependencyInterface(
     ScratchArena& scratchArena
 ){
     outInterfacePath.clear();
-    outInterfaceName = NAME_NONE;
+    outInterfaceName = s_NameNone;
     outDependsOnMaterialBind = false;
 
     Path normalizedMaterialBindIncludeRoot(materialBindIncludeRoot.arena());
     if(!materialBindIncludeRoot.empty()){
         ErrorCode errorCode;
-        normalizedMaterialBindIncludeRoot = AbsolutePath(materialBindIncludeRoot, errorCode).lexically_normal();
+        normalizedMaterialBindIncludeRoot = AbsolutePath(materialBindIncludeRoot, errorCode).lexicallyNormal();
         if(errorCode){
             NWB_LOGGER_ERROR(GLB_TEXT("Material bind dependency: failed to normalize generated include root '{}': {}")
                 , PathToString<tchar>(materialBindIncludeRoot)
@@ -134,7 +134,7 @@ bool ResolveMaterialBindDependencyInterface(
         if(outInterfaceName != dependencyInterfaceName){
             // Generic dispatch consumer: no single owning interface.
             outInterfacePath.clear();
-            outInterfaceName = NAME_NONE;
+            outInterfaceName = s_NameNone;
             dependsOnMultipleInterfaces = true;
         }
     }

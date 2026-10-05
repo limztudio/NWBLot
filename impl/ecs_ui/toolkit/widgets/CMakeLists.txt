@@ -1,4 +1,4 @@
-global_declare_static_library(nwb_ui_widgets)
+nwb_declare_static_library(nwb_ui_widgets)
 target_sources(nwb_ui_widgets PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/image.h"
     "${CMAKE_CURRENT_LIST_DIR}/image_layout.h"

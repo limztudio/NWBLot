@@ -36,13 +36,13 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID){
         for(int y = -1; y <= 1; ++y){
             for(int x = -1; x <= 1; ++x){
                 const int2 source = clamp(int2(destination) + int2(x, y), int2(0), int2(sourceExtent) - 1);
-                const float depth = NwbHeapSampledImage2D(g_NwbReflectionDepthPush.sourceSlot).Load(int3(source, 0)).x;
+                const float depth = nwbHeapSampledImage2D(g_NwbReflectionDepthPush.sourceSlot).Load(int3(source, 0)).x;
                 const float validDepth = isfinite(depth) && depth >= 0.0 ? min(depth, 1.0) : 1.0;
                 depthInterval.x = min(depthInterval.x, validDepth);
                 depthInterval.y = max(depthInterval.y, validDepth);
             }
         }
-        NwbHeapStorageImage2DFloat4(g_NwbReflectionDepthPush.destinationSlot)[destination] = float4(depthInterval, 0.0, 0.0);
+        nwbHeapStorageImage2DFloat4(g_NwbReflectionDepthPush.destinationSlot)[destination] = float4(depthInterval, 0.0, 0.0);
         return;
     }
 
@@ -59,12 +59,12 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID){
     for(uint y = 0u; y < span.y; ++y){
         for(uint x = 0u; x < span.x; ++x){
             // The frozen source descriptor exposes one mip; level zero is relative to that view.
-            const float2 interval = NwbHeapSampledImage2D(g_NwbReflectionDepthPush.sourceSlot).Load(int3(begin + uint2(x, y), 0)).xy;
+            const float2 interval = nwbHeapSampledImage2D(g_NwbReflectionDepthPush.sourceSlot).Load(int3(begin + uint2(x, y), 0)).xy;
             depthInterval.x = min(depthInterval.x, interval.x);
             depthInterval.y = max(depthInterval.y, interval.y);
         }
     }
-    NwbHeapStorageImage2DFloat4(g_NwbReflectionDepthPush.destinationSlot)[destination] = float4(depthInterval, 0.0, 0.0);
+    nwbHeapStorageImage2DFloat4(g_NwbReflectionDepthPush.destinationSlot)[destination] = float4(depthInterval, 0.0, 0.0);
 }
 
 

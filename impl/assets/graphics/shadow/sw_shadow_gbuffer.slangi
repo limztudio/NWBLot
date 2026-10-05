@@ -18,8 +18,8 @@
 
 // The software-shadow G-buffer inputs and material context are selected directly from global heap tables by the
 // shared push block.  No local selector cbuffer remains in a software-shadow pipeline.
-#define NWB_SW_SHADOW_DEFERRED_RESOURCES NwbHeapDeferredBindlessResources(g_NwbSwShadowPush.deferredResourcesHeapSlot)
-#define g_NwbSwShadowMaterialContextSlots NwbHeapShadowMaterialContextSlots(g_NwbSwShadowPush.materialContextSlotsHeapSlot)
+#define NWB_SW_SHADOW_DEFERRED_RESOURCES nwbHeapDeferredBindlessResources(g_NwbSwShadowPush.deferredResourcesHeapSlot)
+#define g_NwbSwShadowMaterialContextSlots nwbHeapShadowMaterialContextSlots(g_NwbSwShadowPush.materialContextSlotsHeapSlot)
 #define NWB_SCENE_SHADING_HEAP_SLOT NWB_SW_SHADOW_DEFERRED_RESOURCES.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT NWB_SW_SHADOW_DEFERRED_RESOURCES.avboitSlots.w
 #include "../scene/buffer.slangi"
@@ -32,21 +32,21 @@
 // background texel specially (store white / leave the pristine mask), so this test is centralised here rather than the
 // bare depth literal repeated at every trace/resolve site.
 bool nwbSwShadowIsBackground(const int3 texel){
-    return NwbHeapSampledImage2D(NWB_SW_SHADOW_DEFERRED_RESOURCES.gbufferSlots.w).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH;
+    return nwbHeapSampledImage2D(NWB_SW_SHADOW_DEFERRED_RESOURCES.gbufferSlots.w).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH;
 }
 
 // The world-space surface position at this texel (the shade point the occlusion ray leaves from).
 float3 nwbSwShadowLoadWorldPosition(const int3 texel){
     // Both deferred vector attachments are RGBA16F. Keep the sampled payload compact and widen at this FP32
     // ray-geometry boundary, shared by the opaque, transparent, coarse, and soft software paths.
-    const half3 worldPositionSample = half3(NwbHeapSampledImage2D(NWB_SW_SHADOW_DEFERRED_RESOURCES.gbufferSlots.z).Load(texel).xyz);
+    const half3 worldPositionSample = half3(nwbHeapSampledImage2D(NWB_SW_SHADOW_DEFERRED_RESOURCES.gbufferSlots.z).Load(texel).xyz);
     return float3(worldPositionSample);
 }
 
 // The world-space surface normal at this texel, unpacked from the [0,1] G-buffer encoding back to [-1,1] and
 // renormalised (the ray origin is biased along it to avoid self-intersection).
 float3 nwbSwShadowLoadNormal(const int3 texel){
-    const half3 normalSample = half3(NwbHeapSampledImage2D(NWB_SW_SHADOW_DEFERRED_RESOURCES.gbufferSlots.y).Load(texel).xyz);
+    const half3 normalSample = half3(nwbHeapSampledImage2D(NWB_SW_SHADOW_DEFERRED_RESOURCES.gbufferSlots.y).Load(texel).xyz);
     return normalize(float3(normalSample) * 2.0 - 1.0);
 }
 

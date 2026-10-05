@@ -84,12 +84,12 @@ private:
 class ComboBehavior final{
 public:
     // Rebinding after omission or to another field retires popup interaction while preserving committed selection.
-    [[nodiscard]] static bool Bind(ComboState& state, WidgetId owner, u64 declarationGeneration);
-    [[nodiscard]] static bool Reconcile(ComboState& state, const IListDataSource& source);
-    static void Open(ComboState& state);
-    static void Close(ComboState& state);
-    [[nodiscard]] static bool Commit(ComboState& state, const IListDataSource& source, u64 key);
-    [[nodiscard]] static ListState& Preview(ComboState& state){ return state.m_list; }
+    [[nodiscard]] static bool bind(ComboState& state, WidgetId owner, u64 declarationGeneration);
+    [[nodiscard]] static bool reconcile(ComboState& state, const IListDataSource& source);
+    static void open(ComboState& state);
+    static void close(ComboState& state);
+    [[nodiscard]] static bool commit(ComboState& state, const IListDataSource& source, u64 key);
+    [[nodiscard]] static ListState& preview(ComboState& state){ return state.m_list; }
 };
 
 

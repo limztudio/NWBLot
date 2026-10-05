@@ -23,7 +23,7 @@ bool ResolveSkinnedRuntimeMeshIdentity(
     Name& outMeshKey,
     u64& outVersion
 ){
-    outMeshKey = NAME_NONE;
+    outMeshKey = s_NameNone;
     outVersion = 0u;
     if(!runtimeMesh.valid())
         return false;

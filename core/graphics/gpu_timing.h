@@ -176,7 +176,7 @@ private:
     u64 m_discardedScopeCount = 0u;
     u64 m_quarantinedScopeCount = 0u;
     u64 m_skippedScopeCountByReason[GpuTimingScopeSkipReason::kCount]{};
-    Name m_scopeName = NAME_NONE;
+    Name m_scopeName = s_NameNone;
     u32 m_requestedQueryCount = 0u;
     bool m_captureEnabled = false;
     Perf::TimingScopeId m_timingScope;
@@ -217,7 +217,7 @@ private:
     };
 
     struct FeedbackScopeDemand{
-        Name scopeName = NAME_NONE;
+        Name scopeName = s_NameNone;
         u64 ownerCount = 0u;
     };
 
@@ -235,7 +235,7 @@ private:
 
 
 private:
-    static thread_local GpuTimingSubmissionTicket* s_activeSubmissionTicket;
+    static thread_local GpuTimingSubmissionTicket* s_ActiveSubmissionTicket;
 
 
 public:

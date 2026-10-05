@@ -68,7 +68,7 @@ bool Builder::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& res
         input.closePopup(frame.popupToken);
         return contextMenuMatches(frame);
     }
-    if(!ListBehavior::Reconcile(state.m_list, *frame.source) || !contextMenuMatches(frame))
+    if(!ListBehavior::reconcile(state.m_list, *frame.source) || !contextMenuMatches(frame))
         return false;
     if(state.m_list.cursorKey() == 0u){
         ControlAction first;
@@ -79,7 +79,7 @@ bool Builder::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& res
         options.wheelRows = frame.options.wheelRows;
         options.selectOnNavigate = false;
         ListResult preview;
-        if(!ListBehavior::Apply(state.m_list, *frame.source, options, first, preview) || !contextMenuMatches(frame))
+        if(!ListBehavior::apply(state.m_list, *frame.source, options, first, preview) || !contextMenuMatches(frame))
             return false;
     }
     return applyContextMenuInput(frame, result);
@@ -109,7 +109,7 @@ bool Builder::applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& 
         }
         else{
             ListResult preview;
-            if(!ListBehavior::Apply(frame.state->m_list, *frame.source, options, action, preview) || !contextMenuMatches(frame))
+            if(!ListBehavior::apply(frame.state->m_list, *frame.source, options, action, preview) || !contextMenuMatches(frame))
                 return false;
             if(preview.activated){
                 result.activated = true;

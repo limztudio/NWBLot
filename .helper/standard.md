@@ -50,17 +50,19 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 
 ## 3. Naming conventions
 - Types (`class`, `struct`, `enum namespaces`) use `PascalCase`.
-- Functions, methods, parameters, and local variables use `lowerCamelCase`.
-- Member fields use `m_` prefix.
+- Member functions, including static helpers and factories, parameters, and local variables use `lowerCamelCase`.
+- Internal/class state fields use the `m_` prefix. Public aggregate, descriptor, and serialized-layout fields use semantic `lowerCamelCase` names; preserve their layout and authored field contracts.
 - Non-static global variables use `g_` prefix.
 - Constants use `s_` prefix and are usually `constexpr`.
 - Enum pattern is typically:
   - `namespace SomeEnum { enum Enum : u8 { ... }; };`
 - For engine public/module-facing enums, use the namespace-enum pattern (`namespace X { enum Enum : u8 { ... }; };`) and do not use `enum class`.
 - Handle aliases follow `<Type>Handle` naming.
-- Global functions start with `Uppercase`.
-- Global static variables start with `s_Uppercase`.
+- C++ free functions at global or namespace scope use `UpperCamelCase`, starting with an uppercase letter. This includes templates, namespace helpers, and translation-unit-local `static` functions and callbacks. Class member functions, including static member functions, use `lowerCamelCase`.
+- Global and class static variables start with `s_Uppercase`; function-local static variables retain the `s_` prefix.
 - Macros owned by `global/` use the `GLB_` prefix. Keep `NWB_` for project-owned namespace, graphics configuration, logger, and shader macros.
+- Preserve project scalar aliases, template parameter conventions, required standard-library customization/iterator names, and external API/entry-point spellings. Project-owned methods that merely resemble standard APIs follow the project method convention.
+- Python uses `snake_case` functions, parameters, and variables, `PascalCase` classes, and `UPPER_SNAKE_CASE` module constants. Project CMake helpers use the `nwb_` prefix.
 - For virtual overrides, explicitly write both `virtual` and `override`.
 - If a class or virtual function can reasonably be `final`, use `final` to help devirtualization/unrolling opportunities.
 
@@ -250,7 +252,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - If a helper needs `Core::Alloc::ScratchArena`, take the scratch arena from the caller instead of constructing a local arena inside the helper.
   Put the actual scratch arena at the first owning caller for that operation and thread it through lower helpers so repeated helper calls reuse the same arena allocation.
 - Prefer explicit casts (`static_cast`) over C-style casts.
-- Use `checked_cast` for pointer downcasts in internal engine code.
+- Use `CheckedCast` for pointer downcasts in internal engine code.
 - `[[nodiscard]]` is used on important query/accessor return values.
 - Const correctness is expected, though both `const T&` and `T const&` forms appear.
 - `auto` is allowed, but always spell out qualifiers and reference/pointer intent (`const`, `&`, `*`, `&&`) explicitly when applicable.
@@ -350,8 +352,8 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 ## 9. Performance-oriented conventions
 - Use `constexpr` for static mappings and constants.
 - For compile-time string literals, use `constexpr StringView` rather than `constexpr const char*`:
-  - Correct: `constexpr StringView str = "foobar";`
-  - Wrong: `constexpr const char* str = "foobar";`
+  - Correct: `constexpr StringView s_Str = "foobar";`
+  - Wrong: `constexpr const char* s_Str = "foobar";`
 - Keep C/C++ literal pooling and optional obfuscation at the compiler/linker boundary. Preserve frontend `constexpr` evaluation, borrowed view lifetimes, required object identity, and the selected machine-code optimization level. Decode eligible pooled records once per image before application static initialization; do not add per-access decode guards, temporary heap strings, or owning-string conversions to ordinary literal access.
 - Measure literal pooling savings separately from encoding costs: startup decoding, record headers/alignment, and writable private pages. Named arrays, address-significant or explicitly retained objects, optimized immediates, debug data, and name-symbol data are outside eligible literal-global coverage; decoded bytes remain readable in memory. Do not claim complete plaintext removal or zero startup/memory cost.
 - Reserve container capacity when expected counts are known.

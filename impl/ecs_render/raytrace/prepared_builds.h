@@ -31,7 +31,7 @@ using PreparedShadowTraceMaterialSampledTextureVector = Vector<
 // A BLAS build derives its geometry directly from retained buffers. Keep the resolved operation rather than a
 // MeshResources pointer: runtime meshes can be replaced or pruned between preflight and native recording.
 struct PreparedMeshBlasBuild{
-    Name meshName = NAME_NONE;
+    Name meshName = s_NameNone;
     Core::BufferHandle positionBuffer;
     Core::BufferHandle triangleIndexBuffer;
     Core::RayTracingAccelStructHandle blas;
@@ -62,7 +62,7 @@ using PreparedMeshBlasBuildVector = Vector<
 // mesh-local inputs/outputs and the exact shared scratch generation. Never retain MeshResources pointers: runtime
 // geometry can be replaced or pruned between preflight and Shadow Preparation recording.
 struct PreparedMeshSwBvhBuild{
-    Name meshName = NAME_NONE;
+    Name meshName = s_NameNone;
     Core::BufferHandle positionBuffer;
     Core::BufferHandle triangleIndexBuffer;
     Core::BufferHandle nodeBuffer;
@@ -107,7 +107,7 @@ using PreparedMeshSwBvhBuildVector = Vector<
 // The scene-level software traversal consumes one descriptor-table entry per distinct mesh. Retain owning buffer
 // handles so recording consumes the same resources captured during preparation.
 struct PreparedSceneSwBvhMesh{
-    Name meshName = NAME_NONE;
+    Name meshName = s_NameNone;
     Core::BufferHandle nodeBuffer;
     Core::BufferHandle positionBuffer;
     Core::BufferHandle triangleIndexBuffer;

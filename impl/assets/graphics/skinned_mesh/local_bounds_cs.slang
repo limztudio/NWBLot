@@ -37,9 +37,9 @@ void main(uint3 groupThreadID : SV_GroupThreadID){
     uint invalid = 0u;
     for(uint index = lane; index < meshletCount; index += NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X){
         const uint byteOffset = index * NWB_RUNTIME_MESH_BOUNDS_BYTE_SIZE;
-        const uint flags = NwbHeapRawBuffer(boundsSlots.x).Load(byteOffset + NWB_RUNTIME_MESH_BOUNDS_FLAGS_OFFSET);
-        const float3 partialMin = asfloat(NwbHeapRawBuffer(boundsSlots.x).Load3(byteOffset + NWB_RUNTIME_MESH_BOUNDS_MIN_OFFSET));
-        const float3 partialMax = asfloat(NwbHeapRawBuffer(boundsSlots.x).Load3(byteOffset + NWB_RUNTIME_MESH_BOUNDS_MAX_OFFSET));
+        const uint flags = nwbHeapRawBuffer(boundsSlots.x).Load(byteOffset + NWB_RUNTIME_MESH_BOUNDS_FLAGS_OFFSET);
+        const float3 partialMin = asfloat(nwbHeapRawBuffer(boundsSlots.x).Load3(byteOffset + NWB_RUNTIME_MESH_BOUNDS_MIN_OFFSET));
+        const float3 partialMax = asfloat(nwbHeapRawBuffer(boundsSlots.x).Load3(byteOffset + NWB_RUNTIME_MESH_BOUNDS_MAX_OFFSET));
         const bool valid = (flags & NWB_RUNTIME_MESH_BOUNDS_FLAG_VALID) != 0u
             && all(isfinite(partialMin)) && all(isfinite(partialMax)) && all(partialMin <= partialMax);
         invalid |= valid ? 0u : 1u;

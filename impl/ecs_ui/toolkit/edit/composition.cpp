@@ -33,7 +33,7 @@ bool EditModel::beginComposition(){
 bool EditModel::updateComposition(const AStringView value, const usize anchor, const usize caret){
     if(!m_compositionActive || value.size() > m_limits.maxBytes || !validateText(value))
         return false;
-    if(!GraphemeSegmentation::IsScalarBoundary(value, anchor) || !GraphemeSegmentation::IsScalarBoundary(value, caret))
+    if(!GraphemeSegmentation::isScalarBoundary(value, anchor) || !GraphemeSegmentation::isScalarBoundary(value, caret))
         return false;
     const usize retainedBytes = m_text.size() - (Max(m_compositionAnchor, m_compositionCaret)
         - Min(m_compositionAnchor, m_compositionCaret));

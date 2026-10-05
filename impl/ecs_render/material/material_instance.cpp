@@ -27,7 +27,7 @@ namespace __hidden_material_instance{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool writeMaterialInstanceOverrideBytes(
+[[nodiscard]] static bool WriteMaterialInstanceOverrideBytes(
     const Core::ECS::EntityID entity,
     const Name& materialName,
     const MaterialInstanceParameter& parameter,
@@ -62,7 +62,7 @@ namespace __hidden_material_instance{
 
 
 // Single source of truth for cache validity shared by prepare and find paths.
-[[nodiscard]] static bool materialInstanceMutableCacheEntryMatches(
+[[nodiscard]] static bool MaterialInstanceMutableCacheEntryMatches(
     const MaterialInstanceMutableCacheEntry& cacheEntry,
     const MaterialSurfaceInfo& materialInfo,
     const MaterialInstanceComponent& materialInstance
@@ -195,7 +195,7 @@ bool RendererMaterialSystem::applyMaterialInstanceOverrides(
         }
 
         const u32 fieldByteOffset = resolvedField.blockByteBegin + field.offset;
-        if(!__hidden_material_instance::writeMaterialInstanceOverrideBytes(
+        if(!__hidden_material_instance::WriteMaterialInstanceOverrideBytes(
             entity,
             materialInfo.materialName,
             parameter,
@@ -225,7 +225,7 @@ bool RendererMaterialSystem::prepareMaterialInstanceMutableTypedBytes(
 
     auto it = m_materialState.m_instanceMutableCache.try_emplace(entity, m_arena).first;
     MaterialInstanceMutableCacheEntry& cacheEntry = it.value();
-    if(__hidden_material_instance::materialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance)){
+    if(__hidden_material_instance::MaterialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance)){
         outMutableTypedBytes = &cacheEntry.mutableTypedBytes;
         return true;
     }
@@ -266,7 +266,7 @@ bool RendererMaterialSystem::findPreparedMaterialInstanceMutableTypedBytes(
         return false;
 
     const MaterialInstanceMutableCacheEntry& cacheEntry = found.value();
-    if(!__hidden_material_instance::materialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance))
+    if(!__hidden_material_instance::MaterialInstanceMutableCacheEntryMatches(cacheEntry, materialInfo, *materialInstance))
         return false;
 
     outMutableTypedBytes = &cacheEntry.mutableTypedBytes;

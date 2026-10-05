@@ -36,7 +36,7 @@ ConstantBuffer<NwbShadowGeometryDownsamplePushConstants> g_NwbShadowGeometryDown
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT 0u
 #include "../scene/buffer.slangi"
 
-#define g_NwbShadowGeometryOutput NwbHeapStorageImage2DFloat4(g_NwbShadowGeometryDownsamplePushConstants.outputStorageSlot)
+#define g_NwbShadowGeometryOutput nwbHeapStorageImage2DFloat4(g_NwbShadowGeometryDownsamplePushConstants.outputStorageSlot)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -54,7 +54,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         min((int)halfTexel.y * g_NwbShadowGeometryDownsamplePushConstants.receiverFactor, (int)g_NwbShadowGeometryDownsamplePushConstants.height - 1)
     );
 
-    const float depth = NwbHeapSampledImage2D(g_NwbShadowGeometryDownsamplePushConstants.depthSlot).Load(int3(full, 0)).r;
+    const float depth = nwbHeapSampledImage2D(g_NwbShadowGeometryDownsamplePushConstants.depthSlot).Load(int3(full, 0)).r;
     if(depth >= NWB_SCENE_BACKGROUND_DEPTH){
         // Background (no receiver): validity 0. Normal/distance are irrelevant (the resolve skips invalid taps).
         g_NwbShadowGeometryOutput[halfTexel] = float4(0.0, 0.0, 0.0, 0.0);
@@ -63,11 +63,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     // Both G-buffer vector attachments are RGBA16F. Preserve their native precision until the full-precision
     // normalization/distance calculations that actually need it.
-    const half3 worldSample = half3(NwbHeapSampledImage2D(g_NwbShadowGeometryDownsamplePushConstants.worldPositionSlot).Load(int3(full, 0)).xyz);
+    const half3 worldSample = half3(nwbHeapSampledImage2D(g_NwbShadowGeometryDownsamplePushConstants.worldPositionSlot).Load(int3(full, 0)).xyz);
     const float3 world = float3(worldSample);
     // The G-buffer normal is stored [0,1]-encoded (matching the SW/HW traces' `n*2-1` decode); normalize the decode so
     // the octahedral pack sees a unit vector.
-    const half3 normalSample = half3(NwbHeapSampledImage2D(g_NwbShadowGeometryDownsamplePushConstants.normalSlot).Load(int3(full, 0)).xyz);
+    const half3 normalSample = half3(nwbHeapSampledImage2D(g_NwbShadowGeometryDownsamplePushConstants.normalSlot).Load(int3(full, 0)).xyz);
     const float3 normal = normalize(float3(normalSample) * 2.0 - 1.0);
     const half2 octNormal = half2(nwbOctEncodeNormal(normal));
     const float cameraDistance = length(world - g_NwbSceneCameraPosition.xyz);

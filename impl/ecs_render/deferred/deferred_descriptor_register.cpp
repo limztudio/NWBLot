@@ -34,7 +34,7 @@ namespace DeferredDescriptorRegisterDetail{
     handle = heap.allocate(descriptorClass);
     if(!handle.valid())
         return false;
-    if(heap.write(handle, Core::DescriptorWriteItem::Texture_SRV(0u, texture, format, subresources, dimension)))
+    if(heap.write(handle, Core::DescriptorWriteItem::textureSrv(0u, texture, format, subresources, dimension)))
         return true;
     heap.free(handle);
     handle = Core::GpuDescriptorHandle::invalid();
@@ -51,7 +51,7 @@ namespace DeferredDescriptorRegisterDetail{
     handle = heap.allocate(Core::GpuDescriptorClass::StorageImage);
     if(!handle.valid())
         return false;
-    if(heap.write(handle, Core::DescriptorWriteItem::Texture_UAV(
+    if(heap.write(handle, Core::DescriptorWriteItem::textureUav(
         0u,
         texture,
         format,
@@ -68,7 +68,7 @@ namespace DeferredDescriptorRegisterDetail{
     handle = heap.allocate(Core::GpuDescriptorClass::Sampler);
     if(!handle.valid())
         return false;
-    if(heap.write(handle, Core::DescriptorWriteItem::Sampler(0u, sampler)))
+    if(heap.write(handle, Core::DescriptorWriteItem::sampler(0u, sampler)))
         return true;
     heap.free(handle);
     handle = Core::GpuDescriptorHandle::invalid();
@@ -79,7 +79,7 @@ namespace DeferredDescriptorRegisterDetail{
     handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(!handle.valid())
         return false;
-    if(heap.write(handle, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, buffer)))
+    if(heap.write(handle, Core::DescriptorWriteItem::structuredBufferSrv(0u, buffer)))
         return true;
     heap.free(handle);
     handle = Core::GpuDescriptorHandle::invalid();
@@ -90,7 +90,7 @@ namespace DeferredDescriptorRegisterDetail{
     handle = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
     if(!handle.valid())
         return false;
-    if(heap.write(handle, Core::DescriptorWriteItem::ConstantBuffer(0u, buffer)))
+    if(heap.write(handle, Core::DescriptorWriteItem::constantBuffer(0u, buffer)))
         return true;
     heap.free(handle);
     handle = Core::GpuDescriptorHandle::invalid();

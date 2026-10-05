@@ -42,8 +42,8 @@ using CookVector = Vector<T, CookArena>;
 using ScratchArena = Core::Alloc::ScratchArena;
 
 struct CsgShapeCookEntry{
-    Name shapeName = NAME_NONE;
-    Name shaderModule = NAME_NONE;
+    Name shapeName = s_NameNone;
+    Name shaderModule = s_NameNone;
     u32 shapeTypeId = 0u;
     CookString evalInclude;
     CookString moduleInclude;

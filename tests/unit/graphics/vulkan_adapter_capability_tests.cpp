@@ -104,11 +104,11 @@ TEST(VulkanQueueFamilySelection, RejectsMissingRequiredRolesAndIgnoresEmptyFamil
 TEST(VulkanAdapterSelection, ExtensionLookupHonorsNonTerminatedViewBounds){
     VkExtensionProperties extensions[1] = {};
     GLB_STRCPY(extensions[0].extensionName, VK_MAX_EXTENSION_NAME_SIZE, "VK_EXT_sample");
-    constexpr char nameWithSuffix[] = "VK_EXT_sample_suffix";
-    constexpr usize extensionNameLength = sizeof("VK_EXT_sample") - 1u;
-    EXPECT_TRUE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView(nameWithSuffix, extensionNameLength)));
-    EXPECT_FALSE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView(nameWithSuffix)));
-    EXPECT_FALSE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView(nameWithSuffix, extensionNameLength - 1u)));
+    constexpr char s_NameWithSuffix[] = "VK_EXT_sample_suffix";
+    constexpr usize s_ExtensionNameLength = sizeof("VK_EXT_sample") - 1u;
+    EXPECT_TRUE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView(s_NameWithSuffix, s_ExtensionNameLength)));
+    EXPECT_FALSE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView(s_NameWithSuffix)));
+    EXPECT_FALSE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView(s_NameWithSuffix, s_ExtensionNameLength - 1u)));
 }
 
 
@@ -128,8 +128,8 @@ TEST(VulkanAdapterSelection, ExtensionLookupBoundsNativeNamesAndRejectsEmbeddedN
     EXPECT_FALSE(VulkanDetail::HasDeviceExtension(extensions, 1u, maximumFittingName));
 
     extensions[0].extensionName[1u] = '\0';
-    constexpr char embeddedNullName[] = { 'a', '\0', 'a' };
-    EXPECT_FALSE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView(embeddedNullName, sizeof(embeddedNullName))));
+    constexpr char s_EmbeddedNullName[] = { 'a', '\0', 'a' };
+    EXPECT_FALSE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView(s_EmbeddedNullName, sizeof(s_EmbeddedNullName))));
     EXPECT_FALSE(VulkanDetail::HasDeviceExtension(extensions, 1u, AStringView{}));
 
     extensions[0].extensionName[0u] = '\0';

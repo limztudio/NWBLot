@@ -12,7 +12,7 @@
 #include "hardware_transparent_resources.slangi"
 #include "sw_binding_slots.h"
 
-#define NWB_HW_TRANSPARENT_DEFERRED_RESOURCES NwbHeapDeferredBindlessResources(g_NwbHardwareTransparentPush.deferredResourcesHeapSlot)
+#define NWB_HW_TRANSPARENT_DEFERRED_RESOURCES nwbHeapDeferredBindlessResources(g_NwbHardwareTransparentPush.deferredResourcesHeapSlot)
 #define NWB_SCENE_SHADING_HEAP_SLOT NWB_HW_TRANSPARENT_DEFERRED_RESOURCES.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT NWB_HW_TRANSPARENT_DEFERRED_RESOURCES.avboitSlots.w
 #include "../scene/buffer.slangi"
@@ -31,10 +31,10 @@ bool nwbHwShadowBuildRay(const uint2 halfPixel, out RayDesc ray){
     ray = (RayDesc)0;
     const uint2 fullExtent = uint2(g_NwbHardwareTransparentPush.width, g_NwbHardwareTransparentPush.height);
     const int3 texel = int3(min(halfPixel * g_NwbHardwareTransparentPush.receiverFactor, fullExtent - 1u), 0);
-    if(NwbHeapSampledImage2D(NWB_HW_TRANSPARENT_DEFERRED_RESOURCES.gbufferSlots.w).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH)
+    if(nwbHeapSampledImage2D(NWB_HW_TRANSPARENT_DEFERRED_RESOURCES.gbufferSlots.w).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH)
         return false;
-    const half3 positionSample = half3(NwbHeapSampledImage2D(NWB_HW_TRANSPARENT_DEFERRED_RESOURCES.gbufferSlots.z).Load(texel).xyz);
-    const half3 normalSample = half3(NwbHeapSampledImage2D(NWB_HW_TRANSPARENT_DEFERRED_RESOURCES.gbufferSlots.y).Load(texel).xyz);
+    const half3 positionSample = half3(nwbHeapSampledImage2D(NWB_HW_TRANSPARENT_DEFERRED_RESOURCES.gbufferSlots.z).Load(texel).xyz);
+    const half3 normalSample = half3(nwbHeapSampledImage2D(NWB_HW_TRANSPARENT_DEFERRED_RESOURCES.gbufferSlots.y).Load(texel).xyz);
     const float3 worldPosition = float3(positionSample);
     const float3 normal = normalize(float3(normalSample) * 2.0 - 1.0);
     const float2 jitter = nwbShadowLowDiscrepancy2D(
@@ -60,8 +60,8 @@ void nwbHwShadowStoreVisibility(const uint2 halfPixel, const half3 visibility){
     // Visibility visibility is a (0, 1) bounded factor; half math matches the finalized transmittance.
     half3 accumulated = visibility / half(g_NwbHardwareTransparentPush.sampleCount);
     if(g_NwbHardwareTransparentPush.sampleIndex != 0u)
-        accumulated += half3(NwbHeapStorageImage2DArrayFloat4(g_NwbHardwareTransparentPush.outputStorageSlot)[texel].rgb);
-    NwbHeapStorageImage2DArrayFloat4(g_NwbHardwareTransparentPush.outputStorageSlot)[texel] = float4(accumulated, 1.0);
+        accumulated += half3(nwbHeapStorageImage2DArrayFloat4(g_NwbHardwareTransparentPush.outputStorageSlot)[texel].rgb);
+    nwbHeapStorageImage2DArrayFloat4(g_NwbHardwareTransparentPush.outputStorageSlot)[texel] = float4(accumulated, 1.0);
 }
 
 

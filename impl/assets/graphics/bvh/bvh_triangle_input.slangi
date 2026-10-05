@@ -38,12 +38,12 @@ void nwbBvhLoadTrianglePositions(
     const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
     const uint indexHeapSlot = g_NwbBvhBuildPushConstants.triangleIndexHeapSlot;
     const uint positionHeapSlot = g_NwbBvhBuildPushConstants.positionHeapSlot;
-    const uint i0 = NwbHeapRawBuffer(indexHeapSlot).Load(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
-    const uint i1 = NwbHeapRawBuffer(indexHeapSlot).Load((indexBase + 1u) * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
-    const uint i2 = NwbHeapRawBuffer(indexHeapSlot).Load((indexBase + 2u) * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
-    outP0 = asfloat(NwbHeapRawBuffer(positionHeapSlot).Load3(i0 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-    outP1 = asfloat(NwbHeapRawBuffer(positionHeapSlot).Load3(i1 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-    outP2 = asfloat(NwbHeapRawBuffer(positionHeapSlot).Load3(i2 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const uint i0 = nwbHeapRawBuffer(indexHeapSlot).Load(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    const uint i1 = nwbHeapRawBuffer(indexHeapSlot).Load((indexBase + 1u) * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    const uint i2 = nwbHeapRawBuffer(indexHeapSlot).Load((indexBase + 2u) * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    outP0 = asfloat(nwbHeapRawBuffer(positionHeapSlot).Load3(i0 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    outP1 = asfloat(nwbHeapRawBuffer(positionHeapSlot).Load3(i1 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    outP2 = asfloat(nwbHeapRawBuffer(positionHeapSlot).Load3(i2 * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
 }
 
 

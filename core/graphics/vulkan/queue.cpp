@@ -415,7 +415,7 @@ TrackedCommandBufferPtr Queue::createCommandBuffer(
     cmdBuf->m_recordingWorkerDomain = recordingWorkerDomain;
     cmdBuf->m_recordingWorkerIndex = recordingWorkerIndex;
     registerCommandBuffer(*cmdBuf);
-    return TrackedCommandBufferPtr(cmdBuf, TrackedCommandBufferPtr::deleter_type(&m_context.objectArena), AdoptRef);
+    return TrackedCommandBufferPtr(cmdBuf, TrackedCommandBufferPtr::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 

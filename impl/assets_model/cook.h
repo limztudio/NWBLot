@@ -27,7 +27,7 @@ NWB_IMPL_BEGIN
 
 
 struct ModelCookEntry{
-    Name virtualPath = NAME_NONE;
+    Name virtualPath = s_NameNone;
     Model::SkeletonObjectVector skeletonObjects;
     Model::StaticMeshObjectVector staticMeshObjects;
     Model::SkinnedMeshObjectVector skinnedMeshObjects;

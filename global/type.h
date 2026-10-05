@@ -82,11 +82,11 @@ using InitializerList = std::initializer_list<T>;
 
 
 #if defined(GLB_UNICODE)
-#define __GLB_TEXT(x) L ## x
+#define GLB_DETAIL_TEXT(x) L ## x
 #else
-#define __GLB_TEXT(x) x
+#define GLB_DETAIL_TEXT(x) x
 #endif
-#define GLB_TEXT(x) __GLB_TEXT(x)
+#define GLB_TEXT(x) GLB_DETAIL_TEXT(x)
 
 #if defined(GLB_PLATFORM_WINDOWS)
 #if GLB_COMPILER_FRONTEND_MSVC || __has_declspec_attribute(dllexport)

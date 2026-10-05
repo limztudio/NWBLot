@@ -324,7 +324,7 @@ private:
 
     [[nodiscard]] bool loadSkeletonBindJoints(){
         UniquePtr<NWB::Core::Assets::IAsset> loadedModelAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_BenchmarkModel.name(), loadedModelAsset)){
+        if(!m_context.assetManager.loadSync(NWB::Impl::Model::assetTypeName(), s_BenchmarkModel.name(), loadedModelAsset)){
             NWB_LOGGER_ERROR(GLB_TEXT("SkinningCullingBenchmark: failed to load benchmark model"));
             return false;
         }
@@ -349,7 +349,7 @@ private:
         }
 
         UniquePtr<NWB::Core::Assets::IAsset> loadedSkeletonAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), skeletonObject->skeleton.name(), loadedSkeletonAsset)){
+        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::assetTypeName(), skeletonObject->skeleton.name(), loadedSkeletonAsset)){
             NWB_LOGGER_ERROR(GLB_TEXT("SkinningCullingBenchmark: failed to load benchmark skeleton"));
             return false;
         }
@@ -521,7 +521,7 @@ public:
 public:
     virtual bool onStartup()override{
         if(!m_staticPreview)
-            m_context.setTelemetryCapture(NWB::Core::Telemetry::CaptureOptions::PerfOnly());
+            m_context.setTelemetryCapture(NWB::Core::Telemetry::CaptureOptions::perfOnly());
 
         if(!loadSkeletonBindJoints()){
             NWB_LOGGER_ERROR(GLB_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));

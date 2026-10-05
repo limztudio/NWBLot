@@ -170,11 +170,11 @@ private:
             )
                 return false;
 
-            const usize slotRecordAllocationBytes = Alloc::PersistentArena::StructureAlignedSize(
+            const usize slotRecordAllocationBytes = Alloc::PersistentArena::structureAlignedSize(
                 slotRecordBytes,
                 alignof(AmdBreadcrumbSlotRecord)
             );
-            const usize nextSerialAllocationBytes = Alloc::PersistentArena::StructureAlignedSize(
+            const usize nextSerialAllocationBytes = Alloc::PersistentArena::structureAlignedSize(
                 nextSerialBytes,
                 alignof(u64)
             );
@@ -404,8 +404,8 @@ public:
     // must not overlap engine submission, presentation, idle, or teardown.
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, CommandQueue::Enum queue);
     [[nodiscard]] Object getNativeQueue(ObjectType objectType, const GpuPhysicalQueueId& queue);
-    bool isGpuCrashDiagnosticsEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.NV_device_diagnostic_checkpoints; }
-    bool isAmdBreadcrumbEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.AMD_buffer_marker && m_amdBreadcrumb.metadata && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
+    bool isGpuCrashDiagnosticsEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.nvDeviceDiagnosticCheckpoints; }
+    bool isAmdBreadcrumbEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.amdBufferMarker && m_amdBreadcrumb.metadata && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
     // NV and AMD marker paths share one command-list tracker.
     bool isAnyGpuMarkerEnabled()const noexcept{ return isGpuCrashDiagnosticsEnabled() || isAmdBreadcrumbEnabled(); }
     [[nodiscard]] GpuCrashTracker& getGpuCrashTracker(){ return m_gpuCrashTracker; }

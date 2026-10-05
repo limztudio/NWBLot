@@ -21,15 +21,15 @@ NWB_IMPL_BEGIN
 class CsgDeformWallBuilder final : NoCopy{
 public:
     // SIMD-domain cores: inputs and outputs stay on vector lanes, never touch storage.
-    [[nodiscard]] static SIMDVector MixAttributeVec(SIMDVector firstVec, SIMDVector secondVec, SIMDVector blendVec, SIMDVector otherVec);
-    [[nodiscard]] static SIMDVector NormalizeDirectionVec(SIMDVector direction);
-    [[nodiscard]] static SIMDVector KeepWVec(SIMDVector normalizedVec, SIMDVector sourceVec);
-    [[nodiscard]] static SIMDVector TangentHandednessVec(SIMDVector normalizedTangent, SIMDVector tangentVec);
-    [[nodiscard]] static SIMDVector UpAxisVec();
+    [[nodiscard]] static SIMDVector mixAttributeVec(SIMDVector firstVec, SIMDVector secondVec, SIMDVector blendVec, SIMDVector otherVec);
+    [[nodiscard]] static SIMDVector normalizeDirectionVec(SIMDVector direction);
+    [[nodiscard]] static SIMDVector keepWVec(SIMDVector normalizedVec, SIMDVector sourceVec);
+    [[nodiscard]] static SIMDVector tangentHandednessVec(SIMDVector normalizedTangent, SIMDVector tangentVec);
+    [[nodiscard]] static SIMDVector upAxisVec();
     // Storage conversion stays at these boundaries; the cores use SIMD lanes.
-    [[nodiscard]] static CsgDeformVertex MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight);
-    [[nodiscard]] static bool NormalizeDeformVertex(CsgDeformVertex& vertex);
-    [[nodiscard]] static bool SplitEdgeVertex(
+    [[nodiscard]] static CsgDeformVertex mixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight);
+    [[nodiscard]] static bool normalizeDeformVertex(CsgDeformVertex& vertex);
+    [[nodiscard]] static bool splitEdgeVertex(
         CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices,
         CsgDeformEdgeSplitMap& edgeSplits,
         const u32 first,
@@ -38,14 +38,14 @@ public:
         const f32 secondDistance,
         u32& outVertex
     );
-    static void EmitTriangle(
+    static void emitTriangle(
         CsgDeformTriangleVector<Core::Alloc::ScratchArena>& triangles,
         const u32 first,
         const u32 second,
         const u32 third
     );
     // Keep side is distance >= 0; caller snaps |distance| <= epsilon to zero first.
-    [[nodiscard]] static bool ClipShell(
+    [[nodiscard]] static bool clipShell(
         Core::Alloc::ScratchArena& scratchArena,
         const CsgDeformShape& shape,
         const f32 epsilon,

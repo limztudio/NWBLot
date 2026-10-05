@@ -36,7 +36,7 @@ StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> g_NwbHeapRtInstanceMat
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> NwbHeapRtInstanceMaterials(const uint slot){
+StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> nwbHeapRtInstanceMaterials(const uint slot){
     return g_NwbHeapRtInstanceMaterialBuffers[slot];
 }
 

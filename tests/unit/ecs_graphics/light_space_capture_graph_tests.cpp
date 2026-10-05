@@ -71,7 +71,7 @@ public:
             .setInitialState(Core::ResourceStates::Common).setKeepInitialState(true)
         ;
         Core::Texture* const texture = Tests::NewMetadataOnlyTexture(testArena.arena, context, allocator, depth);
-        snapshot.depth = Core::TextureHandle(texture, Core::TextureHandle::deleter_type(&testArena.arena), AdoptRef);
+        snapshot.depth = Core::TextureHandle(texture, Core::TextureHandle::deleter_type(&testArena.arena), s_AdoptRef);
         snapshot.plan.viewCount = 1u;
         snapshot.plan.textureResolution = 32u;
         snapshot.captureTicket = { 2u, true };
@@ -94,7 +94,7 @@ public:
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
         Core::Buffer* const buffer = Tests::NewMetadataOnlyBuffer(testArena.arena, context, allocator, description, true);
-        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
     }
 
     [[nodiscard]] LightSpaceShadowGraph declareMaps(const bool reuse){

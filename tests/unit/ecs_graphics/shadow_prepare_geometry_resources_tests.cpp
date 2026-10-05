@@ -51,7 +51,7 @@ struct GeometryContext{
         Core::Buffer* const buffer = NWB::Tests::NewMetadataOnlyBuffer(
             testArena.arena, context, allocator, Core::BufferDesc{}.setByteSize(256u).setDebugName(identity)
         );
-        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
     }
 
     [[nodiscard]] usize addBuffer(const bool includeInTrace = true){

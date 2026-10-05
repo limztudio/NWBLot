@@ -11,7 +11,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE SIMDVector SIMDCALL VectorExp2(SIMDVector value)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL VectorExp2(SIMDVector value)noexcept{
 #if defined(GLB_HAS_SSE4)
     __m128i iTrunc = _mm_cvttps_epi32(value);
     SIMDVector fTrunc = _mm_cvtepi32_ps(iTrunc);
@@ -111,17 +111,17 @@ GLB_INLINE SIMDVector SIMDCALL VectorExp2(SIMDVector value)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDVector SIMDCALL VectorExp10(SIMDVector value)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL VectorExp10(SIMDVector value)noexcept{
     return VectorExp2(VectorMultiply(s_SIMDLg10, value));
 }
 
-GLB_INLINE SIMDVector SIMDCALL VectorExpE(SIMDVector value)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL VectorExpE(SIMDVector value)noexcept{
     return VectorExp2(VectorMultiply(s_SIMDLgE, value));
 }
 
-GLB_INLINE SIMDVector SIMDCALL VectorExp(SIMDVector value)noexcept{ return VectorExpE(value); }
+GLB_INLINE SIMDVector GLB_SIMD_CALL VectorExp(SIMDVector value)noexcept{ return VectorExpE(value); }
 
-GLB_INLINE SIMDVector SIMDCALL VectorLog2(SIMDVector value)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL VectorLog2(SIMDVector value)noexcept{
 #if defined(GLB_HAS_SSE4)
     __m128i rawBiased = _mm_and_si128(_mm_castps_si128(value), s_SIMDInfinity);
     __m128i trailing = _mm_and_si128(_mm_castps_si128(value), s_SIMDQNaNTest);
@@ -243,7 +243,7 @@ GLB_INLINE SIMDVector SIMDCALL VectorLog2(SIMDVector value)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDVector SIMDCALL VectorLog10(SIMDVector value)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL VectorLog10(SIMDVector value)noexcept{
 #if defined(GLB_HAS_SSE4) || defined(GLB_HAS_NEON)
     return VectorMultiply(s_SIMDInvLg10, VectorLog2(value));
 #else
@@ -251,7 +251,7 @@ GLB_INLINE SIMDVector SIMDCALL VectorLog10(SIMDVector value)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDVector SIMDCALL VectorLogE(SIMDVector value)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL VectorLogE(SIMDVector value)noexcept{
 #if defined(GLB_HAS_SSE4) || defined(GLB_HAS_NEON)
     return VectorMultiply(s_SIMDInvLgE, VectorLog2(value));
 #else
@@ -259,9 +259,9 @@ GLB_INLINE SIMDVector SIMDCALL VectorLogE(SIMDVector value)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDVector SIMDCALL VectorLog(SIMDVector value)noexcept{ return VectorLogE(value); }
+GLB_INLINE SIMDVector GLB_SIMD_CALL VectorLog(SIMDVector value)noexcept{ return VectorLogE(value); }
 
-GLB_INLINE SIMDVector SIMDCALL VectorPow(SIMDVector v0, SIMDVector v1)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL VectorPow(SIMDVector v0, SIMDVector v1)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return VectorSet(Pow(VectorGetX(v0), VectorGetX(v1)), Pow(VectorGetY(v0), VectorGetY(v1)), Pow(VectorGetZ(v0), VectorGetZ(v1)), Pow(VectorGetW(v0), VectorGetW(v1)));
 #elif defined(GLB_HAS_NEON)

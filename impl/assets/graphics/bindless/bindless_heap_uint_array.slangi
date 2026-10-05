@@ -33,7 +33,7 @@ Texture2DArray<uint> g_NwbHeapSampledImage2DArrayUints[];
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Texture2DArray<uint> NwbHeapSampledImage2DArrayUint(const uint slot){
+Texture2DArray<uint> nwbHeapSampledImage2DArrayUint(const uint slot){
     return g_NwbHeapSampledImage2DArrayUints[slot];
 }
 

@@ -157,7 +157,7 @@ Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena){
     if(::VolumeSegmentExists(executableResDirectory, s_GraphicsVolumeName))
         return executableResDirectory;
 
-    const Path parentDirectory = executableDirectory.parent_path();
+    const Path parentDirectory = executableDirectory.parentPath();
     if(parentDirectory.empty())
         return Path(arena, s_ResourceDirectoryName);
 
@@ -192,7 +192,7 @@ bool LoadShaderArchiveRecords(
     NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& outRecords
 ){
     NWB::Core::Assets::AssetBytes indexBinary{outRecords.get_allocator().arena()};
-    if(!assetBinarySource.readAssetBinary(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary))
+    if(!assetBinarySource.readAssetBinary(NWB::Core::ShaderArchive::indexVirtualPathName(), indexBinary))
         return false;
 
     return NWB::Core::ShaderArchive::deserializeIndex(indexBinary, outRecords);
@@ -499,7 +499,7 @@ static int MainLogic(NWB::Core::Alloc::GlobalArena& arena, const __hidden_loader
 template<typename CharT>
 static int EntryPoint(isize argc, CharT** argv, void* inst){
     // Capture early startup failures; configure uploads after CLI and logger setup.
-    const usize crashArenaReserveSize = __hidden_loader::CrashArena::StructureAlignedSize(__hidden_loader::s_CrashArenaPayloadSize);
+    const usize crashArenaReserveSize = __hidden_loader::CrashArena::structureAlignedSize(__hidden_loader::s_CrashArenaPayloadSize);
     __hidden_loader::CrashArena crashArena(__hidden_loader::s_CrashReportingArena, crashArenaReserveSize);
     const bool crashReportingInstalled = __hidden_loader::InstallCrashCapture(crashArena);
     ScopeExit crashCaptureGuard([crashReportingInstalled]()noexcept{

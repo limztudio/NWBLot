@@ -37,7 +37,7 @@ struct NwbDeferredBindlessResources{
 ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> g_NwbHeapDeferredBindlessResources[];
 #pragma warning(pop)
 
-ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> NwbHeapDeferredBindlessResources(const uint slot){
+ConstantBuffer<NwbDeferredBindlessResources, Std140DataLayout> nwbHeapDeferredBindlessResources(const uint slot){
     return g_NwbHeapDeferredBindlessResources[slot];
 }
 

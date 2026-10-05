@@ -64,7 +64,7 @@ BufferHandle Device::createHandleForNativeBuffer(
         );
         return nullptr;
     }
-    if(objectType != ObjectTypes::VK_Buffer){
+    if(objectType != ObjectTypes::s_Buffer){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create buffer handle for native buffer: object type is not VK_Buffer"));
         return nullptr;
     }
@@ -147,7 +147,7 @@ BufferHandle Device::createHandleForNativeBuffer(
         return nullptr;
     }
 
-    return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 

@@ -40,12 +40,12 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
     const f32 effectiveIntensity = EffectiveCausticIntensity(temporalDecay);
     // Alternate the prepare output and its counterpart while doubling the wavelet sampling distance.
     const bool inputIsHalfB = ((static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) + passIndex) % 2u) == 0u;
-    const __hidden_caustics::CausticResolvePassResources halfA{
+    const RayTracingCausticsTaskDetail::CausticResolvePassResources halfA{
         targets.causticHistory.get(),
         targets.bindless.causticHistory.slot(),
         targets.bindless.causticHistoryStorage.slot()
     };
-    const __hidden_caustics::CausticResolvePassResources halfB{
+    const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB{
         targets.causticResolveHalf.get(),
         targets.bindless.causticResolveHalf.slot(),
         targets.bindless.causticResolveHalfStorage.slot()
@@ -59,7 +59,7 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
             : stepWidth > NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP ? resolve.m_waveletDirect : resolve.m_wavelet
     ;
     GLB_ASSERT(wavelet.m_pipeline);
-    __hidden_caustics::DispatchCausticResolvePass(
+    RayTracingCausticsTaskDetail::DispatchCausticResolvePass(
         commandList,
         heap,
         *wavelet.m_pipeline.get(),
@@ -97,18 +97,18 @@ void RendererRayTracingSystem::dispatchCausticResolveUpsample(
     const f32 temporalDecay = causticTemporalDecay();
     const f32 effectiveIntensity = EffectiveCausticIntensity(temporalDecay);
 
-    const __hidden_caustics::CausticResolvePassResources halfB{
+    const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB{
         targets.causticResolveHalf.get(),
         targets.bindless.causticResolveHalf.slot(),
         targets.bindless.causticResolveHalfStorage.slot()
     };
-    const __hidden_caustics::CausticResolvePassResources irradiance{
+    const RayTracingCausticsTaskDetail::CausticResolvePassResources irradiance{
         targets.causticIrradiance.get(),
         targets.bindless.causticIrradiance.slot(),
         targets.bindless.causticIrradianceStorage.slot()
     };
     // Edge-aware upsample into deferred-lighting irradiance.
-    __hidden_caustics::DispatchCausticResolvePass(
+    RayTracingCausticsTaskDetail::DispatchCausticResolvePass(
         commandList,
         heap,
         *m_rayTracingState.m_causticResolve.m_upsample.m_pipeline.get(),

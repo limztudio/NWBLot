@@ -138,7 +138,7 @@ inline void RecordUnsignedTestProperty(const AStringView key, const u64 value){
 
 template<typename ArenaT>
 [[nodiscard]] inline ::Path<ArenaT> RepoRootOf(ArenaT& arena, const char* const sourceFile){
-    return ::Path<ArenaT>(arena, sourceFile).parent_path().parent_path().parent_path().parent_path().lexically_normal();
+    return ::Path<ArenaT>(arena, sourceFile).parentPath().parentPath().parentPath().parentPath().lexicallyNormal();
 }
 
 

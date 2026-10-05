@@ -92,7 +92,7 @@ TextureHandle Device::createTexture(const TextureDesc& d){
         return nullptr;
     }
 
-    return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 MemoryRequirements Device::getTextureMemoryRequirements(Texture& texture){
@@ -236,7 +236,7 @@ TextureHandle Device::createHandleForNativeTexture(
     const TextureDesc& desc,
     const NativeTextureProvenance& nativeProvenance
 ){
-    if(objectType != ObjectTypes::VK_Image){
+    if(objectType != ObjectTypes::s_Image){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create texture handle for native texture: object type is not VK_Image"));
         return nullptr;
     }
@@ -296,7 +296,7 @@ TextureHandle Device::createHandleForNativeTexture(
         return nullptr;
     }
 
-    return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return TextureHandle(texture, TextureHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 
@@ -329,7 +329,7 @@ SamplerHandle Device::createSampler(const SamplerDesc& d){
         return nullptr;
     }
 
-    return SamplerHandle(sampler, SamplerHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return SamplerHandle(sampler, SamplerHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 

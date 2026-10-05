@@ -178,7 +178,7 @@ SharedUiSliderSmokeScene CreateUiSliderSmokeScene(Core::Alloc::GlobalArena& aren
     return SharedUiSliderSmokeScene(
         NewArenaObject<RefCounter<UiSliderSmokeScene>>(arena, arena, input),
         ArenaRefDeleter<RefCounter<UiSliderSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

@@ -167,7 +167,7 @@ Impl::Ui::Rect UiSearchComboSmokeScene::cursorRow()const{
     if(
         !m_state.combo().isOpen() || !m_source.filtered().indexOf(list.cursorKey(), index)
         || index < placement.firstRow || index >= placement.endRow
-        || !Impl::Ui::ScrollLayout::RowBounds(index, placement, __hidden_ui_search_combo_smoke::s_RowHeight, rectangle)
+        || !Impl::Ui::ScrollLayout::rowBounds(index, placement, __hidden_ui_search_combo_smoke::s_RowHeight, rectangle)
     )
         return {};
     return rectangle;
@@ -245,7 +245,7 @@ SharedUiSearchComboSmokeScene CreateUiSearchComboSmokeScene(Core::Alloc::GlobalA
     return SharedUiSearchComboSmokeScene(
         NewArenaObject<RefCounter<UiSearchComboSmokeScene>>(arena, arena, input),
         ArenaRefDeleter<RefCounter<UiSearchComboSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

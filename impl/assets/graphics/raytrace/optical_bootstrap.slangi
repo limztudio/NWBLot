@@ -32,16 +32,16 @@ bool nwbOpticalBootstrap(
     out NwbOpticalMedia media,
     inout NwbOpticalTraceResult result){
     media = (NwbOpticalMedia)0;
-    const uint headerFlags = NwbHeapRawBuffer(config.opticalSceneHeapSlot).Load(NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET);
+    const uint headerFlags = nwbHeapRawBuffer(config.opticalSceneHeapSlot).Load(NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET);
     if((headerFlags & NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID) == 0u){
         result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
         return false;
     }
-    const uint transparentCount = NwbHeapRawBuffer(config.opticalSceneHeapSlot).Load(NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET);
+    const uint transparentCount = nwbHeapRawBuffer(config.opticalSceneHeapSlot).Load(NWB_RT_OPTICAL_SCENE_TRANSPARENT_COUNT_OFFSET);
     if(transparentCount == 0u)
         return true;
-    const float3 boundsMin = asfloat(NwbHeapRawBuffer(config.opticalSceneHeapSlot).Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MIN_OFFSET));
-    const float3 boundsMax = asfloat(NwbHeapRawBuffer(config.opticalSceneHeapSlot).Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MAX_OFFSET));
+    const float3 boundsMin = asfloat(nwbHeapRawBuffer(config.opticalSceneHeapSlot).Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MIN_OFFSET));
+    const float3 boundsMax = asfloat(nwbHeapRawBuffer(config.opticalSceneHeapSlot).Load3(NWB_RT_OPTICAL_SCENE_BOUNDS_MAX_OFFSET));
     if(!all(isfinite(boundsMin)) || !all(isfinite(boundsMax)) || any(boundsMin > boundsMax)){
         result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
         return false;
@@ -66,7 +66,7 @@ bool nwbOpticalBootstrap(
     if(!nwbOpticalConsumeQuery(config, result))
         return false;
     RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
-    query.TraceRayInline(NwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK, ray);
+    query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK, ray);
 #if NWB_OPTICAL_CLOSED_MEDIA
     NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS];
     uint eventCount = 0u;
@@ -110,7 +110,7 @@ bool nwbOpticalBootstrap(
             result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
             return false;
         }
-        const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[instance];
+        const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[instance];
         const float3 normal = nwbRayTraceTriangleGeometricNormal(
             material, query.CandidatePrimitiveIndex(), query.CandidateWorldToObject3x4()
         );

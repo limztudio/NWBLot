@@ -30,7 +30,7 @@ using namespace TelemetryTestDetail;
 TEST(Telemetry, RecorderFiltersOwnsCallerPayloadAndRejectsEndIndex){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::FrameGraphOnly());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::frameGraphOnly());
 
     const u8 perfPayload[] = { 1u, s_ExpectedDualCount };
     EXPECT_FALSE(recorder.recordBinary(Telemetry::EventKind::PerfFrame, 12u, perfPayload, sizeof(perfPayload)));
@@ -112,7 +112,7 @@ TEST(Telemetry, EventStreamCodecHandlesEmptyStreams){
 TEST(Telemetry, EventStreamCodecRejectsInvalidInput){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::perfOnly());
 
     const u8 payload[] = { 7u, 8u };
     EXPECT_TRUE(recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, payload, sizeof(payload)));
@@ -190,7 +190,7 @@ TEST(Telemetry, EventCodecRejectsNonCurrentVersionsAndRecovers){
 TEST(Telemetry, EventStreamRejectsNonCurrentStreamAndNestedEventVersionsAndRecovers){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::perfOnly());
     const u8 payload[] = { 7u, 8u };
     ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::PerfFrame, 1u, payload, sizeof(payload)));
     Telemetry::TelemetryBytes encoded(testArena.arena);
@@ -269,14 +269,14 @@ TEST(Telemetry, DiagnosticPayloadRejectsNonCurrentVersionsAndRecovers){
 TEST(Telemetry, RecorderAcceptsConcurrentRecords){
     TestArena testArena;
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::all());
 
-    constexpr u32 threadCount = 4u;
-    constexpr u32 eventsPerThread = 64u;
-    Thread threads[threadCount];
-    for(u32 threadIndex = 0u; threadIndex < threadCount; ++threadIndex){
+    constexpr u32 s_ThreadCount = 4u;
+    constexpr u32 s_EventsPerThread = 64u;
+    Thread threads[s_ThreadCount];
+    for(u32 threadIndex = 0u; threadIndex < s_ThreadCount; ++threadIndex){
         threads[threadIndex] = Thread([&recorder, threadIndex](){
-            for(u32 eventIndex = 0u; eventIndex < eventsPerThread; ++eventIndex){
+            for(u32 eventIndex = 0u; eventIndex < s_EventsPerThread; ++eventIndex){
                 if(!Telemetry::RecordTextLog(
                     recorder,
                     NWB::Core::Common::LogType::Info,
@@ -292,7 +292,7 @@ TEST(Telemetry, RecorderAcceptsConcurrentRecords){
     for(Thread& thread : threads)
         thread.join();
 
-    EXPECT_EQ(recorder.eventCount(), threadCount * eventsPerThread);
+    EXPECT_EQ(recorder.eventCount(), s_ThreadCount * s_EventsPerThread);
 }
 
 

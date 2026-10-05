@@ -92,7 +92,7 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
     }
     const u64 previousGeneration = state.m_list.m_sourceGeneration;
     const u64 previousRevision = state.m_list.m_sourceRevision;
-    if(!ListBehavior::Reconcile(state.m_list, source) || !contextMenuMatches(frame)){
+    if(!ListBehavior::reconcile(state.m_list, source) || !contextMenuMatches(frame)){
         m_context.fail();
         return result;
     }

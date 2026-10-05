@@ -72,11 +72,11 @@ NwbLightSpaceView nwbLightSpaceLoadView(const uint index){
     const uint base = index * NWB_LIGHT_SPACE_VIEW_BYTES;
     NwbLightSpaceView view;
     for(uint row = 0u; row < 4u; ++row)
-        view.worldToClipRows[row] = asfloat(NwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + row * 16u));
-    view.originOrDirection = asfloat(NwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 64u));
-    view.depthRange = asfloat(NwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 80u));
-    view.map = NwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 96u);
-    view.light = NwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 112u);
+        view.worldToClipRows[row] = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + row * 16u));
+    view.originOrDirection = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 64u));
+    view.depthRange = asfloat(nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 80u));
+    view.map = nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 96u);
+    view.light = nwbHeapRawBuffer(g_NwbLightSpacePush.viewSlot).Load4(base + 112u);
     return view;
 }
 
@@ -98,13 +98,13 @@ uint nwbLightSpacePixelIndex(const NwbLightSpaceView view, const uint2 pixel){
 
 NwbLightSpaceEvent nwbLightSpaceLoadEvent(const uint pixel, const uint eventIndex){
     const uint address = (pixel * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + eventIndex) * NWB_LIGHT_SPACE_EVENT_BYTES;
-    const uint4 first = NwbHeapRawBuffer(g_NwbLightSpacePush.eventsSlot).Load4(address);
+    const uint4 first = nwbHeapRawBuffer(g_NwbLightSpacePush.eventsSlot).Load4(address);
     NwbLightSpaceEvent event;
     event.depth = asfloat(first.x);
     event.instanceAndFacing = first.y;
     event.primitive = first.z;
     event.absorptionRG = first.w;
-    event.absorptionBInterface = NwbHeapRawBuffer(g_NwbLightSpacePush.eventsSlot).Load(address + 16u);
+    event.absorptionBInterface = nwbHeapRawBuffer(g_NwbLightSpacePush.eventsSlot).Load(address + 16u);
     return event;
 }
 

@@ -30,7 +30,7 @@ struct UiSkinCookEntry{
     Core::Assets::AssetArena& arena;
     UiSkin::RegionVector regions;
     Core::Assets::AssetRef<Texture> texture;
-    Name virtualPath = NAME_NONE;
+    Name virtualPath = s_NameNone;
     u32 atlasWidth = 0u;
     u32 atlasHeight = 0u;
     f32 referenceDensity = 1.0f;

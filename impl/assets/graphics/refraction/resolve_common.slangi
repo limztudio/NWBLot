@@ -39,7 +39,7 @@ ConstantBuffer<NwbRefractionView, Std140DataLayout> g_NwbHeapRefractionViews[];
 
 #define g_NwbRefractionResources g_NwbHeapDeferredBindlessResources[g_NwbRefractionPush.deferredResourcesHeapSlot]
 #define g_NwbRefractionView g_NwbHeapRefractionViews[g_NwbRefractionPush.viewHeapSlot]
-#define g_NwbRefractionOutput NwbHeapStorageImage2DFloat4(g_NwbRefractionResources.refractionSlots0.w)
+#define g_NwbRefractionOutput nwbHeapStorageImage2DFloat4(g_NwbRefractionResources.refractionSlots0.w)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -74,17 +74,17 @@ bool nwbRefractionProject(const float3 world, out uint2 pixel, out float depth){
 
 half3 nwbRefractionOpaqueBackground(const uint2 pixel){
     const int3 texel = int3(pixel, 0);
-    const half3 opaque = half3(NwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.x).Load(texel).rgb);
+    const half3 opaque = half3(nwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.x).Load(texel).rgb);
     return g_NwbRefractionPush.opaqueReflectionSlot != 0xffffffffu
-        ? opaque + half3(NwbHeapSampledImage2D(g_NwbRefractionPush.opaqueReflectionSlot).Load(texel).rgb) : opaque;
+        ? opaque + half3(nwbHeapSampledImage2D(g_NwbRefractionPush.opaqueReflectionSlot).Load(texel).rgb) : opaque;
 }
 
 half3 nwbRefractionBackground(const uint2 pixel){
     const int3 texel = int3(pixel, 0);
     const half3 opaque = nwbRefractionOpaqueBackground(pixel);
-    const half3 behind = half3(NwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.y).Load(texel).rgb);
-    const half behindExtinction = half(NwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.z).Load(texel).r);
-    const half frontExtinction = half(NwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.z).Load(texel).r);
+    const half3 behind = half3(nwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.y).Load(texel).rgb);
+    const half behindExtinction = half(nwbHeapSampledImage2D(g_NwbRefractionResources.compositeSlots.z).Load(texel).r);
+    const half frontExtinction = half(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.z).Load(texel).r);
     // Transmittances are (0, 1) bounded factors, so half arithmetic is sufficient here.
     const half frontTransmittance = exp(-min(frontExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
     const half backTransmittance = exp(-min(behindExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
@@ -123,12 +123,12 @@ struct NwbRefractionEntry{
 
 bool nwbRefractionLoadEntry(const uint2 pixel, out NwbRefractionEntry entry){
     entry = (NwbRefractionEntry)0;
-    entry.depth = NwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.x).Load(int3(pixel, 0)).r;
+    entry.depth = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.x).Load(int3(pixel, 0)).r;
     if(entry.depth >= 1.0)
         return false;
-    entry.primaryRasterInstance = uint(NwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(int3(pixel, 0)).r);
-    const float4 normalIor = NwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.y).Load(int3(pixel, 0));
-    const float4 tintCoverage = NwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.z).Load(int3(pixel, 0));
+    entry.primaryRasterInstance = uint(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(int3(pixel, 0)).r);
+    const float4 normalIor = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.y).Load(int3(pixel, 0));
+    const float4 tintCoverage = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.z).Load(int3(pixel, 0));
     entry.csgPrimary = tintCoverage.w < 0.0;
     entry.position = nwbRefractionReconstruct(pixel, entry.depth);
     const float3 cameraRay = entry.position - g_NwbRefractionView.cameraPosition.xyz;
@@ -145,7 +145,7 @@ bool nwbRefractionLoadEntry(const uint2 pixel, out NwbRefractionEntry entry){
 }
 
 half3 nwbRefractionBackgroundForEntry(const uint2 pixel, const NwbRefractionEntry entry){
-    const uint samplePrimary = uint(NwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(int3(pixel, 0)).r);
+    const uint samplePrimary = uint(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(int3(pixel, 0)).r);
     // A displaced pixel outside this primary's silhouette has a different AVBOIT depth partition. Reusing its
     // transparent accumulation could pull a camera-foreground object behind the glass. Only the opaque cache is
     // reusable there; the hardware path can still evaluate transparent geometry actually intersected by its ray.
@@ -168,7 +168,7 @@ bool nwbRefractionScreenBackground(const NwbRefractionEntry entry, const float3 
     float unusedDepth;
     if(!nwbRefractionProject(entry.position, sourcePixel, unusedDepth))
         return false;
-    const float sourceOpaqueDepth = NwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.w).Load(int3(sourcePixel, 0)).r;
+    const float sourceOpaqueDepth = nwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.w).Load(int3(sourcePixel, 0)).r;
     if(sourceOpaqueDepth >= 1.0)
         return false;
     const float3 sourceOpaque = nwbRefractionReconstruct(sourcePixel, sourceOpaqueDepth);
@@ -181,7 +181,7 @@ bool nwbRefractionScreenBackground(const NwbRefractionEntry entry, const float3 
         float rayDepth;
         if(!nwbRefractionProject(sampleWorld, samplePixel, rayDepth))
             return false;
-        const float sceneDepth = NwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.w).Load(int3(samplePixel, 0)).r;
+        const float sceneDepth = nwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.w).Load(int3(samplePixel, 0)).r;
         if(sceneDepth < 1.0 && rayDepth >= sceneDepth){
             const float3 sceneWorld = nwbRefractionReconstruct(samplePixel, sceneDepth);
             const float3 delta = sceneWorld - entry.position;

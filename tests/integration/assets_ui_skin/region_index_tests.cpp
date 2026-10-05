@@ -82,7 +82,7 @@ TEST(AssetsUiSkinRegionIndex, MaximumCountPreservesAuthoredOrderAcrossHashOrderA
         ASSERT_EQ(skin.regions()[index].name, RegionName(index));
         ASSERT_EQ(skin.findRegion(RegionName(index)), &skin.regions()[index]);
     }
-    EXPECT_EQ(skin.findRegion(NAME_NONE), nullptr);
+    EXPECT_EQ(skin.findRegion(s_NameNone), nullptr);
     EXPECT_EQ(skin.findRegion(Name("missing")), nullptr);
     NameHash after{};
     after.qwords[0u] = Limit<u64>::s_Max;
@@ -129,11 +129,11 @@ TEST(AssetsUiSkinRegionIndex, ReplacementAcrossSmallSkinBoundaryDoesNotKeepStale
     using namespace __hidden_ui_skin_region_index_tests;
     TestArena<> owner;
     UiSkin skin(owner.arena, Name("test/skin"));
-    constexpr u32 counts[]{ 128u, 129u, 128u };
-    Name previous = NAME_NONE;
-    for(u32 stage = 0u; stage < LengthOf(counts); ++stage){
+    constexpr u32 s_Counts[]{ 128u, 129u, 128u };
+    Name previous = s_NameNone;
+    for(u32 stage = 0u; stage < LengthOf(s_Counts); ++stage){
         UiSkin::RegionVector regions(owner.arena);
-        for(u32 index = 0u; index < counts[stage]; ++index)
+        for(u32 index = 0u; index < s_Counts[stage]; ++index)
             regions.push_back(MakeRegion(RegionName(index + stage * 256u), index));
         SetRegions(skin, Move(regions));
         ASSERT_TRUE(skin.validatePayload());

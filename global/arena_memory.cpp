@@ -14,7 +14,7 @@
 
 
 struct ArenaMemoryOwnerRecord{
-    Name ownerName = NAME_NONE;
+    Name ownerName = s_NameNone;
     ArenaMemoryStats retiredStats = {};
     ArenaMemoryTracker* liveTrackers = nullptr;
     const ArenaMemoryOwnerRecord* next = nullptr;

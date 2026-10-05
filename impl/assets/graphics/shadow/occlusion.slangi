@@ -22,7 +22,7 @@
 #ifndef NWB_SHADOW_RQ_VISIBILITY_STORAGE_SLOT
 #error "shadow RayQuery sources must provide the visibility StorageImage heap slot expression"
 #endif
-#define g_NwbShadowVisibility NwbHeapStorageImage2DArrayFloat4(NWB_SHADOW_RQ_VISIBILITY_STORAGE_SLOT)
+#define g_NwbShadowVisibility nwbHeapStorageImage2DArrayFloat4(NWB_SHADOW_RQ_VISIBILITY_STORAGE_SLOT)
 
 // (binding 7, the per-instance occluder material table, is intentionally absent here: the hardware opaque fast
 // path commits the first FORCE_OPAQUE hit and loads no per-instance material -- see binding_slots.h.)

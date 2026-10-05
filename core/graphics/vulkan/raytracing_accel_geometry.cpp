@@ -300,7 +300,7 @@ bool FillBlasGeometryForSizeQuery(
     }
     else if(geomDesc.geometryType == RayTracingGeometryType::Spheres){
         if(
-            !context.extensions.NV_ray_tracing_linear_swept_spheres
+            !context.extensions.nvRayTracingLinearSweptSpheres
             || context.rayTracingLinearSweptSpheresFeatures.spheres != VK_TRUE
         ){
             NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: sphere geometry requires VK_NV_ray_tracing_linear_swept_spheres with spheres support"), operation);
@@ -414,7 +414,7 @@ bool FillBlasGeometryForSizeQuery(
     }
     else if(geomDesc.geometryType == RayTracingGeometryType::Lss){
         if(
-            !context.extensions.NV_ray_tracing_linear_swept_spheres
+            !context.extensions.nvRayTracingLinearSweptSpheres
             || context.rayTracingLinearSweptSpheresFeatures.linearSweptSpheres != VK_TRUE
         ){
             NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: LSS geometry requires VK_NV_ray_tracing_linear_swept_spheres with linearSweptSpheres support"), operation);

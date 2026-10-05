@@ -84,7 +84,7 @@ void TooltipState::advanceRevision(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TooltipBehavior::Update(TooltipState& state, const WidgetId anchor, const u64 declarationGeneration,
+bool TooltipBehavior::update(TooltipState& state, const WidgetId anchor, const u64 declarationGeneration,
     const PopupToken& popup, const u64 focusLossGeneration, const u64 hoverActivityGeneration,
     const bool hovered, const f32 deltaSeconds, const TooltipOptions& options){
     using namespace __hidden_ui_tooltip;

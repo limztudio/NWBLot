@@ -512,7 +512,7 @@ ResourceStates::Mask Texture::resolveTaskGraphImportInitialState()const{
 }
 
 Object Texture::getNativeHandle(ObjectType objectType){
-    if(objectType == ObjectTypes::VK_Image){
+    if(objectType == ObjectTypes::s_Image){
         ScopedLock bindingLock(m_memoryBindingMutex);
         return Object(m_image);
     }
@@ -526,9 +526,9 @@ Object Texture::getNativeView(
     TextureDimension::Enum dimension,
     bool
 ){
-    if(objectType == ObjectTypes::VK_ImageView)
+    if(objectType == ObjectTypes::s_ImageView)
         return getView(subresources, dimension, format);
-    if(objectType == ObjectTypes::VK_Image)
+    if(objectType == ObjectTypes::s_Image)
         return getNativeHandle(objectType);
     return nullptr;
 }

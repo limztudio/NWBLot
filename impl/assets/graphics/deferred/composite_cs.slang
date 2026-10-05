@@ -26,7 +26,7 @@ ConstantBuffer<NwbDeferredCompositePushConstants> g_NwbDeferredCompositePushCons
 
 
 #define g_NwbDeferredBindlessResources g_NwbHeapDeferredBindlessResources[g_NwbDeferredCompositePushConstants.resourceSlots]
-#define g_NwbDeferredCompositeOutput NwbHeapStorageImage2DFloat4(g_NwbDeferredBindlessResources.avboitWorkSlots1.w)
+#define g_NwbDeferredCompositeOutput nwbHeapStorageImage2DFloat4(g_NwbDeferredBindlessResources.avboitWorkSlots1.w)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -48,21 +48,21 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // stays free of implicit derivatives and therefore needs no compute-derivative Vulkan extension or feature.
     const int3 texel = int3(pixel, 0);
     const half4 opaqueReflection = g_NwbDeferredCompositePushConstants.opaqueReflectionSlot != 0xffffffffu
-        ? half4(NwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.opaqueReflectionSlot).Load(texel)) : half4(0.0h);
+        ? half4(nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.opaqueReflectionSlot).Load(texel)) : half4(0.0h);
     const half4 glassReflection = g_NwbDeferredCompositePushConstants.glassReflectionSlot != 0xffffffffu
-        ? half4(NwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.glassReflectionSlot).Load(texel)) : half4(0.0h);
-    const half3 opaqueColor = half3(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.x).Load(texel).rgb) + opaqueReflection.rgb;
+        ? half4(nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.glassReflectionSlot).Load(texel)) : half4(0.0h);
+    const half3 opaqueColor = half3(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.x).Load(texel).rgb) + opaqueReflection.rgb;
     half reflectionSource = opaqueReflection.a;
-    const half4 transparentColorAccum = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.y).Load(texel));
-    const half transparentExtinction = half(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.z).Load(texel).r);
+    const half4 transparentColorAccum = half4(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.y).Load(texel));
+    const half transparentExtinction = half(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.z).Load(texel).r);
     const half totalTransmittance = exp(-min(transparentExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
     half3 compositeColor = transparentColorAccum.rgb + opaqueColor * totalTransmittance;
     if(g_NwbDeferredCompositePushConstants.refractionResources != 0u){
         // Front-layer color and its (0, 1) bounded extinction/transmittance factor are LDR color math, matching the half composite path.
-        const half3 frontColor = half3(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.y).Load(texel).rgb);
-        const half frontExtinction = half(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.z).Load(texel).r);
+        const half3 frontColor = half3(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.y).Load(texel).rgb);
+        const half frontExtinction = half(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.z).Load(texel).r);
         const half frontTransmittance = exp(-min(frontExtinction, half(NWB_AVBOIT_EXTINCTION_SATURATION)));
-        const half4 transmitted = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.x).Load(texel));
+        const half4 transmitted = half4(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.x).Load(texel));
         const half3 transmittedColor = transmitted.a > half(0.0h)
             ? frontColor + frontTransmittance * (transmitted.rgb + glassReflection.rgb)
             : frontColor + transparentColorAccum.rgb + opaqueColor * frontTransmittance * totalTransmittance;

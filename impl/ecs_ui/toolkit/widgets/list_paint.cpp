@@ -25,17 +25,17 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
         return false;
     const Rect clip = visibleClip(box.clip);
     ScrollPlacement placement;
-    if(!ScrollLayout::Calculate(
+    if(!ScrollLayout::calculate(
         box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb,
         frame.rowCount, frame.options.rowHeight, frame.state->scrollOffset(), placement
     ))
         return false;
     if(
-        !ListBehavior::EnsureCursor(*frame.state, *frame.source, frame.options.rowHeight, placement.viewport.height)
+        !ListBehavior::ensureCursor(*frame.state, *frame.source, frame.options.rowHeight, placement.viewport.height)
         || !listStateMatches(frame)
     )
         return false;
-    if(!ScrollLayout::Calculate(
+    if(!ScrollLayout::calculate(
         box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb,
         frame.rowCount, frame.options.rowHeight, frame.state->scrollOffset(), placement
     ))
@@ -119,14 +119,14 @@ bool Builder::paintListRows(const Item& item, const ListFrame& frame, const Scro
             return false;
         const WidgetId part = MakeWidgetPartId(rows, key);
         Rect rectangle;
-        if(!ScrollLayout::RowBounds(index, placement, frame.options.rowHeight, rectangle))
+        if(!ScrollLayout::rowBounds(index, placement, frame.options.rowHeight, rectangle))
             return false;
         const ShapeRequest request = textShapeRequest(frame.source->text(index), frame.widgetStyle.fontSize);
         if(!listStateMatches(frame) || m_text.layout(request, text) != TextLayoutStatus::Success)
             return false;
         const SelectablePaintFlags flags{ enabled, frame.state->selectedKey() == key,
             m_context.input().hover() == part, focused && frame.state->cursorKey() == key };
-        if(!SelectablePainter::Paint(
+        if(!SelectablePainter::paint(
             m_paint, m_text, *m_skin, text, rectangle, placement.contentClip, frame.style.row, flags,
             frame.widgetStyle.text, frame.widgetStyle.disabledText
         ))

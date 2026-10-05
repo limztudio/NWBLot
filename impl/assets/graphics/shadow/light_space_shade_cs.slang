@@ -31,7 +31,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         + dispatchThreadID.y * (NWB_LIGHT_SPACE_SHADE_MAX_GROUPS_X * NWB_LIGHT_SPACE_SHADE_GROUP_SIZE);
     if(pixelIndex >= g_NwbLightSpacePush.width)
         return;
-    const uint count = NwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * 4u);
+    const uint count = nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * 4u);
 #if NWB_LIGHT_SPACE_CSG_SHADE
     if(nwbCsgShadowEnabled()){
         g_NwbHeapStorageBuffers[g_NwbLightSpacePush.csgOpaqueDepthSlot].Store(pixelIndex * 4u, 0x7f7fffffu);
@@ -67,10 +67,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             nwbLightSpaceInvalidateCrossing(address, instanceIndex, primitive);
             continue;
         }
-        const uint3 indices = NwbHeapRawBuffer(material.indexSlot).Load3(primitive * 12u);
-        const float3 p0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-        const float3 p1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-        const float3 p2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+        const uint3 indices = nwbHeapRawBuffer(material.indexSlot).Load3(primitive * 12u);
+        const float3 p0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+        const float3 p1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+        const float3 p2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
         const float3 geometric = cross(p1 - p0, p2 - p0);
 #if NWB_LIGHT_SPACE_CSG_SHADE
         if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) == 0u){

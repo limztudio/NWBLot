@@ -49,13 +49,13 @@ struct FilterContext{
             Core::Buffer* const resource = Tests::NewMetadataOnlyBuffer(
                 arena, context, allocator, Core::BufferDesc{}.setByteSize(256u)
             );
-            buffer = Core::BufferHandle(resource, Core::BufferHandle::deleter_type(&arena), AdoptRef);
+            buffer = Core::BufferHandle(resource, Core::BufferHandle::deleter_type(&arena), s_AdoptRef);
         }
         for(Core::TextureHandle& texture : textures){
             Core::Texture* const resource = Tests::NewMetadataOnlyTexture(
                 arena, context, allocator, Core::TextureDesc{}.setMipLevels(2u).setArraySize(2u)
             );
-            texture = Core::TextureHandle(resource, Core::TextureHandle::deleter_type(&arena), AdoptRef);
+            texture = Core::TextureHandle(resource, Core::TextureHandle::deleter_type(&arena), s_AdoptRef);
         }
         Access::stateHandoffTextures(source).push_back({
             .texture = textures[0u].get(), .mipLevel = 0u, .arraySlice = 0u,

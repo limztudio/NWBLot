@@ -20,11 +20,11 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-thread_local GpuRecordedGraph::ArtifactOperation* GpuRecordedGraph::ArtifactOperation::s_activeOperation = nullptr;
+thread_local GpuRecordedGraph::ArtifactOperation* GpuRecordedGraph::ArtifactOperation::s_ActiveOperation = nullptr;
 
 
 bool GpuRecordedGraph::ArtifactOperation::activeFor(const GpuRecordedGraph& recordedGraph)noexcept{
-    for(const ArtifactOperation* operation = s_activeOperation; operation; operation = operation->m_previousOperation){
+    for(const ArtifactOperation* operation = s_ActiveOperation; operation; operation = operation->m_previousOperation){
         if(operation->m_recordedGraph == &recordedGraph)
             return true;
     }
@@ -32,7 +32,7 @@ bool GpuRecordedGraph::ArtifactOperation::activeFor(const GpuRecordedGraph& reco
 }
 
 bool GpuRecordedGraph::ArtifactOperation::activeExclusiveFor(const GpuRecordedGraph& recordedGraph)noexcept{
-    for(const ArtifactOperation* operation = s_activeOperation; operation; operation = operation->m_previousOperation){
+    for(const ArtifactOperation* operation = s_ActiveOperation; operation; operation = operation->m_previousOperation){
         if(operation->m_recordedGraph == &recordedGraph)
             return operation->m_exclusive;
     }
@@ -46,22 +46,22 @@ GpuRecordedGraph::ArtifactOperation::ArtifactOperation(
 )noexcept{
     const bool exclusive = mode == ArtifactOperationMode::Exclusive;
     const bool waitRead = mode == ArtifactOperationMode::WaitRead;
-    for(const ArtifactOperation* operation = s_activeOperation; operation; operation = operation->m_previousOperation){
+    for(const ArtifactOperation* operation = s_ActiveOperation; operation; operation = operation->m_previousOperation){
         if(operation->m_recordedGraph != &recordedGraph)
             continue;
         if(exclusive && !operation->m_exclusive)
             return;
 
         m_recordedGraph = &recordedGraph;
-        m_previousOperation = s_activeOperation;
+        m_previousOperation = s_ActiveOperation;
         m_exclusive = operation->m_exclusive;
-        s_activeOperation = this;
+        s_ActiveOperation = this;
         return;
     }
 
     // Mutating cross-artifact/transaction reentry is rejected even when the target happens to be idle.
     // This keeps blocking cleanup outside every unrelated scheduler gate and removes the symmetric ABBA shape entirely.
-    if(s_activeOperation || GpuGraphSubmissionTransaction::SubmissionOperation::active())
+    if(s_ActiveOperation || GpuGraphSubmissionTransaction::SubmissionOperation::active())
         return;
     const bool acquireExclusive = exclusive;
     if(acquireExclusive){
@@ -103,19 +103,19 @@ GpuRecordedGraph::ArtifactOperation::ArtifactOperation(
     }
     m_exclusive = acquireExclusive;
     m_recordedGraph = &recordedGraph;
-    m_previousOperation = s_activeOperation;
+    m_previousOperation = s_ActiveOperation;
     m_ownsAdmission = true;
-    s_activeOperation = this;
+    s_ActiveOperation = this;
 }
 GpuRecordedGraph::ArtifactOperation::~ArtifactOperation()noexcept{
     if(!m_recordedGraph)
         return;
 
-    if(s_activeOperation != this){
+    if(s_ActiveOperation != this){
         GLB_FATAL_ASSERT_MSG(false, "GpuRecordedGraph artifact operations must unwind in lexical order");
         TerminateInvariant();
     }
-    s_activeOperation = m_previousOperation;
+    s_ActiveOperation = m_previousOperation;
     if(!m_ownsAdmission)
         return;
 

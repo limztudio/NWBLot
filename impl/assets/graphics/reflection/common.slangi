@@ -84,9 +84,9 @@ void nwbReflectionStore(const uint2 pixel, const bool glass, const half3 radianc
     // Mixed queue lanes select the surface, but each store keeps a uniform descriptor index. This avoids requiring
     // storage-image nonuniform indexing beyond the existing device contract.
     if(glass)
-        NwbHeapStorageImage2DFloat4(g_NwbReflectionParameters.glassOutputSlot)[pixel] = float4(output);
+        nwbHeapStorageImage2DFloat4(g_NwbReflectionParameters.glassOutputSlot)[pixel] = float4(output);
     else
-        NwbHeapStorageImage2DFloat4(g_NwbReflectionParameters.opaqueOutputSlot)[pixel] = float4(output);
+        nwbHeapStorageImage2DFloat4(g_NwbReflectionParameters.opaqueOutputSlot)[pixel] = float4(output);
 }
 
 bool nwbReflectionFeedbackWriting(){
@@ -105,12 +105,12 @@ bool nwbReflectionLoadSurface(
     surface = (NwbReflectionSurface)0;
     const int3 texel = int3(pixel, 0);
     const uint specularSlot = glass ? g_NwbReflectionParameters.glassSpecularSlot : g_NwbReflectionParameters.opaqueSpecularSlot;
-    const float4 specularRoughness = NwbHeapSampledImage2DNonUniform(specularSlot).Load(texel);
+    const float4 specularRoughness = nwbHeapSampledImage2DNonUniform(specularSlot).Load(texel);
     const uint normalSlot = glass ? g_NwbReflectionResources.refractionSlots0.y : g_NwbReflectionResources.gbufferSlots.y;
     float4 packedNormal = float4(0.0);
     half3 f0 = half3(saturate(specularRoughness.rgb));
     if(glass){
-        packedNormal = NwbHeapSampledImage2DNonUniform(normalSlot).Load(texel);
+        packedNormal = nwbHeapSampledImage2DNonUniform(normalSlot).Load(texel);
         if(!isfinite(packedNormal.w) || packedNormal.w <= 1.0001)
             return false;
         // Glass reflection and transmission share the same optical boundary. Its IOR determines F0, so the two
@@ -122,7 +122,7 @@ bool nwbReflectionLoadSurface(
     if(!isfinite(specularRoughness.a) || !all(isfinite(float3(f0))) || !any(f0 > half3(0.0h)))
         return false;
     const uint depthSlot = glass ? g_NwbReflectionResources.refractionSlots0.x : g_NwbReflectionResources.gbufferSlots.w;
-    const float depth = NwbHeapSampledImage2DNonUniform(depthSlot).Load(texel).r;
+    const float depth = nwbHeapSampledImage2DNonUniform(depthSlot).Load(texel).r;
     if(!isfinite(depth) || depth < 0.0 || depth >= 1.0)
         return false;
     const float2 uv = (float2(pixel) + 0.5) / float2(g_NwbReflectionParameters.dimensionsAndRoute.x, g_NwbReflectionParameters.dimensionsAndRoute.y);
@@ -133,13 +133,13 @@ bool nwbReflectionLoadSurface(
         surface.position = world.xyz / world.w;
     }
     else
-        surface.position = NwbHeapSampledImage2D(g_NwbReflectionResources.gbufferSlots.z).Load(texel).xyz;
+        surface.position = nwbHeapSampledImage2D(g_NwbReflectionResources.gbufferSlots.z).Load(texel).xyz;
     if(!all(isfinite(surface.position)))
         return false;
     const float3 cameraRay = surface.position - g_NwbReflectionView.cameraPosition.xyz;
     const float3 incident = nwbSafeNormalize(cameraRay, float3(0.0, 0.0, 1.0));
     if(!glass)
-        packedNormal = NwbHeapSampledImage2DNonUniform(normalSlot).Load(texel);
+        packedNormal = nwbHeapSampledImage2DNonUniform(normalSlot).Load(texel);
     surface.normal = nwbSafeNormalize(glass ? packedNormal.xyz : packedNormal.xyz * 2.0 - 1.0, -incident);
     if(dot(surface.normal, incident) > 0.0)
         surface.normal = -surface.normal;

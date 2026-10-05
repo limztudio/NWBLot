@@ -155,10 +155,10 @@ bool GpuRendererState::createResources(){
     if(!resources->m_inputLayout)
         return false;
     Core::BindingLayoutDesc paintLayout(m_arena);
-    paintLayout.setVisibility(Core::ShaderType::AllGraphics).addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(GpuPaintPushConstants)));
+    paintLayout.setVisibility(Core::ShaderType::AllGraphics).addItem(Core::BindingLayoutItem::pushConstants(0u, sizeof(GpuPaintPushConstants)));
     resources->m_layout = device.createBindingLayout(paintLayout);
     Core::BindingLayoutDesc outputLayout(m_arena);
-    outputLayout.setVisibility(Core::ShaderType::AllGraphics).addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(GpuOutputPushConstants)));
+    outputLayout.setVisibility(Core::ShaderType::AllGraphics).addItem(Core::BindingLayoutItem::pushConstants(0u, sizeof(GpuOutputPushConstants)));
     resources->m_outputLayout = device.createBindingLayout(outputLayout);
     Core::SamplerDesc sampler;
     sampler.setAllFilters(true).setAllAddressModes(Core::SamplerAddressMode::Clamp);
@@ -168,7 +168,7 @@ bool GpuRendererState::createResources(){
     resources->m_samplerDescriptor = heap.allocate(Core::GpuDescriptorClass::Sampler);
     if(
         !resources->m_samplerDescriptor.valid()
-        || !heap.write(resources->m_samplerDescriptor, Core::DescriptorWriteItem::Sampler(0u, resources->m_sampler.get()))
+        || !heap.write(resources->m_samplerDescriptor, Core::DescriptorWriteItem::sampler(0u, resources->m_sampler.get()))
     )
         return false;
     Core::GraphicsPipelineDesc pipeline;
@@ -221,7 +221,7 @@ GpuVersion<GpuTargetVersion> GpuRendererState::createTarget(const u32 width, con
         return {};
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     target->m_sampledImage = heap.allocate(Core::GpuDescriptorClass::SampledImage);
-    const Core::DescriptorWriteItem view = Core::DescriptorWriteItem::Texture_SRV(
+    const Core::DescriptorWriteItem view = Core::DescriptorWriteItem::textureSrv(
         0u, target->m_color.get(), Core::Format::RGBA16_FLOAT, Core::s_AllSubresources, Core::TextureDimension::Texture2D
     );
     if(!target->m_sampledImage.valid() || !heap.write(target->m_sampledImage, view))

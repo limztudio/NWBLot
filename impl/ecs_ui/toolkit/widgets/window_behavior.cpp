@@ -56,7 +56,7 @@ namespace __hidden_ui_window_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool WindowBehavior::Initialize(WindowState& state, const WindowOptions& options, const WindowMetrics& metrics){
+bool WindowBehavior::initialize(WindowState& state, const WindowOptions& options, const WindowMetrics& metrics){
     if(
         !__hidden_ui_window_behavior::ValidBounds(options.initialBounds)
         || options.direction > LayoutDirection::Column || options.direction == LayoutDirection::Leaf
@@ -83,7 +83,7 @@ bool WindowBehavior::Initialize(WindowState& state, const WindowOptions& options
     return true;
 }
 
-bool WindowBehavior::ApplyMove(WindowState& state, const PointerGesture& gesture){
+bool WindowBehavior::applyMove(WindowState& state, const PointerGesture& gesture){
     f64 x = 0.0;
     f64 y = 0.0;
     if(!__hidden_ui_window_behavior::Displacement(gesture, x, y))
@@ -107,7 +107,7 @@ bool WindowBehavior::ApplyMove(WindowState& state, const PointerGesture& gesture
     return true;
 }
 
-bool WindowBehavior::ApplyResize(WindowState& state, const PointerGesture& gesture, const Point& minimumSize){
+bool WindowBehavior::applyResize(WindowState& state, const PointerGesture& gesture, const Point& minimumSize){
     f64 x = 0.0;
     f64 y = 0.0;
     if(
@@ -135,7 +135,7 @@ bool WindowBehavior::ApplyResize(WindowState& state, const PointerGesture& gestu
     return true;
 }
 
-bool WindowBehavior::Constrain(WindowState& state, const DisplayMetrics& display, const f32 titleHeight){
+bool WindowBehavior::constrain(WindowState& state, const DisplayMetrics& display, const f32 titleHeight){
     if(
         !IsFinite(display.logicalWidth) || display.logicalWidth <= 0.0f
         || !IsFinite(display.logicalHeight) || display.logicalHeight <= 0.0f

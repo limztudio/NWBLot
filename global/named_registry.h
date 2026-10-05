@@ -91,7 +91,7 @@ template<typename ScopeId, typename ScopeVector>
 template<typename ScopeVector>
 [[nodiscard]] Name ScopeNameAt(const ScopeVector& scopes, const usize index){
     if(index >= scopes.size() || !scopes[index])
-        return NAME_NONE;
+        return s_NameNone;
 
     return scopes[index]->name;
 }

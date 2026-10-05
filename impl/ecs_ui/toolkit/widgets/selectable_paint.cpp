@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SelectablePainter::Paint(
+bool SelectablePainter::paint(
     PaintBuilder& paint, TextService& text, const UiSkin& skin, const TextLayout& layout,
     const Rect& bounds, const Rect& clip, const SelectableStyle& style,
     const SelectablePaintFlags& flags, const Color& textColor, const Color& disabledTextColor
@@ -56,7 +56,7 @@ bool Builder::selectable(
 bool Builder::paintSelectable(const Item& item, const LayoutBox& box){
     const InputRouter& input = m_context.input();
     const SelectablePaintFlags flags{ item.enabled, item.checked, input.hover() == item.state.id, input.focus() == item.state.id };
-    if(!SelectablePainter::Paint(
+    if(!SelectablePainter::paint(
         m_paint, m_text, *m_skin, item.text, box.rectangle, visibleClip(box.clip), item.selectableStyle, flags,
         item.style.text, item.style.disabledText
     ))

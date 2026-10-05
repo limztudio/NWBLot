@@ -41,7 +41,7 @@ struct RangeContext{
                 retained
             ),
             Core::BufferHandle::deleter_type(&arena),
-            AdoptRef
+            s_AdoptRef
         )
     {}
 };

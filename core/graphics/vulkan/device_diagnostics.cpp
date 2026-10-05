@@ -24,10 +24,10 @@ void Device::captureDeviceLoss(const AStringView context){
     if(!m_gpuCrashDiagnosticsEnabled)
         return;
 
-    const bool hasCheckpoints = m_context.extensions.NV_device_diagnostic_checkpoints;
-    const bool hasDeviceFault = m_context.extensions.EXT_device_fault;
+    const bool hasCheckpoints = m_context.extensions.nvDeviceDiagnosticCheckpoints;
+    const bool hasDeviceFault = m_context.extensions.extDeviceFault;
     const bool hasBufferMarker =
-        m_context.extensions.AMD_buffer_marker
+        m_context.extensions.amdBufferMarker
         && m_amdBreadcrumb.metadata
         && m_amdBreadcrumb.metadata->slotRecordCount == m_amdBreadcrumb.layout.totalSlotCount
         && m_amdBreadcrumb.metadata->nextSerialCount == m_amdBreadcrumb.layout.physicalQueueCount

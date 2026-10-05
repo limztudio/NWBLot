@@ -1,4 +1,4 @@
-global_declare_static_library(nwb_loader)
+nwb_declare_static_library(nwb_loader)
 target_sources(nwb_loader PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/profile_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/main.cpp"

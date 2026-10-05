@@ -53,7 +53,7 @@ private:
 
 
 private:
-    static void OpenTimingFile(OutputFileStream& timingFile){
+    static void openTimingFile(OutputFileStream& timingFile){
         Core::Alloc::GlobalArena arena(s_SmokeEnvironmentArena);
         SmokeEnvironmentString timingPath(arena);
         if(!ReadSmokeEnvironmentText("NWB_GPU_TIMING_FILE", timingPath))
@@ -138,7 +138,7 @@ private:
 
         // GUI logging is not scrapeable; the optional file sink exposes per-pass A/B timings.
         OutputFileStream timingFile;
-        OpenTimingFile(timingFile);
+        openTimingFile(timingFile);
         if(timingFile.is_open()){
             timingFile.setf(s_FileFormatFixed, s_FileFormatFloatField);
             timingFile.precision(s_TimingFilePrecision);

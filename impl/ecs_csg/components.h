@@ -20,7 +20,7 @@ NWB_IMPL_BEGIN
 
 
 struct CsgReceiverComponent{
-    Name receiverGroup = NAME_NONE;
+    Name receiverGroup = s_NameNone;
 
     bool enabled = true;
 
@@ -48,9 +48,9 @@ static_assert(IsTriviallyCopyable_V<SkinnedCsgMeshComponent>, "SkinnedCsgMeshCom
 struct CsgCutterComponent{
     using ParameterByteVector = Vector<u8, Core::Alloc::GlobalArena>;
 
-    Name receiverGroup = NAME_NONE;
+    Name receiverGroup = s_NameNone;
 
-    Name shapeType = NAME_NONE;
+    Name shapeType = s_NameNone;
 
     Float34 worldToShape;
     Float34 shapeToWorld;

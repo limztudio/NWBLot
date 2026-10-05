@@ -176,19 +176,19 @@ struct ShaderSpecialization{
         f32 f;
     } value;
 
-    static constexpr ShaderSpecialization U32(u32 constantID, u32 u){
+    static constexpr ShaderSpecialization fromU32(u32 constantID, u32 u){
         ShaderSpecialization s;
         s.constantID = constantID;
         s.value.u = u;
         return s;
     }
-    static constexpr ShaderSpecialization I32(u32 constantID, i32 i){
+    static constexpr ShaderSpecialization fromI32(u32 constantID, i32 i){
         ShaderSpecialization s;
         s.constantID = constantID;
         s.value.i = i;
         return s;
     }
-    static constexpr ShaderSpecialization F32(u32 constantID, f32 f){
+    static constexpr ShaderSpecialization fromF32(u32 constantID, f32 f){
         ShaderSpecialization s;
         s.constantID = constantID;
         s.value.f = f;

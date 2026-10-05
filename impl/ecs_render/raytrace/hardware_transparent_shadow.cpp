@@ -67,7 +67,7 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
     if(!state.m_bindingLayout){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_hardware_transparent_shadow::PushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0u, sizeof(__hidden_hardware_transparent_shadow::PushConstants)));
         state.m_bindingLayout = device.createBindingLayout(layoutDesc);
         if(!state.m_bindingLayout){
             NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create hardware transparent-shadow binding layout"));

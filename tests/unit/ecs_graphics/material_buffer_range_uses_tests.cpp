@@ -62,7 +62,7 @@ TEST(MaterialBufferRangeUses, ActiveFramePrefixesDoNotSynchronizeUnusedCapacity)
                 Core::BufferDesc{}.setByteSize(capacityByteCount).setInitialState(Core::ResourceStates::Common)
             ),
             Core::BufferHandle::deleter_type(&testArena.arena),
-            AdoptRef
+            s_AdoptRef
         );
         ASSERT_TRUE(buffer);
         const Core::GpuGraphResourceId resource = graph.importBuffer(

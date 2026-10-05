@@ -32,15 +32,15 @@ StructuredBuffer<uint, Std430DataLayout> g_NwbHeapShadowReadOnlyUintBuffers[];
 #pragma warning(pop)
 
 
-ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> NwbHeapShadowMaterialContextSlots(const uint slot){
+ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> nwbHeapShadowMaterialContextSlots(const uint slot){
     return g_NwbHeapShadowMaterialContextSlotBuffers[slot];
 }
 
-RWStructuredBuffer<uint, Std430DataLayout> NwbHeapShadowWritableUintBuffer(const uint slot){
+RWStructuredBuffer<uint, Std430DataLayout> nwbHeapShadowWritableUintBuffer(const uint slot){
     return g_NwbHeapShadowWritableUintBuffers[slot];
 }
 
-StructuredBuffer<uint, Std430DataLayout> NwbHeapShadowReadOnlyUintBuffer(const uint slot){
+StructuredBuffer<uint, Std430DataLayout> nwbHeapShadowReadOnlyUintBuffer(const uint slot){
     return g_NwbHeapShadowReadOnlyUintBuffers[slot];
 }
 

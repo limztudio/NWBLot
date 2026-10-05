@@ -60,7 +60,7 @@ u64 CpuTaskScheduler::allocateProfileLabelIdentity()noexcept{
 }
 
 CpuTaskProfileLabel CpuTaskScheduler::registerProfileLabel(const Name& name){
-    if(name == NAME_NONE)
+    if(name == s_NameNone)
         return {};
     ScopedLock lock(m_mutex);
 
@@ -161,7 +161,7 @@ void CpuTaskScheduler::finishProfileLocked(const ProfileSample& sample, const Ti
     CpuTaskProfileEvent& event = m_profileEvents[(m_profileRead + m_profileCount) % m_profileEvents.size()];
     event.kind = sample.kind;
     event.task = sample.task;
-    event.label = NAME_NONE;
+    event.label = s_NameNone;
     if(sample.label.valid()){
         const auto found = LowerBound(
             m_profileLabels.begin(),

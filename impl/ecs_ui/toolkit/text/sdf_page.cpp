@@ -59,7 +59,7 @@ SharedSdfAtlasPage CreateSdfAtlasPage(
         SharedSdfAtlasPage(
             NewArenaObject<RefCounter<SdfAtlasPage>>(arena, arena, immutable, Move(pixels)),
             ArenaRefDeleter<RefCounter<SdfAtlasPage>, Core::Alloc::GlobalArena>(&arena),
-            AdoptRef
+            s_AdoptRef
         )
     ;
 }

@@ -22,7 +22,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Compute, s_OperationName))
         return;
     if(
-        !m_context.extensions.NV_cluster_acceleration_structure
+        !m_context.extensions.nvClusterAccelerationStructure
         || !m_context.clusterAccelerationStructureFeatureEnabled
         || !m_context.deviceDispatch.vkGetClusterAccelerationStructureBuildSizesNV
         || !m_context.deviceDispatch.vkCmdBuildClusterAccelerationStructureIndirectNV
@@ -74,7 +74,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     if(
         (opDesc.params.flags & RayTracingClusterOperationFlags::AllowOMM)
         && (
-            !m_context.extensions.EXT_opacity_micromap
+            !m_context.extensions.extOpacityMicromap
             || !m_context.opacityMicromapFeatureEnabled
         )
     ){

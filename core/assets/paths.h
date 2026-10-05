@@ -134,7 +134,7 @@ template<typename StringT>
 ){
     outVirtualPath.clear();
 
-    const Path relativePath = sourceOrMetaPath.lexically_relative(assetRoot);
+    const Path relativePath = sourceOrMetaPath.lexicallyRelative(assetRoot);
     if(relativePath.empty()){
         NWB_LOGGER_ERROR(GLB_TEXT("Assets: failed to derive asset path from '{}' relative to asset root '{}'")
             , PathToString<tchar>(sourceOrMetaPath)
@@ -144,7 +144,7 @@ template<typename StringT>
     }
 
     Path logicalPath = relativePath;
-    logicalPath.replace_extension();
+    logicalPath.replaceExtension();
 
     const RelativeAssetPathLayout layout = MeasureRelativeAssetPathText(logicalPath);
     if(!layout.accepted){
@@ -196,7 +196,7 @@ template<typename StringT>
     Name& outVirtualPath,
     Alloc::ScratchArena& scratchArena
 ){
-    outVirtualPath = NAME_NONE;
+    outVirtualPath = s_NameNone;
 
     AString<Alloc::ScratchArena> virtualPathText{scratchArena};
     if(!AssetPathsDetail::BuildDerivedAssetVirtualPathText(assetRoot, virtualRoot, sourceOrMetaPath, virtualPathText))
@@ -272,7 +272,7 @@ template<typename AssetRootVector>
 
             outResolvedPath /= componentText;
         }
-        outResolvedPath = outResolvedPath.lexically_normal();
+        outResolvedPath = outResolvedPath.lexicallyNormal();
         return true;
     }
 
@@ -284,7 +284,7 @@ template<typename StringT>
     outSourcePath.clear();
     auto& arena = outSourcePath.get_allocator().arena();
 
-    const Path parentDirectory = nwbFilePath.parent_path();
+    const Path parentDirectory = nwbFilePath.parentPath();
     if(parentDirectory.empty()){
         NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': failed to resolve paired source because the metadata directory is empty")
             , PathToString<tchar>(nwbFilePath)
@@ -318,7 +318,7 @@ template<typename StringT>
         }
 
         errorCode.clear();
-        const bool isRegularFile = dirEntry.is_regular_file(errorCode);
+        const bool isRegularFile = dirEntry.isRegularFile(errorCode);
         if(errorCode){
             NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': failed to inspect '{}' while resolving paired source: {}")
                 , PathToString<tchar>(nwbFilePath)
@@ -340,7 +340,7 @@ template<typename StringT>
         if(candidateStem != nwbStem)
             continue;
 
-        matchedSourcePath = candidatePath.lexically_normal();
+        matchedSourcePath = candidatePath.lexicallyNormal();
         ++matchCount;
         if(matchCount > 1){
             NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': paired source is ambiguous; multiple source files share stem '{}'")
@@ -577,13 +577,13 @@ template<typename MetadataValue>
     const bool required,
     Name& outName
 ){
-    outName = NAME_NONE;
+    outName = s_NameNone;
 
     AStringView text;
     bool present = false;
     if(!ReadMetadataStringField(nwbFilePath, object, diagnosticPrefix, fieldName, required, text, &present))
         return false;
-    // An absent optional field must remain NAME_NONE. Name("") is a valid, non-null hash.
+    // An absent optional field must remain s_NameNone. Name("") is a valid, non-null hash.
     if(!present)
         return true;
 
@@ -608,7 +608,7 @@ template<typename AssetT, typename MetadataValue>
     const bool required,
     AssetRef<AssetT>& outRef
 ){
-    Name assetName = NAME_NONE;
+    Name assetName = s_NameNone;
     if(!ReadMetadataNameField(nwbFilePath, object, diagnosticPrefix, fieldName, required, assetName))
         return false;
 

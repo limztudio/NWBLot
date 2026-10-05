@@ -94,9 +94,9 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scrat
             state.m_bvhSortKeysBuffer
             && state.m_bvhSortPayloadBuffer
             && state.m_bvhVisitCounterBuffer
-            && __hidden_rt_swbvh::IsStorageBufferHeapHandle(state.m_bvhSortKeysHeapHandle)
-            && __hidden_rt_swbvh::IsStorageBufferHeapHandle(state.m_bvhSortPayloadHeapHandle)
-            && __hidden_rt_swbvh::IsStorageBufferHeapHandle(state.m_bvhVisitCounterHeapHandle)
+            && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(state.m_bvhSortKeysHeapHandle)
+            && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(state.m_bvhSortPayloadHeapHandle)
+            && RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(state.m_bvhVisitCounterHeapHandle)
         ;
     };
     if(!sharedResourcesReady())
@@ -118,8 +118,8 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scrat
                 mesh.swBvhNodeHeapHandle,
                 mesh.swBvhParentHeapHandle
             )
-            || !__hidden_rt_swbvh::IsStorageBufferHeapHandle(mesh.swBvhPositionHeapHandle)
-            || !__hidden_rt_swbvh::IsStorageBufferHeapHandle(mesh.swBvhTriangleIndexHeapHandle)
+            || !RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(mesh.swBvhPositionHeapHandle)
+            || !RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(mesh.swBvhTriangleIndexHeapHandle)
         ){
             NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not freeze software BVH build for mesh '{}'"), StringConvert(mesh.meshName.resolvedText()));
             clearPreparedMeshSwBvhBuilds();
@@ -131,7 +131,7 @@ bool RendererRayTracingSystem::capturePreparedMeshSwBvhBuilds(Core::Alloc::Scrat
         const bool performRefit =
             mesh.runtimeMesh
             && !firstBuild
-            && mesh.swBvhRefitsSinceRebuild < adaptiveRefitsBeforeRebuild(primitiveCount)
+            && mesh.swBvhRefitsSinceRebuild < AdaptiveRefitsBeforeRebuild(primitiveCount)
         ;
         const Core::BufferDesc& positionDesc = mesh.positionBuffer->getCreationDescription();
         const Core::BufferDesc& indexDesc = mesh.triangleIndexBuffer->getCreationDescription();

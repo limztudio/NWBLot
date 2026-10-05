@@ -36,7 +36,7 @@ bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
             return false;
         }
         const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::RawBuffer_SRV(0u, mesh.runtimeLocalBoundsBuffer.get()))){
+        if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::rawBufferSrv(0u, mesh.runtimeLocalBoundsBuffer.get()))){
             if(handle.valid())
                 heap.free(handle);
             releaseMeshGeometryHeapHandles(mesh);
@@ -56,7 +56,7 @@ bool RendererMeshSystem::createMeshRenderBindings(MeshResources& mesh){
         if(heap.isInitialized() && requiredBytes != 0u && desc.byteSize >= requiredBytes && desc.canHaveRawViews){
             const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
             if(handle.valid()){
-                if(heap.write(handle, Core::DescriptorWriteItem::RawBuffer_SRV(0u, mesh.runtimeMeshletLocalBoundsBuffer.get())))
+                if(heap.write(handle, Core::DescriptorWriteItem::rawBufferSrv(0u, mesh.runtimeMeshletLocalBoundsBuffer.get())))
                     mesh.runtimeMeshletLocalBoundsHeapHandle = handle;
                 else
                     heap.free(handle);
@@ -140,7 +140,7 @@ bool RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(
         !handle.valid()
-        || !heap.write(handle, Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, mesh.emulationVertexBuffer.get()))
+        || !heap.write(handle, Core::DescriptorWriteItem::structuredBufferUav(0u, mesh.emulationVertexBuffer.get()))
     ){
         if(handle.valid())
             heap.free(handle);
@@ -176,12 +176,12 @@ bool RendererMeshSystem::prepareMeshFrameBindings(const ECSRenderDetail::Materia
         instanceHandle.valid()
         && materialTypedHandle.valid()
         && viewHandle.valid()
-        && heap.write(instanceHandle, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, materialBuffers.instanceBuffer.get()))
+        && heap.write(instanceHandle, Core::DescriptorWriteItem::structuredBufferSrv(0u, materialBuffers.instanceBuffer.get()))
         && heap.write(
             materialTypedHandle,
-            Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, materialBuffers.materialTypedBuffer.get())
+            Core::DescriptorWriteItem::structuredBufferSrv(0u, materialBuffers.materialTypedBuffer.get())
         )
-        && heap.write(viewHandle, Core::DescriptorWriteItem::ConstantBuffer(0u, m_meshState.m_meshViewBuffer.get()))
+        && heap.write(viewHandle, Core::DescriptorWriteItem::constantBuffer(0u, m_meshState.m_meshViewBuffer.get()))
     ;
     if(!registered){
         if(instanceHandle.valid())
@@ -276,7 +276,7 @@ bool RendererMeshSystem::createMeshGeometryHeapHandles(MeshResources& mesh){
             registered = false;
             return;
         }
-        if(!heap.write(handle, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, buffer.get()))){
+        if(!heap.write(handle, Core::DescriptorWriteItem::structuredBufferSrv(0u, buffer.get()))){
             heap.free(handle);
             registered = false;
             return;
@@ -355,8 +355,8 @@ bool RendererMeshSystem::ensureMeshSwBvhInputHeapHandles(MeshResources& mesh){
     const bool registered =
         positionHandle.valid()
         && triangleIndexHandle.valid()
-        && heap.write(positionHandle, Core::DescriptorWriteItem::RawBuffer_SRV(0u, mesh.positionBuffer.get()))
-        && heap.write(triangleIndexHandle, Core::DescriptorWriteItem::RawBuffer_SRV(0u, mesh.triangleIndexBuffer.get()))
+        && heap.write(positionHandle, Core::DescriptorWriteItem::rawBufferSrv(0u, mesh.positionBuffer.get()))
+        && heap.write(triangleIndexHandle, Core::DescriptorWriteItem::rawBufferSrv(0u, mesh.triangleIndexBuffer.get()))
     ;
     if(!registered){
         if(positionHandle.valid())

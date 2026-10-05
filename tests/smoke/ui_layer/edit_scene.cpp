@@ -201,7 +201,7 @@ SharedUiEditSmokeScene CreateUiEditSmokeScene(Core::Alloc::GlobalArena& arena, C
     return SharedUiEditSmokeScene(
         NewArenaObject<RefCounter<UiEditSmokeScene>>(arena, arena, input),
         ArenaRefDeleter<RefCounter<UiEditSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

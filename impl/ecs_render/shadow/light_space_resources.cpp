@@ -66,7 +66,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         return false;
     if(!snapshot.layout){
         Core::BindingLayoutDesc desc(m_arena);
-        desc.setVisibility(Core::ShaderType::All).addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(LightSpaceShadowPush)));
+        desc.setVisibility(Core::ShaderType::All).addItem(Core::BindingLayoutItem::pushConstants(0u, sizeof(LightSpaceShadowPush)));
         snapshot.layout = device.createBindingLayout(desc);
         if(!snapshot.layout)
             return false;
@@ -236,7 +236,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
         return false;
     descriptors[4] = heap.allocate(Core::GpuDescriptorClass::SampledImage2DArray);
     if(
-        !descriptors[4].valid() || !heap.write(descriptors[4], Core::DescriptorWriteItem::Texture_SRV(0u, depth.get(), Core::Format::D32,
+        !descriptors[4].valid() || !heap.write(descriptors[4], Core::DescriptorWriteItem::textureSrv(0u, depth.get(), Core::Format::D32,
         Core::TextureSubresourceSet(0u, 1u, 0u, plan.viewCount), Core::TextureDimension::Texture2DArray))
     )
         return false;

@@ -103,7 +103,7 @@ void ForEachMaterialPassMeshSourceBuffer(
 
 
 struct MaterialPassDrawItem{
-    Name meshKey = NAME_NONE;
+    Name meshKey = s_NameNone;
     MaterialPipelineKey pipelineKey;
     MaterialPassMeshResourceSnapshot meshResources;
     MaterialPassPipelineResourceSnapshot pipelineResources;
@@ -114,8 +114,8 @@ struct MaterialPassDrawItem{
 };
 
 struct MaterialInstanceMutableCacheEntry{
-    Name materialName = NAME_NONE;
-    Name materialInterface = NAME_NONE;
+    Name materialName = s_NameNone;
+    Name materialInterface = s_NameNone;
     u64 typedLayoutHash = 0u;
     u64 revision = 0u;
     MaterialTypedByteVector mutableTypedBytes;

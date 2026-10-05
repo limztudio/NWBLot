@@ -135,7 +135,7 @@
 
 ## GPU Timing / Perf Measurement
 
-1. Smoke apps are GUI processes with no scrapeable stdout (logger routes to the logserver window), so per-pass GPU timing A/B uses the `NWB_GPU_TIMING_FILE` file sink in `tests/smoke/gpu_pass_timing_probe.h`. The smoke project opts in with `CaptureOptions::GpuTimingOnly()` (`gi_test_project.cpp`); the file is appended per report interval.
+1. Smoke apps are GUI processes with no scrapeable stdout (logger routes to the logserver window), so per-pass GPU timing A/B uses the `NWB_GPU_TIMING_FILE` file sink in `tests/smoke/gpu_pass_timing_probe.h`. The smoke project opts in with `CaptureOptions::gpuTimingOnly()` (`gi_test_project.cpp`); the file is appended per report interval.
 2. Timing scope identities are readable text in a `dbg` build but can be hashed in `opt`/`fin`, so decode opt timing dumps against the matching `*.namesym` shipped beside the binary. GPU markers and crash-event labels retain their authored text in every configuration.
 3. A/B control-pass methodology: a real per-pass win appears ONLY in the target scope while control passes the change cannot affect (`render.shadow_visibility`, `render.opaque_regular`, `render.caustic_resolve`) stay flat. If those controls drift by the same ~1–3% as the target, it is system-wide GPU variance (clock/thermal state between runs), not a real win.
     - **Unattended-capture stall:** on this KDE-Wayland/Xwayland host, a background smoke window can stop receiving frame callbacks and yield all-zero timing intervals. Keep the window foregrounded for captures; treat runs with at most 10 nonzero intervals as inconclusive.

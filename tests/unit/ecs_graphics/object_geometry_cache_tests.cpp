@@ -70,12 +70,12 @@ struct Context{
         Core::Buffer* const buffer = Tests::NewMetadataOnlyBuffer(
             testArena.arena, context, allocator, Core::BufferDesc{}.setByteSize(256u).setCanHaveRawViews(true)
         );
-        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
     }
 
     [[nodiscard]] Core::ComputePipelineHandle makeDecoder(){
         Core::ComputePipeline* const pipeline = NewArenaObject<Core::ComputePipeline>(testArena.arena, context);
-        return Core::ComputePipelineHandle(pipeline, Core::ComputePipelineHandle::deleter_type(&testArena.arena), AdoptRef);
+        return Core::ComputePipelineHandle(pipeline, Core::ComputePipelineHandle::deleter_type(&testArena.arena), s_AdoptRef);
     }
 };
 

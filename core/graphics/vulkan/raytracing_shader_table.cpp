@@ -99,7 +99,7 @@ RayTracingShaderTableHandle RayTracingPipeline::createShaderTable(){
         return nullptr;
     }
     sbt->m_pipeline = Handle<RayTracingPipeline>(this, Handle<RayTracingPipeline>::deleter_type(&m_context.objectArena));
-    return RayTracingShaderTableHandle(sbt, RayTracingShaderTableHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return RayTracingShaderTableHandle(sbt, RayTracingShaderTableHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 
@@ -223,7 +223,7 @@ void ShaderTable::clearCallableShaders(){
 
 Object ShaderTable::getNativeHandle(const ObjectType objectType){
     ScopedLock lock(m_mutex);
-    if(objectType == ObjectTypes::VK_Buffer && m_raygenBuffer)
+    if(objectType == ObjectTypes::s_Buffer && m_raygenBuffer)
         return Object(m_raygenBuffer->m_buffer);
     return Object(nullptr);
 }

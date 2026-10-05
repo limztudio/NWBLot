@@ -65,7 +65,7 @@ struct SubsetContext{
             Core::Buffer* const buffer = Tests::NewMetadataOnlyBuffer(
                 arena, context, allocator, Core::BufferDesc{}.setByteSize(256u)
             );
-            buffers.emplace_back(buffer, Core::BufferHandle::deleter_type(&arena), AdoptRef);
+            buffers.emplace_back(buffer, Core::BufferHandle::deleter_type(&arena), s_AdoptRef);
         }
     }
 
@@ -75,7 +75,7 @@ struct SubsetContext{
             Core::Texture* const texture = Tests::NewMetadataOnlyTexture(
                 arena, context, allocator, Core::TextureDesc{}.setMipLevels(s_ExpectedDualCount).setArraySize(s_ExpectedDualCount)
             );
-            textures.emplace_back(texture, Core::TextureHandle::deleter_type(&arena), AdoptRef);
+            textures.emplace_back(texture, Core::TextureHandle::deleter_type(&arena), s_AdoptRef);
         }
     }
 

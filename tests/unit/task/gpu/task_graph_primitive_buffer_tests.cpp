@@ -56,7 +56,7 @@ TEST(GpuTaskGraph, UploadBufferTaskPreflightsNativeAlignmentContract){
     Graphics::BufferHandle destination(
         destinationObject,
         Graphics::BufferHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId destinationResource = graph.importBuffer(
@@ -178,7 +178,7 @@ TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){
         Graphics::BufferHandle buffer(
             bufferObject,
             Graphics::BufferHandle::deleter_type(&testArena.arena),
-            AdoptRef
+            s_AdoptRef
         );
         return buffer;
     };
@@ -463,11 +463,11 @@ TEST(GpuTaskGraph, CopyBufferRegionsDeclareExactIntervalsAndReplayOnlyCoveredByt
     Graphics::Buffer* const destinationObject = NewMetadataOnlyBuffer(testArena.arena, context, allocator, bufferDesc);
     ASSERT_NE(sourceObject, nullptr);
     ASSERT_NE(destinationObject, nullptr);
-    Graphics::BufferHandle sourceBuffer(sourceObject, Graphics::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+    Graphics::BufferHandle sourceBuffer(sourceObject, Graphics::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
     Graphics::BufferHandle destinationBuffer(
         destinationObject,
         Graphics::BufferHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId source = graph.importBuffer(

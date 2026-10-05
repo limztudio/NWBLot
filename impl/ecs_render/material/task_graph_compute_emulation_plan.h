@@ -26,8 +26,8 @@ namespace ECSRenderDetail{
 
 // Retain the selected draw metadata so recording rejects changed packet inputs before generating into the shared output.
 struct GeneratedGeometryEquivalenceKey{
-    Name meshKey = NAME_NONE;
-    Name material = NAME_NONE;
+    Name meshKey = s_NameNone;
+    Name material = s_NameNone;
     const Core::Buffer* outputBuffer = nullptr;
     u32 instanceIndex = 0u;
     u32 materialConstantByteOffset = 0u;

@@ -97,7 +97,7 @@ public:
 public:
     AssetBytes m_binary;
     Name m_path = Name("tests/ui/image_loader/texture");
-    mutable Name m_lastReadPath = NAME_NONE;
+    mutable Name m_lastReadPath = s_NameNone;
     mutable usize m_readCount = 0u;
     bool m_available = true;
 };
@@ -106,7 +106,7 @@ public:
 class MisdirectedImageCodec final : public IAssetCodec{
 public:
     explicit MisdirectedImageCodec(const bool wrongType)
-        : IAssetCodec(Texture::AssetTypeName())
+        : IAssetCodec(Texture::assetTypeName())
         , m_wrongType(wrongType)
     {}
 
@@ -217,7 +217,7 @@ TEST_F(ImageLoaderTests, RealCodecLoadRetainsExactTextureAfterTemporaryAssetAndB
 TEST_F(ImageLoaderTests, EmptyReferenceFailsBeforeReadingTheBinarySource){
     EXPECT_FALSE(LoadImageSource(m_arena, m_assets, AssetRef<Texture>{}));
     EXPECT_EQ(m_source.m_readCount, 0u);
-    EXPECT_EQ(m_source.m_lastReadPath, NAME_NONE);
+    EXPECT_EQ(m_source.m_lastReadPath, s_NameNone);
     EXPECT_TRUE(m_logger.sawErrorContaining(GLB_TEXT("texture asset reference is empty")));
 }
 
@@ -234,7 +234,7 @@ TEST_F(ImageLoaderTests, MissingPathAndFailedBinaryReadReturnNoSource){
 }
 
 TEST_F(ImageLoaderTests, MissingTextureCodecFailsAfterReadingAValidBinary){
-    ASSERT_TRUE(m_registry.unregisterCodec(Texture::AssetTypeName()));
+    ASSERT_TRUE(m_registry.unregisterCodec(Texture::assetTypeName()));
     EXPECT_FALSE(LoadImageSource(m_arena, m_assets, m_identity));
     EXPECT_EQ(m_source.m_readCount, 1u);
     EXPECT_TRUE(m_logger.sawErrorContaining(GLB_TEXT("failed to deserialize")));

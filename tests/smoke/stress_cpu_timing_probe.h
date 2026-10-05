@@ -33,7 +33,7 @@ private:
     static constexpr usize s_MaxRecords = 262144u;
 
     struct Scope{
-        Name name = NAME_NONE;
+        Name name = s_NameNone;
         u64 lastPublication = 0u;
         u32 generation = 0u;
         bool recorded = false;

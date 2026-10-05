@@ -30,8 +30,8 @@ NwbUiPixelOutput main(NwbUiPixelInput input){
     if(g_NwbUiPushConstants.material == NWB_UI_MATERIAL_SOLID)
         return output;
 
-    const Texture2D<float4> texture = NwbHeapSampledImage2D(g_NwbUiPushConstants.textureSlot);
-    const SamplerState sampler = NwbHeapSampler(g_NwbUiPushConstants.samplerSlot);
+    const Texture2D<float4> texture = nwbHeapSampledImage2D(g_NwbUiPushConstants.textureSlot);
+    const SamplerState sampler = nwbHeapSampler(g_NwbUiPushConstants.samplerSlot);
     // Base mip sampling preserves atlas gutters. R8 glyph views contain linear coverage without sRGB conversion.
     const float4 sampled = texture.SampleLevel(sampler, input.uv, 0.0);
     if(g_NwbUiPushConstants.material == NWB_UI_MATERIAL_GLYPH){

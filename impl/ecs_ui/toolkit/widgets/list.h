@@ -90,10 +90,10 @@ private:
 
 class ListBehavior final{
 public:
-    [[nodiscard]] static bool Reconcile(ListState& state, const IListDataSource& source);
-    [[nodiscard]] static bool Apply(ListState& state, const IListDataSource& source, const ListOptions& options,
+    [[nodiscard]] static bool reconcile(ListState& state, const IListDataSource& source);
+    [[nodiscard]] static bool apply(ListState& state, const IListDataSource& source, const ListOptions& options,
         const ControlAction& action, ListResult& result);
-    [[nodiscard]] static bool EnsureCursor(ListState& state, const IListDataSource& source, f32 rowHeight, f64 viewportHeight);
+    [[nodiscard]] static bool ensureCursor(ListState& state, const IListDataSource& source, f32 rowHeight, f64 viewportHeight);
 };
 
 

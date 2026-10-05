@@ -51,7 +51,7 @@ struct CoincidentOpticalVolumeCandidate{
     Float3U scale = Float3U(1.f, 1.f, 1.f);
     const u8* mutableTypedBytes = nullptr;
     usize mutableTypedByteCount = 0u;
-    Name group = NAME_NONE;
+    Name group = s_NameNone;
     Core::ECS::EntityID entity;
     i32 priority = 0;
     // Identical-material grouping also requires the same authored medium semantics.

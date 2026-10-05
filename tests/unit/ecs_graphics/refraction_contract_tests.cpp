@@ -82,7 +82,7 @@ TEST(EcsGraphics, StandaloneAvboitModeNeverSamplesMissingRefractionDescriptors){
         const usize entry = shader.find(function);
         ASSERT_NE(entry, AStringView::npos);
         const usize guard = shader.find("if(!nwbAvboitRefractionEnabled())", entry);
-        const usize imageAccess = shader.find("NwbHeapSampledImage2D", entry);
+        const usize imageAccess = shader.find("nwbHeapSampledImage2D", entry);
         ASSERT_NE(guard, AStringView::npos);
         ASSERT_NE(imageAccess, AStringView::npos);
         EXPECT_LT(guard, imageAccess);

@@ -35,7 +35,7 @@ bool Builder::beginWindow(
         !frame || !header || (options.collapsible && !collapse)
         || (options.resizable && !resize && !region(m_style.white, m_style.white)) || !window
         || m_text.layout(request, m_scope->m_window.title) != TextLayoutStatus::Success
-        || !WindowLayout::Measure(
+        || !WindowLayout::measure(
             *frame, *header, collapse, resize, m_style, options,
             m_scope->m_window.title.measure(), m_skin->referenceDensity(), m_scope->m_window.metrics
         )
@@ -48,7 +48,7 @@ bool Builder::beginWindow(
     m_scope->m_window.options = options;
     m_scope->m_window.firstUse = !state.initialized;
     WindowState candidate = state;
-    if(!WindowBehavior::Initialize(candidate, options, m_scope->m_window.metrics) || !m_context.pushScope(stableKey)){
+    if(!WindowBehavior::initialize(candidate, options, m_scope->m_window.metrics) || !m_context.pushScope(stableKey)){
         m_context.fail();
         return false;
     }
@@ -69,22 +69,22 @@ bool Builder::beginWindow(
         candidate.collapsed = !candidate.collapsed;
     PointerGesture gesture;
     while(m_context.takePointerGesture(m_scope->m_window.titleState, options.movable, gesture)){
-        if(!WindowBehavior::ApplyMove(candidate, gesture)){
+        if(!WindowBehavior::applyMove(candidate, gesture)){
             m_context.fail();
             return false;
         }
     }
     while(m_context.takePointerGesture(m_scope->m_window.resizeState, options.resizable && !candidate.collapsed, gesture)){
-        if(!WindowBehavior::ApplyResize(candidate, gesture, m_scope->m_window.metrics.minimumSize)){
+        if(!WindowBehavior::applyResize(candidate, gesture, m_scope->m_window.metrics.minimumSize)){
             m_context.fail();
             return false;
         }
     }
-    if(!WindowBehavior::Constrain(candidate, m_paint.displayMetrics(), m_scope->m_window.metrics.titleHeight)){
+    if(!WindowBehavior::constrain(candidate, m_paint.displayMetrics(), m_scope->m_window.metrics.titleHeight)){
         m_context.fail();
         return false;
     }
-    m_scope->m_bounds = WindowLayout::Content(candidate, m_scope->m_window.metrics);
+    m_scope->m_bounds = WindowLayout::content(candidate, m_scope->m_window.metrics);
     LayoutNodeDesc description;
     description.direction = options.direction;
     description.width = m_scope->m_window.firstUse && options.contentWidthFirstUse
@@ -132,8 +132,8 @@ bool Builder::endWindow(){
                 state.bounds.height = Max(
                     root->rectangle.height + m_scope->m_window.metrics.titleHeight, m_scope->m_window.metrics.minimumSize.y
                 );
-            arranged = WindowBehavior::Constrain(state, display, m_scope->m_window.metrics.titleHeight);
-            m_scope->m_bounds = WindowLayout::Content(state, m_scope->m_window.metrics);
+            arranged = WindowBehavior::constrain(state, display, m_scope->m_window.metrics.titleHeight);
+            m_scope->m_bounds = WindowLayout::content(state, m_scope->m_window.metrics);
             if(arranged)
                 arranged = m_scope->m_layout.arrange(m_scope->m_bounds);
         }

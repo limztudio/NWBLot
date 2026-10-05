@@ -48,7 +48,7 @@ static constexpr f32 s_Gap = 4.0f;
 
 
 [[nodiscard]] Impl::Ui::Rect Button(const Impl::Ui::WindowState& state, const Impl::Ui::WindowMetrics& metrics){
-    const Impl::Ui::Rect content = Impl::Ui::WindowLayout::Content(state, metrics);
+    const Impl::Ui::Rect content = Impl::Ui::WindowLayout::content(state, metrics);
     return { content.x + metrics.contentPadding.left,
         content.y + metrics.contentPadding.top + s_LabelHeight + s_SeparatorHeight + 2.0f * s_Gap,
         s_ControlWidth, s_ControlHeight };
@@ -141,10 +141,10 @@ void UiWindowSmokeScene::observeState(const Impl::Ui::WindowMetrics& metrics){
         , static_cast<u32>(m_window.collapsed), static_cast<u32>(m_locked), m_count
     );
     const Rect title{ bounds.x, bounds.y, bounds.width, metrics.titleHeight };
-    const Rect collapse = WindowLayout::Collapse(m_window, metrics);
-    const Rect resize = WindowLayout::Resize(m_window, metrics);
+    const Rect collapse = WindowLayout::collapse(m_window, metrics);
+    const Rect resize = WindowLayout::resize(m_window, metrics);
     const Rect button = __hidden_ui_window_smoke::Button(m_window, metrics);
-    const Rect content = WindowLayout::Content(m_window, metrics);
+    const Rect content = WindowLayout::content(m_window, metrics);
     NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiWindowSmoke: geometry sequence={} title={},{},{},{} collapse={},{},{},{} resize={},{},{},{}")
         , m_sequence, title.x, title.y, title.width, title.height
         , collapse.x, collapse.y, collapse.width, collapse.height
@@ -173,7 +173,7 @@ void UiWindowSmokeScene::paintMarkers(Impl::UiPaintContext& context, const Impl:
     for(usize index = 0u; index < LengthOf(values); ++index)
         context.paint.fillRect({ 12.0f + static_cast<f32>(index) * 20.0f, markerY, 14.0f, 12.0f },
             EncodeSmokeColor(values[index]));
-    context.paint.pushClip(WindowLayout::Visible(m_window, metrics));
+    context.paint.pushClip(WindowLayout::visible(m_window, metrics));
     context.paint.fillRect({ bounds.x + bounds.width - 14.0f, bounds.y + 4.0f, 10.0f, 10.0f },
         __hidden_ui_window_smoke::s_TitleAnchor);
     if(!m_window.collapsed)
@@ -199,7 +199,7 @@ SharedUiWindowSmokeScene CreateUiWindowSmokeScene(Core::Alloc::GlobalArena& aren
     return SharedUiWindowSmokeScene(
         NewArenaObject<RefCounter<UiWindowSmokeScene>>(arena),
         ArenaRefDeleter<RefCounter<UiWindowSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

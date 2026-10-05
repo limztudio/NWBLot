@@ -160,7 +160,7 @@ struct MaterialBindTypedLayoutParameterLookupEntry{
     u32 fieldIndex = 0u;
     u32 byteOffset = 0u;
     u32 constantByteOffset = 0u;
-    Name blockName = NAME_NONE;
+    Name blockName = s_NameNone;
 };
 
 using MaterialBindTypedLayoutBlockLookup = MaterialCookMap<Name, MaterialBindTypedLayoutBlockLookupEntry>;

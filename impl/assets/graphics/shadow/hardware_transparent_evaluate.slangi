@@ -69,12 +69,12 @@ float3 nwbHwShadowScaleGeometryVector(const float3 value){
 }
 
 float3 nwbHwShadowGeometricNormal(const NwbRtInstanceMaterial material, const uint primitive){
-    const uint3 indices = NwbHeapRawBuffer(material.indexSlot).Load3(
+    const uint3 indices = nwbHeapRawBuffer(material.indexSlot).Load3(
         primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES
     );
-    const float3 p0 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-    const float3 p1 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-    const float3 p2 = asfloat(NwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 p0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 p1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 p2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
     return nwbHwShadowScaleGeometryVector(cross(
         nwbHwShadowScaleGeometryVector(p1 - p0),
         nwbHwShadowScaleGeometryVector(p2 - p0)
@@ -91,7 +91,7 @@ uint nwbHwShadowFacing(const float3 geometricNormal, const float3 objectDirectio
 }
 
 uint nwbHwShadowCrossingFacing(const RayDesc ray, const NwbHardwareTransparentCrossing crossing){
-    const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbHardwareTransparentContext.sceneSlots.z)[crossing.instance];
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbHardwareTransparentContext.sceneSlots.z)[crossing.instance];
     const NwbMeshInstanceData instance = g_NwbMeshInstances[material.meshInstanceIndex];
     return nwbHwShadowFacing(nwbHwShadowGeometricNormal(material, crossing.primitive), nwbHwShadowObjectDirection(instance, ray.Direction));
 }
@@ -99,12 +99,12 @@ uint nwbHwShadowCrossingFacing(const RayDesc ray, const NwbHardwareTransparentCr
 NwbHardwareTransparentCrossingOptics nwbHwShadowShadeCrossing(
     const RayDesc ray,
     const NwbHardwareTransparentCrossing crossing){
-    const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(g_NwbHardwareTransparentContext.sceneSlots.z)[crossing.instance];
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbHardwareTransparentContext.sceneSlots.z)[crossing.instance];
     const NwbMeshInstanceData instance = g_NwbMeshInstances[material.meshInstanceIndex];
     const uint corner = crossing.primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-    const NwbRayTraceVertexAttrib a0 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4(corner * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
-    const NwbRayTraceVertexAttrib a1 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4((corner + 1u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
-    const NwbRayTraceVertexAttrib a2 = nwbRayTraceDecodeVertexAttrib(NwbHeapRawBuffer(material.attributeSlot).Load4((corner + 2u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const NwbRayTraceVertexAttrib a0 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4(corner * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const NwbRayTraceVertexAttrib a1 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4((corner + 1u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+    const NwbRayTraceVertexAttrib a2 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4((corner + 2u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
     const float3 bary = float3(1.0 - crossing.barycentrics.x - crossing.barycentrics.y, crossing.barycentrics);
     const float3 objectNormal = float3(a0.normal) * bary.x + float3(a1.normal) * bary.y + float3(a2.normal) * bary.z;
     const float3 geometricNormal = nwbHwShadowGeometricNormal(material, crossing.primitive);
@@ -138,7 +138,7 @@ NwbHardwareTransparentCrossingOptics nwbHwShadowShadeCrossing(
 uint nwbHwShadowBoundaryMode(const uint instance){
     if(instance >= g_NwbHardwareTransparentContext.materialSlots.z)
         return NWB_RT_OPTICAL_BOUNDARY_UNSPECIFIED;
-    return NwbHeapRawBuffer(g_NwbHardwareTransparentContext.materialSlots.y).Load(
+    return nwbHeapRawBuffer(g_NwbHardwareTransparentContext.materialSlots.y).Load(
         NWB_RT_OPTICAL_SCENE_HEADER_BYTES + instance * NWB_RT_OPTICAL_INSTANCE_BYTES + NWB_RT_OPTICAL_INSTANCE_BOUNDARY_OFFSET
     );
 }

@@ -47,8 +47,8 @@ using CsgShapeBoundsCallback = bool(*)(
 struct CsgShapeTypeDesc{
     using DefaultParameterByteVector = FixedVector<u8, s_CsgShapeInlineParameterMaxBytes>;
 
-    Name name = NAME_NONE;
-    Name shaderModule = NAME_NONE;
+    Name name = s_NameNone;
+    Name shaderModule = s_NameNone;
     ACompactString shaderModuleInclude;
 
     u32 parameterByteSize = 0u;

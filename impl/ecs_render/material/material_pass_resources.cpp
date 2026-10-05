@@ -35,7 +35,7 @@ bool RendererMaterialSystem::prepareMaterialPassBindingLayout(Core::BindingLayou
         bindingLayoutDesc
             .setVisibility(Core::ShaderType::All)
             // Every material pass uses this push-only layout; transparent consumes the full payload.
-            .addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)))
+            .addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(ECSRenderDetail::TransparentDrawPushConstants)))
         ;
         m_materialState.m_materialPassBindingLayout = m_graphics.getDevice().createBindingLayout(bindingLayoutDesc);
         if(!m_materialState.m_materialPassBindingLayout){
@@ -53,7 +53,7 @@ bool RendererMaterialSystem::prepareMeshComputeBindingLayout(){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Compute);
         // The unified UAV keeps its existing heap selector; only the compute tail adds the generated-index byte offset.
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::MeshComputePushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(ECSRenderDetail::MeshComputePushConstants)));
 
         auto& device = m_graphics.getDevice();
         m_materialState.m_computeBindingLayout = device.createBindingLayout(bindingLayoutDesc);

@@ -131,7 +131,7 @@ inline constexpr u32 s_ReaderMask = s_WriterBit - 1u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-thread_local GpuGraphSubmissionTransaction::SubmissionOperation* GpuGraphSubmissionTransaction::SubmissionOperation::s_activeOperation = nullptr;
+thread_local GpuGraphSubmissionTransaction::SubmissionOperation* GpuGraphSubmissionTransaction::SubmissionOperation::s_ActiveOperation = nullptr;
 
 
 GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(
@@ -141,13 +141,13 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(
 )noexcept{
     constexpr u32 s_SubmissionGateWriterBit = __hidden_submission_gate::s_WriterBit;
     constexpr u32 s_SubmissionGateReaderMask = __hidden_submission_gate::s_ReaderMask;
-    for(const SubmissionOperation* operation = s_activeOperation; operation; operation = operation->m_previousOperation){
+    for(const SubmissionOperation* operation = s_ActiveOperation; operation; operation = operation->m_previousOperation){
         if(operation->m_transaction == &transaction)
             return;
     }
     // Cross-transaction reentry is a prompt rejection regardless of target availability.
     // An exception finalizer can therefore run after its local gates unwind without retaining an unrelated transaction gate on this thread.
-    if(s_activeOperation)
+    if(s_ActiveOperation)
         return;
     if(
         GpuRecordedGraph::ArtifactOperation::active()
@@ -235,7 +235,7 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(
         }
         return;
     }
-    if(composite && transaction.m_compositeOperationActive.test_and_set(MemoryOrder::acq_rel)){
+    if(composite && transaction.m_compositeOperationActive.testAndSet(MemoryOrder::acq_rel)){
         if(exclusive){
             transaction.m_submissionGateState.store(0u, MemoryOrder::release);
             transaction.m_submissionGateState.notify_all();
@@ -244,21 +244,21 @@ GpuGraphSubmissionTransaction::SubmissionOperation::SubmissionOperation(
         return;
     }
     m_transaction = &transaction;
-    m_previousOperation = s_activeOperation;
+    m_previousOperation = s_ActiveOperation;
     m_exclusive = exclusive;
     m_composite = composite;
-    s_activeOperation = this;
+    s_ActiveOperation = this;
 }
 
 GpuGraphSubmissionTransaction::SubmissionOperation::~SubmissionOperation()noexcept{
     if(!m_transaction)
         return;
 
-    if(s_activeOperation != this){
+    if(s_ActiveOperation != this){
         GLB_FATAL_ASSERT_MSG(false, "GPU graph submission operations must unwind in lexical order");
         TerminateInvariant();
     }
-    s_activeOperation = m_previousOperation;
+    s_ActiveOperation = m_previousOperation;
     if(m_composite)
         m_transaction->m_compositeOperationActive.clear(MemoryOrder::release);
     if(m_exclusive){

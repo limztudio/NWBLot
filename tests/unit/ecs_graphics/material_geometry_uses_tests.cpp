@@ -64,7 +64,7 @@ struct GeometryContext{
             allocator,
             Core::BufferDesc{}.setByteSize(256u).setDebugName(identity)
         );
-        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
     }
 };
 
@@ -254,7 +254,7 @@ TEST(MaterialGeometryUses, PreservesPartialImportFailureAndReusesUnnamedExisting
     GeometryContext context;
     BufferVector buffers{ context.scratchArena };
     ASSERT_TRUE(CreateBuffers(context, s_SourceBufferCount, buffers));
-    const Core::BufferHandle unnamedBuffer = context.makeBuffer(NAME_NONE);
+    const Core::BufferHandle unnamedBuffer = context.makeBuffer(s_NameNone);
     ASSERT_TRUE(unnamedBuffer);
     buffers.back() = unnamedBuffer;
     Impl::MaterialPassDrawItems drawItems(context.scratchArena);

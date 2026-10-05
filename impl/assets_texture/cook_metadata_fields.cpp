@@ -88,7 +88,7 @@ using TextureFormat::s_TextureDataExtension;
     }
 
     const Path dataPath(nwbFilePath.arena(), dataFileName);
-    if(dataPath.is_absolute() || dataPath.filename().native() != dataPath.native()){
+    if(dataPath.isAbsolute() || dataPath.filename().native() != dataPath.native()){
         NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' must be a relative sidecar filename")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)

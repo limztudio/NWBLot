@@ -19,7 +19,7 @@ NWB_ASSETS_BEGIN
 
 template<typename TAsset>
 struct AssetRef{
-    Name virtualPath = NAME_NONE;
+    Name virtualPath = s_NameNone;
 
 
 public:
@@ -42,7 +42,7 @@ public:
     }
 
     void reset(){
-        virtualPath = NAME_NONE;
+        virtualPath = s_NameNone;
     }
 
     [[nodiscard]] const Name& name()const{

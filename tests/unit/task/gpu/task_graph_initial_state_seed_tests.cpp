@@ -139,7 +139,7 @@ struct SeedContext{
             );
             if(!buffer)
                 return false;
-            m_buffers.emplace_back(buffer, Core::BufferHandle::deleter_type(&m_testArena.arena), AdoptRef);
+            m_buffers.emplace_back(buffer, Core::BufferHandle::deleter_type(&m_testArena.arena), s_AdoptRef);
             char suffix[s_NumberBytes] = {};
             m_resources.push_back(m_graph.importBuffer(
                 m_buffers.back(),
@@ -324,7 +324,7 @@ TEST(GpuPacketInitialStateSeed, ReleasedAccelStorageRejectsPartialPrefixBeforeSa
     Core::RayTracingAccelStructHandle accelStruct(
         accelStructObject,
         Core::RayTracingAccelStructHandle::deleter_type(&context.m_testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Core::BufferHandle& backing = const_cast<Core::BufferHandle&>(accelStruct->getBackingBufferHandle());
     backing = context.m_buffers[0u];

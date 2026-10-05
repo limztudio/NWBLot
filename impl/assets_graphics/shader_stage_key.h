@@ -32,8 +32,8 @@ namespace AssetsGraphicsCookDetail{
 
 
 struct ShaderStageKey{
-    Name shaderName = NAME_NONE;
-    Name stageName = NAME_NONE;
+    Name shaderName = s_NameNone;
+    Name stageName = s_NameNone;
 };
 
 struct ShaderStageKeyHasher{

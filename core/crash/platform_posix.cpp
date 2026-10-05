@@ -58,11 +58,11 @@ struct FramePointerRecord{
 };
 
 
-[[nodiscard]] static bool __hidden_is_aligned_pointer(const u64 address)noexcept{
+[[nodiscard]] static bool IsAlignedPointer(const u64 address)noexcept{
     return (address & (sizeof(void*) - 1u)) == 0u;
 }
 
-static void __hidden_append_callstack_frame(Detail::CrashDumpRequestOptions& options, const u64 address)noexcept{
+static void AppendCallstackFrame(Detail::CrashDumpRequestOptions& options, const u64 address)noexcept{
     if(address == 0u || options.callstackFrameCount >= Detail::s_MaxCallstackFrames)
         return;
     if(options.callstackFrameCount != 0u && options.callstackFrames[options.callstackFrameCount - 1u] == address)
@@ -71,15 +71,15 @@ static void __hidden_append_callstack_frame(Detail::CrashDumpRequestOptions& opt
     options.callstackFrames[options.callstackFrameCount++] = address;
 }
 
-static void __hidden_capture_frame_pointer_callstack(
+static void CaptureFramePointerCallstack(
     Detail::CrashDumpRequestOptions& options,
     const u64 instructionPointer,
     const u64 stackPointer,
     const u64 framePointer
 )noexcept{
-    __hidden_append_callstack_frame(options, instructionPointer);
+    AppendCallstackFrame(options, instructionPointer);
 
-    if(stackPointer == 0u || framePointer == 0u || !__hidden_is_aligned_pointer(framePointer))
+    if(stackPointer == 0u || framePointer == 0u || !IsAlignedPointer(framePointer))
         return;
     if(framePointer < stackPointer || framePointer - stackPointer > s_MaxFramePointerWalkBytes)
         return;
@@ -89,9 +89,9 @@ static void __hidden_capture_frame_pointer_callstack(
         const auto* const frame = reinterpret_cast<const FramePointerRecord*>(static_cast<usize>(currentFrame));
         const u64 nextFrame = static_cast<u64>(reinterpret_cast<usize>(frame->previous));
         const u64 returnAddress = static_cast<u64>(reinterpret_cast<usize>(frame->returnAddress));
-        __hidden_append_callstack_frame(options, returnAddress);
+        AppendCallstackFrame(options, returnAddress);
 
-        if(nextFrame <= currentFrame || !__hidden_is_aligned_pointer(nextFrame))
+        if(nextFrame <= currentFrame || !IsAlignedPointer(nextFrame))
             break;
         if(nextFrame < stackPointer || nextFrame - stackPointer > s_MaxFramePointerWalkBytes)
             break;
@@ -105,7 +105,7 @@ static void __hidden_capture_frame_pointer_callstack(
 // Pre-2.35 glibc may take the loader lock (dl_iterate_phdr); newer glibc uses lock-free __dl_find_object.
 // When the trigger IP is known, capture starts there (robust to inlining); otherwise only that IP is emitted.
 // Returns false when nothing unwound so the caller falls back to the frame-pointer walk.
-[[nodiscard]] static bool __hidden_capture_eh_frame_callstack(Detail::CrashDumpRequestOptions& options, const u64 alignmentInstructionPointer)noexcept{
+[[nodiscard]] static bool CaptureEhFrameCallstack(Detail::CrashDumpRequestOptions& options, const u64 alignmentInstructionPointer)noexcept{
     void* unwoundAddresses[Detail::s_MaxCallstackFrames] = {};
     const int unwoundFrameCount = backtrace(unwoundAddresses, static_cast<int>(Detail::s_MaxCallstackFrames));
     if(unwoundFrameCount <= 0)
@@ -117,20 +117,20 @@ static void __hidden_capture_frame_pointer_callstack(
                 continue;
 
             for(usize frame = static_cast<usize>(i); frame < static_cast<usize>(unwoundFrameCount); ++frame)
-                __hidden_append_callstack_frame(options, static_cast<u64>(reinterpret_cast<usize>(unwoundAddresses[frame])));
+                AppendCallstackFrame(options, static_cast<u64>(reinterpret_cast<usize>(unwoundAddresses[frame])));
             return options.callstackFrameCount != 0u;
         }
 
-        __hidden_append_callstack_frame(options, alignmentInstructionPointer);
+        AppendCallstackFrame(options, alignmentInstructionPointer);
         return true;
     }
 
     for(int i = 0; i < unwoundFrameCount; ++i)
-        __hidden_append_callstack_frame(options, static_cast<u64>(reinterpret_cast<usize>(unwoundAddresses[i])));
+        AppendCallstackFrame(options, static_cast<u64>(reinterpret_cast<usize>(unwoundAddresses[i])));
     return options.callstackFrameCount != 0u;
 }
 
-static void __hidden_warm_up_unwinder()noexcept{
+static void WarmUpUnwinder()noexcept{
     void* warmUpAddresses[Detail::s_MaxCallstackFrames] = {};
     const int warmedFrameCount = backtrace(warmUpAddresses, static_cast<int>(Detail::s_MaxCallstackFrames));
     if(warmedFrameCount <= 0)
@@ -138,7 +138,7 @@ static void __hidden_warm_up_unwinder()noexcept{
 }
 #endif
 
-static void __hidden_capture_current_callstack(
+static void CaptureCurrentCallstack(
     Detail::CrashDumpRequestOptions& outOptions,
     const void* const stackPointer,
     const void* const framePointer,
@@ -152,13 +152,13 @@ static void __hidden_capture_current_callstack(
         ? outOptions.triggerInstructionPointer
         : outOptions.instructionPointer
     ;
-    if(__hidden_capture_eh_frame_callstack(outOptions, alignmentInstructionPointer)){
+    if(CaptureEhFrameCallstack(outOptions, alignmentInstructionPointer)){
         // backtrace already trimmed crash-handler-internal frames, so the downstream skip must not drop user frames.
         outOptions.callstackFramesToSkip = 0u;
         return;
     }
 #endif
-    __hidden_capture_frame_pointer_callstack(
+    CaptureFramePointerCallstack(
         outOptions,
         outOptions.instructionPointer,
         outOptions.stackPointer,
@@ -166,7 +166,7 @@ static void __hidden_capture_current_callstack(
     );
 }
 
-static void __hidden_capture_signal_context(Detail::CrashDumpRequestOptions& options, const siginfo_t* signalInfo, const void* signalContext)noexcept{
+static void CaptureSignalContext(Detail::CrashDumpRequestOptions& options, const siginfo_t* signalInfo, const void* signalContext)noexcept{
     if(signalInfo)
         options.faultAddress = static_cast<u64>(reinterpret_cast<usize>(signalInfo->si_addr));
 
@@ -187,16 +187,16 @@ static void __hidden_capture_signal_context(Detail::CrashDumpRequestOptions& opt
 #if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
     // backtrace() crosses the kernel signal trampoline into the interrupted frame, so the fault instruction
     // pointer aligns the trace and a frame-pointer-omitting final build still gets the full faulting callstack.
-    if(__hidden_capture_eh_frame_callstack(options, options.instructionPointer))
+    if(CaptureEhFrameCallstack(options, options.instructionPointer))
         return;
 #endif
-    __hidden_capture_frame_pointer_callstack(options, options.instructionPointer, options.stackPointer, options.framePointer);
+    CaptureFramePointerCallstack(options, options.instructionPointer, options.stackPointer, options.framePointer);
 }
 
-static void __hidden_signal_handler(const int signalNumber, siginfo_t* signalInfo, void* signalContext)noexcept{
+static void SignalHandler(const int signalNumber, siginfo_t* signalInfo, void* signalContext)noexcept{
     if(!Detail::TryConsumeSuppressedPlatformCrashCapture()){
         Detail::CrashDumpRequestOptions options;
-        __hidden_capture_signal_context(options, signalInfo, signalContext);
+        CaptureSignalContext(options, signalInfo, signalContext);
         Detail::NotifyCrashHandler(Detail::CrashReasonKind::PosixSignal, static_cast<u32>(signalNumber), options);
     }
 
@@ -207,19 +207,19 @@ static void __hidden_signal_handler(const int signalNumber, siginfo_t* signalInf
     raise(signalNumber);
 }
 
-[[noreturn]] static void __hidden_terminate_handler(){
+[[noreturn]] static void TerminateHandler(){
     Detail::CrashDumpRequestOptions options;
 #if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
     // std::terminate runs in a normal thread context, so unwind a callstack directly instead of relying on the
     // follow-up SIGABRT to carry it.
-    if(!__hidden_capture_eh_frame_callstack(options, 0u))
+    if(!CaptureEhFrameCallstack(options, 0u))
         options.callstackFrameCount = 0u;
 #endif
     Detail::NotifyCrashHandler(Detail::CrashReasonKind::Terminate, 0u, options);
     abort();
 }
 
-static void __hidden_install_signal_handlers(){
+static void InstallSignalHandlers(){
     static u8 s_signalStack[s_SignalStackSize] = {};
 
     stack_t stack = {};
@@ -229,7 +229,7 @@ static void __hidden_install_signal_handlers(){
     sigaltstack(&stack, &Detail::g_State.previousSignalStack);
 
     struct sigaction action = {};
-    action.sa_sigaction = __hidden_signal_handler;
+    action.sa_sigaction = SignalHandler;
     sigemptyset(&action.sa_mask);
     action.sa_flags = SA_SIGINFO | SA_ONSTACK | SA_RESETHAND;
 
@@ -246,7 +246,7 @@ static void __hidden_install_signal_handlers(){
 }
 
 #if defined(GLB_PLATFORM_ANDROID)
-static void __hidden_open_android_emergency_file(){
+static void OpenAndroidEmergencyFile(){
     if(Detail::g_State.spoolDirectoryText[0] == 0)
         return;
 
@@ -259,7 +259,7 @@ static void __hidden_open_android_emergency_file(){
 #endif
 
 #if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
-[[nodiscard]] static bool __hidden_move_fd_above_stdio(int& inOutFd)noexcept{
+[[nodiscard]] static bool MoveFdAboveStdio(int& inOutFd)noexcept{
     if(inOutFd > STDERR_FILENO)
         return true;
 
@@ -272,14 +272,14 @@ static void __hidden_open_android_emergency_file(){
     return true;
 }
 
-[[nodiscard]] static bool __hidden_set_close_on_exec(const int fd)noexcept{
+[[nodiscard]] static bool SetCloseOnExec(const int fd)noexcept{
     const int flags = fcntl(fd, F_GETFD, 0);
     if(flags < 0)
         return false;
     return fcntl(fd, F_SETFD, flags | FD_CLOEXEC) == 0;
 }
 
-[[nodiscard]] static bool __hidden_send_all_socket_no_sigpipe(const int fd, const void* const data, const usize byteCount)noexcept{
+[[nodiscard]] static bool SendAllSocketNoSigpipe(const int fd, const void* const data, const usize byteCount)noexcept{
     return TransferAllPosix(
         static_cast<const u8*>(data),
         byteCount,
@@ -289,7 +289,7 @@ static void __hidden_open_android_emergency_file(){
     );
 }
 
-static void __hidden_redirect_stdio_to_null()noexcept{
+static void RedirectStdioToNull()noexcept{
     const int nullFd = open("/dev/null", O_RDWR);
     if(nullFd < 0)
         return;
@@ -304,21 +304,21 @@ static void __hidden_redirect_stdio_to_null()noexcept{
         return;
 }
 
-static void __hidden_silence_child_process(int& requestReadFd, int& ackWriteFd)noexcept{
-    if(!__hidden_move_fd_above_stdio(requestReadFd))
+static void SilenceChildProcess(int& requestReadFd, int& ackWriteFd)noexcept{
+    if(!MoveFdAboveStdio(requestReadFd))
         return;
-    if(!__hidden_move_fd_above_stdio(ackWriteFd))
+    if(!MoveFdAboveStdio(ackWriteFd))
         return;
 
     const pid_t sessionId = setsid();
     if(sessionId < 0){
-        __hidden_redirect_stdio_to_null();
+        RedirectStdioToNull();
         return;
     }
-    __hidden_redirect_stdio_to_null();
+    RedirectStdioToNull();
 }
 
-static void __hidden_drain_pending_acks(const int ackReadFd)noexcept{
+static void DrainPendingAcks(const int ackReadFd)noexcept{
     if(ackReadFd < 0)
         return;
 
@@ -339,7 +339,7 @@ static void __hidden_drain_pending_acks(const int ackReadFd)noexcept{
     }
 }
 
-[[nodiscard]] static Detail::CrashDumpTransportStatus::Enum __hidden_wait_for_ack(
+[[nodiscard]] static Detail::CrashDumpTransportStatus::Enum WaitForAck(
     const int ackReadFd,
     const Detail::CrashRequest& request,
     const u32 waitMilliseconds
@@ -386,7 +386,7 @@ static void __hidden_drain_pending_acks(const int ackReadFd)noexcept{
     }
 }
 
-static void __hidden_wait_for_child_process(const pid_t pid)noexcept{
+static void WaitForChildProcess(const pid_t pid)noexcept{
     if(pid <= 0)
         return;
 
@@ -426,7 +426,7 @@ void CaptureManualDumpContext(CrashDumpRequestOptions& outOptions, ManualDumpCon
 #else
     __asm__ volatile("mov %0, sp" : "=r"(stackPointer));
 #endif
-    __hidden_crash_posix::__hidden_capture_current_callstack(
+    __hidden_crash_posix::CaptureCurrentCallstack(
         outOptions,
         stackPointer,
         __builtin_frame_address(0),
@@ -461,11 +461,11 @@ CrashDumpTransportStatus::Enum RequestCrashHandler(const CrashRequest& request, 
         ;
 #elif defined(GLB_PLATFORM_LINUX)
     if(g_State.requestWriteFd >= 0){
-        __hidden_crash_posix::__hidden_drain_pending_acks(g_State.ackReadFd);
-        if(!__hidden_crash_posix::__hidden_send_all_socket_no_sigpipe(g_State.requestWriteFd, &request, sizeof(request)))
+        __hidden_crash_posix::DrainPendingAcks(g_State.ackReadFd);
+        if(!__hidden_crash_posix::SendAllSocketNoSigpipe(g_State.requestWriteFd, &request, sizeof(request)))
             status = CrashDumpTransportStatus::Failed;
         else
-            status = __hidden_crash_posix::__hidden_wait_for_ack(g_State.ackReadFd, request, waitMilliseconds);
+            status = __hidden_crash_posix::WaitForAck(g_State.ackReadFd, request, waitMilliseconds);
     }
 #endif
 
@@ -497,8 +497,8 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
         return false;
     }
     if(
-        !__hidden_crash_posix::__hidden_set_close_on_exec(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex])
-        || !__hidden_crash_posix::__hidden_set_close_on_exec(ackPipeFds[__hidden_crash_posix::s_ParentEndIndex])
+        !__hidden_crash_posix::SetCloseOnExec(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex])
+        || !__hidden_crash_posix::SetCloseOnExec(ackPipeFds[__hidden_crash_posix::s_ParentEndIndex])
     ){
         close(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex]);
         close(requestChannelFds[__hidden_crash_posix::s_ChildEndIndex]);
@@ -520,7 +520,7 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
         close(requestChannelFds[__hidden_crash_posix::s_ParentEndIndex]);
         close(ackPipeFds[__hidden_crash_posix::s_ParentEndIndex]);
 
-        __hidden_crash_posix::__hidden_silence_child_process(
+        __hidden_crash_posix::SilenceChildProcess(
             requestChannelFds[__hidden_crash_posix::s_ChildEndIndex],
             ackPipeFds[__hidden_crash_posix::s_ChildEndIndex]
         );
@@ -549,14 +549,14 @@ template bool StartDesktopHandler(const ::Path<Alloc::PersistentArena>& handlerE
 
 void InstallPlatformHandlers(){
 #if defined(GLB_PLATFORM_ANDROID)
-    __hidden_crash_posix::__hidden_open_android_emergency_file();
+    __hidden_crash_posix::OpenAndroidEmergencyFile();
 #elif defined(GLB_PLATFORM_LINUX)
     // Force libgcc_s to load now so the crash-time backtrace() is allocation-free and async-signal-safe.
-    __hidden_crash_posix::__hidden_warm_up_unwinder();
+    __hidden_crash_posix::WarmUpUnwinder();
 #endif
 
-    __hidden_crash_posix::__hidden_install_signal_handlers();
-    std::set_terminate(__hidden_crash_posix::__hidden_terminate_handler);
+    __hidden_crash_posix::InstallSignalHandlers();
+    std::set_terminate(__hidden_crash_posix::TerminateHandler);
 }
 
 void UninstallPlatformResources(){
@@ -571,7 +571,7 @@ void UninstallPlatformResources(){
         close(g_State.requestWriteFd);
         g_State.requestWriteFd = -1;
     }
-    __hidden_crash_posix::__hidden_wait_for_child_process(handlerPid);
+    __hidden_crash_posix::WaitForChildProcess(handlerPid);
     if(g_State.ackReadFd >= 0){
         close(g_State.ackReadFd);
         g_State.ackReadFd = -1;

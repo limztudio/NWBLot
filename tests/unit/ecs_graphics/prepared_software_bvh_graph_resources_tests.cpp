@@ -69,7 +69,7 @@ struct BuildContext{
         Core::Buffer* const buffer = Tests::NewMetadataOnlyBuffer(
             testArena.arena, context, allocator, Core::BufferDesc{}.setByteSize(256u).setDebugName(identity)
         );
-        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
     }
 
     [[nodiscard]] Core::GpuGraphResourceId importBuffer(const Core::BufferHandle& buffer, const Name& identity){
@@ -275,7 +275,7 @@ TEST(PreparedSoftwareBvhGraphResources, FreshCallsObserveLateImportsCurrentHandl
 
 TEST(PreparedSoftwareBvhGraphResources, ExistingPointerAliasesBypassUnrelatedBuildAndResourceMetadataValidation){
     BuildContext context;
-    context.buffers.push_back(context.makeBuffer(NAME_NONE));
+    context.buffers.push_back(context.makeBuffer(s_NameNone));
     for(usize index = 1u; index < 7u; ++index)
         context.addBuffer();
     const auto alias = context.importBuffer(context.buffers[0u], Name("tests/prepared_sw_bvh/unnamed_alias"));

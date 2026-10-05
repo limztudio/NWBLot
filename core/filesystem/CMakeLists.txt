@@ -1,4 +1,4 @@
-global_declare_static_library(nwb_filesystem)
+nwb_declare_static_library(nwb_filesystem)
 target_sources(nwb_filesystem PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/volume_build.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/volume_file_system.cpp"

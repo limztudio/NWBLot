@@ -390,7 +390,7 @@ static_assert(
 }
 
 struct MaterialTypedLayoutBlock{
-    Name blockName = NAME_NONE;
+    Name blockName = s_NameNone;
     MaterialBlockClass::Enum blockClass = MaterialBlockClass::None;
     u32 fieldBegin = 0u;
     u32 fieldCount = 0u;
@@ -398,7 +398,7 @@ struct MaterialTypedLayoutBlock{
 };
 
 struct MaterialTypedLayoutField{
-    Name fieldName = NAME_NONE;
+    Name fieldName = s_NameNone;
     MaterialLayoutFieldType::Enum fieldType = MaterialLayoutFieldType::None;
     u32 offset = 0u;
     UInt4U defaultValue = {};
@@ -407,13 +407,13 @@ struct MaterialTypedLayoutField{
 // A cooked material separates resource identity from its numeric/default payload.
 // `constantByteOffset` is the slot word the renderer patches after resolving the descriptor handle. Exactly one typed reference is valid.
 struct MaterialResourceReference{
-    Name blockName = NAME_NONE;
-    Name fieldName = NAME_NONE;
+    Name blockName = s_NameNone;
+    Name fieldName = s_NameNone;
     Core::Assets::AssetRef<Texture> textureAsset;
     Core::Assets::AssetRef<Sampler> samplerAsset;
     // A cooked material keeps resource identity separate from its numeric/default typed payload.
     // `constantByteOffset` points at the four-byte slot word the renderer patches after it resolves the device-lifetime descriptor handle.
-    Name fixtureName = NAME_NONE;
+    Name fixtureName = s_NameNone;
     MaterialResourceKind::Enum resourceKind = MaterialResourceKind::None;
     MaterialResourceSource::Enum resourceSource = MaterialResourceSource::None;
     u32 constantByteOffset = 0u;
@@ -529,7 +529,7 @@ private:
 
 private:
     Core::Assets::AssetString m_shaderVariant;
-    Name m_materialInterface = NAME_NONE;
+    Name m_materialInterface = s_NameNone;
     u32 m_shadingModelId = 0u;
     u32 m_surfaceDispatchId = 0u;
     u64 m_typedLayoutHash = 0u;

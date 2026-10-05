@@ -158,7 +158,7 @@ bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const C
     if(!heap.isInitialized())
         return false;
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-    if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, cache.buffer.get()))){
+    if(!handle.valid() || !heap.write(handle, Core::DescriptorWriteItem::structuredBufferUav(0u, cache.buffer.get()))){
         if(handle.valid())
             heap.free(handle);
         return false;

@@ -1,4 +1,4 @@
-global_declare_static_library(nwb_pipeline_asset_builder)
+nwb_declare_static_library(nwb_pipeline_asset_builder)
 target_sources(nwb_pipeline_asset_builder PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/global.h"
     "${CMAKE_CURRENT_LIST_DIR}/build.h"

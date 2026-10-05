@@ -28,7 +28,7 @@ NWB_VULKAN_BEGIN
 
 [[nodiscard]] inline bool IsImplicitScissorValid(const Viewport& viewport)noexcept{ return VulkanDetail::IsImplicitScissorValid(viewport); }
 
-[[nodiscard]] inline bool IsGraphicsPipelineReady(GraphicsPipeline& pipeline, const Device& device){ return pipeline.getDeviceGeneration() == device.getDeviceGeneration() && pipeline.getNativeHandle(ObjectTypes::VK_Pipeline).integer != 0u && pipeline.m_pipelineLayout != VK_NULL_HANDLE; }
+[[nodiscard]] inline bool IsGraphicsPipelineReady(GraphicsPipeline& pipeline, const Device& device){ return pipeline.getDeviceGeneration() == device.getDeviceGeneration() && pipeline.getNativeHandle(ObjectTypes::s_Pipeline).integer != 0u && pipeline.m_pipelineLayout != VK_NULL_HANDLE; }
 
 [[nodiscard]] constexpr bool IsFramebufferAttachmentSubresourceSetValid(const TextureDesc& description, const TextureSubresourceSet& subresources)noexcept{ return VulkanDetail::IsFramebufferAttachmentSubresourceSetValid(description, subresources); }
 

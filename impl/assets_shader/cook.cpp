@@ -118,7 +118,7 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
         Path dependencyPath = Move(pending.back());
         pending.pop_back();
 
-        const Path absolutePath = AbsolutePath(dependencyPath, errorCode).lexically_normal();
+        const Path absolutePath = AbsolutePath(dependencyPath, errorCode).lexicallyNormal();
         if(errorCode){
             NWB_LOGGER_ERROR(GLB_TEXT("Failed to resolve dependency path '{}' : {}")
                 , PathToString<tchar>(dependencyPath)
@@ -155,7 +155,7 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
             AStringView includeName;
             ShaderIncludeKind::Enum includeKind = ShaderIncludeKind::Relative;
             if(SlangShaderCompiler::extractIncludeDirective(line, includeName, includeKind)){
-                if(!SlangShaderCompiler::resolveIncludeFile(includeName, includeKind, absolutePath.parent_path(), includeDirectories, includePath)){
+                if(!SlangShaderCompiler::resolveIncludeFile(includeName, includeKind, absolutePath.parentPath(), includeDirectories, includePath)){
                     NWB_LOGGER_ERROR(GLB_TEXT("Unable to resolve include '{}' from '{}'")
                         , StringConvert(includeName)
                         , PathToString<tchar>(absolutePath)

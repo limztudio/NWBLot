@@ -442,7 +442,7 @@ bool BuildPackageArchive(ArenaT& arena, const ::Path<ArenaT>& packageDirectory, 
     bool wroteFile = false;
     for(const auto& entry : directory){
         ErrorCode entryError;
-        if(!entry.is_regular_file(entryError) || entryError)
+        if(!entry.isRegularFile(entryError) || entryError)
             continue;
 
         CrashBytesT<ArenaT> fileBytes{arena};
@@ -450,7 +450,7 @@ bool BuildPackageArchive(ArenaT& arena, const ::Path<ArenaT>& packageDirectory, 
         if(!ReadBinaryFile(entry.path(), fileBytes, readError))
             return false;
 
-        const CrashStringT<ArenaT> pathText = PathToGenericString<char>(arena, entry.path().lexically_relative(packageDirectory));
+        const CrashStringT<ArenaT> pathText = PathToGenericString<char>(arena, entry.path().lexicallyRelative(packageDirectory));
         AppendArchiveText(outArchive, PackageNames::s_ArchiveFileHeaderPrefix);
         AppendArchiveText(outArchive, AStringView(pathText.data(), pathText.size()));
         AppendArchiveText(outArchive, " ");

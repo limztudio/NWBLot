@@ -30,12 +30,12 @@ inline constexpr u32 s_MinParallelCoreCount = 1u;
 
 static bool AddRoot(const NWB::Path& path, NWB::Pipeline::AssetBuilder::AssetBuildOptions& options){
     auto& arena = options.assetRoots.get_allocator().arena();
-    auto text = PathToString(arena, path.lexically_normal());
+    auto text = PathToString(arena, path.lexicallyNormal());
     for(const auto& root : options.assetRoots){
         if(root.path == text)
             return true;
     }
-    auto parentName = PathToString(arena, path.parent_path().filename());
+    auto parentName = PathToString(arena, path.parentPath().filename());
     CanonicalizeTextInPlace(parentName);
     const ACompactString virtualRoot(parentName == s_ImplSourceDirectoryName ? NWB::Core::Assets::s_EngineVirtualRoot : NWB::Core::Assets::s_ProjectVirtualRoot);
     options.assetRoots.emplace_back(arena, AStringView(text), virtualRoot);
@@ -53,9 +53,9 @@ static bool ResolveRoots(const PipelineOptions& parsed, NWB::Pipeline::AssetBuil
     const auto& sources = parsed.assetRoots.empty() ? parsed.inputs : parsed.assetRoots;
     for(const auto& input : sources){
         Path path(arena, input);
-        if(!path.is_absolute())
+        if(!path.isAbsolute())
             path = repoRoot / path;
-        path = path.lexically_normal();
+        path = path.lexicallyNormal();
         if(parsed.assetRoots.empty()){
             const bool directory = IsDirectory(path, error);
             if(error){
@@ -63,7 +63,7 @@ static bool ResolveRoots(const PipelineOptions& parsed, NWB::Pipeline::AssetBuil
                 return false;
             }
             if(!directory)
-                path = path.parent_path();
+                path = path.parentPath();
             Path ancestor = path;
             while(!ancestor.empty()){
                 auto name = PathToString(arena, ancestor.filename());
@@ -72,7 +72,7 @@ static bool ResolveRoots(const PipelineOptions& parsed, NWB::Pipeline::AssetBuil
                     path = ancestor;
                     break;
                 }
-                const Path parent = ancestor.parent_path();
+                const Path parent = ancestor.parentPath();
                 if(parent == ancestor)
                     break;
                 ancestor = parent;

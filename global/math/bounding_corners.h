@@ -100,7 +100,7 @@ inline void FrustumCorners(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline SIMDVector SIMDCALL BoundingSphere::transformSphereValue(SIMDVector sphereValue, const SIMDMatrix& matrix)noexcept{
+[[nodiscard]] inline SIMDVector GLB_SIMD_CALL BoundingSphere::transformSphereValue(SIMDVector sphereValue, const SIMDMatrix& matrix)noexcept{
     SIMDVector scale{};
     SIMDVector rotation{};
     SIMDVector translation{};
@@ -120,7 +120,7 @@ inline void FrustumCorners(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline SIMDVector SIMDCALL BoundingSphere::transformSphereValue(
+[[nodiscard]] inline SIMDVector GLB_SIMD_CALL BoundingSphere::transformSphereValue(
     SIMDVector sphereValue,
     const f32 scale,
     const SIMDVector rotation,

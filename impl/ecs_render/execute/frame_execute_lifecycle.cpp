@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameExecuteLifecycle::PrepareShadowPrepareTask(
+[[nodiscard]] bool FrameExecuteLifecycle::prepareShadowPrepareTask(
     void* const rawContext,
     const Core::CommandListResourceStateHandoff* const finalState
 ){
@@ -42,7 +42,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameExecuteLifecycle::AcceptShadowPrepareTask(
+[[nodiscard]] bool FrameExecuteLifecycle::acceptShadowPrepareTask(
     void* const rawContext,
     const Core::QueueSubmissionToken& token
 ){
@@ -83,7 +83,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameExecuteLifecycle::PrepareShadowVisibilityTask(
+[[nodiscard]] bool FrameExecuteLifecycle::prepareShadowVisibilityTask(
     void* const rawContext,
     const Core::CommandListResourceStateHandoff* const finalState
 ){
@@ -132,7 +132,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameExecuteLifecycle::AcceptShadowVisibilityTask(
+[[nodiscard]] bool FrameExecuteLifecycle::acceptShadowVisibilityTask(
     void* const rawContext,
     const Core::QueueSubmissionToken& token
 ){
@@ -167,7 +167,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameExecuteLifecycle::PrepareSoftwareCausticsTask(
+[[nodiscard]] bool FrameExecuteLifecycle::prepareSoftwareCausticsTask(
     void* const rawContext,
     const Core::CommandListResourceStateHandoff* const finalState
 ){
@@ -214,7 +214,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameExecuteLifecycle::AcceptSoftwareCausticsTask(
+[[nodiscard]] bool FrameExecuteLifecycle::acceptSoftwareCausticsTask(
     void* const rawContext,
     const Core::QueueSubmissionToken& token
 ){
@@ -245,7 +245,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameExecuteLifecycle::PrepareSurfelGiTask(
+[[nodiscard]] bool FrameExecuteLifecycle::prepareSurfelGiTask(
     void* const rawContext,
     const Core::CommandListResourceStateHandoff* const finalState
 ){
@@ -301,7 +301,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameExecuteLifecycle::AcceptSurfelGiTask(
+[[nodiscard]] bool FrameExecuteLifecycle::acceptSurfelGiTask(
     void* const rawContext,
     const Core::QueueSubmissionToken& token
 ){
@@ -329,7 +329,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameExecuteLifecycle::PrepareHardwareCausticsTask(
+[[nodiscard]] bool FrameExecuteLifecycle::prepareHardwareCausticsTask(
     void* const rawContext,
     const Core::CommandListResourceStateHandoff* const finalState
 ){
@@ -364,7 +364,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameExecuteLifecycle::AcceptHardwareCausticsTask(
+[[nodiscard]] bool FrameExecuteLifecycle::acceptHardwareCausticsTask(
     void* const rawContext,
     const Core::QueueSubmissionToken& token
 ){
@@ -391,7 +391,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameExecuteLifecycle::PrepareDeferredLightingTask(
+[[nodiscard]] bool FrameExecuteLifecycle::prepareDeferredLightingTask(
     void* const rawContext,
     const Core::CommandListResourceStateHandoff* const finalState
 ){
@@ -451,7 +451,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool FrameExecuteLifecycle::AcceptDeferredLightingTask(
+[[nodiscard]] bool FrameExecuteLifecycle::acceptDeferredLightingTask(
     void* const rawContext,
     const Core::QueueSubmissionToken& token
 ){

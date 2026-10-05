@@ -503,7 +503,7 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     // Push constants are pipeline-layout state, not descriptor-set state.
     layout->m_descriptorBufferCompatible = true;
 
-    return BindingLayoutHandle(layout, BindingLayoutHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return BindingLayoutHandle(layout, BindingLayoutHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc){
@@ -620,7 +620,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     layout->m_descriptorBufferSegmentKind = descriptorBufferSegmentKind;
     layout->m_descriptorBufferCompatible = true;
 
-    return BindingLayoutHandle(layout, BindingLayoutHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return BindingLayoutHandle(layout, BindingLayoutHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 

@@ -235,7 +235,7 @@ bool DiscoverFilesWithExtension(
             }
 
             errorCode.clear();
-            const bool isRegularFile = dirEntry.is_regular_file(errorCode);
+            const bool isRegularFile = dirEntry.isRegularFile(errorCode);
             if(errorCode){
                 NWB_LOGGER_ERROR(GLB_TEXT("AssetCook: failed to inspect '{}' while scanning '{}': {}")
                     , PathToString<tchar>(dirEntry.path())
@@ -253,7 +253,7 @@ bool DiscoverFilesWithExtension(
             if(extension != expectedExtension)
                 continue;
 
-            ScratchString normalizedPath = PathToString(scratchArena, filePath.lexically_normal());
+            ScratchString normalizedPath = PathToString(scratchArena, filePath.lexicallyNormal());
             CanonicalizeTextInPlace(normalizedPath);
             if(!seenPathHashes.insert(ComputeFnv64Text(normalizedPath)).second)
                 continue;

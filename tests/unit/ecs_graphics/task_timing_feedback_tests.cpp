@@ -77,7 +77,7 @@ using TestArena = ::NWB::Tests::TestArena<struct TaskTimingFeedbackTestsTag>;
     return Core::GpuTimingSample{
         .sourceFrameIndex = 0u,
         .durationSeconds = 0.0,
-        .scopeName = NAME_NONE,
+        .scopeName = s_NameNone,
         .attribution = attribution,
         .comparableRange = {},
         .physicalQueue = queue,

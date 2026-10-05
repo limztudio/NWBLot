@@ -207,7 +207,7 @@ bool WriteTexturePayload(const Path& path, const TexturePayload& payload){
 bool ResolveOutputPaths(const Path& inputPath, const AStringView outputArgument, OutputPaths& outOutputPaths){
     if(outputArgument.empty()){
         outOutputPaths.metadata = inputPath;
-        outOutputPaths.metadata.replace_extension(__hidden_output::s_NwbOutputExtension);
+        outOutputPaths.metadata.replaceExtension(__hidden_output::s_NwbOutputExtension);
     }
     else{
         const Path outputBase(UtilityDetail::Arena(), outputArgument);
@@ -220,11 +220,11 @@ bool ResolveOutputPaths(const Path& inputPath, const AStringView outputArgument,
             NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: --output must be an output base name or a .nwb filename."));
             return false;
         }
-        outOutputPaths.metadata.replace_extension(__hidden_output::s_NwbOutputExtension);
+        outOutputPaths.metadata.replaceExtension(__hidden_output::s_NwbOutputExtension);
     }
 
     outOutputPaths.data = outOutputPaths.metadata;
-    outOutputPaths.data.replace_extension(TextureFormat::s_TextureDataExtension);
+    outOutputPaths.data.replaceExtension(TextureFormat::s_TextureDataExtension);
     outOutputPaths.metadataTemporary = outOutputPaths.metadata;
     outOutputPaths.metadataTemporary += s_TemporaryOutputSuffix;
     outOutputPaths.dataTemporary = outOutputPaths.data;

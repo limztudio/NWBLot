@@ -47,7 +47,7 @@ float nwbShadowTemporalWorldSpacing(const float cameraDistance){
 }
 
 half4 nwbShadowMergeGeomCurr(const int2 halfTexel){
-    return half4(NwbHeapSampledImage2D(g_NwbShadowMergePush.geometryCurrSlot).Load(int3(halfTexel, 0)));
+    return half4(nwbHeapSampledImage2D(g_NwbShadowMergePush.geometryCurrSlot).Load(int3(halfTexel, 0)));
 }
 
 
@@ -59,7 +59,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint2 h = dispatchThreadID.xy;
     uint halfWidth;
     uint halfHeight;
-    NwbHeapSampledImage2D(g_NwbShadowMergePush.geometryCurrSlot).GetDimensions(halfWidth, halfHeight);
+    nwbHeapSampledImage2D(g_NwbShadowMergePush.geometryCurrSlot).GetDimensions(halfWidth, halfHeight);
     if(h.x >= halfWidth || h.y >= halfHeight)
         return;
 
@@ -76,7 +76,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     // Ceil-sized receiver grids keep every top-left source coordinate inside the full-resolution target.
     const int2 full = int2(h * g_NwbShadowMergePush.receiverFactor);
-    const half3 worldPositionSample = half3(NwbHeapSampledImage2D(g_NwbShadowMergePush.worldPositionSlot).Load(int3(full, 0)).xyz);
+    const half3 worldPositionSample = half3(nwbHeapSampledImage2D(g_NwbShadowMergePush.worldPositionSlot).Load(int3(full, 0)).xyz);
     const float3 Wc = float3(worldPositionSample);
 
     // Reproject the current world position into previous history.
@@ -96,7 +96,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // Accept history only for matching receiver geometry.
     bool historyAccepted = false;
     if(onScreen && valid){
-        const half4 gp = half4(NwbHeapSampledImage2D(g_NwbShadowMergePush.geometryPrevSlot).Load(int3(hp, 0)));
+        const half4 gp = half4(nwbHeapSampledImage2D(g_NwbShadowMergePush.geometryPrevSlot).Load(int3(hp, 0)));
         if(gp.w > half(0.5h)){
             const float3 Np = nwbOctDecodeNormal(float2(gp.xy));
             const bool planeOk = abs(currentCameraDistance - float(gp.z)) < (NWB_SHADOW_TEMPORAL_PLANE_K * nwbShadowTemporalWorldSpacing(currentCameraDistance));
@@ -124,15 +124,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             const uint momentsInSlot = opaque ? g_NwbShadowMergePush.opaqueMomentsInSlot : g_NwbShadowMergePush.transparentMomentsInSlot;
             const uint historyOutSlot = opaque ? g_NwbShadowMergePush.opaqueHistoryOutSlot : g_NwbShadowMergePush.transparentHistoryOutSlot;
             const uint momentsOutSlot = opaque ? g_NwbShadowMergePush.opaqueMomentsOutSlot : g_NwbShadowMergePush.transparentMomentsOutSlot;
-            const half3 currentVisibilitySample = half3(NwbHeapSampledImage2DArray(softTraceSlot).Load(int4(texel, slot, 0)).rgb);
+            const half3 currentVisibilitySample = half3(nwbHeapSampledImage2DArray(softTraceSlot).Load(int4(texel, slot, 0)).rgb);
             const float3 cur = float3(currentVisibilitySample);
 
             // Invalid receiver: pass through the current sample and reset history.
             if(!valid){
-                NwbHeapStorageImage2DArrayFloat4(historyOutSlot)[uint3(h, slot)] = float4(cur, 1.0);
+                nwbHeapStorageImage2DArrayFloat4(historyOutSlot)[uint3(h, slot)] = float4(cur, 1.0);
                 // Visibility luma stays in (0, 1), so half math is sufficient here; widen only at the float4 moments store.
                 const half lumaCur0 = nwbLuminance(currentVisibilitySample);
-                NwbHeapStorageImage2DArrayFloat4(momentsOutSlot)[uint3(h, slot)] = float4(float(lumaCur0), float(lumaCur0) * float(lumaCur0), 0.0, 0.0);
+                nwbHeapStorageImage2DArrayFloat4(momentsOutSlot)[uint3(h, slot)] = float4(float(lumaCur0), float(lumaCur0) * float(lumaCur0), 0.0, 0.0);
                 continue;
             }
 
@@ -142,8 +142,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             float m1Prev = 0.0;
             float m2Prev = 0.0;
             if(historyAccepted){
-                const half3 historySample = half3(NwbHeapSampledImage2DArray(historyInSlot).Load(int4(hp, slot, 0)).rgb);
-                const half3 momentSample = half3(NwbHeapSampledImage2DArray(momentsInSlot).Load(int4(hp, slot, 0)).xyz);
+                const half3 historySample = half3(nwbHeapSampledImage2DArray(historyInSlot).Load(int4(hp, slot, 0)).rgb);
+                const half3 momentSample = half3(nwbHeapSampledImage2DArray(momentsInSlot).Load(int4(hp, slot, 0)).xyz);
                 hist = float3(historySample);
                 const float3 mom = float3(momentSample);
                 m1Prev = mom.x;
@@ -174,7 +174,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                     if((validTapMask & tapBit) == 0u)
                         continue;
                     // Tap visibility and its luma stay in (0, 1), so half math is sufficient here.
-                    const half3 s = half3(NwbHeapSampledImage2DArray(softTraceSlot).Load(int4(t, slot, 0)).rgb);
+                    const half3 s = half3(nwbHeapSampledImage2DArray(softTraceSlot).Load(int4(t, slot, 0)).rgb);
                     mu += float3(s);
                     mu2 += float3(s * s);
                     const half sl = half(nwbLuminance(float3(s)));
@@ -227,8 +227,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             const half m1 = half(lerp(m1Prev, lumaCur, float(alpha)));
             const half m2 = half(lerp(m2Prev, lumaCur * lumaCur, float(alpha)));
 
-            NwbHeapStorageImage2DArrayFloat4(historyOutSlot)[uint3(h, slot)] = float4(float3(outVis), 1.0);
-            NwbHeapStorageImage2DArrayFloat4(momentsOutSlot)[uint3(h, slot)] = float4(float(m1), float(m2), nNext, 0.0);
+            nwbHeapStorageImage2DArrayFloat4(historyOutSlot)[uint3(h, slot)] = float4(float3(outVis), 1.0);
+            nwbHeapStorageImage2DArrayFloat4(momentsOutSlot)[uint3(h, slot)] = float4(float(m1), float(m2), nNext, 0.0);
         }
     }
 }

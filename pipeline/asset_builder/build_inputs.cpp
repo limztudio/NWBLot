@@ -34,28 +34,28 @@ struct IndexedPath{
 };
 
 struct PathSelectionIndex{
-    Vector<IndexedPath, Assets::ScratchArena> entries;
-    Optional<Vector<Assets::ScratchString, Assets::ScratchArena>> ownedPaths;
+    Vector<IndexedPath, Assets::ScratchArena> m_entries;
+    Optional<Vector<Assets::ScratchString, Assets::ScratchArena>> m_ownedPaths;
 
     PathSelectionIndex(
         const Assets::DiscoveredNwbFileVector& files,
         Assets::ScratchArena& scratchArena,
         const bool preserveCase)
-        : entries(scratchArena){
-        entries.reserve(files.size());
+        : m_entries(scratchArena){
+        m_entries.reserve(files.size());
         if(preserveCase){
-            ownedPaths.emplace(scratchArena);
-            ownedPaths->reserve(files.size());
+            m_ownedPaths.emplace(scratchArena);
+            m_ownedPaths->reserve(files.size());
         }
         for(usize i = 0u; i < files.size(); ++i){
             if(preserveCase){
-                ownedPaths->emplace_back(PathToString(scratchArena, files[i].filePath.lexically_normal()));
-                entries.push_back({ AStringView(ownedPaths->back()), i });
+                m_ownedPaths->emplace_back(PathToString(scratchArena, files[i].filePath.lexicallyNormal()));
+                m_entries.push_back({ AStringView(m_ownedPaths->back()), i });
             }
             else
-                entries.push_back({ AStringView(files[i].normalizedPathText), i });
+                m_entries.push_back({ AStringView(files[i].normalizedPathText), i });
         }
-        Sort(entries.begin(), entries.end(), [](const IndexedPath& lhs, const IndexedPath& rhs){ return lhs.text < rhs.text; });
+        Sort(m_entries.begin(), m_entries.end(), [](const IndexedPath& lhs, const IndexedPath& rhs){ return lhs.text < rhs.text; });
     }
 };
 
@@ -65,11 +65,11 @@ struct PathSelectionIndex{
     const bool prefix,
     Vector<u8, Assets::ScratchArena>& selected){
     auto entry = LowerBound(
-        index.entries.begin(), index.entries.end(), path,
+        index.m_entries.begin(), index.m_entries.end(), path,
         [](const IndexedPath& candidate, const AStringView value){ return candidate.text < value; }
     );
     bool matched = false;
-    for(; entry != index.entries.end(); ++entry){
+    for(; entry != index.m_entries.end(); ++entry){
         if(prefix ? !entry->text.starts_with(path) : entry->text != path)
             break;
         selected[entry->fileIndex] = 1u;
@@ -118,7 +118,7 @@ bool SelectBuildInputs(
             return false;
         }
 
-        Assets::ScratchString normalized = PathToString(scratchArena, path.lexically_normal());
+        Assets::ScratchString normalized = PathToString(scratchArena, path.lexicallyNormal());
 #if defined(GLB_PLATFORM_WINDOWS)
         CanonicalizeTextInPlace(normalized);
 #else
@@ -128,7 +128,7 @@ bool SelectBuildInputs(
         bool matched = false;
         if(isDirectory){
             for(const Assets::ResolvedAssetRoot& root : paths.assetRoots){
-                Assets::ScratchString rootText = PathToString(scratchArena, root.path.lexically_normal());
+                Assets::ScratchString rootText = PathToString(scratchArena, root.path.lexicallyNormal());
 #if defined(GLB_PLATFORM_WINDOWS)
                 CanonicalizeTextInPlace(rootText);
 #endif

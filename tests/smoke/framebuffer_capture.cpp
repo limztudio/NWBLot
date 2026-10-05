@@ -572,7 +572,7 @@ bool FramebufferCapture::writeCapture(
         }
     }
 
-    const ::Path<Core::Alloc::GlobalArena> outputDirectory = m_outputPath.parent_path();
+    const ::Path<Core::Alloc::GlobalArena> outputDirectory = m_outputPath.parentPath();
     ErrorCode filesystemError;
     if(!outputDirectory.empty() && !EnsureDirectories(outputDirectory, filesystemError))
         return false;

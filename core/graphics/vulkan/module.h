@@ -25,13 +25,13 @@ inline constexpr u64 s_AccelerationStructureAlignment = s_ConstantBufferOffsetSi
 inline constexpr u64 s_TlasInstanceDataAlignment = 16u;
 
 namespace ObjectTypes{
-    inline constexpr ObjectType VK_Queue                               = 0x00030004;
-    inline constexpr ObjectType VK_DeviceMemory                        = 0x00030006;
-    inline constexpr ObjectType VK_Buffer                              = 0x00030007;
-    inline constexpr ObjectType VK_Image                               = 0x00030008;
-    inline constexpr ObjectType VK_ImageView                           = 0x00030009;
-    inline constexpr ObjectType VK_AccelerationStructureKHR            = 0x0003000a;
-    inline constexpr ObjectType VK_Pipeline                            = 0x00030013;
+    inline constexpr ObjectType s_Queue                               = 0x00030004;
+    inline constexpr ObjectType s_DeviceMemory                        = 0x00030006;
+    inline constexpr ObjectType s_Buffer                              = 0x00030007;
+    inline constexpr ObjectType s_Image                               = 0x00030008;
+    inline constexpr ObjectType s_ImageView                           = 0x00030009;
+    inline constexpr ObjectType s_AccelerationStructureKHR            = 0x0003000a;
+    inline constexpr ObjectType s_Pipeline                            = 0x00030013;
 };
 
 

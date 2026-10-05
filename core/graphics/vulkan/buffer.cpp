@@ -175,7 +175,7 @@ ResourceStates::Mask Buffer::resolveTaskGraphImportInitialState()const noexcept{
 }
 
 Object Buffer::getNativeHandle(ObjectType objectType){
-    if(objectType != ObjectTypes::VK_Buffer)
+    if(objectType != ObjectTypes::s_Buffer)
         return nullptr;
 
     return Object(m_buffer);
@@ -310,7 +310,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         return nullptr;
     }
     if(d.isShaderBindingTable){
-        if(!m_context.extensions.KHR_ray_tracing_pipeline || !m_context.extensions.bufferDeviceAddress){
+        if(!m_context.extensions.khrRayTracingPipeline || !m_context.extensions.bufferDeviceAddress){
             NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
             GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
             return nullptr;
@@ -373,7 +373,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         }
     }
 
-    return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 bool CommandList::prepareUploadStaging(

@@ -121,7 +121,7 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     u64 version = 0u;
     // Accepted object-space geometry generation; zero requires conservative updates, including pending deformation.
     u64 geometryContentRevision = 0u;
-    Name meshKey = NAME_NONE;
+    Name meshKey = s_NameNone;
     Core::BufferHandle triangleIndexBuffer;   // RT-only; null when ray tracing is unsupported
     Core::BufferHandle attributeBuffer;       // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
     bool dynamicMeshletBoundsFresh = false;
@@ -130,7 +130,7 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     [[nodiscard]] bool valid()const noexcept{
         return
             entity.valid()
-            && meshKey != NAME_NONE
+            && meshKey != s_NameNone
             && buffersValid()
             && meshletCount > 0u
             && meshletPrimitiveIndexCount > 0u

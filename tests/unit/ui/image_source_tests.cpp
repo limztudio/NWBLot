@@ -91,7 +91,7 @@ protected:
 
     static void expectCopy(const Texture& original, const Texture& copied){
         EXPECT_EQ(copied.virtualPath(), original.virtualPath());
-        EXPECT_EQ(copied.assetType(), Texture::AssetTypeName());
+        EXPECT_EQ(copied.assetType(), Texture::assetTypeName());
         EXPECT_EQ(copied.width(), original.width());
         EXPECT_EQ(copied.height(), original.height());
         EXPECT_EQ(copied.depth(), original.depth());

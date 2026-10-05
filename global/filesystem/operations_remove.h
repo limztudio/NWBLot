@@ -215,7 +215,7 @@ template<typename ArenaT>
 template<typename TempArenaT, typename PathArenaT>
 [[nodiscard]] inline StagedDirectoryPaths<PathArenaT> BuildStagedDirectoryPaths(TempArenaT& tempArena, const Path<PathArenaT>& outputDirectory, const AStringView stageToken){
     PathArenaT& pathArena = outputDirectory.arena();
-    const Path<PathArenaT> outputParentDirectory = outputDirectory.parent_path();
+    const Path<PathArenaT> outputParentDirectory = outputDirectory.parentPath();
     const Path<PathArenaT> stageBaseDirectory = outputParentDirectory.empty() ? outputDirectory : outputParentDirectory;
 
     StagedDirectoryPaths<PathArenaT> output(pathArena);

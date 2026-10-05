@@ -443,7 +443,7 @@ static bool ParseMaterialInterface(
         return false;
     }
 
-    interfacePathPath.replace_extension();
+    interfacePathPath.replaceExtension();
     ScratchString strippedInterface = PathToString(scratchArena, interfacePathPath);
     for(char& ch : strippedInterface){
         if(ch == '\\')

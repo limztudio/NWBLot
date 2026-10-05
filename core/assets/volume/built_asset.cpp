@@ -44,7 +44,7 @@ static bool WriteIfChanged(const Path& path, const AssetBytes& bytes, AssetBytes
     temporaryName += s_TemporaryNameSeparator;
     AppendHexU64(g_TemporarySequence.fetch_add(s_TemporarySequenceStep, MemoryOrder::relaxed), temporaryName);
     temporaryName += s_TemporaryNameExtension;
-    const Path temporary = path.parent_path() / temporaryName;
+    const Path temporary = path.parentPath() / temporaryName;
     if(!WriteBinaryFile(temporary, bytes) || !ReadBinaryFile(temporary, existing, error)
         || existing != bytes || !RenamePath(temporary, path, error)){
         NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to publish built asset '{}'"), PathToString<tchar>(path));
@@ -131,7 +131,7 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
 }
 
 bool ReadBuiltAsset(const Path& path, AssetBytes& bytes, Name& outVirtualPath, usize& outPayloadOffset){
-    outVirtualPath = NAME_NONE;
+    outVirtualPath = s_NameNone;
     outPayloadOffset = 0u;
     ErrorCode error;
     u32 magic = 0u;

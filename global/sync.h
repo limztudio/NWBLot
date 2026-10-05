@@ -216,13 +216,13 @@ class MallocMutex : NoCopy{
 public:
     void lock()noexcept{
         AtomicBackOff backoff;
-        bool locked = m_flag.test_and_set();
+        bool locked = m_flag.testAndSet();
         while(locked){
             backoff.pause();
-            locked = m_flag.test_and_set();
+            locked = m_flag.testAndSet();
         }
     }
-    bool try_lock()noexcept{ return (!m_flag.test_and_set()); }
+    bool try_lock()noexcept{ return (!m_flag.testAndSet()); }
     void unlock()noexcept{ m_flag.clear(MemoryOrder::release); }
 
 

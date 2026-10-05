@@ -244,7 +244,7 @@ SharedUiPopupSmokeScene CreateUiPopupSmokeScene(Core::Alloc::GlobalArena& arena,
     return SharedUiPopupSmokeScene(
         NewArenaObject<RefCounter<UiPopupSmokeScene>>(arena, arena, input),
         ArenaRefDeleter<RefCounter<UiPopupSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

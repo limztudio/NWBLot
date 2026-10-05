@@ -129,7 +129,7 @@ bool DescriptorBufferManager::writeDescriptor(
     VkDeviceAddress accelStructAddress = 0;
 
     if(VulkanDetail::UsesDescriptorBufferInfo(item.type)){
-        auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
+        auto* buffer = CheckedCast<Buffer*>(item.resourceHandle);
         const bool isUniform = item.type == ResourceType::ConstantBuffer;
         const VkBufferUsageFlags requiredUsage = isUniform
             ? VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
@@ -201,7 +201,7 @@ bool DescriptorBufferManager::writeDescriptor(
         switch(item.type){
         case ResourceType::TypedBuffer_SRV:
         case ResourceType::TypedBuffer_UAV:{
-            auto* buffer = checked_cast<Buffer*>(item.resourceHandle);
+            auto* buffer = CheckedCast<Buffer*>(item.resourceHandle);
             const VkBufferUsageFlags requiredUsage = item.type == ResourceType::TypedBuffer_UAV
                 ? VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
                 : VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
@@ -271,7 +271,7 @@ bool DescriptorBufferManager::writeDescriptor(
         }
         case ResourceType::Texture_SRV:
         case ResourceType::Texture_UAV:{
-            auto* texture = checked_cast<Texture*>(item.resourceHandle);
+            auto* texture = CheckedCast<Texture*>(item.resourceHandle);
             if(!m_device.isTextureReadyForGpuUse(texture)){
                 NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer write rejected a foreign or unready Texture."));
                 return false;
@@ -293,7 +293,7 @@ bool DescriptorBufferManager::writeDescriptor(
             break;
         }
         case ResourceType::Sampler:{
-            auto* sampler = checked_cast<Sampler*>(item.resourceHandle);
+            auto* sampler = CheckedCast<Sampler*>(item.resourceHandle);
             if(&sampler->m_context != &m_context){
                 NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer write rejected a foreign Sampler."));
                 return false;
@@ -308,7 +308,7 @@ bool DescriptorBufferManager::writeDescriptor(
         }
         case ResourceType::RayTracingAccelStruct:{
             // TLAS descriptor directly encodes the generation's device address.
-            auto* as = checked_cast<AccelStruct*>(item.resourceHandle);
+            auto* as = CheckedCast<AccelStruct*>(item.resourceHandle);
             if(!m_device.isAccelStructReadyForGpuUse(as)){
                 NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer write rejected a foreign or unready AccelStruct."));
                 return false;

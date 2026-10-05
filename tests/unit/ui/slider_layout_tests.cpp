@@ -57,12 +57,12 @@ static void ExpectPlacement(const SliderPlacement& actual, const SliderPlacement
 
 TEST(UiSliderLayoutTests, EndpointThumbPositionsMeetTheExactPaddedBounds){
     SliderMetrics metrics;
-    ASSERT_TRUE(SliderLayout::Measure({}, {}, metrics));
+    ASSERT_TRUE(SliderLayout::measure({}, {}, metrics));
     const Rect bounds{ 10.0f, 20.0f, 240.0f, 32.0f };
     SliderPlacement first;
     SliderPlacement last;
-    ASSERT_TRUE(SliderLayout::Place(bounds, bounds, metrics, 0.0, first));
-    ASSERT_TRUE(SliderLayout::Place(bounds, bounds, metrics, 1.0, last));
+    ASSERT_TRUE(SliderLayout::place(bounds, bounds, metrics, 0.0, first));
+    ASSERT_TRUE(SliderLayout::place(bounds, bounds, metrics, 1.0, last));
     EXPECT_FLOAT_EQ(first.thumb.x, first.travelBounds.x);
     EXPECT_FLOAT_EQ(last.thumb.x + last.thumb.width, last.travelBounds.x + last.travelBounds.width);
     EXPECT_FLOAT_EQ(last.thumb.x, 222.0f);
@@ -72,12 +72,12 @@ TEST(UiSliderLayoutTests, EndpointThumbPositionsMeetTheExactPaddedBounds){
 
 TEST(UiSliderLayoutTests, ClipChangesOnlyVisibilityAndPreservesAcceptedTravelGeometry){
     SliderMetrics metrics;
-    ASSERT_TRUE(SliderLayout::Measure({}, {}, metrics));
+    ASSERT_TRUE(SliderLayout::measure({}, {}, metrics));
     const Rect bounds{ 10.0f, 20.0f, 240.0f, 32.0f };
     SliderPlacement full;
     SliderPlacement clipped;
-    ASSERT_TRUE(SliderLayout::Place(bounds, bounds, metrics, 0.25, full));
-    ASSERT_TRUE(SliderLayout::Place(bounds, { 50.0f, 25.0f, 100.0f, 10.0f }, metrics, 0.25, clipped));
+    ASSERT_TRUE(SliderLayout::place(bounds, bounds, metrics, 0.25, full));
+    ASSERT_TRUE(SliderLayout::place(bounds, { 50.0f, 25.0f, 100.0f, 10.0f }, metrics, 0.25, clipped));
     UiWidgetTests::ExpectRect(clipped.clip, { 50.0f, 25.0f, 100.0f, 10.0f });
     UiWidgetTests::ExpectRect(clipped.travelBounds, full.travelBounds);
     UiWidgetTests::ExpectRect(clipped.centerTravel, full.centerTravel);
@@ -87,10 +87,10 @@ TEST(UiSliderLayoutTests, ClipChangesOnlyVisibilityAndPreservesAcceptedTravelGeo
 
 TEST(UiSliderLayoutTests, TinyAreasBoundThumbDimensionsAndProduceZeroTravelSafely){
     SliderMetrics metrics;
-    ASSERT_TRUE(SliderLayout::Measure({}, {}, metrics));
+    ASSERT_TRUE(SliderLayout::measure({}, {}, metrics));
     const Rect bounds{ 10.0f, 20.0f, 20.0f, 12.0f };
     SliderPlacement placement;
-    ASSERT_TRUE(SliderLayout::Place(bounds, bounds, metrics, 0.5, placement));
+    ASSERT_TRUE(SliderLayout::place(bounds, bounds, metrics, 0.5, placement));
     UiWidgetTests::ExpectRect(placement.travelBounds, { 14.0f, 24.0f, 12.0f, 4.0f });
     UiWidgetTests::ExpectRect(placement.thumb, placement.travelBounds);
     EXPECT_FLOAT_EQ(placement.thumbExtent.x, 12.0f);
@@ -101,10 +101,10 @@ TEST(UiSliderLayoutTests, TinyAreasBoundThumbDimensionsAndProduceZeroTravelSafel
 
 TEST(UiSliderLayoutTests, PaddingLargerThanTheAreaAndEmptyAreasRemainValid){
     SliderMetrics metrics;
-    ASSERT_TRUE(SliderLayout::Measure({}, {}, metrics));
+    ASSERT_TRUE(SliderLayout::measure({}, {}, metrics));
     for(const Rect bounds : { Rect{ 10.0f, 20.0f, 4.0f, 3.0f }, Rect{ 10.0f, 20.0f, 0.0f, 0.0f } }){
         SliderPlacement placement;
-        ASSERT_TRUE(SliderLayout::Place(bounds, bounds, metrics, 1.0, placement));
+        ASSERT_TRUE(SliderLayout::place(bounds, bounds, metrics, 1.0, placement));
         EXPECT_FLOAT_EQ(placement.travelBounds.width, 0.0f);
         EXPECT_FLOAT_EQ(placement.travelBounds.height, 0.0f);
         EXPECT_FLOAT_EQ(placement.thumb.width, 0.0f);
@@ -115,7 +115,7 @@ TEST(UiSliderLayoutTests, PaddingLargerThanTheAreaAndEmptyAreasRemainValid){
 
 TEST(UiSliderLayoutTests, InvalidOptionsStylesAndTintsPreservePreviouslyMeasuredMetrics){
     SliderMetrics measured;
-    ASSERT_TRUE(SliderLayout::Measure({}, {}, measured));
+    ASSERT_TRUE(SliderLayout::measure({}, {}, measured));
     for(u32 field = 0u; field < 13u; ++field){
         SliderOptions options;
         SliderStyle style;
@@ -135,7 +135,7 @@ TEST(UiSliderLayoutTests, InvalidOptionsStylesAndTintsPreservePreviouslyMeasured
         default: style.padding.right = Limit<f32>::s_Infinity; break;
         }
         SliderMetrics output = measured;
-        EXPECT_FALSE(SliderLayout::Measure(options, style, output));
+        EXPECT_FALSE(SliderLayout::measure(options, style, output));
         ExpectMetrics(output, measured);
     }
 }
@@ -145,18 +145,18 @@ TEST(UiSliderLayoutTests, OverflowingIntrinsicMetricsAreRejectedAtomically){
     style.thumbExtent.x = Limit<f32>::s_Max;
     style.padding.left = Limit<f32>::s_Max;
     SliderMetrics output;
-    ASSERT_TRUE(SliderLayout::Measure({}, {}, output));
+    ASSERT_TRUE(SliderLayout::measure({}, {}, output));
     const SliderMetrics before = output;
-    EXPECT_FALSE(SliderLayout::Measure({}, style, output));
+    EXPECT_FALSE(SliderLayout::measure({}, style, output));
     ExpectMetrics(output, before);
 }
 
 TEST(UiSliderLayoutTests, InvalidProspectivePlacementPreservesEveryOutputRectangle){
     SliderMetrics metrics;
-    ASSERT_TRUE(SliderLayout::Measure({}, {}, metrics));
+    ASSERT_TRUE(SliderLayout::measure({}, {}, metrics));
     const Rect normal{ 10.0f, 20.0f, 240.0f, 32.0f };
     SliderPlacement measured;
-    ASSERT_TRUE(SliderLayout::Place(normal, normal, metrics, 0.25, measured));
+    ASSERT_TRUE(SliderLayout::place(normal, normal, metrics, 0.25, measured));
     for(u32 field = 0u; field < 10u; ++field){
         Rect bounds = normal;
         Rect clip = normal;
@@ -175,18 +175,18 @@ TEST(UiSliderLayoutTests, InvalidProspectivePlacementPreservesEveryOutputRectang
         default: normalized = Limit<f64>::s_QuietNaN; break;
         }
         SliderPlacement output = measured;
-        EXPECT_FALSE(SliderLayout::Place(bounds, clip, invalid, normalized, output));
+        EXPECT_FALSE(SliderLayout::place(bounds, clip, invalid, normalized, output));
         ExpectPlacement(output, measured);
     }
 }
 
 TEST(UiSliderLayoutTests, PositiveDimensionsThatCollapseAtExtremeCoordinatesAreRejected){
     SliderMetrics metrics;
-    ASSERT_TRUE(SliderLayout::Measure({}, {}, metrics));
+    ASSERT_TRUE(SliderLayout::measure({}, {}, metrics));
     SliderPlacement output;
     const SliderPlacement before = output;
     const Rect bounds{ Limit<f32>::s_Max, 0.0f, 1.0f, 32.0f };
-    EXPECT_FALSE(SliderLayout::Place(bounds, bounds, metrics, 0.5, output));
+    EXPECT_FALSE(SliderLayout::place(bounds, bounds, metrics, 0.5, output));
     ExpectPlacement(output, before);
 }
 

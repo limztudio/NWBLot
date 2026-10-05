@@ -48,10 +48,10 @@ struct NwbHardwareTransparentCrossing{
 [[vk::push_constant]]
 ConstantBuffer<NwbHardwareTransparentPushConstants> g_NwbHardwareTransparentPush;
 
-#define g_NwbHardwareTransparentContext NwbHeapShadowMaterialContextSlots(g_NwbHardwareTransparentPush.materialContextSlotsHeapSlot)
-#define g_NwbHardwareTransparentCrossings NwbHeapShadowWritableUintBuffer(g_NwbHardwareTransparentPush.crossingsHeapSlot)
-#define g_NwbHardwareTransparentOverflowList NwbHeapShadowWritableUintBuffer(g_NwbHardwareTransparentPush.overflowListHeapSlot)
-#define g_NwbHardwareTransparentOverflowArgs NwbHeapShadowWritableUintBuffer(g_NwbHardwareTransparentPush.overflowArgsHeapSlot)
+#define g_NwbHardwareTransparentContext nwbHeapShadowMaterialContextSlots(g_NwbHardwareTransparentPush.materialContextSlotsHeapSlot)
+#define g_NwbHardwareTransparentCrossings nwbHeapShadowWritableUintBuffer(g_NwbHardwareTransparentPush.crossingsHeapSlot)
+#define g_NwbHardwareTransparentOverflowList nwbHeapShadowWritableUintBuffer(g_NwbHardwareTransparentPush.overflowListHeapSlot)
+#define g_NwbHardwareTransparentOverflowArgs nwbHeapShadowWritableUintBuffer(g_NwbHardwareTransparentPush.overflowArgsHeapSlot)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

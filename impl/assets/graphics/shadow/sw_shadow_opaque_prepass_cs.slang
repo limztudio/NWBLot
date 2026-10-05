@@ -18,7 +18,7 @@
 
 // The full-res visibility array the deferred lighting samples: this pass writes the binary opaque mask (later
 // multiplied by the transparent pass), one layer per shadow slot.
-#define g_NwbSwShadowVisibility NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
+#define g_NwbSwShadowVisibility nwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

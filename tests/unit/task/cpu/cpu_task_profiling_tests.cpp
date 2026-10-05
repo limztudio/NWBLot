@@ -23,7 +23,7 @@ TEST(CpuTaskProfilingTests, ReadyAndExecutionEventsRetainTheirOwnFramesAndLabels
     const auto scopeLabel = scheduler.registerProfileLabel(scopeName);
     const auto taskLabel = scheduler.registerProfileLabel(taskName);
     EXPECT_EQ(scheduler.registerProfileLabel(taskName).value, taskLabel.value);
-    EXPECT_FALSE(scheduler.registerProfileLabel(NAME_NONE).valid());
+    EXPECT_FALSE(scheduler.registerProfileLabel(s_NameNone).valid());
     CpuTaskScope scope(scheduler, scopeLabel);
     scheduler.setProfiling(true, 7u);
     const auto task = scope.submit([](){ SleepMS(1u); }, { .profileLabel = taskLabel });
@@ -173,7 +173,7 @@ TEST(CpuTaskProfilingTests, ForeignLabelsDoNotAliasLocalNames){
     const usize count = second.readProfileEvents(events, 8u);
     ASSERT_GT(count, 0u);
     for(usize index = 0u; index < count; ++index)
-        EXPECT_EQ(events[index].label, NAME_NONE);
+        EXPECT_EQ(events[index].label, s_NameNone);
 }
 
 TEST(CpuTaskProfilingTests, ZeroCapacityLeavesCaptureDisabled){

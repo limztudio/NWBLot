@@ -266,7 +266,7 @@ GlobalUniquePtr<IClipboardService> CreateX11ClipboardService(Alloc::GlobalArena&
 }
 
 bool DispatchX11ClipboardEvent(IClipboardService& service, const _XEvent& event){
-    return checked_cast<X11ClipboardService*>(&service)->handleEvent(event);
+    return CheckedCast<X11ClipboardService*>(&service)->handleEvent(event);
 }
 
 

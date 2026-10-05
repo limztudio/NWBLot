@@ -10,15 +10,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define __nwb__decl_nodiscard [[nodiscard]]
+#define NWB_ALLOC_NODISCARD [[nodiscard]]
 
 #if defined(_MSC_VER) && defined(_Ret_notnull_) && defined(_Post_writable_byte_size_)
 // stay consistent with VCRT definitions
-#define __nwb__decl_new(n) __nwb__decl_nodiscard _Ret_notnull_ _Post_writable_byte_size_(n)
-#define __nwb__decl_new_nothrow(n) __nwb__decl_nodiscard _Ret_maybenull_ _Success_(return != NULL) _Post_writable_byte_size_(n)
+#define NWB_ALLOC_NEW_ATTRIBUTES(n) NWB_ALLOC_NODISCARD _Ret_notnull_ _Post_writable_byte_size_(n)
+#define NWB_ALLOC_NEW_NOTHROW_ATTRIBUTES(n) NWB_ALLOC_NODISCARD _Ret_maybenull_ _Success_(return != NULL) _Post_writable_byte_size_(n)
 #else
-#define __nwb__decl_new(n) __nwb__decl_nodiscard
-#define __nwb__decl_new_nothrow(n) __nwb__decl_nodiscard
+#define NWB_ALLOC_NEW_ATTRIBUTES(n) NWB_ALLOC_NODISCARD
+#define NWB_ALLOC_NEW_NOTHROW_ATTRIBUTES(n) NWB_ALLOC_NODISCARD
 #endif
 
 
@@ -83,19 +83,19 @@ void operator delete[](void* p, const std::nothrow_t&)noexcept{
     NWB::Core::Alloc::CoreFree(p);
 }
 
-__nwb__decl_new(n) void* operator new(std::size_t n)noexcept(false){
+NWB_ALLOC_NEW_ATTRIBUTES(n) void* operator new(std::size_t n)noexcept(false){
     return __hidden_new::InternalOperatorNew(n);
 }
 
-__nwb__decl_new(n) void* operator new[](std::size_t n)noexcept(false){
+NWB_ALLOC_NEW_ATTRIBUTES(n) void* operator new[](std::size_t n)noexcept(false){
     return __hidden_new::InternalOperatorNew(n);
 }
 
-__nwb__decl_new_nothrow(n) void* operator new(std::size_t n, const std::nothrow_t&)noexcept{
+NWB_ALLOC_NEW_NOTHROW_ATTRIBUTES(n) void* operator new(std::size_t n, const std::nothrow_t&)noexcept{
     return NWB::Core::Alloc::CoreAlloc(static_cast<usize>(n));
 }
 
-__nwb__decl_new_nothrow(n) void* operator new[](std::size_t n, const std::nothrow_t&)noexcept{
+NWB_ALLOC_NEW_NOTHROW_ATTRIBUTES(n) void* operator new[](std::size_t n, const std::nothrow_t&)noexcept{
     return NWB::Core::Alloc::CoreAlloc(static_cast<usize>(n));
 }
 
@@ -152,10 +152,10 @@ void* operator new[](std::size_t n, std::align_val_t alignment, std::nothrow_t c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#undef __nwb__decl_new
-#undef __nwb__decl_new_nothrow
+#undef NWB_ALLOC_NEW_ATTRIBUTES
+#undef NWB_ALLOC_NEW_NOTHROW_ATTRIBUTES
 
-#undef __nwb__decl_nodiscard
+#undef NWB_ALLOC_NODISCARD
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

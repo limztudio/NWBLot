@@ -155,13 +155,13 @@ TEST(ModelPayload, RejectsMissingNamesRequiredReferencesAndEmptyModels){
     for(u32 invalidCase = 0u; invalidCase < 7u; ++invalidCase){
         ModelInputs inputs;
         switch(invalidCase){
-        case 0u: inputs.skeletonObjects.front().name = NAME_NONE; break;
+        case 0u: inputs.skeletonObjects.front().name = s_NameNone; break;
         case 1u: inputs.skeletonObjects.front().skeleton.reset(); break;
-        case s_ExpectedDualCount: inputs.staticMeshObjects.front().name = NAME_NONE; break;
+        case s_ExpectedDualCount: inputs.staticMeshObjects.front().name = s_NameNone; break;
         case 3u: inputs.staticMeshObjects.front().mesh.reset(); break;
-        case 4u: inputs.skinnedMeshObjects.front().name = NAME_NONE; break;
+        case 4u: inputs.skinnedMeshObjects.front().name = s_NameNone; break;
         case 5u: inputs.skinnedMeshObjects.front().skin.reset(); break;
-        case 6u: inputs.skinnedMeshObjects.front().skeletonObject = NAME_NONE; break;
+        case 6u: inputs.skinnedMeshObjects.front().skeletonObject = s_NameNone; break;
         }
         inputs.publish();
         EXPECT_FALSE(inputs.model.validatePayload(inputs.scratchArena)) << invalidCase;
@@ -185,7 +185,7 @@ TEST(ModelPayload, RejectsMissingOrWrongKindParents){
         case 0u: inputs.staticMeshObjects.front().parentObject = Name("missing"); break;
         case 1u: inputs.staticMeshObjects.front().parentObject = Name(s_PROP); break;
         case s_ExpectedDualCount: inputs.staticMeshObjects.front().parentObject = Name(s_BODY); break;
-        case 3u: inputs.staticMeshObjects.front().parentObject = NAME_NONE; break;
+        case 3u: inputs.staticMeshObjects.front().parentObject = s_NameNone; break;
         case 4u: inputs.skinnedMeshObjects.front().skeletonObject = Name("missing"); break;
         case 5u: inputs.skinnedMeshObjects.front().skeletonObject = Name(s_PROP); break;
         case 6u: inputs.skinnedMeshObjects.front().skeletonObject = Name(s_BODY); break;
@@ -227,8 +227,8 @@ TEST(ModelPayload, SingleObjectValidationDoesNotAllocateOrResolveItselfAsASkelet
     inputs.staticMeshObjects.front().parentObject = inputs.staticMeshObjects.front().name;
     inputs.publish();
     EXPECT_FALSE(inputs.model.validatePayload(inputs.scratchArena));
-    inputs.staticMeshObjects.front().parentObject = NAME_NONE;
-    inputs.staticMeshObjects.front().parentJoint = NAME_NONE;
+    inputs.staticMeshObjects.front().parentObject = s_NameNone;
+    inputs.staticMeshObjects.front().parentJoint = s_NameNone;
     inputs.publish();
     EXPECT_TRUE(inputs.model.validatePayload(inputs.scratchArena));
     EXPECT_EQ(inputs.scratchArena.memoryStats().allocationCount, 0u);
@@ -331,8 +331,8 @@ TEST(ModelPayloadBenchmark, DISABLED_ValidatesSingleObject){
     ModelInputs inputs;
     inputs.skeletonObjects.clear();
     inputs.skinnedMeshObjects.clear();
-    inputs.staticMeshObjects.front().parentObject = NAME_NONE;
-    inputs.staticMeshObjects.front().parentJoint = NAME_NONE;
+    inputs.staticMeshObjects.front().parentObject = s_NameNone;
+    inputs.staticMeshObjects.front().parentJoint = s_NameNone;
     inputs.publish();
     MeasureValidation(inputs, 4096u);
 }

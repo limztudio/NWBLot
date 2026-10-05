@@ -80,7 +80,7 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
             return false;
         }
         const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
-        if(!descriptor.valid() || !heap.write(descriptor, Core::DescriptorWriteItem::RawBuffer_SRV(0u, buffer.get()))){
+        if(!descriptor.valid() || !heap.write(descriptor, Core::DescriptorWriteItem::rawBufferSrv(0u, buffer.get()))){
             if(descriptor.valid())
                 heap.free(descriptor);
             NWB_LOGGER_ERROR(GLB_TEXT("Ray optical scene: failed to register metadata buffer"));
@@ -115,7 +115,7 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
         m_resources.upload = RayTracingOpticalSceneUploadHandle(
             NewArenaObject<RayTracingOpticalSceneUploadControl>(m_arena, m_arena, gather),
             ArenaRefDeleter<RayTracingOpticalSceneUploadControl, Core::Alloc::GlobalArena>(&m_arena),
-            AdoptRef
+            s_AdoptRef
         );
     }
     m_resources.transparentCount = gather.header.transparentCount;

@@ -51,7 +51,7 @@ struct NwbCausticResolvePushConstants{
 [[vk::push_constant]]
 ConstantBuffer<NwbCausticResolvePushConstants> g_NwbCausticResolvePushConstants;
 
-#define g_NwbCausticResolveOutput NwbHeapStorageImage2DFloat4(g_NwbCausticResolvePushConstants.outputStorageSlot)
+#define g_NwbCausticResolveOutput nwbHeapStorageImage2DFloat4(g_NwbCausticResolvePushConstants.outputStorageSlot)
 
 #if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE == NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_STEP_ONE
 #define NWB_CAUSTIC_RESOLVE_STEP_WIDTH 1u
@@ -68,12 +68,12 @@ ConstantBuffer<NwbCausticResolvePushConstants> g_NwbCausticResolvePushConstants;
 
 #if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
 // Groupshared tile for small-dilation wavelet passes.
-groupshared half3  s_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
+groupshared half3  g_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 // The geometry cache is RGBA16F. Keep its sampled world positions compact in LDS and widen only for the edge-stop
 // arithmetic below; storing them as float3 here would double the shared-memory footprint without adding precision.
-groupshared half3  s_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
-groupshared uint   s_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
-groupshared uint   s_NwbCausticResolveTileActive;
+groupshared half3  g_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
+groupshared uint   g_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
+groupshared uint   g_NwbCausticResolveTileActive;
 #endif
 
 
@@ -81,7 +81,7 @@ groupshared uint   s_NwbCausticResolveTileActive;
 
 
 half4 nwbCausticResolveGeometryAtHalf(const int2 halfTexel){
-    return half4(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.geometrySlot).Load(int3(halfTexel, 0)));
+    return half4(nwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.geometrySlot).Load(int3(halfTexel, 0)));
 }
 
 half3 nwbCausticResolveWorldAtHalf(const int2 halfTexel){
@@ -93,7 +93,7 @@ bool nwbCausticResolveValidAtHalf(const int2 halfTexel){
 }
 
 half3 nwbCausticResolveWorldAtFull(const int2 fullTexel){
-    return half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.worldPositionSlot).Load(int3(fullTexel, 0)).xyz);
+    return half3(nwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.worldPositionSlot).Load(int3(fullTexel, 0)).xyz);
 }
 
 // World-space area subtended by one half-resolution pixel.
@@ -108,10 +108,10 @@ float nwbCausticResolveHalfPixelArea(const int2 halfTexel){
 
 // 5x5 B-spline a-trous kernel.
 // Geometry-only edge stop: luminance is sparse-splat noise and must not gate filtering.
-static const half s_NwbCausticResolveKernel[5] = { half(1.0 / 16.0), half(4.0 / 16.0), half(6.0 / 16.0), half(4.0 / 16.0), half(1.0 / 16.0) };
+static const half NWB_CAUSTIC_RESOLVE_KERNEL[5] = { half(1.0 / 16.0), half(4.0 / 16.0), half(6.0 / 16.0), half(4.0 / 16.0), half(1.0 / 16.0) };
 
-groupshared uint s_NwbCausticResolveInputActivity;
-groupshared uint s_NwbCausticResolveOutputActivity;
+groupshared uint g_NwbCausticResolveInputActivity;
+groupshared uint g_NwbCausticResolveOutputActivity;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -126,7 +126,7 @@ bool nwbCausticResolveInputInactive(const uint2 group, const uint threadIndex){
     )
         return false;
     if(threadIndex == 0u)
-        s_NwbCausticResolveInputActivity = 0u;
+        g_NwbCausticResolveInputActivity = 0u;
     GroupMemoryBarrierWithGroupSync();
     // Small-step halos span at most the adjacent tile in each direction; large steps preserve tile residues.
     const uint side = smallStep ? 3u : 5u;
@@ -138,12 +138,12 @@ bool nwbCausticResolveInputInactive(const uint2 group, const uint threadIndex){
         const int2 tile = int2(group) + offset;
         if(all(tile >= int2(0, 0)) && all(tile < int2(tiles))){
             const uint index = (uint)tile.y * tiles.x + (uint)tile.x;
-            if(NwbHeapRawBuffer(g_NwbCausticResolvePushConstants.activityInputSlot).Load(index * 4u) != 0u)
-                InterlockedOr(s_NwbCausticResolveInputActivity, 1u);
+            if(nwbHeapRawBuffer(g_NwbCausticResolvePushConstants.activityInputSlot).Load(index * 4u) != 0u)
+                InterlockedOr(g_NwbCausticResolveInputActivity, 1u);
         }
     }
     GroupMemoryBarrierWithGroupSync();
-    return s_NwbCausticResolveInputActivity == 0u;
+    return g_NwbCausticResolveInputActivity == 0u;
 }
 
 bool nwbCausticResolveUpsampleInactive(const int2 baseTexel){
@@ -157,7 +157,7 @@ bool nwbCausticResolveUpsampleInactive(const int2 baseTexel){
     // The four clamped bilinear taps occupy one, two or four activity tiles.
     for(uint y = firstTile.y; y <= lastTile.y; ++y){
         for(uint x = firstTile.x; x <= lastTile.x; ++x){
-            if(NwbHeapRawBuffer(g_NwbCausticResolvePushConstants.activityInputSlot).Load((y * tilesX + x) * 4u) != 0u)
+            if(nwbHeapRawBuffer(g_NwbCausticResolvePushConstants.activityInputSlot).Load((y * tilesX + x) * 4u) != 0u)
                 return false;
         }
     }
@@ -168,17 +168,17 @@ void nwbCausticResolvePublishActivity(const float3 color, const bool inBounds, c
     if(g_NwbCausticResolvePushConstants.activityOutputSlot == NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT)
         return;
     if(threadIndex == 0u)
-        s_NwbCausticResolveOutputActivity = 0u;
+        g_NwbCausticResolveOutputActivity = 0u;
     GroupMemoryBarrierWithGroupSync();
     // The filter widens its half result only for storage. Exact inequality keeps negative and nonfinite results active.
     if(inBounds && any(color != float3(0.0)))
-        InterlockedOr(s_NwbCausticResolveOutputActivity, 1u);
+        InterlockedOr(g_NwbCausticResolveOutputActivity, 1u);
     GroupMemoryBarrierWithGroupSync();
     if(threadIndex == 0u){
         const uint tilesX = (g_NwbCausticResolvePushConstants.halfWidth + NWB_CAUSTIC_RESOLVE_GROUP_SIZE - 1u)
             / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
         g_NwbHeapStorageBuffers[g_NwbCausticResolvePushConstants.activityOutputSlot].Store(
-            (group.y * tilesX + group.x) * 4u, s_NwbCausticResolveOutputActivity
+            (group.y * tilesX + group.x) * 4u, g_NwbCausticResolveOutputActivity
         );
     }
 }
@@ -199,7 +199,7 @@ float4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, co
         const uint threadIndex = groupThreadID.y * NWB_CAUSTIC_RESOLVE_GROUP_SIZE + groupThreadID.x;
         const uint tileTexels = (uint)(tileW * tileW);
         if(threadIndex == 0u)
-            s_NwbCausticResolveTileActive = 0u;
+            g_NwbCausticResolveTileActive = 0u;
         GroupMemoryBarrierWithGroupSync();
 
         for(uint i = threadIndex; i < tileTexels; i += threadCount){
@@ -209,20 +209,20 @@ float4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, co
             uint tapValid = 0u;
             if(t.x >= 0 && t.y >= 0 && t.x < hw && t.y < hh){
                 if(nwbCausticResolveValidAtHalf(t)){
-                    tapColor = half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(t, 0)).rgb);
+                    tapColor = half3(nwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(t, 0)).rgb);
                     tapWorld = nwbCausticResolveWorldAtHalf(t);
                     tapValid = 1u;
                     if(any(tapColor > half3(0.0h, 0.0h, 0.0h)))
-                        InterlockedOr(s_NwbCausticResolveTileActive, 1u);
+                        InterlockedOr(g_NwbCausticResolveTileActive, 1u);
                 }
             }
-            s_NwbCausticResolveTileColor[i] = tapColor;
-            s_NwbCausticResolveTileWorld[i] = tapWorld;
-            s_NwbCausticResolveTileValid[i] = tapValid;
+            g_NwbCausticResolveTileColor[i] = tapColor;
+            g_NwbCausticResolveTileWorld[i] = tapWorld;
+            g_NwbCausticResolveTileValid[i] = tapValid;
         }
         GroupMemoryBarrierWithGroupSync();
 
-        if(s_NwbCausticResolveTileActive == 0u){
+        if(g_NwbCausticResolveTileActive == 0u){
             return float4(0.0, 0.0, 0.0, 1.0);
         }
 
@@ -244,11 +244,11 @@ float4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, co
         [unroll] for(int ky = -2; ky <= 2; ++ky){
             [unroll] for(int kx = -2; kx <= 2; ++kx){
                 const uint idx = (uint)((int(groupThreadID.y) + (ky + 2) * step) * tileW + (int(groupThreadID.x) + (kx + 2) * step));
-                if(s_NwbCausticResolveTileValid[idx] == 0u)
+                if(g_NwbCausticResolveTileValid[idx] == 0u)
                     continue;
-                const float3 d = float3(s_NwbCausticResolveTileWorld[idx]) - centerWorld;
-                const half weight = s_NwbCausticResolveKernel[kx + 2] * s_NwbCausticResolveKernel[ky + 2] * half(exp(-dot(d, d) * invTwoSigmaWorldSq));
-                sum += weight * s_NwbCausticResolveTileColor[idx];
+                const float3 d = float3(g_NwbCausticResolveTileWorld[idx]) - centerWorld;
+                const half weight = NWB_CAUSTIC_RESOLVE_KERNEL[kx + 2] * NWB_CAUSTIC_RESOLVE_KERNEL[ky + 2] * half(exp(-dot(d, d) * invTwoSigmaWorldSq));
+                sum += weight * g_NwbCausticResolveTileColor[idx];
                 weightSum += weight;
             }
         }
@@ -279,8 +279,8 @@ float4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, co
             if(!nwbCausticResolveValidAtHalf(tap))
                 continue;
             const float3 d = float3(nwbCausticResolveWorldAtHalf(tap)) - centerWorld;
-            const half weight = s_NwbCausticResolveKernel[kx + 2] * s_NwbCausticResolveKernel[ky + 2] * half(exp(-dot(d, d) * invTwoSigmaWorldSq));
-            const half3 tapColor = half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);
+            const half weight = NWB_CAUSTIC_RESOLVE_KERNEL[kx + 2] * NWB_CAUSTIC_RESOLVE_KERNEL[ky + 2] * half(exp(-dot(d, d) * invTwoSigmaWorldSq));
+            const half3 tapColor = half3(nwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);
             sum += weight * tapColor;
             weightSum += weight;
         }
@@ -320,7 +320,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const int fw = (int)g_NwbCausticResolvePushConstants.width;
         const int fh = (int)g_NwbCausticResolvePushConstants.height;
         const int2 fullTexel = int2(pixel);
-        if(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.depthSlot).Load(int3(fullTexel, 0)).r >= NWB_SCENE_BACKGROUND_DEPTH){
+        if(nwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.depthSlot).Load(int3(fullTexel, 0)).r >= NWB_SCENE_BACKGROUND_DEPTH){
             g_NwbCausticResolveOutput[pixel] = float4(0.0, 0.0, 0.0, 1.0);
             return;
         }
@@ -347,7 +347,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const half bilinearWeight = (i == 0 ? half(1.0 - lerpFrac.x) : half(lerpFrac.x)) * (j == 0 ? half(1.0 - lerpFrac.y) : half(lerpFrac.y));
                 const float3 d = float3(nwbCausticResolveWorldAtHalf(tap)) - centerWorld;
                 const half weight = bilinearWeight * half(exp(-dot(d, d) * invTwoSigmaWorldSq));
-                const half3 tapColor = half3(NwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);
+                const half3 tapColor = half3(nwbHeapSampledImage2D(g_NwbCausticResolvePushConstants.inputColorSlot).Load(int3(tap, 0)).rgb);
                 sum += weight * tapColor;
                 weightSum += weight;
             }
@@ -377,9 +377,9 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     [unroll] for(int ox = 0; ox < 2; ++ox){
                         const int2 fpx = int2(min(base.x + ox, fw - 1), min(base.y + oy, fh - 1));
                         flux += float3(
-                            (float)NwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, NWB_CAUSTIC_ACCUMULATOR_CHANNEL_RED, 0)).r,
-                            (float)NwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, NWB_CAUSTIC_ACCUMULATOR_CHANNEL_GREEN, 0)).r,
-                            (float)NwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, NWB_CAUSTIC_ACCUMULATOR_CHANNEL_BLUE, 0)).r
+                            (float)nwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, NWB_CAUSTIC_ACCUMULATOR_CHANNEL_RED, 0)).r,
+                            (float)nwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, NWB_CAUSTIC_ACCUMULATOR_CHANNEL_GREEN, 0)).r,
+                            (float)nwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, NWB_CAUSTIC_ACCUMULATOR_CHANNEL_BLUE, 0)).r
                         );
                     }
                 }

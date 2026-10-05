@@ -230,7 +230,7 @@ private:
         const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy,
         Texture* backbufferTexture
     );
-    [[nodiscard]] static bool PrepareFramePresentationSignal(
+    [[nodiscard]] static bool invokeFramePresentationSignalPreparation(
         void* context,
         u64 identity,
         const GpuPhysicalQueueId& executionQueue,
@@ -241,7 +241,7 @@ private:
         const GpuPhysicalQueueId& executionQueue,
         QueueSubmissionNativeSignal& outSignal
     )noexcept;
-    [[nodiscard]] static bool ResolveFramePresentationSignal(
+    [[nodiscard]] static bool invokeFramePresentationSignalResolution(
         void* context,
         u64 identity,
         const QueueSubmissionToken& token

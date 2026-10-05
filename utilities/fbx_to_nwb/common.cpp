@@ -182,7 +182,7 @@ bool ParseColorText(const AStringView text, Vec4& outColor){
 
 Path DefaultOutputPath(const AStringView inputPath){
     Path outputPath(UtilityDetail::Arena(), inputPath);
-    outputPath.replace_extension(s_NwbOutputExtension);
+    outputPath.replaceExtension(s_NwbOutputExtension);
     return outputPath;
 }
 

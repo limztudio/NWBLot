@@ -55,11 +55,11 @@ uint nwbSwTransparentSampleCount(const uint2 pixel, const uint lightSlot, const 
     if(!nwbSwTransparentSamplingReproject(pixel, extent, g_NwbSwShadowPush.receiverFactor, world,
         g_NwbSwShadowPush.prevWorldToClip, g_NwbSwShadowPush.historyValid != 0u, previousPixel))
         return maximumSamples;
-    const half4 current = half4(NwbHeapSampledImage2D(g_NwbSwShadowPush.geometryCurrSlot).Load(int3(pixel, 0)));
-    const half4 previous = half4(NwbHeapSampledImage2D(g_NwbSwShadowPush.geometryPrevSlot).Load(int3(previousPixel, 0)));
+    const half4 current = half4(nwbHeapSampledImage2D(g_NwbSwShadowPush.geometryCurrSlot).Load(int3(pixel, 0)));
+    const half4 previous = half4(nwbHeapSampledImage2D(g_NwbSwShadowPush.geometryPrevSlot).Load(int3(previousPixel, 0)));
     if(!nwbSwTransparentSamplingGeometryMatches(current, previous))
         return maximumSamples;
-    const half3 moments = half3(NwbHeapSampledImage2DArray(g_NwbSwShadowPush.momentsInSlot).Load(int4(previousPixel, lightSlot, 0)).xyz);
+    const half3 moments = half3(nwbHeapSampledImage2DArray(g_NwbSwShadowPush.momentsInSlot).Load(int4(previousPixel, lightSlot, 0)).xyz);
     return nwbSwTransparentSamplingBudget(true, moments, maximumSamples);
 }
 #endif
@@ -71,7 +71,7 @@ uint nwbSwTransparentSampleCount(const uint2 pixel, const uint lightSlot, const 
 // The half-res soft TRANSPARENT transmittance buffer (one layer per shadow slot) this pass writes the cone-jittered
 // colored sample into; the separate RGB shadow_resolve pipeline denoises + fold-multiplies it onto the full-res
 // visibility (which already holds the soft OPAQUE result).
-#define g_NwbSwShadowTransparentSoftHalf NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.transparentSoftHalfStorageSlot)
+#define g_NwbSwShadowTransparentSoftHalf nwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.transparentSoftHalfStorageSlot)
 
 #define NWB_SW_SHADOW_SOFT_TRACE_OUTPUT g_NwbSwShadowTransparentSoftHalf
 #define NWB_SW_SHADOW_SOFT_TRACE_SPP NWB_SW_SHADOW_TRANSPARENT_SPP

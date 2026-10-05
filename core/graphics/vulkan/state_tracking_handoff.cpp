@@ -238,7 +238,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
                 state,
                 sourceQueueFamily,
                 destinationQueueFamily,
-                m_context.extensions.KHR_ray_tracing_pipeline
+                m_context.extensions.khrRayTracingPipeline
             ));
         }
         return true;
@@ -305,7 +305,7 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
                 state,
                 sourceQueueFamily,
                 destinationQueueFamily,
-                m_context.extensions.KHR_ray_tracing_pipeline,
+                m_context.extensions.khrRayTracingPipeline,
                 range
             ));
         }
@@ -679,7 +679,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
             state,
             sourceQueueFamily,
             destinationQueueFamily,
-            m_context.extensions.KHR_ray_tracing_pipeline
+            m_context.extensions.khrRayTracingPipeline
         ));
         retainResource(texture);
     }
@@ -700,7 +700,7 @@ void CommandList::appendPendingOwnershipReleaseBarriers(){
                     state.state,
                     sourceQueueFamily,
                     destinationQueueFamily,
-                    m_context.extensions.KHR_ray_tracing_pipeline,
+                    m_context.extensions.khrRayTracingPipeline,
                     overlap
                 ));
             }

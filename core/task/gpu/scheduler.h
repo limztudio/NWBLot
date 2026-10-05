@@ -45,7 +45,7 @@ private:
 
     class SubmissionAttemptExceptionFinalizer final : NoCopy{
     private:
-        static thread_local SubmissionAttemptExceptionFinalizer* s_activeFinalizer;
+        static thread_local SubmissionAttemptExceptionFinalizer* s_ActiveFinalizer;
 
 
     public:

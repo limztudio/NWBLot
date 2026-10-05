@@ -184,7 +184,7 @@ public:
             return false;
 
         ::Path<SymbolArena> outputPath = executableDirectory / executableName;
-        outputPath.replace_extension(NameSymbols::s_FileExtension);
+        outputPath.replaceExtension(NameSymbols::s_FileExtension);
         return writeFile(outputPath);
     }
 

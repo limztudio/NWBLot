@@ -51,11 +51,11 @@ struct ShadowPacketPlan{
             Name("tests/shadow_packet/transparent_temporal"), Name("tests/shadow_packet/transparent_wavelet"),
             Name("tests/shadow_packet/terminal")
         };
-        constexpr AStringView labels[] = {
+        constexpr AStringView s_Labels[] = {
             "Shadow Opaque", "Shadow Opaque Wavelet", "Shadow Opaque Upsample", "Shadow Transparent Trace",
             "Shadow Transparent Temporal", "Shadow Transparent Wavelet", "Shadow Terminal"
         };
-        static_assert(LengthOf(labels) == LengthOf(identities));
+        static_assert(LengthOf(s_Labels) == LengthOf(identities));
         Core::GpuTaskId stages[LengthOf(identities)]{};
         Core::GpuTaskId previous;
         for(u32 index = 0u; index < LengthOf(identities); ++index){
@@ -67,7 +67,7 @@ struct ShadowPacketPlan{
             stages[index] = graph.addTask(
                 Core::GpuTaskDesc{}
                     .setIdentity(identities[index])
-                    .setMarkerLabel(labels[index])
+                    .setMarkerLabel(s_Labels[index])
                     .setScheduling(scheduling)
                     .setDependencies(previous.valid() ? &previous : nullptr, previous.valid() ? 1u : 0u),
                 Core::GpuTaskCommandRequirements{ Core::GpuQueueCapability::Graphics }

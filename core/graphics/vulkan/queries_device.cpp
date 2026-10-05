@@ -37,7 +37,7 @@ TimerQueryHandle Device::createTimerQuery(){
         DestroyArenaObject(m_context.objectArena, query);
         return nullptr;
     }
-    return TimerQueryHandle(query, TimerQueryHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return TimerQueryHandle(query, TimerQueryHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 bool Device::pollTimerQuery(TimerQuery& query){

@@ -160,7 +160,7 @@ private:
         case CallbackMutation::Reconcile:{
             RadioGroupChoices nestedChoices;
             RadioGroupResult nestedResult;
-            nestedSucceeded = RadioGroupBehavior::Reconcile(*state, *this, nestedChoices, nestedResult);
+            nestedSucceeded = RadioGroupBehavior::reconcile(*state, *this, nestedChoices, nestedResult);
             break;
         }
         case CallbackMutation::Apply:{
@@ -169,7 +169,7 @@ private:
             action.control = { snapshot.inputGeneration, snapshot.sourceGeneration, snapshot.sourceRevision };
             action.kind = ControlActionKind::Down;
             RadioGroupResult nestedResult;
-            nestedSucceeded = RadioGroupBehavior::Apply(*state, borrowedChoices, {}, action, nestedResult);
+            nestedSucceeded = RadioGroupBehavior::apply(*state, borrowedChoices, {}, action, nestedResult);
             break;
         }
         default:
@@ -242,7 +242,7 @@ TEST(UiRadioGroupBehaviorTests, DisabledCheckedChoiceIsPreservedWhileCursorMoves
     state.select(2u);
     RadioGroupChoices choices;
     RadioGroupResult result;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     EXPECT_EQ(state.selectedKey(), 2u);
     EXPECT_EQ(state.cursorKey(), 4u);
     EXPECT_FALSE(result.selectionChanged);
@@ -255,11 +255,11 @@ TEST(UiRadioGroupBehaviorTests, RevisionReorderPreservesStableKeys){
     state.select(3u);
     RadioGroupChoices choices;
     RadioGroupResult result;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     Swap(source.rows[0u], source.rows[2u]);
     ++source.revisionValue;
     result = {};
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     EXPECT_EQ(state.selectedKey(), 3u);
     EXPECT_EQ(state.cursorKey(), 3u);
     EXPECT_FALSE(result.selectionChanged);
@@ -272,19 +272,19 @@ TEST(UiRadioGroupBehaviorTests, RemovedSelectionAndSourceReplacementClearKnownCh
     state.select(4u);
     RadioGroupChoices choices;
     RadioGroupResult result;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     source.count = 3u;
     ++source.revisionValue;
     result = {};
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.cursorKey(), 1u);
     EXPECT_TRUE(result.selectionChanged);
     state.select(2u);
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     ++source.generation;
     result = {};
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.cursorKey(), 1u);
     EXPECT_TRUE(result.selectionChanged);
@@ -295,11 +295,11 @@ TEST(UiRadioGroupBehaviorTests, ResetAllowsExplicitChoiceOnANewFirstBinding){
     RadioGroupState state;
     RadioGroupChoices choices;
     RadioGroupResult result;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     state.reset();
     state.select(3u);
     ++source.generation;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     EXPECT_EQ(state.selectedKey(), 3u);
 }
 
@@ -309,7 +309,7 @@ TEST(UiRadioGroupBehaviorTests, EmptyAndAllDisabledSourcesAreValidWithoutAutomat
     RadioGroupChoices choices;
     RadioGroupResult result;
     source.count = 0u;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     EXPECT_TRUE(result.valid);
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.cursorKey(), 0u);
@@ -318,11 +318,11 @@ TEST(UiRadioGroupBehaviorTests, EmptyAndAllDisabledSourcesAreValidWithoutAutomat
         source.rows[index].enabled = false;
     ++source.revisionValue;
     state.select(2u);
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     EXPECT_EQ(state.selectedKey(), 2u);
     EXPECT_EQ(state.cursorKey(), 0u);
     result = {};
-    ASSERT_TRUE(RadioGroupBehavior::Apply(state, choices, {}, Action(state, ControlActionKind::Submit), result));
+    ASSERT_TRUE(RadioGroupBehavior::apply(state, choices, {}, Action(state, ControlActionKind::Submit), result));
     EXPECT_FALSE(result.activated);
     EXPECT_FALSE(result.selectionChanged);
 }
@@ -335,14 +335,14 @@ TEST(UiRadioGroupBehaviorTests, AllFourArrowsWrapAndSkipDisabledChoices){
     state.select(1u);
     RadioGroupChoices choices;
     RadioGroupResult result;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     const u64 input = state.inputGeneration();
     const ControlActionKind::Enum kinds[]{ ControlActionKind::Up, ControlActionKind::Right, ControlActionKind::Left,
         ControlActionKind::Down };
     const u64 expected[]{ 4u, 1u, 4u, 1u };
     for(u32 index = 0u; index < 4u; ++index){
         result = {};
-        ASSERT_TRUE(RadioGroupBehavior::Apply(state, choices, {}, Action(state, kinds[index]), result));
+        ASSERT_TRUE(RadioGroupBehavior::apply(state, choices, {}, Action(state, kinds[index]), result));
         EXPECT_EQ(state.selectedKey(), expected[index]);
         EXPECT_EQ(state.cursorKey(), expected[index]);
         EXPECT_EQ(state.inputGeneration(), input);
@@ -358,10 +358,10 @@ TEST(UiRadioGroupBehaviorTests, HomeEndChooseEnabledEndpoints){
     RadioGroupState state;
     RadioGroupChoices choices;
     RadioGroupResult result;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
-    ASSERT_TRUE(RadioGroupBehavior::Apply(state, choices, {}, Action(state, ControlActionKind::End), result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::apply(state, choices, {}, Action(state, ControlActionKind::End), result));
     EXPECT_EQ(state.selectedKey(), 3u);
-    ASSERT_TRUE(RadioGroupBehavior::Apply(state, choices, {}, Action(state, ControlActionKind::Home), result));
+    ASSERT_TRUE(RadioGroupBehavior::apply(state, choices, {}, Action(state, ControlActionKind::Home), result));
     EXPECT_EQ(state.selectedKey(), 2u);
     EXPECT_FALSE(result.activated);
 }
@@ -372,16 +372,16 @@ TEST(UiRadioGroupBehaviorTests, SubmitAndPointerActivateReportActivationEvenForA
     state.select(2u);
     RadioGroupChoices choices;
     RadioGroupResult result;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     const u64 input = state.inputGeneration();
     const u64 revision = state.revision();
     result = {};
-    ASSERT_TRUE(RadioGroupBehavior::Apply(state, choices, {}, Action(state, ControlActionKind::Submit), result));
+    ASSERT_TRUE(RadioGroupBehavior::apply(state, choices, {}, Action(state, ControlActionKind::Submit), result));
     EXPECT_TRUE(result.activated);
     EXPECT_FALSE(result.selectionChanged);
     EXPECT_EQ(state.revision(), revision + 1u);
     result = {};
-    ASSERT_TRUE(RadioGroupBehavior::Apply(state, choices, {}, Action(state, ControlActionKind::Activate, 2u), result));
+    ASSERT_TRUE(RadioGroupBehavior::apply(state, choices, {}, Action(state, ControlActionKind::Activate, 2u), result));
     EXPECT_TRUE(result.activated);
     EXPECT_FALSE(result.selectionChanged);
     EXPECT_EQ(state.inputGeneration(), input);
@@ -395,10 +395,10 @@ TEST(UiRadioGroupBehaviorTests, IdenticalNavigationAndIgnoredPageIntentAdvanceRe
     state.select(1u);
     RadioGroupChoices choices;
     RadioGroupResult result;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     const RadioGroupSnapshot before = state.snapshot();
-    ASSERT_TRUE(RadioGroupBehavior::Apply(state, choices, {}, Action(state, ControlActionKind::Down), result));
-    ASSERT_TRUE(RadioGroupBehavior::Apply(state, choices, {}, Action(state, ControlActionKind::PageUp), result));
+    ASSERT_TRUE(RadioGroupBehavior::apply(state, choices, {}, Action(state, ControlActionKind::Down), result));
+    ASSERT_TRUE(RadioGroupBehavior::apply(state, choices, {}, Action(state, ControlActionKind::PageUp), result));
     EXPECT_EQ(state.selectedKey(), 1u);
     EXPECT_EQ(state.inputGeneration(), before.inputGeneration);
     EXPECT_EQ(state.revision(), before.revision + 2u);
@@ -413,26 +413,26 @@ TEST(UiRadioGroupBehaviorTests, RejectedActionsPreserveStateAndResult){
     state.select(1u);
     RadioGroupChoices choices;
     RadioGroupResult result;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     const RadioGroupSnapshot before = state.snapshot();
     const RadioGroupResult expected{ true, true, true, true };
     result = expected;
-    EXPECT_FALSE(RadioGroupBehavior::Apply(state, choices, {}, Action(state, ControlActionKind::Activate, 2u), result));
+    EXPECT_FALSE(RadioGroupBehavior::apply(state, choices, {}, Action(state, ControlActionKind::Activate, 2u), result));
     EXPECT_TRUE(state.matches(before));
     ExpectResult(result, expected);
     RadioGroupOptions disabled;
     disabled.enabled = false;
-    EXPECT_FALSE(RadioGroupBehavior::Apply(state, choices, disabled, Action(state, ControlActionKind::Down), result));
+    EXPECT_FALSE(RadioGroupBehavior::apply(state, choices, disabled, Action(state, ControlActionKind::Down), result));
     EXPECT_TRUE(state.matches(before));
     ExpectResult(result, expected);
     RadioGroupOptions tooSmall;
     tooSmall.rowHeight = 31.0f;
-    EXPECT_FALSE(RadioGroupBehavior::Apply(state, choices, tooSmall, Action(state, ControlActionKind::Down), result));
+    EXPECT_FALSE(RadioGroupBehavior::apply(state, choices, tooSmall, Action(state, ControlActionKind::Down), result));
     EXPECT_TRUE(state.matches(before));
     ExpectResult(result, expected);
     ControlAction stale = Action(state, ControlActionKind::Down);
     ++stale.control.contentRevision;
-    EXPECT_FALSE(RadioGroupBehavior::Apply(state, choices, {}, stale, result));
+    EXPECT_FALSE(RadioGroupBehavior::apply(state, choices, {}, stale, result));
     EXPECT_TRUE(state.matches(before));
     ExpectResult(result, expected);
 }
@@ -443,12 +443,12 @@ TEST(UiRadioGroupBehaviorTests, IdenticalPublicSelectionRejectsCopiedOlderInput)
     state.select(2u);
     RadioGroupChoices choices;
     RadioGroupResult result;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     const ControlAction action = Action(state, ControlActionKind::Down);
     state.select(2u);
     const RadioGroupSnapshot before = state.snapshot();
     result = {};
-    EXPECT_FALSE(RadioGroupBehavior::Apply(state, choices, {}, action, result));
+    EXPECT_FALSE(RadioGroupBehavior::apply(state, choices, {}, action, result));
     EXPECT_TRUE(state.matches(before));
     EXPECT_FALSE(result.valid);
 }
@@ -459,14 +459,14 @@ TEST(UiRadioGroupBehaviorTests, FullBoundIsAcceptedAndOversizedSourcePreservesEv
     RadioGroupState state;
     RadioGroupChoices choices;
     RadioGroupResult result;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     EXPECT_EQ(choices.count, s_RadioGroupMaxChoices);
     const RadioGroupSnapshot before = state.snapshot();
     const RadioGroupChoices expected = choices;
     const RadioGroupResult expectedResult = result;
     source.count = s_RadioGroupMaxChoices + 1u;
     source.keyCalls = 0u;
-    EXPECT_FALSE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    EXPECT_FALSE(RadioGroupBehavior::reconcile(state, source, choices, result));
     EXPECT_TRUE(state.matches(before));
     ExpectChoices(choices, expected);
     ExpectResult(result, expectedResult);
@@ -496,7 +496,7 @@ TEST(UiRadioGroupBehaviorTests, MalformedKeysAndLookupsRejectAtomically){
         case 4u: source.generation = 0u; break;
         case 5u: source.revisionValue = 0u; break;
         }
-        EXPECT_FALSE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+        EXPECT_FALSE(RadioGroupBehavior::reconcile(state, source, choices, result));
         EXPECT_TRUE(state.matches(before));
         ExpectChoices(choices, expected);
         ExpectResult(result, expectedResult);
@@ -512,7 +512,7 @@ TEST(UiRadioGroupBehaviorTests, EverySourceCallbackRejectsStateSelectionAbaBefor
         state.select(2u);
         RadioGroupChoices choices;
         RadioGroupResult result;
-        ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+        ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
         const RadioGroupSnapshot before = state.snapshot();
         const RadioGroupChoices expected = choices;
         const RadioGroupResult expectedResult = result;
@@ -520,7 +520,7 @@ TEST(UiRadioGroupBehaviorTests, EverySourceCallbackRejectsStateSelectionAbaBefor
         source.phase = phase;
         source.mutation = CallbackMutation::SelectAba;
         source.armed = true;
-        EXPECT_FALSE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+        EXPECT_FALSE(RadioGroupBehavior::reconcile(state, source, choices, result));
         EXPECT_EQ(state.selectedKey(), before.selectedKey);
         EXPECT_EQ(state.cursorKey(), before.cursorKey);
         EXPECT_EQ(state.revision(), before.revision + 2u);
@@ -538,14 +538,14 @@ TEST(UiRadioGroupBehaviorTests, CallbackIdenticalSelectionAndResetRemainAuthorit
         state.select(2u);
         RadioGroupChoices choices;
         RadioGroupResult result;
-        ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+        ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
         const RadioGroupSnapshot before = state.snapshot();
         const RadioGroupChoices expected = choices;
         source.state = &state;
         source.phase = CallbackPhase::Lookup;
         source.mutation = mutation;
         source.armed = true;
-        EXPECT_FALSE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+        EXPECT_FALSE(RadioGroupBehavior::reconcile(state, source, choices, result));
         EXPECT_EQ(state.revision(), before.revision + 1u);
         EXPECT_NE(state.inputGeneration(), before.inputGeneration);
         EXPECT_EQ(state.selectedKey(), mutation == CallbackMutation::Reset ? 0u : 2u);
@@ -560,7 +560,7 @@ TEST(UiRadioGroupBehaviorTests, ReentrantBehaviorRejectsTheOuterReconciliationAn
         RadioGroupState state;
         RadioGroupChoices choices;
         RadioGroupResult result;
-        ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+        ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
         const RadioGroupSnapshot before = state.snapshot();
         const RadioGroupChoices expected = choices;
         const RadioGroupResult expectedResult = result;
@@ -569,12 +569,12 @@ TEST(UiRadioGroupBehaviorTests, ReentrantBehaviorRejectsTheOuterReconciliationAn
         source.phase = CallbackPhase::Enabled;
         source.mutation = mutation;
         source.armed = true;
-        EXPECT_FALSE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+        EXPECT_FALSE(RadioGroupBehavior::reconcile(state, source, choices, result));
         EXPECT_FALSE(source.nestedSucceeded);
         EXPECT_TRUE(state.matches(before));
         ExpectChoices(choices, expected);
         ExpectResult(result, expectedResult);
-        ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+        ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     }
 }
 
@@ -586,14 +586,14 @@ TEST(UiRadioGroupBehaviorTests, SourceMutationDuringChoiceCallbacksRejectsWithou
         RadioGroupState state;
         RadioGroupChoices choices;
         RadioGroupResult result;
-        ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+        ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
         const RadioGroupSnapshot before = state.snapshot();
         const RadioGroupChoices expected = choices;
         const RadioGroupResult expectedResult = result;
         source.phase = CallbackPhase::Enabled;
         source.mutation = mutation;
         source.armed = true;
-        EXPECT_FALSE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+        EXPECT_FALSE(RadioGroupBehavior::reconcile(state, source, choices, result));
         EXPECT_TRUE(state.matches(before));
         ExpectChoices(choices, expected);
         ExpectResult(result, expectedResult);
@@ -607,7 +607,7 @@ TEST(UiRadioGroupBehaviorTests, FinalOneShotMetadataMutationIsRejectedBeforeComm
         RadioGroupState state;
         RadioGroupChoices choices;
         RadioGroupResult result;
-        ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+        ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
         const RadioGroupSnapshot before = state.snapshot();
         const RadioGroupChoices expected = choices;
         const RadioGroupResult expectedResult = result;
@@ -616,7 +616,7 @@ TEST(UiRadioGroupBehaviorTests, FinalOneShotMetadataMutationIsRejectedBeforeComm
         source.mutation = mutation;
         source.triggerCount = static_cast<u32>(source.count) * 3u + 3u;
         source.armed = true;
-        EXPECT_FALSE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+        EXPECT_FALSE(RadioGroupBehavior::reconcile(state, source, choices, result));
         EXPECT_FALSE(source.armed);
         EXPECT_TRUE(state.matches(before));
         ExpectChoices(choices, expected);
@@ -629,7 +629,7 @@ TEST(UiRadioGroupBehaviorTests, FailedBorrowedGuardStopsAllFurtherSourceCallback
     RadioGroupState state;
     RadioGroupChoices choices;
     RadioGroupResult result;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
+    ASSERT_TRUE(RadioGroupBehavior::reconcile(state, source, choices, result));
     const RadioGroupSnapshot before = state.snapshot();
     const RadioGroupChoices expected = choices;
     const RadioGroupResult expectedResult = result;
@@ -638,7 +638,7 @@ TEST(UiRadioGroupBehaviorTests, FailedBorrowedGuardStopsAllFurtherSourceCallback
     source.phase = CallbackPhase::Enabled;
     source.mutation = CallbackMutation::GuardFailure;
     source.armed = true;
-    EXPECT_FALSE(RadioGroupBehavior::Reconcile(state, source, choices, result, &gate));
+    EXPECT_FALSE(RadioGroupBehavior::reconcile(state, source, choices, result, &gate));
     EXPECT_EQ(source.callbackCalls, source.callbacksAtMutation);
     EXPECT_TRUE(state.matches(before));
     ExpectChoices(choices, expected);
@@ -655,7 +655,7 @@ TEST(UiRadioGroupBehaviorTests, BorrowedGuardMutationIsRejectedBeforeTheFirstSou
     ReconcileGate gate;
     gate.state = &state;
     gate.mutateState = true;
-    EXPECT_FALSE(RadioGroupBehavior::Reconcile(state, source, choices, result, &gate));
+    EXPECT_FALSE(RadioGroupBehavior::reconcile(state, source, choices, result, &gate));
     EXPECT_EQ(source.callbackCalls, 0u);
     EXPECT_EQ(state.selectedKey(), 2u);
     EXPECT_EQ(state.revision(), before.revision + 1u);

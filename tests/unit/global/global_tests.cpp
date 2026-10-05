@@ -425,7 +425,7 @@ TEST(Global, GlobalArenaReallocationPreservesAlignment){
 TEST(Global, PersistentArenaReallocationPreservesAlignment){
     NWB::Core::Alloc::PersistentArena arena(
         NWB::Tests::s_TestArena,
-        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(16u * 1024u)
+        NWB::Core::Alloc::PersistentArena::structureAlignedSize(16u * 1024u)
     );
     VerifyAlignedReallocation(arena);
 }
@@ -438,9 +438,9 @@ TEST(Global, ConstexprNameViewsPreserveBoundedIdentityAndSymbolCallbacks){
     constexpr char s_EmbeddedNull[]{ 'a', '\0', 'b' };
     constexpr Name s_InvalidName{AStringView(s_EmbeddedNull, LengthOf(s_EmbeddedNull))};
     static_assert(s_ViewName == s_LiteralName);
-    static_assert(s_InvalidName == NAME_NONE);
-    static_assert(Name{AStringView{}} != NAME_NONE);
-    static_assert(Name{static_cast<const char*>(nullptr)} == NAME_NONE);
+    static_assert(s_InvalidName == s_NameNone);
+    static_assert(Name{AStringView{}} != s_NameNone);
+    static_assert(Name{static_cast<const char*>(nullptr)} == s_NameNone);
 
     NameSymbolCallbackProbe probe;
     EXPECT_EQ(s_ViewName.identityHash(), s_LiteralName.identityHash());
@@ -505,7 +505,7 @@ TEST(Global, WindowsProcessInputsSupportBoundedViews){
     ::AString<NWB::Core::Alloc::GlobalArena> executableText(testArena.arena);
     ASSERT_TRUE(ReadEnvironmentVariable("ComSpec", executableText));
     const Path<NWB::Core::Alloc::GlobalArena> executablePath(testArena.arena, AStringView(executableText));
-    ::AString<NWB::Core::Alloc::GlobalArena> searchPathText = PathToString<char>(testArena.arena, executablePath.parent_path());
+    ::AString<NWB::Core::Alloc::GlobalArena> searchPathText = PathToString<char>(testArena.arena, executablePath.parentPath());
     ::AString<NWB::Core::Alloc::GlobalArena> executableNameText = PathToString<char>(testArena.arena, executablePath.filename());
     const usize searchPathLength = searchPathText.size();
     const usize executableNameLength = executableNameText.size();
@@ -586,49 +586,49 @@ TEST(Global, DiagnosticEventTextViewsStopAtNullOrBufferBounds){
 }
 
 TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
-    constexpr Name first{"Identity\\First"};
-    constexpr Name same{"identity/first"};
-    constexpr Name second{"identity/second"};
-    static_assert(noexcept(static_cast<bool>(first)));
-    static_assert(noexcept(first == same));
-    static_assert(noexcept(first != second));
-    static_assert(noexcept(first < second));
-    static_assert(noexcept(Hasher<Name>{}(first)));
-    static_assert(noexcept(first.identityHash()));
-    static_assert(first.identityHash() == ComputeNameHash("identity/first"));
+    constexpr Name s_First{"Identity\\First"};
+    constexpr Name s_Same{"identity/first"};
+    constexpr Name s_Second{"identity/second"};
+    static_assert(noexcept(static_cast<bool>(s_First)));
+    static_assert(noexcept(s_First == s_Same));
+    static_assert(noexcept(s_First != s_Second));
+    static_assert(noexcept(s_First < s_Second));
+    static_assert(noexcept(Hasher<Name>{}(s_First)));
+    static_assert(noexcept(s_First.identityHash()));
+    static_assert(s_First.identityHash() == ComputeNameHash("identity/first"));
 
     NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
     NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
 
-    EXPECT_TRUE(static_cast<bool>(first));
-    EXPECT_FALSE(static_cast<bool>(NAME_NONE));
-    EXPECT_EQ(first, same);
-    EXPECT_NE(first, second);
-    EXPECT_TRUE(first < second || second < first);
-    EXPECT_EQ(Hasher<Name>{}(first), Hasher<NameHash>{}(ComputeNameHash(s_IDENTITY_FIRST)));
-    EXPECT_EQ(first.identityHash(), ComputeNameHash(s_IDENTITY_FIRST));
+    EXPECT_TRUE(static_cast<bool>(s_First));
+    EXPECT_FALSE(static_cast<bool>(s_NameNone));
+    EXPECT_EQ(s_First, s_Same);
+    EXPECT_NE(s_First, s_Second);
+    EXPECT_TRUE(s_First < s_Second || s_Second < s_First);
+    EXPECT_EQ(Hasher<Name>{}(s_First), Hasher<NameHash>{}(ComputeNameHash(s_IDENTITY_FIRST)));
+    EXPECT_EQ(s_First.identityHash(), ComputeNameHash(s_IDENTITY_FIRST));
     for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
-        NameHash changed = first.identityHash();
+        NameHash changed = s_First.identityHash();
         changed.qwords[lane] ^= 1u;
         const Name binary{changed};
         EXPECT_EQ(binary.identityHash(), changed);
-        EXPECT_NE(binary.identityHash(), first.identityHash());
+        EXPECT_NE(binary.identityHash(), s_First.identityHash());
     }
     EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 0u);
 
 #if defined(GLB_BUILD_SYMBOLS)
-    EXPECT_EQ(first.hash(), ComputeNameHash(s_IDENTITY_FIRST));
+    EXPECT_EQ(s_First.hash(), ComputeNameHash(s_IDENTITY_FIRST));
     EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 1u);
 #endif
 }
 
 TEST(Global, NameBinaryIdentityNeverInvokesInstalledSymbolCallbacks){
-    constexpr Name literal{"identity/callback_probe"};
+    constexpr Name s_Literal{"identity/callback_probe"};
     const Name binary{ComputeNameHash("identity/binary_probe")};
     NameSymbolCallbackProbe probe;
-    EXPECT_EQ(literal.identityHash(), ComputeNameHash("identity/callback_probe"));
+    EXPECT_EQ(s_Literal.identityHash(), ComputeNameHash("identity/callback_probe"));
     EXPECT_EQ(binary.identityHash(), ComputeNameHash("identity/binary_probe"));
-    EXPECT_EQ(NAME_NONE.identityHash(), NameHash{});
+    EXPECT_EQ(s_NameNone.identityHash(), NameHash{});
     EXPECT_EQ(probe.recordCount, 0u);
     EXPECT_EQ(probe.resolveCount, 0u);
 
@@ -639,7 +639,7 @@ TEST(Global, NameBinaryIdentityNeverInvokesInstalledSymbolCallbacks){
     EXPECT_EQ(probe.recordCount, 1u);
     EXPECT_EQ(probe.resolveCount, 1u);
 #if defined(GLB_BUILD_SYMBOLS)
-    EXPECT_EQ(literal.hash(), literal.identityHash());
+    EXPECT_EQ(s_Literal.hash(), s_Literal.identityHash());
     EXPECT_EQ(probe.recordCount, s_ExpectedDualCount);
 #endif
 }
@@ -756,7 +756,7 @@ TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
     NameSymbolTestPath executableName(liveOwner);
     ASSERT_TRUE(GetExecutableName(executableName));
     NameSymbolTestPath namesymPath = executableDirectory / executableName;
-    namesymPath.replace_extension(GLB_TEXT(".namesym"));
+    namesymPath.replaceExtension(GLB_TEXT(".namesym"));
     // The application exception path exports after its scoped runtime callbacks have already detached.
     NameSymbols::UninstallRuntimeRegistry();
     ASSERT_TRUE(NameSymbols::WriteDefaultFile());

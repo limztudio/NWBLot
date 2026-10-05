@@ -23,7 +23,7 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr AStringView s_SharedSlangiValueSnippet = "static const uint value = 2u;\n";
+constexpr AStringView s_SharedSlangiValueSnippet = "static const uint NWB_TEST_OBJECT_SHARED_VALUE = 2u;\n";
 constexpr u32 s_ExpectedDualCount = 2u;
 
 
@@ -50,15 +50,15 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
     TestArena testArena;
     Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
     Path root(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "object_geometry_metadata", root));
+    ASSERT_TRUE(AssetsGraphicsFixture::prepareAssetsGraphicsCaseRoot(testArena, "object_geometry_metadata", root));
     const Path metadataPath = root / "shader.nwb";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "void main(){}\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(root / "shader.slang", "void main(){}\n"));
     struct MetadataCase{
         AStringView stage;
         AStringView fields;
         bool accepted;
     };
-    constexpr MetadataCase cases[] = {
+    constexpr MetadataCase s_Cases[] = {
         { "mesh", "", true },
         { "ps", "", true },
         { "mesh", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
@@ -70,14 +70,14 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
     };
     Impl::ShaderCook shaderCook(testArena.arena);
     Impl::ShaderCook::ShaderEntry entry(testArena.arena);
-    for(const MetadataCase& testCase : cases){
+    for(const MetadataCase& testCase : s_Cases){
         SCOPED_TRACE(testCase.stage);
         SCOPED_TRACE(testCase.fields);
         Impl::ShaderCook::CookString metadata("shader asset;\nasset.stage = \"", testArena.arena);
         metadata.append(testCase.stage.data(), testCase.stage.size());
         metadata.append("\";\nasset.entry_point = \"main\";\n");
         metadata.append(testCase.fields.data(), testCase.fields.size());
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, AStringView(metadata.data(), metadata.size())));
+        ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(metadataPath, AStringView(metadata.data(), metadata.size())));
         const u32 priorErrors = logger.errorCount();
         EXPECT_EQ(shaderCook.parseShaderMeta(metadataPath, entry, scratchArena), testCase.accepted);
         if(testCase.accepted){
@@ -97,11 +97,11 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     TestArena testArena;
     Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
     Path root(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "object_geometry_plan", root));
+    ASSERT_TRUE(AssetsGraphicsFixture::prepareAssetsGraphicsCaseRoot(testArena, "object_geometry_plan", root));
     const Path meshRoot = root / "impl" / "assets" / "graphics" / "mesh";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "shared_ms.slang", "void main(){}\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_shared.slangi", "static const uint value = 1u;\n"));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_vs.slang", "#include \"object_shared.slangi\"\nvoid main(){}\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(meshRoot / "shared_ms.slang", "void main(){}\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(meshRoot / "object_shared.slangi", "static const uint NWB_TEST_OBJECT_SHARED_VALUE = 1u;\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(meshRoot / "object_vs.slang", "#include \"object_shared.slangi\"\nvoid main(){}\n"));
     Plan::ResolvedCookPaths paths(testArena.arena);
     paths.repoRoot = root;
     paths.cacheDirectory = root / "cache";
@@ -167,7 +167,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     EXPECT_TRUE(standalonePlan.preparedEntries.empty());
     EXPECT_EQ(standalonePlan.plannedFileCount, 3u);
     const u64 oldChecksum = plan.preparedEntries[0].dependencyChecksum;
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_shared.slangi", s_SharedSlangiValueSnippet));
+    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(meshRoot / "object_shared.slangi", s_SharedSlangiValueSnippet));
     Plan::PreparedShaderPlan changedPlan(testArena.arena);
     ASSERT_TRUE(Plan::AppendMeshObjectShaderEntries(testArena.arena, shaderCook, paths, mesh, changedPlan, scratchArena));
     ASSERT_EQ(changedPlan.preparedEntries.size(), 1u);

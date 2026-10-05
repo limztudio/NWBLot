@@ -47,7 +47,7 @@ SharedGlyphPage CreateGlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPage
     return SharedGlyphPage(
         NewArenaObject<RefCounter<GlyphPage>>(arena, arena, binding, Move(pixels)),
         ArenaRefDeleter<RefCounter<GlyphPage>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

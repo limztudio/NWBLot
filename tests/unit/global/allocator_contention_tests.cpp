@@ -109,7 +109,7 @@ TEST(PersistentArenaTests, SharedArenaConcurrentAllocationCrossThreadFreeAndAcco
     constexpr usize s_HandoffAlignment = 256u;
     constexpr usize s_HandoffBytes = 256u;
     constexpr usize s_PoolPayloadBytes = 512u * 1024u;
-    const usize poolBytes = NWB::Core::Alloc::PersistentArena::StructureAlignedSize(s_PoolPayloadBytes);
+    const usize poolBytes = NWB::Core::Alloc::PersistentArena::structureAlignedSize(s_PoolPayloadBytes);
     static constexpr Name s_OwnerName("tests/persistent_arena/shared_cross_thread_churn");
     NWB::Core::Alloc::PersistentArena arena(s_OwnerName, poolBytes);
     u8* handoffs[s_ThreadCount] = {};
@@ -216,7 +216,7 @@ TEST(PersistentArenaTests, SharedArenaConcurrentReallocationPreservesPayloadAndA
     constexpr usize s_ReplacementBytes = 389u;
     constexpr usize s_ReplacementAlignment = 256u;
     constexpr usize s_PoolPayloadBytes = 512u * 1024u;
-    const usize poolBytes = NWB::Core::Alloc::PersistentArena::StructureAlignedSize(s_PoolPayloadBytes);
+    const usize poolBytes = NWB::Core::Alloc::PersistentArena::structureAlignedSize(s_PoolPayloadBytes);
     static constexpr Name s_OwnerName("tests/persistent_arena/shared_reallocation_churn");
     NWB::Core::Alloc::PersistentArena arena(s_OwnerName, poolBytes);
     PersistentArenaWorkerResult results[s_ThreadCount];

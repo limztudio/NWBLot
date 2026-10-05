@@ -65,7 +65,7 @@ struct UploadContext{
         Core::BufferDesc desc;
         desc.setByteSize(256u).setCanHaveRawViews(true).setCanHaveUAVs(true).setDebugName(identity).enableAutomaticStateTracking(initialState);
         Core::Buffer* const buffer = Tests::NewMetadataOnlyBuffer(testArena.arena, context, allocator, desc, initialStateKnown);
-        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
     }
 
     [[nodiscard]] RayTracingOpticalSceneUploadHandle makeUpload(const u32 entityIndex, const i32 priority = 0){
@@ -77,7 +77,7 @@ struct UploadContext{
         return RayTracingOpticalSceneUploadHandle(
             NewArenaObject<RayTracingOpticalSceneUploadControl>(testArena.arena, testArena.arena, gather),
             ArenaRefDeleter<RayTracingOpticalSceneUploadControl, Core::Alloc::GlobalArena>(&testArena.arena),
-            AdoptRef
+            s_AdoptRef
         );
     }
 
@@ -315,7 +315,7 @@ TEST(OpticalSceneUpload, BoundsFinalizeRejectsComputeOnlyAndSelectsPrimaryGraphi
     resources.uploadBuffer = context.buffer;
     resources.finalize = RayTracingOpticalBoundsFinalizeHandle(
         NewArenaObject<RayTracingOpticalBoundsFinalizeControl>(context.testArena.arena, context.testArena.arena, context.graphics),
-        ArenaRefDeleter<RayTracingOpticalBoundsFinalizeControl, Core::Alloc::GlobalArena>(&context.testArena.arena), AdoptRef
+        ArenaRefDeleter<RayTracingOpticalBoundsFinalizeControl, Core::Alloc::GlobalArena>(&context.testArena.arena), s_AdoptRef
     );
     resources.finalize->inputBuffer = context.makeBuffer(Name("tests/optical_finalize/inputs"));
     resources.finalize->outputBuffer = context.makeBuffer(Name("tests/optical_finalize/output"));

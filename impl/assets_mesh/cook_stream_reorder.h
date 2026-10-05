@@ -58,13 +58,13 @@ struct MeshCookCommonStreamReorder{
 class MeshCookStreamReorder final : NoCopy{
 public:
     template<typename StreamVectorT>
-    static void PrepareMeshStreamReorder(
+    static void prepareMeshStreamReorder(
     const StreamVectorT& source,
     StreamVectorT& outStream,
     ScratchVector<u32>& outRemap
     );
     template<typename StreamVectorT>
-    [[nodiscard]] static bool RemapMeshStreamRef(
+    [[nodiscard]] static bool remapMeshStreamRef(
     const Name& virtualPath,
     const TStringView metaKind,
     const TStringView streamName,
@@ -74,26 +74,26 @@ public:
     u32& index
     );
     template<typename CookEntryT>
-    static void PrepareCommonMeshStreamReorder(
+    static void prepareCommonMeshStreamReorder(
     const CookEntryT& entry,
     MeshCookCommonStreamReorder& reorder
     );
     template<typename CookEntryT>
-    [[nodiscard]] static bool RemapMeshletAttributeRefs(
+    [[nodiscard]] static bool remapMeshletAttributeRefs(
     CookEntryT& entry,
     const TStringView metaKind,
     MeshCookCommonStreamReorder& reorder
     );
     template<typename CookEntryT, typename SkinRemapperT>
-    [[nodiscard]] static bool RemapMeshletPositionRefs(
+    [[nodiscard]] static bool remapMeshletPositionRefs(
     CookEntryT& entry,
     const TStringView metaKind,
     MeshCookCommonStreamReorder& reorder,
     SkinRemapperT remapSkin
     );
     template<typename CookEntryT>
-    static void CommitCommonMeshStreamReorder(CookEntryT& entry, MeshCookCommonStreamReorder& reorder);
-    [[nodiscard]] static bool ReorderMeshStreamsByMeshletTraversal(
+    static void commitCommonMeshStreamReorder(CookEntryT& entry, MeshCookCommonStreamReorder& reorder);
+    [[nodiscard]] static bool reorderMeshStreamsByMeshletTraversal(
     MeshCookEntry& entry,
     Core::Alloc::ScratchArena& scratchArena
     );
@@ -108,7 +108,7 @@ public:
 
 
 template<typename StreamVectorT>
-void MeshCookStreamReorder::PrepareMeshStreamReorder(
+void MeshCookStreamReorder::prepareMeshStreamReorder(
     const StreamVectorT& source,
     StreamVectorT& outStream,
     ScratchVector<u32>& outRemap
@@ -121,7 +121,7 @@ void MeshCookStreamReorder::PrepareMeshStreamReorder(
 
 
 template<typename StreamVectorT>
-bool MeshCookStreamReorder::RemapMeshStreamRef(
+bool MeshCookStreamReorder::remapMeshStreamRef(
     const Name& virtualPath,
     const TStringView metaKind,
     const TStringView streamName,
@@ -170,20 +170,20 @@ bool MeshCookStreamReorder::RemapMeshStreamRef(
 
 
 template<typename CookEntryT>
-void MeshCookStreamReorder::PrepareCommonMeshStreamReorder(
+void MeshCookStreamReorder::prepareCommonMeshStreamReorder(
     const CookEntryT& entry,
     MeshCookCommonStreamReorder& reorder
 ){
-    PrepareMeshStreamReorder(entry.positions, reorder.positions, reorder.positionRemap);
-    PrepareMeshStreamReorder(entry.normals, reorder.normals, reorder.normalRemap);
-    PrepareMeshStreamReorder(entry.tangents, reorder.tangents, reorder.tangentRemap);
-    PrepareMeshStreamReorder(entry.uv0, reorder.uv0, reorder.uv0Remap);
-    PrepareMeshStreamReorder(entry.colors, reorder.colors, reorder.colorRemap);
+    prepareMeshStreamReorder(entry.positions, reorder.positions, reorder.positionRemap);
+    prepareMeshStreamReorder(entry.normals, reorder.normals, reorder.normalRemap);
+    prepareMeshStreamReorder(entry.tangents, reorder.tangents, reorder.tangentRemap);
+    prepareMeshStreamReorder(entry.uv0, reorder.uv0, reorder.uv0Remap);
+    prepareMeshStreamReorder(entry.colors, reorder.colors, reorder.colorRemap);
 }
 
 
 template<typename CookEntryT>
-bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
+bool MeshCookStreamReorder::remapMeshletAttributeRefs(
     CookEntryT& entry,
     const TStringView metaKind,
     MeshCookCommonStreamReorder& reorder
@@ -191,7 +191,7 @@ bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
     for(const MeshletDesc& meshlet : entry.meshlets){
         for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(meshlet); ++localAttributeIndex){
             MeshletAttributeStreamRef& ref = entry.meshletAttributeStreamRefs[meshlet.attributeRefOffset + localAttributeIndex];
-            if(!RemapMeshStreamRef(
+            if(!remapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
                 MeshAssetBinaryPayload::s_NormalStreamNameView,
@@ -201,7 +201,7 @@ bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
                 ref.normal
             ))
                 return false;
-            if(!RemapMeshStreamRef(
+            if(!remapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
                 MeshAssetBinaryPayload::s_TangentStreamNameView,
@@ -211,7 +211,7 @@ bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
                 ref.tangent
             ))
                 return false;
-            if(!RemapMeshStreamRef(
+            if(!remapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
                 MeshAssetBinaryPayload::s_Uv0StreamNameView,
@@ -221,7 +221,7 @@ bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
                 ref.uv0
             ))
                 return false;
-            if(!RemapMeshStreamRef(
+            if(!remapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
                 MeshAssetBinaryPayload::s_ColorStreamNameView,
@@ -239,7 +239,7 @@ bool MeshCookStreamReorder::RemapMeshletAttributeRefs(
 
 
 template<typename CookEntryT, typename SkinRemapperT>
-bool MeshCookStreamReorder::RemapMeshletPositionRefs(
+bool MeshCookStreamReorder::remapMeshletPositionRefs(
     CookEntryT& entry,
     const TStringView metaKind,
     MeshCookCommonStreamReorder& reorder,
@@ -248,7 +248,7 @@ bool MeshCookStreamReorder::RemapMeshletPositionRefs(
     for(const MeshletDesc& meshlet : entry.meshlets){
         for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
             MeshletPositionStreamRef& ref = entry.meshletPositionStreamRefs[meshlet.positionRefOffset + localPositionIndex];
-            if(!RemapMeshStreamRef(
+            if(!remapMeshStreamRef(
                 entry.virtualPath,
                 metaKind,
                 MeshAssetBinaryPayload::s_PositionStreamNameView,
@@ -268,7 +268,7 @@ bool MeshCookStreamReorder::RemapMeshletPositionRefs(
 
 
 template<typename CookEntryT>
-void MeshCookStreamReorder::CommitCommonMeshStreamReorder(CookEntryT& entry, MeshCookCommonStreamReorder& reorder){
+void MeshCookStreamReorder::commitCommonMeshStreamReorder(CookEntryT& entry, MeshCookCommonStreamReorder& reorder){
     entry.positions = Move(reorder.positions);
     entry.normals = Move(reorder.normals);
     entry.tangents = Move(reorder.tangents);

@@ -148,7 +148,7 @@ bool ParseFontAtlasCookMetadata(
     const Core::Metascript::Document& doc,
     FontAtlasCookEntry& outEntry,
     Core::Alloc::ScratchArena& scratchArena){
-    Name virtualPath = NAME_NONE;
+    Name virtualPath = s_NameNone;
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, virtualPath, scratchArena))
         return false;
     return ParseFontAtlasCookMetadataValue(virtualPath, nwbFilePath, doc.asset(), outEntry, scratchArena);
@@ -178,7 +178,7 @@ bool ParseFontAtlasCookMetadataValue(
     )
         return false;
     Path fontPath = nwbFilePath;
-    fontPath.replace_extension(".font");
+    fontPath.replaceExtension(".font");
     PreparedFontSource source(outEntry.arena);
     if(!ReadPreparedFontSource(fontPath, source, true))
         return false;

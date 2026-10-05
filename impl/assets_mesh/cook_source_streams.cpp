@@ -42,7 +42,7 @@ inline constexpr TStringView s_TangentStreamLabel = GLB_TEXT("tangent");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshCookSourceStreams::ParseSourceVertexRefs(
+bool MeshCookSourceStreams::parseSourceVertexRefs(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const TStringView metaKind,
@@ -52,7 +52,7 @@ bool MeshCookSourceStreams::ParseSourceVertexRefs(
 ){
     outVertexRefs.clear();
 
-    const Core::Metascript::Value* field = MeshCookMetadata::FindRequiredMetadataListField(
+    const Core::Metascript::Value* field = MeshCookMetadata::findRequiredMetadataListField(
         nwbFilePath,
         asset,
         metaKind,
@@ -78,7 +78,7 @@ bool MeshCookSourceStreams::ParseSourceVertexRefs(
 
         MeshVertexRef ref;
         const auto& components = value.asList();
-        const ScratchString label = MeshCookMetadata::MakeIndexedLabel(scratchArena, MeshCookMetadata::s_VertexRefsFieldNameView, vertexRefIndex);
+        const ScratchString label = MeshCookMetadata::makeIndexedLabel(scratchArena, MeshCookMetadata::s_VertexRefsFieldNameView, vertexRefIndex);
         const AStringView componentNames[] = {
             __hidden_mesh_source_streams::s_VertexRefPositionName,
             __hidden_mesh_source_streams::s_VertexRefNormalName,
@@ -101,7 +101,7 @@ bool MeshCookSourceStreams::ParseSourceVertexRefs(
             componentLabel.append(label.data(), label.size());
             componentLabel += '.';
             componentLabel.append(componentNames[componentIndex].data(), componentNames[componentIndex].size());
-            if(!MeshCookMetadata::ParseMetadataU32Value(
+            if(!MeshCookMetadata::parseMetadataU32Value(
                 nwbFilePath,
                 components[componentIndex],
                 metaKind,
@@ -125,7 +125,7 @@ bool MeshCookSourceStreams::ParseSourceVertexRefs(
 }
 
 
-bool MeshCookSourceStreams::ValidateSourceStreamIndex(
+bool MeshCookSourceStreams::validateSourceStreamIndex(
     const Path& nwbFilePath,
     const TStringView metaKind,
     const AStringView streamName,
@@ -144,7 +144,7 @@ bool MeshCookSourceStreams::ValidateSourceStreamIndex(
 }
 
 
-bool MeshCookSourceStreams::ValidateSourceIndexStream(
+bool MeshCookSourceStreams::validateSourceIndexStream(
     const Path& nwbFilePath,
     const TStringView metaKind,
     const Core::Assets::AssetVector<u32>& indices,
@@ -171,7 +171,7 @@ bool MeshCookSourceStreams::ValidateSourceIndexStream(
 }
 
 
-bool MeshCookSourceStreams::ValidateSourceVertexRefs(
+bool MeshCookSourceStreams::validateSourceVertexRefs(
     const Path& nwbFilePath,
     const TStringView metaKind,
     const bool includeSkin,
@@ -179,18 +179,18 @@ bool MeshCookSourceStreams::ValidateSourceVertexRefs(
     const usize skinCount
 ){
     for(const MeshVertexRef& ref : streams.vertexRefs){
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefPositionName, ref.position, streams.positions.size()))
+        if(!validateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefPositionName, ref.position, streams.positions.size()))
             return false;
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefNormalName, ref.normal, streams.normals.size()))
+        if(!validateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefNormalName, ref.normal, streams.normals.size()))
             return false;
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefTangentName, ref.tangent, streams.tangents.size()))
+        if(!validateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefTangentName, ref.tangent, streams.tangents.size()))
             return false;
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefUvName, ref.uv0, streams.uv0.size()))
+        if(!validateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefUvName, ref.uv0, streams.uv0.size()))
             return false;
-        if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefColorName, ref.color, streams.colors.size()))
+        if(!validateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefColorName, ref.color, streams.colors.size()))
             return false;
         if(includeSkin){
-            if(!ValidateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefSkinName, ref.skin, skinCount))
+            if(!validateSourceStreamIndex(nwbFilePath, metaKind, __hidden_mesh_source_streams::s_VertexRefSkinName, ref.skin, skinCount))
                 return false;
         }
         else if(ref.skin != s_MeshMissingStreamIndex){
@@ -205,7 +205,7 @@ bool MeshCookSourceStreams::ValidateSourceVertexRefs(
 }
 
 
-bool MeshCookSourceStreams::ParseCommonSourceMeshStreams(
+bool MeshCookSourceStreams::parseCommonSourceMeshStreams(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset,
     const TStringView metaKind,
@@ -214,7 +214,7 @@ bool MeshCookSourceStreams::ParseCommonSourceMeshStreams(
     const usize skinCount,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    if(!MeshCookMetadata::ParseMetadataFloatListField<Float3U, 3u>(
+    if(!MeshCookMetadata::parseMetadataFloatListField<Float3U, 3u>(
         discoveredFile.filePath,
         asset,
         metaKind,
@@ -223,7 +223,7 @@ bool MeshCookSourceStreams::ParseCommonSourceMeshStreams(
         scratchArena
     ))
         return false;
-    if(!MeshCookMetadata::ParseMetadataFloatListField<Float3U, 3u>(
+    if(!MeshCookMetadata::parseMetadataFloatListField<Float3U, 3u>(
         discoveredFile.filePath,
         asset,
         metaKind,
@@ -232,7 +232,7 @@ bool MeshCookSourceStreams::ParseCommonSourceMeshStreams(
         scratchArena
     ))
         return false;
-    if(!MeshCookMetadata::ParseMetadataFloatListField<Float4U, 4u>(
+    if(!MeshCookMetadata::parseMetadataFloatListField<Float4U, 4u>(
         discoveredFile.filePath,
         asset,
         metaKind,
@@ -241,7 +241,7 @@ bool MeshCookSourceStreams::ParseCommonSourceMeshStreams(
         scratchArena
     ))
         return false;
-    if(!MeshCookMetadata::ParseMetadataFloatListField<Float2U, 2u>(
+    if(!MeshCookMetadata::parseMetadataFloatListField<Float2U, 2u>(
         discoveredFile.filePath,
         asset,
         metaKind,
@@ -251,7 +251,7 @@ bool MeshCookSourceStreams::ParseCommonSourceMeshStreams(
     ))
         return false;
 
-    if(!MeshCookMetadata::ParseMetadataFloatListField<Float4U, 4u>(
+    if(!MeshCookMetadata::parseMetadataFloatListField<Float4U, 4u>(
         discoveredFile.filePath,
         asset,
         metaKind,
@@ -261,13 +261,13 @@ bool MeshCookSourceStreams::ParseCommonSourceMeshStreams(
     ))
         return false;
 
-    if(!ParseSourceVertexRefs(discoveredFile.filePath, asset, metaKind, includeSkin, streams.vertexRefs, scratchArena))
+    if(!parseSourceVertexRefs(discoveredFile.filePath, asset, metaKind, includeSkin, streams.vertexRefs, scratchArena))
         return false;
-    if(!MeshCookMetadata::ParseMetadataIndexField(discoveredFile.filePath, asset, metaKind, streams.indices, scratchArena))
+    if(!MeshCookMetadata::parseMetadataIndexField(discoveredFile.filePath, asset, metaKind, streams.indices, scratchArena))
         return false;
-    if(!ValidateSourceIndexStream(discoveredFile.filePath, metaKind, streams.indices, streams.vertexRefs.size()))
+    if(!validateSourceIndexStream(discoveredFile.filePath, metaKind, streams.indices, streams.vertexRefs.size()))
         return false;
-    if(!ValidateSourceVertexRefs(discoveredFile.filePath, metaKind, includeSkin, streams, skinCount))
+    if(!validateSourceVertexRefs(discoveredFile.filePath, metaKind, includeSkin, streams, skinCount))
         return false;
     return true;
 }

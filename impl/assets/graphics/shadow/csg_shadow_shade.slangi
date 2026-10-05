@@ -209,7 +209,7 @@ bool nwbCsgShadowConvertEvents(const uint pixel, const NwbLightSpaceView view, c
         for(uint index = 0u; index < NWB_CSG_SHADOW_MAX_CUTTERS; ++index)
             intervals[index] = (NwbCsgShadowInterval)0;
         uint intervalCount = 0u;
-        const uint cutterCount = NwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(12u);
+        const uint cutterCount = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(12u);
         const bool bounded = range.x <= cutterCount && range.y <= cutterCount - range.x
             && range.y <= NWB_CSG_SHADOW_MAX_CUTTERS;
         bool supported = bounded && (range.z & NWB_CSG_SHADOW_RECEIVER_UNSUPPORTED) == 0u;

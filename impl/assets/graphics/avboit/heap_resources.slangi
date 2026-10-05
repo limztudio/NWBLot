@@ -77,7 +77,7 @@ RWStructuredBuffer<uint, Std430DataLayout> nwbAvboitExtinctionOverflowDepthUav()
 }
 
 RWTexture3D<float> nwbAvboitTransmittanceUav(){
-    return NwbHeapStorageImage3DFloat(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.avboitWorkSlots1.y);
+    return nwbHeapStorageImage3DFloat(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.avboitWorkSlots1.y);
 }
 
 

@@ -24,9 +24,9 @@ inline constexpr MChar s_DigitFirst = '0';
 inline constexpr MChar s_DigitLast = '9';
 
 
-[[nodiscard]] inline bool isDigit(MChar c){ return c >= s_DigitFirst && c <= s_DigitLast; }
-[[nodiscard]] inline bool isAlpha(MChar c){ return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; }
-[[nodiscard]] inline bool isAlphaNumeric(MChar c){ return isAlpha(c) || isDigit(c); }
+[[nodiscard]] inline bool IsDigit(MChar c){ return c >= s_DigitFirst && c <= s_DigitLast; }
+[[nodiscard]] inline bool IsAlpha(MChar c){ return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; }
+[[nodiscard]] inline bool IsAlphaNumeric(MChar c){ return IsAlpha(c) || IsDigit(c); }
 
 constexpr usize s_CompoundAssignmentTokenLength = 2u;
 
@@ -66,10 +66,10 @@ Token Lexer::next(){
 
     const MChar c = peek();
 
-    if(isAlpha(c))
+    if(IsAlpha(c))
         return readIdentifier();
 
-    if(isDigit(c))
+    if(IsDigit(c))
         return readNumber();
 
     if(c == '"')
@@ -189,7 +189,7 @@ Token Lexer::readIdentifier(){
     const u32 startLine = m_line;
     const u32 startColumn = m_column;
 
-    while(!isAtEnd() && isAlphaNumeric(peek()))
+    while(!isAtEnd() && IsAlphaNumeric(peek()))
         advance();
 
     Token tok;
@@ -208,7 +208,7 @@ Token Lexer::readNumber(){
     const u32 startColumn = m_column;
     bool isDouble = false;
 
-    while(!isAtEnd() && isDigit(peek()))
+    while(!isAtEnd() && IsDigit(peek()))
         advance();
 
     if(!isAtEnd() && peek() == '.'){
@@ -216,7 +216,7 @@ Token Lexer::readNumber(){
         if(afterDot >= '0' && afterDot <= '9'){
             isDouble = true;
             advance();
-            while(!isAtEnd() && isDigit(peek()))
+            while(!isAtEnd() && IsDigit(peek()))
                 advance();
         }
     }
@@ -226,9 +226,9 @@ Token Lexer::readNumber(){
         advance();
         if(!isAtEnd() && (peek() == '+' || peek() == '-'))
             advance();
-        if(isAtEnd() || !isDigit(peek()))
+        if(isAtEnd() || !IsDigit(peek()))
             return makeErrorToken(MStringView("invalid exponent in number literal"), startLine, startColumn);
-        while(!isAtEnd() && isDigit(peek()))
+        while(!isAtEnd() && IsDigit(peek()))
             advance();
     }
 

@@ -27,7 +27,7 @@ inline constexpr u32 s_DiagnosticCaptureCallstackFramesToSkip = 5u;
 
 
 template<typename ArenaT>
-[[nodiscard]] static ::Path<ArenaT> __hidden_default_crash_root_directory(ArenaT& arena){
+[[nodiscard]] static ::Path<ArenaT> DefaultCrashRootDirectory(ArenaT& arena){
     ::Path<ArenaT> executableDirectory(arena);
     if(GetExecutableDirectory(executableDirectory))
         return executableDirectory / PackageNames::s_DefaultRootDirectoryName;
@@ -40,7 +40,7 @@ template<typename ArenaT>
     return ::Path<ArenaT>(arena, PackageNames::s_DefaultRootDirectoryName);
 }
 
-static void __hidden_store_breadcrumb(const AStringView category, const AStringView message){
+static void StoreBreadcrumb(const AStringView category, const AStringView message){
     Detail::FixedBreadcrumb& breadcrumb = Detail::g_State.breadcrumbs[Detail::g_State.nextBreadcrumb % Detail::s_MaxBreadcrumbs];
     breadcrumb.used = 1u;
     breadcrumb.order = Detail::g_State.breadcrumbOrder.fetch_add(1u, MemoryOrder::relaxed);
@@ -49,7 +49,7 @@ static void __hidden_store_breadcrumb(const AStringView category, const AStringV
     ++Detail::g_State.nextBreadcrumb;
 }
 
-static bool __hidden_capture_policy_allows(const CrashCapturePolicy& policy, const AStringView event, const AStringView category){
+static bool CapturePolicyAllows(const CrashCapturePolicy& policy, const AStringView event, const AStringView category){
     if(category == DiagnosticEventCategory::s_Assert)
         return policy.captureAssertions;
     if(category == DiagnosticEventCategory::s_FatalAssert)
@@ -62,7 +62,7 @@ static bool __hidden_capture_policy_allows(const CrashCapturePolicy& policy, con
     return true;
 }
 
-static u64 __hidden_diagnostic_site_hash(const DiagnosticEventRecord& record)noexcept{
+static u64 DiagnosticSiteHash(const DiagnosticEventRecord& record)noexcept{
     u64 hash = s_Fnv64OffsetBasis;
     if(!record.event.empty())
         hash = UpdateFnv64TextExact(hash, record.event);
@@ -78,18 +78,18 @@ static u64 __hidden_diagnostic_site_hash(const DiagnosticEventRecord& record)noe
     return hash;
 }
 
-static bool __hidden_diagnostic_result_can_suppress_duplicate_platform_crash(const CrashDumpResult& result)noexcept{
+static bool DiagnosticResultCanSuppressDuplicatePlatformCrash(const CrashDumpResult& result)noexcept{
     return result.status != CrashDumpStatus::NotInstalled
         && result.status != CrashDumpStatus::RequestFailed
         && result.status != CrashDumpStatus::PackageWriteFailed
     ;
 }
 
-static bool __hidden_reserve_diagnostic_capture(const DiagnosticEventRecord& record, const AStringView event, const AStringView category){
+static bool ReserveDiagnosticCapture(const DiagnosticEventRecord& record, const AStringView event, const AStringView category){
     ScopedLock lock(Detail::g_State.mutex);
     if(!Detail::g_State.installed)
         return false;
-    if(!__hidden_capture_policy_allows(Detail::g_State.capturePolicy, event, category))
+    if(!CapturePolicyAllows(Detail::g_State.capturePolicy, event, category))
         return false;
 
     const CrashCapturePolicy& policy = Detail::g_State.capturePolicy;
@@ -98,7 +98,7 @@ static bool __hidden_reserve_diagnostic_capture(const DiagnosticEventRecord& rec
 
     Detail::FixedDiagnosticSite* freeSite = nullptr;
     Detail::FixedDiagnosticSite* matchingSite = nullptr;
-    const u64 siteHash = __hidden_diagnostic_site_hash(record);
+    const u64 siteHash = DiagnosticSiteHash(record);
     for(usize i = 0u; i < Detail::s_MaxDiagnosticSites; ++i){
         Detail::FixedDiagnosticSite& site = Detail::g_State.diagnosticSites[i];
         if(site.used && site.hash == siteHash){
@@ -129,7 +129,7 @@ static bool __hidden_reserve_diagnostic_capture(const DiagnosticEventRecord& rec
     return true;
 }
 
-GLB_NOINLINE static CrashDumpResult __hidden_capture_crash_dump(const Detail::CrashReasonKind::Enum reasonKind, const AStringView category, const AStringView message, Detail::CrashDumpRequestOptions& options){
+GLB_NOINLINE static CrashDumpResult CaptureCrashDumpForReason(const Detail::CrashReasonKind::Enum reasonKind, const AStringView category, const AStringView message, Detail::CrashDumpRequestOptions& options){
     const AStringView breadcrumbCategory = category.empty() ? AStringView(Detail::s_ManualDumpCategory) : category;
 
     {
@@ -137,7 +137,7 @@ GLB_NOINLINE static CrashDumpResult __hidden_capture_crash_dump(const Detail::Cr
         if(!Detail::g_State.installed)
             return CrashDumpResult{ CrashDumpStatus::NotInstalled };
         if(!category.empty() || !message.empty())
-            __hidden_store_breadcrumb(breadcrumbCategory, message);
+            StoreBreadcrumb(breadcrumbCategory, message);
     }
 
     if(options.triggerCategory.empty())
@@ -154,7 +154,7 @@ GLB_NOINLINE static CrashDumpResult __hidden_capture_crash_dump(const Detail::Cr
     return Detail::RequestCrashDump(reasonKind, 0u, options);
 }
 
-GLB_NOINLINE static void __hidden_capture_diagnostic_crash(const DiagnosticEventRecord& record)noexcept{
+GLB_NOINLINE static void CaptureDiagnosticCrash(const DiagnosticEventRecord& record)noexcept{
     Detail::CrashDumpRequestOptions options;
     options.event = DiagnosticEventNameFromRecord(record);
     options.triggerCategory = record.category;
@@ -164,10 +164,10 @@ GLB_NOINLINE static void __hidden_capture_diagnostic_crash(const DiagnosticEvent
     options.triggerInstructionPointer = record.instructionPointer;
     options.triggerLine = record.line;
     options.callstackFramesToSkip = s_DiagnosticCaptureCallstackFramesToSkip;
-    if(!__hidden_reserve_diagnostic_capture(record, options.event, options.triggerCategory))
+    if(!ReserveDiagnosticCapture(record, options.event, options.triggerCategory))
         return;
-    const CrashDumpResult result = __hidden_capture_crash_dump(Detail::CrashReasonKind::ManualDump, options.triggerCategory, options.triggerMessage, options);
-    if(record.terminatesProcess && __hidden_diagnostic_result_can_suppress_duplicate_platform_crash(result))
+    const CrashDumpResult result = CaptureCrashDumpForReason(Detail::CrashReasonKind::ManualDump, options.triggerCategory, options.triggerMessage, options);
+    if(record.terminatesProcess && DiagnosticResultCanSuppressDuplicatePlatformCrash(result))
         Detail::SuppressNextPlatformCrashCapture();
 }
 
@@ -183,7 +183,7 @@ GLB_NOINLINE static void __hidden_capture_diagnostic_crash(const DiagnosticEvent
 
 template<typename ArenaT>
 ::Path<ArenaT> DefaultCrashSpoolDirectory(ArenaT& arena){
-    return __hidden_crash_module::__hidden_default_crash_root_directory(arena);
+    return __hidden_crash_module::DefaultCrashRootDirectory(arena);
 }
 
 template<typename ArenaT>
@@ -237,7 +237,7 @@ bool InstallCrashHandler(ArenaT& arena, const CrashConfigT<ArenaT>& config){
 
     Detail::InstallPlatformHandlers();
     Detail::g_State.installed = true;
-    SetDiagnosticEventCallback(__hidden_crash_module::__hidden_capture_diagnostic_crash);
+    SetDiagnosticEventCallback(__hidden_crash_module::CaptureDiagnosticCrash);
     return true;
 }
 
@@ -246,7 +246,7 @@ void UninstallCrashHandler(){
     if(!Detail::g_State.installed)
         return;
 
-    ClearDiagnosticEventCallback(__hidden_crash_module::__hidden_capture_diagnostic_crash);
+    ClearDiagnosticEventCallback(__hidden_crash_module::CaptureDiagnosticCrash);
     Detail::UninstallPlatformResources();
     Detail::g_State.installed = false;
     Detail::g_State.handlerStarted = false;
@@ -291,7 +291,7 @@ bool SetCrashUploadDestination(const AStringView logServerUrl, const AStringView
 
 bool AddCrashBreadcrumb(const AStringView category, const AStringView message){
     ScopedLock lock(Detail::g_State.mutex);
-    __hidden_crash_module::__hidden_store_breadcrumb(category, message);
+    __hidden_crash_module::StoreBreadcrumb(category, message);
     return true;
 }
 
@@ -301,7 +301,7 @@ template bool InstallCrashHandler(Alloc::PersistentArena& arena, const CrashConf
 
 CrashDumpResult CaptureCrashDump(const AStringView category, const AStringView message){
     Detail::CrashDumpRequestOptions options;
-    return __hidden_crash_module::__hidden_capture_crash_dump(Detail::CrashReasonKind::ManualDump, category, message, options);
+    return __hidden_crash_module::CaptureCrashDumpForReason(Detail::CrashReasonKind::ManualDump, category, message, options);
 }
 
 CrashDumpResult CaptureGpuCrashDump(const AStringView message, const AStringView binaryDump, const GpuCrashDumpKind::Enum dumpKind){
@@ -309,7 +309,7 @@ CrashDumpResult CaptureGpuCrashDump(const AStringView message, const AStringView
     options.gpuReport = message;
     options.gpuDump = binaryDump;
     options.gpuDumpKind = binaryDump.empty() ? GpuCrashDumpKind::None : dumpKind;
-    return __hidden_crash_module::__hidden_capture_crash_dump(Detail::CrashReasonKind::GpuCrash, AStringView(Detail::s_GpuCrashCategory), message, options);
+    return __hidden_crash_module::CaptureCrashDumpForReason(Detail::CrashReasonKind::GpuCrash, AStringView(Detail::s_GpuCrashCategory), message, options);
 }
 
 

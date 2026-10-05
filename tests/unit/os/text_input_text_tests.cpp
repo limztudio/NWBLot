@@ -36,11 +36,11 @@ TEST(TextInputText, ValidatesStrictUtf8AndEmbeddedNul){
 }
 
 TEST(TextInputText, BoundariesUseBytesForBmpAndSupplementaryScalars){
-    constexpr AStringView text = "A\xED\x95\x9C\xF0\x9F\x98\x80";
+    constexpr AStringView s_Text = "A\xED\x95\x9C\xF0\x9F\x98\x80";
     for(const usize index : { 0u, 1u, 4u, 8u })
-        EXPECT_TRUE(IsTextInputUtf8Boundary(text, index));
+        EXPECT_TRUE(IsTextInputUtf8Boundary(s_Text, index));
     for(const usize index : { 2u, 3u, 5u, 6u, 7u, 9u })
-        EXPECT_FALSE(IsTextInputUtf8Boundary(text, index));
+        EXPECT_FALSE(IsTextInputUtf8Boundary(s_Text, index));
 }
 
 TEST(TextInputText, CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins){

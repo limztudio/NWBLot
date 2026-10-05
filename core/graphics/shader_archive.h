@@ -30,9 +30,9 @@ public:
             : variantName(arena)
         {}
 
-        Name shaderName = NAME_NONE;
+        Name shaderName = s_NameNone;
         GraphicsString variantName;
-        Name stage = NAME_NONE;
+        Name stage = s_NameNone;
         u64 sourceChecksum = 0;
         u64 bytecodeChecksum = 0;
         NameHash virtualPathHash = {};
@@ -40,7 +40,7 @@ public:
 
 
 public:
-    [[nodiscard]] static const Name& IndexVirtualPathName();
+    [[nodiscard]] static const Name& indexVirtualPathName();
     [[nodiscard]] static Name buildVirtualPathName(const Name& shaderName, AStringView variantName, const Name& stageName);
     static bool serializeIndex(const GraphicsVector<Record>& records, GraphicsBytes& outBinary);
     static bool deserializeIndex(const GraphicsBytes& binary, GraphicsVector<Record>& outRecords);

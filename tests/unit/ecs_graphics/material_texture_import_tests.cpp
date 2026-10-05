@@ -59,7 +59,7 @@ struct TextureContext{
         Core::TextureDesc description;
         description.setName(identity).setWidth(4u).setHeight(4u).setFormat(Core::Format::RGBA8_UNORM);
         Core::Texture* const texture = Tests::NewMetadataOnlyTexture(testArena.arena, context, allocator, description);
-        return Core::TextureHandle(texture, Core::TextureHandle::deleter_type(&testArena.arena), AdoptRef);
+        return Core::TextureHandle(texture, Core::TextureHandle::deleter_type(&testArena.arena), s_AdoptRef);
     }
 
     [[nodiscard]] Core::GpuGraphResourceId importExisting(const Core::TextureHandle& texture, const Name& identity){
@@ -95,7 +95,7 @@ TEST(MaterialTextureImport, PreservesRequestedOrderDuplicatesAndExistingMetadata
 
 TEST(MaterialTextureImport, EmptyInputLeavesOutputAndUnnamedExistingTextureIntact){
     TextureContext context;
-    const auto unnamed = context.makeTexture(NAME_NONE);
+    const auto unnamed = context.makeTexture(s_NameNone);
     const auto existing = context.importExisting(unnamed, Name("tests/texture_import/unnamed_alias"));
     ASSERT_TRUE(existing.valid());
     Core::Alloc::ScratchArena scratch{ Name(s_TESTS_TEXTURE_IMPORT_SCRATCH) };
@@ -118,7 +118,7 @@ TEST(MaterialTextureImport, SingletonFailuresPreserveExistingOutputAndUseTheComp
         Core::TextureHandle texture;
         if(failureKind != 0u){
             const Name identity = failureKind == 1u
-                ? NAME_NONE
+                ? s_NameNone
                 : failureKind == s_ExpectedDualCount ? prefixIdentity : Name("tests/texture_import/singleton_changed")
             ;
             texture = context.makeTexture(identity);
@@ -157,7 +157,7 @@ TEST(MaterialTextureImport, MissingIdentityKeepsTheImportedPrefixAndDoesNotProce
         TextureContext context;
         const Array<Core::TextureHandle, 3u> requested = {
             context.makeTexture(Name("tests/texture_import/prefix")),
-            useNull ? Core::TextureHandle{} : context.makeTexture(NAME_NONE),
+            useNull ? Core::TextureHandle{} : context.makeTexture(s_NameNone),
             context.makeTexture(Name("tests/texture_import/later")),
         };
         Core::Alloc::ScratchArena scratch{ Name(s_TESTS_TEXTURE_IMPORT_SCRATCH) };
@@ -219,7 +219,7 @@ TEST(MaterialTextureImport, LargeRequestsPreserveAliasesOrderAndOwnershipWhileIm
     for(usize index = 0u; index < s_TextureCount; ++index){
         char indexText[32u] = {};
         const Name identity = index == 0u
-            ? NAME_NONE
+            ? s_NameNone
             : DeriveName(Name("tests/texture_import/promoted"), FormatDecimal(index, indexText))
         ;
         context.textures.push_back(context.makeTexture(identity));
@@ -289,7 +289,7 @@ TEST(MaterialTextureImport, PromotedFailuresKeepOnlyTheAcceptedPrefixAndDoNotSki
         if(failureKind == 0u)
             context.textures[s_FailureIndex] = nullptr;
         else if(failureKind == 1u)
-            context.textures[s_FailureIndex] = context.makeTexture(NAME_NONE);
+            context.textures[s_FailureIndex] = context.makeTexture(s_NameNone);
         else if(failureKind == s_ExpectedDualCount){
             const Name identity = context.textures[s_FailureIndex]->getCreationDescription().name;
             conflictingTexture = context.makeTexture(identity);

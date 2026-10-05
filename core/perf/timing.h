@@ -94,7 +94,7 @@ private:
             : name(scopeName)
         {}
 
-        Name name = NAME_NONE;
+        Name name = s_NameNone;
         TimingAccumulator accumulator;
         u32 generation = 0u;
     };

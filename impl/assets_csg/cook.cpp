@@ -143,7 +143,7 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     }
 
     const ::Path<ScratchArena> includePathValue(scratchArena, includePath);
-    if(includePathValue.is_absolute() || includePathValue.empty()){
+    if(includePathValue.isAbsolute() || includePathValue.empty()){
         NWB_LOGGER_ERROR(GLB_TEXT("CSG shape meta '{}': field '{}' must be a relative include path")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -251,9 +251,9 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
 
     const Path outputPath = includeRoot / moduleInclude;
     ErrorCode errorCode;
-    if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
+    if(!EnsureDirectories(outputPath.parentPath(), errorCode)){
         NWB_LOGGER_ERROR(GLB_TEXT("CSG shape include generation: failed to create generated include parent '{}': {}")
-            , PathToString<tchar>(outputPath.parent_path())
+            , PathToString<tchar>(outputPath.parentPath())
             , StringConvert(errorCode.message())
         );
         return false;
@@ -271,9 +271,9 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     const Path outputPath = includeRoot / "engine" / "csg" / "generated" / "built_in.slangi";
 
     ErrorCode errorCode;
-    if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
+    if(!EnsureDirectories(outputPath.parentPath(), errorCode)){
         NWB_LOGGER_ERROR(GLB_TEXT("CSG shape include generation: failed to create generated include parent '{}': {}")
-            , PathToString<tchar>(outputPath.parent_path())
+            , PathToString<tchar>(outputPath.parentPath())
             , StringConvert(errorCode.message())
         );
         return false;

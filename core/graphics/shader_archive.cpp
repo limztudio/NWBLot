@@ -143,13 +143,13 @@ const ShaderArchive::Record* FindRecord(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const Name& ShaderArchive::IndexVirtualPathName(){
+const Name& ShaderArchive::indexVirtualPathName(){
     return s_IndexVirtualPathName;
 }
 
 Name ShaderArchive::buildVirtualPathName(const Name& shaderName, const AStringView variantName, const Name& stageName){
     if(!shaderName || variantName.empty() || !stageName)
-        return NAME_NONE;
+        return s_NameNone;
 
     NameHash derivedHash = {};
     static constexpr AStringView s_VirtualPathPrefix = "nwb/shader/archive/path";
@@ -326,7 +326,7 @@ bool ShaderArchive::deserializeIndex(const GraphicsBytes& binary, GraphicsVector
 }
 
 bool ShaderArchive::findVirtualPath(const GraphicsVector<Record>& records, const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
-    outVirtualPath = NAME_NONE;
+    outVirtualPath = s_NameNone;
 
     if(!shaderName || variantName.empty() || !stageName)
         return false;

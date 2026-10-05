@@ -41,7 +41,7 @@ struct MeshSkinningRuntimeInstance{
     RuntimeMeshHandle handle;
     Core::ECS::EntityID entity = Core::ECS::s_InvalidEntityId;
     u32 meshClass = Core::Mesh::MeshClass::Skinned;
-    Name sourceName = NAME_NONE;
+    Name sourceName = s_NameNone;
     RuntimeMeshLocalBounds localBounds;
     PositionVector restPositions;
     Half4Vector restNormals;

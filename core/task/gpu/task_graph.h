@@ -35,7 +35,7 @@ namespace Telemetry{
 
 struct GpuTaskGraphTaskView{
     GpuTaskId id;
-    Name identity = NAME_NONE;
+    Name identity = s_NameNone;
     AStringView markerLabel;
     GpuTaskCommandRequirements commands;
     GpuTaskSchedulingHint scheduling;
@@ -72,7 +72,7 @@ struct GpuTaskGraphInitialOwnerHandoffSourceView{
 
 struct GpuTaskGraphResourceView{
     GpuGraphResourceId id;
-    Name identity = NAME_NONE;
+    Name identity = s_NameNone;
     AStringView markerLabel;
     // Each first-use range must be covered by one source naming its exact physical consumer queue.
     const GpuTaskGraphInitialOwnerHandoffSourceView* initialOwnerHandoffSources = nullptr;
@@ -100,7 +100,7 @@ struct GpuTaskGraphResourceVersionView{
 
 struct GpuTaskGraphResourceSetView{
     GpuGraphResourceSetId id;
-    Name identity = NAME_NONE;
+    Name identity = s_NameNone;
     AStringView markerLabel;
     const GpuGraphResourceId* members = nullptr;
     usize memberCount = 0u;
@@ -108,7 +108,7 @@ struct GpuTaskGraphResourceSetView{
 
 struct GpuTaskGraphPipelineView{
     GpuGraphPipelineId id;
-    Name identity = NAME_NONE;
+    Name identity = s_NameNone;
     AStringView markerLabel;
     bool hasBackendPipeline = false;
     GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
@@ -116,7 +116,7 @@ struct GpuTaskGraphPipelineView{
 
 struct GpuTaskGraphExternalCompletionView{
     GpuExternalCompletionId id;
-    Name identity = NAME_NONE;
+    Name identity = s_NameNone;
     AStringView markerLabel;
     bool hasToken = false;
     QueueSubmissionToken token;
@@ -621,7 +621,7 @@ private:
 
 private:
     struct GpuTaskNode{
-        Name identity = NAME_NONE;
+        Name identity = s_NameNone;
         GpuTaskTimingMetadata timing;
         GpuTaskCommandRequirements commands;
         GpuTaskSchedulingHint scheduling;
@@ -659,7 +659,7 @@ private:
     };
 
     struct GpuGraphResourceNode{
-        Name identity = NAME_NONE;
+        Name identity = s_NameNone;
         TextureHandle texture;
         BufferHandle buffer;
         RayTracingAccelStructHandle accelStruct;
@@ -717,7 +717,7 @@ private:
     };
 
     struct GpuGraphResourceSetNode{
-        Name identity = NAME_NONE;
+        Name identity = s_NameNone;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
         u32 memberOffset = 0u;
@@ -725,7 +725,7 @@ private:
     };
 
     struct GpuGraphPipelineNode{
-        Name identity = NAME_NONE;
+        Name identity = s_NameNone;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
         u16 deviceGeneration = 0u;
@@ -766,7 +766,7 @@ private:
     };
 
     struct GpuExternalCompletionNode{
-        Name identity = NAME_NONE;
+        Name identity = s_NameNone;
         u32 markerLabelOffset = 0u;
         u32 markerLabelSize = 0u;
         QueueSubmissionToken token;
@@ -798,7 +798,7 @@ private:
 
 private:
     template<typename TaskT>
-    static bool RecordPayload(
+    static bool recordTaskPayload(
         const void* const payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
@@ -807,17 +807,17 @@ private:
         return TaskT::record(*static_cast<const Payload*>(payload), commandList, context);
     }
     template<typename TaskT>
-    static void AcceptPayload(void* const payload, const QueueSubmissionToken& token){
+    static void acceptTaskPayload(void* const payload, const QueueSubmissionToken& token){
         using Payload = typename TaskT::Payload;
         TaskT::accepted(*static_cast<Payload*>(payload), token);
     }
     template<typename TaskT>
-    static void DiscardPayload(void* const payload){
+    static void discardTaskPayload(void* const payload){
         using Payload = typename TaskT::Payload;
         TaskT::discarded(*static_cast<Payload*>(payload));
     }
     template<typename PayloadT>
-    static void DestroyPayload(GraphicsArena& arena, void* payload)noexcept{
+    static void destroyTaskPayload(GraphicsArena& arena, void* payload)noexcept{
         static_assert(noexcept(DestroyArenaObjectNoexcept(arena, static_cast<PayloadT*>(payload))));
         DestroyArenaObjectNoexcept(arena, static_cast<PayloadT*>(payload));
     }
@@ -883,15 +883,15 @@ public:
 
         GpuTaskRecordThunk recordPayload = nullptr;
         if constexpr(GpuGraphTaskContract::RecordApi<TaskT>)
-            recordPayload = &RecordPayload<TaskT>;
+            recordPayload = &recordTaskPayload<TaskT>;
 
         GpuTaskAcceptedThunk acceptPayload = nullptr;
         if constexpr(GpuGraphTaskContract::AcceptedApi<TaskT>)
-            acceptPayload = &AcceptPayload<TaskT>;
+            acceptPayload = &acceptTaskPayload<TaskT>;
 
         GpuTaskDiscardedThunk discardPayload = nullptr;
         if constexpr(GpuGraphTaskContract::DiscardedApi<TaskT>)
-            discardPayload = &DiscardPayload<TaskT>;
+            discardPayload = &discardTaskPayload<TaskT>;
 
         const GpuTaskId task = appendTaskWithinMutation(
             desc,
@@ -900,14 +900,14 @@ public:
             recordPayload,
             acceptPayload,
             discardPayload,
-            &DestroyPayload<Payload>,
+            &destroyTaskPayload<Payload>,
             sizeof(Payload),
             mutation
         );
         if(task.valid())
             storedPayload.publish();
         else
-            discardAndDestroyUnappendedPayload(storedPayload.release(), discardPayload, &DestroyPayload<Payload>);
+            discardAndDestroyUnappendedPayload(storedPayload.release(), discardPayload, &destroyTaskPayload<Payload>);
         return task;
     }
 
@@ -918,8 +918,8 @@ public:
         using Payload = typename TaskT::Payload;
         discardAndDestroyUnappendedPayload(
             payload.release(),
-            &DiscardPayload<TaskT>,
-            &DestroyPayload<Payload>
+            &discardTaskPayload<TaskT>,
+            &destroyTaskPayload<Payload>
         );
         return {};
     }
@@ -936,10 +936,10 @@ public:
             resolvedDesc,
             commands,
             payload.get(),
-            &RecordPayload<TaskT>,
-            &AcceptPayload<TaskT>,
-            &DiscardPayload<TaskT>,
-            &DestroyPayload<Payload>,
+            &recordTaskPayload<TaskT>,
+            &acceptTaskPayload<TaskT>,
+            &discardTaskPayload<TaskT>,
+            &destroyTaskPayload<Payload>,
             sizeof(Payload),
             mutation
         );
@@ -948,8 +948,8 @@ public:
         else
             discardAndDestroyUnappendedPayload(
                 payload.release(),
-                &DiscardPayload<TaskT>,
-                &DestroyPayload<Payload>
+                &discardTaskPayload<TaskT>,
+                &destroyTaskPayload<Payload>
             );
         return task;
     }

@@ -34,7 +34,7 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
     if(!m_rayTracingState.m_surfelSpawnBindingLayout){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(SurfelHeapPushConstants)));
         m_rayTracingState.m_surfelSpawnBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelSpawnBindingLayout){
             NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create surfel spawn binding layout"));
@@ -88,7 +88,7 @@ bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
     if(!m_rayTracingState.m_surfelAgeFreeBindingLayout){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(SurfelHeapPushConstants)));
         m_rayTracingState.m_surfelAgeFreeBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelAgeFreeBindingLayout){
             NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create surfel age-free binding layout"));
@@ -142,7 +142,7 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
     if(!m_rayTracingState.m_surfelHashBuildBindingLayout){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(SurfelHeapPushConstants)));
         m_rayTracingState.m_surfelHashBuildBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelHashBuildBindingLayout){
             NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create surfel hash-build binding layout"));
@@ -196,7 +196,7 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
     if(!m_rayTracingState.m_surfelTraceBindingLayout){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(SurfelHeapPushConstants)));
         m_rayTracingState.m_surfelTraceBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelTraceBindingLayout){
             NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create surfel trace binding layout"));
@@ -481,7 +481,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
     if(!m_rayTracingState.m_surfelTraceHwBindingLayout){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(SurfelHeapPushConstants)));
         m_rayTracingState.m_surfelTraceHwBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelTraceHwBindingLayout){
             NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create surfel HW trace binding layout"));
@@ -539,7 +539,7 @@ bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
     if(!m_rayTracingState.m_surfelResolveBindingLayout){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(SurfelHeapPushConstants)));
         m_rayTracingState.m_surfelResolveBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelResolveBindingLayout){
             NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create surfel resolve binding layout"));
@@ -593,7 +593,7 @@ bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
     if(!m_rayTracingState.m_surfelUpsampleBindingLayout){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(SurfelHeapPushConstants)));
         m_rayTracingState.m_surfelUpsampleBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelUpsampleBindingLayout){
             NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create surfel upsample binding layout"));
@@ -647,7 +647,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
     if(!m_rayTracingState.m_surfelTraceBuildArgsBindingLayout){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(SurfelHeapPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(SurfelHeapPushConstants)));
         m_rayTracingState.m_surfelTraceBuildArgsBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelTraceBuildArgsBindingLayout){
             NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create surfel trace build-args binding layout"));

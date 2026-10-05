@@ -517,7 +517,7 @@ void GpuTimingRecorder::quarantineScope(const GpuTimingScope& scope)noexcept{
 }
 
 GpuTimingSubmissionTicket* GpuTimingRecorder::activeSubmissionTicket()const{
-    GpuTimingSubmissionTicket* ticket = s_activeSubmissionTicket;
+    GpuTimingSubmissionTicket* ticket = s_ActiveSubmissionTicket;
     return ticket && &ticket->m_recorder == this ? ticket : nullptr;
 }
 

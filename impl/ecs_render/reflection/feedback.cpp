@@ -200,7 +200,7 @@ ReflectionFeedbackControlHandle CreateReflectionFeedbackControl(Core::Alloc::Glo
     return ReflectionFeedbackControlHandle(
         NewArenaObject<ReflectionFeedbackControl>(arena, deviceGeneration),
         ArenaRefDeleter<ReflectionFeedbackControl, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

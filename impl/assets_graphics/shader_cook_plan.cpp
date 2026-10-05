@@ -70,7 +70,7 @@ static bool AppendIncludeDirectory(
         return false;
     }
 
-    ScratchString normalizedIncludeDirectory = PathToString(scratchArena, includeDirectory.lexically_normal());
+    ScratchString normalizedIncludeDirectory = PathToString(scratchArena, includeDirectory.lexicallyNormal());
     CanonicalizeTextInPlace(normalizedIncludeDirectory);
     if(!seenIncludeDirectories.insert(Move(normalizedIncludeDirectory)).second)
         return true;
@@ -227,10 +227,10 @@ static bool ResolveProjectEvaluatorModuleIncludePath(
 
     ErrorCode errorCode;
     const Path includePath(outPath.arena(), includeName);
-    if(includePath.is_absolute()){
+    if(includePath.isAbsolute()){
         errorCode.clear();
         if(IsRegularFile(includePath, errorCode)){
-            outPath = includePath.lexically_normal();
+            outPath = includePath.lexicallyNormal();
             return true;
         }
         if(errorCode && !IsMissingPathError(errorCode)){
@@ -243,7 +243,7 @@ static bool ResolveProjectEvaluatorModuleIncludePath(
     }
 
     for(const Path& includeDirectory : includeDirectories){
-        const Path candidate = (includeDirectory / includePath).lexically_normal();
+        const Path candidate = (includeDirectory / includePath).lexicallyNormal();
         errorCode.clear();
         if(IsRegularFile(candidate, errorCode)){
             outPath = candidate;
@@ -269,7 +269,7 @@ static bool AppendUniqueDependency(
     ScratchArena& scratchArena
 ){
     ErrorCode errorCode;
-    Path absoluteDependency = AbsolutePath(dependency, errorCode).lexically_normal();
+    Path absoluteDependency = AbsolutePath(dependency, errorCode).lexicallyNormal();
     if(errorCode){
         NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to resolve CSG evaluator module dependency '{}': {}")
             , PathToString<tchar>(dependency)

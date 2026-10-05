@@ -26,7 +26,7 @@ using TelemetryArena = Telemetry::TelemetryArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_telemetry_report{
+namespace TelemetryReportDetail{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -55,7 +55,7 @@ struct FrameGraphOwnerStatisticsRange{
 
 struct GraphTimingKey{
     u64 frameIndex = 0u;
-    Name scopeName = NAME_NONE;
+    Name scopeName = s_NameNone;
 };
 
 inline bool operator==(const GraphTimingKey& lhs, const GraphTimingKey& rhs)noexcept{

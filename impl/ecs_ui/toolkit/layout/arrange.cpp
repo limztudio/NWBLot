@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 
 
 bool LayoutTree::arrange(const Rect& viewport){
-    if(m_buildFailed || m_nodes.empty() || !IsValidRectangle(viewport))
+    if(m_buildFailed || m_nodes.empty() || !isValidRectangle(viewport))
         return false;
     m_work.assign(m_nodes.size(), {});
     if(!measure())
@@ -44,14 +44,14 @@ bool LayoutTree::arrangeNode(const u32 index){
     const LayoutNodeDesc& description = node.description;
     Work& work = m_work[index];
     LayoutBox& box = work.box;
-    if(!IsValidRectangle(box.rectangle))
+    if(!isValidRectangle(box.rectangle))
         return false;
-    box.content = Inset(box.rectangle, description.padding);
-    box.clip = Intersect(box.rectangle, work.inheritedClip);
+    box.content = inset(box.rectangle, description.padding);
+    box.clip = intersect(box.rectangle, work.inheritedClip);
     box.hit = box.clip;
-    if(!IsValidRectangle(box.content) || !IsValidRectangle(box.clip))
+    if(!isValidRectangle(box.content) || !isValidRectangle(box.clip))
         return false;
-    const Rect childClip = description.clipChildren ? Intersect(work.inheritedClip, box.content) : work.inheritedClip;
+    const Rect childClip = description.clipChildren ? intersect(work.inheritedClip, box.content) : work.inheritedClip;
     const bool row = description.direction == LayoutDirection::Row;
     const bool column = description.direction == LayoutDirection::Column;
     f64 consumed = 0.0;
@@ -86,7 +86,7 @@ bool LayoutTree::arrangeNode(const u32 index){
         const f32 x = row ? static_cast<f32>(cursor) : box.content.x;
         const f32 y = column ? static_cast<f32>(cursor) : box.content.y;
         const Rect rectangle{ x, y, width, height };
-        if(!IsValidRectangle(rectangle))
+        if(!isValidRectangle(rectangle))
             return false;
         m_work[child].box.rectangle = rectangle;
         m_work[child].inheritedClip = childClip;

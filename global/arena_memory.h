@@ -155,12 +155,12 @@ private:
 
 
 struct ArenaMemoryOwnerIdentity{
-    Name ownerName = NAME_NONE;
+    Name ownerName = s_NameNone;
     ArenaMemorySource::Enum source = ArenaMemorySource::Arena;
 };
 
 struct ArenaMemoryOwnerSnapshot{
-    Name ownerName = NAME_NONE;
+    Name ownerName = s_NameNone;
     ArenaMemoryStats stats;
     ArenaMemorySource::Enum source = ArenaMemorySource::Arena;
 };

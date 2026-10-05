@@ -89,7 +89,7 @@ TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndClearsPreviousOutput){
         EXPECT_TRUE(inputs.skeleton.jointChildRanges().empty());
         EXPECT_TRUE(inputs.skeleton.jointChildIndices().empty());
         EXPECT_EQ(inputs.skeleton.virtualPath(), inputs.entry.virtualPath);
-        inputs.entry.joints[0u].parent = NAME_NONE;
+        inputs.entry.joints[0u].parent = s_NameNone;
         inputs.entry.joints[1u].parent = Name(s_ROOT);
         inputs.entry.joints[3u].parent = Name(s_LEFT);
         EXPECT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
@@ -120,7 +120,7 @@ TEST(SkeletonPayload, RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent){
 TEST(SkeletonPayload, RebuildsChangedHierarchyAndSerializesJointIdentityAndMatrices){
     SkeletonInputs inputs;
     ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
-    inputs.entry.joints[s_ThirdElementIndex].parent = NAME_NONE;
+    inputs.entry.joints[s_ThirdElementIndex].parent = s_NameNone;
     inputs.entry.joints[3u].parent = Name(s_RIGHT);
     ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
     EXPECT_EQ(inputs.skeleton.rootJointCount(), s_ExpectedDualCount);
@@ -155,7 +155,7 @@ static void BenchmarkSkeletonBuild(const usize jointCount, const usize iteration
     for(usize jointIndex = 0u; jointIndex < jointCount; ++jointIndex){
         inputs.entry.joints.push_back(SkeletonCookJoint{
             .name = IndexedJointName(jointIndex),
-            .parent = jointIndex == 0u ? NAME_NONE : inputs.entry.joints.back().name,
+            .parent = jointIndex == 0u ? s_NameNone : inputs.entry.joints.back().name,
         });
     }
     ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));

@@ -292,12 +292,12 @@ public:
     [[nodiscard]] operator const value_type*()const noexcept{ return c_str(); }
 
     [[nodiscard]] std::string string()const{ return toStdString<char>(false); }
-    [[nodiscard]] std::string generic_string()const{ return toStdString<char>(true); }
+    [[nodiscard]] std::string genericString()const{ return toStdString<char>(true); }
     template<typename OutCharT>
-    [[nodiscard]] std::basic_string<OutCharT> generic_string()const{ return toStdString<OutCharT>(true); }
-    [[nodiscard]] std::wstring generic_wstring()const{ return toStdString<wchar>(true); }
-    [[nodiscard]] auto generic_u8string()const{
-        const std::string text = generic_string();
+    [[nodiscard]] std::basic_string<OutCharT> genericString()const{ return toStdString<OutCharT>(true); }
+    [[nodiscard]] std::wstring genericWString()const{ return toStdString<wchar>(true); }
+    [[nodiscard]] auto genericU8String()const{
+        const std::string text = genericString();
 #if defined(__cpp_char8_t)
         return std::u8string(reinterpret_cast<const char8_t*>(text.data()), text.size());
 #else
@@ -305,7 +305,7 @@ public:
 #endif
     }
 
-    [[nodiscard]] bool is_absolute()const noexcept{
+    [[nodiscard]] bool isAbsolute()const noexcept{
         if(m_text.empty())
             return false;
 
@@ -317,13 +317,13 @@ public:
         return GlobalFilesystemPathDetail::IsSeparator(m_text[0]);
     }
 
-    [[nodiscard]] bool has_filename()const noexcept{
+    [[nodiscard]] bool hasFilename()const noexcept{
         if(m_text.empty())
             return false;
         return !GlobalFilesystemPathDetail::IsSeparator(m_text.back());
     }
 
-    [[nodiscard]] Path parent_path()const{
+    [[nodiscard]] Path parentPath()const{
         if(m_text.empty())
             return Path(arena());
 
@@ -377,16 +377,16 @@ public:
         return Path(arena(), native_string_view(fileName.m_text.data() + extensionBegin, fileName.m_text.size() - extensionBegin));
     }
 
-    [[nodiscard]] Path lexically_normal()const{
+    [[nodiscard]] Path lexicallyNormal()const{
         Path output(arena());
         appendNormalizedTo(output);
         return output;
     }
 
-    [[nodiscard]] Path lexically_relative(const Path& base)const{
-        const Path normalizedPath = lexically_normal();
-        const Path normalizedBase = base.lexically_normal();
-        if(normalizedPath.is_absolute() != normalizedBase.is_absolute())
+    [[nodiscard]] Path lexicallyRelative(const Path& base)const{
+        const Path normalizedPath = lexicallyNormal();
+        const Path normalizedBase = base.lexicallyNormal();
+        if(normalizedPath.isAbsolute() != normalizedBase.isAbsolute())
             return Path(arena());
 
         Path output(arena());
@@ -431,7 +431,7 @@ public:
         return *this;
     }
 
-    Path& replace_extension(){
+    Path& replaceExtension(){
         const usize extensionBegin = extensionBeginInText();
         if(extensionBegin < m_text.size())
             m_text.erase(extensionBegin);
@@ -439,8 +439,8 @@ public:
     }
 
     template<typename SourceT>
-    Path& replace_extension(const SourceT& replacement){
-        replace_extension();
+    Path& replaceExtension(const SourceT& replacement){
+        replaceExtension();
         Path replacementPath(arena(), replacement);
         if(replacementPath.empty())
             return *this;
@@ -455,7 +455,7 @@ public:
         Path rhsPath(arena(), rhs);
         if(rhsPath.empty())
             return *this;
-        if(rhsPath.is_absolute()){
+        if(rhsPath.isAbsolute()){
             m_text = rhsPath.m_text;
             return *this;
         }
@@ -535,7 +535,7 @@ private:
     void appendNormalizedTo(Path& output)const{
         const usize rootNameLength = rootNameLengthInText();
         const usize rootDirectoryLength = rootDirectoryLengthInText();
-        const bool absolute = is_absolute();
+        const bool absolute = isAbsolute();
         if(rootNameLength != 0u)
             output.m_text.append(m_text.data(), rootNameLength);
         if(rootDirectoryLength > rootNameLength)
@@ -555,7 +555,7 @@ private:
                 continue;
             if(GlobalFilesystemPathDetail::IsDotDot(text)){
                 if(!output.empty() && !output.filename().empty() && !GlobalFilesystemPathDetail::IsDotDot(output.filename().native())){
-                    output = output.parent_path();
+                    output = output.parentPath();
                     continue;
                 }
                 if(!absolute)

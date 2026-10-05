@@ -1,4 +1,4 @@
-global_declare_static_library(nwb_common)
+nwb_declare_static_library(nwb_common)
 target_sources(nwb_common PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/log.cpp"

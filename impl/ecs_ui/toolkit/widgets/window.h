@@ -69,23 +69,23 @@ struct SeparatorOptions{
 
 class WindowBehavior final{
 public:
-    [[nodiscard]] static bool Initialize(WindowState& state, const WindowOptions& options, const WindowMetrics& metrics);
-    [[nodiscard]] static bool ApplyMove(WindowState& state, const PointerGesture& gesture);
-    [[nodiscard]] static bool ApplyResize(WindowState& state, const PointerGesture& gesture, const Point& minimumSize);
-    [[nodiscard]] static bool Constrain(WindowState& state, const DisplayMetrics& display, f32 titleHeight);
+    [[nodiscard]] static bool initialize(WindowState& state, const WindowOptions& options, const WindowMetrics& metrics);
+    [[nodiscard]] static bool applyMove(WindowState& state, const PointerGesture& gesture);
+    [[nodiscard]] static bool applyResize(WindowState& state, const PointerGesture& gesture, const Point& minimumSize);
+    [[nodiscard]] static bool constrain(WindowState& state, const DisplayMetrics& display, f32 titleHeight);
 };
 
 class WindowLayout final{
 public:
-    [[nodiscard]] static bool Measure(
+    [[nodiscard]] static bool measure(
         const UiSkinRegion& frame, const UiSkinRegion& title, const UiSkinRegion* collapse,
         const UiSkinRegion* resize, const WidgetStyle& style, const WindowOptions& options,
         const Point& titleSize, f32 density, WindowMetrics& metrics
     );
-    [[nodiscard]] static Rect Visible(const WindowState& state, const WindowMetrics& metrics);
-    [[nodiscard]] static Rect Content(const WindowState& state, const WindowMetrics& metrics);
-    [[nodiscard]] static Rect Collapse(const WindowState& state, const WindowMetrics& metrics);
-    [[nodiscard]] static Rect Resize(const WindowState& state, const WindowMetrics& metrics);
+    [[nodiscard]] static Rect visible(const WindowState& state, const WindowMetrics& metrics);
+    [[nodiscard]] static Rect content(const WindowState& state, const WindowMetrics& metrics);
+    [[nodiscard]] static Rect collapse(const WindowState& state, const WindowMetrics& metrics);
+    [[nodiscard]] static Rect resize(const WindowState& state, const WindowMetrics& metrics);
 };
 
 

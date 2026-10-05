@@ -25,11 +25,11 @@
 
 
 // The clamped trace count ([1]) guarding the tail + the compacted edge-record list this pass consumes.
-#define g_NwbSwShadowEdgeCounter NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeCounterStorageSlot)
-#define g_NwbSwShadowEdgeList NwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeListStorageSlot)
+#define g_NwbSwShadowEdgeCounter nwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeCounterStorageSlot)
+#define g_NwbSwShadowEdgeList nwbHeapShadowWritableUintBuffer(g_NwbSwShadowPush.edgeListStorageSlot)
 
 // The full-res visibility array: fold this edge's transmittance onto the pristine opaque mask with a single overwrite.
-#define g_NwbSwShadowVisibility NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
+#define g_NwbSwShadowVisibility nwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

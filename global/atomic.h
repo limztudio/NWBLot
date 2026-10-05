@@ -42,7 +42,7 @@ public:
         return m_storage.load(order) != 0;
     }
 
-    bool test_and_set(const MemoryOrder order = MemoryOrder::seq_cst)noexcept{
+    bool testAndSet(const MemoryOrder order = MemoryOrder::seq_cst)noexcept{
         return m_storage.exchange(true, order) != 0;
     }
 
@@ -52,29 +52,29 @@ public:
         m_storage.wait(static_cast<decltype(m_storage)::value_type>(expected), order);
     }
 
-    void notify_one()noexcept{ m_storage.notify_one(); }
+    void notifyOne()noexcept{ m_storage.notify_one(); }
 
-    void notify_all()noexcept{ m_storage.notify_all(); }
+    void notifyAll()noexcept{ m_storage.notify_all(); }
 };
 
-[[nodiscard]] inline bool atomic_flag_test(const AtomicFlag& flag)noexcept{ return flag.test(); }
-[[nodiscard]] inline bool atomic_flag_test_explicit(const AtomicFlag& flag, const MemoryOrder order)noexcept{
+[[nodiscard]] inline bool AtomicFlagTest(const AtomicFlag& flag)noexcept{ return flag.test(); }
+[[nodiscard]] inline bool AtomicFlagTestExplicit(const AtomicFlag& flag, const MemoryOrder order)noexcept{
     return flag.test(order);
 }
 
-inline bool atomic_flag_test_and_set(AtomicFlag& flag)noexcept{ return flag.test_and_set(); }
-inline bool atomic_flag_test_and_set_explicit(AtomicFlag& flag, const MemoryOrder order)noexcept{
-    return flag.test_and_set(order);
+inline bool AtomicFlagTestAndSet(AtomicFlag& flag)noexcept{ return flag.testAndSet(); }
+inline bool AtomicFlagTestAndSetExplicit(AtomicFlag& flag, const MemoryOrder order)noexcept{
+    return flag.testAndSet(order);
 }
-inline void atomic_flag_clear(AtomicFlag& flag)noexcept{ flag.clear(); }
-inline void atomic_flag_clear_explicit(AtomicFlag& flag, const MemoryOrder order)noexcept{ flag.clear(order); }
+inline void AtomicFlagClear(AtomicFlag& flag)noexcept{ flag.clear(); }
+inline void AtomicFlagClearExplicit(AtomicFlag& flag, const MemoryOrder order)noexcept{ flag.clear(order); }
 
-inline void atomic_flag_wait(const AtomicFlag& flag, const bool expected)noexcept{ flag.wait(expected); }
-inline void atomic_flag_wait_explicit(const AtomicFlag& flag, const bool expected, const MemoryOrder order)noexcept{
+inline void AtomicFlagWait(const AtomicFlag& flag, const bool expected)noexcept{ flag.wait(expected); }
+inline void AtomicFlagWaitExplicit(const AtomicFlag& flag, const bool expected, const MemoryOrder order)noexcept{
     flag.wait(expected, order);
 }
-inline void atomic_flag_notify_one(AtomicFlag& flag)noexcept{ flag.notify_one(); }
-inline void atomic_flag_notify_all(AtomicFlag& flag)noexcept{ flag.notify_all(); }
+inline void AtomicFlagNotifyOne(AtomicFlag& flag)noexcept{ flag.notifyOne(); }
+inline void AtomicFlagNotifyAll(AtomicFlag& flag)noexcept{ flag.notifyAll(); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

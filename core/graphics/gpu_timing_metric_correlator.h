@@ -20,13 +20,13 @@ NWB_CORE_BEGIN
 
 
 struct GpuPacketEnvelopeMetricScope{
-    Name scopeName = NAME_NONE;
+    Name scopeName = s_NameNone;
     GpuPhysicalQueueId physicalQueue;
 };
 
 struct GpuPacketEnvelopeMetricQueueOutput{
     GpuPhysicalQueueId physicalQueue;
-    Name internalIdleScopeName = NAME_NONE;
+    Name internalIdleScopeName = s_NameNone;
 };
 
 struct GpuTimingSinkSample{
@@ -58,9 +58,9 @@ private:
     };
 
     struct OverlapRecord{
-        Name firstScope = NAME_NONE;
-        Name secondScope = NAME_NONE;
-        Name outputScopeName = NAME_NONE;
+        Name firstScope = s_NameNone;
+        Name secondScope = s_NameNone;
+        Name outputScopeName = s_NameNone;
         Perf::TimingScopeId outputScope;
         Vector<PendingOverlapFrame, Alloc::GlobalArena> pendingFrames;
 
@@ -71,19 +71,19 @@ private:
 
     struct PacketEnvelopeMetricScopeRecord{
         GpuComparableTimestampRange range;
-        Name scopeName = NAME_NONE;
+        Name scopeName = s_NameNone;
         GpuPhysicalQueueId physicalQueue;
         bool received = false;
     };
 
     struct PacketEnvelopeMetricQueueOutputRecord{
         GpuPhysicalQueueId physicalQueue;
-        Name internalIdleScopeName = NAME_NONE;
+        Name internalIdleScopeName = s_NameNone;
         Perf::TimingScopeId internalIdleScope;
     };
 
     struct PacketEnvelopeMetricOutputRoleRecord{
-        Name scopeName = NAME_NONE;
+        Name scopeName = s_NameNone;
         GpuPhysicalQueueId physicalQueue;
         bool queueInternalIdle = false;
     };
@@ -91,7 +91,7 @@ private:
 
     struct PendingPacketEnvelopeMetric{
         u64 sourceFrameIndex = 0u;
-        Name queueOverlapScopeName = NAME_NONE;
+        Name queueOverlapScopeName = s_NameNone;
         Perf::TimingScopeId queueOverlapScope;
         Vector<PacketEnvelopeMetricScopeRecord, Alloc::GlobalArena> scopes;
         PacketEnvelopeScopeIndex scopeIndices;

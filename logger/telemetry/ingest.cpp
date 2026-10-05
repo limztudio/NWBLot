@@ -124,13 +124,13 @@ TelemetryIngestResult ProcessTelemetryUpload(
 
     const Path uploadStem = __hidden_telemetry_ingest::MakeTelemetryUploadStem(arena);
     result.rawPath = rawDirectory / uploadStem;
-    result.rawPath.replace_extension(__hidden_telemetry_ingest::s_RawStreamFileExtension);
+    result.rawPath.replaceExtension(__hidden_telemetry_ingest::s_RawStreamFileExtension);
     result.jsonPath = reportDirectory / uploadStem;
-    result.jsonPath.replace_extension(__hidden_telemetry_ingest::s_JsonFileExtension);
+    result.jsonPath.replaceExtension(__hidden_telemetry_ingest::s_JsonFileExtension);
     result.perfCsvPath = reportDirectory / uploadStem;
-    result.perfCsvPath.replace_extension(__hidden_telemetry_ingest::s_PerfCsvFileExtension);
+    result.perfCsvPath.replaceExtension(__hidden_telemetry_ingest::s_PerfCsvFileExtension);
     result.graphPath = reportDirectory / uploadStem;
-    result.graphPath.replace_extension(__hidden_telemetry_ingest::s_GraphFileExtension);
+    result.graphPath.replaceExtension(__hidden_telemetry_ingest::s_GraphFileExtension);
 
     result.storedRaw = __hidden_telemetry_ingest::StoreRawTelemetry(result.rawPath, bytes, byteCount);
     if(!result.storedRaw){

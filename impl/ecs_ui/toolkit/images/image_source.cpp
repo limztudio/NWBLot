@@ -85,7 +85,7 @@ SharedImageSource MakeImageSource(Core::Alloc::GlobalArena& arena, const Texture
         SharedImageSource(
             NewArenaObject<RefCounter<ImageSource>>(arena, arena, texture, ImageSource::ConstructionToken{}),
             ArenaRefDeleter<RefCounter<ImageSource>, Core::Alloc::GlobalArena>(&arena),
-            AdoptRef
+            s_AdoptRef
         )
     ;
 }

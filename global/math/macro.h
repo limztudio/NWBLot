@@ -57,11 +57,11 @@
 
 
 #if defined(_MSC_VER) && !defined(_M_ARM) && !defined(_M_ARM64) && !defined(_M_HYBRID_X86_ARM64) && !defined(_M_ARM64EC) && (!_MANAGED) && (!_M_CEE) && (!defined(_M_IX86_FP) || (_M_IX86_FP > 1)) && !defined(GLB_NO_INTRINSICS) && !defined(GLB_NO_VECTORCALL)
-#define SIMDCALL __vectorcall
+#define GLB_SIMD_CALL __vectorcall
 #elif defined(__GNUC__)
-#define SIMDCALL
+#define GLB_SIMD_CALL
 #else
-#define SIMDCALL __fastcall
+#define GLB_SIMD_CALL __fastcall
 #endif
 
 

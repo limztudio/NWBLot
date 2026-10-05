@@ -27,8 +27,8 @@ NWB_ASSETS_BEGIN
 
 // Each record owns its resolved value; the value's arena must outlive the record.
 struct ExpandedAssetMetadata{
-    Name assetType = NAME_NONE;
-    Name virtualPath = NAME_NONE;
+    Name assetType = s_NameNone;
+    Name virtualPath = s_NameNone;
     Core::Metascript::Value value;
 };
 

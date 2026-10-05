@@ -60,7 +60,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     Graphics::TextureHandle source(
         sourceObject,
         Graphics::TextureHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
 
     Graphics::Texture* const destinationObject = NewMetadataOnlyTexture(
@@ -74,7 +74,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     Graphics::TextureHandle destination(
         destinationObject,
         Graphics::TextureHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
 
     return {
@@ -152,7 +152,7 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     Graphics::TextureHandle texture(
         textureObject,
         Graphics::TextureHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     return graph.importTexture(
         texture,

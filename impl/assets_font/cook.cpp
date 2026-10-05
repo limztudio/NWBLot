@@ -26,7 +26,7 @@ NWB_IMPL_BEGIN
 bool FontAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
     if(!checkSerializeAssetType(asset, GLB_TEXT("FontAssetCodec::serialize")))
         return false;
-    const Font& font = *checked_cast<const Font*>(&asset);
+    const Font& font = *CheckedCast<const Font*>(&asset);
     if(!font.validatePayload())
         return false;
 

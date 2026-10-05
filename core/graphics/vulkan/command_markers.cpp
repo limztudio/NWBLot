@@ -94,7 +94,7 @@ CommandMarkerRecordingToken CommandList::beginMarkerLease(const AStringView name
         .nativeRecordingID = m_nativeRecordingID,
         .markerSerial = m_nextMarkerSerial,
     };
-    const bool useDebugUtils = m_context.extensions.EXT_debug_utils;
+    const bool useDebugUtils = m_context.extensions.extDebugUtils;
     const bool useNvCheckpoint = m_device.isGpuCrashDiagnosticsEnabled();
     const bool useAmdBreadcrumb = m_device.isAmdBreadcrumbEnabled();
     const bool useGpuMarkers = useNvCheckpoint || useAmdBreadcrumb;

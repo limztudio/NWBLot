@@ -126,10 +126,10 @@ void SliderFixture::configureSliderSkin(){
     configureSkin();
     UiSkin::RegionVector regions(m_arena);
     regions.assign(m_skin.regions().begin(), m_skin.regions().end());
-    constexpr StringView names[]{ "slider.track", "slider.thumb.normal", "slider.thumb.hover" };
+    constexpr StringView s_Names[]{ "slider.track", "slider.thumb.normal", "slider.thumb.hover" };
     for(u32 index = 0u; index < 3u; ++index){
         UiSkinRegion region;
-        region.name = Name(names[index]);
+        region.name = Name(s_Names[index]);
         region.rectangle = { 96u + index * 32u, 0u, 24u, 24u };
         region.drawMode = UiSkinDrawMode::NineSlice;
         region.sliceInsets = { 6u, 6u, 6u, 6u };

@@ -23,11 +23,11 @@ half3 nwbCsgShadowBoundsVisibility(const float3 worldOrigin, const float3 worldD
         return half3(1.0h);
     if(!all(isfinite(worldOrigin)) || !all(isfinite(worldDirection)) || !isfinite(minimum) || !isfinite(maximum))
         return half3(0.0h);
-    const NwbRayTraceMaterialContextSlots context = NwbHeapShadowMaterialContextSlots(g_NwbLightSpacePush.materialContextSlot);
+    const NwbRayTraceMaterialContextSlots context = nwbHeapShadowMaterialContextSlots(g_NwbLightSpacePush.materialContextSlot);
     for(uint index = 0u; index < g_NwbLightSpacePush.instanceCount; ++index){
         if(!nwbCsgShadowReceiver(index))
             continue;
-        const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(context.sceneSlots.z)[index];
+        const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(context.sceneSlots.z)[index];
         const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
         if(transparent)

@@ -119,68 +119,68 @@ RaytracingAccelerationStructure g_NwbHeapAccelStruct;
 
 // Read-only raw slot accessor; centralizes NonUniformResourceIndex (per-mesh slots vary across a wave). Returns
 // the buffer by value for caller-offset loads.
-ByteAddressBuffer NwbHeapRawBuffer(const uint slot){
+ByteAddressBuffer nwbHeapRawBuffer(const uint slot){
     return g_NwbHeapRawBuffers[NonUniformResourceIndex(slot)];
 }
 
 // Deferred/compositor resource-slot buffers are constant across their fullscreen draw. Keep these indices uniform:
 // unlike per-mesh fetches they do not require sampler/image non-uniform-indexing capability on the portability path.
-Texture2D<float4> NwbHeapSampledImage2D(const uint slot){
+Texture2D<float4> nwbHeapSampledImage2D(const uint slot){
     return g_NwbHeapSampledImages[slot];
 }
 
 // Material texture slots can differ between adjacent pixel/ray invocations. Keep NonUniformResourceIndex at the heap boundary.
-Texture2D<float4> NwbHeapSampledImage2DNonUniform(const uint slot){
+Texture2D<float4> nwbHeapSampledImage2DNonUniform(const uint slot){
     return g_NwbHeapSampledImages[NonUniformResourceIndex(slot)];
 }
 
-Texture2DArray<float4> NwbHeapSampledImage2DArray(const uint slot){
+Texture2DArray<float4> nwbHeapSampledImage2DArray(const uint slot){
     return g_NwbHeapSampledImage2DArrays[slot];
 }
 
-Texture3D<float4> NwbHeapSampledImage3D(const uint slot){
+Texture3D<float4> nwbHeapSampledImage3D(const uint slot){
     return g_NwbHeapSampledImage3Ds[slot];
 }
 
-TextureCube<float4> NwbHeapSampledImageCube(const uint slot){
+TextureCube<float4> nwbHeapSampledImageCube(const uint slot){
     return g_NwbHeapSampledImageCubes[slot];
 }
 
 // CSG's slot cbuffer is uniform per draw/dispatch, so these array lookups remain uniform like the fullscreen image
 // helpers above. Per-invocation storage-image indexing requires NonUniformResourceIndex.
-RWTexture2DArray<float4> NwbHeapStorageImage2DArrayFloat4(const uint slot){
+RWTexture2DArray<float4> nwbHeapStorageImage2DArrayFloat4(const uint slot){
     return g_NwbHeapStorageImage2DArrayFloat4s[slot];
 }
 
-RWTexture2DArray<uint> NwbHeapStorageImage2DArrayUint(const uint slot){
+RWTexture2DArray<uint> nwbHeapStorageImage2DArrayUint(const uint slot){
     return g_NwbHeapStorageImage2DArrayUints[slot];
 }
 
-RWTexture2DArray<uint2> NwbHeapStorageImage2DArrayUint2(const uint slot){
+RWTexture2DArray<uint2> nwbHeapStorageImage2DArrayUint2(const uint slot){
     return g_NwbHeapStorageImage2DArrayUint2s[slot];
 }
 
-RWTexture2DArray<uint4> NwbHeapStorageImage2DArrayUint4(const uint slot){
+RWTexture2DArray<uint4> nwbHeapStorageImage2DArrayUint4(const uint slot){
     return g_NwbHeapStorageImage2DArrayUint4s[slot];
 }
 
-RWTexture2D<float4> NwbHeapStorageImage2DFloat4(const uint slot){
+RWTexture2D<float4> nwbHeapStorageImage2DFloat4(const uint slot){
     return g_NwbHeapStorageImages[slot];
 }
 
-RWTexture2D<uint> NwbHeapStorageImage2DUint(const uint slot){
+RWTexture2D<uint> nwbHeapStorageImage2DUint(const uint slot){
     return g_NwbHeapStorageImageUints[slot];
 }
 
-RWTexture3D<float> NwbHeapStorageImage3DFloat(const uint slot){
+RWTexture3D<float> nwbHeapStorageImage3DFloat(const uint slot){
     return g_NwbHeapStorageImage3DFloats[slot];
 }
 
-SamplerState NwbHeapSampler(const uint slot){
+SamplerState nwbHeapSampler(const uint slot){
     return g_NwbHeapSamplers[slot];
 }
 
-SamplerState NwbHeapSamplerNonUniform(const uint slot){
+SamplerState nwbHeapSamplerNonUniform(const uint slot){
     return g_NwbHeapSamplers[NonUniformResourceIndex(slot)];
 }
 
@@ -198,7 +198,7 @@ SamplerState NwbHeapSamplerNonUniform(const uint slot){
 // It is not an array subscript in shader code: a freshly allocated block per TLAS generation keeps older command buffers pointing at their original AS descriptor until the heap's deferred-free quarantine retires it.
 
 
-RaytracingAccelerationStructure NwbHeapAccelStruct(){
+RaytracingAccelerationStructure nwbHeapAccelStruct(){
     return g_NwbHeapAccelStruct;
 }
 

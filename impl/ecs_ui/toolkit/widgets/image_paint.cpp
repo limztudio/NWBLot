@@ -19,7 +19,7 @@ bool Builder::paintImage(const Item& item, const LayoutBox& box){
         return false;
     const ImageFrame& frame = m_scope->m_images[item.image];
     ImagePlacement placement;
-    if(!ImageLayout::Place(box.rectangle, visibleClip(box.clip), placement))
+    if(!ImageLayout::place(box.rectangle, visibleClip(box.clip), placement))
         return false;
     m_paint.pushClip(placement.clip);
     const bool painted = frame.source

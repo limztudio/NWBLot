@@ -135,22 +135,22 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
     Graphics::TextureHandle texture(
         textureObject,
         Graphics::TextureHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::BufferHandle buffer(
         bufferObject,
         Graphics::BufferHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::BufferHandle mismatchedAccelStructBacking(
         mismatchedAccelStructBackingObject,
         Graphics::BufferHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::RayTracingAccelStructHandle accelStruct(
         accelStructObject,
         Graphics::RayTracingAccelStructHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::BufferDesc& bufferDesc = const_cast<Graphics::BufferDesc&>(buffer->getDescription());
     Graphics::RayTracingAccelStructDesc& accelStructDesc = const_cast<Graphics::RayTracingAccelStructDesc&>(
@@ -384,7 +384,7 @@ TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwner
     Graphics::TextureHandle texture(
         textureObject,
         Graphics::TextureHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     const Graphics::BufferDesc bufferDesc = Graphics::BufferDesc()
         .setByteSize(64u)
@@ -411,12 +411,12 @@ TEST(GpuTaskGraph, TypedConcurrentResourceAdmissionConstrainsCompilationAndOwner
     Graphics::BufferHandle buffer(
         bufferObject,
         Graphics::BufferHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::RayTracingAccelStructHandle accelStruct(
         accelStructObject,
         Graphics::RayTracingAccelStructHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::BufferHandle& accelStructBacking = const_cast<Graphics::BufferHandle&>(
         accelStruct->getBackingBufferHandle()
@@ -654,17 +654,17 @@ TEST(GpuTaskGraph, TypedImportsRejectMalformedInheritedNativeQueueSharing){
         Graphics::TextureHandle texture(
             textureObject,
             Graphics::TextureHandle::deleter_type(&testArena.arena),
-            AdoptRef
+            s_AdoptRef
         );
         Graphics::BufferHandle buffer(
             bufferObject,
             Graphics::BufferHandle::deleter_type(&testArena.arena),
-            AdoptRef
+            s_AdoptRef
         );
         Graphics::RayTracingAccelStructHandle accelStruct(
             accelStructObject,
             Graphics::RayTracingAccelStructHandle::deleter_type(&testArena.arena),
-            AdoptRef
+            s_AdoptRef
         );
         ASSERT_TRUE(texture->descriptionMatchesCreation());
         ASSERT_TRUE(buffer->descriptionMatchesCreation());
@@ -790,39 +790,39 @@ TEST(GpuTaskGraph, TypedImportsValidateRetainedExternalFinalState){
     Graphics::TextureHandle retainedTexture(
         retainedTextureObject,
         Graphics::TextureHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::TextureHandle nonRetainedTexture(
         nonRetainedTextureObject,
         Graphics::TextureHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::TextureHandle* activeTexture = &retainedTexture;
     Graphics::BufferHandle retainedBuffer(
         retainedBufferObject,
         Graphics::BufferHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::BufferHandle nonRetainedBuffer(
         nonRetainedBufferObject,
         Graphics::BufferHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::BufferHandle* activeBuffer = &retainedBuffer;
     Graphics::BufferHandle retainedAccelStructBacking(
         retainedAccelStructBackingObject,
         Graphics::BufferHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::BufferHandle nonRetainedAccelStructBacking(
         nonRetainedAccelStructBackingObject,
         Graphics::BufferHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::RayTracingAccelStructHandle accelStruct(
         accelStructObject,
         Graphics::RayTracingAccelStructHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::BufferHandle& accelStructBackingHandle = const_cast<Graphics::BufferHandle&>(
         accelStruct->getBackingBufferHandle()
@@ -990,7 +990,7 @@ TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
     Graphics::BufferHandle buffer(
         bufferObject,
         Graphics::BufferHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
 
     Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
@@ -1003,7 +1003,7 @@ TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
     Graphics::TextureHandle texture(
         textureObject,
         Graphics::TextureHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
 
     Graphics::RayTracingAccelStruct* const accelStructObject = NewArenaObject<Graphics::RayTracingAccelStruct>(
@@ -1014,7 +1014,7 @@ TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
     Graphics::RayTracingAccelStructHandle accelStruct(
         accelStructObject,
         Graphics::RayTracingAccelStructHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
 
     Graphics::GraphicsPipeline* const graphicsPipelineObject = NewArenaObject<Graphics::GraphicsPipeline>(
@@ -1025,7 +1025,7 @@ TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
     Graphics::GraphicsPipelineHandle graphicsPipeline(
         graphicsPipelineObject,
         Graphics::GraphicsPipelineHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
 
     Graphics::ComputePipeline* const computePipelineObject = NewArenaObject<Graphics::ComputePipeline>(
@@ -1036,7 +1036,7 @@ TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
     Graphics::ComputePipelineHandle computePipeline(
         computePipelineObject,
         Graphics::ComputePipelineHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
 
     Graphics::MeshletPipeline* const meshletPipelineObject = NewArenaObject<Graphics::MeshletPipeline>(
@@ -1047,7 +1047,7 @@ TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){
     Graphics::MeshletPipelineHandle meshletPipeline(
         meshletPipelineObject,
         Graphics::MeshletPipelineHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
 
     Graphics::GpuPhysicalQueueInfo sourceQueue = GraphicsQueue();

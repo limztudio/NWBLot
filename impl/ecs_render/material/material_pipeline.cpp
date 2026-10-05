@@ -99,7 +99,7 @@ struct MaterialPipelineAvboitPixelShaderSelection{
     AStringView debugName = "ECSRender_InvalidAvboitPixelShader";
 
     [[nodiscard]] bool materialDriven()const{ return materialShader != nullptr && materialShader->valid(); }
-    [[nodiscard]] Name shaderName()const{ return materialDriven() ? materialShader->name() : NAME_NONE; }
+    [[nodiscard]] Name shaderName()const{ return materialDriven() ? materialShader->name() : s_NameNone; }
 };
 
 [[nodiscard]] MaterialPipelineAvboitPixelShaderSelection SelectAvboitPixelShader(
@@ -286,7 +286,7 @@ bool RendererMaterialSystem::createRendererPipeline(
     const bool hasPixelShader = materialInfo.pixelShader.valid();
     const bool hasMeshShader = materialInfo.meshShader.valid();
     Core::ShaderHandle passPixelShader;
-    Name passPixelShaderName = NAME_NONE;
+    Name passPixelShaderName = s_NameNone;
     AStringView passPixelShaderDebugName = "ECSRender_InvalidPassPixelShader";
     __hidden_material_pipeline::MaterialPipelineAvboitPixelShaderSelection avboitPixelShaderSelection;
     if(MaterialPipelinePassUsesRendererAvboit(pass)){

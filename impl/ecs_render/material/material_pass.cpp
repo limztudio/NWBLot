@@ -77,7 +77,7 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
 }
 
 struct MaterialTypedByteRangeKey{
-    Name materialName = NAME_NONE;
+    Name materialName = s_NameNone;
     u64 typedLayoutHash = 0u;
 
     friend bool operator==(const MaterialTypedByteRangeKey& lhs, const MaterialTypedByteRangeKey& rhs){

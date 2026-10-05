@@ -58,9 +58,9 @@ void main(const uint3 threadId : SV_GroupThreadID){
         const uint instance = nwbBvhLeafPrimitive(node);
         if(instance < g_NwbSceneBvhRefitPush.instanceCount){
             const uint offset = instance * NWB_SCENE_BVH_REFIT_INSTANCE_BYTES;
-            const ByteAddressBuffer inputs = NwbHeapRawBuffer(g_NwbSceneBvhRefitPush.instanceInputSlot);
+            const ByteAddressBuffer inputs = nwbHeapRawBuffer(g_NwbSceneBvhRefitPush.instanceInputSlot);
             const uint meshSlot = inputs.Load(offset + NWB_SCENE_BVH_REFIT_MESH_SLOT_OFFSET);
-            const NwbBvhNode root = NwbHeapBvhNodes(meshSlot)[0u];
+            const NwbBvhNode root = nwbHeapBvhNodes(meshSlot)[0u];
             float3 lower;
             float3 upper;
             bool valid = all(isfinite(root.aabbMin)) && all(isfinite(root.aabbMax)) && all(root.aabbMin <= root.aabbMax);

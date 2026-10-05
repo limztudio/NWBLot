@@ -48,7 +48,7 @@ namespace __hidden_ui_gpu_sdf{
     const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::SampledImage);
     if(!descriptor.valid())
         return false;
-    if(!heap.write(descriptor, Core::DescriptorWriteItem::Texture_SRV(
+    if(!heap.write(descriptor, Core::DescriptorWriteItem::textureSrv(
         0u, version.m_texture.get(), version.m_texture->getDescription().format, Core::s_AllSubresources, Core::TextureDimension::Texture2D
     ))){
         heap.free(descriptor);

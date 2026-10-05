@@ -478,10 +478,10 @@ bool GpuTimingSubmissionTicket::trackSubmissionPrerequisite(const QueueSubmissio
 
 bool GpuTimingSubmissionTicket::activateOnCurrentThread(GpuTimingSubmissionTicket*& outPreviousTicket)noexcept{
     NothrowScopedLock lock(m_mutex);
-    outPreviousTicket = GpuTimingRecorder::s_activeSubmissionTicket;
+    outPreviousTicket = GpuTimingRecorder::s_ActiveSubmissionTicket;
     GLB_ASSERT_MSG(!m_resolved && !m_submissionPrepared, GLB_TEXT("GPU timing submission ticket activated after recording closed"));
     if(m_resolved || m_submissionPrepared){
-        GpuTimingRecorder::s_activeSubmissionTicket = nullptr;
+        GpuTimingRecorder::s_ActiveSubmissionTicket = nullptr;
         return false;
     }
     const bool countAvailable = m_recordingScopeCount != Limit<u32>::s_Max;
@@ -489,7 +489,7 @@ bool GpuTimingSubmissionTicket::activateOnCurrentThread(GpuTimingSubmissionTicke
     if(!countAvailable)
         TerminateInvariant();
 
-    GpuTimingRecorder::s_activeSubmissionTicket = this;
+    GpuTimingRecorder::s_ActiveSubmissionTicket = this;
     ++m_recordingScopeCount;
     return true;
 }
@@ -499,12 +499,12 @@ void GpuTimingSubmissionTicket::deactivateOnCurrentThread(
     const bool activated
 )noexcept{
     GpuTimingSubmissionTicket* const expectedTicket = activated ? this : nullptr;
-    const bool tlsValid = GpuTimingRecorder::s_activeSubmissionTicket == expectedTicket;
+    const bool tlsValid = GpuTimingRecorder::s_ActiveSubmissionTicket == expectedTicket;
     GLB_FATAL_ASSERT_MSG(tlsValid, "GPU timing submission ticket recording scope closed out of order");
     if(!tlsValid)
         TerminateInvariant();
     if(!activated){
-        GpuTimingRecorder::s_activeSubmissionTicket = previousTicket;
+        GpuTimingRecorder::s_ActiveSubmissionTicket = previousTicket;
         return;
     }
     NothrowScopedLock lock(m_mutex);
@@ -513,7 +513,7 @@ void GpuTimingSubmissionTicket::deactivateOnCurrentThread(
     if(!countValid)
         TerminateInvariant();
     --m_recordingScopeCount;
-    GpuTimingRecorder::s_activeSubmissionTicket = previousTicket;
+    GpuTimingRecorder::s_ActiveSubmissionTicket = previousTicket;
 }
 
 bool GpuTimingSubmissionTicket::confirm(const QueueSubmissionToken& token)noexcept{

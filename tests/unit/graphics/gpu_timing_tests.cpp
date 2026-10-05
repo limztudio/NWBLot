@@ -109,7 +109,7 @@ struct GpuTimingSubscriptionCapture{
     u32 sampleCount = 0u;
 
 
-    static void Invoke(void* const context, const Core::GpuTimingSample&){
+    static void invoke(void* const context, const Core::GpuTimingSample&){
         GpuTimingSubscriptionCapture* const capture = static_cast<GpuTimingSubscriptionCapture*>(context);
         if(!capture)
             return;
@@ -138,15 +138,15 @@ TEST(GpuTimingSampleSubscriptions, ScopedDemandsReplaceAtomicallyAndRemainSubscr
     const Name metricOutput("tests.gpu_timing.feedback.metric_output");
     const Name firstScopes[] = { firstScope, sharedScope };
     const Name secondScopes[] = { sharedScope, secondScope };
-    const Name invalidScopes[] = { firstScope, NAME_NONE };
+    const Name invalidScopes[] = { firstScope, s_NameNone };
     const Name duplicateScopes[] = { firstScope, firstScope };
     const Core::GpuTimingSampleSubscription first = recorder.subscribeSampleListener(Core::GpuTimingSampleListener{
         .context = &firstCapture,
-        .invoke = &GpuTimingSubscriptionCapture::Invoke,
+        .invoke = &GpuTimingSubscriptionCapture::invoke,
     });
     const Core::GpuTimingSampleSubscription second = recorder.subscribeSampleListener(Core::GpuTimingSampleListener{
         .context = &secondCapture,
-        .invoke = &GpuTimingSubscriptionCapture::Invoke,
+        .invoke = &GpuTimingSubscriptionCapture::invoke,
     });
 
     ASSERT_TRUE(first.valid());
@@ -364,9 +364,9 @@ TEST(GpuTimingOverlapRegistration, IsCanonicalIdempotentAndRejectsMetricRoleConf
     const Name outputScope("tests/timing/overlap/output");
     const Name alternateOutputScope("tests/timing/overlap/alternate_output");
 
-    EXPECT_FALSE(correlator.prepareOverlapMetric(NAME_NONE, secondScope, outputScope));
-    EXPECT_FALSE(correlator.prepareOverlapMetric(firstScope, NAME_NONE, outputScope));
-    EXPECT_FALSE(correlator.prepareOverlapMetric(firstScope, secondScope, NAME_NONE));
+    EXPECT_FALSE(correlator.prepareOverlapMetric(s_NameNone, secondScope, outputScope));
+    EXPECT_FALSE(correlator.prepareOverlapMetric(firstScope, s_NameNone, outputScope));
+    EXPECT_FALSE(correlator.prepareOverlapMetric(firstScope, secondScope, s_NameNone));
     EXPECT_FALSE(correlator.prepareOverlapMetric(firstScope, firstScope, outputScope));
     EXPECT_FALSE(correlator.prepareOverlapMetric(firstScope, secondScope, firstScope));
     EXPECT_FALSE(correlator.prepareOverlapMetric(firstScope, secondScope, secondScope));

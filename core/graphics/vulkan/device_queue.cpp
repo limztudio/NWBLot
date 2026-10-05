@@ -300,7 +300,7 @@ CommandListHandle Device::createCommandList(const CommandListParameters& params)
     }
 
     auto* cmdList = NewArenaObject<CommandList>(m_context.objectArena, *this, resolvedParams);
-    return CommandListHandle(cmdList, CommandListHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return CommandListHandle(cmdList, CommandListHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 u64 Device::executeCommandLists(

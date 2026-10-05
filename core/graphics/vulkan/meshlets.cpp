@@ -34,12 +34,12 @@ Object MeshletPipeline::getNativeHandle(ObjectType objectType){
 
 
 MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& desc, FramebufferInfo const& fbinfo){
-    if(!m_context.extensions.KHR_dynamic_rendering){
+    if(!m_context.extensions.khrDynamicRendering){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Dynamic rendering extension is required to create meshlet pipelines."));
         return nullptr;
     }
     if(
-        !m_context.extensions.EXT_mesh_shader
+        !m_context.extensions.extMeshShader
         || m_context.meshShaderFeatures.meshShader != VK_TRUE
         || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT
     ){
@@ -60,7 +60,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Meshlet pipeline single-pass stereo is not implemented."));
         return nullptr;
     }
-    if(!desc.MS){
+    if(!desc.meshShader){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Mesh shader is required for meshlet pipeline"));
         return nullptr;
     }
@@ -72,9 +72,9 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         return false;
     };
     if(
-        !validateShaderOwner(desc.AS.get(), VulkanArenaScope::s_TaskStageLabel)
-        || !validateShaderOwner(desc.MS.get(), VulkanArenaScope::s_MeshStageLabel)
-        || !validateShaderOwner(desc.PS.get(), VulkanArenaScope::s_FragmentStageLabel)
+        !validateShaderOwner(desc.amplificationShader.get(), VulkanArenaScope::s_TaskStageLabel)
+        || !validateShaderOwner(desc.meshShader.get(), VulkanArenaScope::s_MeshStageLabel)
+        || !validateShaderOwner(desc.pixelShader.get(), VulkanArenaScope::s_FragmentStageLabel)
     )
         return nullptr;
 
@@ -89,16 +89,16 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     shaderStages.reserve(s_MeshletPipelineStageReserveCount); // Task (optional), Mesh, Fragment
     specInfos.reserve(s_MeshletPipelineStageReserveCount);
 
-    if(desc.AS && m_context.meshShaderFeatures.taskShader != VK_TRUE){
+    if(desc.amplificationShader && m_context.meshShaderFeatures.taskShader != VK_TRUE){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Task shader was supplied for meshlet pipeline, but VK_EXT_mesh_shader taskShader was not enabled."));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
     if(
-        desc.AS
+        desc.amplificationShader
         && (
-            desc.AS->m_shaderModule == VK_NULL_HANDLE
-            || desc.AS->m_desc.shaderType != ShaderType::Amplification
+            desc.amplificationShader->m_shaderModule == VK_NULL_HANDLE
+            || desc.amplificationShader->m_desc.shaderType != ShaderType::Amplification
         )
     ){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Meshlet pipeline task shader has the wrong shader stage."));
@@ -106,35 +106,35 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         return nullptr;
     }
     if(
-        desc.MS
-        && (desc.MS->m_shaderModule == VK_NULL_HANDLE || desc.MS->m_desc.shaderType != ShaderType::Mesh)
+        desc.meshShader
+        && (desc.meshShader->m_shaderModule == VK_NULL_HANDLE || desc.meshShader->m_desc.shaderType != ShaderType::Mesh)
     ){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Meshlet pipeline mesh shader has the wrong shader stage."));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
     if(
-        desc.PS
-        && (desc.PS->m_shaderModule == VK_NULL_HANDLE || desc.PS->m_desc.shaderType != ShaderType::Pixel)
+        desc.pixelShader
+        && (desc.pixelShader->m_shaderModule == VK_NULL_HANDLE || desc.pixelShader->m_desc.shaderType != ShaderType::Pixel)
     ){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Meshlet pipeline fragment shader has the wrong shader stage."));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
-    if(desc.AS)
-        appendPipelineShaderStage(*desc.AS, VK_SHADER_STAGE_TASK_BIT_EXT, specInfos, shaderStages);
+    if(desc.amplificationShader)
+        appendPipelineShaderStage(*desc.amplificationShader, VK_SHADER_STAGE_TASK_BIT_EXT, specInfos, shaderStages);
 
-    if(desc.MS)
-        appendPipelineShaderStage(*desc.MS, VK_SHADER_STAGE_MESH_BIT_EXT, specInfos, shaderStages);
+    if(desc.meshShader)
+        appendPipelineShaderStage(*desc.meshShader, VK_SHADER_STAGE_MESH_BIT_EXT, specInfos, shaderStages);
     else{
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Mesh shader is required for meshlet pipeline"));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
-    if(desc.PS)
-        appendPipelineShaderStage(*desc.PS, VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
+    if(desc.pixelShader)
+        appendPipelineShaderStage(*desc.pixelShader, VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
 
     if(!configurePipelineBindingsOrDestroy(
         desc.bindingLayouts,
@@ -181,7 +181,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
     if(!createPipelineOrDestroy(GLB_TEXT("meshlet pipeline"), *pso, pipelineInfo))
         return nullptr;
 
-    return MeshletPipelineHandle(pso, MeshletPipelineHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return MeshletPipelineHandle(pso, MeshletPipelineHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 
@@ -272,7 +272,7 @@ void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){
         return;
     }
     if(
-        !m_context.extensions.EXT_mesh_shader
+        !m_context.extensions.extMeshShader
         || m_context.meshShaderFeatures.meshShader != VK_TRUE
         || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT
     ){
@@ -282,7 +282,7 @@ void CommandList::dispatchMesh(u32 groupsX, u32 groupsY, u32 groupsZ){
 
     const VulkanDetail::MeshDispatchLimits dispatchLimits = VulkanDetail::GetMeshDispatchLimits(
         m_context.meshShaderProperties,
-        pipeline->m_desc.AS != nullptr
+        pipeline->m_desc.amplificationShader != nullptr
     );
     if(!VulkanDetail::AreMeshDispatchGroupCountsValid(
         groupsX,

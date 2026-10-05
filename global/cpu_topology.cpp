@@ -33,7 +33,7 @@ static constexpr usize s_BitsPerByte = 8u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void classifyPlacements(InteropVector<CpuWorkerPlacement>& placements){
+void ClassifyPlacements(InteropVector<CpuWorkerPlacement>& placements){
     u32 minimumClass = Limit<u32>::s_Max;
     u32 maximumClass = 0u;
     for(const CpuWorkerPlacement& placement : placements){
@@ -61,7 +61,7 @@ void classifyPlacements(InteropVector<CpuWorkerPlacement>& placements){
 static constexpr u32 s_QueryRetryCount = 4u;
 
 
-[[nodiscard]] bool queryWindowsPlacements(InteropVector<CpuWorkerPlacement>& placements){
+[[nodiscard]] bool QueryWindowsPlacements(InteropVector<CpuWorkerPlacement>& placements){
     const HANDLE process = GetCurrentProcess();
     GROUP_AFFINITY primaryAffinity{};
     if(!GetThreadGroupAffinity(GetCurrentThread(), &primaryAffinity))
@@ -181,7 +181,7 @@ static constexpr usize s_SysfsCapacityPathCapacity = 128u;
 static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
 
 
-[[nodiscard]] bool queryLinuxAffinity(InteropVector<usize>& affinityWords){
+[[nodiscard]] bool QueryLinuxAffinity(InteropVector<usize>& affinityWords){
     usize byteCount = sizeof(cpu_set_t);
     while(byteCount <= s_MaxCpuAffinityBytes){
         affinityWords.assign((byteCount + sizeof(usize) - 1u) / sizeof(usize), 0u);
@@ -196,7 +196,7 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
 }
 
 
-[[nodiscard]] u32 queryLinuxCapacity(u32 processorIndex){
+[[nodiscard]] u32 QueryLinuxCapacity(u32 processorIndex){
     char path[s_SysfsCapacityPathCapacity];
     const int pathLength = GLB_SPRINTF(path, sizeof(path), "/sys/devices/system/cpu/cpu%u/cpu_capacity", processorIndex);
     if(pathLength <= 0 || static_cast<usize>(pathLength) >= sizeof(path))
@@ -209,9 +209,9 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
 }
 
 
-[[nodiscard]] bool queryLinuxPlacements(InteropVector<CpuWorkerPlacement>& placements){
+[[nodiscard]] bool QueryLinuxPlacements(InteropVector<CpuWorkerPlacement>& placements){
     InteropVector<usize> affinityWords;
-    if(!queryLinuxAffinity(affinityWords))
+    if(!QueryLinuxAffinity(affinityWords))
         return false;
     const usize byteCount = affinityWords.size() * sizeof(usize);
     const auto* affinity = reinterpret_cast<const cpu_set_t*>(affinityWords.data());
@@ -223,7 +223,7 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
     for(usize processorIndex = 0u; processorIndex < byteCount * __hidden_cpu_topology::s_BitsPerByte; ++processorIndex){
         if(!CPU_ISSET_S(processorIndex, byteCount, affinity))
             continue;
-        const u32 capacity = queryLinuxCapacity(static_cast<u32>(processorIndex));
+        const u32 capacity = QueryLinuxCapacity(static_cast<u32>(processorIndex));
         allCapacitiesKnown = allCapacitiesKnown && capacity != 0u;
         placements.push_back(CpuWorkerPlacement{ static_cast<u32>(processorIndex), 0u, capacity, CpuAffinity::Any });
     }
@@ -254,9 +254,9 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
 bool QueryCpuWorkerPlacements(InteropVector<CpuWorkerPlacement>& outPlacements){
     outPlacements.clear();
 #if defined(GLB_PLATFORM_WINDOWS)
-    const bool queried = __hidden_cpu_topology::queryWindowsPlacements(outPlacements);
+    const bool queried = __hidden_cpu_topology::QueryWindowsPlacements(outPlacements);
 #elif defined(GLB_PLATFORM_LINUX)
-    const bool queried = __hidden_cpu_topology::queryLinuxPlacements(outPlacements);
+    const bool queried = __hidden_cpu_topology::QueryLinuxPlacements(outPlacements);
 #else
     const bool queried = false;
 #endif
@@ -264,7 +264,7 @@ bool QueryCpuWorkerPlacements(InteropVector<CpuWorkerPlacement>& outPlacements){
         outPlacements.clear();
         return false;
     }
-    __hidden_cpu_topology::classifyPlacements(outPlacements);
+    __hidden_cpu_topology::ClassifyPlacements(outPlacements);
     return true;
 }
 
@@ -281,7 +281,7 @@ bool SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement){
     return SetThreadGroupAffinity(GetCurrentThread(), &affinity, nullptr) != FALSE;
 #elif defined(GLB_PLATFORM_LINUX)
     InteropVector<usize> affinityWords;
-    if(placement.processorGroup != 0u || !__hidden_cpu_topology::queryLinuxAffinity(affinityWords))
+    if(placement.processorGroup != 0u || !__hidden_cpu_topology::QueryLinuxAffinity(affinityWords))
         return false;
     const usize byteCount = affinityWords.size() * sizeof(usize);
     auto* affinity = reinterpret_cast<cpu_set_t*>(affinityWords.data());

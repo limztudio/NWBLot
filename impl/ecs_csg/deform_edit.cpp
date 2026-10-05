@@ -27,7 +27,7 @@ CsgDeformViability CheckCsgDeformCutsViability(
     CsgDeformVertexVector<Core::Alloc::ScratchArena> vertices(scratchArena);
     CsgDeformTriangleVector<Core::Alloc::ScratchArena> triangles(scratchArena);
     CsgDeformPipelineResult result;
-    if(!CsgDeformPipeline::RebuildSequentialCuts(
+    if(!CsgDeformPipeline::rebuildSequentialCuts(
         scratchArena,
         inputVertices,
         inputVertexCount,
@@ -59,7 +59,7 @@ bool PreviewCsgDeformCuts(
 ){
     outStats = CsgDeformStats{};
     CsgDeformPipelineResult result;
-    if(!CsgDeformPipeline::RebuildSequentialCuts(
+    if(!CsgDeformPipeline::rebuildSequentialCuts(
         scratchArena,
         inputVertices,
         inputVertexCount,

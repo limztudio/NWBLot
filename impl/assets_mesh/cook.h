@@ -37,7 +37,7 @@ struct MeshVertexRef{
 };
 
 struct MeshCookEntry{
-    Name virtualPath = NAME_NONE;
+    Name virtualPath = s_NameNone;
     Core::Assets::AssetVector<Float3U> positions;
     Core::Assets::AssetVector<Half4U> normals;
     Core::Assets::AssetVector<Half4U> tangents;

@@ -1,4 +1,4 @@
-global_declare_static_library(nwb_assets_model)
+nwb_declare_static_library(nwb_assets_model)
 target_sources(nwb_assets_model PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
     "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
@@ -8,7 +8,7 @@ target_sources(nwb_assets_model PRIVATE
 target_link_libraries(nwb_assets_model PUBLIC nwb_assets nwb_assets_material nwb_assets_mesh nwb_assets_skeleton)
 
 if(NWB_BUILD_PIPELINE)
-    global_declare_static_library(nwb_assets_model_cook)
+    nwb_declare_static_library(nwb_assets_model_cook)
     target_sources(nwb_assets_model_cook PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/asset.h"
         "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
@@ -20,7 +20,7 @@ if(NWB_BUILD_PIPELINE)
     target_link_libraries(nwb_assets_model_cook PUBLIC nwb_assets nwb_assets_material nwb_assets_mesh_cook nwb_assets_skeleton_cook)
     target_compile_definitions(nwb_assets_model_cook PRIVATE NWB_COOK=1)
 
-    global_declare_static_library(nwb_assets_model_volume_entry)
+    nwb_declare_static_library(nwb_assets_model_volume_entry)
     target_sources(nwb_assets_model_volume_entry PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/volume_entry.cpp"
     )

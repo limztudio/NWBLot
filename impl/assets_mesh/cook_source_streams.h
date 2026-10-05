@@ -52,7 +52,7 @@ struct SourceMeshStreams{
 
 class MeshCookSourceStreams final : NoCopy{
 public:
-    static bool ParseSourceVertexRefs(
+    static bool parseSourceVertexRefs(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const TStringView metaKind,
@@ -60,20 +60,20 @@ public:
     ScratchVector<MeshVertexRef>& outVertexRefs,
     Core::Alloc::ScratchArena& scratchArena
     );
-    static bool ValidateSourceStreamIndex(
+    static bool validateSourceStreamIndex(
     const Path& nwbFilePath,
     const TStringView metaKind,
     const AStringView streamName,
     const u32 index,
     const usize streamCount
     );
-    static bool ValidateSourceIndexStream(
+    static bool validateSourceIndexStream(
     const Path& nwbFilePath,
     const TStringView metaKind,
     const Core::Assets::AssetVector<u32>& indices,
     const usize vertexRefCount
     );
-    static bool ValidateSourceVertexRefs(
+    static bool validateSourceVertexRefs(
     const Path& nwbFilePath,
     const TStringView metaKind,
     const bool includeSkin,
@@ -81,8 +81,8 @@ public:
     const usize skinCount
     );
     template<typename CookEntryT>
-    static void CopySourceStreams(SourceMeshStreams& streams, CookEntryT& outEntry);
-    static bool ParseCommonSourceMeshStreams(
+    static void copySourceStreams(SourceMeshStreams& streams, CookEntryT& outEntry);
+    static bool parseCommonSourceMeshStreams(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset,
     const TStringView metaKind,
@@ -102,7 +102,7 @@ public:
 
 
 template<typename CookEntryT>
-void MeshCookSourceStreams::CopySourceStreams(SourceMeshStreams& streams, CookEntryT& outEntry){
+void MeshCookSourceStreams::copySourceStreams(SourceMeshStreams& streams, CookEntryT& outEntry){
     outEntry.positions.clear();
     outEntry.normals.clear();
     outEntry.tangents.clear();

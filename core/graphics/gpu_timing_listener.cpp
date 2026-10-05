@@ -102,7 +102,7 @@ GpuTimingSampleSubscription GpuTimingRecorder::subscribeSampleListener(const Gpu
     SampleListenerRecordPtr record(
         listenerRecord,
         SampleListenerRecordPtr::deleter_type(&m_arena),
-        AdoptRef
+        s_AdoptRef
     );
 
     ScopedLock lock(m_sampleListenerMutex);

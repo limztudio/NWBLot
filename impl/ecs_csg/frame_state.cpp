@@ -21,7 +21,7 @@ namespace __hidden_frame_state{
 
 
 [[nodiscard]] bool ActiveCutter(const CsgCutterComponent& cutter){
-    return cutter.active && cutter.shapeType != NAME_NONE;
+    return cutter.active && cutter.shapeType != s_NameNone;
 }
 
 [[nodiscard]] bool ReceiverVisible(

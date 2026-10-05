@@ -60,11 +60,11 @@ struct HandoffContext{
             Graphics::Texture* const texture = NewMetadataOnlyTexture(
                 testArena.arena, context, allocator, Graphics::TextureDesc{}.setMipLevels(2u).setArraySize(16u)
             );
-            textures.emplace_back(texture, Graphics::TextureHandle::deleter_type(&testArena.arena), AdoptRef);
+            textures.emplace_back(texture, Graphics::TextureHandle::deleter_type(&testArena.arena), s_AdoptRef);
             Graphics::Buffer* const buffer = NewMetadataOnlyBuffer(
                 testArena.arena, context, allocator, Graphics::BufferDesc{}.setByteSize(4096u)
             );
-            buffers.emplace_back(buffer, Graphics::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+            buffers.emplace_back(buffer, Graphics::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
         }
     }
 

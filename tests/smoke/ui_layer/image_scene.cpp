@@ -213,7 +213,7 @@ SharedUiImageSmokeScene CreateUiImageSmokeScene(Core::Alloc::GlobalArena& arena,
     return SharedUiImageSmokeScene(
         NewArenaObject<RefCounter<UiImageSmokeScene>>(arena, arena, input),
         ArenaRefDeleter<RefCounter<UiImageSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

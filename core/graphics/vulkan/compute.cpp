@@ -34,12 +34,12 @@ Object ComputePipeline::getNativeHandle(ObjectType objectType){
 
 
 ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& desc){
-    if(!desc.CS){
+    if(!desc.computeShader){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create compute pipeline: compute shader is null"));
         return nullptr;
     }
 
-    auto* cs = desc.CS.get();
+    auto* cs = desc.computeShader.get();
     if(&cs->m_context != &m_context){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create compute pipeline: compute shader belongs to another device"));
         return nullptr;
@@ -83,7 +83,7 @@ ComputePipelineHandle Device::createComputePipeline(const ComputePipelineDesc& d
     if(!createPipelineOrDestroy(GLB_TEXT("compute pipeline"), *pso, pipelineInfo))
         return nullptr;
 
-    return ComputePipelineHandle(pso, ComputePipelineHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return ComputePipelineHandle(pso, ComputePipelineHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 

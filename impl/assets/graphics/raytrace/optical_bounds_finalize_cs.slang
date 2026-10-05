@@ -37,11 +37,11 @@ bool nwbOpticalTransformRuntimeBounds(
     out float3 boundsMax){
     boundsMin = float3(0.0);
     boundsMax = float3(0.0);
-    const ByteAddressBuffer inputs = NwbHeapRawBuffer(g_NwbOpticalBoundsFinalize.runtimeInputsSlot);
+    const ByteAddressBuffer inputs = nwbHeapRawBuffer(g_NwbOpticalBoundsFinalize.runtimeInputsSlot);
     const uint localSlot = inputs.Load(inputOffset + NWB_OPTICAL_BOUNDS_RUNTIME_SLOT_OFFSET);
     if(localSlot == 0xffffffffu)
         return false;
-    const ByteAddressBuffer localBounds = NwbHeapRawBuffer(localSlot);
+    const ByteAddressBuffer localBounds = nwbHeapRawBuffer(localSlot);
     if((localBounds.Load(NWB_RUNTIME_MESH_BOUNDS_FLAGS_OFFSET) & NWB_RUNTIME_MESH_BOUNDS_FLAG_VALID) == 0u)
         return false;
     const float3 localMin = asfloat(localBounds.Load3(NWB_RUNTIME_MESH_BOUNDS_MIN_OFFSET));
@@ -79,7 +79,7 @@ bool nwbOpticalTransformRuntimeBounds(
 [numthreads(NWB_OPTICAL_BOUNDS_FINALIZE_GROUP_SIZE, 1, 1)]
 void main(uint3 groupThreadId : SV_GroupThreadID){
     const uint lane = groupThreadId.x;
-    const ByteAddressBuffer source = NwbHeapRawBuffer(g_NwbOpticalBoundsFinalize.sourceSceneSlot);
+    const ByteAddressBuffer source = nwbHeapRawBuffer(g_NwbOpticalBoundsFinalize.sourceSceneSlot);
     const RWByteAddressBuffer destination = g_NwbHeapStorageBuffers[g_NwbOpticalBoundsFinalize.outputSceneSlot];
     for(uint index = lane; index < g_NwbOpticalBoundsFinalize.instanceCount; index += NWB_OPTICAL_BOUNDS_FINALIZE_GROUP_SIZE){
         const uint offset = NWB_RT_OPTICAL_SCENE_HEADER_BYTES + index * NWB_RT_OPTICAL_INSTANCE_BYTES;
@@ -100,7 +100,7 @@ void main(uint3 groupThreadId : SV_GroupThreadID){
         if(!all(isfinite(minimum)) || !all(isfinite(maximum)) || any(minimum > maximum))
             invalid = 1u;
     }
-    const ByteAddressBuffer inputs = NwbHeapRawBuffer(g_NwbOpticalBoundsFinalize.runtimeInputsSlot);
+    const ByteAddressBuffer inputs = nwbHeapRawBuffer(g_NwbOpticalBoundsFinalize.runtimeInputsSlot);
     for(uint index = lane; index < g_NwbOpticalBoundsFinalize.runtimeCount; index += NWB_OPTICAL_BOUNDS_FINALIZE_GROUP_SIZE){
         const uint inputOffset = index * NWB_OPTICAL_BOUNDS_RUNTIME_INPUT_BYTES;
         const uint instanceIndex = inputs.Load(inputOffset + NWB_OPTICAL_BOUNDS_RUNTIME_INSTANCE_OFFSET);

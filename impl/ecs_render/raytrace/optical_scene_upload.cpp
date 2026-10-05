@@ -143,7 +143,7 @@ RayTracingOpticalUploadControlHandle CreateRayTracingOpticalUploadControl(
     return RayTracingOpticalUploadControlHandle(
         NewArenaObject<RayTracingOpticalUploadControl>(arena, buffer, primaryQueue),
         ArenaRefDeleter<RayTracingOpticalUploadControl, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

@@ -88,10 +88,10 @@ bool UiProgressSmokeScene::paintMain(Impl::Ui::Builder& ui, const Impl::Ui::Rect
         return false;
     if(ui.button("before", "Before progress", button))
         ++m_beforeClicks;
-    constexpr Array<StringView, 6u> keys{ "zero", "quarter", "full", "below", "above", "tiny" };
-    constexpr Array<f64, 6u> fractions{ 0.0, 0.25, 1.0, -2.0, 3.0, 0.01 };
-    for(usize index = 0u; index < keys.size(); ++index){
-        if(!ui.progress(keys[index], fractions[index]))
+    constexpr Array<StringView, 6u> s_Keys{ "zero", "quarter", "full", "below", "above", "tiny" };
+    constexpr Array<f64, 6u> s_Fractions{ 0.0, 0.25, 1.0, -2.0, 3.0, 0.01 };
+    for(usize index = 0u; index < s_Keys.size(); ++index){
+        if(!ui.progress(s_Keys[index], s_Fractions[index]))
             return false;
         m_declared.rectangles[index + 2u] = { bounds.x + 8.0f, bounds.y + 68.0f + static_cast<f32>(index) * 40.0f,
             bounds.width - 16.0f, 32.0f };
@@ -191,7 +191,7 @@ SharedUiProgressSmokeScene CreateUiProgressSmokeScene(Core::Alloc::GlobalArena& 
     return SharedUiProgressSmokeScene(
         NewArenaObject<RefCounter<UiProgressSmokeScene>>(arena, arena, input),
         ArenaRefDeleter<RefCounter<UiProgressSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

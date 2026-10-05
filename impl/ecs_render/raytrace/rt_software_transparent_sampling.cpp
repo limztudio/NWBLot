@@ -25,7 +25,7 @@ bool RendererRayTracingSystem::ensureSoftwareTransparentSamplingPipeline(){
         return false;
     if(!sampling.m_layout){
         Core::BindingLayoutDesc desc(m_arena);
-        desc.setVisibility(Core::ShaderType::Compute).addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(SoftwareTransparentSamplingPush)));
+        desc.setVisibility(Core::ShaderType::Compute).addItem(Core::BindingLayoutItem::pushConstants(0u, sizeof(SoftwareTransparentSamplingPush)));
         sampling.m_layout = device.createBindingLayout(desc);
         if(!sampling.m_layout)
             return false;

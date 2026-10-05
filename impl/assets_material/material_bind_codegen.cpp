@@ -203,8 +203,8 @@ static AStringView MaterialBindResourceSlangTypeName(const MaterialLayoutFieldTy
 
 static AStringView MaterialBindResourceHeapAccessorName(const MaterialLayoutFieldType::Enum fieldType){
     switch(fieldType){
-    case MaterialLayoutFieldType::SampledImage2D: return "NwbHeapSampledImage2DNonUniform";
-    case MaterialLayoutFieldType::Sampler: return "NwbHeapSamplerNonUniform";
+    case MaterialLayoutFieldType::SampledImage2D: return "nwbHeapSampledImage2DNonUniform";
+    case MaterialLayoutFieldType::Sampler: return "nwbHeapSamplerNonUniform";
     default: return AStringView();
     }
 }
@@ -995,9 +995,9 @@ bool EmitMaterialBindIncludes(
 
         const Path outputPath = outIncludeRoot / AStringView(includePath);
         ErrorCode errorCode;
-        if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
+        if(!EnsureDirectories(outputPath.parentPath(), errorCode)){
             NWB_LOGGER_ERROR(GLB_TEXT("Material bind include generation: failed to create generated include parent '{}': {}")
-                , PathToString<tchar>(outputPath.parent_path())
+                , PathToString<tchar>(outputPath.parentPath())
                 , StringConvert(errorCode.message())
             );
             return false;

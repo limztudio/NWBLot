@@ -96,7 +96,7 @@ void CpuTaskScheduler::validateWaitLocked(const TaskHandle handle, const CpuTask
             m_searchStack.push_back(candidate.index);
         }
     };
-    for(Execution* current = s_execution; current; current = current->previous){
+    for(Execution* current = s_Execution; current; current = current->previous){
         if(&current->scheduler == this)
             visit(current->task);
     }

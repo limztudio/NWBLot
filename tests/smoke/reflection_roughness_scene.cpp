@@ -176,7 +176,7 @@ NWB::Core::ECS::EntityID ReflectionRoughnessScene::createPanel(const SmokeMateri
 bool ReflectionRoughnessScene::createDeformingSource(){
     using namespace __hidden_reflection_roughness_scene;
     UniquePtr<NWB::Core::Assets::IAsset> modelAsset;
-    if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name(), modelAsset))
+    if(!m_context.assetManager.loadSync(NWB::Impl::Model::assetTypeName(), s_Model.name(), modelAsset))
         return false;
     GLB_ASSERT(modelAsset);
     const NWB::Impl::Model* modelPtr = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(modelAsset.get());
@@ -186,7 +186,7 @@ bool ReflectionRoughnessScene::createDeformingSource(){
     if(model.skeletonObjects().empty())
         return false;
     UniquePtr<NWB::Core::Assets::IAsset> skeletonAsset;
-    if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model.skeletonObjects().front().skeleton.name(), skeletonAsset))
+    if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::assetTypeName(), model.skeletonObjects().front().skeleton.name(), skeletonAsset))
         return false;
     GLB_ASSERT(skeletonAsset);
     const NWB::Impl::Skeleton* skeletonPtr = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(skeletonAsset.get());

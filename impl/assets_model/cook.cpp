@@ -368,7 +368,7 @@ bool ParseModelCookMetadata(
     ModelCookEntry& outEntry,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    Name virtualPath = NAME_NONE;
+    Name virtualPath = s_NameNone;
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, virtualPath, scratchArena))
         return false;
     return ParseModelCookMetadata(virtualPath, nwbFilePath, doc.asset(), outEntry, scratchArena);

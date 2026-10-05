@@ -45,15 +45,15 @@ public:
 
 
 public:
-    static TangentFrameRebuildVertex MakeVertex(const f32 x, const f32 y, const f32 z, const f32 u, const f32 v)noexcept;
-    static Vector<TangentFrameRebuildVertex> MakeFlatQuadVertices();
+    static TangentFrameRebuildVertex makeVertex(const f32 x, const f32 y, const f32 z, const f32 u, const f32 v)noexcept;
+    static Vector<TangentFrameRebuildVertex> makeFlatQuadVertices();
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TangentFrameRebuildVertex TangentFrameFixture::MakeVertex(const f32 x, const f32 y, const f32 z, const f32 u, const f32 v)noexcept{
+TangentFrameRebuildVertex TangentFrameFixture::makeVertex(const f32 x, const f32 y, const f32 z, const f32 u, const f32 v)noexcept{
     TangentFrameRebuildVertex vertex;
     vertex.position = Float4(x, y, z, 0.0f);
     vertex.normal = Float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -62,12 +62,12 @@ TangentFrameRebuildVertex TangentFrameFixture::MakeVertex(const f32 x, const f32
     return vertex;
 }
 
-Vector<TangentFrameRebuildVertex> TangentFrameFixture::MakeFlatQuadVertices(){
+Vector<TangentFrameRebuildVertex> TangentFrameFixture::makeFlatQuadVertices(){
     Vector<TangentFrameRebuildVertex> vertices;
-    vertices.push_back(MakeVertex(-1.0f, -1.0f, 0.0f, 0.0f, 0.0f));
-    vertices.push_back(MakeVertex(1.0f, -1.0f, 0.0f, 1.0f, 0.0f));
-    vertices.push_back(MakeVertex(1.0f, 1.0f, 0.0f, 1.0f, 1.0f));
-    vertices.push_back(MakeVertex(-1.0f, 1.0f, 0.0f, 0.0f, 1.0f));
+    vertices.push_back(makeVertex(-1.0f, -1.0f, 0.0f, 0.0f, 0.0f));
+    vertices.push_back(makeVertex(1.0f, -1.0f, 0.0f, 1.0f, 0.0f));
+    vertices.push_back(makeVertex(1.0f, 1.0f, 0.0f, 1.0f, 1.0f));
+    vertices.push_back(makeVertex(-1.0f, 1.0f, 0.0f, 0.0f, 1.0f));
     return vertices;
 }
 
@@ -76,7 +76,7 @@ Vector<TangentFrameRebuildVertex> TangentFrameFixture::MakeFlatQuadVertices(){
 
 
 TEST(Global, DegenerateUvsUseStableTangentFallback){
-    Vector<TangentFrameRebuildVertex> vertices = TangentFrameFixture::MakeFlatQuadVertices();
+    Vector<TangentFrameRebuildVertex> vertices = TangentFrameFixture::makeFlatQuadVertices();
     const Vector<u32> indices = NWB::Tests::MakeQuadTriangleIndices();
     NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
     for(TangentFrameRebuildVertex& vertex : vertices)
@@ -97,9 +97,9 @@ TEST(Global, DegenerateUvsUseStableTangentFallback){
 
 TEST(Global, RejectsDegenerateTangentFrameTriangle){
     Vector<TangentFrameRebuildVertex> vertices;
-    vertices.push_back(TangentFrameFixture::MakeVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
-    vertices.push_back(TangentFrameFixture::MakeVertex(0.0f, 0.0f, 0.0f, 1.0f, 0.0f));
-    vertices.push_back(TangentFrameFixture::MakeVertex(0.0f, 0.0f, 0.0f, 0.0f, 1.0f));
+    vertices.push_back(TangentFrameFixture::makeVertex(0.0f, 0.0f, 0.0f, 0.0f, 0.0f));
+    vertices.push_back(TangentFrameFixture::makeVertex(0.0f, 0.0f, 0.0f, 1.0f, 0.0f));
+    vertices.push_back(TangentFrameFixture::makeVertex(0.0f, 0.0f, 0.0f, 0.0f, 1.0f));
     const Vector<u32> indices = NWB::Tests::MakeTriangleIndices();
     NWB::Core::Alloc::ScratchArena scratchArena(NWB::Tests::s_TestArena);
 

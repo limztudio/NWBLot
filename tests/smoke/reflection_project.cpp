@@ -219,7 +219,7 @@ public:
             return false;
         }
         if(ReadSmokeEnvironmentFlag("NWB_REFLECTION_SMOKE_TIMING") || m_spatialOwnerProbe){
-            m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+            m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::gpuTimingOnly());
             if(!m_timingRenderPass.prepareQueries(extent.width, extent.height))
                 return false;
             m_context.graphics.addRenderPassToBack(m_timingRenderPass);

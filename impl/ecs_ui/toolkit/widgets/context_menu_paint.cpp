@@ -48,7 +48,7 @@ bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
     options.size = frame.options.size;
     options.gap = 0.0f;
     PopupPlacement placement;
-    if(!PopupLayout::Place(options, m_paint.displayMetrics(), placement))
+    if(!PopupLayout::place(options, m_paint.displayMetrics(), placement))
         return false;
     PopupScope scope;
     scope.token = frame.popupToken;

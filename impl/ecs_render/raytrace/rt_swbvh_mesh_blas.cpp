@@ -66,7 +66,7 @@ bool RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::Scratc
         }
 
         PreparedMeshBlasBuild build;
-        if(!__hidden_rt_swbvh::ResolvePreparedMeshBlasBuild(meshResources, build)){
+        if(!RayTracingSoftwareBvhDetail::ResolvePreparedMeshBlasBuild(meshResources, build)){
             NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not freeze BLAS build for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
             clearPreparedMeshBlasBuilds();
             return false;
@@ -88,14 +88,14 @@ bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(
         ECSRenderDetail::MeshRayTracingResourceSnapshot meshResources;
         if(
             !m_meshSystem.findRayTracingResourceSnapshot(build.meshName, meshResources)
-            || !__hidden_rt_swbvh::MatchesPreparedMeshBlasBuild(meshResources, build)
+            || !RayTracingSoftwareBvhDetail::MatchesPreparedMeshBlasBuild(meshResources, build)
         ){
             NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: frozen BLAS build no longer matches mesh '{}'"), StringConvert(build.meshName.resolvedText()));
             return false;
         }
     }
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
-        if(!__hidden_rt_swbvh::RecordPreparedMeshBlasBuild(
+        if(!RayTracingSoftwareBvhDetail::RecordPreparedMeshBlasBuild(
             commandList,
             build,
             meshBlasGeometryBuildInputStatesGraphOwned
@@ -124,7 +124,7 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
         ECSRenderDetail::MeshRayTracingResourceSnapshot meshResources;
         if(
             !m_meshSystem.findRayTracingResourceSnapshot(build.meshName, meshResources)
-            || !__hidden_rt_swbvh::MatchesPreparedMeshBlasBuild(meshResources, build)
+            || !RayTracingSoftwareBvhDetail::MatchesPreparedMeshBlasBuild(meshResources, build)
         ){
             allPlansCurrent = false;
             continue;

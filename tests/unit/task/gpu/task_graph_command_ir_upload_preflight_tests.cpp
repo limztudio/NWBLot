@@ -47,7 +47,7 @@ struct UploadPreflightFixture final{
         Graphics::Buffer* const object = NewMetadataOnlyBuffer(testArena.arena, context, allocator, description);
         if(!object)
             return {};
-        Graphics::BufferHandle handle(object, Graphics::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+        Graphics::BufferHandle handle(object, Graphics::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
         return graph.importBuffer(
             handle,
             Graphics::GpuGraphResourceDesc{}
@@ -62,7 +62,7 @@ struct UploadPreflightFixture final{
         Graphics::Texture* const object = NewMetadataOnlyTexture(testArena.arena, context, allocator, description);
         if(!object)
             return {};
-        Graphics::TextureHandle handle(object, Graphics::TextureHandle::deleter_type(&testArena.arena), AdoptRef);
+        Graphics::TextureHandle handle(object, Graphics::TextureHandle::deleter_type(&testArena.arena), s_AdoptRef);
         return graph.importTexture(
             handle,
             Graphics::GpuGraphResourceDesc{}

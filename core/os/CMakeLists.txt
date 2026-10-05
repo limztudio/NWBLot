@@ -1,4 +1,4 @@
-global_declare_static_library(nwb_os)
+nwb_declare_static_library(nwb_os)
 target_sources(nwb_os PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/utf8_text_internal.h"
     "${CMAKE_CURRENT_LIST_DIR}/clipboard.h"

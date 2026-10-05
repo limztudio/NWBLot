@@ -84,7 +84,7 @@ public:
         Core::Buffer* const buffer = Tests::NewMetadataOnlyBuffer(
             testArena.arena, context, allocator, Core::BufferDesc{}.setByteSize(512u).setDebugName(Name(identity))
         );
-        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
     }
 
     void setPass(const MaterialPipelinePass::Enum pass){

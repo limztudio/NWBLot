@@ -68,16 +68,16 @@ StructuredBuffer<NwbSceneLight, Std430DataLayout> g_NwbHeapSceneLightBuffers[];
 ConstantBuffer<NwbSceneShadingBuffer, Std140DataLayout> g_NwbHeapSceneShadingBuffers[];
 #pragma warning(pop)
 
-ConstantBuffer<NwbSceneShadingBuffer, Std140DataLayout> NwbHeapSceneShading(const uint slot){
+ConstantBuffer<NwbSceneShadingBuffer, Std140DataLayout> nwbHeapSceneShading(const uint slot){
     return g_NwbHeapSceneShadingBuffers[slot];
 }
 
-StructuredBuffer<NwbSceneLight, Std430DataLayout> NwbHeapSceneLights(const uint slot){
+StructuredBuffer<NwbSceneLight, Std430DataLayout> nwbHeapSceneLights(const uint slot){
     return g_NwbHeapSceneLightBuffers[slot];
 }
 
-#define g_NwbSceneCameraPosition NwbHeapSceneShading(NWB_SCENE_SHADING_HEAP_SLOT).g_NwbSceneCameraPosition
-#define g_NwbSceneLights NwbHeapSceneLights(NWB_SCENE_LIGHT_LIST_HEAP_SLOT)
+#define g_NwbSceneCameraPosition nwbHeapSceneShading(NWB_SCENE_SHADING_HEAP_SLOT).g_NwbSceneCameraPosition
+#define g_NwbSceneLights nwbHeapSceneLights(NWB_SCENE_LIGHT_LIST_HEAP_SLOT)
 
 uint nwbSceneLightCount(){
     return uint(max(g_NwbSceneCameraPosition.w, 0.0));

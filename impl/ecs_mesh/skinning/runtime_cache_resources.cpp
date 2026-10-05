@@ -185,7 +185,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = GLB_TEXT("rt triangle 
                     true,
                     ref
                 )
-                && MeshMeshletRefValidation::MeshletPositionRefInRange(ref, instance.restPositions.size(), instance.skin.size(), true)
+                && MeshMeshletRefValidation::meshletPositionRefInRange(ref, instance.restPositions.size(), instance.skin.size(), true)
             )
                 continue;
 
@@ -206,7 +206,7 @@ static constexpr TStringView s_RtTriangleAttributeLabel = GLB_TEXT("rt triangle 
                     localAttributeIndex,
                     ref
                 )
-                && MeshMeshletRefValidation::MeshletAttributeRefInRange(
+                && MeshMeshletRefValidation::meshletAttributeRefInRange(
                     ref,
                     instance.restNormals.size(),
                     instance.restTangents.size(),

@@ -59,10 +59,10 @@ bool nwbRefractionCachedHit(const NwbRayTraceSurfaceHit hit, const NwbRefraction
     float projectedDepth;
     if(!nwbRefractionProject(hit.position, pixel, projectedDepth))
         return false;
-    const float opaqueDepth = NwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.w).Load(int3(pixel, 0)).r;
+    const float opaqueDepth = nwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.w).Load(int3(pixel, 0)).r;
     if(opaqueDepth >= 1.0)
         return false;
-    const float3 opaqueWorld = NwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.z).Load(int3(pixel, 0)).xyz;
+    const float3 opaqueWorld = nwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.z).Load(int3(pixel, 0)).xyz;
     const float cameraDistance = length(hit.position - g_NwbRefractionView.cameraPosition.xyz);
     // Require both projected depth and world distance. A depth-only comparison becomes permissive in the far field
     // and incorrectly returns an opaque foreground object's lighting for a hidden RT hit.

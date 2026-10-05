@@ -113,7 +113,7 @@ TEST(CpuTaskProfileIntegration, DelayedTaskTimingPreservesExecutionFrameAtLaterP
     EXPECT_EQ(timing.stats(taskName).publishFrameIndex, 42u);
 
     Telemetry::CaptureSession telemetry(arena.arena);
-    telemetry.setCaptureOptions(Telemetry::CaptureOptions::All());
+    telemetry.setCaptureOptions(Telemetry::CaptureOptions::all());
     const Telemetry::PerfSessionRecordResult result = telemetry.recordPerfReport(perf.report());
     ASSERT_TRUE(result.ok());
     bool foundNamedTask = false;

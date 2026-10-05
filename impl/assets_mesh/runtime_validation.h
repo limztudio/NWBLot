@@ -29,14 +29,14 @@ NWB_IMPL_BEGIN
 
 class MeshRuntimeValidation final : NoCopy{
 public:
-    [[nodiscard]] static SIMDVector MakeMeshPositionVector(const SIMDVector position);
-    [[nodiscard]] static SIMDVector MakeMeshNormalVector(const SIMDVector normal);
-    [[nodiscard]] static SIMDVector MakeMeshTangentVector(const SIMDVector tangent);
-    [[nodiscard]] static SIMDVector MakeMeshUvVector(const SIMDVector uv);
-    [[nodiscard]] static SIMDVector MakeMeshColorVector(const SIMDVector color);
-    [[nodiscard]] static bool ValidDirectionVector(const SIMDVector direction);
-    [[nodiscard]] static bool ValidTangentVector(const SIMDVector tangent);
-    [[nodiscard]] static bool ValidateMeshStreams(
+    [[nodiscard]] static SIMDVector makeMeshPositionVector(const SIMDVector position);
+    [[nodiscard]] static SIMDVector makeMeshNormalVector(const SIMDVector normal);
+    [[nodiscard]] static SIMDVector makeMeshTangentVector(const SIMDVector tangent);
+    [[nodiscard]] static SIMDVector makeMeshUvVector(const SIMDVector uv);
+    [[nodiscard]] static SIMDVector makeMeshColorVector(const SIMDVector color);
+    [[nodiscard]] static bool validDirectionVector(const SIMDVector direction);
+    [[nodiscard]] static bool validTangentVector(const SIMDVector tangent);
+    [[nodiscard]] static bool validateMeshStreams(
     const Core::Assets::AssetVector<Float3U>& positions,
     const Core::Assets::AssetVector<Half4U>& normals,
     const Core::Assets::AssetVector<Half4U>& tangents,
@@ -45,14 +45,14 @@ public:
     const TStringView contextText,
     const TStringView meshPathText
     );
-    [[nodiscard]] static bool ValidateMeshletAttributeSkinSharing(
+    [[nodiscard]] static bool validateMeshletAttributeSkinSharing(
     const Core::Assets::AssetVector<u8>& positionRefDeltas,
     const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
     const Core::Assets::AssetVector<MeshletDesc>& meshlets,
     const TStringView contextText,
     const TStringView meshPathText
     );
-    [[nodiscard]] static bool ValidateMeshletPayload(
+    [[nodiscard]] static bool validateMeshletPayload(
     const Core::Assets::AssetVector<u8>& positionRefDeltas,
     const Core::Assets::AssetVector<u8>& attributeRefDeltas,
     const Core::Assets::AssetVector<MeshletLocalVertexRef>& localVertexRefs,
@@ -69,7 +69,7 @@ public:
     const TStringView contextText,
     const TStringView meshPathText
     );
-    [[nodiscard]] static bool ValidateSharedMeshPayload(
+    [[nodiscard]] static bool validateSharedMeshPayload(
     const Core::Assets::AssetVector<Float3U>& positions,
     const Core::Assets::AssetVector<Half4U>& normals,
     const Core::Assets::AssetVector<Half4U>& tangents,
@@ -87,7 +87,7 @@ public:
     const TStringView meshPathText
     );
     template<typename MeshGeometryPayloadT>
-    [[nodiscard]] static bool ValidateSharedMeshPayload(
+    [[nodiscard]] static bool validateSharedMeshPayload(
     const MeshGeometryPayloadT& payload,
     const usize skinCount,
     const bool skinRequired,
@@ -105,14 +105,14 @@ public:
 
 
 template<typename MeshGeometryPayloadT>
-[[nodiscard]] bool MeshRuntimeValidation::ValidateSharedMeshPayload(
+[[nodiscard]] bool MeshRuntimeValidation::validateSharedMeshPayload(
     const MeshGeometryPayloadT& payload,
     const usize skinCount,
     const bool skinRequired,
     const TStringView contextText,
     const TStringView meshPathText
 ){
-    return ValidateSharedMeshPayload(
+    return validateSharedMeshPayload(
         payload.positionStream(),
         payload.normalStream(),
         payload.tangentStream(),

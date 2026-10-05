@@ -25,18 +25,18 @@ struct CaptureOptions{
     bool gpuTiming = false;
     bool memory = false;
 
-    [[nodiscard]] static constexpr CaptureOptions Disabled(){
+    [[nodiscard]] static constexpr CaptureOptions disabled(){
         return {};
     }
 
-    [[nodiscard]] static constexpr CaptureOptions GpuTimingOnly(){
+    [[nodiscard]] static constexpr CaptureOptions gpuTimingOnly(){
         CaptureOptions options;
         options.enabled = true;
         options.gpuTiming = true;
         return options;
     }
 
-    [[nodiscard]] static constexpr CaptureOptions All(){
+    [[nodiscard]] static constexpr CaptureOptions all(){
         CaptureOptions options;
         options.enabled = true;
         options.cpuTiming = true;

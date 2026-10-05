@@ -211,35 +211,35 @@ bool RendererReflectionSystem::prepareResources(
     if(
         !registerDescriptor(
             m_descriptors[OpaqueSampled], Core::GpuDescriptorClass::SampledImage,
-            Core::DescriptorWriteItem::Texture_SRV(0u, m_resources.opaqueRadiance.get())
+            Core::DescriptorWriteItem::textureSrv(0u, m_resources.opaqueRadiance.get())
         )
         || !registerDescriptor(
             m_descriptors[OpaqueStorage], Core::GpuDescriptorClass::StorageImage,
-            Core::DescriptorWriteItem::Texture_UAV(0u, m_resources.opaqueRadiance.get())
+            Core::DescriptorWriteItem::textureUav(0u, m_resources.opaqueRadiance.get())
         )
         || !registerDescriptor(
             m_descriptors[GlassSampled], Core::GpuDescriptorClass::SampledImage,
-            Core::DescriptorWriteItem::Texture_SRV(0u, m_resources.glassRadiance.get())
+            Core::DescriptorWriteItem::textureSrv(0u, m_resources.glassRadiance.get())
         )
         || !registerDescriptor(
             m_descriptors[GlassStorage], Core::GpuDescriptorClass::StorageImage,
-            Core::DescriptorWriteItem::Texture_UAV(0u, m_resources.glassRadiance.get())
+            Core::DescriptorWriteItem::textureUav(0u, m_resources.glassRadiance.get())
         )
         || !registerDescriptor(
             m_descriptors[Queue], Core::GpuDescriptorClass::StorageBuffer,
-            Core::DescriptorWriteItem::RawBuffer_UAV(0u, m_resources.queue.get())
+            Core::DescriptorWriteItem::rawBufferUav(0u, m_resources.queue.get())
         )
         || !registerDescriptor(
             m_descriptors[Counters], Core::GpuDescriptorClass::StorageBuffer,
-            Core::DescriptorWriteItem::RawBuffer_UAV(0u, m_resources.counters.get())
+            Core::DescriptorWriteItem::rawBufferUav(0u, m_resources.counters.get())
         )
         || !registerDescriptor(
             m_descriptors[Args], Core::GpuDescriptorClass::StorageBuffer,
-            Core::DescriptorWriteItem::RawBuffer_UAV(0u, m_resources.indirectArgs.get())
+            Core::DescriptorWriteItem::rawBufferUav(0u, m_resources.indirectArgs.get())
         )
         || !registerDescriptor(
             m_descriptors[Parameters], Core::GpuDescriptorClass::UniformBuffer,
-            Core::DescriptorWriteItem::ConstantBuffer(0u, m_resources.frameParameters.get())
+            Core::DescriptorWriteItem::constantBuffer(0u, m_resources.frameParameters.get())
         )
     ){
         releaseTargets();
@@ -247,7 +247,7 @@ bool RendererReflectionSystem::prepareResources(
     }
     if(!registerDescriptor(
         m_depthSampledDescriptor, Core::GpuDescriptorClass::SampledImage,
-        Core::DescriptorWriteItem::Texture_SRV(0u, depthPyramid.texture.get())
+        Core::DescriptorWriteItem::textureSrv(0u, depthPyramid.texture.get())
     )){
         releaseTargets();
         return false;
@@ -258,11 +258,11 @@ bool RendererReflectionSystem::prepareResources(
         if(
             !registerDescriptor(
                 m_depthMipSampledDescriptors[mipIndex], Core::GpuDescriptorClass::SampledImage,
-                Core::DescriptorWriteItem::Texture_SRV(0u, depthPyramid.texture.get(), depthFormat, subresources)
+                Core::DescriptorWriteItem::textureSrv(0u, depthPyramid.texture.get(), depthFormat, subresources)
             )
             || !registerDescriptor(
                 m_depthMipStorageDescriptors[mipIndex], Core::GpuDescriptorClass::StorageImage,
-                Core::DescriptorWriteItem::Texture_UAV(0u, depthPyramid.texture.get(), depthFormat, subresources)
+                Core::DescriptorWriteItem::textureUav(0u, depthPyramid.texture.get(), depthFormat, subresources)
             )
         ){
             releaseTargets();
@@ -455,7 +455,7 @@ bool RendererReflectionSystem::prepareQueue(const u32 capacity){
     const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(!descriptor.valid())
         return false;
-    if(!heap.write(descriptor, Core::DescriptorWriteItem::RawBuffer_UAV(0u, queue.get()))){
+    if(!heap.write(descriptor, Core::DescriptorWriteItem::rawBufferUav(0u, queue.get()))){
         heap.free(descriptor);
         return false;
     }
@@ -475,7 +475,7 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware){
     if(!m_bindingLayout){
         Core::BindingLayoutDesc desc(m_arena);
         desc.setVisibility(Core::ShaderType::Compute);
-        desc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(u32)));
+        desc.addItem(Core::BindingLayoutItem::pushConstants(0u, sizeof(u32)));
         m_bindingLayout = device.createBindingLayout(desc);
         if(!m_bindingLayout)
             return false;
@@ -483,7 +483,7 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware){
     if(!m_depthBindingLayout){
         Core::BindingLayoutDesc desc(m_arena);
         desc.setVisibility(Core::ShaderType::Compute);
-        desc.addItem(Core::BindingLayoutItem::PushConstants(0u, NWB_REFLECTION_DEPTH_PUSH_CONSTANT_BYTES));
+        desc.addItem(Core::BindingLayoutItem::pushConstants(0u, NWB_REFLECTION_DEPTH_PUSH_CONSTANT_BYTES));
         m_depthBindingLayout = device.createBindingLayout(desc);
         if(!m_depthBindingLayout)
             return false;

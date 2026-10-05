@@ -34,7 +34,7 @@ uint nwbSkinnedMeshRepackMeshletCount(){
 }
 
 uint nwbSkinnedMeshRepackLoadPrimitiveIndex(const uint primitiveIndex){
-    const uint word = NwbHeapRawBuffer(g_NwbSkinnedMeshRepackBindlessResources.streamSlots3.y).Load(primitiveIndex & ~NWB_MESHLET_PACKED_WORD_BYTE_MASK);
+    const uint word = nwbHeapRawBuffer(g_NwbSkinnedMeshRepackBindlessResources.streamSlots3.y).Load(primitiveIndex & ~NWB_MESHLET_PACKED_WORD_BYTE_MASK);
     return (word >> ((primitiveIndex & NWB_MESHLET_PACKED_WORD_BYTE_MASK) * NWB_MESHLET_PACKED_BYTE_BITS)) & NWB_MESHLET_PACKED_BYTE_MASK;
 }
 
@@ -61,7 +61,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
         const NwbMeshletLocalVertexRef localVertexRef = nwbSkinnedMeshHeapLocalVertexRefs(g_NwbSkinnedMeshRepackBindlessResources.streamSlots3.x)[meshlet.localVertexOffset + localVertex];
         const uint localAttributeIndex = nwbMeshletLocalAttribute(localVertexRef);
         const NwbMeshletAttributeStreamRef attributeRef = nwbMeshletDecodeAttributeRef(
-            NwbHeapRawBuffer(g_NwbSkinnedMeshRepackBindlessResources.streamSlots2.x),
+            nwbHeapRawBuffer(g_NwbSkinnedMeshRepackBindlessResources.streamSlots2.x),
             meshlet,
             decodeInfo,
             localAttributeIndex

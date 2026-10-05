@@ -207,7 +207,7 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard(){
     if(!m_installed)
         return;
 
-    while(::DiagnosticDetail::g_EventActive.test_and_set(MemoryOrder::acquire)){
+    while(::DiagnosticDetail::g_EventActive.testAndSet(MemoryOrder::acquire)){
         ::DiagnosticDetail::g_EventActive.wait(true, MemoryOrder::relaxed);
     }
 
@@ -232,7 +232,7 @@ DiagnosticCaptureGuard::~DiagnosticCaptureGuard(){
     }
 
     ::DiagnosticDetail::g_EventActive.clear(MemoryOrder::release);
-    ::DiagnosticDetail::g_EventActive.notify_all();
+    ::DiagnosticDetail::g_EventActive.notifyAll();
 }
 
 bool DiagnosticCaptureGuard::capture(const DiagnosticEventRecord& record){

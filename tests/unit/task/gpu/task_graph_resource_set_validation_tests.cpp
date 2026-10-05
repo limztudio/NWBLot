@@ -185,7 +185,7 @@ TEST(ResourceSetValidation, EmptySetsRemainValidAndMalformedDescriptorsRemainUnp
     desc.identity = Name("tests/resource_set_validation/bad_shape");
     desc.setMembers(nullptr, 1u);
     EXPECT_FALSE(context.graph.importResourceSet(desc).valid());
-    desc = context.description(NAME_NONE);
+    desc = context.description(s_NameNone);
     EXPECT_FALSE(context.graph.importResourceSet(desc).valid());
     desc = context.description(Name("tests/resource_set_validation/bad_label"));
     desc.markerLabel = {};

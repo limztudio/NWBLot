@@ -26,7 +26,7 @@ namespace __hidden_system{
 
 
 template<typename AccessContainer>
-[[nodiscard]] bool systemsConflict(const AccessContainer& predecessorAccesses, const AccessContainer& systemAccesses){
+[[nodiscard]] bool SystemsConflict(const AccessContainer& predecessorAccesses, const AccessContainer& systemAccesses){
     for(const ComponentAccess& predecessor : predecessorAccesses){
         for(const ComponentAccess& access : systemAccesses){
             if(predecessor.typeId == access.typeId && (predecessor.mode == AccessMode::Write || access.mode == AccessMode::Write))
@@ -118,7 +118,7 @@ void SystemScheduler::rebuild(){
     for(usize systemIndex = 0u; systemIndex < systemCount; ++systemIndex){
         DependencyList predecessors(m_arena);
         for(usize predecessorIndex = 0u; predecessorIndex < systemIndex; ++predecessorIndex){
-            if(__hidden_system::systemsConflict(m_allSystems[predecessorIndex]->m_access, m_allSystems[systemIndex]->m_access))
+            if(__hidden_system::SystemsConflict(m_allSystems[predecessorIndex]->m_access, m_allSystems[systemIndex]->m_access))
                 predecessors.push_back(predecessorIndex);
         }
         m_dependencies.push_back(Move(predecessors));

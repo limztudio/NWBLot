@@ -165,7 +165,7 @@ void BenchmarkReport(const u32 packetCount, const u32 ownerCount, const u32 task
             fixture.addUnmeasuredNode();
     }
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::all());
     ASSERT_TRUE(Telemetry::RecordFrameGraph(
         recorder, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, 19u
     ));
@@ -215,7 +215,7 @@ TEST(FrameGraphReport, GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjacentNod
     fixture.addOwner(s_ExpectedDualCount, 7u, false);
     fixture.addUnmeasuredNode();
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::all());
     ASSERT_TRUE(Telemetry::RecordFrameGraph(
         recorder, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, 19u
     ));
@@ -267,7 +267,7 @@ TEST(FrameGraphReport, RestartsOwnerRangesForEveryCaptureAndReportRebuild){
     second.addUnmeasuredNode();
     second.addOwner(s_ExpectedDualCount, 7u);
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::all());
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 918u, first.nodes, first.edges, first.queues, first.packets, 19u));
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 919u, second.nodes, second.edges, second.queues, second.packets, 20u));
     Log::TelemetryReport report(testArena.arena);
@@ -310,7 +310,7 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     const usize packetOffset = queueOffset + s_ExpectedDualCount * sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics);
     ASSERT_LE(packetOffset + 3u * sizeof(Telemetry::EncodedFrameGraphPacketSubmissionStatistics), original.size());
     Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::All());
+    recorder.setCaptureOptions(Telemetry::CaptureOptions::all());
 
     Telemetry::TelemetryBytes malformed(original);
     Telemetry::EncodedFrameGraphPacketSubmissionStatistics packet;

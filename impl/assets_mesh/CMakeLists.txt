@@ -27,14 +27,14 @@ set(NWB_ASSETS_MESH_RUNTIME_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
 )
 
-global_declare_static_library(nwb_assets_mesh)
+nwb_declare_static_library(nwb_assets_mesh)
 target_sources(nwb_assets_mesh PRIVATE
     ${NWB_ASSETS_MESH_RUNTIME_SOURCES}
 )
 target_link_libraries(nwb_assets_mesh PUBLIC nwb_assets nwb_assets_skeleton nwb_mesh nwb_assets_skeleton_types)
 
 if(NWB_BUILD_PIPELINE)
-    global_declare_static_library(nwb_assets_mesh_cook)
+    nwb_declare_static_library(nwb_assets_mesh_cook)
     target_sources(nwb_assets_mesh_cook PRIVATE
         ${NWB_ASSETS_MESH_RUNTIME_SOURCES}
         "${CMAKE_CURRENT_LIST_DIR}/skin_cook.cpp"
@@ -55,7 +55,7 @@ if(NWB_BUILD_PIPELINE)
     target_link_libraries(nwb_assets_mesh_cook PUBLIC nwb_assets nwb_assets_skeleton_cook nwb_mesh nwb_metascript nwb_assets_skeleton_types nwb_cpu_task)
     target_compile_definitions(nwb_assets_mesh_cook PRIVATE NWB_COOK=1)
 
-    global_declare_static_library(nwb_assets_mesh_volume_entries)
+    nwb_declare_static_library(nwb_assets_mesh_volume_entries)
     target_sources(nwb_assets_mesh_volume_entries PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/volume_entries.cpp"
     )

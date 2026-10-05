@@ -37,7 +37,7 @@ static bool CollectBuiltFiles(const AssetGatherOptions& options, Assets::AssetVe
     Assets::AssetArena& arena = files.get_allocator().arena();
     for(const Assets::AssetString& input : options.inputs){
         ErrorCode error;
-        const Path path = AbsolutePath(Path(arena, input), error).lexically_normal();
+        const Path path = AbsolutePath(Path(arena, input), error).lexicallyNormal();
         if(error){
             NWB_LOGGER_ERROR(GLB_TEXT("AssetGatherer: failed to resolve input '{}'"), StringConvert(input));
             return false;
@@ -67,7 +67,7 @@ static bool CollectBuiltFiles(const AssetGatherOptions& options, Assets::AssetVe
                 NWB_LOGGER_ERROR(GLB_TEXT("AssetGatherer: failed to scan input '{}'"), StringConvert(input));
                 return false;
             }
-            if(entry.is_regular_file(error) && PathToString(arena, entry.path().extension()) == Assets::BuiltAssetDetail::s_Extension)
+            if(entry.isRegularFile(error) && PathToString(arena, entry.path().extension()) == Assets::BuiltAssetDetail::s_Extension)
                 files.emplace_back(PathToString(arena, entry.path()));
             if(error){
                 NWB_LOGGER_ERROR(GLB_TEXT("AssetGatherer: failed to inspect input entry '{}'"), PathToString<tchar>(entry.path()));
@@ -144,7 +144,7 @@ bool GatherAssets(const AssetGatherOptions& options){
 
     Assets::ResolvedCookPaths paths(arena);
     ErrorCode error;
-    paths.outputDirectory = AbsolutePath(Path(arena, options.outputDirectory), error).lexically_normal();
+    paths.outputDirectory = AbsolutePath(Path(arena, options.outputDirectory), error).lexicallyNormal();
     if(error){
         NWB_LOGGER_ERROR(GLB_TEXT("AssetGatherer: failed to resolve output '{}'"), StringConvert(options.outputDirectory));
         return false;

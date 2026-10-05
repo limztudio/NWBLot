@@ -32,7 +32,7 @@ static bool RegisterWorkBuffer(
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(!handle.valid())
         return false;
-    if(!heap.write(handle, Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, buffer))){
+    if(!heap.write(handle, Core::DescriptorWriteItem::structuredBufferUav(0u, buffer))){
         heap.free(handle);
         return false;
     }
@@ -54,7 +54,7 @@ static bool RegisterTransmittanceStorageTexture(
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageImage);
     if(!handle.valid())
         return false;
-    if(!heap.write(handle, Core::DescriptorWriteItem::Texture_UAV(
+    if(!heap.write(handle, Core::DescriptorWriteItem::textureUav(
         0u,
         texture,
         format,

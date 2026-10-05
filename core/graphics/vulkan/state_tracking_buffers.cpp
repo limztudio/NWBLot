@@ -237,7 +237,7 @@ void CommandList::setBufferState(
             registerHostReadbackBuffer(buffer);
         if(VulkanStateTrackingDetail::NeedsResourceStateBarrier(oldState, stateBits, uavBarrierEnabled, forceMemoryDependency)){
             m_pendingBufferBarriers.push_back(VulkanStateTrackingDetail::BuildBufferStateBarrier(
-                buffer.m_buffer, piece, oldState, stateBits, m_context.extensions.KHR_ray_tracing_pipeline
+                buffer.m_buffer, piece, oldState, stateBits, m_context.extensions.khrRayTracingPipeline
             ));
         }
     };

@@ -58,7 +58,7 @@ inline constexpr Core::BufferHandle MeshSkinningRuntimeInstance::* s_InstanceBuf
 
 struct RuntimePayload{
     MeshSkinningRuntimeInstance instance;
-    Name fixedKey = NAME_NONE;
+    Name fixedKey = s_NameNone;
     Optional<u64> versionOverride;
     u32 providerId = 0u;
 
@@ -156,10 +156,10 @@ struct PruneContext{
         Core::Buffer* const rawBuffer = Tests::NewMetadataOnlyBuffer(
             arena, context, allocator, Core::BufferDesc{}.setByteSize(256u)
         );
-        buffer = Core::BufferHandle(rawBuffer, Core::BufferHandle::deleter_type(&arena), AdoptRef);
+        buffer = Core::BufferHandle(rawBuffer, Core::BufferHandle::deleter_type(&arena), s_AdoptRef);
     }
 
-    [[nodiscard]] Core::ECS::EntityID addBinding(const u32 providerId = 0u, const Name fixedKey = NAME_NONE){
+    [[nodiscard]] Core::ECS::EntityID addBinding(const u32 providerId = 0u, const Name fixedKey = s_NameNone){
         auto entity = world.createEntity();
         auto& binding = entity.addComponent<SkinnedMeshBindingComponent>();
         binding.runtimeMesh.value = (1ull << 40u) + static_cast<u64>(entity.id().id) + 1u;
@@ -200,7 +200,7 @@ struct PruneContext{
         WorldRuntimeProvider& provider = payload.providerId == 0u ? firstProvider : secondProvider;
         if(!provider.resolveRuntimeMesh(entity, description)){
             ADD_FAILURE() << "The fixture binding must resolve before retaining its renderer resources";
-            return NAME_NONE;
+            return s_NameNone;
         }
         MeshResources mesh;
         mesh.meshName = description.meshKey;
@@ -332,7 +332,7 @@ TEST(RuntimeMeshPruning, DescriptorBuildPreservesOwningRolesAndClearsRejectedCur
             instance.dirtyFlags = RuntimeMeshDirtyFlag::MeshletBoundsDirty;
         EXPECT_FALSE(BuildSkinnedRuntimeMeshDesc(entity, requestedHandle, selectedInstance, true, true, description));
         EXPECT_FALSE(description.valid());
-        EXPECT_EQ(description.meshKey, NAME_NONE);
+        EXPECT_EQ(description.meshKey, s_NameNone);
         EXPECT_EQ(description.entity, Core::ECS::s_InvalidEntityId);
         EXPECT_EQ(description.version, 0u);
         EXPECT_EQ(context.buffer->getReferenceCount(), referencesBefore);
@@ -432,14 +432,14 @@ TEST(RuntimeMeshPruning, RechecksCurrentHandleEntityReadinessAndFullVersionOnEve
     const auto entity = context.addBinding(0u, sharedKey);
     auto& payload = context.world.entity(entity).getComponent<RuntimePayload>();
     payload.versionOverride = (1ull << 40u) + 7u;
-    ASSERT_NE(context.retainBinding(entity), NAME_NONE);
+    ASSERT_NE(context.retainBinding(entity), s_NameNone);
     context.prune(scratch, &context.meshSystem);
     EXPECT_EQ(context.resources.size(), 1u);
     payload.versionOverride = 7u;
     context.prune(scratch, &context.meshSystem);
     EXPECT_TRUE(context.resources.empty());
     for(u32 failure = 0u; failure < 4u; ++failure){
-        ASSERT_NE(context.retainBinding(entity), NAME_NONE);
+        ASSERT_NE(context.retainBinding(entity), s_NameNone);
         auto& binding = context.world.entity(entity).getComponent<SkinnedMeshBindingComponent>();
         const RuntimeMeshHandle previousHandle = binding.runtimeMesh;
         if(failure == 0u)
@@ -456,7 +456,7 @@ TEST(RuntimeMeshPruning, RechecksCurrentHandleEntityReadinessAndFullVersionOnEve
         payload.instance.entity = entity;
         payload.instance.dirtyFlags = RuntimeMeshDirtyFlag::None;
     }
-    ASSERT_NE(context.retainBinding(entity), NAME_NONE);
+    ASSERT_NE(context.retainBinding(entity), s_NameNone);
     context.prune(scratch, &context.meshSystem);
     EXPECT_EQ(context.resources.size(), 1u);
 }
@@ -467,7 +467,7 @@ TEST(RuntimeMeshPruning, SharedIdentitiesRemainLiveAcrossProvidersUntilTheirLast
     const Name sharedKey("tests/runtime_mesh_pruning/shared");
     const auto first = context.addBinding(0u, sharedKey);
     const auto second = context.addBinding(1u, sharedKey);
-    ASSERT_NE(context.retainBinding(first), NAME_NONE);
+    ASSERT_NE(context.retainBinding(first), s_NameNone);
     context.meshSystem.registerRuntimeMeshProvider(context.firstProvider);
     context.world.entity(first).removeComponent<SkinnedMeshBindingComponent>();
     context.prune(scratch, &context.meshSystem);
@@ -476,7 +476,7 @@ TEST(RuntimeMeshPruning, SharedIdentitiesRemainLiveAcrossProvidersUntilTheirLast
     context.prune(scratch, &context.meshSystem);
     EXPECT_TRUE(context.resources.empty());
     context.meshSystem.registerRuntimeMeshProvider(context.secondProvider);
-    ASSERT_NE(context.retainBinding(second), NAME_NONE);
+    ASSERT_NE(context.retainBinding(second), s_NameNone);
     context.prune(scratch, &context.meshSystem);
     EXPECT_EQ(context.resources.size(), 1u);
     context.world.destroyEntity(second);
@@ -525,10 +525,10 @@ TEST(RuntimeMeshPruning, RequestedIdentitiesKeepFullNameAndVersionAcrossHintedAn
         Core::Alloc::ScratchArena scratch(Name("tests/runtime_mesh_pruning/request_scratch"));
         RuntimeMeshRequestSet requests(scratch, capacityHint);
         EXPECT_TRUE(requests.complete());
-        requests.add(NAME_NONE, 7u);
-        requests.markLive(NAME_NONE, 7u);
+        requests.add(s_NameNone, 7u);
+        requests.markLive(s_NameNone, 7u);
         EXPECT_TRUE(requests.complete());
-        EXPECT_FALSE(requests.containsLive(NAME_NONE, 7u));
+        EXPECT_FALSE(requests.containsLive(s_NameNone, 7u));
         for(usize index = 0u; index < 40u; ++index){
             requests.add(names[index], 7u);
             requests.add(names[index], 7u);
@@ -565,7 +565,7 @@ TEST(RuntimeMeshPruning, MembershipStopsAtItsLastRequestedIdentityWithoutRetaini
     PruneContext context;
     const auto first = context.addBinding();
     const Name retainedKey = context.retainBinding(first);
-    ASSERT_NE(retainedKey, NAME_NONE);
+    ASSERT_NE(retainedKey, s_NameNone);
     for(u32 index = 0u; index < 64u; ++index)
         ASSERT_TRUE(context.addBinding().valid());
     context.firstProvider.m_resolveCalls = 0u;
@@ -586,14 +586,14 @@ TEST(RuntimeMeshPruning, MembershipStopsAtItsLastRequestedIdentityWithoutRetaini
     EXPECT_EQ(scratch.memoryStats().allocationCount, allocationsBefore);
 
     const auto& instance = context.world.entity(first).getComponent<RuntimePayload>().instance;
-    Name meshKey = NAME_NONE;
+    Name meshKey = s_NameNone;
     u64 version = 0u;
     ASSERT_TRUE(ResolveSkinnedRuntimeMeshIdentity(first, instance.handle, &instance, meshKey, version));
     EXPECT_EQ(meshKey, retainedKey);
     EXPECT_EQ(version, 7u);
     EXPECT_EQ(context.buffer->getReferenceCount(), referencesBefore);
     EXPECT_FALSE(ResolveSkinnedRuntimeMeshIdentity(first, RuntimeMeshHandle{}, &instance, meshKey, version));
-    EXPECT_EQ(meshKey, NAME_NONE);
+    EXPECT_EQ(meshKey, s_NameNone);
     EXPECT_EQ(version, 0u);
     EXPECT_EQ(context.buffer->getReferenceCount(), referencesBefore);
 }
@@ -603,10 +603,10 @@ static void BenchmarkPruning(const usize bindingCount, const usize cachedCount, 
     context.entities.reserve(bindingCount);
     context.resources.reserve(cachedCount);
     for(usize index = 0u; index < bindingCount; ++index)
-        ASSERT_TRUE(context.addBinding(0u, shared ? Name("tests/runtime_mesh_pruning/benchmark_shared") : NAME_NONE).valid());
+        ASSERT_TRUE(context.addBinding(0u, shared ? Name("tests/runtime_mesh_pruning/benchmark_shared") : s_NameNone).valid());
     for(usize index = 0u; index < cachedCount; ++index){
         const usize entityIndex = shared ? 0u : ((index + 1u) * bindingCount / cachedCount - 1u);
-        ASSERT_NE(context.retainBinding(context.entities[entityIndex]), NAME_NONE);
+        ASSERT_NE(context.retainBinding(context.entities[entityIndex]), s_NameNone);
     }
     context.retired.reserve(context.resources.size());
     context.firstProvider.m_resolveCalls = 0u;

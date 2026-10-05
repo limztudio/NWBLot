@@ -56,7 +56,7 @@ bool GpuGraphSubmissionTransaction::beginSubmissionExceptionClosingWithinSubmiss
 
     m_exceptionClosingRecordingAttemptGeneration = m_recordingAttemptGeneration;
     m_exceptionClosingBinding = m_activeSubmissionBinding;
-    if(m_submissionExceptionClosing.test_and_set(MemoryOrder::release))
+    if(m_submissionExceptionClosing.testAndSet(MemoryOrder::release))
         TerminateInvariant();
     if(!graph.beginSubmissionExceptionClosing(
         compiledGraph,
@@ -64,7 +64,7 @@ bool GpuGraphSubmissionTransaction::beginSubmissionExceptionClosingWithinSubmiss
         m_exceptionClosingBinding
     )){
         m_submissionExceptionClosing.clear(MemoryOrder::release);
-        m_submissionExceptionClosing.notify_all();
+        m_submissionExceptionClosing.notifyAll();
         m_exceptionClosingRecordingAttemptGeneration = 0u;
         m_exceptionClosingBinding = {};
         return false;
@@ -101,7 +101,7 @@ bool GpuGraphSubmissionTransaction::submissionExceptionClosingResolved(
     m_exceptionClosingRecordingAttemptGeneration = 0u;
     m_exceptionClosingBinding = {};
     m_submissionExceptionClosing.clear(MemoryOrder::release);
-    m_submissionExceptionClosing.notify_all();
+    m_submissionExceptionClosing.notifyAll();
     return true;
 }
 
@@ -130,7 +130,7 @@ void GpuGraphSubmissionTransaction::completeSubmissionExceptionClosingWithinSubm
             m_exceptionClosingRecordingAttemptGeneration = 0u;
             m_exceptionClosingBinding = {};
             m_submissionExceptionClosing.clear(MemoryOrder::release);
-            m_submissionExceptionClosing.notify_all();
+            m_submissionExceptionClosing.notifyAll();
             return;
         }
     }
@@ -142,7 +142,7 @@ void GpuGraphSubmissionTransaction::completeSubmissionExceptionClosingWithinSubm
     m_exceptionClosingRecordingAttemptGeneration = 0u;
     m_exceptionClosingBinding = {};
     m_submissionExceptionClosing.clear(MemoryOrder::release);
-    m_submissionExceptionClosing.notify_all();
+    m_submissionExceptionClosing.notifyAll();
 }
 
 

@@ -91,8 +91,8 @@ namespace __hidden_csg_resources{
     )
         return false;
     const Core::DescriptorWriteItem descriptorWrite = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
-        ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
-        : Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, &buffer)
+        ? Core::DescriptorWriteItem::constantBuffer(0u, &buffer)
+        : Core::DescriptorWriteItem::structuredBufferSrv(0u, &buffer)
     ;
     const Core::GpuDescriptorHandle acquired = heap.allocate(descriptorClass);
     if(!acquired.valid() || !heap.write(acquired, descriptorWrite)){
@@ -154,7 +154,7 @@ bool RendererCsgSystem::createCsgClipResources(){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc.setVisibility(Core::ShaderType::Mesh | Core::ShaderType::Compute | Core::ShaderType::Pixel);
         // Push-only layout for the cap-fill path.
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(ECSRenderDetail::ShaderDrivenPushConstants)));
 
         m_csgState.m_clipBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_csgState.m_clipBindingLayout){

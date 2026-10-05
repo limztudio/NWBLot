@@ -108,7 +108,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
 ){
     using namespace Core::Assets;
 
-    if(context.assetType == Shader::AssetTypeName()){
+    if(context.assetType == Shader::assetTypeName()){
         GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
         ShaderCook::ShaderEntry shaderEntry(context.cookArena);
         if(!graphicsMetadata.shaderCook.parseShaderMeta(context.discoveredNwbFile.filePath, context.doc, shaderEntry, context.scratchArena))
@@ -136,7 +136,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
         if(!includeEntry.source.empty() && !includeEntry.defineValues.empty()){
             ErrorCode errorCode;
             const Path sourcePath(context.cookArena, includeEntry.source);
-            const Path absSource = AbsolutePath(sourcePath, errorCode).lexically_normal();
+            const Path absSource = AbsolutePath(sourcePath, errorCode).lexicallyNormal();
             if(errorCode){
                 NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to resolve include metadata source '{}' from '{}': {}")
                     , StringConvert(includeEntry.source)
@@ -214,7 +214,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         context.parsedMetadata,
         s_GraphicsVolumeMetadataExtensionName
     );
-    const Core::Assets::ICookEntryBucket* materialBucket = context.parsedMetadata.entryRegistry.find(Material::AssetTypeName());
+    const Core::Assets::ICookEntryBucket* materialBucket = context.parsedMetadata.entryRegistry.find(Material::assetTypeName());
     // Only selected graphics metadata or materials require generated modules and the shader index.
     if(!selectedGraphics && (!materialBucket || materialBucket->size() == 0u))
         return true;
@@ -225,7 +225,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     if(!AssetsCsgCook::AssignCsgShapeCookIds(graphicsMetadata.csgShapeEntries))
         return false;
 
-    auto& materialEntries = context.parsedMetadata.entryRegistry.entries<MaterialCookEntry>(Material::AssetTypeName());
+    auto& materialEntries = context.parsedMetadata.entryRegistry.entries<MaterialCookEntry>(Material::assetTypeName());
     if(graphicsMetadata.shaderEntries.empty() && !materialEntries.empty()){
         NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: material assets require at least one shader entry"));
         return false;

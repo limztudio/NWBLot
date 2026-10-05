@@ -77,7 +77,7 @@ struct LiveStateContext{
                 allocator,
                 Core::BufferDesc{}.setByteSize(256u)
             );
-            buffers.emplace_back(buffer, Core::BufferHandle::deleter_type(&arena), AdoptRef);
+            buffers.emplace_back(buffer, Core::BufferHandle::deleter_type(&arena), s_AdoptRef);
         }
         instances.reserve(instanceCount);
         for(usize index = 0u; index < instanceCount; ++index){
@@ -172,7 +172,7 @@ TEST(SkinningLiveStateBuffers, FiltersMissingInstancesInvalidHandlesAndIncomplet
         switch(failure){
         case 0u: instance.handle.reset(); break;
         case 1u: instance.entity = Core::ECS::s_InvalidEntityId; break;
-        case s_ExpectedDualCount: instance.sourceName = NAME_NONE; break;
+        case s_ExpectedDualCount: instance.sourceName = s_NameNone; break;
         case 3u: instance.dirtyFlags = RuntimeMeshDirtyFlag::GpuUploadDirty; break;
         case 4u: instance.restPositionBuffer = nullptr; break;
         case 5u: instance.localBounds.minBounds.w = 0; break;

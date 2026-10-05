@@ -158,14 +158,14 @@ bool nwbAvboitPrimaryRefractionInstance(float2 fullUv, uint instanceIndex){
     if(!nwbAvboitRefractionEnabled())
         return false;
     // All transparent passes gather the same instance ordering. Zero denotes no selected refractor
-    const float encodedInstance = NwbHeapSampledImage2D(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.refractionSlots1.w).SampleLevel(NwbHeapSampler(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.lightingSlots.w), fullUv, 0.0).r;
+    const float encodedInstance = nwbHeapSampledImage2D(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.refractionSlots1.w).SampleLevel(nwbHeapSampler(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.lightingSlots.w), fullUv, 0.0).r;
     return encodedInstance >= 0.5 && uint(encodedInstance + 0.5) == instanceIndex + 1u;
 }
 
 float nwbAvboitPrimaryRefractionDepth(float2 fragCoord){
     if(!nwbAvboitRefractionEnabled())
         return NWB_SCENE_BACKGROUND_DEPTH;
-    return NwbHeapSampledImage2D(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.refractionSlots0.x)
+    return nwbHeapSampledImage2D(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.refractionSlots0.x)
         .Load(int3(int2(fragCoord), 0)).r;
 }
 

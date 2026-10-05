@@ -53,8 +53,8 @@ bool nwbBxdfRequiresLinearOutput(){
     return true;
 }
 
-#define NWB_SCENE_SHADOW_VISIBILITY_RESOURCE NwbHeapSampledImage2DArray(g_NwbDeferredBindlessResources.lightingSlots.x)
-#define NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.y)
+#define NWB_SCENE_SHADOW_VISIBILITY_RESOURCE nwbHeapSampledImage2DArray(g_NwbDeferredBindlessResources.lightingSlots.x)
+#define NWB_SCENE_CAUSTIC_IRRADIANCE_RESOURCE nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.y)
 // Brings common/math (nwbSafeNormalize, frame helpers), scene/buffer (g_NwbSceneLights, nwbSceneLightCount,
 // g_NwbSceneCameraPosition, nwbSceneResolveLight), and the engine-owned transport accessors. Project BXDFs own
 // their BRDF, light-loop, and tone-map policy.
@@ -73,7 +73,7 @@ bool nwbBxdfRequiresLinearOutput(){
 // continuous coverage. The resolve texture is 1:1 with the screen, so sample exactly this pixel; upsample already
 // filtered coverage while respecting normal and world-distance edges.
 half3 nwbBxdfResolvedIndirect(const int2 pixel, float3 normalVector){
-    const half4 resolved = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.z).Load(int3(pixel, 0)));
+    const half4 resolved = half4(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.z).Load(int3(pixel, 0)));
     return lerp(nwbGiHemiAmbient(normalVector), half3(resolved.rgb), saturate(resolved.a));
 }
 
@@ -93,12 +93,12 @@ float3 nwbDeferredDecodeNormal(half3 value){
 // operations in this Compute shader.
 NwbBxdfSurface nwbBxdfLoadSurface(const int2 pixel){
     const int3 texel = int3(pixel, 0);
-    const half4 baseColorSample = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.x).Load(texel));
-    const half4 normalSample = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.y).Load(texel));
+    const half4 baseColorSample = half4(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.x).Load(texel));
+    const half4 normalSample = half4(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.y).Load(texel));
     // Every G-buffer color/vector attachment is RGBA16F. Keep this packed payload native-half until the world-space
     // shading calculations below, which are deliberately FP32.
-    const half4 worldSample = half4(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.z).Load(texel));
-    const float depth = NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w).Load(texel).r;
+    const half4 worldSample = half4(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.z).Load(texel));
+    const float depth = nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w).Load(texel).r;
 
     NwbBxdfSurface surface;
     surface.baseColor = baseColorSample.rgb;

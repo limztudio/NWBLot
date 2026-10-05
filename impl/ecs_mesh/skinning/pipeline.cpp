@@ -74,7 +74,7 @@ bool MeshSkinningSystem::ensureSkinningPipeline(){
             .setVisibility(Core::ShaderType::Compute)
         ;
         // Streams live in the global heap; local layout is push constants only.
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshSkinningPushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(MeshSkinningPushConstants)));
 
         m_skinningBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_skinningBindingLayout){
@@ -125,7 +125,7 @@ bool MeshSkinningSystem::ensureBoundsPipeline(){
             .setVisibility(Core::ShaderType::Compute)
         ;
         // Per-runtime selector is a global UniformBuffer entry via push-constant word.
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshletBoundsPushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(MeshletBoundsPushConstants)));
 
         m_boundsBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_boundsBindingLayout){
@@ -206,7 +206,7 @@ bool MeshSkinningSystem::ensureRepackPipeline(){
             .setVisibility(Core::ShaderType::Compute)
         ;
         // Per-runtime selector is a global UniformBuffer entry via push-constant word.
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(MeshletRepackPushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(MeshletRepackPushConstants)));
 
         m_repackBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_repackBindingLayout){

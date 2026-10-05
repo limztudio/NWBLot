@@ -26,7 +26,7 @@ NWB_IMPL_BEGIN
 class MeshCookRefEncoding final : NoCopy{
 public:
     template<typename CookEntryT>
-    [[nodiscard]] static bool EncodeMeshletRefs(
+    [[nodiscard]] static bool encodeMeshletRefs(
     CookEntryT& entry,
     const bool skinRequired,
     const TStringView metaKind
@@ -43,7 +43,7 @@ public:
 
 
 template<typename CookEntryT>
-bool MeshCookRefEncoding::EncodeMeshletRefs(
+bool MeshCookRefEncoding::encodeMeshletRefs(
     CookEntryT& entry,
     const bool skinRequired,
     const TStringView metaKind

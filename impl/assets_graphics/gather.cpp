@@ -50,7 +50,7 @@ bool MergeGatheredGraphicsAsset(
     Core::Assets::AssetBytes& existingPayload,
     const void* incomingPayload,
     const usize incomingSize){
-    if(virtualPath != Core::ShaderArchive::IndexVirtualPathName())
+    if(virtualPath != Core::ShaderArchive::indexVirtualPathName())
         return false;
     if(incomingSize > 0u && incomingPayload == nullptr)
         return false;

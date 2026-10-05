@@ -24,7 +24,7 @@ using ScratchArena = Core::Alloc::ScratchArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CsgDeformPipeline::RebuildSequentialCuts(
+bool CsgDeformPipeline::rebuildSequentialCuts(
     ScratchArena& scratchArena,
     NotNull<const CsgDeformVertex*> inputVertices,
     const usize inputVertexCount,
@@ -52,24 +52,24 @@ bool CsgDeformPipeline::RebuildSequentialCuts(
         outResult.viability.reason = CsgDeformViabilityReason::TooLarge;
         return false;
     }
-    if(!CsgDeformValidator::ValidOptions(options)){
+    if(!CsgDeformValidator::validOptions(options)){
         outResult.viability.viable = false;
         outResult.viability.reason = CsgDeformViabilityReason::InvalidCutter;
         return false;
     }
     CsgDeformViabilityReason::Enum inputReason = CsgDeformViabilityReason::Ok;
-    if(!CsgDeformValidator::FiniteInput(inputVertices, inputVertexCount, inputReason)){
+    if(!CsgDeformValidator::finiteInput(inputVertices, inputVertexCount, inputReason)){
         outResult.viability.viable = false;
         outResult.viability.reason = inputReason;
         return false;
     }
-    if(!CsgDeformValidator::ValidTopology(inputTriangles, inputTriangleCount, inputVertexCount)){
+    if(!CsgDeformValidator::validTopology(inputTriangles, inputTriangleCount, inputVertexCount)){
         outResult.viability.viable = false;
         outResult.viability.reason = CsgDeformViabilityReason::InvalidTopology;
         return false;
     }
 
-    const f32 epsilon = CsgDeformValidator::ShapeEpsilon(options);
+    const f32 epsilon = CsgDeformValidator::shapeEpsilon(options);
     outVertices.reserve(inputVertexCount + cutCount * s_RebuildReservePerCut);
     outTriangles.reserve(inputTriangleCount * s_KeptReserveMultiplier + cutCount * s_RebuildReservePerCut);
     for(usize vertexIndex = 0u; vertexIndex < inputVertexCount; ++vertexIndex)
@@ -89,7 +89,7 @@ bool CsgDeformPipeline::RebuildSequentialCuts(
         if(!cut.active)
             continue;
         CsgDeformViabilityReason::Enum cutReason = CsgDeformViabilityReason::Ok;
-        if(!CsgDeformWallBuilder::ClipShell(scratchArena, cut.shape, epsilon, outVertices, outTriangles, scratchKept, scratchDistances, cutReason)){
+        if(!CsgDeformWallBuilder::clipShell(scratchArena, cut.shape, epsilon, outVertices, outTriangles, scratchKept, scratchDistances, cutReason)){
             outResult.viability.viable = false;
             outResult.viability.reason = cutReason == CsgDeformViabilityReason::Ok
                 ? CsgDeformViabilityReason::NoKeptGeometry
@@ -108,7 +108,7 @@ bool CsgDeformPipeline::RebuildSequentialCuts(
         }
         if(options.fillCaps){
             u32 cutCaps = 0u;
-            if(!CsgDeformCapBuilder::FillCutCaps(scratchArena, outVertices, outTriangles, scratchEdges, cutCaps)){
+            if(!CsgDeformCapBuilder::fillCutCaps(scratchArena, outVertices, outTriangles, scratchEdges, cutCaps)){
                 outResult.viability.viable = false;
                 outResult.viability.reason = CsgDeformViabilityReason::CapLoopFailed;
                 return false;
@@ -123,7 +123,7 @@ bool CsgDeformPipeline::RebuildSequentialCuts(
         return false;
     }
     for(const CsgDeformVertex& vertex : outVertices){
-        if(!CsgDeformValidator::FiniteVertex(vertex)){
+        if(!CsgDeformValidator::finiteVertex(vertex)){
             outResult.viability.viable = false;
             outResult.viability.reason = CsgDeformViabilityReason::NonFiniteInput;
             return false;

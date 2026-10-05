@@ -145,7 +145,7 @@ SharedUiNumericEditSmokeScene CreateUiNumericEditSmokeScene(Core::Alloc::GlobalA
     return SharedUiNumericEditSmokeScene(
         NewArenaObject<RefCounter<UiNumericEditSmokeScene>>(arena, arena, input),
         ArenaRefDeleter<RefCounter<UiNumericEditSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

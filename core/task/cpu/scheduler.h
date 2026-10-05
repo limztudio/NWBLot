@@ -131,7 +131,7 @@ private:
     static constexpr usize s_QueueCount = s_PrioritySlotCount * s_CostSlotCount;
     static constexpr usize s_ChunksPerWorker = 4u;
     static constexpr u64 s_ScopeSearchGenerationStep = 2u;
-    inline static thread_local Execution* s_execution = nullptr;
+    inline static thread_local Execution* s_Execution = nullptr;
 
     struct ScopeWait{
         CpuTaskScope& m_scope;
@@ -188,8 +188,8 @@ public:
     [[nodiscard]] u64 domainIdentity()const noexcept{ return m_domainIdentity; }
     [[nodiscard]] u32 workerThreadCount()const noexcept{ return m_workerCount; }
     [[nodiscard]] bool isParallelEnabled()const noexcept{ return m_workerCount != 0u; }
-    [[nodiscard]] usize currentWorkerIndex()const noexcept{ return s_execution && &s_execution->scheduler == this ? s_execution->workerIndex : 0u; }
-    [[nodiscard]] CpuAffinity::Enum currentWorkerAffinity()const noexcept{ return s_execution && &s_execution->scheduler == this ? s_execution->affinity : CpuAffinity::Any; }
+    [[nodiscard]] usize currentWorkerIndex()const noexcept{ return s_Execution && &s_Execution->scheduler == this ? s_Execution->workerIndex : 0u; }
+    [[nodiscard]] CpuAffinity::Enum currentWorkerAffinity()const noexcept{ return s_Execution && &s_Execution->scheduler == this ? s_Execution->affinity : CpuAffinity::Any; }
 
 
 public:
@@ -241,7 +241,7 @@ private:
     void validateWaitLocked(TaskHandle handle, const CpuTaskScope* scope);
     void waitScope(CpuTaskScope& scope);
     [[nodiscard]] bool isMainThread()const noexcept;
-    [[nodiscard]] bool isExecuting()const noexcept{ return s_execution && &s_execution->scheduler == this; }
+    [[nodiscard]] bool isExecuting()const noexcept{ return s_Execution && &s_Execution->scheduler == this; }
     [[nodiscard]] u32 workerWakeMaskLocked()const noexcept;
     void notifyWorkers(u32 wakeMask)noexcept;
     void notifyProgress(u32 wakeMask, bool wakeJoiners)noexcept;

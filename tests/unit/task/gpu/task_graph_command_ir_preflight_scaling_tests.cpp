@@ -52,7 +52,7 @@ static void CheckMergedPacketPreflight(const usize taskCount, const bool benchma
             .setInitialState(Graphics::ResourceStates::CopyDest)
     );
     ASSERT_NE(textureObject, nullptr);
-    Graphics::TextureHandle texture(textureObject, Graphics::TextureHandle::deleter_type(&testArena.arena), AdoptRef);
+    Graphics::TextureHandle texture(textureObject, Graphics::TextureHandle::deleter_type(&testArena.arena), s_AdoptRef);
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId resource = graph.importTexture(
         texture,

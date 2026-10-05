@@ -16,7 +16,7 @@ namespace __hidden_ecs_graphics_task_graph_effects_contract_tests{
 
 static constexpr AStringView s_IMPL = "impl";
 static constexpr AStringView s_ECS_RENDER = "ecs_render";
-static constexpr AStringView s_RENDERER_FRAME_PIPELINE_GRAPH_SURFEL_GI_ = "renderer_frame_pipeline_graph_surfel_gi.cpp";
+static constexpr AStringView s_SurfelGiFramePipelineSource = "renderer_frame_pipeline_graph_surfel_gi.cpp";
 static constexpr AStringView s_RAYTRACE = "raytrace";
 static constexpr AStringView s_RENDERER_FRAME_PIPELINE_GRAPH_CAUSTICS_CPP = "renderer_frame_pipeline_graph_caustics.cpp";
 
@@ -56,7 +56,7 @@ TEST(EcsGraphics, SurfelCounterSharesComputeAndTransferReadbackPath){
         },
         surfelSource
     ));
-    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RENDERER_FRAME_PIPELINE_GRAPH_SURFEL_GI_, surfelTaskGraphSource));
+    ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_SurfelGiFramePipelineSource, surfelTaskGraphSource));
     ASSERT_TRUE(ReadRendererFramePipelineRuntimeSources(repoRoot, systemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / s_RAYTRACE / "raytracing_frame_resources.cpp", rayTracingSystemSource));
     ASSERT_TRUE(ReadTextFile(repoRoot / s_IMPL / s_ECS_RENDER / "renderer_frame_pipeline_graph_surfel_gi_readback.cpp", readbackSource));
@@ -224,8 +224,8 @@ TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAc
     EXPECT_FALSE(ContainsText(system, "deferredStateBindings"));
     EXPECT_FALSE(ContainsText(system, "m_causticIrradianceLightingState"));
     // Check lifecycle-owned bodies in the concatenated system source, beyond the execute.cpp range.
-    EXPECT_TRUE(ContainsText(system, "FrameExecuteLifecycle::PrepareHardwareCausticsTask("));
-    EXPECT_TRUE(ContainsText(system, "FrameExecuteLifecycle::AcceptHardwareCausticsTask("));
+    EXPECT_TRUE(ContainsText(system, "FrameExecuteLifecycle::prepareHardwareCausticsTask("));
+    EXPECT_TRUE(ContainsText(system, "FrameExecuteLifecycle::acceptHardwareCausticsTask("));
     EXPECT_TRUE(ContainsText(hardwareLifecycle, "m_hardwareCausticAccumulatorPersistentState.buildFilteredResourceSubset("));
     EXPECT_TRUE(ContainsText(hardwareLifecycle, "m_hardwareCausticAccumulatorPersistentState.commit("));
     EXPECT_FALSE(ContainsText(hardwareLifecycle, "replaceTextureSubset("));
@@ -233,13 +233,13 @@ TEST(EcsGraphics, CausticGraphScratchUsesFirstWritesAndHardwareRetainsAcceptedAc
         system,
         ".task = m_deferredHardwareCausticsTask,\n"
         "            .context = &hardwareCausticsStateLifecycle,\n"
-        "            .invoke = FrameExecuteLifecycle::PrepareHardwareCausticsTask,"
+        "            .invoke = FrameExecuteLifecycle::prepareHardwareCausticsTask,"
     ));
     EXPECT_TRUE(ContainsText(
         system,
         ".task = m_deferredHardwareCausticsTask,\n"
         "            .context = &hardwareCausticsStateLifecycle,\n"
-        "            .invoke = FrameExecuteLifecycle::AcceptHardwareCausticsTask,"
+        "            .invoke = FrameExecuteLifecycle::acceptHardwareCausticsTask,"
     ));
     EXPECT_TRUE(ContainsText(
         system,
@@ -287,8 +287,8 @@ TEST(EcsGraphics, SoftwareCausticsScratchRetainsAcceptedStateAcrossGraphicsRoute
     ASSERT_LT(candidatesOffset, callbacksOffset);
     EXPECT_FALSE(ContainsText(system, "m_causticIrradianceLightingState"));
     // Check lifecycle-owned bodies in the concatenated system source, beyond the execute.cpp range.
-    EXPECT_TRUE(ContainsText(system, "FrameExecuteLifecycle::PrepareSoftwareCausticsTask("));
-    EXPECT_TRUE(ContainsText(system, "FrameExecuteLifecycle::AcceptSoftwareCausticsTask("));
+    EXPECT_TRUE(ContainsText(system, "FrameExecuteLifecycle::prepareSoftwareCausticsTask("));
+    EXPECT_TRUE(ContainsText(system, "FrameExecuteLifecycle::acceptSoftwareCausticsTask("));
     EXPECT_TRUE(ContainsText(system, "if(context->runsOnCompute){"));
     EXPECT_TRUE(ContainsText(system, "m_causticIrradianceReturnState.buildFilteredResourceSubset("));
     EXPECT_TRUE(ContainsText(system, "m_causticsComputePersistentState.buildFilteredResourceSubset("));
@@ -298,13 +298,13 @@ TEST(EcsGraphics, SoftwareCausticsScratchRetainsAcceptedStateAcrossGraphicsRoute
         system,
         ".task = m_deferredSoftwareCausticsTask,\n"
         "            .context = &softwareCausticsStateLifecycle,\n"
-        "            .invoke = FrameExecuteLifecycle::PrepareSoftwareCausticsTask,"
+        "            .invoke = FrameExecuteLifecycle::prepareSoftwareCausticsTask,"
     ));
     EXPECT_TRUE(ContainsText(
         system,
         ".task = m_deferredSoftwareCausticsTask,\n"
         "            .context = &softwareCausticsStateLifecycle,\n"
-        "            .invoke = FrameExecuteLifecycle::AcceptSoftwareCausticsTask,"
+        "            .invoke = FrameExecuteLifecycle::acceptSoftwareCausticsTask,"
     ));
     EXPECT_TRUE(ContainsText(
         system,

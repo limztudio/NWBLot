@@ -11,7 +11,7 @@
 
 #if defined(NWB_CSG_EVAL_SHAPE_ID)
 #define NWB_CSG_HAS_SHAPE_ID_CAPSULE 1
-static const uint s_NwbCsgCapsuleShapeId = NWB_CSG_EVAL_SHAPE_ID;
+static const uint NWB_CSG_CAPSULE_SHAPE_ID = NWB_CSG_EVAL_SHAPE_ID;
 #endif
 
 

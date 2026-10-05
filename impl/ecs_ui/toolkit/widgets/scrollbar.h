@@ -46,7 +46,7 @@ struct ScrollViewportPlacement{
 class ScrollbarLayout final{
 public:
     // Resolve coupled bar visibility in logical coordinates; rejected inputs preserve the previous placement.
-    [[nodiscard]] static bool Calculate(
+    [[nodiscard]] static bool calculate(
         const Rect& bounds,
         const Rect& clip,
         const Insets& padding,
@@ -58,7 +58,7 @@ public:
         ScrollViewportPlacement& out
     );
     // Update only clamped offsets and thumb positions after caret reveal; extents and reserved geometry remain fixed.
-    [[nodiscard]] static bool UpdateOffsets(const Point& scroll, ScrollViewportPlacement& out);
+    [[nodiscard]] static bool updateOffsets(const Point& scroll, ScrollViewportPlacement& out);
 };
 
 

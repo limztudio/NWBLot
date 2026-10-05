@@ -11,7 +11,7 @@
 
 #if defined(NWB_CSG_EVAL_SHAPE_ID)
 #define NWB_CSG_HAS_SHAPE_ID_BOX 1
-static const uint s_NwbCsgBoxShapeId = NWB_CSG_EVAL_SHAPE_ID;
+static const uint NWB_CSG_BOX_SHAPE_ID = NWB_CSG_EVAL_SHAPE_ID;
 #endif
 
 

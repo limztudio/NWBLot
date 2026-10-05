@@ -62,8 +62,8 @@ class AssetManager final : NoCopy{
 private:
     struct RequestRecord{
         AssetLoadResult result;
-        Name assetType = NAME_NONE;
-        Name virtualPath = NAME_NONE;
+        Name assetType = s_NameNone;
+        Name virtualPath = s_NameNone;
     };
 
     using RequestMap = HashMap<u64, RequestRecord, Alloc::GlobalArena, Hasher<u64>, EqualTo<u64>>;
@@ -90,7 +90,7 @@ public:
 
 public:
     template<typename TAsset, typename TResource>
-    [[nodiscard]] static bool CheckLoaderEnter(
+    [[nodiscard]] static bool checkLoaderEnter(
         const AssetRef<TAsset>& assetRef,
         const TResource& resource,
         const TStringView owner,
@@ -110,7 +110,7 @@ public:
         const TStringView ownerName,
         const AStringView assetKindText
     )const{
-        if(!loadSync(AssetT::AssetTypeName(), virtualPath, outLoadedAsset)){
+        if(!loadSync(AssetT::assetTypeName(), virtualPath, outLoadedAsset)){
             NWB_LOGGER_ERROR(GLB_TEXT("{}: failed to load {} asset '{}'")
                 , ownerName
                 , StringConvert(assetKindText)

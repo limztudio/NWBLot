@@ -47,7 +47,7 @@ void MarkLiveSkinnedRuntimeMeshes(
     if(requests.complete())
         return;
     for(auto&& [entity, binding] : world.view<SkinnedMeshBindingComponent>()){
-        Name meshKey = NAME_NONE;
+        Name meshKey = s_NameNone;
         u64 version = 0u;
         if(resolveIdentity(entity, binding, meshKey, version))
             requests.markLive(meshKey, version);

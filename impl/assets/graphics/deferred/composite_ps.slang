@@ -42,9 +42,9 @@ struct NwbDeferredCompositePixelOutput{
 // framebuffer. SDR uses the attachment's sRGB conversion; HDR10 explicitly converts Rec.709 scene color to
 // Rec.2020/PQ before writing its A2B10G10R10 surface.
 NwbDeferredCompositePixelOutput main(NwbDeferredCompositePixelInput input){
-    const SamplerState sampler = NwbHeapSampler(g_NwbDeferredBindlessResources.lightingSlots.w);
+    const SamplerState sampler = nwbHeapSampler(g_NwbDeferredBindlessResources.lightingSlots.w);
     // Composite color is linear RGBA16F. Exposure and display mapping happen once, after every transport effect.
-    const half3 compositeColor = half3(NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.avboitWorkSlots1.z).Sample(sampler, input.uv).rgb);
+    const half3 compositeColor = half3(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.avboitWorkSlots1.z).Sample(sampler, input.uv).rgb);
     // Bound extreme finite exposure controls to the representable scene range before HDR conversion or division.
     // Exposure color math stays in FP16: inputs/outputs are RGBA16F and the 65504 clamp matches half max.
     const half3 exposedColor = min(
@@ -59,7 +59,7 @@ NwbDeferredCompositePixelOutput main(NwbDeferredCompositePixelInput input){
     // The optional layer is display-linear premultiplied Rec.709; it joins after scene mapping and before encoding.
     float4 outputLayer = float4(0.0);
     if(g_NwbDeferredCompositePushConstants.outputLayerSlot != 0xffffffffu)
-        outputLayer = NwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.outputLayerSlot).Sample(sampler, input.uv);
+        outputLayer = nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.outputLayerSlot).Sample(sampler, input.uv);
 
     NwbDeferredCompositePixelOutput output;
     // HDR10 blends in absolute linear nits and encodes PQ once; SDR uses the attachment's sRGB conversion once.

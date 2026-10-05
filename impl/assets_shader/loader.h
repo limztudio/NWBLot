@@ -68,7 +68,7 @@ template<typename ShaderPathResolver>
         return false;
     }
 
-    Name shaderVirtualPath = NAME_NONE;
+    Name shaderVirtualPath = s_NameNone;
     if(!shaderPathResolver(shaderName, variantName, stageName, shaderVirtualPath)){
         NWB_LOGGER_ERROR(GLB_TEXT("{}: failed to resolve shader '{}' variant '{}' stage '{}'")
             , ownerName

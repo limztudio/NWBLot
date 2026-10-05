@@ -19,7 +19,7 @@ NwbMeshletBounds nwbMeshLoadMeshletBounds(const uint meshletIndex){
     const uint byteOffset = nwbMeshletBoundsByteOffset(meshletIndex);
 
     NwbMeshletBounds bounds;
-    const ByteAddressBuffer meshletBounds = NwbHeapRawBuffer(
+    const ByteAddressBuffer meshletBounds = nwbHeapRawBuffer(
         nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_BOUNDS)
     );
     bounds.sphere = asfloat(meshletBounds.Load4(byteOffset + NWB_MESHLET_BOUNDS_SPHERE_BYTE_OFFSET));

@@ -6,14 +6,14 @@ elseif(NOT NWB_GRAPHICS_BACKEND STREQUAL "Vulkan")
     message(FATAL_ERROR "Unknown graphics backend: ${NWB_GRAPHICS_BACKEND}")
 endif()
 
-global_declare_static_library(nwb_shader_archive)
+nwb_declare_static_library(nwb_shader_archive)
 target_sources(nwb_shader_archive PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/shader_archive.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/shader_archive.h"
 )
 target_link_libraries(nwb_shader_archive PUBLIC nwb_common)
 
-global_declare_static_library(nwb_graphics_backend)
+nwb_declare_static_library(nwb_graphics_backend)
 target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/backend_selection.h"
     "${CMAKE_CURRENT_LIST_DIR}/backend_selection/configuration.h"

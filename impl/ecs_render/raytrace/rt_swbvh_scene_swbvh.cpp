@@ -23,7 +23,7 @@ NWB_IMPL_BEGIN
 
 
 bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchArena& scratchArena){
-    using namespace __hidden_rt_swbvh;
+    using namespace RayTracingSoftwareBvhDetail;
 
     m_preparedSceneContentStamp = {};
     m_lightSpaceShadow.m_captureSceneTrusted = false;
@@ -118,7 +118,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             !meshReady
             || !topologyReady
             || !mesh.swBvhNodeBuffer
-            || !__hidden_rt_swbvh::IsStorageBufferHeapHandle(mesh.swBvhNodeHeapHandle)
+            || !RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(mesh.swBvhNodeHeapHandle)
             || !mesh.positionBuffer
             || !mesh.triangleIndexBuffer
             || !mesh.attributeBuffer

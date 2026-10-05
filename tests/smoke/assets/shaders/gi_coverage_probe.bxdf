@@ -6,7 +6,7 @@
 half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
 #ifdef NWB_GRAPHICS_DEFERRED_LIGHTING_FRAMEWORK_SLANGI
     const half coverage = saturate(half(
-        NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.z).Load(int3(pixel, 0)).a
+        nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.lightingSlots.z).Load(int3(pixel, 0)).a
     ));
     if(surface.normal.z < -0.7)
         return half3(coverage, 1.0h - coverage, 0.0h);

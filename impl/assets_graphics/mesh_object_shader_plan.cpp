@@ -53,7 +53,7 @@ bool AppendMeshObjectShaderEntries(
         return true;
 
     const Path expectedSource = resolvedPaths.repoRoot / s_ImplPathToken / s_AssetsPathToken / s_GraphicsPathToken / s_MeshPathToken / s_SharedMeshSourceFile;
-    const bool hasFixedSource = meshEntry.sourcePath.lexically_normal() == expectedSource.lexically_normal();
+    const bool hasFixedSource = meshEntry.sourcePath.lexicallyNormal() == expectedSource.lexicallyNormal();
     if(mesh.name != s_SharedMeshProgramName && !hasFixedSource)
         return true;
     if(
@@ -73,7 +73,7 @@ bool AppendMeshObjectShaderEntries(
         || !prepared.entry.archiveStage.assign(MaterialShaderStageNames::MeshObjectVertexArchiveStageText()))
         return false;
     prepared.entry.emitMeshComputeShadow = false;
-    prepared.sourcePath = meshEntry.sourcePath.parent_path() / s_ObjectVertexSourceName;
+    prepared.sourcePath = meshEntry.sourcePath.parentPath() / s_ObjectVertexSourceName;
     prepared.entry.source = PathToString(cookArena, prepared.sourcePath);
     prepared.includeDirectories = meshEntry.includeDirectories;
     prepared.variantCount = 1u;

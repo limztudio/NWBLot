@@ -83,7 +83,7 @@ SearchComboState::SearchComboState(Core::Alloc::GlobalArena& arena)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SearchComboBehavior::Filter(SearchComboState& state, ISearchableListDataSource& source){
+bool SearchComboBehavior::filter(SearchComboState& state, ISearchableListDataSource& source){
     using namespace __hidden_ui_search_combo;
     const QuerySnapshot query{ state.m_query.instanceGeneration(), state.m_query.externalRevision(), state.m_query.revision(),
         state.m_query.compositionGeneration(), state.m_query.selectionGeneration(), state.m_query.anchor(), state.m_query.caret() };
@@ -122,7 +122,7 @@ bool SearchComboBehavior::Filter(SearchComboState& state, ISearchableListDataSou
     const bool externalQueryChange = state.m_filterValid && (state.m_queryGeneration != query.generation
         || state.m_queryExternalRevision != query.externalRevision);
     if(rebuild || externalQueryChange){
-        ListState& preview = ComboBehavior::Preview(state.m_combo);
+        ListState& preview = ComboBehavior::preview(state.m_combo);
         if(!preview.scrollTo(0.0))
             return false;
         preview.select(state.m_combo.selectedKey());

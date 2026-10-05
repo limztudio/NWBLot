@@ -23,7 +23,7 @@ NWB_CORE_BEGIN
 class GpuTimingSubmissionTicket;
 
 struct GpuTimingScope{
-    Name scopeName = NAME_NONE;
+    Name scopeName = s_NameNone;
     u64 reservation = 0u;
     TimerQueryRecordingToken timerQueryRecording;
     GpuTimingSubmissionTicket* submissionTicket = nullptr;
@@ -32,13 +32,13 @@ struct GpuTimingScope{
     // Epoch and reservation distinguish a recreated accumulator and reused query-pool slot from an earlier scope.
     u32 epoch = 0u;
 
-    [[nodiscard]] bool valid()const{ return scopeName != NAME_NONE && index != Limit<u32>::s_Max && epoch != 0u && reservation != 0u; }
+    [[nodiscard]] bool valid()const{ return scopeName != s_NameNone && index != Limit<u32>::s_Max && epoch != 0u && reservation != 0u; }
 };
 
 static_assert(IsTriviallyCopyable_V<GpuTimingScope>, "GPU timing publication must remain allocation-free after native recording begins");
 
 struct GpuTimingScopeDefinition{
-    Name identity = NAME_NONE;
+    Name identity = s_NameNone;
     // Label storage must outlive the definition and every recording that uses it.
     AStringView markerLabel;
 
@@ -105,7 +105,7 @@ inline constexpr GpuTimingSampleAttribution s_NoGpuTimingSampleAttribution;
 struct GpuTimingSample{
     u64 sourceFrameIndex = 0u;
     f64 durationSeconds = 0.0;
-    Name scopeName = NAME_NONE;
+    Name scopeName = s_NameNone;
     // Accepted native queue per attributed outcome; stays valid when the backend exposes durations
     // but no absolute cross-submission comparable range.
     GpuTimingSampleAttribution attribution = s_NoGpuTimingSampleAttribution;

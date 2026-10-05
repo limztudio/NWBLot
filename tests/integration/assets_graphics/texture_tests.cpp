@@ -94,7 +94,7 @@ static NWB::Core::Assets::AssetBytes MakeTextureTestUastcPayload(
     const usize byteCount = 96u,
     const u8 initialValue = 0u
 ){
-    NWB::Core::Assets::AssetBytes bytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
+    NWB::Core::Assets::AssetBytes bytes = AssetsGraphicsFixture::makeAssetBytes(testArena);
     bytes.resize(byteCount);
     for(usize index = 0u; index < bytes.size(); ++index)
         bytes[index] = static_cast<u8>(initialValue + index);
@@ -112,7 +112,7 @@ static NWB::Impl::Texture::MipLevelVector MakeTextureTestMipLevels(TestArena& te
 
 
 static NWB::Core::Assets::AssetBytes MakeTextureTestHdrPayload(TestArena& testArena){
-    NWB::Core::Assets::AssetBytes bytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
+    NWB::Core::Assets::AssetBytes bytes = AssetsGraphicsFixture::makeAssetBytes(testArena);
     // HDR RGB blocks come first; the matched LDR alpha blocks deliberately use
     // a different byte range so the tests exercise the trailing-stream boundary.
     bytes.resize(96u);
@@ -179,7 +179,7 @@ TEST(AssetsGraphics, TextureCodecRejectsUnsupportedBinaryVersions){
         TextureFormat::s_OpaqueAlphaUnorm8
     );
     NWB::Impl::TextureAssetCodec codec;
-    NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
+    NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::makeAssetBytes(testArena);
     ASSERT_TRUE(codec.serialize(texture, binary));
     for(const u32 version : { 0u, 1u, 2u, NWB::Impl::TextureBinaryPayload::s_TextureVersion + 1u }){
         GLB_MEMCPY(binary.data() + offsetof(NWB::Impl::TextureBinaryPayload::HeaderBinary, version), sizeof(version), &version, sizeof(version));
@@ -228,7 +228,7 @@ TEST(AssetsGraphics, TextureCookerBuildsCookedAssetFromTexConverterMetadata){
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
+    ASSERT_TRUE(AssetsGraphicsFixture::prepareAssetsGraphicsCookCase(
         testArena,
         "texture_cooker_round_trip",
         root,
@@ -239,12 +239,12 @@ TEST(AssetsGraphics, TextureCookerBuildsCookedAssetFromTexConverterMetadata){
     const Path textureDirectory = assetRoot / "textures";
     const Path metadataPath = textureDirectory / "checker.nwb";
     const Path dataPath = textureDirectory / "checker.tex";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_TextureTestMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(metadataPath, s_TextureTestMetadata));
     ASSERT_TRUE(WriteBinaryFile(dataPath, MakeTextureTestUastcPayload(testArena)));
-    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    ASSERT_TRUE(AssetsGraphicsFixture::cookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::TextureAssetCodec>(
+    ASSERT_TRUE(AssetsGraphicsFixture::loadCookedAsset<NWB::Impl::TextureAssetCodec>(
         testArena,
         outputDirectory,
         Name("project/textures/checker"),
@@ -273,7 +273,7 @@ TEST(AssetsGraphics, TextureCookerBuildsUastcHdrAssetWithTrailingAlphaFromMetada
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
+    ASSERT_TRUE(AssetsGraphicsFixture::prepareAssetsGraphicsCookCase(
         testArena,
         "texture_hdr_cooker_round_trip",
         root,
@@ -282,12 +282,12 @@ TEST(AssetsGraphics, TextureCookerBuildsUastcHdrAssetWithTrailingAlphaFromMetada
 
     const Path assetRoot = root / "assets";
     const Path textureDirectory = assetRoot / "textures";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(textureDirectory / "bright.nwb", s_TextureHdrTestMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(textureDirectory / "bright.nwb", s_TextureHdrTestMetadata));
     ASSERT_TRUE(WriteBinaryFile(textureDirectory / "bright.tex", MakeTextureTestHdrPayload(testArena)));
-    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    ASSERT_TRUE(AssetsGraphicsFixture::cookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::TextureAssetCodec>(
+    ASSERT_TRUE(AssetsGraphicsFixture::loadCookedAsset<NWB::Impl::TextureAssetCodec>(
         testArena,
         outputDirectory,
         Name("project/textures/bright"),
@@ -326,7 +326,7 @@ TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromCurrentMetadata){
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
+    ASSERT_TRUE(AssetsGraphicsFixture::prepareAssetsGraphicsCookCase(
         testArena,
         "texture_cube_volume_cooker_round_trip",
         root,
@@ -335,14 +335,14 @@ TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromCurrentMetadata){
 
     const Path assetRoot = root / "assets";
     const Path textureDirectory = assetRoot / "textures";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(textureDirectory / "sky.nwb", s_TextureCubeTestMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(textureDirectory / "sky.nwb", s_TextureCubeTestMetadata));
     ASSERT_TRUE(WriteBinaryFile(textureDirectory / "sky.tex", MakeTextureTestUastcPayload(testArena, 192u, 0x40u)));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(textureDirectory / "fog.nwb", s_TextureVolumeTestMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(textureDirectory / "fog.nwb", s_TextureVolumeTestMetadata));
     ASSERT_TRUE(WriteBinaryFile(textureDirectory / "fog.tex", MakeTextureTestUastcPayload(testArena, 80u, 0x80u)));
-    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    ASSERT_TRUE(AssetsGraphicsFixture::cookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
 
     UniquePtr<NWB::Core::Assets::IAsset> cubeAsset;
-    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::TextureAssetCodec>(
+    ASSERT_TRUE(AssetsGraphicsFixture::loadCookedAsset<NWB::Impl::TextureAssetCodec>(
         testArena,
         outputDirectory,
         Name("project/textures/sky"),
@@ -357,7 +357,7 @@ TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromCurrentMetadata){
     EXPECT_EQ(cube.mipLevels()[0u].sliceCount, 6u);
 
     UniquePtr<NWB::Core::Assets::IAsset> volumeAsset;
-    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::TextureAssetCodec>(
+    ASSERT_TRUE(AssetsGraphicsFixture::loadCookedAsset<NWB::Impl::TextureAssetCodec>(
         testArena,
         outputDirectory,
         Name("project/textures/fog"),
@@ -382,7 +382,7 @@ TEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata){
         AStringView assignment;
         TStringView diagnostic;
     };
-    constexpr Array<ObsoleteField, 15u> obsoleteFields = {{
+    constexpr Array<ObsoleteField, 15u> s_ObsoleteFields = {{
         { "asset.version = 1;\n", GLB_TEXT("unsupported asset field 'version'") },
         { "asset.uastc_spec_revision = \"b624c07ad3c659e7b0f0badcb36e9a6b8820a99d\";\n",
             GLB_TEXT("unsupported asset field 'uastc_spec_revision'") },
@@ -403,7 +403,7 @@ TEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata){
         { "asset.alpha_payload_byte_count = 48;\n", GLB_TEXT("unsupported asset field 'alpha_payload_byte_count'") },
     }};
     for(const AStringView source : { s_TextureTestMetadata, s_TextureHdrTestMetadata }){
-        for(const ObsoleteField& field : obsoleteFields){
+        for(const ObsoleteField& field : s_ObsoleteFields){
             CapturingLogger logger;
             NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
                 logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
@@ -418,7 +418,7 @@ TEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata){
             NWB::Core::Metascript::Document document(testArena.arena);
             ASSERT_TRUE(document.parse(metadata));
 
-            const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_obsolete_metadata") / "assets";
+            const Path assetRoot = AssetsGraphicsFixture::assetsGraphicsTestCaseRoot(testArena, "texture_obsolete_metadata") / "assets";
             const Path metadataPath = assetRoot / "textures" / "checker.nwb";
             NWB::Impl::TextureCookEntry entry(testArena.arena);
             EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(
@@ -439,14 +439,14 @@ TEST(AssetsGraphics, TextureCookerRejectsMissingMalformedAndUnsupportedFormats){
         AStringView assignment;
         TStringView diagnostic;
     };
-    constexpr Array<InvalidFormat, 4u> invalidFormats = {{
+    constexpr Array<InvalidFormat, 4u> s_InvalidFormats = {{
         { "", GLB_TEXT("field 'format' is required") },
         { "asset.format = 17;", GLB_TEXT("field 'format' must be a string") },
         { "asset.format = \"\";", GLB_TEXT("field 'format' must not be empty") },
         { "asset.format = \"uastc_hdr_6x6\";", GLB_TEXT("field 'format' must be 'uastc_ldr_4x4' or 'uastc_hdr_4x4'") },
     }};
-    constexpr AStringView formatAssignment = "asset.format = \"uastc_ldr_4x4\";";
-    for(const InvalidFormat& invalidFormat : invalidFormats){
+    constexpr AStringView s_FormatAssignment = "asset.format = \"uastc_ldr_4x4\";";
+    for(const InvalidFormat& invalidFormat : s_InvalidFormats){
         CapturingLogger logger;
         NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
             logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
@@ -455,13 +455,13 @@ TEST(AssetsGraphics, TextureCookerRejectsMissingMalformedAndUnsupportedFormats){
         TestArena testArena;
         NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
         ::AString<NWB::Core::Alloc::ScratchArena> metadata(s_TextureTestMetadata, scratchArena);
-        const usize formatPosition = metadata.find(formatAssignment);
+        const usize formatPosition = metadata.find(s_FormatAssignment);
         ASSERT_NE(formatPosition, AString::npos);
-        metadata.replace(formatPosition, formatAssignment.size(), invalidFormat.assignment);
+        metadata.replace(formatPosition, s_FormatAssignment.size(), invalidFormat.assignment);
         NWB::Core::Metascript::Document document(testArena.arena);
         ASSERT_TRUE(document.parse(metadata));
 
-        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_invalid_format") / "assets";
+        const Path assetRoot = AssetsGraphicsFixture::assetsGraphicsTestCaseRoot(testArena, "texture_invalid_format") / "assets";
         const Path metadataPath = assetRoot / "textures" / "checker.nwb";
         NWB::Impl::TextureCookEntry entry(testArena.arena);
         EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(
@@ -482,7 +482,7 @@ TEST(AssetsGraphics, TextureCookerRejectsFieldsDerivedFromFormatAndDimension){
         AStringView assignment;
         TStringView diagnostic;
     };
-    constexpr Array<DerivedField, 7u> derivedFields = {{
+    constexpr Array<DerivedField, 7u> s_DerivedFields = {{
         { s_TextureTestMetadata, "asset.depth = 1;\n", GLB_TEXT("unsupported asset field 'depth'") },
         { s_TextureCubeTestMetadata, "asset.depth = 1;\n", GLB_TEXT("unsupported asset field 'depth'") },
         { s_TextureHdrTestMetadata, "asset.color_space = \"linear\";\n", GLB_TEXT("unsupported asset field 'color_space'") },
@@ -491,7 +491,7 @@ TEST(AssetsGraphics, TextureCookerRejectsFieldsDerivedFromFormatAndDimension){
         { s_TextureTestMetadata, "asset.alpha_mode = \"opaque\";\n", GLB_TEXT("unsupported asset field 'alpha_mode'") },
         { s_TextureTestMetadata, "asset.alpha_constant_unorm8 = 128;\n", GLB_TEXT("unsupported asset field 'alpha_constant_unorm8'") },
     }};
-    for(const DerivedField& field : derivedFields){
+    for(const DerivedField& field : s_DerivedFields){
         CapturingLogger logger;
         NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
             logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
@@ -506,7 +506,7 @@ TEST(AssetsGraphics, TextureCookerRejectsFieldsDerivedFromFormatAndDimension){
         NWB::Core::Metascript::Document document(testArena.arena);
         ASSERT_TRUE(document.parse(metadata));
 
-        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_derived_fields") / "assets";
+        const Path assetRoot = AssetsGraphicsFixture::assetsGraphicsTestCaseRoot(testArena, "texture_derived_fields") / "assets";
         const Path metadataPath = assetRoot / "textures" / "checker.nwb";
         NWB::Impl::TextureCookEntry entry(testArena.arena);
         EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena));
@@ -520,19 +520,19 @@ TEST(AssetsGraphics, TextureCookerRequiresExactDerivedSidecarSize){
         AStringView filename;
         usize byteCount;
     };
-    constexpr Array<SidecarCase, 4u> sidecarCases = {{
+    constexpr Array<SidecarCase, 4u> s_SidecarCases = {{
         { s_TextureTestMetadata, "checker.tex", 96u },
         { s_TextureHdrTestMetadata, "bright.tex", 96u },
         { s_TextureCubeTestMetadata, "sky.tex", 192u },
         { s_TextureVolumeTestMetadata, "fog.tex", 80u },
     }};
-    for(const SidecarCase& sidecarCase : sidecarCases){
+    for(const SidecarCase& sidecarCase : s_SidecarCases){
         TestArena testArena;
         Path root(testArena.arena);
-        ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "texture_derived_sidecar_size", root));
+        ASSERT_TRUE(AssetsGraphicsFixture::prepareAssetsGraphicsCaseRoot(testArena, "texture_derived_sidecar_size", root));
         const Path assetRoot = root / "assets";
         const Path metadataPath = assetRoot / "textures" / "checker.nwb";
-        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, sidecarCase.metadata));
+        ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(metadataPath, sidecarCase.metadata));
         NWB::Core::Metascript::Document document(testArena.arena);
         ASSERT_TRUE(document.parse(sidecarCase.metadata));
 
@@ -548,7 +548,7 @@ TEST(AssetsGraphics, TextureCookerRequiresExactDerivedSidecarSize){
             const bool parsed = NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena);
             EXPECT_EQ(parsed, byteCount == sidecarCase.byteCount) << sidecarCase.filename << ": " << byteCount;
             if(parsed){
-                NWB::Impl::Texture texture(testArena.arena, NAME_NONE);
+                NWB::Impl::Texture texture(testArena.arena, s_NameNone);
                 EXPECT_TRUE(NWB::Impl::BuildTextureAsset(entry, texture));
                 EXPECT_EQ(logger.errorCount(), 0u);
             }
@@ -566,21 +566,21 @@ TEST(AssetsGraphics, TextureCookerInfersHdrAlphaAndChecksConstantBounds){
         bool valid;
         u8 alphaConstant;
     };
-    constexpr Array<AlphaCase, 4u> alphaCases = {{
+    constexpr Array<AlphaCase, 4u> s_AlphaCases = {{
         { "asset.alpha_mode = \"opaque\";", true, 255u },
         { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = 0;", true, 0u },
         { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = 254;", true, 254u },
         { "asset.alpha_mode = \"constant_unorm8\"; asset.alpha_constant_unorm8 = 255;", false, 255u },
     }};
-    constexpr AStringView alphaAssignment = "asset.alpha_mode = \"uastc_ldr_4x4\";";
+    constexpr AStringView s_AlphaAssignment = "asset.alpha_mode = \"uastc_ldr_4x4\";";
     TestArena testArena;
     Path root(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "texture_hdr_alpha_inference", root));
+    ASSERT_TRUE(AssetsGraphicsFixture::prepareAssetsGraphicsCaseRoot(testArena, "texture_hdr_alpha_inference", root));
     const Path assetRoot = root / "assets";
     const Path metadataPath = assetRoot / "textures" / "bright.nwb";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_TextureHdrTestMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::writeTextFile(metadataPath, s_TextureHdrTestMetadata));
     ASSERT_TRUE(WriteBinaryFile(assetRoot / "textures" / "bright.tex", MakeTextureTestUastcPayload(testArena, 48u)));
-    for(const AlphaCase& alphaCase : alphaCases){
+    for(const AlphaCase& alphaCase : s_AlphaCases){
         CapturingLogger logger;
         NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
             logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
@@ -588,16 +588,16 @@ TEST(AssetsGraphics, TextureCookerInfersHdrAlphaAndChecksConstantBounds){
 
         NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
         ::AString<NWB::Core::Alloc::ScratchArena> metadata(s_TextureHdrTestMetadata, scratchArena);
-        const usize alphaPosition = metadata.find(alphaAssignment);
+        const usize alphaPosition = metadata.find(s_AlphaAssignment);
         ASSERT_NE(alphaPosition, AString::npos);
-        metadata.replace(alphaPosition, alphaAssignment.size(), alphaCase.assignment);
+        metadata.replace(alphaPosition, s_AlphaAssignment.size(), alphaCase.assignment);
         NWB::Core::Metascript::Document document(testArena.arena);
         ASSERT_TRUE(document.parse(metadata));
         NWB::Impl::TextureCookEntry entry(testArena.arena);
         const bool parsed = NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena);
         EXPECT_EQ(parsed, alphaCase.valid) << alphaCase.assignment;
         if(parsed){
-            NWB::Impl::Texture texture(testArena.arena, NAME_NONE);
+            NWB::Impl::Texture texture(testArena.arena, s_NameNone);
             ASSERT_TRUE(NWB::Impl::BuildTextureAsset(entry, texture));
             EXPECT_EQ(texture.alphaConstantUnorm8(), alphaCase.alphaConstant);
             EXPECT_EQ(logger.errorCount(), 0u);
@@ -614,7 +614,7 @@ TEST(AssetsGraphics, TextureCookerRejectsDerivedMipAndAlphaSizeOverflow){
         AStringView fields;
         TStringView diagnostic;
     };
-    constexpr Array<OverflowCase, 4u> overflowCases = {{
+    constexpr Array<OverflowCase, 4u> s_OverflowCases = {{
         {
             "asset.format = \"uastc_ldr_4x4\"; asset.color_space = \"linear\"; asset.has_alpha = 0;\n"
             "asset.dimension = \"2d\"; asset.width = 4294967295; asset.height = 4294967295;\n",
@@ -636,7 +636,7 @@ TEST(AssetsGraphics, TextureCookerRejectsDerivedMipAndAlphaSizeOverflow){
             GLB_TEXT("separate HDR alpha payload size overflows")
         },
     }};
-    for(const OverflowCase& overflowCase : overflowCases){
+    for(const OverflowCase& overflowCase : s_OverflowCases){
         CapturingLogger logger;
         NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(
             logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal
@@ -649,7 +649,7 @@ TEST(AssetsGraphics, TextureCookerRejectsDerivedMipAndAlphaSizeOverflow){
         metadata.append("asset.data = \"overflow.tex\";\n");
         NWB::Core::Metascript::Document document(testArena.arena);
         ASSERT_TRUE(document.parse(metadata));
-        const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_derived_size_overflow") / "assets";
+        const Path assetRoot = AssetsGraphicsFixture::assetsGraphicsTestCaseRoot(testArena, "texture_derived_size_overflow") / "assets";
         const Path metadataPath = assetRoot / "textures" / "overflow.nwb";
         NWB::Impl::TextureCookEntry entry(testArena.arena);
         EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena));
@@ -671,7 +671,7 @@ TEST(AssetsGraphics, TextureCookerRejectsSidecarPathTraversal){
     NWB::Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(document.parse(AStringView(metadata.data(), metadata.size())));
 
-    const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_path_traversal") / "assets";
+    const Path assetRoot = AssetsGraphicsFixture::assetsGraphicsTestCaseRoot(testArena, "texture_path_traversal") / "assets";
     const Path metadataPath = assetRoot / "textures" / "checker.nwb";
     NWB::Impl::TextureCookEntry entry(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);

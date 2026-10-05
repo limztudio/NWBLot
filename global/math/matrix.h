@@ -30,7 +30,7 @@ inline constexpr f32 s_MatrixDecomposeEpsilon = 0.0001f;
 
 GLB_INLINE bool ScalarNearEqual(f32 value0, f32 value1, f32 epsilon)noexcept{ return Abs(value0 - value1) <= epsilon; }
 
-GLB_INLINE SIMDVector SIMDCALL MatrixRowMultiply(SIMDVector row, const SIMDMatrix& matrix)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL MatrixRowMultiply(SIMDVector row, const SIMDMatrix& matrix)noexcept{
 #if defined(GLB_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(
         (matrix.v[0].f[0] * row.f[0]) + (matrix.v[1].f[0] * row.f[1]) + (matrix.v[2].f[0] * row.f[2]) + (matrix.v[3].f[0] * row.f[3]),
@@ -73,7 +73,7 @@ GLB_INLINE SIMDVector SIMDCALL MatrixRowMultiply(SIMDVector row, const SIMDMatri
 }
 
 #if defined(GLB_HAS_AVX2) && (defined(__FMA__) || defined(_M_FMA))
-GLB_INLINE void SIMDCALL MatrixMultiplyPackedRowsFMA(
+GLB_INLINE void GLB_SIMD_CALL MatrixMultiplyPackedRowsFMA(
     const SIMDMatrix& m0,
     const SIMDMatrix& m1,
     __m256& outRows01,
@@ -119,7 +119,7 @@ GLB_INLINE void SIMDCALL MatrixMultiplyPackedRowsFMA(
     outRows23 = t1;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixMultiplyFMA(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixMultiplyFMA(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
     __m256 rows01{};
     __m256 rows23{};
     MatrixMultiplyPackedRowsFMA(m0, m1, rows01, rows23);
@@ -131,7 +131,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixMultiplyFMA(const SIMDMatrix& m0, const SIM
     return result;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixMultiplyTransposeFMA(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixMultiplyTransposeFMA(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
     __m256 rows01{};
     __m256 rows23{};
     MatrixMultiplyPackedRowsFMA(m0, m1, rows01, rows23);
@@ -139,7 +139,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixMultiplyTransposeFMA(const SIMDMatrix& m0, 
 }
 #endif
 
-GLB_INLINE SIMDVector SIMDCALL PlaneNormalize(SIMDVector plane)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL PlaneNormalize(SIMDVector plane)noexcept{
 #if defined(GLB_HAS_SSE4)
     SIMDVector lengthSq = _mm_dp_ps(plane, plane, 0x7F);
     const SIMDVector length = _mm_sqrt_ps(lengthSq);
@@ -200,21 +200,21 @@ GLB_INLINE void RankDecompose(usize& a, usize& b, usize& c, f32 x, f32 y, f32 z)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE bool SIMDCALL MatrixIsNaN(const SIMDMatrix& matrix)noexcept{
+GLB_INLINE bool GLB_SIMD_CALL MatrixIsNaN(const SIMDMatrix& matrix)noexcept{
     SIMDVector mask = VectorOrInt(VectorIsNaN(matrix.v[0]), VectorIsNaN(matrix.v[1]));
     mask = VectorOrInt(mask, VectorIsNaN(matrix.v[2]));
     mask = VectorOrInt(mask, VectorIsNaN(matrix.v[3]));
     return VectorMoveMask(mask) != 0;
 }
 
-GLB_INLINE bool SIMDCALL MatrixIsInfinite(const SIMDMatrix& matrix)noexcept{
+GLB_INLINE bool GLB_SIMD_CALL MatrixIsInfinite(const SIMDMatrix& matrix)noexcept{
     SIMDVector mask = VectorOrInt(VectorIsInfinite(matrix.v[0]), VectorIsInfinite(matrix.v[1]));
     mask = VectorOrInt(mask, VectorIsInfinite(matrix.v[2]));
     mask = VectorOrInt(mask, VectorIsInfinite(matrix.v[3]));
     return VectorMoveMask(mask) != 0;
 }
 
-GLB_INLINE bool SIMDCALL MatrixIsIdentity(const SIMDMatrix& matrix)noexcept{
+GLB_INLINE bool GLB_SIMD_CALL MatrixIsIdentity(const SIMDMatrix& matrix)noexcept{
     SIMDVector mask0 = VectorEqual(matrix.v[0], s_SIMDIdentityR0);
     SIMDVector mask1 = VectorEqual(matrix.v[1], s_SIMDIdentityR1);
     SIMDVector mask2 = VectorEqual(matrix.v[2], s_SIMDIdentityR2);
@@ -228,11 +228,11 @@ GLB_INLINE bool SIMDCALL MatrixIsIdentity(const SIMDMatrix& matrix)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixTranspose(const SIMDMatrix& matrix)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixTranspose(const SIMDMatrix& matrix)noexcept{
     return SIMDVectorDetail::MatrixTranspose4(matrix.v[0], matrix.v[1], matrix.v[2], matrix.v[3]);
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixMultiply(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixMultiply(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
 #if defined(GLB_HAS_AVX2) && (defined(__FMA__) || defined(_M_FMA))
     return SIMDMatrixDetail::MatrixMultiplyFMA(m0, m1);
 #else
@@ -245,7 +245,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixMultiply(const SIMDMatrix& m0, const SIMDMa
 #endif
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixMultiplyTranspose(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixMultiplyTranspose(const SIMDMatrix& m0, const SIMDMatrix& m1)noexcept{
 #if defined(GLB_HAS_AVX2) && (defined(__FMA__) || defined(_M_FMA))
     return SIMDMatrixDetail::MatrixMultiplyTransposeFMA(m0, m1);
 #else
@@ -257,7 +257,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixMultiplyTranspose(const SIMDMatrix& m0, con
 #endif
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixVectorTensorProduct(SIMDVector v0, SIMDVector v1)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixVectorTensorProduct(SIMDVector v0, SIMDVector v1)noexcept{
     SIMDMatrix result{};
     result.v[0] = VectorMultiply(VectorSplatX(v0), v1);
     result.v[1] = VectorMultiply(VectorSplatY(v0), v1);
@@ -266,7 +266,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixVectorTensorProduct(SIMDVector v0, SIMDVect
     return result;
 }
 
-GLB_INLINE SIMDVector SIMDCALL MatrixDeterminant(const SIMDMatrix& matrix)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL MatrixDeterminant(const SIMDMatrix& matrix)noexcept{
     SIMDVector v0 = VectorSwizzle<1, 0, 0, 0>(matrix.v[2]);
     SIMDVector v1 = VectorSwizzle<2, 2, 1, 1>(matrix.v[3]);
     SIMDVector v2 = VectorSwizzle<1, 0, 0, 0>(matrix.v[2]);
@@ -300,7 +300,7 @@ GLB_INLINE SIMDVector SIMDCALL MatrixDeterminant(const SIMDMatrix& matrix)noexce
     return Vector4Dot(s, r);
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixInverse(SIMDVector* outDeterminant, const SIMDMatrix& matrix)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixInverse(SIMDVector* outDeterminant, const SIMDMatrix& matrix)noexcept{
     const SIMDMatrix mt = MatrixTranspose(matrix);
 
     SIMDVector v0[4]{};
@@ -392,7 +392,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixInverse(SIMDVector* outDeterminant, const S
     return result;
 }
 
-GLB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector& outScale, SIMDVector& outRotQuat, SIMDVector& outTrans, const SIMDMatrix& matrix)noexcept{
+GLB_INLINE bool GLB_SIMD_CALL MatrixDecompose(SIMDVector& outScale, SIMDVector& outRotQuat, SIMDVector& outTrans, const SIMDMatrix& matrix)noexcept{
     const SIMDVector canonicalBasis[3] = {
         s_SIMDIdentityR0,
         s_SIMDIdentityR1,
@@ -479,7 +479,7 @@ GLB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector& outScale, SIMDVector& outRo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE bool SIMDCALL MatrixIsAffine(const SIMDMatrix& matrix, const f32 epsilon)noexcept{
+[[nodiscard]] GLB_INLINE bool GLB_SIMD_CALL MatrixIsAffine(const SIMDMatrix& matrix, const f32 epsilon)noexcept{
     return
         VectorIsFinite(matrix.v[0], VectorComponentMask::s_XYZW)
         && VectorIsFinite(matrix.v[1], VectorComponentMask::s_XYZW)
@@ -489,18 +489,18 @@ GLB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector& outScale, SIMDVector& outRo
     ;
 }
 
-[[nodiscard]] GLB_INLINE SIMDVector SIMDCALL MatrixLinearDeterminantV(const SIMDMatrix& matrix)noexcept{
+[[nodiscard]] GLB_INLINE SIMDVector GLB_SIMD_CALL MatrixLinearDeterminantV(const SIMDMatrix& matrix)noexcept{
     const SIMDVector row0 = VectorSetW(matrix.v[0], 0.0f);
     const SIMDVector row1 = VectorSetW(matrix.v[1], 0.0f);
     const SIMDVector row2 = VectorSetW(matrix.v[2], 0.0f);
     return Vector3Dot(row0, Vector3Cross(row1, row2));
 }
 
-[[nodiscard]] GLB_INLINE f32 SIMDCALL MatrixLinearDeterminant(const SIMDMatrix& matrix)noexcept{
+[[nodiscard]] GLB_INLINE f32 GLB_SIMD_CALL MatrixLinearDeterminant(const SIMDMatrix& matrix)noexcept{
     return VectorGetX(MatrixLinearDeterminantV(matrix));
 }
 
-[[nodiscard]] GLB_INLINE bool SIMDCALL MatrixIsInvertibleAffine(
+[[nodiscard]] GLB_INLINE bool GLB_SIMD_CALL MatrixIsInvertibleAffine(
     const SIMDMatrix& matrix,
     const f32 affineEpsilon,
     const f32 determinantEpsilon
@@ -513,7 +513,7 @@ GLB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector& outScale, SIMDVector& outRo
         && Vector4Greater(VectorAbs(determinant), VectorReplicate(determinantEpsilon));
 }
 
-[[nodiscard]] GLB_INLINE bool SIMDCALL MatrixIsRigidAffine(
+[[nodiscard]] GLB_INLINE bool GLB_SIMD_CALL MatrixIsRigidAffine(
     const SIMDMatrix& matrix,
     const f32 affineEpsilon,
     const f32 rigidEpsilon
@@ -545,7 +545,7 @@ GLB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector& outScale, SIMDVector& outRo
     ;
 }
 
-[[nodiscard]] GLB_INLINE bool SIMDCALL MatrixTryBuildRigidRotationQuaternion(
+[[nodiscard]] GLB_INLINE bool GLB_SIMD_CALL MatrixTryBuildRigidRotationQuaternion(
     const SIMDMatrix& matrix,
     const f32 affineEpsilon,
     const f32 rigidEpsilon,
@@ -559,7 +559,7 @@ GLB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector& outScale, SIMDVector& outRo
     return !QuaternionIsNaN(outQuaternion) && !QuaternionIsInfinite(outQuaternion);
 }
 
-[[nodiscard]] GLB_INLINE bool SIMDCALL MatrixTryBuildRigidDualQuaternion(
+[[nodiscard]] GLB_INLINE bool GLB_SIMD_CALL MatrixTryBuildRigidDualQuaternion(
     const SIMDMatrix& matrix,
     const f32 affineEpsilon,
     const f32 rigidEpsilon,
@@ -585,7 +585,7 @@ GLB_INLINE bool SIMDCALL MatrixDecompose(SIMDVector& outScale, SIMDVector& outRo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixIdentity()noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixIdentity()noexcept{
     SIMDMatrix matrix{};
     matrix.v[0] = s_SIMDIdentityR0;
     matrix.v[1] = s_SIMDIdentityR1;
@@ -594,7 +594,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixIdentity()noexcept{
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixSet(f32 m00, f32 m01, f32 m02, f32 m03, f32 m10, f32 m11, f32 m12, f32 m13, f32 m20, f32 m21, f32 m22, f32 m23, f32 m30, f32 m31, f32 m32, f32 m33)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixSet(f32 m00, f32 m01, f32 m02, f32 m03, f32 m10, f32 m11, f32 m12, f32 m13, f32 m20, f32 m21, f32 m22, f32 m23, f32 m30, f32 m31, f32 m32, f32 m33)noexcept{
     SIMDMatrix matrix{};
     matrix.v[0] = VectorSet(m00, m01, m02, m03);
     matrix.v[1] = VectorSet(m10, m11, m12, m13);
@@ -603,7 +603,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixSet(f32 m00, f32 m01, f32 m02, f32 m03, f32
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixTranslation(f32 offsetX, f32 offsetY, f32 offsetZ)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixTranslation(f32 offsetX, f32 offsetY, f32 offsetZ)noexcept{
     SIMDMatrix matrix{};
     matrix.v[0] = VectorSet(1.0f, 0.0f, 0.0f, offsetX);
     matrix.v[1] = VectorSet(0.0f, 1.0f, 0.0f, offsetY);
@@ -612,7 +612,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixTranslation(f32 offsetX, f32 offsetY, f32 o
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixTranslationFromVector(SIMDVector offset)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixTranslationFromVector(SIMDVector offset)noexcept{
     SIMDMatrix matrix{};
 #if defined(GLB_HAS_SSE4)
     matrix.v[0] = _mm_blend_ps(s_SIMDIdentityR0, VectorSplatX(offset), 0x8);
@@ -627,7 +627,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixTranslationFromVector(SIMDVector offset)noe
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixScaling(f32 scaleX, f32 scaleY, f32 scaleZ)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixScaling(f32 scaleX, f32 scaleY, f32 scaleZ)noexcept{
     SIMDMatrix matrix{};
     matrix.v[0] = VectorSet(scaleX, 0.0f, 0.0f, 0.0f);
     matrix.v[1] = VectorSet(0.0f, scaleY, 0.0f, 0.0f);
@@ -636,7 +636,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixScaling(f32 scaleX, f32 scaleY, f32 scaleZ)
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixScalingFromVector(SIMDVector scale)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixScalingFromVector(SIMDVector scale)noexcept{
     SIMDMatrix matrix{};
     matrix.v[0] = VectorAndInt(scale, s_SIMDMaskX);
     matrix.v[1] = VectorAndInt(scale, s_SIMDMaskY);
@@ -645,7 +645,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixScalingFromVector(SIMDVector scale)noexcept
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixRotationX(f32 angle)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixRotationX(f32 angle)noexcept{
     SIMDVector sinAngle{};
     SIMDVector cosAngle{};
     VectorSinCos(sinAngle, cosAngle, VectorReplicate(angle));
@@ -658,7 +658,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixRotationX(f32 angle)noexcept{
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixRotationY(f32 angle)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixRotationY(f32 angle)noexcept{
     SIMDVector sinAngle{};
     SIMDVector cosAngle{};
     VectorSinCos(sinAngle, cosAngle, VectorReplicate(angle));
@@ -671,7 +671,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixRotationY(f32 angle)noexcept{
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixRotationZ(f32 angle)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixRotationZ(f32 angle)noexcept{
     SIMDVector sinAngle{};
     SIMDVector cosAngle{};
     VectorSinCos(sinAngle, cosAngle, VectorReplicate(angle));
@@ -684,7 +684,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixRotationZ(f32 angle)noexcept{
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixRotationQuaternion(SIMDVector quaternion)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixRotationQuaternion(SIMDVector quaternion)noexcept{
     quaternion = QuaternionConjugate(quaternion);
 
     const SIMDVector q0 = VectorAdd(quaternion, quaternion);
@@ -719,15 +719,15 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixRotationQuaternion(SIMDVector quaternion)no
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixRotationRollPitchYawFromVector(SIMDVector angles)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixRotationRollPitchYawFromVector(SIMDVector angles)noexcept{
     return MatrixRotationQuaternion(QuaternionRotationRollPitchYawFromVector(angles));
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixRotationRollPitchYaw(f32 pitch, f32 yaw, f32 roll)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixRotationRollPitchYaw(f32 pitch, f32 yaw, f32 roll)noexcept{
     return MatrixRotationRollPitchYawFromVector(VectorSet(pitch, yaw, roll, 0.0f));
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixRotationNormal(SIMDVector normalAxis, f32 angle)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixRotationNormal(SIMDVector normalAxis, f32 angle)noexcept{
     SIMDVector sinAngle{};
     SIMDVector cosAngle{};
     VectorSinCos(sinAngle, cosAngle, VectorReplicate(angle));
@@ -822,14 +822,14 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixRotationNormal(SIMDVector normalAxis, f32 a
 #endif
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixRotationAxis(SIMDVector axis, f32 angle)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixRotationAxis(SIMDVector axis, f32 angle)noexcept{
     GLB_ASSERT(!Vector3Equal(axis, VectorZero()));
     GLB_ASSERT(!Vector3IsInfinite(axis));
 
     return MatrixRotationNormal(Vector3Normalize(axis), angle);
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixAffineTransformation(SIMDVector scaling, SIMDVector rotationOrigin, SIMDVector rotationQuaternion, SIMDVector translation)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixAffineTransformation(SIMDVector scaling, SIMDVector rotationOrigin, SIMDVector rotationQuaternion, SIMDVector translation)noexcept{
     // T(translation) * T(origin) * R * T(-origin) * S folds to a rotation-scaled basis and one translation column.
     const SIMDVector origin = VectorSelect(VectorZero(), rotationOrigin, s_SIMDSelect1110);
     const SIMDMatrix rotation = MatrixRotationQuaternion(rotationQuaternion);
@@ -843,7 +843,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixAffineTransformation(SIMDVector scaling, SI
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixAffineTransformation2D(SIMDVector scaling, SIMDVector rotationOrigin, f32 rotation, SIMDVector translation)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixAffineTransformation2D(SIMDVector scaling, SIMDVector rotationOrigin, f32 rotation, SIMDVector translation)noexcept{
     const SIMDVector vScaling = VectorSelect(s_SIMDOne, scaling, s_SIMDSelect1100);
     const SIMDVector origin = VectorSelect(VectorZero(), rotationOrigin, s_SIMDSelect1100);
     const SIMDVector vTranslation = VectorSelect(VectorZero(), translation, s_SIMDSelect1100);
@@ -858,7 +858,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixAffineTransformation2D(SIMDVector scaling, 
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixTransformation(SIMDVector scalingOrigin, SIMDVector scalingOrientationQuaternion, SIMDVector scaling, SIMDVector rotationOrigin, SIMDVector rotationQuaternion, SIMDVector translation)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixTransformation(SIMDVector scalingOrigin, SIMDVector scalingOrientationQuaternion, SIMDVector scaling, SIMDVector rotationOrigin, SIMDVector rotationQuaternion, SIMDVector translation)noexcept{
     const SIMDVector vScalingOrigin = VectorSelect(VectorZero(), scalingOrigin, s_SIMDSelect1110);
     const SIMDVector vRotationOrigin = VectorSelect(VectorZero(), rotationOrigin, s_SIMDSelect1110);
 
@@ -886,7 +886,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixTransformation(SIMDVector scalingOrigin, SI
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixTransformation2D(SIMDVector scalingOrigin, f32 scalingOrientation, SIMDVector scaling, SIMDVector rotationOrigin, f32 rotation, SIMDVector translation)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixTransformation2D(SIMDVector scalingOrigin, f32 scalingOrientation, SIMDVector scaling, SIMDVector rotationOrigin, f32 rotation, SIMDVector translation)noexcept{
     const SIMDVector vScalingOrigin = VectorSelect(VectorZero(), scalingOrigin, s_SIMDSelect1100);
     const SIMDVector vRotationOrigin = VectorSelect(VectorZero(), rotationOrigin, s_SIMDSelect1100);
     const SIMDVector vScaling = VectorSelect(s_SIMDOne, scaling, s_SIMDSelect1100);
@@ -915,7 +915,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixTransformation2D(SIMDVector scalingOrigin, 
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixReflect(SIMDVector reflectionPlane)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixReflect(SIMDVector reflectionPlane)noexcept{
     GLB_ASSERT(!Vector3Equal(reflectionPlane, VectorZero()));
     GLB_ASSERT(!Vector4IsInfinite(reflectionPlane));
 
@@ -934,7 +934,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixReflect(SIMDVector reflectionPlane)noexcept
     return MatrixTranspose(rowVectorMatrix);
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixShadow(SIMDVector shadowPlane, SIMDVector lightPosition)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixShadow(SIMDVector shadowPlane, SIMDVector lightPosition)noexcept{
     GLB_ASSERT(!Vector3Equal(shadowPlane, VectorZero()));
     GLB_ASSERT(!Vector4IsInfinite(shadowPlane));
 
@@ -963,7 +963,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixShadow(SIMDVector shadowPlane, SIMDVector l
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixLookToLH(SIMDVector eyePosition, SIMDVector eyeDirection, SIMDVector upDirection)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixLookToLH(SIMDVector eyePosition, SIMDVector eyeDirection, SIMDVector upDirection)noexcept{
     GLB_ASSERT(!Vector3Equal(eyeDirection, VectorZero()));
     GLB_ASSERT(!Vector3IsInfinite(eyeDirection));
     GLB_ASSERT(!Vector3Equal(upDirection, VectorZero()));
@@ -987,15 +987,15 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixLookToLH(SIMDVector eyePosition, SIMDVector
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixLookToRH(SIMDVector eyePosition, SIMDVector eyeDirection, SIMDVector upDirection)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixLookToRH(SIMDVector eyePosition, SIMDVector eyeDirection, SIMDVector upDirection)noexcept{
     return MatrixLookToLH(eyePosition, VectorNegate(eyeDirection), upDirection);
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixLookAtLH(SIMDVector eyePosition, SIMDVector focusPosition, SIMDVector upDirection)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixLookAtLH(SIMDVector eyePosition, SIMDVector focusPosition, SIMDVector upDirection)noexcept{
     return MatrixLookToLH(eyePosition, VectorSubtract(focusPosition, eyePosition), upDirection);
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixLookAtRH(SIMDVector eyePosition, SIMDVector focusPosition, SIMDVector upDirection)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixLookAtRH(SIMDVector eyePosition, SIMDVector focusPosition, SIMDVector upDirection)noexcept{
     return MatrixLookToLH(eyePosition, VectorSubtract(eyePosition, focusPosition), upDirection);
 }
 
@@ -1012,7 +1012,7 @@ namespace SIMDMatrixDetail{
 inline constexpr f32 s_MatrixProjectionNearEqualEpsilon = 0.00001f;
 inline constexpr f32 s_MatrixPerspectiveFovNearEqualEpsilon = s_MatrixProjectionNearEqualEpsilon * s_MatrixTwo;
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveImpl(
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixPerspectiveImpl(
     const f32 viewWidth,
     const f32 viewHeight,
     const f32 nearZ,
@@ -1050,11 +1050,11 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveImpl(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveLH(f32 viewWidth, f32 viewHeight, f32 nearZ, f32 farZ)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixPerspectiveLH(f32 viewWidth, f32 viewHeight, f32 nearZ, f32 farZ)noexcept{
     return SIMDMatrixDetail::MatrixPerspectiveImpl(viewWidth, viewHeight, nearZ, farZ, farZ - nearZ, -1.0f, 1.0f);
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveRH(f32 viewWidth, f32 viewHeight, f32 nearZ, f32 farZ)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixPerspectiveRH(f32 viewWidth, f32 viewHeight, f32 nearZ, f32 farZ)noexcept{
     return SIMDMatrixDetail::MatrixPerspectiveImpl(viewWidth, viewHeight, nearZ, farZ, nearZ - farZ, 1.0f, -1.0f);
 }
 
@@ -1068,7 +1068,7 @@ namespace SIMDMatrixDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovImpl(
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixPerspectiveFovImpl(
     const f32 fovAngleY,
     const f32 aspectRatio,
     const f32 nearZ,
@@ -1102,7 +1102,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovImpl(
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveOffCenterImpl(
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixPerspectiveOffCenterImpl(
     const f32 viewLeft,
     const f32 viewRight,
     const f32 viewBottom,
@@ -1141,7 +1141,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveOffCenterImpl(
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicImpl(
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixOrthographicImpl(
     const f32 viewWidth,
     const f32 viewHeight,
     const f32 nearZ,
@@ -1165,7 +1165,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicImpl(
     return matrix;
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicOffCenterImpl(
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixOrthographicOffCenterImpl(
     const f32 viewLeft,
     const f32 viewRight,
     const f32 viewBottom,
@@ -1209,35 +1209,35 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicOffCenterImpl(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovLH(f32 fovAngleY, f32 aspectRatio, f32 nearZ, f32 farZ)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixPerspectiveFovLH(f32 fovAngleY, f32 aspectRatio, f32 nearZ, f32 farZ)noexcept{
     return SIMDMatrixDetail::MatrixPerspectiveFovImpl(fovAngleY, aspectRatio, nearZ, farZ, farZ - nearZ, -1.0f, 1.0f);
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveFovRH(f32 fovAngleY, f32 aspectRatio, f32 nearZ, f32 farZ)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixPerspectiveFovRH(f32 fovAngleY, f32 aspectRatio, f32 nearZ, f32 farZ)noexcept{
     return SIMDMatrixDetail::MatrixPerspectiveFovImpl(fovAngleY, aspectRatio, nearZ, farZ, nearZ - farZ, 1.0f, -1.0f);
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveOffCenterLH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixPerspectiveOffCenterLH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
     return SIMDMatrixDetail::MatrixPerspectiveOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ, farZ - nearZ, -1.0f, -1.0f, 1.0f);
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixPerspectiveOffCenterRH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixPerspectiveOffCenterRH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
     return SIMDMatrixDetail::MatrixPerspectiveOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ, nearZ - farZ, 1.0f, 1.0f, -1.0f);
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicLH(f32 viewWidth, f32 viewHeight, f32 nearZ, f32 farZ)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixOrthographicLH(f32 viewWidth, f32 viewHeight, f32 nearZ, f32 farZ)noexcept{
     return SIMDMatrixDetail::MatrixOrthographicImpl(viewWidth, viewHeight, nearZ, farZ - nearZ, -1.0f);
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicRH(f32 viewWidth, f32 viewHeight, f32 nearZ, f32 farZ)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixOrthographicRH(f32 viewWidth, f32 viewHeight, f32 nearZ, f32 farZ)noexcept{
     return SIMDMatrixDetail::MatrixOrthographicImpl(viewWidth, viewHeight, nearZ, nearZ - farZ, 1.0f);
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicOffCenterLH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixOrthographicOffCenterLH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
     return SIMDMatrixDetail::MatrixOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, farZ - nearZ, -1.0f);
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixOrthographicOffCenterRH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixOrthographicOffCenterRH(f32 viewLeft, f32 viewRight, f32 viewBottom, f32 viewTop, f32 nearZ, f32 farZ)noexcept{
     return SIMDMatrixDetail::MatrixOrthographicOffCenterImpl(viewLeft, viewRight, viewBottom, viewTop, nearZ, nearZ - farZ, 1.0f);
 }
 

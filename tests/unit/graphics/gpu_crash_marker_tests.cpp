@@ -58,8 +58,8 @@ TEST(GpuCrashMarkerTracker, CopiesExactNonTerminatedViewAndEmbeddedNullBytes){
     ASSERT_TRUE(outer.first());
     ASSERT_TRUE(nested.first());
     EXPECT_EQ(outer.second(), AStringView("Outer"));
-    constexpr char expected[] = { 'O', 'u', 't', 'e', 'r', '/', 'I', '\0', 'n' };
-    EXPECT_EQ(nested.second(), AStringView(expected, sizeof(expected)));
+    constexpr char s_Expected[] = { 'O', 'u', 't', 'e', 'r', '/', 'I', '\0', 'n' };
+    EXPECT_EQ(nested.second(), AStringView(s_Expected, sizeof(s_Expected)));
 }
 
 
@@ -100,7 +100,7 @@ TEST(GpuCrashMarkerTracker, SharedDeviceTrackerPreservesHistoryAcrossCommandList
 TEST(GpuCrashMarkerTracker, DestroyedCommandListTrackersLeaveAllDeviceHistoryResolvable){
     TestArena testArena;
     Core::GpuCrashTracker crashTracker(testArena.arena);
-    constexpr AStringView markerNames[] = {
+    constexpr AStringView s_MarkerNames[] = {
         "Destroyed command list 0",
         "Destroyed command list 1",
         "Destroyed command list 2",
@@ -111,14 +111,14 @@ TEST(GpuCrashMarkerTracker, DestroyedCommandListTrackersLeaveAllDeviceHistoryRes
     usize markerHashes[6] = {};
 
     usize markerIndex = 0u;
-    for(const AStringView markerName : markerNames){
+    for(const AStringView markerName : s_MarkerNames){
         Core::GpuCrashMarkerTracker commandListTracker(crashTracker, testArena.arena);
         markerHashes[markerIndex] = commandListTracker.pushEvent(markerName);
         ++markerIndex;
     }
 
     markerIndex = 0u;
-    for(const AStringView markerName : markerNames){
+    for(const AStringView markerName : s_MarkerNames){
         const Core::ResolvedMarker resolved = crashTracker.resolveMarker(markerHashes[markerIndex]);
         ASSERT_TRUE(resolved.first());
         EXPECT_EQ(resolved.second(), markerName);
@@ -139,7 +139,7 @@ TEST(GpuCrashMarkerTracker, RetainedResolvedViewSurvivesConcurrentHistoryGrowthA
     ASSERT_TRUE(retained.first());
     ASSERT_EQ(retained.second(), AStringView("Retained marker view"));
 
-    constexpr AStringView firstWriterMarkerNames[] = {
+    constexpr AStringView s_FirstWriterMarkerNames[] = {
         "Concurrent writer A marker 00", "Concurrent writer A marker 01",
         "Concurrent writer A marker 02", "Concurrent writer A marker 03",
         "Concurrent writer A marker 04", "Concurrent writer A marker 05",
@@ -149,7 +149,7 @@ TEST(GpuCrashMarkerTracker, RetainedResolvedViewSurvivesConcurrentHistoryGrowthA
         "Concurrent writer A marker 12", "Concurrent writer A marker 13",
         "Concurrent writer A marker 14", "Concurrent writer A marker 15",
     };
-    constexpr AStringView secondWriterMarkerNames[] = {
+    constexpr AStringView s_SecondWriterMarkerNames[] = {
         "Concurrent writer B marker 00", "Concurrent writer B marker 01",
         "Concurrent writer B marker 02", "Concurrent writer B marker 03",
         "Concurrent writer B marker 04", "Concurrent writer B marker 05",
@@ -182,8 +182,8 @@ TEST(GpuCrashMarkerTracker, RetainedResolvedViewSurvivesConcurrentHistoryGrowthA
         if(previousActiveWriters == 0u || previousActiveWriters > 2u)
             invalidObservation.store(true, MemoryOrder::release);
     };
-    Thread firstWriter([&](){ insertMarkers(firstWriterMarkerNames); });
-    Thread secondWriter([&](){ insertMarkers(secondWriterMarkerNames); });
+    Thread firstWriter([&](){ insertMarkers(s_FirstWriterMarkerNames); });
+    Thread secondWriter([&](){ insertMarkers(s_SecondWriterMarkerNames); });
 
     const auto retainedViewIsValid = [&](){
         const Core::ResolvedMarker resolved = crashTracker.resolveMarker(retainedHash);

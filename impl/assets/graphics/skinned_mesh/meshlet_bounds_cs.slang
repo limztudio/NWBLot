@@ -53,7 +53,7 @@ uint nwbSkinnedMeshBoundsMeshletCount(){
 }
 
 uint nwbSkinnedMeshBoundsLoadPrimitiveIndex(const uint primitiveIndex){
-    const uint word = NwbHeapRawBuffer(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots3.y).Load(primitiveIndex & ~NWB_MESHLET_PACKED_WORD_BYTE_MASK);
+    const uint word = nwbHeapRawBuffer(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots3.y).Load(primitiveIndex & ~NWB_MESHLET_PACKED_WORD_BYTE_MASK);
     return (word >> ((primitiveIndex & NWB_MESHLET_PACKED_WORD_BYTE_MASK) * NWB_MESHLET_PACKED_BYTE_BITS)) & NWB_MESHLET_PACKED_BYTE_MASK;
 }
 
@@ -73,7 +73,7 @@ bool nwbSkinnedMeshBoundsLoadLocalPosition(
     out float3 outPosition
 ){
     const NwbMeshletPositionStreamRef positionRef = nwbMeshletDecodePositionRef(
-        NwbHeapRawBuffer(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots1.w),
+        nwbHeapRawBuffer(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots1.w),
         meshlet,
         decodeInfo,
         localPositionIndex,

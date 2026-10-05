@@ -55,12 +55,12 @@ QueueSubmissionPreSubmitHook BackendContext::claimFramePresentationSignal()noexc
     return QueueSubmissionPreSubmitHook{
         .context = this,
         .identity = m_framePresentationClaimIdentity,
-        .invoke = &BackendContext::PrepareFramePresentationSignal,
-        .resolved = &BackendContext::ResolveFramePresentationSignal,
+        .invoke = &BackendContext::invokeFramePresentationSignalPreparation,
+        .resolved = &BackendContext::invokeFramePresentationSignalResolution,
     };
 }
 
-bool BackendContext::PrepareFramePresentationSignal(
+bool BackendContext::invokeFramePresentationSignalPreparation(
     void* const context,
     const u64 identity,
     const GpuPhysicalQueueId& executionQueue,
@@ -113,7 +113,7 @@ bool BackendContext::prepareFramePresentationSignal(
     return true;
 }
 
-bool BackendContext::ResolveFramePresentationSignal(
+bool BackendContext::invokeFramePresentationSignalResolution(
     void* const context,
     const u64 identity,
     const QueueSubmissionToken& token
@@ -183,8 +183,8 @@ bool BackendContext::confirmFramePresentationSignal(
         && claim.context == this
         && claim.identity != 0u
         && claim.identity == m_framePresentationClaimIdentity
-        && claim.invoke == &BackendContext::PrepareFramePresentationSignal
-        && claim.resolved == &BackendContext::ResolveFramePresentationSignal
+        && claim.invoke == &BackendContext::invokeFramePresentationSignalPreparation
+        && claim.resolved == &BackendContext::invokeFramePresentationSignalResolution
         && m_framePresentationSignalState == FramePresentationSignalState::Accepted
         && token.valid()
         && token.queue == m_framePresentationSubmission.queue
@@ -259,8 +259,8 @@ bool BackendContext::cancelFramePresentationSignalDeferred(
                 claim->context != this
                 || claim->identity == 0u
                 || claim->identity != m_framePresentationClaimIdentity
-                || claim->invoke != &BackendContext::PrepareFramePresentationSignal
-                || claim->resolved != &BackendContext::ResolveFramePresentationSignal
+                || claim->invoke != &BackendContext::invokeFramePresentationSignalPreparation
+                || claim->resolved != &BackendContext::invokeFramePresentationSignalResolution
             )
         )
     )
@@ -272,8 +272,8 @@ bool BackendContext::cancelFramePresentationSignalDeferred(
         claim
         && (
             claim->identity != m_framePresentationClaimIdentity
-            || claim->invoke != &BackendContext::PrepareFramePresentationSignal
-            || claim->resolved != &BackendContext::ResolveFramePresentationSignal
+            || claim->invoke != &BackendContext::invokeFramePresentationSignalPreparation
+            || claim->resolved != &BackendContext::invokeFramePresentationSignalResolution
         )
     )
         return false;

@@ -191,7 +191,7 @@ TEST_F(FilesystemVolumeTest, ReplacesRemovesAndReadsEmptyFiles){
     EXPECT_TRUE(loaded.empty());
     EXPECT_EQ(filesystem->fileCount(), 1u);
     EXPECT_FALSE(filesystem->writeFile(s_TestFile, nullptr, 1));
-    EXPECT_FALSE(filesystem->writeFile(NAME_NONE, payload));
+    EXPECT_FALSE(filesystem->writeFile(s_NameNone, payload));
     usize bytesRead = 27;
     EXPECT_FALSE(filesystem->readFile(s_TestFile, 1, nullptr, 0, bytesRead));
     EXPECT_EQ(bytesRead, 0u);

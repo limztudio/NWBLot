@@ -41,7 +41,7 @@ void CommandList::buildTopLevelAccelStructFromBuffer(
         return;
     }
 
-    if(!m_context.extensions.KHR_acceleration_structure || !m_context.accelerationStructureFeatureEnabled)
+    if(!m_context.extensions.khrAccelerationStructure || !m_context.accelerationStructureFeatureEnabled)
         return;
 
     auto* as = accelStructResource;
@@ -109,7 +109,7 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
         return;
     }
 
-    if(!m_context.extensions.KHR_acceleration_structure || !m_context.accelerationStructureFeatureEnabled)
+    if(!m_context.extensions.khrAccelerationStructure || !m_context.accelerationStructureFeatureEnabled)
         return;
 
     auto* as = accelStructResource;

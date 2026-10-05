@@ -27,9 +27,9 @@ NWB_IMPL_BEGIN
     Name& outBlockName,
     Name& outFieldName
 ){
-    outParameterName = NAME_NONE;
-    outBlockName = NAME_NONE;
-    outFieldName = NAME_NONE;
+    outParameterName = s_NameNone;
+    outBlockName = s_NameNone;
+    outFieldName = s_NameNone;
 
     const usize dotIndex = parameterName.find('.');
     if(parameterName.empty() || dotIndex == AStringView::npos || dotIndex == 0u || dotIndex + 1u >= parameterName.size()){

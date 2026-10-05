@@ -521,7 +521,7 @@ TEST(CsgShadowSnapshot, IdentityTracksEffectiveCutterEditsRegistryAndInstanceOrd
     ASSERT_TRUE(context.build(inputs, LengthOf(inputs)));
     EXPECT_NE(context.snapshot.identity, identity);
 
-    cutter->receiverGroup = NAME_NONE;
+    cutter->receiverGroup = s_NameNone;
     ASSERT_TRUE(context.build(inputs, LengthOf(inputs)));
     EXPECT_FALSE(context.snapshot.hasCsg);
     EXPECT_EQ(context.snapshot.identity, 0u);

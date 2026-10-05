@@ -52,8 +52,8 @@ bool nwbAvboitLoadAcceptedMaterialAlpha(
     outAlpha = half(clamp(surface.renderCoverage, 0.0, 1.0));
     uint virtualSlice;
     return nwbAvboitAcceptLowDepthFragment(
-        NwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w),
-        NwbHeapSampler(g_NwbDeferredBindlessResources.lightingSlots.w),
+        nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w),
+        nwbHeapSampler(g_NwbDeferredBindlessResources.lightingSlots.w),
         position,
         outAlpha,
         virtualSlice

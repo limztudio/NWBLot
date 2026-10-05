@@ -113,8 +113,8 @@ using MaterialTypedByteDataVector = Vector<u8, Core::Alloc::ScratchArena>;
 
 
 struct MaterialPipelineKey{
-    Name material = NAME_NONE;
-    Name csgEvaluatorVariant = NAME_NONE;
+    Name material = s_NameNone;
+    Name csgEvaluatorVariant = s_NameNone;
     Core::FramebufferInfo framebufferInfo;
     MaterialPipelinePass::Enum pass = MaterialPipelinePass::Opaque;
     bool twoSided = false;
@@ -159,8 +159,8 @@ struct MaterialPipelineKeyEqualTo{
 };
 
 struct MaterialSurfaceInfo{
-    Name materialName = NAME_NONE;
-    Name materialInterface = NAME_NONE;
+    Name materialName = s_NameNone;
+    Name materialInterface = s_NameNone;
     Core::GraphicsString shaderVariant;
     Core::Assets::AssetRef<Shader> pixelShader;
     Core::Assets::AssetRef<Shader> meshShader;

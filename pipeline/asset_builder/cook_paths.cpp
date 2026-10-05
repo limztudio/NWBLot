@@ -49,7 +49,7 @@ bool ResolveCookPaths(
     }
 
     outPaths.repoRoot = options.repoRoot.empty() ? Path(outPaths.repoRoot.arena(), ".") : Path(outPaths.repoRoot.arena(), AStringView(options.repoRoot));
-    outPaths.repoRoot = AbsolutePath(outPaths.repoRoot, errorCode).lexically_normal();
+    outPaths.repoRoot = AbsolutePath(outPaths.repoRoot, errorCode).lexicallyNormal();
     if(errorCode){
         NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to resolve repo root: {}"), StringConvert(errorCode.message()));
         return false;

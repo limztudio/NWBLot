@@ -51,7 +51,7 @@ struct CollectionContext{
         Core::TextureDesc description;
         description.setName(identity).setWidth(4u).setHeight(4u).setFormat(Core::Format::RGBA8_UNORM);
         Core::Texture* const texture = Tests::NewMetadataOnlyTexture(testArena.arena, context, allocator, description);
-        return Core::TextureHandle(texture, Core::TextureHandle::deleter_type(&testArena.arena), AdoptRef);
+        return Core::TextureHandle(texture, Core::TextureHandle::deleter_type(&testArena.arena), s_AdoptRef);
     }
 
     [[nodiscard]] usize addTexture(const bool named = true, const Core::TextureHandle& alias = {}){
@@ -59,7 +59,7 @@ struct CollectionContext{
         char indexText[32u] = {};
         Core::Assets::AssetRef<Texture> asset;
         asset.virtualPath = DeriveName(Name("tests/material_texture_collection/asset"), FormatDecimal(index, indexText));
-        Core::TextureHandle texture = alias ? alias : makeTexture(named ? asset.name() : NAME_NONE);
+        Core::TextureHandle texture = alias ? alias : makeTexture(named ? asset.name() : s_NameNone);
         auto resource = MakeUnique<TextureGpuResource>();
         resource->texture = texture;
         resource->format = Core::Format::RGBA8_UNORM;
@@ -224,7 +224,7 @@ TEST(MaterialSampledTextureCollection, SamplersKeepTheirExistingSkipContractAndP
     ASSERT_TRUE(AppendPreparedMaterialSurfaceSampledTextures(material, context.resources, context.fixtures, collector));
     ASSERT_EQ(output.size(), 1u);
     EXPECT_EQ(output[0u], context.textures[0u]);
-    EXPECT_EQ(output[0u]->getCreationDescription().name, NAME_NONE);
+    EXPECT_EQ(output[0u]->getCreationDescription().name, s_NameNone);
 }
 
 TEST(MaterialSampledTextureCollection, ShadowResourceFailurePublishesNoPartOfTheMaterialAndReleasesTemporaryOwnership){

@@ -85,20 +85,20 @@ struct ImportContext{
         Core::Buffer* const buffer = Tests::NewMetadataOnlyBuffer(
             inputArena, context, allocator, Core::BufferDesc{}.setByteSize(256u).setDebugName(identity)
         );
-        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&inputArena), AdoptRef);
+        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&inputArena), s_AdoptRef);
     }
 
     [[nodiscard]] Core::TextureHandle makeTexture(const Name& identity){
         Core::TextureDesc description;
         description.setName(identity).setWidth(4u).setHeight(4u).setFormat(Core::Format::RGBA8_UNORM);
         Core::Texture* const texture = Tests::NewMetadataOnlyTexture(inputArena, context, allocator, description);
-        return Core::TextureHandle(texture, Core::TextureHandle::deleter_type(&inputArena), AdoptRef);
+        return Core::TextureHandle(texture, Core::TextureHandle::deleter_type(&inputArena), s_AdoptRef);
     }
 
     [[nodiscard]] Core::RayTracingAccelStructHandle makeAccelStruct(){
         auto* const accelStruct = NewArenaObject<Core::RayTracingAccelStruct>(inputArena, context);
         return Core::RayTracingAccelStructHandle(
-            accelStruct, Core::RayTracingAccelStructHandle::deleter_type(&inputArena), AdoptRef
+            accelStruct, Core::RayTracingAccelStructHandle::deleter_type(&inputArena), s_AdoptRef
         );
     }
 
@@ -196,8 +196,8 @@ TEST(TaskGraphImportIndex, GenericFirstDoesNotAcquireTypedOwnershipAndTypedFirst
 
 TEST(TaskGraphImportIndex, PointerAliasesKeepFirstIdentityAndLabelWhileConflictingRequestsLeaveTheGraphUnchanged){
     ImportContext context;
-    const auto buffer = context.makeBuffer(NAME_NONE);
-    const auto texture = context.makeTexture(NAME_NONE);
+    const auto buffer = context.makeBuffer(s_NameNone);
+    const auto texture = context.makeTexture(s_NameNone);
     auto bufferDescription = ResourceDescription(Name("tests/graph_import_index/buffer_alias"), Core::GpuGraphResourceType::Buffer);
     auto textureDescription = ResourceDescription(Name("tests/graph_import_index/texture_alias"), Core::GpuGraphResourceType::Texture);
     const auto bufferId = context.graph.importBuffer(buffer, bufferDescription);

@@ -44,9 +44,9 @@ bool ReadAssetInputList(const Path& path, AssetVector<AssetString>& inputs, cons
         const AStringView value(text.data() + cursor, length);
         if(resolveRelativePaths){
             Path resolved(arena, value);
-            if(!resolved.is_absolute())
-                resolved = path.parent_path() / resolved;
-            inputs.emplace_back(PathToString(arena, resolved.lexically_normal()));
+            if(!resolved.isAbsolute())
+                resolved = path.parentPath() / resolved;
+            inputs.emplace_back(PathToString(arena, resolved.lexicallyNormal()));
         }
         else
             inputs.emplace_back(value, arena);

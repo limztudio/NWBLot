@@ -37,21 +37,21 @@ bool nwbBvhSortPairLess(const uint keyA, const uint payloadA, const uint keyB, c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-groupshared uint s_tileKeys[NWB_BVH_SORT_GROUP_SIZE];
-groupshared uint s_tilePayload[NWB_BVH_SORT_GROUP_SIZE];
+groupshared uint g_tileKeys[NWB_BVH_SORT_GROUP_SIZE];
+groupshared uint g_tilePayload[NWB_BVH_SORT_GROUP_SIZE];
 
 // Preprocessor-shared compare/swap keeps the inline tile modes aligned.
 #define NWB_BVH_SORT_TILE_COMPARE_SWAP(ASCENDING, PARTNER) \
-    const uint keyA = s_tileKeys[local]; \
-    const uint payloadA = s_tilePayload[local]; \
-    const uint keyB = s_tileKeys[PARTNER]; \
-    const uint payloadB = s_tilePayload[PARTNER]; \
+    const uint keyA = g_tileKeys[local]; \
+    const uint payloadA = g_tilePayload[local]; \
+    const uint keyB = g_tileKeys[PARTNER]; \
+    const uint payloadB = g_tilePayload[PARTNER]; \
     const bool aLessB = nwbBvhSortPairLess(keyA, payloadA, keyB, payloadB); \
     if((ASCENDING) != aLessB){ \
-        s_tileKeys[local] = keyB; \
-        s_tilePayload[local] = payloadB; \
-        s_tileKeys[PARTNER] = keyA; \
-        s_tilePayload[PARTNER] = payloadA; \
+        g_tileKeys[local] = keyB; \
+        g_tilePayload[local] = payloadB; \
+        g_tileKeys[PARTNER] = keyA; \
+        g_tilePayload[PARTNER] = payloadA; \
     }
 
 
@@ -92,8 +92,8 @@ void main(
     const uint local = groupThreadID.x;
     const uint global = tileBase + local;
 
-    s_tileKeys[local] = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.keysHeapSlot][global];
-    s_tilePayload[local] = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.payloadHeapSlot][global];
+    g_tileKeys[local] = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.keysHeapSlot][global];
+    g_tilePayload[local] = g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.payloadHeapSlot][global];
     GroupMemoryBarrierWithGroupSync();
 
     if(mode == NWB_BVH_SORT_MODE_LOCAL_TILE){
@@ -124,8 +124,8 @@ void main(
         }
     }
 
-    g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.keysHeapSlot][global] = s_tileKeys[local];
-    g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.payloadHeapSlot][global] = s_tilePayload[local];
+    g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.keysHeapSlot][global] = g_tileKeys[local];
+    g_NwbHeapBvhWritableUintBuffers[g_NwbBvhBitonicSortPushConstants.payloadHeapSlot][global] = g_tilePayload[local];
 }
 
 

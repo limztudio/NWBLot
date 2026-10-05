@@ -322,7 +322,7 @@ bool GpuCommandIrCapture::captureBindGraphicsHeap(
     if(m_rasterOwners && m_rasterOwners->heapOwners.size() >= Limit<u32>::s_Max)
         return false;
     auto* const lease = NewArenaObject<__hidden_gpu_command_ir_raster_capture::HeapLeaseOwner>(ownerArena, ownerArena, heap);
-    GpuCommandIrOwnerAnchor leaseAnchor(lease, AdoptRef);
+    GpuCommandIrOwnerAnchor leaseAnchor(lease, s_AdoptRef);
     if(!lease->valid())
         return false;
     GpuCommandIrRasterHeapOwner owner;

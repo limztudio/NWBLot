@@ -49,9 +49,9 @@ inline constexpr AStringView s_DefaultTaskMarkerLabel = "GPU Task";
 ){
     const GpuCompiledPacketView packetView = planAccess.packet(packet);
     if(!packetView.valid() || packetView.plan->taskCount == 0u)
-        return NAME_NONE;
+        return s_NameNone;
     const GpuTaskGraphTaskView task = declarationAccess.taskAt(packetView.tasks[0u].index);
-    return task.id == packetView.tasks[0u] ? GpuTaskPacketTimingScopeName(task.identity) : NAME_NONE;
+    return task.id == packetView.tasks[0u] ? GpuTaskPacketTimingScopeName(task.identity) : s_NameNone;
 }
 
 [[nodiscard]] bool PrepareCompiledTimingQueries(

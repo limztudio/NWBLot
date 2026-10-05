@@ -86,7 +86,7 @@ template<typename T, typename... Args>
     return GpuVersion<T>(
         NewArenaObject<RefCounter<T>>(arena, Forward<Args>(args)...),
         ArenaRefDeleter<RefCounter<T>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

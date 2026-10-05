@@ -104,7 +104,7 @@ inline constexpr Core::GpuTimingScopeDefinition s_SurfelUpsample("render.surfel_
     Core::Alloc::ScratchArena& scratchArena
 ){
     if(!queue.valid())
-        return NAME_NONE;
+        return s_NameNone;
 
     const AString<Core::Alloc::ScratchArena> scopeName = StringFormat(
         scratchArena,

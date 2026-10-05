@@ -63,7 +63,7 @@ public:
         const f32 yaw = 0.0f,
         const f32 roll = 0.0f,
         const f32 pitch = 0.0f,
-        const Name opticalGroup = NAME_NONE,
+        const Name opticalGroup = s_NameNone,
         const i32 opticalPriority = 0,
         const Impl::OpticalVolumeCoincidence::Enum opticalCoincidence = Impl::OpticalVolumeCoincidence::Independent){
         const Float4 firstTint = m_preview ? Float4(0.12f, 0.72f, 1.0f, 0.48f) : Float4(0.90f, 0.98f, 1.0f, coverage);
@@ -90,7 +90,7 @@ public:
         const f32 radius,
         const bool second = false,
         const f32 coverage = 0.0f,
-        const Name opticalGroup = NAME_NONE,
+        const Name opticalGroup = s_NameNone,
         const i32 opticalPriority = 0,
         const Impl::OpticalVolumeCoincidence::Enum opticalCoincidence = Impl::OpticalVolumeCoincidence::Independent){
         object(
@@ -221,8 +221,8 @@ bool CreateRefractionGalleryScene(
     }
     else if(caseName == "coincident_identical" || caseName == "coincident_tinted_identical"){
         const f32 coverage = caseName == "coincident_tinted_identical" ? 0.3f : 0.0f;
-        scene.sphere(0.0f, 0.0f, 1.1f, false, coverage, NAME_NONE, 0, Impl::OpticalVolumeCoincidence::IdenticalMaterial);
-        scene.sphere(0.0f, 0.0f, 1.1f, false, coverage, NAME_NONE, 0, Impl::OpticalVolumeCoincidence::IdenticalMaterial);
+        scene.sphere(0.0f, 0.0f, 1.1f, false, coverage, s_NameNone, 0, Impl::OpticalVolumeCoincidence::IdenticalMaterial);
+        scene.sphere(0.0f, 0.0f, 1.1f, false, coverage, s_NameNone, 0, Impl::OpticalVolumeCoincidence::IdenticalMaterial);
     }
     else if(caseName == "near_coincident"){
         const Name opticalGroup = __hidden_refraction_gallery_scene::s_DuplicateOpticalGroup;

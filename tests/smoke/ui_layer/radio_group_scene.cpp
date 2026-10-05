@@ -155,7 +155,7 @@ SharedUiRadioGroupSmokeScene CreateUiRadioGroupSmokeScene(Core::Alloc::GlobalAre
     return SharedUiRadioGroupSmokeScene(
         NewArenaObject<RefCounter<UiRadioGroupSmokeScene>>(arena, arena, input),
         ArenaRefDeleter<RefCounter<UiRadioGroupSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

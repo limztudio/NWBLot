@@ -28,7 +28,7 @@ inline constexpr usize s_DumpArenaPayloadSize = 512u * 1024u;
 
 
 Alloc::PersistentArena& DumpArena(){
-    static Alloc::PersistentArena s_Arena(CrashArenaScope::s_DumpArena, Alloc::PersistentArena::StructureAlignedSize(s_DumpArenaPayloadSize));
+    static Alloc::PersistentArena s_Arena(CrashArenaScope::s_DumpArena, Alloc::PersistentArena::structureAlignedSize(s_DumpArenaPayloadSize));
     return s_Arena;
 }
 

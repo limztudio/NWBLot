@@ -423,7 +423,7 @@ public:
         // GPU durations are sampled diagnostics; FPS comes only from accepted native presentations and steady wall time.
         if(!m_cpuTimingProbe.initialize(m_cpuDiagnosticsEnabled, m_timingEnabled))
             return false;
-        NWB::Core::Perf::CaptureOptions capture = NWB::Core::Perf::CaptureOptions::GpuTimingOnly();
+        NWB::Core::Perf::CaptureOptions capture = NWB::Core::Perf::CaptureOptions::gpuTimingOnly();
         capture.cpuTiming = m_cpuDiagnosticsEnabled;
         m_context.setPerfCapture(capture);
         if(m_timingEnabled){

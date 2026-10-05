@@ -18,8 +18,8 @@ namespace PlaneTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] SIMDVector SIMDCALL Distance(SIMDVector plane, SIMDVector point)noexcept;
-[[nodiscard]] SIMDVector SIMDCALL FromPointNormal(SIMDVector normal, SIMDVector point, SIMDVector fallbackNormal)noexcept;
+[[nodiscard]] SIMDVector GLB_SIMD_CALL Distance(SIMDVector plane, SIMDVector point)noexcept;
+[[nodiscard]] SIMDVector GLB_SIMD_CALL FromPointNormal(SIMDVector normal, SIMDVector point, SIMDVector fallbackNormal)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -31,7 +31,7 @@ namespace PlaneTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE SIMDVector SIMDCALL PlaneTests::Distance(const SIMDVector plane, const SIMDVector point)noexcept{
+[[nodiscard]] GLB_INLINE SIMDVector GLB_SIMD_CALL PlaneTests::Distance(const SIMDVector plane, const SIMDVector point)noexcept{
     return CollisionDetail::PlaneDistance(plane, point);
 }
 
@@ -39,7 +39,7 @@ namespace PlaneTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE SIMDVector SIMDCALL PlaneTests::FromPointNormal(
+[[nodiscard]] GLB_INLINE SIMDVector GLB_SIMD_CALL PlaneTests::FromPointNormal(
     const SIMDVector normal,
     const SIMDVector point,
     const SIMDVector fallbackNormal

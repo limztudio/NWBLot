@@ -75,7 +75,7 @@ inline constexpr usize s_MaxBeginFrameResizeAttempts = 3u;
 struct GraphicsRuntime::CpuTimingPhaseBatch final : NoCopy{
 private:
     struct PhaseTiming{
-        Name scopeName = NAME_NONE;
+        Name scopeName = s_NameNone;
         Perf::TimingScopeId scope;
         f64 seconds = 0.0;
     };

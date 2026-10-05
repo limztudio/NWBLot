@@ -71,7 +71,7 @@ Graphics::BufferHandle MetadataVertexBuffer(
         allocator,
         Graphics::BufferDesc().setByteSize(256u).setInitialState(Graphics::ResourceStates::VertexBuffer)
     );
-    return Graphics::BufferHandle(object, Graphics::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+    return Graphics::BufferHandle(object, Graphics::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
 }
 
 TEST(GpuCommandIrRasterCapture, ExportRetainsExactBufferAfterCallerGraphAndCaptureReset){

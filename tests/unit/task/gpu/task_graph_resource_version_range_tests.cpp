@@ -60,12 +60,12 @@ TEST(GpuTaskGraphResourceVersion, RejectsTypedRangesOutsideBackendBoundsAndAccep
     Graphics::BufferHandle buffer(
         bufferObject,
         Graphics::BufferHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::TextureHandle texture(
         textureObject,
         Graphics::TextureHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
 
     {

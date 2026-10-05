@@ -18,7 +18,7 @@ NWB_TELEMETRY_BEGIN
 
 
 struct FrameGraphNodeDesc{
-    Name name = NAME_NONE;
+    Name name = s_NameNone;
     AStringView label;
     FrameGraphNodeKind::Enum kind = FrameGraphNodeKind::Unknown;
     u8 flags = 0u;
@@ -35,7 +35,7 @@ struct FrameGraphEdgeDesc{
 };
 
 struct FrameGraphNodePayload{
-    Name name = NAME_NONE;
+    Name name = s_NameNone;
     AString<TelemetryArena> label;
     FrameGraphNodeKind::Enum kind = FrameGraphNodeKind::Unknown;
     u8 flags = 0u;

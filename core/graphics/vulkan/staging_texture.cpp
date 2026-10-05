@@ -421,7 +421,7 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     staging->m_admittedQueueFamilies = Move(admittedFamilies);
     staging->m_cpuAccess = cpuAccess;
 
-    return StagingTextureHandle(staging, StagingTextureHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return StagingTextureHandle(staging, StagingTextureHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 void* Device::mapStagingTexture(

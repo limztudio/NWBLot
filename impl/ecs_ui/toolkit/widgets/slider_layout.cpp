@@ -82,10 +82,10 @@ namespace __hidden_ui_slider_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SliderLayout::Measure(const SliderOptions& options, const SliderStyle& style, SliderMetrics& out){
+bool SliderLayout::measure(const SliderOptions& options, const SliderStyle& style, SliderMetrics& out){
     using namespace __hidden_ui_slider_layout;
     if(
-        !SliderBehavior::Validate(options) || !IsValidUiPadding(style.padding)
+        !SliderBehavior::validate(options) || !IsValidUiPadding(style.padding)
         || !IsFinite(style.thumbExtent.x) || style.thumbExtent.x <= 0.0f
         || !IsFinite(style.thumbExtent.y) || style.thumbExtent.y <= 0.0f
         || !IsFinite(style.trackHeight) || style.trackHeight <= 0.0f
@@ -108,7 +108,7 @@ bool SliderLayout::Measure(const SliderOptions& options, const SliderStyle& styl
     return true;
 }
 
-bool SliderLayout::Place(
+bool SliderLayout::place(
     const Rect& bounds,
     const Rect& clip,
     const SliderMetrics& metrics,

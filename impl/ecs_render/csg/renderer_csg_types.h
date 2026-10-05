@@ -185,7 +185,7 @@ struct CsgFrameWorkRegion{
 
 struct CsgReceiverClipDrawInfo{
     u32 cutterCount = 0u;
-    Name evaluatorVariant = NAME_NONE;
+    Name evaluatorVariant = s_NameNone;
 };
 
 struct CsgFrameGpuData{

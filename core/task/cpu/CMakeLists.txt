@@ -1,4 +1,4 @@
-global_declare_static_library(nwb_cpu_task)
+nwb_declare_static_library(nwb_cpu_task)
 target_sources(nwb_cpu_task PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/scheduler.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/scheduler_notify.cpp"

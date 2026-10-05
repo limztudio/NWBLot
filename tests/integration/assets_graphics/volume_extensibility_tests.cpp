@@ -84,7 +84,7 @@ public:
 };
 
 struct ProjectProbeCookEntry{
-    Name virtualPath = NAME_NONE;
+    Name virtualPath = s_NameNone;
     u32 marker = 0u;
 
     explicit ProjectProbeCookEntry(NWB::Core::Assets::CookArena&){
@@ -123,7 +123,7 @@ static bool ParseProjectProbeValue(
     outEntry = ProjectProbeCookEntry(context.cookArena);
     outEntry.virtualPath = virtualPath;
     outEntry.marker = s_ProjectProbeValueMarker;
-    return outEntry.virtualPath != NAME_NONE;
+    return outEntry.virtualPath != s_NameNone;
 }
 
 static bool BuildProjectProbeAsset(ProjectProbeCookEntry& entry, ProjectProbeAsset& outAsset){
@@ -134,7 +134,7 @@ static bool BuildProjectProbeAsset(ProjectProbeCookEntry& entry, ProjectProbeAss
 
 static bool RegisterProjectProbeCookEntry(NWB::Core::Assets::CookEntryRegistry& registry){
     return registry.registerType<ProjectProbeCookEntry, ProjectProbeAsset, ProjectProbeAssetCodec>(
-        ProjectProbeAsset::AssetTypeName(),
+        ProjectProbeAsset::assetTypeName(),
         GLB_TEXT("project probe asset"),
         &ParseProjectProbeDocument,
         &ParseProjectProbeValue,
@@ -153,7 +153,7 @@ static bool LoadProjectProbeAsset(
     const u32 expectedMarker
 ){
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    if(!AssetsGraphicsFixture::LoadCookedAsset<ProjectProbeAssetCodec>(
+    if(!AssetsGraphicsFixture::loadCookedAsset<ProjectProbeAssetCodec>(
         testArena,
         outputDirectory,
         assetName,
@@ -178,7 +178,7 @@ TEST(AssetsGraphics, ProjectCookEntryDocumentCook){
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    const bool cooked = AssetsGraphicsFixture::CookSingleGraphicsMeta(
+    const bool cooked = AssetsGraphicsFixture::cookSingleGraphicsMeta(
         "project_probe asset;\n\n"
         "asset.label = \"document\";\n",
         "project_cook_entry_document",
@@ -208,7 +208,7 @@ TEST(AssetsGraphics, ProjectCookEntryAssetBunchCook){
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    const bool cooked = AssetsGraphicsFixture::CookSingleGraphicsMeta(
+    const bool cooked = AssetsGraphicsFixture::cookSingleGraphicsMeta(
         "project_probe probe;\n"
         "probe.label = \"bunch\";\n\n"
         "asset_bunch bunch = [\n"

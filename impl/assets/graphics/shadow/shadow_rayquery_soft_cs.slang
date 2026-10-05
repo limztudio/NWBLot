@@ -60,7 +60,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // Background: fully LIT (white) for every slot -- the multiplicative identity the resolve carries and the value the
     // upsample writes for a background full-res pixel, so the two agree at the geometry/background edge. Same depth
     // threshold as the SW trace (NWB_SW_SHADOW_BACKGROUND_DEPTH aliases the HW full-res threshold).
-    if(NwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.depthSlot).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH){
+    if(nwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.depthSlot).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH){
         for(uint i = 0u; i < lightCount; ++i){
             const float slot = g_NwbSceneLights[i].params.z;
             if(slot < 0.0)
@@ -72,8 +72,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     // The deferred vector attachments are RGBA16F. Keep the half payload through the fetch and expand only for
     // the ray origin/normal calculations, which must remain FP32 for stable soft-shadow tracing.
-    const half3 worldPositionSample = half3(NwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.worldPositionSlot).Load(texel).xyz);
-    const half3 normalSample = half3(NwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.normalSlot).Load(texel).xyz);
+    const half3 worldPositionSample = half3(nwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.worldPositionSlot).Load(texel).xyz);
+    const half3 normalSample = half3(nwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.normalSlot).Load(texel).xyz);
     const float3 worldPosition = float3(worldPositionSample);
     const float3 normal = normalize(float3(normalSample) * 2.0 - 1.0);
     for(uint i = 0u; i < lightCount; ++i){

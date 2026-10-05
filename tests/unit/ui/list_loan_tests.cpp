@@ -231,16 +231,16 @@ TEST(UiListLoanBehaviorTests, ReconcileAndApplyPreserveExplicitChangesMadeBySour
     CallbackSource source(state);
     state.select(2u);
     source.arm(MutationKind::KeySelect, 8u);
-    EXPECT_FALSE(ListBehavior::Reconcile(state, source));
+    EXPECT_FALSE(ListBehavior::reconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 8u);
     EXPECT_EQ(state.cursorKey(), 8u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(state, source));
     ControlAction action;
     action.control = { state.inputGeneration(), source.instanceGeneration(), source.revision() };
     action.kind = ControlActionKind::Down;
     source.arm(MutationKind::KeySelect, 3u);
     ListResult result;
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, action, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, action, result));
     EXPECT_EQ(state.selectedKey(), 3u);
     EXPECT_EQ(state.cursorKey(), 3u);
     EXPECT_FALSE(result.valid);
@@ -251,7 +251,7 @@ TEST(UiListLoanBehaviorTests, ReconcileAndApplyPreserveExplicitChangesMadeBySour
     action.step = 24.0;
     action.maximum = 300.0;
     source.arm(MutationKind::RevisionScroll);
-    EXPECT_FALSE(ListBehavior::Apply(state, source, {}, action, result));
+    EXPECT_FALSE(ListBehavior::apply(state, source, {}, action, result));
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 64.0);
     EXPECT_FALSE(result.valid);
 }

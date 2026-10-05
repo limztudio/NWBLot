@@ -181,7 +181,7 @@ public:
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
     return s_TransparentCsgReceiverGroup;
 #else
-    return NAME_NONE;
+    return s_NameNone;
 #endif
 }
 
@@ -284,7 +284,7 @@ static void ApplyTransparentCsgSceneTransform(
     const Float4& colorTint,
     const Float4& position,
     const Float4& scale,
-    const Name csgReceiverGroup = NAME_NONE
+    const Name csgReceiverGroup = s_NameNone
 ){
     const NWB::Core::ECS::EntityID entity = CreateTintedStaticMeshEntity(
         world,
@@ -455,7 +455,7 @@ public:
 public:
     virtual bool onStartup()override{
         // Enable both the timing sink and graphics recorder for per-pass observations.
-        m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+        m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::gpuTimingOnly());
 
         bool causticTiming = false;
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)

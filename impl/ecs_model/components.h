@@ -52,7 +52,7 @@ namespace ModelObjectKind{
 
 
 struct ModelRuntimeComponent{
-    Name model = NAME_NONE;
+    Name model = s_NameNone;
     u32 objectCount = 0u;
 };
 
@@ -64,8 +64,8 @@ static_assert(IsTriviallyCopyable_V<ModelRuntimeComponent>, "ModelRuntimeCompone
 
 
 struct ModelObjectComponent{
-    Name model = NAME_NONE;
-    Name object = NAME_NONE;
+    Name model = s_NameNone;
+    Name object = s_NameNone;
     SkeletonJointMatrix localTransform = ::Float34Identity();
     Core::ECS::EntityID owner = Core::ECS::s_InvalidEntityId;
     u32 kind = ModelObjectKind::StaticMesh;
@@ -90,8 +90,8 @@ static_assert(IsTriviallyCopyable_V<ModelSkeletonComponent>, "ModelSkeletonCompo
 
 
 struct ModelStaticMeshAttachmentComponent{
-    Name parentObject = NAME_NONE;
-    Name parentJoint = NAME_NONE;
+    Name parentObject = s_NameNone;
+    Name parentJoint = s_NameNone;
     Core::ECS::EntityID parentEntity = Core::ECS::s_InvalidEntityId;
     u32 parentJointIndex = Limit<u32>::s_Max;
     SkeletonJointMatrix localTransform = ::Float34Identity();

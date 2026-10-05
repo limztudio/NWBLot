@@ -43,7 +43,7 @@ static constexpr AStringView s_DiagnosticPrefix = "Font meta";
 
 bool LoadPairedFontCookSource(const Path& nwbFilePath, Font& outFont){
     Path fontPath = nwbFilePath;
-    fontPath.replace_extension(".font");
+    fontPath.replaceExtension(".font");
     Core::Assets::AssetArena& arena = outFont.fontBytes().get_allocator().arena();
     PreparedFontSource source(arena);
     if(!ReadPreparedFontSource(fontPath, source, false))
@@ -63,7 +63,7 @@ bool ParseFontCookMetadata(
     const Core::Metascript::Document& doc,
     FontCookEntry& outEntry,
     Core::Alloc::ScratchArena& scratchArena){
-    Name virtualPath = NAME_NONE;
+    Name virtualPath = s_NameNone;
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, virtualPath, scratchArena))
         return false;
     return ParseFontCookMetadataValue(virtualPath, nwbFilePath, doc.asset(), outEntry);

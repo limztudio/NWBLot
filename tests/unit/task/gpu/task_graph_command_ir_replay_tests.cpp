@@ -59,7 +59,7 @@ TEST(GpuCommandIrReplay, AcceptsOnlyFullUncompressedMultisampleTextureClears){
     Graphics::TextureHandle texture(
         textureObject,
         Graphics::TextureHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId resource = graph.importTexture(
@@ -141,7 +141,7 @@ TEST(GpuCommandIrReplay, AcceptsOnlyFullUncompressedMultisampleTextureClears){
     Graphics::TextureHandle compressedTexture(
         compressedTextureObject,
         Graphics::TextureHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
     Graphics::GpuTaskGraph compressedGraph(testArena.arena);
     const Graphics::GpuGraphResourceId compressedResource = compressedGraph.importTexture(
@@ -226,7 +226,7 @@ TEST(GpuCommandIrReplay, TextureCopyCorruptionRequiresDeclaredAndActualQueueCapa
         Graphics::TextureHandle texture(
             textureObject,
             Graphics::TextureHandle::deleter_type(&testArena.arena),
-            AdoptRef
+            s_AdoptRef
         );
         return texture;
     };

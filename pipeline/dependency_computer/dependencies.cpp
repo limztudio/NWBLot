@@ -56,7 +56,7 @@ bool ComputeSkinDependencies(const PipelineOptions& options,
             return false;
         if(included[provider])
             continue;
-        candidate.emplace_back(PathToString(arena, files[provider].filePath.lexically_normal()));
+        candidate.emplace_back(PathToString(arena, files[provider].filePath.lexicallyNormal()));
         included[provider] = 1u;
     }
     outInputs.swap(candidate);

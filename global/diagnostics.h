@@ -454,13 +454,13 @@ inline void ClearDiagnosticEventCallback(const DiagnosticEventCallback callback)
 }
 
 GLB_NOINLINE inline void CaptureDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{
-    if(DiagnosticDetail::g_EventActive.test_and_set(MemoryOrder::acquire))
+    if(DiagnosticDetail::g_EventActive.testAndSet(MemoryOrder::acquire))
         return;
 
     const DiagnosticEventCallback callback = DiagnosticDetail::g_EventCallback.load(MemoryOrder::acquire);
     if(!callback){
         DiagnosticDetail::g_EventActive.clear(MemoryOrder::release);
-        DiagnosticDetail::g_EventActive.notify_all();
+        DiagnosticDetail::g_EventActive.notifyAll();
         return;
     }
 
@@ -473,7 +473,7 @@ GLB_NOINLINE inline void CaptureDiagnosticEvent(const DiagnosticEventRecord& rec
     callback(normalizedRecord);
 
     DiagnosticDetail::g_EventActive.clear(MemoryOrder::release);
-    DiagnosticDetail::g_EventActive.notify_all();
+    DiagnosticDetail::g_EventActive.notifyAll();
 }
 
 inline void CaptureDiagnosticEvent(const StringView category, const StringView message, const StringView file = {}, const u32 line = 0u)noexcept{

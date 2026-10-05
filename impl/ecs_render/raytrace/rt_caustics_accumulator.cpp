@@ -81,17 +81,17 @@ void RendererRayTracingSystem::dispatchCausticResolvePrepare(
     const f32 temporalDecay = causticTemporalDecay();
     const f32 effectiveIntensity = EffectiveCausticIntensity(temporalDecay);
     const bool prepareToHalfB = (static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT) % 2u) == 0u;
-    const __hidden_caustics::CausticResolvePassResources halfA{
+    const RayTracingCausticsTaskDetail::CausticResolvePassResources halfA{
         targets.causticHistory.get(),
         targets.bindless.causticHistory.slot(),
         targets.bindless.causticHistoryStorage.slot()
     };
-    const __hidden_caustics::CausticResolvePassResources halfB{
+    const RayTracingCausticsTaskDetail::CausticResolvePassResources halfB{
         targets.causticResolveHalf.get(),
         targets.bindless.causticResolveHalf.slot(),
         targets.bindless.causticResolveHalfStorage.slot()
     };
-    __hidden_caustics::DispatchCausticResolvePass(
+    RayTracingCausticsTaskDetail::DispatchCausticResolvePass(
         commandList,
         heap,
         *m_rayTracingState.m_causticResolve.m_prepare.m_pipeline.get(),

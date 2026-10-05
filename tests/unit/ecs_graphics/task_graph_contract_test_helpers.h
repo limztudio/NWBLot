@@ -61,7 +61,7 @@ inline usize CountText(const AStringView text, const AStringView expected){
 }
 
 inline TestPath RepoRoot(TestArena& testArena){
-    return TestPath(testArena.arena, __FILE__).parent_path().parent_path().parent_path().parent_path().lexically_normal();
+    return TestPath(testArena.arena, __FILE__).parentPath().parentPath().parentPath().parentPath().lexicallyNormal();
 }
 
 inline void ExpectRendererBaselineEnvOwnedBySmokeHelper(const TestPath& repoRoot){

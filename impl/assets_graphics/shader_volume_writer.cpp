@@ -217,9 +217,9 @@ static bool GetVariantBytecode(
     });
 
     errorCode.clear();
-    if(!EnsureDirectories(cachePaths.bytecodePath.parent_path(), errorCode)){
+    if(!EnsureDirectories(cachePaths.bytecodePath.parentPath(), errorCode)){
         NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to create cache directory '{}': {}")
-            , PathToString<tchar>(cachePaths.bytecodePath.parent_path())
+            , PathToString<tchar>(cachePaths.bytecodePath.parentPath())
             , StringConvert(errorCode.message())
         );
         return false;
@@ -285,7 +285,7 @@ static bool AppendShaderIndexToManifest(
     Core::Assets::AssetsVolumeCookDetail::AssetVolumePackManifest& manifest,
     VirtualPathHashSet& inOutSeenVirtualPathHashes
 ){
-    const Name& shaderIndexVirtualPath = Core::ShaderArchive::IndexVirtualPathName();
+    const Name& shaderIndexVirtualPath = Core::ShaderArchive::indexVirtualPathName();
     if(!inOutSeenVirtualPathHashes.insert(shaderIndexVirtualPath.hash()).second){
         NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: duplicate shader archive index virtual path '{}'"),
             StringConvert(shaderIndexVirtualPath.resolvedText())

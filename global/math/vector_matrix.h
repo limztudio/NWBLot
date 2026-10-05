@@ -12,10 +12,10 @@
 
 
 #if defined(GLB_HAS_AVX2)
-GLB_INLINE SIMDMatrix SIMDCALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept;
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept;
 #endif
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixTranspose4(SIMDVector r0, SIMDVector r1, SIMDVector r2, SIMDVector r3)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixTranspose4(SIMDVector r0, SIMDVector r1, SIMDVector r2, SIMDVector r3)noexcept{
 #if defined(GLB_HAS_NEON)
     const float32x4x2_t p0 = vzipq_f32(r0, r2);
     const float32x4x2_t p1 = vzipq_f32(r1, r3);
@@ -69,12 +69,12 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixTranspose4(SIMDVector r0, SIMDVector r1, SI
 #endif
 }
 
-GLB_INLINE SIMDMatrix SIMDCALL MatrixTransposeForTransform(const SIMDMatrix& matrix)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixTransposeForTransform(const SIMDMatrix& matrix)noexcept{
     return MatrixTranspose4(matrix.v[0], matrix.v[1], matrix.v[2], matrix.v[3]);
 }
 
 #if defined(GLB_HAS_AVX2)
-GLB_INLINE SIMDMatrix SIMDCALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept{
+GLB_INLINE SIMDMatrix GLB_SIMD_CALL MatrixTransposePackedRows(__m256 t0, __m256 t1)noexcept{
     __m256 temp0 = _mm256_unpacklo_ps(t0, t1);
     __m256 temp1 = _mm256_unpackhi_ps(t0, t1);
     __m256 temp2 = _mm256_permute2f128_ps(temp0, temp1, 0x20);
@@ -93,7 +93,7 @@ GLB_INLINE SIMDMatrix SIMDCALL MatrixTransposePackedRows(__m256 t0, __m256 t1)no
 }
 #endif
 
-GLB_INLINE SIMDVector SIMDCALL Vector4TransformTransposed(SIMDVector value, const SIMDMatrix& transposedMatrix)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL Vector4TransformTransposed(SIMDVector value, const SIMDMatrix& transposedMatrix)noexcept{
 #if defined(GLB_HAS_SCALAR)
     const f32 x = value.f[0];
     const f32 y = value.f[1];
@@ -153,7 +153,7 @@ GLB_INLINE SIMDVector SIMDCALL Vector4TransformTransposed(SIMDVector value, cons
 }
 
 template<typename OutputT, typename InputT, typename TransformT>
-GLB_INLINE OutputT* SIMDCALL VectorTransformStreamImpl(
+GLB_INLINE OutputT* GLB_SIMD_CALL VectorTransformStreamImpl(
     OutputT* outputStream,
     usize outputStride,
     const InputT* inputStream,
@@ -178,7 +178,7 @@ GLB_INLINE OutputT* SIMDCALL VectorTransformStreamImpl(
 
 #if defined(GLB_HAS_SSE4)
 template<int Mask>
-GLB_INLINE SIMDVector SIMDCALL MatrixDotPack(const SIMDMatrix& matrix, SIMDVector value)noexcept{
+GLB_INLINE SIMDVector GLB_SIMD_CALL MatrixDotPack(const SIMDMatrix& matrix, SIMDVector value)noexcept{
     const SIMDVector x = _mm_dp_ps(matrix.v[0], value, Mask);
     const SIMDVector y = _mm_dp_ps(matrix.v[1], value, Mask);
     const SIMDVector z = _mm_dp_ps(matrix.v[2], value, Mask);

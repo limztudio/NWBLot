@@ -80,23 +80,23 @@ constexpr CaptureFlag::Mask operator~(const CaptureFlag::Mask value)noexcept{
 struct CaptureOptions{
     CaptureFlag::Mask flags = CaptureFlag::None;
 
-    [[nodiscard]] static constexpr CaptureOptions Disabled(){
+    [[nodiscard]] static constexpr CaptureOptions disabled(){
         return {};
     }
 
-    [[nodiscard]] static constexpr CaptureOptions All(){
+    [[nodiscard]] static constexpr CaptureOptions all(){
         CaptureOptions options;
         options.flags = CaptureFlag::All;
         return options;
     }
 
-    [[nodiscard]] static constexpr CaptureOptions FrameGraphOnly(){
+    [[nodiscard]] static constexpr CaptureOptions frameGraphOnly(){
         CaptureOptions options;
         options.flags = CaptureFlag::FrameGraph;
         return options;
     }
 
-    [[nodiscard]] static constexpr CaptureOptions PerfOnly(){
+    [[nodiscard]] static constexpr CaptureOptions perfOnly(){
         CaptureOptions options;
         options.flags = CaptureFlag::Perf;
         return options;

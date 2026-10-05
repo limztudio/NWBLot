@@ -184,7 +184,7 @@ TEST(ArenaObjectConstruction, GlobalUniqueObjectFailureReleasesAlignedStorageAnd
 }
 
 TEST(ArenaObjectConstruction, PersistentUniqueObjectFailureReleasesAlignedStorageAndConstructedMembers){
-    PersistentArena arena(Name("tests/arena_object/persistent_constructor_failure"), PersistentArena::StructureAlignedSize(16384u));
+    PersistentArena arena(Name("tests/arena_object/persistent_constructor_failure"), PersistentArena::structureAlignedSize(16384u));
     VerifyConstructionFailure(arena, 1u, [&](ConstructionState& state){
         return MakePersistentUnique<ConstructionProbe<PersistentArena>>(arena, arena, state);
     });
@@ -205,7 +205,7 @@ TEST(ArenaObjectConstruction, GlobalArrayFailureDestroysOnlyCompletedElementsAnd
 }
 
 TEST(ArenaObjectConstruction, PersistentArrayFailureDestroysOnlyCompletedElementsAndReleasesStorage){
-    PersistentArena arena(Name("tests/arena_object/persistent_array_failure"), PersistentArena::StructureAlignedSize(16384u));
+    PersistentArena arena(Name("tests/arena_object/persistent_array_failure"), PersistentArena::structureAlignedSize(16384u));
     VerifyConstructionFailure(arena, 3u, [&](ConstructionState&){
         return MakePersistentUnique<ConstructionProbe<PersistentArena>[]>(arena, 4u);
     });

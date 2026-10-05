@@ -37,7 +37,7 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // Set 0 is push-only; resources come from the global heap.
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticPhotonPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(CausticPhotonPushConstants)));
 
         m_rayTracingState.m_swCausticBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_swCausticBindingLayout){
@@ -100,7 +100,7 @@ bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // Target-generation resources are selected through the push block.
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticResolvePushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(CausticResolvePushConstants)));
 
         resolve.m_bindingLayout = device.createBindingLayout(layoutDesc);
         if(!resolve.m_bindingLayout){
@@ -175,7 +175,7 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
     if(!m_rayTracingState.m_causticGeometryDownsampleBindingLayout){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticGeometryDownsamplePushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(CausticGeometryDownsamplePushConstants)));
 
         m_rayTracingState.m_causticGeometryDownsampleBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_causticGeometryDownsampleBindingLayout){
@@ -255,7 +255,7 @@ bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::Compute);
         // The accumulator is heap-selected through push constants.
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticAccumulatorDecayPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(CausticAccumulatorDecayPushConstants)));
 
         m_rayTracingState.m_causticAccumulatorDecayBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_causticAccumulatorDecayBindingLayout){
@@ -322,7 +322,7 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     if(!m_rayTracingState.m_hwCausticBindingLayout){
         Core::BindingLayoutDesc layoutDesc(m_arena);
         layoutDesc.setVisibility(Core::ShaderType::AllRayTracing);
-        layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0, sizeof(CausticPhotonPushConstants)));
+        layoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0, sizeof(CausticPhotonPushConstants)));
 
         m_rayTracingState.m_hwCausticBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_hwCausticBindingLayout){
@@ -356,15 +356,15 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     pipelineDesc.addBindingLayout(heap.getAccelStructLayout());
 
     Core::RayTracingPipelineShaderDesc raygenDesc;
-    raygenDesc.setShader(raygenShader).setExportName(__hidden_caustics::s_HwRaygenExportName);
+    raygenDesc.setShader(raygenShader).setExportName(RayTracingCausticsTaskDetail::s_HwRaygenExportName);
     pipelineDesc.addShader(raygenDesc);
 
     Core::RayTracingPipelineShaderDesc missDesc;
-    missDesc.setShader(missShader).setExportName(__hidden_caustics::s_HwMissExportName);
+    missDesc.setShader(missShader).setExportName(RayTracingCausticsTaskDetail::s_HwMissExportName);
     pipelineDesc.addShader(missDesc);
 
     Core::RayTracingPipelineHitGroupDesc hitGroupDesc;
-    hitGroupDesc.setClosestHitShader(closestHitShader).setExportName(__hidden_caustics::s_HwHitGroupExportName);
+    hitGroupDesc.setClosestHitShader(closestHitShader).setExportName(RayTracingCausticsTaskDetail::s_HwHitGroupExportName);
     pipelineDesc.addHitGroup(hitGroupDesc);
 
     Core::RayTracingPipelineHandle pipeline = device.createRayTracingPipeline(pipelineDesc);
@@ -381,9 +381,9 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
         return false;
     }
     if(
-        !shaderTable->setRayGenerationShader(__hidden_caustics::s_HwRaygenExportName)
-        || shaderTable->addMissShader(__hidden_caustics::s_HwMissExportName) != 0u
-        || shaderTable->addHitGroup(__hidden_caustics::s_HwHitGroupExportName) != 0u
+        !shaderTable->setRayGenerationShader(RayTracingCausticsTaskDetail::s_HwRaygenExportName)
+        || shaderTable->addMissShader(RayTracingCausticsTaskDetail::s_HwMissExportName) != 0u
+        || shaderTable->addHitGroup(RayTracingCausticsTaskDetail::s_HwHitGroupExportName) != 0u
     ){
         NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to populate RT caustic shader table"));
         m_rayTracingState.m_hwCausticPipelineFailed = true;

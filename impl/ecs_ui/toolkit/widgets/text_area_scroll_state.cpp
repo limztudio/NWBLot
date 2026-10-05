@@ -75,7 +75,7 @@ ControlToken TextAreaScrollState::prepare(const WidgetState& widget, const Popup
 }
 
 bool TextAreaScrollState::updateOffsets(const Point scroll){
-    return ScrollbarLayout::UpdateOffsets(scroll, m_placement);
+    return ScrollbarLayout::updateOffsets(scroll, m_placement);
 }
 
 void TextAreaScrollState::retire(){

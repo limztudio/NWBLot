@@ -56,7 +56,7 @@ struct ReferencesContext{
                 allocator,
                 Core::BufferDesc{}.setByteSize(256u)
             );
-            buffers.emplace_back(buffer, Core::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+            buffers.emplace_back(buffer, Core::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
         }
     }
 
@@ -64,7 +64,7 @@ struct ReferencesContext{
         textures.reserve(textures.size() + count);
         for(usize index = 0u; index < count; ++index){
             Core::Texture* const texture = NWB::Tests::NewMetadataOnlyTexture(testArena.arena, context, allocator, Core::TextureDesc{});
-            textures.emplace_back(texture, Core::TextureHandle::deleter_type(&testArena.arena), AdoptRef);
+            textures.emplace_back(texture, Core::TextureHandle::deleter_type(&testArena.arena), s_AdoptRef);
         }
     }
 

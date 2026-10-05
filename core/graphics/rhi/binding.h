@@ -57,27 +57,27 @@ struct BindingLayoutItem{
 
     constexpr u32 getArraySize()const{ return (type == ResourceType::PushConstants) ? 1 : size; }
 
-#define NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TYPE_ENUM) \
-    static constexpr BindingLayoutItem TYPE_ENUM(const u32 slot, const usize size){ \
+#define NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TYPE_ENUM, FACTORY_NAME) \
+    static constexpr BindingLayoutItem FACTORY_NAME(const u32 slot, const usize size){ \
         BindingLayoutItem ret{}; \
         ret.slot = slot; \
         ret.type = ResourceType::TYPE_ENUM; \
         ret.size = static_cast<u16>(size); \
         return ret; \
     }
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Texture_SRV)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Texture_UAV)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TypedBuffer_SRV)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TypedBuffer_UAV)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(StructuredBuffer_SRV)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(StructuredBuffer_UAV)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RawBuffer_SRV)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RawBuffer_UAV)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(ConstantBuffer)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(VolatileConstantBuffer)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Sampler)
-    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RayTracingAccelStruct)
-    static constexpr BindingLayoutItem PushConstants(const u32 slot, const usize size){
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Texture_SRV, textureSrv)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Texture_UAV, textureUav)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TypedBuffer_SRV, typedBufferSrv)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TypedBuffer_UAV, typedBufferUav)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(StructuredBuffer_SRV, structuredBufferSrv)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(StructuredBuffer_UAV, structuredBufferUav)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RawBuffer_SRV, rawBufferSrv)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RawBuffer_UAV, rawBufferUav)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(ConstantBuffer, constantBuffer)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(VolatileConstantBuffer, volatileConstantBuffer)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Sampler, sampler)
+    NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RayTracingAccelStruct, rayTracingAccelStruct)
+    static constexpr BindingLayoutItem pushConstants(const u32 slot, const usize size){
         BindingLayoutItem ret{};
         ret.slot = slot;
         ret.type = ResourceType::PushConstants;
@@ -178,7 +178,7 @@ struct DescriptorWriteItem{
     constexpr DescriptorWriteItem& setSubresources(TextureSubresourceSet value){ subresources = value; return *this; }
     constexpr DescriptorWriteItem& setRange(BufferRange value){ range = value; return *this; }
 
-    static DescriptorWriteItem Base(u32 slot, ResourceType::Enum type, void* resourceHandle, Format::Enum format, TextureDimension::Enum dimension){
+    static DescriptorWriteItem base(u32 slot, ResourceType::Enum type, void* resourceHandle, Format::Enum format, TextureDimension::Enum dimension){
         DescriptorWriteItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -193,58 +193,58 @@ struct DescriptorWriteItem{
         return result;
     }
 
-    static DescriptorWriteItem None(u32 slot = 0){
-        return Base(slot, ResourceType::None, nullptr, Format::UNKNOWN, TextureDimension::Unknown);
+    static DescriptorWriteItem none(u32 slot = 0){
+        return base(slot, ResourceType::None, nullptr, Format::UNKNOWN, TextureDimension::Unknown);
     }
-    static DescriptorWriteItem Texture_SRV(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_AllSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown){
-        DescriptorWriteItem result = Base(slot, ResourceType::Texture_SRV, texture, format, dimension);
+    static DescriptorWriteItem textureSrv(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_AllSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown){
+        DescriptorWriteItem result = base(slot, ResourceType::Texture_SRV, texture, format, dimension);
         result.subresources = subresources;
         return result;
     }
-    static DescriptorWriteItem Texture_UAV(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::s_AllArraySlices), TextureDimension::Enum dimension = TextureDimension::Unknown){
-        DescriptorWriteItem result = Base(slot, ResourceType::Texture_UAV, texture, format, dimension);
+    static DescriptorWriteItem textureUav(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::s_AllArraySlices), TextureDimension::Enum dimension = TextureDimension::Unknown){
+        DescriptorWriteItem result = base(slot, ResourceType::Texture_UAV, texture, format, dimension);
         result.subresources = subresources;
         return result;
     }
-    static DescriptorWriteItem TypedBuffer_SRV(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
-        DescriptorWriteItem result = Base(slot, ResourceType::TypedBuffer_SRV, buffer, format, TextureDimension::Unknown);
+    static DescriptorWriteItem typedBufferSrv(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
+        DescriptorWriteItem result = base(slot, ResourceType::TypedBuffer_SRV, buffer, format, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static DescriptorWriteItem TypedBuffer_UAV(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
-        DescriptorWriteItem result = Base(slot, ResourceType::TypedBuffer_UAV, buffer, format, TextureDimension::Unknown);
+    static DescriptorWriteItem typedBufferUav(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
+        DescriptorWriteItem result = base(slot, ResourceType::TypedBuffer_UAV, buffer, format, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static DescriptorWriteItem ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer);
-    static DescriptorWriteItem Sampler(u32 slot, Sampler* sampler){
-        return Base(slot, ResourceType::Sampler, sampler, Format::UNKNOWN, TextureDimension::Unknown);
+    static DescriptorWriteItem constantBuffer(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer);
+    static DescriptorWriteItem sampler(u32 slot, Sampler* sampler){
+        return base(slot, ResourceType::Sampler, sampler, Format::UNKNOWN, TextureDimension::Unknown);
     }
-    static DescriptorWriteItem RayTracingAccelStruct(u32 slot, RayTracingAccelStruct* as){
-        return Base(slot, ResourceType::RayTracingAccelStruct, as, Format::UNKNOWN, TextureDimension::Unknown);
+    static DescriptorWriteItem rayTracingAccelStruct(u32 slot, RayTracingAccelStruct* as){
+        return base(slot, ResourceType::RayTracingAccelStruct, as, Format::UNKNOWN, TextureDimension::Unknown);
     }
-    static DescriptorWriteItem StructuredBuffer_SRV(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
-        DescriptorWriteItem result = Base(slot, ResourceType::StructuredBuffer_SRV, buffer, format, TextureDimension::Unknown);
+    static DescriptorWriteItem structuredBufferSrv(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
+        DescriptorWriteItem result = base(slot, ResourceType::StructuredBuffer_SRV, buffer, format, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static DescriptorWriteItem StructuredBuffer_UAV(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
-        DescriptorWriteItem result = Base(slot, ResourceType::StructuredBuffer_UAV, buffer, format, TextureDimension::Unknown);
+    static DescriptorWriteItem structuredBufferUav(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
+        DescriptorWriteItem result = base(slot, ResourceType::StructuredBuffer_UAV, buffer, format, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static DescriptorWriteItem RawBuffer_SRV(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer){
-        DescriptorWriteItem result = Base(slot, ResourceType::RawBuffer_SRV, buffer, Format::UNKNOWN, TextureDimension::Unknown);
+    static DescriptorWriteItem rawBufferSrv(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer){
+        DescriptorWriteItem result = base(slot, ResourceType::RawBuffer_SRV, buffer, Format::UNKNOWN, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static DescriptorWriteItem RawBuffer_UAV(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer){
-        DescriptorWriteItem result = Base(slot, ResourceType::RawBuffer_UAV, buffer, Format::UNKNOWN, TextureDimension::Unknown);
+    static DescriptorWriteItem rawBufferUav(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer){
+        DescriptorWriteItem result = base(slot, ResourceType::RawBuffer_UAV, buffer, Format::UNKNOWN, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static DescriptorWriteItem PushConstants(u32 slot, u32 byteSize){
-        DescriptorWriteItem result = Base(slot, ResourceType::PushConstants, nullptr, Format::UNKNOWN, TextureDimension::Unknown);
+    static DescriptorWriteItem pushConstants(u32 slot, u32 byteSize){
+        DescriptorWriteItem result = base(slot, ResourceType::PushConstants, nullptr, Format::UNKNOWN, TextureDimension::Unknown);
         result.range.byteOffset = 0;
         result.range.byteSize = byteSize;
         return result;

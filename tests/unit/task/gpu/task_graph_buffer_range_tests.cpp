@@ -443,7 +443,7 @@ TEST(GpuTaskGraphBufferRange, TypedRangesRejectOutOfBoundsAndResolveRemainingByt
         Graphics::BufferDesc().setByteSize(64u).setInitialState(Graphics::ResourceStates::Common)
     );
     ASSERT_NE(object, nullptr);
-    const Graphics::BufferHandle buffer(object, Graphics::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+    const Graphics::BufferHandle buffer(object, Graphics::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
     const Graphics::BufferRange ranges[] = {
         { 0u, 0u },
         { 64u, Graphics::BufferRange::s_AllBytes },

@@ -65,14 +65,14 @@ inline constexpr AStringView s_OwnerSeparator = "_";
     const AStringView label
 ){
     if(!sourceName || label.empty())
-        return NAME_NONE;
+        return s_NameNone;
 
     char ownerBuffer[TextDetail::s_DecimalTextBufferBytes] = {};
     char revisionBuffer[TextDetail::s_DecimalTextBufferBytes] = {};
     const AStringView ownerText = FormatDecimal(static_cast<usize>(ownerId), ownerBuffer);
     const AStringView revisionText = FormatDecimal(static_cast<usize>(editRevision), revisionBuffer);
     if(ownerText.empty() || revisionText.empty())
-        return NAME_NONE;
+        return s_NameNone;
 
     NameHash derivedHash = {};
     if(
@@ -84,7 +84,7 @@ inline constexpr AStringView s_OwnerSeparator = "_";
         || !UpdateDerivedNameHashText(derivedHash, SkinningResourceNamesDetail::s_OwnerSeparator)
         || !UpdateDerivedNameHashText(derivedHash, label)
     )
-        return NAME_NONE;
+        return s_NameNone;
 
     return FinishDerivedNameHash(derivedHash);
 }

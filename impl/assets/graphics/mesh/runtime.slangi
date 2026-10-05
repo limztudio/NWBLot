@@ -266,14 +266,14 @@ float3 nwbMeshTransformDirection(float3 direction, const NwbMeshInstanceData ins
 
 uint nwbMeshLoadMeshletPrimitiveIndex(const uint primitiveIndex){
     const uint byteOffset = primitiveIndex;
-    const uint word = NwbHeapRawBuffer(
+    const uint word = nwbHeapRawBuffer(
         nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES)
     ).Load(byteOffset & ~NWB_MESHLET_PACKED_WORD_BYTE_MASK);
     return (word >> ((byteOffset & NWB_MESHLET_PACKED_WORD_BYTE_MASK) * NWB_MESHLET_PACKED_BYTE_BITS)) & NWB_MESHLET_PACKED_BYTE_MASK;
 }
 
 NwbMeshletLocalVertexRef nwbMeshLoadMeshletLocalVertexRef(const NwbMeshletDesc meshlet, const uint localVertexIndex){
-    return NwbHeapMeshletLocalVertexRefs(
+    return nwbHeapMeshletLocalVertexRefs(
         nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS)
     )[meshlet.localVertexOffset + localVertexIndex];
 }
@@ -284,7 +284,7 @@ NwbMeshletPositionStreamRef nwbMeshLoadMeshletPositionRef(
     const uint localDeformedPosition
 ){
     return nwbMeshletDecodePositionRef(
-        NwbHeapRawBuffer(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_POSITION_REFS)),
+        nwbHeapRawBuffer(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_POSITION_REFS)),
         meshlet,
         decodeInfo,
         localDeformedPosition,
@@ -298,7 +298,7 @@ NwbMeshletAttributeStreamRef nwbMeshLoadMeshletAttributeRef(
     const uint localAttribute
 ){
     return nwbMeshletDecodeAttributeRef(
-        NwbHeapRawBuffer(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS)),
+        nwbHeapRawBuffer(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_ATTRIBUTE_REFS)),
         meshlet,
         decodeInfo,
         localAttribute
@@ -325,16 +325,16 @@ NwbMeshSourceVertex nwbMeshLoadSourceVertex(
     sourceVertex.worldPosition = worldPosition;
     sourceVertex.clipPosition = clipPosition;
     sourceVertex.normal = nwbMeshLoadHalf4(
-        NwbHeapMeshHalf4s(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_NORMAL))[attributeRef.normal]
+        nwbHeapMeshHalf4s(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_NORMAL))[attributeRef.normal]
     ).xyz;
     sourceVertex.tangent = nwbMeshLoadHalf4(
-        NwbHeapMeshHalf4s(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_TANGENT))[attributeRef.tangent]
+        nwbHeapMeshHalf4s(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_TANGENT))[attributeRef.tangent]
     );
     sourceVertex.uv0 = nwbMeshLoadUv0(
-        NwbHeapMeshUv0s(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_UV0))[attributeRef.uv0]
+        nwbHeapMeshUv0s(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_UV0))[attributeRef.uv0]
     );
     sourceVertex.color = nwbMeshLoadHalf4(
-        NwbHeapMeshHalf4s(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_COLOR))[attributeRef.color]
+        nwbHeapMeshHalf4s(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_COLOR))[attributeRef.color]
     );
     return sourceVertex;
 }

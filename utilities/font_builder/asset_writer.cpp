@@ -45,7 +45,7 @@ struct OutputPaths{
         , metadataBackup(output)
         , fontBackup(output)
     {
-        font.replace_extension(".font");
+        font.replaceExtension(".font");
         metadataTemporary += ".tmp";
         fontTemporary = font;
         fontTemporary += ".tmp";
@@ -219,7 +219,7 @@ bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payl
         return false;
     }
     ErrorCode error;
-    const Path directory = options.output.parent_path();
+    const Path directory = options.output.parentPath();
     if(!directory.empty() && !EnsureDirectories(directory, error))
         return false;
 

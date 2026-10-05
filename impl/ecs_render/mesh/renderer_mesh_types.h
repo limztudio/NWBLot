@@ -59,7 +59,7 @@ using InstanceGpuDataVector = Vector<InstanceGpuData, Core::Alloc::ScratchArena>
 
 
 struct MeshResources : public RuntimeMeshBuffers{
-    Name meshName = NAME_NONE;
+    Name meshName = s_NameNone;
     // Unified generated geometry: expanded vertices or compact vertices followed by u32 indices.
     Core::BufferHandle emulationVertexBuffer;
     ECSRenderDetail::ObjectGeometryCacheState objectGeometryCache;
@@ -105,7 +105,7 @@ struct MeshResources : public RuntimeMeshBuffers{
 
     [[nodiscard]] bool valid()const noexcept{
         return
-            meshName != NAME_NONE
+            meshName != s_NameNone
             && buffersValid()
             && meshletCount > 0
             && meshletPrimitiveIndexCount > 0

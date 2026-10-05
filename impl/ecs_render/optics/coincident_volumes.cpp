@@ -72,7 +72,7 @@ struct CandidateHasher{
         HashCombine(hash, candidate->material.name());
         HashCombine(hash, candidate->group);
         hash = hashTransformLanes(LoadFloat(candidate->position), LoadFloat(candidate->rotation), LoadFloat(candidate->scale), hash);
-        if(candidate->group == NAME_NONE){
+        if(candidate->group == s_NameNone){
             HashCombine(hash, candidate->boundaryMode);
             HashCombine(hash, candidate->mediumPriority);
             HashCombine(hash, candidate->mutableTypedByteCount);
@@ -96,7 +96,7 @@ struct CandidateEqual{
         )
             return false;
         // Shared groups assert preserved boundaries; otherwise all material bytes must agree.
-        return lhs->group != NAME_NONE || (
+        return lhs->group != s_NameNone || (
             lhs->boundaryMode == rhs->boundaryMode && lhs->mediumPriority == rhs->mediumPriority
             && lhs->mutableTypedByteCount == rhs->mutableTypedByteCount
             && (lhs->mutableTypedByteCount == 0u
@@ -133,7 +133,7 @@ void RendererOpticalVolumeSelection::prepare(
     const auto mergingEnabled = [](const RendererComponent& renderer){
         return renderer.visible && (
             renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::IdenticalMaterial
-            || (renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup && renderer.opticalVolumeGroup != NAME_NONE)
+            || (renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup && renderer.opticalVolumeGroup != s_NameNone)
         );
     };
     // Count opt-ins first; opaque-heavy worlds need no candidate allocation.
@@ -178,7 +178,7 @@ void RendererOpticalVolumeSelection::prepare(
         candidate.mesh = mesh.mesh;
         candidate.material = renderer.material;
         candidate.group = renderer.opticalVolumeCoincidence == OpticalVolumeCoincidence::SharedGroup
-            ? renderer.opticalVolumeGroup : NAME_NONE;
+            ? renderer.opticalVolumeGroup : s_NameNone;
         candidate.priority = renderer.opticalVolumePriority;
         candidate.boundaryMode = static_cast<u32>(renderer.opticalBoundaryMode);
         candidate.mediumPriority = renderer.opticalMediumPriority;

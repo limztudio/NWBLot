@@ -332,13 +332,13 @@ GlobalUniquePtr<ITextInputService> CreateX11TextInputService(
 bool FilterX11TextInputEvent(ITextInputService& service, XEvent& event){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::X11Xim)
         return false;
-    return checked_cast<X11TextInputService*>(&service)->filterEvent(event);
+    return CheckedCast<X11TextInputService*>(&service)->filterEvent(event);
 }
 
 bool DispatchX11TextInputKey(ITextInputService& service, XKeyEvent& event){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::X11Xim)
         return false;
-    return checked_cast<X11TextInputService*>(&service)->dispatchKey(event);
+    return CheckedCast<X11TextInputService*>(&service)->dispatchKey(event);
 }
 
 

@@ -14,14 +14,14 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshCookStreamReorder::ReorderMeshStreamsByMeshletTraversal(
+bool MeshCookStreamReorder::reorderMeshStreamsByMeshletTraversal(
     MeshCookEntry& entry,
     Core::Alloc::ScratchArena& scratchArena
 ){
     MeshCookCommonStreamReorder reorder(entry.positions.get_allocator().arena(), scratchArena);
-    PrepareCommonMeshStreamReorder(entry, reorder);
+    prepareCommonMeshStreamReorder(entry, reorder);
 
-    if(!RemapMeshletPositionRefs(
+    if(!remapMeshletPositionRefs(
         entry,
         s_MeshMetaKind,
         reorder,
@@ -38,10 +38,10 @@ bool MeshCookStreamReorder::ReorderMeshStreamsByMeshletTraversal(
     ))
         return false;
 
-    if(!RemapMeshletAttributeRefs(entry, s_MeshMetaKind, reorder))
+    if(!remapMeshletAttributeRefs(entry, s_MeshMetaKind, reorder))
         return false;
 
-    CommitCommonMeshStreamReorder(entry, reorder);
+    commitCommonMeshStreamReorder(entry, reorder);
     return true;
 }
 

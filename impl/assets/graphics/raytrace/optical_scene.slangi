@@ -34,7 +34,7 @@ bool nwbOpticalReadInstance(
         return false;
     }
     const uint offset = NWB_RT_OPTICAL_SCENE_HEADER_BYTES + instance * NWB_RT_OPTICAL_INSTANCE_BYTES;
-    const uint4 record = NwbHeapRawBuffer(config.opticalSceneHeapSlot).Load4(offset);
+    const uint4 record = nwbHeapRawBuffer(config.opticalSceneHeapSlot).Load4(offset);
     optical.entityId = record.x;
     optical.priority = asint(record.y);
     optical.mode = record.z;
@@ -70,7 +70,7 @@ bool nwbOpticalLoadHomogeneousMedium(
     const float3 direction,
     inout NwbOpticalMedium medium,
     inout NwbOpticalTraceResult result){
-    const NwbRtInstanceMaterial material = NwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[medium.instance];
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[medium.instance];
     NwbShadowHit input = (NwbShadowHit)0;
     input.meshInstanceIndex = material.meshInstanceIndex;
     input.surfaceDispatchId = material.surfaceDispatchId;

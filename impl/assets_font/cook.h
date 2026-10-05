@@ -29,7 +29,7 @@ NWB_IMPL_BEGIN
 struct FontCookEntry{
     Core::Assets::AssetArena& arena;
     Core::Assets::AssetBytes fontBytes;
-    Name virtualPath = NAME_NONE;
+    Name virtualPath = s_NameNone;
     u32 faceIndex = 0u;
 
 

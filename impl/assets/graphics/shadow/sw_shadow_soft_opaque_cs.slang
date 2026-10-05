@@ -19,7 +19,7 @@
 
 // The half-res soft opaque visibility buffer (one layer per shadow slot) this pass writes the cone-jittered sample
 // into; the separate shadow_resolve pipeline denoises + upsamples it into the full-res visibility.
-#define g_NwbSwShadowSoftHalf NwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.softHalfStorageSlot)
+#define g_NwbSwShadowSoftHalf nwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.softHalfStorageSlot)
 
 #define NWB_SW_SHADOW_SOFT_TRACE_OUTPUT g_NwbSwShadowSoftHalf
 #define NWB_SW_SHADOW_SOFT_TRACE_SPP NWB_SW_SHADOW_SOFT_SPP

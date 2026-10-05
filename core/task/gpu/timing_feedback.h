@@ -33,7 +33,7 @@ struct GpuQueueAssignmentScore{
 // Accepted assignment and dwell state follow semantic work across queue-class changes. Duration histories remain
 // route-specific below, but a Graphics -> Compute -> Graphics sequence must update one shared switch timeline.
 struct GpuTaskTimingAssignmentKey{
-    Name task = NAME_NONE;
+    Name task = s_NameNone;
     u32 variant = 0u;
     u32 resolutionClass = 0u;
 
@@ -53,7 +53,7 @@ inline constexpr bool operator!=(const GpuTaskTimingAssignmentKey& lhs, const Gp
 // Stable route key for measured task work. The broad queue class belongs in the history key, while the exact
 // physical queue is retained separately so devices with several same-class queues do not blend samples.
 struct GpuTaskTimingKey{
-    Name task = NAME_NONE;
+    Name task = s_NameNone;
     u32 variant = 0u;
     u32 resolutionClass = 0u;
     CommandQueue::Enum queue = CommandQueue::Graphics;

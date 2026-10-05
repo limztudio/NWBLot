@@ -163,7 +163,7 @@ void WriteVertexRef(Stream& out, const SourceVertexRef& ref){
 
 bool EnsureOutputDirectory(const Path& outputPath, const AStringView assetKind){
     ErrorCode errorCode;
-    const Path parentPath = outputPath.parent_path();
+    const Path parentPath = outputPath.parentPath();
     if(parentPath.empty())
         return true;
 
@@ -298,7 +298,7 @@ AString BuildVirtualBasePath(const Path& outputPath, const AStringView virtualRo
     const AStringView trimmedVirtualRoot = TrimView(virtualRoot);
 
     Path noExtension = outputPath;
-    noExtension.replace_extension();
+    noExtension.replaceExtension();
 
     Path relativePath(outputPath.arena());
     bool foundAssets = false;
@@ -640,7 +640,7 @@ bool WriteNwbAsset(
     }
 
     const bool skinnedModel = !mesh.skin.empty() || !skeletonJoints.empty() || !inverseBindMatrices.empty();
-    const Path packageDirectory = outputPath.parent_path() / outputPath.stem();
+    const Path packageDirectory = outputPath.parentPath() / outputPath.stem();
     const Path meshPath = packageDirectory / __hidden_asset_writer::s_MeshSplitFileName;
     const AString virtualBase = __hidden_asset_writer::BuildVirtualBasePath(outputPath, virtualRoot);
     const AString meshName = virtualBase + "/mesh";

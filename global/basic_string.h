@@ -121,9 +121,9 @@ constexpr auto MakeConstString(const char(&str)[N]){ return ConstString<N>(str);
 template<usize N>
 constexpr auto MakeConstWString(const wchar(&str)[N]){ return ConstWString<N>(str); }
 #if defined(GLB_UNICODE)
-#define MakeConstTString MakeConstWString
+#define GLB_MAKE_CONST_TSTRING MakeConstWString
 #else
-#define MakeConstTString MakeConstString
+#define GLB_MAKE_CONST_TSTRING MakeConstString
 #endif
 
 

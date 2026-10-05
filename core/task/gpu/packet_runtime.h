@@ -179,11 +179,11 @@ private:
 
     class ArtifactOperation final : NoCopy{
     private:
-        static thread_local ArtifactOperation* s_activeOperation;
+        static thread_local ArtifactOperation* s_ActiveOperation;
 
 
     public:
-        [[nodiscard]] static bool active()noexcept{ return s_activeOperation != nullptr; }
+        [[nodiscard]] static bool active()noexcept{ return s_ActiveOperation != nullptr; }
         [[nodiscard]] static bool activeFor(const GpuRecordedGraph& recordedGraph)noexcept;
         [[nodiscard]] static bool activeExclusiveFor(const GpuRecordedGraph& recordedGraph)noexcept;
         [[nodiscard]] static bool activeScopeIs(const ArtifactOperation& operation)noexcept{
@@ -193,7 +193,7 @@ private:
             )
                 return false;
             bool foundOperation = false;
-            for(const ArtifactOperation* active = s_activeOperation; active; active = active->m_previousOperation){
+            for(const ArtifactOperation* active = s_ActiveOperation; active; active = active->m_previousOperation){
                 if(active->m_recordedGraph != operation.m_recordedGraph)
                     return false;
                 if(active == &operation)
@@ -649,16 +649,16 @@ private:
 
     class SubmissionOperation final : NoCopy{
     private:
-        static thread_local SubmissionOperation* s_activeOperation;
+        static thread_local SubmissionOperation* s_ActiveOperation;
 
 
     public:
-        [[nodiscard]] static bool active()noexcept{ return s_activeOperation != nullptr; }
+        [[nodiscard]] static bool active()noexcept{ return s_ActiveOperation != nullptr; }
         [[nodiscard]] static bool activeFor(const GpuGraphSubmissionTransaction& transaction)noexcept{
-            return s_activeOperation && s_activeOperation->m_transaction == &transaction;
+            return s_ActiveOperation && s_ActiveOperation->m_transaction == &transaction;
         }
         [[nodiscard]] static bool activeExclusiveFor(const GpuGraphSubmissionTransaction& transaction)noexcept{
-            return activeFor(transaction) && s_activeOperation->m_exclusive;
+            return activeFor(transaction) && s_ActiveOperation->m_exclusive;
         }
     public:
         SubmissionOperation(

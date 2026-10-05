@@ -163,8 +163,8 @@ private:
 
 
 [[nodiscard]] static bool Navigate(ComboState& state, const ComboSource& source, const ControlActionKind::Enum kind){
-    ListState& preview = ComboBehavior::Preview(state);
-    if(!ListBehavior::Reconcile(preview, source))
+    ListState& preview = ComboBehavior::preview(state);
+    if(!ListBehavior::reconcile(preview, source))
         return false;
     ListOptions options;
     options.selectOnNavigate = false;
@@ -172,7 +172,7 @@ private:
     action.kind = kind;
     action.control = { preview.inputGeneration(), source.instanceGeneration(), source.revision() };
     ListResult result;
-    return ListBehavior::Apply(preview, source, options, action, result);
+    return ListBehavior::apply(preview, source, options, action, result);
 }
 
 
@@ -185,12 +185,12 @@ TEST(UiComboBehaviorTests, FirstBindingPreservesAnExplicitlyOpenStateAndSameBind
     state.open();
     const u64 inputGeneration = state.inputGeneration();
     const u64 previewGeneration = state.listState().inputGeneration();
-    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 17u));
+    ASSERT_TRUE(ComboBehavior::bind(state, WidgetId{ 201u }, 17u));
     EXPECT_TRUE(state.isOpen());
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_EQ(state.inputGeneration(), inputGeneration);
     EXPECT_EQ(state.listState().inputGeneration(), previewGeneration);
-    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 17u));
+    ASSERT_TRUE(ComboBehavior::bind(state, WidgetId{ 201u }, 17u));
     EXPECT_TRUE(state.isOpen());
     EXPECT_EQ(state.listState().inputGeneration(), previewGeneration);
 }
@@ -199,13 +199,13 @@ TEST(UiComboBehaviorTests, ARecreatedDeclarationCancelsPreviewAndPreservesTheCom
     ComboSource source;
     ComboState state;
     state.select(4u);
-    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 17u));
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ComboBehavior::Open(state);
+    ASSERT_TRUE(ComboBehavior::bind(state, WidgetId{ 201u }, 17u));
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ComboBehavior::open(state);
     ASSERT_TRUE(Navigate(state, source, ControlActionKind::Down));
     const u64 inputGeneration = state.inputGeneration();
     const u64 previewGeneration = state.listState().inputGeneration();
-    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 18u));
+    ASSERT_TRUE(ComboBehavior::bind(state, WidgetId{ 201u }, 18u));
     EXPECT_FALSE(state.isOpen());
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_EQ(state.listState().cursorKey(), 4u);
@@ -216,16 +216,16 @@ TEST(UiComboBehaviorTests, ARecreatedDeclarationCancelsPreviewAndPreservesTheCom
 TEST(UiComboBehaviorTests, MovingStateToAnotherOwnerClosesAndEachOwnerSwitchRetiresThePreviewLifetime){
     ComboState state;
     state.select(4u);
-    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 17u));
+    ASSERT_TRUE(ComboBehavior::bind(state, WidgetId{ 201u }, 17u));
     state.open();
     const u64 previewGeneration = state.listState().inputGeneration();
-    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 202u }, 17u));
+    ASSERT_TRUE(ComboBehavior::bind(state, WidgetId{ 202u }, 17u));
     EXPECT_FALSE(state.isOpen());
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_NE(state.listState().inputGeneration(), previewGeneration);
     state.open();
     const u64 returnedPreview = state.listState().inputGeneration();
-    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 17u));
+    ASSERT_TRUE(ComboBehavior::bind(state, WidgetId{ 201u }, 17u));
     EXPECT_FALSE(state.isOpen());
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_NE(state.listState().inputGeneration(), returnedPreview);
@@ -234,12 +234,12 @@ TEST(UiComboBehaviorTests, MovingStateToAnotherOwnerClosesAndEachOwnerSwitchReti
 TEST(UiComboBehaviorTests, InvalidBindingFailsAtomicallyAndDoesNotReplaceTheExistingOwner){
     ComboState state;
     state.select(4u);
-    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 17u));
+    ASSERT_TRUE(ComboBehavior::bind(state, WidgetId{ 201u }, 17u));
     state.open();
     const u64 previewGeneration = state.listState().inputGeneration();
-    EXPECT_FALSE(ComboBehavior::Bind(state, {}, 18u));
-    EXPECT_FALSE(ComboBehavior::Bind(state, WidgetId{ 202u }, 0u));
-    ASSERT_TRUE(ComboBehavior::Bind(state, WidgetId{ 201u }, 17u));
+    EXPECT_FALSE(ComboBehavior::bind(state, {}, 18u));
+    EXPECT_FALSE(ComboBehavior::bind(state, WidgetId{ 202u }, 0u));
+    ASSERT_TRUE(ComboBehavior::bind(state, WidgetId{ 201u }, 17u));
     EXPECT_TRUE(state.isOpen());
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_EQ(state.listState().inputGeneration(), previewGeneration);
@@ -249,12 +249,12 @@ TEST(UiComboBehaviorTests, MissingAndDisabledInitialSelectionClearWithoutChoosin
     ComboSource source;
     ComboState missing;
     missing.select(99u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(missing, source));
+    ASSERT_TRUE(ComboBehavior::reconcile(missing, source));
     EXPECT_EQ(missing.selectedKey(), 0u);
     ComboState disabled;
     disabled.select(5u);
     source.disabledKey = 5u;
-    ASSERT_TRUE(ComboBehavior::Reconcile(disabled, source));
+    ASSERT_TRUE(ComboBehavior::reconcile(disabled, source));
     EXPECT_EQ(disabled.selectedKey(), 0u);
 }
 
@@ -262,14 +262,14 @@ TEST(UiComboBehaviorTests, ReorderPreservesCommittedSelectionAndOpenPreviewCurso
     ComboSource source;
     ComboState state;
     state.select(4u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ComboBehavior::Open(state);
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ComboBehavior::open(state);
     ASSERT_TRUE(Navigate(state, source, ControlActionKind::Down));
     ASSERT_EQ(state.listState().cursorKey(), 5u);
     source.reversed = true;
     ++source.revisionValue;
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ASSERT_TRUE(ListBehavior::Reconcile(ComboBehavior::Preview(state), source));
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(ComboBehavior::preview(state), source));
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_EQ(state.listState().cursorKey(), 5u);
     EXPECT_TRUE(state.isOpen());
@@ -279,9 +279,9 @@ TEST(UiComboBehaviorTests, CommittingTheCurrentSelectionIsStillAnActivationAndCl
     ComboSource source;
     ComboState state;
     state.select(4u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ComboBehavior::Open(state);
-    EXPECT_TRUE(ComboBehavior::Commit(state, source, 4u));
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ComboBehavior::open(state);
+    EXPECT_TRUE(ComboBehavior::commit(state, source, 4u));
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_FALSE(state.isOpen());
 }
@@ -290,12 +290,12 @@ TEST(UiComboBehaviorTests, ZeroMissingAndDisabledCommitFailWithoutClosingOrChang
     ComboSource source;
     ComboState state;
     state.select(4u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ComboBehavior::Open(state);
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ComboBehavior::open(state);
     source.disabledKey = 5u;
-    EXPECT_FALSE(ComboBehavior::Commit(state, source, 0u));
-    EXPECT_FALSE(ComboBehavior::Commit(state, source, 99u));
-    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+    EXPECT_FALSE(ComboBehavior::commit(state, source, 0u));
+    EXPECT_FALSE(ComboBehavior::commit(state, source, 99u));
+    EXPECT_FALSE(ComboBehavior::commit(state, source, 5u));
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_EQ(state.listState().cursorKey(), 4u);
     EXPECT_TRUE(state.isOpen());
@@ -305,12 +305,12 @@ TEST(UiComboBehaviorTests, ClosedAndUnboundStateRejectCommit){
     ComboSource source;
     ComboState state;
     state.select(4u);
-    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
-    ComboBehavior::Open(state);
-    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ComboBehavior::Close(state);
-    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+    EXPECT_FALSE(ComboBehavior::commit(state, source, 5u));
+    ComboBehavior::open(state);
+    EXPECT_FALSE(ComboBehavior::commit(state, source, 5u));
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ComboBehavior::close(state);
+    EXPECT_FALSE(ComboBehavior::commit(state, source, 5u));
     EXPECT_EQ(state.selectedKey(), 4u);
 }
 
@@ -318,8 +318,8 @@ TEST(UiComboBehaviorTests, ExplicitSelectRenewsInputEvenWhenUnchangedAndCancelsP
     ComboSource source;
     ComboState state;
     state.select(4u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ComboBehavior::Open(state);
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ComboBehavior::open(state);
     ASSERT_TRUE(Navigate(state, source, ControlActionKind::Down));
     const u64 inputGeneration = state.inputGeneration();
     state.select(4u);
@@ -362,12 +362,12 @@ TEST(UiComboBehaviorTests, ReopenRestoresCommittedCursorAndRetiresPreviousPrevie
     ComboSource source;
     ComboState state;
     state.select(4u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ComboBehavior::Open(state);
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ComboBehavior::open(state);
     ASSERT_TRUE(Navigate(state, source, ControlActionKind::Down));
     const u64 inputGeneration = state.inputGeneration();
     const u64 previewGeneration = state.listState().inputGeneration();
-    ComboBehavior::Open(state);
+    ComboBehavior::open(state);
     EXPECT_EQ(state.listState().cursorKey(), 4u);
     EXPECT_NE(state.listState().inputGeneration(), previewGeneration);
     EXPECT_EQ(state.inputGeneration(), inputGeneration);
@@ -378,22 +378,22 @@ TEST(UiComboBehaviorTests, RemovedOrDisabledCommittedKeyClearsOnRevisionWithoutC
     ComboSource source;
     ComboState state;
     state.select(4u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ComboBehavior::Open(state);
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ComboBehavior::open(state);
     ASSERT_TRUE(Navigate(state, source, ControlActionKind::Down));
     source.disabledKey = 4u;
     ++source.revisionValue;
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ASSERT_TRUE(ListBehavior::Reconcile(ComboBehavior::Preview(state), source));
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ASSERT_TRUE(ListBehavior::reconcile(ComboBehavior::preview(state), source));
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.listState().cursorKey(), 5u);
     EXPECT_TRUE(state.isOpen());
-    ComboBehavior::Close(state);
+    ComboBehavior::close(state);
     EXPECT_EQ(state.listState().cursorKey(), 0u);
     state.select(5u);
     source.count = 4u;
     ++source.revisionValue;
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 0u);
 }
 
@@ -401,14 +401,14 @@ TEST(UiComboBehaviorTests, ReplacingEstablishedSourceClosesAndClearsSelectionPre
     ComboSource source;
     ComboState state;
     state.select(10u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ComboBehavior::Open(state);
-    ASSERT_TRUE(ListBehavior::Reconcile(ComboBehavior::Preview(state), source));
-    ASSERT_TRUE(ListBehavior::EnsureCursor(ComboBehavior::Preview(state), source, 32.0f, 64.0));
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ComboBehavior::open(state);
+    ASSERT_TRUE(ListBehavior::reconcile(ComboBehavior::preview(state), source));
+    ASSERT_TRUE(ListBehavior::ensureCursor(ComboBehavior::preview(state), source, 32.0f, 64.0));
     ASSERT_GT(state.listState().scrollOffset(), 0.0);
     const u64 inputGeneration = state.inputGeneration();
     ++source.generation;
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.listState().selectedKey(), 0u);
     EXPECT_EQ(state.listState().cursorKey(), 0u);
@@ -421,15 +421,15 @@ TEST(UiComboBehaviorTests, EmptyDatasetClearsSelectionAndDoesNotInventACommit){
     ComboSource source;
     ComboState state;
     state.select(4u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ComboBehavior::Open(state);
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ComboBehavior::open(state);
     source.count = 0u;
     ++source.revisionValue;
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
     ASSERT_TRUE(Navigate(state, source, ControlActionKind::Down));
     EXPECT_EQ(state.selectedKey(), 0u);
     EXPECT_EQ(state.listState().cursorKey(), 0u);
-    EXPECT_FALSE(ComboBehavior::Commit(state, source, 0u));
+    EXPECT_FALSE(ComboBehavior::commit(state, source, 0u));
     EXPECT_TRUE(state.isOpen());
 }
 
@@ -437,21 +437,21 @@ TEST(UiComboBehaviorTests, InvalidIdentitiesAndMalformedLookupLeaveExistingState
     ComboSource source;
     ComboState state;
     state.select(4u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ComboBehavior::Open(state);
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ComboBehavior::open(state);
     source.generation = 0u;
-    EXPECT_FALSE(ComboBehavior::Reconcile(state, source));
+    EXPECT_FALSE(ComboBehavior::reconcile(state, source));
     source.generation = 51u;
     source.revisionValue = 0u;
-    EXPECT_FALSE(ComboBehavior::Reconcile(state, source));
+    EXPECT_FALSE(ComboBehavior::reconcile(state, source));
     source.revisionValue = 1u;
     source.badLookup = true;
-    EXPECT_FALSE(ComboBehavior::Reconcile(state, source));
-    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+    EXPECT_FALSE(ComboBehavior::reconcile(state, source));
+    EXPECT_FALSE(ComboBehavior::commit(state, source, 5u));
     source.badLookup = false;
     source.wrongLookup = true;
-    EXPECT_FALSE(ComboBehavior::Reconcile(state, source));
-    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+    EXPECT_FALSE(ComboBehavior::reconcile(state, source));
+    EXPECT_FALSE(ComboBehavior::commit(state, source, 5u));
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_EQ(state.listState().cursorKey(), 4u);
     EXPECT_TRUE(state.isOpen());
@@ -461,13 +461,13 @@ TEST(UiComboBehaviorTests, CommitRequiresReconciledRevisionAndRejectsSourceRepla
     ComboSource source;
     ComboState state;
     state.select(4u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ComboBehavior::Open(state);
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ComboBehavior::open(state);
     ++source.revisionValue;
-    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
+    EXPECT_FALSE(ComboBehavior::commit(state, source, 5u));
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
     ++source.generation;
-    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+    EXPECT_FALSE(ComboBehavior::commit(state, source, 5u));
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_TRUE(state.isOpen());
 }
@@ -477,10 +477,10 @@ TEST(UiComboBehaviorTests, RevisionAndGenerationChangingDuringReconcileFailWitho
         ComboSource source;
         ComboState state;
         state.select(4u);
-        ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-        ComboBehavior::Open(state);
+        ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+        ComboBehavior::open(state);
         source.arm(CallbackStage::Lookup, mutation);
-        EXPECT_FALSE(ComboBehavior::Reconcile(state, source));
+        EXPECT_FALSE(ComboBehavior::reconcile(state, source));
         EXPECT_EQ(state.selectedKey(), 4u);
         EXPECT_TRUE(state.isOpen());
     }
@@ -490,10 +490,10 @@ TEST(UiComboBehaviorTests, RowCountChangingWithoutRevisionDuringReconcileFailsWi
     ComboSource source;
     ComboState state;
     state.select(4u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ComboBehavior::Open(state);
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ComboBehavior::open(state);
     source.arm(CallbackStage::Lookup, CallbackMutation::Count);
-    EXPECT_FALSE(ComboBehavior::Reconcile(state, source));
+    EXPECT_FALSE(ComboBehavior::reconcile(state, source));
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_TRUE(state.isOpen());
 }
@@ -505,10 +505,10 @@ TEST(UiComboBehaviorTests, SourceChangesDuringCommitLeaveThePopupAndCommittedKey
         ComboSource source;
         ComboState state;
         state.select(4u);
-        ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-        ComboBehavior::Open(state);
+        ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+        ComboBehavior::open(state);
         source.arm(CallbackStage::Lookup, mutation);
-        EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+        EXPECT_FALSE(ComboBehavior::commit(state, source, 5u));
         EXPECT_EQ(state.selectedKey(), 4u);
         EXPECT_EQ(state.listState().cursorKey(), 4u);
         EXPECT_TRUE(state.isOpen());
@@ -523,10 +523,10 @@ TEST(UiComboBehaviorTests, ReconcileCannotOverwriteAnExplicitSelectionFromAnySou
         ComboState state;
         ComboSource source(&state);
         state.select(4u);
-        ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-        ComboBehavior::Open(state);
+        ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+        ComboBehavior::open(state);
         source.arm(stage, CallbackMutation::Select, 8u);
-        EXPECT_FALSE(ComboBehavior::Reconcile(state, source));
+        EXPECT_FALSE(ComboBehavior::reconcile(state, source));
         EXPECT_EQ(state.selectedKey(), 8u);
         EXPECT_EQ(state.listState().cursorKey(), 8u);
         EXPECT_FALSE(state.isOpen());
@@ -541,10 +541,10 @@ TEST(UiComboBehaviorTests, CommitCannotOverwriteAnExplicitSelectionFromAnySource
         ComboState state;
         ComboSource source(&state);
         state.select(4u);
-        ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-        ComboBehavior::Open(state);
+        ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+        ComboBehavior::open(state);
         source.arm(stage, CallbackMutation::Select, 8u);
-        EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+        EXPECT_FALSE(ComboBehavior::commit(state, source, 5u));
         EXPECT_EQ(state.selectedKey(), 8u);
         EXPECT_EQ(state.listState().cursorKey(), 8u);
         EXPECT_FALSE(state.isOpen());
@@ -556,11 +556,11 @@ TEST(UiComboBehaviorTests, CallbackCloseAndReopenPreserveTheExplicitPopupLifetim
         ComboState state;
         ComboSource source(&state);
         state.select(4u);
-        ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-        ComboBehavior::Open(state);
+        ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+        ComboBehavior::open(state);
         const u64 inputGeneration = state.inputGeneration();
         source.arm(CallbackStage::Enabled, mutation);
-        EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+        EXPECT_FALSE(ComboBehavior::commit(state, source, 5u));
         EXPECT_NE(state.inputGeneration(), inputGeneration);
         EXPECT_EQ(state.selectedKey(), 4u);
         EXPECT_EQ(state.listState().cursorKey(), 4u);
@@ -572,11 +572,11 @@ TEST(UiComboBehaviorTests, SameValueCallbackSelectionStillRejectsTheOutstandingC
     ComboState state;
     ComboSource source(&state);
     state.select(4u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ComboBehavior::Open(state);
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ComboBehavior::open(state);
     const u64 inputGeneration = state.inputGeneration();
     source.arm(CallbackStage::Key, CallbackMutation::Select, 4u);
-    EXPECT_FALSE(ComboBehavior::Commit(state, source, 5u));
+    EXPECT_FALSE(ComboBehavior::commit(state, source, 5u));
     EXPECT_NE(state.inputGeneration(), inputGeneration);
     EXPECT_EQ(state.selectedKey(), 4u);
     EXPECT_FALSE(state.isOpen());
@@ -587,12 +587,12 @@ TEST(UiComboBehaviorTests, HundredThousandRowsResolveCommittedKeyWithBoundedSour
     source.count = 100000u;
     ComboState state;
     state.select(99999u);
-    ASSERT_TRUE(ComboBehavior::Reconcile(state, source));
-    ComboBehavior::Open(state);
+    ASSERT_TRUE(ComboBehavior::reconcile(state, source));
+    ComboBehavior::open(state);
     source.lookupCalls = 0u;
     source.keyCalls = 0u;
     source.enabledCalls = 0u;
-    ASSERT_TRUE(ComboBehavior::Commit(state, source, 100000u));
+    ASSERT_TRUE(ComboBehavior::commit(state, source, 100000u));
     EXPECT_EQ(state.selectedKey(), 100000u);
     EXPECT_EQ(source.lookupCalls, 1u);
     EXPECT_EQ(source.keyCalls, 1u);

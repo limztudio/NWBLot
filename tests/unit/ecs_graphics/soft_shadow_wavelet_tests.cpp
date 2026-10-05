@@ -41,7 +41,7 @@ struct WaveletInputsFixture{
             Core::TextureDesc desc;
             desc.setName(names[index]).setWidth(16u).setHeight(16u).setFormat(Core::Format::RGBA16_FLOAT);
             Core::Texture* const texture = Tests::NewMetadataOnlyTexture(testArena.arena, context, allocator, desc);
-            textures[index] = Core::TextureHandle(texture, Core::TextureHandle::deleter_type(&testArena.arena), AdoptRef);
+            textures[index] = Core::TextureHandle(texture, Core::TextureHandle::deleter_type(&testArena.arena), s_AdoptRef);
         }
         inputs = { textures[0u].get(), textures[1u].get(), textures[2u].get(), textures[3u].get(),
             textures[4u].get(), textures[5u].get(), textures[6u].get() };

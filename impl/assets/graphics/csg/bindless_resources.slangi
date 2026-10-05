@@ -23,7 +23,7 @@
 #endif
 
 #define g_NwbCsgBindlessResources \
-    NwbHeapDeferredBindlessResources(g_NwbCsgClipContextSlots.deferredBindlessResources)
+    nwbHeapDeferredBindlessResources(g_NwbCsgClipContextSlots.deferredBindlessResources)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

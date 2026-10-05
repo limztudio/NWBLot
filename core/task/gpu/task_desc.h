@@ -155,7 +155,7 @@ struct GpuGraphInitialOwnerHandoffSourceDesc{
 // A resource may be metadata-only during the shadow-graph phase, or may retain an imported engine handle through
 // one of GpuTaskGraph's typed import overloads. The latter is the required path before graph recording is enabled.
 struct GpuGraphResourceDesc{
-    Name identity = NAME_NONE;
+    Name identity = s_NameNone;
     AStringView markerLabel;
     GpuGraphResourceType::Enum type = GpuGraphResourceType::HazardDomain;
     // Packet-boundary transitions start here; Unknown needs a transitional handoff at record time. Unspecified
@@ -214,7 +214,7 @@ struct GpuGraphResourceVersionDesc{
 // Resource sets retain graph resource IDs, not backend pointers. Their member list is copied into graph-owned
 // storage, which makes dynamic enumerable bindless declarations immutable before compilation and native recording.
 struct GpuGraphResourceSetDesc{
-    Name identity = NAME_NONE;
+    Name identity = s_NameNone;
     AStringView markerLabel;
     const GpuGraphResourceId* members = nullptr;
     usize memberCount = 0u;
@@ -232,7 +232,7 @@ struct GpuGraphResourceSetDesc{
 // pointers. Typed import overloads retain the matching engine pipeline handle; importPipeline is metadata-only for
 // analysis/tooling paths that do not record a native pipeline bind yet.
 struct GpuGraphPipelineDesc{
-    Name identity = NAME_NONE;
+    Name identity = s_NameNone;
     AStringView markerLabel;
     GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
 
@@ -244,7 +244,7 @@ struct GpuGraphPipelineDesc{
 // Prior-frame and other out-of-graph completions may retain the authoritative accepted native token directly in
 // graph-owned storage. Executable graphs require an authoritative token; empty tokens are for graph analysis only.
 struct GpuExternalCompletionDesc{
-    Name identity = NAME_NONE;
+    Name identity = s_NameNone;
     AStringView markerLabel;
     QueueSubmissionToken token;
 
@@ -254,7 +254,7 @@ struct GpuExternalCompletionDesc{
 };
 
 struct GpuTaskDesc{
-    Name identity = NAME_NONE;
+    Name identity = s_NameNone;
     AStringView markerLabel;
     GpuTaskSchedulingHint scheduling;
     const GpuTaskId* dependencies = nullptr;

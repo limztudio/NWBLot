@@ -109,7 +109,7 @@ namespace __hidden_ui_slider_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SliderBehavior::Validate(const SliderOptions& options){
+bool SliderBehavior::validate(const SliderOptions& options){
     return
         __hidden_ui_slider_behavior::ValidRange(options.minimum, options.maximum)
         && IsFinite(options.keyStep) && options.keyStep >= 0.0
@@ -119,7 +119,7 @@ bool SliderBehavior::Validate(const SliderOptions& options){
     ;
 }
 
-bool SliderBehavior::Normalize(const f64 minimum, const f64 maximum, const f64 value, f64& out){
+bool SliderBehavior::normalize(const f64 minimum, const f64 maximum, const f64 value, f64& out){
     using namespace __hidden_ui_slider_behavior;
     if(!ValidRange(minimum, maximum) || !IsFinite(value))
         return false;
@@ -139,7 +139,7 @@ bool SliderBehavior::Normalize(const f64 minimum, const f64 maximum, const f64 v
     return true;
 }
 
-bool SliderBehavior::Interpolate(const f64 minimum, const f64 maximum, const f64 normalized, f64& out){
+bool SliderBehavior::interpolate(const f64 minimum, const f64 maximum, const f64 normalized, f64& out){
     using namespace __hidden_ui_slider_behavior;
     if(!ValidRange(minimum, maximum) || !IsFinite(normalized) || normalized < 0.0 || normalized > 1.0)
         return false;
@@ -157,9 +157,9 @@ bool SliderBehavior::Interpolate(const f64 minimum, const f64 maximum, const f64
     return true;
 }
 
-bool SliderBehavior::Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement){
+bool SliderBehavior::admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement){
     using namespace __hidden_ui_slider_behavior;
-    if(!Validate(options) || !ValidPlacement(placement))
+    if(!validate(options) || !ValidPlacement(placement))
         return false;
     const bool changed = !state.m_admitted || BitCast<u64>(state.m_minimum) != BitCast<u64>(options.minimum)
         || BitCast<u64>(state.m_maximum) != BitCast<u64>(options.maximum)
@@ -180,14 +180,14 @@ bool SliderBehavior::Admit(SliderState& state, const SliderOptions& options, con
     return true;
 }
 
-bool SliderBehavior::Apply(
+bool SliderBehavior::apply(
     SliderState& state,
     const SliderOptions& options,
     const ControlAction& action,
     SliderResult& result){
     using namespace __hidden_ui_slider_behavior;
     if(
-        !Validate(options) || !state.m_admitted || !action.id.valid() || action.control != state.controlToken()
+        !validate(options) || !state.m_admitted || !action.id.valid() || action.control != state.controlToken()
         || BitCast<u64>(state.m_minimum) != BitCast<u64>(options.minimum)
         || BitCast<u64>(state.m_maximum) != BitCast<u64>(options.maximum)
         || BitCast<u64>(state.m_keyStep) != BitCast<u64>(options.keyStep) || state.m_enabled != options.enabled
@@ -235,14 +235,14 @@ bool SliderBehavior::Apply(
     return true;
 }
 
-bool SliderBehavior::Seek(
+bool SliderBehavior::seek(
     SliderState& state,
     const SliderOptions& options,
     const PointerGesture& gesture,
     SliderResult& result){
     using namespace __hidden_ui_slider_behavior;
     if(
-        !Validate(options) || !state.m_admitted || !ValidGesture(gesture) || gesture.control != state.controlToken()
+        !validate(options) || !state.m_admitted || !ValidGesture(gesture) || gesture.control != state.controlToken()
         || BitCast<u64>(state.m_minimum) != BitCast<u64>(options.minimum)
         || BitCast<u64>(state.m_maximum) != BitCast<u64>(options.maximum)
         || BitCast<u64>(state.m_keyStep) != BitCast<u64>(options.keyStep) || state.m_enabled != options.enabled
@@ -259,7 +259,7 @@ bool SliderBehavior::Seek(
     const f64 normalized = Clamp((static_cast<f64>(gesture.position.x) - gesture.referenceRectangle.x)
         / gesture.referenceRectangle.width, 0.0, 1.0);
     f64 value = state.m_value;
-    if(!Interpolate(options.minimum, options.maximum, normalized, value))
+    if(!interpolate(options.minimum, options.maximum, normalized, value))
         return false;
     accepted.valueChanged = accepted.valueChanged || BitCast<u64>(state.m_value) != BitCast<u64>(value);
     accepted.dragging = gesture.state == PointerGestureState::Active;
@@ -271,7 +271,7 @@ bool SliderBehavior::Seek(
     return true;
 }
 
-bool SliderBehavior::Drag(
+bool SliderBehavior::drag(
     SliderState& state,
     const SliderOptions& options,
     const PointerGesture& gesture,
@@ -279,7 +279,7 @@ bool SliderBehavior::Drag(
     using namespace __hidden_ui_slider_behavior;
     const f64 baseline = BitCast<f64>(gesture.value);
     if(
-        !Validate(options) || !state.m_admitted || !ValidGesture(gesture) || gesture.control != state.controlToken()
+        !validate(options) || !state.m_admitted || !ValidGesture(gesture) || gesture.control != state.controlToken()
         || BitCast<u64>(state.m_minimum) != BitCast<u64>(options.minimum)
         || BitCast<u64>(state.m_maximum) != BitCast<u64>(options.maximum)
         || BitCast<u64>(state.m_keyStep) != BitCast<u64>(options.keyStep) || state.m_enabled != options.enabled
@@ -305,10 +305,10 @@ bool SliderBehavior::Drag(
     }
     else{
         f64 normalized = 0.0;
-        if(!Normalize(options.minimum, options.maximum, baseline, normalized))
+        if(!normalize(options.minimum, options.maximum, baseline, normalized))
             return false;
         normalized = Clamp(normalized + delta / travel, 0.0, 1.0);
-        if(!Interpolate(options.minimum, options.maximum, normalized, value))
+        if(!interpolate(options.minimum, options.maximum, normalized, value))
             return false;
         moved = true;
     }

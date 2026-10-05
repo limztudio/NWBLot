@@ -64,7 +64,7 @@ class RendererTaskTimingFeedbackState final : NoCopy{
 private:
     struct PendingSample{
         Core::GpuTimingSampleAttribution attribution = Core::s_NoGpuTimingSampleAttribution;
-        Name scopeName = NAME_NONE;
+        Name scopeName = s_NameNone;
         Core::GpuTaskTimingKey key;
         Core::GpuPhysicalQueueId expectedQueue;
         u64 sourceFrameIndex = 0u;

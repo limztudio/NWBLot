@@ -191,8 +191,8 @@ void AssetManager::dispatchAsync(const u64 requestId, IAssetAsyncExecutor& async
 
 
 void AssetManager::processRequest(const u64 requestId){
-    Name assetType = NAME_NONE;
-    Name virtualPath = NAME_NONE;
+    Name assetType = s_NameNone;
+    Name virtualPath = s_NameNone;
     {
         ScopedLock lock(m_mutex);
 

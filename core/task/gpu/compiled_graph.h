@@ -212,7 +212,7 @@ struct GpuCompiledOwnershipTransfer{
     GpuSubmissionPacketId destinationPacket;
     u32 sourceQueueFamilyIndex = Limit<u32>::s_Max;
     u32 destinationQueueFamilyIndex = Limit<u32>::s_Max;
-    Name resourceIdentity = NAME_NONE;
+    Name resourceIdentity = s_NameNone;
     GpuPhysicalQueueId sourceQueue;
     GpuPhysicalQueueId destinationQueue;
     ResourceQueueSharing::Mask declaredQueueSharing = ResourceQueueSharing::Exclusive;
@@ -223,7 +223,7 @@ struct GpuCompiledOwnershipTransfer{
     [[nodiscard]] bool valid()const noexcept{
         if(
             !resource.valid()
-            || resourceIdentity == NAME_NONE
+            || resourceIdentity == s_NameNone
             || resourceType >= GpuGraphResourceType::HazardDomain
             || route >= GpuOwnershipTransferRoute::kCount
             || !sourceQueue.valid()
@@ -442,7 +442,7 @@ public:
         friend class GpuCompiledGraph;
 
     private:
-        static thread_local ReadView* s_activeView;
+        static thread_local ReadView* s_ActiveView;
 
 
     public:

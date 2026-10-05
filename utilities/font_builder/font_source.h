@@ -23,9 +23,9 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 
 class FontSource final : NoCopy{
 private:
-    [[nodiscard]] static void* Allocate(FT_Memory memory, FT_Long size);
-    static void Release(FT_Memory memory, void* block);
-    [[nodiscard]] static void* Reallocate(FT_Memory memory, FT_Long oldSize, FT_Long newSize, void* block);
+    [[nodiscard]] static void* allocate(FT_Memory memory, FT_Long size);
+    static void release(FT_Memory memory, void* block);
+    [[nodiscard]] static void* reallocate(FT_Memory memory, FT_Long oldSize, FT_Long newSize, void* block);
 
 
 public:

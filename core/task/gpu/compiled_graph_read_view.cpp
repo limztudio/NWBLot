@@ -17,19 +17,19 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-thread_local GpuCompiledGraph::ReadView* GpuCompiledGraph::ReadView::s_activeView = nullptr;
+thread_local GpuCompiledGraph::ReadView* GpuCompiledGraph::ReadView::s_ActiveView = nullptr;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 GpuCompiledGraph::ReadView::ReadView(const GpuCompiledGraph& graph)noexcept{
-    if(s_activeView){
-        if(s_activeView->m_graph != &graph)
+    if(s_ActiveView){
+        if(s_ActiveView->m_graph != &graph)
             return;
         m_graph = &graph;
-        m_previousView = s_activeView;
-        s_activeView = this;
+        m_previousView = s_ActiveView;
+        s_ActiveView = this;
         return;
     }
 
@@ -57,9 +57,9 @@ GpuCompiledGraph::ReadView::ReadView(const GpuCompiledGraph& graph)noexcept{
     }
 
     m_graph = &graph;
-    m_previousView = s_activeView;
+    m_previousView = s_ActiveView;
     m_ownsAdmission = true;
-    s_activeView = this;
+    s_ActiveView = this;
 }
 GpuCompiledGraph::ReadView::~ReadView()noexcept{
     release();
@@ -70,10 +70,10 @@ void GpuCompiledGraph::ReadView::release()noexcept{
     if(!m_graph)
         return;
 
-    GLB_FATAL_ASSERT_MSG(s_activeView == this, "GpuCompiledGraph read views must unwind in lexical order");
-    if(s_activeView != this)
+    GLB_FATAL_ASSERT_MSG(s_ActiveView == this, "GpuCompiledGraph read views must unwind in lexical order");
+    if(s_ActiveView != this)
         TerminateInvariant();
-    s_activeView = m_previousView;
+    s_ActiveView = m_previousView;
     if(m_ownsAdmission){
         u32 planAccessState = m_graph->m_planAccessState.load(MemoryOrder::acquire);
         for(;;){

@@ -127,7 +127,7 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
             .setVisibility(Core::ShaderType::Compute)
         ;
         // Local layout carries the heap slot plus the swap-chain mode.
-        bindingLayoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_deferred_lighting::PushConstants)));
+        bindingLayoutDesc.addItem(Core::BindingLayoutItem::pushConstants(0u, sizeof(__hidden_deferred_lighting::PushConstants)));
 
         m_deferredState.m_lightingBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_deferredState.m_lightingBindingLayout){

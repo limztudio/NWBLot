@@ -155,7 +155,7 @@ SharedUiTextSmokeSamples CreateUiTextSmokeSamples(Core::Alloc::GlobalArena& aren
     return SharedUiTextSmokeSamples(
         NewArenaObject<RefCounter<UiTextSmokeSamples>>(arena, arena),
         ArenaRefDeleter<RefCounter<UiTextSmokeSamples>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

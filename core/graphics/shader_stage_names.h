@@ -48,7 +48,7 @@ inline const Name& ArchiveStageNameFromShaderType(const ShaderType::Enum shaderT
 #define NWB_SHADER_STAGE_NAME_CASE(Stage, Text) case Core::ShaderType::Stage: return s_##Stage##Name;
         NWB_SHADER_STAGE_NAME_ENTRIES(NWB_SHADER_STAGE_NAME_CASE)
 #undef NWB_SHADER_STAGE_NAME_CASE
-        default: return NAME_NONE;
+        default: return s_NameNone;
     }
 }
 

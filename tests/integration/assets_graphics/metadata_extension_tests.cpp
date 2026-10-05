@@ -170,7 +170,7 @@ static void BenchmarkMetadataParsing(const usize pairCount, const usize iteratio
         ASSERT_TRUE(WriteFixtureFile(directory / "include.nwb", "include asset;\r\nasset.defines = { \"FIXTURE_OPTION\": [\"0\", \"1\"] };\r\n"));
         for(const AStringView fileName : { AStringView("shader.nwb"), AStringView("include.nwb") }){
             const NWB::Path path = directory / fileName;
-            AssetString normalized = PathToString(fixtureArena, path.lexically_normal());
+            AssetString normalized = PathToString(fixtureArena, path.lexicallyNormal());
             CanonicalizeTextInPlace(normalized);
             files.emplace_back(fixtureArena, root, path, normalized, ACompactString("project"));
         }
@@ -502,7 +502,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
         AssetString source(s_SamplerFields, fixtureArena);
         source += StringFormat(fixtureArena, "asset.mip_bias = {};\r\n", identity);
         ASSERT_TRUE(WriteFixtureFile(path, source));
-        const AssetString normalized = PathToString(fixtureArena, path.lexically_normal());
+        const AssetString normalized = PathToString(fixtureArena, path.lexicallyNormal());
         files.emplace_back(fixtureArena, root, path, normalized, ACompactString("project"));
     }
     for(const bool rejectDuplicate : { false, true }){
@@ -512,8 +512,8 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
             Alloc::ScratchArena scratchArena(Name("tests/metadata_registry/scratch"));
             ParsedAssetMetadata metadata(parseArena);
             ASSERT_TRUE(RegisterAutoCollectedCookEntryTypes(metadata.entryRegistry));
-            auto& samplers = metadata.entryRegistry.entries<Impl::SamplerCookEntry>(Impl::Sampler::AssetTypeName());
-            auto& models = metadata.entryRegistry.entries<Impl::ModelCookEntry>(Impl::Model::AssetTypeName());
+            auto& samplers = metadata.entryRegistry.entries<Impl::SamplerCookEntry>(Impl::Sampler::assetTypeName());
+            auto& models = metadata.entryRegistry.entries<Impl::ModelCookEntry>(Impl::Model::assetTypeName());
             ASSERT_EQ(samplers.capacity(), 0u);
             ASSERT_EQ(models.capacity(), 0u);
             EXPECT_EQ(ParseAssetMetadata(parseArena, files, metadata, cpuScheduler, scratchArena), !rejectDuplicate);

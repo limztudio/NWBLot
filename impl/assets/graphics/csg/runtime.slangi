@@ -64,11 +64,11 @@ StructuredBuffer<NwbCsgReceiverRange, Std430DataLayout> g_NwbHeapCsgReceiverRang
 StructuredBuffer<NwbCsgCutter, Std430DataLayout> g_NwbHeapCsgCutterBuffers[];
 #pragma warning(pop)
 
-StructuredBuffer<NwbCsgReceiverRange, Std430DataLayout> NwbHeapCsgReceiverRanges(const uint slot){
+StructuredBuffer<NwbCsgReceiverRange, Std430DataLayout> nwbHeapCsgReceiverRanges(const uint slot){
     return g_NwbHeapCsgReceiverRangeBuffers[slot];
 }
 
-StructuredBuffer<NwbCsgCutter, Std430DataLayout> NwbHeapCsgCutters(const uint slot){
+StructuredBuffer<NwbCsgCutter, Std430DataLayout> nwbHeapCsgCutters(const uint slot){
     return g_NwbHeapCsgCutterBuffers[slot];
 }
 
@@ -110,9 +110,9 @@ uint nwbCsgContextHeapSlot(){
 }
 
 // Local CSG clip SRVs/cbuffer remain ABI gaps. This macro resolves the selected heap context.
-#define g_NwbCsgClipContextSlots NwbHeapCsgClipContextSlots(nwbCsgContextHeapSlot())
-#define g_NwbCsgReceiverRanges NwbHeapCsgReceiverRanges(g_NwbCsgClipContextSlots.receiverRanges)
-#define g_NwbCsgCutters NwbHeapCsgCutters(g_NwbCsgClipContextSlots.cutters)
+#define g_NwbCsgClipContextSlots nwbHeapCsgClipContextSlots(nwbCsgContextHeapSlot())
+#define g_NwbCsgReceiverRanges nwbHeapCsgReceiverRanges(g_NwbCsgClipContextSlots.receiverRanges)
+#define g_NwbCsgCutters nwbHeapCsgCutters(g_NwbCsgClipContextSlots.cutters)
 
 float3 nwbCsgNormalizeOr(const float3 value, const float3 fallback){
     const float lengthSquared = dot(value, value);

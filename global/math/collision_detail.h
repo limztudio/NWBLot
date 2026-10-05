@@ -212,7 +212,7 @@ GLB_INLINE void FastIntersectSpherePlane(
     outInside = VectorGreaterOrEqual(distance, radius);
 }
 
-[[nodiscard]] GLB_INLINE ContainmentType::Enum SIMDCALL ContainmentFromSpherePlaneTests(const SIMDVector sphereValue, const SIMDVector (&planes)[s_FrustumPlaneCount])noexcept{
+[[nodiscard]] GLB_INLINE ContainmentType::Enum GLB_SIMD_CALL ContainmentFromSpherePlaneTests(const SIMDVector sphereValue, const SIMDVector (&planes)[s_FrustumPlaneCount])noexcept{
     const SIMDVector centerVector = SphereCenter(sphereValue);
     const SIMDVector sphereRadius = SphereRadius(sphereValue);
     SIMDVector anyIntersecting = VectorFalseInt();

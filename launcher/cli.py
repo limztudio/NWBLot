@@ -24,7 +24,7 @@ from launcher.constants import (
     ARG_DRY_RUN,
     ARG_EXECUTABLE,
     ARG_EXECUTABLE_NAME,
-    ARG_GPUDbg,
+    ARG_GPUDBG,
     ARG_JOBS,
     ARG_KILL_EXISTING,
     ARG_PLATFORM,
@@ -67,7 +67,7 @@ from launcher.constants import (
     HELP_DRY_RUN,
     HELP_EXECUTABLE,
     HELP_EXECUTABLE_NAME,
-    HELP_GPUDbg,
+    HELP_GPUDBG,
     HELP_JOBS,
     HELP_KILL_EXISTING,
     HELP_PLATFORM,
@@ -142,7 +142,7 @@ class LauncherCli:
         parser.add_argument(ARG_WORKING_DIRECTORY, type=Path, help=HELP_WORKING_DIRECTORY)
         parser.add_argument(ARG_EXECUTABLE, type=Path, help=HELP_EXECUTABLE)
         parser.add_argument(ARG_EXECUTABLE_NAME, help=HELP_EXECUTABLE_NAME)
-        parser.add_argument(ARG_GPUDbg, action=STORE_TRUE, help=HELP_GPUDbg)
+        parser.add_argument(ARG_GPUDBG, action=STORE_TRUE, help=HELP_GPUDBG)
         parser.add_argument(
             ARG_KILL_EXISTING,
             action=STORE_TRUE,

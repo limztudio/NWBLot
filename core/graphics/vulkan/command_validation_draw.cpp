@@ -184,14 +184,14 @@ bool CommandList::validateMeshletState(const MeshletState& state){
 
     if(state.pipeline){
         if(
-            !m_context.extensions.EXT_mesh_shader
+            !m_context.extensions.extMeshShader
             || m_context.meshShaderFeatures.meshShader != VK_TRUE
             || !m_context.deviceDispatch.vkCmdDrawMeshTasksEXT
         ){
             rejectCommandRecording(s_OperationName, GLB_TEXT("mesh shader feature or entry point is unavailable"));
             return false;
         }
-        if(state.pipeline->m_desc.AS && m_context.meshShaderFeatures.taskShader != VK_TRUE){
+        if(state.pipeline->m_desc.amplificationShader && m_context.meshShaderFeatures.taskShader != VK_TRUE){
             rejectCommandRecording(s_OperationName, GLB_TEXT("task shader feature is unavailable"));
             return false;
         }

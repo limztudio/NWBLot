@@ -52,7 +52,7 @@ struct OutputContext{
         Core::Buffer* const buffer = Tests::NewMetadataOnlyBuffer(
             testArena.arena, context, allocator, Core::BufferDesc{}.setByteSize(256u).setDebugName(identity)
         );
-        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), AdoptRef);
+        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
     }
 
     [[nodiscard]] Core::GpuGraphResourceId importExisting(const Core::BufferHandle& buffer, const Name& identity){
@@ -106,7 +106,7 @@ TEST(ComputeEmulationOutputResourceSet, EmptyAndUncapturedPlansClearTheOutputWit
 TEST(ComputeEmulationOutputResourceSet, PreservesOrderAndReusesAnExistingUnnamedAliasWithoutMetadataValidation){
     OutputContext context;
     const auto first = context.makeBuffer(Name("tests/compute_output_set/first"));
-    const auto unnamed = context.makeBuffer(NAME_NONE);
+    const auto unnamed = context.makeBuffer(s_NameNone);
     const auto last = context.makeBuffer(Name("tests/compute_output_set/last"));
     const auto existing = context.importExisting(unnamed, Name("tests/compute_output_set/existing_alias"));
     ASSERT_TRUE(existing.valid());
@@ -169,7 +169,7 @@ TEST(ComputeEmulationOutputResourceSet, LateInvalidInputsKeepOnlyTheImportedPref
         if(failureKind == 0u)
             context.plan.outputBuffers[s_FailureIndex] = nullptr;
         else if(failureKind == 1u)
-            context.plan.outputBuffers[s_FailureIndex] = context.makeBuffer(NAME_NONE);
+            context.plan.outputBuffers[s_FailureIndex] = context.makeBuffer(s_NameNone);
         else if(failureKind == s_ExpectedDualCount){
             const Name identity = context.plan.outputBuffers[s_FailureIndex]->getCreationDescription().debugName;
             conflict = context.makeBuffer(identity);

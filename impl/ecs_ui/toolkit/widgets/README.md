@@ -16,7 +16,7 @@ The title supplies pointer dragging. The bottom-right corner supplies resizing w
 
 Chrome targets capture the complete committed window bounds as their pointer gesture reference. Each press uses the geometry that received the native event, even when the host model already describes a GPU-pending candidate. Active updates retain that press reference; a completed press survives until the next callback. Numeric admission and behavior updates validate candidates before publishing changes.
 
-`windowMetrics()` is available during an open window scope, including a collapsed window. `WindowLayout::Visible`, `Content`, `Collapse`, and `Resize` compute matching logical geometry from those metrics and the host state.
+`windowMetrics()` is available during an open window scope, including a collapsed window. `WindowLayout::visible`, `content`, `collapse`, and `resize` compute matching logical geometry from those metrics and the host state.
 
 ## Skin parts and separators
 

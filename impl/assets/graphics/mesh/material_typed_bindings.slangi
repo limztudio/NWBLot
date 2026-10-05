@@ -28,8 +28,8 @@ struct NwbMeshInstanceData{
     uint geometryHeapSlots[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
 };
 
-#define g_NwbMaterialTypedWords NwbHeapMeshMaterialTypedWords(nwbMeshFrameMaterialTypedHeapSlot())
-#define g_NwbMeshInstances NwbHeapMeshInstances(nwbMeshFrameInstanceHeapSlot())
+#define g_NwbMaterialTypedWords nwbHeapMeshMaterialTypedWords(nwbMeshFrameMaterialTypedHeapSlot())
+#define g_NwbMeshInstances nwbHeapMeshInstances(nwbMeshFrameInstanceHeapSlot())
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

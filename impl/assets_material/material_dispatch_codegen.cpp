@@ -205,9 +205,9 @@ bool EmitDeferredBxdfDispatchModuleImpl(
 
     const Path outputPath = outIncludeRoot / s_DeferredBxdfModuleSubPath.data();
     ErrorCode errorCode;
-    if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
+    if(!EnsureDirectories(outputPath.parentPath(), errorCode)){
         NWB_LOGGER_ERROR(GLB_TEXT("Deferred bxdf dispatch: failed to create generated include parent '{}': {}")
-            , PathToString<tchar>(outputPath.parent_path())
+            , PathToString<tchar>(outputPath.parentPath())
             , StringConvert(errorCode.message())
         );
         return false;
@@ -656,9 +656,9 @@ bool EmitShadowSurfaceDispatchModuleImpl(
 
     const Path outputPath = outIncludeRoot / s_ShadowSurfaceModuleSubPath.data();
     ErrorCode errorCode;
-    if(!EnsureDirectories(outputPath.parent_path(), errorCode)){
+    if(!EnsureDirectories(outputPath.parentPath(), errorCode)){
         NWB_LOGGER_ERROR(GLB_TEXT("Shadow surface dispatch: failed to create generated include parent '{}': {}")
-            , PathToString<tchar>(outputPath.parent_path())
+            , PathToString<tchar>(outputPath.parentPath())
             , StringConvert(errorCode.message())
         );
         return false;

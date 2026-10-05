@@ -48,7 +48,7 @@ struct RendererComponent{
     // Opt-in merging: hooks ID-independent; mesh/material/transform must match. IdenticalMaterial compares all
     // mutable bytes; SharedGroup needs a common group + same boundary. Runtime/CSG receivers stay independent.
     OpticalVolumeCoincidence::Enum opticalVolumeCoincidence = OpticalVolumeCoincidence::Independent;
-    Name opticalVolumeGroup = NAME_NONE;
+    Name opticalVolumeGroup = s_NameNone;
     // Higher priority wins; equal priority uses the lowest full EntityID. The selected material supplies every
     // optical and shading property to raster, RT and caustics, including when screen refraction is disabled.
     i32 opticalVolumePriority = 0;
@@ -61,9 +61,9 @@ struct RendererComponent{
 };
 
 struct MaterialInstanceParameter{
-    Name parameterName = NAME_NONE;
-    Name blockName = NAME_NONE;
-    Name fieldName = NAME_NONE;
+    Name parameterName = s_NameNone;
+    Name blockName = s_NameNone;
+    Name fieldName = s_NameNone;
     MaterialLayoutFieldType::Enum fieldType = MaterialLayoutFieldType::None;
     UInt4U value = {};
 };
@@ -71,7 +71,7 @@ struct MaterialInstanceParameter{
 struct MaterialInstanceComponent{
     using ParameterVector = Vector<MaterialInstanceParameter, Core::Alloc::GlobalArena>;
 
-    Name materialInterface = NAME_NONE;
+    Name materialInterface = s_NameNone;
     ParameterVector overrides;
     u64 revision = 0u;
 

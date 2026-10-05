@@ -16,8 +16,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static const uint s_NwbReflectionScreenMaximumSteps = 256u;
-static const float s_NwbReflectionScreenDepthRoundoff = 0.0000002384185791015625;
+static const uint NWB_REFLECTION_SCREEN_MAXIMUM_STEPS = 256u;
+static const float NWB_REFLECTION_SCREEN_DEPTH_ROUNDOFF = 0.0000002384185791015625;
 
 struct NwbReflectionScreenRay{
     float3 worldOrigin;
@@ -108,11 +108,11 @@ bool nwbReflectionValidateScreenHit(
     if(all(abs(int2(candidatePixel) - int2(sourcePixel)) < 2))
         return false;
     const int3 texel = int3(candidatePixel, 0);
-    const float depth = NwbHeapSampledImage2D(g_NwbReflectionResources.gbufferSlots.w).Load(texel).x;
+    const float depth = nwbHeapSampledImage2D(g_NwbReflectionResources.gbufferSlots.w).Load(texel).x;
     if(!isfinite(depth) || depth < 0.0 || depth >= 1.0)
         return false;
-    const float3 position = NwbHeapSampledImage2D(g_NwbReflectionResources.gbufferSlots.z).Load(texel).xyz;
-    const float3 packedNormal = NwbHeapSampledImage2D(g_NwbReflectionResources.gbufferSlots.y).Load(texel).xyz;
+    const float3 position = nwbHeapSampledImage2D(g_NwbReflectionResources.gbufferSlots.z).Load(texel).xyz;
+    const float3 packedNormal = nwbHeapSampledImage2D(g_NwbReflectionResources.gbufferSlots.y).Load(texel).xyz;
     if(!all(isfinite(position)) || !all(isfinite(packedNormal)))
         return false;
     const float3 normal = nwbSafeNormalize(packedNormal * 2.0 - 1.0, float3(0.0, 0.0, 1.0));
@@ -162,7 +162,7 @@ bool nwbReflectionValidateScreenHit(
     const float2 sampleUv = (float2(candidatePixel) + 0.5) / float2(dimensions);
     if(
         any(abs(positionUv - sampleUv) * float2(dimensions) > 1.0 + ndcError.xy * float2(dimensions) * 0.5)
-        || abs(positionNdc.z - depth) > ndcError.z + s_NwbReflectionScreenDepthRoundoff
+        || abs(positionNdc.z - depth) > ndcError.z + NWB_REFLECTION_SCREEN_DEPTH_ROUNDOFF
     )
         return false;
 
@@ -187,7 +187,7 @@ bool nwbReflectionValidateScreenHit(
 
     // Screen color was shaded for the camera observer. Reflective hit materials reduce confidence when the
     // reflected observer differs; roughness relaxes the directional match but does not prove a custom BXDF invariant.
-    const float4 specular = NwbHeapSampledImage2D(g_NwbReflectionParameters.opaqueSpecularSlot).Load(texel);
+    const float4 specular = nwbHeapSampledImage2D(g_NwbReflectionParameters.opaqueSpecularSlot).Load(texel);
     if(!all(isfinite(specular)))
         return false;
     const half strength = half(saturate(max(specular.x, max(specular.y, specular.z)) * 8.0));
@@ -201,7 +201,7 @@ bool nwbReflectionValidateScreenHit(
     confidence *= half(1.0h) - half(smoothstep(
         g_NwbReflectionParameters.distanceFadeStart, g_NwbReflectionParameters.maxRayDistance, distance
     ));
-    radiance = half3(NwbHeapSampledImage2D(g_NwbReflectionResources.compositeSlots.x).Load(texel).rgb);
+    radiance = half3(nwbHeapSampledImage2D(g_NwbReflectionResources.compositeSlots.x).Load(texel).rgb);
     if(!all(isfinite(float3(radiance))) || !isfinite(float(confidence)) || confidence <= half(0.0h))
         return false;
     radiance = max(radiance, half3(0.0h));
@@ -233,7 +233,7 @@ bool nwbReflectionTraceScreen(
 
     const uint2 fullDimensions = uint2(g_NwbReflectionParameters.dimensionsAndRoute.x, g_NwbReflectionParameters.dimensionsAndRoute.y);
     const uint lastMip = min(g_NwbReflectionParameters.depthMipCount, NWB_REFLECTION_MAX_DEPTH_MIPS) - 1u;
-    const uint steps = min(g_NwbReflectionParameters.screenMaxSteps, s_NwbReflectionScreenMaximumSteps);
+    const uint steps = min(g_NwbReflectionParameters.screenMaxSteps, NWB_REFLECTION_SCREEN_MAXIMUM_STEPS);
     const uint2 firstCell = min(uint2(saturate(ray.screenOrigin.xy) * float2(fullDimensions)), fullDimensions - 1u);
     float parameter = nwbReflectionScreenCellExit(ray, firstCell, fullDimensions) + ray.parameterEpsilon;
     uint mip = 0u;
@@ -252,15 +252,15 @@ bool nwbReflectionTraceScreen(
             return false;
         // Count represented-depth accesses, not projection rejection or an already completed ray's final guard.
         iterations = stepIndex + 1u;
-        const float2 depthInterval = NwbHeapSampledImage2D(g_NwbReflectionParameters.depthPyramidSlot).Load(int3(cell, mip)).xy;
+        const float2 depthInterval = nwbHeapSampledImage2D(g_NwbReflectionParameters.depthPyramidSlot).Load(int3(cell, mip)).xy;
         if(!all(isfinite(depthInterval)))
             return false;
         const float exitDepth = ray.screenOrigin.z + ray.screenDirection.z * cellExit;
         // Both ray directions can skip cells disjoint from the represented visible-depth interval. The maximum
         // permits camera-facing rays to cross a panel's interior efficiently without inferring hidden geometry.
         const bool empty = depthInterval.x >= 1.0
-            || max(position.z, exitDepth) < depthInterval.x - s_NwbReflectionScreenDepthRoundoff
-            || min(position.z, exitDepth) > depthInterval.y + s_NwbReflectionScreenDepthRoundoff;
+            || max(position.z, exitDepth) < depthInterval.x - NWB_REFLECTION_SCREEN_DEPTH_ROUNDOFF
+            || min(position.z, exitDepth) > depthInterval.y + NWB_REFLECTION_SCREEN_DEPTH_ROUNDOFF;
         if(empty){
             parameter = cellExit + ray.parameterEpsilon;
             mip = min(mip + 1u, lastMip);

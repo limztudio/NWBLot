@@ -125,7 +125,7 @@ SharedUiInteractiveSmokeScene CreateUiInteractiveSmokeScene(Core::Alloc::GlobalA
     return SharedUiInteractiveSmokeScene(
         NewArenaObject<RefCounter<UiInteractiveSmokeScene>>(arena),
         ArenaRefDeleter<RefCounter<UiInteractiveSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

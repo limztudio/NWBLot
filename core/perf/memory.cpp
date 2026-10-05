@@ -187,7 +187,7 @@ MemoryScopeId MemoryView::scopeAt(const usize index)const{
 }
 
 Name MemoryView::scopeNameAt(const usize index)const{
-    return m_recorder ? m_recorder->scopeNameAt(index) : NAME_NONE;
+    return m_recorder ? m_recorder->scopeNameAt(index) : s_NameNone;
 }
 
 const MemorySnapshot& MemoryView::snapshotAt(const usize index)const{

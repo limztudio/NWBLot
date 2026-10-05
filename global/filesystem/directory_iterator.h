@@ -24,7 +24,7 @@ public:
 
 public:
     [[nodiscard]] const Path<ArenaT>& path()const{ return m_path; }
-    [[nodiscard]] bool is_regular_file(ErrorCode& outError)const{ return IsRegularFile(m_path, outError); }
+    [[nodiscard]] bool isRegularFile(ErrorCode& outError)const{ return IsRegularFile(m_path, outError); }
 
 
 private:

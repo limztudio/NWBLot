@@ -43,7 +43,7 @@ namespace __hidden_ui_image_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ImageLayout::Measure(
+bool ImageLayout::measure(
     const ImageOptions& options,
     const UiSkinRegion& region,
     const f32 density,
@@ -79,7 +79,7 @@ bool ImageLayout::Measure(
     return true;
 }
 
-bool ImageLayout::Measure(const ImageOptions& options, const ImageSource& source, ImageMetrics& out){
+bool ImageLayout::measure(const ImageOptions& options, const ImageSource& source, ImageMetrics& out){
     using namespace __hidden_ui_image_layout;
     if(!ValidSize(options.width) || !ValidSize(options.height) || !IsValidUiColor(options.tint))
         return false;
@@ -90,7 +90,7 @@ bool ImageLayout::Measure(const ImageOptions& options, const ImageSource& source
     return true;
 }
 
-bool ImageLayout::Place(const Rect& bounds, const Rect& clip, ImagePlacement& out){
+bool ImageLayout::place(const Rect& bounds, const Rect& clip, ImagePlacement& out){
     using namespace __hidden_ui_image_layout;
     if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip))
         return false;

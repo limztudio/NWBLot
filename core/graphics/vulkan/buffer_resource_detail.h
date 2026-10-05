@@ -197,7 +197,7 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
     if(
         (usage & accelStructUsage)
         && (
-            !context.extensions.KHR_acceleration_structure
+            !context.extensions.khrAccelerationStructure
             || !context.accelerationStructureFeatureEnabled
             || !(usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
         )
@@ -206,7 +206,7 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
     if(
         (usage & VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR)
         && (
-            !context.extensions.KHR_ray_tracing_pipeline
+            !context.extensions.khrRayTracingPipeline
             || !context.rayTracingPipelineFeatureEnabled
             || !(usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
         )
@@ -220,10 +220,10 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
     if(
         (usage & micromapUsage)
         && (
-            !context.extensions.EXT_opacity_micromap
+            !context.extensions.extOpacityMicromap
             || !context.opacityMicromapFeatureEnabled
-            || !context.extensions.KHR_synchronization2
-            || !context.extensions.KHR_acceleration_structure
+            || !context.extensions.khrSynchronization2
+            || !context.extensions.khrAccelerationStructure
             || !context.accelerationStructureFeatureEnabled
             || !(usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
         )
@@ -238,7 +238,7 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
     if(
         (usage & descriptorBufferUsage)
         && (
-            !context.extensions.EXT_descriptor_buffer
+            !context.extensions.extDescriptorBuffer
             || !(usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
         )
     )
@@ -254,10 +254,10 @@ inline constexpr ResourceStates::Mask s_ValidBufferResourceStates = static_cast<
     usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     usage |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
     if(
-        context.extensions.EXT_opacity_micromap
+        context.extensions.extOpacityMicromap
         && context.opacityMicromapFeatureEnabled
-        && context.extensions.KHR_synchronization2
-        && context.extensions.KHR_acceleration_structure
+        && context.extensions.khrSynchronization2
+        && context.extensions.khrAccelerationStructure
         && context.accelerationStructureFeatureEnabled
     ){
         if(desc.isAccelStructBuildInput)

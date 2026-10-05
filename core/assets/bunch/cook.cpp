@@ -150,7 +150,7 @@ private:
     Name& outVirtualPath,
     ScratchArena&
 ){
-    outVirtualPath = NAME_NONE;
+    outVirtualPath = s_NameNone;
     outVirtualPathText.clear();
     outVirtualPathText.reserve(AddSize(AddSize(baseVirtualPath.size(), 1u), variableName.size()));
 
@@ -159,7 +159,7 @@ private:
     outVirtualPathText.append(variableName.data(), variableName.size());
 
     outVirtualPath = Name(AStringView(outVirtualPathText.data(), outVirtualPathText.size()));
-    return outVirtualPath != NAME_NONE;
+    return outVirtualPath != s_NameNone;
 }
 
 [[nodiscard]] static NameHash DeclarationVariableHash(const Metascript::Document::Declaration& declaration){
@@ -294,7 +294,7 @@ private:
     }
 
     ScratchString virtualPathText(scratchArena);
-    Name virtualPath = NAME_NONE;
+    Name virtualPath = s_NameNone;
     if(!BuildItemVirtualPath(baseVirtualPath, DeclarationVariable(*declaration), virtualPathText, virtualPath, scratchArena)){
         NWB_LOGGER_ERROR(GLB_TEXT("Asset bunch '{}': failed to build virtual path for reference '{}'")
             , PathToString<tchar>(nwbFilePath)
@@ -510,7 +510,7 @@ bool ExpandAssetBunch(
             return false;
 
         ScratchString virtualPathText(scratchArena);
-        Name virtualPath = NAME_NONE;
+        Name virtualPath = s_NameNone;
         if(!BuildItemVirtualPath(
             AStringView(baseVirtualPathText.data(), baseVirtualPathText.size()),
             variableName,

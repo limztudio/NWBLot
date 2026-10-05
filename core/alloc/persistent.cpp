@@ -341,11 +341,11 @@ inline void CoalesceFreeBlocks(void*& freeHead, Block* block)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize PersistentArena::StructureAlignedSize(const usize byte){
-    return StructureAlignedSize(byte, alignof(MaxAlign));
+usize PersistentArena::structureAlignedSize(const usize byte){
+    return structureAlignedSize(byte, alignof(MaxAlign));
 }
 
-usize PersistentArena::StructureAlignedSize(const usize byte, const usize align){
+usize PersistentArena::structureAlignedSize(const usize byte, const usize align){
     if(!__hidden_persistent::IsSupportedAlignment(align)){
         GLB_ASSERT_MSG(false, GLB_TEXT("PersistentArena alignment must be zero, one, or a power of two"));
         return 0u;

@@ -97,12 +97,12 @@ FramebufferHandle Device::createFramebuffer(const FramebufferDesc& desc){
     if(desc.shadingRateAttachment.texture)
         fb->m_resources.emplace_back(desc.shadingRateAttachment.texture, TextureHandle::deleter_type(&m_context.objectArena));
 
-    return FramebufferHandle(fb, FramebufferHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return FramebufferHandle(fb, FramebufferHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 
 GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc& desc, FramebufferInfo const& fbinfo){
-    if(!m_context.extensions.KHR_dynamic_rendering){
+    if(!m_context.extensions.khrDynamicRendering){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Dynamic rendering extension is required to create graphics pipelines."));
         return nullptr;
     }
@@ -129,7 +129,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Graphics pipeline single-pass stereo is not implemented."));
         return nullptr;
     }
-    if(!desc.VS){
+    if(!desc.vertexShader){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create graphics pipeline: vertex shader is required"));
         return nullptr;
     }
@@ -155,11 +155,11 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         return true;
     };
     if(
-        !validateShader(desc.VS.get(), ShaderType::Vertex, GLB_TEXT("vertex"))
-        || !validateShader(desc.HS.get(), ShaderType::Hull, GLB_TEXT("hull"))
-        || !validateShader(desc.DS.get(), ShaderType::Domain, GLB_TEXT("domain"))
-        || !validateShader(desc.GS.get(), ShaderType::Geometry, GLB_TEXT("geometry"))
-        || !validateShader(desc.PS.get(), ShaderType::Pixel, GLB_TEXT("pixel"))
+        !validateShader(desc.vertexShader.get(), ShaderType::Vertex, GLB_TEXT("vertex"))
+        || !validateShader(desc.hullShader.get(), ShaderType::Hull, GLB_TEXT("hull"))
+        || !validateShader(desc.domainShader.get(), ShaderType::Domain, GLB_TEXT("domain"))
+        || !validateShader(desc.geometryShader.get(), ShaderType::Geometry, GLB_TEXT("geometry"))
+        || !validateShader(desc.pixelShader.get(), ShaderType::Pixel, GLB_TEXT("pixel"))
     )
         return nullptr;
     if(desc.inputLayout && &desc.inputLayout->m_context != &m_context){
@@ -173,8 +173,8 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     pso->m_desc = desc;
     pso->m_framebufferInfo = fbinfo;
 
-    const bool hasTessellationControlShader = static_cast<bool>(desc.HS);
-    const bool hasTessellationEvaluationShader = static_cast<bool>(desc.DS);
+    const bool hasTessellationControlShader = static_cast<bool>(desc.hullShader);
+    const bool hasTessellationEvaluationShader = static_cast<bool>(desc.domainShader);
     const bool usesTessellation = hasTessellationControlShader || hasTessellationEvaluationShader || desc.primType == PrimitiveType::PatchList || desc.patchControlPoints > 0;
 
     if(hasTessellationControlShader != hasTessellationEvaluationShader){
@@ -213,16 +213,16 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     shaderStages.reserve(VulkanDetail::s_MaxGraphicsPipelineShaderStageCount);
     specInfos.reserve(VulkanDetail::s_MaxGraphicsPipelineShaderStageCount);
 
-    if(desc.VS)
-        appendPipelineShaderStage(*desc.VS, VK_SHADER_STAGE_VERTEX_BIT, specInfos, shaderStages);
-    if(desc.HS)
-        appendPipelineShaderStage(*desc.HS, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, specInfos, shaderStages);
-    if(desc.DS)
-        appendPipelineShaderStage(*desc.DS, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, specInfos, shaderStages);
-    if(desc.GS)
-        appendPipelineShaderStage(*desc.GS, VK_SHADER_STAGE_GEOMETRY_BIT, specInfos, shaderStages);
-    if(desc.PS)
-        appendPipelineShaderStage(*desc.PS, VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
+    if(desc.vertexShader)
+        appendPipelineShaderStage(*desc.vertexShader, VK_SHADER_STAGE_VERTEX_BIT, specInfos, shaderStages);
+    if(desc.hullShader)
+        appendPipelineShaderStage(*desc.hullShader, VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, specInfos, shaderStages);
+    if(desc.domainShader)
+        appendPipelineShaderStage(*desc.domainShader, VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, specInfos, shaderStages);
+    if(desc.geometryShader)
+        appendPipelineShaderStage(*desc.geometryShader, VK_SHADER_STAGE_GEOMETRY_BIT, specInfos, shaderStages);
+    if(desc.pixelShader)
+        appendPipelineShaderStage(*desc.pixelShader, VK_SHADER_STAGE_FRAGMENT_BIT, specInfos, shaderStages);
 
     if(shaderStages.empty()){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create graphics pipeline: no shader stages provided"));
@@ -300,7 +300,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
     if(!createPipelineOrDestroy(GLB_TEXT("graphics pipeline"), *pso, pipelineInfo))
         return nullptr;
 
-    return GraphicsPipelineHandle(pso, GraphicsPipelineHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return GraphicsPipelineHandle(pso, GraphicsPipelineHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 

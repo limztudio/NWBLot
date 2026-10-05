@@ -83,7 +83,7 @@ private:
 class PopupLayout final{
 public:
     // Anchored placement flips on its requested axis; oversized content shrinks to the logical viewport.
-    [[nodiscard]] static bool Place(const PopupOptions& options, const DisplayMetrics& display, PopupPlacement& placement);
+    [[nodiscard]] static bool place(const PopupOptions& options, const DisplayMetrics& display, PopupPlacement& placement);
 };
 
 

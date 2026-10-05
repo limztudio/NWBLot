@@ -341,7 +341,7 @@ TEST(GpuTaskGraph, ClampsTypedTextureFragmentsToPhysicalSubresources){
     Graphics::TextureHandle typedTexture(
         textureObject,
         Graphics::TextureHandle::deleter_type(&testArena.arena),
-        AdoptRef
+        s_AdoptRef
     );
 
     // The safe CPU-only Texture fixture retains its default one-mip descriptor. A broad consumer after this

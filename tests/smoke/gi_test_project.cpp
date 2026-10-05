@@ -220,7 +220,7 @@ public:
         }
 
         // Emit per-pass GPU timings (render.surfel_*) for A/B capture via NWB_GPU_TIMING_FILE.
-        m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+        m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::gpuTimingOnly());
 
         const NWB::Core::ECS::EntityID activeCamera = CreateSmokeCamera(
             *m_world,

@@ -153,7 +153,7 @@ Impl::Ui::Rect UiPopupToolsSmokeScene::rowBounds(const u64 key)const{
     const auto& placement = m_menu.listState().placement();
     if(
         !m_menu.isOpen() || !m_source.indexOf(key, index) || index < placement.firstRow || index >= placement.endRow
-        || !Impl::Ui::ScrollLayout::RowBounds(index, placement, __hidden_ui_popup_tools_smoke::s_RowHeight, rectangle)
+        || !Impl::Ui::ScrollLayout::rowBounds(index, placement, __hidden_ui_popup_tools_smoke::s_RowHeight, rectangle)
     )
         return {};
     return rectangle;
@@ -225,7 +225,7 @@ SharedUiPopupToolsSmokeScene CreateUiPopupToolsSmokeScene(Core::Alloc::GlobalAre
     return SharedUiPopupToolsSmokeScene(
         NewArenaObject<RefCounter<UiPopupToolsSmokeScene>>(arena, arena, input),
         ArenaRefDeleter<RefCounter<UiPopupToolsSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

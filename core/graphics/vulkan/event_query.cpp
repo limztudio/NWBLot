@@ -47,7 +47,7 @@ EventQueryHandle Device::createEventQuery(){
         DestroyArenaObject(m_context.objectArena, query);
         return nullptr;
     }
-    return EventQueryHandle(query, EventQueryHandle::deleter_type(&m_context.objectArena), AdoptRef);
+    return EventQueryHandle(query, EventQueryHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
 bool Device::setEventQuery(EventQuery& query, CommandQueue::Enum queue){

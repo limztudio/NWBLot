@@ -27,13 +27,13 @@ NWB_IMPL_BEGIN
 
 
 struct SkeletonCookJoint{
-    Name name = NAME_NONE;
-    Name parent = NAME_NONE;
+    Name name = s_NameNone;
+    Name parent = s_NameNone;
     SkeletonJointMatrix localBindPose = ::Float34Identity();
 };
 
 struct SkeletonCookEntry{
-    Name virtualPath = NAME_NONE;
+    Name virtualPath = s_NameNone;
     Core::Assets::AssetVector<SkeletonCookJoint> joints;
 
     explicit SkeletonCookEntry(Core::Assets::AssetArena& arena)

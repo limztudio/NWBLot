@@ -78,7 +78,7 @@ static bool RegisterUniformBuffer(
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
     if(!handle.valid())
         return false;
-    if(!heap.write(handle, Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer))){
+    if(!heap.write(handle, Core::DescriptorWriteItem::constantBuffer(0u, &buffer))){
         heap.free(handle);
         return false;
     }
@@ -161,21 +161,21 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
     }
 
     if(
-        !registerBuffer(resources.bindlessHeapHandles.restPosition, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, instance.restPositionBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.skinnedPosition, Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, instance.skinnedPositionBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.restNormal, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, instance.restNormalBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.skinnedNormal, Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, instance.skinnedNormalBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.restTangent, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, instance.restTangentBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.skinnedTangent, Core::DescriptorWriteItem::StructuredBuffer_UAV(0u, instance.skinnedTangentBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.meshletDesc, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, instance.meshletDescBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.positionRefDeltas, Core::DescriptorWriteItem::RawBuffer_SRV(0u, instance.meshletPositionRefDeltaBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.attributeRefDeltas, Core::DescriptorWriteItem::RawBuffer_SRV(0u, instance.meshletAttributeRefDeltaBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.attributeSkins, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, instance.attributeSkinBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.localVertexRefs, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, instance.meshletLocalVertexRefBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.primitiveIndices, Core::DescriptorWriteItem::RawBuffer_SRV(0u, instance.meshletPrimitiveIndexBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.meshletBounds, Core::DescriptorWriteItem::RawBuffer_UAV(0u, instance.meshletBoundsBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.meshletLocalBounds, Core::DescriptorWriteItem::RawBuffer_UAV(0u, instance.meshletLocalBoundsBuffer.get()))
-        || !registerBuffer(resources.bindlessHeapHandles.localBounds, Core::DescriptorWriteItem::RawBuffer_UAV(0u, instance.localBoundsBuffer.get()))
+        !registerBuffer(resources.bindlessHeapHandles.restPosition, Core::DescriptorWriteItem::structuredBufferSrv(0u, instance.restPositionBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.skinnedPosition, Core::DescriptorWriteItem::structuredBufferUav(0u, instance.skinnedPositionBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.restNormal, Core::DescriptorWriteItem::structuredBufferSrv(0u, instance.restNormalBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.skinnedNormal, Core::DescriptorWriteItem::structuredBufferUav(0u, instance.skinnedNormalBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.restTangent, Core::DescriptorWriteItem::structuredBufferSrv(0u, instance.restTangentBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.skinnedTangent, Core::DescriptorWriteItem::structuredBufferUav(0u, instance.skinnedTangentBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.meshletDesc, Core::DescriptorWriteItem::structuredBufferSrv(0u, instance.meshletDescBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.positionRefDeltas, Core::DescriptorWriteItem::rawBufferSrv(0u, instance.meshletPositionRefDeltaBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.attributeRefDeltas, Core::DescriptorWriteItem::rawBufferSrv(0u, instance.meshletAttributeRefDeltaBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.attributeSkins, Core::DescriptorWriteItem::structuredBufferSrv(0u, instance.attributeSkinBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.localVertexRefs, Core::DescriptorWriteItem::structuredBufferSrv(0u, instance.meshletLocalVertexRefBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.primitiveIndices, Core::DescriptorWriteItem::rawBufferSrv(0u, instance.meshletPrimitiveIndexBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.meshletBounds, Core::DescriptorWriteItem::rawBufferUav(0u, instance.meshletBoundsBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.meshletLocalBounds, Core::DescriptorWriteItem::rawBufferUav(0u, instance.meshletLocalBoundsBuffer.get()))
+        || !registerBuffer(resources.bindlessHeapHandles.localBounds, Core::DescriptorWriteItem::rawBufferUav(0u, instance.localBoundsBuffer.get()))
     )
         return fail();
 
@@ -185,14 +185,14 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
             return fail();
         }
         if(
-            !registerBuffer(resources.bindlessHeapHandles.skinInfluences, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, resources.skinBuffer.get()))
-            || !registerBuffer(resources.bindlessHeapHandles.jointPalette, Core::DescriptorWriteItem::StructuredBuffer_SRV(0u, resources.jointPaletteBuffer.get()))
+            !registerBuffer(resources.bindlessHeapHandles.skinInfluences, Core::DescriptorWriteItem::structuredBufferSrv(0u, resources.skinBuffer.get()))
+            || !registerBuffer(resources.bindlessHeapHandles.jointPalette, Core::DescriptorWriteItem::structuredBufferSrv(0u, resources.jointPaletteBuffer.get()))
         )
             return fail();
     }
 
     if(instance.attributeBuffer){
-        if(!registerBuffer(resources.bindlessHeapHandles.attributeBuffer, Core::DescriptorWriteItem::RawBuffer_UAV(0u, instance.attributeBuffer.get())))
+        if(!registerBuffer(resources.bindlessHeapHandles.attributeBuffer, Core::DescriptorWriteItem::rawBufferUav(0u, instance.attributeBuffer.get())))
             return fail();
     }
     if(!__hidden_resources::RegisterUniformBuffer(

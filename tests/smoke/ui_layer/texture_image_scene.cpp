@@ -314,7 +314,7 @@ SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(
     return SharedUiTextureImageSmokeScene(
         NewArenaObject<RefCounter<UiTextureImageSmokeScene>>(arena, arena, input, assets),
         ArenaRefDeleter<RefCounter<UiTextureImageSmokeScene>, Core::Alloc::GlobalArena>(&arena),
-        AdoptRef
+        s_AdoptRef
     );
 }
 

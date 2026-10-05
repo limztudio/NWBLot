@@ -19,10 +19,10 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-usize GpuDescriptorHeap::SlotAllocator::RequiredBytes(const u32 capacity){
+usize GpuDescriptorHeap::SlotAllocator::requiredBytes(const u32 capacity){
     return AddSize(
-        AddSize(FixedTable<u32>::RequiredBytes(capacity), FixedTable<SlotState>::RequiredBytes(capacity)),
-        FixedTable<u8>::RequiredBytes(capacity)
+        AddSize(FixedTable<u32>::requiredBytes(capacity), FixedTable<SlotState>::requiredBytes(capacity)),
+        FixedTable<u8>::requiredBytes(capacity)
     );
 }
 

@@ -39,7 +39,7 @@ DeviceHandle CreateDevice(const DeviceDesc& desc){
             DestroyArenaObject(desc.allocator.getObjectArena(), device);
         return {};
     }
-    return DeviceHandle(device, DeviceHandle::deleter_type(&desc.allocator.getObjectArena()), AdoptRef);
+    return DeviceHandle(device, DeviceHandle::deleter_type(&desc.allocator.getObjectArena()), s_AdoptRef);
 }
 
 

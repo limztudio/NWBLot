@@ -71,8 +71,8 @@ TEST(TextInputSelection, UnknownBasisAndMissingOrStaleRevisionDoNotQueueAnyEvent
         TextInputAdmission::InvalidRange);
     EXPECT_EQ(service.emitDeleteSurrounding(begun.token, 2u, 1u, 0u, TextInputDeletionBasis::Selection),
         TextInputAdmission::InvalidRange);
-    constexpr TextInputDeletionBasis::Enum invalidBasis = static_cast<TextInputDeletionBasis::Enum>(255u);
-    EXPECT_EQ(service.emitDeleteSurrounding(begun.token, 0u, 0u, currentRevision, invalidBasis), TextInputAdmission::InvalidRange);
+    constexpr TextInputDeletionBasis::Enum s_InvalidBasis = static_cast<TextInputDeletionBasis::Enum>(255u);
+    EXPECT_EQ(service.emitDeleteSurrounding(begun.token, 0u, 0u, currentRevision, s_InvalidBasis), TextInputAdmission::InvalidRange);
     TextInputEvent event(arena.arena);
     EXPECT_EQ(service.poll(begun.token, event), TextInputPollResult::Pending);
     EXPECT_EQ(service.activeSession(), begun.token);

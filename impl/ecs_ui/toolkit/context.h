@@ -48,7 +48,7 @@ private:
 private:
     static constexpr usize s_SmallStateClaims = 32u;
 
-    [[nodiscard]] static bool ContainsRoot(const WidgetRoot* roots, usize count, const WidgetRoot& root);
+    [[nodiscard]] static bool containsRoot(const WidgetRoot* roots, usize count, const WidgetRoot& root);
 
 
 public:

@@ -205,13 +205,13 @@ void RadioGroupFixture::configureRadioSkin(const bool fallbackOnly){
     configureSkin();
     UiSkin::RegionVector regions(m_arena);
     regions.assign(m_skin.regions().begin(), m_skin.regions().end());
-    constexpr StringView names[]{ "radio.normal", "radio.checked", "radio.mark",
+    constexpr StringView s_Names[]{ "radio.normal", "radio.checked", "radio.mark",
         "checkbox.normal", "checkbox.checked", "checkbox.mark" };
     for(u32 index = 0u; index < 6u; ++index){
         if(fallbackOnly && index < 3u)
             continue;
         UiSkinRegion region;
-        region.name = Name(names[index]);
+        region.name = Name(s_Names[index]);
         region.rectangle = { 88u + index * 8u, 0u, 8u, 8u };
         if(index % 3u != 2u){
             region.minimumWidth = 24.0f;
@@ -310,7 +310,7 @@ usize RadioGroupFixture::regionQuads(const DrawSnapshot& snapshot, const Name& n
     const UiSkinRegion* region = m_skin.findRegion(name);
     if(!region)
         return 0u;
-    constexpr f32 uvTolerance = 0.00000024f;
+    constexpr f32 s_UvTolerance = 0.00000024f;
     const f32 left = static_cast<f32>(region->rectangle.x) / static_cast<f32>(m_skin.atlasWidth());
     const f32 right = static_cast<f32>(region->rectangle.x + region->rectangle.width)
         / static_cast<f32>(m_skin.atlasWidth());
@@ -322,8 +322,8 @@ usize RadioGroupFixture::regionQuads(const DrawSnapshot& snapshot, const Name& n
             const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
             const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
             if(
-                Abs(first.texCoord.x - left) <= uvTolerance
-                && Abs(opposite.texCoord.x - right) <= uvTolerance
+                Abs(first.texCoord.x - left) <= s_UvTolerance
+                && Abs(opposite.texCoord.x - right) <= s_UvTolerance
             )
                 ++count;
         }

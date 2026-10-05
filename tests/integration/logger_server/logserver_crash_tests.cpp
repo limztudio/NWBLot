@@ -405,7 +405,7 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
     if(childPid == 0){
         NWB::Core::Alloc::PersistentArena installArena(
             s_AssertChildInstallArena,
-            NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
+            NWB::Core::Alloc::PersistentArena::structureAlignedSize(64u * 1024u)
         );
         NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
         config.applicationName = AStringView("logserver_crash_tests");
@@ -488,7 +488,7 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
     auto& arena = testArena.arena;
     NWB::Core::Alloc::PersistentArena installArena(
         s_RecoverableErrorInstallArena,
-        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
+        NWB::Core::Alloc::PersistentArena::structureAlignedSize(64u * 1024u)
     );
     constexpr AStringView s_Group("logger_server_recoverable_error_observe_test");
     constexpr AStringView s_Stem("recoverable_error_observe_001");

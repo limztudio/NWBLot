@@ -26,27 +26,27 @@ NWB_IMPL_BEGIN
 
 
 struct ModelSkeletonObject{
-    Name name = NAME_NONE;
+    Name name = s_NameNone;
     Core::Assets::AssetRef<Skeleton> skeleton;
     SkeletonJointMatrix transform = ::Float34Identity();
 };
 
 struct ModelStaticMeshObject{
-    Name name = NAME_NONE;
+    Name name = s_NameNone;
     Core::Assets::AssetRef<Mesh> mesh;
     Core::Assets::AssetRef<Material> material;
     // Static attachment order: model owner * parent_object skeleton transform * parent_joint pose * transform.
     // If parent_joint is empty, the joint pose term is omitted. If parent_object is empty, the model owner is used.
-    Name parentObject = NAME_NONE;
-    Name parentJoint = NAME_NONE;
+    Name parentObject = s_NameNone;
+    Name parentJoint = s_NameNone;
     SkeletonJointMatrix transform = ::Float34Identity();
 };
 
 struct ModelSkinnedMeshObject{
-    Name name = NAME_NONE;
+    Name name = s_NameNone;
     Core::Assets::AssetRef<Skin> skin;
     Core::Assets::AssetRef<Material> material;
-    Name skeletonObject = NAME_NONE;
+    Name skeletonObject = s_NameNone;
     SkeletonJointMatrix transform = ::Float34Identity();
 };
 

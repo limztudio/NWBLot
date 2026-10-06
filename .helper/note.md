@@ -86,6 +86,8 @@
 
 82. First-party contracts support only the current API/schema/protocol/layout. Remove old readers, migration paths, compatibility aliases/overloads, guessed artifact or older API fallbacks, and pre-graph adapters; migrate current callers and reject retired inputs at the existing boundary. Preserve active backend/platform interoperability, hardware/software paths, and required alias/lifetime rules.
 
+83. Mark every C++ function that cannot throw `noexcept`, following `.helper/standard.md` section 8. Verify its complete implementation, callees, callbacks, and construction/destruction; keep declarations and definitions consistent. Use conditional `noexcept(...)` when the guarantee depends on template types or callables, and preserve existing exception and intentional termination contracts.
+
 ## Scheduler Architecture
 
 1. `Frame` owns one `Core::CpuTaskScheduler`, initialized with the configured worker budget before graphics and project work starts. Standalone tools own one scheduler for their process work and pass it to consumers.

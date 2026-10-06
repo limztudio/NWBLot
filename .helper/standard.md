@@ -288,7 +288,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Apply the same rule to trivial pass-through setters (`setX(...) { m_x = ...; }`): remove them when unused or bubble-only.
 - Keep trivial setters only when they are part of a deliberate external API contract and actually needed at module boundaries.
 - Trivial single-statement member functions (getters that return a member, setters that assign a member, `assetType()` returning a literal, etc.) should be defined inline in the header rather than in a `.cpp` file.
-  - Example: `[[nodiscard]] const Name& shaderName()const{ return m_shaderName; }`
+  - Example: `[[nodiscard]] const Name& shaderName()const noexcept{ return m_shaderName; }`
   - Multi-statement bodies, loops, conditionals, or functions that call other non-trivial helpers belong in the `.cpp`.
 - For asset bindings:
   - When a component references an asset, use `Core::Assets::AssetRef<T>`.
@@ -340,7 +340,9 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Let unexpected exceptions unwind to the application-entry exception boundary. Do not add an intermediate `try`/`catch` that logs, converts the exception to an ordinary failure result, and resumes execution.
 - Keep `try`/`catch` in the shared terminal application-entry boundary, only when an unexpected exception ends the program. Do not add local handlers for recovery, logging and continuation, rollback before rethrow, or deferred worker-task exception delivery. Use explicit failure results for expected errors and RAII for cleanup while an unexpected exception unwinds.
 - Prefer RAII and failure-atomic ordering for unwind cleanup. Complete irreversible state publication before invoking a potentially throwing observer, or use a non-throwing scope object that completes the publication during unwind.
-- Mark a function `noexcept` only when its implementation and every callback it invokes are genuinely non-throwing, or when violating that boundary must terminate the application. Do not use `noexcept` merely to replace the application-entry exception handler with `std::terminate`.
+- Mark every C++ function whose complete implementation cannot throw with `noexcept`, including free/member/static functions, constructors, destructors, operators, and lambdas where applicable. Check all called operations and callbacks, including allocation, construction/destruction, and moves/copies; the absence of an explicit `throw` does not prove this guarantee.
+- Keep declarations and definitions consistent, and preserve virtual and callback/function-pointer exception contracts. Use conditional `noexcept(...)` for templates or operations whose exception guarantee depends on their supplied types or callable; the condition must cover the complete operation.
+- Preserve intentional termination contracts. Do not add `noexcept` to potentially throwing work merely to replace the application-entry exception handler with `std::terminate`.
 - When a `bool` helper only used an `AString& outError` to report the immediate failure reason, prefer logging at the failure detection site and returning `false`. Keep output parameters for produced data, not for diagnostic-only strings that the caller just forwards to a logger.
 - Do not hide a function return with `static_cast<void>(call())`, a C-style void cast, `std::ignore`, or a `[[maybe_unused]]` local initialized from the call — handle it. This includes templated calls and locals wrapped only to convert or test the return before discarding it, regardless of assignment, brace, or direct initialization. Check and act: `if(!call(...)){ log / propagate / early-return }`, or fold the discarded `bool` into the matching out-error check (`static_cast<void>(f(p, error)); if(error) ...` → `if(!f(p, error)) ...`).
   - If a result genuinely conveys no actionable information to any caller, make that operation a `void` command instead of suppressing its return at individual call sites. Keep `[[maybe_unused]]` for non-call values such as unused callback parameters or compile-time expressions only.
@@ -384,6 +386,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Keep naming prefixes consistent (`m_`, `s_`, `g_`).
 - Use module namespace wrapper macros and `__hidden_*` internal namespaces.
 - Use project types/containers/macros when equivalents exist.
+- Mark non-throwing functions `noexcept` after checking their complete implementation and call path, following section 8.
 - Validate and log all external API failure paths.
 - When iterating ECS views with structured bindings, prefer reference-preserving bindings (`auto&&`) unless copying is explicitly intended.
 

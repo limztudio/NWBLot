@@ -192,6 +192,26 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         add_dependencies(nwb_transparent_multi_smoke nwb_transparent_multi_smoke_assets)
         add_dependencies(nwb_frame_lagged_async_lighting_smoke nwb_transparent_multi_smoke_assets)
 
+        nwb_declare_executable(nwb_avboit_depth_warp_probe_smoke)
+        target_sources(nwb_avboit_depth_warp_probe_smoke PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/avboit_depth_warp_probe.cpp"
+        )
+        nwb_configure_runtime_smoke_target(nwb_avboit_depth_warp_probe_smoke "${_nwb_transparent_multi_runtime_root}")
+        add_dependencies(nwb_avboit_depth_warp_probe_smoke nwb_transparent_multi_smoke_assets)
+        if(TARGET nwb_logserver)
+            add_test(NAME nwb_avboit_depth_warp_probe_smoke
+                COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/avboit_depth_warp_probe_smoke.py"
+                    --executable "$<TARGET_FILE:nwb_avboit_depth_warp_probe_smoke>"
+                    --working-directory "${_nwb_transparent_multi_runtime_root}"
+                    --logserver-executable "$<TARGET_FILE:nwb_logserver>"
+                    --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/avboit_depth_warp_probe"
+                CONFIGURATIONS dbg opt
+            )
+            set_tests_properties(nwb_avboit_depth_warp_probe_smoke PROPERTIES
+                RESOURCE_LOCK nwb_display TIMEOUT 180 LABELS "avboit;gpu_validation"
+            )
+        endif()
+
         nwb_declare_executable(nwb_csg_shadow_smoke)
         target_sources(nwb_csg_shadow_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_project.cpp"

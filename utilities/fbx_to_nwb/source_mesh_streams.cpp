@@ -151,10 +151,10 @@ bool FbxSourceMeshStreams::GenerateSourceMeshTangents(
         if(i0 == i1 || i0 == i2 || i1 == i2)
             continue;
 
-        const Float4& p0 = rebuildVertices[i0].position;
-        const Float4& p1 = rebuildVertices[i1].position;
-        const Float4& p2 = rebuildVertices[i2].position;
-        const TriangleAreaNormal64 areaNormal = BuildStoredTriangleAreaNormal64(p0.x, p0.y, p0.z, p1.x, p1.y, p1.z, p2.x, p2.y, p2.z);
+        const SIMDVector p0 = LoadFloat(rebuildVertices[i0].position);
+        const SIMDVector p1 = LoadFloat(rebuildVertices[i1].position);
+        const SIMDVector p2 = LoadFloat(rebuildVertices[i2].position);
+        const TriangleAreaNormal64 areaNormal = BuildTriangleAreaNormal64(p0, p1, p2);
         const f64 areaLengthSquared = TriangleAreaNormalLengthSquared(areaNormal);
         if(!IsFinite(areaLengthSquared) || areaLengthSquared <= static_cast<f64>(::s_FrameDirectionEpsilon))
             continue;

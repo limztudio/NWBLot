@@ -387,31 +387,19 @@ bool FbxMeshBuild::AppendInstanceMesh(
             triangleCorners[triangleCornerIndex] = corner;
         }
 
-        if(!::StoredTriangleHasArea(
-            triangleCorners[0u].position.x,
-            triangleCorners[0u].position.y,
-            triangleCorners[0u].position.z,
-            triangleCorners[1u].position.x,
-            triangleCorners[1u].position.y,
-            triangleCorners[1u].position.z,
-            triangleCorners[2u].position.x,
-            triangleCorners[2u].position.y,
-            triangleCorners[2u].position.z,
+        if(!::TriangleHasArea(
+            LoadFloat(triangleCorners[0u].position),
+            LoadFloat(triangleCorners[1u].position),
+            LoadFloat(triangleCorners[2u].position),
             options.triangleAreaLengthSquaredEpsilon
         ))
             return true;
 
         if(normalMode == NormalMode::Regenerate){
-            const TriangleAreaNormal64 faceNormal64 = BuildStoredTriangleAreaNormal64(
-                triangleCorners[0u].position.x,
-                triangleCorners[0u].position.y,
-                triangleCorners[0u].position.z,
-                triangleCorners[1u].position.x,
-                triangleCorners[1u].position.y,
-                triangleCorners[1u].position.z,
-                triangleCorners[2u].position.x,
-                triangleCorners[2u].position.y,
-                triangleCorners[2u].position.z
+            const TriangleAreaNormal64 faceNormal64 = BuildTriangleAreaNormal64(
+                LoadFloat(triangleCorners[0u].position),
+                LoadFloat(triangleCorners[1u].position),
+                LoadFloat(triangleCorners[2u].position)
             );
             const SIMDVector faceNormal = VectorSet(
                 static_cast<f32>(faceNormal64.x),

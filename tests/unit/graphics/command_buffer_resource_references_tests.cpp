@@ -6,7 +6,7 @@
 #include <tests/common/test_context.h>
 #include <tests/common/vulkan_test_sync.h>
 
-#include <core/graphics/backend_selection/test/command_buffer_resource_references.h>
+#include <core/graphics/vulkan/command_buffer_resource_references.h>
 
 #include <global/text_utils.h>
 #include <global/timer.h>

@@ -4,7 +4,7 @@
 
 #include <gtest/gtest.h>
 
-#include <core/graphics/backend_selection/test/backend_context_capabilities.h>
+#include <core/graphics/vulkan/backend_context_capabilities.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

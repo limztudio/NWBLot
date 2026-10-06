@@ -4,9 +4,9 @@
 
 #include "task_graph_test_utils.h"
 
-#include <core/graphics/backend_selection/test/command_validation.h>
-#include <core/graphics/backend_selection/test/device_detail.h>
-#include <core/graphics/backend_selection/test/state_tracking_detail.h>
+#include <core/graphics/vulkan/command_validation.h>
+#include <core/graphics/vulkan/device_detail.h>
+#include <core/graphics/vulkan/state_tracking_detail.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

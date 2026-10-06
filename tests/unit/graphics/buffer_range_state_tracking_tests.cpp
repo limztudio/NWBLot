@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <core/graphics/backend_selection/test/state_tracking_detail.h>
+#include <core/graphics/vulkan/state_tracking_detail.h>
 
 #include <tests/common/graphics_metadata_test_objects.h>
 

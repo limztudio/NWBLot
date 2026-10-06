@@ -4,8 +4,8 @@
 
 #include <gtest/gtest.h>
 
-#include <core/graphics/backend_selection/test/heap_binding_contract.h>
-#include <core/graphics/backend_selection/test/resource_bindings_detail.h>
+#include <core/graphics/vulkan/heap_binding_contract.h>
+#include <core/graphics/vulkan/resource_bindings_detail.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

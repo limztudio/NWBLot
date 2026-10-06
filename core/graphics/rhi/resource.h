@@ -65,8 +65,7 @@ namespace CpuAccessMode{
     };
 };
 
-// Sharing intent for multi-transport resources. Never exposes queue-family indices; a requested set becomes
-// concurrent Vulkan sharing only for the distinct families the device created.
+// Sharing intent for multi-transport resources. Never exposes queue-family indices; a requested set becomes concurrent Vulkan sharing only for the distinct families the device created.
 namespace ResourceQueueSharing{
     static constexpr u8 s_ResourceQueueSharingExclusiveBase = 0;
     enum Mask : u8{
@@ -87,8 +86,7 @@ namespace ResourceQueueSharing{
     }
 };
 
-// Physical admission facts for one resource. The backend owns the family list; consumers retaining the snapshot
-// past the call boundary must copy it.
+// Physical admission facts for one resource. The backend owns the family list; consumers retaining the snapshot past the call boundary must copy it.
 struct ResourceQueueAdmissionSnapshot{
     const u32* queueFamilyIndices = nullptr;
     u32 queueFamilyIndexCount = 0u;
@@ -175,15 +173,12 @@ struct TextureDesc{
     bool isTypeless = false;
     bool isShadingRateSurface = false;
 
-    // Indicates that the texture is created with no backing memory,
-    // and memory is bound to the texture later using bindTextureMemory.
+    // Indicates that the texture is created with no backing memory, and memory is bound to the texture later using bindTextureMemory.
     bool isVirtual = false;
 
     bool useClearValue = false;
 
-    // If keepInitialState is true, command lists restore each used subresource to initialState before close. That
-    // retained native state becomes globally known only after the restoring command buffer is successfully
-    // submitted; a pre-submit cross-list consumer must import CommandListResourceStateHandoff instead.
+    // If keepInitialState is true, command lists restore each used subresource to initialState before close. That retained native state becomes globally known only after the restoring command buffer is successfully submitted; a pre-submit cross-list consumer must import CommandListResourceStateHandoff instead.
     bool keepInitialState = false;
 
     constexpr TextureDesc& setWidth(u32 v)noexcept{ width = v; return *this; }
@@ -212,8 +207,7 @@ struct TextureSlice{
     u32 y = 0;
     u32 z = 0;
 
-    // s_AllDimensions means the entire dimension is part of the region.
-    // resolve() will translate these values into actual dimensions.
+    // s_AllDimensions means the entire dimension is part of the region. resolve() will translate these values into actual dimensions.
     u32 width = s_AllDimensions;
     u32 height = s_AllDimensions;
     u32 depth = s_AllDimensions;
@@ -373,8 +367,7 @@ struct BufferDesc{
     // A dynamic/upload buffer whose contents only live in the current command list
     bool isVolatile = false;
 
-    // Indicates that the buffer is created with no backing memory,
-    // and memory is bound to the buffer later using bindBufferMemory.
+    // Indicates that the buffer is created with no backing memory, and memory is bound to the buffer later using bindBufferMemory.
     bool isVirtual = false;
 
     // see TextureDesc::keepInitialState

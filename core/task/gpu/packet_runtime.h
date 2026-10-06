@@ -31,7 +31,6 @@ class GpuTimingSubmissionTicket;
 class GpuTaskScheduler;
 class GpuNativePacketRecorder;
 class GpuCommandIrCapture;
-class GpuPacketInitialStateSeedTestAccess;
 struct GpuTaskGraphRuntimeStatistics;
 
 
@@ -159,7 +158,6 @@ class GpuRecordedGraph final : NoCopy{
         const GpuGraphSubmissionTransaction& transaction
     )noexcept;
     friend class GpuGraphSubmissionTransaction;
-    friend class GpuPacketInitialStateSeedTestAccess;
     friend class GpuNativePacketRecorder;
     friend class GpuTaskScheduler;
 

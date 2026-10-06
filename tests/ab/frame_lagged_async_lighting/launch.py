@@ -107,7 +107,7 @@ def make_parser() -> argparse.ArgumentParser:
         LIT_GPU_VALIDATION,
         dest=LIT_GPU_VALIDATION_2,
         action=LIT_STORE_TRUE,
-        help="Enable Vulkan GPU validation (the default).",
+        help="Enable GPU validation for the selected backend (the default).",
     )
     validation_group.add_argument(
         "--no-gpu-validation",

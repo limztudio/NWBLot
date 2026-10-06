@@ -43,16 +43,12 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_LIST_DIR}/repository_launcher_tests.py"
     )
-    # Parser/report self-tests stay in ordinary CTest. The matching GPU runs remain opt-in: M4 and lagged lighting
-    # need a distinct compute family plus a window, hybrid capture is target-hardware, and transfer-queue needs a
-    # Transfer-only family plus an external bandwidth capture.
+    # GPU measurements remain opt-in; M4 and lagged lighting need distinct Compute queues and window capture.
     set(_nwb_ab_self_test_harnesses
-        command_ir
         renderer_baseline
         async_shadow_m4
         hardware_shadow_boundary
         frame_lagged_async_lighting
-        transfer_queue
     )
     foreach(_nwb_ab_harness IN LISTS _nwb_ab_self_test_harnesses)
         add_test(

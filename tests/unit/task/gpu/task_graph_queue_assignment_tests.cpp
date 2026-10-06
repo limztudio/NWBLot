@@ -539,7 +539,7 @@ TEST(GpuTaskGraph, RejectsInvalidAndIncompatibleQueueTopologiesDeterministically
     );
 
     Graphics::GpuPhysicalQueueInfo duplicateNativeQueue = GraphicsQueue(3u);
-    // Different graph IDs must not alias the same Vulkan family/index transport.
+    // Different graph IDs must not alias the same physical queue family/index transport.
     duplicateNativeQueue.queueIndex = GraphicsQueue().queueIndex;
     const Graphics::GpuPhysicalQueueInfo duplicateNativeQueues[] = {
         GraphicsQueue(),

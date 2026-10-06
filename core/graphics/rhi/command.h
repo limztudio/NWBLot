@@ -20,11 +20,6 @@ NWB_CORE_BEGIN
 class GpuNativePacketRecorder;
 class CommandListResourceSelection;
 
-namespace GraphicsBackend{
-    class BackendTestDispatchAccess;
-};
-
-
 // Queue identity for command lists and state handoffs (avoids pulling in device.h).
 namespace CommandQueue{
     static constexpr u8 s_CommandQueueGraphicsBase = 0;
@@ -239,7 +234,6 @@ class CommandListResourceStateHandoff final : NoCopy{
     friend class GraphicsBackend::CommandList;
     friend class GpuNativePacketRecorder;
     friend class GpuInitialStateHandoffValidation;
-    friend class GraphicsBackend::BackendTestDispatchAccess;
 
 private:
     struct TextureState{

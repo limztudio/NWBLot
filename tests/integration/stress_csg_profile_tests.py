@@ -18,14 +18,14 @@ LIT_WAIST_BANDS = "waist_bands"
 LIT_CSG_PROFILE = "--csg-profile"
 LIT_VERIFIED = "verified"
 LIT_HARDWARE_COMPOSE = "hardware_compose"
-LIT_DISABLED_LOGICAL_DEVICE = "disabled logical-device"
+LIT_SOFTWARE_POLICY_OR_ROUTE = "loader policy or software route"
 LIT_PRECEDE = "precede"
 LIT_MAIN = "__main__"
 
 
 PROFILE = (smoke.CSG_PROFILE + "profile=waist_bands receivers=20 transparent=10 opaque=10 cutters=2 "
     "half_x=4.5 half_y=0.08 half_z=0.65 center_y=0.9 amplitude_y=0.1 front_z=-0.55 back_z=0.55 motion=crowd_yaw")
-DISABLED = "RayQuery=0 RayTracingPipeline=0 RayTracingAccelStruct=0 AccelStructDescriptors=0 AccelStructLayout=0"
+DISABLED = "Loader: hardware ray tracing disabled before device creation"
 
 
 def csg_log(hardware=True):
@@ -73,16 +73,16 @@ class StressCsgProfileTests(unittest.TestCase):
             self.assertTrue(verified["accepted_reuse_verified"])
             self.assertTrue(smoke.verify_csg_profile(text, args)[LIT_VERIFIED])
 
-    def test_hardware_and_disabled_device_routes_are_verified(self):
+    def test_hardware_and_requested_software_routes_are_verified(self):
         args = smoke.parse_args(self.argv + [LIT_CSG_PROFILE, LIT_WAIST_BANDS])
         hardware = smoke.verify_csg_profile(csg_log(), args)
         self.assertTrue(hardware[LIT_HARDWARE_COMPOSE])
         args.application_arg.append("--disable-hardware-ray-tracing")
         software = smoke.verify_csg_profile(csg_log(False), args)
         self.assertFalse(software[LIT_HARDWARE_COMPOSE])
-        with self.assertRaisesRegex(smoke.SmokeFailure, LIT_DISABLED_LOGICAL_DEVICE):
+        with self.assertRaisesRegex(smoke.SmokeFailure, LIT_SOFTWARE_POLICY_OR_ROUTE):
             smoke.verify_csg_profile(csg_log(), args)
-        with self.assertRaisesRegex(smoke.SmokeFailure, LIT_DISABLED_LOGICAL_DEVICE):
+        with self.assertRaisesRegex(smoke.SmokeFailure, LIT_SOFTWARE_POLICY_OR_ROUTE):
             smoke.verify_csg_profile(csg_log(False).replace(DISABLED, ""), args)
 
     def test_missing_or_partial_csg_work_cannot_qualify(self):

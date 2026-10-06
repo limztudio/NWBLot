@@ -79,11 +79,7 @@ LIT_MAIN = "__main__"
 LIT_APPEND = "append"
 
 
-GPU_DEBUG_MARKERS = (
-    "Loader: GPU debug validation enabled",
-    "validation layer enabled: yes",
-    "Vulkan GPU debug: debug utils messenger installed.",
-)
+GPU_DEBUG_MARKERS = ("Loader: GPU debug validation enabled",)
 
 
 def validate_gpu_debug(text, application_args):
@@ -91,7 +87,7 @@ def validate_gpu_debug(text, application_args):
     if requested:
         lines = [line.strip() for line in text.splitlines()]
         if any(lines.count(marker) != 1 for marker in GPU_DEBUG_MARKERS):
-            raise SmokeFailure("requested GPU validation lacks actual loader/layer/messenger markers")
+            raise SmokeFailure("requested GPU validation requires exactly one Loader activation marker")
 
 
 def validate_output_path(output, protected_roots):

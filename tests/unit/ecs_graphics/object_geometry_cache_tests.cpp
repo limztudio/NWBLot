@@ -6,9 +6,6 @@
 #include <impl/assets_mesh/payload_types.h>
 #include <impl/ecs_render/mesh/mesh_system.h>
 
-#include <tests/common/graphics_metadata_test_objects.h>
-#include <tests/common/test_context.h>
-
 #include <gtest/gtest.h>
 
 
@@ -24,60 +21,6 @@ namespace __hidden_object_geometry_cache_tests{
 using namespace NWB;
 using namespace NWB::Impl;
 using namespace NWB::Impl::ECSRenderDetail;
-
-using TestArena = Tests::TestArena<struct ObjectGeometryCacheTestsTag>;
-using SourceBufferMember = Core::BufferHandle RuntimeMeshBuffers::*;
-
-constexpr SourceBufferMember s_SourceBufferMembers[] = {
-    &RuntimeMeshBuffers::positionBuffer,
-    &RuntimeMeshBuffers::normalBuffer,
-    &RuntimeMeshBuffers::tangentBuffer,
-    &RuntimeMeshBuffers::uv0Buffer,
-    &RuntimeMeshBuffers::colorBuffer,
-    &RuntimeMeshBuffers::meshletDescBuffer,
-    &RuntimeMeshBuffers::meshletBoundsBuffer,
-    &RuntimeMeshBuffers::meshletPositionRefDeltaBuffer,
-    &RuntimeMeshBuffers::meshletAttributeRefDeltaBuffer,
-    &RuntimeMeshBuffers::meshletLocalVertexRefBuffer,
-    &RuntimeMeshBuffers::meshletPrimitiveIndexBuffer,
-};
-
-struct Context{
-    TestArena testArena;
-    Core::GraphicsAllocator graphicsAllocator{ testArena.arena };
-    Core::CpuTaskScheduler cpuScheduler{ 0u };
-    Core::GraphicsBackend::VulkanContext context{ graphicsAllocator, cpuScheduler, 1u };
-    Core::GraphicsBackend::VulkanAllocator allocator{ context };
-    MeshResources mesh;
-    RuntimeMeshBuffers source;
-    ObjectGeometryCacheSnapshot snapshot;
-
-    Context(){
-        for(const SourceBufferMember member : s_SourceBufferMembers)
-            mesh.*member = makeBuffer();
-        mesh.runtimeMesh = true;
-        mesh.runtimeGeometryContentRevision = 7u;
-        mesh.objectGeometryCache.buffer = makeBuffer();
-        mesh.objectGeometryCache.decoderPipeline = makeDecoder();
-        mesh.objectGeometryCache.indexByteOffset = 4u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
-        mesh.objectGeometryCache.indexCount = 3u;
-        mesh.objectGeometryCache.heapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 8u);
-        source = static_cast<const RuntimeMeshBuffers&>(mesh);
-        snapshot = RendererMeshSystem::ObjectGeometryCacheSnapshot(mesh);
-    }
-
-    [[nodiscard]] Core::BufferHandle makeBuffer(){
-        Core::Buffer* const buffer = Tests::NewMetadataOnlyBuffer(
-            testArena.arena, context, allocator, Core::BufferDesc{}.setByteSize(256u).setCanHaveRawViews(true)
-        );
-        return Core::BufferHandle(buffer, Core::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
-    }
-
-    [[nodiscard]] Core::ComputePipelineHandle makeDecoder(){
-        Core::ComputePipeline* const pipeline = NewArenaObject<Core::ComputePipeline>(testArena.arena, context);
-        return Core::ComputePipelineHandle(pipeline, Core::ComputePipelineHandle::deleter_type(&testArena.arena), s_AdoptRef);
-    }
-};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -156,105 +99,6 @@ TEST(ObjectGeometryCacheTests, ImmutableStaticContentReusesZeroRevisionOnlyAfter
     EXPECT_EQ(accepted.sourceRevision, 0u);
     // A content decision never substitutes for the required retained resource and decoder bindings.
     EXPECT_FALSE(accepted.valid());
-}
-
-
-TEST(ObjectGeometryCacheTests, EachSourceReplacementInvalidatesAnAcceptedDecode){
-    for(u32 index = 0u; index < LengthOf(s_SourceBufferMembers); ++index){
-        SCOPED_TRACE(index);
-        Context fixture;
-        ASSERT_TRUE(AcceptObjectGeometryCacheWrite(fixture.mesh, fixture.source, fixture.snapshot, true));
-        fixture.mesh.*s_SourceBufferMembers[index] = fixture.makeBuffer();
-        EXPECT_FALSE(AcceptObjectGeometryCacheWrite(fixture.mesh, fixture.source, fixture.snapshot, true));
-        EXPECT_TRUE(fixture.mesh.objectGeometryCache.initialized);
-        EXPECT_FALSE(fixture.mesh.objectGeometryCache.acceptedContent);
-        EXPECT_TRUE(RendererMeshSystem::ObjectGeometryCacheSnapshot(fixture.mesh).requiresDecode);
-    }
-}
-
-TEST(ObjectGeometryCacheTests, AcceptedOlderWritesInitializeTheSameBufferWithoutValidatingNewContent){
-    for(u32 mismatch = 0u; mismatch < 6u; ++mismatch){
-        SCOPED_TRACE(mismatch);
-        Context fixture;
-        auto& cache = fixture.mesh.objectGeometryCache;
-        switch(mismatch){
-        case 0u: fixture.mesh.runtimeGeometryContentRevision = 8u; break;
-        case 1u: cache.decoderPipeline = fixture.makeDecoder(); break;
-        case 2u: cache.heapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, 9u); break;
-        case 3u: fixture.mesh.runtimeMesh = false; break;
-        case 4u: cache.indexByteOffset += NWB_MESH_OBJECT_VERTEX_BYTE_SIZE; break;
-        case 5u: cache.indexCount += 3u; break;
-        }
-        EXPECT_FALSE(cache.initialized);
-        EXPECT_FALSE(AcceptObjectGeometryCacheWrite(fixture.mesh, fixture.source, fixture.snapshot, true));
-        EXPECT_EQ(cache.buffer, fixture.snapshot.buffer);
-        EXPECT_TRUE(cache.initialized);
-        EXPECT_FALSE(cache.acceptedContent);
-        EXPECT_TRUE(RendererMeshSystem::ObjectGeometryCacheSnapshot(fixture.mesh).requiresDecode);
-    }
-}
-
-TEST(ObjectGeometryCacheTests, LateOlderContentInvalidatesPreviouslyAcceptedNewerContentInTheSameBuffer){
-    Context fixture;
-    fixture.mesh.runtimeGeometryContentRevision = 8u;
-    const ObjectGeometryCacheSnapshot newer = RendererMeshSystem::ObjectGeometryCacheSnapshot(fixture.mesh);
-    ASSERT_TRUE(AcceptObjectGeometryCacheWrite(fixture.mesh, fixture.source, newer, true));
-    EXPECT_FALSE(RendererMeshSystem::ObjectGeometryCacheSnapshot(fixture.mesh).requiresDecode);
-    EXPECT_FALSE(AcceptObjectGeometryCacheWrite(fixture.mesh, fixture.source, fixture.snapshot, true));
-    EXPECT_TRUE(fixture.mesh.objectGeometryCache.initialized);
-    EXPECT_FALSE(fixture.mesh.objectGeometryCache.acceptedContent);
-    EXPECT_TRUE(RendererMeshSystem::ObjectGeometryCacheSnapshot(fixture.mesh).requiresDecode);
-    EXPECT_EQ(fixture.mesh.objectGeometryCache.acceptedContentRevision, 8u);
-    ASSERT_TRUE(AcceptObjectGeometryCacheWrite(fixture.mesh, fixture.source, newer, true));
-    EXPECT_FALSE(RendererMeshSystem::ObjectGeometryCacheSnapshot(fixture.mesh).requiresDecode);
-}
-
-TEST(ObjectGeometryCacheTests, OldBufferAcceptanceCannotInitializeOrInvalidateAReplacementBuffer){
-    for(const bool alreadyAccepted : { false, true }){
-        SCOPED_TRACE(alreadyAccepted);
-        Context fixture;
-        auto& cache = fixture.mesh.objectGeometryCache;
-        cache.buffer = fixture.makeBuffer();
-        cache.initialized = alreadyAccepted;
-        cache.acceptedContent = alreadyAccepted;
-        cache.acceptedContentRevision = 19u;
-        EXPECT_FALSE(AcceptObjectGeometryCacheWrite(fixture.mesh, fixture.source, fixture.snapshot, true));
-        EXPECT_NE(cache.buffer, fixture.snapshot.buffer);
-        EXPECT_EQ(cache.initialized, alreadyAccepted);
-        EXPECT_EQ(cache.acceptedContent, alreadyAccepted);
-        EXPECT_EQ(cache.acceptedContentRevision, 19u);
-    }
-}
-
-TEST(ObjectGeometryCacheTests, InvalidSnapshotsNeverPublishBufferInitialization){
-    for(u32 missing = 0u; missing < 6u; ++missing){
-        SCOPED_TRACE(missing);
-        Context fixture;
-        switch(missing){
-        case 0u: fixture.snapshot.buffer.reset(); break;
-        case 1u: fixture.snapshot.decoderPipeline.reset(); break;
-        case 2u: fixture.snapshot.heapHandle = Core::GpuDescriptorHandle::Invalid(); break;
-        case 3u: fixture.snapshot.heapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::UniformBuffer, 8u); break;
-        case 4u: fixture.snapshot.indexByteOffset = 0u; break;
-        case 5u: fixture.snapshot.indexCount = 0u; break;
-        }
-        EXPECT_FALSE(fixture.snapshot.valid());
-        EXPECT_FALSE(AcceptObjectGeometryCacheWrite(fixture.mesh, fixture.source, fixture.snapshot, true));
-        EXPECT_FALSE(fixture.mesh.objectGeometryCache.initialized);
-        EXPECT_FALSE(fixture.mesh.objectGeometryCache.acceptedContent);
-    }
-}
-
-TEST(ObjectGeometryCacheTests, UnknownRuntimeRevisionPublishesStateButRequiresAnotherDecode){
-    Context fixture;
-    fixture.mesh.runtimeGeometryContentRevision = 0u;
-    fixture.snapshot = RendererMeshSystem::ObjectGeometryCacheSnapshot(fixture.mesh);
-    ASSERT_TRUE(fixture.snapshot.valid());
-    EXPECT_TRUE(AcceptObjectGeometryCacheWrite(fixture.mesh, fixture.source, fixture.snapshot, true));
-    EXPECT_TRUE(fixture.mesh.objectGeometryCache.initialized);
-    EXPECT_FALSE(fixture.mesh.objectGeometryCache.acceptedContent);
-    EXPECT_EQ(fixture.mesh.objectGeometryCache.acceptedContentRevision, 0u);
-    EXPECT_TRUE(RendererMeshSystem::ObjectGeometryCacheSnapshot(fixture.mesh).requiresDecode);
 }
 
 

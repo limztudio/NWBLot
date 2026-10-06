@@ -872,8 +872,7 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
         EXPECT_EQ(exclusiveComputePacketView.dependencies[0u].producer, exclusiveGraphicsPacket);
     }
 
-    // The combined sharing mask becomes Vulkan-concurrent only when the queues have distinct families. Two real
-    // VkQueues in one family still use exclusive ownership in the backend, so they must retain the handoff.
+    // Queues in one family retain exclusive ownership and require a handoff even with combined sharing flags.
     Graphics::GpuPhysicalQueueInfo sameFamilyComputeQueue = DedicatedComputeQueue();
     sameFamilyComputeQueue.familyIndex = GraphicsQueue().familyIndex;
     sameFamilyComputeQueue.queueIndex = 1u;

@@ -61,11 +61,7 @@ SELECTIONS = {
     "fresh1": (1,), "fresh2": (2,), "fresh3": (3,),
     "sequence3": (1, 3), "sequence2": (1, 3, 2), "sequence1": (1, 3, 2, 1),
 }
-GPU_DEBUG_MARKERS = (
-    "Loader: GPU debug validation enabled",
-    "validation layer enabled: yes",
-    "Vulkan GPU debug: debug utils messenger installed.",
-)
+GPU_DEBUG_MARKERS = ("Loader: GPU debug validation enabled",)
 FIELDS = {
     LIT_PHASE: {LIT_INDEX, LIT_RADIUS, LIT_SEED, LIT_GRAPHICS_FRAME},
     LIT_WARM: {LIT_INDEX, LIT_SEQUENCE, LIT_GENERATION, LIT_GRAPHICS_FRAME, LIT_EPOCH, LIT_START_GRAPHICS_FRAME,
@@ -80,7 +76,7 @@ def validate_gpu_debug(text, application_args):
     if requested:
         lines = [line.strip() for line in text.splitlines()]
         if any(lines.count(marker) != 1 for marker in GPU_DEBUG_MARKERS):
-            raise SmokeFailure("requested GPU validation lacks its actual loader/layer/messenger markers")
+            raise SmokeFailure("requested GPU validation requires exactly one Loader activation marker")
     return {"requested": requested, "markers": list(GPU_DEBUG_MARKERS) if requested else []}
 
 

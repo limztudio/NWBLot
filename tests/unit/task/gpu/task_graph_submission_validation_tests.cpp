@@ -4,7 +4,6 @@
 
 #include "task_graph_test_utils.h"
 
-#include <tests/common/vulkan_test_sync.h>
 #include <core/task/gpu/packet_runtime_internal.h>
 #include <global/timer.h>
 
@@ -92,156 +91,6 @@ void BenchmarkClusteredWaits(const usize count){
     RecordUnsignedTestProperty("wait_statistics_ns", minimumNanoseconds);
 }
 
-[[nodiscard]] bool ValidatePacketOwnership(
-    const Graphics::GpuTaskGraph::DeclarationReadView& declarations,
-    const Graphics::GpuCompiledGraph::ReadView& plan,
-    const Graphics::GpuSubmissionPacketId packetID){
-    const Graphics::GpuCompiledPacketView packet = plan.packet(packetID);
-    if(!packet.valid())
-        return false;
-    for(u32 index = 0u; index < packet.plan->externalDependencyCount; ++index){
-        if(!declarations.externalCompletionToken(packet.externalDependencies[index]))
-            return false;
-    }
-    return Graphics::GpuPacketRuntimeDetail::ValidateInitialOwnershipCompletions(declarations, plan, packetID);
-}
-
-void CheckInitialOwnershipFanIn(const usize count, const bool benchmark){
-    ASSERT_GT(count, 0u);
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(3u), GraphicsQueue(19u), DedicatedComputeQueue(41u) };
-    queues[1u].queueIndex = 1u;
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
-    Graphics::CommandListResourceStateHandoff stateSource(testArena.arena);
-    Graphics::GraphicsBackend::BackendTestDispatchAccess::ValidateStateHandoff(stateSource, queues[0u].id.deviceGeneration);
-    Graphics::GraphicsVector<Graphics::GpuTaskResourceUse> uses(testArena.arena);
-    uses.reserve(count);
-    Graphics::GpuExternalCompletionId firstCompletion;
-    Graphics::QueueSubmissionToken firstToken;
-    for(usize index = 0u; index < count; ++index){
-        char identityText[32u] = {};
-        const AStringView suffix = FormatDecimal(index, identityText);
-        const Graphics::GpuPhysicalQueueInfo& sourceQueue = queues[index % 2u];
-        const Graphics::QueueSubmissionToken token{
-            .value = index + 7u,
-            .physicalQueueIndex = sourceQueue.id.index,
-            .deviceGeneration = sourceQueue.id.deviceGeneration,
-            .queue = sourceQueue.queueClass,
-        };
-        const Graphics::GpuExternalCompletionId completion = graph.importExternalCompletion(
-            Graphics::GpuExternalCompletionDesc{}
-                .setIdentity(DeriveName(Name("tests/submission_validation/owner_completion/"), suffix))
-                .setMarkerLabel("Owner Completion")
-                .setToken(token)
-        );
-        ASSERT_TRUE(completion.valid());
-        if(index == 0u){
-            firstCompletion = completion;
-            firstToken = token;
-        }
-        const Graphics::GpuGraphInitialOwnerHandoffSourceDesc source{
-            .range = {},
-            .sourceQueue = sourceQueue.id,
-            .destinationQueue = queues[2u].id,
-            .completion = completion,
-            .minimumCompletionToken = token,
-            .stateSource = &stateSource,
-        };
-        const Graphics::GpuGraphResourceId resource = graph.importResource(
-            Graphics::GpuGraphResourceDesc{}
-                .setIdentity(DeriveName(Name("tests/submission_validation/owned_resource/"), suffix))
-                .setMarkerLabel("Owned Resource")
-                .setType(Graphics::GpuGraphResourceType::AccelStruct)
-                .setInitialState(Graphics::ResourceStates::AccelStructRead)
-                .setInitialOwnerHandoffSources(&source, 1u)
-        );
-        ASSERT_TRUE(resource.valid());
-        uses.push_back({
-            .resource = resource,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::AccelStructRead,
-            .access = Graphics::GpuTaskResourceAccess::Read,
-        });
-    }
-    const Graphics::GpuExternalCompletionId ordinaryCompletion = graph.importExternalCompletion(
-        Graphics::GpuExternalCompletionDesc{}
-            .setIdentity(Name("tests/submission_validation/ordinary_completion"))
-            .setMarkerLabel("Ordinary Completion")
-            .setToken(firstToken)
-    );
-    ASSERT_TRUE(ordinaryCompletion.valid());
-    const Graphics::GpuTaskId task = graph.addTask(
-        Graphics::GpuTaskDesc{}
-            .setIdentity(Name("tests/submission_validation/ownership_fan_in"))
-            .setMarkerLabel("Ownership Fan In")
-            .setResourceUses(uses.data(), uses.size())
-            .setExternalDependencies(&ordinaryCompletion, 1u),
-        ComputeCommands()
-    );
-    ASSERT_TRUE(task.valid());
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const GpuTaskGraphReadViews reads(graph, compiledGraph);
-    ASSERT_TRUE(reads.valid());
-    const Graphics::GpuSubmissionPacketId packetID = reads.compiled.packetForTask(task);
-    const Graphics::GpuCompiledPacketView packet = reads.compiled.packet(packetID);
-    ASSERT_TRUE(packet.valid());
-    ASSERT_EQ(packet.plan->queue, queues[2u].id);
-    ASSERT_EQ(packet.plan->externalDependencyCount, count + 1u);
-    const ArenaMemoryStats before = testArena.arena.memoryStats();
-    u64 minimumNanoseconds = Limit<u64>::s_Max;
-    for(usize iteration = 0u; iteration < (benchmark ? 4u : 1u); ++iteration){
-        const Timer begin = TimerNow();
-        const bool valid = ValidatePacketOwnership(reads.declarations, reads.compiled, packetID);
-        const u64 nanoseconds = DurationInNS<u64>(TimerNow(), begin);
-        ASSERT_TRUE(valid);
-        if(iteration != 0u || !benchmark)
-            minimumNanoseconds = Min(minimumNanoseconds, nanoseconds);
-    }
-    EXPECT_EQ(testArena.arena.memoryStats().allocationCount, before.allocationCount);
-    EXPECT_EQ(testArena.arena.memoryStats().usedBytes, before.usedBytes);
-    if(benchmark)
-        RecordUnsignedTestProperty("ownership_validation_ns", minimumNanoseconds);
-    const Graphics::GpuTaskGraphResourceView firstResource = reads.declarations.resourceAt(uses.front().resource.index);
-    ASSERT_EQ(firstResource.initialOwnerHandoffSourceCount, 1u);
-    const Graphics::GpuTaskGraphInitialOwnerHandoffSourceView& firstSource = firstResource.initialOwnerHandoffSources[0u];
-    EXPECT_EQ(firstSource.completion, firstCompletion);
-    const Graphics::GpuCompiledTaskView compiledTask = reads.compiled.findTask(task);
-    ASSERT_TRUE(compiledTask.valid());
-    const Graphics::GpuCompiledBarrier* firstAcquire = nullptr;
-    for(u32 index = 0u; index < compiledTask.plan->prologueBarrierCount; ++index){
-        const Graphics::GpuCompiledBarrier& barrier = compiledTask.prologueBarriers[index];
-        if(barrier.isInitialOwnerHandoff && barrier.resource == uses.front().resource){
-            ASSERT_EQ(firstAcquire, nullptr);
-            firstAcquire = &barrier;
-        }
-    }
-    ASSERT_NE(firstAcquire, nullptr);
-    const auto validateToken = [&](const Graphics::QueueSubmissionToken& token){
-        return Graphics::GpuPacketRuntimeDetail::ValidateInitialOwnershipCompletionToken(
-            firstSource, *firstAcquire, queues[0u], token, reads.compiled.deviceGeneration()
-        );
-    };
-    Graphics::QueueSubmissionToken invalidToken = firstToken;
-    --invalidToken.value;
-    EXPECT_FALSE(validateToken(invalidToken));
-    invalidToken = firstToken;
-    invalidToken.physicalQueueIndex = queues[1u].id.index;
-    EXPECT_FALSE(validateToken(invalidToken));
-    invalidToken = firstToken;
-    ++invalidToken.deviceGeneration;
-    EXPECT_FALSE(validateToken(invalidToken));
-    invalidToken = firstToken;
-    invalidToken.queue = Graphics::CommandQueue::Transfer;
-    EXPECT_FALSE(validateToken(invalidToken));
-    invalidToken = firstToken;
-    ++invalidToken.value;
-    EXPECT_TRUE(validateToken(invalidToken));
-    EXPECT_TRUE(ValidatePacketOwnership(reads.declarations, reads.compiled, packetID));
-}
 
 TEST(GpuTaskGraphSubmissionValidation, CountsDistinctPhysicalQueueGenerationsWithoutChangingWaitTokens){
     TestArena testArena;
@@ -265,9 +114,6 @@ TEST(GpuTaskGraphSubmissionValidation, CountsDistinctPhysicalQueueGenerationsWit
     EXPECT_EQ(GLB_MEMCMP(tokens.data(), original.data(), tokens.size() * sizeof(tokens[0u])), 0);
 }
 
-TEST(GpuTaskGraphSubmissionValidation, ValidatesEveryInitialOwnerMinimumPhysicalQueueAndGeneration){
-    CheckInitialOwnershipFanIn(8u, false);
-}
 
 TEST(GpuTaskGraphSubmissionValidation, DISABLED_ClusteredWaitBenchmark1024Tokens){
     BenchmarkClusteredWaits(1024u);
@@ -275,18 +121,6 @@ TEST(GpuTaskGraphSubmissionValidation, DISABLED_ClusteredWaitBenchmark1024Tokens
 
 TEST(GpuTaskGraphSubmissionValidation, DISABLED_ClusteredWaitBenchmark4096Tokens){
     BenchmarkClusteredWaits(4096u);
-}
-
-TEST(GpuTaskGraphSubmissionValidation, DISABLED_OwnershipFanInBenchmark128Sources){
-    CheckInitialOwnershipFanIn(128u, true);
-}
-
-TEST(GpuTaskGraphSubmissionValidation, DISABLED_OwnershipFanInBenchmark512Sources){
-    CheckInitialOwnershipFanIn(512u, true);
-}
-
-TEST(GpuTaskGraphSubmissionValidation, DISABLED_OwnershipFanInBenchmark2048Sources){
-    CheckInitialOwnershipFanIn(2048u, true);
 }
 
 

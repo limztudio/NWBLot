@@ -35,61 +35,6 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     EXPECT_EQ(actual.deallocationCount, expected.deallocationCount);
 }
 
-[[nodiscard]] ImportedTexturePair ImportTexturePair(
-    TestArena& testArena,
-    Graphics::GraphicsBackend::VulkanContext& context,
-    Graphics::GraphicsBackend::VulkanAllocator& allocator,
-    Graphics::GpuTaskGraph& graph,
-    const Graphics::TextureDesc& sourceDescription,
-    const Graphics::TextureDesc& destinationDescription
-){
-    Graphics::Texture* const sourceObject = NewMetadataOnlyTexture(
-        testArena.arena,
-        context,
-        allocator,
-        sourceDescription
-    );
-    if(!sourceObject)
-        return {};
-    Graphics::TextureHandle source(
-        sourceObject,
-        Graphics::TextureHandle::deleter_type(&testArena.arena),
-        s_AdoptRef
-    );
-
-    Graphics::Texture* const destinationObject = NewMetadataOnlyTexture(
-        testArena.arena,
-        context,
-        allocator,
-        destinationDescription
-    );
-    if(!destinationObject)
-        return {};
-    Graphics::TextureHandle destination(
-        destinationObject,
-        Graphics::TextureHandle::deleter_type(&testArena.arena),
-        s_AdoptRef
-    );
-
-    return {
-        .source = graph.importTexture(
-            source,
-            Graphics::GpuGraphResourceDesc{}
-                .setIdentity(Name("tests/task_graph/immutable_texture_pair_source"))
-                .setMarkerLabel("Immutable Texture Pair Source")
-                .setType(Graphics::GpuGraphResourceType::Texture)
-                .setInitialState(Graphics::ResourceStates::Common)
-        ),
-        .destination = graph.importTexture(
-            destination,
-            Graphics::GpuGraphResourceDesc{}
-                .setIdentity(Name("tests/task_graph/immutable_texture_pair_destination"))
-                .setMarkerLabel("Immutable Texture Pair Destination")
-                .setType(Graphics::GpuGraphResourceType::Texture)
-                .setInitialState(Graphics::ResourceStates::Common)
-        ),
-    };
-}
 
 [[nodiscard]] Graphics::GpuGraphResourceId AddHazardDomain(
     Graphics::GpuTaskGraph& graph,
@@ -122,43 +67,6 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     return graph.importResource(desc);
 }
 
-[[nodiscard]] Graphics::GpuGraphResourceId AddPresentationTexture(
-    TestArena& testArena,
-    Graphics::GraphicsBackend::VulkanContext& context,
-    Graphics::GraphicsBackend::VulkanAllocator& allocator,
-    Graphics::GpuTaskGraph& graph,
-    const Name& identity,
-    const AStringView label,
-    const Graphics::ResourceStates::Mask initialState,
-    const Graphics::ResourceStates::Mask externalFinalState,
-    const Graphics::GpuPhysicalQueueId externalFinalReleaseDestinationQueue){
-    Graphics::Texture* const textureObject = NewMetadataOnlyTexture(
-        testArena.arena,
-        context,
-        allocator,
-        Graphics::TextureDesc()
-            .setName(identity)
-            .setInRenderTarget(true)
-            .setInitialState(initialState)
-    );
-    if(!textureObject)
-        return {};
-    Graphics::TextureHandle texture(
-        textureObject,
-        Graphics::TextureHandle::deleter_type(&testArena.arena),
-        s_AdoptRef
-    );
-    return graph.importTexture(
-        texture,
-        Graphics::GpuGraphResourceDesc{}
-            .setIdentity(identity)
-            .setMarkerLabel(label)
-            .setType(Graphics::GpuGraphResourceType::Texture)
-            .setInitialState(initialState)
-            .setExternalFinalState(externalFinalState)
-            .setExternalFinalReleaseDestinationQueue(externalFinalReleaseDestinationQueue)
-    );
-}
 
 [[nodiscard]] Graphics::GpuGraphResourceId AddBufferMetadata(
     Graphics::GpuTaskGraph& graph,

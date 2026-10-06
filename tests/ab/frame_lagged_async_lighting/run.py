@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the opt-in frame-lagged async-lighting lifecycle on target Vulkan hardware.
+"""Validate the opt-in frame-lagged async-lighting lifecycle through the selected graphics backend.
 
 The smoke application starts with frame-lagged lighting enabled. This runner waits for accepted bootstrap and
 history-use submissions, uses F1 to request the established current-frame path, then re-enables the feature and
@@ -72,7 +72,7 @@ FORBIDDEN_LOG_MESSAGES = (
 )
 
 # A successful target run has exactly this accepted lifecycle.  Keep the sequence as data so the live poller and
-# the no-Vulkan self-test use the same verdict rather than independently counting markers.
+# the offline self-test use the same verdict rather than independently counting markers.
 LAGGED_LIGHTING_LIFECYCLE = (
     (LIT_BOOTSTRAP, BOOTSTRAP_ACCEPTED),
     (LIT_ACTIVE_HISTORY, ACTIVE_HISTORY_ACCEPTED),
@@ -188,7 +188,7 @@ def require_positive(parser: argparse.ArgumentParser, option: str, value: float)
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Run parser/state-machine checks without Vulkan.")
+    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Run parser/state-machine checks without starting a graphics application.")
     parser.add_argument("--executable", type=Path, help="Path to nwb_frame_lagged_async_lighting_smoke.")
     parser.add_argument("--runtime-dir", type=Path, help="Cooked smoke runtime root used as the process working directory.")
     parser.add_argument("--logserver-executable", help="Optional path to nwb_logserver/logserver.")

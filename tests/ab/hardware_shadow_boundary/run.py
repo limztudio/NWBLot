@@ -8,7 +8,7 @@ diagnostic artifacts, not a pixel-parity gate: the material classes intentionall
 
 The runner collects renderer GPU timestamp envelopes, verifies the arm-specific diagnostic markers,
 captures both native windows, and writes a device-local report. ``--self-test`` exercises parsing
-and report evaluation without a Vulkan device or visible window.
+and report evaluation without a graphics device or visible window.
 
 Both arms use hardware ray traversal, and only the healthy arm includes transparent volume shadows.
 """
@@ -618,7 +618,7 @@ def require_non_negative(parser: argparse.ArgumentParser, option: str, value: fl
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Run parser and report checks without Vulkan.")
+    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Run parser and report checks without starting a graphics application.")
     parser.add_argument("--healthy-executable", type=Path, help="Path to nwb_hardware_shadow_boundary_healthy_benchmark.")
     parser.add_argument(
         "--baseline-executable",

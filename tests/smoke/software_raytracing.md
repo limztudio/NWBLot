@@ -4,25 +4,21 @@ Loader-based applications accept `--disable-hardware-ray-tracing`. This selects
 `Core::HardwareRayTracingPolicy::Disabled` before graphics instance/device
 creation. Normal startup keeps automatic hardware ray tracing selection.
 
-The Vulkan backend omits optional RT feature extensions, rejects conflicting
-required RT extensions, and creates the logical device without RayQuery,
-ray-tracing pipelines, acceleration structures, or an AS descriptor layout.
-Generic pipeline-library and deferred-host-operation extension requests remain
-available to independent callers. The setting cannot change after instance
-creation; use a new process to compare automatic and disabled policies.
+The selected backend applies the disabled hardware ray tracing policy before
+device creation. The setting cannot change after instance creation; use a new
+process to compare automatic and disabled policies.
 
-Successful disabled startup reports the actual enabled capabilities and heap:
+The scene tests require selected policy and actual software traversal evidence:
 
 ```text
 Loader: hardware ray tracing disabled before device creation
-Vulkan: hardware ray tracing policy=disabled; RayQuery=0 RayTracingPipeline=0 RayTracingAccelStruct=0 AccelStructDescriptors=0 AccelStructLayout=0
+RendererSystem: dispatched software shadow traversal
 ```
 
-The second marker is emitted only after all five values have been checked.
-This exercises the real no-RT logical-device route on an RT-capable adapter.
-It does not substitute for qualification on other physical GPUs and drivers.
-The renderer's other minimum requirements, including descriptor buffers, still
-apply.
+The renderer record follows actual software traversal recording. Feature-specific
+registrations also require software caustic, surfel tracing or screen-space
+optical evidence. These checks exercise the selected software route on a
+hardware ray tracing capable adapter.
 
 ## Expected fallback behavior
 
@@ -56,8 +52,9 @@ ctest --test-dir <build-directory> -C opt -L software_raytracing --output-on-fai
 The seven scene tests cover overlapping transparent meshes, two clipped CSG poses,
 converged sphere caustics with refraction, animated skinned glass, the full
 20-body scene before/after an odd-sized resize, and the dedicated GI scene.
-They require the disabled device proof and software shadow dispatch, reject
-hardware traversal/producer markers, and run with Vulkan validation. Caustic
+They require the Loader disabled policy and software shadow dispatch, reject
+hardware traversal/producer markers, and request selected GPU validation
+outside the Final configuration. Caustic
 cases additionally require the software photon producer. Warnings, errors,
 assertions and validation diagnostics fail the capture harness.
 
@@ -75,10 +72,10 @@ ray-miss radiometric oracle: projected screen-space hits do not establish the
 same off-screen transport. Its report records that distinction.
 
 The scene captures establish startup, traversal-route and rendered-output
-coverage. The ECS graphics unit tests cover prepared BVH resources, scene-refit
-graph dependencies and shadow quality/history contracts using metadata-only
-resources. They do not execute the traversal shaders. A visually nonempty
-capture alone is not an exact optical equivalence test.
+coverage. The ECS graphics unit tests retain neutral empty-input, geometry
+layout, identity, shadow quality and history edge cases. Native metadata-only
+fixtures and their resource-dependent cases have been removed. A visually
+nonempty capture alone is not an exact optical equivalence test.
 
 ## Animated scene bounds
 
@@ -86,10 +83,8 @@ Runtime software scenes refit the scene BVH from the current GPU mesh roots
 after the per-mesh build/refit work. The CPU topology and instance order remain
 frozen for that frame. Static-only scenes retain their existing reuse path.
 
-`software_scene_refit_graph_tests.cpp` checks graph declaration, resource
-handoffs and failure cases with metadata-only resources. The skinned scene
-smoke exercises the production shader on a disabled-RT device. The retired
-native kernel test suite is not part of the current qualification commands.
+The skinned scene smoke exercises the production shader through the selected
+disabled hardware ray tracing route.
 
 Caustic photon emission-target domains remain a separate approximation based
 on CPU geometry bounds; these smoke scenes do not establish coverage for every

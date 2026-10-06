@@ -8,7 +8,7 @@ baseline on the animated ten-character stress scene. Both arms freeze the same y
   so the renderer naturally selects hardware shadows without a behavior-changing production hook.
 
 The baseline intentionally removes transparent materials. Its capture is therefore an inspection artifact, not a
-visual-parity input. The runner verifies RayQuery and natural route markers, checks for Vulkan/runtime failures, and
+visual-parity input. The runner verifies RayQuery and natural route markers, checks for GPU validation/runtime failures, and
 compares GPU timestamp medians without manufacturing a renderer failure.
 
 From the repository root:
@@ -24,7 +24,7 @@ For an optimized binary whose timing names are hashed, forward its generated `.n
 `--baseline-namesym` is omitted.
 
 The command configures and builds the shared benchmark, then writes a timestamped artifact bundle
-under `.cozter/out/ab-results/hardware-shadow-boundary/`. It measures without Vulkan validation by
+under `.cozter/out/ab-results/hardware-shadow-boundary/`. It measures without GPU validation by
 default so `--gpudbg` layer work does not dominate the timing evidence. Run the correctness-oriented
 variant explicitly when needed:
 

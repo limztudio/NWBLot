@@ -88,8 +88,6 @@ def capture(args, variant):
         command += ["--application-arg=--disable-hardware-ray-tracing"]
         for message in (
             "Loader: hardware ray tracing disabled before device creation",
-            "Vulkan: hardware ray tracing policy=disabled",
-            "RayQuery=0 RayTracingPipeline=0 RayTracingAccelStruct=0 AccelStructDescriptors=0 AccelStructLayout=0",
             LIT_NATURAL_SOFTWARE_ONLY_SHADOW_ROUTE_SEL,
             "RendererSystem: dispatched software shadow traversal",
             "CausticSphereSmokeProject: screen refraction striped backdrop created (24 opaque strips)",

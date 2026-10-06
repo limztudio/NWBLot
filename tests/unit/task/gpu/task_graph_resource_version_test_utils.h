@@ -5,7 +5,6 @@
 #pragma once
 
 
-#include <tests/common/graphics_metadata_test_objects.h>
 #include <tests/common/test_context.h>
 
 #include "task_graph_test_utils.h"
@@ -13,7 +12,6 @@
 #include <gtest/gtest.h>
 
 #include <core/task/gpu/compiler_internal.h>
-#include <core/graphics/backend_selection/backend.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

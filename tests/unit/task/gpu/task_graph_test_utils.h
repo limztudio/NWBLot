@@ -7,7 +7,6 @@
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/gpu_task_graph_read_views.h>
-#include <tests/common/graphics_metadata_test_objects.h>
 #include <tests/common/test_context.h>
 
 #include <cstddef>
@@ -19,7 +18,6 @@
 #include <core/task/gpu/compiler_internal.h>
 #include <core/task/gpu/packet_runtime.h>
 #include <core/task/gpu/queue_assignment_telemetry.h>
-#include <core/graphics/backend_selection/backend.h>
 #include <core/telemetry/frame_graph_contributor.h>
 #include <global/filesystem/operations.h>
 #include <global/filesystem/path.h>
@@ -58,26 +56,6 @@ inline constexpr Name s_TaskGraphScratchArena("tests/task/gpu/scratch");
 void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryStats& actual);
 
 
-using ::NWB::Tests::NewMetadataOnlyBuffer;
-using ::NWB::Tests::NewMetadataOnlyTexture;
-
-
-struct ImportedTexturePair{
-    Graphics::GpuGraphResourceId source;
-    Graphics::GpuGraphResourceId destination;
-};
-
-
-[[nodiscard]] ImportedTexturePair ImportTexturePair(
-    TestArena& testArena,
-    Graphics::GraphicsBackend::VulkanContext& context,
-    Graphics::GraphicsBackend::VulkanAllocator& allocator,
-    Graphics::GpuTaskGraph& graph,
-    const Graphics::TextureDesc& sourceDescription,
-    const Graphics::TextureDesc& destinationDescription
-);
-
-
 [[nodiscard]] Graphics::GpuGraphResourceId AddHazardDomain(
     Graphics::GpuTaskGraph& graph,
     const Name& identity,
@@ -92,17 +70,6 @@ struct ImportedTexturePair{
     const Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Exclusive
 );
 
-[[nodiscard]] Graphics::GpuGraphResourceId AddPresentationTexture(
-    TestArena& testArena,
-    Graphics::GraphicsBackend::VulkanContext& context,
-    Graphics::GraphicsBackend::VulkanAllocator& allocator,
-    Graphics::GpuTaskGraph& graph,
-    const Name& identity,
-    const AStringView label,
-    const Graphics::ResourceStates::Mask initialState,
-    const Graphics::ResourceStates::Mask externalFinalState = Graphics::ResourceStates::Present,
-    const Graphics::GpuPhysicalQueueId externalFinalReleaseDestinationQueue = {}
-);
 
 [[nodiscard]] Graphics::GpuGraphResourceId AddBufferMetadata(
     Graphics::GpuTaskGraph& graph,

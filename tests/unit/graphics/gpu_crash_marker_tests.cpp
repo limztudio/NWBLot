@@ -6,8 +6,7 @@
 
 #include <gtest/gtest.h>
 
-#include <core/graphics/api.h>
-#include <core/graphics/backend_selection/backend.h>
+#include <core/graphics/rhi/device.h>
 
 #include <global/sync.h>
 #include <global/thread.h>
@@ -35,9 +34,6 @@ namespace __hidden_gpu_crash_marker_tests{
 
 
 using TestArena = ::NWB::Tests::TestArena<struct GpuCrashMarkerTestsTag>;
-
-
-static_assert(IsNothrowDestructible_V<Core::GraphicsBackend::CommandList>);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

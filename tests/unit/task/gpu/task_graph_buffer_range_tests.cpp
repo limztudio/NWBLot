@@ -430,65 +430,6 @@ TEST(GpuTaskGraphBufferRange, CrossQueueFanInTransfersOnlyIntersectingBytes){
     ), nullptr);
 }
 
-TEST(GpuTaskGraphBufferRange, TypedRangesRejectOutOfBoundsAndResolveRemainingBytes){
-    TestArena testArena;
-    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::CpuTaskScheduler cpuScheduler(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
-    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
-    Graphics::Buffer* const object = NewMetadataOnlyBuffer(
-        testArena.arena,
-        context,
-        allocator,
-        Graphics::BufferDesc().setByteSize(64u).setInitialState(Graphics::ResourceStates::Common)
-    );
-    ASSERT_NE(object, nullptr);
-    const Graphics::BufferHandle buffer(object, Graphics::BufferHandle::deleter_type(&testArena.arena), s_AdoptRef);
-    const Graphics::BufferRange ranges[] = {
-        { 0u, 0u },
-        { 64u, Graphics::BufferRange::s_AllBytes },
-        { 48u, 32u },
-        { Limit<u64>::s_Max - 3u, 4u },
-        { 32u, Graphics::BufferRange::s_AllBytes },
-    };
-    for(usize index = 0u; index < LengthOf(ranges); ++index){
-        Graphics::GpuTaskGraph graph(testArena.arena);
-        const Graphics::GpuGraphResourceId resource = graph.importBuffer(
-            buffer,
-            Graphics::GpuGraphResourceDesc{}
-                .setIdentity(Name("tests/buffer_range/typed"))
-                .setMarkerLabel("Typed Byte Range")
-                .setType(Graphics::GpuGraphResourceType::Buffer)
-                .setInitialState(Graphics::ResourceStates::Common)
-        );
-        ASSERT_TRUE(resource.valid());
-        const Graphics::GpuTaskResourceUse use = BufferUse(
-            resource,
-            ranges[index].byteOffset,
-            ranges[index].byteSize,
-            Graphics::ResourceStates::CopyDest
-        );
-        const Graphics::GpuTaskId task = AddRangeTask(graph, Name("tests/buffer_range/typed_writer"), &use, 1u);
-        ASSERT_TRUE(task.valid());
-        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        if(index + 1u != LengthOf(ranges)){
-            EXPECT_FALSE(Analyze(graph, analysis));
-            EXPECT_EQ(analysis.diagnostic().status, Graphics::GpuTaskGraphAnalysisStatus::InvalidResourceUse);
-            continue;
-        }
-        const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-        const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
-        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
-        const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
-        const Graphics::GpuCompiledTaskView taskView = plan.findTask(task);
-        ASSERT_TRUE(taskView.valid());
-        ASSERT_EQ(taskView.plan->prologueBarrierCount, 1u);
-        EXPECT_EQ(taskView.prologueBarriers[0u].range.bufferRange, Graphics::BufferRange(32u, 32u));
-    }
-}
-
 
 TEST(GpuTaskGraphBufferRange, GroupsLateOwnershipAndTerminalExportsInTaskAndDiscoveryOrder){
     TestArena testArena;

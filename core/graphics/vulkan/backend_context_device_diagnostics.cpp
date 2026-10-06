@@ -209,8 +209,6 @@ void BackendContext::logVulkanDeviceConfiguration(
         , m_secondaryTransferQueueFamily
         , StringConvert(sameClassTransferQueueReason)
     );
-
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Vulkan: created device '{}'"), m_rendererString);
 }
 
 

@@ -2,16 +2,16 @@
 """Run the M4 async-shadow queue-validation and critical-path A/B benchmark.
 
 The paired smoke executables are intentionally identical except that the synchronous baseline explicitly disables
-the default AsyncCompute request before Vulkan device creation. This runner refuses a Graphics queue route, captures
+the default async-compute lane request before selected-backend device creation. This runner refuses a Graphics queue route, captures
 fixed-yaw pixel output from both binaries, collects the renderer's
 timestamp envelopes, and makes the M4 rollout gate explicit:
 
-* a distinct Vulkan compute family must be active;
+* a distinct dedicated compute queue must be active;
 * the graph-owned render.async_shadow scope must contain measurable work;
 * render.frame (the Graphics critical path) must not regress beyond the configured tolerance; and
 * the fixed-scene output and validation log must remain clean.
 
-The actual benchmark needs a target GPU with a dedicated compute-only family and a visible native
+The actual benchmark needs a target GPU with a dedicated compute-only queue and a visible native
 window. `--self-test` checks capture failures, cleanup ordering, and incomplete telemetry without either requirement.
 """
 
@@ -38,6 +38,7 @@ sys.path.insert(0, str(REPO / "tests" / "ab"))
 sys.path.insert(0, str(REPO / "tests" / "smoke"))
 
 from gpu_timing_parse import (  # noqa: E402
+    INTERVAL_RE,
     ScopeSummary,
     load_name_symbols as load_timing_name_symbols,
     parse_timing_file,
@@ -87,7 +88,7 @@ LIT_LOG_FILE = "log_file"
 LIT_PASS = "pass"
 LIT_FAIL = "fail"
 LIT_SCHEMA = "schema"
-LIT_NWB_ASYNC_SHADOW_M4_V2 = "nwb.async_shadow_m4.v2"
+LIT_NWB_ASYNC_SHADOW_M4_V3 = "nwb.async_shadow_m4.v3"
 LIT_VERDICT = "verdict"
 LIT_SELF_TEST = "--self-test"
 LIT_STORE_TRUE = "store_true"
@@ -115,10 +116,12 @@ LIT_APPEND = "append"
 
 
 LANE_RE = re.compile(
-    r"Vulkan:\s+async compute lane\s+requested=(true|false|yes|no)\s+effective=(true|false|yes|no)"
-    r"\s+graphicsFamily=(-?\d+)\s+computeFamily=(-?\d+)",
-    re.IGNORECASE,
+    r"StressTestSmokeProject:\s+M4 async compute\s+requested=([01])\s+effective=([01])"
+    r"\s+graphicsQueue=(\d+):(\d+)\s+computeQueue=(\d+):(\d+)"
+    r"\s+computeDedicated=([01])\s+computeSupported=([01])\s+computeGraphics=([01])(?=\s|$)",
 )
+INVALID_PHYSICAL_QUEUE_INDEX = 65535
+MAX_DEVICE_GENERATION = 65535
 REQUIRED_ASYNC_SCOPES = (
     LIT_RENDER_FRAME,
     LIT_RENDER_ASYNC_SHADOW,
@@ -137,11 +140,36 @@ class DedicatedComputeUnavailable(SmokeSkip):
 
 
 @dataclass(frozen=True)
+class PhysicalQueueId:
+    index: int
+    device_generation: int
+
+    @property
+    def valid(self) -> bool:
+        return 0 <= self.index < INVALID_PHYSICAL_QUEUE_INDEX and 0 < self.device_generation <= MAX_DEVICE_GENERATION
+
+
+@dataclass(frozen=True)
 class LaneStatus:
     requested: bool
     effective: bool
-    graphics_family: int
-    compute_family: int
+    graphics_queue: PhysicalQueueId
+    compute_queue: PhysicalQueueId
+    compute_dedicated: bool
+    compute_supported: bool
+    compute_graphics: bool
+
+    @property
+    def dedicated_compute(self) -> bool:
+        return (
+            self.graphics_queue.valid
+            and self.compute_queue.valid
+            and self.compute_queue.device_generation == self.graphics_queue.device_generation
+            and self.compute_queue != self.graphics_queue
+            and self.compute_dedicated
+            and self.compute_supported
+            and not self.compute_graphics
+        )
 
 
 @dataclass(frozen=True)
@@ -168,6 +196,7 @@ class RunResult:
     lane: LaneStatus
     scopes: Dict[str, ScopeSummary]
     forbidden_log_messages: List[str]
+    measurement_start_byte_offset: int = 0
 
 
 @dataclass(frozen=True)
@@ -177,21 +206,20 @@ class FrameLockedCapture:
     lane: LaneStatus
 
 
-def bool_from_log(value: str) -> bool:
-    return value.lower() in ("true", "yes")
-
-
 def parse_lane_status(log_text: str) -> Optional[LaneStatus]:
     matches = LANE_RE.findall(log_text)
     if not matches:
         return None
 
-    requested, effective, graphics_family, compute_family = matches[-1]
+    requested, effective, graphics_index, graphics_generation, compute_index, compute_generation, dedicated, supported, graphics = matches[-1]
     return LaneStatus(
-        requested=bool_from_log(requested),
-        effective=bool_from_log(effective),
-        graphics_family=int(graphics_family),
-        compute_family=int(compute_family),
+        requested=requested == "1",
+        effective=effective == "1",
+        graphics_queue=PhysicalQueueId(int(graphics_index), int(graphics_generation)),
+        compute_queue=PhysicalQueueId(int(compute_index), int(compute_generation)),
+        compute_dedicated=dedicated == "1",
+        compute_supported=supported == "1",
+        compute_graphics=graphics == "1",
     )
 
 
@@ -213,7 +241,7 @@ def wait_for_lane_status(
         time.sleep(0.1)
 
     detail = latest_log[-4000:]
-    raise SmokeFailure(f"timed out waiting for Vulkan async-lane capability log\n{detail}")
+    raise SmokeFailure(f"timed out waiting for selected async-lane capability log\n{detail}")
 
 
 def wait_for_log_message(
@@ -235,6 +263,33 @@ def wait_for_log_message(
 
     detail = latest_log[-4000:]
     raise SmokeFailure(f"timed out waiting for benchmark log message '{message}'\n{detail}")
+
+
+def wait_for_measurement_timing_boundary(process, timing_path: Path, timeout_seconds: float) -> int:
+    initial_size = timing_path.stat().st_size if timing_path.is_file() else 0
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        ensure_process_running(process, "while waiting for the post-warmup GPU timing boundary")
+        raw_timing = timing_path.read_bytes() if timing_path.is_file() else b""
+        if len(raw_timing) < initial_size:
+            raise SmokeFailure(f"GPU timing file was truncated during measurement admission: {timing_path}")
+        header_count = 0
+        for match in re.finditer(rb"(?m)^=== interval:[^\r\n]*\r?\n", raw_timing):
+            if match.start() < initial_size:
+                continue
+            header = INTERVAL_RE.fullmatch(match.group().decode(LIT_UTF_8).rstrip("\r\n"))
+            if not header or not 0 < int(header.group("frames")) < 2 ** 32:
+                raise SmokeFailure(f"invalid post-warmup GPU timing interval in {timing_path}")
+            seconds = float(header.group("seconds"))
+            if not math.isfinite(seconds) or seconds <= 0.0:
+                raise SmokeFailure(f"invalid post-warmup GPU timing interval in {timing_path}")
+            header_count += 1
+            # The first report can span warmup; the second header proves its append stream closed and accumulator reset.
+            if header_count == 2:
+                return match.start()
+        time.sleep(0.05)
+
+    raise SmokeFailure(f"GPU timing file did not publish a post-warmup interval boundary: {timing_path}")
 
 
 def load_name_symbols(path: Optional[Path]) -> Dict[str, str]:
@@ -411,13 +466,24 @@ def find_forbidden_log_messages(log_text: str, needles: Sequence[str]) -> List[s
 
 
 def validate_lane_for_mode(mode: str, lane: LaneStatus) -> None:
-    if mode == LIT_ASYNC and not lane.effective:
-        raise DedicatedComputeUnavailable(
-            "async-shadow M4 skipped: the requested async lane did not resolve to a distinct compute-only family "
-            f"(graphics family {lane.graphics_family}, compute family {lane.compute_family})"
-        )
-    if mode == LIT_ASYNC and (not lane.requested or lane.graphics_family == lane.compute_family):
-        raise SmokeFailure(f"async benchmark did not create a distinct requested compute lane: {lane}")
+    if not lane.graphics_queue.valid:
+        raise SmokeFailure(f"{mode} benchmark reported an invalid primary Graphics queue: {lane}")
+    compute_absent = lane.compute_queue == PhysicalQueueId(INVALID_PHYSICAL_QUEUE_INDEX, 0)
+    if compute_absent:
+        if lane.compute_dedicated or lane.compute_supported or lane.compute_graphics:
+            raise SmokeFailure(f"{mode} benchmark reported capabilities for an absent Compute queue: {lane}")
+    elif not lane.compute_queue.valid or lane.compute_queue.device_generation != lane.graphics_queue.device_generation:
+        raise SmokeFailure(f"{mode} benchmark reported an invalid or stale primary Compute queue: {lane}")
+    if lane.effective != (lane.requested and lane.dedicated_compute):
+        raise SmokeFailure(f"{mode} benchmark reported contradictory async-compute route evidence: {lane}")
+    if mode == LIT_ASYNC:
+        if not lane.requested:
+            raise SmokeFailure(f"async benchmark did not request an async compute lane: {lane}")
+        if not lane.effective:
+            raise DedicatedComputeUnavailable(
+                "async-shadow M4 skipped: the requested async lane did not resolve to a distinct dedicated compute-only queue "
+                f"(Graphics {lane.graphics_queue}, Compute {lane.compute_queue})"
+            )
     if mode == LIT_SYNC and (lane.requested or lane.effective):
         raise SmokeFailure(f"synchronous baseline unexpectedly enabled async compute: {lane}")
 
@@ -585,6 +651,7 @@ def run_single_mode(
             raise SmokeFailure(f"{mode} benchmark did not expose the expected window '{args.window_title}'")
 
         wait_while_running(app_process, args.warmup_seconds, f"during {mode} warmup")
+        measurement_start_byte_offset = wait_for_measurement_timing_boundary(app_process, timing_path, args.startup_timeout)
         wait_while_running(app_process, args.measure_seconds, f"during {mode} measurement")
         app_exit_code, app_exit_tail = terminate_process(app_process, f"{mode} benchmark", window)
         app_process = None
@@ -618,7 +685,7 @@ def run_single_mode(
     else:
         log_text = measurement_log_text
     log_path.write_text(log_text, encoding=LIT_UTF_8)
-    summaries = summarize_scopes(parse_timing_file(timing_path, symbols))
+    summaries = summarize_scopes(parse_timing_file(timing_path, symbols, measurement_start_byte_offset))
     forbidden = find_forbidden_log_messages(log_text, tuple(DEFAULT_FORBIDDEN_LOGS) + tuple(args.reject_log))
     return RunResult(
         mode=mode,
@@ -629,6 +696,7 @@ def run_single_mode(
         lane=lane,
         scopes=summaries,
         forbidden_log_messages=forbidden,
+        measurement_start_byte_offset=measurement_start_byte_offset,
     )
 
 
@@ -642,6 +710,7 @@ def raw_run_payload(run: RunResult) -> Dict[str, object]:
         LIT_TIMING_FILE: run.timing_file,
         LIT_LOG_FILE: run.log_file,
         "capture_file": run.capture_file,
+        "measurement_start_byte_offset": run.measurement_start_byte_offset,
         "lane": asdict(run.lane),
         "forbidden_log_messages": run.forbidden_log_messages,
         "scopes": {name: asdict(summary) for name, summary in run.scopes.items()},
@@ -700,9 +769,11 @@ def evaluate_runs(args: argparse.Namespace, sync: RunResult, async_run: RunResul
             "dedicated async lane",
             async_run.lane.requested
             and async_run.lane.effective
-            and async_run.lane.graphics_family != async_run.lane.compute_family,
+            and async_run.lane.dedicated_compute,
             f"requested={async_run.lane.requested}, effective={async_run.lane.effective}, "
-            f"families={async_run.lane.graphics_family}/{async_run.lane.compute_family}",
+            f"queues={async_run.lane.graphics_queue}/{async_run.lane.compute_queue}, "
+            f"dedicated={async_run.lane.compute_dedicated}, compute={async_run.lane.compute_supported}, "
+            f"graphics={async_run.lane.compute_graphics}",
         ),
         gate(
             "graph-owned shadow timing",
@@ -742,7 +813,7 @@ def evaluate_runs(args: argparse.Namespace, sync: RunResult, async_run: RunResul
         return result
 
     return {
-        LIT_SCHEMA: LIT_NWB_ASYNC_SHADOW_M4_V2,
+        LIT_SCHEMA: LIT_NWB_ASYNC_SHADOW_M4_V3,
         LIT_VERDICT: verdict,
         LIT_GATES: gates,
         "frame_regression_percent": regression_percent,
@@ -764,7 +835,7 @@ def require_non_negative(parser: argparse.ArgumentParser, option: str, value: fl
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Run parser/verdict checks without launching Vulkan.")
+    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Run parser/verdict checks without launching the selected backend.")
     parser.add_argument("--sync-executable", type=Path, help="Path to nwb_async_shadow_m4_sync_benchmark.")
     parser.add_argument("--async-executable", type=Path, help="Path to nwb_async_shadow_m4_async_benchmark.")
     parser.add_argument("--runtime-dir", type=Path, help="Cooked smoke runtime root used as both process working directory.")
@@ -845,6 +916,63 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 
 def run_self_test() -> int:
     capture_args = parse_args([LIT_SELF_TEST])
+
+    lane_log = (
+        "StressTestSmokeProject: M4 async compute requested=1 effective=1 graphicsQueue=0:17 computeQueue=1:17 "
+        "computeDedicated=1 computeSupported=1 computeGraphics=0"
+    )
+    lane = parse_lane_status(lane_log)
+    assert lane is not None
+    validate_lane_for_mode(LIT_ASYNC, lane)
+    for invalid_log in (
+        lane_log.replace("graphicsQueue=0:17", "graphicsQueue=65535:17"),
+        lane_log.replace("computeQueue=1:17", "computeQueue=1:18"),
+        lane_log.replace("computeQueue=1:17", "computeQueue=1:0"),
+        lane_log.replace("computeQueue=1:17", "computeQueue=65535:0"),
+        lane_log.replace("computeQueue=1:17", "computeQueue=0:17"),
+        lane_log.replace("computeDedicated=1", "computeDedicated=0"),
+        lane_log.replace("computeSupported=1", "computeSupported=0"),
+        lane_log.replace("computeGraphics=0", "computeGraphics=1"),
+        lane_log.replace("effective=1", "effective=0"),
+        lane_log.replace("requested=1 effective=1", "requested=0 effective=0"),
+    ):
+        invalid_lane = parse_lane_status(invalid_log)
+        assert invalid_lane is not None
+        try:
+            validate_lane_for_mode(LIT_ASYNC, invalid_lane)
+        except DedicatedComputeUnavailable:
+            raise AssertionError("M4 contradictory queue evidence was classified as a hardware skip")
+        except SmokeFailure:
+            pass
+        else:
+            raise AssertionError("M4 accepted invalid or contradictory selected queue evidence")
+    absent_compute_log = (
+        "StressTestSmokeProject: M4 async compute requested=1 effective=0 graphicsQueue=0:17 computeQueue=65535:0 "
+        "computeDedicated=0 computeSupported=0 computeGraphics=0"
+    )
+    shared_compute_log = (
+        "StressTestSmokeProject: M4 async compute requested=1 effective=0 graphicsQueue=0:17 computeQueue=0:17 "
+        "computeDedicated=0 computeSupported=1 computeGraphics=1"
+    )
+    for unavailable_log in (absent_compute_log, shared_compute_log):
+        unavailable_lane = parse_lane_status(unavailable_log)
+        assert unavailable_lane is not None
+        try:
+            validate_lane_for_mode(LIT_ASYNC, unavailable_lane)
+        except DedicatedComputeUnavailable:
+            pass
+        else:
+            raise AssertionError("M4 unavailable dedicated compute transport was not a capability skip")
+    disabled_lane = parse_lane_status(lane_log.replace("requested=1 effective=1", "requested=0 effective=0"))
+    assert disabled_lane is not None
+    validate_lane_for_mode(LIT_SYNC, disabled_lane)
+    for malformed_log in (
+        lane_log.replace("computeGraphics=0", "computeGraphics="),
+        lane_log.replace("computeGraphics=0", "computeGraphics=2"),
+        lane_log.replace("graphicsQueue=0:17", "graphicsQueue=0"),
+        lane_log.replace("StressTestSmokeProject:", "OtherProject:"),
+    ):
+        assert parse_lane_status(malformed_log) is None
 
     class ClientRectUser32:
         def __init__(self, get_client_rect_result=True, client_to_screen_result=True):
@@ -965,7 +1093,7 @@ def run_self_test() -> int:
             appears_empty_or_white=False,
             has_pixel_variation=True,
         )
-        orchestration_lane = LaneStatus(False, False, 0, 1)
+        orchestration_lane = LaneStatus(False, False, PhysicalQueueId(0, 17), PhysicalQueueId(1, 17), True, True, False)
         events = []
 
         def terminate(process, name, window_handle=None):
@@ -988,6 +1116,7 @@ def run_self_test() -> int:
              mock.patch.object(module, "wait_for_lane_status", return_value=orchestration_lane), \
              mock.patch.object(module, "wait_for_log_message"), \
              mock.patch.object(module, "wait_while_running"), \
+             mock.patch.object(module, "wait_for_measurement_timing_boundary", return_value=1), \
              mock.patch.object(module, "terminate_process", side_effect=terminate) as terminate_mock, \
              mock.patch.object(module, "shutdown_logserver_and_collect", side_effect=shutdown):
             try:
@@ -1032,7 +1161,7 @@ def run_self_test() -> int:
             timing_file="async.timing.txt",
             log_file=LIT_ASYNC_LOG,
             capture_file=None,
-            lane=LaneStatus(True, True, 0, 1),
+            lane=LaneStatus(True, True, PhysicalQueueId(0, 17), PhysicalQueueId(1, 17), True, True, False),
             scopes={
                 LIT_RENDER_FRAME: stable_scope,
                 LIT_RENDER_ASYNC_SHADOW: stable_scope,
@@ -1046,12 +1175,96 @@ def run_self_test() -> int:
             timing_file="sync.timing.txt",
             log_file=LIT_SYNC_LOG,
             capture_file=None,
-            lane=LaneStatus(False, False, 0, 1),
+            lane=LaneStatus(False, False, PhysicalQueueId(0, 17), PhysicalQueueId(1, 17), True, True, False),
             scopes={LIT_RENDER_FRAME: stable_scope},
             forbidden_log_messages=[],
         )
         capture_args.skip_pixel_parity = True
         assert evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] == LIT_PASS
+
+        # Warmup can falsely fail an accepted measurement or mask a real regression; neither prefix may reach the gate.
+        sync_run.scopes = {LIT_RENDER_FRAME: ScopeSummary(6, 6, 10.0, 10.0, 10.0, 10.0)}
+        timing_path = root / "measurement-boundary.timing.txt"
+        timing_symbols = load_name_symbols(None)
+        for newline in ("\n", "\r\n"):
+            def timing_interval(frame_ms: float) -> bytes:
+                lines = ["=== interval: 20 frames / 0.5s ==="]
+                for scope, value in ((LIT_RENDER_FRAME, frame_ms), (LIT_RENDER_ASYNC_SHADOW, 1.0), (LIT_RENDER_ASYNC_FINAL, 0.1), ("warmup_한", 0.2)):
+                    lines.append(
+                        f"  {scope}: window_avg_ms={value} window_min_ms={value} window_max_ms={value} "
+                        f"published_windows=20 total_ms={value * 20} gpu_samples=40 sample_avg_ms={value / 2}"
+                    )
+                return (newline.join(lines) + newline).encode(LIT_UTF_8)
+
+            for warmup_ms, measured_ms, expected_verdict in ((500.0, 10.0, LIT_PASS), (1.0, 12.0, LIT_FAIL)):
+                warmup_interval = timing_interval(warmup_ms)
+                measured_interval = timing_interval(measured_ms)
+                header = measured_interval.splitlines(keepends=True)[0]
+                for cutoff_kind in ("completed_report", "partial_header", "partial_scope", "missing_file"):
+                    full_prefix = warmup_interval * 8
+                    if cutoff_kind == "partial_header":
+                        initial_prefix = full_prefix + warmup_interval[:9]
+                        remainder = warmup_interval[9:]
+                        full_prefix += warmup_interval
+                    elif cutoff_kind == "partial_scope":
+                        cut = warmup_interval.index(b"window_avg_ms=") + 6
+                        initial_prefix = full_prefix + warmup_interval[:cut]
+                        remainder = warmup_interval[cut:]
+                        full_prefix += warmup_interval
+                    elif cutoff_kind == "missing_file":
+                        full_prefix = b""
+                        initial_prefix = b""
+                        remainder = b""
+                    else:
+                        initial_prefix = full_prefix
+                        remainder = b""
+                    if timing_path.exists():
+                        timing_path.unlink()
+                    if cutoff_kind != "missing_file":
+                        timing_path.write_bytes(initial_prefix)
+                    chunks = [remainder, warmup_interval, header.rstrip(b"\r\n"), newline.encode(LIT_UTF_8) + measured_interval[len(header):] + measured_interval * 5]
+                    clock = [0.0]
+                    writes = []
+
+                    def append_chunk(seconds: float) -> None:
+                        clock[0] += seconds
+                        chunk = chunks.pop(0)
+                        with timing_path.open("ab") as timing_file:
+                            timing_file.write(chunk)
+                        writes.append(chunk)
+
+                    with mock.patch.object(module.time, "monotonic", side_effect=lambda: clock[0]), \
+                         mock.patch.object(module.time, "sleep", side_effect=append_chunk):
+                        offset = wait_for_measurement_timing_boundary(app, timing_path, 1.0)
+                    assert len(writes) == 4, "an incomplete or first post-warmup header was admitted"
+                    assert offset == len(full_prefix) + len(warmup_interval)
+                    measured = summarize_scopes(parse_timing_file(timing_path, timing_symbols, offset))
+                    assert measured[LIT_RENDER_FRAME].sample_count == 6
+                    assert measured[LIT_RENDER_FRAME].median_ms == measured_ms
+                    async_run.scopes = measured
+                    assert evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] == expected_verdict
+                    if cutoff_kind != "missing_file":
+                        async_run.scopes = summarize_scopes(parse_timing_file(timing_path, timing_symbols))
+                        assert evaluate_runs(capture_args, sync_run, async_run)[LIT_VERDICT] != expected_verdict
+
+        # Missing publications and truncation fail admission instead of falling back to warmup or partial rows.
+        timing_path.write_bytes(b"warmup prefix")
+        clock = [0.0]
+        with mock.patch.object(module.time, "monotonic", side_effect=lambda: clock[0]), \
+             mock.patch.object(module.time, "sleep", side_effect=lambda seconds: clock.__setitem__(0, clock[0] + seconds)):
+            try:
+                wait_for_measurement_timing_boundary(app, timing_path, 0.1)
+            except SmokeFailure as error:
+                assert "did not publish" in str(error)
+            else:
+                raise AssertionError("missing post-warmup boundaries admitted the prefix")
+        with mock.patch.object(module.time, "sleep", side_effect=lambda seconds: timing_path.write_bytes(b"")):
+            try:
+                wait_for_measurement_timing_boundary(app, timing_path, 1.0)
+            except SmokeFailure as error:
+                assert "was truncated" in str(error)
+            else:
+                raise AssertionError("truncated timing input admitted a measurement")
 
     print("async-shadow M4 harness self-test passed")
     return 0
@@ -1099,7 +1312,7 @@ def run(args: argparse.Namespace) -> int:
             report = evaluate_runs(args, sync_run, async_run)
         except SmokeFailure as error:
             report = {
-                LIT_SCHEMA: LIT_NWB_ASYNC_SHADOW_M4_V2,
+                LIT_SCHEMA: LIT_NWB_ASYNC_SHADOW_M4_V3,
                 LIT_VERDICT: LIT_FAIL,
                 LIT_COLLECTION_ERROR: str(error),
                 LIT_GATES: [gate("required timestamp telemetry", False, str(error))],

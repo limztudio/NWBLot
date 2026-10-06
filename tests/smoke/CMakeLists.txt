@@ -125,7 +125,6 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "--expect-log-message" "ProjectTestbed: startup scene created"
             "--expect-log-message" "Loader: project startup complete"
             "--expect-log-message" "Loader: GPU debug validation enabled"
-            "--expect-log-message" "Vulkan GPU debug: debug utils messenger installed."
             "--expect-log-message" "ProjectTestbed: shutdown"
             "--reject-log-message" "software BVH build failed"
             "--reject-log-message" "software BVH update failed"

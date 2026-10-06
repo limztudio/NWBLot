@@ -75,7 +75,7 @@ python -m launcher renderer-baseline surfel-gi -- \
   --corpus-root /mnt/nwb-artifacts/current-renderer-v1
 ```
 
-`--verify-corpus` is a no-Vulkan integrity check for all eight baseline images, manifests, and logs. Any missing or
+`--verify-corpus` is an offline integrity check for all eight baseline images, manifests, and logs. Any missing or
 changed artifact fails closed. The v1 corpus was captured on AMD BC-250 with RADV GFX1013 on Linux and Vulkan
 validation enabled; use it only on that qualified adapter/driver configuration. The runner enforces validation mode,
 scene settings, and immutable hashes; adapter identity remains part of the operator's qualified-hardware selection.
@@ -97,5 +97,5 @@ stress profile at M4's established 96-frame/`1/60` capture point. The stress con
 M4 async-lighting capture contract.
 
 Available profiles cover opaque sampled images, transparent AVBOIT, static/skinned CSG, soft shadows, caustics,
-surfel GI, and the skinned stress scene. Frame-lagged async lighting and dedicated-Transfer evidence retain their
-separate topology-gated workflows because a Graphics fallback is not equivalent evidence.
+surfel GI, and the skinned stress scene. Frame-lagged async lighting retains its
+separate topology-gated workflow because a Graphics fallback is not equivalent evidence.

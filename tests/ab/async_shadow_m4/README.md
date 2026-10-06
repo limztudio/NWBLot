@@ -1,11 +1,13 @@
 # Async-shadow M4 target-hardware harness
 
-This harness makes the M4 rollout decision repeatable on a Vulkan target that exposes a dedicated compute-only queue family. It runs the same fixed-yaw stress scene twice:
+This harness makes the M4 rollout decision repeatable on the selected backend when its public topology exposes a dedicated compute-only queue. It runs the same fixed-yaw stress scene twice:
 
 - `nwb_async_shadow_m4_sync_benchmark` explicitly disables the default async-lane request.
-- `nwb_async_shadow_m4_async_benchmark` retains the default `AsyncCompute` request.
+- `nwb_async_shadow_m4_async_benchmark` retains the default async-compute lane request.
 
-The runner rejects an async result if it silently uses the Graphics queue route. For a real dedicated lane, it collects the renderer's timestamp envelopes, verifies that graph-owned `render.async_shadow` reports work, compares the `render.frame` Graphics critical path rather than summing queue work, captures a fixed-scene pixel A/B after the same number of rendered frames in each mode, and scans logs for ownership or Vulkan-validation failures.
+The native test logs exact primary Graphics/Compute queue IDs and device generations, along with public Compute capability and dedicated status. The runner accepts only a requested, distinct, current-generation, dedicated Compute-capable queue without Graphics capability; missing or shared transport returns the capability skip, while invalid identities or contradictory evidence fail. The synchronous request remains disabled even on hardware that needs a separate Compute transport.
+
+The runner rejects an async result if it silently uses the Graphics queue route. For a real dedicated lane, it collects the renderer's timestamp envelopes, verifies that graph-owned `render.async_shadow` reports work, compares the `render.frame` Graphics critical path rather than summing queue work, captures a fixed-scene pixel A/B after the same number of rendered frames in each mode, and scans logs for ownership or selected-backend validation failures.
 
 From the repository root, use the one-command launcher:
 
@@ -13,7 +15,7 @@ From the repository root, use the one-command launcher:
 python -m launcher async-shadow-m4
 ```
 
-It configures the required test targets, builds both benchmarks and their cooked runtime assets, enables GPU validation, and writes a timestamped directory under `.cozter/out/ab-results/async-shadow-m4/`. The command returns `77` when the adapter has no distinct compute-only family. To adjust a `run.py` setting, pass it after `--`, for example:
+It configures the required test targets, builds both benchmarks and their cooked runtime assets, enables GPU validation, and writes a timestamped directory under `.cozter/out/ab-results/async-shadow-m4/`. The command returns `77` when the adapter has no distinct dedicated compute-only queue. To adjust a `run.py` setting, pass it after `--`, for example:
 
 ```powershell
 python -m launcher async-shadow-m4 -- --measure-seconds 30
@@ -37,7 +39,7 @@ documented unsupported-attribute result `E_INVALIDARG` (`HRESULT 0x80070057`) is
 other non-`S_OK` DWM result, including any `DwmFlush` failure, is an explicit M4 test failure rather than a
 best-effort fallback, because the resulting composed desktop capture would not be a valid raw parity artifact.
 
-Build both benchmark targets and their cooked runtime assets. A debug or namesym build is simplest because timing scope names are readable. For an opt/final build, pass each generated `.namesym` sidecar to the runner.
+Build both benchmark targets and their cooked runtime assets in the chosen configuration. The runner decodes its known required scopes (`render.frame`, `render.async_shadow`, and `render.async_final`) in normal opt/final builds without a `.namesym` sidecar. Optional `--sync-namesym` and `--async-namesym` sidecars decode additional scope names.
 
 ```bash
 python -m launcher build \
@@ -55,7 +57,9 @@ python tests/ab/async_shadow_m4/run.py \
   --gpu-validation
 ```
 
-Choose a configure preset for the target platform and architecture, and use the same build directory and configuration for both the launcher build and runner paths. The build command configures a cold directory automatically and cooks the target runtime assets without starting either benchmark. On Linux, run this from an active X11/Xwayland session. The runner sets `NWB_RENDER_UNFOCUSED=1` and freezes `NWB_STRESS_TEST_SPIN_ANGLE=0.6` for a repeatable capture. It returns exit code `77` when the target has no dedicated compute family; that is an environment skip after selecting the Graphics queue route.
+Choose a configure preset for the target platform and architecture, and use the same build directory and configuration for both the launcher build and runner paths. The build command configures a cold directory automatically and cooks the target runtime assets without starting either benchmark. On Linux, run this from an active X11/Xwayland session. The runner sets `NWB_RENDER_UNFOCUSED=1` and freezes `NWB_STRESS_TEST_SPIN_ANGLE=0.6` for a repeatable capture. It returns exit code `77` when the target has no dedicated compute-only queue; that is an environment skip after selecting the Graphics queue route.
+
+After wall-clock warmup, the runner snapshots the timing file's EOF and waits for two valid, fully newline-terminated interval headers beginning at or after that byte cutoff. It discards the first report because it may span warmup, then starts the requested measurement duration and parses from the second header's byte offset. The report records this boundary as `measurement_start_byte_offset`. Only publication windows admitted after that boundary contribute to the timing gate; GPU readback latency means the boundary is not a strict wall-clock fence on source-frame execution. Missing, malformed, or truncated timing output, process exit, and boundary timeout fail rather than admit warmup data.
 
 The default gate needs at least six timing intervals, a median graph-owned `render.async_shadow` duration of at least `0.01 ms`, no more than `3%` median `render.frame` regression, no forbidden validation/ownership logs, and pixel differences inside the reported tolerance. Tune those thresholds explicitly on the command line for a device's known noise floor. `--report-only` always preserves the report while returning success for a failed rollout gate.
 

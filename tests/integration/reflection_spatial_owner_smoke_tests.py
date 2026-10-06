@@ -59,7 +59,7 @@ def image_set():
 
 
 class SpatialOwnerValidationMarkerTests(unittest.TestCase):
-    def test_requested_validation_requires_actual_loader_layer_and_messenger(self):
+    def test_requested_validation_requires_actual_loader_activation(self):
         text = LIT_N.join(GPU_DEBUG_MARKERS)
         self.assertTrue(validate_gpu_debug(text, [LIT_GPUDBG])[LIT_REQUESTED])
         for marker in GPU_DEBUG_MARKERS:

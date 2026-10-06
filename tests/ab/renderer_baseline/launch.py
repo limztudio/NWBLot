@@ -119,7 +119,7 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument(LIT_NO_LOGSERVER, action=LIT_STORE_TRUE, help="Use standalone loader logs instead of logserver.")
     validation_group = parser.add_mutually_exclusive_group()
     validation_group.add_argument(
-        LIT_GPU_VALIDATION, dest=LIT_GPU_VALIDATION_2, action=LIT_STORE_TRUE, help="Enable Vulkan validation for this capture."
+        LIT_GPU_VALIDATION, dest=LIT_GPU_VALIDATION_2, action=LIT_STORE_TRUE, help="Enable GPU validation for this capture."
     )
     validation_group.add_argument(
         "--no-gpu-validation", dest=LIT_GPU_VALIDATION_2, action="store_false", help="Do not pass --gpudbg."

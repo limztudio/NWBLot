@@ -27,6 +27,9 @@
 
 #include <core/common/log.h>
 #include <core/ecs/module.h>
+#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
+#include <core/graphics/backend_selection/backend.h>
+#endif
 #include <core/graphics/runtime/runtime.h>
 
 #include <global/math/frame.h>
@@ -412,6 +415,63 @@ public:
 
 public:
     virtual bool onStartup()override{
+#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
+#if defined(NWB_SMOKE_DISABLE_ASYNC_COMPUTE)
+        constexpr bool s_AsyncRequested = false;
+#else
+        constexpr bool s_AsyncRequested = true;
+#endif
+        const auto& device = m_context.graphics.getDevice();
+        const auto graphicsQueue = device.getPrimaryPhysicalQueue(NWB::Core::CommandQueue::Graphics);
+        const auto computeQueue = device.getPrimaryPhysicalQueue(NWB::Core::CommandQueue::Compute);
+        const auto* const graphicsInfo = device.getPhysicalQueueInfo(graphicsQueue);
+        const auto* const computeInfo = device.getPhysicalQueueInfo(computeQueue);
+        const auto topology = device.getPhysicalQueueTopology();
+        const u16 deviceGeneration = device.getDeviceGeneration();
+        bool graphicsRegistered = false;
+        bool computeRegistered = false;
+        bool topologyValid = topology.queues && topology.queueCount != 0u;
+        if(topologyValid){
+            for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
+                const auto& queue = topology.queues[queueIndex];
+                topologyValid = topologyValid && queue.id.valid() && queue.id.deviceGeneration == deviceGeneration;
+                graphicsRegistered = graphicsRegistered || queue.id == graphicsQueue;
+                computeRegistered = computeRegistered || queue.id == computeQueue;
+            }
+        }
+        if(
+            !topologyValid || !graphicsQueue.valid() || graphicsQueue.deviceGeneration != deviceGeneration
+            || !graphicsInfo || graphicsInfo->id != graphicsQueue || !graphicsRegistered
+            || (
+                computeQueue.valid()
+                ? !computeInfo || computeInfo->id != computeQueue || !computeRegistered
+                    || computeQueue.deviceGeneration != deviceGeneration
+                : computeQueue != NWB::Core::GpuPhysicalQueueId{} || computeInfo != nullptr
+            )
+        ){
+            NWB_LOGGER_ERROR(GLB_TEXT("StressTestSmokeProject: M4 selected queue topology is invalid"));
+            return false;
+        }
+        const bool computeDedicated = computeInfo && computeInfo->dedicated;
+        const bool computeSupported = computeInfo
+            && (computeInfo->capabilities & NWB::Core::GpuQueueCapability::Compute) != NWB::Core::GpuQueueCapability::None;
+        const bool computeGraphics = computeInfo
+            && (computeInfo->capabilities & NWB::Core::GpuQueueCapability::Graphics) != NWB::Core::GpuQueueCapability::None;
+        const bool asyncEffective = s_AsyncRequested && computeQueue != graphicsQueue
+            && computeDedicated && computeSupported && !computeGraphics;
+        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("StressTestSmokeProject: M4 async compute requested={} effective={} graphicsQueue={}:{} computeQueue={}:{} computeDedicated={} computeSupported={} computeGraphics={}")
+            , s_AsyncRequested ? 1u : 0u
+            , asyncEffective ? 1u : 0u
+            , graphicsQueue.index
+            , graphicsQueue.deviceGeneration
+            , computeQueue.index
+            , computeQueue.deviceGeneration
+            , computeDedicated ? 1u : 0u
+            , computeSupported ? 1u : 0u
+            , computeGraphics ? 1u : 0u
+        );
+#endif
+
         if(!ReadCharactersPerClass(m_charactersPerClass))
             return false;
         NWB::Impl::ReflectionSettings reflectionSettings;

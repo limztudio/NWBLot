@@ -89,7 +89,7 @@ def capture_arm(args, arm):
         command += [LIT_EXPECT_LOG_MESSAGE, "CsgShadowSmokeProject: cutters moved at update40"]
     if args.route == LIT_SOFTWARE:
         command += ["--application-arg=--disable-hardware-ray-tracing",
-            LIT_EXPECT_LOG_MESSAGE, "RayQuery=0 RayTracingPipeline=0 RayTracingAccelStruct=0 AccelStructDescriptors=0 AccelStructLayout=0",
+            LIT_EXPECT_LOG_MESSAGE, "Loader: hardware ray tracing disabled before device creation",
             LIT_REJECT_LOG_MESSAGE, LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA]
         if arm in (LIT_REFERENCE, LIT_UNCUT):
             command += [LIT_EXPECT_LOG_MESSAGE, "RendererSystem: dispatched light-space shadow maps"]

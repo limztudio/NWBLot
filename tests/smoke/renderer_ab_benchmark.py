@@ -175,9 +175,9 @@ class Workload:
 
 def device_material_signature(text):
     text = text.replace("\r\n", "\n")
-    devices = re.findall(r"^Vulkan: created device '(.+)'$", text, re.MULTILINE)
+    devices = re.findall(r"^GraphicsRuntime: created device '(.+)'$", text, re.MULTILINE)
     if len(devices) != 1:
-        raise SmokeFailure("one actual Vulkan device identity is required")
+        raise SmokeFailure("one actual selected device identity is required")
     material_routes = {}
     for material, route in re.findall(r"^RendererSystem: material '([^']+)' selected (.+)$", text, re.MULTILINE):
         # A material can serve both indexed ordinary meshes and compute-emulated CSG meshes.

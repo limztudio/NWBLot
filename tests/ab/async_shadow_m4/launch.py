@@ -6,7 +6,7 @@ From the repository root, the usual invocation is simply:
     python -m launcher async-shadow-m4
 
 The launcher configures the M4 dependencies, builds the paired synchronous and asynchronous
-benchmarks (including their cooked runtime assets), enables Vulkan GPU validation, and writes a
+benchmarks (including their cooked runtime assets), enables selected-backend GPU validation, and writes a
 timestamped report beneath ``.cozter/out/ab-results/async-shadow-m4``. Pass additional ``run.py`` options after ``--``; for
 example, ``python -m launcher async-shadow-m4 -- --measure-seconds 30``.
 """
@@ -147,7 +147,7 @@ def make_parser() -> argparse.ArgumentParser:
         LIT_GPU_VALIDATION,
         dest=LIT_GPU_VALIDATION_2,
         action=LIT_STORE_TRUE,
-        help="Enable Vulkan GPU validation (the default).",
+        help="Enable selected-backend GPU validation (the default).",
     )
     validation_group.add_argument(
         "--no-gpu-validation",

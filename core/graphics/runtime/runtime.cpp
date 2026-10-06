@@ -206,6 +206,7 @@ bool GraphicsRuntime::init(const Common::FrameData& data){
 
     if(!m_backend->createDevice())
         return false;
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("GraphicsRuntime: created device '{}'"), m_backend->getRendererString());
     if(!m_gpuTasks.attachDevice(getDevice())){
         requestDeviceRecreation();
         return false;
@@ -245,6 +246,7 @@ bool GraphicsRuntime::createHeadlessDevice(){
 
     if(!m_backend->createDevice())
         return false;
+    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("GraphicsRuntime: created device '{}'"), m_backend->getRendererString());
     if(!m_gpuTasks.attachDevice(getDevice())){
         requestDeviceRecreation();
         return false;

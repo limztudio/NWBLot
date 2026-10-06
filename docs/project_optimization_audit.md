@@ -102,13 +102,13 @@ The runtime gate admitted 185 fresh captures and 16 complete application logs, w
 
 All eight changed C++ files pass UTF-8 without BOM, CRLF, separator, exact EOF, and unnamed-namespace checks. A constant used only by a Final-only skeleton regression is localized to that branch to remove an Opt unused-variable warning; this leaves the measured benchmark body and production helper unchanged. After this cleanup, the affected graphics target rebuilt without compiler diagnostics and its suite passed again in both Opt and Final. The 74-entry Opt run and these targeted reruns are separate qualifications; no full Final runtime gate is claimed.
 
-Build the affected native targets through the launcher:
+Build the surviving material benchmark and runtime targets through the launcher:
 
 ```powershell
-python -m launcher build nwb_ecs_graphics_tests nwb_graphics_resource_tests nwb_ui_layer_smoke testbed --arch arm64 --config opt --configure always --jobs 6
+python -m launcher build nwb_ecs_graphics_tests nwb_ui_layer_smoke testbed --arch arm64 --config opt --configure always --jobs 6
 ```
 
-Run `CommandBufferResourceReferences.DISABLED_Benchmark*` in `graphics_resource_tests.exe` and `MaterialTypedDedupBenchmark.*` in `ecs_graphics_tests.exe` with `--gtest_also_run_disabled_tests` and `--gtest_filter=...`. Compare original and candidate binaries in alternating serial rounds; do not time them alongside a build or application smoke. Local evidence is under `__cmake/verification_optimization/`, including paired samples, model results, source inventories/reviews, build logs, CTest XML/full output, immutable runtime snapshots, and visual review reports. Other platforms received source review; native execution and CPU results in this pass apply to this Windows ARM64 host.
+Run `MaterialTypedDedupBenchmark.*` in `ecs_graphics_tests.exe` with `--gtest_also_run_disabled_tests` and `--gtest_filter=MaterialTypedDedupBenchmark.*`. Compare original and candidate binaries in alternating serial rounds; do not time them alongside a build or application smoke. The former private command-buffer resource-reference benchmark has been removed; its paired results above remain historical decision evidence. Local evidence is under `__cmake/verification_optimization/`, including paired samples, model results, source inventories/reviews, build logs, CTest XML/full output, immutable runtime snapshots, and visual review reports. Other platforms received source review; native execution and CPU results in this pass apply to this Windows ARM64 host.
 
 ### Remaining opportunities
 

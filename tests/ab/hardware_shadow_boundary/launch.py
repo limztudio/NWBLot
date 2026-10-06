@@ -182,7 +182,7 @@ def make_parser() -> argparse.ArgumentParser:
         LIT_GPU_VALIDATION,
         dest=LIT_GPU_VALIDATION_2,
         action=LIT_STORE_TRUE,
-        help="Enable Vulkan validation for a correctness-oriented run.",
+        help="Enable GPU validation for a correctness-oriented run.",
     )
     validation_group.add_argument(
         "--no-gpu-validation",
@@ -191,7 +191,7 @@ def make_parser() -> argparse.ArgumentParser:
         help="Measure without --gpudbg layer overhead (the default).",
     )
     parser.set_defaults(gpu_validation=False)
-    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Check rejection of configurations without diagnostic evidence, without Vulkan.")
+    parser.add_argument(LIT_SELF_TEST, action=LIT_STORE_TRUE, help="Check diagnostic-configuration rejection without starting a graphics application.")
     return parser
 
 

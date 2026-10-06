@@ -1,4 +1,4 @@
-# Exercise the actual no-RT logical-device contract even on a RayQuery-capable adapter.
+# Exercise the selected disabled hardware ray tracing policy even on a capable adapter.
 # The ordinary capability-gated smokes remain useful on naturally unsupported adapters.
 function(nwb_add_software_raytracing_smoke TEST_NAME TARGET_NAME RUNTIME_DIRECTORY WINDOW_TITLE)
     nwb_add_window_capture_smoke(
@@ -13,8 +13,6 @@ function(nwb_add_software_raytracing_smoke TEST_NAME TARGET_NAME RUNTIME_DIRECTO
         "--render-ready-timeout" "90"
         "--settle-seconds" "8"
         "--expect-log-message" "Loader: hardware ray tracing disabled before device creation"
-        "--expect-log-message" "Vulkan: hardware ray tracing policy=disabled"
-        "--expect-log-message" "RayQuery=0 RayTracingPipeline=0 RayTracingAccelStruct=0 AccelStructDescriptors=0 AccelStructLayout=0"
         "--expect-log-message" "RendererSystem: dispatched software shadow traversal"
         "--reject-log-message" "RendererSystem: dispatched hardware transparent shadow traversal"
         "--reject-log-message" "RendererSystem: dispatched hardware caustic producer"

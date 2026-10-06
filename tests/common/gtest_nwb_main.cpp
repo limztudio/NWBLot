@@ -2,7 +2,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <cstdlib>
 #include <gtest/gtest.h>
 
 #include <core/common/application_entry.h>
@@ -31,35 +30,7 @@ namespace __hidden_gtest_nwb_main{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_Vkon12DriverSortingDisableKey = "VK_DISABLE_VKON12_DRIVER_SORTING";
-inline constexpr AStringView s_Vkon12DriverSortingDisableValue = "1";
 inline constexpr AStringView s_ThreadsafeDeathTestStyle = "threadsafe";
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static bool ConfigureWindowsArm64VulkanLayerPolicy(){
-#if defined(GLB_PLATFORM_WINDOWS) && (defined(__aarch64__) || defined(_M_ARM64)) && !defined(_M_ARM64EC)
-    char* existingValue = nullptr;
-    usize existingValueSize = 0u;
-    const errno_t readResult = ::_dupenv_s(&existingValue, &existingValueSize, s_Vkon12DriverSortingDisableKey.data());
-    if(readResult != 0){
-        ::free(existingValue);
-        return false;
-    }
-    if(existingValue){
-        ::free(existingValue);
-        return true;
-    }
-
-    // D3DMappingLayers 1.2506.2.0 omits vkGetDeviceProcAddr from its ARM64 driver-sorting layer. Overlapping Vulkan
-    // instances then corrupt loader bookkeeping during device teardown. Use the layer manifest's official disable key.
-    return ::_putenv_s(s_Vkon12DriverSortingDisableKey.data(), s_Vkon12DriverSortingDisableValue.data()) == 0;
-#else
-    return true;
-#endif
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -72,11 +43,6 @@ static bool ConfigureWindowsArm64VulkanLayerPolicy(){
 
 
 static int GoogleTestEntryPoint(const isize argc, tchar** argv, void*){
-    if(!__hidden_gtest_nwb_main::ConfigureWindowsArm64VulkanLayerPolicy()){
-        GLB_CERR << "test Vulkan layer policy initialization failed\n";
-        return -1;
-    }
-
     Core::Common::InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize()){
         GLB_CERR << "test common initialization failed\n";

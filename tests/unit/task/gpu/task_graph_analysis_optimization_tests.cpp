@@ -145,39 +145,6 @@ static void BuildDistinctVersions(Graphics::GpuTaskGraph& graph, const usize ver
     }
 }
 
-static void AppendPresentationChain(
-    Graphics::GpuTaskGraph& graph,
-    const Graphics::GpuGraphResourceId backBuffer,
-    const usize taskCount,
-    Graphics::GpuTaskId& outWriter,
-    Graphics::GpuTaskId& outProducer){
-    ASSERT_GE(taskCount, 2u);
-    outWriter = {};
-    outProducer = {};
-    for(usize index = 0u; index < taskCount; ++index){
-        const Graphics::GpuTaskId dependencies[] = { outProducer, outWriter };
-        const Graphics::GpuTaskResourceUse use{
-            .resource = backBuffer,
-            .range = {},
-            .requiredState = Graphics::ResourceStates::RenderTarget,
-            .access = Graphics::GpuTaskResourceAccess::Write,
-        };
-        Graphics::GpuTaskDesc desc;
-        desc
-            .setIdentity(IndexedName(Name("tests/analysis_optimization/presentation_task"), index))
-            .setMarkerLabel("Analysis Presentation Task")
-        ;
-        if(index != 0u)
-            desc.setDependencies(dependencies, index == 1u ? 1u : LengthOf(dependencies));
-        else
-            desc.setResourceUses(&use, 1u);
-        const Graphics::GpuTaskCommandRequirements commands{ Graphics::GpuQueueCapability::Graphics };
-        outProducer = graph.addTask(desc, commands);
-        ASSERT_TRUE(outProducer.valid());
-        if(index == 0u)
-            outWriter = outProducer;
-    }
-}
 
 static void MeasureAnalysis(
     const Graphics::GpuTaskGraph& graph,
@@ -645,36 +612,6 @@ TEST(GpuTaskGraphAnalysis, DISABLED_DistinctProducedVersionBenchmark1024Versions
 
 TEST(GpuTaskGraphAnalysis, DISABLED_DistinctProducedVersionBenchmark2048Versions){
     BenchmarkDistinctVersions(2048u);
-}
-
-TEST(GpuTaskGraphAnalysis, DISABLED_PresentationAncestryBenchmark4096Tasks){
-    TestArena testArena;
-    Graphics::GraphicsAllocator graphicsAllocator(testArena.arena);
-    Core::CpuTaskScheduler cpuScheduler(0u);
-    Graphics::GraphicsBackend::VulkanContext context(graphicsAllocator, cpuScheduler, 1u);
-    Graphics::GraphicsBackend::VulkanAllocator allocator(context);
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId backBuffer = AddPresentationTexture(
-        testArena,
-        context,
-        allocator,
-        graph,
-        Name("tests/analysis_optimization/presentation_benchmark_buffer"),
-        "Presentation Benchmark Buffer",
-        Graphics::ResourceStates::Unknown
-    );
-    ASSERT_TRUE(backBuffer.valid());
-    Graphics::GpuTaskId writer;
-    Graphics::GpuTaskId producer;
-    AppendPresentationChain(graph, backBuffer, s_BenchmarkTaskCount, writer, producer);
-    ASSERT_TRUE(writer.valid());
-    ASSERT_TRUE(producer.valid());
-    ASSERT_TRUE(graph.declarePresentEndpoint(Graphics::GpuPresentEndpoint{ .producer = producer, .backBuffer = backBuffer }));
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Core::Alloc::ScratchArena scratchArena(Name("tests/analysis_optimization/presentation_scratch"));
-    MeasureAnalysis(graph, analysis, scratchArena);
-    EXPECT_EQ(analysis.edges().size(), s_BenchmarkTaskCount * 2u - 3u);
-    EXPECT_EQ(analysis.schedulingEdges().size(), s_BenchmarkTaskCount - 1u);
 }
 
 

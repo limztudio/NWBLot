@@ -865,7 +865,7 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--verify-corpus",
         choices=(CURRENT_CORPUS_ID,),
-        help="Verify every restored current-renderer corpus artifact without running Vulkan.",
+        help="Verify every restored current-renderer corpus artifact without starting a graphics application.",
     )
     parser.add_argument("--logserver-executable", type=Path, help="Override the logserver executable.")
     parser.add_argument("--no-logserver", action=LIT_STORE_TRUE, help="Use standalone loader logs instead of logserver.")
@@ -880,7 +880,7 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--maximum-mean-abs", type=float, help="Optional maximum mean absolute RGB difference.")
     parser.add_argument("--maximum-changed-fraction", type=float, help="Optional maximum fraction of changed pixels.")
     parser.add_argument("--reject-log", action=LIT_APPEND, default=[], help="Additional runtime log text that invalidates a capture.")
-    parser.add_argument("--self-test", action=LIT_STORE_TRUE, help="Exercise manifest and pixel-difference logic without Vulkan.")
+    parser.add_argument("--self-test", action=LIT_STORE_TRUE, help="Exercise manifest and pixel-difference logic without starting a graphics application.")
     return parser
 
 

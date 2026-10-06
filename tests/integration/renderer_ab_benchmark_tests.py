@@ -29,7 +29,7 @@ LIT_MODIFIED = "modified"
 LIT_AVBOITTIMINGPROBE_IN_FLIGHT_RANGES_32 = "AvboitTimingProbe: in-flight ranges 32"
 LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1 = "AvboitTimingProbe: render unfocused 1"
 LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG = "RendererSystem: deferred rendering targets ready (1280x900, samples=1)"
-LIT_VULKAN_CREATED_DEVICE_EXAMPLE_GPU = "Vulkan: created device 'Example GPU'"
+LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU = "GraphicsRuntime: created device 'Example GPU'"
 LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED = "RendererSystem: material 'glass' selected CS + PS through compute emulation"
 LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN = "TransparentMultiSmokeProject: shutdown"
 LIT_SOURCE = "source"
@@ -167,7 +167,7 @@ def log_text(route=LIT_HARDWARE):
         LIT_AVBOITTIMINGPROBE_RENDER_UNFOCUSED_1,
         "TransparentMultiSmokeProject: shared transparent material with three mutable instance overrides created",
         LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG,
-        LIT_VULKAN_CREATED_DEVICE_EXAMPLE_GPU,
+        LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU,
         LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED,
         LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN))
 
@@ -286,14 +286,14 @@ class WorkloadPolicyTests(unittest.TestCase):
             log_text().replace("render unfocused 1", "render unfocused 0"),
             log_text().replace(LIT_TRANSPARENTMULTISMOKEPROJECT_SHUTDOWN, ""),
             log_text() + "\nAvboitTimingProbe: in-flight ranges 32", log_text() + "\n[ERROR]: rejected",
-            log_text() + "\nFramebufferCapture: capture ready", log_text().replace("Vulkan: created device", "device")):
+            log_text() + "\nFramebufferCapture: capture ready", log_text().replace("GraphicsRuntime: created device", "device")):
             with self.subTest(text=altered), self.assertRaises(benchmark.SmokeFailure):
                 benchmark.transparent_multi_log(altered, workload, True)
 
     def test_material_signature_preserves_mixed_routes_independent_of_creation_order(self):
         indexed = "RendererSystem: material 'glass' selected VertexIndexed + PS from persistent object-space geometry"
         compute = LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED
-        device = LIT_VULKAN_CREATED_DEVICE_EXAMPLE_GPU
+        device = LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU
         mixed = benchmark.device_material_signature("\n".join((device, compute, indexed, compute)))
         reordered = benchmark.device_material_signature("\n".join((device, indexed, compute)))
         self.assertEqual(mixed, reordered)
@@ -404,7 +404,7 @@ def soft_shadow_log_text(workload, route=LIT_HARDWARE):
         f"ShadowTimingProbe: source extents angular={values['NWB_SOFT_SHADOW_TEST_ANGLE']} radius={values['NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS']}",
         "SoftShadowTestSmokeProject: opaque + glass characters on a ground plane, 3 coloured lights, angularRadius=0 rad",
         LIT_RENDERERSYSTEM_DEFERRED_RENDERING_TARG,
-        LIT_VULKAN_CREATED_DEVICE_EXAMPLE_GPU, LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED,
+        LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU, LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED,
         LIT_SOFTSHADOWTESTSMOKEPROJECT_SHUTDOWN))
 
 
@@ -598,7 +598,7 @@ def reflection_log_text(workload):
         "ReflectionSmokeProject: timing in-flight ranges 32",
         "ReflectionSmokeProject: timing depth mip count 10",
         "ReflectionSmokeProject: hardware available", LIT_REFLECTIONSMOKEPROJECT_SHUTDOWN,
-        f"Reflection resolve: {route}", LIT_VULKAN_CREATED_DEVICE_EXAMPLE_GPU,
+        f"Reflection resolve: {route}", LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU,
         "RendererSystem: material 'receiver' selected CS + PS through compute emulation",
         "RendererSystem: deferred rendering targets ready (960x720, samples=1)"]
     if policy.family.startswith("optical_"):
@@ -724,7 +724,7 @@ class ReflectionWorkloadTests(unittest.TestCase):
 def caustic_log_text(preset=LIT_POPULATED, enabled=True, capture=False):
     distance = benchmark.caustic.PRESETS[preset]
     text = "\n".join((
-        LIT_VULKAN_CREATED_DEVICE_EXAMPLE_GPU,
+        LIT_GRAPHICS_RUNTIME_CREATED_DEVICE_EXAMPLE_GPU,
         LIT_RENDERERSYSTEM_MATERIAL_GLASS_SELECTED,
         "TransparentMultiSmokeProject: natural hardware shadow route selected on RayQuery-capable hardware",
         LIT_RENDERERSYSTEM_DISPATCHED_HARDWARE_TRA,
@@ -900,7 +900,7 @@ class CausticMeasurementTests(unittest.TestCase):
                     benchmark.caustic.validate_output_path(output, (protected,))
             benchmark.caustic.validate_output_path(root / "evidence", (protected,))
 
-    def test_caustic_requested_gpu_debug_needs_actual_all_markers(self):
+    def test_caustic_requested_gpu_debug_needs_actual_loader_activation(self):
         utility = benchmark.caustic
         text = "\n".join(utility.GPU_DEBUG_MARKERS)
         utility.validate_gpu_debug(text, [LIT_GPUDBG])

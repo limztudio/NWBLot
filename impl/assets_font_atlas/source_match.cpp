@@ -14,31 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_font_atlas_source_match{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static u32 ReadBigU32(const u8* bytes)noexcept{
-    return
-        (static_cast<u32>(bytes[0u]) << 24u) | (static_cast<u32>(bytes[1u]) << 16u)
-        | (static_cast<u32>(bytes[2u]) << 8u) | static_cast<u32>(bytes[3u])
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& font){
-    using namespace __hidden_font_atlas_source_match;
     const Core::Assets::AssetBytes& source = font.fontBytes();
     if(
         payload.font.name() != font.virtualPath() || payload.faceIndex != font.faceIndex()
@@ -55,9 +31,9 @@ bool ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& f
     bool hasMaxp = false;
     for(u32 index = 0u; index < tableCount; ++index){
         const u8* record = source.data() + 12u + static_cast<usize>(index) * 16u;
-        const u32 tag = ReadBigU32(record);
-        const u32 offset = ReadBigU32(record + 8u);
-        const u32 length = ReadBigU32(record + 12u);
+        const u32 tag = ReadFontAtlasBigU32(record);
+        const u32 offset = ReadFontAtlasBigU32(record + 8u);
+        const u32 length = ReadFontAtlasBigU32(record + 12u);
         if(offset > source.size() || length > source.size() - offset)
             return false;
         if(tag == 0x68656164u){

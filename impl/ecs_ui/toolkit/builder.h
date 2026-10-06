@@ -86,6 +86,8 @@ public:
     [[nodiscard]] bool image(AStringView stableKey, const Name& regionName, const ImageOptions& options = {});
     // Retains an immutable engine texture source and copied options; natural size is its texel extent in logical units.
     [[nodiscard]] bool image(AStringView stableKey, const SharedImageSource& source, const ImageOptions& options = {});
+    // Image and texture-image declarations share one frame publisher.
+    [[nodiscard]] bool publishImageFrame(const WidgetState& widget, ImageFrame&& frame);
     // Fields and popups borrow state/source through the enclosing panel/window or outermost popup end.
     // Internal popup/list scopes reserve declaration order and emit after their containing layout.
     [[nodiscard]] ComboResult comboBox(AStringView stableKey, const IListDataSource& source, ComboState& state, const ComboOptions& options = {});
@@ -171,6 +173,8 @@ private:
     [[nodiscard]] bool paintSlider(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool paintProgress(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool paintImage(const Item& item, const LayoutBox& box);
+    // Image and progress paints share one clip-pop plus hit-target tail.
+    [[nodiscard]] bool finishClipPaint(const Item& item, const Rect& bounds, const Rect& clip, bool painted);
     [[nodiscard]] bool applySliderInput(SliderFrame& frame, const SliderPlacement& placement, bool interactive);
     [[nodiscard]] bool sliderMatches(const SliderFrame& frame)const;
     void publishSliderResults(bool valid);

@@ -16,6 +16,21 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+bool Builder::finishClipPaint(const Item& item, const Rect& bounds, const Rect& clip, bool painted){
+    const bool popped = m_paint.popClip();
+    if(!painted || !popped)
+        return false;
+    if(!item.annotated)
+        return true;
+    HitTarget target;
+    target.rectangle = bounds;
+    target.clip = clip;
+    target.focusable = false;
+    target.activatable = false;
+    target.contextMenu = item.contextMenu;
+    return m_context.addTarget(item.state, target);
+}
+
 bool Builder::paintPanel(){
     const LayoutBox* panel = m_scope->m_layout.box(0u);
     if(!panel)

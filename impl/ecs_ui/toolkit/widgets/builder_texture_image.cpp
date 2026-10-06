@@ -36,20 +36,7 @@ bool Builder::image(const AStringView stableKey, const SharedImageSource& source
         m_context.fail();
         return false;
     }
-    Item item(m_arena);
-    item.state = *widget;
-    item.image = static_cast<u32>(m_scope->m_images.size());
-    LayoutNodeDesc description;
-    description.width = frame.options.width;
-    description.height = frame.options.height;
-    description.intrinsicSize = frame.metrics.contentSize;
-    if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, item.node)){
-        m_context.fail();
-        return false;
-    }
-    m_scope->m_images.push_back(Move(frame));
-    m_scope->m_items.push_back(Move(item));
-    return true;
+    return publishImageFrame(*widget, Move(frame));
 }
 
 

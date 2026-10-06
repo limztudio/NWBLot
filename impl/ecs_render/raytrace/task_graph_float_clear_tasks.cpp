@@ -2,12 +2,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#pragma once
+#include <impl/ecs_render/raytrace/task_graph_float_clear_tasks.h>
 
+#include <impl/ecs_render/kernel/renderer_constants_private.h>
 
-#include <impl/global.h>
-
-#include <core/task/gpu/task_graph.h>
+#include <core/graphics/backend_selection.h>
+#include <core/task/gpu/capture/command_ir.h>
+#include <core/task/gpu/compiled_graph.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -25,22 +26,23 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct SurfelIrradianceClearGraphTask{
-    // Native uncompressed color clears accept either Compute or Graphics commands.
-    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {
-        Core::GpuQueueCapability::None, false, Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute,
-    };
+bool FloatTextureClearGraphTask::Record(
+    const Payload& payload,
+    Core::CommandList& commandList,
+    const Core::GpuTaskRecordContext& context
+){
+    Core::Texture* const destination = context.declarations.textureForResource(payload.destination);
+    if(!destination || commandList.isRenderPassActive())
+        return false;
 
-    struct Payload{
-        Core::GpuGraphResourceId destination;
+    const Core::GpuClearTextureTaskDesc clearDesc{
+        .destination = payload.destination,
+        .subresources = payload.subresources,
+        .valueType = Core::GpuClearTextureTaskValueType::Float,
+        .floatValue = payload.floatValue,
     };
-
-    [[nodiscard]] static bool Record(
-        const Payload& payload,
-        Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context
-    );
-};
+    return RecordFloatTextureClear(commandList, context, payload.destination, *destination, clearDesc);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

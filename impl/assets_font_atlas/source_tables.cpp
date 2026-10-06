@@ -14,31 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace __hidden_font_atlas_source_tables{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-[[nodiscard]] static u32 ReadBigU32(const u8* bytes)noexcept{
-    return
-        (static_cast<u32>(bytes[0u]) << 24u) | (static_cast<u32>(bytes[1u]) << 16u)
-        | (static_cast<u32>(bytes[2u]) << 8u) | static_cast<u32>(bytes[3u])
-    ;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool CopyFontAtlasPositioningTables(const Font& font, FontAtlasPayload& outPayload){
-    using namespace __hidden_font_atlas_source_tables;
     if(!font.validatePayload())
         return false;
     const Core::Assets::AssetBytes& source = font.fontBytes();
@@ -51,10 +27,10 @@ bool CopyFontAtlasPositioningTables(const Font& font, FontAtlasPayload& outPaylo
     for(const u32 tag : s_Tags){
         for(u32 index = 0u; index < tableCount; ++index){
             const u8* record = source.data() + 12u + static_cast<usize>(index) * 16u;
-            if(ReadBigU32(record) != tag)
+            if(ReadFontAtlasBigU32(record) != tag)
                 continue;
-            const u32 offset = ReadBigU32(record + 8u);
-            const u32 length = ReadBigU32(record + 12u);
+            const u32 offset = ReadFontAtlasBigU32(record + 8u);
+            const u32 length = ReadFontAtlasBigU32(record + 12u);
             if(length == 0u)
                 break;
             if(totalBytes + length > s_FontAtlasMaxPositioningBytes){

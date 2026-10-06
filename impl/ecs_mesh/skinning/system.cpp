@@ -91,6 +91,33 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Def
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Deformation and post-dispatch share the same plan loop; only the per-plan recorder differs.
+using SkinningPlanRecorder = bool (MeshSkinningSystem::*)(
+    const MeshSkinningGraphDispatchPlan&,
+    Core::CommandList&,
+    const Core::GpuTaskRecordContext&
+);
+
+[[nodiscard]] inline bool RecordSkinningPlans(
+    MeshSkinningSystem& system,
+    Core::GpuTimingSubmissionTicket& timingTicket,
+    const Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena>& plans,
+    Core::CommandList& commandList,
+    const Core::GpuTaskRecordContext& context,
+    const SkinningPlanRecorder recorder
+){
+    if(plans.empty())
+        return false;
+
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(timingTicket);
+    for(const MeshSkinningGraphDispatchPlan& plan : plans){
+        if(!(system.*recorder)(plan, commandList, context))
+            return false;
+    }
+    return true;
+}
+
+
 // Deformation produces UAV streams; compiler owns the UAV-to-SRV handoff.
 struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
@@ -115,15 +142,14 @@ struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        if(payload.plans.empty())
-            return false;
-
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-        for(const MeshSkinningGraphDispatchPlan& plan : payload.plans){
-            if(!payload.system.recordGraphOwnedSkinningDeformation(plan, commandList, context))
-                return false;
-        }
-        return true;
+        return RecordSkinningPlans(
+            payload.system,
+            payload.timingTicket,
+            payload.plans,
+            commandList,
+            context,
+            &MeshSkinningSystem::recordGraphOwnedSkinningDeformation
+        );
     }
 };
 
@@ -152,15 +178,14 @@ struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        if(payload.plans.empty())
-            return false;
-
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
-        for(const MeshSkinningGraphDispatchPlan& plan : payload.plans){
-            if(!payload.system.recordGraphOwnedSkinningPostDispatch(plan, commandList, context))
-                return false;
-        }
-        return true;
+        return RecordSkinningPlans(
+            payload.system,
+            payload.timingTicket,
+            payload.plans,
+            commandList,
+            context,
+            &MeshSkinningSystem::recordGraphOwnedSkinningPostDispatch
+        );
     }
 };
 

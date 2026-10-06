@@ -56,6 +56,30 @@ inline void LogSmokeRect(const TStringView tag, const u32 sequence, const TStrin
     return hash;
 }
 
+// Progress, slider, and image snapshots paint one 12-bit marker swatch per
+// value part plus sequence swatches along the bottom edge.
+template<typename ValuesT, typename BitsT>
+inline void PaintSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT& values, const BitsT& bits, const u64 sequence){
+    const f32 y = context.display.logicalHeight - 18.0f;
+    usize marker = 0u;
+    for(const u64 value : values){
+        for(u32 part = 0u; part < 2u; ++part){
+            context.paint.fillRect({ 12.0f + static_cast<f32>(marker++) * 12.0f, y, 8.0f, 8.0f },
+                EncodeSmokeColor(value >> (part * 12u)));
+        }
+    }
+    for(const u64 bit : bits){
+        for(u32 part = 0u; part < 6u; ++part){
+            context.paint.fillRect({ 12.0f + static_cast<f32>(marker++) * 12.0f, y, 8.0f, 8.0f },
+                EncodeSmokeColor(bit >> (part * 12u)));
+        }
+    }
+    for(u32 part = 0u; part < 2u; ++part){
+        context.paint.fillRect({ 12.0f + static_cast<f32>(marker++) * 12.0f, y, 8.0f, 8.0f },
+            EncodeSmokeColor(sequence >> (part * 12u)));
+    }
+}
+
 [[nodiscard]] inline u32 HashSmokeText32(const AStringView text){
     return static_cast<u32>(HashSmokeText(text));
 }

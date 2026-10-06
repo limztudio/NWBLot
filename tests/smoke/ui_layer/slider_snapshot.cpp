@@ -143,25 +143,7 @@ void UiSliderSmokeScene::observeState(Impl::UiPaintContext& context){
 }
 
 void UiSliderSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{
-    using namespace __hidden_ui_slider_snapshot;
-    const f32 y = context.display.logicalHeight - 18.0f;
-    usize marker = 0u;
-    for(const u64 value : m_snapshot.values){
-        for(u32 part = 0u; part < 2u; ++part){
-            context.paint.fillRect({ 12.0f + static_cast<f32>(marker++) * 12.0f, y, 8.0f, 8.0f },
-                EncodeSmokeColor(value >> (part * 12u)));
-        }
-    }
-    for(const u64 bits : m_snapshot.bits){
-        for(u32 part = 0u; part < 6u; ++part){
-            context.paint.fillRect({ 12.0f + static_cast<f32>(marker++) * 12.0f, y, 8.0f, 8.0f },
-                EncodeSmokeColor(bits >> (part * 12u)));
-        }
-    }
-    for(u32 part = 0u; part < 2u; ++part){
-        context.paint.fillRect({ 12.0f + static_cast<f32>(marker++) * 12.0f, y, 8.0f, 8.0f },
-            EncodeSmokeColor(m_snapshot.sequence >> (part * 12u)));
-    }
+    PaintSmokeValueMarkers(context, m_snapshot.values, m_snapshot.bits, m_snapshot.sequence);
 }
 
 

@@ -4,7 +4,7 @@
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 #include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
-#include <impl/ecs_render/raytrace/task_graph_shadow_visibility_tasks.h>
+#include <impl/ecs_render/raytrace/task_graph_float_clear_tasks.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 #include <impl/ecs_render/shadow/task_graph_light_space_shadow.h>
 #include <impl/ecs_render/kernel/arena_names.h>
@@ -1202,11 +1202,13 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         .setResourceUses(&allLitClearResourceUse, 1u)
     ;
     m_deferredShadowVisibilityAllLitClearTask = m_deferredLightingTaskGraph.addTask<
-        ECSRenderDetail::ShadowVisibilityAllLitClearGraphTask
+        ECSRenderDetail::FloatTextureClearGraphTask
     >(
         allLitClearDesc,
-        ECSRenderDetail::ShadowVisibilityAllLitClearGraphTask::Payload{
+        ECSRenderDetail::FloatTextureClearGraphTask::Payload{
             .destination = shadowVisibility,
+            .subresources = ECSRenderDetail::s_ShadowVisibilitySubresources,
+            .floatValue = ECSRenderDetail::s_ShadowVisibilityAllLitClearColor,
         }
     );
     if(!m_deferredShadowVisibilityAllLitClearTask.valid()){

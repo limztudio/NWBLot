@@ -75,6 +75,39 @@ namespace RayTracingSurfelGiTaskDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Hash-build, spawn, trace-args, trace, and resolve share one async-guard preamble;
+// only the render call differs.
+template<typename PayloadT>
+[[nodiscard]] inline bool SurfelAsyncRecordReady(
+    const PayloadT& payload,
+    const Core::GpuTaskRecordContext& context
+){
+    if(!payload.deferredLightingResources.valid())
+        return false;
+
+    const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
+    if(
+        !queue
+        || (queue->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming.has_value())
+    )
+        return false;
+    return true;
+}
+
+[[nodiscard]] inline bool FailSurfelAsyncRecord(
+    Optional<Core::GpuTimingMeasure>& asyncTiming
+){
+    if(asyncTiming.has_value()){
+        asyncTiming.value().discardTiming();
+        asyncTiming.reset();
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 struct SurfelGiAgeFreeGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
@@ -156,16 +189,7 @@ struct SurfelGiHashBuildGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        if(
-            !payload.deferredLightingResources.valid()
-        )
-            return false;
-
-        const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
-        if(
-            !queue
-            || (queue->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming.has_value())
-        )
+        if(!RayTracingSurfelGiTaskDetail::SurfelAsyncRecordReady(payload, context))
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
@@ -208,16 +232,7 @@ struct SurfelGiSpawnGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        if(
-            !payload.deferredLightingResources.valid()
-        )
-            return false;
-
-        const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
-        if(
-            !queue
-            || (queue->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming.has_value())
-        )
+        if(!RayTracingSurfelGiTaskDetail::SurfelAsyncRecordReady(payload, context))
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
@@ -260,16 +275,7 @@ struct SurfelGiTraceBuildArgsGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        if(
-            !payload.deferredLightingResources.valid()
-        )
-            return false;
-
-        const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
-        if(
-            !queue
-            || (queue->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming.has_value())
-        )
+        if(!RayTracingSurfelGiTaskDetail::SurfelAsyncRecordReady(payload, context))
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
@@ -312,16 +318,7 @@ struct SurfelGiTraceGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        if(
-            !payload.deferredLightingResources.valid()
-        )
-            return false;
-
-        const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
-        if(
-            !queue
-            || (queue->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming.has_value())
-        )
+        if(!RayTracingSurfelGiTaskDetail::SurfelAsyncRecordReady(payload, context))
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
@@ -364,16 +361,7 @@ struct SurfelGiResolveGraphTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        if(
-            !payload.deferredLightingResources.valid()
-        )
-            return false;
-
-        const Core::GpuPhysicalQueueInfo* const queue = context.compiledPlan.queueInfo(context.queue);
-        if(
-            !queue
-            || (queue->queueClass == Core::CommandQueue::Compute && !payload.asyncTiming.has_value())
-        )
+        if(!RayTracingSurfelGiTaskDetail::SurfelAsyncRecordReady(payload, context))
             return false;
 
         Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);

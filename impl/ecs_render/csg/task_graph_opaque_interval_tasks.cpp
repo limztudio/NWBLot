@@ -30,6 +30,76 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+namespace __hidden_opaque_interval_tasks{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// The span-build and combine passes materialize the same opaque snapshot and gate on
+// the same draw-buffer, CSG-resource, and receiver-surface readiness.
+struct OpaqueIntervalReadiness{
+    MaterialPassDrawItemPartitions opaqueDrawItems;
+    CsgFrameGpuData csgFrameData;
+    bool csgResourcesReady = false;
+    bool csgReceiverSurfaceDrawResourcesReady = false;
+
+    explicit OpaqueIntervalReadiness(Core::Alloc::ScratchArena& arena)
+        : opaqueDrawItems(arena)
+        , csgFrameData(arena)
+    {}
+};
+
+[[nodiscard]] inline OpaqueIntervalReadiness ResolveOpaqueIntervalReadiness(
+    const CsgOpaqueIntervalRecordInputs& payload,
+    RendererMaterialSystem& materialSystem,
+    Core::Alloc::ScratchArena& scratchArena
+){
+    OpaqueIntervalReadiness readiness{ scratchArena };
+    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
+        payload.meshViewSetupReady,
+        payload.sceneShadingSetupReady
+    );
+    if(frameSetupReady)
+        payload.opaqueDrawSnapshot.materialize(readiness.opaqueDrawItems, readiness.csgFrameData);
+
+    const bool hasDeferredDrawItems = !readiness.opaqueDrawItems.empty();
+    const bool deferredResourcesReady =
+        hasDeferredDrawItems
+        && payload.materialDrawBuffersUploaded
+        && payload.frameBindings.frameReady(
+            payload.opaqueDrawSnapshot.instanceCount,
+            payload.opaqueDrawSnapshot.materialTypedByteCount
+        )
+    ;
+    readiness.csgResourcesReady =
+        deferredResourcesReady
+        && (
+            !readiness.csgFrameData.hasWork()
+            || (
+                payload.csgFrameBuffersUploaded
+                && payload.csgResources.frameReady(readiness.csgFrameData)
+            )
+        )
+    ;
+    readiness.csgReceiverSurfaceDrawResourcesReady =
+        readiness.csgResourcesReady
+        && (readiness.opaqueDrawItems.csgReceiverSurface.empty()
+            || materialSystem.materialPassDrawResourcesReady(readiness.opaqueDrawItems.csgReceiverSurface, payload.frameBindings))
+    ;
+    return readiness;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 bool CsgReceiverSpanBuildGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
@@ -44,45 +114,13 @@ bool CsgReceiverSpanBuildGraphTask::Record(
     DeferredFrameTargets& deferredTargets = payload.targets;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-
-    MaterialPassDrawItemPartitions opaqueDrawItems{ scratchArena };
-    CsgFrameGpuData csgFrameData{ scratchArena };
-    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
-        payload.meshViewSetupReady,
-        payload.sceneShadingSetupReady
-    );
-    if(frameSetupReady)
-        payload.opaqueDrawSnapshot.materialize(opaqueDrawItems, csgFrameData);
-
-    const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
-    const bool deferredResourcesReady =
-        hasDeferredDrawItems
-        && payload.materialDrawBuffersUploaded
-        && payload.frameBindings.frameReady(
-            payload.opaqueDrawSnapshot.instanceCount,
-            payload.opaqueDrawSnapshot.materialTypedByteCount
-        )
-    ;
-    const bool csgResourcesReady =
-        deferredResourcesReady
-        && (
-            !csgFrameData.hasWork()
-            || (
-                payload.csgFrameBuffersUploaded
-                && payload.csgResources.frameReady(csgFrameData)
-            )
-        )
-    ;
-    const bool csgReceiverSurfaceDrawResourcesReady =
-        csgResourcesReady
-        && (opaqueDrawItems.csgReceiverSurface.empty()
-            || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface, payload.frameBindings))
-    ;
-    if(csgResourcesReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady){
+    __hidden_opaque_interval_tasks::OpaqueIntervalReadiness readiness =
+        __hidden_opaque_interval_tasks::ResolveOpaqueIntervalReadiness(payload, materialSystem, scratchArena);
+    if(readiness.csgResourcesReady && readiness.csgFrameData.hasWork() && readiness.csgReceiverSurfaceDrawResourcesReady){
         csgSystem.dispatchCsgReceiverSpanBuild(
             commandList,
             deferredTargets,
-            csgFrameData,
+            readiness.csgFrameData,
             payload.csgResources
         );
     }
@@ -105,45 +143,13 @@ bool CsgIntervalCombineGraphTask::Record(
     DeferredFrameTargets& deferredTargets = payload.targets;
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
-
-    MaterialPassDrawItemPartitions opaqueDrawItems{ scratchArena };
-    CsgFrameGpuData csgFrameData{ scratchArena };
-    const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
-        payload.meshViewSetupReady,
-        payload.sceneShadingSetupReady
-    );
-    if(frameSetupReady)
-        payload.opaqueDrawSnapshot.materialize(opaqueDrawItems, csgFrameData);
-
-    const bool hasDeferredDrawItems = !opaqueDrawItems.empty();
-    const bool deferredResourcesReady =
-        hasDeferredDrawItems
-        && payload.materialDrawBuffersUploaded
-        && payload.frameBindings.frameReady(
-            payload.opaqueDrawSnapshot.instanceCount,
-            payload.opaqueDrawSnapshot.materialTypedByteCount
-        )
-    ;
-    const bool csgResourcesReady =
-        deferredResourcesReady
-        && (
-            !csgFrameData.hasWork()
-            || (
-                payload.csgFrameBuffersUploaded
-                && payload.csgResources.frameReady(csgFrameData)
-            )
-        )
-    ;
-    const bool csgReceiverSurfaceDrawResourcesReady =
-        csgResourcesReady
-        && (opaqueDrawItems.csgReceiverSurface.empty()
-            || materialSystem.materialPassDrawResourcesReady(opaqueDrawItems.csgReceiverSurface, payload.frameBindings))
-    ;
-    if(csgResourcesReady && csgFrameData.hasWork() && csgReceiverSurfaceDrawResourcesReady){
+    __hidden_opaque_interval_tasks::OpaqueIntervalReadiness readiness =
+        __hidden_opaque_interval_tasks::ResolveOpaqueIntervalReadiness(payload, materialSystem, scratchArena);
+    if(readiness.csgResourcesReady && readiness.csgFrameData.hasWork() && readiness.csgReceiverSurfaceDrawResourcesReady){
         csgSystem.dispatchCsgIntervalCombine(
             commandList,
             deferredTargets,
-            csgFrameData,
+            readiness.csgFrameData,
             payload.csgResources
         );
     }

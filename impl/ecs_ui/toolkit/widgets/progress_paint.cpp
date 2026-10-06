@@ -29,18 +29,7 @@ bool Builder::paintProgress(const Item& item, const LayoutBox& box){
         const bool popped = m_paint.popClip();
         painted = painted && popped;
     }
-    const bool popped = m_paint.popClip();
-    if(!painted || !popped)
-        return false;
-    if(!item.annotated)
-        return true;
-    HitTarget target;
-    target.rectangle = placement.bounds;
-    target.clip = placement.clip;
-    target.focusable = false;
-    target.activatable = false;
-    target.contextMenu = item.contextMenu;
-    return m_context.addTarget(item.state, target);
+    return finishClipPaint(item, placement.bounds, placement.clip, painted);
 }
 
 

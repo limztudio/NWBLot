@@ -40,8 +40,12 @@ bool Builder::image(const AStringView stableKey, const Name& regionName, const I
         return false;
     }
     frame.region = skinRegion->name;
+    return publishImageFrame(*widget, Move(frame));
+}
+
+bool Builder::publishImageFrame(const WidgetState& widget, ImageFrame&& frame){
     Item item(m_arena);
-    item.state = *widget;
+    item.state = widget;
     item.image = static_cast<u32>(m_scope->m_images.size());
     LayoutNodeDesc description;
     description.width = frame.options.width;

@@ -35,6 +35,14 @@ inline constexpr u32 s_FontAtlasKernTag = 0x6b65726eu;
 inline constexpr u32 s_FontAtlasGposTag = 0x47504f53u;
 inline constexpr u32 s_FontAtlasGdefTag = 0x47444546u;
 
+// All font-atlas readers parse big-endian sfnt table-directory records.
+[[nodiscard]] inline u32 ReadFontAtlasBigU32(const u8* bytes)noexcept{
+    return
+        (static_cast<u32>(bytes[0u]) << 24u) | (static_cast<u32>(bytes[1u]) << 16u)
+        | (static_cast<u32>(bytes[2u]) << 8u) | static_cast<u32>(bytes[3u])
+    ;
+}
+
 namespace FontAtlasRasterMode{
     enum Enum : u32{
         Outline = 0u,

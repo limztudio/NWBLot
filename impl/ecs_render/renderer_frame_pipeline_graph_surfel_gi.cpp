@@ -4,7 +4,7 @@
 
 #include <impl/ecs_render/renderer_frame_pipeline.h>
 #include <impl/ecs_render/renderer_frame_pipeline_graph_shared.h>
-#include <impl/ecs_render/raytrace/task_graph_surfel_tasks.h>
+#include <impl/ecs_render/raytrace/task_graph_float_clear_tasks.h>
 #include <impl/ecs_render/kernel/arena_names.h>
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/assets/graphics/shadow/shadow_resolve_binding_slots.h>
@@ -479,10 +479,12 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         .setDependencies(&surfelGiDependency, 1u)
         .setResourceUses(&surfelIrradianceClearResourceUse, 1u)
     ;
-    const Core::GpuTaskId surfelIrradianceClearTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::SurfelIrradianceClearGraphTask>(
+    const Core::GpuTaskId surfelIrradianceClearTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::FloatTextureClearGraphTask>(
         surfelIrradianceClearDesc,
-        ECSRenderDetail::SurfelIrradianceClearGraphTask::Payload{
+        ECSRenderDetail::FloatTextureClearGraphTask::Payload{
             .destination = surfelIrradiance,
+            .subresources = ECSRenderDetail::s_FramebufferSubresources,
+            .floatValue = ECSRenderDetail::s_SurfelIrradianceClearColor,
         }
     );
     if(!surfelIrradianceClearTask.valid()){

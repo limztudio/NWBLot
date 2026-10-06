@@ -59,13 +59,6 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
     return false;
 }
 
-[[nodiscard]] static u32 ReadBigU32(const u8* bytes)noexcept{
-    return
-        (static_cast<u32>(bytes[0u]) << 24u) | (static_cast<u32>(bytes[1u]) << 16u)
-        | (static_cast<u32>(bytes[2u]) << 8u) | static_cast<u32>(bytes[3u])
-    ;
-}
-
 [[nodiscard]] static bool ReadSourceFaceMetrics(const Font& font, FontAtlasPayload& payload){
     const Core::Assets::AssetBytes& bytes = font.fontBytes();
     if(bytes.size() < 12u)
@@ -76,9 +69,9 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
     payload.faceIndex = font.faceIndex();
     for(u32 index = 0u; index < tableCount; ++index){
         const u8* record = bytes.data() + 12u + static_cast<usize>(index) * 16u;
-        const u32 tag = ReadBigU32(record);
-        const u32 offset = ReadBigU32(record + 8u);
-        const u32 length = ReadBigU32(record + 12u);
+        const u32 tag = ReadFontAtlasBigU32(record);
+        const u32 offset = ReadFontAtlasBigU32(record + 8u);
+        const u32 length = ReadFontAtlasBigU32(record + 12u);
         if(offset > bytes.size() || length > bytes.size() - offset)
             return false;
         if(tag == 0x68656164u){

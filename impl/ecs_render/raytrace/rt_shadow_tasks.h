@@ -28,6 +28,39 @@ namespace RayTracingShadowVisibilityTaskDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Both opaque soft-shadow resolve callbacks share one all-lit fallback: clear
+// visibility, realign the UAV state, and retire every owned timing reservation.
+template<typename PayloadT>
+inline void RecoverOpaqueSoftShadowAllLit(
+    const PayloadT& payload,
+    Core::CommandList& commandList
+){
+    payload.raytracingSystem.clearShadowVisibility(commandList, payload.targets);
+    // The skipped transparent callbacks still declare this output as UAV. Keep the native state
+    // tracker aligned with their no-op graph handoff after the typed fallback clear.
+    commandList.setTextureState(
+        payload.targets.shadowVisibility.get(),
+        ECSRenderDetail::s_ShadowVisibilitySubresources,
+        Core::ResourceStates::UnorderedAccess
+    );
+    commandList.commitBarriers();
+    payload.opaqueProduced = false;
+    if(payload.asyncTiming.has_value()){
+        payload.asyncTiming.value().discardTiming();
+        payload.asyncTiming.reset();
+    }
+    if(payload.shadowVisibilityTiming.has_value()){
+        payload.shadowVisibilityTiming.value().discardTiming();
+        payload.shadowVisibilityTiming.reset();
+    }
+    payload.opaqueResolveTiming.value().discardTiming();
+    payload.opaqueResolveTiming.reset();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 // A prepared soft-transparent frame records opaque production, opaque resolve, transparent trace, and terminal
 // fold as one native packet. The shared state is stack-owned by the renderer for this graph transaction; it never
 // survives acceptance or a retry.
@@ -219,26 +252,7 @@ struct ShadowVisibilityOpaqueFirstWaveletGraphTask{
         }
 
         NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: split opaque soft-shadow first wavelet failed; retaining all-lit visibility"));
-        payload.raytracingSystem.clearShadowVisibility(commandList, payload.targets);
-        // The skipped transparent callbacks still declare this output as UAV. Keep the native state tracker aligned
-        // with their no-op graph handoff after the typed fallback clear.
-        commandList.setTextureState(
-            payload.targets.shadowVisibility.get(),
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::ResourceStates::UnorderedAccess
-        );
-        commandList.commitBarriers();
-        payload.opaqueProduced = false;
-        if(payload.asyncTiming.has_value()){
-            payload.asyncTiming.value().discardTiming();
-            payload.asyncTiming.reset();
-        }
-        if(payload.shadowVisibilityTiming.has_value()){
-            payload.shadowVisibilityTiming.value().discardTiming();
-            payload.shadowVisibilityTiming.reset();
-        }
-        payload.opaqueResolveTiming.value().discardTiming();
-        payload.opaqueResolveTiming.reset();
+        RayTracingShadowVisibilityTaskDetail::RecoverOpaqueSoftShadowAllLit(payload, commandList);
         return true;
     }
 
@@ -295,24 +309,7 @@ struct ShadowVisibilityOpaqueResolveTailGraphTask{
         }
 
         NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: split opaque soft-shadow resolve tail failed; retaining all-lit visibility"));
-        payload.raytracingSystem.clearShadowVisibility(commandList, payload.targets);
-        commandList.setTextureState(
-            payload.targets.shadowVisibility.get(),
-            ECSRenderDetail::s_ShadowVisibilitySubresources,
-            Core::ResourceStates::UnorderedAccess
-        );
-        commandList.commitBarriers();
-        payload.opaqueProduced = false;
-        if(payload.asyncTiming.has_value()){
-            payload.asyncTiming.value().discardTiming();
-            payload.asyncTiming.reset();
-        }
-        if(payload.shadowVisibilityTiming.has_value()){
-            payload.shadowVisibilityTiming.value().discardTiming();
-            payload.shadowVisibilityTiming.reset();
-        }
-        payload.opaqueResolveTiming.value().discardTiming();
-        payload.opaqueResolveTiming.reset();
+        RayTracingShadowVisibilityTaskDetail::RecoverOpaqueSoftShadowAllLit(payload, commandList);
         return true;
     }
 

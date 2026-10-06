@@ -11,8 +11,7 @@
 #include <impl/ecs_render/raytrace/task_graph_post_gbuffer_normalize_task.h>
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_finalize_task.h>
 #include <impl/ecs_render/raytrace/task_graph_shadow_prepare_tasks.h>
-#include <impl/ecs_render/raytrace/task_graph_shadow_visibility_tasks.h>
-#include <impl/ecs_render/raytrace/task_graph_surfel_tasks.h>
+#include <impl/ecs_render/raytrace/task_graph_float_clear_tasks.h>
 #include <impl/ecs_render/raytrace/task_graph_refraction_resolve.h>
 #include <impl/ecs_render/raytrace/task_graph_scene_resources.h>
 #include <impl/ecs_render/reflection/task_graph_reflection.h>

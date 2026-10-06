@@ -26,15 +26,6 @@ SIMDVector FbxMeshBuild::ToVector(const ufbx_vec3 value, const f32 w){
 }
 
 
-PositionKey FbxMeshBuild::MakePositionKey(const Vec3& position){
-    return PositionKey{
-        FloatHashBits(position.x),
-        FloatHashBits(position.y),
-        FloatHashBits(position.z),
-    };
-}
-
-
 PositionKey FbxMeshBuild::MakePositionKey(const SIMDVector position){
     return PositionKey{
         FloatHashBits(VectorGetX(position)),

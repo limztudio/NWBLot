@@ -29,10 +29,6 @@ namespace TriangleAreaDetail{
 
 
 #if defined(__AVX2__) || defined(_M_AVX2)
-[[nodiscard]] GLB_INLINE __m256d MakeVector3F64(const f64 x, const f64 y, const f64 z)noexcept{
-    return _mm256_set_pd(0.0, z, y, x);
-}
-
 [[nodiscard]] GLB_INLINE __m256d MakeVector3F64(const SIMDVector value)noexcept{
     return _mm256_cvtps_pd(value);
 }
@@ -127,20 +123,6 @@ namespace TriangleAreaDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE TriangleAreaNormal64 BuildStoredTriangleAreaNormal64(
-    const f64 aX,
-    const f64 aY,
-    const f64 aZ,
-    const f64 bX,
-    const f64 bY,
-    const f64 bZ,
-    const f64 cX,
-    const f64 cY,
-    const f64 cZ
-)noexcept{
-    return TriangleAreaDetail::BuildTriangleAreaNormal64FromEdges(bX - aX, bY - aY, bZ - aZ, cX - aX, cY - aY, cZ - aZ);
-}
-
 [[nodiscard]] GLB_INLINE TriangleAreaNormal64 BuildTriangleAreaNormal64(
     const SIMDVector a,
     const SIMDVector b,
@@ -190,21 +172,6 @@ namespace TriangleAreaDetail{
 #else
     return areaNormal.x * areaNormal.x + areaNormal.y * areaNormal.y + areaNormal.z * areaNormal.z;
 #endif
-}
-
-[[nodiscard]] GLB_INLINE bool StoredTriangleHasArea(
-    const f64 aX,
-    const f64 aY,
-    const f64 aZ,
-    const f64 bX,
-    const f64 bY,
-    const f64 bZ,
-    const f64 cX,
-    const f64 cY,
-    const f64 cZ,
-    const f64 triangleAreaLengthSquaredEpsilon
-)noexcept{
-    return TriangleAreaNormalLengthSquared(BuildStoredTriangleAreaNormal64(aX, aY, aZ, bX, bY, bZ, cX, cY, cZ)) > triangleAreaLengthSquaredEpsilon;
 }
 
 [[nodiscard]] GLB_INLINE bool TriangleHasArea(

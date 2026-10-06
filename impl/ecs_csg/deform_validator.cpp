@@ -24,17 +24,17 @@ bool CsgDeformValidator::FiniteFloat(const f32 value)noexcept{
     return value == value && value != Limit<f32>::s_Infinity && value != -Limit<f32>::s_Infinity;
 }
 
-bool CsgDeformValidator::FiniteVertex(const CsgDeformVertex& vertex)noexcept{
-    return VectorIsFinite(LoadFloat(vertex.position), VectorComponentMask::s_XYZ)
-        && VectorIsFinite(LoadFloat(vertex.normal), VectorComponentMask::s_XYZW)
-        && VectorIsFinite(LoadFloat(vertex.tangent), VectorComponentMask::s_XYZW)
-        && VectorIsFinite(LoadFloat(vertex.uv0), VectorComponentMask::s_XY)
-        && VectorIsFinite(LoadFloat(vertex.color), VectorComponentMask::s_XYZW)
+bool CsgDeformValidator::FiniteVertexVec(const SIMDVector position, const SIMDVector normal, const SIMDVector tangent, const SIMDVector uv0, const SIMDVector color)noexcept{
+    return VectorIsFinite(position, VectorComponentMask::s_XYZ)
+        && VectorIsFinite(normal, VectorComponentMask::s_XYZW)
+        && VectorIsFinite(tangent, VectorComponentMask::s_XYZW)
+        && VectorIsFinite(uv0, VectorComponentMask::s_XY)
+        && VectorIsFinite(color, VectorComponentMask::s_XYZW)
     ;
 }
 
-f32 CsgDeformValidator::SaturateFloat(const f32 value)noexcept{
-    return VectorGetX(VectorSaturate(VectorReplicate(value)));
+bool CsgDeformValidator::FiniteVertex(const CsgDeformVertex& vertex)noexcept{
+    return CsgDeformValidator::FiniteVertexVec(LoadFloat(vertex.position), LoadFloat(vertex.normal), LoadFloat(vertex.tangent), LoadFloat(vertex.uv0), LoadFloat(vertex.color));
 }
 
 SIMDVector CsgDeformValidator::SaturateVec(const SIMDVector value)noexcept{

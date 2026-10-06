@@ -21,8 +21,8 @@ NWB_IMPL_BEGIN
 class CsgDeformValidator final : NoCopy{
 public:
     [[nodiscard]] static bool FiniteFloat(const f32 value)noexcept;
+    [[nodiscard]] static bool FiniteVertexVec(const SIMDVector position, const SIMDVector normal, const SIMDVector tangent, const SIMDVector uv0, const SIMDVector color)noexcept;
     [[nodiscard]] static bool FiniteVertex(const CsgDeformVertex& vertex)noexcept;
-    [[nodiscard]] static f32 SaturateFloat(const f32 value)noexcept;
     [[nodiscard]] static SIMDVector SaturateVec(const SIMDVector value)noexcept;
     [[nodiscard]] static SIMDVector AbsDivideVec(const SIMDVector numerator, const SIMDVector denominator)noexcept;
     [[nodiscard]] static f32 ShapeEpsilon(const CsgDeformBuildOptions& options)noexcept;

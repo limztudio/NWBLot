@@ -26,7 +26,6 @@ NWB_FBX_TO_NWB_BEGIN
 class FbxMeshBuild final : NoCopy{
 public:
     [[nodiscard]] static SIMDVector ToVector(const ufbx_vec3 value, const f32 w = 0.0f);
-    [[nodiscard]] static PositionKey MakePositionKey(const Vec3& position);
     [[nodiscard]] static PositionKey MakePositionKey(const SIMDVector position);
     [[nodiscard]] static SIMDVector BuildCornerOutputPositionVector(
         const ufbx_mesh& mesh,

@@ -353,8 +353,8 @@ TEST(Global, TriangleAreaRejectsExactThreshold){
     const Float3U a(1.0f, 1.0f, 1.0f);
     const Float3U b(4.0f, 1.0f, 1.0f);
     const Float3U c(1.0f, 5.0f, 1.0f);
-    EXPECT_TRUE(::StoredTriangleHasArea(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, 143.0));
-    EXPECT_FALSE(::StoredTriangleHasArea(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z, 144.0));
+    EXPECT_TRUE(::TriangleHasArea(LoadFloat(a), LoadFloat(b), LoadFloat(c), 143.0));
+    EXPECT_FALSE(::TriangleHasArea(LoadFloat(a), LoadFloat(b), LoadFloat(c), 144.0));
 }
 
 TEST(Global, GlobalArenaReallocationPreservesAlignment){

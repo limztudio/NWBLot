@@ -135,7 +135,7 @@ u32 RendererMaterialSystem::meshDispatchFlags(
     const MaterialPipelinePass::Enum pass,
     const bool twoSided,
     const bool meshletConeCullScaleSafe
-)const{
+)const noexcept{
     u32 flags = 0u;
     const bool meshletBoundsFresh = !mesh.runtimeMesh || mesh.dynamicMeshletBoundsFresh;
     const bool meshletConesFresh = !mesh.runtimeMesh || mesh.dynamicMeshletConesFresh;

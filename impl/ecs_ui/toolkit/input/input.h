@@ -102,7 +102,7 @@ struct InputActionId{
     u64 layoutGeneration = 0u;
     u64 sequence = 0u;
 
-    [[nodiscard]] bool valid()const{
+    [[nodiscard]] bool valid()const noexcept{
         return target.valid() && declarationGeneration != 0u && layoutGeneration != 0u && sequence != 0u;
     }
 };

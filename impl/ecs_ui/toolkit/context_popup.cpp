@@ -22,7 +22,7 @@ namespace __hidden_ui_context_popup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool Geometry(const PopupScope& scope){
+[[nodiscard]] static bool Geometry(const PopupScope& scope)noexcept{
     return
         IsFinite(scope.bounds.x) && IsFinite(scope.bounds.y) && IsFinite(scope.bounds.width) && IsFinite(scope.bounds.height)
         && IsFinite(scope.viewport.x) && IsFinite(scope.viewport.y) && IsFinite(scope.viewport.width) && IsFinite(scope.viewport.height)
@@ -160,11 +160,11 @@ void Context::discardPopupScope(const PopupToken& token){
     }
 }
 
-bool Context::hasPopupScope(const PopupToken& token)const{
+bool Context::hasPopupScope(const PopupToken& token)const noexcept{
     return popupLayer(token) != 0u;
 }
 
-u32 Context::popupLayer(const PopupToken& token)const{
+u32 Context::popupLayer(const PopupToken& token)const noexcept{
     for(const auto& owned : m_popups){
         if(owned.scope.token == token)
             return owned.scope.layer;

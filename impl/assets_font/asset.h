@@ -29,10 +29,10 @@ public:
 
 
 public:
-    explicit Font(Core::Assets::AssetArena& arena)
+    explicit Font(Core::Assets::AssetArena& arena)noexcept
         : m_fontBytes(arena)
     {}
-    Font(Core::Assets::AssetArena& arena, const Name& virtualPath)
+    Font(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept
         : Core::Assets::TypedAsset<Font>(virtualPath)
         , m_fontBytes(arena)
     {}
@@ -41,12 +41,12 @@ public:
 public:
     bool loadBinary(const Core::Assets::AssetBytes& binary);
     [[nodiscard]] bool validatePayload()const;
-    void setFontBytes(Core::Assets::AssetBytes&& bytes, u32 faceIndex = 0u);
+    void setFontBytes(Core::Assets::AssetBytes&& bytes, u32 faceIndex = 0u)noexcept;
 
 
 public:
-    [[nodiscard]] const Core::Assets::AssetBytes& fontBytes()const{ return m_fontBytes; }
-    [[nodiscard]] u32 faceIndex()const{ return m_faceIndex; }
+    [[nodiscard]] const Core::Assets::AssetBytes& fontBytes()const noexcept{ return m_fontBytes; }
+    [[nodiscard]] u32 faceIndex()const noexcept{ return m_faceIndex; }
 
 
 private:

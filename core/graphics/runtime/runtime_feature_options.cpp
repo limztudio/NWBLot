@@ -16,7 +16,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GraphicsRuntime::setDebugRuntimeEnabled(bool enabled){
+bool GraphicsRuntime::setDebugRuntimeEnabled(bool enabled)noexcept{
     if(enabled && !CanEnableDebugRuntime())
         return false;
     if(m_instanceCreated && m_deviceCreationParams.enableDebugRuntime != enabled)
@@ -26,7 +26,7 @@ bool GraphicsRuntime::setDebugRuntimeEnabled(bool enabled){
     return true;
 }
 
-bool GraphicsRuntime::setHardwareRayTracingPolicy(const HardwareRayTracingPolicy::Enum policy){
+bool GraphicsRuntime::setHardwareRayTracingPolicy(const HardwareRayTracingPolicy::Enum policy)noexcept{
     if(m_instanceCreated || !IsValidHardwareRayTracingPolicy(policy))
         return false;
 
@@ -34,7 +34,7 @@ bool GraphicsRuntime::setHardwareRayTracingPolicy(const HardwareRayTracingPolicy
     return true;
 }
 
-bool GraphicsRuntime::setNativeMeshShadersEnabled(const bool enabled){
+bool GraphicsRuntime::setNativeMeshShadersEnabled(const bool enabled)noexcept{
     if(m_instanceCreated)
         return false;
 
@@ -42,7 +42,7 @@ bool GraphicsRuntime::setNativeMeshShadersEnabled(const bool enabled){
     return true;
 }
 
-bool GraphicsRuntime::setAsyncComputeLaneEnabled(const bool enabled){
+bool GraphicsRuntime::setAsyncComputeLaneEnabled(const bool enabled)noexcept{
     if(m_backend->getDevice())
         return false;
 
@@ -50,7 +50,7 @@ bool GraphicsRuntime::setAsyncComputeLaneEnabled(const bool enabled){
     return true;
 }
 
-bool GraphicsRuntime::setTransferQueueEnabled(const bool enabled){
+bool GraphicsRuntime::setTransferQueueEnabled(const bool enabled)noexcept{
     if(m_backend->getDevice())
         return false;
 
@@ -58,7 +58,7 @@ bool GraphicsRuntime::setTransferQueueEnabled(const bool enabled){
     return true;
 }
 
-bool GraphicsRuntime::setSameClassMultiQueueEnabled(const bool enabled){
+bool GraphicsRuntime::setSameClassMultiQueueEnabled(const bool enabled)noexcept{
     if(m_backend->getDevice())
         return false;
 
@@ -66,7 +66,7 @@ bool GraphicsRuntime::setSameClassMultiQueueEnabled(const bool enabled){
     return true;
 }
 
-bool GraphicsRuntime::setCrossFamilySameClassQueueRoutingEnabled(const bool enabled){
+bool GraphicsRuntime::setCrossFamilySameClassQueueRoutingEnabled(const bool enabled)noexcept{
     if(m_backend->getDevice())
         return false;
 
@@ -74,7 +74,7 @@ bool GraphicsRuntime::setCrossFamilySameClassQueueRoutingEnabled(const bool enab
     return true;
 }
 
-bool GraphicsRuntime::setAdapterIndex(const i32 index){
+bool GraphicsRuntime::setAdapterIndex(const i32 index)noexcept{
     if(index < -1 || m_backend->getDevice())
         return false;
 
@@ -82,7 +82,7 @@ bool GraphicsRuntime::setAdapterIndex(const i32 index){
     return true;
 }
 
-bool GraphicsRuntime::setHDR10OutputEnabled(const bool enabled){
+bool GraphicsRuntime::setHDR10OutputEnabled(const bool enabled)noexcept{
     if(m_backend->getDevice())
         return false;
 
@@ -90,7 +90,7 @@ bool GraphicsRuntime::setHDR10OutputEnabled(const bool enabled){
     return true;
 }
 
-bool GraphicsRuntime::setSwapChainReadbackEnabled(const bool enabled){
+bool GraphicsRuntime::setSwapChainReadbackEnabled(const bool enabled)noexcept{
     if(m_backend->getDevice())
         return false;
 
@@ -98,7 +98,7 @@ bool GraphicsRuntime::setSwapChainReadbackEnabled(const bool enabled){
     return true;
 }
 
-bool GraphicsRuntime::setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi){
+bool GraphicsRuntime::setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi)noexcept{
     if(!abi.valid() || m_backend->getDevice())
         return false;
 

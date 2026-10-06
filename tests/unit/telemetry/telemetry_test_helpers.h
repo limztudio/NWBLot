@@ -23,13 +23,13 @@ using TestArena = NWB::Tests::TestArena<struct TelemetryTestsTag>;
 namespace Telemetry = NWB::Core::Telemetry;
 namespace Log = NWB::Log;
 
-NWB::Core::Perf::TimingStats MakeTestTimingStats();
+NWB::Core::Perf::TimingStats MakeTestTimingStats()noexcept;
 
-NWB::Core::Perf::MemorySnapshot MakeTestMemorySnapshot(const Name& scopeName);
+NWB::Core::Perf::MemorySnapshot MakeTestMemorySnapshot(const Name& scopeName)noexcept;
 
-NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(const i64 deallocationCount = 0);
+NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(const i64 deallocationCount = 0)noexcept;
 
-bool ContainsText(const AStringView text, const AStringView needle);
+bool ContainsText(const AStringView text, const AStringView needle)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

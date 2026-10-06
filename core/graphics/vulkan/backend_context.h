@@ -141,11 +141,11 @@ public:
 
 
 public:
-    [[nodiscard]] Device* getDevice()const{ return m_rhiDevice.get(); }
-    [[nodiscard]] TStringView getRendererString()const{ return m_rendererString; }
+    [[nodiscard]] Device* getDevice()const noexcept{ return m_rhiDevice.get(); }
+    [[nodiscard]] TStringView getRendererString()const noexcept{ return m_rendererString; }
     bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters);
     [[nodiscard]] bool getSelectedAdapterInfo(AdapterInfo& outAdapter)const;
-    [[nodiscard]] bool isValidationMessageIdIgnored(i32 messageId)const;
+    [[nodiscard]] bool isValidationMessageIdIgnored(i32 messageId)const noexcept;
 
     [[nodiscard]] bool isInstanceExtensionEnabled(AStringView extensionName)const{
         return m_enabledExtensions.instance.find(extensionName) != m_enabledExtensions.instance.end();
@@ -157,10 +157,10 @@ public:
         return m_enabledExtensions.layers.find(layerName) != m_enabledExtensions.layers.end();
     }
 
-    Texture* getBackBuffer(u32 index)const;
-    u32 getBackBufferCount()const{ return static_cast<u32>(m_swapChainImages.size()); }
+    Texture* getBackBuffer(u32 index)const noexcept;
+    u32 getBackBufferCount()const noexcept{ return static_cast<u32>(m_swapChainImages.size()); }
 
-    void setPlatformFrameParam(const Common::FrameParam& frameParam){ m_platformFrameParam = frameParam; }
+    void setPlatformFrameParam(const Common::FrameParam& frameParam)noexcept{ m_platformFrameParam = frameParam; }
     bool createInstance();
     bool createDevice();
     bool createSwapChain();
@@ -189,7 +189,7 @@ public:
     // A hook that reached a rejected or abandoned submission cannot be reused blindly; retire that binary signal
     // before the next frame instead of allowing it to leak into another present.
     [[nodiscard]] bool cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim);
-    void reportLiveObjects()const{}
+    void reportLiveObjects()const noexcept{}
 
 private:
     void initDefaultExtensions();

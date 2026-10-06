@@ -20,23 +20,23 @@ NWB_IMPL_BEGIN
 // Owns finiteness, topology, and option checks so preview and commit share one classifier before any cutter, wall, or cap work runs.
 class CsgDeformValidator final : NoCopy{
 public:
-    [[nodiscard]] static bool FiniteFloat(const f32 value);
-    [[nodiscard]] static bool FiniteVertex(const CsgDeformVertex& vertex);
-    [[nodiscard]] static f32 SaturateFloat(const f32 value);
-    [[nodiscard]] static SIMDVector SaturateVec(const SIMDVector value);
-    [[nodiscard]] static SIMDVector AbsDivideVec(const SIMDVector numerator, const SIMDVector denominator);
-    [[nodiscard]] static f32 ShapeEpsilon(const CsgDeformBuildOptions& options);
-    [[nodiscard]] static bool ValidOptions(const CsgDeformBuildOptions& options);
+    [[nodiscard]] static bool FiniteFloat(const f32 value)noexcept;
+    [[nodiscard]] static bool FiniteVertex(const CsgDeformVertex& vertex)noexcept;
+    [[nodiscard]] static f32 SaturateFloat(const f32 value)noexcept;
+    [[nodiscard]] static SIMDVector SaturateVec(const SIMDVector value)noexcept;
+    [[nodiscard]] static SIMDVector AbsDivideVec(const SIMDVector numerator, const SIMDVector denominator)noexcept;
+    [[nodiscard]] static f32 ShapeEpsilon(const CsgDeformBuildOptions& options)noexcept;
+    [[nodiscard]] static bool ValidOptions(const CsgDeformBuildOptions& options)noexcept;
     [[nodiscard]] static bool ValidTopology(
         NotNull<const CsgDeformTriangle*> triangles,
         const usize triangleCount,
         const usize vertexCount
-    );
+    )noexcept;
     [[nodiscard]] static bool FiniteInput(
         NotNull<const CsgDeformVertex*> vertices,
         const usize vertexCount,
         CsgDeformViabilityReason::Enum& outReason
-    );
+    )noexcept;
 
 
 public:

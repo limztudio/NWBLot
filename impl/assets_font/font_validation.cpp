@@ -35,11 +35,11 @@ static constexpr usize s_TableRecordBytes = 16u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u16 ReadBigU16(const u8* data){
+[[nodiscard]] static u16 ReadBigU16(const u8* data)noexcept{
     return static_cast<u16>((static_cast<u16>(data[0u]) << 8u) | data[1u]);
 }
 
-[[nodiscard]] static u32 ReadBigU32(const u8* data){
+[[nodiscard]] static u32 ReadBigU32(const u8* data)noexcept{
     return
         (static_cast<u32>(data[0u]) << 24u)
         | (static_cast<u32>(data[1u]) << 16u)

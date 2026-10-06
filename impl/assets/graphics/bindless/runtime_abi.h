@@ -32,7 +32,7 @@ static_assert(NWB_BINDLESS_HEAP_ACCEL_STRUCT_SET == NWB_BINDLESS_HEAP_SAMPLER_SE
 
 
 // Adapts the shared ABI into the runtime payload; keeps the renderer off asset constants.
-[[nodiscard]] inline Core::GpuDescriptorHeapAbi MakeGpuDescriptorHeapAbi(){
+[[nodiscard]] inline Core::GpuDescriptorHeapAbi MakeGpuDescriptorHeapAbi()noexcept{
     Core::GpuDescriptorHeapAbi abi;
     abi.resourceSetIndex = NWB_BINDLESS_HEAP_RESOURCE_SET;
     abi.samplerSetIndex = NWB_BINDLESS_HEAP_SAMPLER_SET;

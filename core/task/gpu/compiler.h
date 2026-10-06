@@ -205,7 +205,7 @@ public:
 
 
 public:
-    void reset();
+    void reset()noexcept;
 
     [[nodiscard]] bool valid()const noexcept{ return m_valid; }
     [[nodiscard]] bool validFor(const GpuTaskGraph::DeclarationReadView& graph)const noexcept;

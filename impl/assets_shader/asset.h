@@ -37,8 +37,8 @@ public:
 
 
 public:
-    [[nodiscard]] const Core::Assets::AssetString& entryPoint()const{ return m_entryPoint; }
-    [[nodiscard]] const Core::Assets::AssetBytes& bytecode()const{ return m_bytecode; }
+    [[nodiscard]] const Core::Assets::AssetString& entryPoint()const noexcept{ return m_entryPoint; }
+    [[nodiscard]] const Core::Assets::AssetBytes& bytecode()const noexcept{ return m_bytecode; }
 
 public:
     bool loadBinary(const Core::Assets::AssetBytes& binary);

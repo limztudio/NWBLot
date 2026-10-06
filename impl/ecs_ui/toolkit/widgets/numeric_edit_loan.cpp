@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Builder::snapshotNumericEdit(NumericEditFrame& frame, const EditModel& draft){
+void Builder::snapshotNumericEdit(NumericEditFrame& frame, const EditModel& draft)noexcept{
     frame.draftGeneration = draft.instanceGeneration();
     frame.draftRevision = draft.revision();
     frame.draftExternalRevision = draft.externalRevision();
@@ -56,7 +56,7 @@ bool Builder::numericEditMatches(const Item& item)const{
     return true;
 }
 
-bool Builder::numericStateAvailable(const EditBoxState& state)const{
+bool Builder::numericStateAvailable(const EditBoxState& state)const noexcept{
     for(usize index = 0u; index <= m_popupFrameCount; ++index){
         const BuilderScopeFrame& scope = index == 0u ? m_scopeFrame : *m_popupFrames[index - 1u];
         for(const auto& frame : scope.m_integerEdits){

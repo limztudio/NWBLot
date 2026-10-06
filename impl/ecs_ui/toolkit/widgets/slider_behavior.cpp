@@ -24,18 +24,18 @@ namespace __hidden_ui_slider_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidRange(const f64 minimum, const f64 maximum){
+[[nodiscard]] static bool ValidRange(const f64 minimum, const f64 maximum)noexcept{
     return IsFinite(minimum) && IsFinite(maximum) && minimum <= maximum;
 }
 
-[[nodiscard]] static bool SameRect(const Rect& lhs, const Rect& rhs){
+[[nodiscard]] static bool SameRect(const Rect& lhs, const Rect& rhs)noexcept{
     return
         BitCast<u32>(lhs.x) == BitCast<u32>(rhs.x) && BitCast<u32>(lhs.y) == BitCast<u32>(rhs.y)
         && BitCast<u32>(lhs.width) == BitCast<u32>(rhs.width) && BitCast<u32>(lhs.height) == BitCast<u32>(rhs.height)
     ;
 }
 
-[[nodiscard]] static bool ValidPlacement(const SliderPlacement& placement){
+[[nodiscard]] static bool ValidPlacement(const SliderPlacement& placement)noexcept{
     return
         IsPreciseUiRect(placement.bounds) && IsPreciseUiRect(placement.clip) && IsPreciseUiRect(placement.travelBounds)
         && IsPreciseUiRect(placement.track) && IsPreciseUiRect(placement.centerTravel) && IsPreciseUiRect(placement.thumb)
@@ -49,7 +49,7 @@ namespace __hidden_ui_slider_behavior{
     ;
 }
 
-[[nodiscard]] static bool SamePlacement(const SliderPlacement& lhs, const SliderPlacement& rhs){
+[[nodiscard]] static bool SamePlacement(const SliderPlacement& lhs, const SliderPlacement& rhs)noexcept{
     return
         SameRect(lhs.bounds, rhs.bounds) && SameRect(lhs.clip, rhs.clip) && SameRect(lhs.travelBounds, rhs.travelBounds)
         && SameRect(lhs.track, rhs.track) && SameRect(lhs.centerTravel, rhs.centerTravel)
@@ -58,14 +58,14 @@ namespace __hidden_ui_slider_behavior{
     ;
 }
 
-[[nodiscard]] static bool SamePress(const InputActionId& lhs, const InputActionId& rhs){
+[[nodiscard]] static bool SamePress(const InputActionId& lhs, const InputActionId& rhs)noexcept{
     return
         lhs.target == rhs.target && lhs.declarationGeneration == rhs.declarationGeneration
         && lhs.layoutGeneration == rhs.layoutGeneration && lhs.sequence == rhs.sequence
     ;
 }
 
-[[nodiscard]] static bool ValidGesture(const PointerGesture& gesture){
+[[nodiscard]] static bool ValidGesture(const PointerGesture& gesture)noexcept{
     return
         gesture.id.valid() && gesture.updateSequence != 0u && gesture.state <= PointerGestureState::Completed
         && IsFinite(gesture.origin.x) && IsFinite(gesture.origin.y)
@@ -74,11 +74,11 @@ namespace __hidden_ui_slider_behavior{
     ;
 }
 
-[[nodiscard]] static f64 ClampValue(const f64 value, const f64 minimum, const f64 maximum){
+[[nodiscard]] static f64 ClampValue(const f64 value, const f64 minimum, const f64 maximum)noexcept{
     return value < minimum ? minimum : value > maximum ? maximum : value;
 }
 
-[[nodiscard]] static f64 KeyStep(const SliderOptions& options){
+[[nodiscard]] static f64 KeyStep(const SliderOptions& options)noexcept{
     if(options.keyStep > 0.0)
         return options.keyStep;
     const f64 span = options.maximum - options.minimum;
@@ -89,7 +89,7 @@ namespace __hidden_ui_slider_behavior{
     return options.maximum / 100.0 - options.minimum / 100.0;
 }
 
-[[nodiscard]] static f64 StepValue(const f64 value, const SliderOptions& options, const f64 step, const bool increasing){
+[[nodiscard]] static f64 StepValue(const f64 value, const SliderOptions& options, const f64 step, const bool increasing)noexcept{
     const f64 current = ClampValue(value, options.minimum, options.maximum);
     if(increasing){
         const f64 distance = options.maximum - current;
@@ -109,7 +109,7 @@ namespace __hidden_ui_slider_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SliderBehavior::Validate(const SliderOptions& options){
+bool SliderBehavior::Validate(const SliderOptions& options)noexcept{
     return
         __hidden_ui_slider_behavior::ValidRange(options.minimum, options.maximum)
         && IsFinite(options.keyStep) && options.keyStep >= 0.0
@@ -119,7 +119,7 @@ bool SliderBehavior::Validate(const SliderOptions& options){
     ;
 }
 
-bool SliderBehavior::Normalize(const f64 minimum, const f64 maximum, const f64 value, f64& out){
+bool SliderBehavior::Normalize(const f64 minimum, const f64 maximum, const f64 value, f64& out)noexcept{
     using namespace __hidden_ui_slider_behavior;
     if(!ValidRange(minimum, maximum) || !IsFinite(value))
         return false;
@@ -139,7 +139,7 @@ bool SliderBehavior::Normalize(const f64 minimum, const f64 maximum, const f64 v
     return true;
 }
 
-bool SliderBehavior::Interpolate(const f64 minimum, const f64 maximum, const f64 normalized, f64& out){
+bool SliderBehavior::Interpolate(const f64 minimum, const f64 maximum, const f64 normalized, f64& out)noexcept{
     using namespace __hidden_ui_slider_behavior;
     if(!ValidRange(minimum, maximum) || !IsFinite(normalized) || normalized < 0.0 || normalized > 1.0)
         return false;
@@ -157,7 +157,7 @@ bool SliderBehavior::Interpolate(const f64 minimum, const f64 maximum, const f64
     return true;
 }
 
-bool SliderBehavior::Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement){
+bool SliderBehavior::Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement)noexcept{
     using namespace __hidden_ui_slider_behavior;
     if(!Validate(options) || !ValidPlacement(placement))
         return false;
@@ -184,7 +184,7 @@ bool SliderBehavior::Apply(
     SliderState& state,
     const SliderOptions& options,
     const ControlAction& action,
-    SliderResult& result){
+    SliderResult& result)noexcept{
     using namespace __hidden_ui_slider_behavior;
     if(
         !Validate(options) || !state.m_admitted || !action.id.valid() || action.control != state.controlToken()
@@ -239,7 +239,7 @@ bool SliderBehavior::Seek(
     SliderState& state,
     const SliderOptions& options,
     const PointerGesture& gesture,
-    SliderResult& result){
+    SliderResult& result)noexcept{
     using namespace __hidden_ui_slider_behavior;
     if(
         !Validate(options) || !state.m_admitted || !ValidGesture(gesture) || gesture.control != state.controlToken()
@@ -275,7 +275,7 @@ bool SliderBehavior::Drag(
     SliderState& state,
     const SliderOptions& options,
     const PointerGesture& gesture,
-    SliderResult& result){
+    SliderResult& result)noexcept{
     using namespace __hidden_ui_slider_behavior;
     const f64 baseline = BitCast<f64>(gesture.value);
     if(

@@ -59,7 +59,7 @@ inline SIMDMatrix BuildWorldToClipMatrix(
     const SIMDVector up,
     const SIMDVector forward,
     const SIMDVector projection
-){
+)noexcept{
     const SIMDVector translation = VectorAdd(
         VectorNegate(VectorMergeX(
             Vector3Dot(positionDepthBias, right),

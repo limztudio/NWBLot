@@ -28,49 +28,49 @@ using EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation = void(*)(
 
 static constexpr EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutation
 s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutations[] = {
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics){
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.reserved[6u] = 1u;
     },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics){
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.ownerNodeIndex = 1u;
     },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics){
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.queue.deviceGeneration = 18u;
     },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics){
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.queueClass = Telemetry::FrameGraphQueueClass::Unknown;
     },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics){
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.recording.recordingSeconds = -1.0;
     },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics){
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.submission.submissionSeconds = Limit<f64>::s_QuietNaN;
     },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics){
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.submission.recoverySubmissionCount =
             statistics.submission.acceptedFrontierSubmissionCount + 1u
         ;
     },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics){
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.compile.taskCount = 79u;
         statistics.compile.packetCount = 78u;
         statistics.compile.mergedTaskCount = 1u;
     },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics){
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.compile.taskCount = 51u;
         statistics.compile.packetCount = 50u;
         statistics.compile.mergedTaskCount = 1u;
     },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics){
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.compile.prologueBarrierCount = 0u;
     },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics){
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.recording.barrierCount = 24u;
     },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics){
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.recording.taskCount = 22u;
     },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics){
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.submission.rejectedPacketCount = 23u;
         statistics.submission.rejectedTaskCount = 24u;
         statistics.submission.rejectedSubmissionCount = 23u;
@@ -81,7 +81,7 @@ s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutations[] = {
         statistics.compile.incomingRepeatedOwnershipTransferSignatureCount = 0u;
         statistics.compile.outgoingRepeatedOwnershipTransferSignatureCount = 0u;
     },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics){
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.recording = {};
         statistics.recording.commandListCount = 1u;
         statistics.submission = {};
@@ -110,7 +110,7 @@ s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutations[] = {
         statistics.submission.recoverySubmissionCount = 0u;
         statistics.submission.submissionSeconds = 0.0;
     },
-    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics){
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.submission.rejectedPacketCount = 0u;
         statistics.submission.rejectedTaskCount = 1u;
         statistics.submission.rejectedSubmissionCount = 0u;

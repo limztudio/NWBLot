@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateSurfelGiQualitySettings(const SurfelGiQualitySettings& settings){
+bool ValidateSurfelGiQualitySettings(const SurfelGiQualitySettings& settings)noexcept{
     return settings.resolveResolution == SurfelGiResolveResolution::Half || settings.resolveResolution == SurfelGiResolveResolution::Quarter;
 }
 

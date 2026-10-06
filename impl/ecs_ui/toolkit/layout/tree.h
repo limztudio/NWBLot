@@ -74,10 +74,10 @@ private:
 
 
 private:
-    [[nodiscard]] static bool IsValidDescription(const LayoutNodeDesc& description);
-    [[nodiscard]] static bool IsValidRectangle(const Rect& rectangle);
-    [[nodiscard]] static Rect Intersect(const Rect& lhs, const Rect& rhs);
-    [[nodiscard]] static Rect Inset(const Rect& rectangle, const Insets& padding);
+    [[nodiscard]] static bool IsValidDescription(const LayoutNodeDesc& description)noexcept;
+    [[nodiscard]] static bool IsValidRectangle(const Rect& rectangle)noexcept;
+    [[nodiscard]] static Rect Intersect(const Rect& lhs, const Rect& rhs)noexcept;
+    [[nodiscard]] static Rect Inset(const Rect& rectangle, const Insets& padding)noexcept;
 
 
 public:
@@ -87,19 +87,19 @@ public:
 
 public:
     // Start a new build while retaining the last successful arranged output.
-    void reset();
+    void reset()noexcept;
     // A failed admission poisons this build until reset(), and leaves outIndex unchanged.
     [[nodiscard]] bool addNode(u32 parent, const LayoutNodeDesc& description, u32& outIndex);
     // Root sizing follows its policies against the viewport. All geometry stays in logical units.
     [[nodiscard]] bool arrange(const Rect& viewport);
-    [[nodiscard]] u32 nodeCount()const{ return static_cast<u32>(m_nodes.size()); }
-    [[nodiscard]] const LayoutBox* box(u32 index)const{ return index < m_boxes.size() ? &m_boxes[index] : nullptr; }
-    [[nodiscard]] const PaintVector<LayoutBox>& boxes()const{ return m_boxes; }
+    [[nodiscard]] u32 nodeCount()const noexcept{ return static_cast<u32>(m_nodes.size()); }
+    [[nodiscard]] const LayoutBox* box(u32 index)const noexcept{ return index < m_boxes.size() ? &m_boxes[index] : nullptr; }
+    [[nodiscard]] const PaintVector<LayoutBox>& boxes()const noexcept{ return m_boxes; }
 
 
 private:
-    [[nodiscard]] bool measure();
-    [[nodiscard]] bool arrangeNode(u32 index);
+    [[nodiscard]] bool measure()noexcept;
+    [[nodiscard]] bool arrangeNode(u32 index)noexcept;
 
 
 private:

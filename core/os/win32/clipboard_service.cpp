@@ -107,7 +107,7 @@ void Win32ClipboardService::startNativeRequest(
     m_utf8Text.clear();
 }
 
-void Win32ClipboardService::cancelNativeRequest(const ClipboardRequestToken token){
+void Win32ClipboardService::cancelNativeRequest(const ClipboardRequestToken token)noexcept{
     if(m_nativeToken == token)
         m_nativeToken = {};
 }

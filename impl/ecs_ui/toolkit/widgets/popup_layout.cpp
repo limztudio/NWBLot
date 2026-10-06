@@ -22,7 +22,7 @@ namespace __hidden_ui_popup_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidOptions(const PopupOptions& options, const DisplayMetrics& display){
+[[nodiscard]] static bool ValidOptions(const PopupOptions& options, const DisplayMetrics& display)noexcept{
     const Rect& anchor = options.anchor;
     return
         IsFinite(anchor.x) && IsFinite(anchor.y) && IsFinite(anchor.width) && IsFinite(anchor.height)
@@ -37,7 +37,7 @@ namespace __hidden_ui_popup_layout{
     ;
 }
 
-[[nodiscard]] static PopupPlacementSide::Enum Opposite(const PopupPlacementSide::Enum side){
+[[nodiscard]] static PopupPlacementSide::Enum Opposite(const PopupPlacementSide::Enum side)noexcept{
     switch(side){
     case PopupPlacementSide::Below: return PopupPlacementSide::Above;
     case PopupPlacementSide::Above: return PopupPlacementSide::Below;
@@ -48,7 +48,7 @@ namespace __hidden_ui_popup_layout{
 }
 
 [[nodiscard]] static f64 Available(const PopupOptions& options, const DisplayMetrics& display,
-    const PopupPlacementSide::Enum side){
+    const PopupPlacementSide::Enum side)noexcept{
     const f64 gap = options.gap;
     switch(side){
     case PopupPlacementSide::Below:
@@ -76,7 +76,7 @@ namespace __hidden_ui_popup_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PopupLayout::Place(const PopupOptions& options, const DisplayMetrics& display, PopupPlacement& placement){
+bool PopupLayout::Place(const PopupOptions& options, const DisplayMetrics& display, PopupPlacement& placement)noexcept{
     using namespace __hidden_ui_popup_layout;
     if(!ValidOptions(options, display))
         return false;

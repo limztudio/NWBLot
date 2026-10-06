@@ -42,24 +42,24 @@ class ContextMenuState final : NoCopy{
 
 
 public:
-    ContextMenuState() = default;
+    ContextMenuState()noexcept = default;
     ContextMenuState(ContextMenuState&&) = delete;
     ContextMenuState& operator=(ContextMenuState&&) = delete;
 
 
 public:
-    [[nodiscard]] bool open(const Rect& anchor);
-    void close();
-    [[nodiscard]] bool isOpen()const{ return m_popup.isOpen(); }
-    [[nodiscard]] u64 instanceGeneration()const{ return m_popup.instanceGeneration(); }
-    [[nodiscard]] u64 revision()const{ return m_revision; }
-    [[nodiscard]] u64 cursorKey()const{ return m_list.cursorKey(); }
-    [[nodiscard]] const ListState& listState()const{ return m_list; }
-    [[nodiscard]] const PopupPlacement& placement()const{ return m_popup.placement(); }
+    [[nodiscard]] bool open(const Rect& anchor)noexcept;
+    void close()noexcept;
+    [[nodiscard]] bool isOpen()const noexcept{ return m_popup.isOpen(); }
+    [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_popup.instanceGeneration(); }
+    [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
+    [[nodiscard]] u64 cursorKey()const noexcept{ return m_list.cursorKey(); }
+    [[nodiscard]] const ListState& listState()const noexcept{ return m_list; }
+    [[nodiscard]] const PopupPlacement& placement()const noexcept{ return m_popup.placement(); }
 
 
 private:
-    void advanceRevision();
+    void advanceRevision()noexcept;
 
 
 private:

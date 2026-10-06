@@ -26,7 +26,7 @@ struct NativeQueueState final : NoCopy{
     Futex hostMutex;
 
 
-    NativeQueueState(const VkQueue nativeQueue, const u32 nativeFamilyIndex, const u32 nativeQueueIndex)
+    NativeQueueState(const VkQueue nativeQueue, const u32 nativeFamilyIndex, const u32 nativeQueueIndex)noexcept
         : queue(nativeQueue)
         , familyIndex(nativeFamilyIndex)
         , queueIndex(nativeQueueIndex)

@@ -111,7 +111,7 @@ RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotSh
     };
 }
 
-RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferredGraphResources()const{
+RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferredGraphResources()const noexcept{
     const auto& state = m_rayTracingState;
     return RayTracingDeferredGraphResourceSnapshot{
         .materialContextSlotsBuffer = state.m_rayTraceMaterialContextSlotsBuffer,
@@ -140,7 +140,7 @@ RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferr
     };
 }
 
-RayTracingSurfelPersistentResourceSnapshot RendererRayTracingSystem::snapshotSurfelPersistentResources()const{
+RayTracingSurfelPersistentResourceSnapshot RendererRayTracingSystem::snapshotSurfelPersistentResources()const noexcept{
     return RayTracingSurfelPersistentResourceSnapshot{
         .constantsBuffer = m_rayTracingState.m_surfelConstants,
         .poolBuffer = m_rayTracingState.m_surfelPoolBuffer,

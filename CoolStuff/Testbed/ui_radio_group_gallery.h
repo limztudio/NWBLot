@@ -14,14 +14,14 @@
 
 class TestbedUiRadioGroupSource final : public NWB::Impl::Ui::IListDataSource{
 public:
-    [[nodiscard]] virtual u64 instanceGeneration()const override;
-    [[nodiscard]] virtual u64 revision()const override;
-    [[nodiscard]] virtual u64 rowCount()const override;
-    [[nodiscard]] virtual u64 key(u64 index)const override;
-    [[nodiscard]] virtual bool indexOf(u64 key, u64& index)const override;
-    [[nodiscard]] virtual bool findEnabled(u64 start, bool reverse, u64& index)const override;
-    [[nodiscard]] virtual StringView text(u64 index)const override;
-    [[nodiscard]] virtual bool enabled(u64 index)const override;
+    [[nodiscard]] virtual u64 instanceGeneration()const noexcept override;
+    [[nodiscard]] virtual u64 revision()const noexcept override;
+    [[nodiscard]] virtual u64 rowCount()const noexcept override;
+    [[nodiscard]] virtual u64 key(u64 index)const noexcept override;
+    [[nodiscard]] virtual bool indexOf(u64 key, u64& index)const noexcept override;
+    [[nodiscard]] virtual bool findEnabled(u64 start, bool reverse, u64& index)const noexcept override;
+    [[nodiscard]] virtual StringView text(u64 index)const noexcept override;
+    [[nodiscard]] virtual bool enabled(u64 index)const noexcept override;
 };
 
 class TestbedUiRadioGroupGallery final : NoCopy{

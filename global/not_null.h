@@ -61,7 +61,7 @@ public:
     [[nodiscard]] constexpr T get()const noexcept{ return m_ptr; }
 
     [[nodiscard]] constexpr T operator->()const noexcept{ return m_ptr; }
-    [[nodiscard]] constexpr decltype(auto) operator*()const{ return *m_ptr; }
+    [[nodiscard]] constexpr decltype(auto) operator*()const noexcept{ return *m_ptr; }
 
 
 private:

@@ -52,7 +52,7 @@ struct RadioGroupSnapshot{
     u64 sourceGeneration = 0u;
     u64 sourceRevision = 0u;
 
-    [[nodiscard]] bool operator==(const RadioGroupSnapshot&)const = default;
+    [[nodiscard]] bool operator==(const RadioGroupSnapshot&)const noexcept = default;
 };
 
 
@@ -66,7 +66,7 @@ class RadioGroupState final : NoCopy{
 
 
 public:
-    RadioGroupState();
+    RadioGroupState()noexcept;
 
 
 public:
@@ -75,20 +75,20 @@ public:
 
 
 public:
-    [[nodiscard]] u64 instanceGeneration()const{ return m_instanceGeneration; }
-    [[nodiscard]] u64 inputGeneration()const{ return m_inputGeneration; }
-    [[nodiscard]] u64 revision()const{ return m_revision; }
-    [[nodiscard]] u64 selectedKey()const{ return m_selected; }
-    [[nodiscard]] u64 cursorKey()const{ return m_cursor; }
-    [[nodiscard]] const RadioGroupPlacement& placement()const{ return m_placement; }
-    [[nodiscard]] RadioGroupSnapshot snapshot()const;
-    [[nodiscard]] bool matches(const RadioGroupSnapshot& snapshot)const;
-    void select(u64 key);
-    void reset();
+    [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
+    [[nodiscard]] u64 inputGeneration()const noexcept{ return m_inputGeneration; }
+    [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
+    [[nodiscard]] u64 selectedKey()const noexcept{ return m_selected; }
+    [[nodiscard]] u64 cursorKey()const noexcept{ return m_cursor; }
+    [[nodiscard]] const RadioGroupPlacement& placement()const noexcept{ return m_placement; }
+    [[nodiscard]] RadioGroupSnapshot snapshot()const noexcept;
+    [[nodiscard]] bool matches(const RadioGroupSnapshot& snapshot)const noexcept;
+    void select(u64 key)noexcept;
+    void reset()noexcept;
 
 
 private:
-    void advanceRevision();
+    void advanceRevision()noexcept;
 
 
 private:
@@ -107,7 +107,7 @@ private:
 // An optional guard is borrowed only during reconciliation to stop source calls when its declaration context fails.
 interface IRadioGroupReconcileGuard{
 public:
-    virtual ~IRadioGroupReconcileGuard() = default;
+    virtual ~IRadioGroupReconcileGuard()noexcept = default;
 
 
 public:

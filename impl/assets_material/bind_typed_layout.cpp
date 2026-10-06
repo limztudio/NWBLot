@@ -421,7 +421,7 @@ static bool ParseMaterialBindBlockClass(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static UInt4U ToMaterialTypedLayoutDefaultValue(const MaterialTypedValueData& parameter){
+static UInt4U ToMaterialTypedLayoutDefaultValue(const MaterialTypedValueData& parameter)noexcept{
     UInt4U result = {};
     for(u32 i = 0u; i < NWB_MATERIAL_TYPED_VALUE_COMPONENT_COUNT; ++i)
         result.raw[i] = parameter.data.raw[i];

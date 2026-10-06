@@ -15,7 +15,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ClipboardStatus::Enum ValidateClipboardUtf8Text(const AStringView text){
+ClipboardStatus::Enum ValidateClipboardUtf8Text(const AStringView text)noexcept{
     if(text.size() > s_ClipboardMaxTextBytes)
         return ClipboardStatus::TooLarge;
     usize offset = 0u;
@@ -80,7 +80,7 @@ ClipboardTextAccumulator::ClipboardTextAccumulator(Alloc::GlobalArena& arena)
     : m_text(arena)
 {}
 
-void ClipboardTextAccumulator::clear(){
+void ClipboardTextAccumulator::clear()noexcept{
     m_text.clear();
     m_status = ClipboardStatus::Success;
 }

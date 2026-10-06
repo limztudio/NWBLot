@@ -31,7 +31,7 @@ namespace __hidden_vulkan_descriptor_heap{
     // Reserve TLAS blocks across in-flight generation replacement.
     inline constexpr u32 s_AccelStructCapacity = s_MaxFramesInFlight + 2u;
 
-    bool IsBindlessHeapAbiValid(const GpuDescriptorHeapAbi& abi){
+    bool IsBindlessHeapAbiValid(const GpuDescriptorHeapAbi& abi)noexcept{
         if(!abi.valid())
             return false;
         if(
@@ -113,7 +113,7 @@ GpuDescriptorHeap::PendingRecordingLease GpuDescriptorHeap::acquirePendingRecord
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptorClass)const{
+u32 GpuDescriptorHeap::getRegisterSlot(const GpuDescriptorClass::Enum descriptorClass)const noexcept{
     const GpuDescriptorHeapAbi& abi = m_desc.bindlessHeapAbi;
     switch(descriptorClass){
     case GpuDescriptorClass::SampledImage:  return abi.sampledImageBinding;

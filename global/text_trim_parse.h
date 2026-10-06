@@ -16,7 +16,7 @@
 
 
 template<typename CharT>
-[[nodiscard]] inline BasicStringView<CharT> TrimView(const BasicStringView<CharT> text){
+[[nodiscard]] inline BasicStringView<CharT> TrimView(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     usize begin = 0;
     while(begin < text.size() && IsAsciiSpace(text[begin]))
         ++begin;
@@ -28,11 +28,14 @@ template<typename CharT>
     return text.substr(begin, end - begin);
 }
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicStringView<CharT> TrimView(const BasicString<CharT, ArenaT>& text){
+[[nodiscard]] inline BasicStringView<CharT> TrimView(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
     return TrimView<CharT>(BasicStringView<CharT>{text});
 }
 template<typename StringT> requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
-[[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimView(const StringT& text){
+[[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimView(const StringT& text)noexcept(
+    noexcept(BasicStringView<typename StringT::value_type>{text.data(), text.size()})
+    && IsArithmetic_V<typename StringT::value_type>
+){
     using CharT = typename StringT::value_type;
     return TrimView<CharT>(BasicStringView<CharT>{text.data(), text.size()});
 }
@@ -41,17 +44,20 @@ BasicStringView<CharT> TrimView(const BasicString<CharT, ArenaT>&&) = delete;
 
 
 template<typename CharT>
-[[nodiscard]] inline BasicStringView<CharT> TrimLeftView(BasicStringView<CharT> text){
+[[nodiscard]] inline BasicStringView<CharT> TrimLeftView(BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     while(!text.empty() && IsAsciiSpace(text.front()))
         text.remove_prefix(1u);
     return text;
 }
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline BasicStringView<CharT> TrimLeftView(const BasicString<CharT, ArenaT>& text){
+[[nodiscard]] inline BasicStringView<CharT> TrimLeftView(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
     return TrimLeftView<CharT>(BasicStringView<CharT>{text});
 }
 template<typename StringT> requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
-[[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimLeftView(const StringT& text){
+[[nodiscard]] inline BasicStringView<typename StringT::value_type> TrimLeftView(const StringT& text)noexcept(
+    noexcept(BasicStringView<typename StringT::value_type>{text.data(), text.size()})
+    && IsArithmetic_V<typename StringT::value_type>
+){
     using CharT = typename StringT::value_type;
     return TrimLeftView<CharT>(BasicStringView<CharT>{text.data(), text.size()});
 }
@@ -60,24 +66,24 @@ BasicStringView<CharT> TrimLeftView(const BasicString<CharT, ArenaT>&&) = delete
 
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool StartsWith(const BasicStringView<CharT> text, const BasicStringView<CharT> prefix){
+[[nodiscard]] inline constexpr bool StartsWith(const BasicStringView<CharT> text, const BasicStringView<CharT> prefix)noexcept(IsArithmetic_V<CharT>){
     return text.size() >= prefix.size() && BasicStringView<CharT>(text.data(), prefix.size()) == prefix;
 }
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline constexpr bool StartsWith(const BasicString<CharT, ArenaT>& text, const BasicStringView<CharT> prefix){
+[[nodiscard]] inline constexpr bool StartsWith(const BasicString<CharT, ArenaT>& text, const BasicStringView<CharT> prefix)noexcept(IsArithmetic_V<CharT>){
     return StartsWith<CharT>(BasicStringView<CharT>{text}, prefix);
 }
 template<typename CharT, usize N>
-[[nodiscard]] inline constexpr bool StartsWith(const BasicStringView<CharT> text, const CharT (&prefix)[N]){
+[[nodiscard]] inline constexpr bool StartsWith(const BasicStringView<CharT> text, const CharT (&prefix)[N])noexcept(IsArithmetic_V<CharT>){
     return StartsWith<CharT>(text, BasicStringView<CharT>(prefix, N > 0u ? N - 1u : 0u));
 }
 template<typename CharT, typename ArenaT, usize N>
-[[nodiscard]] inline constexpr bool StartsWith(const BasicString<CharT, ArenaT>& text, const CharT (&prefix)[N]){
+[[nodiscard]] inline constexpr bool StartsWith(const BasicString<CharT, ArenaT>& text, const CharT (&prefix)[N])noexcept(IsArithmetic_V<CharT>){
     return StartsWith<CharT>(BasicStringView<CharT>{text}, BasicStringView<CharT>(prefix, N > 0u ? N - 1u : 0u));
 }
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool IsPathPrefixText(const BasicStringView<CharT> root, const BasicStringView<CharT> file){
+[[nodiscard]] inline constexpr bool IsPathPrefixText(const BasicStringView<CharT> root, const BasicStringView<CharT> file)noexcept(IsArithmetic_V<CharT>){
     if(root == file)
         return true;
     return
@@ -143,7 +149,7 @@ template<typename CharT, typename ArenaT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool HasCrlfLineEndings(const BasicStringView<CharT> text){
+[[nodiscard]] inline bool HasCrlfLineEndings(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     for(usize i = 1u; i < text.size(); ++i){
         if(text[i - 1u] == CharT('\r') && text[i] == CharT('\n'))
             return true;
@@ -243,11 +249,11 @@ inline void StripUtf8Bom(StringT& inOutText){
 }
 
 
-[[nodiscard]] inline bool IsUtf8Continuation(const u8 value){
+[[nodiscard]] inline bool IsUtf8Continuation(const u8 value)noexcept{
     return (value & TextDetail::s_Utf8ContinuationMask) == TextDetail::s_Utf8ContinuationMarker;
 }
 
-[[nodiscard]] inline i32 DecodeUtf8CodePoint(const AStringView bytes, u32& unicode){
+[[nodiscard]] inline i32 DecodeUtf8CodePoint(const AStringView bytes, u32& unicode)noexcept{
     if(bytes.empty())
         return 0;
 
@@ -309,7 +315,7 @@ inline void StripUtf8Bom(StringT& inOutText){
     return 0;
 }
 
-[[nodiscard]] inline bool IsTextInputCodePoint(const u32 unicode){
+[[nodiscard]] inline bool IsTextInputCodePoint(const u32 unicode)noexcept{
     if(unicode < TextDetail::s_AsciiControlMaxExclusive || unicode == TextDetail::s_AsciiDelete)
         return false;
     if(unicode > TextDetail::s_UnicodeMaxCodePoint)
@@ -434,7 +440,7 @@ template<usize N>
 inline constexpr int s_DecimalParseBase = 10;
 
 
-[[nodiscard]] inline bool ParseI64FromChars(const AStringView text, i64& outValue){
+[[nodiscard]] inline bool ParseI64FromChars(const AStringView text, i64& outValue)noexcept{
     if(text.empty())
         return false;
     const char* begin = text.data();
@@ -443,7 +449,7 @@ inline constexpr int s_DecimalParseBase = 10;
     return parseResult.ec == std::errc() && parseResult.ptr == end;
 }
 
-[[nodiscard]] inline bool ParseU64FromChars(const AStringView text, u64& outValue){
+[[nodiscard]] inline bool ParseU64FromChars(const AStringView text, u64& outValue)noexcept{
     if(text.empty())
         return false;
     const char* begin = text.data();
@@ -452,7 +458,7 @@ inline constexpr int s_DecimalParseBase = 10;
     return parseResult.ec == std::errc() && parseResult.ptr == end;
 }
 
-[[nodiscard]] inline bool ParseF64FromChars(const AStringView text, f64& outValue){
+[[nodiscard]] inline bool ParseF64FromChars(const AStringView text, f64& outValue)noexcept{
     if(text.empty())
         return false;
     const char* begin = text.data();
@@ -461,7 +467,7 @@ inline constexpr int s_DecimalParseBase = 10;
     return parseResult.ec == std::errc() && parseResult.ptr == end;
 }
 
-[[nodiscard]] inline bool ParseF32FromChars(const AStringView text, f32& outValue){
+[[nodiscard]] inline bool ParseF32FromChars(const AStringView text, f32& outValue)noexcept{
     if(text.empty())
         return false;
     const char* begin = text.data();
@@ -471,7 +477,7 @@ inline constexpr int s_DecimalParseBase = 10;
 }
 
 
-[[nodiscard]] inline bool ParseU64(const AStringView text, u64& outValue){
+[[nodiscard]] inline bool ParseU64(const AStringView text, u64& outValue)noexcept{
     outValue = 0;
     if(text.empty())
         return false;
@@ -479,7 +485,7 @@ inline constexpr int s_DecimalParseBase = 10;
     return ParseU64FromChars(text, outValue);
 }
 
-[[nodiscard]] inline bool ParseI64(const AStringView text, i64& outValue){
+[[nodiscard]] inline bool ParseI64(const AStringView text, i64& outValue)noexcept{
     outValue = 0;
     if(text.empty())
         return false;
@@ -488,7 +494,7 @@ inline constexpr int s_DecimalParseBase = 10;
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool NextTextLine(const BasicStringView<CharT> text, usize& inOutCursor, BasicStringView<CharT>& outLine){
+[[nodiscard]] inline bool NextTextLine(const BasicStringView<CharT> text, usize& inOutCursor, BasicStringView<CharT>& outLine)noexcept(IsArithmetic_V<CharT>){
     if(inOutCursor >= text.size())
         return false;
 
@@ -503,7 +509,15 @@ template<typename CharT>
 }
 
 template<typename ByteContainer>
-[[nodiscard]] inline bool NextLfByteLine(const ByteContainer& bytes, usize& inOutCursor, AStringView& outLine){
+[[nodiscard]] inline bool NextLfByteLine(const ByteContainer& bytes, usize& inOutCursor, AStringView& outLine)noexcept(
+    IsArithmetic_V<typename ByteContainer::value_type>
+    && IsSame_V<decltype(bytes.size()), usize>
+    && IsArithmetic_V<RemoveCVRef_T<decltype(bytes[inOutCursor])>>
+    && IsPointer_V<decltype(bytes.data())>
+    && noexcept(bytes.size())
+    && noexcept(bytes[inOutCursor])
+    && noexcept(bytes.data())
+){
     using ByteType = typename ByteContainer::value_type;
 static constexpr usize s_ByteTypeByteSize = 1u;
     static_assert(sizeof(ByteType) == s_ByteTypeByteSize, "NextLfByteLine requires a byte-sized container");
@@ -528,7 +542,7 @@ static constexpr usize s_ByteTypeByteSize = 1u;
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool NextTrimmedTextLine(const BasicStringView<CharT> text, usize& inOutCursor, BasicStringView<CharT>& outLine){
+[[nodiscard]] inline bool NextTrimmedTextLine(const BasicStringView<CharT> text, usize& inOutCursor, BasicStringView<CharT>& outLine)noexcept(IsArithmetic_V<CharT>){
     if(!NextTextLine(text, inOutCursor, outLine))
         return false;
 
@@ -536,7 +550,7 @@ template<typename CharT>
     return true;
 }
 
-[[nodiscard]] inline bool FindLineKeyValue(const AStringView text, const AStringView key, AStringView& outValue){
+[[nodiscard]] inline bool FindLineKeyValue(const AStringView text, const AStringView key, AStringView& outValue)noexcept{
     outValue = AStringView();
 
     usize cursor = 0u;
@@ -564,7 +578,7 @@ template<typename ArenaT>
     return true;
 }
 
-[[nodiscard]] inline bool FindLineKeyValueU64(const AStringView text, const AStringView key, u64& outValue){
+[[nodiscard]] inline bool FindLineKeyValueU64(const AStringView text, const AStringView key, u64& outValue)noexcept{
     AStringView value;
     return FindLineKeyValue(text, key, value) && ParseU64(value, outValue);
 }

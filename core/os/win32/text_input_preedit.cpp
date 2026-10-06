@@ -66,7 +66,7 @@ TextInputAdmission::Enum Win32TextInputService::publishCompositionPreedit(
     return admitted;
 }
 
-void Win32TextInputService::clearCompositionPreedit(){
+void Win32TextInputService::clearCompositionPreedit()noexcept{
     m_preeditText.clear();
     m_preeditCaretByte = 0u;
     m_pendingPreeditHighSurrogate = 0u;

@@ -34,13 +34,13 @@ public:
 
 class RejectedReader final : public IMetaReader{
 public:
-    explicit RejectedReader(const bool oversized)
+    explicit RejectedReader(const bool oversized)noexcept
         : m_oversized(oversized)
     {}
 
 
 public:
-    [[nodiscard]] virtual isize read(MChar*, const usize maxBytes)override{
+    [[nodiscard]] virtual isize read(MChar*, const usize maxBytes)noexcept override{
         return m_oversized ? static_cast<isize>(maxBytes + 1u) : -1;
     }
 

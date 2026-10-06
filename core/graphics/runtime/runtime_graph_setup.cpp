@@ -51,7 +51,7 @@ struct SetupUploadReadinessBridgeGraphTask{
         GpuPhysicalQueueId consumerQueue;
     };
 
-    [[nodiscard]] static GpuTaskCommandRequirements CommandRequirements(const Payload& payload){
+    [[nodiscard]] static GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{
         GpuTaskCommandRequirements commands;
         commands.externalQueue = payload.consumerQueue;
         return commands;
@@ -62,7 +62,7 @@ struct SetupUploadReadinessBridgeGraphTask{
         const Payload& payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
-    ){
+    )noexcept{
         static_cast<void>(payload);
         static_cast<void>(commandList);
         static_cast<void>(context);
@@ -83,7 +83,7 @@ struct StandaloneTaskGraphRecoveryTask{
         const Payload& payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
-    ){
+    )noexcept{
         static_cast<void>(context);
         return !payload.frameTimingTransaction
             || !payload.frameTimingTransaction->needsRetirement()
@@ -206,7 +206,7 @@ struct FrameTimingResetGraphTask{
         const Payload& payload,
         CommandList& commandList,
         const GpuTaskRecordContext& context
-    ){
+    )noexcept{
         static_cast<void>(context);
         if(!payload.timing)
             return false;

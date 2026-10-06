@@ -48,7 +48,7 @@ public:
         const UiSkinRegion& fill,
         f32 density,
         ProgressMetrics& out
-    );
+    )noexcept;
     // Paint fillCanvas under fillReveal intersected with clip to preserve small-fill skin borders.
     [[nodiscard]] static bool Place(
         const Rect& bounds,
@@ -56,7 +56,7 @@ public:
         const ProgressMetrics& metrics,
         f64 fraction,
         ProgressPlacement& out
-    );
+    )noexcept;
 };
 
 

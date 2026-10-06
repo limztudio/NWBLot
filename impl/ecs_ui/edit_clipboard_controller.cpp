@@ -109,7 +109,7 @@ bool UiEditClipboardController::cancel(){
 }
 
 
-void UiEditClipboardController::clearRequest(){
+void UiEditClipboardController::clearRequest()noexcept{
     m_token = {};
     m_owner = {};
     m_action = Ui::EditClipboardAction::None;

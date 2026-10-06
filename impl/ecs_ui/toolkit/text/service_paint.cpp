@@ -131,7 +131,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
     for(auto& glyph : prepared){
         if(glyph.sdfPage){
             const SharedSdfAtlasPage& page = *glyph.sdfPage;
-            const auto existing = FindIf(m_sdfPages.begin(), m_sdfPages.end(), [&page](const SharedSdfAtlasPage& item){
+            const auto existing = FindIf(m_sdfPages.begin(), m_sdfPages.end(), [&page](const SharedSdfAtlasPage& item)noexcept{
                 return item.get() == page.get();
             });
             glyph.pageIndex = static_cast<u32>(existing - m_sdfPages.begin());
@@ -142,7 +142,7 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
             SharedGlyphPage page = m_atlas->page(glyph.pageIndex);
             if(!page)
                 return false;
-            const auto existing = FindIf(m_pages.begin(), m_pages.end(), [&page](const SharedGlyphPage& item){
+            const auto existing = FindIf(m_pages.begin(), m_pages.end(), [&page](const SharedGlyphPage& item)noexcept{
                 return item.get() == page.get();
             });
             glyph.pageIndex = static_cast<u32>(existing - m_pages.begin());

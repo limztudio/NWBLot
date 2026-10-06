@@ -24,7 +24,7 @@ using MessageTypeId = usize;
 
 
 template<typename T>
-inline MessageTypeId MessageType(){
+inline MessageTypeId MessageType()noexcept{
     return ECSDetail::TypeCounter<ECSDetail::MessageTypeTag>::Id<Decay_T<T>>();
 }
 
@@ -122,7 +122,7 @@ private:
                 func(message);
         }
 
-        usize size()const{ return m_readBuffer.size(); }
+        usize size()const noexcept{ return m_readBuffer.size(); }
 
 
     public:
@@ -133,7 +133,7 @@ private:
 
         virtual void clear()override{
             m_readBuffer.clear();
-            drainPending([](T&){});
+            drainPending([](T&)noexcept{});
         }
 
 

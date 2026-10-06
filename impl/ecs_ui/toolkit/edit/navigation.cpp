@@ -25,7 +25,7 @@ namespace RunClass{
     enum Enum : u8{ Whitespace, Punctuation, Text, LineBreak };
 };
 
-static bool IsWhitespace(const u32 scalar){
+static bool IsWhitespace(const u32 scalar)noexcept{
     return (scalar >= 0x9u && scalar <= 0xDu) || scalar == 0x20u || scalar == 0x85u || scalar == 0xA0u
         || scalar == 0x1680u || (scalar >= 0x2000u && scalar <= 0x200Au) || scalar == 0x2028u
         || scalar == 0x2029u || scalar == 0x202Fu || scalar == 0x205Fu || scalar == 0x3000u;
@@ -96,17 +96,17 @@ bool EditModel::move(const EditMove::Enum movement, const bool extend){
     return true;
 }
 
-bool EditModel::isBoundary(const usize position)const{
+bool EditModel::isBoundary(const usize position)const noexcept{
     const auto found = LowerBound(m_boundaries.begin(), m_boundaries.end(), position);
     return found != m_boundaries.end() && *found == position;
 }
 
-usize EditModel::previousBoundary(const usize position)const{
+usize EditModel::previousBoundary(const usize position)const noexcept{
     const auto found = LowerBound(m_boundaries.begin(), m_boundaries.end(), position);
     return found == m_boundaries.begin() ? 0u : *(found - 1);
 }
 
-usize EditModel::nextBoundary(const usize position)const{
+usize EditModel::nextBoundary(const usize position)const noexcept{
     auto found = LowerBound(m_boundaries.begin(), m_boundaries.end(), position);
     if(found != m_boundaries.end() && *found == position)
         ++found;

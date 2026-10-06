@@ -123,7 +123,7 @@ struct ReportSectionRange{
     usize contentBegin = AStringView::npos;
     usize contentEnd = AStringView::npos;
 
-    [[nodiscard]] bool found()const{ return removeBegin != AStringView::npos; }
+    [[nodiscard]] bool found()const noexcept{ return removeBegin != AStringView::npos; }
 };
 
 [[nodiscard]] static bool FindReportSection(

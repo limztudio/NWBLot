@@ -65,19 +65,19 @@ struct GpuDescriptorHandle{
     u32 value = s_Invalid;
 
     constexpr GpuDescriptorHandle() = default;
-    constexpr explicit GpuDescriptorHandle(u32 raw) : value(raw){}
+    constexpr explicit GpuDescriptorHandle(u32 raw)noexcept : value(raw){}
 
-    static constexpr GpuDescriptorHandle Make(GpuDescriptorClass::Enum cls, u32 slot){
+    static constexpr GpuDescriptorHandle Make(GpuDescriptorClass::Enum cls, u32 slot)noexcept{
         return GpuDescriptorHandle((static_cast<u32>(cls) << s_ClassShift) | (slot & s_SlotMask));
     }
-    static constexpr GpuDescriptorHandle Invalid(){ return GpuDescriptorHandle(s_Invalid); }
+    static constexpr GpuDescriptorHandle Invalid()noexcept{ return GpuDescriptorHandle(s_Invalid); }
 
-    [[nodiscard]] constexpr bool valid()const{ return value != s_Invalid; }
-    [[nodiscard]] constexpr GpuDescriptorClass::Enum descriptorClass()const{ return static_cast<GpuDescriptorClass::Enum>(value >> s_ClassShift); }
-    [[nodiscard]] constexpr u32 slot()const{ return value & s_SlotMask; }
+    [[nodiscard]] constexpr bool valid()const noexcept{ return value != s_Invalid; }
+    [[nodiscard]] constexpr GpuDescriptorClass::Enum descriptorClass()const noexcept{ return static_cast<GpuDescriptorClass::Enum>(value >> s_ClassShift); }
+    [[nodiscard]] constexpr u32 slot()const noexcept{ return value & s_SlotMask; }
 };
-inline constexpr bool operator==(const GpuDescriptorHandle lhs, const GpuDescriptorHandle rhs){ return lhs.value == rhs.value; }
-inline constexpr bool operator!=(const GpuDescriptorHandle lhs, const GpuDescriptorHandle rhs){ return lhs.value != rhs.value; }
+inline constexpr bool operator==(const GpuDescriptorHandle lhs, const GpuDescriptorHandle rhs)noexcept{ return lhs.value == rhs.value; }
+inline constexpr bool operator!=(const GpuDescriptorHandle lhs, const GpuDescriptorHandle rhs)noexcept{ return lhs.value != rhs.value; }
 static constexpr usize s_GpuDescriptorHandleByteSize = 4;
 static_assert(sizeof(GpuDescriptorHandle) == s_GpuDescriptorHandleByteSize, "GpuDescriptorHandle is supposed to be a single 32-bit word");
 
@@ -102,7 +102,7 @@ struct GpuDescriptorHeapAbi{
     u32 samplerBinding = s_Unspecified;
     u32 accelStructBinding = s_Unspecified;
 
-    [[nodiscard]] constexpr bool valid()const{
+    [[nodiscard]] constexpr bool valid()const noexcept{
         return resourceSetIndex != s_Unspecified
             && samplerSetIndex != s_Unspecified
             && accelStructSetIndex != s_Unspecified
@@ -129,9 +129,9 @@ struct GpuDescriptorHeapDesc{
     u32 samplerCapacity = 0;    // samplers live in their own global namespace
     GpuDescriptorHeapAbi bindlessHeapAbi;
 
-    constexpr GpuDescriptorHeapDesc& setResourceCapacity(u32 value){ resourceCapacity = value; return *this; }
-    constexpr GpuDescriptorHeapDesc& setSamplerCapacity(u32 value){ samplerCapacity = value; return *this; }
-    constexpr GpuDescriptorHeapDesc& setBindlessHeapAbi(const GpuDescriptorHeapAbi& value){ bindlessHeapAbi = value; return *this; }
+    constexpr GpuDescriptorHeapDesc& setResourceCapacity(u32 value)noexcept{ resourceCapacity = value; return *this; }
+    constexpr GpuDescriptorHeapDesc& setSamplerCapacity(u32 value)noexcept{ samplerCapacity = value; return *this; }
+    constexpr GpuDescriptorHeapDesc& setBindlessHeapAbi(const GpuDescriptorHeapAbi& value)noexcept{ bindlessHeapAbi = value; return *this; }
 };
 
 

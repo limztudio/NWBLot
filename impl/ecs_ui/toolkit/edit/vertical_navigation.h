@@ -37,24 +37,24 @@ struct EditNavigationResult{
 // Caller-owned preferred-column intent is lent synchronously; identical accepted intentions still retire old snapshots.
 class EditNavigationState final : NoCopy{
 public:
-    EditNavigationState();
+    EditNavigationState()noexcept;
     EditNavigationState(EditNavigationState&&) = delete;
     EditNavigationState& operator=(EditNavigationState&&) = delete;
 
 
 public:
-    [[nodiscard]] u64 instanceGeneration()const{ return m_instanceGeneration; }
-    [[nodiscard]] u64 generation()const{ return m_generation; }
-    [[nodiscard]] f32 preferredX()const{ return m_preferredX; }
-    [[nodiscard]] bool hasPreferredX()const{ return m_valid; }
-    [[nodiscard]] EditNavigationSnapshot snapshot()const;
-    [[nodiscard]] bool matches(const EditNavigationSnapshot& snapshot)const;
-    [[nodiscard]] bool setPreferredX(f32 preferredX);
-    void reset();
+    [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
+    [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
+    [[nodiscard]] f32 preferredX()const noexcept{ return m_preferredX; }
+    [[nodiscard]] bool hasPreferredX()const noexcept{ return m_valid; }
+    [[nodiscard]] EditNavigationSnapshot snapshot()const noexcept;
+    [[nodiscard]] bool matches(const EditNavigationSnapshot& snapshot)const noexcept;
+    [[nodiscard]] bool setPreferredX(f32 preferredX)noexcept;
+    void reset()noexcept;
 
 
 private:
-    void advanceGeneration();
+    void advanceGeneration()noexcept;
 
 
 private:
@@ -71,7 +71,7 @@ private:
 // Resolve current committed text at the key's ordered event position. Return values; never retain the model or snapshot.
 interface IEditNavigationResolver : private NoCopy{
 public:
-    virtual ~IEditNavigationResolver() = default;
+    virtual ~IEditNavigationResolver()noexcept = default;
 
 
 public:
@@ -79,7 +79,7 @@ public:
         const EditNavigationSnapshot& preferred, f32 viewportHeight) = 0;
 };
 
-[[nodiscard]] bool TranslateEditNavigation(const InputCommandIntent& intent, EditNavigationDirection::Enum& output);
+[[nodiscard]] bool TranslateEditNavigation(const InputCommandIntent& intent, EditNavigationDirection::Enum& output)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

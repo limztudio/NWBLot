@@ -29,7 +29,7 @@ namespace MaterialBindDetail{
 bool ParseMaterialBindResourceFieldTypeText(
     const AStringView typeText,
     MaterialLayoutFieldType::Enum& outFieldType
-);
+)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -324,7 +324,7 @@ static u32* MaterialBindStorageByteSizePointer(
     const MaterialBlockClass::Enum blockClass,
     u32& inOutConstantByteSize,
     u32& inOutMutableByteSize
-){
+)noexcept{
     switch(blockClass){
     case MaterialBlockClass::MaterialConstant: return &inOutConstantByteSize;
     case MaterialBlockClass::MaterialMutable: return &inOutMutableByteSize;

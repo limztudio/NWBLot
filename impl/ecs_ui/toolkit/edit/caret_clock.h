@@ -18,7 +18,7 @@ NWB_IMPL_UI_BEGIN
 
 
 // The caret has a one-second cycle. Invalid or nonpositive deltas leave its phase unchanged.
-[[nodiscard]] f64 AdvanceCaretPhase(f64 phase, f64 deltaSeconds);
+[[nodiscard]] f64 AdvanceCaretPhase(f64 phase, f64 deltaSeconds)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

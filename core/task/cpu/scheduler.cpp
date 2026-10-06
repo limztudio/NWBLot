@@ -62,7 +62,7 @@ CpuTaskScheduler::Execution::Execution(
 {
     s_Execution = this;
 }
-CpuTaskScheduler::Execution::~Execution(){
+CpuTaskScheduler::Execution::~Execution()noexcept{
     s_Execution = previous;
 }
 
@@ -78,7 +78,7 @@ u64 CpuTaskScheduler::AllocateDomainIdentity()noexcept{
     return identity;
 }
 
-CpuTaskSchedulerConfig CpuTaskScheduler::WorkerConfig(const u32 workerCount){
+CpuTaskSchedulerConfig CpuTaskScheduler::WorkerConfig(const u32 workerCount)noexcept{
     CpuTaskSchedulerConfig config;
     config.workerCount = workerCount;
     return config;
@@ -112,7 +112,7 @@ CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     InteropVector<CpuWorkerPlacement> topology;
     if(!QueryCpuWorkerPlacements(topology))
         topology.clear();
-    Sort(topology.begin(), topology.end(), [](const CpuWorkerPlacement& lhs, const CpuWorkerPlacement& rhs){
+    Sort(topology.begin(), topology.end(), [](const CpuWorkerPlacement& lhs, const CpuWorkerPlacement& rhs)noexcept{
         return lhs.performanceClass > rhs.performanceClass;
     });
     const u32 available = topology.empty() ? Max(QueryCpuCoreCount(CpuAffinity::Any), 1u) : static_cast<u32>(topology.size());

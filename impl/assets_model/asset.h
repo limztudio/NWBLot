@@ -66,12 +66,12 @@ public:
 
 
 public:
-    explicit Model(Core::Assets::AssetArena& arena)
+    explicit Model(Core::Assets::AssetArena& arena)noexcept
         : m_skeletonObjects(arena)
         , m_staticMeshObjects(arena)
         , m_skinnedMeshObjects(arena)
     {}
-    Model(Core::Assets::AssetArena& arena, const Name& virtualPath)
+    Model(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept
         : Core::Assets::TypedAsset<Model>(virtualPath)
         , m_skeletonObjects(arena)
         , m_staticMeshObjects(arena)
@@ -88,16 +88,16 @@ public:
         SkeletonObjectVector&& skeletonObjects,
         StaticMeshObjectVector&& staticMeshObjects,
         SkinnedMeshObjectVector&& skinnedMeshObjects
-    ){
+    )noexcept{
         m_skeletonObjects = Move(skeletonObjects);
         m_staticMeshObjects = Move(staticMeshObjects);
         m_skinnedMeshObjects = Move(skinnedMeshObjects);
     }
 
 public:
-    [[nodiscard]] const SkeletonObjectVector& skeletonObjects()const{ return m_skeletonObjects; }
-    [[nodiscard]] const StaticMeshObjectVector& staticMeshObjects()const{ return m_staticMeshObjects; }
-    [[nodiscard]] const SkinnedMeshObjectVector& skinnedMeshObjects()const{ return m_skinnedMeshObjects; }
+    [[nodiscard]] const SkeletonObjectVector& skeletonObjects()const noexcept{ return m_skeletonObjects; }
+    [[nodiscard]] const StaticMeshObjectVector& staticMeshObjects()const noexcept{ return m_staticMeshObjects; }
+    [[nodiscard]] const SkinnedMeshObjectVector& skinnedMeshObjects()const noexcept{ return m_skinnedMeshObjects; }
 
 
 private:

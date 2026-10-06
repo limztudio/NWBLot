@@ -387,8 +387,8 @@ public:
         return isDeviceLost() || m_deviceQuarantined.load(MemoryOrder::acquire);
     }
     void quarantineDevice()noexcept{ m_deviceQuarantined.store(true, MemoryOrder::release); }
-    [[nodiscard]] u32 getQueueFamilyIndex(CommandQueue::Enum queue)const;
-    [[nodiscard]] u32 getQueueFamilyIndex(const GpuPhysicalQueueId& queue)const;
+    [[nodiscard]] u32 getQueueFamilyIndex(CommandQueue::Enum queue)const noexcept;
+    [[nodiscard]] u32 getQueueFamilyIndex(const GpuPhysicalQueueId& queue)const noexcept;
     [[nodiscard]] bool usesConcurrentQueueSharing(ResourceQueueSharing::Mask sharing)const{
         return UsesConcurrentQueueSharing(sharing, m_context);
     }
@@ -408,7 +408,7 @@ public:
     bool isAmdBreadcrumbEnabled()const noexcept{ return m_gpuCrashDiagnosticsEnabled && m_context.extensions.amdBufferMarker && m_amdBreadcrumb.metadata && m_amdBreadcrumb.buffer != VK_NULL_HANDLE; }
     // NV and AMD marker paths share one command-list tracker.
     bool isAnyGpuMarkerEnabled()const noexcept{ return isGpuCrashDiagnosticsEnabled() || isAmdBreadcrumbEnabled(); }
-    [[nodiscard]] GpuCrashTracker& getGpuCrashTracker(){ return m_gpuCrashTracker; }
+    [[nodiscard]] GpuCrashTracker& getGpuCrashTracker()noexcept{ return m_gpuCrashTracker; }
     void captureDeviceLoss(AStringView context);
 
     [[nodiscard]] AmdBreadcrumbWrite reserveAmdBreadcrumb(
@@ -423,9 +423,9 @@ public:
     void queueWaitForCommandList(CommandQueue::Enum waitQueue, CommandQueue::Enum executionQueue, u64 instance);
 
 public:
-    [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType);
-    [[nodiscard]] Queue* getQueue(const GpuPhysicalQueueId& queue);
-    [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap(){ return m_gpuDescriptorHeap; }
+    [[nodiscard]] Queue* getQueue(CommandQueue::Enum queueType)noexcept;
+    [[nodiscard]] Queue* getQueue(const GpuPhysicalQueueId& queue)noexcept;
+    [[nodiscard]] GpuDescriptorHeap& getDescriptorHeap()noexcept{ return m_gpuDescriptorHeap; }
 
 
 private:

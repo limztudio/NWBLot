@@ -19,12 +19,12 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Queue* Device::getQueue(const CommandQueue::Enum queueType){
+Queue* Device::getQueue(const CommandQueue::Enum queueType)noexcept{
     const u32 index = static_cast<u32>(queueType);
     return index < static_cast<u32>(CommandQueue::kCount) ? m_primaryQueues[index] : nullptr;
 }
 
-Queue* Device::getQueue(const GpuPhysicalQueueId& queue){
+Queue* Device::getQueue(const GpuPhysicalQueueId& queue)noexcept{
     if(!queue.valid() || queue.deviceGeneration != m_deviceGeneration || queue.index >= m_physicalQueues.size())
         return nullptr;
     Queue* const result = m_physicalQueues[queue.index];

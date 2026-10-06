@@ -203,12 +203,12 @@ struct U32VectorView{
     const u32* values = nullptr;
     usize valueCount = 0u;
 
-    [[nodiscard]] bool empty()const{ return valueCount == 0u; }
-    [[nodiscard]] usize size()const{ return valueCount; }
-    [[nodiscard]] const u32* data()const{ return values; }
-    [[nodiscard]] const u32* begin()const{ return values; }
-    [[nodiscard]] const u32* end()const{ return values + valueCount; }
-    [[nodiscard]] u32 operator[](const usize index)const{ return values[index]; }
+    [[nodiscard]] bool empty()const noexcept{ return valueCount == 0u; }
+    [[nodiscard]] usize size()const noexcept{ return valueCount; }
+    [[nodiscard]] const u32* data()const noexcept{ return values; }
+    [[nodiscard]] const u32* begin()const noexcept{ return values; }
+    [[nodiscard]] const u32* end()const noexcept{ return values + valueCount; }
+    [[nodiscard]] u32 operator[](const usize index)const noexcept{ return values[index]; }
 };
 
 

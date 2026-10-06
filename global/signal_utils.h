@@ -41,7 +41,7 @@ enum Enum : i32{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool SetSignalHandler(ProcessSignal::Enum signalValue, SignalHandler handler){
+[[nodiscard]] inline bool SetSignalHandler(ProcessSignal::Enum signalValue, SignalHandler handler)noexcept{
     return std::signal(signalValue, handler) != SIG_ERR;
 }
 

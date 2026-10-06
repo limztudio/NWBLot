@@ -14,7 +14,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateReflectionSettings(const ReflectionSettings& settings){
+bool ValidateReflectionSettings(const ReflectionSettings& settings)noexcept{
     constexpr u32 s_MaxTemporalSamples = 256u;
     constexpr u32 s_MaxSpatialRadius = 3u;
     if(settings.temporalMaxSamples == 0u || settings.temporalMaxSamples > s_MaxTemporalSamples || settings.spatialRadius > s_MaxSpatialRadius)

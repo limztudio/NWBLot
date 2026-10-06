@@ -17,7 +17,7 @@ NWB_ALLOC_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void* CoreAlloc(usize size, ArenaMemoryTracker* arenaTracker){
+void* CoreAlloc(usize size, ArenaMemoryTracker* arenaTracker)noexcept{
     void* const result = scalable_malloc(size);
     if(result){
         const u64 bytes = static_cast<u64>(scalable_msize(result));
@@ -28,7 +28,7 @@ void* CoreAlloc(usize size, ArenaMemoryTracker* arenaTracker){
     return result;
 }
 
-void* CoreRealloc(void* p, usize size, ArenaMemoryTracker* arenaTracker){
+void* CoreRealloc(void* p, usize size, ArenaMemoryTracker* arenaTracker)noexcept{
     const u64 oldBytes = p ? static_cast<u64>(scalable_msize(p)) : 0u;
     void* const result = scalable_realloc(p, size);
     if(result || size == 0u){
@@ -40,7 +40,7 @@ void* CoreRealloc(void* p, usize size, ArenaMemoryTracker* arenaTracker){
     return result;
 }
 
-void* CoreReallocAligned(void* p, usize size, usize align, ArenaMemoryTracker* arenaTracker){
+void* CoreReallocAligned(void* p, usize size, usize align, ArenaMemoryTracker* arenaTracker)noexcept{
     if(align == 0u || (align & (align - 1u)) != 0u)
         return scalable_aligned_realloc(p, size, align);
 
@@ -55,7 +55,7 @@ void* CoreReallocAligned(void* p, usize size, usize align, ArenaMemoryTracker* a
     return result;
 }
 
-void* CoreAllocAligned(usize size, usize align, ArenaMemoryTracker* arenaTracker){
+void* CoreAllocAligned(usize size, usize align, ArenaMemoryTracker* arenaTracker)noexcept{
     void* const result = scalable_aligned_malloc(size, align);
     if(result){
         const u64 bytes = static_cast<u64>(scalable_msize(result));

@@ -15,7 +15,7 @@ NWB_PERF_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void MemoryRecorder::setEnabled(const bool enabled){
+void MemoryRecorder::setEnabled(const bool enabled)noexcept{
     m_enabled = enabled;
     if(m_enabled)
         return;
@@ -29,7 +29,7 @@ void MemoryRecorder::setEnabled(const bool enabled){
     m_emptyDelta = MemoryDelta{};
 }
 
-void MemoryRecorder::clear(){
+void MemoryRecorder::clear()noexcept{
     for(ScopeRecordPtr& scope : m_scopes){
         scope->previousSnapshot = MemorySnapshot{};
         scope->lastSnapshot = MemorySnapshot{};
@@ -64,7 +64,7 @@ void MemoryRecorder::recordSnapshot(
     const MemoryScopeId scope,
     const ::ArenaMemoryStats& stats,
     const u64 frameIndex
-){
+)noexcept{
     if(!m_enabled)
         return;
 
@@ -84,7 +84,7 @@ void MemoryRecorder::recordSnapshot(
     const ::ArenaMemoryStats& stats,
     const u64 frameIndex,
     const MemorySource::Enum source
-){
+)noexcept{
     if(!m_enabled || !scopeName)
         return;
 
@@ -96,7 +96,7 @@ void MemoryRecorder::recordSnapshot(
     recordSnapshot(found.value(), stats, frameIndex);
 }
 
-const MemorySnapshot& MemoryRecorder::snapshot(const Name& scopeName, const MemorySource::Enum source)const{
+const MemorySnapshot& MemoryRecorder::snapshot(const Name& scopeName, const MemorySource::Enum source)const noexcept{
     const auto found = m_scopeMap.find(ScopeKey{ scopeName, source });
     if(found == m_scopeMap.end())
         return m_emptySnapshot;
@@ -104,7 +104,7 @@ const MemorySnapshot& MemoryRecorder::snapshot(const Name& scopeName, const Memo
     return snapshot(found.value());
 }
 
-const MemorySnapshot& MemoryRecorder::snapshot(const MemoryScopeId scope)const{
+const MemorySnapshot& MemoryRecorder::snapshot(const MemoryScopeId scope)const noexcept{
     const ScopeRecord* record = findScope(scope);
     if(!record)
         return m_emptySnapshot;
@@ -112,7 +112,7 @@ const MemorySnapshot& MemoryRecorder::snapshot(const MemoryScopeId scope)const{
     return record->lastSnapshot;
 }
 
-const MemoryDelta& MemoryRecorder::delta(const Name& scopeName, const MemorySource::Enum source)const{
+const MemoryDelta& MemoryRecorder::delta(const Name& scopeName, const MemorySource::Enum source)const noexcept{
     const auto found = m_scopeMap.find(ScopeKey{ scopeName, source });
     if(found == m_scopeMap.end())
         return m_emptyDelta;
@@ -120,7 +120,7 @@ const MemoryDelta& MemoryRecorder::delta(const Name& scopeName, const MemorySour
     return delta(found.value());
 }
 
-const MemoryDelta& MemoryRecorder::delta(const MemoryScopeId scope)const{
+const MemoryDelta& MemoryRecorder::delta(const MemoryScopeId scope)const noexcept{
     const ScopeRecord* record = findScope(scope);
     if(!record)
         return m_emptyDelta;
@@ -128,29 +128,29 @@ const MemoryDelta& MemoryRecorder::delta(const MemoryScopeId scope)const{
     return record->lastDelta;
 }
 
-MemoryScopeId MemoryRecorder::scopeAt(const usize index)const{
+MemoryScopeId MemoryRecorder::scopeAt(const usize index)const noexcept{
     return ::ScopeAt<MemoryScopeId>(m_scopes, index);
 }
 
-Name MemoryRecorder::scopeNameAt(const usize index)const{
+Name MemoryRecorder::scopeNameAt(const usize index)const noexcept{
     return ::ScopeNameAt(m_scopes, index);
 }
 
-const MemorySnapshot& MemoryRecorder::snapshotAt(const usize index)const{
+const MemorySnapshot& MemoryRecorder::snapshotAt(const usize index)const noexcept{
     if(index >= m_scopes.size() || !m_scopes[index])
         return m_emptySnapshot;
 
     return m_scopes[index]->lastSnapshot;
 }
 
-const MemoryDelta& MemoryRecorder::deltaAt(const usize index)const{
+const MemoryDelta& MemoryRecorder::deltaAt(const usize index)const noexcept{
     if(index >= m_scopes.size() || !m_scopes[index])
         return m_emptyDelta;
 
     return m_scopes[index]->lastDelta;
 }
 
-MemoryRecorder::ScopeRecord* MemoryRecorder::findScope(const MemoryScopeId scope)const{
+MemoryRecorder::ScopeRecord* MemoryRecorder::findScope(const MemoryScopeId scope)const noexcept{
     return ::FindNamedScope<MemoryScopeId>(m_scopes, scope);
 }
 
@@ -158,44 +158,44 @@ MemoryRecorder::ScopeRecord* MemoryRecorder::findScope(const MemoryScopeId scope
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const MemorySnapshot& MemoryView::snapshot(const Name& scopeName, const MemorySource::Enum source)const{
+const MemorySnapshot& MemoryView::snapshot(const Name& scopeName, const MemorySource::Enum source)const noexcept{
     static const MemorySnapshot s_EmptySnapshot;
     return m_recorder ? m_recorder->snapshot(scopeName, source) : s_EmptySnapshot;
 }
 
-const MemorySnapshot& MemoryView::snapshot(const MemoryScopeId scope)const{
+const MemorySnapshot& MemoryView::snapshot(const MemoryScopeId scope)const noexcept{
     static const MemorySnapshot s_EmptySnapshot;
     return m_recorder ? m_recorder->snapshot(scope) : s_EmptySnapshot;
 }
 
-const MemoryDelta& MemoryView::delta(const Name& scopeName, const MemorySource::Enum source)const{
+const MemoryDelta& MemoryView::delta(const Name& scopeName, const MemorySource::Enum source)const noexcept{
     static const MemoryDelta s_EmptyDelta;
     return m_recorder ? m_recorder->delta(scopeName, source) : s_EmptyDelta;
 }
 
-const MemoryDelta& MemoryView::delta(const MemoryScopeId scope)const{
+const MemoryDelta& MemoryView::delta(const MemoryScopeId scope)const noexcept{
     static const MemoryDelta s_EmptyDelta;
     return m_recorder ? m_recorder->delta(scope) : s_EmptyDelta;
 }
 
-usize MemoryView::scopeCount()const{
+usize MemoryView::scopeCount()const noexcept{
     return m_recorder ? m_recorder->scopeCount() : 0u;
 }
 
-MemoryScopeId MemoryView::scopeAt(const usize index)const{
+MemoryScopeId MemoryView::scopeAt(const usize index)const noexcept{
     return m_recorder ? m_recorder->scopeAt(index) : MemoryScopeId{};
 }
 
-Name MemoryView::scopeNameAt(const usize index)const{
+Name MemoryView::scopeNameAt(const usize index)const noexcept{
     return m_recorder ? m_recorder->scopeNameAt(index) : s_NameNone;
 }
 
-const MemorySnapshot& MemoryView::snapshotAt(const usize index)const{
+const MemorySnapshot& MemoryView::snapshotAt(const usize index)const noexcept{
     static const MemorySnapshot s_EmptySnapshot;
     return m_recorder ? m_recorder->snapshotAt(index) : s_EmptySnapshot;
 }
 
-const MemoryDelta& MemoryView::deltaAt(const usize index)const{
+const MemoryDelta& MemoryView::deltaAt(const usize index)const noexcept{
     static const MemoryDelta s_EmptyDelta;
     return m_recorder ? m_recorder->deltaAt(index) : s_EmptyDelta;
 }

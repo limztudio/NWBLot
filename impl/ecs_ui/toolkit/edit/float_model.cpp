@@ -64,7 +64,7 @@ bool FloatEditModel::canonicalize(const f64 value, bool* textChanged){
     return true;
 }
 
-void FloatEditModel::advanceRevision(){
+void FloatEditModel::advanceRevision()noexcept{
     if(m_revision == Limit<u64>::s_Max)
         TerminateInvariant();
     ++m_revision;

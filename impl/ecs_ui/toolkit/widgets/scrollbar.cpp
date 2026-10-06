@@ -24,7 +24,7 @@ namespace __hidden_ui_scrollbar{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool MakeRect(const f64 x, const f64 y, const f64 width, const f64 height, Rect& out){
+[[nodiscard]] static bool MakeRect(const f64 x, const f64 y, const f64 width, const f64 height, Rect& out)noexcept{
     if(
         !IsFinite(x) || x < -Limit<f32>::s_Max || x > Limit<f32>::s_Max
         || !IsFinite(y) || y < -Limit<f32>::s_Max || y > Limit<f32>::s_Max
@@ -39,7 +39,7 @@ namespace __hidden_ui_scrollbar{
     return true;
 }
 
-[[nodiscard]] static bool Intersect(const Rect& lhs, const Rect& rhs, Rect& out){
+[[nodiscard]] static bool Intersect(const Rect& lhs, const Rect& rhs, Rect& out)noexcept{
     const f64 x = Max(static_cast<f64>(lhs.x), static_cast<f64>(rhs.x));
     const f64 y = Max(static_cast<f64>(lhs.y), static_cast<f64>(rhs.y));
     const f64 right = Min(static_cast<f64>(lhs.x) + lhs.width, static_cast<f64>(rhs.x) + rhs.width);
@@ -47,7 +47,7 @@ namespace __hidden_ui_scrollbar{
     return MakeRect(x, y, Max(0.0, right - x), Max(0.0, bottom - y), out);
 }
 
-[[nodiscard]] static bool ValidBar(const ScrollbarPlacement& bar, const ScrollAxis::Enum axis){
+[[nodiscard]] static bool ValidBar(const ScrollbarPlacement& bar, const ScrollAxis::Enum axis)noexcept{
     if(
         !IsValidUiRect(bar.track) || !IsValidUiRect(bar.thumb)
         || !IsFinite(bar.contentExtent) || bar.contentExtent < 0.0
@@ -81,7 +81,7 @@ namespace __hidden_ui_scrollbar{
     ;
 }
 
-[[nodiscard]] static bool MoveThumb(const f64 offset, const ScrollAxis::Enum axis, ScrollbarPlacement& bar){
+[[nodiscard]] static bool MoveThumb(const f64 offset, const ScrollAxis::Enum axis, ScrollbarPlacement& bar)noexcept{
     bar.offset = Min(offset, bar.maximum);
     if(!bar.visible)
         return true;
@@ -108,7 +108,7 @@ namespace __hidden_ui_scrollbar{
     const f32 minThumb,
     const f64 offset,
     const ScrollAxis::Enum axis,
-    ScrollbarPlacement& out){
+    ScrollbarPlacement& out)noexcept{
     ScrollbarPlacement candidate;
     candidate.contentExtent = contentExtent;
     candidate.viewportExtent = viewportExtent;
@@ -154,7 +154,7 @@ bool ScrollbarLayout::Calculate(
     const Point& previousScroll,
     const f32 thickness,
     const f32 minThumb,
-    ScrollViewportPlacement& out){
+    ScrollViewportPlacement& out)noexcept{
     using namespace __hidden_ui_scrollbar;
     if(
         !IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidUiPadding(padding)
@@ -227,7 +227,7 @@ bool ScrollbarLayout::Calculate(
     return true;
 }
 
-bool ScrollbarLayout::UpdateOffsets(const Point& scroll, ScrollViewportPlacement& out){
+bool ScrollbarLayout::UpdateOffsets(const Point& scroll, ScrollViewportPlacement& out)noexcept{
     using namespace __hidden_ui_scrollbar;
     if(
         !IsValidUiExtent(scroll) || !IsValidUiRect(out.viewport) || !IsValidUiRect(out.contentClip) || !IsValidUiRect(out.corner)

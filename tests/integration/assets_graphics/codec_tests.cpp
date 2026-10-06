@@ -184,7 +184,7 @@ static bool ReadAssetObjectCacheBytes(const Path& objectPath, NWB::Core::Assets:
     return read && !errorCode && !outBytes.empty();
 }
 
-static bool AssetBytesEqual(const NWB::Core::Assets::AssetBytes& lhs, const NWB::Core::Assets::AssetBytes& rhs){
+static bool AssetBytesEqual(const NWB::Core::Assets::AssetBytes& lhs, const NWB::Core::Assets::AssetBytes& rhs)noexcept{
     if(lhs.size() != rhs.size())
         return false;
     for(usize i = 0u; i < lhs.size(); ++i){

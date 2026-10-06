@@ -24,7 +24,7 @@ template<typename StringT>
 
 
 template<typename CharT>
-[[nodiscard]] inline bool CommandLineHasValidArgv(const isize argc, CharT** argv){
+[[nodiscard]] inline bool CommandLineHasValidArgv(const isize argc, CharT** argv)noexcept{
     return argc > 0 && argv != nullptr && argv[0] != nullptr;
 }
 

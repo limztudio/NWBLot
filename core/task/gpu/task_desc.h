@@ -179,24 +179,24 @@ struct GpuGraphResourceDesc{
     // A direct native consumer cannot acquire a graph-exported ownership handoff. Exclusive imports stay in its family.
     GpuPhysicalQueueId directConsumerQueue = {};
 
-    constexpr GpuGraphResourceDesc& setIdentity(const Name& value){ identity = value; return *this; }
-    constexpr GpuGraphResourceDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
-    constexpr GpuGraphResourceDesc& setType(const GpuGraphResourceType::Enum value){ type = value; return *this; }
-    constexpr GpuGraphResourceDesc& setInitialState(const ResourceStates::Mask value){ initialState = value; hasExplicitInitialState = true; return *this; }
-    constexpr GpuGraphResourceDesc& setExternalFinalState(const ResourceStates::Mask value){ externalFinalState = value; return *this; }
-    constexpr GpuGraphResourceDesc& setExternalFinalReleaseDestinationQueue(const GpuPhysicalQueueId value){ externalFinalReleaseDestinationQueue = value; return *this; }
-    constexpr GpuGraphResourceDesc& setInitialOwnerQueue(const GpuPhysicalQueueId value){ initialOwnerQueue = value; return *this; }
+    constexpr GpuGraphResourceDesc& setIdentity(const Name& value)noexcept{ identity = value; return *this; }
+    constexpr GpuGraphResourceDesc& setMarkerLabel(const AStringView value)noexcept{ markerLabel = value; return *this; }
+    constexpr GpuGraphResourceDesc& setType(const GpuGraphResourceType::Enum value)noexcept{ type = value; return *this; }
+    constexpr GpuGraphResourceDesc& setInitialState(const ResourceStates::Mask value)noexcept{ initialState = value; hasExplicitInitialState = true; return *this; }
+    constexpr GpuGraphResourceDesc& setExternalFinalState(const ResourceStates::Mask value)noexcept{ externalFinalState = value; return *this; }
+    constexpr GpuGraphResourceDesc& setExternalFinalReleaseDestinationQueue(const GpuPhysicalQueueId value)noexcept{ externalFinalReleaseDestinationQueue = value; return *this; }
+    constexpr GpuGraphResourceDesc& setInitialOwnerQueue(const GpuPhysicalQueueId value)noexcept{ initialOwnerQueue = value; return *this; }
     constexpr GpuGraphResourceDesc& setInitialOwnerHandoffSources(
         const GpuGraphInitialOwnerHandoffSourceDesc* const values,
         const usize count
-    ){
+    )noexcept{
         initialOwnerHandoffSources = values;
         initialOwnerHandoffSourceCount = count;
         return *this;
     }
-    constexpr GpuGraphResourceDesc& setQueueSharing(const ResourceQueueSharing::Mask value){ queueSharing = value; return *this; }
-    constexpr GpuGraphResourceDesc& setInitialAvailabilityCompletion(const GpuExternalCompletionId value){ initialAvailabilityCompletion = value; return *this; }
-    constexpr GpuGraphResourceDesc& setDirectConsumerQueue(const GpuPhysicalQueueId value){ directConsumerQueue = value; return *this; }
+    constexpr GpuGraphResourceDesc& setQueueSharing(const ResourceQueueSharing::Mask value)noexcept{ queueSharing = value; return *this; }
+    constexpr GpuGraphResourceDesc& setInitialAvailabilityCompletion(const GpuExternalCompletionId value)noexcept{ initialAvailabilityCompletion = value; return *this; }
+    constexpr GpuGraphResourceDesc& setDirectConsumerQueue(const GpuPhysicalQueueId value)noexcept{ directConsumerQueue = value; return *this; }
 };
 
 // A version identifies one semantic value of one exact physical resource range. Imported roots enter the graph
@@ -206,9 +206,9 @@ struct GpuGraphResourceVersionDesc{
     GpuTaskResourceRange range;
     GpuGraphResourceVersionOrigin::Enum origin = GpuGraphResourceVersionOrigin::kCount;
 
-    constexpr GpuGraphResourceVersionDesc& setResource(const GpuGraphResourceId value){ resource = value; return *this; }
-    constexpr GpuGraphResourceVersionDesc& setRange(const GpuTaskResourceRange& value){ range = value; return *this; }
-    constexpr GpuGraphResourceVersionDesc& setOrigin(const GpuGraphResourceVersionOrigin::Enum value){ origin = value; return *this; }
+    constexpr GpuGraphResourceVersionDesc& setResource(const GpuGraphResourceId value)noexcept{ resource = value; return *this; }
+    constexpr GpuGraphResourceVersionDesc& setRange(const GpuTaskResourceRange& value)noexcept{ range = value; return *this; }
+    constexpr GpuGraphResourceVersionDesc& setOrigin(const GpuGraphResourceVersionOrigin::Enum value)noexcept{ origin = value; return *this; }
 };
 
 // Resource sets retain graph resource IDs, not backend pointers. Their member list is copied into graph-owned
@@ -219,9 +219,9 @@ struct GpuGraphResourceSetDesc{
     const GpuGraphResourceId* members = nullptr;
     usize memberCount = 0u;
 
-    constexpr GpuGraphResourceSetDesc& setIdentity(const Name& value){ identity = value; return *this; }
-    constexpr GpuGraphResourceSetDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
-    constexpr GpuGraphResourceSetDesc& setMembers(const GpuGraphResourceId* values, const usize count){
+    constexpr GpuGraphResourceSetDesc& setIdentity(const Name& value)noexcept{ identity = value; return *this; }
+    constexpr GpuGraphResourceSetDesc& setMarkerLabel(const AStringView value)noexcept{ markerLabel = value; return *this; }
+    constexpr GpuGraphResourceSetDesc& setMembers(const GpuGraphResourceId* values, const usize count)noexcept{
         members = values;
         memberCount = count;
         return *this;
@@ -236,9 +236,9 @@ struct GpuGraphPipelineDesc{
     AStringView markerLabel;
     GpuGraphPipelineType::Enum type = GpuGraphPipelineType::kCount;
 
-    constexpr GpuGraphPipelineDesc& setIdentity(const Name& value){ identity = value; return *this; }
-    constexpr GpuGraphPipelineDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
-    constexpr GpuGraphPipelineDesc& setType(const GpuGraphPipelineType::Enum value){ type = value; return *this; }
+    constexpr GpuGraphPipelineDesc& setIdentity(const Name& value)noexcept{ identity = value; return *this; }
+    constexpr GpuGraphPipelineDesc& setMarkerLabel(const AStringView value)noexcept{ markerLabel = value; return *this; }
+    constexpr GpuGraphPipelineDesc& setType(const GpuGraphPipelineType::Enum value)noexcept{ type = value; return *this; }
 };
 
 // Prior-frame and other out-of-graph completions may retain the authoritative accepted native token directly in
@@ -248,9 +248,9 @@ struct GpuExternalCompletionDesc{
     AStringView markerLabel;
     QueueSubmissionToken token;
 
-    constexpr GpuExternalCompletionDesc& setIdentity(const Name& value){ identity = value; return *this; }
-    constexpr GpuExternalCompletionDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
-    constexpr GpuExternalCompletionDesc& setToken(const QueueSubmissionToken& value){ token = value; return *this; }
+    constexpr GpuExternalCompletionDesc& setIdentity(const Name& value)noexcept{ identity = value; return *this; }
+    constexpr GpuExternalCompletionDesc& setMarkerLabel(const AStringView value)noexcept{ markerLabel = value; return *this; }
+    constexpr GpuExternalCompletionDesc& setToken(const QueueSubmissionToken& value)noexcept{ token = value; return *this; }
 };
 
 struct GpuTaskDesc{
@@ -272,32 +272,32 @@ struct GpuTaskDesc{
     const GpuTaskResourceVersionUse* resourceVersionUses = nullptr;
     usize resourceVersionUseCount = 0u;
 
-    constexpr GpuTaskDesc& setIdentity(const Name& value){ identity = value; return *this; }
-    constexpr GpuTaskDesc& setMarkerLabel(const AStringView value){ markerLabel = value; return *this; }
-    constexpr GpuTaskDesc& setScheduling(const GpuTaskSchedulingHint& value){ scheduling = value; return *this; }
-    constexpr GpuTaskDesc& setDependencies(const GpuTaskId* values, const usize count){ dependencies = values; dependencyCount = count; return *this; }
-    constexpr GpuTaskDesc& setExternalDependencies(const GpuExternalCompletionId* values, const usize count){
+    constexpr GpuTaskDesc& setIdentity(const Name& value)noexcept{ identity = value; return *this; }
+    constexpr GpuTaskDesc& setMarkerLabel(const AStringView value)noexcept{ markerLabel = value; return *this; }
+    constexpr GpuTaskDesc& setScheduling(const GpuTaskSchedulingHint& value)noexcept{ scheduling = value; return *this; }
+    constexpr GpuTaskDesc& setDependencies(const GpuTaskId* values, const usize count)noexcept{ dependencies = values; dependencyCount = count; return *this; }
+    constexpr GpuTaskDesc& setExternalDependencies(const GpuExternalCompletionId* values, const usize count)noexcept{
         externalDependencies = values;
         externalDependencyCount = count;
         return *this;
     }
-    constexpr GpuTaskDesc& setExternalStateSources(const GpuTaskExternalStateSource* values, const usize count){
+    constexpr GpuTaskDesc& setExternalStateSources(const GpuTaskExternalStateSource* values, const usize count)noexcept{
         externalStateSources = values;
         externalStateSourceCount = count;
         return *this;
     }
-    constexpr GpuTaskDesc& setResourceUses(const GpuTaskResourceUse* values, const usize count){
+    constexpr GpuTaskDesc& setResourceUses(const GpuTaskResourceUse* values, const usize count)noexcept{
         resourceUses = values;
         resourceUseCount = count;
         return *this;
     }
-    constexpr GpuTaskDesc& setResourceSetUses(const GpuTaskResourceSetUse* values, const usize count){
+    constexpr GpuTaskDesc& setResourceSetUses(const GpuTaskResourceSetUse* values, const usize count)noexcept{
         resourceSetUses = values;
         resourceSetUseCount = count;
         return *this;
     }
-    constexpr GpuTaskDesc& setTimingMetadata(const GpuTaskTimingMetadata& value){ timing = value; return *this; }
-    constexpr GpuTaskDesc& setResourceVersionUses(const GpuTaskResourceVersionUse* values, const usize count){
+    constexpr GpuTaskDesc& setTimingMetadata(const GpuTaskTimingMetadata& value)noexcept{ timing = value; return *this; }
+    constexpr GpuTaskDesc& setResourceVersionUses(const GpuTaskResourceVersionUse* values, const usize count)noexcept{
         resourceVersionUses = values;
         resourceVersionUseCount = count;
         return *this;

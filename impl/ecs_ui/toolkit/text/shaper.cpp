@@ -20,14 +20,14 @@ namespace __hidden_ui_text_shaper{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static usize ClusterEnd(const PaintVector<RawShapedGlyph>& glyphs, usize begin){
+[[nodiscard]] static usize ClusterEnd(const PaintVector<RawShapedGlyph>& glyphs, usize begin)noexcept{
     usize end = begin + 1u;
     while(end < glyphs.size() && glyphs[end].byteBegin == glyphs[begin].byteBegin)
         ++end;
     return end;
 }
 
-[[nodiscard]] static bool HasMissing(const PaintVector<RawShapedGlyph>& glyphs, usize begin, usize end){
+[[nodiscard]] static bool HasMissing(const PaintVector<RawShapedGlyph>& glyphs, usize begin, usize end)noexcept{
     for(usize index = begin; index < end; ++index){
         if(glyphs[index].glyphId == 0u)
             return true;

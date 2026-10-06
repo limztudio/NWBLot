@@ -79,27 +79,27 @@ struct BlendState{
         ColorMask::Mask colorWriteMask = ColorMask::All;
         bool blendEnable = false;
 
-        constexpr RenderTarget& setBlendEnable(bool enable){ blendEnable = enable; return *this; }
-        constexpr RenderTarget& enableBlend(){ blendEnable = true; return *this; }
-        constexpr RenderTarget& disableBlend(){ blendEnable = false; return *this; }
-        constexpr RenderTarget& setSrcBlend(BlendFactor::Enum value){ srcBlend = value; return *this; }
-        constexpr RenderTarget& setDestBlend(BlendFactor::Enum value){ destBlend = value; return *this; }
-        constexpr RenderTarget& setBlendOp(BlendOp::Enum value){ blendOp = value; return *this; }
-        constexpr RenderTarget& setSrcBlendAlpha(BlendFactor::Enum value){ srcBlendAlpha = value; return *this; }
-        constexpr RenderTarget& setDestBlendAlpha(BlendFactor::Enum value){ destBlendAlpha = value; return *this; }
-        constexpr RenderTarget& setBlendOpAlpha(BlendOp::Enum value){ blendOpAlpha = value; return *this; }
-        constexpr RenderTarget& setColorWriteMask(ColorMask::Mask value){ colorWriteMask = value; return *this; }
+        constexpr RenderTarget& setBlendEnable(bool enable)noexcept{ blendEnable = enable; return *this; }
+        constexpr RenderTarget& enableBlend()noexcept{ blendEnable = true; return *this; }
+        constexpr RenderTarget& disableBlend()noexcept{ blendEnable = false; return *this; }
+        constexpr RenderTarget& setSrcBlend(BlendFactor::Enum value)noexcept{ srcBlend = value; return *this; }
+        constexpr RenderTarget& setDestBlend(BlendFactor::Enum value)noexcept{ destBlend = value; return *this; }
+        constexpr RenderTarget& setBlendOp(BlendOp::Enum value)noexcept{ blendOp = value; return *this; }
+        constexpr RenderTarget& setSrcBlendAlpha(BlendFactor::Enum value)noexcept{ srcBlendAlpha = value; return *this; }
+        constexpr RenderTarget& setDestBlendAlpha(BlendFactor::Enum value)noexcept{ destBlendAlpha = value; return *this; }
+        constexpr RenderTarget& setBlendOpAlpha(BlendOp::Enum value)noexcept{ blendOpAlpha = value; return *this; }
+        constexpr RenderTarget& setColorWriteMask(ColorMask::Mask value)noexcept{ colorWriteMask = value; return *this; }
 
-        [[nodiscard]] bool usesConstantColor()const;
+        [[nodiscard]] bool usesConstantColor()const noexcept;
     };
 
     RenderTarget targets[s_MaxRenderTargets];
     bool alphaToCoverageEnable = false;
 
-    constexpr BlendState& setRenderTarget(u32 index, const RenderTarget& target){ targets[index] = target; return *this; }
-    constexpr BlendState& setAlphaToCoverageEnable(bool enable){ alphaToCoverageEnable = enable; return *this; }
-    constexpr BlendState& enableAlphaToCoverage(){ alphaToCoverageEnable = true; return *this; }
-    constexpr BlendState& disableAlphaToCoverage(){ alphaToCoverageEnable = false; return *this; }
+    constexpr BlendState& setRenderTarget(u32 index, const RenderTarget& target)noexcept{ targets[index] = target; return *this; }
+    constexpr BlendState& setAlphaToCoverageEnable(bool enable)noexcept{ alphaToCoverageEnable = enable; return *this; }
+    constexpr BlendState& enableAlphaToCoverage()noexcept{ alphaToCoverageEnable = true; return *this; }
+    constexpr BlendState& disableAlphaToCoverage()noexcept{ alphaToCoverageEnable = false; return *this; }
 
     [[nodiscard]] bool usesConstantColor(u32 numTargets)const;
 };
@@ -167,40 +167,40 @@ struct RasterState{
     char samplePositionsX[s_MaxProgrammableSamplePositions]{};
     char samplePositionsY[s_MaxProgrammableSamplePositions]{};
 
-    constexpr RasterState& setFillMode(RasterFillMode::Enum value){ fillMode = value; return *this; }
-    constexpr RasterState& setFillSolid(){ fillMode = RasterFillMode::Solid; return *this; }
-    constexpr RasterState& setFillWireframe(){ fillMode = RasterFillMode::Wireframe; return *this; }
-    constexpr RasterState& setCullMode(RasterCullMode::Enum value){ cullMode = value; return *this; }
-    constexpr RasterState& setCullBack(){ cullMode = RasterCullMode::Back; return *this; }
-    constexpr RasterState& setCullFront(){ cullMode = RasterCullMode::Front; return *this; }
-    constexpr RasterState& setCullNone(){ cullMode = RasterCullMode::None; return *this; }
-    constexpr RasterState& setFrontCounterClockwise(bool value){ frontCounterClockwise = value; return *this; }
-    constexpr RasterState& setDepthClipEnable(bool value){ depthClipEnable = value; return *this; }
-    constexpr RasterState& enableDepthClip(){ depthClipEnable = true; return *this; }
-    constexpr RasterState& disableDepthClip(){ depthClipEnable = false; return *this; }
-    constexpr RasterState& setScissorEnable(bool value){ scissorEnable = value; return *this; }
-    constexpr RasterState& enableScissor(){ scissorEnable = true; return *this; }
-    constexpr RasterState& disableScissor(){ scissorEnable = false; return *this; }
-    constexpr RasterState& setMultisampleEnable(bool value){ multisampleEnable = value; return *this; }
-    constexpr RasterState& enableMultisample(){ multisampleEnable = true; return *this; }
-    constexpr RasterState& disableMultisample(){ multisampleEnable = false; return *this; }
-    constexpr RasterState& setAntialiasedLineEnable(bool value){ antialiasedLineEnable = value; return *this; }
-    constexpr RasterState& enableAntialiasedLine(){ antialiasedLineEnable = true; return *this; }
-    constexpr RasterState& disableAntialiasedLine(){ antialiasedLineEnable = false; return *this; }
-    constexpr RasterState& setDepthBias(i32 value){ depthBias = value; return *this; }
-    constexpr RasterState& setDepthBiasClamp(f32 value){ depthBiasClamp = value; return *this; }
-    constexpr RasterState& setSlopeScaleDepthBias(f32 value){ slopeScaledDepthBias = value; return *this; }
-    constexpr RasterState& setForcedSampleCount(u8 value){ forcedSampleCount = value; return *this; }
-    constexpr RasterState& setProgrammableSamplePositionsEnable(bool value){ programmableSamplePositionsEnable = value; return *this; }
-    constexpr RasterState& enableProgrammableSamplePositions(){ programmableSamplePositionsEnable = true; return *this; }
-    constexpr RasterState& disableProgrammableSamplePositions(){ programmableSamplePositionsEnable = false; return *this; }
-    constexpr RasterState& setConservativeRasterEnable(bool value){ conservativeRasterEnable = value; return *this; }
-    constexpr RasterState& enableConservativeRaster(){ conservativeRasterEnable = true; return *this; }
-    constexpr RasterState& disableConservativeRaster(){ conservativeRasterEnable = false; return *this; }
-    constexpr RasterState& setQuadFillEnable(bool value){ quadFillEnable = value; return *this; }
-    constexpr RasterState& enableQuadFill(){ quadFillEnable = true; return *this; }
-    constexpr RasterState& disableQuadFill(){ quadFillEnable = false; return *this; }
-    constexpr RasterState& setSamplePositions(const i8* x, const i8* y, usize count){
+    constexpr RasterState& setFillMode(RasterFillMode::Enum value)noexcept{ fillMode = value; return *this; }
+    constexpr RasterState& setFillSolid()noexcept{ fillMode = RasterFillMode::Solid; return *this; }
+    constexpr RasterState& setFillWireframe()noexcept{ fillMode = RasterFillMode::Wireframe; return *this; }
+    constexpr RasterState& setCullMode(RasterCullMode::Enum value)noexcept{ cullMode = value; return *this; }
+    constexpr RasterState& setCullBack()noexcept{ cullMode = RasterCullMode::Back; return *this; }
+    constexpr RasterState& setCullFront()noexcept{ cullMode = RasterCullMode::Front; return *this; }
+    constexpr RasterState& setCullNone()noexcept{ cullMode = RasterCullMode::None; return *this; }
+    constexpr RasterState& setFrontCounterClockwise(bool value)noexcept{ frontCounterClockwise = value; return *this; }
+    constexpr RasterState& setDepthClipEnable(bool value)noexcept{ depthClipEnable = value; return *this; }
+    constexpr RasterState& enableDepthClip()noexcept{ depthClipEnable = true; return *this; }
+    constexpr RasterState& disableDepthClip()noexcept{ depthClipEnable = false; return *this; }
+    constexpr RasterState& setScissorEnable(bool value)noexcept{ scissorEnable = value; return *this; }
+    constexpr RasterState& enableScissor()noexcept{ scissorEnable = true; return *this; }
+    constexpr RasterState& disableScissor()noexcept{ scissorEnable = false; return *this; }
+    constexpr RasterState& setMultisampleEnable(bool value)noexcept{ multisampleEnable = value; return *this; }
+    constexpr RasterState& enableMultisample()noexcept{ multisampleEnable = true; return *this; }
+    constexpr RasterState& disableMultisample()noexcept{ multisampleEnable = false; return *this; }
+    constexpr RasterState& setAntialiasedLineEnable(bool value)noexcept{ antialiasedLineEnable = value; return *this; }
+    constexpr RasterState& enableAntialiasedLine()noexcept{ antialiasedLineEnable = true; return *this; }
+    constexpr RasterState& disableAntialiasedLine()noexcept{ antialiasedLineEnable = false; return *this; }
+    constexpr RasterState& setDepthBias(i32 value)noexcept{ depthBias = value; return *this; }
+    constexpr RasterState& setDepthBiasClamp(f32 value)noexcept{ depthBiasClamp = value; return *this; }
+    constexpr RasterState& setSlopeScaleDepthBias(f32 value)noexcept{ slopeScaledDepthBias = value; return *this; }
+    constexpr RasterState& setForcedSampleCount(u8 value)noexcept{ forcedSampleCount = value; return *this; }
+    constexpr RasterState& setProgrammableSamplePositionsEnable(bool value)noexcept{ programmableSamplePositionsEnable = value; return *this; }
+    constexpr RasterState& enableProgrammableSamplePositions()noexcept{ programmableSamplePositionsEnable = true; return *this; }
+    constexpr RasterState& disableProgrammableSamplePositions()noexcept{ programmableSamplePositionsEnable = false; return *this; }
+    constexpr RasterState& setConservativeRasterEnable(bool value)noexcept{ conservativeRasterEnable = value; return *this; }
+    constexpr RasterState& enableConservativeRaster()noexcept{ conservativeRasterEnable = true; return *this; }
+    constexpr RasterState& disableConservativeRaster()noexcept{ conservativeRasterEnable = false; return *this; }
+    constexpr RasterState& setQuadFillEnable(bool value)noexcept{ quadFillEnable = value; return *this; }
+    constexpr RasterState& enableQuadFill()noexcept{ quadFillEnable = true; return *this; }
+    constexpr RasterState& disableQuadFill()noexcept{ quadFillEnable = false; return *this; }
+    constexpr RasterState& setSamplePositions(const i8* x, const i8* y, usize count)noexcept{
         if(!x || !y)
             return *this;
         const usize samplePositionCount = count < s_MaxProgrammableSamplePositions ? count : s_MaxProgrammableSamplePositions;
@@ -253,10 +253,10 @@ struct DepthStencilState{
         StencilOp::Enum passOp = StencilOp::Keep;
         ComparisonFunc::Enum stencilFunc = ComparisonFunc::Always;
 
-        constexpr StencilOpDesc& setFailOp(StencilOp::Enum value){ failOp = value; return *this; }
-        constexpr StencilOpDesc& setDepthFailOp(StencilOp::Enum value){ depthFailOp = value; return *this; }
-        constexpr StencilOpDesc& setPassOp(StencilOp::Enum value){ passOp = value; return *this; }
-        constexpr StencilOpDesc& setStencilFunc(ComparisonFunc::Enum value){ stencilFunc = value; return *this; }
+        constexpr StencilOpDesc& setFailOp(StencilOp::Enum value)noexcept{ failOp = value; return *this; }
+        constexpr StencilOpDesc& setDepthFailOp(StencilOp::Enum value)noexcept{ depthFailOp = value; return *this; }
+        constexpr StencilOpDesc& setPassOp(StencilOp::Enum value)noexcept{ passOp = value; return *this; }
+        constexpr StencilOpDesc& setStencilFunc(ComparisonFunc::Enum value)noexcept{ stencilFunc = value; return *this; }
     };
 
     bool depthTestEnable = true;
@@ -270,22 +270,22 @@ struct DepthStencilState{
     StencilOpDesc frontFaceStencil;
     StencilOpDesc backFaceStencil;
 
-    constexpr DepthStencilState& setDepthTestEnable(bool value){ depthTestEnable = value; return *this; }
-    constexpr DepthStencilState& enableDepthTest(){ depthTestEnable = true; return *this; }
-    constexpr DepthStencilState& disableDepthTest(){ depthTestEnable = false; return *this; }
-    constexpr DepthStencilState& setDepthWriteEnable(bool value){ depthWriteEnable = value; return *this; }
-    constexpr DepthStencilState& enableDepthWrite(){ depthWriteEnable = true; return *this; }
-    constexpr DepthStencilState& disableDepthWrite(){ depthWriteEnable = false; return *this; }
-    constexpr DepthStencilState& setDepthFunc(ComparisonFunc::Enum value){ depthFunc = value; return *this; }
-    constexpr DepthStencilState& setStencilEnable(bool value){ stencilEnable = value; return *this; }
-    constexpr DepthStencilState& enableStencil(){ stencilEnable = true; return *this; }
-    constexpr DepthStencilState& disableStencil(){ stencilEnable = false; return *this; }
-    constexpr DepthStencilState& setStencilReadMask(u8 value){ stencilReadMask = value; return *this; }
-    constexpr DepthStencilState& setStencilWriteMask(u8 value){ stencilWriteMask = value; return *this; }
-    constexpr DepthStencilState& setStencilRefValue(u8 value){ stencilRefValue = value; return *this; }
-    constexpr DepthStencilState& setFrontFaceStencil(const StencilOpDesc& value){ frontFaceStencil = value; return *this; }
-    constexpr DepthStencilState& setBackFaceStencil(const StencilOpDesc& value){ backFaceStencil = value; return *this; }
-    constexpr DepthStencilState& setDynamicStencilRef(bool value){ dynamicStencilRef = value; return *this; }
+    constexpr DepthStencilState& setDepthTestEnable(bool value)noexcept{ depthTestEnable = value; return *this; }
+    constexpr DepthStencilState& enableDepthTest()noexcept{ depthTestEnable = true; return *this; }
+    constexpr DepthStencilState& disableDepthTest()noexcept{ depthTestEnable = false; return *this; }
+    constexpr DepthStencilState& setDepthWriteEnable(bool value)noexcept{ depthWriteEnable = value; return *this; }
+    constexpr DepthStencilState& enableDepthWrite()noexcept{ depthWriteEnable = true; return *this; }
+    constexpr DepthStencilState& disableDepthWrite()noexcept{ depthWriteEnable = false; return *this; }
+    constexpr DepthStencilState& setDepthFunc(ComparisonFunc::Enum value)noexcept{ depthFunc = value; return *this; }
+    constexpr DepthStencilState& setStencilEnable(bool value)noexcept{ stencilEnable = value; return *this; }
+    constexpr DepthStencilState& enableStencil()noexcept{ stencilEnable = true; return *this; }
+    constexpr DepthStencilState& disableStencil()noexcept{ stencilEnable = false; return *this; }
+    constexpr DepthStencilState& setStencilReadMask(u8 value)noexcept{ stencilReadMask = value; return *this; }
+    constexpr DepthStencilState& setStencilWriteMask(u8 value)noexcept{ stencilWriteMask = value; return *this; }
+    constexpr DepthStencilState& setStencilRefValue(u8 value)noexcept{ stencilRefValue = value; return *this; }
+    constexpr DepthStencilState& setFrontFaceStencil(const StencilOpDesc& value)noexcept{ frontFaceStencil = value; return *this; }
+    constexpr DepthStencilState& setBackFaceStencil(const StencilOpDesc& value)noexcept{ backFaceStencil = value; return *this; }
+    constexpr DepthStencilState& setDynamicStencilRef(bool value)noexcept{ dynamicStencilRef = value; return *this; }
 };
 
 
@@ -341,18 +341,18 @@ struct SamplerDesc{
     SamplerAddressMode::Enum addressW = SamplerAddressMode::Clamp;
     SamplerReductionType::Enum reductionType = SamplerReductionType::Standard;
 
-    constexpr SamplerDesc& setBorderColor(const Color& color){ borderColor = color; return *this; }
-    constexpr SamplerDesc& setMaxAnisotropy(f32 value){ maxAnisotropy = value; return *this; }
-    constexpr SamplerDesc& setMipBias(f32 value){ mipBias = value; return *this; }
-    constexpr SamplerDesc& setMinFilter(bool enable){ minFilter = enable; return *this; }
-    constexpr SamplerDesc& setMagFilter(bool enable){ magFilter = enable; return *this; }
-    constexpr SamplerDesc& setMipFilter(bool enable){ mipFilter = enable; return *this; }
-    constexpr SamplerDesc& setAllFilters(bool enable){ minFilter = magFilter = mipFilter = enable; return *this; }
-    constexpr SamplerDesc& setAddressU(SamplerAddressMode::Enum mode){ addressU = mode; return *this; }
-    constexpr SamplerDesc& setAddressV(SamplerAddressMode::Enum mode){ addressV = mode; return *this; }
-    constexpr SamplerDesc& setAddressW(SamplerAddressMode::Enum mode){ addressW = mode; return *this; }
-    constexpr SamplerDesc& setAllAddressModes(SamplerAddressMode::Enum mode){ addressU = addressV = addressW = mode; return *this; }
-    constexpr SamplerDesc& setReductionType(SamplerReductionType::Enum type){ reductionType = type; return *this; }
+    constexpr SamplerDesc& setBorderColor(const Color& color)noexcept{ borderColor = color; return *this; }
+    constexpr SamplerDesc& setMaxAnisotropy(f32 value)noexcept{ maxAnisotropy = value; return *this; }
+    constexpr SamplerDesc& setMipBias(f32 value)noexcept{ mipBias = value; return *this; }
+    constexpr SamplerDesc& setMinFilter(bool enable)noexcept{ minFilter = enable; return *this; }
+    constexpr SamplerDesc& setMagFilter(bool enable)noexcept{ magFilter = enable; return *this; }
+    constexpr SamplerDesc& setMipFilter(bool enable)noexcept{ mipFilter = enable; return *this; }
+    constexpr SamplerDesc& setAllFilters(bool enable)noexcept{ minFilter = magFilter = mipFilter = enable; return *this; }
+    constexpr SamplerDesc& setAddressU(SamplerAddressMode::Enum mode)noexcept{ addressU = mode; return *this; }
+    constexpr SamplerDesc& setAddressV(SamplerAddressMode::Enum mode)noexcept{ addressV = mode; return *this; }
+    constexpr SamplerDesc& setAddressW(SamplerAddressMode::Enum mode)noexcept{ addressW = mode; return *this; }
+    constexpr SamplerDesc& setAllAddressModes(SamplerAddressMode::Enum mode)noexcept{ addressU = addressV = addressW = mode; return *this; }
+    constexpr SamplerDesc& setReductionType(SamplerReductionType::Enum type)noexcept{ reductionType = type; return *this; }
 };
 
 typedef GraphicsBackend::Handle<Sampler> SamplerHandle;

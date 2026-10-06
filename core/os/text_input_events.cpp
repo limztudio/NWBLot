@@ -142,12 +142,12 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
     return TextInputAdmission::Accepted;
 }
 
-void QueuedTextInputService::clearEvents(){
+void QueuedTextInputService::clearEvents()noexcept{
     m_events.clear();
     m_queuedTextBytes = 0u;
 }
 
-void QueuedTextInputService::invalidateSession(){
+void QueuedTextInputService::invalidateSession()noexcept{
     m_activeToken = {};
     m_surrounding.clear();
     m_anchorByte = 0u;

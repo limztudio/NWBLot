@@ -89,11 +89,11 @@ private:
 
     bool createSegmentLocked(usize segmentIndex);
     bool ensureCapacityLocked(u64 requiredBytes);
-    bool computeLogicalCapacityLocked(u64& outCapacityBytes)const;
+    bool computeLogicalCapacityLocked(u64& outCapacityBytes)const noexcept;
 
     bool loadMetadataLocked();
     bool flushMetadataLocked();
-    bool canFitMetadataForFileCountLocked(u64 fileCount)const;
+    bool canFitMetadataForFileCountLocked(u64 fileCount)const noexcept;
     bool readFileRecordLocked(const Name& virtualPath, FileRecord& outRecord)const;
     bool computePhysicalCapacityLocked(u64& outCapacityBytes)const;
 

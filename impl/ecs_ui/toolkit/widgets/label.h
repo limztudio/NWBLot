@@ -26,7 +26,7 @@ public:
 public:
     [[nodiscard]] TextLayoutStatus::Enum setText(const ShapeRequest& request);
     [[nodiscard]] bool paint(TextService& text, PaintBuilder& paint, Point topLeft, const Color& color = {});
-    [[nodiscard]] const TextLayout& layout()const{ return m_layout; }
+    [[nodiscard]] const TextLayout& layout()const noexcept{ return m_layout; }
 
 
 private:

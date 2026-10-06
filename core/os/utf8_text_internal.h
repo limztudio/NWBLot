@@ -18,7 +18,7 @@ NWB_CORE_BEGIN
 
 
 namespace Utf8TextDetail{
-[[nodiscard]] inline bool DecodeCodePoint(const AStringView text, usize& offset, u32& codePoint){
+[[nodiscard]] inline bool DecodeCodePoint(const AStringView text, usize& offset, u32& codePoint)noexcept{
     const u8 first = static_cast<u8>(text[offset]);
     ++offset;
     if(first < 0x80u){

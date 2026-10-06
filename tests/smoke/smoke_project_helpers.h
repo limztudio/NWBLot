@@ -130,11 +130,11 @@ public:
             m_yaw += Min(safeDelta, maxSpinDelta) * spinSpeed;
     }
 
-    [[nodiscard]] f32 yaw()const{
+    [[nodiscard]] f32 yaw()const noexcept{
         return m_yaw;
     }
 
-    [[nodiscard]] bool manualControl()const{
+    [[nodiscard]] bool manualControl()const noexcept{
         return m_manualControl;
     }
 

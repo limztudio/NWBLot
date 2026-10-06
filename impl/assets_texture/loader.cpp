@@ -184,7 +184,7 @@ static void InitializeBasisTranscoder(){
     const u32 sliceByteCount,
     const u32 arraySlice,
     const u32 mipLevel
-){
+)noexcept{
     return Core::GraphicsRuntime::TextureUploadRegion{
         .data = data,
         .dataSize = dataSize,
@@ -195,7 +195,7 @@ static void InitializeBasisTranscoder(){
     };
 }
 
-[[nodiscard]] static Core::TextureDimension::Enum ToCoreTextureDimension(const TextureDimension::Enum dimension){
+[[nodiscard]] static Core::TextureDimension::Enum ToCoreTextureDimension(const TextureDimension::Enum dimension)noexcept{
     switch(dimension){
     case TextureDimension::Texture2D: return Core::TextureDimension::Texture2D;
     case TextureDimension::TextureCube: return Core::TextureDimension::TextureCube;
@@ -204,7 +204,7 @@ static void InitializeBasisTranscoder(){
     }
 }
 
-[[nodiscard]] static Core::GpuDescriptorClass::Enum ToSampledImageDescriptorClass(const TextureDimension::Enum dimension){
+[[nodiscard]] static Core::GpuDescriptorClass::Enum ToSampledImageDescriptorClass(const TextureDimension::Enum dimension)noexcept{
     switch(dimension){
     case TextureDimension::Texture2D: return Core::GpuDescriptorClass::SampledImage;
     case TextureDimension::TextureCube: return Core::GpuDescriptorClass::SampledImageCube;

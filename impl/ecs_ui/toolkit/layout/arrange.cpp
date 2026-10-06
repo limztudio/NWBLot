@@ -39,7 +39,7 @@ bool LayoutTree::arrange(const Rect& viewport){
     return true;
 }
 
-bool LayoutTree::arrangeNode(const u32 index){
+bool LayoutTree::arrangeNode(const u32 index)noexcept{
     const Node& node = m_nodes[index];
     const LayoutNodeDesc& description = node.description;
     Work& work = m_work[index];

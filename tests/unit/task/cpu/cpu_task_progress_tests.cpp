@@ -91,9 +91,9 @@ TEST(CpuTaskProgressTests, ScopeJoinWakesForANewlyReadyUnscopedMainThreadPrerequ
         });
         ASSERT_TRUE(gate.valid());
         workerEntered.wait(false, MemoryOrder::acquire);
-        const auto prerequisite = scheduler.submit([&](){ ++callbacks; }, s_MainThread, &gate, 1u);
+        const auto prerequisite = scheduler.submit([&]()noexcept{ ++callbacks; }, s_MainThread, &gate, 1u);
         ASSERT_TRUE(prerequisite.valid());
-        ASSERT_TRUE(scope.submit([&](){ ++callbacks; }, s_MainThread, &prerequisite, 1u).valid());
+        ASSERT_TRUE(scope.submit([&]()noexcept{ ++callbacks; }, s_MainThread, &prerequisite, 1u).valid());
         releaser = JoiningThread([&](){
             joining.wait(false, MemoryOrder::acquire);
             if(round % s_ReleaseSchedules == 0u)
@@ -144,12 +144,12 @@ TEST(CpuTaskProgressTests, ConcurrentSameScopeJoinsRetainLatePublishedDescendant
         for(u32 count = entered.load(MemoryOrder::acquire); count != s_Workers; count = entered.load(MemoryOrder::acquire))
             entered.wait(count, MemoryOrder::acquire);
         for(auto& root : roots){
-            root = scheduler.submit([&](){ visits.fetch_add(1u, MemoryOrder::relaxed); });
+            root = scheduler.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); });
             ASSERT_TRUE(root.valid());
         }
         ASSERT_TRUE(scope.submit([&](){
             EXPECT_TRUE(scheduler.submit([&](){
-                EXPECT_TRUE(scheduler.submit([&](){ visits.fetch_add(1u, MemoryOrder::relaxed); }).valid());
+                EXPECT_TRUE(scheduler.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); }).valid());
             }).valid());
         }, {}, roots, s_RootCount).valid());
         start.store(true, MemoryOrder::release);
@@ -158,9 +158,9 @@ TEST(CpuTaskProgressTests, ConcurrentSameScopeJoinsRetainLatePublishedDescendant
         EXPECT_EQ(joined.load(MemoryOrder::acquire), s_Workers);
         EXPECT_EQ(visits.load(MemoryOrder::acquire), s_RootCount + 1u);
         // This scope keeps its identity after completion, while publication invalidates its old contribution proofs.
-        const auto later = scheduler.submit([&](){ visits.fetch_add(1u, MemoryOrder::relaxed); });
+        const auto later = scheduler.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); });
         ASSERT_TRUE(later.valid());
-        ASSERT_TRUE(scope.submit([&](){ visits.fetch_add(1u, MemoryOrder::relaxed); }, later).valid());
+        ASSERT_TRUE(scope.submit([&]()noexcept{ visits.fetch_add(1u, MemoryOrder::relaxed); }, later).valid());
         scope.wait();
         scheduler.wait();
         finish.release();

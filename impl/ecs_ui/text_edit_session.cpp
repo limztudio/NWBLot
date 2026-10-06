@@ -133,7 +133,7 @@ bool UiTextEditSession::end(const UiTextEditOwner& owner, Ui::EditModel& model){
 }
 
 
-bool UiTextEditSession::matchesPublishedModel(const Ui::EditModel& model)const{
+bool UiTextEditSession::matchesPublishedModel(const Ui::EditModel& model)const noexcept{
     return
         model.revision() == m_publishedModelRevision && model.externalRevision() == m_publishedExternalRevision
         && model.selectionGeneration() == m_publishedSelectionGeneration

@@ -23,7 +23,7 @@ namespace __hidden_ui_input_router{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidRectangle(const Rect& rectangle){
+bool ValidRectangle(const Rect& rectangle)noexcept{
     return
         IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height)
         && rectangle.width >= 0.0f && rectangle.height >= 0.0f
@@ -31,7 +31,7 @@ bool ValidRectangle(const Rect& rectangle){
     ;
 }
 
-bool Contains(const Rect& rectangle, const Point& position){
+bool Contains(const Rect& rectangle, const Point& position)noexcept{
     return
         position.x >= rectangle.x && position.y >= rectangle.y
         && position.x < rectangle.x + rectangle.width && position.y < rectangle.y + rectangle.height
@@ -167,7 +167,7 @@ bool InputRouter::commitTargets(
         m_stagedTargets.push_back(target);
         m_stagedLookup.push_back({ target.id.value, static_cast<u32>(index) });
     }
-    Sort(m_stagedLookup.begin(), m_stagedLookup.end(), [](const TargetLookup& lhs, const TargetLookup& rhs){
+    Sort(m_stagedLookup.begin(), m_stagedLookup.end(), [](const TargetLookup& lhs, const TargetLookup& rhs)noexcept{
         return lhs.value < rhs.value;
     });
     for(usize index = 1u; index < m_stagedLookup.size(); ++index){
@@ -216,7 +216,7 @@ bool InputRouter::commitTargets(
     return true;
 }
 
-const HitTarget* InputRouter::findTarget(const WidgetId id, const u64 declarationGeneration)const{
+const HitTarget* InputRouter::findTarget(const WidgetId id, const u64 declarationGeneration)const noexcept{
     usize begin = 0u;
     usize end = m_lookup.size();
     while(begin < end){
@@ -248,12 +248,12 @@ void InputRouter::rebuildLookup(){
     m_lookup.clear();
     for(usize index = 0u; index < m_targets.size(); ++index)
         m_lookup.push_back({ m_targets[index].id.value, static_cast<u32>(index) });
-    Sort(m_lookup.begin(), m_lookup.end(), [](const TargetLookup& lhs, const TargetLookup& rhs){
+    Sort(m_lookup.begin(), m_lookup.end(), [](const TargetLookup& lhs, const TargetLookup& rhs)noexcept{
         return lhs.value < rhs.value;
     });
 }
 
-void InputRouter::clearFocus(){
+void InputRouter::clearFocus()noexcept{
     m_focus = {};
     m_focusDeclaration = 0u;
     m_focusControl = {};
@@ -389,13 +389,13 @@ void InputRouter::updateHover(){
     m_hover = hovered == nullptr ? WidgetId{} : hovered->id;
 }
 
-void InputRouter::advanceHoverActivity(){
+void InputRouter::advanceHoverActivity()noexcept{
     if(m_hoverActivityGeneration == Limit<u64>::s_Max)
         TerminateInvariant();
     ++m_hoverActivityGeneration;
 }
 
-void InputRouter::clearHover(){
+void InputRouter::clearHover()noexcept{
     m_hover = {};
     m_hoverIdentity = {};
 }

@@ -23,13 +23,13 @@ namespace __hidden_ui_numeric_parse{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool IsDigit(const char value){ return value >= '0' && value <= '9'; }
+[[nodiscard]] static bool IsDigit(const char value)noexcept{ return value >= '0' && value <= '9'; }
 
-[[nodiscard]] static usize SkipSign(const AStringView text){
+[[nodiscard]] static usize SkipSign(const AStringView text)noexcept{
     return !text.empty() && (text.front() == '+' || text.front() == '-') ? 1u : 0u;
 }
 
-[[nodiscard]] static NumericParseStatus::Enum IntegerGrammar(const AStringView text){
+[[nodiscard]] static NumericParseStatus::Enum IntegerGrammar(const AStringView text)noexcept{
     const usize begin = SkipSign(text);
     if(begin == text.size())
         return NumericParseStatus::Incomplete;
@@ -40,7 +40,7 @@ namespace __hidden_ui_numeric_parse{
     return NumericParseStatus::Complete;
 }
 
-[[nodiscard]] static NumericParseStatus::Enum FloatGrammar(const AStringView text){
+[[nodiscard]] static NumericParseStatus::Enum FloatGrammar(const AStringView text)noexcept{
     usize index = SkipSign(text);
     bool digits = false;
     while(index < text.size() && IsDigit(text[index])){
@@ -79,21 +79,21 @@ namespace __hidden_ui_numeric_parse{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateIntegerBounds(const IntegerBounds& bounds){
+bool ValidateIntegerBounds(const IntegerBounds& bounds)noexcept{
     return
         bounds.minimum <= bounds.maximum
         && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp)
     ;
 }
 
-bool ValidateFloatBounds(const FloatBounds& bounds){
+bool ValidateFloatBounds(const FloatBounds& bounds)noexcept{
     return
         IsFinite(bounds.minimum) && IsFinite(bounds.maximum) && bounds.minimum <= bounds.maximum
         && (bounds.policy == NumericBoundsPolicy::Reject || bounds.policy == NumericBoundsPolicy::Clamp)
     ;
 }
 
-NumericParseStatus::Enum ParseIntegerDraft(const AStringView text, i64& output){
+NumericParseStatus::Enum ParseIntegerDraft(const AStringView text, i64& output)noexcept{
     const AStringView trimmed = TrimView(text);
     const NumericParseStatus::Enum status = __hidden_ui_numeric_parse::IntegerGrammar(trimmed);
     if(status != NumericParseStatus::Complete)
@@ -106,7 +106,7 @@ NumericParseStatus::Enum ParseIntegerDraft(const AStringView text, i64& output){
     return NumericParseStatus::Complete;
 }
 
-NumericParseStatus::Enum ParseFloatDraft(const AStringView text, f64& output){
+NumericParseStatus::Enum ParseFloatDraft(const AStringView text, f64& output)noexcept{
     const AStringView trimmed = TrimView(text);
     const NumericParseStatus::Enum status = __hidden_ui_numeric_parse::FloatGrammar(trimmed);
     if(status != NumericParseStatus::Complete)

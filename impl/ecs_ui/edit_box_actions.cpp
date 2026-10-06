@@ -208,14 +208,14 @@ bool UiEditBoxHost::applyAction(Entry& entry, Ui::EditModel& model, const Ui::Ed
     return !m_borrowRejected;
 }
 
-bool UiEditBoxHost::rejectBorrowedMutation(){
+bool UiEditBoxHost::rejectBorrowedMutation()noexcept{
     if(!m_borrowed)
         return false;
     m_borrowRejected = true;
     return true;
 }
 
-u64 UiEditBoxHost::nextFocusGeneration(){
+u64 UiEditBoxHost::nextFocusGeneration()noexcept{
     if(m_focusGeneration == Limit<u64>::s_Max)
         TerminateInvariant();
     return ++m_focusGeneration;

@@ -39,7 +39,7 @@ namespace BytecodeValidationFailure{
     };
 };
 
-[[nodiscard]] inline bool IsValidBytecodeSize(const usize byteSize){
+[[nodiscard]] inline bool IsValidBytecodeSize(const usize byteSize)noexcept{
     return byteSize >= s_SpvWordBytes && (byteSize % s_SpvWordBytes) == 0u;
 }
 

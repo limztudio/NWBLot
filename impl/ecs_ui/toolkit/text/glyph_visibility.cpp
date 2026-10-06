@@ -26,15 +26,15 @@ namespace __hidden_ui_glyph_visibility{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidLocation(const PlacedGlyph& glyph, const Point& topLeft){
+[[nodiscard]] static bool ValidLocation(const PlacedGlyph& glyph, const Point& topLeft)noexcept{
     return IsFinite(glyph.position.x) && IsFinite(glyph.position.y) && IsFinite(topLeft.x) && IsFinite(topLeft.y);
 }
 
-[[nodiscard]] static bool ValidFontSize(const f32 fontSize){
+[[nodiscard]] static bool ValidFontSize(const f32 fontSize)noexcept{
     return IsFinite(fontSize) && fontSize >= 1.0f / 64.0f && fontSize <= 2048.0f;
 }
 
-[[nodiscard]] static bool MakeRect(const f64 x, const f64 y, const f64 width, const f64 height, Rect& out){
+[[nodiscard]] static bool MakeRect(const f64 x, const f64 y, const f64 width, const f64 height, Rect& out)noexcept{
     if(
         !IsFinite(x) || x < -Limit<f32>::s_Max || x > Limit<f32>::s_Max
         || !IsFinite(y) || y < -Limit<f32>::s_Max || y > Limit<f32>::s_Max

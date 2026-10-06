@@ -77,7 +77,7 @@ static_assert(alignof(SceneLight) >= alignof(Float4), "SceneLight must keep stor
 
 
 // Fallback when a world declares no lights: one neutral directional light.
-[[nodiscard]] SceneLight BuildDefaultSceneLight(SIMDVector forward);
+[[nodiscard]] SceneLight BuildDefaultSceneLight(SIMDVector forward)noexcept;
 [[nodiscard]] bool TryBuildSceneLight(
     SIMDVector position,
     SIMDVector rotation,
@@ -90,7 +90,7 @@ static_assert(alignof(SceneLight) >= alignof(Float4), "SceneLight must keep stor
     LightType::Enum type,
     bool enableCaustics,
     SceneLight& outLight
-);
+)noexcept;
 [[nodiscard]] usize GatherSceneLights(Core::ECS::World& world, SIMDVector defaultForward, SceneLight* outLights, usize maxLights);
 
 

@@ -301,7 +301,7 @@ bool RemapSkinInfluences(
     return true;
 }
 
-u64 PositionSkinKey(const u32 position, const u32 skin){
+u64 PositionSkinKey(const u32 position, const u32 skin)noexcept{
     return (static_cast<u64>(position) << s_PositionSkinKeySkinShiftBits) | static_cast<u64>(skin);
 }
 

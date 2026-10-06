@@ -43,7 +43,7 @@ namespace ShaderStageNames{
 NWB_SHADER_STAGE_NAME_ENTRIES(NWB_SHADER_STAGE_NAME_CONSTANT)
 #undef NWB_SHADER_STAGE_NAME_CONSTANT
 
-inline const Name& ArchiveStageNameFromShaderType(const ShaderType::Enum shaderType){
+inline const Name& ArchiveStageNameFromShaderType(const ShaderType::Enum shaderType)noexcept{
     switch(shaderType){
 #define NWB_SHADER_STAGE_NAME_CASE(Stage, Text) case Core::ShaderType::Stage: return s_##Stage##Name;
         NWB_SHADER_STAGE_NAME_ENTRIES(NWB_SHADER_STAGE_NAME_CASE)
@@ -52,11 +52,11 @@ inline const Name& ArchiveStageNameFromShaderType(const ShaderType::Enum shaderT
     }
 }
 
-inline const Name& ArchiveStageNameFromShaderType(const ShaderType::Mask shaderType){
+inline const Name& ArchiveStageNameFromShaderType(const ShaderType::Mask shaderType)noexcept{
     return ArchiveStageNameFromShaderType(ShaderType::ToEnum(shaderType));
 }
 
-inline ShaderType::Enum ShaderTypeFromArchiveStageName(const Name& stageName){
+inline ShaderType::Enum ShaderTypeFromArchiveStageName(const Name& stageName)noexcept{
 #define NWB_SHADER_STAGE_NAME_MATCH(Stage, Text)                                                                              \
     if(stageName == ArchiveStageNameFromShaderType(ShaderType::Stage))                                                        \
         return ShaderType::Stage;

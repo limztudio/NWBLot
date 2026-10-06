@@ -298,7 +298,7 @@ bool RendererMaterialSystem::materialPassDrawBuffersReady(
     ;
 }
 
-ECSRenderDetail::MaterialPassBufferSnapshot RendererMaterialSystem::materialPassBufferSnapshot()const{
+ECSRenderDetail::MaterialPassBufferSnapshot RendererMaterialSystem::materialPassBufferSnapshot()const noexcept{
     return {
         .instanceBuffer = m_materialState.m_instanceBuffer,
         .materialTypedBuffer = m_materialState.m_materialTypedBuffer,

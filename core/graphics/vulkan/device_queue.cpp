@@ -722,11 +722,11 @@ QueueSubmissionToken Device::executeCommandListsInternal(
     return submissionToken;
 }
 
-u32 Device::getQueueFamilyIndex(const CommandQueue::Enum queueType)const{
+u32 Device::getQueueFamilyIndex(const CommandQueue::Enum queueType)const noexcept{
     return getQueueFamilyIndex(getPrimaryPhysicalQueue(queueType));
 }
 
-u32 Device::getQueueFamilyIndex(const GpuPhysicalQueueId& queue)const{
+u32 Device::getQueueFamilyIndex(const GpuPhysicalQueueId& queue)const noexcept{
     const GpuPhysicalQueueInfo* const info = getPhysicalQueueInfo(queue);
     return info ? info->familyIndex : VK_QUEUE_FAMILY_IGNORED;
 }

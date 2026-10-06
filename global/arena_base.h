@@ -28,7 +28,7 @@ protected:
 
 
 public:
-    [[nodiscard]] ArenaMemoryStats memoryStats()const{ return m_memoryStats.snapshot(); }
+    [[nodiscard]] ArenaMemoryStats memoryStats()const noexcept{ return m_memoryStats.snapshot(); }
 
 
 protected:

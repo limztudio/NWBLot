@@ -24,7 +24,7 @@ namespace EditAction{
 // Actions run between copied input events while the matching model is lent. Neither reference may be retained.
 interface IEditActionSink : private NoCopy{
 public:
-    virtual ~IEditActionSink() = default;
+    virtual ~IEditActionSink()noexcept = default;
 
 
 public:

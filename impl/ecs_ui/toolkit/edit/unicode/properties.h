@@ -25,9 +25,9 @@ namespace IndicConjunct{
     enum Enum : u8{ None, Consonant, Extend, Linker };
 };
 
-[[nodiscard]] GraphemeBreak::Enum LookupGraphemeBreak(u32 codePoint);
-[[nodiscard]] IndicConjunct::Enum LookupIndicConjunct(u32 codePoint);
-[[nodiscard]] bool IsExtendedPictographic(u32 codePoint);
+[[nodiscard]] GraphemeBreak::Enum LookupGraphemeBreak(u32 codePoint)noexcept;
+[[nodiscard]] IndicConjunct::Enum LookupIndicConjunct(u32 codePoint)noexcept;
+[[nodiscard]] bool IsExtendedPictographic(u32 codePoint)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

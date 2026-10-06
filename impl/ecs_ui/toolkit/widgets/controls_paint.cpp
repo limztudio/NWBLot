@@ -121,7 +121,7 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
     return true;
 }
 
-Rect Builder::visibleClip(const Rect& clip)const{
+Rect Builder::visibleClip(const Rect& clip)const noexcept{
     const DisplayMetrics& display = m_paint.displayMetrics();
     const f32 left = Max(0.0f, clip.x);
     const f32 top = Max(0.0f, clip.y);

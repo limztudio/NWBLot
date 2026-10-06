@@ -23,7 +23,7 @@ namespace __hidden_builder_slider{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool MinimumSize(const UiSkinRegion& region, const f32 density, Point& out){
+[[nodiscard]] static bool MinimumSize(const UiSkinRegion& region, const f32 density, Point& out)noexcept{
     if(
         !IsFinite(region.minimumWidth) || region.minimumWidth < 0.0f
         || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f

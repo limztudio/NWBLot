@@ -51,8 +51,8 @@ public:
 
 
 private:
-    static bool TryMapStageToSlangStage(const AStringView stage, AStringView& outStage);
-    static AStringView SlangOptimizationArgument(const ShaderOptimizationLevel::Enum optimizationLevel);
+    static bool TryMapStageToSlangStage(const AStringView stage, AStringView& outStage)noexcept;
+    static AStringView SlangOptimizationArgument(const ShaderOptimizationLevel::Enum optimizationLevel)noexcept;
 };
 
 

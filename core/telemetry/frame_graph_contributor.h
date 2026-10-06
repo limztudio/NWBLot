@@ -22,7 +22,7 @@ inline constexpr u32 s_InvalidFrameGraphNodeIndex = ~0u;
 struct FrameGraphNodeHandle{
     u32 index = s_InvalidFrameGraphNodeIndex;
 
-    [[nodiscard]] bool valid()const{ return index != s_InvalidFrameGraphNodeIndex; }
+    [[nodiscard]] bool valid()const noexcept{ return index != s_InvalidFrameGraphNodeIndex; }
 };
 
 struct FrameGraphPendingNameEdge{
@@ -71,7 +71,7 @@ public:
 
 
 public:
-    [[nodiscard]] u64 frameIndex()const{ return m_frameIndex; }
+    [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }
     [[nodiscard]] bool addPhysicalQueueRuntimeStatistics(
         FrameGraphNodeHandle owner,
         const FrameGraphPhysicalQueueRuntimeStatistics& statistics

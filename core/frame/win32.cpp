@@ -71,15 +71,15 @@ static bool EnableProcessDpiAwareness(){
     return true;
 }
 
-static bool IsExtendedKey(LPARAM lParam){
+static bool IsExtendedKey(LPARAM lParam)noexcept{
     return (static_cast<usize>(lParam) & (static_cast<usize>(1) << s_Win32ExtendedKeyBit)) != 0;
 }
 
-static i32 TranslateScancode(LPARAM lParam){
+static i32 TranslateScancode(LPARAM lParam)noexcept{
     return static_cast<i32>((static_cast<usize>(lParam) >> s_Win32ScancodeShift) & s_Win32ScancodeMask);
 }
 
-static i32 TranslateModifiers(){
+static i32 TranslateModifiers()noexcept{
     i32 mods = 0;
 
     if(GetKeyState(VK_SHIFT) & s_Win32KeyDownMask)
@@ -98,7 +98,7 @@ static i32 TranslateModifiers(){
     return mods;
 }
 
-static i32 TranslateShiftKey(LPARAM lParam){
+static i32 TranslateShiftKey(LPARAM lParam)noexcept{
     const UINT scancode = static_cast<UINT>((static_cast<usize>(lParam) >> s_Win32ScancodeShift) & s_Win32VirtualScancodeMask);
     switch(MapVirtualKeyW(scancode, MAPVK_VSC_TO_VK_EX)){
     case VK_RSHIFT:
@@ -109,11 +109,11 @@ static i32 TranslateShiftKey(LPARAM lParam){
     }
 }
 
-static i32 TranslateNavigationKey(i32 extendedKey, i32 keypadKey, LPARAM lParam){
+static i32 TranslateNavigationKey(i32 extendedKey, i32 keypadKey, LPARAM lParam)noexcept{
     return IsExtendedKey(lParam) ? extendedKey : keypadKey;
 }
 
-static i32 TranslateKey(WPARAM wParam, LPARAM lParam){
+static i32 TranslateKey(WPARAM wParam, LPARAM lParam)noexcept{
     const u32 vk = static_cast<u32>(wParam);
 
     if(vk >= s_AsciiDigitFirst && vk <= s_AsciiDigitLast)
@@ -190,15 +190,15 @@ static i32 TranslateKey(WPARAM wParam, LPARAM lParam){
     }
 }
 
-static i32 SignedLowWord(LPARAM value){
+static i32 SignedLowWord(LPARAM value)noexcept{
     return static_cast<i32>(static_cast<i16>(static_cast<u16>(static_cast<usize>(value) & s_Win32WordMask)));
 }
 
-static i32 SignedHighWord(LPARAM value){
+static i32 SignedHighWord(LPARAM value)noexcept{
     return static_cast<i32>(static_cast<i16>(static_cast<u16>((static_cast<usize>(value) >> s_Win32ScancodeShift) & s_Win32WordMask)));
 }
 
-static i32 TranslateMouseButton(UINT message, WPARAM wParam){
+static i32 TranslateMouseButton(UINT message, WPARAM wParam)noexcept{
     switch(message){
     case WM_LBUTTONDOWN:
     case WM_LBUTTONUP:
@@ -306,7 +306,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 hwnd,
                 uMsg,
                 wParam,
-                [](){},
+                []()noexcept{},
                 [&](const bool isActive){
                     frame->data<Common::WinFrame>().setActive(isActive);
                     DispatchTextInputFocus(*frame, isActive && GetFocus() == hwnd);

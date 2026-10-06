@@ -34,7 +34,7 @@ static constexpr Array<StringView, 5u> s_Labels{ "Alpha", "Beta", "Gamma (disabl
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static char Lower(const char value){
+[[nodiscard]] static char Lower(const char value)noexcept{
     return value >= 'A' && value <= 'Z' ? static_cast<char>(value - 'A' + 'a') : value;
 }
 

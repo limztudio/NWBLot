@@ -211,7 +211,7 @@ ClipboardRequestResult QueuedClipboardService::enqueue(
     return { .token = available->token, .admission = ClipboardAdmission::Accepted };
 }
 
-QueuedClipboardService::Request* QueuedClipboardService::findRequest(const ClipboardRequestToken token){
+QueuedClipboardService::Request* QueuedClipboardService::findRequest(const ClipboardRequestToken token)noexcept{
     if(!token.valid() || token.service != m_serviceIdentity)
         return nullptr;
     for(Request& request : m_requests){

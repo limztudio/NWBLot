@@ -31,7 +31,7 @@ struct GraphClearTimingRecordState{
 
 [[nodiscard]] inline Core::GpuTimingSubmissionTicket* ResolveGraphClearTimingTicket(
     const GraphClearTimingRecordState& state
-){
+)noexcept{
     return state.rebindableTimingTicket ? *state.rebindableTimingTicket : state.timingTicket;
 }
 

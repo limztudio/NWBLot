@@ -20,7 +20,7 @@ namespace __hidden_ui_edit_commands{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool IsMutation(const EditCommand::Enum command){
+static bool IsMutation(const EditCommand::Enum command)noexcept{
     return
         command == EditCommand::Backspace || command == EditCommand::Delete || command == EditCommand::WordBackspace
         || command == EditCommand::WordDelete || command == EditCommand::Cut || command == EditCommand::Paste
@@ -28,7 +28,7 @@ static bool IsMutation(const EditCommand::Enum command){
     ;
 }
 
-static bool SuppressRepeat(const EditCommand::Enum command){
+static bool SuppressRepeat(const EditCommand::Enum command)noexcept{
     return
         command == EditCommand::SelectAll || command == EditCommand::Copy || command == EditCommand::Cut
         || command == EditCommand::Paste || command == EditCommand::Submit || command == EditCommand::Cancel
@@ -57,7 +57,7 @@ static bool EraseWord(EditModel& model, const bool forward){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EditCommandRequest TranslateEditCommand(const InputCommandIntent& intent, const bool repeat, const EditTextMode::Enum mode){
+EditCommandRequest TranslateEditCommand(const InputCommandIntent& intent, const bool repeat, const EditTextMode::Enum mode)noexcept{
     EditCommandRequest request{ EditCommand::None, intent.extend, repeat };
     if(!intent.edit || mode > EditTextMode::Multiline)
         return request;

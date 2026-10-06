@@ -25,9 +25,9 @@ namespace Tests::Smoke{
 
 class UiPopupToolsSmokeSource final : public Impl::Ui::IListDataSource, NoCopy{
 public:
-    virtual u64 instanceGeneration()const override{ return m_generation; }
-    virtual u64 revision()const override{ return m_revision; }
-    virtual u64 rowCount()const override{ return 5u; }
+    virtual u64 instanceGeneration()const noexcept override{ return m_generation; }
+    virtual u64 revision()const noexcept override{ return m_revision; }
+    virtual u64 rowCount()const noexcept override{ return 5u; }
     virtual u64 key(u64 index)const override;
     virtual bool indexOf(u64 key, u64& index)const override;
     virtual bool findEnabled(u64 start, bool reverse, u64& index)const override;
@@ -36,11 +36,11 @@ public:
 
 
 public:
-    void reverse(){ m_reversed = !m_reversed; ++m_revision; }
-    void replace(){ ++m_generation; ++m_revision; }
-    void beginFrame(){ m_labelReads = 0u; }
-    [[nodiscard]] bool reversed()const{ return m_reversed; }
-    [[nodiscard]] u32 labelReads()const{ return m_labelReads; }
+    void reverse()noexcept{ m_reversed = !m_reversed; ++m_revision; }
+    void replace()noexcept{ ++m_generation; ++m_revision; }
+    void beginFrame()noexcept{ m_labelReads = 0u; }
+    [[nodiscard]] bool reversed()const noexcept{ return m_reversed; }
+    [[nodiscard]] u32 labelReads()const noexcept{ return m_labelReads; }
 
 
 private:

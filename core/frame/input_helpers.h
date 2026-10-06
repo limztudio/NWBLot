@@ -23,7 +23,7 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline i32 AdjustModifiersForKey(i32 key, i32 action, i32 mods){
+[[nodiscard]] inline i32 AdjustModifiersForKey(i32 key, i32 action, i32 mods)noexcept{
     switch(key){
     case Key::LeftShift:
     case Key::RightShift:

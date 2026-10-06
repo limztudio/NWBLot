@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateCausticQualitySettings(const CausticQualitySettings& settings){
+bool ValidateCausticQualitySettings(const CausticQualitySettings& settings)noexcept{
     return settings.photonGridDivisor == 1u || settings.photonGridDivisor == 2u || settings.photonGridDivisor == 4u;
 }
 

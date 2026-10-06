@@ -30,9 +30,9 @@ namespace VulkanStateTrackingDetail{
     ResourceStates::Mask oldState,
     ResourceStates::Mask stateBits,
     bool rayTracingStageAvailable
-);
+)noexcept;
 
-[[nodiscard]] ResourceStates::Mask NormalizeOwnershipState(ResourceStates::Mask state);
+[[nodiscard]] ResourceStates::Mask NormalizeOwnershipState(ResourceStates::Mask state)noexcept;
 
 [[nodiscard]] VkImageMemoryBarrier2 BuildTextureOwnershipReleaseBarrier(
     VkImage image,
@@ -42,7 +42,7 @@ namespace VulkanStateTrackingDetail{
     u32 sourceQueueFamily,
     u32 destinationQueueFamily,
     bool rayTracingStageAvailable
-);
+)noexcept;
 
 [[nodiscard]] VkImageMemoryBarrier2 BuildTextureOwnershipAcquireBarrier(
     VkImage image,
@@ -52,7 +52,7 @@ namespace VulkanStateTrackingDetail{
     u32 sourceQueueFamily,
     u32 destinationQueueFamily,
     bool rayTracingStageAvailable
-);
+)noexcept;
 
 [[nodiscard]] bool IsBufferStateRangeValid(BufferRange range, const BufferDesc& description)noexcept;
 
@@ -62,7 +62,7 @@ namespace VulkanStateTrackingDetail{
     ResourceStates::Mask oldState,
     ResourceStates::Mask stateBits,
     bool rayTracingStageAvailable
-);
+)noexcept;
 
 [[nodiscard]] VkBufferMemoryBarrier2 BuildBufferOwnershipReleaseBarrier(
     VkBuffer buffer,
@@ -71,7 +71,7 @@ namespace VulkanStateTrackingDetail{
     u32 destinationQueueFamily,
     bool rayTracingStageAvailable,
     BufferRange range = s_EntireBuffer
-);
+)noexcept;
 
 [[nodiscard]] VkBufferMemoryBarrier2 BuildBufferOwnershipAcquireBarrier(
     VkBuffer buffer,
@@ -80,14 +80,14 @@ namespace VulkanStateTrackingDetail{
     u32 destinationQueueFamily,
     bool rayTracingStageAvailable,
     BufferRange range = s_EntireBuffer
-);
+)noexcept;
 
 [[nodiscard]] bool NeedsResourceStateBarrier(
     ResourceStates::Mask oldState,
     ResourceStates::Mask stateBits,
     bool uavBarrierEnabled,
     bool forceMemoryDependency
-);
+)noexcept;
 
 [[nodiscard]] bool ImageBarrierOverlapsTextureSubresources(
     const VkImageMemoryBarrier2& barrier,

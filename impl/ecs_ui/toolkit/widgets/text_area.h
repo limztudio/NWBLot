@@ -32,26 +32,26 @@ class TextAreaState final : NoCopy{
 
 
 public:
-    TextAreaState() = default;
+    TextAreaState()noexcept = default;
     TextAreaState(TextAreaState&&) = delete;
     TextAreaState& operator=(TextAreaState&&) = delete;
 
 
 public:
-    [[nodiscard]] u64 instanceGeneration()const{ return m_navigation.instanceGeneration(); }
-    [[nodiscard]] u64 revision()const{ return m_revision; }
-    [[nodiscard]] const EditBoxPlacement& placement()const{ return m_visual.placement; }
-    [[nodiscard]] const ScrollViewportPlacement& scrollbars()const{ return m_scrollInput.m_placement; }
-    [[nodiscard]] Point scroll()const{ return { m_visual.scroll, m_scrollY }; }
-    [[nodiscard]] const EditNavigationState& navigation()const{ return m_navigation; }
-    [[nodiscard]] bool focused()const{ return m_visual.focused; }
+    [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_navigation.instanceGeneration(); }
+    [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
+    [[nodiscard]] const EditBoxPlacement& placement()const noexcept{ return m_visual.placement; }
+    [[nodiscard]] const ScrollViewportPlacement& scrollbars()const noexcept{ return m_scrollInput.m_placement; }
+    [[nodiscard]] Point scroll()const noexcept{ return { m_visual.scroll, m_scrollY }; }
+    [[nodiscard]] const EditNavigationState& navigation()const noexcept{ return m_navigation; }
+    [[nodiscard]] bool focused()const noexcept{ return m_visual.focused; }
     // Explicit scrolling suppresses caret reveal until a later accepted text, selection or ownership intent.
-    [[nodiscard]] bool scrollTo(Point scroll);
-    void reset();
+    [[nodiscard]] bool scrollTo(Point scroll)noexcept;
+    void reset()noexcept;
 
 
 private:
-    void advanceRevision();
+    void advanceRevision()noexcept;
 
 
 private:

@@ -34,18 +34,18 @@ static Atomic<u64> s_NextIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ListState::ListState()
+ListState::ListState()noexcept
     : m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_list_state::s_NextIdentity))
 {}
 
-void ListState::select(const u64 key){
+void ListState::select(const u64 key)noexcept{
     m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_list_state::s_NextIdentity);
     m_selected = key;
     m_cursor = key;
     m_ensureCursor = key != 0u;
 }
 
-bool ListState::scrollTo(const f64 offset){
+bool ListState::scrollTo(const f64 offset)noexcept{
     if(!m_scroll.setOffset(offset))
         return false;
     m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_list_state::s_NextIdentity);

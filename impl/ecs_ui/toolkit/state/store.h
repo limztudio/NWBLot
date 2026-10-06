@@ -56,7 +56,7 @@ public:
     [[nodiscard]] WidgetState* touch(WidgetId id, const WidgetRoot& root, WidgetKind::Enum kind, u64 frameGeneration);
     [[nodiscard]] WidgetState* find(WidgetId id);
     [[nodiscard]] const WidgetState* find(WidgetId id)const;
-    [[nodiscard]] const PaintVector<WidgetState>& entries()const{ return m_entries; }
+    [[nodiscard]] const PaintVector<WidgetState>& entries()const noexcept{ return m_entries; }
     void erase(usize index);
 
 

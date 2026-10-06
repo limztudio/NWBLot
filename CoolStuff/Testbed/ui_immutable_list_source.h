@@ -15,19 +15,19 @@
 template<typename Source, usize LabelCount, u64 DisabledKey, typename Interface = NWB::Impl::Ui::IListDataSource>
 class TestbedUiImmutableListSource : public Interface, NoCopy{
 public:
-    virtual u64 instanceGeneration()const override final{ return 1u; }
-    virtual u64 revision()const override final{ return 1u; }
-    virtual u64 rowCount()const override final{ return LabelCount; }
-    virtual u64 key(const u64 index)const override final{ return index < LabelCount ? index + 1u : 0u; }
+    virtual u64 instanceGeneration()const noexcept override final{ return 1u; }
+    virtual u64 revision()const noexcept override final{ return 1u; }
+    virtual u64 rowCount()const noexcept override final{ return LabelCount; }
+    virtual u64 key(const u64 index)const noexcept override final{ return index < LabelCount ? index + 1u : 0u; }
 
-    virtual bool indexOf(const u64 keyValue, u64& index)const override final{
+    virtual bool indexOf(const u64 keyValue, u64& index)const noexcept override final{
         if(keyValue == 0u || keyValue > LabelCount)
             return false;
         index = keyValue - 1u;
         return true;
     }
 
-    virtual bool findEnabled(const u64 start, const bool reverse, u64& index)const override final{
+    virtual bool findEnabled(const u64 start, const bool reverse, u64& index)const noexcept override final{
         if(start >= LabelCount)
             return false;
         if(enabled(start)){
@@ -48,7 +48,7 @@ public:
     }
 
     virtual StringView text(const u64 index)const override{ return index < LabelCount ? Source::s_Labels[index] : StringView{}; }
-    virtual bool enabled(const u64 index)const override final{ return index < LabelCount && index + 1u != DisabledKey; }
+    virtual bool enabled(const u64 index)const noexcept override final{ return index < LabelCount && index + 1u != DisabledKey; }
 };
 
 
@@ -64,12 +64,12 @@ private:
 
 
     public:
-        virtual u64 instanceGeneration()const override{ return 2u; }
-        virtual u64 revision()const override{ return m_source.m_viewRevision; }
-        virtual u64 rowCount()const override{ return m_source.m_count; }
-        virtual u64 key(const u64 index)const override{ return index < rowCount() ? m_source.key(m_source.m_indices[index]) : 0u; }
+        virtual u64 instanceGeneration()const noexcept override{ return 2u; }
+        virtual u64 revision()const noexcept override{ return m_source.m_viewRevision; }
+        virtual u64 rowCount()const noexcept override{ return m_source.m_count; }
+        virtual u64 key(const u64 index)const noexcept override{ return index < rowCount() ? m_source.key(m_source.m_indices[index]) : 0u; }
 
-        virtual bool indexOf(const u64 keyValue, u64& index)const override{
+        virtual bool indexOf(const u64 keyValue, u64& index)const noexcept override{
             for(u64 candidate = 0u; candidate < rowCount(); ++candidate){
                 if(key(candidate) == keyValue){
                     index = candidate;
@@ -79,7 +79,7 @@ private:
             return false;
         }
 
-        virtual bool findEnabled(const u64 start, const bool reverse, u64& index)const override{
+        virtual bool findEnabled(const u64 start, const bool reverse, u64& index)const noexcept override{
             if(start >= rowCount())
                 return false;
             for(u64 candidate = start; candidate < rowCount(); reverse ? --candidate : ++candidate){
@@ -97,7 +97,7 @@ private:
             return index < rowCount() ? static_cast<const Source&>(m_source).text(m_source.m_indices[index]) : StringView{};
         }
 
-        virtual bool enabled(const u64 index)const override{ return index < rowCount() && m_source.enabled(m_source.m_indices[index]); }
+        virtual bool enabled(const u64 index)const noexcept override{ return index < rowCount() && m_source.enabled(m_source.m_indices[index]); }
 
 
     private:
@@ -106,11 +106,11 @@ private:
 
 
 private:
-    [[nodiscard]] static char Lower(const char value){
+    [[nodiscard]] static char Lower(const char value)noexcept{
         return value >= 'A' && value <= 'Z' ? static_cast<char>(value - 'A' + 'a') : value;
     }
 
-    [[nodiscard]] static bool Matches(const StringView text, const AStringView query){
+    [[nodiscard]] static bool Matches(const StringView text, const AStringView query)noexcept{
         if(query.size() > text.size())
             return false;
         for(usize start = 0u; start <= text.size() - query.size(); ++start){

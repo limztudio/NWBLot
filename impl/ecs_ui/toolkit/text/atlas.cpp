@@ -34,7 +34,7 @@ static Atomic<u64> s_NextAtlasIdentity{ 1u };
     return identity;
 }
 
-[[nodiscard]] static bool Place(const AtlasPage& page, u32 width, u32 height, u32& x, u32& y, u32& rowHeight){
+[[nodiscard]] static bool Place(const AtlasPage& page, u32 width, u32 height, u32& x, u32& y, u32& rowHeight)noexcept{
     x = page.cursorX;
     y = page.cursorY;
     rowHeight = page.rowHeight;

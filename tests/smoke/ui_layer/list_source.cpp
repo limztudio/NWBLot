@@ -84,12 +84,12 @@ bool UiListSmokeSource::enabled(const u64 index)const{
     return index < rowCount() && key(index) != 5u;
 }
 
-void UiListSmokeSource::reverse(){
+void UiListSmokeSource::reverse()noexcept{
     m_reversed = !m_reversed;
     ++m_revision;
 }
 
-void UiListSmokeSource::remove(const u64 keyValue){
+void UiListSmokeSource::remove(const u64 keyValue)noexcept{
     if(keyValue == 0u || keyValue > 100000u || keyValue == m_removed)
         return;
     m_removed = keyValue;

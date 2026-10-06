@@ -735,7 +735,7 @@ bool SlangShaderCompiler::compileVariant(const ShaderCook::ShaderCompilerRequest
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SlangShaderCompiler::TryMapStageToSlangStage(const AStringView stage, AStringView& outStage){
+bool SlangShaderCompiler::TryMapStageToSlangStage(const AStringView stage, AStringView& outStage)noexcept{
     struct SlangStageMapping{
         AStringView name;
         AStringView slangStage;
@@ -769,7 +769,7 @@ bool SlangShaderCompiler::TryMapStageToSlangStage(const AStringView stage, AStri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AStringView SlangShaderCompiler::SlangOptimizationArgument(const ShaderOptimizationLevel::Enum optimizationLevel){
+AStringView SlangShaderCompiler::SlangOptimizationArgument(const ShaderOptimizationLevel::Enum optimizationLevel)noexcept{
     switch(optimizationLevel){
     case ShaderOptimizationLevel::None: return "-O0";
     case ShaderOptimizationLevel::Default: return {};

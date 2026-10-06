@@ -30,7 +30,7 @@ inline constexpr u64 s_HexNibbleMask = 0xFu;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline u64 UpdateFnv64(u64 hash, const u8* bytes, const usize byteCount){
+[[nodiscard]] inline u64 UpdateFnv64(u64 hash, const u8* bytes, const usize byteCount)noexcept{
     if(bytes == nullptr || byteCount == 0)
         return hash;
 
@@ -43,23 +43,23 @@ inline constexpr u64 s_HexNibbleMask = 0xFu;
 }
 
 template<typename T>
-inline void Fnv64AppendValue(u64& inOutHash, const T& value){
+inline void Fnv64AppendValue(u64& inOutHash, const T& value)noexcept(noexcept(&value)){
     static_assert(IsTriviallyCopyable_V<T>, "Fnv64AppendValue requires a trivially copyable value");
     inOutHash = UpdateFnv64(inOutHash, reinterpret_cast<const u8*>(&value), sizeof(value));
 }
 
-inline void Fnv64AppendBuffer(u64& inOutHash, const u8* bytes, const usize byteCount){
+inline void Fnv64AppendBuffer(u64& inOutHash, const u8* bytes, const usize byteCount)noexcept{
     Fnv64AppendValue(inOutHash, byteCount);
     inOutHash = UpdateFnv64(inOutHash, bytes, byteCount);
 }
 
-inline void Fnv64AppendBool(u64& inOutHash, const bool value){
+inline void Fnv64AppendBool(u64& inOutHash, const bool value)noexcept{
     const u8 byteValue = value ? 1u : 0u;
     Fnv64AppendValue(inOutHash, byteValue);
 }
 
 template<typename CharT>
-[[nodiscard]] inline constexpr u64 UpdateFnv64TextCanonical(u64 hash, const BasicStringView<CharT> text){
+[[nodiscard]] inline constexpr u64 UpdateFnv64TextCanonical(u64 hash, const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     for(const CharT ch : text){
         hash ^= static_cast<u64>(static_cast<u8>(Canonicalize(ch)));
         hash *= s_Fnv64Prime;
@@ -69,7 +69,7 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline u64 UpdateFnv64TextExact(u64 hash, const BasicStringView<CharT> text){
+[[nodiscard]] inline u64 UpdateFnv64TextExact(u64 hash, const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return UpdateFnv64(
         hash,
         reinterpret_cast<const u8*>(text.data()),
@@ -77,7 +77,7 @@ template<typename CharT>
     );
 }
 
-[[nodiscard]] inline u64 ComputeFnv64Bytes(const void* data, const usize byteCount){
+[[nodiscard]] inline u64 ComputeFnv64Bytes(const void* data, const usize byteCount)noexcept{
     return UpdateFnv64(
         s_Fnv64OffsetBasis,
         static_cast<const u8*>(data),
@@ -85,7 +85,7 @@ template<typename CharT>
     );
 }
 
-inline void HashCombineHash(usize& seed, const usize hash){
+inline void HashCombineHash(usize& seed, const usize hash)noexcept{
     seed ^= hash
         + s_HashCombineGoldenRatio
         + (seed << s_HashCombineLeftShift)
@@ -94,7 +94,7 @@ inline void HashCombineHash(usize& seed, const usize hash){
 }
 
 template<typename T>
-inline void HashCombine(usize& seed, const T& value){
+inline void HashCombine(usize& seed, const T& value)noexcept(noexcept(HashCombineHash(seed, Hasher<T>{}(value)))){
     HashCombineHash(seed, Hasher<T>{}(value));
 }
 
@@ -113,11 +113,11 @@ inline void HashCombineFloat(usize& seed, const f32 value)noexcept{
 
 
 template<typename CharT>
-[[nodiscard]] inline u64 ComputeFnv64Text(const BasicStringView<CharT> text){
+[[nodiscard]] inline u64 ComputeFnv64Text(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return ComputeFnv64Bytes(text.data(), text.size() * sizeof(CharT));
 }
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline u64 ComputeFnv64Text(const BasicString<CharT, ArenaT>& text){
+[[nodiscard]] inline u64 ComputeFnv64Text(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
     return ComputeFnv64Text(BasicStringView<CharT>(text));
 }
 template<typename StringT>
@@ -126,14 +126,14 @@ template<typename StringT>
         text.data();
         text.size();
     }
-[[nodiscard]] inline u64 ComputeFnv64Text(const StringT& text){
+[[nodiscard]] inline u64 ComputeFnv64Text(const StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>(text.data(), text.size())) && IsArithmetic_V<typename StringT::value_type>){
     using CharT = typename StringT::value_type;
     return ComputeFnv64Text(BasicStringView<CharT>(text.data(), text.size()));
 }
 
 
 template<typename CharT>
-[[nodiscard]] inline bool ParseHexDigit(const CharT ch, u8& outValue){
+[[nodiscard]] inline bool ParseHexDigit(const CharT ch, u8& outValue)noexcept(IsArithmetic_V<CharT>){
     if(ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9')){
         outValue = static_cast<u8>(ch - static_cast<CharT>('0'));
         return true;
@@ -151,7 +151,7 @@ template<typename CharT>
 
 
 template<typename CharT>
-[[nodiscard]] inline bool ParseHexU64(const BasicStringView<CharT> text, u64& outValue){
+[[nodiscard]] inline bool ParseHexU64(const BasicStringView<CharT> text, u64& outValue)noexcept(IsArithmetic_V<CharT>){
     if(text.size() != s_HexU64DigitCount)
         return false;
 
@@ -169,7 +169,7 @@ template<typename CharT>
 
 
 template<typename CharT>
-[[nodiscard]] inline bool ParseVariableHexU64(BasicStringView<CharT> text, u64& outValue){
+[[nodiscard]] inline bool ParseVariableHexU64(BasicStringView<CharT> text, u64& outValue)noexcept(IsArithmetic_V<CharT>){
     outValue = 0u;
     if(text.size() >= s_HexPrefixLength && text[0u] == static_cast<CharT>('0') && (text[1u] == static_cast<CharT>('x') || text[1u] == static_cast<CharT>('X')))
         text.remove_prefix(s_HexPrefixLength);
@@ -194,7 +194,7 @@ namespace HashUtilsDetail{
 
 
 template<typename CharT>
-[[nodiscard]] inline constexpr CharT HexDigit(const usize nibble){
+[[nodiscard]] inline constexpr CharT HexDigit(const usize nibble)noexcept(IsArithmetic_V<CharT>){
     return static_cast<CharT>(
         nibble < s_HexDecimalDigitCount
             ? static_cast<usize>('0') + nibble

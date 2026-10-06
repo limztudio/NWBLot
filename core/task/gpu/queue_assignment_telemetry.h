@@ -54,7 +54,7 @@ public:
 
 
 public:
-    void reset();
+    void reset()noexcept;
     [[nodiscard]] bool update(
         const GpuTaskGraph::DeclarationReadView& declarations,
         const GpuTaskGraphQueueAssignments& assignments,

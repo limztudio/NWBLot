@@ -28,7 +28,7 @@ struct CausticPhotonBudget{
     u32 photonsPerFrame = 0u;
 };
 
-[[nodiscard]] bool ValidateCausticQualitySettings(const CausticQualitySettings& settings);
+[[nodiscard]] bool ValidateCausticQualitySettings(const CausticQualitySettings& settings)noexcept;
 // Callers supply validated settings, a supported base grid, and the existing 1/2/4 temporal phase count.
 [[nodiscard]] CausticPhotonBudget MakeCausticPhotonBudget(
     const CausticQualitySettings& settings,

@@ -76,7 +76,7 @@ public:
 public:
     bool openFile(const Name& virtualPath, FileCursor& outCursor)const;
     bool readFile(FileCursor& cursor, void* data, usize bytes, usize& outBytesRead)const;
-    void closeFile(FileCursor& cursor)const;
+    void closeFile(FileCursor& cursor)const noexcept;
 
     template<typename ByteContainer>
     bool readFile(const Name& virtualPath, ByteContainer& outData)const;

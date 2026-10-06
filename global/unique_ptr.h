@@ -162,7 +162,7 @@ public:
         return *this;
     }
 
-    typename AddLValueReference<T>::type operator*()const{ return *get(); }
+    typename AddLValueReference<T>::type operator*()const noexcept(IsPointer_V<pointer>){ return *get(); }
     pointer operator->()const noexcept{ return get(); }
 
     explicit operator bool()const noexcept{ return (get() != pointer()); }
@@ -238,7 +238,7 @@ public:
 
     explicit operator bool()const noexcept{ return (get() != pointer()); }
 
-    typename AddLValueReference<T>::type operator[](ptrdiff_t i)const{ return get()[i]; }
+    typename AddLValueReference<T>::type operator[](ptrdiff_t i)const noexcept(IsPointer_V<pointer>){ return get()[i]; }
 
 
 public:
@@ -287,7 +287,7 @@ public:
 
 
 public:
-    typename AddLValueReference<element_type>::type operator*()const{
+    typename AddLValueReference<element_type>::type operator*()const noexcept(noexcept(*m_owner)){
         return *m_owner;
     }
     pointer operator->()const noexcept{

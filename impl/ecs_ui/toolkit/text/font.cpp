@@ -54,7 +54,7 @@ public:
 
 public:
     [[nodiscard]] bool valid()const{ return m_font != hb_font_get_empty(); }
-    [[nodiscard]] hb_font_t& get()const{ return *m_font; }
+    [[nodiscard]] hb_font_t& get()const noexcept{ return *m_font; }
 
 
 private:
@@ -70,7 +70,7 @@ public:
 
 
 public:
-    [[nodiscard]] hb_buffer_t& get()const{ return *m_buffer; }
+    [[nodiscard]] hb_buffer_t& get()const noexcept{ return *m_buffer; }
 
 
 private:
@@ -252,17 +252,17 @@ FontFace::FontFace(Core::Alloc::GlobalArena& arena, const FontSource& source)
 
 FontFace::~FontFace() = default;
 
-bool FontFace::valid()const{ return m_state->m_ready; }
+bool FontFace::valid()const noexcept{ return m_state->m_ready; }
 
-const Core::Assets::AssetRef<Font>& FontFace::identity()const{ return m_state->m_identity; }
+const Core::Assets::AssetRef<Font>& FontFace::identity()const noexcept{ return m_state->m_identity; }
 
-u64 FontFace::generation()const{ return m_state->m_generation; }
+u64 FontFace::generation()const noexcept{ return m_state->m_generation; }
 
-u32 FontFace::unitsPerEm()const{ return m_state->m_unitsPerEm; }
+u32 FontFace::unitsPerEm()const noexcept{ return m_state->m_unitsPerEm; }
 
-bool FontFace::coverageInkReliable()const{ return m_state->m_coverageInkReliable; }
+bool FontFace::coverageInkReliable()const noexcept{ return m_state->m_coverageInkReliable; }
 
-const SharedBakedFontAtlas& FontFace::bakedAtlas()const{ return m_state->m_bakedAtlas; }
+const SharedBakedFontAtlas& FontFace::bakedAtlas()const noexcept{ return m_state->m_bakedAtlas; }
 
 bool FontFace::metrics(f32 fontSize, FontMetrics& output)const{
     if(!valid() || !IsFinite(fontSize) || fontSize < 1.0f / 64.0f || fontSize > 2048.0f)

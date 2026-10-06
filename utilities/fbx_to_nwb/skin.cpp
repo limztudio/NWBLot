@@ -26,7 +26,7 @@ static constexpr f64 s_UniformScaleNumerator = 1.0;
 static constexpr f64 s_InvertibleMatrixDeterminantEpsilon = 0.00000001;
 static constexpr f32 s_JointMatrixRowEpsilon = 0.0001f;
 
-ufbx_matrix MakeInverseUniformScaleMatrix(const f64 scale){
+ufbx_matrix MakeInverseUniformScaleMatrix(const f64 scale)noexcept{
     ufbx_matrix matrix = {};
     const f64 inverseScale = s_UniformScaleNumerator / scale;
     matrix.m00 = inverseScale;

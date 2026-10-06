@@ -107,8 +107,8 @@ public:
 
 
 public:
-    void reset();
-    void record(u32 serial, TextInputSessionToken token, u64 revision);
+    void reset()noexcept;
+    void record(u32 serial, TextInputSessionToken token, u64 revision)noexcept;
     [[nodiscard]] WaylandTextInputProvenance resolve(u32 serial, TextInputSessionToken current)const noexcept;
 
 

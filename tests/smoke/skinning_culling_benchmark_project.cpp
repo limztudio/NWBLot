@@ -136,7 +136,7 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
     }
 }
 
-[[nodiscard]] static u32 RandomJointSeed(const u32 jointIndex, const u32 characterIndex){
+[[nodiscard]] static u32 RandomJointSeed(const u32 jointIndex, const u32 characterIndex)noexcept{
     u32 seed = jointIndex * 747796405u + characterIndex * 2891336453u + 277803737u;
     seed = ((seed >> ((seed >> 28u) + 4u)) ^ seed) * 277803737u;
     return (seed >> 22u) ^ seed;
@@ -250,7 +250,7 @@ public:
         m_registered = false;
     }
 
-    void setMode(const BenchmarkMode::Enum mode){
+    void setMode(const BenchmarkMode::Enum mode)noexcept{
         m_mode = mode;
     }
 

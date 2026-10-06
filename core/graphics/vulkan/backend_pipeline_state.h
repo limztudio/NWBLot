@@ -57,7 +57,7 @@ inline void DestroyPipelineResource(const VulkanContext& context, PipelineBindin
     );
 }
 
-inline Object GetPipelineNativeHandle(const VkPipeline pipeline, const ObjectType objectType){
+inline Object GetPipelineNativeHandle(const VkPipeline pipeline, const ObjectType objectType)noexcept{
     if(objectType == ObjectTypes::s_Pipeline)
         return Object(pipeline);
     return Object(nullptr);
@@ -67,7 +67,7 @@ inline void AttachPipelineBindingState(
     VkComputePipelineCreateInfo& pipelineInfo,
     const PipelineBindingState& bindingState,
     const void* next = nullptr
-){
+)noexcept{
     pipelineInfo.pNext = next;
     pipelineInfo.layout = bindingState.m_pipelineLayout;
     pipelineInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
@@ -77,7 +77,7 @@ inline void AttachPipelineBindingState(
     VkGraphicsPipelineCreateInfo& pipelineInfo,
     const PipelineBindingState& bindingState,
     const void* next = nullptr
-){
+)noexcept{
     pipelineInfo.pNext = next;
     pipelineInfo.layout = bindingState.m_pipelineLayout;
     pipelineInfo.flags |= VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
@@ -113,7 +113,7 @@ struct DescriptorBufferSegment{
     u32 sizeBytes = 0;
     DescriptorBufferSegmentKind::Enum kind = DescriptorBufferSegmentKind::None;
 
-    [[nodiscard]] bool valid()const{
+    [[nodiscard]] bool valid()const noexcept{
         return (kind == DescriptorBufferSegmentKind::Resource || kind == DescriptorBufferSegmentKind::Sampler)
             && sizeBytes > 0
             && storageIdentity != 0u
@@ -195,11 +195,11 @@ public:
 
     // Exact driver descriptor size; 0 when descriptor buffers are disabled.
     [[nodiscard]] u32 getDescriptorSize(VkDescriptorType descriptorType)const;
-    [[nodiscard]] u32 getOffsetAlignmentBytes()const;
-    [[nodiscard]] u64 getUniformBufferAddressAlignmentBytes()const;
-    [[nodiscard]] u64 getStorageBufferAddressAlignmentBytes()const;
-    [[nodiscard]] u64 getTexelBufferAddressAlignmentBytes()const;
-    [[nodiscard]] u32 getMaxTexelBufferElements()const;
+    [[nodiscard]] u32 getOffsetAlignmentBytes()const noexcept;
+    [[nodiscard]] u64 getUniformBufferAddressAlignmentBytes()const noexcept;
+    [[nodiscard]] u64 getStorageBufferAddressAlignmentBytes()const noexcept;
+    [[nodiscard]] u64 getTexelBufferAddressAlignmentBytes()const noexcept;
+    [[nodiscard]] u32 getMaxTexelBufferElements()const noexcept;
 
     // Allocates aligned, zeroed descriptor bytes from free ranges or the bump pointer.
     [[nodiscard]] DescriptorBufferSegment allocate(DescriptorBufferSegmentKind::Enum kind, u32 sizeBytes, u32 alignmentBytes);
@@ -233,7 +233,7 @@ private:
         const SegmentStorage& storage,
         const DescriptorBufferSegment& segment,
         DescriptorBufferSegmentKind::Enum expectedKind
-    )const;
+    )const noexcept;
     bool initializeSegment(SegmentStorage& segment, const ACompactString& debugName, u32 capacityBytes);
     void shutdownSegment(SegmentStorage& segment)noexcept;
 
@@ -374,7 +374,7 @@ public:
     bool initialize(const GpuDescriptorHeapDesc& desc);
     void shutdown();
 
-    [[nodiscard]] bool isInitialized()const{ return m_initialized; }
+    [[nodiscard]] bool isInitialized()const noexcept{ return m_initialized; }
     // Coherent aggregate lifecycle counters; intentionally does not identify individual physical queues.
     [[nodiscard]] GpuDescriptorHeapLifecycleStatistics lifecycleStatistics()const;
 
@@ -409,13 +409,13 @@ public:
     );
 
     // Resource and sampler layouts at sets 0 and 1.
-    [[nodiscard]] const BindingLayoutHandle& getResourceLayout()const{ return m_resourceLayout; }
-    [[nodiscard]] const BindingLayoutHandle& getSamplerLayout()const{ return m_samplerLayout; }
+    [[nodiscard]] const BindingLayoutHandle& getResourceLayout()const noexcept{ return m_resourceLayout; }
+    [[nodiscard]] const BindingLayoutHandle& getSamplerLayout()const noexcept{ return m_samplerLayout; }
     // Per-generation one-descriptor TLAS layout at set 2.
-    [[nodiscard]] const BindingLayoutHandle& getAccelStructLayout()const{ return m_accelStructLayout; }
-    [[nodiscard]] bool hasAccelStructLayout()const{ return m_accelStructLayout != nullptr; }
+    [[nodiscard]] const BindingLayoutHandle& getAccelStructLayout()const noexcept{ return m_accelStructLayout; }
+    [[nodiscard]] bool hasAccelStructLayout()const noexcept{ return m_accelStructLayout != nullptr; }
     // SPIR-V binding number for a descriptor class.
-    [[nodiscard]] u32 getRegisterSlot(GpuDescriptorClass::Enum descriptorClass)const;
+    [[nodiscard]] u32 getRegisterSlot(GpuDescriptorClass::Enum descriptorClass)const noexcept;
     // Per-generation TLAS segment block bound at heap set 2.
     [[nodiscard]] DescriptorBufferSegment getAccelStructBufferBlock(GpuDescriptorHandle handle)const;
 
@@ -511,9 +511,9 @@ public:
 
 
 public:
-    [[nodiscard]] const GraphicsPipelineDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] const GraphicsPipelineDesc& getDescription()const noexcept{ return m_desc; }
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
-    [[nodiscard]] const FramebufferInfo& getFramebufferInfo()const{ return m_framebufferInfo; }
+    [[nodiscard]] const FramebufferInfo& getFramebufferInfo()const noexcept{ return m_framebufferInfo; }
     Object getNativeHandle(ObjectType objectType);
 
 
@@ -540,7 +540,7 @@ public:
 
 
 public:
-    [[nodiscard]] const ComputePipelineDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] const ComputePipelineDesc& getDescription()const noexcept{ return m_desc; }
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     Object getNativeHandle(ObjectType objectType);
 
@@ -567,9 +567,9 @@ public:
 
 
 public:
-    [[nodiscard]] const MeshletPipelineDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] const MeshletPipelineDesc& getDescription()const noexcept{ return m_desc; }
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
-    [[nodiscard]] const FramebufferInfo& getFramebufferInfo()const{ return m_framebufferInfo; }
+    [[nodiscard]] const FramebufferInfo& getFramebufferInfo()const noexcept{ return m_framebufferInfo; }
     Object getNativeHandle(ObjectType objectType);
 
 
@@ -619,7 +619,7 @@ public:
 
 
 public:
-    [[nodiscard]] const RayTracingPipelineDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] const RayTracingPipelineDesc& getDescription()const noexcept{ return m_desc; }
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     [[nodiscard]] bool allowsClusterAccelerationStructures()const noexcept{ return m_allowClusterAccelerationStructuresAtCreation; }
     [[nodiscard]] RayTracingShaderTableHandle createShaderTable();
@@ -687,7 +687,7 @@ public:
     void clearMissShaders();
     void clearHitShaders();
     void clearCallableShaders();
-    [[nodiscard]] RayTracingPipeline* getPipeline(){ return m_pipeline.get(); }
+    [[nodiscard]] RayTracingPipeline* getPipeline()noexcept{ return m_pipeline.get(); }
     Object getNativeHandle(ObjectType objectType);
 
 

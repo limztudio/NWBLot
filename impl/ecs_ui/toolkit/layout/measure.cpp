@@ -16,7 +16,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool LayoutTree::measure(){
+bool LayoutTree::measure()noexcept{
     for(usize reverse = m_nodes.size(); reverse > 0u; --reverse){
         const u32 index = static_cast<u32>(reverse - 1u);
         const Node& node = m_nodes[index];

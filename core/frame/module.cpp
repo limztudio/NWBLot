@@ -128,7 +128,7 @@ void Frame::cleanup(){
         GLB_TEXT("Frame cleanup requires either a completed graphics join or terminal device loss")
     );
 }
-void Frame::requestQuit(){
+void Frame::requestQuit()noexcept{
     m_quitRequested = true;
 }
 void Frame::setPerfCapture(const Perf::CaptureOptions& options){
@@ -144,7 +144,7 @@ void Frame::setTelemetryCapture(const Telemetry::CaptureOptions& options){
     if(options.perfEnabled())
         setPerfCapture(Perf::CaptureOptions::All());
 }
-void Frame::setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData){
+void Frame::setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData)noexcept{
     m_telemetryUploadCallback = callback;
     m_telemetryUploadUserData = userData;
 }
@@ -234,7 +234,7 @@ bool Frame::updateFrame(f32 delta){
     }
     return true;
 }
-bool Frame::render(){
+bool Frame::render()noexcept{
     return true;
 }
 
@@ -248,7 +248,7 @@ ITextInputService& Frame::textInput(){
     return *m_textInput;
 }
 
-TStringView Frame::windowTitleOrDefault()const{
+TStringView Frame::windowTitleOrDefault()const noexcept{
     const TStringView title = m_graphics.getWindowTitle();
     return !title.empty() ? title : TStringView(GLB_TEXT("NWB"));
 }

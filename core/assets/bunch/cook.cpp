@@ -42,15 +42,15 @@ using ScratchNameHashSet = HashSet<NameHash, ScratchArena, Hasher<NameHash>, Equ
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static AStringView DeclarationType(const Metascript::Document::Declaration& declaration){
+[[nodiscard]] static AStringView DeclarationType(const Metascript::Document::Declaration& declaration)noexcept{
     return AStringView(declaration.type.data(), declaration.type.size());
 }
 
-[[nodiscard]] static AStringView DeclarationVariable(const Metascript::Document::Declaration& declaration){
+[[nodiscard]] static AStringView DeclarationVariable(const Metascript::Document::Declaration& declaration)noexcept{
     return AStringView(declaration.variable.data(), declaration.variable.size());
 }
 
-[[nodiscard]] static Metascript::MStringView DeclarationVariableMetaView(const Metascript::Document::Declaration& declaration){
+[[nodiscard]] static Metascript::MStringView DeclarationVariableMetaView(const Metascript::Document::Declaration& declaration)noexcept{
     return Metascript::MStringView(declaration.variable.data(), declaration.variable.size());
 }
 
@@ -162,7 +162,7 @@ private:
     return outVirtualPath != s_NameNone;
 }
 
-[[nodiscard]] static NameHash DeclarationVariableHash(const Metascript::Document::Declaration& declaration){
+[[nodiscard]] static NameHash DeclarationVariableHash(const Metascript::Document::Declaration& declaration)noexcept{
     return ComputeNameHash(DeclarationVariable(declaration));
 }
 

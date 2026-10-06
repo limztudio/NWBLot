@@ -23,7 +23,7 @@ namespace __hidden_vulkan_descriptor_heap{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ResourceType::Enum ClassToResourceType(const GpuDescriptorClass::Enum descriptorClass){
+ResourceType::Enum ClassToResourceType(const GpuDescriptorClass::Enum descriptorClass)noexcept{
     switch(descriptorClass){
     case GpuDescriptorClass::SampledImage:  return ResourceType::Texture_SRV;
     case GpuDescriptorClass::StorageImage:  return ResourceType::Texture_UAV;
@@ -43,7 +43,7 @@ ResourceType::Enum ClassToResourceType(const GpuDescriptorClass::Enum descriptor
 bool IsResourceTypeCompatible(
     const GpuDescriptorClass::Enum descriptorClass,
     const ResourceType::Enum resourceType
-){
+)noexcept{
     switch(descriptorClass){
     case GpuDescriptorClass::SampledImage:
     case GpuDescriptorClass::SampledImage2DArray:
@@ -72,7 +72,7 @@ bool IsResourceTypeCompatible(
     }
 }
 
-bool IsSampledImageClass(const GpuDescriptorClass::Enum descriptorClass){
+bool IsSampledImageClass(const GpuDescriptorClass::Enum descriptorClass)noexcept{
     switch(descriptorClass){
     case GpuDescriptorClass::SampledImage:
     case GpuDescriptorClass::SampledImage2DArray:
@@ -85,7 +85,7 @@ bool IsSampledImageClass(const GpuDescriptorClass::Enum descriptorClass){
     }
 }
 
-TextureDimension::Enum GetSampledImageDimension(const GpuDescriptorClass::Enum descriptorClass){
+TextureDimension::Enum GetSampledImageDimension(const GpuDescriptorClass::Enum descriptorClass)noexcept{
     switch(descriptorClass){
     case GpuDescriptorClass::SampledImage: return TextureDimension::Texture2D;
     case GpuDescriptorClass::SampledImage2DArray:

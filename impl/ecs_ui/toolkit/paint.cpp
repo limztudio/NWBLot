@@ -22,7 +22,7 @@ namespace __hidden_ui_paint{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool HasArea(const Rect& rectangle){
+bool HasArea(const Rect& rectangle)noexcept{
     return
         IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height)
         && rectangle.width > 0.0f && rectangle.height > 0.0f
@@ -30,7 +30,7 @@ bool HasArea(const Rect& rectangle){
     ;
 }
 
-Rect Intersect(const Rect& lhs, const Rect& rhs){
+Rect Intersect(const Rect& lhs, const Rect& rhs)noexcept{
     if(!HasArea(lhs) || !HasArea(rhs))
         return {};
     const f32 left = Max(lhs.x, rhs.x);
@@ -40,7 +40,7 @@ Rect Intersect(const Rect& lhs, const Rect& rhs){
     return { left, top, Max(0.0f, right - left), Max(0.0f, bottom - top) };
 }
 
-bool EqualClip(const Rect& lhs, const Rect& rhs){
+bool EqualClip(const Rect& lhs, const Rect& rhs)noexcept{
     return lhs.x == rhs.x && lhs.y == rhs.y && lhs.width == rhs.width && lhs.height == rhs.height;
 }
 
@@ -54,7 +54,7 @@ bool EqualClip(const Rect& lhs, const Rect& rhs){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-DrawSnapshot::DrawSnapshot(Core::Alloc::GlobalArena& arena)
+DrawSnapshot::DrawSnapshot(Core::Alloc::GlobalArena& arena)noexcept
     : m_vertices(arena)
     , m_indices(arena)
     , m_commands(arena)
@@ -67,7 +67,7 @@ DrawSnapshot::DrawSnapshot(Core::Alloc::GlobalArena& arena)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-PaintBuilder::PaintBuilder(Core::Alloc::GlobalArena& arena)
+PaintBuilder::PaintBuilder(Core::Alloc::GlobalArena& arena)noexcept
     : m_snapshot(arena)
     , m_regions(arena)
     , m_clips(arena)
@@ -140,7 +140,7 @@ void PaintBuilder::fillRect(const Rect& rectangle, const Color& color){
 
 bool PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint){
     GLB_ASSERT(m_recording);
-    const auto region = FindIf(m_regions.begin(), m_regions.end(), [&regionName](const UiSkinRegion& value){
+    const auto region = FindIf(m_regions.begin(), m_regions.end(), [&regionName](const UiSkinRegion& value)noexcept{
         return value.name == regionName;
     });
     if(region == m_regions.end())
@@ -160,7 +160,7 @@ bool PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, con
 
 DrawSnapshot PaintBuilder::freeze(){
     GLB_ASSERT(m_recording && m_clips.size() == 1u && m_overlayDepth == 0u);
-    Sort(m_snapshot.m_commands.begin(), m_snapshot.m_commands.end(), [](const DrawCommand& lhs, const DrawCommand& rhs){
+    Sort(m_snapshot.m_commands.begin(), m_snapshot.m_commands.end(), [](const DrawCommand& lhs, const DrawCommand& rhs)noexcept{
         return lhs.layer != rhs.layer ? lhs.layer < rhs.layer : lhs.firstIndex < rhs.firstIndex;
     });
     m_recording = false;

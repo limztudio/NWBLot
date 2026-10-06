@@ -36,7 +36,7 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool TryComputeCameraTanHalfVerticalFov(const SIMDVector verticalFovRadians, SIMDVector& outTanHalfFov){
+[[nodiscard]] inline bool TryComputeCameraTanHalfVerticalFov(const SIMDVector verticalFovRadians, SIMDVector& outTanHalfFov)noexcept{
     constexpr f32 s_CameraFovCosEpsilon = 0.000001f;
 
     outTanHalfFov = s_SIMDZero;
@@ -69,7 +69,7 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
     return true;
 }
 
-[[nodiscard]] inline bool CameraClipRangeValid(const SIMDVector nearPlane, const SIMDVector farPlane){
+[[nodiscard]] inline bool CameraClipRangeValid(const SIMDVector nearPlane, const SIMDVector farPlane)noexcept{
     return
         VectorIsFinite(nearPlane, VectorComponentMask::s_XYZW)
         && VectorIsFinite(farPlane, VectorComponentMask::s_XYZW)
@@ -78,7 +78,7 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
     ;
 }
 
-[[nodiscard]] inline SIMDVector ResolveCameraAspectRatio(const SIMDVector cameraAspectRatio, const SIMDVector fallbackAspectRatio){
+[[nodiscard]] inline SIMDVector ResolveCameraAspectRatio(const SIMDVector cameraAspectRatio, const SIMDVector fallbackAspectRatio)noexcept{
     const SIMDVector fallbackValid = VectorAndCInt(
         VectorGreater(fallbackAspectRatio, s_SIMDZero),
         VectorOrInt(VectorIsNaN(fallbackAspectRatio), VectorIsInfinite(fallbackAspectRatio))
@@ -101,7 +101,7 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
     const SIMDVector tanHalfVerticalFov,
     const SIMDVector nearPlane,
     const SIMDVector farPlane
-){
+)noexcept{
     const SIMDVector validProjectionParams = VectorOrInt(
         VectorAndInt(VectorGreater(projectionParams, s_SIMDZero), s_SIMDMask3),
         VectorAndInt(VectorLess(projectionParams, s_SIMDZero), s_SIMDMaskW)
@@ -120,7 +120,7 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
     ;
 }
 
-inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDVector& outProjectionParams, SIMDVector& outAspectRatio, SIMDVector& outTanHalfVerticalFov, SIMDVector& outNearPlane, SIMDVector& outFarPlane){
+inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDVector& outProjectionParams, SIMDVector& outAspectRatio, SIMDVector& outTanHalfVerticalFov, SIMDVector& outNearPlane, SIMDVector& outFarPlane)noexcept{
     outProjectionParams = LoadFloat(projection.projectionParams);
     outAspectRatio = VectorReplicate(projection.aspectRatio);
     outTanHalfVerticalFov = VectorReplicate(projection.tanHalfVerticalFov);
@@ -128,7 +128,7 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
     outFarPlane = VectorReplicate(projection.farPlane);
 }
 
-[[nodiscard]] inline bool CameraProjectionStorageValid(const CameraProjection& projection){
+[[nodiscard]] inline bool CameraProjectionStorageValid(const CameraProjection& projection)noexcept{
     SIMDVector projectionParams{};
     SIMDVector aspectRatio{};
     SIMDVector tanHalfVerticalFov{};
@@ -149,7 +149,7 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
     SIMDVector& outTanHalfVerticalFov,
     SIMDVector& outNearPlane,
     SIMDVector& outFarPlane
-){
+)noexcept{
     outProjectionParams = s_SIMDZero;
     outAspectRatio = s_SIMDZero;
     outTanHalfVerticalFov = s_SIMDZero;
@@ -193,7 +193,7 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
     const SIMDVector cameraAspectRatio,
     const SIMDVector fallbackAspectRatio,
     CameraProjection& outProjection
-){
+)noexcept{
     outProjection = CameraProjection{};
 
     SIMDVector projectionParams;
@@ -223,7 +223,7 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
     return true;
 }
 
-[[nodiscard]] inline CameraProjection BuildDefaultCameraProjection(const f32 fallbackAspectRatio = CameraDefaults::s_FallbackAspectRatio){
+[[nodiscard]] inline CameraProjection BuildDefaultCameraProjection(const f32 fallbackAspectRatio = CameraDefaults::s_FallbackAspectRatio)noexcept{
     CameraProjection projection;
     if(TryBuildCameraProjection(
         VectorReplicate(CameraDefaults::s_VerticalFovRadians),

@@ -508,7 +508,7 @@ static constexpr UnicodePropertyRange s_Ranges[] = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-IndicConjunct::Enum LookupIndicConjunct(const u32 codePoint){
+IndicConjunct::Enum LookupIndicConjunct(const u32 codePoint)noexcept{
     const u8 property = LookupUnicodePropertyRanges(__hidden_ui_unicode_incb::s_Ranges, codePoint, IndicConjunct::None);
     return static_cast<IndicConjunct::Enum>(property);
 }

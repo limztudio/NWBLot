@@ -72,8 +72,8 @@ public:
 
     [[nodiscard]] bool poll(const Core::Perf::SessionReport& report, bool memoryEnabled);
 
-    [[nodiscard]] bool finished()const{ return m_successfulFrames >= s_WarmupFrames + s_SampleFrames + s_DrainFrames; }
-    [[nodiscard]] u32 successfulFrames()const{ return m_successfulFrames; }
+    [[nodiscard]] bool finished()const noexcept{ return m_successfulFrames >= s_WarmupFrames + s_SampleFrames + s_DrainFrames; }
+    [[nodiscard]] u32 successfulFrames()const noexcept{ return m_successfulFrames; }
 
     [[nodiscard]] bool write(AStringView path, AStringView workload, bool memoryEnabled, u32 renderers,
         u32 runtimeRenderers, u32 transparentRenderers, u32 runtimeOwners)const;

@@ -20,13 +20,13 @@ using namespace NWB::Core;
 
 class PointerLifecycleHandler final : public IInputEventHandler{
 public:
-    explicit PointerLifecycleHandler(InputDispatcher& dispatcher)
+    explicit PointerLifecycleHandler(InputDispatcher& dispatcher)noexcept
         : m_dispatcher(dispatcher)
     {}
 
 
 public:
-    virtual void windowFocusUpdate(bool)override{ ++m_focusChanges; }
+    virtual void windowFocusUpdate(bool)noexcept override{ ++m_focusChanges; }
     virtual void pointerLeave()override{
         ++m_leaves;
         if(m_addOnLeave){
@@ -41,7 +41,7 @@ public:
             m_removeOnCaptureLoss = nullptr;
         }
     }
-    virtual bool keyboardUpdate(i32, i32, const i32 action, i32)override{
+    virtual bool keyboardUpdate(i32, i32, const i32 action, i32)noexcept override{
         if(action == InputAction::Release)
             ++m_keyReleases;
         else

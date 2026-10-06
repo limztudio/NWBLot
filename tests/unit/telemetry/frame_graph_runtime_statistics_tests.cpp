@@ -26,127 +26,127 @@ using namespace TelemetryTestDetail;
 using FrameGraphRuntimeStatisticsMutation = void(*)(Telemetry::FrameGraphRuntimeStatistics&);
 
 static constexpr FrameGraphRuntimeStatisticsMutation s_FrameGraphRuntimeStatisticsCountMutations[] = {
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.compile.packetCount = statistics.compile.taskCount + 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         ++statistics.compile.mergedTaskCount;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.compile.resourceVersionCount = 0u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.compile.directResourceUseCount = statistics.compile.resourceUseCount + 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         ++statistics.compile.expandedResourceSetMemberUseCount;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.compile.payloadObjectCount = statistics.compile.taskCount + 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.compile.logicalOwnershipTransferSignatureCount =
             statistics.compile.logicalOwnershipTransferCount + 1u
         ;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.compile.repeatedOwnershipTransferSignatureCount =
             statistics.compile.logicalOwnershipTransferSignatureCount + 1u
         ;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.compile.concurrentSharingCouldAvoidTransferCount =
             statistics.compile.logicalOwnershipTransferCount + 1u
         ;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.compile.concurrentSharingAdviceResourceCount = statistics.compile.resourceCount + 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.compile.logicalOwnershipTransferInternalCount =
             statistics.compile.logicalOwnershipTransferCount + 1u
         ;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.compile.logicalOwnershipTransferExternalImportCount =
             statistics.compile.logicalOwnershipTransferCount
             - statistics.compile.logicalOwnershipTransferInternalCount
             + 1u
         ;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         ++statistics.compile.logicalOwnershipTransferExternalExportCount;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.recording.packetCount = statistics.compile.packetCount + 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.recording.taskCount = statistics.compile.taskCount + 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.recording.taskCount = statistics.recording.packetCount - 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.recording.commandListCount = statistics.recording.packetCount - 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.recording.workerRoutedPacketCount = statistics.recording.packetCount + 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.recording.parallelPacketCount = statistics.recording.packetCount + 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.acceptedPacketCount = statistics.compile.packetCount + 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.rejectedPacketCount = statistics.compile.packetCount
             - statistics.submission.acceptedPacketCount + 1u
         ;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.acceptedTaskCount = statistics.compile.taskCount + 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.rejectedTaskCount = statistics.compile.taskCount
             - statistics.submission.acceptedTaskCount + 1u
         ;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.acceptedTaskCount = statistics.submission.acceptedPacketCount - 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.rejectedTaskCount = statistics.submission.rejectedPacketCount - 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.acceptedPacketCount = statistics.submission.nativeSubmissionCount - 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.rejectedSubmissionCount = statistics.submission.rejectedPacketCount + 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.acceptedFrontierSubmissionCount = statistics.submission.nativeSubmissionCount + 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.recoverySubmissionCount = statistics.submission.acceptedFrontierSubmissionCount + 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.nativeSubmissionCount = statistics.recording.packetCount + 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.nativeCommandListCount = statistics.submission.nativeSubmissionCount - 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.nativeCommandListCount = statistics.recording.commandListCount + 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.sameQueueWaitElisionCount = statistics.submission.plannedWaitTokenCount + 1u;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         statistics.submission.mergedTimelineWaitCount = statistics.submission.plannedWaitTokenCount
             - statistics.submission.sameQueueWaitElisionCount + 1u
         ;
     },
-    [](Telemetry::FrameGraphRuntimeStatistics& statistics){
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         ++statistics.submission.timelineWaitCount;
     },
 };

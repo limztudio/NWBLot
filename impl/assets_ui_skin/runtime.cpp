@@ -36,7 +36,7 @@ static_assert(UiSkinColorRole::Count == UiSkinBinaryPayload::s_UiSkinPaletteColo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool IsValidRegion(const UiSkinRegion& region, const u32 atlasWidth, const u32 atlasHeight){
+[[nodiscard]] static bool IsValidRegion(const UiSkinRegion& region, const u32 atlasWidth, const u32 atlasHeight)noexcept{
     if(!region.name || region.name == Name(""))
         return false;
     const UiSkinRect& rectangle = region.rectangle;

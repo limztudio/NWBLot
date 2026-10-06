@@ -37,14 +37,14 @@ namespace FilesystemVolumeDetail{
 constexpr usize s_ErrnoMessageBufferBytes = 256u;
 
 
-static bool ToStreamOff(const u64 value, GlobalFilesystemDetail::StreamOffset& out){
+static bool ToStreamOff(const u64 value, GlobalFilesystemDetail::StreamOffset& out)noexcept{
     if(!CanRepresentU64<GlobalFilesystemDetail::StreamOffset>(value))
         return false;
     out = static_cast<GlobalFilesystemDetail::StreamOffset>(value);
     return true;
 }
 
-static bool ToStreamSize(const u64 value, GlobalFilesystemDetail::StreamSize& out){
+static bool ToStreamSize(const u64 value, GlobalFilesystemDetail::StreamSize& out)noexcept{
     if(!CanRepresentU64<GlobalFilesystemDetail::StreamSize>(value))
         return false;
     out = static_cast<GlobalFilesystemDetail::StreamSize>(value);
@@ -494,7 +494,7 @@ bool VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
     }
 }
 
-bool VolumeFileSystem::computeLogicalCapacityLocked(u64& outCapacityBytes)const{
+bool VolumeFileSystem::computeLogicalCapacityLocked(u64& outCapacityBytes)const noexcept{
     outCapacityBytes = 0;
     if(m_segmentSize == 0)
         return false;

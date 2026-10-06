@@ -29,7 +29,7 @@ namespace SpirvEntryPointLookupResult{
 [[nodiscard]] bool IsValidSpirvModuleWords(
     const u32* words,
     usize wordCount
-);
+)noexcept;
 
 // The result borrows unchanged module words and excludes the validated terminating null.
 [[nodiscard]] SpirvEntryPointLookupResult::Enum ResolveSpirvEntryPointName(
@@ -38,7 +38,7 @@ namespace SpirvEntryPointLookupResult{
     AStringView entryName,
     ShaderType::Mask shaderType,
     AStringView& outEntryPointName
-);
+)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

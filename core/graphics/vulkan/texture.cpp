@@ -23,7 +23,7 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsSupportedSampleCount(u32 sampleCount){
+bool IsSupportedSampleCount(u32 sampleCount)noexcept{
     switch(sampleCount){
     case VK_SAMPLE_COUNT_1_BIT:
     case VK_SAMPLE_COUNT_2_BIT:
@@ -116,7 +116,7 @@ bool ValidateTextureShape(const TextureDesc& desc, TStringView operationName){
     return true;
 }
 
-VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo){
+VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo)noexcept{
     VkImageAspectFlags aspectMask = 0;
     if(formatInfo.hasDepth)
         aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
@@ -127,7 +127,7 @@ VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo){
     return aspectMask;
 }
 
-bool GetTextureFormatBlockLayout(const FormatInfo& formatInfo, TextureFormatBlockLayout& outLayout){
+bool GetTextureFormatBlockLayout(const FormatInfo& formatInfo, TextureFormatBlockLayout& outLayout)noexcept{
     outLayout = {};
     outLayout.blockWidth = GetFormatBlockWidth(formatInfo);
     outLayout.blockHeight = GetFormatBlockHeight(formatInfo);
@@ -167,7 +167,7 @@ bool IsBufferImageCopyAspectMaskSupported(const VkImageAspectFlags aspectMask)no
     return (aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) == 0 || (aspectMask & VK_IMAGE_ASPECT_STENCIL_BIT) == 0;
 }
 
-VkExtent3D GetTextureMipExtent(const TextureDesc& desc, const MipLevel mipLevel){
+VkExtent3D GetTextureMipExtent(const TextureDesc& desc, const MipLevel mipLevel)noexcept{
     VkExtent3D extent{};
     extent.width = Max<u32>(desc.width >> mipLevel, 1u);
     extent.height = Max<u32>(desc.height >> mipLevel, 1u);
@@ -297,7 +297,7 @@ VkImageSubresourceLayers BuildImageSubresourceLayers(
     const MipLevel mipLevel,
     const ArraySlice arraySlice,
     const ArraySlice layerCount
-){
+)noexcept{
     VkImageSubresourceLayers layers{};
     layers.aspectMask = aspectMask;
     layers.mipLevel = mipLevel;
@@ -306,7 +306,7 @@ VkImageSubresourceLayers BuildImageSubresourceLayers(
     return layers;
 }
 
-VkImageSubresourceRange BuildImageSubresourceRange(const TextureSubresourceSet& subresources, const VkImageAspectFlags aspectMask){
+VkImageSubresourceRange BuildImageSubresourceRange(const TextureSubresourceSet& subresources, const VkImageAspectFlags aspectMask)noexcept{
     VkImageSubresourceRange range{};
     range.aspectMask = aspectMask;
     range.baseMipLevel = subresources.baseMipLevel;

@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RadioGroupFrame::RadioGroupFrame(Core::Alloc::GlobalArena& arena, const IListDataSource& source, RadioGroupState& state)
+RadioGroupFrame::RadioGroupFrame(Core::Alloc::GlobalArena& arena, const IListDataSource& source, RadioGroupState& state)noexcept
     : m_source(source)
     , m_state(state)
     , m_labels(arena)

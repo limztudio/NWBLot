@@ -42,12 +42,12 @@ template<typename ResourceDesc>
     ;
 }
 
-inline void PublishAcceptedToken(QueueSubmissionToken* acceptedToken, const QueueSubmissionToken& token){
+inline void PublishAcceptedToken(QueueSubmissionToken* acceptedToken, const QueueSubmissionToken& token)noexcept{
     if(acceptedToken)
         *acceptedToken = token;
 }
 
-inline void ClearAcceptedToken(QueueSubmissionToken* acceptedToken){
+inline void ClearAcceptedToken(QueueSubmissionToken* acceptedToken)noexcept{
     if(acceptedToken)
         *acceptedToken = {};
 }
@@ -63,7 +63,7 @@ struct CopiesPayloadBase{
 };
 
 template<typename Payload>
-[[nodiscard]] inline bool CopiesPayloadHasWork(const Payload& payload){
+[[nodiscard]] inline bool CopiesPayloadHasWork(const Payload& payload)noexcept(noexcept(static_cast<bool>(!payload.copies.empty()))){
     return !payload.copies.empty();
 }
 
@@ -71,11 +71,11 @@ template<typename PayloadT>
 struct SingletonTokenTaskBase{
     using Payload = PayloadT;
 
-    static void Accepted(Payload& payload, const QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const QueueSubmissionToken& token)noexcept(noexcept(PublishAcceptedToken(payload.acceptedToken, token))){
         PublishAcceptedToken(payload.acceptedToken, token);
     }
 
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept(noexcept(ClearAcceptedToken(payload.acceptedToken))){
         ClearAcceptedToken(payload.acceptedToken);
     }
 };
@@ -88,11 +88,11 @@ struct CopiesTaskBase{
         {}
     };
 
-    static void Accepted(Payload& payload, const QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const QueueSubmissionToken& token)noexcept(noexcept(PublishAcceptedToken(payload.acceptedToken, token))){
         PublishAcceptedToken(payload.acceptedToken, token);
     }
 
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept(noexcept(ClearAcceptedToken(payload.acceptedToken))){
         ClearAcceptedToken(payload.acceptedToken);
     }
 };

@@ -39,7 +39,7 @@ struct ScrollPlacement{
 // Hosts own scroll state; its offset and identity contain no retained application or OS references.
 class ScrollState final : NoCopy{
 public:
-    ScrollState();
+    ScrollState()noexcept;
 
 
 public:
@@ -48,12 +48,12 @@ public:
 
 
 public:
-    [[nodiscard]] u64 instanceGeneration()const{ return m_instanceGeneration; }
-    [[nodiscard]] f64 offset()const{ return m_offset; }
-    [[nodiscard]] bool setOffset(f64 offset);
-    [[nodiscard]] bool ensureVisible(f64 start, f64 end, f64 viewportHeight);
-    [[nodiscard]] bool scrollBy(f64 delta, f64 contentHeight, f64 viewportHeight);
-    [[nodiscard]] bool clamp(f64 contentHeight, f64 viewportHeight);
+    [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
+    [[nodiscard]] f64 offset()const noexcept{ return m_offset; }
+    [[nodiscard]] bool setOffset(f64 offset)noexcept;
+    [[nodiscard]] bool ensureVisible(f64 start, f64 end, f64 viewportHeight)noexcept;
+    [[nodiscard]] bool scrollBy(f64 delta, f64 contentHeight, f64 viewportHeight)noexcept;
+    [[nodiscard]] bool clamp(f64 contentHeight, f64 viewportHeight)noexcept;
 
 
 private:
@@ -75,8 +75,8 @@ public:
         f32 rowHeight,
         f64 offset,
         ScrollPlacement& placement
-    );
-    [[nodiscard]] static bool RowBounds(u64 index, const ScrollPlacement& placement, f32 rowHeight, Rect& rectangle);
+    )noexcept;
+    [[nodiscard]] static bool RowBounds(u64 index, const ScrollPlacement& placement, f32 rowHeight, Rect& rectangle)noexcept;
 };
 
 

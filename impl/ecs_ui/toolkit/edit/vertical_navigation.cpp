@@ -35,22 +35,22 @@ static Atomic<u64> s_NextIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EditNavigationState::EditNavigationState()
+EditNavigationState::EditNavigationState()noexcept
     : m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_vertical_navigation::s_NextIdentity))
 {}
 
-EditNavigationSnapshot EditNavigationState::snapshot()const{
+EditNavigationSnapshot EditNavigationState::snapshot()const noexcept{
     return { m_instanceGeneration, m_generation, m_preferredX, m_valid };
 }
 
-bool EditNavigationState::matches(const EditNavigationSnapshot& snapshot)const{
+bool EditNavigationState::matches(const EditNavigationSnapshot& snapshot)const noexcept{
     return
         snapshot.instanceGeneration == m_instanceGeneration && snapshot.generation == m_generation
         && snapshot.preferredX == m_preferredX && snapshot.valid == m_valid
     ;
 }
 
-bool EditNavigationState::setPreferredX(const f32 preferredX){
+bool EditNavigationState::setPreferredX(const f32 preferredX)noexcept{
     if(!IsFinite(preferredX))
         return false;
     advanceGeneration();
@@ -59,13 +59,13 @@ bool EditNavigationState::setPreferredX(const f32 preferredX){
     return true;
 }
 
-void EditNavigationState::reset(){
+void EditNavigationState::reset()noexcept{
     advanceGeneration();
     m_preferredX = 0.0f;
     m_valid = false;
 }
 
-void EditNavigationState::advanceGeneration(){
+void EditNavigationState::advanceGeneration()noexcept{
     if(m_generation == Limit<u64>::s_Max)
         TerminateInvariant();
     ++m_generation;

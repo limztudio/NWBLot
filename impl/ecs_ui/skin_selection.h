@@ -35,7 +35,7 @@ namespace UiSkinChangeResult{
 // Commits a skin identity only after its complete asset and GPU binding succeeds.
 class UiSkinSelection final{
 public:
-    explicit UiSkinSelection(const Core::Assets::AssetRef<UiSkin>& requested)
+    explicit UiSkinSelection(const Core::Assets::AssetRef<UiSkin>& requested)noexcept
         : m_requested(requested)
         , m_requestedChange(requested)
     {}
@@ -43,7 +43,7 @@ public:
 
 public:
     template<typename TTryBind>
-    [[nodiscard]] UiSkinSelectionResult::Enum ensure(TTryBind&& tryBind){
+    [[nodiscard]] UiSkinSelectionResult::Enum ensure(TTryBind&& tryBind)noexcept(noexcept(static_cast<bool>(tryBind(m_selected))) && noexcept(static_cast<bool>(tryBind(s_DefaultUiSkinRef))) && noexcept(static_cast<bool>(true || !tryBind(s_DefaultUiSkinRef)))){
         if(m_selected.valid())
             return tryBind(m_selected) ? UiSkinSelectionResult::Selected : UiSkinSelectionResult::Failed;
 
@@ -58,14 +58,14 @@ public:
         return UiSkinSelectionResult::DefaultFallback;
     }
 
-    void requestChange(const Core::Assets::AssetRef<UiSkin>& requested){
+    void requestChange(const Core::Assets::AssetRef<UiSkin>& requested)noexcept{
         m_requestedChange = requested;
         m_changePending = true;
         m_changeFailed = false;
     }
 
     // A failed request remains recorded, but retries only after explicit request or successful resource validation.
-    void resourcesValidated(){
+    void resourcesValidated()noexcept{
         if(m_changeFailed)
             m_changePending = true;
     }
@@ -75,7 +75,7 @@ public:
         const bool resourcesReady,
         const bool gpuFramePending,
         const bool layoutPending,
-        TTryBind&& tryBind){
+        TTryBind&& tryBind)noexcept(noexcept(static_cast<bool>(!tryBind(s_DefaultUiSkinRef, DeclVal<const u64&>())))){
         if(!m_changePending || !resourcesReady || gpuFramePending || layoutPending)
             return UiSkinChangeResult::Deferred;
         m_changePending = false;
@@ -95,13 +95,13 @@ public:
         return UiSkinChangeResult::Applied;
     }
 
-    [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& requested()const{ return m_requested; }
-    [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& selected()const{ return m_selected; }
+    [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& requested()const noexcept{ return m_requested; }
+    [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& selected()const noexcept{ return m_selected; }
     // The latest desired reference may be empty (engine default) or differ from the last accepted selection.
-    [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& requestedChange()const{ return m_requestedChange; }
-    [[nodiscard]] u64 generation()const{ return m_generation; }
-    [[nodiscard]] bool changePending()const{ return m_changePending; }
-    [[nodiscard]] bool changeFailed()const{ return m_changeFailed; }
+    [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& requestedChange()const noexcept{ return m_requestedChange; }
+    [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
+    [[nodiscard]] bool changePending()const noexcept{ return m_changePending; }
+    [[nodiscard]] bool changeFailed()const noexcept{ return m_changeFailed; }
 
 
 private:

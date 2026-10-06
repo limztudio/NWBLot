@@ -44,7 +44,7 @@ public:
 
 
 public:
-    [[nodiscard]] static bool ValidKey(i32 key);
+    [[nodiscard]] static bool ValidKey(i32 key)noexcept;
 
 
 public:
@@ -55,9 +55,9 @@ public:
     // Replacement is atomic, accepts an empty profile, and rejects overlapping chords for the same physical key.
     [[nodiscard]] bool set(const InputKeyBinding* bindings, usize count);
     void restoreDefaults();
-    [[nodiscard]] InputCommandIntent resolve(i32 key, i32 modifiers)const;
+    [[nodiscard]] InputCommandIntent resolve(i32 key, i32 modifiers)const noexcept;
     // Borrowed observations remain valid until a successful profile replacement or default restoration.
-    [[nodiscard]] const BindingVector& bindings()const{ return m_bindings; }
+    [[nodiscard]] const BindingVector& bindings()const noexcept{ return m_bindings; }
 
 
 private:

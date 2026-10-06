@@ -16,16 +16,16 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::TextInputRect UiEditBoxHost::nativeCaret(const UiEditBoxGeometry& geometry)const{
+Core::TextInputRect UiEditBoxHost::nativeCaret(const UiEditBoxGeometry& geometry)const noexcept{
     const Ui::Rect& caret = geometry.placement.caret;
-    const auto coordinate = [](const f32 value){
+    const auto coordinate = [](const f32 value)noexcept{
         return static_cast<i32>(Clamp(static_cast<f64>(value), static_cast<f64>(Limit<i32>::s_Min), static_cast<f64>(Limit<i32>::s_Max)));
     };
     return { coordinate(Floor(caret.x * m_display.pixelScaleX)), coordinate(Floor(caret.y * m_display.pixelScaleY)),
         Max(1, coordinate(Ceil(caret.width * m_display.pixelScaleX))), Max(1, coordinate(Ceil(caret.height * m_display.pixelScaleY))) };
 }
 
-bool UiEditBoxHost::hit(const Entry& entry, const Ui::Point position, usize& byte)const{
+bool UiEditBoxHost::hit(const Entry& entry, const Ui::Point position, usize& byte)const noexcept{
     const UiEditBoxGeometry& geometry = entry.displayed;
     if(
         geometry.generation == 0u || geometry.stops.empty() || geometry.lines.empty()
@@ -38,7 +38,7 @@ bool UiEditBoxHost::hit(const Entry& entry, const Ui::Point position, usize& byt
     return Ui::HitEditCaretGeometry(geometry.lines, geometry.stops, local, byte);
 }
 
-bool UiEditBoxHost::hitWord(const Entry& entry, const Ui::Point position, usize& byte)const{
+bool UiEditBoxHost::hitWord(const Entry& entry, const Ui::Point position, usize& byte)const noexcept{
     if(!hit(entry, position, byte))
         return false;
     const UiEditBoxGeometry& geometry = entry.displayed;

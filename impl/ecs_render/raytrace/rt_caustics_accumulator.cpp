@@ -19,12 +19,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RendererRayTracingSystem::confirmCausticAccumulatorNonTemporalClear(){
+void RendererRayTracingSystem::confirmCausticAccumulatorNonTemporalClear()noexcept{
     m_rayTracingState.m_causticAccumulatorInitialized = false;
     m_rayTracingState.m_causticTemporalReuseFrameCount = 0u;
 }
 
-void RendererRayTracingSystem::confirmCausticAccumulatorBootstrapClear(){
+void RendererRayTracingSystem::confirmCausticAccumulatorBootstrapClear()noexcept{
     m_rayTracingState.m_causticAccumulatorInitialized = true;
 }
 

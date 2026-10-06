@@ -30,10 +30,10 @@ public:
 public:
     [[nodiscard]] AStringView text()const noexcept{ return m_text; }
     [[nodiscard]] usize caretByte()const noexcept{ return m_caretByte; }
-    void clear();
+    void clear()noexcept;
     [[nodiscard]] bool replace(usize firstCharacter, usize characterCount, AStringView insertion, usize caretCharacter);
-    [[nodiscard]] bool moveCaret(usize caretCharacter);
-    [[nodiscard]] usize moveCaretToEnd();
+    [[nodiscard]] bool moveCaret(usize caretCharacter)noexcept;
+    [[nodiscard]] usize moveCaretToEnd()noexcept;
 
 
 private:

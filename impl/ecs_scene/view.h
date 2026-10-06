@@ -30,8 +30,8 @@ static_assert(IsTriviallyCopyable_V<SceneViewBasis>, "SceneViewBasis must stay c
 static_assert(alignof(SceneViewBasis) >= alignof(Float4), "SceneViewBasis must keep storage vectors aligned");
 
 
-[[nodiscard]] SceneViewBasis BuildDefaultSceneViewBasis();
-[[nodiscard]] SceneViewBasis BuildSceneViewBasis(SIMDVector position, SIMDVector rotation);
+[[nodiscard]] SceneViewBasis BuildDefaultSceneViewBasis()noexcept;
+[[nodiscard]] SceneViewBasis BuildSceneViewBasis(SIMDVector position, SIMDVector rotation)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

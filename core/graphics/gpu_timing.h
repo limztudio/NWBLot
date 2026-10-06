@@ -120,7 +120,7 @@ public:
     void recordFrameReset(CommandList& commandList);
     void confirmFrameReset(const QueueSubmissionToken& token);
     void discardFrameReset()noexcept;
-    void requestQueries(u32 queryCount);
+    void requestQueries(u32 queryCount)noexcept;
     [[nodiscard]] bool materializeRequestedQueries(Device& device);
     [[nodiscard]] bool beginQuery(
         CommandList& commandList,
@@ -152,7 +152,7 @@ public:
 private:
     [[nodiscard]] bool quarantineRecord(QueryRecord& record, u64 subscriptionIdentityLimit)noexcept;
     [[nodiscard]] bool reserveQueries(Device& device, u32 queryCount);
-    [[nodiscard]] u32 findAvailableQuery()const;
+    [[nodiscard]] u32 findAvailableQuery()const noexcept;
     [[nodiscard]] u32 appendQuery(Device& device);
     void releaseQuery(QueryRecord& record)noexcept;
     void releaseUnacceptedQuery(QueryRecord& record)noexcept;
@@ -346,7 +346,7 @@ private:
     void discardScope(GpuTimingScope& scope);
     void abandonScopeWithoutCallbacks(GpuTimingScope& scope)noexcept;
     void quarantineScope(const GpuTimingScope& scope)noexcept;
-    [[nodiscard]] GpuTimingSubmissionTicket* activeSubmissionTicket()const;
+    [[nodiscard]] GpuTimingSubmissionTicket* activeSubmissionTicket()const noexcept;
     [[nodiscard]] GpuTimingAccumulator* findAccumulator(const GpuTimingScope& scope)noexcept;
     [[nodiscard]] GpuTimingAccumulator* findOrCreateAccumulator(const Name& scopeName);
     [[nodiscard]] bool collectLocked(
@@ -371,7 +371,7 @@ private:
     void discardMarkedPendingAttributionsLocked()noexcept;
     void retirePendingAttributionsLocked(SampleDispatchVector& outSamples, u64 subscriptionIdentityLimit);
     void discardFrameResetLocked();
-    void noteSkippedScope(GpuTimingScopeSkipReason::Enum reason);
+    void noteSkippedScope(GpuTimingScopeSkipReason::Enum reason)noexcept;
     void syncActiveState(u64 subscriptionIdentityLimit)noexcept;
     void syncActiveState()noexcept;
     void advancePerformanceCaptureEpoch()noexcept;
@@ -580,7 +580,7 @@ private:
 
 
 public:
-    explicit GpuTimingFrameTransaction(GpuTimingRecorder& recorder);
+    explicit GpuTimingFrameTransaction(GpuTimingRecorder& recorder)noexcept;
     ~GpuTimingFrameTransaction()noexcept;
 
 
@@ -598,7 +598,7 @@ public:
     [[nodiscard]] bool recordEnd(CommandList& commandList);
     [[nodiscard]] bool confirmBeginSubmission(const QueueSubmissionToken& token);
     [[nodiscard]] bool confirmEndSubmission(const QueueSubmissionToken& token, bool publishSample);
-    [[nodiscard]] bool needsRetirement()const;
+    [[nodiscard]] bool needsRetirement()const noexcept;
     // Discards the endpoint recorded in a packet that will not be submitted, allowing a recovery command list to
     // write the replacement endpoint after the accepted begin.
     [[nodiscard]] bool prepareForRecovery();

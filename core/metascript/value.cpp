@@ -15,18 +15,18 @@ NWB_METASCRIPT_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Value::Value(MetaArena& arena)
+Value::Value(MetaArena& arena)noexcept
     : m_arena(arena)
 {}
 
-Value::Value(i64 val, MetaArena& arena)
+Value::Value(i64 val, MetaArena& arena)noexcept
     : m_arena(arena)
     , m_type(ValueType::Integer)
 {
     m_data.m_integer = val;
 }
 
-Value::Value(f64 val, MetaArena& arena)
+Value::Value(f64 val, MetaArena& arena)noexcept
     : m_arena(arena)
     , m_type(ValueType::Double)
 {

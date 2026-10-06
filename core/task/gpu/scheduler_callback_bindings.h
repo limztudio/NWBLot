@@ -33,7 +33,7 @@ private:
 
 
 public:
-    explicit TaskCallbackBindings(Alloc::ScratchArena& scratchArena)
+    explicit TaskCallbackBindings(Alloc::ScratchArena& scratchArena)noexcept
         : m_scratchArena(scratchArena)
     {}
 

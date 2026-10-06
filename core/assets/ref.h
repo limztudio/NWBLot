@@ -33,30 +33,30 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const{
+    [[nodiscard]] bool valid()const noexcept{
         return static_cast<bool>(virtualPath);
     }
 
-    [[nodiscard]] explicit operator bool()const{
+    [[nodiscard]] explicit operator bool()const noexcept{
         return valid();
     }
 
-    void reset(){
+    void reset()noexcept{
         virtualPath = s_NameNone;
     }
 
-    [[nodiscard]] const Name& name()const{
+    [[nodiscard]] const Name& name()const noexcept{
         return virtualPath;
     }
 };
 
 
 template<typename TAsset>
-[[nodiscard]] inline bool operator==(const AssetRef<TAsset>& lhs, const AssetRef<TAsset>& rhs){
+[[nodiscard]] inline bool operator==(const AssetRef<TAsset>& lhs, const AssetRef<TAsset>& rhs)noexcept{
     return lhs.virtualPath == rhs.virtualPath;
 }
 template<typename TAsset>
-[[nodiscard]] inline bool operator!=(const AssetRef<TAsset>& lhs, const AssetRef<TAsset>& rhs){
+[[nodiscard]] inline bool operator!=(const AssetRef<TAsset>& lhs, const AssetRef<TAsset>& rhs)noexcept{
     return !(lhs == rhs);
 }
 

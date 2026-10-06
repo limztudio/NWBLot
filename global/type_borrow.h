@@ -189,6 +189,11 @@ using IsConstructible = std::is_constructible<T, Args...>;
 template<class T, class... Args>
 inline constexpr bool IsConstructible_V = std::is_constructible_v<T, Args...>;
 
+template<class T, class... Args>
+using IsNothrowConstructible = std::is_nothrow_constructible<T, Args...>;
+template<class T, class... Args>
+inline constexpr bool IsNothrowConstructible_V = std::is_nothrow_constructible_v<T, Args...>;
+
 template<class T>
 using IsNothrowMoveConstructible = std::is_nothrow_move_constructible<T>;
 template<class T>
@@ -203,6 +208,11 @@ template<class Func, class... Args>
 using IsInvocable = std::is_invocable<Func, Args...>;
 template<class Func, class... Args>
 inline constexpr bool IsInvocable_V = std::is_invocable_v<Func, Args...>;
+
+template<typename R, typename Func, typename... Args>
+using IsNothrowInvocableR = std::is_nothrow_invocable_r<R, Func, Args...>;
+template<typename R, typename Func, typename... Args>
+inline constexpr bool IsNothrowInvocableR_V = std::is_nothrow_invocable_r_v<R, Func, Args...>;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

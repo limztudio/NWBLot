@@ -68,28 +68,28 @@ struct Token{
 
 class Lexer{
 public:
-    Lexer(MStringView source);
+    Lexer(MStringView source)noexcept;
 
 
 public:
-    [[nodiscard]] Token next();
-    [[nodiscard]] u32 currentLine()const{ return m_line; }
-    [[nodiscard]] u32 currentColumn()const{ return m_column; }
+    [[nodiscard]] Token next()noexcept;
+    [[nodiscard]] u32 currentLine()const noexcept{ return m_line; }
+    [[nodiscard]] u32 currentColumn()const noexcept{ return m_column; }
 
 
 private:
-    void skipWhitespaceAndComments();
-    [[nodiscard]] Token readIdentifier();
-    [[nodiscard]] Token readNumber();
-    [[nodiscard]] Token readString();
-    [[nodiscard]] Token makeToken(TokenType::Enum type, usize length);
-    [[nodiscard]] Token makeErrorToken(MStringView message);
-    [[nodiscard]] Token makeErrorToken(MStringView message, u32 line, u32 column);
+    void skipWhitespaceAndComments()noexcept;
+    [[nodiscard]] Token readIdentifier()noexcept;
+    [[nodiscard]] Token readNumber()noexcept;
+    [[nodiscard]] Token readString()noexcept;
+    [[nodiscard]] Token makeToken(TokenType::Enum type, usize length)noexcept;
+    [[nodiscard]] Token makeErrorToken(MStringView message)noexcept;
+    [[nodiscard]] Token makeErrorToken(MStringView message, u32 line, u32 column)noexcept;
 
-    [[nodiscard]] MChar peek()const;
-    [[nodiscard]] MChar peekNext()const;
-    MChar advance();
-    [[nodiscard]] bool isAtEnd()const{ return m_current >= m_source.size(); }
+    [[nodiscard]] MChar peek()const noexcept;
+    [[nodiscard]] MChar peekNext()const noexcept;
+    MChar advance()noexcept;
+    [[nodiscard]] bool isAtEnd()const noexcept{ return m_current >= m_source.size(); }
 
 
 private:

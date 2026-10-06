@@ -14,7 +14,7 @@
 
 
 template<typename T>
-[[nodiscard]] constexpr bool NegateOverflows(const TypeIdentity<T> value){
+[[nodiscard]] constexpr bool NegateOverflows(const TypeIdentity<T> value)noexcept(IsArithmetic_V<T>){
     if constexpr(IsSigned_V<T>)
         return value == Limit<T>::s_Min;
     else
@@ -22,7 +22,7 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] constexpr bool AddOverflows(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs){
+[[nodiscard]] constexpr bool AddOverflows(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs)noexcept(IsArithmetic_V<T>){
     if constexpr(IsSigned_V<T>){
         if(rhs > T(0))
             return lhs > Limit<T>::s_Max - rhs;
@@ -35,7 +35,7 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] constexpr bool SubtractOverflows(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs){
+[[nodiscard]] constexpr bool SubtractOverflows(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs)noexcept(IsArithmetic_V<T>){
     if constexpr(IsSigned_V<T>){
         if(rhs > T(0))
             return lhs < Limit<T>::s_Min + rhs;
@@ -48,7 +48,7 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] constexpr bool MultiplyOverflows(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs){
+[[nodiscard]] constexpr bool MultiplyOverflows(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs)noexcept(IsArithmetic_V<T>){
     if(lhs == T(0) || rhs == T(0))
         return false;
 
@@ -69,7 +69,7 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] constexpr bool TryMultiply(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs, T& outValue){
+[[nodiscard]] constexpr bool TryMultiply(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs, T& outValue)noexcept(IsArithmetic_V<T>){
     outValue = T(0);
     if(MultiplyOverflows<T>(lhs, rhs))
         return false;
@@ -79,7 +79,7 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] constexpr bool DivideOverflows(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs){
+[[nodiscard]] constexpr bool DivideOverflows(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs)noexcept(IsArithmetic_V<T>){
     if constexpr(IsSigned_V<T>)
         return lhs == Limit<T>::s_Min && rhs == T(-1);
     else
@@ -91,7 +91,7 @@ template<typename T>
 
 
 template<typename T>
-[[nodiscard]] constexpr T AddSaturating(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs){
+[[nodiscard]] constexpr T AddSaturating(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs)noexcept(IsArithmetic_V<T>){
     return AddOverflows<T>(lhs, rhs) ? Limit<T>::s_Max : static_cast<T>(lhs + rhs);
 }
 

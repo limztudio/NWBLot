@@ -20,7 +20,7 @@ using namespace NWB::Core;
 
 class FocusHandler final : public IInputEventHandler{
 public:
-    explicit FocusHandler(InputDispatcher& dispatcher)
+    explicit FocusHandler(InputDispatcher& dispatcher)noexcept
         : m_dispatcher(dispatcher)
     {}
 
@@ -57,12 +57,12 @@ public:
         return m_consumeKeys;
     }
 
-    [[nodiscard]] virtual bool blocksKeyboardText()const override{
+    [[nodiscard]] virtual bool blocksKeyboardText()const noexcept override{
         ++m_textPolicyQueries;
         return m_blockText;
     }
 
-    virtual bool mouseButtonUpdate(i32, const i32 action, i32)override{
+    virtual bool mouseButtonUpdate(i32, const i32 action, i32)noexcept override{
         if(action == InputAction::Release)
             ++m_buttonReleases;
         else

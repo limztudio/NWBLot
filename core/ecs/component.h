@@ -43,7 +43,7 @@ struct ViewTupleAccess;
 
 
 template<typename T>
-inline ComponentTypeId ComponentType(){
+inline ComponentTypeId ComponentType()noexcept{
     return ECSDetail::TypeCounter<ECSDetail::ComponentTypeTag>::Id<Decay_T<T>>();
 }
 
@@ -77,7 +77,7 @@ class ComponentPool final : public IComponentPool{
 
 
 private:
-    [[nodiscard]] inline bool findDenseIndex(EntityID entityId, u32& outDenseIndex)const{
+    [[nodiscard]] inline bool findDenseIndex(EntityID entityId, u32& outDenseIndex)const noexcept{
         const u32 index = entityId.index();
         if(index >= static_cast<u32>(m_sparse.size()))
             return false;
@@ -138,13 +138,13 @@ public:
     inline const T& get(EntityID entityId)const{
         return m_components[requireDenseIndex(entityId)];
     }
-    inline T* tryGet(EntityID entityId){
+    inline T* tryGet(EntityID entityId)noexcept{
         u32 denseIndex = 0;
         if(!findDenseIndex(entityId, denseIndex))
             return nullptr;
         return &m_components[denseIndex];
     }
-    inline const T* tryGet(EntityID entityId)const{
+    inline const T* tryGet(EntityID entityId)const noexcept{
         u32 denseIndex = 0;
         if(!findDenseIndex(entityId, denseIndex))
             return nullptr;

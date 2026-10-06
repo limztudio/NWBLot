@@ -91,12 +91,12 @@ public:
 
 
 public:
-    void setFrameIndex(u64 frameIndex){ m_frameIndex = frameIndex; }
-    void setStreamId(u32 streamId){ m_streamId = streamId; }
+    void setFrameIndex(u64 frameIndex)noexcept{ m_frameIndex = frameIndex; }
+    void setStreamId(u32 streamId)noexcept{ m_streamId = streamId; }
 
-    [[nodiscard]] u64 frameIndex()const{ return m_frameIndex; }
-    [[nodiscard]] u32 streamId()const{ return m_streamId; }
-    [[nodiscard]] bool installed()const{ return m_installed; }
+    [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }
+    [[nodiscard]] u32 streamId()const noexcept{ return m_streamId; }
+    [[nodiscard]] bool installed()const noexcept{ return m_installed; }
 
     [[nodiscard]] bool capture(const DiagnosticEventRecord& record);
 

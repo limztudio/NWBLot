@@ -51,8 +51,8 @@ public:
 
 public:
     [[nodiscard]] bool start();
-    [[nodiscard]] inline u16 port()const{ return m_port; }
-    [[nodiscard]] inline u32 requestCount()const{ return m_requestCount.load(MemoryOrder::acquire); }
+    [[nodiscard]] inline u16 port()const noexcept{ return m_port; }
+    [[nodiscard]] inline u32 requestCount()const noexcept{ return m_requestCount.load(MemoryOrder::acquire); }
 
 
 private:

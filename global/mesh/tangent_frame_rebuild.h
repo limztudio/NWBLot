@@ -72,13 +72,13 @@ static_assert(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline f32 ResolveTangentHandedness(const f32 handedness){
+[[nodiscard]] inline f32 ResolveTangentHandedness(const f32 handedness)noexcept{
     if(IsFinite(handedness) && Abs(handedness) > s_Epsilon)
         return handedness < 0.0f ? -1.0f : 1.0f;
     return 1.0f;
 }
 
-[[nodiscard]] inline bool ValidInputVertex(const SIMDVector position, const SIMDVector uv0){
+[[nodiscard]] inline bool ValidInputVertex(const SIMDVector position, const SIMDVector uv0)noexcept{
     return Vector3IsFinite(position) && VectorIsFinite(uv0, s_UvComponentMask);
 }
 
@@ -90,7 +90,7 @@ static_assert(
     SIMDVector edge02,
     SIMDVector& outTangent,
     SIMDVector& outBitangent
-){
+)noexcept{
     const SIMDVector uvDelta1 = VectorSubtract(uv1, uv0);
     const SIMDVector uvDelta2 = VectorSubtract(uv2, uv0);
     const SIMDVector determinantVector = Vector2Cross(uvDelta1, uvDelta2);

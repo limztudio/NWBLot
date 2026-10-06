@@ -29,13 +29,13 @@ NWB_IMPL_BEGIN
 
 class MeshRuntimeValidation final : NoCopy{
 public:
-    [[nodiscard]] static SIMDVector MakeMeshPositionVector(const SIMDVector position);
-    [[nodiscard]] static SIMDVector MakeMeshNormalVector(const SIMDVector normal);
-    [[nodiscard]] static SIMDVector MakeMeshTangentVector(const SIMDVector tangent);
-    [[nodiscard]] static SIMDVector MakeMeshUvVector(const SIMDVector uv);
-    [[nodiscard]] static SIMDVector MakeMeshColorVector(const SIMDVector color);
-    [[nodiscard]] static bool ValidDirectionVector(const SIMDVector direction);
-    [[nodiscard]] static bool ValidTangentVector(const SIMDVector tangent);
+    [[nodiscard]] static SIMDVector MakeMeshPositionVector(const SIMDVector position)noexcept;
+    [[nodiscard]] static SIMDVector MakeMeshNormalVector(const SIMDVector normal)noexcept;
+    [[nodiscard]] static SIMDVector MakeMeshTangentVector(const SIMDVector tangent)noexcept;
+    [[nodiscard]] static SIMDVector MakeMeshUvVector(const SIMDVector uv)noexcept;
+    [[nodiscard]] static SIMDVector MakeMeshColorVector(const SIMDVector color)noexcept;
+    [[nodiscard]] static bool ValidDirectionVector(const SIMDVector direction)noexcept;
+    [[nodiscard]] static bool ValidTangentVector(const SIMDVector tangent)noexcept;
     [[nodiscard]] static bool ValidateMeshStreams(
     const Core::Assets::AssetVector<Float3U>& positions,
     const Core::Assets::AssetVector<Half4U>& normals,

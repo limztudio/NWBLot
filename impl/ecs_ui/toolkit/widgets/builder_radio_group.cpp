@@ -46,7 +46,7 @@ public:
         ++m_count;
         return true;
     }
-    [[nodiscard]] virtual bool current()const override{
+    [[nodiscard]] virtual bool current()const noexcept override{
         if(m_context.failed())
             return false;
         for(usize index = 0u; index < m_count; ++index){

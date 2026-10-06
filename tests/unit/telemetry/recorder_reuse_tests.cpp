@@ -220,7 +220,7 @@ TEST(Telemetry, RecorderDisableDuringBuildRejectsPublicationAndReleasesLease){
         Telemetry::EventKind::PerfFrame,
         s_ExpectedDualCount,
         0u,
-        [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes&){ builderCalled = true; return true; }
+        [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes&)noexcept{ builderCalled = true; return true; }
     ));
     EXPECT_FALSE(builderCalled);
     EXPECT_EQ(testArena.arena.memoryStats().allocationCount, disabled.allocationCount);
@@ -376,7 +376,7 @@ TEST(Telemetry, RecorderRejectsInvalidInputsWithoutConsumingPayloadsOrReusedSlot
             kind,
             1u,
             0u,
-            [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes&){ builderCalled = true; return true; }
+            [&](Telemetry::TelemetryArena&, Telemetry::TelemetryBytes&)noexcept{ builderCalled = true; return true; }
         ));
         Telemetry::EventHeader header;
         header.kind = kind;

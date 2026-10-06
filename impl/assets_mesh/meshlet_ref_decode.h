@@ -17,11 +17,11 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr GLB_INLINE bool MeshletRefDeltaWidthValid(const MeshletRefDeltaWidth::Enum width){
+[[nodiscard]] constexpr GLB_INLINE bool MeshletRefDeltaWidthValid(const MeshletRefDeltaWidth::Enum width)noexcept{
     return width == MeshletRefDeltaWidth::U8 || width == MeshletRefDeltaWidth::U16 || width == MeshletRefDeltaWidth::U32;
 }
 
-[[nodiscard]] constexpr GLB_INLINE u32 MeshletRefDeltaByteWidth(const MeshletRefDeltaWidth::Enum width){
+[[nodiscard]] constexpr GLB_INLINE u32 MeshletRefDeltaByteWidth(const MeshletRefDeltaWidth::Enum width)noexcept{
     return width == MeshletRefDeltaWidth::U8
         ? 1u
         : width == MeshletRefDeltaWidth::U16
@@ -34,7 +34,7 @@ NWB_IMPL_BEGIN
     const u32 refCount,
     const MeshletRefDeltaWidth::Enum width,
     usize& outByteCount
-){
+)noexcept{
     outByteCount = 0u;
     if(!MeshletRefDeltaWidthValid(width))
         return false;
@@ -51,7 +51,7 @@ NWB_IMPL_BEGIN
     usize& inOutByteCount,
     const u32 refCount,
     const MeshletRefDeltaWidth::Enum width
-){
+)noexcept{
     usize channelBytes = 0u;
     if(!MeshletRefDeltaByteCount(refCount, width, channelBytes))
         return false;
@@ -88,7 +88,7 @@ struct MeshletAttributeRefEncodingLayout{
     const MeshletRefDeltaWidth::Enum width,
     usize& inOutRelativeOffset,
     usize& outChannelByteOffset
-){
+)noexcept{
     if(baseOffset > Limit<usize>::s_Max - inOutRelativeOffset)
         return false;
 
@@ -100,7 +100,7 @@ struct MeshletAttributeRefEncodingLayout{
     const MeshletDesc& meshlet,
     const bool skinRequired,
     MeshletPositionRefEncodingLayout& outLayout
-){
+)noexcept{
     outLayout = {};
     const u32 positionCount = MeshletPositionCount(meshlet);
     outLayout.positionWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingPositionShift);
@@ -131,7 +131,7 @@ struct MeshletAttributeRefEncodingLayout{
 [[nodiscard]] GLB_INLINE bool BuildMeshletAttributeRefEncodingLayout(
     const MeshletDesc& meshlet,
     MeshletAttributeRefEncodingLayout& outLayout
-){
+)noexcept{
     outLayout = {};
     const u32 attributeCount = MeshletAttributeCount(meshlet);
     outLayout.normalWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingNormalShift);
@@ -174,7 +174,7 @@ struct MeshletAttributeRefEncodingLayout{
     const MeshletDesc& meshlet,
     const bool skinRequired,
     usize& outByteCount
-){
+)noexcept{
     MeshletPositionRefEncodingLayout layout;
     if(!BuildMeshletPositionRefEncodingLayout(meshlet, skinRequired, layout))
         return false;
@@ -183,7 +183,7 @@ struct MeshletAttributeRefEncodingLayout{
     return true;
 }
 
-[[nodiscard]] GLB_INLINE bool MeshletEncodedAttributeRefByteCount(const MeshletDesc& meshlet, usize& outByteCount){
+[[nodiscard]] GLB_INLINE bool MeshletEncodedAttributeRefByteCount(const MeshletDesc& meshlet, usize& outByteCount)noexcept{
     MeshletAttributeRefEncodingLayout layout;
     if(!BuildMeshletAttributeRefEncodingLayout(meshlet, layout))
         return false;
@@ -198,7 +198,7 @@ struct MeshletAttributeRefEncodingLayout{
     const usize byteOffset,
     const MeshletRefDeltaWidth::Enum width,
     u32& outDelta
-){
+)noexcept{
     outDelta = 0u;
     if(!MeshletRefDeltaWidthValid(width))
         return false;
@@ -227,7 +227,7 @@ struct MeshletAttributeRefEncodingLayout{
     const u32 localIndex,
     const MeshletRefDeltaWidth::Enum width,
     u32& outDelta
-){
+)noexcept{
     return DecodeMeshletRefDelta(
         bytes,
         byteCount,
@@ -257,7 +257,7 @@ struct MeshletPositionRefDecodeChannel{
     const MeshletPositionRefDecodeChannel& channel,
     const u32 localPositionIndex,
     MeshletPositionStreamRef& outRef
-){
+)noexcept{
     u32 delta = 0u;
     if(!DecodeMeshletRefDeltaAtIndex(bytes, byteCount, channel.byteOffset, localPositionIndex, channel.width, delta))
         return false;
@@ -272,7 +272,7 @@ struct MeshletPositionRefDecodeChannel{
     const MeshletAttributeRefDecodeChannel& channel,
     const u32 localAttributeIndex,
     MeshletAttributeStreamRef& outRef
-){
+)noexcept{
     u32 delta = 0u;
     if(!DecodeMeshletRefDeltaAtIndex(bytes, byteCount, channel.byteOffset, localAttributeIndex, channel.width, delta))
         return false;
@@ -288,7 +288,7 @@ struct MeshletPositionRefDecodeChannel{
     const u32 localPositionIndex,
     const bool skinRequired,
     MeshletPositionStreamRef& outRef
-){
+)noexcept{
     outRef = {};
     const u32 positionCount = MeshletPositionCount(meshlet);
     if(localPositionIndex >= positionCount)
@@ -325,7 +325,7 @@ struct MeshletPositionRefDecodeChannel{
     const MeshletDesc& meshlet,
     const u32 localAttributeIndex,
     MeshletAttributeStreamRef& outRef
-){
+)noexcept{
     outRef = {};
     const u32 attributeCount = MeshletAttributeCount(meshlet);
     if(localAttributeIndex >= attributeCount)

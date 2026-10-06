@@ -29,14 +29,14 @@ struct OwnedPipe final : NoCopy{
     int m_readFd = -1;
     int m_writeFd = -1;
 
-    ~OwnedPipe(){
+    ~OwnedPipe()noexcept{
         CloseClipboardPipe(m_readFd);
         CloseClipboardPipe(m_writeFd);
     }
 
-    [[nodiscard]] bool open(){ return OpenClipboardPipe(m_readFd, m_writeFd); }
+    [[nodiscard]] bool open()noexcept{ return OpenClipboardPipe(m_readFd, m_writeFd); }
 
-    [[nodiscard]] int releaseWrite(){
+    [[nodiscard]] int releaseWrite()noexcept{
         const int fd = m_writeFd;
         m_writeFd = -1;
         return fd;

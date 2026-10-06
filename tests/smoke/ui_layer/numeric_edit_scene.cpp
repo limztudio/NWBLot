@@ -125,7 +125,7 @@ void UiNumericEditSmokeScene::count(const Impl::Ui::NumericEditResult& result){
     m_restored += result.restored ? 1u : 0u;
 }
 
-Impl::Ui::FloatBounds UiNumericEditSmokeScene::floatBounds()const{
+Impl::Ui::FloatBounds UiNumericEditSmokeScene::floatBounds()const noexcept{
     return { -10.0, 10.0, m_clamp ? Impl::Ui::NumericBoundsPolicy::Clamp : Impl::Ui::NumericBoundsPolicy::Reject };
 }
 

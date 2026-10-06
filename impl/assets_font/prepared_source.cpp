@@ -39,14 +39,14 @@ static void AppendU32(Core::Assets::AssetBytes& bytes, const u32 value){
         bytes.push_back(static_cast<u8>(value >> (index * 8u)));
 }
 
-[[nodiscard]] static u32 ReadU32(const u8* bytes){
+[[nodiscard]] static u32 ReadU32(const u8* bytes)noexcept{
     return
         static_cast<u32>(bytes[0u]) | (static_cast<u32>(bytes[1u]) << 8u)
         | (static_cast<u32>(bytes[2u]) << 16u) | (static_cast<u32>(bytes[3u]) << 24u)
     ;
 }
 
-[[nodiscard]] static bool ImageByteCount(const u32 width, const u32 height, const u32 channels, u32& outByteCount){
+[[nodiscard]] static bool ImageByteCount(const u32 width, const u32 height, const u32 channels, u32& outByteCount)noexcept{
     if(width == 0u || width > s_MaxSide || height == 0u || height > s_MaxSide || channels == 0u || channels > 4u)
         return false;
     outByteCount = width * height * channels;

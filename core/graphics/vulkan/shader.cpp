@@ -147,7 +147,7 @@ Shader::~Shader(){
     }
 }
 
-VkSpecializationInfo Shader::makeSpecializationInfo()const{
+VkSpecializationInfo Shader::makeSpecializationInfo()const noexcept{
     VkSpecializationInfo specInfo{};
     specInfo.mapEntryCount = static_cast<u32>(m_specializationEntries.size());
     specInfo.pMapEntries = m_specializationEntries.data();
@@ -168,7 +168,7 @@ ShaderLibrary::ShaderLibrary(const VulkanContext& context)
 {}
 ShaderLibrary::~ShaderLibrary(){}
 
-void ShaderLibrary::getBytecode(const void** ppBytecode, usize* pSize)const{
+void ShaderLibrary::getBytecode(const void** ppBytecode, usize* pSize)const noexcept{
     *ppBytecode = m_spirvWords.data();
     *pSize = __hidden_vulkan_shader::SpirvByteSize(m_spirvWords);
 }

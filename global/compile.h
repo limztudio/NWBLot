@@ -191,7 +191,7 @@
 #else
 namespace CompileDetail{
 template<typename DestT, typename SrcT>
-inline DestT* CheckedMemcpy(DestT* dest, const std::size_t destSize, const SrcT* src, const std::size_t srcSize){
+inline DestT* CheckedMemcpy(DestT* dest, const std::size_t destSize, const SrcT* src, const std::size_t srcSize)noexcept{
     if(srcSize == 0u)
         return dest;
     if(srcSize > destSize)
@@ -203,7 +203,7 @@ inline DestT* CheckedMemcpy(DestT* dest, const std::size_t destSize, const SrcT*
 }
 
 template<typename DestT, typename SrcT>
-inline DestT* CheckedWmemcpy(DestT* dest, const std::size_t destSize, const SrcT* src, const std::size_t srcSize){
+inline DestT* CheckedWmemcpy(DestT* dest, const std::size_t destSize, const SrcT* src, const std::size_t srcSize)noexcept{
     if(srcSize == 0u)
         return dest;
     if(srcSize > destSize)
@@ -214,16 +214,16 @@ inline DestT* CheckedWmemcpy(DestT* dest, const std::size_t destSize, const SrcT
     return std::wmemcpy(dest, src, srcSize);
 }
 
-inline std::size_t BoundedLength(const char* text, const std::size_t maxLength){
+inline std::size_t BoundedLength(const char* text, const std::size_t maxLength)noexcept{
     return ::strnlen(text, maxLength);
 }
 
-inline std::size_t BoundedLength(const wchar_t* text, const std::size_t maxLength){
+inline std::size_t BoundedLength(const wchar_t* text, const std::size_t maxLength)noexcept{
     return ::wcsnlen(text, maxLength);
 }
 
 template<typename CharT>
-inline int BoundedCopy(CharT* dest, const std::size_t destSize, const CharT* src){
+inline int BoundedCopy(CharT* dest, const std::size_t destSize, const CharT* src)noexcept{
     if(dest == nullptr || destSize == 0u)
         return -1;
     if(src == nullptr){
@@ -243,7 +243,7 @@ inline int BoundedCopy(CharT* dest, const std::size_t destSize, const CharT* src
 }
 
 template<typename CharT>
-inline int BoundedNCopy(CharT* dest, const std::size_t destSize, const CharT* src, const std::size_t count){
+inline int BoundedNCopy(CharT* dest, const std::size_t destSize, const CharT* src, const std::size_t count)noexcept{
     if(dest == nullptr || destSize == 0u)
         return -1;
     if(src == nullptr){
@@ -263,7 +263,7 @@ inline int BoundedNCopy(CharT* dest, const std::size_t destSize, const CharT* sr
 }
 
 template<typename CharT>
-inline int BoundedCat(CharT* dest, const std::size_t destSize, const CharT* src){
+inline int BoundedCat(CharT* dest, const std::size_t destSize, const CharT* src)noexcept{
     if(dest == nullptr || destSize == 0u)
         return -1;
     if(src == nullptr)
@@ -279,7 +279,7 @@ inline int BoundedCat(CharT* dest, const std::size_t destSize, const CharT* src)
     return result == 0 ? 0 : -1;
 }
 
-inline int BoundedStrError(char* dest, const std::size_t destSize, const int errorNum){
+inline int BoundedStrError(char* dest, const std::size_t destSize, const int errorNum)noexcept{
     return BoundedCopy(dest, destSize, std::strerror(errorNum));
 }
 };
@@ -333,7 +333,7 @@ inline int BoundedStrError(char* dest, const std::size_t destSize, const int err
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr bool CanEnableDebugRuntime(){
+[[nodiscard]] constexpr bool CanEnableDebugRuntime()noexcept{
 #if !defined(GLB_FINAL)
     return true;
 #else

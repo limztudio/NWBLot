@@ -46,7 +46,7 @@ struct SliderSnapshot{
     bool pressMoved = false;
 };
 
-[[nodiscard]] bool operator==(const SliderSnapshot& lhs, const SliderSnapshot& rhs);
+[[nodiscard]] bool operator==(const SliderSnapshot& lhs, const SliderSnapshot& rhs)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,7 +59,7 @@ class SliderState final : NoCopy{
 
 
 public:
-    SliderState();
+    SliderState()noexcept;
 
 
 public:
@@ -68,23 +68,23 @@ public:
 
 
 public:
-    [[nodiscard]] u64 instanceGeneration()const{ return m_instanceGeneration; }
-    [[nodiscard]] u64 inputGeneration()const{ return m_inputGeneration; }
-    [[nodiscard]] u64 revision()const{ return m_revision; }
-    [[nodiscard]] u64 admissionGeneration()const{ return m_admissionGeneration; }
-    [[nodiscard]] f64 value()const{ return m_value; }
-    [[nodiscard]] SliderResult result()const{ return m_result; }
-    [[nodiscard]] const SliderPlacement& placement()const{ return m_placement; }
-    [[nodiscard]] ControlToken controlToken()const;
-    [[nodiscard]] SliderSnapshot snapshot()const;
-    [[nodiscard]] bool matches(const SliderSnapshot& snapshot)const;
-    [[nodiscard]] bool setValue(f64 value);
-    void reset();
+    [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
+    [[nodiscard]] u64 inputGeneration()const noexcept{ return m_inputGeneration; }
+    [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
+    [[nodiscard]] u64 admissionGeneration()const noexcept{ return m_admissionGeneration; }
+    [[nodiscard]] f64 value()const noexcept{ return m_value; }
+    [[nodiscard]] SliderResult result()const noexcept{ return m_result; }
+    [[nodiscard]] const SliderPlacement& placement()const noexcept{ return m_placement; }
+    [[nodiscard]] ControlToken controlToken()const noexcept;
+    [[nodiscard]] SliderSnapshot snapshot()const noexcept;
+    [[nodiscard]] bool matches(const SliderSnapshot& snapshot)const noexcept;
+    [[nodiscard]] bool setValue(f64 value)noexcept;
+    void reset()noexcept;
 
 
 private:
-    void advanceRevision();
-    void advanceAdmission();
+    void advanceRevision()noexcept;
+    void advanceAdmission()noexcept;
 
 
 private:
@@ -107,29 +107,29 @@ private:
 
 class SliderBehavior final{
 public:
-    [[nodiscard]] static bool Validate(const SliderOptions& options);
-    [[nodiscard]] static bool Normalize(f64 minimum, f64 maximum, f64 value, f64& out);
-    [[nodiscard]] static bool Interpolate(f64 minimum, f64 maximum, f64 normalized, f64& out);
+    [[nodiscard]] static bool Validate(const SliderOptions& options)noexcept;
+    [[nodiscard]] static bool Normalize(f64 minimum, f64 maximum, f64 value, f64& out)noexcept;
+    [[nodiscard]] static bool Interpolate(f64 minimum, f64 maximum, f64 normalized, f64& out)noexcept;
     // Admission includes stable geometry and policy, while thumb position and repaint-only value changes preserve its token.
-    [[nodiscard]] static bool Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement);
+    [[nodiscard]] static bool Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement)noexcept;
     [[nodiscard]] static bool Apply(
         SliderState& state,
         const SliderOptions& options,
         const ControlAction& action,
         SliderResult& result
-    );
+    )noexcept;
     [[nodiscard]] static bool Seek(
         SliderState& state,
         const SliderOptions& options,
         const PointerGesture& gesture,
         SliderResult& result
-    );
+    )noexcept;
     [[nodiscard]] static bool Drag(
         SliderState& state,
         const SliderOptions& options,
         const PointerGesture& gesture,
         SliderResult& result
-    );
+    )noexcept;
 };
 
 

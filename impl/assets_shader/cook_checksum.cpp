@@ -83,7 +83,7 @@ static Path NormalizeDependencyRootAliasPath(Path path){
 
 [[nodiscard]] static AStringView ShaderOptimizationLevelText(
     const ShaderOptimizationLevel::Enum optimizationLevel
-){
+)noexcept{
     switch(optimizationLevel){
     case ShaderOptimizationLevel::None: return __hidden_shader_cook_checksum::s_NoneOptName;
     case ShaderOptimizationLevel::Default: return __hidden_shader_cook_checksum::s_DefaultOptName;

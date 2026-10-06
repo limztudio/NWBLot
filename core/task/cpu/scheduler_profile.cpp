@@ -167,7 +167,7 @@ void CpuTaskScheduler::finishProfileLocked(const ProfileSample& sample, const Ti
             m_profileLabels.begin(),
             m_profileLabels.end(),
             sample.label.value,
-            [](const ProfileLabelRecord& record, const u64 identity){ return record.label.value < identity; }
+            [](const ProfileLabelRecord& record, const u64 identity)noexcept{ return record.label.value < identity; }
         );
         if(found != m_profileLabels.end() && found->label.value == sample.label.value)
             event.label = found->name;

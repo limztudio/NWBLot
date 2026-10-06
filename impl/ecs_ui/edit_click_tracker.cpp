@@ -17,7 +17,7 @@ NWB_IMPL_BEGIN
 
 
 UiEditClickKind::Enum UiEditClickTracker::press(const UiTextEditOwner& owner, const Ui::PopupToken& popup,
-    const u64 revision, const u64 externalRevision, const Ui::Point position, const u64 timestampMs, const bool shift){
+    const u64 revision, const u64 externalRevision, const Ui::Point position, const u64 timestampMs, const bool shift)noexcept{
     if(!owner.valid() || timestampMs == 0u || shift || !IsFinite(position.x) || !IsFinite(position.y)){
         cancel();
         return UiEditClickKind::Caret;
@@ -40,7 +40,7 @@ UiEditClickKind::Enum UiEditClickTracker::press(const UiTextEditOwner& owner, co
     return second ? UiEditClickKind::Word : UiEditClickKind::Caret;
 }
 
-void UiEditClickTracker::move(const Ui::Point position){
+void UiEditClickTracker::move(const Ui::Point position)noexcept{
     if(!m_down)
         return;
     if(!IsFinite(position.x) || !IsFinite(position.y)){
@@ -53,7 +53,7 @@ void UiEditClickTracker::move(const Ui::Point position){
         cancel();
 }
 
-void UiEditClickTracker::release(const UiTextEditOwner& owner){
+void UiEditClickTracker::release(const UiTextEditOwner& owner)noexcept{
     if(m_down && m_owner == owner){
         m_down = false;
         m_released = true;
@@ -62,12 +62,12 @@ void UiEditClickTracker::release(const UiTextEditOwner& owner){
         cancel();
 }
 
-void UiEditClickTracker::retainFocus(const UiTextEditOwner* owner){
+void UiEditClickTracker::retainFocus(const UiTextEditOwner* owner)noexcept{
     if(m_clickCount != 0u && (!owner || *owner != m_owner))
         cancel();
 }
 
-void UiEditClickTracker::cancel(){
+void UiEditClickTracker::cancel()noexcept{
     m_owner = {};
     m_popup = {};
     m_position = {};

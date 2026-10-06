@@ -36,7 +36,7 @@ using ViewEntityVector = Vector<EntityID, Alloc::GlobalArena>;
 
 struct ViewTupleAccess{
     template<usize I, typename... Ts>
-    static const ViewEntityVector* EntityVector(const Tuple<ComponentPool<Ts>*...>& pools){
+    static const ViewEntityVector* EntityVector(const Tuple<ComponentPool<Ts>*...>& pools)noexcept{
         return &Get<I>(pools)->m_dense;
     }
 
@@ -46,7 +46,7 @@ struct ViewTupleAccess{
     }
 
     template<usize I, typename... Ts>
-    static bool FindDenseIndex(const Tuple<ComponentPool<Ts>*...>& pools, usize anchorPoolIndex, usize anchorDenseIndex, EntityID entityId, u32& outDenseIndex){
+    static bool FindDenseIndex(const Tuple<ComponentPool<Ts>*...>& pools, usize anchorPoolIndex, usize anchorDenseIndex, EntityID entityId, u32& outDenseIndex)noexcept{
         if(I == anchorPoolIndex){
             outDenseIndex = static_cast<u32>(anchorDenseIndex);
             return true;
@@ -57,7 +57,7 @@ struct ViewTupleAccess{
     }
 
     template<usize I, typename... Ts>
-    static auto& ComponentAtDense(const Tuple<ComponentPool<Ts>*...>& pools, u32 denseIndex){
+    static auto& ComponentAtDense(const Tuple<ComponentPool<Ts>*...>& pools, u32 denseIndex)noexcept{
         return Get<I>(pools)->m_components[denseIndex];
     }
 };
@@ -126,11 +126,11 @@ struct ViewIterator{
             entity = s_InvalidEntityId;
     }
 
-    bool resolveDenseIndices(EntityID entityId, usize anchorDenseIndex){
+    bool resolveDenseIndices(EntityID entityId, usize anchorDenseIndex)noexcept{
         return resolveDenseIndicesImpl(entityId, anchorDenseIndex, IndexSequenceFor<Ts...>{});
     }
     template<usize... Is>
-    bool resolveDenseIndicesImpl(EntityID entityId, usize anchorDenseIndex, IndexSequence<Is...>){
+    bool resolveDenseIndicesImpl(EntityID entityId, usize anchorDenseIndex, IndexSequence<Is...>)noexcept{
         return (ViewTupleAccess::FindDenseIndex<Is>(pools, anchorPoolIndex, anchorDenseIndex, entityId, Get<Is>(denseIndices)) && ...);
     }
 
@@ -153,9 +153,9 @@ struct ViewIterator{
     }
 };
 template<typename... Ts>
-inline bool operator==(const ViewIterator<Ts...>& a, const ViewIterator<Ts...>& b){ return a.index == b.index; }
+inline bool operator==(const ViewIterator<Ts...>& a, const ViewIterator<Ts...>& b)noexcept{ return a.index == b.index; }
 template<typename... Ts>
-inline bool operator!=(const ViewIterator<Ts...>& a, const ViewIterator<Ts...>& b){ return a.index != b.index; }
+inline bool operator!=(const ViewIterator<Ts...>& a, const ViewIterator<Ts...>& b)noexcept{ return a.index != b.index; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

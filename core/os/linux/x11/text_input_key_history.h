@@ -32,20 +32,20 @@ private:
     static constexpr usize s_KeyCount = 256u;
     static constexpr u32 s_HalfRange = 1u << 31u;
 
-    [[nodiscard]] static bool Newer(u32 timestamp, u32 serial, const Stamp& previous);
-    [[nodiscard]] static bool Current(const Stamp& stamp, u64 receivedAtMs);
+    [[nodiscard]] static bool Newer(u32 timestamp, u32 serial, const Stamp& previous)noexcept;
+    [[nodiscard]] static bool Current(const Stamp& stamp, u64 receivedAtMs)noexcept;
 
 
 public:
-    void synchronizeSession(TextInputSessionToken session);
-    void recordFiltered(u32 keycode, bool released, u32 timestamp, u32 serial, u64 receivedAtMs);
+    void synchronizeSession(TextInputSessionToken session)noexcept;
+    void recordFiltered(u32 keycode, bool released, u32 timestamp, u32 serial, u64 receivedAtMs)noexcept;
     [[nodiscard]] bool isForwardedDuplicate(
         u32 keycode, bool released, u32 timestamp, u32 serial, bool sent, u64 receivedAtMs
-    )const;
+    )const noexcept;
     [[nodiscard]] bool isRetiredDuplicate(
         u32 keycode, bool released, u32 timestamp, u32 serial, bool sent, u64 receivedAtMs
-    )const;
-    void reset();
+    )const noexcept;
+    void reset()noexcept;
 
 
 private:

@@ -33,7 +33,7 @@ static constexpr usize s_LinearLookupRegionLimit = 128u;
     index.reserve(regions.size());
     for(u32 position = 0u; position < regions.size(); ++position)
         index.push_back(position);
-    Sort(index.begin(), index.end(), [&regions](const u32 left, const u32 right){
+    Sort(index.begin(), index.end(), [&regions](const u32 left, const u32 right)noexcept{
         const Name& a = regions[left].name;
         const Name& b = regions[right].name;
         return a == b ? left < right : a < b;
@@ -71,7 +71,7 @@ void UiSkin::setAtlas(
     m_typography = {};
 }
 
-const UiSkinRegion* UiSkin::findRegion(const Name& name)const{
+const UiSkinRegion* UiSkin::findRegion(const Name& name)const noexcept{
     // Small skins scan faster; oversized programmatic objects remain inspectable without an unbounded index.
     if(m_regions.size() <= __hidden_ui_skin_region_index::s_LinearLookupRegionLimit || m_regions.size() > s_UiSkinMaxRegionCount){
         for(const UiSkinRegion& region : m_regions){

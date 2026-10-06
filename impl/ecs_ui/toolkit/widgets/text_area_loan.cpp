@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::textAreaAvailable(const EditModel& model, const TextAreaState& state)const{
+bool Builder::textAreaAvailable(const EditModel& model, const TextAreaState& state)const noexcept{
     for(usize index = 0u; index <= m_popupFrameCount; ++index){
         const BuilderScopeFrame& scope = index == 0u ? m_scopeFrame : *m_popupFrames[index - 1u];
         for(const auto& frame : scope.m_textAreas){

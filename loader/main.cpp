@@ -106,7 +106,7 @@ public:
         m_tasks.wait();
     }
 
-    void activate(){
+    void activate()noexcept{
         m_active = true;
     }
 

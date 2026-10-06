@@ -23,7 +23,7 @@ class FloatEditModel final : NoCopy{
 private:
     [[nodiscard]] NumericEditResult commit(const FloatBounds& bounds, bool canonical);
     [[nodiscard]] bool canonicalize(f64 value, bool* textChanged = nullptr);
-    void advanceRevision();
+    void advanceRevision()noexcept;
 
 
 public:
@@ -31,13 +31,13 @@ public:
 
 
 public:
-    [[nodiscard]] f64 value()const{ return m_value; }
-    [[nodiscard]] const EditModel& draft()const{ return m_draft; }
+    [[nodiscard]] f64 value()const noexcept{ return m_value; }
+    [[nodiscard]] const EditModel& draft()const noexcept{ return m_draft; }
     [[nodiscard]] NumericParseStatus::Enum status(const FloatBounds& bounds = {})const;
     [[nodiscard]] bool dirty()const;
-    [[nodiscard]] u64 revision()const{ return m_revision; }
+    [[nodiscard]] u64 revision()const noexcept{ return m_revision; }
     // Neither the returned reference nor a view into it may outlive the synchronous edit operation.
-    [[nodiscard]] EditModel& lendDraft(){ return m_draft; }
+    [[nodiscard]] EditModel& lendDraft()noexcept{ return m_draft; }
     // Nonfinite values fail atomically. Successful external replacements always fence pending input.
     [[nodiscard]] bool setValue(f64 value);
     [[nodiscard]] bool setDraft(AStringView text);

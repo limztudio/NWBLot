@@ -65,13 +65,13 @@ inline constexpr u64 s_LaneSeeds[s_HashLaneCount] = {
 static_assert(sizeof(s_LaneSeeds) / sizeof(s_LaneSeeds[0]) == s_HashLaneCount, "s_LaneSeeds count must match s_HashLaneCount");
 
 
-inline constexpr void InitializeNameHash(NameHash& hash){
+inline constexpr void InitializeNameHash(NameHash& hash)noexcept{
     for(u32 i = 0u; i < s_HashLaneCount; ++i)
         hash.qwords[i] = s_LaneSeeds[i];
 }
 
 template<typename CharT>
-inline constexpr void UpdateCanonicalNameHashLanes(NameHash& hash, const CharT ch){
+inline constexpr void UpdateCanonicalNameHashLanes(NameHash& hash, const CharT ch)noexcept(IsArithmetic_V<CharT>){
     const u64 byte = static_cast<u64>(static_cast<u8>(Canonicalize(ch)));
     for(u32 i = 0u; i < s_HashLaneCount; ++i){
         hash.qwords[i] ^= byte;
@@ -80,7 +80,7 @@ inline constexpr void UpdateCanonicalNameHashLanes(NameHash& hash, const CharT c
 }
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool UpdateCanonicalNameHashText(NameHash& hash, const BasicStringView<CharT> text){
+[[nodiscard]] inline constexpr bool UpdateCanonicalNameHashText(NameHash& hash, const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     for(const CharT ch : text){
         if(ch == CharT{})
             return false;
@@ -91,7 +91,7 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool IsNameHashTokenChar(const CharT ch){
+[[nodiscard]] inline bool IsNameHashTokenChar(const CharT ch)noexcept(IsArithmetic_V<CharT>){
     return (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9'))
         || (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('f'))
         || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('F'))
@@ -100,7 +100,7 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool CopyDebugHashToken(const BasicStringView<CharT> text, const usize offset, char (&outHashText)[s_DebugHashTextLength + 1u]){
+[[nodiscard]] inline bool CopyDebugHashToken(const BasicStringView<CharT> text, const usize offset, char (&outHashText)[s_DebugHashTextLength + 1u])noexcept(IsArithmetic_V<CharT>){
     if(offset + s_DebugHashTextLength > text.size())
         return false;
     if(offset > 0u && IsNameHashTokenChar(text[offset - 1u]))
@@ -124,7 +124,7 @@ template<typename CharT>
     return true;
 }
 
-[[nodiscard]] inline bool DecodeDebugHashText(const AStringView text, NameHash& outHash){
+[[nodiscard]] inline bool DecodeDebugHashText(const AStringView text, NameHash& outHash)noexcept{
     if(text.size() != s_DebugHashTextLength)
         return false;
 
@@ -154,7 +154,7 @@ template<typename CharT>
 
 
 template<typename CharT>
-inline constexpr NameHash ComputeNameHash(const CharT* str){
+inline constexpr NameHash ComputeNameHash(const CharT* str)noexcept(IsArithmetic_V<CharT>){
     if(str == nullptr)
         return {};
 
@@ -166,7 +166,7 @@ inline constexpr NameHash ComputeNameHash(const CharT* str){
 }
 
 template<typename CharT>
-inline constexpr NameHash ComputeNameHash(const BasicStringView<CharT> text){
+inline constexpr NameHash ComputeNameHash(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     NameHash hash = {};
     NameDetail::InitializeNameHash(hash);
     if(!NameDetail::UpdateCanonicalNameHashText(hash, text))
@@ -227,34 +227,34 @@ struct NameSymbolResolverState{
 };
 
 
-[[nodiscard]] inline NameSymbolRecorderState& SymbolRecorderState(){
+[[nodiscard]] inline NameSymbolRecorderState& SymbolRecorderState()noexcept{
     static NameSymbolRecorderState state;
     return state;
 }
 
-[[nodiscard]] inline NameSymbolResolverState& SymbolResolverState(){
+[[nodiscard]] inline NameSymbolResolverState& SymbolResolverState()noexcept{
     static NameSymbolResolverState state;
     return state;
 }
 
-[[nodiscard]] inline bool& SymbolRecordInProgress(){
+[[nodiscard]] inline bool& SymbolRecordInProgress()noexcept{
     thread_local static bool inProgress = false;
     return inProgress;
 }
 
-[[nodiscard]] inline bool& SymbolResolveInProgress(){
+[[nodiscard]] inline bool& SymbolResolveInProgress()noexcept{
     thread_local static bool inProgress = false;
     return inProgress;
 }
 
 class ScopedSymbolCallbackFlag final{
 public:
-    explicit ScopedSymbolCallbackFlag(bool& flag)
+    explicit ScopedSymbolCallbackFlag(bool& flag)noexcept
         : m_flag(flag)
     {
         m_flag = true;
     }
-    ~ScopedSymbolCallbackFlag(){
+    ~ScopedSymbolCallbackFlag()noexcept{
         m_flag = false;
     }
 
@@ -269,7 +269,7 @@ private:
 // Rotating thread-local scratch for Name text in opt/fin; ring avoids aliasing in one expression.
 inline constexpr usize s_SymbolTextBufferLength = 1024u; // keep == NameSymbols::s_MaxResolvedTextLength
 inline constexpr usize s_SymbolTextBufferCount = 8u;
-[[nodiscard]] inline char* NextSymbolTextBuffer(){
+[[nodiscard]] inline char* NextSymbolTextBuffer()noexcept{
     thread_local static char buffers[s_SymbolTextBufferCount][s_SymbolTextBufferLength];
     thread_local static usize next = 0u;
     char* const buffer = buffers[next];
@@ -277,13 +277,13 @@ inline constexpr usize s_SymbolTextBufferCount = 8u;
     return buffer;
 }
 
-inline void SetNameSymbolRecordCallback(const NameSymbolRecordCallback callback, void* const userData){
+inline void SetNameSymbolRecordCallback(const NameSymbolRecordCallback callback, void* const userData)noexcept{
     NameSymbolRecorderState& state = SymbolRecorderState();
     state.callback = callback;
     state.userData = userData;
 }
 
-inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callback, void* const userData){
+inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callback, void* const userData)noexcept{
     NameSymbolResolverState& state = SymbolResolverState();
     state.callback = callback;
     state.userData = userData;
@@ -347,7 +347,7 @@ inline void RecordNameSymbolText(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize HashValue(const NameHash& hash){
+inline constexpr usize HashValue(const NameHash& hash)noexcept{
     usize seed = static_cast<usize>(hash.qwords[0]);
     for(u32 i = 1; i < s_HashLaneCount; ++i){
         seed ^= static_cast<usize>(hash.qwords[i])
@@ -359,7 +359,7 @@ inline constexpr usize HashValue(const NameHash& hash){
 }
 
 template<typename CharT>
-inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstSize){
+inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstSize)noexcept(IsArithmetic_V<CharT>){
     if(dstSize == 0)
         return;
 
@@ -387,7 +387,7 @@ inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstS
 
 #if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
 template<typename CharT>
-inline constexpr void CopyDebugName(const BasicStringView<CharT> text, char* dst, const usize dstSize){
+inline constexpr void CopyDebugName(const BasicStringView<CharT> text, char* dst, const usize dstSize)noexcept(IsArithmetic_V<CharT>){
     if(dstSize == 0)
         return;
 
@@ -436,11 +436,11 @@ inline void RecordStoredNameSymbolText(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline void SetNameSymbolRecordCallback(const NameSymbolRecordCallback callback, void* const userData = nullptr){
+inline void SetNameSymbolRecordCallback(const NameSymbolRecordCallback callback, void* const userData = nullptr)noexcept{
     NameDetail::SetNameSymbolRecordCallback(callback, userData);
 }
 
-inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callback, void* const userData = nullptr){
+inline void SetNameSymbolResolveCallback(const NameSymbolResolveCallback callback, void* const userData = nullptr)noexcept{
     NameDetail::SetNameSymbolResolveCallback(callback, userData);
 }
 
@@ -462,7 +462,7 @@ class Name{
 
 
 public:
-    constexpr Name()
+    constexpr Name()noexcept
         : m_hash{}
 #if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
         , m_debugName{}
@@ -471,7 +471,7 @@ public:
         , m_hasSymbolText(false)
 #endif
     {}
-    constexpr Name(std::nullptr_t)
+    constexpr Name(std::nullptr_t)noexcept
         : m_hash{}
 #if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
         , m_debugName{}
@@ -480,7 +480,7 @@ public:
         , m_hasSymbolText(false)
 #endif
     {}
-    constexpr Name(const char* str)
+    constexpr Name(const char* str)noexcept
         : m_hash(ComputeNameHash(str))
 #if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
         , m_debugName{}
@@ -493,7 +493,7 @@ public:
         CopyCanonical(m_debugName, NameDetail::s_DebugNameCapacity, str);
 #endif
     }
-    constexpr Name(const wchar* str)
+    constexpr Name(const wchar* str)noexcept
         : m_hash(ComputeNameHash(str))
 #if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
         , m_debugName{}
@@ -506,7 +506,7 @@ public:
         CopyCanonical(m_debugName, NameDetail::s_DebugNameCapacity, str);
 #endif
     }
-    explicit Name(const NameHash& hash)
+    explicit Name(const NameHash& hash)noexcept
         : m_hash(hash)
 #if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
         , m_debugName{}
@@ -605,7 +605,7 @@ public:
     }
 
     // Non-resolving text for labels/breadcrumbs: readable name in dbg, else hash hex.
-    [[nodiscard]] AStringView logText()const{
+    [[nodiscard]] AStringView logText()const noexcept{
 #if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
         return AStringView(m_debugName);
 #else
@@ -689,7 +689,7 @@ namespace NameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline u64 UpdateFnv64U64(u64 hash, const u64 value){
+inline u64 UpdateFnv64U64(u64 hash, const u64 value)noexcept{
     for(u32 byteIndex = 0u; byteIndex < sizeof(value); ++byteIndex){
         hash ^= static_cast<u8>((value >> (byteIndex * s_NameHashByteBitCount)) & s_NameHashByteMask);
         hash *= s_Fnv64Prime;
@@ -723,11 +723,11 @@ inline constexpr u64 s_DerivePrefixHash = UpdateFnv64TextCanonical(s_Fnv64Offset
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool UpdateDerivedNameHashText(NameHash& inOutDerivedHash, const BasicStringView<CharT> text){
+[[nodiscard]] inline bool UpdateDerivedNameHashText(NameHash& inOutDerivedHash, const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return NameDetail::UpdateCanonicalNameHashText(inOutDerivedHash, text);
 }
 
-[[nodiscard]] inline Name FinishDerivedNameHash(const NameHash& derivedHash){
+[[nodiscard]] inline Name FinishDerivedNameHash(const NameHash& derivedHash)noexcept{
     return Name(derivedHash);
 }
 
@@ -750,7 +750,7 @@ template<typename CharT, typename ArenaT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool DecodeNameHash(const BasicStringView<CharT> encodedHash, Name& outName){
+[[nodiscard]] inline bool DecodeNameHash(const BasicStringView<CharT> encodedHash, Name& outName)noexcept(IsArithmetic_V<CharT>){
     if(encodedHash.size() != NameDetail::s_EncodedNameHashLength)
         return false;
 
@@ -767,7 +767,7 @@ template<typename CharT>
     return true;
 }
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline bool DecodeNameHash(const BasicString<CharT, ArenaT>& encodedHash, Name& outName){
+[[nodiscard]] inline bool DecodeNameHash(const BasicString<CharT, ArenaT>& encodedHash, Name& outName)noexcept(IsArithmetic_V<CharT>){
     return DecodeNameHash(BasicStringView<CharT>(encodedHash), outName);
 }
 
@@ -790,7 +790,7 @@ struct hash<Name>{
 
 template<>
 struct hash<NameHash>{
-    usize operator()(const NameHash& h)const{
+    usize operator()(const NameHash& h)const noexcept{
         return NameDetail::HashValue(h);
     }
 };

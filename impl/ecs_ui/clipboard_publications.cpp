@@ -24,7 +24,7 @@ namespace __hidden_ui_clipboard_publications{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static UiClipboardPublicationStatus::Enum Status(const Core::ClipboardStatus::Enum status){
+[[nodiscard]] static UiClipboardPublicationStatus::Enum Status(const Core::ClipboardStatus::Enum status)noexcept{
     switch(status){
     case Core::ClipboardStatus::Success: return UiClipboardPublicationStatus::Published;
     case Core::ClipboardStatus::Unsupported: return UiClipboardPublicationStatus::Unsupported;

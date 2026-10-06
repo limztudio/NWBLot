@@ -187,7 +187,7 @@ void AddCsgFrameReceiverWork(
     bool transparentWork,
     u32 cutterCount
 );
-void FinalizeCsgFrameState(CsgFrameState& inOutState);
+void FinalizeCsgFrameState(CsgFrameState& inOutState)noexcept;
 [[nodiscard]] CsgFrameState BuildCsgFrameState(
     Core::ECS::World& world,
     Core::Alloc::ScratchArena& scratchArena,

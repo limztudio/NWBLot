@@ -478,7 +478,7 @@ bool TrackedCommandBuffer::getPendingAccelStructBuildSignature(
     VkBuildAccelerationStructureFlagsKHR& outBuildFlags,
     const AccelStructGeometryBuildSignature*& outGeometrySignatures,
     usize& outGeometrySignatureCount
-)const{
+)const noexcept{
     for(usize commitIndex = m_pendingAccelStructBuildCommits.size(); commitIndex > 0u; --commitIndex){
         const PendingAccelStructBuildCommit& commit = m_pendingAccelStructBuildCommits[commitIndex - 1u];
         if(commit.accelStruct == &accelStruct){
@@ -553,7 +553,7 @@ void TrackedCommandBuffer::appendPendingOpacityMicromapBuildCommit(OpacityMicrom
     });
 }
 
-bool TrackedCommandBuffer::hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const{
+bool TrackedCommandBuffer::hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const noexcept{
     for(usize commitIndex = m_pendingOpacityMicromapBuildCommits.size(); commitIndex > 0u; --commitIndex){
         if(m_pendingOpacityMicromapBuildCommits[commitIndex - 1u].opacityMicromap == &opacityMicromap)
             return true;

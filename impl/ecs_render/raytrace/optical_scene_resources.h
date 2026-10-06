@@ -66,7 +66,7 @@ public:
     void resetPrepared()noexcept{ m_prepared = false; }
     [[nodiscard]] bool prepare(const RayTracingOpticalSceneGather& gather);
     [[nodiscard]] bool prepareRuntimeBounds(const RayTracingOpticalSceneGather& gather, RendererShaderSystem& shaderSystem);
-    [[nodiscard]] RayTracingOpticalSceneSnapshot snapshot()const;
+    [[nodiscard]] RayTracingOpticalSceneSnapshot snapshot()const noexcept;
 
 private:
     Core::Alloc::GlobalArena& m_arena;

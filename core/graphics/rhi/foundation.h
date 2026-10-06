@@ -164,7 +164,7 @@ using GraphicsHashMap = HashMap<T, V, GraphicsArena>;
 
 class GraphicsAllocator : NoCopy{
 public:
-    explicit GraphicsAllocator(Alloc::GlobalArena& objectArena);
+    explicit GraphicsAllocator(Alloc::GlobalArena& objectArena)noexcept;
 
 
 public:

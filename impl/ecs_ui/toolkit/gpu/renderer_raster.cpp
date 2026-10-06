@@ -106,7 +106,7 @@ bool GpuRasterTask::Record(
     return true;
 }
 
-void GpuRasterTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+void GpuRasterTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
     payload.frame->m_raster = token;
 }
 
@@ -145,7 +145,7 @@ bool GpuOutputTask::Record(
     return true;
 }
 
-void GpuOutputTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+void GpuOutputTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
     payload.frame->m_finalConsumer = token;
 }
 

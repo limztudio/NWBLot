@@ -37,7 +37,7 @@ class Texture;
     const Core::Assets::AssetRef<Shader>& accumulatePixelShader,
     const Core::Assets::AssetRef<Shader>& occupancyPixelShader,
     const Core::Assets::AssetRef<Shader>& extinctionPixelShader
-){
+)noexcept{
     if(transparent){
         return
             accumulatePixelShader.valid()
@@ -82,7 +82,7 @@ namespace MaterialBlockClass{
     };
 };
 
-[[nodiscard]] inline bool IsValidMaterialBlockClass(const MaterialBlockClass::Enum blockClass){
+[[nodiscard]] inline bool IsValidMaterialBlockClass(const MaterialBlockClass::Enum blockClass)noexcept{
     return blockClass == MaterialBlockClass::MaterialConstant || blockClass == MaterialBlockClass::MaterialMutable;
 }
 
@@ -96,7 +96,7 @@ namespace MaterialResourceKind{
     };
 };
 
-[[nodiscard]] inline bool IsValidMaterialResourceKind(const MaterialResourceKind::Enum resourceKind){
+[[nodiscard]] inline bool IsValidMaterialResourceKind(const MaterialResourceKind::Enum resourceKind)noexcept{
     return resourceKind == MaterialResourceKind::SampledImage2D || resourceKind == MaterialResourceKind::Sampler;
 }
 
@@ -110,7 +110,7 @@ namespace MaterialResourceSource{
     };
 };
 
-[[nodiscard]] inline bool IsMaterialAssetReference(const AStringView resourceName){
+[[nodiscard]] inline bool IsMaterialAssetReference(const AStringView resourceName)noexcept{
     const usize rootEnd = resourceName.find('/');
     if(
         rootEnd == AStringView::npos
@@ -143,7 +143,7 @@ namespace MaterialResourceSource{
     const MaterialResourceKind::Enum resourceKind,
     const MaterialResourceSource::Enum resourceSource,
     const AStringView resourceName
-){
+)noexcept{
     return IsValidMaterialResourceKind(resourceKind)
         && resourceSource == MaterialResourceSource::Asset
         && IsMaterialAssetReference(resourceName)
@@ -156,7 +156,7 @@ namespace MaterialResourceSource{
     const MaterialResourceKind::Enum resourceKind,
     const MaterialResourceSource::Enum resourceSource,
     const Name& resourceName
-){
+)noexcept{
     if(!resourceName)
         return false;
 
@@ -176,7 +176,7 @@ namespace MaterialResourceFixture{
 [[nodiscard]] inline bool IsKnownMaterialResourceFixture(
     const MaterialResourceKind::Enum resourceKind,
     const AStringView fixtureName
-){
+)noexcept{
     switch(resourceKind){
     case MaterialResourceKind::SampledImage2D:
         return fixtureName == MaterialResourceFixture::s_CheckerRgba8;
@@ -276,19 +276,19 @@ static_assert(
     "Material layout field/value type ordering must remain contiguous"
 );
 
-[[nodiscard]] inline bool IsValidMaterialLayoutFieldType(const MaterialLayoutFieldType::Enum fieldType){
+[[nodiscard]] inline bool IsValidMaterialLayoutFieldType(const MaterialLayoutFieldType::Enum fieldType)noexcept{
     return fieldType >= MaterialLayoutFieldType::Bool && fieldType <= MaterialLayoutFieldType::Sampler;
 }
 
-[[nodiscard]] inline bool IsMaterialLayoutNumericFieldType(const MaterialLayoutFieldType::Enum fieldType){
+[[nodiscard]] inline bool IsMaterialLayoutNumericFieldType(const MaterialLayoutFieldType::Enum fieldType)noexcept{
     return fieldType >= MaterialLayoutFieldType::Bool && fieldType <= MaterialLayoutFieldType::Float4;
 }
 
-[[nodiscard]] inline bool IsMaterialLayoutResourceFieldType(const MaterialLayoutFieldType::Enum fieldType){
+[[nodiscard]] inline bool IsMaterialLayoutResourceFieldType(const MaterialLayoutFieldType::Enum fieldType)noexcept{
     return fieldType == MaterialLayoutFieldType::SampledImage2D || fieldType == MaterialLayoutFieldType::Sampler;
 }
 
-[[nodiscard]] inline MaterialResourceKind::Enum MaterialLayoutFieldResourceKind(const MaterialLayoutFieldType::Enum fieldType){
+[[nodiscard]] inline MaterialResourceKind::Enum MaterialLayoutFieldResourceKind(const MaterialLayoutFieldType::Enum fieldType)noexcept{
     switch(fieldType){
     case MaterialLayoutFieldType::SampledImage2D: return MaterialResourceKind::SampledImage2D;
     case MaterialLayoutFieldType::Sampler: return MaterialResourceKind::Sampler;
@@ -296,7 +296,7 @@ static_assert(
     }
 }
 
-[[nodiscard]] inline u32 MaterialLayoutFieldComponentCount(const MaterialLayoutFieldType::Enum fieldType){
+[[nodiscard]] inline u32 MaterialLayoutFieldComponentCount(const MaterialLayoutFieldType::Enum fieldType)noexcept{
     if(!IsMaterialLayoutNumericFieldType(fieldType))
         return 0u;
 
@@ -305,7 +305,7 @@ static_assert(
 
 [[nodiscard]] inline MaterialParameterValueType::Enum MaterialLayoutFieldValueType(
     const MaterialLayoutFieldType::Enum fieldType
-){
+)noexcept{
     if(!IsMaterialLayoutNumericFieldType(fieldType))
         return MaterialParameterValueType::None;
 
@@ -316,7 +316,7 @@ static_assert(
 [[nodiscard]] inline MaterialLayoutFieldType::Enum MaterialLayoutFieldTypeFromParameterType(
     const MaterialParameterValueType::Enum valueType,
     const u32 componentCount
-){
+)noexcept{
     if(componentCount == 0u || componentCount > s_MaterialLayoutFieldComponentsPerValueType)
         return MaterialLayoutFieldType::None;
 
@@ -337,7 +337,7 @@ static_assert(
     return static_cast<MaterialLayoutFieldType::Enum>(firstFieldType + componentCount - 1u);
 }
 
-[[nodiscard]] inline u32 MaterialParameterValueTypeByteSize(const MaterialParameterValueType::Enum valueType){
+[[nodiscard]] inline u32 MaterialParameterValueTypeByteSize(const MaterialParameterValueType::Enum valueType)noexcept{
     switch(valueType){
     case MaterialParameterValueType::Bool:
     case MaterialParameterValueType::Char:
@@ -356,7 +356,7 @@ static_assert(
     }
 }
 
-[[nodiscard]] inline u32 MaterialLayoutFieldByteSize(const MaterialLayoutFieldType::Enum fieldType){
+[[nodiscard]] inline u32 MaterialLayoutFieldByteSize(const MaterialLayoutFieldType::Enum fieldType)noexcept{
     if(IsMaterialLayoutResourceFieldType(fieldType))
         return sizeof(u32);
 
@@ -366,7 +366,7 @@ static_assert(
     ;
 }
 
-[[nodiscard]] inline u32 MaterialLayoutFieldAlignment(const MaterialLayoutFieldType::Enum fieldType){
+[[nodiscard]] inline u32 MaterialLayoutFieldAlignment(const MaterialLayoutFieldType::Enum fieldType)noexcept{
     if(IsMaterialLayoutResourceFieldType(fieldType))
         return sizeof(u32);
 
@@ -377,7 +377,7 @@ static_assert(
     const u32 byteOffset,
     const MaterialLayoutFieldType::Enum fieldType,
     u32& outByteOffset
-){
+)noexcept{
     const u32 alignment = MaterialLayoutFieldAlignment(fieldType);
     if(alignment == 0u)
         return false;
@@ -385,7 +385,7 @@ static_assert(
     return AlignUpU32Checked(byteOffset, alignment, outByteOffset);
 }
 
-[[nodiscard]] inline bool AlignMaterialLayoutBlockByteSize(const u32 byteSize, u32& outByteSize){
+[[nodiscard]] inline bool AlignMaterialLayoutBlockByteSize(const u32 byteSize, u32& outByteSize)noexcept{
     return AlignUpU32Checked(byteSize, NWB_MATERIAL_TYPED_WORD_BYTES, outByteSize);
 }
 
@@ -479,15 +479,15 @@ public:
 
 public:
     void setShaderVariant(AStringView variantName){ m_shaderVariant.assign(variantName); }
-    void setMaterialInterface(const Name& materialInterface){ m_materialInterface = materialInterface; }
-    void setShadingModelId(const u32 shadingModelId){ m_shadingModelId = shadingModelId; }
-    void setSurfaceDispatchId(const u32 surfaceDispatchId){ m_surfaceDispatchId = surfaceDispatchId; }
-    void setAvboitAccumulatePixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset){ m_avboitAccumulatePixelShader = shaderAsset; }
-    void setAvboitOccupancyPixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset){ m_avboitOccupancyPixelShader = shaderAsset; }
-    void setAvboitExtinctionPixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset){ m_avboitExtinctionPixelShader = shaderAsset; }
-    void setTransparent(const bool transparent){ m_transparent = transparent; }
-    void setTwoSided(const bool twoSided){ m_twoSided = twoSided; }
-    void setRefractive(const bool refractive){ m_refractive = refractive; }
+    void setMaterialInterface(const Name& materialInterface)noexcept{ m_materialInterface = materialInterface; }
+    void setShadingModelId(const u32 shadingModelId)noexcept{ m_shadingModelId = shadingModelId; }
+    void setSurfaceDispatchId(const u32 surfaceDispatchId)noexcept{ m_surfaceDispatchId = surfaceDispatchId; }
+    void setAvboitAccumulatePixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset)noexcept{ m_avboitAccumulatePixelShader = shaderAsset; }
+    void setAvboitOccupancyPixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset)noexcept{ m_avboitOccupancyPixelShader = shaderAsset; }
+    void setAvboitExtinctionPixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset)noexcept{ m_avboitExtinctionPixelShader = shaderAsset; }
+    void setTransparent(const bool transparent)noexcept{ m_transparent = transparent; }
+    void setTwoSided(const bool twoSided)noexcept{ m_twoSided = twoSided; }
+    void setRefractive(const bool refractive)noexcept{ m_refractive = refractive; }
     void setTypedLayout(
         u64 layoutHash,
         const TypedLayoutBlockVector& blocks,
@@ -495,36 +495,36 @@ public:
         const TypedBlockByteVector& blockBytes
     );
     void setResourceReferences(const ResourceReferenceVector& resourceReferences);
-    bool setShaderForStage(Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<Shader>& shaderAsset);
+    bool setShaderForStage(Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<Shader>& shaderAsset)noexcept;
 
-    bool findShaderForStage(Core::ShaderType::Enum shaderType, Core::Assets::AssetRef<Shader>& outShaderAsset)const;
+    bool findShaderForStage(Core::ShaderType::Enum shaderType, Core::Assets::AssetRef<Shader>& outShaderAsset)const noexcept;
 
 public:
-    [[nodiscard]] const Core::Assets::AssetString& shaderVariant()const{ return m_shaderVariant; }
-    [[nodiscard]] const Name& materialInterface()const{ return m_materialInterface; }
-    [[nodiscard]] u32 shadingModelId()const{ return m_shadingModelId; }
-    [[nodiscard]] u32 surfaceDispatchId()const{ return m_surfaceDispatchId; }
-    [[nodiscard]] u64 typedLayoutHash()const{ return m_typedLayoutHash; }
-    [[nodiscard]] const TypedLayoutBlockVector& typedLayoutBlocks()const{ return m_typedLayoutBlocks; }
-    [[nodiscard]] const TypedLayoutFieldVector& typedLayoutFields()const{ return m_typedLayoutFields; }
-    [[nodiscard]] const TypedBlockByteVector& typedBlockBytes()const{ return m_typedBlockBytes; }
-    [[nodiscard]] const ResourceReferenceVector& resourceReferences()const{ return m_resourceReferences; }
-    [[nodiscard]] const StageShaderArray& stageShaders()const{ return m_stageShaders; }
-    [[nodiscard]] u32 stageShaderCount()const{ return m_stageShaderCount; }
+    [[nodiscard]] const Core::Assets::AssetString& shaderVariant()const noexcept{ return m_shaderVariant; }
+    [[nodiscard]] const Name& materialInterface()const noexcept{ return m_materialInterface; }
+    [[nodiscard]] u32 shadingModelId()const noexcept{ return m_shadingModelId; }
+    [[nodiscard]] u32 surfaceDispatchId()const noexcept{ return m_surfaceDispatchId; }
+    [[nodiscard]] u64 typedLayoutHash()const noexcept{ return m_typedLayoutHash; }
+    [[nodiscard]] const TypedLayoutBlockVector& typedLayoutBlocks()const noexcept{ return m_typedLayoutBlocks; }
+    [[nodiscard]] const TypedLayoutFieldVector& typedLayoutFields()const noexcept{ return m_typedLayoutFields; }
+    [[nodiscard]] const TypedBlockByteVector& typedBlockBytes()const noexcept{ return m_typedBlockBytes; }
+    [[nodiscard]] const ResourceReferenceVector& resourceReferences()const noexcept{ return m_resourceReferences; }
+    [[nodiscard]] const StageShaderArray& stageShaders()const noexcept{ return m_stageShaders; }
+    [[nodiscard]] u32 stageShaderCount()const noexcept{ return m_stageShaderCount; }
     // Cook-generated AVBOIT accumulate pixel shader for this material's transparent draw. Valid only for surface-authored transparent materials; missing means a cook/runtime contract failure.
     // Not a graphics stage: the material has one pixel stage, and this is the transparent-only shader the renderer selects by pass.
-    [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitAccumulatePixelShader()const{ return m_avboitAccumulatePixelShader; }
+    [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitAccumulatePixelShader()const noexcept{ return m_avboitAccumulatePixelShader; }
     // Occupancy/extinction twins of the accumulate shader, so all three AVBOIT passes read the same surface renderCoverage. Same validity contract as above.
-    [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitOccupancyPixelShader()const{ return m_avboitOccupancyPixelShader; }
-    [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitExtinctionPixelShader()const{ return m_avboitExtinctionPixelShader; }
-    [[nodiscard]] bool transparent()const{ return m_transparent; }
-    [[nodiscard]] bool twoSided()const{ return m_twoSided; }
+    [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitOccupancyPixelShader()const noexcept{ return m_avboitOccupancyPixelShader; }
+    [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitExtinctionPixelShader()const noexcept{ return m_avboitExtinctionPixelShader; }
+    [[nodiscard]] bool transparent()const noexcept{ return m_transparent; }
+    [[nodiscard]] bool twoSided()const noexcept{ return m_twoSided; }
     // Refractive-caster flag, separate from `transparent`. Refraction values stay shader-side (NwbMeshSurface).
-    [[nodiscard]] bool refractive()const{ return m_refractive; }
+    [[nodiscard]] bool refractive()const noexcept{ return m_refractive; }
 
 
 private:
-    void clearStageShaders();
+    void clearStageShaders()noexcept;
 
 
 private:

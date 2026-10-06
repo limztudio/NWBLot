@@ -17,7 +17,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] ClipboardStatus::Enum ValidateClipboardUtf8Text(AStringView text);
+[[nodiscard]] ClipboardStatus::Enum ValidateClipboardUtf8Text(AStringView text)noexcept;
 [[nodiscard]] ClipboardStatus::Enum DecodeClipboardLatin1(AStringView text, AString<Alloc::GlobalArena>& output);
 [[nodiscard]] ClipboardStatus::Enum EncodeClipboardLatin1(AStringView text, AString<Alloc::GlobalArena>& output);
 
@@ -29,9 +29,9 @@ public:
 
 
 public:
-    void clear();
+    void clear()noexcept;
     [[nodiscard]] ClipboardStatus::Enum appendBytes(AStringView bytes);
-    [[nodiscard]] const AString<Alloc::GlobalArena>& text()const{ return m_text; }
+    [[nodiscard]] const AString<Alloc::GlobalArena>& text()const noexcept{ return m_text; }
 
 
 private:

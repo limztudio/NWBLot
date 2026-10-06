@@ -24,10 +24,10 @@ NWB_ALLOC_BEGIN
 
 
 // Arena context uses FollowsUsage reservation; pool backing allocations omit it.
-extern void* CoreAlloc(usize size, ArenaMemoryTracker* arenaTracker = nullptr);
-extern void* CoreRealloc(void* p, usize size, ArenaMemoryTracker* arenaTracker = nullptr);
-extern void* CoreReallocAligned(void* p, usize size, usize align, ArenaMemoryTracker* arenaTracker = nullptr);
-extern void* CoreAllocAligned(usize size, usize align, ArenaMemoryTracker* arenaTracker = nullptr);
+extern void* CoreAlloc(usize size, ArenaMemoryTracker* arenaTracker = nullptr)noexcept;
+extern void* CoreRealloc(void* p, usize size, ArenaMemoryTracker* arenaTracker = nullptr)noexcept;
+extern void* CoreReallocAligned(void* p, usize size, usize align, ArenaMemoryTracker* arenaTracker = nullptr)noexcept;
+extern void* CoreAllocAligned(usize size, usize align, ArenaMemoryTracker* arenaTracker = nullptr)noexcept;
 
 extern usize CoreMsize(void* ptr)noexcept;
 

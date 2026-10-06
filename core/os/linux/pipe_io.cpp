@@ -31,7 +31,7 @@ static constexpr u32 s_TimeoutMs = 5000u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static ssize_t WriteWithoutSigpipe(const int fd, const AStringView bytes){
+static ssize_t WriteWithoutSigpipe(const int fd, const AStringView bytes)noexcept{
     sigset_t blocked;
     sigset_t previous;
     sigset_t pending;
@@ -65,7 +65,7 @@ static ssize_t WriteWithoutSigpipe(const int fd, const AStringView bytes){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool OpenClipboardPipe(int& readFd, int& writeFd){
+bool OpenClipboardPipe(int& readFd, int& writeFd)noexcept{
     int descriptors[2]{ -1, -1 };
     if(pipe(descriptors) != 0)
         return false;
@@ -79,7 +79,7 @@ bool OpenClipboardPipe(int& readFd, int& writeFd){
     return false;
 }
 
-bool ConfigureClipboardPipe(const int fd){
+bool ConfigureClipboardPipe(const int fd)noexcept{
     const int flags = fcntl(fd, F_GETFL);
     const int descriptorFlags = fcntl(fd, F_GETFD);
     return
@@ -88,7 +88,7 @@ bool ConfigureClipboardPipe(const int fd){
     ;
 }
 
-void CloseClipboardPipe(int& fd){
+void CloseClipboardPipe(int& fd)noexcept{
     if(fd < 0)
         return;
     const int released = fd;
@@ -131,7 +131,7 @@ ClipboardPipeWriter::ClipboardPipeWriter(Alloc::GlobalArena& arena)
     : m_text(arena)
 {}
 
-ClipboardPipeWriter::~ClipboardPipeWriter(){
+ClipboardPipeWriter::~ClipboardPipeWriter()noexcept{
     CloseClipboardPipe(m_fd);
 }
 
@@ -150,7 +150,7 @@ bool ClipboardPipeWriter::begin(const int fd, const AStringView text){
     return true;
 }
 
-ClipboardStatus::Enum ClipboardPipeWriter::advance(){
+ClipboardStatus::Enum ClipboardPipeWriter::advance()noexcept{
     if(m_fd < 0)
         return ClipboardStatus::Success;
     if(TimerNow() >= m_deadline){

@@ -34,7 +34,7 @@ public:
 
 
 public:
-    constexpr BasicCompactString()
+    constexpr BasicCompactString()noexcept(IsArithmetic_V<value_type>)
         : m_storage{}
         , m_size(0)
     {}
@@ -70,14 +70,14 @@ public:
 
 
 public:
-    [[nodiscard]] bool assign(const value_type* text){
+    [[nodiscard]] bool assign(const value_type* text)noexcept(IsArithmetic_V<value_type>){
         return text == nullptr
             ? clearAndReturn(true)
             : assign(view_type(text))
         ;
     }
 
-    [[nodiscard]] bool assign(const view_type text){
+    [[nodiscard]] bool assign(const view_type text)noexcept(IsArithmetic_V<value_type>){
         clear();
 
         const usize textSize = text.size();
@@ -99,18 +99,18 @@ public:
     }
 
     template<typename ArenaT>
-    [[nodiscard]] bool assign(const BasicString<value_type, ArenaT>& text){
+    [[nodiscard]] bool assign(const BasicString<value_type, ArenaT>& text)noexcept(IsArithmetic_V<value_type>){
         return assign(view_type(text.data(), text.size()));
     }
 
-    [[nodiscard]] bool append(const value_type* text){
+    [[nodiscard]] bool append(const value_type* text)noexcept(IsArithmetic_V<value_type>){
         return text == nullptr
             ? true
             : append(view_type(text))
         ;
     }
 
-    [[nodiscard]] bool append(const view_type text){
+    [[nodiscard]] bool append(const view_type text)noexcept(IsArithmetic_V<value_type>){
         const usize textSize = text.size();
         if(text.empty())
             return true;
@@ -131,15 +131,15 @@ public:
     }
 
     template<typename ArenaT>
-    [[nodiscard]] bool append(const BasicString<value_type, ArenaT>& text){
+    [[nodiscard]] bool append(const BasicString<value_type, ArenaT>& text)noexcept(IsArithmetic_V<value_type>){
         return append(view_type(text.data(), text.size()));
     }
 
-    [[nodiscard]] bool append(const BasicCompactString& text){
+    [[nodiscard]] bool append(const BasicCompactString& text)noexcept(IsArithmetic_V<value_type>){
         return append(text.view());
     }
 
-    [[nodiscard]] bool pushBack(const value_type ch){
+    [[nodiscard]] bool pushBack(const value_type ch)noexcept(IsArithmetic_V<value_type>){
         if(ch == value_type{} || remainingCapacity() == 0)
             return false;
 
@@ -149,58 +149,58 @@ public:
         return true;
     }
 
-    void clear(){
+    void clear()noexcept(IsArithmetic_V<value_type>){
         m_size = 0;
         m_storage[0] = value_type{};
     }
 
 
 public:
-    [[nodiscard]] bool empty()const{
+    [[nodiscard]] bool empty()const noexcept{
         return m_size == 0;
     }
 
-    [[nodiscard]] explicit operator bool()const{
+    [[nodiscard]] explicit operator bool()const noexcept{
         return !empty();
     }
 
-    [[nodiscard]] usize size()const{
+    [[nodiscard]] usize size()const noexcept{
         return m_size;
     }
 
-    [[nodiscard]] constexpr usize capacity()const{
+    [[nodiscard]] constexpr usize capacity()const noexcept{
         return s_MaxLength;
     }
 
-    [[nodiscard]] constexpr usize max_size()const{
+    [[nodiscard]] constexpr usize max_size()const noexcept{
         return capacity();
     }
 
-    [[nodiscard]] usize remainingCapacity()const{
+    [[nodiscard]] usize remainingCapacity()const noexcept{
         return s_MaxLength - m_size;
     }
 
-    [[nodiscard]] view_type view()const{
+    [[nodiscard]] view_type view()const noexcept{
         return view_type(m_storage, m_size);
     }
 
-    [[nodiscard]] operator view_type()const{
+    [[nodiscard]] operator view_type()const noexcept{
         return view();
     }
 
-    [[nodiscard]] const value_type* c_str()const{
+    [[nodiscard]] const value_type* c_str()const noexcept{
         return m_storage;
     }
 
-    [[nodiscard]] const value_type* data()const{
+    [[nodiscard]] const value_type* data()const noexcept{
         return m_storage;
     }
 
-    [[nodiscard]] const value_type* cursor()const{
+    [[nodiscard]] const value_type* cursor()const noexcept{
         return m_storage + m_size;
     }
 
-    [[nodiscard]] BasicCompactString substr(const usize pos, const usize count = s_NPos)const{
+    [[nodiscard]] BasicCompactString substr(const usize pos, const usize count = s_NPos)const noexcept(IsArithmetic_V<value_type>){
         BasicCompactString result;
         if(pos >= m_size)
             return result;
@@ -259,7 +259,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool clearAndReturn(const bool value){
+    [[nodiscard]] bool clearAndReturn(const bool value)noexcept(IsArithmetic_V<value_type>){
         clear();
         return value;
     }
@@ -281,15 +281,15 @@ static_assert(sizeof(WCompactString) == WCompactString::s_StorageBytes, "WCompac
 
 
 template<typename CharT>
-[[nodiscard]] inline bool operator==(const BasicCompactString<CharT>& lhs, const BasicCompactString<CharT>& rhs){
+[[nodiscard]] inline bool operator==(const BasicCompactString<CharT>& lhs, const BasicCompactString<CharT>& rhs)noexcept(IsArithmetic_V<CharT>){
     return lhs.view() == rhs.view();
 }
 template<typename CharT>
-[[nodiscard]] inline bool operator!=(const BasicCompactString<CharT>& lhs, const BasicCompactString<CharT>& rhs){
+[[nodiscard]] inline bool operator!=(const BasicCompactString<CharT>& lhs, const BasicCompactString<CharT>& rhs)noexcept(IsArithmetic_V<CharT>){
     return !(lhs == rhs);
 }
 template<typename CharT>
-[[nodiscard]] inline bool operator<(const BasicCompactString<CharT>& lhs, const BasicCompactString<CharT>& rhs){
+[[nodiscard]] inline bool operator<(const BasicCompactString<CharT>& lhs, const BasicCompactString<CharT>& rhs)noexcept(IsArithmetic_V<CharT>){
     return lhs.view() < rhs.view();
 }
 
@@ -331,7 +331,7 @@ namespace std{
 
 template<typename CharT>
 struct hash<BasicCompactString<CharT>>{
-    usize operator()(const BasicCompactString<CharT>& value)const{
+    usize operator()(const BasicCompactString<CharT>& value)const noexcept(noexcept(hash<BasicStringView<CharT>>{}(value.view()))){
         return hash<BasicStringView<CharT>>{}(value.view());
     }
 };

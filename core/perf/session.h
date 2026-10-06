@@ -28,28 +28,28 @@ public:
 
 
 public:
-    void setCaptureOptions(const CaptureOptions& options);
-    void clear();
-    void beginFrame(u64 frameIndex);
+    void setCaptureOptions(const CaptureOptions& options)noexcept;
+    void clear()noexcept;
+    void beginFrame(u64 frameIndex)noexcept;
     void publishFrame();
 
-    [[nodiscard]] bool enabled()const{ return m_enabled; }
-    [[nodiscard]] bool cpuTimingEnabled()const{ return m_cpuTimingEnabled; }
-    [[nodiscard]] bool gpuTimingEnabled()const{ return m_gpuTimingEnabled; }
-    [[nodiscard]] bool memoryEnabled()const{ return m_memoryEnabled; }
-    [[nodiscard]] u64 frameIndex()const{ return m_frameIndex; }
-    [[nodiscard]] CaptureOptions captureOptions()const;
-    [[nodiscard]] SessionReport report()const;
+    [[nodiscard]] bool enabled()const noexcept{ return m_enabled; }
+    [[nodiscard]] bool cpuTimingEnabled()const noexcept{ return m_cpuTimingEnabled; }
+    [[nodiscard]] bool gpuTimingEnabled()const noexcept{ return m_gpuTimingEnabled; }
+    [[nodiscard]] bool memoryEnabled()const noexcept{ return m_memoryEnabled; }
+    [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }
+    [[nodiscard]] CaptureOptions captureOptions()const noexcept;
+    [[nodiscard]] SessionReport report()const noexcept;
 
-    [[nodiscard]] TimingSink& cpuTimingSink(){ return m_cpuTiming; }
-    [[nodiscard]] TimingSink& gpuTimingSink(){ return m_gpuTiming; }
-    [[nodiscard]] TimingView cpuTimingView()const{ return TimingView(m_cpuTiming); }
-    [[nodiscard]] TimingView gpuTimingView()const{ return TimingView(m_gpuTiming); }
-    [[nodiscard]] MemoryView memoryView()const{ return MemoryView(m_memory); }
+    [[nodiscard]] TimingSink& cpuTimingSink()noexcept{ return m_cpuTiming; }
+    [[nodiscard]] TimingSink& gpuTimingSink()noexcept{ return m_gpuTiming; }
+    [[nodiscard]] TimingView cpuTimingView()const noexcept{ return TimingView(m_cpuTiming); }
+    [[nodiscard]] TimingView gpuTimingView()const noexcept{ return TimingView(m_gpuTiming); }
+    [[nodiscard]] MemoryView memoryView()const noexcept{ return MemoryView(m_memory); }
     [[nodiscard]] MemoryScopeId registerMemoryScope(const Name& scopeName);
 
     template<typename Arena>
-    void recordMemorySnapshot(const MemoryScopeId scope, const Arena& arena){
+    void recordMemorySnapshot(const MemoryScopeId scope, const Arena& arena)noexcept(noexcept(m_memory.recordArenaSnapshot(scope, arena, m_frameIndex))){
         if(!captureOptions().memoryActive())
             return;
 
@@ -68,7 +68,7 @@ public:
 
 private:
     void ensureMemoryScopes();
-    void applyEnabledState();
+    void applyEnabledState()noexcept;
 
 
 private:

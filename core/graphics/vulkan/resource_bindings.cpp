@@ -25,7 +25,7 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-VkDescriptorType ConvertDescriptorType(ResourceType::Enum type){
+VkDescriptorType ConvertDescriptorType(ResourceType::Enum type)noexcept{
     switch(type){
     case ResourceType::Texture_SRV:
         return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
@@ -54,7 +54,7 @@ VkDescriptorType ConvertDescriptorType(ResourceType::Enum type){
     }
 }
 
-VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages){
+VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages)noexcept{
     VkShaderStageFlags flags = 0;
 
     if(stages & ShaderType::Vertex)
@@ -83,7 +83,7 @@ VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages){
 }
 
 // Clamp descriptor-buffer alignment for 32-bit byte offsets.
-u32 GetDescriptorBufferOffsetAlignmentBytes(const VulkanContext& context){
+u32 GetDescriptorBufferOffsetAlignmentBytes(const VulkanContext& context)noexcept{
     const VkDeviceSize alignment = context.descriptorBufferProperties.descriptorBufferOffsetAlignment;
     return (alignment == 0 || alignment > UINT32_MAX) ? 1u : static_cast<u32>(alignment);
 }
@@ -109,7 +109,7 @@ void ConfigurePipelineDepthStencilState(
     const DepthStencilState& state,
     PipelineStencilFaceMode::Enum stencilFaceMode,
     VkPipelineDepthStencilStateCreateInfo& outState
-){
+)noexcept{
     outState = MakeVkStruct<VkPipelineDepthStencilStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO);
     outState.depthTestEnable = state.depthTestEnable ? VK_TRUE : VK_FALSE;
     outState.depthWriteEnable = state.depthWriteEnable ? VK_TRUE : VK_FALSE;
@@ -221,7 +221,7 @@ void DestroyPipelineAndOwnedLayout(
 }
 
 // Samplers occupy their dedicated descriptor-buffer segment.
-constexpr DescriptorBufferSegmentKind::Enum GetDescriptorBufferSegmentKind(ResourceType::Enum type){
+constexpr DescriptorBufferSegmentKind::Enum GetDescriptorBufferSegmentKind(ResourceType::Enum type)noexcept{
     return type == ResourceType::Sampler ? DescriptorBufferSegmentKind::Sampler : DescriptorBufferSegmentKind::Resource;
 }
 
@@ -234,7 +234,7 @@ bool IsDescriptorBufferBackendReady(const VulkanContext& context){
 bool TryResolveBindlessDescriptorBufferLayout(
     const BindlessLayoutDesc& desc,
     DescriptorBufferSegmentKind::Enum& outSegmentKind
-){
+)noexcept{
     outSegmentKind = DescriptorBufferSegmentKind::None;
     bool hasDescriptors = false;
 
@@ -286,15 +286,15 @@ bool ValidateDescriptorBufferBindingFootprint(
 }
 
 // Global heap resource type; TLAS uses its own immutable one-descriptor layout.
-constexpr bool IsBindlessRegisterSpaceType(ResourceType::Enum type){
+constexpr bool IsBindlessRegisterSpaceType(ResourceType::Enum type)noexcept{
     return IsSupportedDescriptorBindingType(type);
 }
 
-constexpr u32 NormalizeBindlessDescriptorCapacity(const u32 capacity){
+constexpr u32 NormalizeBindlessDescriptorCapacity(const u32 capacity)noexcept{
     return capacity > 0 ? capacity : 1u;
 }
 
-u32 GetPushConstantByteSize(const BindingLayoutDesc& desc){
+u32 GetPushConstantByteSize(const BindingLayoutDesc& desc)noexcept{
     u32 pushConstantByteSize = 0;
     for(const auto& item : desc.bindings){
         if(item.type == ResourceType::PushConstants)
@@ -364,7 +364,7 @@ bool CreatePipelineLayout(
     return true;
 }
 
-VkSamplerAddressMode ConvertSamplerAddressMode(const SamplerAddressMode::Enum mode){
+VkSamplerAddressMode ConvertSamplerAddressMode(const SamplerAddressMode::Enum mode)noexcept{
     switch(mode){
     case SamplerAddressMode::Clamp:      return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     case SamplerAddressMode::Wrap:       return VK_SAMPLER_ADDRESS_MODE_REPEAT;
@@ -375,7 +375,7 @@ VkSamplerAddressMode ConvertSamplerAddressMode(const SamplerAddressMode::Enum mo
     }
 }
 
-VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc){
+VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc)noexcept{
     const f32 maxAnisotropy = desc.maxAnisotropy >= 1.f ? desc.maxAnisotropy : 1.f;
 
     VkSamplerCreateInfo samplerInfo{};

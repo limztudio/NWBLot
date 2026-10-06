@@ -79,15 +79,15 @@ struct alignas(Float4) CameraComponent{
         CameraDefaults::s_AutoAspectRatio
     );
 
-    [[nodiscard]] f32 verticalFovRadians()const{ return projection.x; }
-    [[nodiscard]] f32 nearPlane()const{ return projection.y; }
-    [[nodiscard]] f32 farPlane()const{ return projection.z; }
-    [[nodiscard]] f32 aspectRatio()const{ return projection.w; }
+    [[nodiscard]] f32 verticalFovRadians()const noexcept{ return projection.x; }
+    [[nodiscard]] f32 nearPlane()const noexcept{ return projection.y; }
+    [[nodiscard]] f32 farPlane()const noexcept{ return projection.z; }
+    [[nodiscard]] f32 aspectRatio()const noexcept{ return projection.w; }
 
-    void setVerticalFovRadians(const f32 value){ projection.x = value; }
-    void setNearPlane(const f32 value){ projection.y = value; }
-    void setFarPlane(const f32 value){ projection.z = value; }
-    void setAspectRatio(const f32 value){ projection.w = value; }
+    void setVerticalFovRadians(const f32 value)noexcept{ projection.x = value; }
+    void setNearPlane(const f32 value)noexcept{ projection.y = value; }
+    void setFarPlane(const f32 value)noexcept{ projection.z = value; }
+    void setAspectRatio(const f32 value)noexcept{ projection.w = value; }
 };
 
 static_assert(IsStandardLayout_V<CameraComponent>, "CameraComponent must stay layout-stable for ECS storage");
@@ -149,17 +149,17 @@ struct alignas(Float4) LightComponent{
     LightType::Enum type = LightType::Directional;
     bool enableCaustics = LightDefaults::s_EnableCaustics;
 
-    [[nodiscard]] Float4 color()const{
+    [[nodiscard]] Float4 color()const noexcept{
         return Float4(colorIntensity.x, colorIntensity.y, colorIntensity.z, 0.0f);
     }
-    [[nodiscard]] f32 intensity()const{ return colorIntensity.w; }
+    [[nodiscard]] f32 intensity()const noexcept{ return colorIntensity.w; }
 
-    void setColor(const Float4& value){
+    void setColor(const Float4& value)noexcept{
         colorIntensity.x = value.x;
         colorIntensity.y = value.y;
         colorIntensity.z = value.z;
     }
-    void setIntensity(const f32 value){ colorIntensity.w = value; }
+    void setIntensity(const f32 value)noexcept{ colorIntensity.w = value; }
 };
 
 static_assert(sizeof(LightType::Enum) == sizeof(u8), "LightType must stay compact for ECS storage");

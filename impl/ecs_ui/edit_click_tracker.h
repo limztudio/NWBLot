@@ -27,11 +27,11 @@ namespace UiEditClickKind{
 class UiEditClickTracker final{
 public:
     [[nodiscard]] UiEditClickKind::Enum press(const UiTextEditOwner& owner, const Ui::PopupToken& popup,
-        u64 revision, u64 externalRevision, Ui::Point position, u64 timestampMs, bool shift);
-    void move(Ui::Point position);
-    void release(const UiTextEditOwner& owner);
-    void retainFocus(const UiTextEditOwner* owner);
-    void cancel();
+        u64 revision, u64 externalRevision, Ui::Point position, u64 timestampMs, bool shift)noexcept;
+    void move(Ui::Point position)noexcept;
+    void release(const UiTextEditOwner& owner)noexcept;
+    void retainFocus(const UiTextEditOwner* owner)noexcept;
+    void cancel()noexcept;
 
 
 private:

@@ -194,7 +194,7 @@ struct ClearTextureTask{
         ;
     }
 
-    static void Accepted(Payload& payload, const QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const QueueSubmissionToken& token)noexcept{
         GpuTaskGraphBuiltinDetail::PublishAcceptedToken(payload.clearDesc.acceptedToken, token);
     }
 
@@ -262,7 +262,7 @@ struct ClearTextureRectUIntTask{
         ;
     }
 
-    static void Accepted(Payload& payload, const QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const QueueSubmissionToken& token)noexcept{
         GpuTaskGraphBuiltinDetail::PublishAcceptedToken(payload.clearDesc.acceptedToken, token);
     }
 

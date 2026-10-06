@@ -285,7 +285,7 @@ bool RendererCsgSystem::prepareCsgFrameResources(const usize receiverRangeCount,
     return true;
 }
 
-ECSRenderDetail::CsgGraphResourceSnapshot RendererCsgSystem::csgGraphResourceSnapshot()const{
+ECSRenderDetail::CsgGraphResourceSnapshot RendererCsgSystem::csgGraphResourceSnapshot()const noexcept{
     return {
         .receiverRanges = m_csgState.m_receiverRangeBuffer,
         .cutters = m_csgState.m_cutterBuffer,

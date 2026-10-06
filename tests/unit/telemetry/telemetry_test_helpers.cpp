@@ -14,7 +14,7 @@ namespace TelemetryTestDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB::Core::Perf::TimingStats MakeTestTimingStats(){
+NWB::Core::Perf::TimingStats MakeTestTimingStats()noexcept{
     NWB::Core::Perf::TimingStats stats;
     stats.seconds = 0.125;
     stats.sampleCount = 3u;
@@ -24,7 +24,7 @@ NWB::Core::Perf::TimingStats MakeTestTimingStats(){
     return stats;
 }
 
-NWB::Core::Perf::MemorySnapshot MakeTestMemorySnapshot(const Name& scopeName){
+NWB::Core::Perf::MemorySnapshot MakeTestMemorySnapshot(const Name& scopeName)noexcept{
     NWB::Core::Perf::MemorySnapshot snapshot;
     snapshot.scopeName = scopeName;
     snapshot.frameIndex = 88u;
@@ -37,7 +37,7 @@ NWB::Core::Perf::MemorySnapshot MakeTestMemorySnapshot(const Name& scopeName){
     return snapshot;
 }
 
-NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(const i64 deallocationCount){
+NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(const i64 deallocationCount)noexcept{
     NWB::Core::Perf::MemoryDelta delta;
     delta.previousFrameIndex = 87u;
     delta.currentFrameIndex = 88u;
@@ -51,7 +51,7 @@ NWB::Core::Perf::MemoryDelta MakeTestMemoryDelta(const i64 deallocationCount){
     return delta;
 }
 
-bool ContainsText(const AStringView text, const AStringView needle){
+bool ContainsText(const AStringView text, const AStringView needle)noexcept{
     return text.find(needle) != AStringView::npos;
 }
 

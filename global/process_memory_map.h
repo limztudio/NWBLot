@@ -71,7 +71,7 @@ inline void SkipProcMapWhitespace(const AStringView line, usize& cursor)noexcept
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ParseLinuxProcessMemoryMapLine(const AStringView line, LinuxProcessMemoryMapEntry& outEntry){
+[[nodiscard]] inline bool ParseLinuxProcessMemoryMapLine(const AStringView line, LinuxProcessMemoryMapEntry& outEntry)noexcept{
     outEntry = LinuxProcessMemoryMapEntry{};
 
     const usize split = line.find('-');

@@ -80,7 +80,7 @@ struct RegularSharedComputeEmulationGraphPlan{
     u32 outputHeapSlot = 0u;
     bool captured = false;
 
-    void reset(){
+    void reset()noexcept{
         for(MaterialPassDrawItem& drawItem : drawItems)
             drawItem = {};
         for(GeneratedGeometryEquivalenceKey& key : equivalenceKeys)
@@ -94,7 +94,7 @@ struct RegularSharedComputeEmulationGraphPlan{
     [[nodiscard]] bool capture(
         const MaterialPassDrawItems& sourceDrawItems,
         const usize allowedMaxDrawCount
-    ){
+    )noexcept{
         reset();
         if(
             !IsSupportedSharedComputeEmulationDrawCount(allowedMaxDrawCount)
@@ -133,7 +133,7 @@ struct RegularSharedComputeEmulationGraphPlan{
         return captured;
     }
 
-    [[nodiscard]] bool matches(const usize drawIndex)const{
+    [[nodiscard]] bool matches(const usize drawIndex)const noexcept{
         if(!captured || drawIndex >= drawCount || !outputBuffer)
             return false;
 

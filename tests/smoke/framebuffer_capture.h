@@ -68,8 +68,8 @@ public:
     [[nodiscard]] bool start();
     void stop();
     void update();
-    [[nodiscard]] bool captureReady()const{ return m_captureReady; }
-    [[nodiscard]] u64 capturedGraphicsFrameIndex()const{ return m_completionState->graphicsFrameIndex; }
+    [[nodiscard]] bool captureReady()const noexcept{ return m_captureReady; }
+    [[nodiscard]] u64 capturedGraphicsFrameIndex()const noexcept{ return m_completionState->graphicsFrameIndex; }
     void finish();
 
 

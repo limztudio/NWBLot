@@ -24,7 +24,7 @@ namespace VulkanDetail{
 
 
 using MicromapUsageVector = Vector<VkMicromapUsageEXT, Alloc::ScratchArena>;
-VkOpacityMicromapFormatEXT ConvertOpacityMicromapFormat(const OpacityMicromapFormat::Enum format){
+VkOpacityMicromapFormatEXT ConvertOpacityMicromapFormat(const OpacityMicromapFormat::Enum format)noexcept{
     switch(format){
     case OpacityMicromapFormat::OC1_2_State:
         return VK_OPACITY_MICROMAP_FORMAT_2_STATE_EXT;

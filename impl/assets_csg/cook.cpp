@@ -54,7 +54,7 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool IsAllowedCsgShapeAssetField(const AStringView fieldName){
+[[nodiscard]] static bool IsAllowedCsgShapeAssetField(const AStringView fieldName)noexcept{
     return fieldName == s_ShapeField
         || fieldName == s_ModuleField
         || fieldName == s_ModuleIncludeField
@@ -195,7 +195,7 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     return cacheDirectory / configurationSafeName / "csg_modules";
 }
 
-[[nodiscard]] static bool SameModule(const CsgShapeCookEntry& entry, const Name shaderModule){
+[[nodiscard]] static bool SameModule(const CsgShapeCookEntry& entry, const Name shaderModule)noexcept{
     return entry.shaderModule == shaderModule;
 }
 

@@ -49,25 +49,25 @@ struct EntityID{
     u32 id;
 
 
-    inline constexpr EntityID()
+    inline constexpr EntityID()noexcept
         : id(~0u)
     {}
-    inline constexpr explicit EntityID(u32 idValue)
+    inline constexpr explicit EntityID(u32 idValue)noexcept
         : id(idValue)
     {}
-    inline constexpr EntityID(u32 index, u32 generation)
+    inline constexpr EntityID(u32 index, u32 generation)noexcept
         : id(
             ((generation & ECSDetail::s_EntityGenerationMask) << ECSDetail::s_EntityIndexBits)
             | (index & ECSDetail::s_EntityIndexMask)
         ){}
 
-    inline constexpr u32 index()const{ return id & ECSDetail::s_EntityIndexMask; }
-    inline constexpr u32 generation()const{ return (id >> ECSDetail::s_EntityIndexBits) & ECSDetail::s_EntityGenerationMask; }
-    inline constexpr bool valid()const{ return index() != ECSDetail::s_EntityInvalidIndex; }
+    inline constexpr u32 index()const noexcept{ return id & ECSDetail::s_EntityIndexMask; }
+    inline constexpr u32 generation()const noexcept{ return (id >> ECSDetail::s_EntityIndexBits) & ECSDetail::s_EntityGenerationMask; }
+    inline constexpr bool valid()const noexcept{ return index() != ECSDetail::s_EntityInvalidIndex; }
 };
-inline constexpr bool operator==(const EntityID& lhs, const EntityID& rhs){ return lhs.id == rhs.id; }
-inline constexpr bool operator!=(const EntityID& lhs, const EntityID& rhs){ return lhs.id != rhs.id; }
-inline constexpr bool operator<(const EntityID& lhs, const EntityID& rhs){ return lhs.id < rhs.id; }
+inline constexpr bool operator==(const EntityID& lhs, const EntityID& rhs)noexcept{ return lhs.id == rhs.id; }
+inline constexpr bool operator!=(const EntityID& lhs, const EntityID& rhs)noexcept{ return lhs.id != rhs.id; }
+inline constexpr bool operator<(const EntityID& lhs, const EntityID& rhs)noexcept{ return lhs.id < rhs.id; }
 
 inline constexpr EntityID s_InvalidEntityId = EntityID{};
 
@@ -86,9 +86,9 @@ public:
 public:
     EntityID create();
     void destroy(EntityID entityId);
-    bool alive(EntityID entityId)const;
-    usize count()const{ return m_aliveCount; }
-    void clear();
+    bool alive(EntityID entityId)const noexcept;
+    usize count()const noexcept{ return m_aliveCount; }
+    void clear()noexcept;
 
 
 private:

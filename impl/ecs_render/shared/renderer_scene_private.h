@@ -47,14 +47,14 @@ inline constexpr f32 s_LightTypePointMax = static_cast<f32>(NWB_SCENE_LIGHT_TYPE
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE f32 ResolveExtentAspectRatio(const u32 width, const u32 height){
+GLB_INLINE f32 ResolveExtentAspectRatio(const u32 width, const u32 height)noexcept{
     if(width != 0u && height != 0u)
         return static_cast<f32>(width) / static_cast<f32>(height);
 
     return NWB::Impl::Scene::CameraDefaults::s_FallbackAspectRatio;
 }
 
-GLB_INLINE f32 ResolveFramebufferAspectRatio(const Core::FramebufferInfoEx& framebufferInfo){
+GLB_INLINE f32 ResolveFramebufferAspectRatio(const Core::FramebufferInfoEx& framebufferInfo)noexcept{
     return ResolveExtentAspectRatio(framebufferInfo.width, framebufferInfo.height);
 }
 
@@ -67,7 +67,7 @@ inline f32 ShadowSlotImportance(
     const SIMDVector params,
     const SIMDVector lightPosition,
     const SIMDVector cameraPosition
-){
+)noexcept{
     const SIMDVector luminance = Vector3Dot(
         colorIntensity,
         VectorSet(s_Rec709LuminanceRed, s_Rec709LuminanceGreen, s_Rec709LuminanceBlue, 0.0f)
@@ -95,7 +95,7 @@ inline f32 ShadowSlotImportance(
 // Caustic importance: pure radiant power (luminance * intensity), the same energy proxy ShadowSlotImportance
 // uses, but WITHOUT the screen-coverage weighting (the caustic budget is aimed at the refractive occluders, not
 // the camera). Higher = more worth a scarce caustic slot.
-inline f32 CausticSlotImportance(const SIMDVector colorIntensity){
+inline f32 CausticSlotImportance(const SIMDVector colorIntensity)noexcept{
     const SIMDVector luminance = Vector3Dot(
         colorIntensity,
         VectorSet(s_Rec709LuminanceRed, s_Rec709LuminanceGreen, s_Rec709LuminanceBlue, 0.0f)
@@ -194,11 +194,11 @@ inline u32 ResolveSceneLights(
 // True when the light is a caustic-eligible emitter: directional (params.y ~ 0) or spot (params.y ~ 2). Point
 // lights (params.y ~ 1) are excluded because omnidirectional emission would spread the photon budget too thin.
 // params.y carries static_cast<f32>(LightType::Enum) (Directional=0, Point=1, Spot=2; see ResolveSceneLights).
-inline bool CausticLightEligible(const SceneLightGpuData& light){
+inline bool CausticLightEligible(const SceneLightGpuData& light)noexcept{
     return light.params.y < s_LightTypeDirectionalMax || light.params.y > s_LightTypePointMax;
 }
 
-inline bool CausticLightEnabled(const SceneLightGpuData& light){
+inline bool CausticLightEnabled(const SceneLightGpuData& light)noexcept{
     return light.params.w >= s_CausticSlotEnabledThreshold;
 }
 
@@ -209,7 +209,7 @@ inline u32 ResolveCausticLights(
     const f32* causticImportance,
     const u32 lightCount,
     const u32 refractiveInstanceCount
-){
+)noexcept{
     if(refractiveInstanceCount == 0u || lightCount == 0u)
         return 0u;
 

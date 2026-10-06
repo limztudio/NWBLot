@@ -198,7 +198,7 @@ static CrashStringT<ArenaT> BuildEmergencyText(ArenaT& arena, const CrashRequest
     return text;
 }
 
-static bool HasCpuContext(const CrashRequest& request){
+static bool HasCpuContext(const CrashRequest& request)noexcept{
     return request.faultAddress != 0u
         || request.instructionPointer != 0u
         || request.stackPointer != 0u
@@ -206,7 +206,7 @@ static bool HasCpuContext(const CrashRequest& request){
     ;
 }
 
-static bool HasCallstack(const CrashRequest& request){
+static bool HasCallstack(const CrashRequest& request)noexcept{
     return request.callstackFrameCount != 0u;
 }
 

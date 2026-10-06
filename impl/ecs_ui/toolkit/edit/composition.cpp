@@ -55,7 +55,7 @@ bool EditModel::commitComposition(const AStringView value){
     return replaceRange(Min(m_compositionAnchor, m_compositionCaret), Max(m_compositionAnchor, m_compositionCaret), value);
 }
 
-void EditModel::cancelComposition(){
+void EditModel::cancelComposition()noexcept{
     if(m_compositionActive)
         advanceCompositionGeneration();
     m_preedit.clear();
@@ -66,13 +66,13 @@ void EditModel::cancelComposition(){
     m_compositionActive = false;
 }
 
-EditCompositionView EditModel::composition()const{
+EditCompositionView EditModel::composition()const noexcept{
     return { { m_preedit.data(), m_preedit.size() }, m_preeditAnchor, m_preeditCaret,
         Min(m_compositionAnchor, m_compositionCaret), Max(m_compositionAnchor, m_compositionCaret), m_compositionActive };
 }
 
 
-void EditModel::advanceCompositionGeneration(){
+void EditModel::advanceCompositionGeneration()noexcept{
     if(m_compositionGeneration == Limit<u64>::s_Max)
         TerminateInvariant();
     ++m_compositionGeneration;

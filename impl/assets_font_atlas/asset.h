@@ -23,10 +23,10 @@ public:
 
 
 public:
-    explicit FontAtlas(Core::Assets::AssetArena& arena)
+    explicit FontAtlas(Core::Assets::AssetArena& arena)noexcept
         : m_payload(arena)
     {}
-    FontAtlas(Core::Assets::AssetArena& arena, const Name& virtualPath)
+    FontAtlas(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept
         : Core::Assets::TypedAsset<FontAtlas>(virtualPath)
         , m_payload(arena)
     {}
@@ -35,9 +35,9 @@ public:
 public:
     [[nodiscard]] bool loadBinary(const Core::Assets::AssetBytes& binary);
     [[nodiscard]] bool validatePayload()const;
-    void setPayload(FontAtlasPayload&& payload){ m_payload = Move(payload); }
-    [[nodiscard]] const FontAtlasPayload& payload()const{ return m_payload; }
-    [[nodiscard]] const FontAtlasGlyph* glyph(u32 glyphId)const;
+    void setPayload(FontAtlasPayload&& payload)noexcept{ m_payload = Move(payload); }
+    [[nodiscard]] const FontAtlasPayload& payload()const noexcept{ return m_payload; }
+    [[nodiscard]] const FontAtlasGlyph* glyph(u32 glyphId)const noexcept;
 
 
 private:

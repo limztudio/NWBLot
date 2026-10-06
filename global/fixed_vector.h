@@ -36,7 +36,7 @@ public:
 
 
 public:
-    FixedVector()
+    FixedVector()noexcept(noexcept(Base()))
         : Base()
         , m_currentSize(0)
     {}

@@ -24,7 +24,7 @@ inline constexpr u8 s_InvalidDigit = 255u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] constexpr u8 Digit(const char character){
+[[nodiscard]] constexpr u8 Digit(const char character)noexcept{
     if(character >= 'A' && character <= 'Z')
         return static_cast<u8>(character - 'A');
     if(character >= 'a' && character <= 'z')
@@ -49,7 +49,7 @@ inline constexpr u8 s_InvalidDigit = 255u;
 
 
 // Canonical RFC 4648 alphabet and padding only. Failure preserves outSize; no allocation occurs here.
-[[nodiscard]] inline bool Base64DecodedSize(const AStringView source, const usize maxBytes, usize& outSize){
+[[nodiscard]] inline bool Base64DecodedSize(const AStringView source, const usize maxBytes, usize& outSize)noexcept{
     if(source.size() % 4u != 0u)
         return false;
     if(source.empty()){

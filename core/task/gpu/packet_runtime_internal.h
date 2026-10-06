@@ -27,10 +27,10 @@ private:
 
 
 private:
-    explicit GpuNativePacketRecorder(Device& device)
+    explicit GpuNativePacketRecorder(Device& device)noexcept
         : m_device(device)
     {}
-    GpuNativePacketRecorder(Device& device, GpuTimingRecorder& timingRecorder)
+    GpuNativePacketRecorder(Device& device, GpuTimingRecorder& timingRecorder)noexcept
         : m_device(device)
         , m_timingRecorder(&timingRecorder)
     {}

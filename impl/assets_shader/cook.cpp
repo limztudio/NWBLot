@@ -70,7 +70,7 @@ static constexpr AStringView s_SlangIncludeExtension = ".slangi";
 static bool TryParseShaderOptimizationLevel(
     const AStringView text,
     ShaderOptimizationLevel::Enum& outOptimizationLevel
-){
+)noexcept{
     if(text == ::__hidden_shader_cook::s_NoneOptText){
         outOptimizationLevel = ShaderOptimizationLevel::None;
         return true;

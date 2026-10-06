@@ -24,7 +24,7 @@ namespace __hidden_ui_scroll_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Rect Intersect(const Rect& lhs, const Rect& rhs){
+[[nodiscard]] static Rect Intersect(const Rect& lhs, const Rect& rhs)noexcept{
     const f64 x = Max(static_cast<f64>(lhs.x), static_cast<f64>(rhs.x));
     const f64 y = Max(static_cast<f64>(lhs.y), static_cast<f64>(rhs.y));
     const f64 right = Min(static_cast<f64>(lhs.x) + lhs.width, static_cast<f64>(rhs.x) + rhs.width);
@@ -33,7 +33,7 @@ namespace __hidden_ui_scroll_layout{
         static_cast<f32>(Max(0.0, bottom - y)) };
 }
 
-[[nodiscard]] static u64 RowIndex(const f64 position, const f64 rowHeight, const u64 rowCount, const bool exclusive){
+[[nodiscard]] static u64 RowIndex(const f64 position, const f64 rowHeight, const u64 rowCount, const bool exclusive)noexcept{
     const f64 quotient = position / rowHeight;
     const f64 rounded = exclusive ? Ceil(quotient) : Floor(quotient);
     if(rounded >= static_cast<f64>(rowCount))
@@ -62,7 +62,7 @@ bool ScrollLayout::Calculate(
     const u64 rowCount,
     const f32 rowHeight,
     const f64 offset,
-    ScrollPlacement& placement){
+    ScrollPlacement& placement)noexcept{
     using namespace __hidden_ui_scroll_layout;
     if(
         !IsValidUiRect(bounds) || !IsValidUiRect(inheritedClip) || !IsValidUiPadding(padding)
@@ -113,7 +113,7 @@ bool ScrollLayout::Calculate(
     return true;
 }
 
-bool ScrollLayout::RowBounds(const u64 index, const ScrollPlacement& placement, const f32 rowHeight, Rect& rectangle){
+bool ScrollLayout::RowBounds(const u64 index, const ScrollPlacement& placement, const f32 rowHeight, Rect& rectangle)noexcept{
     using namespace __hidden_ui_scroll_layout;
     if(
         index < placement.firstRow || index >= placement.endRow || index >= placement.rowCount

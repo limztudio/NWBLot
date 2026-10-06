@@ -167,7 +167,7 @@ bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const C
     return true;
 }
 
-ECSRenderDetail::ObjectGeometryCacheSnapshot RendererMeshSystem::ObjectGeometryCacheSnapshot(const MeshResources& mesh){
+ECSRenderDetail::ObjectGeometryCacheSnapshot RendererMeshSystem::ObjectGeometryCacheSnapshot(const MeshResources& mesh)noexcept{
     const ECSRenderDetail::ObjectGeometryCacheState& cache = mesh.objectGeometryCache;
     return {
         .buffer = cache.buffer,

@@ -22,7 +22,7 @@ namespace __hidden_shape_registry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidShapeTypeId(const CsgShapeTypeId id){
+[[nodiscard]] bool ValidShapeTypeId(const CsgShapeTypeId id)noexcept{
     return id != s_InvalidCsgShapeTypeId;
 }
 
@@ -86,7 +86,7 @@ template<typename ParameterT>
     return AabbTests::Valid(minBounds, maxBounds);
 }
 
-[[nodiscard]] bool ValidPlaneParameters(const SIMDVector normalDistance){
+[[nodiscard]] bool ValidPlaneParameters(const SIMDVector normalDistance)noexcept{
     return !Vector4IsNaN(normalDistance) && !Vector4IsInfinite(normalDistance);
 }
 
@@ -221,7 +221,7 @@ template<typename ParameterT>
     return PlaneBoundsCore(LoadFloat(parameters.normalDistance));
 }
 
-[[nodiscard]] SIMDVector LoadBoxHalfExtents(const Float4& halfExtentsStorage){
+[[nodiscard]] SIMDVector LoadBoxHalfExtents(const Float4& halfExtentsStorage)noexcept{
     return VectorSetW(LoadFloat(halfExtentsStorage), s_CsgShapeBoundsW);
 }
 
@@ -248,7 +248,7 @@ template<typename ParameterT>
     return true;
 }
 
-[[nodiscard]] SIMDVector LoadSphereRadius(const Float4& radiusStorage){
+[[nodiscard]] SIMDVector LoadSphereRadius(const Float4& radiusStorage)noexcept{
     return VectorSplatX(LoadFloat(radiusStorage));
 }
 
@@ -275,7 +275,7 @@ template<typename ParameterT>
     return true;
 }
 
-[[nodiscard]] SIMDVector LoadCapsuleRadiusHalfHeight(const Float4& radiusHalfHeightStorage){
+[[nodiscard]] SIMDVector LoadCapsuleRadiusHalfHeight(const Float4& radiusHalfHeightStorage)noexcept{
     return LoadFloat(radiusHalfHeightStorage);
 }
 

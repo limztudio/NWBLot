@@ -15,18 +15,18 @@ NWB_PERF_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void TimingAccumulator::clear(){
+void TimingAccumulator::clear()noexcept{
     m_currentStats = TimingStats{};
     m_lastStats = TimingStats{};
 }
 
-void TimingAccumulator::setEnabled(const bool enabled){
+void TimingAccumulator::setEnabled(const bool enabled)noexcept{
     m_enabled = enabled;
     if(!m_enabled)
         clear();
 }
 
-void TimingAccumulator::record(const f64 seconds, const u64 sampleFrameIndex){
+void TimingAccumulator::record(const f64 seconds, const u64 sampleFrameIndex)noexcept{
     if(!m_enabled)
         return;
 
@@ -49,7 +49,7 @@ void TimingAccumulator::record(const f64 seconds, const u64 sampleFrameIndex){
     ++m_currentStats.sampleCount;
 }
 
-void TimingAccumulator::publish(const u64 publishFrameIndex){
+void TimingAccumulator::publish(const u64 publishFrameIndex)noexcept{
     m_currentStats.publishFrameIndex = publishFrameIndex;
     m_lastStats = m_currentStats;
     m_currentStats = TimingStats{};
@@ -59,7 +59,7 @@ void TimingAccumulator::publish(const u64 publishFrameIndex){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void TimingRecorder::setEnabled(const bool enabled){
+void TimingRecorder::setEnabled(const bool enabled)noexcept{
     m_enabled = enabled;
     for(ScopeRecordPtr& scope : m_scopes)
         scope->accumulator.setEnabled(enabled);
@@ -67,7 +67,7 @@ void TimingRecorder::setEnabled(const bool enabled){
         m_emptyStats = TimingStats{};
 }
 
-void TimingRecorder::clear(){
+void TimingRecorder::clear()noexcept{
     for(ScopeRecordPtr& scope : m_scopes)
         scope->accumulator.clear();
     m_emptyStats = TimingStats{};
@@ -88,7 +88,7 @@ TimingScopeId TimingRecorder::registerScope(const Name& scopeName){
     );
 }
 
-void TimingRecorder::recordSample(const TimingScopeId scope, const f64 seconds, const u64 sampleFrameIndex){
+void TimingRecorder::recordSample(const TimingScopeId scope, const f64 seconds, const u64 sampleFrameIndex)noexcept{
     if(!m_enabled)
         return;
 
@@ -99,11 +99,11 @@ void TimingRecorder::recordSample(const TimingScopeId scope, const f64 seconds, 
     record->accumulator.record(seconds, sampleFrameIndex);
 }
 
-void TimingRecorder::publishFrame(){
+void TimingRecorder::publishFrame()noexcept{
     publishFrame(m_nextPublishFrameIndex);
 }
 
-void TimingRecorder::publishFrame(const u64 publishFrameIndex){
+void TimingRecorder::publishFrame(const u64 publishFrameIndex)noexcept{
     if(!m_enabled)
         return;
 
@@ -112,7 +112,7 @@ void TimingRecorder::publishFrame(const u64 publishFrameIndex){
     m_nextPublishFrameIndex = Max(m_nextPublishFrameIndex, publishFrameIndex + 1u);
 }
 
-const TimingStats& TimingRecorder::stats(const Name& scopeName)const{
+const TimingStats& TimingRecorder::stats(const Name& scopeName)const noexcept{
     const auto found = m_scopeMap.find(scopeName);
     if(found == m_scopeMap.end())
         return m_emptyStats;
@@ -120,7 +120,7 @@ const TimingStats& TimingRecorder::stats(const Name& scopeName)const{
     return stats(found.value());
 }
 
-const TimingStats& TimingRecorder::stats(const TimingScopeId scope)const{
+const TimingStats& TimingRecorder::stats(const TimingScopeId scope)const noexcept{
     const ScopeRecord* record = findScope(scope);
     if(!record)
         return m_emptyStats;
@@ -128,26 +128,26 @@ const TimingStats& TimingRecorder::stats(const TimingScopeId scope)const{
     return record->accumulator.lastStats();
 }
 
-TimingScopeId TimingRecorder::scopeAt(const usize index)const{
+TimingScopeId TimingRecorder::scopeAt(const usize index)const noexcept{
     return ::ScopeAt<TimingScopeId>(m_scopes, index);
 }
 
-Name TimingRecorder::scopeNameAt(const usize index)const{
+Name TimingRecorder::scopeNameAt(const usize index)const noexcept{
     return ::ScopeNameAt(m_scopes, index);
 }
 
-const TimingStats& TimingRecorder::statsAt(const usize index)const{
+const TimingStats& TimingRecorder::statsAt(const usize index)const noexcept{
     if(index >= m_scopes.size() || !m_scopes[index])
         return m_emptyStats;
 
     return m_scopes[index]->accumulator.lastStats();
 }
 
-void TimingRecorder::recordSample(const Name& scopeName, const f64 seconds){
+void TimingRecorder::recordSample(const Name& scopeName, const f64 seconds)noexcept{
     recordSample(scopeName, seconds, m_nextPublishFrameIndex);
 }
 
-void TimingRecorder::recordSample(const Name& scopeName, const f64 seconds, const u64 sampleFrameIndex){
+void TimingRecorder::recordSample(const Name& scopeName, const f64 seconds, const u64 sampleFrameIndex)noexcept{
     if(!m_enabled || !scopeName)
         return;
 
@@ -159,7 +159,7 @@ void TimingRecorder::recordSample(const Name& scopeName, const f64 seconds, cons
     recordSample(found.value(), seconds, sampleFrameIndex);
 }
 
-TimingRecorder::ScopeRecord* TimingRecorder::findScope(const TimingScopeId scope)const{
+TimingRecorder::ScopeRecord* TimingRecorder::findScope(const TimingScopeId scope)const noexcept{
     return ::FindNamedScope<TimingScopeId>(m_scopes, scope);
 }
 
@@ -167,29 +167,29 @@ TimingRecorder::ScopeRecord* TimingRecorder::findScope(const TimingScopeId scope
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const TimingStats& TimingView::stats(const Name& scopeName)const{
+const TimingStats& TimingView::stats(const Name& scopeName)const noexcept{
     static const TimingStats s_EmptyStats;
     return m_recorder ? m_recorder->stats(scopeName) : s_EmptyStats;
 }
 
-const TimingStats& TimingView::stats(const TimingScopeId scope)const{
+const TimingStats& TimingView::stats(const TimingScopeId scope)const noexcept{
     static const TimingStats s_EmptyStats;
     return m_recorder ? m_recorder->stats(scope) : s_EmptyStats;
 }
 
-usize TimingView::scopeCount()const{
+usize TimingView::scopeCount()const noexcept{
     return m_recorder ? m_recorder->scopeCount() : 0u;
 }
 
-TimingScopeId TimingView::scopeAt(const usize index)const{
+TimingScopeId TimingView::scopeAt(const usize index)const noexcept{
     return m_recorder ? m_recorder->scopeAt(index) : TimingScopeId{};
 }
 
-Name TimingView::scopeNameAt(const usize index)const{
+Name TimingView::scopeNameAt(const usize index)const noexcept{
     return m_recorder ? m_recorder->scopeNameAt(index) : s_NameNone;
 }
 
-const TimingStats& TimingView::statsAt(const usize index)const{
+const TimingStats& TimingView::statsAt(const usize index)const noexcept{
     static const TimingStats s_EmptyStats;
     return m_recorder ? m_recorder->statsAt(index) : s_EmptyStats;
 }

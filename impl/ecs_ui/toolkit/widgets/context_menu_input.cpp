@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Builder::snapshotContextMenu(ContextMenuFrame& frame){
+void Builder::snapshotContextMenu(ContextMenuFrame& frame)noexcept{
     frame.revision = frame.state->revision();
     frame.open = frame.state->isOpen();
     frame.popupToken.openGeneration = frame.state->m_popup.openGeneration();

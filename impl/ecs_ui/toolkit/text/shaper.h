@@ -32,7 +32,7 @@ struct ShapedRun{
     PaintVector<ShapedGlyph> glyphs;
     FontMetrics metrics;
 
-    explicit ShapedRun(Core::Alloc::GlobalArena& arena)
+    explicit ShapedRun(Core::Alloc::GlobalArena& arena)noexcept
         : glyphs(arena)
     {}
 };
@@ -43,7 +43,7 @@ struct ShapedRun{
 
 interface ITextShaper : private NoCopy{
 public:
-    virtual ~ITextShaper() = default;
+    virtual ~ITextShaper()noexcept = default;
 
 
 public:
@@ -63,7 +63,7 @@ private:
 
 public:
     explicit TextShaper(Core::Alloc::GlobalArena& arena);
-    virtual ~TextShaper()override = default;
+    virtual ~TextShaper()noexcept override = default;
 
 
 public:

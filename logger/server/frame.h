@@ -57,12 +57,12 @@ public:
 
 public:
     template<typename T>
-    inline T& data(){ return static_cast<T&>(m_data); }
+    inline T& data()noexcept{ return static_cast<T&>(m_data); }
 
 public:
-    bool startup();
-    void cleanup();
-    bool update(f32 delta);
+    bool startup()noexcept;
+    void cleanup()noexcept;
+    bool update(f32 delta)noexcept;
 
 
 private:

@@ -20,14 +20,14 @@ namespace __hidden_font_atlas_positioning{
 
 class TableValidator final{
 public:
-    TableValidator(const Core::Assets::AssetBytes& bytes, u32 glyphCount)
+    TableValidator(const Core::Assets::AssetBytes& bytes, u32 glyphCount)noexcept
         : m_bytes(bytes)
         , m_glyphCount(glyphCount)
     {}
 
 
 public:
-    [[nodiscard]] bool kern(){
+    [[nodiscard]] bool kern()noexcept{
         if(!range(0u, 4u))
             return false;
         const bool apple = u32At(0u) == 0x00010000u;
@@ -70,7 +70,7 @@ public:
         return offset == m_bytes.size();
     }
 
-    [[nodiscard]] bool gpos(){
+    [[nodiscard]] bool gpos()noexcept{
         if(!range(0u, 10u) || u16At(0u) != 1u || u16At(2u) > 1u)
             return false;
         const u64 scripts = u16At(4u);
@@ -95,7 +95,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool gdef(){
+    [[nodiscard]] bool gdef()noexcept{
         if(!range(0u, 12u) || u16At(0u) != 1u || u16At(2u) > 3u || u16At(2u) == 1u)
             return false;
         const u32 minor = u16At(2u);
@@ -151,22 +151,22 @@ public:
 
 
 private:
-    [[nodiscard]] bool range(u64 offset, u64 count){
+    [[nodiscard]] bool range(u64 offset, u64 count)noexcept{
         return spend(1u) && offset <= m_bytes.size() && count <= m_bytes.size() - offset;
     }
-    [[nodiscard]] bool spend(u32 count){
+    [[nodiscard]] bool spend(u32 count)noexcept{
         if(count > m_budget)
             return false;
         m_budget -= count;
         return true;
     }
-    [[nodiscard]] u16 u16At(u64 offset)const{
+    [[nodiscard]] u16 u16At(u64 offset)const noexcept{
         return static_cast<u16>((static_cast<u16>(m_bytes[offset]) << 8u) | m_bytes[offset + 1u]);
     }
-    [[nodiscard]] u32 u32At(u64 offset)const{
+    [[nodiscard]] u32 u32At(u64 offset)const noexcept{
         return (static_cast<u32>(u16At(offset)) << 16u) | u16At(offset + 2u);
     }
-    [[nodiscard]] bool coverage(u64 offset, u32& outCount){
+    [[nodiscard]] bool coverage(u64 offset, u32& outCount)noexcept{
         if(!range(offset, 4u))
             return false;
         const u16 format = u16At(offset);
@@ -191,7 +191,7 @@ private:
         }
         return true;
     }
-    [[nodiscard]] bool classDef(u64 offset, u32 classCount){
+    [[nodiscard]] bool classDef(u64 offset, u32 classCount)noexcept{
         if(offset == 0u)
             return true;
         if(!range(offset, 4u))
@@ -226,7 +226,7 @@ private:
         }
         return true;
     }
-    [[nodiscard]] bool device(u64 parent, u32 offset){
+    [[nodiscard]] bool device(u64 parent, u32 offset)noexcept{
         if(offset == 0u)
             return true;
         const u64 table = parent + offset;
@@ -242,13 +242,13 @@ private:
         const u32 bits = 1u << format;
         return range(table + 6u, ((end - start + 1u) * bits + 15u) / 16u * 2u);
     }
-    [[nodiscard]] u32 valueSize(u16 format)const{
+    [[nodiscard]] u32 valueSize(u16 format)const noexcept{
         u32 size = 0u;
         for(u32 bit = 0u; bit < 8u; ++bit)
             size += (format & (1u << bit)) != 0u ? 2u : 0u;
         return size;
     }
-    [[nodiscard]] bool value(u64 offset, u16 format, u64 parent){
+    [[nodiscard]] bool value(u64 offset, u16 format, u64 parent)noexcept{
         if((format & 0xff00u) != 0u || !range(offset, valueSize(format)))
             return false;
         u32 field = 0u;
@@ -261,7 +261,7 @@ private:
         }
         return true;
     }
-    [[nodiscard]] bool langSys(u64 offset, u32 featureCount){
+    [[nodiscard]] bool langSys(u64 offset, u32 featureCount)noexcept{
         if(!range(offset, 6u) || u16At(offset) != 0u)
             return false;
         const u32 required = u16At(offset + 2u);
@@ -274,7 +274,7 @@ private:
         }
         return true;
     }
-    [[nodiscard]] bool scriptList(u64 offset, u32 featureCount){
+    [[nodiscard]] bool scriptList(u64 offset, u32 featureCount)noexcept{
         if(!range(offset, 2u))
             return false;
         const u32 count = u16At(offset);
@@ -297,7 +297,7 @@ private:
         }
         return true;
     }
-    [[nodiscard]] bool featureList(u64 offset, u32 lookupCount){
+    [[nodiscard]] bool featureList(u64 offset, u32 lookupCount)noexcept{
         if(!range(offset, 2u))
             return false;
         const u32 count = u16At(offset);
@@ -319,7 +319,7 @@ private:
         }
         return true;
     }
-    [[nodiscard]] bool pairPos(u64 offset){
+    [[nodiscard]] bool pairPos(u64 offset)noexcept{
         if(!range(offset, 10u))
             return false;
         const u16 format = u16At(offset);
@@ -377,7 +377,7 @@ private:
         }
         return true;
     }
-    [[nodiscard]] bool subtable(u64 offset, u32 type){
+    [[nodiscard]] bool subtable(u64 offset, u32 type)noexcept{
         if(!range(offset, 4u))
             return false;
         if(type == 9u){
@@ -414,7 +414,7 @@ private:
         }
         return (type == 7u || type == 8u) && format >= 1u && format <= 3u;
     }
-    [[nodiscard]] bool lookupList(u64 offset){
+    [[nodiscard]] bool lookupList(u64 offset)noexcept{
         if(!range(offset, 2u))
             return false;
         const u32 count = u16At(offset);

@@ -22,7 +22,7 @@ namespace __hidden_text_area_scroll_input{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool Step(const f64 offset, const f64 delta, const f64 step, const f64 maximum, f32& output){
+[[nodiscard]] static bool Step(const f64 offset, const f64 delta, const f64 step, const f64 maximum, f32& output)noexcept{
     if(!IsFinite(offset) || !IsFinite(delta) || !IsFinite(step) || step < 0.0 || !IsFinite(maximum) || maximum < 0.0)
         return false;
     f64 next = Clamp(offset, 0.0, maximum);
@@ -36,7 +36,7 @@ namespace __hidden_text_area_scroll_input{
     return true;
 }
 
-[[nodiscard]] static bool Drag(const PointerGesture& gesture, const bool horizontal, Point& scroll){
+[[nodiscard]] static bool Drag(const PointerGesture& gesture, const bool horizontal, Point& scroll)noexcept{
     const f64 track = horizontal ? gesture.referenceRectangle.width : gesture.referenceRectangle.height;
     const f64 thumb = horizontal ? gesture.targetRectangle.width : gesture.targetRectangle.height;
     const f64 start = horizontal ? static_cast<f64>(gesture.targetRectangle.x) - gesture.referenceRectangle.x

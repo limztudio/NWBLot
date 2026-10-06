@@ -77,7 +77,7 @@ struct ReflectionSettings{
 };
 
 // Settings are an external boundary; reject invalid values early.
-[[nodiscard]] bool ValidateReflectionSettings(const ReflectionSettings& settings);
+[[nodiscard]] bool ValidateReflectionSettings(const ReflectionSettings& settings)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

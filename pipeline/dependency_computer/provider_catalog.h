@@ -39,7 +39,7 @@ public:
         usize& outIndex,
         NWB::Core::Alloc::ScratchArena& scratchArena
     )const;
-    [[nodiscard]] const NWB::Core::Assets::DiscoveredNwbFileVector& files()const{ return m_files; }
+    [[nodiscard]] const NWB::Core::Assets::DiscoveredNwbFileVector& files()const noexcept{ return m_files; }
 
 
 private:

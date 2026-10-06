@@ -162,7 +162,7 @@ bool RendererRayTracingSystem::retainPreparedSurfelFrameConstantsUpload(
     return outBlob.valid();
 }
 
-void RendererRayTracingSystem::finalizeSurfelResourceInitialization(){
+void RendererRayTracingSystem::finalizeSurfelResourceInitialization()noexcept{
     if(!m_rayTracingState.m_surfelResourcesClearPending)
         return;
 
@@ -178,7 +178,7 @@ bool RendererRayTracingSystem::recordSurfelResourceInitializationLifecycle()noex
     return true;
 }
 
-void RendererRayTracingSystem::discardSurfelResourceInitialization(){
+void RendererRayTracingSystem::discardSurfelResourceInitialization()noexcept{
     // Keep the clear pending until a producer succeeds.
     m_rayTracingState.m_surfelResourcesClearPending = false;
 }

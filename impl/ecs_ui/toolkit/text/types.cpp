@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextLayoutStatus::Enum ValidateTextRequest(const ShapeRequest& request, bool allowLineBreaks){
+TextLayoutStatus::Enum ValidateTextRequest(const ShapeRequest& request, bool allowLineBreaks)noexcept{
     if(
         request.text.size() > s_TextMaxBytes || !IsFinite(request.fontSize) || request.fontSize < 1.0f / 64.0f
         || request.fontSize > 2048.0f || request.scriptTag == 0u || request.language.empty() || request.language.size() > 63u

@@ -19,21 +19,21 @@ NWB_IMPL_UI_BEGIN
 void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
     usize missing = 0u;
     for(const SharedGlyphPage& page : snapshot.glyphPages()){
-        const auto found = FindIf(m_glyphCache.begin(), m_glyphCache.end(), [&page](const GpuVersion<GpuGlyphVersion>& cached){
+        const auto found = FindIf(m_glyphCache.begin(), m_glyphCache.end(), [&page](const GpuVersion<GpuGlyphVersion>& cached)noexcept{
             return SameGlyphPageKey(cached->m_page->binding(), page->binding());
         });
         if(found == m_glyphCache.end())
             ++missing;
     }
     for(const SharedSdfAtlasPage& page : snapshot.sdfPages()){
-        const auto found = FindIf(m_sdfCache.begin(), m_sdfCache.end(), [&page](const GpuVersion<GpuSdfAtlasVersion>& cached){
+        const auto found = FindIf(m_sdfCache.begin(), m_sdfCache.end(), [&page](const GpuVersion<GpuSdfAtlasVersion>& cached)noexcept{
             return SameSdfAtlasPageKey(cached->m_page->binding(), page->binding());
         });
         if(found == m_sdfCache.end())
             ++missing;
     }
     for(const SharedImageSource& source : snapshot.textureImages()){
-        const auto found = FindIf(m_textureCache.begin(), m_textureCache.end(), [&source](const auto& cached){
+        const auto found = FindIf(m_textureCache.begin(), m_textureCache.end(), [&source](const auto& cached)noexcept(noexcept(Decay_T<decltype(cached->m_source->generation() == source->generation())>(cached->m_source->generation() == source->generation()))){
             return cached->m_source->generation() == source->generation();
         });
         if(found == m_textureCache.end())
@@ -45,7 +45,7 @@ void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
     // Live frames retain evicted versions. Removing only cache ownership never changes sampled pixels or live descriptors.
     for(usize index = 0u; index < m_glyphCache.size();){
         const auto& cached = m_glyphCache[index];
-        const auto found = FindIf(snapshot.glyphPages().begin(), snapshot.glyphPages().end(), [&cached](const SharedGlyphPage& page){
+        const auto found = FindIf(snapshot.glyphPages().begin(), snapshot.glyphPages().end(), [&cached](const SharedGlyphPage& page)noexcept{
             return SameGlyphPageKey(cached->m_page->binding(), page->binding());
         });
         if(found == snapshot.glyphPages().end())
@@ -55,7 +55,7 @@ void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
     }
     for(usize index = 0u; index < m_sdfCache.size();){
         const auto& cached = m_sdfCache[index];
-        const auto found = FindIf(snapshot.sdfPages().begin(), snapshot.sdfPages().end(), [&cached](const SharedSdfAtlasPage& page){
+        const auto found = FindIf(snapshot.sdfPages().begin(), snapshot.sdfPages().end(), [&cached](const SharedSdfAtlasPage& page)noexcept{
             return SameSdfAtlasPageKey(cached->m_page->binding(), page->binding());
         });
         if(found == snapshot.sdfPages().end())
@@ -65,7 +65,7 @@ void GpuRendererState::trimImageCache(const DrawSnapshot& snapshot){
     }
     for(usize index = 0u; index < m_textureCache.size();){
         const auto& cached = m_textureCache[index];
-        const auto found = FindIf(snapshot.textureImages().begin(), snapshot.textureImages().end(), [&cached](const auto& source){
+        const auto found = FindIf(snapshot.textureImages().begin(), snapshot.textureImages().end(), [&cached](const auto& source)noexcept(noexcept(Decay_T<decltype(cached->m_source->generation() == source->generation())>(cached->m_source->generation() == source->generation()))){
             return cached->m_source->generation() == source->generation();
         });
         if(found == snapshot.textureImages().end())

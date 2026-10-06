@@ -372,7 +372,7 @@ template<typename StringT>
 [[nodiscard]] inline bool IsListedMetadataAssetField(
     const AStringView fieldName,
     const InitializerList<AStringView> allowedFields
-){
+)noexcept{
     for(const AStringView allowedField : allowedFields){
         if(fieldName == allowedField)
             return true;

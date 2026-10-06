@@ -54,7 +54,7 @@ struct CsgCutterTransforms{
     SIMDMatrix worldToShape;
 };
 
-[[nodiscard]] static SIMDVector ComputeWorldToShapeScaleBound(const SIMDMatrix& worldToShape){
+[[nodiscard]] static SIMDVector ComputeWorldToShapeScaleBound(const SIMDMatrix& worldToShape)noexcept{
     const SIMDVector row0 = VectorSetW(worldToShape.v[0], 0.0f);
     const SIMDVector row1 = VectorSetW(worldToShape.v[1], 0.0f);
     const SIMDVector row2 = VectorSetW(worldToShape.v[2], 0.0f);
@@ -107,7 +107,7 @@ static void CopyCsgCutterInlineParameters(
 [[nodiscard]] static bool BuildCsgReceiverWorldToLocal(
     const SIMDMatrix* localToWorld,
     SIMDMatrix& outWorldToLocal
-){
+)noexcept{
     if(!localToWorld){
         outWorldToLocal = MatrixIdentity();
         return true;
@@ -144,7 +144,7 @@ struct CsgReceiverLocalSpace{
     bool boundsCanCull = false;
     bool hasLocalToWorld = false;
 
-    [[nodiscard]] const SIMDMatrix* localToWorldPtr()const{
+    [[nodiscard]] const SIMDMatrix* localToWorldPtr()const noexcept{
         return hasLocalToWorld ? &localToWorld : nullptr;
     }
 };
@@ -154,7 +154,7 @@ struct CsgReceiverLocalSpace{
     const SIMDVector localMinBounds,
     const SIMDVector localMaxBounds,
     const SIMDMatrix* localToWorld
-){
+)noexcept{
     CsgReceiverLocalSpace localSpace;
     localSpace.boundsCanCull = boundsCanCull;
     if(boundsCanCull){
@@ -172,7 +172,7 @@ struct CsgReceiverLocalSpace{
 [[nodiscard]] static CsgReceiverLocalSpace BuildCsgReceiverLocalSpace(
     const CsgReceiverCpuBounds& receiverBounds,
     const Scene::TransformComponent* transform
-){
+)noexcept{
     const bool boundsCanCull = CsgReceiverBoundsCanCull(receiverBounds);
     const SIMDVector localMinBounds = boundsCanCull ? LoadFloatInt(receiverBounds.minBounds) : VectorZero();
     const SIMDVector localMaxBounds = boundsCanCull ? LoadFloatInt(receiverBounds.maxBounds) : VectorZero();

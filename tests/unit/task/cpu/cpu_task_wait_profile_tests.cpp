@@ -150,7 +150,7 @@ void ProfileWaiters(Alloc::ScratchArena& scratch, const u32 workers, const u32 w
     }
 }
 
-[[nodiscard]] CpuTaskSchedulerConfig Config(const u32 workers){
+[[nodiscard]] CpuTaskSchedulerConfig Config(const u32 workers)noexcept{
     CpuTaskSchedulerConfig config;
     config.workerCount = workers;
     config.heterogeneous = false;
@@ -197,19 +197,19 @@ void ProfileContributions(Alloc::ScratchArena& scratch, const u32 workers, const
         for(u32 observed = entered.load(MemoryOrder::acquire); observed != workers; observed = entered.load(MemoryOrder::acquire))
             entered.wait(observed, MemoryOrder::acquire);
         for(usize index = 0u; index < roots; ++index){
-            prerequisites[index] = scheduler.submit([&, index](){ ++visits[index]; });
+            prerequisites[index] = scheduler.submit([&, index]()noexcept{ ++visits[index]; });
             ASSERT_TRUE(prerequisites[index].valid());
         }
         auto tail = scheduler.submit(
-            [&](){ continuations.fetch_add(1u, MemoryOrder::relaxed); }, {}, prerequisites.data(), roots
+            [&]()noexcept{ continuations.fetch_add(1u, MemoryOrder::relaxed); }, {}, prerequisites.data(), roots
         );
         ASSERT_TRUE(tail.valid());
         for(usize index = 0u; index < chain; ++index){
-            tail = scheduler.submit([&](){ continuations.fetch_add(1u, MemoryOrder::relaxed); }, tail);
+            tail = scheduler.submit([&]()noexcept{ continuations.fetch_add(1u, MemoryOrder::relaxed); }, tail);
             ASSERT_TRUE(tail.valid());
         }
-        ASSERT_TRUE(first.submit([&](){ leaves.fetch_add(1u, MemoryOrder::relaxed); }, tail).valid());
-        ASSERT_TRUE(second.submit([&](){ leaves.fetch_add(1u, MemoryOrder::relaxed); }, tail).valid());
+        ASSERT_TRUE(first.submit([&]()noexcept{ leaves.fetch_add(1u, MemoryOrder::relaxed); }, tail).valid());
+        ASSERT_TRUE(second.submit([&]()noexcept{ leaves.fetch_add(1u, MemoryOrder::relaxed); }, tail).valid());
         const Timer begin = TimerNow();
         start.store(true, MemoryOrder::release);
         start.notify_all();

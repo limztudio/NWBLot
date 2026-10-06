@@ -23,7 +23,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GraphicsAllocator::GraphicsAllocator(Alloc::GlobalArena& objectArena)
+GraphicsAllocator::GraphicsAllocator(Alloc::GlobalArena& objectArena)noexcept
     : m_objectArena(objectArena)
 {}
 
@@ -32,38 +32,38 @@ GraphicsAllocator::GraphicsAllocator(Alloc::GlobalArena& objectArena)
 
 
 GraphicsPipelineDesc::~GraphicsPipelineDesc() = default;
-GraphicsPipelineDesc& GraphicsPipelineDesc::setInputLayout(const InputLayoutHandle& value){ inputLayout = value; return *this; }
-GraphicsPipelineDesc& GraphicsPipelineDesc::setVertexShader(const ShaderHandle& value){ vertexShader = value; return *this; }
-GraphicsPipelineDesc& GraphicsPipelineDesc::setHullShader(const ShaderHandle& value){ hullShader = value; return *this; }
-GraphicsPipelineDesc& GraphicsPipelineDesc::setTessellationControlShader(const ShaderHandle& value){ hullShader = value; return *this; }
-GraphicsPipelineDesc& GraphicsPipelineDesc::setDomainShader(const ShaderHandle& value){ domainShader = value; return *this; }
-GraphicsPipelineDesc& GraphicsPipelineDesc::setTessellationEvaluationShader(const ShaderHandle& value){ domainShader = value; return *this; }
-GraphicsPipelineDesc& GraphicsPipelineDesc::setGeometryShader(const ShaderHandle& value){ geometryShader = value; return *this; }
-GraphicsPipelineDesc& GraphicsPipelineDesc::setPixelShader(const ShaderHandle& value){ pixelShader = value; return *this; }
-GraphicsPipelineDesc& GraphicsPipelineDesc::setFragmentShader(const ShaderHandle& value){ pixelShader = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setInputLayout(const InputLayoutHandle& value)noexcept{ inputLayout = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setVertexShader(const ShaderHandle& value)noexcept{ vertexShader = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setHullShader(const ShaderHandle& value)noexcept{ hullShader = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setTessellationControlShader(const ShaderHandle& value)noexcept{ hullShader = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setDomainShader(const ShaderHandle& value)noexcept{ domainShader = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setTessellationEvaluationShader(const ShaderHandle& value)noexcept{ domainShader = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setGeometryShader(const ShaderHandle& value)noexcept{ geometryShader = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setPixelShader(const ShaderHandle& value)noexcept{ pixelShader = value; return *this; }
+GraphicsPipelineDesc& GraphicsPipelineDesc::setFragmentShader(const ShaderHandle& value)noexcept{ pixelShader = value; return *this; }
 GraphicsPipelineDesc& GraphicsPipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
 
 ComputePipelineDesc::~ComputePipelineDesc() = default;
-ComputePipelineDesc& ComputePipelineDesc::setComputeShader(const ShaderHandle& value){ computeShader = value; return *this; }
+ComputePipelineDesc& ComputePipelineDesc::setComputeShader(const ShaderHandle& value)noexcept{ computeShader = value; return *this; }
 ComputePipelineDesc& ComputePipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
 
 MeshletPipelineDesc::~MeshletPipelineDesc() = default;
-MeshletPipelineDesc& MeshletPipelineDesc::setTaskShader(const ShaderHandle& value){ amplificationShader = value; return *this; }
-MeshletPipelineDesc& MeshletPipelineDesc::setAmplificationShader(const ShaderHandle& value){ amplificationShader = value; return *this; }
-MeshletPipelineDesc& MeshletPipelineDesc::setMeshShader(const ShaderHandle& value){ meshShader = value; return *this; }
-MeshletPipelineDesc& MeshletPipelineDesc::setPixelShader(const ShaderHandle& value){ pixelShader = value; return *this; }
-MeshletPipelineDesc& MeshletPipelineDesc::setFragmentShader(const ShaderHandle& value){ pixelShader = value; return *this; }
+MeshletPipelineDesc& MeshletPipelineDesc::setTaskShader(const ShaderHandle& value)noexcept{ amplificationShader = value; return *this; }
+MeshletPipelineDesc& MeshletPipelineDesc::setAmplificationShader(const ShaderHandle& value)noexcept{ amplificationShader = value; return *this; }
+MeshletPipelineDesc& MeshletPipelineDesc::setMeshShader(const ShaderHandle& value)noexcept{ meshShader = value; return *this; }
+MeshletPipelineDesc& MeshletPipelineDesc::setPixelShader(const ShaderHandle& value)noexcept{ pixelShader = value; return *this; }
+MeshletPipelineDesc& MeshletPipelineDesc::setFragmentShader(const ShaderHandle& value)noexcept{ pixelShader = value; return *this; }
 MeshletPipelineDesc& MeshletPipelineDesc::addBindingLayout(const BindingLayoutHandle& layout){ bindingLayouts.push_back(layout); return *this; }
 
 RayTracingPipelineShaderDesc::~RayTracingPipelineShaderDesc() = default;
-RayTracingPipelineShaderDesc& RayTracingPipelineShaderDesc::setShader(const ShaderHandle& value){ shader = value; return *this; }
-RayTracingPipelineShaderDesc& RayTracingPipelineShaderDesc::setBindingLayout(const BindingLayoutHandle& value){ bindingLayout = value; return *this; }
+RayTracingPipelineShaderDesc& RayTracingPipelineShaderDesc::setShader(const ShaderHandle& value)noexcept{ shader = value; return *this; }
+RayTracingPipelineShaderDesc& RayTracingPipelineShaderDesc::setBindingLayout(const BindingLayoutHandle& value)noexcept{ bindingLayout = value; return *this; }
 
 RayTracingPipelineHitGroupDesc::~RayTracingPipelineHitGroupDesc() = default;
-RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setClosestHitShader(const ShaderHandle& value){ closestHitShader = value; return *this; }
-RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setAnyHitShader(const ShaderHandle& value){ anyHitShader = value; return *this; }
-RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setIntersectionShader(const ShaderHandle& value){ intersectionShader = value; return *this; }
-RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setBindingLayout(const BindingLayoutHandle& value){ bindingLayout = value; return *this; }
+RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setClosestHitShader(const ShaderHandle& value)noexcept{ closestHitShader = value; return *this; }
+RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setAnyHitShader(const ShaderHandle& value)noexcept{ anyHitShader = value; return *this; }
+RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setIntersectionShader(const ShaderHandle& value)noexcept{ intersectionShader = value; return *this; }
+RayTracingPipelineHitGroupDesc& RayTracingPipelineHitGroupDesc::setBindingLayout(const BindingLayoutHandle& value)noexcept{ bindingLayout = value; return *this; }
 
 RayTracingPipelineDesc::~RayTracingPipelineDesc() = default;
 RayTracingPipelineDesc& RayTracingPipelineDesc::addShader(const RayTracingPipelineShaderDesc& value){ shaders.push_back(value); return *this; }
@@ -339,7 +339,7 @@ TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
     return resolve(mipWidth, mipHeight, mipDepth);
 }
 
-TextureSlice TextureSlice::resolve(const u32 mipWidth, const u32 mipHeight, const u32 mipDepth)const{
+TextureSlice TextureSlice::resolve(const u32 mipWidth, const u32 mipHeight, const u32 mipDepth)const noexcept{
     TextureSlice ret(*this);
 
     if(width == TextureSlice::s_AllDimensions)
@@ -354,7 +354,7 @@ TextureSlice TextureSlice::resolve(const u32 mipWidth, const u32 mipHeight, cons
 }
 
 
-TextureSubresourceSet TextureSubresourceSet::resolve(const TextureDesc& desc, TextureSubresourceMipResolve::Enum mipResolve)const{
+TextureSubresourceSet TextureSubresourceSet::resolve(const TextureDesc& desc, TextureSubresourceMipResolve::Enum mipResolve)const noexcept{
     TextureSubresourceSet ret;
     ret.baseMipLevel = baseMipLevel;
 
@@ -389,7 +389,7 @@ TextureSubresourceSet TextureSubresourceSet::resolve(const TextureDesc& desc, Te
 
     return ret;
 }
-bool TextureSubresourceSet::isEntireTexture(const TextureDesc& desc)const{
+bool TextureSubresourceSet::isEntireTexture(const TextureDesc& desc)const noexcept{
     const TextureSubresourceSet resolved = resolve(desc, TextureSubresourceMipResolve::Range);
 
     if(resolved.baseMipLevel > 0u || resolved.numMipLevels < desc.mipLevels)
@@ -412,7 +412,7 @@ bool TextureSubresourceSet::isEntireTexture(const TextureDesc& desc)const{
 }
 
 
-BufferRange BufferRange::resolve(const BufferDesc& desc)const{
+BufferRange BufferRange::resolve(const BufferDesc& desc)const noexcept{
     BufferRange ret;
     ret.byteOffset = Min(byteOffset, desc.byteSize);
 
@@ -432,7 +432,7 @@ BufferRange BufferRange::intersect(const BufferRange& other)const noexcept{
     return BufferRange(rangeBegin, rangeEnd == s_AllBytes ? s_AllBytes : rangeEnd - rangeBegin);
 }
 
-DescriptorWriteItem DescriptorWriteItem::ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range){
+DescriptorWriteItem DescriptorWriteItem::ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range)noexcept{
     const bool isVolatile = buffer && buffer->getCreationDescription().isVolatile;
 
     DescriptorWriteItem result = Base(
@@ -446,7 +446,7 @@ DescriptorWriteItem DescriptorWriteItem::ConstantBuffer(u32 slot, Buffer* buffer
 }
 
 
-bool BlendState::RenderTarget::usesConstantColor()const{
+bool BlendState::RenderTarget::usesConstantColor()const noexcept{
     return
         srcBlend == BlendFactor::ConstantColor || srcBlend == BlendFactor::InvConstantColor
         || destBlend == BlendFactor::ConstantColor || destBlend == BlendFactor::InvConstantColor
@@ -690,7 +690,7 @@ usize GpuCrashTracker::internEvent(const AStringView eventString){
 static GpuCrashSink s_GpuCrashSink = nullptr;
 static void* s_GpuCrashSinkUserData = nullptr;
 
-void RegisterGpuCrashSink(GpuCrashSink sink, void* userData){
+void RegisterGpuCrashSink(GpuCrashSink sink, void* userData)noexcept{
     s_GpuCrashSink = sink;
     s_GpuCrashSinkUserData = userData;
 }

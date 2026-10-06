@@ -61,7 +61,7 @@ struct ResourceUseCollector : NoCopy{
     usize m_count = 0u;
     Optional<Index> m_index;
 
-    [[nodiscard]] static bool MergeUse(ResourceUseInfo& info, const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access){
+    [[nodiscard]] static bool MergeUse(ResourceUseInfo& info, const Core::ResourceStates::Mask state, const Core::GpuTaskResourceAccess::Enum access)noexcept{
         if(info.requiredState != state)
             return false;
         if(info.access != access)

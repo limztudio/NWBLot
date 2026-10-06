@@ -214,7 +214,7 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
     return true;
 }
 
-f32 RendererRayTracingSystem::causticTemporalDecay(){
+f32 RendererRayTracingSystem::causticTemporalDecay()noexcept{
     return m_rayTracingState.m_causticTemporalDecay;
 }
 

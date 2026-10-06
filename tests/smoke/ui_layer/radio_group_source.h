@@ -36,13 +36,13 @@ public:
 
 
 public:
-    void reverse();
-    void remove(u64 key);
-    void replace();
-    void beginFrame();
-    [[nodiscard]] bool reversed()const{ return m_reversed; }
-    [[nodiscard]] u64 removedKey()const{ return m_removed; }
-    [[nodiscard]] u32 labelReads()const{ return m_labelReads; }
+    void reverse()noexcept;
+    void remove(u64 key)noexcept;
+    void replace()noexcept;
+    void beginFrame()noexcept;
+    [[nodiscard]] bool reversed()const noexcept{ return m_reversed; }
+    [[nodiscard]] u64 removedKey()const noexcept{ return m_removed; }
+    [[nodiscard]] u32 labelReads()const noexcept{ return m_labelReads; }
 
 
 private:

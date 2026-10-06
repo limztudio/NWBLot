@@ -505,7 +505,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     return true;
 }
 
-void Material::clearStageShaders(){
+void Material::clearStageShaders()noexcept{
     for(Core::Assets::AssetRef<Shader>& shaderAsset : m_stageShaders)
         shaderAsset.reset();
     m_stageShaderCount = 0;
@@ -531,7 +531,7 @@ void Material::setResourceReferences(const ResourceReferenceVector& resourceRefe
     m_resourceReferences.assign(resourceReferences.begin(), resourceReferences.end());
 }
 
-bool Material::setShaderForStage(const Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<Shader>& shaderAsset){
+bool Material::setShaderForStage(const Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<Shader>& shaderAsset)noexcept{
     if(!Core::ShaderType::IsValid(shaderType) || !shaderAsset.valid())
         return false;
 
@@ -543,7 +543,7 @@ bool Material::setShaderForStage(const Core::ShaderType::Enum shaderType, const 
     return true;
 }
 
-bool Material::findShaderForStage(const Core::ShaderType::Enum shaderType, Core::Assets::AssetRef<Shader>& outShaderAsset)const{
+bool Material::findShaderForStage(const Core::ShaderType::Enum shaderType, Core::Assets::AssetRef<Shader>& outShaderAsset)const noexcept{
     outShaderAsset.reset();
     if(!Core::ShaderType::IsValid(shaderType))
         return false;

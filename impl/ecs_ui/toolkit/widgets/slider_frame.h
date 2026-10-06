@@ -25,7 +25,7 @@ class SliderFrame final : NoCopy{
 
 
 public:
-    explicit SliderFrame(SliderState& state);
+    explicit SliderFrame(SliderState& state)noexcept;
 
 
 private:

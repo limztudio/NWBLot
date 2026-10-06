@@ -313,7 +313,7 @@ u32 BuildSceneBvhNode(
     const MaterialSurfaceInfo& materialInfo,
     const u32 materialConstantByteOffset,
     const u32 meshInstanceIndex
-){
+)noexcept{
     NwbRtInstanceMaterialGpu material;
     material.surfaceDispatchId = materialInfo.surfaceDispatchId;
     material.shadingModelId = materialInfo.shadingModelId;

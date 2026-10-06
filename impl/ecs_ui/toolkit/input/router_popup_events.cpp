@@ -85,7 +85,7 @@ void InputRouter::retirePopup(const WidgetId id){
         return;
     const bool top = removed[m_popups.size() - 1u];
     PopupRecord restore = m_popups.back();
-    const auto splice = [this, &removed](PopupRecord& record){
+    const auto splice = [this, &removed](PopupRecord& record)noexcept{
         for(usize depth = 0u; depth < s_InputMaxPopups; ++depth){
             bool foundParent = false;
             for(usize index = 0u; index < m_popups.size(); ++index){

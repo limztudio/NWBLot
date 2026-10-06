@@ -23,7 +23,7 @@ public:
 
 
 public:
-    [[nodiscard]] const Path<ArenaT>& path()const{ return m_path; }
+    [[nodiscard]] const Path<ArenaT>& path()const noexcept{ return m_path; }
     [[nodiscard]] bool isRegularFile(ErrorCode& outError)const{ return IsRegularFile(m_path, outError); }
 
 

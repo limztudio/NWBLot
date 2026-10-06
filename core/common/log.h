@@ -98,7 +98,7 @@ inline constexpr StringView s_DiagnosticEventCategoryFatal = "logger_Fatal";
 }
 
 template<typename... ARGS>
-constexpr void IgnoreMessage(ARGS&&...){}
+constexpr void IgnoreMessage(ARGS&&...)noexcept{}
 
 [[nodiscard]] inline StringView DiagnosticEventNameFromLogType(const LogType::Enum type)noexcept{
     switch(type){
@@ -282,11 +282,11 @@ public:
         LoggerDetail::g_loggerRegistration = &m_registration;
     }
     LoggerRegistrationGuard(LoggerRegistrationGuard&&) = delete;
-    ~LoggerRegistrationGuard(){
+    ~LoggerRegistrationGuard()noexcept{
         LoggerDetail::g_loggerRegistration = m_previous;
     }
 
-    [[nodiscard]] ILogger* previousLogger()const{ return m_previous ? &m_previous->logger : nullptr; }
+    [[nodiscard]] ILogger* previousLogger()const noexcept{ return m_previous ? &m_previous->logger : nullptr; }
 
 
 private:

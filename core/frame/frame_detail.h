@@ -26,7 +26,7 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline u16 ClampInitialWindowDimension(const u16 requestedDimension, const i32 availableDimension){
+[[nodiscard]] inline u16 ClampInitialWindowDimension(const u16 requestedDimension, const i32 availableDimension)noexcept{
     if(availableDimension <= 0)
         return requestedDimension;
 

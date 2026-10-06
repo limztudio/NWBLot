@@ -82,14 +82,14 @@ struct alignas(128u) ConstructionProbe{
 template<typename Arena>
 class ActiveConstruction final : NoCopy{
 public:
-    ActiveConstruction(Arena& arena, ConstructionState& state)
+    ActiveConstruction(Arena& arena, ConstructionState& state)noexcept
         : m_previousArena(ConstructionProbe<Arena>::s_Arena)
         , m_previousState(ConstructionProbe<Arena>::s_State)
     {
         ConstructionProbe<Arena>::s_Arena = &arena;
         ConstructionProbe<Arena>::s_State = &state;
     }
-    ~ActiveConstruction(){
+    ~ActiveConstruction()noexcept{
         ConstructionProbe<Arena>::s_Arena = m_previousArena;
         ConstructionProbe<Arena>::s_State = m_previousState;
     }
@@ -117,7 +117,7 @@ struct RejectingArena{
     usize attempts = 0u;
 
     template<typename T>
-    T* allocate(const usize count){
+    T* allocate(const usize count)noexcept{
         static_cast<void>(count);
         ++attempts;
         return nullptr;

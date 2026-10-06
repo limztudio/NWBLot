@@ -19,7 +19,7 @@ NWB_FILESYSTEM_BEGIN
 
 using VolumeBuildFileMap = HashMap<VolumeString, VolumeBytes, VolumeArena>;
 
-[[nodiscard]] bool ComputeVolumeMetadataRequirement(u64 fileCount, u64& outMetadataBytes);
+[[nodiscard]] bool ComputeVolumeMetadataRequirement(u64 fileCount, u64& outMetadataBytes)noexcept;
 bool BuildVolume(
     const Path& outputDirectory,
     const VolumeBuildConfig& config,

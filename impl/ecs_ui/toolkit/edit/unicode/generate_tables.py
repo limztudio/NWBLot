@@ -93,7 +93,7 @@ static constexpr UnicodePropertyRange s_Ranges[] = {{
 {SEP}
 
 
-{return_type} {function}(const u32 codePoint){{
+{return_type} {function}(const u32 codePoint)noexcept{{
 {hangul}    const u8 property = LookupUnicodePropertyRanges(__hidden_ui_unicode_{kind}::s_Ranges, codePoint, {default});
     return {result};
 }}

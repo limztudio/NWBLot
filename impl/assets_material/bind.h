@@ -33,17 +33,17 @@ namespace MaterialBindNames{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline AStringView SourceExtensionText(){
+inline AStringView SourceExtensionText()noexcept{
     static constexpr AStringView s_ExtensionText = ".bind";
     return s_ExtensionText;
 }
 
-inline AStringView GeneratedIncludeCacheDirectoryText(){
+inline AStringView GeneratedIncludeCacheDirectoryText()noexcept{
     static constexpr AStringView s_DirectoryText = "material_bind_includes";
     return s_DirectoryText;
 }
 
-inline AStringView TypedBindingImplicitDefineText(){
+inline AStringView TypedBindingImplicitDefineText()noexcept{
     static constexpr AStringView s_DefineText = "NWB_MATERIAL_TYPED_BINDING";
     return s_DefineText;
 }
@@ -51,7 +51,7 @@ inline AStringView TypedBindingImplicitDefineText(){
 #define NWB_MATERIAL_TYPED_STRINGIFY_IMPL(Value) #Value
 #define NWB_MATERIAL_TYPED_STRINGIFY(Value) NWB_MATERIAL_TYPED_STRINGIFY_IMPL(Value)
 
-inline AStringView TypedBindingImplicitDefineValueText(){
+inline AStringView TypedBindingImplicitDefineValueText()noexcept{
     static constexpr AStringView s_DefineValueText = NWB_MATERIAL_TYPED_STRINGIFY(NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE);
     return s_DefineValueText;
 }

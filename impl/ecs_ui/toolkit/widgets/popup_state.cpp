@@ -34,11 +34,11 @@ static Atomic<u64> s_NextIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-PopupState::PopupState()
+PopupState::PopupState()noexcept
     : m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_popup_state::s_NextIdentity))
 {}
 
-void PopupState::open(){
+void PopupState::open()noexcept{
     if(m_open)
         return;
     if(m_openGeneration == Limit<u64>::s_Max)
@@ -47,11 +47,11 @@ void PopupState::open(){
     m_open = true;
 }
 
-void PopupState::close(){
+void PopupState::close()noexcept{
     m_open = false;
 }
 
-void PopupState::bindParent(const PopupToken& parent){
+void PopupState::bindParent(const PopupToken& parent)noexcept{
     if(m_parentBound && m_parent != parent && m_parentOpenGeneration == m_openGeneration)
         close();
     m_parent = parent;

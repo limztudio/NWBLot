@@ -81,8 +81,8 @@ protected:
 
 
 private:
-    [[nodiscard]] Atom selectionAtom(ClipboardChannel::Enum channel)const;
-    [[nodiscard]] OwnedSelection* ownedSelection(Atom selection);
+    [[nodiscard]] Atom selectionAtom(ClipboardChannel::Enum channel)const noexcept;
+    [[nodiscard]] OwnedSelection* ownedSelection(Atom selection)noexcept;
     void releaseOperation();
     void finishOperation(ClipboardStatus::Enum status, AStringView text = {});
     void receiveTimestamp(Time timestamp);

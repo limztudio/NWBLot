@@ -142,7 +142,7 @@ bool RayTracingOpticalSceneResources::prepareRuntimeBounds(
     return m_prepared;
 }
 
-RayTracingOpticalSceneSnapshot RayTracingOpticalSceneResources::snapshot()const{
+RayTracingOpticalSceneSnapshot RayTracingOpticalSceneResources::snapshot()const noexcept{
     if(!m_prepared || (m_runtimeBoundsRequired && !m_runtimeBoundsSnapshot))
         return {};
     RayTracingOpticalSceneSnapshot result = m_resources;

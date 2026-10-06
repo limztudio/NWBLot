@@ -161,7 +161,7 @@ template<usize Count>
         path,
         object,
         s_DiagnosticPrefix,
-        [hasSlice = outRegion.drawMode == UiSkinDrawMode::NineSlice](const AStringView field){
+        [hasSlice = outRegion.drawMode == UiSkinDrawMode::NineSlice](const AStringView field)noexcept{
             return
                 field == s_NameField || field == s_RectField || field == s_DrawModeField
                 || field == s_PaddingField || field == s_MinimumSizeField || (hasSlice && field == s_SliceField)

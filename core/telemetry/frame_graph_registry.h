@@ -33,11 +33,11 @@ public:
 public:
     void registerContributor(IFrameGraphContributor& contributor);
     void unregisterContributor(IFrameGraphContributor& contributor);
-    void clear(){ m_contributors.clear(); }
+    void clear()noexcept{ m_contributors.clear(); }
 
     [[nodiscard]] bool record(CaptureSession& session);
 
-    [[nodiscard]] usize contributorCount()const{ return m_contributors.size(); }
+    [[nodiscard]] usize contributorCount()const noexcept{ return m_contributors.size(); }
 
 private:
     List<IFrameGraphContributor*, Alloc::GlobalArena> m_contributors;

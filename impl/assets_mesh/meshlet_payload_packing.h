@@ -56,7 +56,7 @@ namespace MeshletRefDeltaWidth{
     const u32 primitiveCount,
     const u32 positionCount,
     const u32 attributeCount
-){
+)noexcept{
     return (vertexCount & s_MeshletCountMask)
         | ((primitiveCount & s_MeshletCountMask) << s_MeshletPrimitiveCountShift)
         | ((positionCount & s_MeshletCountMask) << s_MeshletPositionCountShift)
@@ -64,23 +64,23 @@ namespace MeshletRefDeltaWidth{
     ;
 }
 
-[[nodiscard]] constexpr GLB_INLINE u32 MeshletVertexCount(const MeshletDesc& meshlet){
+[[nodiscard]] constexpr GLB_INLINE u32 MeshletVertexCount(const MeshletDesc& meshlet)noexcept{
     return meshlet.counts & s_MeshletCountMask;
 }
 
-[[nodiscard]] constexpr GLB_INLINE u32 MeshletPrimitiveCount(const MeshletDesc& meshlet){
+[[nodiscard]] constexpr GLB_INLINE u32 MeshletPrimitiveCount(const MeshletDesc& meshlet)noexcept{
     return (meshlet.counts >> s_MeshletPrimitiveCountShift) & s_MeshletCountMask;
 }
 
-[[nodiscard]] constexpr GLB_INLINE u32 MeshletPositionCount(const MeshletDesc& meshlet){
+[[nodiscard]] constexpr GLB_INLINE u32 MeshletPositionCount(const MeshletDesc& meshlet)noexcept{
     return (meshlet.counts >> s_MeshletPositionCountShift) & s_MeshletCountMask;
 }
 
-[[nodiscard]] constexpr GLB_INLINE u32 MeshletAttributeCount(const MeshletDesc& meshlet){
+[[nodiscard]] constexpr GLB_INLINE u32 MeshletAttributeCount(const MeshletDesc& meshlet)noexcept{
     return meshlet.counts >> s_MeshletAttributeCountShift;
 }
 
-[[nodiscard]] constexpr GLB_INLINE MeshletRefDeltaWidth::Enum MeshletRefDeltaWidthForMaxDelta(const u32 maxDelta){
+[[nodiscard]] constexpr GLB_INLINE MeshletRefDeltaWidth::Enum MeshletRefDeltaWidthForMaxDelta(const u32 maxDelta)noexcept{
     return maxDelta <= static_cast<u32>(Limit<u8>::s_Max)
         ? MeshletRefDeltaWidth::U8
         : maxDelta <= static_cast<u32>(Limit<u16>::s_Max)
@@ -92,7 +92,7 @@ namespace MeshletRefDeltaWidth{
 [[nodiscard]] constexpr GLB_INLINE u32 PackMeshletRefEncodingWidth(
     const MeshletRefDeltaWidth::Enum width,
     const u32 shift
-){
+)noexcept{
     return (static_cast<u32>(width) & s_MeshletRefEncodingWidthMask) << shift;
 }
 
@@ -103,7 +103,7 @@ namespace MeshletRefDeltaWidth{
     const MeshletRefDeltaWidth::Enum tangentWidth,
     const MeshletRefDeltaWidth::Enum uv0Width,
     const MeshletRefDeltaWidth::Enum colorWidth
-){
+)noexcept{
     return
         PackMeshletRefEncodingWidth(positionWidth, s_MeshletRefEncodingPositionShift)
         | PackMeshletRefEncodingWidth(skinWidth, s_MeshletRefEncodingSkinShift)
@@ -117,29 +117,29 @@ namespace MeshletRefDeltaWidth{
 [[nodiscard]] constexpr GLB_INLINE MeshletRefDeltaWidth::Enum MeshletRefEncodingWidth(
     const u32 encoding,
     const u32 shift
-){
+)noexcept{
     return static_cast<MeshletRefDeltaWidth::Enum>((encoding >> shift) & s_MeshletRefEncodingWidthMask);
 }
 
 [[nodiscard]] constexpr GLB_INLINE bool MeshletRefDeltaFitsWidth(
     const u32 delta,
     const MeshletRefDeltaWidth::Enum width
-){
+)noexcept{
     return width == MeshletRefDeltaWidth::U32
         || (width == MeshletRefDeltaWidth::U16 && delta <= static_cast<u32>(Limit<u16>::s_Max))
         || (width == MeshletRefDeltaWidth::U8 && delta <= static_cast<u32>(Limit<u8>::s_Max))
     ;
 }
 
-[[nodiscard]] GLB_INLINE u32 PackMeshletConeUnorm8(const f32 value){
+[[nodiscard]] GLB_INLINE u32 PackMeshletConeUnorm8(const f32 value)noexcept{
     return static_cast<u32>(Saturate(value) * s_MeshletUnorm8Max + s_MeshletUnorm8RoundingBias);
 }
 
-[[nodiscard]] GLB_INLINE u32 PackMeshletConeCutoffUnorm8(const f32 value){
+[[nodiscard]] GLB_INLINE u32 PackMeshletConeCutoffUnorm8(const f32 value)noexcept{
     return static_cast<u32>(Saturate(value) * s_MeshletUnorm8Max);
 }
 
-[[nodiscard]] GLB_INLINE SIMDVector FoldMeshletConeOctAxis(SIMDVector axis){
+[[nodiscard]] GLB_INLINE SIMDVector FoldMeshletConeOctAxis(SIMDVector axis)noexcept{
     const SIMDVector absXY = VectorAndInt(VectorAbs(axis), s_SIMDMaskXY);
     const SIMDVector foldedMagnitude = VectorSubtract(s_SIMDOne, VectorSwizzle<1, 0, 2, 3>(absXY));
     const SIMDVector foldedSign = VectorSelect(
@@ -152,7 +152,7 @@ namespace MeshletRefDeltaWidth{
     return VectorSelect(axis, folded, VectorLess(VectorSplatZ(axis), VectorZero()));
 }
 
-[[nodiscard]] GLB_INLINE u32 PackMeshletConeOct16(const SIMDVector axis){
+[[nodiscard]] GLB_INLINE u32 PackMeshletConeOct16(const SIMDVector axis)noexcept{
     SIMDVector octAxis = VectorSetW(axis, 0.0f);
     const SIMDVector lengthVector = VectorSum(VectorAbs(octAxis));
     if(!VectorIsFinite(lengthVector, VectorComponentMask::s_XYZW) || !Vector4Greater(lengthVector, VectorReplicate(s_MeshletConeAxisLengthEpsilon)))
@@ -166,11 +166,11 @@ namespace MeshletRefDeltaWidth{
     ;
 }
 
-[[nodiscard]] GLB_INLINE f32 UnpackMeshletConeUnorm8(const u32 value, const u32 bitShift){
+[[nodiscard]] GLB_INLINE f32 UnpackMeshletConeUnorm8(const u32 value, const u32 bitShift)noexcept{
     return static_cast<f32>((value >> bitShift) & s_MeshletPackedByteMask) * (1.0f / s_MeshletUnorm8Max);
 }
 
-[[nodiscard]] GLB_INLINE SIMDVector UnpackMeshletConeOct16Axis(const u32 conePacked){
+[[nodiscard]] GLB_INLINE SIMDVector UnpackMeshletConeOct16Axis(const u32 conePacked)noexcept{
     SIMDVector axis = VectorSet(
         UnpackMeshletConeUnorm8(conePacked, s_MeshletConeAxisXShift) * s_MeshletOctDecodeScale - s_MeshletOctDecodeBias,
         UnpackMeshletConeUnorm8(conePacked, s_MeshletConeAxisYShift) * s_MeshletOctDecodeScale - s_MeshletOctDecodeBias,
@@ -186,7 +186,7 @@ namespace MeshletRefDeltaWidth{
     );
 }
 
-[[nodiscard]] GLB_INLINE f32 ConservativePackedMeshletConeCutoff(const SIMDVector axis, const f32 cutoff, const u32 packedAxis){
+[[nodiscard]] GLB_INLINE f32 ConservativePackedMeshletConeCutoff(const SIMDVector axis, const f32 cutoff, const u32 packedAxis)noexcept{
     const SIMDVector unpackedAxis = UnpackMeshletConeOct16Axis(packedAxis);
     const SIMDVector normalizedAxis = Vector3NormalizeOr(
         axis,
@@ -207,7 +207,7 @@ namespace MeshletRefDeltaWidth{
     return VectorGetX(conservativeCutoff);
 }
 
-[[nodiscard]] GLB_INLINE u32 PackMeshletCone(const SIMDVector axis, const f32 cutoff){
+[[nodiscard]] GLB_INLINE u32 PackMeshletCone(const SIMDVector axis, const f32 cutoff)noexcept{
     if(cutoff <= 0.0f)
         return 0u;
 
@@ -225,15 +225,15 @@ namespace MeshletRefDeltaWidth{
     ;
 }
 
-[[nodiscard]] GLB_INLINE u32 MeshletConeFlags(const MeshletBounds& bounds){
+[[nodiscard]] GLB_INLINE u32 MeshletConeFlags(const MeshletBounds& bounds)noexcept{
     return bounds.conePacked >> s_MeshletConeFlagShift;
 }
 
-[[nodiscard]] GLB_INLINE u32 MeshletConePackedCutoff(const MeshletBounds& bounds){
+[[nodiscard]] GLB_INLINE u32 MeshletConePackedCutoff(const MeshletBounds& bounds)noexcept{
     return (bounds.conePacked >> s_MeshletConeCutoffShift) & s_MeshletPackedByteMask;
 }
 
-[[nodiscard]] GLB_INLINE bool MeshletConeEnabled(const MeshletBounds& bounds){
+[[nodiscard]] GLB_INLINE bool MeshletConeEnabled(const MeshletBounds& bounds)noexcept{
     return (MeshletConeFlags(bounds) & s_MeshletConeFlagEnabled) != 0u;
 }
 

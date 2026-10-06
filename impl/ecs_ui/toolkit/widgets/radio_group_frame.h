@@ -26,7 +26,7 @@ class RadioGroupFrame final : NoCopy{
 
 
 public:
-    RadioGroupFrame(Core::Alloc::GlobalArena& arena, const IListDataSource& source, RadioGroupState& state);
+    RadioGroupFrame(Core::Alloc::GlobalArena& arena, const IListDataSource& source, RadioGroupState& state)noexcept;
 
 
 private:

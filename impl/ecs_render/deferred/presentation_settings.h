@@ -35,7 +35,7 @@ struct PresentationSettings{
     f32 shoulder = s_PresentationDefaultShoulder;
 };
 
-[[nodiscard]] bool ValidatePresentationSettings(const PresentationSettings& settings);
+[[nodiscard]] bool ValidatePresentationSettings(const PresentationSettings& settings)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -107,7 +107,7 @@ struct TextureCreateMetadata{
     return usage;
 }
 
-inline u32 GetMaxMipLevels(const TextureDesc& desc){
+inline u32 GetMaxMipLevels(const TextureDesc& desc)noexcept{
     const u32 depth = desc.dimension == TextureDimension::Texture3D ? desc.depth : 1u;
     u32 maxExtent = Max(Max(desc.width, desc.height), depth);
     u32 levels = 1;
@@ -186,7 +186,7 @@ inline u32 GetMaxMipLevels(const TextureDesc& desc){
     return outImageType != VK_IMAGE_TYPE_MAX_ENUM;
 }
 
-inline VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension){
+inline VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension)noexcept{
     switch(dimension){
     case TextureDimension::Texture1D: return VK_IMAGE_VIEW_TYPE_1D;
     case TextureDimension::Texture1DArray: return VK_IMAGE_VIEW_TYPE_1D_ARRAY;
@@ -201,7 +201,7 @@ inline VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimensi
     }
 }
 
-inline VkImageUsageFlags PickImageUsage(const TextureDesc& desc, const VkImageAspectFlags aspectMask){
+inline VkImageUsageFlags PickImageUsage(const TextureDesc& desc, const VkImageAspectFlags aspectMask)noexcept{
     VkImageUsageFlags usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 
     if(desc.isShaderResource)
@@ -223,7 +223,7 @@ inline VkImageUsageFlags PickImageUsage(const TextureDesc& desc, const VkImageAs
     return usage;
 }
 
-inline VkImageCreateFlags PickImageFlags(const TextureDesc& desc){
+inline VkImageCreateFlags PickImageFlags(const TextureDesc& desc)noexcept{
     VkImageCreateFlags flags = 0;
 
     if(desc.dimension == TextureDimension::TextureCube || desc.dimension == TextureDimension::TextureCubeArray)
@@ -235,7 +235,7 @@ inline VkImageCreateFlags PickImageFlags(const TextureDesc& desc){
     return flags;
 }
 
-inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, const TextureCreateMetadata& metadata){
+inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, const TextureCreateMetadata& metadata)noexcept{
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = metadata.imageType;

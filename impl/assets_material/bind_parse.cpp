@@ -143,7 +143,7 @@ bool ParseMaterialParameterTypeText(
 bool ParseMaterialBindResourceFieldTypeText(
     const AStringView typeText,
     MaterialLayoutFieldType::Enum& outFieldType
-){
+)noexcept{
     outFieldType = MaterialLayoutFieldType::None;
     if(typeText == s_BindFieldTypeTexture2D){
         outFieldType = MaterialLayoutFieldType::SampledImage2D;

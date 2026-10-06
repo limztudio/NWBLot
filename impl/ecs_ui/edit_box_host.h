@@ -132,14 +132,14 @@ public:
     [[nodiscard]] bool pastePrimary(Ui::Point position);
     [[nodiscard]] bool hasTextFocus()const;
     [[nodiscard]] bool wantsTextInput()const;
-    [[nodiscard]] bool takeClipboardFailure();
+    [[nodiscard]] bool takeClipboardFailure()noexcept;
     void synchronizeFocus();
     void reset();
 
 
 private:
-    [[nodiscard]] Entry* find(Ui::WidgetId widget);
-    [[nodiscard]] const Entry* find(Ui::WidgetId widget)const;
+    [[nodiscard]] Entry* find(Ui::WidgetId widget)noexcept;
+    [[nodiscard]] const Entry* find(Ui::WidgetId widget)const noexcept;
     [[nodiscard]] bool append(Event&& event);
     void discard(const UiTextEditOwner& owner);
     [[nodiscard]] Ui::EditBoxResult editBorrowed(const Ui::WidgetState& widget, Ui::EditModel& model,
@@ -151,12 +151,12 @@ private:
         Ui::EditNavigationDirection::Enum direction);
     [[nodiscard]] bool applyAction(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options,
         Ui::EditAction::Enum action, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation);
-    [[nodiscard]] bool rejectBorrowedMutation();
-    [[nodiscard]] u64 nextFocusGeneration();
+    [[nodiscard]] bool rejectBorrowedMutation()noexcept;
+    [[nodiscard]] u64 nextFocusGeneration()noexcept;
     void synchronizeSession(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, bool inputMethod);
-    [[nodiscard]] Core::TextInputRect nativeCaret(const UiEditBoxGeometry& geometry)const;
-    [[nodiscard]] bool hit(const Entry& entry, Ui::Point position, usize& byte)const;
-    [[nodiscard]] bool hitWord(const Entry& entry, Ui::Point position, usize& byte)const;
+    [[nodiscard]] Core::TextInputRect nativeCaret(const UiEditBoxGeometry& geometry)const noexcept;
+    [[nodiscard]] bool hit(const Entry& entry, Ui::Point position, usize& byte)const noexcept;
+    [[nodiscard]] bool hitWord(const Entry& entry, Ui::Point position, usize& byte)const noexcept;
     void cancelTransfers();
     void drainPublications();
 

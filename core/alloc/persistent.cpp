@@ -61,7 +61,7 @@ static_assert(alignof(FreeLinks) <= alignof(MaxAlign), "PersistentArena free lin
     return IsSupportedAlignmentValue(align);
 }
 
-[[nodiscard]] constexpr usize EffectiveAlignment(const usize align){
+[[nodiscard]] constexpr usize EffectiveAlignment(const usize align)noexcept{
     return align > s_BlockAlignment ? align : s_BlockAlignment;
 }
 
@@ -84,15 +84,15 @@ private:
     MallocMutex& m_mutex;
 };
 
-[[nodiscard]] inline u8* BlockData(Block& block){
+[[nodiscard]] inline u8* BlockData(Block& block)noexcept{
     return reinterpret_cast<u8*>(&block) + sizeof(Block);
 }
 
-[[nodiscard]] inline const u8* BlockData(const Block& block){
+[[nodiscard]] inline const u8* BlockData(const Block& block)noexcept{
     return reinterpret_cast<const u8*>(&block) + sizeof(Block);
 }
 
-[[nodiscard]] inline FreeLinks& Links(Block& block){
+[[nodiscard]] inline FreeLinks& Links(Block& block)noexcept{
     return *reinterpret_cast<FreeLinks*>(BlockData(block));
 }
 

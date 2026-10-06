@@ -33,7 +33,7 @@ StateTracker::StateTracker(const VulkanContext& context)
 {}
 StateTracker::~StateTracker(){}
 
-void StateTracker::reset(){
+void StateTracker::reset()noexcept{
     m_textureStates.clear();
     m_bufferStates.clear();
 }

@@ -128,7 +128,7 @@ TEST(CpuTaskCleanupTests, SchedulerDestructorPropagatesCallerFailureToTheTermina
         ++handled;
         EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
         return error.code;
-    }, [](){ return -1; });
+    }, []()noexcept{ return -1; });
     EXPECT_EQ(result, 17);
     EXPECT_EQ(handled, 1u);
     EXPECT_EQ(callbacks, 1u);
@@ -157,7 +157,7 @@ TEST(CpuTaskCleanupTests, ScopeDestructorPropagatesCallerFailureAfterDrainingIts
         EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
         EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
         return error.code;
-    }, [](){ return -1; });
+    }, []()noexcept{ return -1; });
     EXPECT_EQ(result, 37);
     EXPECT_EQ(callbacks, 1u);
 }
@@ -184,7 +184,7 @@ TEST(CpuTaskCleanupTests, UnrelatedUnwindCancelsQueuedTasksWithoutReplacingTheOr
     }, [&](const TerminalTaskError& error){
         EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
         return error.code;
-    }, [](){ return -1; });
+    }, []()noexcept{ return -1; });
     EXPECT_EQ(result, 47);
     EXPECT_EQ(callbacks, 0u);
 }
@@ -231,7 +231,7 @@ TEST(CpuTaskCleanupTests, TerminalDrainJoinsAnActiveWorkerAndRetiresCanceledCapt
     EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
     EXPECT_EQ(canceledCallbacks, 0u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
-    EXPECT_FALSE(scheduler.submit([](){}).valid());
+    EXPECT_FALSE(scheduler.submit([]()noexcept{}).valid());
 }
 
 
@@ -242,12 +242,12 @@ TEST(CpuTaskCleanupTests, CancelingOneScopeKeepsTheSchedulerAvailableForOtherWor
     CpuTaskScope other(scheduler);
     u32 canceledCallbacks = 0u;
     u32 completedCallbacks = 0u;
-    EXPECT_TRUE(canceled.submit([&](){ ++canceledCallbacks; }).valid());
-    EXPECT_TRUE(other.submit([&](){ ++completedCallbacks; }).valid());
+    EXPECT_TRUE(canceled.submit([&]()noexcept{ ++canceledCallbacks; }).valid());
+    EXPECT_TRUE(other.submit([&]()noexcept{ ++completedCallbacks; }).valid());
     canceled.cancel();
     canceled.wait();
     other.wait();
-    const auto later = scheduler.submit([&](){ ++completedCallbacks; });
+    const auto later = scheduler.submit([&]()noexcept{ ++completedCallbacks; });
     ASSERT_TRUE(later.valid());
     scheduler.wait(later);
     EXPECT_EQ(canceledCallbacks, 0u);
@@ -267,7 +267,7 @@ TEST(CpuTaskCleanupTests, ConcurrentProducersCompleteNestedTaskRanges){
     for(u32 producer = 0u; producer < s_ExpectedDualCount; ++producer){
         ASSERT_TRUE(scope.submit([&](){
             scheduler.parallelFor(0u, 128u, 4u, [&](usize){
-                scheduler.parallelFor(0u, 32u, 4u, [&](usize){
+                scheduler.parallelFor(0u, 32u, 4u, [&](usize)noexcept{
                     visits.fetch_add(1u, MemoryOrder::relaxed);
                 });
             });
@@ -299,7 +299,7 @@ TEST(CpuTaskCleanupTests, NestedRangeFailureJoinsItsSubtreeBeforeUnwindingTheRec
         EXPECT_EQ(retirements.load(MemoryOrder::acquire), 1u);
         EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
         return error.code;
-    }, [](){ return -1; });
+    }, []()noexcept{ return -1; });
     EXPECT_EQ(result, 67);
     EXPECT_EQ(callbacks, 1u);
 }
@@ -325,7 +325,7 @@ TEST(CpuTaskCleanupTests, DescendantRetirementCanReenterSchedulerBeforeParentCom
         probe = ReentrantRetirementProbe(scheduler, parent, incompleteDuringRetirement, outstandingDuringRetirement)
     ](){
         EXPECT_TRUE(probe.m_active);
-        EXPECT_TRUE(scheduler.submit([&](){ ++callbacks; }).valid());
+        EXPECT_TRUE(scheduler.submit([&]()noexcept{ ++callbacks; }).valid());
     });
     ASSERT_TRUE(parent.valid());
     const auto dependent = scheduler.submit([&](){

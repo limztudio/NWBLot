@@ -34,7 +34,7 @@ struct ShadowPrepareAccelStructFinalizeGraphTask{
         const Payload& payload,
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
-    );
+    )noexcept;
 };
 
 

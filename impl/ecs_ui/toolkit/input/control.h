@@ -23,15 +23,15 @@ struct ControlToken{
     u64 contentGeneration = 0u;
     u64 contentRevision = 0u;
 
-    [[nodiscard]] bool valid()const{
+    [[nodiscard]] bool valid()const noexcept{
         return instanceGeneration != 0u && contentGeneration != 0u && contentRevision != 0u;
     }
-    [[nodiscard]] bool empty()const{
+    [[nodiscard]] bool empty()const noexcept{
         return instanceGeneration == 0u && contentGeneration == 0u && contentRevision == 0u;
     }
 };
 
-[[nodiscard]] inline bool operator==(const ControlToken& lhs, const ControlToken& rhs){
+[[nodiscard]] inline bool operator==(const ControlToken& lhs, const ControlToken& rhs)noexcept{
     return
         lhs.instanceGeneration == rhs.instanceGeneration && lhs.contentGeneration == rhs.contentGeneration
         && lhs.contentRevision == rhs.contentRevision

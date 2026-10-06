@@ -118,7 +118,7 @@ private:
         CpuAffinity::Enum affinity;
 
         Execution(CpuTaskScheduler& owner, TaskHandle handle, usize index, CpuAffinity::Enum workerAffinity)noexcept;
-        ~Execution();
+        ~Execution()noexcept;
     };
 
 
@@ -144,7 +144,7 @@ private:
 private:
     static u64 AllocateDomainIdentity()noexcept;
     static u64 AllocateProfileLabelIdentity()noexcept;
-    static CpuTaskSchedulerConfig WorkerConfig(u32 workerCount);
+    static CpuTaskSchedulerConfig WorkerConfig(u32 workerCount)noexcept;
     static usize QueueIndex(const CpuTaskOptions& options)noexcept;
 
 

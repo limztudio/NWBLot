@@ -30,14 +30,14 @@ public:
     const usize positionCount,
     const usize skinCount,
     const bool skinRequired
-    );
+    )noexcept;
     [[nodiscard]] static bool MeshletAttributeRefInRange(
     const MeshletAttributeStreamRef& ref,
     const usize normalCount,
     const usize tangentCount,
     const usize uv0Count,
     const usize colorCount
-    );
+    )noexcept;
     template<
     typename MeshletContainer,
     typename LocalVertexRefContainer,

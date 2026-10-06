@@ -16,7 +16,7 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Texture* BackendContext::getBackBuffer(u32 index)const{
+Texture* BackendContext::getBackBuffer(u32 index)const noexcept{
     if(index < m_swapChainImages.size())
         return m_swapChainImages[index].rhiHandle.get();
     return nullptr;

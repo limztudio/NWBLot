@@ -20,9 +20,9 @@ NWB_IMPL_BEGIN
 // Retains CPU update time until a UI paint frame actually begins.
 class UiFrameDelta final{
 public:
-    void add(f32 deltaSeconds);
-    [[nodiscard]] f32 consume();
-    void clear();
+    void add(f32 deltaSeconds)noexcept;
+    [[nodiscard]] f32 consume()noexcept;
+    void clear()noexcept;
 
 private:
     f64 m_pendingSeconds = 0.0;

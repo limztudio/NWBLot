@@ -20,11 +20,11 @@ namespace __hidden_ui_id{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 Append(u64 hash, u8 byte){
+u64 Append(u64 hash, u8 byte)noexcept{
     return (hash ^ byte) * 1099511628211ull;
 }
 
-u64 AppendInteger(u64 hash, const u64 value){
+u64 AppendInteger(u64 hash, const u64 value)noexcept{
     for(u32 index = 0u; index < 8u; ++index)
         hash = Append(hash, static_cast<u8>(value >> (index * 8u)));
     return hash;
@@ -40,7 +40,7 @@ u64 AppendInteger(u64 hash, const u64 value){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-WidgetId MakeRootId(const WidgetRoot& root){
+WidgetId MakeRootId(const WidgetRoot& root)noexcept{
     if(root.generation == 0u)
         return {};
     u64 hash = __hidden_ui_id::AppendInteger(14695981039346656037ull, root.value);
@@ -48,7 +48,7 @@ WidgetId MakeRootId(const WidgetRoot& root){
     return { hash == 0u ? 1u : hash };
 }
 
-WidgetId MakeWidgetId(const WidgetId parent, const AStringView stableKey){
+WidgetId MakeWidgetId(const WidgetId parent, const AStringView stableKey)noexcept{
     if(!parent.valid() || stableKey.empty())
         return {};
     u64 hash = __hidden_ui_id::AppendInteger(14695981039346656037ull, parent.value);
@@ -58,7 +58,7 @@ WidgetId MakeWidgetId(const WidgetId parent, const AStringView stableKey){
     return { hash == 0u ? 1u : hash };
 }
 
-WidgetId MakeWidgetPartId(const WidgetId parent, const u64 stableKey){
+WidgetId MakeWidgetPartId(const WidgetId parent, const u64 stableKey)noexcept{
     if(!parent.valid() || stableKey == 0u)
         return {};
     u64 hash = __hidden_ui_id::AppendInteger(14695981039346656037ull, parent.value);

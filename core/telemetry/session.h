@@ -40,24 +40,24 @@ public:
 
 public:
     void setCaptureOptions(const CaptureOptions& options){ m_recorder.setCaptureOptions(options); }
-    void setFrameIndex(const u64 frameIndex){
+    void setFrameIndex(const u64 frameIndex)noexcept{
         m_frameIndex = frameIndex;
         m_textLogCapture.setFrameIndex(frameIndex);
     }
-    void setStreamId(const u32 streamId){
+    void setStreamId(const u32 streamId)noexcept{
         m_streamId = streamId;
         m_textLogCapture.setStreamId(streamId);
     }
     void clear(){ m_recorder.clear(); }
 
-    [[nodiscard]] Recorder& recorder(){ return m_recorder; }
-    [[nodiscard]] const Recorder& recorder()const{ return m_recorder; }
+    [[nodiscard]] Recorder& recorder()noexcept{ return m_recorder; }
+    [[nodiscard]] const Recorder& recorder()const noexcept{ return m_recorder; }
     [[nodiscard]] CaptureOptions captureOptions()const{ return m_recorder.captureOptions(); }
     [[nodiscard]] bool enabled()const{ return m_recorder.enabled(); }
-    [[nodiscard]] u64 frameIndex()const{ return m_frameIndex; }
-    [[nodiscard]] u32 streamId()const{ return m_streamId; }
+    [[nodiscard]] u64 frameIndex()const noexcept{ return m_frameIndex; }
+    [[nodiscard]] u32 streamId()const noexcept{ return m_streamId; }
     [[nodiscard]] usize eventCount()const{ return m_recorder.eventCount(); }
-    [[nodiscard]] EventView view()const{ return m_recorder.view(); }
+    [[nodiscard]] EventView view()const noexcept{ return m_recorder.view(); }
 
     [[nodiscard]] bool recordFrameGraph(const FrameGraphNodeDescs& nodes, const FrameGraphEdgeDescs& edges){
         return RecordFrameGraph(m_recorder, m_frameIndex, nodes, edges, m_streamId);
@@ -97,8 +97,8 @@ public:
     }
 
 private:
-    void setForwardLogger(Common::ILogger* const forwardLogger){ m_textLogCapture.setForwardLogger(forwardLogger); }
-    [[nodiscard]] TextLogCaptureLogger& textLogCaptureLogger(){ return m_textLogCapture; }
+    void setForwardLogger(Common::ILogger* const forwardLogger)noexcept{ m_textLogCapture.setForwardLogger(forwardLogger); }
+    [[nodiscard]] TextLogCaptureLogger& textLogCaptureLogger()noexcept{ return m_textLogCapture; }
 
 private:
     u64 m_frameIndex = 0u;

@@ -24,7 +24,7 @@ struct UnicodePropertyRange{
 };
 
 template<usize Count>
-[[nodiscard]] u8 LookupUnicodePropertyRanges(const UnicodePropertyRange (&ranges)[Count], const u32 scalar, const u8 fallback){
+[[nodiscard]] u8 LookupUnicodePropertyRanges(const UnicodePropertyRange (&ranges)[Count], const u32 scalar, const u8 fallback)noexcept{
     usize first = 0u;
     usize last = Count;
     while(first < last){

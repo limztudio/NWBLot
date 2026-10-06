@@ -347,7 +347,7 @@ void RendererFramePipeline::resetDeferredTaskGraphRuntime(){
     m_deferredLightingTaskGraphScheduled = false;
 }
 
-void RendererFramePipeline::resetGraphicsPrefixTaskState(){
+void RendererFramePipeline::resetGraphicsPrefixTaskState()noexcept{
     m_graphicsPrefixOpaqueComputeEmulationTask = {};
     for(Core::GpuTaskId& task : m_graphicsPrefixOpaqueSharedComputeEmulationTasks)
         task = {};

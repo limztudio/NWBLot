@@ -29,7 +29,7 @@ public:
 
 
 public:
-    void dismiss();
+    void dismiss()noexcept;
 
 private:
     Path m_directoryPath;

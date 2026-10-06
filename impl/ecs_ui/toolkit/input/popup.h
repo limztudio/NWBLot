@@ -24,15 +24,15 @@ struct PopupToken{
     u64 instanceGeneration = 0u;
     u64 openGeneration = 0u;
 
-    [[nodiscard]] bool valid()const{
+    [[nodiscard]] bool valid()const noexcept{
         return widget.valid() && declarationGeneration != 0u && instanceGeneration != 0u && openGeneration != 0u;
     }
-    [[nodiscard]] bool empty()const{
+    [[nodiscard]] bool empty()const noexcept{
         return !widget.valid() && declarationGeneration == 0u && instanceGeneration == 0u && openGeneration == 0u;
     }
 };
 
-[[nodiscard]] inline bool operator==(const PopupToken& lhs, const PopupToken& rhs){
+[[nodiscard]] inline bool operator==(const PopupToken& lhs, const PopupToken& rhs)noexcept{
     return
         lhs.widget == rhs.widget && lhs.declarationGeneration == rhs.declarationGeneration
         && lhs.instanceGeneration == rhs.instanceGeneration && lhs.openGeneration == rhs.openGeneration

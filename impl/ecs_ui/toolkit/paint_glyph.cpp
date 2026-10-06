@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 
 
 namespace __hidden_ui_glyph_paint{
-static bool SamePage(const GlyphPageBinding& first, const GlyphPageBinding& second){
+static bool SamePage(const GlyphPageBinding& first, const GlyphPageBinding& second)noexcept{
     return
         first.font == second.font && first.fontGeneration == second.fontGeneration
         && first.atlasIdentity == second.atlasIdentity && first.index == second.index

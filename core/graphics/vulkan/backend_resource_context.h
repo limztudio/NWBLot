@@ -157,7 +157,7 @@ inline void AttachGraphicsPipelineFixedState(
     VkGraphicsPipelineCreateInfo& pipelineInfo,
     const VkPipelineRasterizationStateCreateInfo& rasterizer,
     const GraphicsPipelineFixedState& fixedState
-){
+)noexcept{
     pipelineInfo.pViewportState = &fixedState.viewportState;
     pipelineInfo.pRasterizationState = &rasterizer;
     pipelineInfo.pMultisampleState = &fixedState.multisampling;
@@ -170,20 +170,20 @@ inline void AttachGraphicsPipelineFixedState(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask state);
-VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask state, bool rayTracingStageAvailable);
-VkImageLayout GetVkImageLayout(ResourceStates::Mask state);
-VkFormat ConvertFormat(Format::Enum format);
-VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount);
-extern VkDeviceAddress GetBufferDeviceAddress(Buffer* bufferResource, u64 offset = 0);
-bool IsSupportedSampleCount(u32 sampleCount);
+VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask state)noexcept;
+VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask state, bool rayTracingStageAvailable)noexcept;
+VkImageLayout GetVkImageLayout(ResourceStates::Mask state)noexcept;
+VkFormat ConvertFormat(Format::Enum format)noexcept;
+VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount)noexcept;
+extern VkDeviceAddress GetBufferDeviceAddress(Buffer* bufferResource, u64 offset = 0)noexcept;
+bool IsSupportedSampleCount(u32 sampleCount)noexcept;
 bool ValidateTextureShape(const TextureDesc& desc, TStringView operationName);
-VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo);
-bool GetTextureFormatBlockLayout(const FormatInfo& formatInfo, TextureFormatBlockLayout& outLayout);
+VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo)noexcept;
+bool GetTextureFormatBlockLayout(const FormatInfo& formatInfo, TextureFormatBlockLayout& outLayout)noexcept;
 bool TryComputeCommonAlignment(u32 firstAlignment, u32 secondAlignment, u32& outAlignment)noexcept;
 bool TryComputeUploadSuballocationAlignment(u32 requiredAlignment, u32& outAlignment)noexcept;
 bool IsBufferImageCopyAspectMaskSupported(VkImageAspectFlags aspectMask)noexcept;
-VkExtent3D GetTextureMipExtent(const TextureDesc& desc, MipLevel mipLevel);
+VkExtent3D GetTextureMipExtent(const TextureDesc& desc, MipLevel mipLevel)noexcept;
 bool BuildBufferImageCopyLayout(
     const VkExtent3D& extent,
     const TextureFormatBlockLayout& formatLayout,
@@ -208,8 +208,8 @@ VkImageSubresourceLayers BuildImageSubresourceLayers(
     MipLevel mipLevel,
     ArraySlice arraySlice,
     ArraySlice layerCount = 1u
-);
-VkImageSubresourceRange BuildImageSubresourceRange(const TextureSubresourceSet& subresources, VkImageAspectFlags aspectMask);
+)noexcept;
+VkImageSubresourceRange BuildImageSubresourceRange(const TextureSubresourceSet& subresources, VkImageAspectFlags aspectMask)noexcept;
 bool BuildTextureImageViewCreateInfo(
     Texture& texture,
     const TextureSubresourceSet& resolvedSubresources,
@@ -231,7 +231,7 @@ bool BuildStagingTextureRange(
     StagingTextureRange& outRange
 )noexcept;
 bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout, TextureSlice* outResolved = nullptr);
-bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes);
+bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes)noexcept;
 
 template<typename... Pointers>
 [[nodiscard]] constexpr bool AreAllPointersValid(Pointers... pointers)noexcept{
@@ -336,8 +336,8 @@ inline bool DebugValidateTextureSliceExtentsMatch(
     return true;
 }
 
-bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes);
-u32 GetPushConstantByteSize(const BindingLayoutDesc& desc);
+bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes)noexcept;
+u32 GetPushConstantByteSize(const BindingLayoutDesc& desc)noexcept;
 bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, TStringView operationName);
 bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, TStringView operationName);
 void DestroyPipelineAndOwnedLayout(const VulkanContext& context, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
@@ -363,23 +363,23 @@ bool BuildClusterOperationInputInfo(
     VkClusterAccelerationStructureClustersBottomLevelInputNV& outBlasInput,
     TStringView operationName
 );
-VkDescriptorType ConvertDescriptorType(ResourceType::Enum type);
-VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages);
+VkDescriptorType ConvertDescriptorType(ResourceType::Enum type)noexcept;
+VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages)noexcept;
 // Descriptor-buffer offset alignment clamped to a 32-bit value (1 when zero/oversized) for byte-offset math.
-u32 GetDescriptorBufferOffsetAlignmentBytes(const VulkanContext& context);
+u32 GetDescriptorBufferOffsetAlignmentBytes(const VulkanContext& context)noexcept;
 VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
 CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type);
 VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout);
 bool BuildPipelineRenderingInfo(const FramebufferInfo& fbinfo, TStringView operationName, VkPipelineRenderingCreateInfo& outRenderingInfo, PipelineRenderingFormatVector& outColorFormats);
 
 template<typename T>
-constexpr T MakeVkStruct(VkStructureType sType){
+constexpr T MakeVkStruct(VkStructureType sType)noexcept(noexcept(T{}) && noexcept(static_cast<T*>(nullptr)->sType = sType) && IsNothrowMoveConstructible_V<T> && IsNothrowDestructible_V<T>){
     T output{};
     output.sType = sType;
     return output;
 }
 
-constexpr VkCullModeFlags ConvertCullMode(RasterCullMode::Enum cullMode){
+constexpr VkCullModeFlags ConvertCullMode(RasterCullMode::Enum cullMode)noexcept{
     switch(cullMode){
     case RasterCullMode::Back:  return VK_CULL_MODE_BACK_BIT;
     case RasterCullMode::Front: return VK_CULL_MODE_FRONT_BIT;
@@ -388,7 +388,7 @@ constexpr VkCullModeFlags ConvertCullMode(RasterCullMode::Enum cullMode){
     }
 }
 
-constexpr VkPolygonMode ConvertFillMode(RasterFillMode::Enum fillMode){
+constexpr VkPolygonMode ConvertFillMode(RasterFillMode::Enum fillMode)noexcept{
     switch(fillMode){
     case RasterFillMode::Solid:     return VK_POLYGON_MODE_FILL;
     case RasterFillMode::Wireframe: return VK_POLYGON_MODE_LINE;
@@ -400,7 +400,7 @@ inline VkPipelineRasterizationStateCreateInfo BuildPipelineRasterizationState(
     const RasterState& rasterState,
     const VkPolygonMode polygonMode,
     const VkBool32 depthClampEnable
-){
+)noexcept{
     auto rasterizer = MakeVkStruct<VkPipelineRasterizationStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO);
     rasterizer.depthClampEnable = depthClampEnable;
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
@@ -416,7 +416,7 @@ inline VkPipelineRasterizationStateCreateInfo BuildPipelineRasterizationState(
     return rasterizer;
 }
 
-constexpr VkCompareOp ConvertCompareOp(ComparisonFunc::Enum compareFunc){
+constexpr VkCompareOp ConvertCompareOp(ComparisonFunc::Enum compareFunc)noexcept{
     switch(compareFunc){
     case ComparisonFunc::Never:          return VK_COMPARE_OP_NEVER;
     case ComparisonFunc::Less:           return VK_COMPARE_OP_LESS;
@@ -430,7 +430,7 @@ constexpr VkCompareOp ConvertCompareOp(ComparisonFunc::Enum compareFunc){
     }
 }
 
-constexpr VkStencilOp ConvertStencilOp(StencilOp::Enum stencilOp){
+constexpr VkStencilOp ConvertStencilOp(StencilOp::Enum stencilOp)noexcept{
     switch(stencilOp){
     case StencilOp::Keep:              return VK_STENCIL_OP_KEEP;
     case StencilOp::Zero:              return VK_STENCIL_OP_ZERO;
@@ -444,7 +444,7 @@ constexpr VkStencilOp ConvertStencilOp(StencilOp::Enum stencilOp){
     }
 }
 
-constexpr VkStencilOpState ConvertStencilOpState(const DepthStencilState& dsState, const DepthStencilState::StencilOpDesc& stencilDesc){
+constexpr VkStencilOpState ConvertStencilOpState(const DepthStencilState& dsState, const DepthStencilState::StencilOpDesc& stencilDesc)noexcept{
     VkStencilOpState state = {};
     state.failOp = ConvertStencilOp(stencilDesc.failOp);
     state.passOp = ConvertStencilOp(stencilDesc.passOp);
@@ -456,7 +456,7 @@ constexpr VkStencilOpState ConvertStencilOpState(const DepthStencilState& dsStat
     return state;
 }
 
-constexpr VkBlendFactor ConvertBlendFactor(BlendFactor::Enum blendFactor){
+constexpr VkBlendFactor ConvertBlendFactor(BlendFactor::Enum blendFactor)noexcept{
     switch(blendFactor){
     case BlendFactor::Zero:             return VK_BLEND_FACTOR_ZERO;
     case BlendFactor::One:              return VK_BLEND_FACTOR_ONE;
@@ -479,7 +479,7 @@ constexpr VkBlendFactor ConvertBlendFactor(BlendFactor::Enum blendFactor){
     }
 }
 
-constexpr VkBlendOp ConvertBlendOp(BlendOp::Enum blendOp){
+constexpr VkBlendOp ConvertBlendOp(BlendOp::Enum blendOp)noexcept{
     switch(blendOp){
     case BlendOp::Add:             return VK_BLEND_OP_ADD;
     case BlendOp::Subtract:        return VK_BLEND_OP_SUBTRACT;
@@ -526,8 +526,8 @@ inline VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(const Fr
 }
 
 bool ConfigurePipelineMultisampleState(const u32 sampleCount, const bool alphaToCoverageEnable, VkPipelineMultisampleStateCreateInfo& outState, TStringView operationName);
-void ConfigurePipelineDepthStencilState(const DepthStencilState& state, PipelineStencilFaceMode::Enum stencilFaceMode, VkPipelineDepthStencilStateCreateInfo& outState);
-VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc);
+void ConfigurePipelineDepthStencilState(const DepthStencilState& state, PipelineStencilFaceMode::Enum stencilFaceMode, VkPipelineDepthStencilStateCreateInfo& outState)noexcept;
+VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc)noexcept;
 
 inline void CopyHostMemory(
     CpuTaskScheduler& cpuScheduler,

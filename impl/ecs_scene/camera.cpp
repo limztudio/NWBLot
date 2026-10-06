@@ -26,7 +26,7 @@ namespace __hidden_camera{
     const SIMDVector position,
     const SIMDVector rotation,
     const SIMDVector scale
-){
+)noexcept{
     constexpr f32 s_CameraRotationUnitLengthSquaredTolerance = 0.001f;
     const f32 rotationLengthSquared = VectorGetX(QuaternionLengthSq(rotation));
 
@@ -50,7 +50,7 @@ namespace __hidden_camera{
     const SIMDVector rotation,
     const SIMDVector scale,
     SceneCameraView& outCameraView
-){
+)noexcept{
     outCameraView = SceneCameraView{};
     if(!SceneCameraTransformValid(position, rotation, scale))
         return false;

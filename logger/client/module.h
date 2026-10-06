@@ -83,7 +83,7 @@ public:
 protected:
     bool internalInit(AStringView url);
     bool internalUpdate();
-    [[nodiscard]] inline bool workerCanExit()const{
+    [[nodiscard]] inline bool workerCanExit()const noexcept{
         return !m_hasPendingPayload && !m_messageCount.load(MemoryOrder::acquire) && !m_telemetryCount.load(MemoryOrder::acquire);
     }
 

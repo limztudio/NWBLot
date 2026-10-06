@@ -34,7 +34,7 @@ static Futex s_PrintMutex;
 static volatile SignalAtomic s_ShouldExit = 0;
 static constexpr u32 s_ConsoleUpdateIntervalMilliseconds = 50u;
 
-static void SignalHandler(i32){
+static void SignalHandler(i32)noexcept{
     s_ShouldExit = 1;
 }
 

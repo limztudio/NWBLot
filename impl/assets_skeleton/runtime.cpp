@@ -81,7 +81,7 @@ void Skeleton::rebuildHierarchy(){
     }
 }
 
-u32 Skeleton::rootJointCount()const{
+u32 Skeleton::rootJointCount()const noexcept{
     u32 rootCount = 0u;
     for(const SkeletonJoint& joint : m_joints){
         if(joint.parentIndex == s_SkeletonInvalidJointIndex)

@@ -25,7 +25,7 @@ UploadManager::~UploadManager(){
     clear();
 }
 
-void UploadManager::clear(){
+void UploadManager::clear()noexcept{
     for(QueueChunkLedger& entry : m_queueChunkLedgers)
         entry.chunks.clear();
     m_queueChunkLedgers.clear();

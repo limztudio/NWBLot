@@ -131,7 +131,7 @@ struct LifetimeProbe{
 };
 
 
-[[nodiscard]] CpuTaskSchedulerConfig HomogeneousWorkers(u32 count){
+[[nodiscard]] CpuTaskSchedulerConfig HomogeneousWorkers(u32 count)noexcept{
     CpuTaskSchedulerConfig config;
     config.workerCount = count;
     config.heterogeneous = false;
@@ -160,14 +160,14 @@ TEST(CpuTaskSchedulerTests, DependencyFanInWaitsForEveryPredecessorIncludingDupl
     EXPECT_TRUE(WaitUntil(rootGate.entered));
     CpuTaskHandle dependencies[6u];
     for(u32 index = 0u; index < 4u; ++index){
-        dependencies[index] = scheduler.submit([&completedBits, index](){
+        dependencies[index] = scheduler.submit([&completedBits, index]()noexcept{
             completedBits.fetch_or(1u << index, MemoryOrder::release);
         }, root);
         EXPECT_TRUE(dependencies[index].valid());
     }
     dependencies[4u] = dependencies[1u];
     dependencies[5u] = {};
-    const auto join = scheduler.submit([&](){
+    const auto join = scheduler.submit([&]()noexcept{
         observedBits.store(completedBits.load(MemoryOrder::acquire), MemoryOrder::release);
     }, {}, dependencies, 6u);
     EXPECT_TRUE(join.valid());
@@ -185,14 +185,14 @@ TEST(CpuTaskSchedulerTests, ForeignDependenciesAndForeignWaitsAreRejectedWithout
     DeadlineGuard deadline;
     CpuTaskScheduler first(0u);
     CpuTaskScheduler second(0u);
-    const auto foreign = first.submit([](){});
+    const auto foreign = first.submit([]()noexcept{});
     u32 invoked = 0u;
-    const auto rejected = second.submit([&](){ ++invoked; }, foreign);
+    const auto rejected = second.submit([&]()noexcept{ ++invoked; }, foreign);
     EXPECT_FALSE(rejected.valid());
     EXPECT_EQ(second.statistics().outstandingTasks, 0u);
     EXPECT_THROW(second.wait(foreign), RuntimeException);
     first.wait(foreign);
-    EXPECT_FALSE(second.submit([&](){ ++invoked; }, foreign).valid());
+    EXPECT_FALSE(second.submit([&]()noexcept{ ++invoked; }, foreign).valid());
     EXPECT_EQ(invoked, 0u);
 }
 
@@ -201,10 +201,10 @@ TEST(CpuTaskSchedulerTests, RetiredHandlesStayCompleteWhenNodeStorageIsReused){
     using namespace __hidden_cpu_task_scheduler_tests;
     DeadlineGuard deadline;
     CpuTaskScheduler scheduler(0u);
-    const auto retired = scheduler.submit([](){});
+    const auto retired = scheduler.submit([]()noexcept{});
     scheduler.wait(retired);
     u32 invoked = 0u;
-    const auto pending = scheduler.submit([&](){ ++invoked; });
+    const auto pending = scheduler.submit([&]()noexcept{ ++invoked; });
     EXPECT_TRUE(scheduler.isComplete(retired));
     EXPECT_FALSE(scheduler.isComplete(pending));
     scheduler.wait(retired);
@@ -243,7 +243,7 @@ TEST(CpuTaskSchedulerTests, ParentCompletionRetainsAncestorCapturesUntilGrandchi
         if(!child.valid())
             rejected.store(true, MemoryOrder::release);
     });
-    const auto dependent = scheduler.submit([&](){
+    const auto dependent = scheduler.submit([&]()noexcept{
         retirementsSeenByDependent.store(retirements.load(MemoryOrder::acquire), MemoryOrder::release);
     }, parent);
     EXPECT_TRUE(WaitUntil(grandchildGate.entered));
@@ -271,7 +271,7 @@ TEST(CpuTaskSchedulerTests, ScopeJoinDoesNotWaitForAnUnrelatedRunningScope){
     const auto unrelatedTask = unrelated.submit([&](){ unrelatedGate.block(); });
     EXPECT_TRUE(WaitUntil(unrelatedGate.entered));
     Atomic<bool> ownedFinished{ false };
-    EXPECT_TRUE(owned.submit([&](){ ownedFinished.store(true, MemoryOrder::release); }).valid());
+    EXPECT_TRUE(owned.submit([&]()noexcept{ ownedFinished.store(true, MemoryOrder::release); }).valid());
     owned.wait();
     EXPECT_TRUE(ownedFinished.load());
     EXPECT_FALSE(scheduler.isComplete(unrelatedTask));
@@ -311,7 +311,7 @@ TEST(CpuTaskSchedulerTests, OneWorkerCompletesNestedParallelRangesThroughCoopera
     Atomic<u32> visited[35u]{};
     const auto root = scheduler.submit([&](){
         scheduler.parallelFor(0u, 5u, 1u, [&](const usize outer){
-            scheduler.parallelFor(0u, 7u, 1u, [&](const usize inner){
+            scheduler.parallelFor(0u, 7u, 1u, [&](const usize inner)noexcept{
                 visited[outer * 7u + inner].fetch_add(1u, MemoryOrder::relaxed);
             });
         });
@@ -364,7 +364,7 @@ TEST(CpuTaskSchedulerTests, ZeroWorkersMakeProgressAcrossChildrenDependenciesAnd
     bool rejected = false;
     ThreadId actual;
     const auto parent = scheduler.submit([&](){
-        const auto child = scheduler.submit([&](){ value = 17u; });
+        const auto child = scheduler.submit([&]()noexcept{ value = 17u; });
         CpuTaskOptions mainOptions;
         mainOptions.target = CpuTaskTarget::MainThread;
         rejected = !scheduler.submit([&](){ value *= 3u; actual = QueryCurrentThreadId(); }, mainOptions, &child, 1u).valid();
@@ -395,7 +395,7 @@ TEST(CpuTaskSchedulerTests, QueuedPrioritiesRunCriticalThenNormalThenBackgroundA
     for(u32 index = 0u; index < 3u; ++index){
         CpuTaskOptions options;
         options.priority = priorities[index];
-        EXPECT_TRUE(scheduler.submit([&, index](){ order[cursor.fetch_add(1u)] = index; }, options).valid());
+        EXPECT_TRUE(scheduler.submit([&, index]()noexcept{ order[cursor.fetch_add(1u)] = index; }, options).valid());
     }
     occupied.open();
     scheduler.wait();
@@ -417,7 +417,7 @@ TEST(CpuTaskSchedulerTests, CanceledScopeSkipsQueuedBodiesAndTheirDependentsAndR
     const auto predecessor = scope.submit([&invoked, capture = LifetimeProbe(retired, 1u)](){ invoked += capture.value; });
     const auto dependent = scheduler.submit([&invoked, capture = LifetimeProbe(retired, s_ExpectedDualCount)](){ invoked += capture.value; }, predecessor);
     scope.cancel();
-    EXPECT_FALSE(scope.submit([&](){ ++invoked; }).valid());
+    EXPECT_FALSE(scope.submit([&]()noexcept{ ++invoked; }).valid());
     scheduler.wait(dependent);
     scope.wait();
     EXPECT_EQ(invoked, 0u);
@@ -443,7 +443,7 @@ TEST(CpuTaskSchedulerTests, CancelingAnActiveParentPreventsFutureDescendantsAndC
             childRejected.store(true, MemoryOrder::release);
     });
     EXPECT_TRUE(WaitUntil(parentGate.entered));
-    const auto continuation = scheduler.submit([&](){ continuationInvocations.fetch_add(1u); }, parent);
+    const auto continuation = scheduler.submit([&]()noexcept{ continuationInvocations.fetch_add(1u); }, parent);
     scope.cancel();
     parentGate.open();
     scheduler.wait(continuation);
@@ -541,8 +541,8 @@ TEST(CpuTaskSchedulerTests, CanceledScopeSkipsBothDirectParallelRangeOverloads){
     CpuTaskScope scope(scheduler);
     u32 invocations = 0u;
     scope.cancel();
-    scope.parallelFor(0u, 17u, [&](usize){ ++invocations; });
-    scope.parallelFor(4u, 25u, 3u, [&](usize){ ++invocations; });
+    scope.parallelFor(0u, 17u, [&](usize)noexcept{ ++invocations; });
+    scope.parallelFor(4u, 25u, 3u, [&](usize)noexcept{ ++invocations; });
     scope.wait();
     EXPECT_EQ(invocations, 0u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
@@ -575,17 +575,17 @@ TEST(CpuTaskSchedulerTests, LateDependenciesRetainCanceledResultsAfterRepeatedNo
     CpuTaskScope canceledScope(scheduler);
     u32 canceledInvocations = 0u;
     u32 unrelatedInvocations = 0u;
-    const auto canceled = canceledScope.submit([&](){ ++canceledInvocations; });
+    const auto canceled = canceledScope.submit([&]()noexcept{ ++canceledInvocations; });
     canceledScope.cancel();
     canceledScope.wait();
     for(u32 iteration = 0u; iteration < 16u; ++iteration){
-        const auto unrelated = scheduler.submit([&](){ ++unrelatedInvocations; });
+        const auto unrelated = scheduler.submit([&]()noexcept{ ++unrelatedInvocations; });
         scheduler.wait(unrelated);
     }
-    const auto lateDependent = scheduler.submit([&](){ ++canceledInvocations; }, canceled);
+    const auto lateDependent = scheduler.submit([&]()noexcept{ ++canceledInvocations; }, canceled);
     ASSERT_TRUE(lateDependent.valid());
     scheduler.wait(lateDependent);
-    const auto laterDependent = scheduler.submit([&](){ ++canceledInvocations; }, lateDependent);
+    const auto laterDependent = scheduler.submit([&]()noexcept{ ++canceledInvocations; }, lateDependent);
     ASSERT_TRUE(laterDependent.valid());
     scheduler.wait(laterDependent);
     EXPECT_EQ(canceledInvocations, 0u);
@@ -604,7 +604,7 @@ TEST(CpuTaskSchedulerTests, ChildCannotDependDirectlyOnItsStructuredParent){
         CpuTaskHandle parent;
         bool rejected = false;
         parent = scheduler.submit([&](){
-            const auto child = scheduler.submit([](){}, parent);
+            const auto child = scheduler.submit([]()noexcept{}, parent);
             rejected = !child.valid();
         });
         scheduler.pumpMainThread();
@@ -625,12 +625,12 @@ TEST(CpuTaskSchedulerTests, ChildCannotDependOnATransitiveDependentOfItsStructur
         bool rejected = false;
         u32 continuations = 0u;
         const auto parent = scheduler.submit([&](){
-            const auto child = scheduler.submit([](){}, dependent);
+            const auto child = scheduler.submit([]()noexcept{}, dependent);
             rejected = !child.valid();
         });
         dependent = parent;
         for(u32 depth = 0u; depth < 3u; ++depth)
-            dependent = scheduler.submit([&](){ ++continuations; }, dependent);
+            dependent = scheduler.submit([&]()noexcept{ ++continuations; }, dependent);
         scheduler.pumpMainThread();
         if(!rejected)
             ExitTestProcess(1u);
@@ -673,7 +673,7 @@ TEST(CpuTaskSchedulerTests, WorkerCannotWaitForAnIndependentlySubmittedDependent
         CpuTaskScheduler scheduler(HomogeneousWorkers(1u));
         CpuTaskHandle dependent;
         const auto running = scheduler.submit([&](){ start.block(); scheduler.wait(dependent); });
-        dependent = scheduler.submit([](){}, running);
+        dependent = scheduler.submit([]()noexcept{}, running);
         start.open();
         scheduler.wait();
     }, "");
@@ -693,7 +693,7 @@ TEST(CpuTaskSchedulerTests, DescendantCannotWaitForTransitiveDependentsOfItsAnce
         });
         dependent = parent;
         for(u32 depth = 0u; depth < 3u; ++depth)
-            dependent = scheduler.submit([](){}, dependent);
+            dependent = scheduler.submit([]()noexcept{}, dependent);
         start.open();
         scheduler.wait();
     }, "");

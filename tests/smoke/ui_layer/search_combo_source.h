@@ -39,9 +39,9 @@ private:
 
 
     public:
-        virtual u64 instanceGeneration()const override{ return 2u; }
-        virtual u64 revision()const override{ return m_source.m_viewRevision; }
-        virtual u64 rowCount()const override{ return m_source.m_filteredCount; }
+        virtual u64 instanceGeneration()const noexcept override{ return 2u; }
+        virtual u64 revision()const noexcept override{ return m_source.m_viewRevision; }
+        virtual u64 rowCount()const noexcept override{ return m_source.m_filteredCount; }
         virtual u64 key(u64 index)const override;
         virtual bool indexOf(u64 key, u64& index)const override;
         virtual bool findEnabled(u64 start, bool reverse, u64& index)const override;
@@ -59,16 +59,16 @@ public:
 
 
 public:
-    virtual u64 instanceGeneration()const override{ return m_rows.instanceGeneration(); }
-    virtual u64 revision()const override{ return m_rows.revision(); }
-    virtual u64 rowCount()const override{ return m_rows.rowCount(); }
+    virtual u64 instanceGeneration()const noexcept override{ return m_rows.instanceGeneration(); }
+    virtual u64 revision()const noexcept override{ return m_rows.revision(); }
+    virtual u64 rowCount()const noexcept override{ return m_rows.rowCount(); }
     virtual u64 key(u64 index)const override{ return m_rows.key(index); }
     virtual bool indexOf(u64 key, u64& index)const override{ return m_rows.indexOf(key, index); }
     virtual bool findEnabled(u64 start, bool reverse, u64& index)const override;
     virtual StringView text(u64 index)const override{ return m_rows.text(index); }
     virtual bool enabled(u64 index)const override{ return m_rows.enabled(index); }
     [[nodiscard]] virtual bool filter(AStringView query)override;
-    [[nodiscard]] virtual const Impl::Ui::IListDataSource& filtered()const override{ return m_view; }
+    [[nodiscard]] virtual const Impl::Ui::IListDataSource& filtered()const noexcept override{ return m_view; }
 
 
 public:

@@ -123,9 +123,9 @@ struct PerfSessionRecordResult{
     u32 memoryEvents = 0u;
     bool succeeded = true;
 
-    [[nodiscard]] bool ok()const{ return succeeded; }
-    [[nodiscard]] u32 eventCount()const{ return cpuTimingEvents + gpuTimingEvents + memoryEvents; }
-    [[nodiscard]] bool recordedAny()const{ return eventCount() != 0u; }
+    [[nodiscard]] bool ok()const noexcept{ return succeeded; }
+    [[nodiscard]] u32 eventCount()const noexcept{ return cpuTimingEvents + gpuTimingEvents + memoryEvents; }
+    [[nodiscard]] bool recordedAny()const noexcept{ return eventCount() != 0u; }
 };
 
 

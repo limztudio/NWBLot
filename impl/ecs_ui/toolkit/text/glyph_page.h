@@ -36,7 +36,7 @@ struct GlyphPageBinding{
     u32 height = 0u;
 };
 
-[[nodiscard]] inline bool SameGlyphPageKey(const GlyphPageBinding& first, const GlyphPageBinding& second){
+[[nodiscard]] inline bool SameGlyphPageKey(const GlyphPageBinding& first, const GlyphPageBinding& second)noexcept{
     return
         first.font == second.font && first.fontGeneration == second.fontGeneration
         && first.atlasIdentity == second.atlasIdentity && first.index == second.index
@@ -57,12 +57,12 @@ public:
 
 
 public:
-    GlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& binding, Pixels&& pixels);
+    GlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& binding, Pixels&& pixels)noexcept;
 
 
 public:
-    [[nodiscard]] const GlyphPageBinding& binding()const{ return m_binding; }
-    [[nodiscard]] const Pixels& pixels()const{ return m_pixels; }
+    [[nodiscard]] const GlyphPageBinding& binding()const noexcept{ return m_binding; }
+    [[nodiscard]] const Pixels& pixels()const noexcept{ return m_pixels; }
 
 
 private:

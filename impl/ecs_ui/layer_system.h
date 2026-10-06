@@ -73,14 +73,14 @@ public:
 
 
 public:
-    void setGpuCommandRecordingMode(Ui::GpuCommandRecordingMode::Enum mode);
+    void setGpuCommandRecordingMode(Ui::GpuCommandRecordingMode::Enum mode)noexcept;
     // Main-thread request; last request wins. Empty selects the engine default. Safe from a UI paint callback.
-    void requestSkin(const Core::Assets::AssetRef<UiSkin>& skin);
-    [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& selectedSkin()const{ return m_skinSelection.selected(); }
-    [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& requestedSkin()const{ return m_skinSelection.requestedChange(); }
-    [[nodiscard]] bool skinRequestPending()const{ return m_skinSelection.changePending(); }
-    [[nodiscard]] bool skinRequestFailed()const{ return m_skinSelection.changeFailed(); }
-    [[nodiscard]] virtual Core::CpuTaskOptions taskOptions()const override{
+    void requestSkin(const Core::Assets::AssetRef<UiSkin>& skin)noexcept;
+    [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& selectedSkin()const noexcept{ return m_skinSelection.selected(); }
+    [[nodiscard]] const Core::Assets::AssetRef<UiSkin>& requestedSkin()const noexcept{ return m_skinSelection.requestedChange(); }
+    [[nodiscard]] bool skinRequestPending()const noexcept{ return m_skinSelection.changePending(); }
+    [[nodiscard]] bool skinRequestFailed()const noexcept{ return m_skinSelection.changeFailed(); }
+    [[nodiscard]] virtual Core::CpuTaskOptions taskOptions()const noexcept override{
         return { .cost = Core::CpuTaskCost::Light, .target = Core::CpuTaskTarget::MainThread };
     }
     virtual void update(Core::ECS::World& world, f32 delta)override;
@@ -98,7 +98,7 @@ public:
     // Projects map device controls to UI commands; each nonzero device/control pair identifies one held sequence.
     [[nodiscard]] bool commandInput(Ui::InputSource source, Ui::InputCommand::Enum command, i32 phase, bool extend = false);
     virtual bool keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods)override;
-    [[nodiscard]] virtual bool blocksKeyboardText()const override{ return m_blockCommandChars; }
+    [[nodiscard]] virtual bool blocksKeyboardText()const noexcept override{ return m_blockCommandChars; }
     virtual bool keyboardCharInput(u32 unicode, i32 mods)override;
     virtual bool mousePosUpdate(f64 xpos, f64 ypos)override;
     virtual bool mouseButtonUpdate(i32 button, i32 action, i32 mods)override;

@@ -58,7 +58,7 @@ bool X11CheckedOperation::succeeded(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-X11Property::~X11Property(){
+X11Property::~X11Property()noexcept{
     if(bytes && XFree(bytes) == 0)
         TerminateInvariant();
 }

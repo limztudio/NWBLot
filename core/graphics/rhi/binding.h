@@ -51,14 +51,14 @@ struct BindingLayoutItem{
     // Must be 1 for VolatileConstantBuffer
     u16 size : 16;
 
-    constexpr BindingLayoutItem& setSlot(u32 value){ slot = value; return *this; }
-    constexpr BindingLayoutItem& setType(ResourceType::Enum value){ type = value; return *this; }
-    constexpr BindingLayoutItem& setSize(u32 value){ size = static_cast<u16>(value); return *this; }
+    constexpr BindingLayoutItem& setSlot(u32 value)noexcept{ slot = value; return *this; }
+    constexpr BindingLayoutItem& setType(ResourceType::Enum value)noexcept{ type = value; return *this; }
+    constexpr BindingLayoutItem& setSize(u32 value)noexcept{ size = static_cast<u16>(value); return *this; }
 
-    constexpr u32 getArraySize()const{ return (type == ResourceType::PushConstants) ? 1 : size; }
+    constexpr u32 getArraySize()const noexcept{ return (type == ResourceType::PushConstants) ? 1 : size; }
 
 #define NWB_BINDING_LAYOUT_ITEM_INITIALIZER(TYPE_ENUM, FACTORY_NAME) \
-    static constexpr BindingLayoutItem FACTORY_NAME(const u32 slot, const usize size){ \
+    static constexpr BindingLayoutItem FACTORY_NAME(const u32 slot, const usize size)noexcept{ \
         BindingLayoutItem ret{}; \
         ret.slot = slot; \
         ret.type = ResourceType::TYPE_ENUM; \
@@ -77,7 +77,7 @@ struct BindingLayoutItem{
     NWB_BINDING_LAYOUT_ITEM_INITIALIZER(VolatileConstantBuffer, VolatileConstantBuffer)
     NWB_BINDING_LAYOUT_ITEM_INITIALIZER(Sampler, Sampler)
     NWB_BINDING_LAYOUT_ITEM_INITIALIZER(RayTracingAccelStruct, RayTracingAccelStruct)
-    static constexpr BindingLayoutItem PushConstants(const u32 slot, const usize size){
+    static constexpr BindingLayoutItem PushConstants(const u32 slot, const usize size)noexcept{
         BindingLayoutItem ret{};
         ret.slot = slot;
         ret.type = ResourceType::PushConstants;
@@ -86,10 +86,10 @@ struct BindingLayoutItem{
     }
 #undef NWB_BINDING_LAYOUT_ITEM_INITIALIZER
 };
-inline bool operator==(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs){
+inline bool operator==(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs)noexcept{
     return lhs.slot == rhs.slot && lhs.type == rhs.type && lhs.size == rhs.size;
 }
-inline bool operator!=(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs){ return !(lhs == rhs); }
+inline bool operator!=(const BindingLayoutItem& lhs, const BindingLayoutItem& rhs)noexcept{ return !(lhs == rhs); }
 static_assert(sizeof(BindingLayoutItem) == BindingLayoutItem::s_ByteSize, "sizeof(BindingLayoutItem) is supposed to be 8 bytes");
 
 struct BindingLayoutDesc{
@@ -100,7 +100,7 @@ struct BindingLayoutDesc{
         : bindings(arena)
     {}
 
-    constexpr BindingLayoutDesc& setVisibility(ShaderType::Mask value){ visibility = value; return *this; }
+    constexpr BindingLayoutDesc& setVisibility(ShaderType::Mask value)noexcept{ visibility = value; return *this; }
     BindingLayoutDesc& addItem(const BindingLayoutItem& value){ bindings.push_back(value); return *this; }
 };
 
@@ -131,11 +131,11 @@ struct BindlessLayoutDesc{
     ShaderType::Mask visibility = ShaderType::None;
     BindlessLayoutType::Enum layoutType = BindlessLayoutType::Immutable;
 
-    constexpr BindlessLayoutDesc& setVisibility(ShaderType::Mask value){ visibility = value; return *this; }
-    constexpr BindlessLayoutDesc& setMaxCapacity(u32 value){ maxCapacity = value; return *this; }
+    constexpr BindlessLayoutDesc& setVisibility(ShaderType::Mask value)noexcept{ visibility = value; return *this; }
+    constexpr BindlessLayoutDesc& setMaxCapacity(u32 value)noexcept{ maxCapacity = value; return *this; }
     constexpr BindlessLayoutDesc& addRegisterSpace(const BindingLayoutItem& value){ registerSpaces.push_back(value); return *this; }
-    constexpr BindlessLayoutDesc& setLayoutType(BindlessLayoutType::Enum value){ layoutType = value; return *this; }
-    constexpr BindlessLayoutDesc& setDescriptorSetIndex(u32 value){ descriptorSetIndex = value; return *this; }
+    constexpr BindlessLayoutDesc& setLayoutType(BindlessLayoutType::Enum value)noexcept{ layoutType = value; return *this; }
+    constexpr BindlessLayoutDesc& setDescriptorSetIndex(u32 value)noexcept{ descriptorSetIndex = value; return *this; }
 };
 
 typedef GraphicsBackend::Handle<BindingLayout> BindingLayoutHandle;
@@ -170,15 +170,15 @@ struct DescriptorWriteItem{
     static_assert(sizeof(BufferRange) == BufferRange::s_ByteSize, "sizeof(BufferRange) is supposed to be 16 bytes");
 
     // Intentionally uninitialized to avoid clearing large descriptor arrays.
-    DescriptorWriteItem(){}
+    DescriptorWriteItem()noexcept{}
 
-    constexpr DescriptorWriteItem& setArrayElement(u32 value){ arrayElement = value; return *this; }
-    constexpr DescriptorWriteItem& setFormat(Format::Enum value){ format = value; return *this; }
-    constexpr DescriptorWriteItem& setDimension(TextureDimension::Enum value){ dimension = value; return *this; }
-    constexpr DescriptorWriteItem& setSubresources(TextureSubresourceSet value){ subresources = value; return *this; }
-    constexpr DescriptorWriteItem& setRange(BufferRange value){ range = value; return *this; }
+    constexpr DescriptorWriteItem& setArrayElement(u32 value)noexcept{ arrayElement = value; return *this; }
+    constexpr DescriptorWriteItem& setFormat(Format::Enum value)noexcept{ format = value; return *this; }
+    constexpr DescriptorWriteItem& setDimension(TextureDimension::Enum value)noexcept{ dimension = value; return *this; }
+    constexpr DescriptorWriteItem& setSubresources(TextureSubresourceSet value)noexcept{ subresources = value; return *this; }
+    constexpr DescriptorWriteItem& setRange(BufferRange value)noexcept{ range = value; return *this; }
 
-    static DescriptorWriteItem Base(u32 slot, ResourceType::Enum type, void* resourceHandle, Format::Enum format, TextureDimension::Enum dimension){
+    static DescriptorWriteItem Base(u32 slot, ResourceType::Enum type, void* resourceHandle, Format::Enum format, TextureDimension::Enum dimension)noexcept{
         DescriptorWriteItem result;
         result.slot = slot;
         result.arrayElement = 0;
@@ -193,64 +193,64 @@ struct DescriptorWriteItem{
         return result;
     }
 
-    static DescriptorWriteItem None(u32 slot = 0){
+    static DescriptorWriteItem None(u32 slot = 0)noexcept{
         return Base(slot, ResourceType::None, nullptr, Format::UNKNOWN, TextureDimension::Unknown);
     }
-    static DescriptorWriteItem TextureSrv(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_AllSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown){
+    static DescriptorWriteItem TextureSrv(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = s_AllSubresources, TextureDimension::Enum dimension = TextureDimension::Unknown)noexcept{
         DescriptorWriteItem result = Base(slot, ResourceType::Texture_SRV, texture, format, dimension);
         result.subresources = subresources;
         return result;
     }
-    static DescriptorWriteItem TextureUav(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::s_AllArraySlices), TextureDimension::Enum dimension = TextureDimension::Unknown){
+    static DescriptorWriteItem TextureUav(u32 slot, Texture* texture, Format::Enum format = Format::UNKNOWN, TextureSubresourceSet subresources = TextureSubresourceSet(0, 1, 0, TextureSubresourceSet::s_AllArraySlices), TextureDimension::Enum dimension = TextureDimension::Unknown)noexcept{
         DescriptorWriteItem result = Base(slot, ResourceType::Texture_UAV, texture, format, dimension);
         result.subresources = subresources;
         return result;
     }
-    static DescriptorWriteItem TypedBufferSrv(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
+    static DescriptorWriteItem TypedBufferSrv(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer)noexcept{
         DescriptorWriteItem result = Base(slot, ResourceType::TypedBuffer_SRV, buffer, format, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static DescriptorWriteItem TypedBufferUav(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
+    static DescriptorWriteItem TypedBufferUav(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer)noexcept{
         DescriptorWriteItem result = Base(slot, ResourceType::TypedBuffer_UAV, buffer, format, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static DescriptorWriteItem ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer);
-    static DescriptorWriteItem Sampler(u32 slot, Core::Sampler* sampler){
+    static DescriptorWriteItem ConstantBuffer(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer)noexcept;
+    static DescriptorWriteItem Sampler(u32 slot, Core::Sampler* sampler)noexcept{
         return Base(slot, ResourceType::Sampler, sampler, Format::UNKNOWN, TextureDimension::Unknown);
     }
-    static DescriptorWriteItem RayTracingAccelStruct(u32 slot, Core::RayTracingAccelStruct* as){
+    static DescriptorWriteItem RayTracingAccelStruct(u32 slot, Core::RayTracingAccelStruct* as)noexcept{
         return Base(slot, ResourceType::RayTracingAccelStruct, as, Format::UNKNOWN, TextureDimension::Unknown);
     }
-    static DescriptorWriteItem StructuredBufferSrv(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
+    static DescriptorWriteItem StructuredBufferSrv(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer)noexcept{
         DescriptorWriteItem result = Base(slot, ResourceType::StructuredBuffer_SRV, buffer, format, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static DescriptorWriteItem StructuredBufferUav(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer){
+    static DescriptorWriteItem StructuredBufferUav(u32 slot, Buffer* buffer, Format::Enum format = Format::UNKNOWN, BufferRange range = s_EntireBuffer)noexcept{
         DescriptorWriteItem result = Base(slot, ResourceType::StructuredBuffer_UAV, buffer, format, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static DescriptorWriteItem RawBufferSrv(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer){
+    static DescriptorWriteItem RawBufferSrv(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer)noexcept{
         DescriptorWriteItem result = Base(slot, ResourceType::RawBuffer_SRV, buffer, Format::UNKNOWN, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static DescriptorWriteItem RawBufferUav(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer){
+    static DescriptorWriteItem RawBufferUav(u32 slot, Buffer* buffer, BufferRange range = s_EntireBuffer)noexcept{
         DescriptorWriteItem result = Base(slot, ResourceType::RawBuffer_UAV, buffer, Format::UNKNOWN, TextureDimension::Unknown);
         result.range = range;
         return result;
     }
-    static DescriptorWriteItem PushConstants(u32 slot, u32 byteSize){
+    static DescriptorWriteItem PushConstants(u32 slot, u32 byteSize)noexcept{
         DescriptorWriteItem result = Base(slot, ResourceType::PushConstants, nullptr, Format::UNKNOWN, TextureDimension::Unknown);
         result.range.byteOffset = 0;
         result.range.byteSize = byteSize;
         return result;
     }
 };
-inline bool operator==(const DescriptorWriteItem& lhs, const DescriptorWriteItem& rhs){
+inline bool operator==(const DescriptorWriteItem& lhs, const DescriptorWriteItem& rhs)noexcept{
     return
         lhs.resourceHandle == rhs.resourceHandle
         && lhs.slot == rhs.slot
@@ -262,7 +262,7 @@ inline bool operator==(const DescriptorWriteItem& lhs, const DescriptorWriteItem
         && lhs.rawData[1] == rhs.rawData[1]
     ;
 }
-inline bool operator!=(const DescriptorWriteItem& lhs, const DescriptorWriteItem& rhs){ return !(lhs == rhs); }
+inline bool operator!=(const DescriptorWriteItem& lhs, const DescriptorWriteItem& rhs)noexcept{ return !(lhs == rhs); }
 static_assert(sizeof(DescriptorWriteItem) == DescriptorWriteItem::s_ByteSize, "sizeof(DescriptorWriteItem) is supposed to be 40 bytes");
 
 

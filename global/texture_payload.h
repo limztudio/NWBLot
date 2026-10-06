@@ -25,7 +25,7 @@ namespace TextureDimension{
     };
 };
 
-[[nodiscard]] constexpr bool IsValidTextureDimension(const TextureDimension::Enum dimension){
+[[nodiscard]] constexpr bool IsValidTextureDimension(const TextureDimension::Enum dimension)noexcept{
     return dimension == TextureDimension::Texture2D
         || dimension == TextureDimension::TextureCube
         || dimension == TextureDimension::Texture3D
@@ -45,13 +45,13 @@ namespace TexturePayloadFormat{
     };
 };
 
-[[nodiscard]] constexpr bool IsValidTexturePayloadFormat(const TexturePayloadFormat::Enum format){
+[[nodiscard]] constexpr bool IsValidTexturePayloadFormat(const TexturePayloadFormat::Enum format)noexcept{
     return format == TexturePayloadFormat::UastcLdr4x4
         || format == TexturePayloadFormat::UastcHdr4x4
     ;
 }
 
-[[nodiscard]] constexpr bool IsHdrTexturePayloadFormat(const TexturePayloadFormat::Enum format){
+[[nodiscard]] constexpr bool IsHdrTexturePayloadFormat(const TexturePayloadFormat::Enum format)noexcept{
     return format == TexturePayloadFormat::UastcHdr4x4;
 }
 
@@ -73,7 +73,7 @@ namespace TextureAlphaMode{
     };
 };
 
-[[nodiscard]] constexpr bool IsValidTextureAlphaMode(const TextureAlphaMode::Enum mode){
+[[nodiscard]] constexpr bool IsValidTextureAlphaMode(const TextureAlphaMode::Enum mode)noexcept{
     return mode == TextureAlphaMode::Opaque
         || mode == TextureAlphaMode::EmbeddedLdr
         || mode == TextureAlphaMode::ConstantUnorm8
@@ -120,7 +120,7 @@ inline constexpr u32 s_MaxConstantAlphaUnorm8 = s_OpaqueAlphaUnorm8 - 1u;
     const u32 height,
     const u32 depth,
     u32& outMipCount
-){
+)noexcept{
     outMipCount = 0u;
     if(!IsValidTextureDimension(dimension) || width == 0u || height == 0u || depth == 0u)
         return false;
@@ -147,7 +147,7 @@ inline constexpr u32 s_MaxConstantAlphaUnorm8 = s_OpaqueAlphaUnorm8 - 1u;
     const TextureDimension::Enum dimension,
     const u32 mipDepth,
     u32& outSliceCount
-){
+)noexcept{
     switch(dimension){
     case TextureDimension::Texture2D:
         outSliceCount = 1u;
@@ -169,7 +169,7 @@ inline constexpr u32 s_MaxConstantAlphaUnorm8 = s_OpaqueAlphaUnorm8 - 1u;
     u32& outBlockWidth,
     u32& outBlockHeight,
     u32& outBytesPerBlock
-){
+)noexcept{
     switch(format){
     case TexturePayloadFormat::UastcLdr4x4:
     case TexturePayloadFormat::UastcHdr4x4:
@@ -192,7 +192,7 @@ inline constexpr u32 s_MaxConstantAlphaUnorm8 = s_OpaqueAlphaUnorm8 - 1u;
     u32& outBlocksX,
     u32& outBlocksY,
     u64& outPlaneByteCount
-){
+)noexcept{
     outBlocksX = 0u;
     outBlocksY = 0u;
     outPlaneByteCount = 0u;

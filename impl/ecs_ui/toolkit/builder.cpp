@@ -244,7 +244,7 @@ Builder::Item* Builder::addItem(
     return &m_scope->m_items.back();
 }
 
-const UiSkinRegion* Builder::region(const Name& preferred, const Name& fallback)const{
+const UiSkinRegion* Builder::region(const Name& preferred, const Name& fallback)const noexcept{
     if(!m_skin)
         return nullptr;
     const UiSkinRegion* found = m_skin->findRegion(preferred);

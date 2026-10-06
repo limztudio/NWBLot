@@ -14,12 +14,12 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EditModelSnapshot::EditModelSnapshot(Core::Alloc::GlobalArena& arena)
+EditModelSnapshot::EditModelSnapshot(Core::Alloc::GlobalArena& arena)noexcept
     : m_expectedText(arena)
     , m_expectedPreedit(arena)
 {}
 
-bool EditModelSnapshot::matches(const EditModel& model)const{
+bool EditModelSnapshot::matches(const EditModel& model)const noexcept{
     const auto composition = model.composition();
     return
         model.revision() == m_expectedRevision && model.externalRevision() == m_expectedExternalRevision
@@ -47,7 +47,7 @@ void EditModelSnapshot::capture(const EditModel& model){
     m_expectedComposition.text = {};
 }
 
-void EditModelSnapshot::clear(){
+void EditModelSnapshot::clear()noexcept{
     m_expectedText.clear();
     m_expectedPreedit.clear();
     m_expectedComposition = {};

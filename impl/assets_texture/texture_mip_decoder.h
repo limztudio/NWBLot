@@ -26,7 +26,7 @@ struct TextureDecodedMipUpload{
     usize rowPitch = 0u;
     usize sliceByteCount = 0u;
 
-    explicit TextureDecodedMipUpload(Core::Alloc::ScratchArena& arena)
+    explicit TextureDecodedMipUpload(Core::Alloc::ScratchArena& arena)noexcept
         : bytes(arena)
     {}
 };
@@ -37,7 +37,7 @@ struct TextureDecodedMipUpload{
 
 class TextureMipDecoder final : NoCopy{
 public:
-    TextureMipDecoder();
+    TextureMipDecoder()noexcept;
 
 
 public:

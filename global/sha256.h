@@ -15,11 +15,11 @@ struct Sha256Digest{
     u8 bytes[32u] = {};
 };
 
-[[nodiscard]] inline bool operator==(const Sha256Digest& lhs, const Sha256Digest& rhs){
+[[nodiscard]] inline bool operator==(const Sha256Digest& lhs, const Sha256Digest& rhs)noexcept{
     return GLB_MEMCMP(lhs.bytes, rhs.bytes, sizeof(lhs.bytes)) == 0;
 }
 
-[[nodiscard]] inline bool operator!=(const Sha256Digest& lhs, const Sha256Digest& rhs){
+[[nodiscard]] inline bool operator!=(const Sha256Digest& lhs, const Sha256Digest& rhs)noexcept{
     return !(lhs == rhs);
 }
 
@@ -48,11 +48,11 @@ inline constexpr u32 s_RoundConstants[64u] = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline u32 Rotate(const u32 value, const u32 count){
+[[nodiscard]] inline u32 Rotate(const u32 value, const u32 count)noexcept{
     return (value >> count) | (value << (32u - count));
 }
 
-inline void Compress(u32 (&state)[8u], const u8 (&block)[64u]){
+inline void Compress(u32 (&state)[8u], const u8 (&block)[64u])noexcept{
     u32 words[64u] = {};
     for(u32 index = 0u; index < 16u; ++index){
         const u8* bytes = block + index * 4u;
@@ -87,7 +87,7 @@ inline void Compress(u32 (&state)[8u], const u8 (&block)[64u]){
 
 
 // Byte-oriented SHA-256 content identity; no host byte-order or allocator dependency.
-[[nodiscard]] inline Sha256Digest ComputeSha256(const BinaryByteView input){
+[[nodiscard]] inline Sha256Digest ComputeSha256(const BinaryByteView input)noexcept{
     u32 state[8u] = { 0x6a09e667u, 0xbb67ae85u, 0x3c6ef372u, 0xa54ff53au, 0x510e527fu, 0x9b05688cu, 0x1f83d9abu, 0x5be0cd19u };
     u8 block[64u] = {};
     usize offset = 0u;
@@ -115,7 +115,7 @@ inline void Compress(u32 (&state)[8u], const u8 (&block)[64u]){
     return digest;
 }
 
-[[nodiscard]] inline bool ParseSha256(const AStringView text, Sha256Digest& outDigest){
+[[nodiscard]] inline bool ParseSha256(const AStringView text, Sha256Digest& outDigest)noexcept{
     if(text.size() != 64u)
         return false;
     Sha256Digest parsed;

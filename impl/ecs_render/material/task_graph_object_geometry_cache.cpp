@@ -115,7 +115,7 @@ struct ReadyTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
     struct Payload{};
-    [[nodiscard]] static bool Record(const Payload&, Core::CommandList&, const Core::GpuTaskRecordContext&){ return true; }
+    [[nodiscard]] static bool Record(const Payload&, Core::CommandList&, const Core::GpuTaskRecordContext&)noexcept{ return true; }
 };
 
 

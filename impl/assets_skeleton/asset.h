@@ -81,12 +81,12 @@ public:
     void setJoints(JointVector&& joints, JointIndexMap&& jointIndices);
 
 public:
-    [[nodiscard]] const JointVector& joints()const{ return m_joints; }
-    [[nodiscard]] const JointChildRangeVector& jointChildRanges()const{ return m_childRanges; }
-    [[nodiscard]] const JointChildIndexVector& jointChildIndices()const{ return m_childIndices; }
-    [[nodiscard]] const JointIndexMap& jointIndices()const{ return m_jointIndices; }
-    [[nodiscard]] u32 jointCount()const{ return static_cast<u32>(m_joints.size()); }
-    [[nodiscard]] u32 rootJointCount()const;
+    [[nodiscard]] const JointVector& joints()const noexcept{ return m_joints; }
+    [[nodiscard]] const JointChildRangeVector& jointChildRanges()const noexcept{ return m_childRanges; }
+    [[nodiscard]] const JointChildIndexVector& jointChildIndices()const noexcept{ return m_childIndices; }
+    [[nodiscard]] const JointIndexMap& jointIndices()const noexcept{ return m_jointIndices; }
+    [[nodiscard]] u32 jointCount()const noexcept{ return static_cast<u32>(m_joints.size()); }
+    [[nodiscard]] u32 rootJointCount()const noexcept;
     [[nodiscard]] u32 findJointIndex(Name jointName)const;
 
 private:

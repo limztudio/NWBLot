@@ -114,7 +114,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool consumeToggleRequest(){
+    [[nodiscard]] bool consumeToggleRequest()noexcept{
         const bool requested = m_toggleRequested;
         m_toggleRequested = false;
         return requested;

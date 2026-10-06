@@ -24,14 +24,14 @@ template<typename>
 inline constexpr bool s_DependentFalse = false;
 
 template<typename Container>
-inline void RequireByteContainer(){
+inline void RequireByteContainer()noexcept{
     using ByteType = typename Container::value_type;
     static constexpr usize s_ByteTypeByteSize = 1u;
     static_assert(sizeof(ByteType) == s_ByteTypeByteSize, "binary helpers require a byte-sized container");
 }
 
 template<typename Container>
-[[nodiscard]] inline bool CanAppendBytes(const Container& outBinary, const usize byteCount){
+[[nodiscard]] inline bool CanAppendBytes(const Container& outBinary, const usize byteCount)noexcept(IsSame_V<decltype(outBinary.size()), usize> && noexcept(outBinary.size())){
     return outBinary.size() <= Limit<usize>::s_Max - byteCount;
 }
 
@@ -74,14 +74,18 @@ inline void AppendBytesUnchecked(Container& outBinary, const void* bytes, const 
 }
 
 template<typename Container>
-[[nodiscard]] inline bool CanReadBytes(const Container& binary, const usize offset, const usize byteCount){
+[[nodiscard]] inline bool CanReadBytes(const Container& binary, const usize offset, const usize byteCount)noexcept(IsSame_V<decltype(binary.size()), usize> && noexcept(binary.size())){
     if(offset > binary.size())
         return false;
     return binary.size() - offset >= byteCount;
 }
 
 template<typename Container>
-[[nodiscard]] inline bool ReadBytes(const Container& binary, usize& inOutOffset, void* outBytes, const usize byteCount){
+[[nodiscard]] inline bool ReadBytes(const Container& binary, usize& inOutOffset, void* outBytes, const usize byteCount)noexcept(
+    noexcept(CanReadBytes(binary, inOutOffset, byteCount))
+    && IsPointer_V<decltype(binary.data())>
+    && noexcept(binary.data())
+){
     RequireByteContainer<Container>();
     if(!CanReadBytes(binary, inOutOffset, byteCount))
         return false;
@@ -116,10 +120,10 @@ struct BinaryByteView{
     const u8* bytes = nullptr;
     usize byteCount = 0u;
 
-    [[nodiscard]] bool empty()const{ return byteCount == 0u; }
-    [[nodiscard]] usize size()const{ return byteCount; }
-    [[nodiscard]] const u8* data()const{ return bytes; }
-    [[nodiscard]] u8 operator[](const usize index)const{ return bytes[index]; }
+    [[nodiscard]] bool empty()const noexcept{ return byteCount == 0u; }
+    [[nodiscard]] usize size()const noexcept{ return byteCount; }
+    [[nodiscard]] const u8* data()const noexcept{ return bytes; }
+    [[nodiscard]] u8 operator[](const usize index)const noexcept{ return bytes[index]; }
 };
 
 
@@ -135,7 +139,7 @@ inline void AppendPOD(Container& outBinary, const PodType& value){
 }
 
 template<typename Container, typename PodType>
-[[nodiscard]] inline bool ReadPOD(const Container& binary, usize& inOutOffset, PodType& outValue){
+[[nodiscard]] inline bool ReadPOD(const Container& binary, usize& inOutOffset, PodType& outValue)noexcept(noexcept(BinaryDetail::ReadBytes(binary, inOutOffset, &outValue, sizeof(PodType)))){
     return BinaryDetail::ReadBytes(binary, inOutOffset, &outValue, sizeof(PodType));
 }
 
@@ -156,7 +160,7 @@ namespace BinaryDetail{
 
 
 template<typename Container>
-[[nodiscard]] inline bool SkipBytes(const Container& binary, usize& inOutOffset, const usize byteCount){
+[[nodiscard]] inline bool SkipBytes(const Container& binary, usize& inOutOffset, const usize byteCount)noexcept(noexcept(CanReadBytes(binary, inOutOffset, byteCount))){
     RequireByteContainer<Container>();
     if(!CanReadBytes(binary, inOutOffset, byteCount))
         return false;
@@ -166,7 +170,11 @@ template<typename Container>
 }
 
 template<typename Container>
-[[nodiscard]] inline bool ReadLengthPrefixedString(const Container& binary, usize& inOutOffset, AStringView& outText){
+[[nodiscard]] inline bool ReadLengthPrefixedString(const Container& binary, usize& inOutOffset, AStringView& outText)noexcept(
+    noexcept(ReadPOD(binary, inOutOffset, DeclVal<u32&>()))
+    && IsPointer_V<decltype(binary.data())>
+    && noexcept(binary.data())
+){
     outText = {};
 
     usize cursor = inOutOffset;
@@ -279,7 +287,7 @@ struct BinaryVectorPayloadFailure{
 };
 
 template<typename ValueType>
-[[nodiscard]] inline bool ComputeBinaryVectorPayloadBytes(const u64 count, usize& outBytes){
+[[nodiscard]] inline bool ComputeBinaryVectorPayloadBytes(const u64 count, usize& outBytes)noexcept{
     static_assert(IsTriviallyCopyable_V<ValueType>, "binary vector payloads require trivially-copyable elements");
 
     outBytes = 0u;
@@ -356,7 +364,7 @@ template<typename Container, typename ValueContainer>
     return BinaryVectorPayloadFailure::None;
 }
 
-[[nodiscard]] inline bool AddBinaryReserveBytes(usize& inOutBytes, const usize additionalBytes){
+[[nodiscard]] inline bool AddBinaryReserveBytes(usize& inOutBytes, const usize additionalBytes)noexcept{
     if(additionalBytes > Limit<usize>::s_Max - inOutBytes)
         return false;
 
@@ -364,14 +372,14 @@ template<typename Container, typename ValueContainer>
     return true;
 }
 
-[[nodiscard]] inline bool AddBinaryRepeatedReserveBytes(usize& inOutBytes, const usize count, const usize bytesPerItem){
+[[nodiscard]] inline bool AddBinaryRepeatedReserveBytes(usize& inOutBytes, const usize count, const usize bytesPerItem)noexcept{
     if(bytesPerItem != 0u && count > Limit<usize>::s_Max / bytesPerItem)
         return false;
 
     return AddBinaryReserveBytes(inOutBytes, count * bytesPerItem);
 }
 
-[[nodiscard]] inline bool AddBinaryStringReserveBytes(usize& inOutBytes, const AStringView text){
+[[nodiscard]] inline bool AddBinaryStringReserveBytes(usize& inOutBytes, const AStringView text)noexcept{
     if(text.size() > Limit<u32>::s_Max)
         return false;
 
@@ -379,12 +387,12 @@ template<typename Container, typename ValueContainer>
 }
 
 template<typename Container>
-[[nodiscard]] inline bool AddBinaryVectorReserveBytes(usize& inOutBytes, const Container& values){
+[[nodiscard]] inline bool AddBinaryVectorReserveBytes(usize& inOutBytes, const Container& values)noexcept(IsSame_V<decltype(values.size()), usize> && noexcept(values.size())){
     using ValueType = typename Container::value_type;
     return AddBinaryRepeatedReserveBytes(inOutBytes, values.size(), sizeof(ValueType));
 }
 
-[[nodiscard]] inline bool AddStringTableTextReserveBytes(usize& inOutBytes, const AStringView text){
+[[nodiscard]] inline bool AddStringTableTextReserveBytes(usize& inOutBytes, const AStringView text)noexcept{
     if(text.empty())
         return false;
     if(text.size() > Limit<usize>::s_Max - 1u)

@@ -33,14 +33,14 @@ public:
 
 
 public:
-    inline BasicFrameData()
+    inline BasicFrameData()noexcept
         : m_data{}
     {}
 
 
 public:
-    inline Param& frameParam(){ return m_data; }
-    inline const Param& frameParam()const{ return m_data; }
+    inline Param& frameParam()noexcept{ return m_data; }
+    inline const Param& frameParam()const noexcept{ return m_data; }
 
 
 protected:

@@ -31,7 +31,7 @@ namespace TextCaretEdge{
     enum Enum : u8{ Leading, Trailing };
 };
 
-[[nodiscard]] constexpr u32 TextScriptTag(char a, char b, char c, char d){
+[[nodiscard]] constexpr u32 TextScriptTag(char a, char b, char c, char d)noexcept{
     return (static_cast<u32>(a) << 24u) | (static_cast<u32>(b) << 16u) | (static_cast<u32>(c) << 8u) | static_cast<u32>(d);
 }
 
@@ -50,7 +50,7 @@ struct FontMetrics{
 };
 
 // This validates scalar UTF-8 and admitted label controls, not Unicode grapheme or paragraph segmentation.
-[[nodiscard]] TextLayoutStatus::Enum ValidateTextRequest(const ShapeRequest& request, bool allowLineBreaks);
+[[nodiscard]] TextLayoutStatus::Enum ValidateTextRequest(const ShapeRequest& request, bool allowLineBreaks)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

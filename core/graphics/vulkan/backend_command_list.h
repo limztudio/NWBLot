@@ -340,8 +340,8 @@ public:
     [[nodiscard]] bool hasExplicitTextureSubresourceState(Texture* texture, ArraySlice arraySlice, MipLevel mipLevel)const;
     [[nodiscard]] bool hasExplicitBufferState(Buffer* buffer, BufferRange range = s_EntireBuffer, bool requireKnown = false)const;
 
-    Device& getDevice(){ return m_device; }
-    const CommandListParameters& getDescription(){ return m_desc; }
+    Device& getDevice()noexcept{ return m_device; }
+    const CommandListParameters& getDescription()noexcept{ return m_desc; }
     [[nodiscard]] CommandListParameters getResolvedDescription()const noexcept{ return m_creationDesc; }
 
 private:

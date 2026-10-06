@@ -31,7 +31,7 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE bool HasSkeletonPose(const SkeletonPoseComponent* pose){
+[[nodiscard]] GLB_INLINE bool HasSkeletonPose(const SkeletonPoseComponent* pose)noexcept{
     return pose && (!pose->localJoints.empty() || !pose->parentJoints.empty());
 }
 
@@ -40,7 +40,7 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     const bool hasInverseBind,
     const SIMDMatrix& inverseBind,
     const f32 inverseBindDeterminantEpsilon,
-    SIMDMatrix& outMatrix){
+    SIMDMatrix& outMatrix)noexcept{
     outMatrix = poseJoint;
     if(!MatrixIsInvertibleAffine(outMatrix, s_AffineEpsilon, s_JointDeterminantEpsilon))
         return false;
@@ -57,7 +57,7 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     const SIMDMatrix& localJoint,
     const SIMDMatrix* parentJoint,
     SIMDMatrix& outMatrix
-){
+)noexcept{
     outMatrix = localJoint;
     if(!MatrixIsInvertibleAffine(outMatrix, s_AffineEpsilon, s_JointDeterminantEpsilon))
         return false;

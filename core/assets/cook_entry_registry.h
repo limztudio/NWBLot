@@ -127,7 +127,7 @@ namespace CookEntryRegistryDetail{
 
 
 // Resolves a cook entry's virtualPath to a Name; strings hash on demand.
-[[nodiscard]] inline const Name& ToCookEntryName(const Name& virtualPath){
+[[nodiscard]] inline const Name& ToCookEntryName(const Name& virtualPath)noexcept{
     return virtualPath;
 }
 template<typename StringT>
@@ -141,7 +141,7 @@ template<typename StringT>
 }
 template<typename StringT>
     requires requires(const StringT& text){ typename StringT::value_type; text.data(); text.size(); }
-[[nodiscard]] inline BasicStringView<typename StringT::value_type> ToCookEntryText(const StringT& virtualPath){
+[[nodiscard]] inline BasicStringView<typename StringT::value_type> ToCookEntryText(const StringT& virtualPath)noexcept(noexcept(BasicStringView<typename StringT::value_type>(virtualPath.data(), virtualPath.size()))){
     return BasicStringView<typename StringT::value_type>(virtualPath.data(), virtualPath.size());
 }
 
@@ -426,12 +426,12 @@ public:
         return true;
     }
 
-    [[nodiscard]] ICookEntryBucket* find(const Name& assetType)const{
+    [[nodiscard]] ICookEntryBucket* find(const Name& assetType)const noexcept{
         const auto found = m_lookup.find(assetType);
         return found == m_lookup.end() ? nullptr : found.value();
     }
 
-    [[nodiscard]] bool has(const Name& assetType)const{
+    [[nodiscard]] bool has(const Name& assetType)const noexcept{
         return find(assetType) != nullptr;
     }
 
@@ -478,7 +478,7 @@ public:
         return false;
     }
 
-    [[nodiscard]] usize bucketCount()const{
+    [[nodiscard]] usize bucketCount()const noexcept{
         return m_buckets.size();
     }
 
@@ -491,7 +491,7 @@ public:
         return m_buckets[bucketIndex]->writeCookedAssets(context);
     }
 
-    [[nodiscard]] u64 entryCount()const{
+    [[nodiscard]] u64 entryCount()const noexcept{
         u64 count = 0;
         for(const BucketPtr& bucket : m_buckets){
             const u64 bucketSize = static_cast<u64>(bucket->size());
@@ -560,12 +560,12 @@ template<typename EntryT, typename AssetT, typename CodecT>
 }
 
 template<typename EntryT, typename AssetT, typename BuildFunction>
-[[nodiscard]] inline bool ForwardCookBuild(EntryT& entry, AssetT& outAsset, BuildFunction buildAsset){
+[[nodiscard]] inline bool ForwardCookBuild(EntryT& entry, AssetT& outAsset, BuildFunction buildAsset)noexcept(IsNothrowInvocableR_V<bool, BuildFunction&, EntryT&, AssetT&> && IsNothrowDestructible_V<BuildFunction>){
     return buildAsset(entry, outAsset);
 }
 
 template<typename EntryT, typename AssetT, typename ScratchT, typename BuildFunction>
-[[nodiscard]] inline bool ForwardCookBuildWithScratch(EntryT& entry, AssetT& outAsset, ScratchT& scratch, BuildFunction buildAsset){
+[[nodiscard]] inline bool ForwardCookBuildWithScratch(EntryT& entry, AssetT& outAsset, ScratchT& scratch, BuildFunction buildAsset)noexcept(IsNothrowInvocableR_V<bool, BuildFunction&, EntryT&, AssetT&, ScratchT&> && IsNothrowDestructible_V<BuildFunction>){
     return buildAsset(entry, outAsset, scratch);
 }
 

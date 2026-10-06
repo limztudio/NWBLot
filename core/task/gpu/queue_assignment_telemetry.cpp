@@ -51,7 +51,7 @@ namespace __hidden_queue_assignment_telemetry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void GpuTaskGraphQueueAssignmentTelemetryTracker::reset(){
+void GpuTaskGraphQueueAssignmentTelemetryTracker::reset()noexcept{
     m_current.clear();
     m_history.clear();
     m_generation = 0u;

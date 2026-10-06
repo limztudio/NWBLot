@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
     const usize positionCount,
     const usize skinCount,
     const bool skinRequired
-){
+)noexcept{
     return ref.position < positionCount && ( skinRequired ? ref.skin < skinCount : ref.skin == s_MeshMissingStreamIndex );
 }
 
@@ -30,7 +30,7 @@ NWB_IMPL_BEGIN
     const usize tangentCount,
     const usize uv0Count,
     const usize colorCount
-){
+)noexcept{
     return ref.normal < normalCount && ref.tangent < tangentCount && ref.uv0 < uv0Count && ref.color < colorCount;
 }
 

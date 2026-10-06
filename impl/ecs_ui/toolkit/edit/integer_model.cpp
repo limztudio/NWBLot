@@ -63,7 +63,7 @@ bool IntegerEditModel::canonicalize(const i64 value, bool* textChanged){
     return true;
 }
 
-void IntegerEditModel::advanceRevision(){
+void IntegerEditModel::advanceRevision()noexcept{
     if(m_revision == Limit<u64>::s_Max)
         TerminateInvariant();
     ++m_revision;

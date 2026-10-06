@@ -53,9 +53,9 @@ public:
 
 public:
     Entity createEntity();
-    [[nodiscard]] Entity entity(EntityID entityId);
+    [[nodiscard]] Entity entity(EntityID entityId)noexcept;
     void destroyEntity(EntityID entityId);
-    usize entityCount()const{ return m_entityManager.count(); }
+    usize entityCount()const noexcept{ return m_entityManager.count(); }
 
 
 public:
@@ -190,15 +190,15 @@ public:
 
 
 public:
-    [[nodiscard]] CpuTaskScope& taskScope(){ return m_tasks; }
-    [[nodiscard]] CpuTaskScheduler& taskScheduler(){ return m_tasks.scheduler(); }
+    [[nodiscard]] CpuTaskScope& taskScope()noexcept{ return m_tasks; }
+    [[nodiscard]] CpuTaskScheduler& taskScheduler()noexcept{ return m_tasks.scheduler(); }
 
     void tick(f32 delta);
     void clear();
 
 
 private:
-    bool alive(EntityID entityId)const{ return m_entityManager.alive(entityId); }
+    bool alive(EntityID entityId)const noexcept{ return m_entityManager.alive(entityId); }
 
     template<typename T>
     ComponentPool<T>* getPool(){

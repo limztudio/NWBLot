@@ -35,7 +35,7 @@ static Atomic<u64> s_NextIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool operator==(const SliderSnapshot& lhs, const SliderSnapshot& rhs){
+bool operator==(const SliderSnapshot& lhs, const SliderSnapshot& rhs)noexcept{
     return
         lhs.instanceGeneration == rhs.instanceGeneration && lhs.inputGeneration == rhs.inputGeneration
         && lhs.revision == rhs.revision && lhs.admissionGeneration == rhs.admissionGeneration && lhs.valueBits == rhs.valueBits
@@ -49,16 +49,16 @@ bool operator==(const SliderSnapshot& lhs, const SliderSnapshot& rhs){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SliderState::SliderState()
+SliderState::SliderState()noexcept
     : m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_slider_state::s_NextIdentity))
     , m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_slider_state::s_NextIdentity))
 {}
 
-ControlToken SliderState::controlToken()const{
+ControlToken SliderState::controlToken()const noexcept{
     return { m_inputGeneration, m_admissionGeneration, m_instanceGeneration };
 }
 
-SliderSnapshot SliderState::snapshot()const{
+SliderSnapshot SliderState::snapshot()const noexcept{
     return {
         .instanceGeneration = m_instanceGeneration,
         .inputGeneration = m_inputGeneration,
@@ -70,11 +70,11 @@ SliderSnapshot SliderState::snapshot()const{
     };
 }
 
-bool SliderState::matches(const SliderSnapshot& value)const{
+bool SliderState::matches(const SliderSnapshot& value)const noexcept{
     return snapshot() == value;
 }
 
-bool SliderState::setValue(const f64 value){
+bool SliderState::setValue(const f64 value)noexcept{
     if(!IsFinite(value))
         return false;
     advanceRevision();
@@ -85,7 +85,7 @@ bool SliderState::setValue(const f64 value){
     return true;
 }
 
-void SliderState::reset(){
+void SliderState::reset()noexcept{
     advanceRevision();
     advanceAdmission();
     m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_slider_state::s_NextIdentity);
@@ -106,13 +106,13 @@ void SliderState::reset(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void SliderState::advanceRevision(){
+void SliderState::advanceRevision()noexcept{
     if(m_revision == Limit<u64>::s_Max)
         TerminateInvariant();
     ++m_revision;
 }
 
-void SliderState::advanceAdmission(){
+void SliderState::advanceAdmission()noexcept{
     if(m_admissionGeneration == Limit<u64>::s_Max)
         TerminateInvariant();
     ++m_admissionGeneration;

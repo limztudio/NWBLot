@@ -22,7 +22,7 @@ namespace __hidden_shadow_cutter_snapshot{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] u32 ResolveShapeKind(const CsgShapeTypeInfo& shapeType){
+[[nodiscard]] u32 ResolveShapeKind(const CsgShapeTypeInfo& shapeType)noexcept{
     if(shapeType.desc.shaderModule)
         return NWB_CSG_SHADOW_SHAPE_UNSUPPORTED;
     const Name shapeName = shapeType.desc.name;

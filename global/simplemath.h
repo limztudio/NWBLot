@@ -17,32 +17,44 @@
 
 
 template<typename T>
-[[nodiscard]] constexpr const T& Min(const T& a, const T& b){ return (a < b) ? a : b; }
+[[nodiscard]] constexpr const T& Min(const T& a, const T& b)noexcept(IsArithmetic_V<T>){ return (a < b) ? a : b; }
 template<typename T, typename Compare>
-[[nodiscard]] constexpr const T& Min(const T& a, const T& b, Compare comp){ return comp(a, b) ? a : b; }
+[[nodiscard]] constexpr const T& Min(const T& a, const T& b, Compare comp)noexcept(noexcept(static_cast<bool>(comp(a, b))) && IsNothrowDestructible_V<Compare>){ return comp(a, b) ? a : b; }
 template<typename T>
-[[nodiscard]] constexpr T Min(InitializerList<T> list){ return *std::min_element(list.begin(), list.end()); }
+[[nodiscard]] constexpr T Min(InitializerList<T> list)noexcept(IsArithmetic_V<T>){ return *std::min_element(list.begin(), list.end()); }
 template<typename T, typename Compare>
-[[nodiscard]] constexpr T Min(InitializerList<T> list, Compare comp){
+[[nodiscard]] constexpr T Min(InitializerList<T> list, Compare comp)noexcept(
+    noexcept(Compare(comp))
+    && IsNothrowMoveConstructible_V<Compare>
+    && IsNothrowDestructible_V<Compare>
+    && noexcept(T(*list.begin()))
+    && noexcept(static_cast<bool>(comp(*list.begin(), *list.begin())))
+){
     return *std::min_element(list.begin(), list.end(), comp);
 }
 
 template<typename T>
-[[nodiscard]] constexpr const T& Max(const T& a, const T& b){ return (a > b) ? a : b; }
+[[nodiscard]] constexpr const T& Max(const T& a, const T& b)noexcept(IsArithmetic_V<T>){ return (a > b) ? a : b; }
 template<typename T, typename Compare>
-[[nodiscard]] constexpr const T& Max(const T& a, const T& b, Compare comp){ return comp(a, b) ? b : a; }
+[[nodiscard]] constexpr const T& Max(const T& a, const T& b, Compare comp)noexcept(noexcept(static_cast<bool>(comp(a, b))) && IsNothrowDestructible_V<Compare>){ return comp(a, b) ? b : a; }
 template<typename T>
-[[nodiscard]] constexpr T Max(InitializerList<T> list){ return *std::max_element(list.begin(), list.end()); }
+[[nodiscard]] constexpr T Max(InitializerList<T> list)noexcept(IsArithmetic_V<T>){ return *std::max_element(list.begin(), list.end()); }
 template<typename T, typename Compare>
-[[nodiscard]] constexpr T Max(InitializerList<T> list, Compare comp){
+[[nodiscard]] constexpr T Max(InitializerList<T> list, Compare comp)noexcept(
+    noexcept(Compare(comp))
+    && IsNothrowMoveConstructible_V<Compare>
+    && IsNothrowDestructible_V<Compare>
+    && noexcept(T(*list.begin()))
+    && noexcept(static_cast<bool>(comp(*list.begin(), *list.begin())))
+){
     return *std::max_element(list.begin(), list.end(), comp);
 }
 
 template<typename T>
-[[nodiscard]] constexpr GLB_INLINE T Abs(const T value){ return value < static_cast<T>(0) ? -value : value; }
+[[nodiscard]] constexpr GLB_INLINE T Abs(const T value)noexcept(IsArithmetic_V<T>){ return value < static_cast<T>(0) ? -value : value; }
 
 template<typename T>
-[[nodiscard]] constexpr GLB_INLINE T Clamp(const T value, const T minValue, const T maxValue){
+[[nodiscard]] constexpr GLB_INLINE T Clamp(const T value, const T minValue, const T maxValue)noexcept(IsArithmetic_V<T>){
     if(!(value > minValue))
         return minValue;
     if(value > maxValue)
@@ -51,17 +63,17 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] constexpr bool IsPowerOfTwo(const T value){
+[[nodiscard]] constexpr bool IsPowerOfTwo(const T value)noexcept(IsArithmetic_V<T>){
     return value > static_cast<T>(0) && (value & (value - static_cast<T>(1))) == static_cast<T>(0);
 }
 
 template<typename T>
-[[nodiscard]] constexpr bool IsSupportedAlignmentValue(const T align){
+[[nodiscard]] constexpr bool IsSupportedAlignmentValue(const T align)noexcept(IsArithmetic_V<T>){
     return align <= static_cast<T>(1) || (align & (align - static_cast<T>(1))) == static_cast<T>(0);
 }
 
 template<typename T>
-[[nodiscard]] constexpr bool AlignUpPowerOfTwoChecked(const T value, const T alignment, T& outValue){
+[[nodiscard]] constexpr bool AlignUpPowerOfTwoChecked(const T value, const T alignment, T& outValue)noexcept(IsArithmetic_V<T>){
     if(alignment == 0){
         outValue = value;
         return true;
@@ -76,7 +88,7 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] constexpr GLB_INLINE T Saturate(const T value){
+[[nodiscard]] constexpr GLB_INLINE T Saturate(const T value)noexcept(IsArithmetic_V<T>){
     if(value < static_cast<T>(0))
         return static_cast<T>(0);
     if(value > static_cast<T>(1))
@@ -85,138 +97,138 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] constexpr GLB_INLINE T FloorLog2(const T x){ return (x == 1) ? 0 : (1 + FloorLog2<T>(x >> 1)); }
+[[nodiscard]] constexpr GLB_INLINE T FloorLog2(const T x)noexcept(IsArithmetic_V<T>){ return (x == 1) ? 0 : (1 + FloorLog2<T>(x >> 1)); }
 template<typename T>
-[[nodiscard]] constexpr GLB_INLINE T CeilLog2(const T x){ return (x == 1) ? 0 : (FloorLog2<T>(x - 1) + 1); }
+[[nodiscard]] constexpr GLB_INLINE T CeilLog2(const T x)noexcept(IsArithmetic_V<T>){ return (x == 1) ? 0 : (FloorLog2<T>(x - 1) + 1); }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T Floor(const T value){
+[[nodiscard]] GLB_INLINE T Floor(const T value)noexcept(IsArithmetic_V<T>){
     using std::floor;
     return static_cast<T>(floor(value));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T Ceil(const T value){
+[[nodiscard]] GLB_INLINE T Ceil(const T value)noexcept(IsArithmetic_V<T>){
     using std::ceil;
     return static_cast<T>(ceil(value));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T ModF(const T value, T* outInteger){
+[[nodiscard]] GLB_INLINE T ModF(const T value, T* outInteger)noexcept(IsArithmetic_V<T>){
     using std::modf;
     return static_cast<T>(modf(value, outInteger));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T FMod(const T numerator, const T denominator){
+[[nodiscard]] GLB_INLINE T FMod(const T numerator, const T denominator)noexcept(IsArithmetic_V<T>){
     using std::fmod;
     return static_cast<T>(fmod(numerator, denominator));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T Sqrt(const T value){
+[[nodiscard]] GLB_INLINE T Sqrt(const T value)noexcept(IsArithmetic_V<T>){
     using std::sqrt;
     return static_cast<T>(sqrt(value));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T Sin(const T value){
+[[nodiscard]] GLB_INLINE T Sin(const T value)noexcept(IsArithmetic_V<T>){
     using std::sin;
     return static_cast<T>(sin(value));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T Cos(const T value){
+[[nodiscard]] GLB_INLINE T Cos(const T value)noexcept(IsArithmetic_V<T>){
     using std::cos;
     return static_cast<T>(cos(value));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T ASin(const T value){
+[[nodiscard]] GLB_INLINE T ASin(const T value)noexcept(IsArithmetic_V<T>){
     using std::asin;
     return static_cast<T>(asin(value));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T ATan2(const T y, const T x){
+[[nodiscard]] GLB_INLINE T ATan2(const T y, const T x)noexcept(IsArithmetic_V<T>){
     using std::atan2;
     return static_cast<T>(atan2(y, x));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T Exp(const T value){
+[[nodiscard]] GLB_INLINE T Exp(const T value)noexcept(IsArithmetic_V<T>){
     using std::exp;
     return static_cast<T>(exp(value));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T Exp2(const T value){
+[[nodiscard]] GLB_INLINE T Exp2(const T value)noexcept(IsArithmetic_V<T>){
     using std::exp2;
     return static_cast<T>(exp2(value));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T Log(const T value){
+[[nodiscard]] GLB_INLINE T Log(const T value)noexcept(IsArithmetic_V<T>){
     using std::log;
     return static_cast<T>(log(value));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T Log2(const T value){
+[[nodiscard]] GLB_INLINE T Log2(const T value)noexcept(IsArithmetic_V<T>){
     using std::log2;
     return static_cast<T>(log2(value));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T Log10(const T value){
+[[nodiscard]] GLB_INLINE T Log10(const T value)noexcept(IsArithmetic_V<T>){
     using std::log10;
     return static_cast<T>(log10(value));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T Pow(const T base, const T exponent){
+[[nodiscard]] GLB_INLINE T Pow(const T base, const T exponent)noexcept(IsArithmetic_V<T>){
     using std::pow;
     return static_cast<T>(pow(base, exponent));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T SinH(const T value){
+[[nodiscard]] GLB_INLINE T SinH(const T value)noexcept(IsArithmetic_V<T>){
     using std::sinh;
     return static_cast<T>(sinh(value));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T CosH(const T value){
+[[nodiscard]] GLB_INLINE T CosH(const T value)noexcept(IsArithmetic_V<T>){
     using std::cosh;
     return static_cast<T>(cosh(value));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE T TanH(const T value){
+[[nodiscard]] GLB_INLINE T TanH(const T value)noexcept(IsArithmetic_V<T>){
     using std::tanh;
     return static_cast<T>(tanh(value));
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE bool IsFinite(const T value){
+[[nodiscard]] GLB_INLINE bool IsFinite(const T value)noexcept(IsArithmetic_V<T>){
     using std::isfinite;
     return isfinite(value);
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE bool IsNaN(const T value){
+[[nodiscard]] GLB_INLINE bool IsNaN(const T value)noexcept(IsArithmetic_V<T>){
     using std::isnan;
     return isnan(value);
 }
 
 template<typename T>
-[[nodiscard]] GLB_INLINE bool SignBit(const T value){
+[[nodiscard]] GLB_INLINE bool SignBit(const T value)noexcept(IsArithmetic_V<T>){
     using std::signbit;
     return signbit(value);
 }
 
 template<typename T>
-[[nodiscard]] constexpr bool AddNoOverflow(const T lhs, const T rhs, T& outResult){
+[[nodiscard]] constexpr bool AddNoOverflow(const T lhs, const T rhs, T& outResult)noexcept(IsArithmetic_V<T>){
     if(lhs > (Limit<T>::s_Max - rhs))
         return false;
 

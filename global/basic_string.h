@@ -91,22 +91,22 @@ using WFormatString = std::wformat_string<T...>;
 template<usize N>
 struct ConstString{
     char data[N];
-    constexpr ConstString(const char(&str)[N]){
+    constexpr ConstString(const char(&str)[N])noexcept{
         for(usize i = 0u; i < N; ++i)
             data[i] = str[i];
     }
-    constexpr operator AStringView()const{ return AStringView(data, N - 1u); }
-    constexpr const char* c_str()const{ return data; }
+    constexpr operator AStringView()const noexcept{ return AStringView(data, N - 1u); }
+    constexpr const char* c_str()const noexcept{ return data; }
 };
 template<usize N>
 struct ConstWString{
     wchar data[N];
-    constexpr ConstWString(const wchar(&str)[N]){
+    constexpr ConstWString(const wchar(&str)[N])noexcept{
         for(usize i = 0u; i < N; ++i)
             data[i] = str[i];
     }
-    constexpr operator WStringView()const{ return WStringView(data, N - 1u); }
-    constexpr const wchar* c_str()const{ return data; }
+    constexpr operator WStringView()const noexcept{ return WStringView(data, N - 1u); }
+    constexpr const wchar* c_str()const noexcept{ return data; }
 };
 #if defined(GLB_UNICODE)
 template<usize N>
@@ -117,9 +117,9 @@ using ConstTString = ConstString<N>;
 #endif
 
 template<usize N>
-constexpr auto MakeConstString(const char(&str)[N]){ return ConstString<N>(str); }
+constexpr auto MakeConstString(const char(&str)[N])noexcept{ return ConstString<N>(str); }
 template<usize N>
-constexpr auto MakeConstWString(const wchar(&str)[N]){ return ConstWString<N>(str); }
+constexpr auto MakeConstWString(const wchar(&str)[N])noexcept{ return ConstWString<N>(str); }
 #if defined(GLB_UNICODE)
 #define GLB_MAKE_CONST_TSTRING MakeConstWString
 #else
@@ -412,7 +412,7 @@ inline TString<ArenaT> StringConvert(ArenaT& arena, const In& src){
 #endif
 
 template<typename In>
-inline BasicStringDetail::StringConvertArg<In> StringConvert(const In& src){
+inline BasicStringDetail::StringConvertArg<In> StringConvert(const In& src)noexcept{
     return BasicStringDetail::StringConvertArg<In>{ src };
 }
 
@@ -449,7 +449,7 @@ namespace std{
 
 template<typename In, typename CharT>
 struct formatter<BasicStringDetail::StringConvertArg<In>, CharT>{
-    constexpr auto parse(basic_format_parse_context<CharT>& ctx){
+    constexpr auto parse(basic_format_parse_context<CharT>& ctx)noexcept{
         return ctx.begin();
     }
 

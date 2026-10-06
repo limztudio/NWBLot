@@ -59,7 +59,7 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
     return false;
 }
 
-[[nodiscard]] static u32 ReadBigU32(const u8* bytes){
+[[nodiscard]] static u32 ReadBigU32(const u8* bytes)noexcept{
     return
         (static_cast<u32>(bytes[0u]) << 24u) | (static_cast<u32>(bytes[1u]) << 16u)
         | (static_cast<u32>(bytes[2u]) << 8u) | static_cast<u32>(bytes[3u])

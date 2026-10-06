@@ -28,7 +28,7 @@ private:
 
 
 public:
-    inline InplaceFunction() = default;
+    inline InplaceFunction()noexcept = default;
     inline ~InplaceFunction()noexcept{ reset(); }
 
     inline InplaceFunction(InplaceFunction&& rhs)noexcept{
@@ -54,7 +54,7 @@ public:
             && IsNothrowDestructible_V<FuncType>
         >
     >
-    inline explicit InplaceFunction(Func&& func){
+    inline explicit InplaceFunction(Func&& func)noexcept(noexcept(assign(Forward<Func>(func)))){
         assign(Forward<Func>(func));
     }
 
@@ -69,13 +69,13 @@ public:
             && IsNothrowDestructible_V<FuncType>
         >
     >
-    inline InplaceFunction& operator=(Func&& func){
+    inline InplaceFunction& operator=(Func&& func)noexcept(noexcept(assign(Forward<Func>(func)))){
         reset();
         assign(Forward<Func>(func));
         return *this;
     }
 
-    inline explicit operator bool()const{ return m_invoke != nullptr; }
+    inline explicit operator bool()const noexcept{ return m_invoke != nullptr; }
 
     inline void operator()(){
         GLB_ASSERT_MSG(m_invoke != nullptr, GLB_TEXT("InplaceFunction invoked without target"));
@@ -95,7 +95,7 @@ public:
 
 private:
     template<typename Func>
-    inline void assign(Func&& func){
+    inline void assign(Func&& func)noexcept(noexcept(new(storagePtr()) Decay_T<Func>(Forward<Func>(func)))){
         using FuncType = Decay_T<Func>;
 
         static_assert(sizeof(FuncType) <= InlineStorageSize, "InplaceFunction capture size exceeds inline storage");
@@ -134,7 +134,7 @@ private:
         rhs.m_move = nullptr;
     }
 
-    inline void* storagePtr(){
+    inline void* storagePtr()noexcept{
         return static_cast<void*>(m_storage.data);
     }
 

@@ -39,7 +39,7 @@ using namespace Impl;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static UiSkinRegion MakeRegion(const Name name, const u32 ordinal){
+[[nodiscard]] static UiSkinRegion MakeRegion(const Name name, const u32 ordinal)noexcept{
     UiSkinRegion region;
     region.name = name;
     region.rectangle = { ordinal, 0u, 1u, 1u };
@@ -50,7 +50,7 @@ static void SetRegions(UiSkin& skin, UiSkin::RegionVector&& regions){
     skin.setAtlas(Core::Assets::AssetRef<Texture>("test/skin/texture"), 8192u, 1u, 1.0f, Move(regions));
 }
 
-[[nodiscard]] static Name RegionName(const u32 index){
+[[nodiscard]] static Name RegionName(const u32 index)noexcept{
     NameHash hash{};
     hash.qwords[0u] = 1u + (index * 271u) % s_UiSkinMaxRegionCount;
     hash.qwords[s_NameHashLaneCount - 1u] = index + 1u;

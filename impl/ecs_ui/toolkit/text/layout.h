@@ -69,9 +69,9 @@ class TextLayout final{
 
 
 public:
-    explicit TextLayout(Core::Alloc::GlobalArena& arena);
-    TextLayout(TextLayout&&) = default;
-    TextLayout& operator=(TextLayout&&) = default;
+    explicit TextLayout(Core::Alloc::GlobalArena& arena)noexcept;
+    TextLayout(TextLayout&&)noexcept = default;
+    TextLayout& operator=(TextLayout&&)noexcept = default;
 
 
 public:
@@ -80,15 +80,15 @@ public:
 
 
 public:
-    [[nodiscard]] StringView utf8()const{ return { m_text.data(), m_text.size() }; }
-    [[nodiscard]] f32 fontSize()const{ return m_fontSize; }
-    [[nodiscard]] Point measure()const{ return m_measure; }
-    [[nodiscard]] Rect inkBounds()const{ return m_inkBounds; }
-    [[nodiscard]] const PaintVector<PlacedGlyph>& glyphs()const{ return m_glyphs; }
-    [[nodiscard]] const PaintVector<TextCluster>& clusters()const{ return m_clusters; }
-    [[nodiscard]] const PaintVector<TextLine>& lines()const{ return m_lines; }
-    [[nodiscard]] TextHit hitTest(Point point)const;
-    [[nodiscard]] bool caretRect(u32 byteOffset, TextCaretEdge::Enum edge, Rect& output)const;
+    [[nodiscard]] StringView utf8()const noexcept{ return { m_text.data(), m_text.size() }; }
+    [[nodiscard]] f32 fontSize()const noexcept{ return m_fontSize; }
+    [[nodiscard]] Point measure()const noexcept{ return m_measure; }
+    [[nodiscard]] Rect inkBounds()const noexcept{ return m_inkBounds; }
+    [[nodiscard]] const PaintVector<PlacedGlyph>& glyphs()const noexcept{ return m_glyphs; }
+    [[nodiscard]] const PaintVector<TextCluster>& clusters()const noexcept{ return m_clusters; }
+    [[nodiscard]] const PaintVector<TextLine>& lines()const noexcept{ return m_lines; }
+    [[nodiscard]] TextHit hitTest(Point point)const noexcept;
+    [[nodiscard]] bool caretRect(u32 byteOffset, TextCaretEdge::Enum edge, Rect& output)const noexcept;
 
 
 private:
@@ -104,7 +104,7 @@ private:
 
 class TextLayoutBuilder final : NoCopy{
 public:
-    TextLayoutBuilder(Core::Alloc::GlobalArena& arena, ITextShaper& shaper);
+    TextLayoutBuilder(Core::Alloc::GlobalArena& arena, ITextShaper& shaper)noexcept;
 
 
 public:

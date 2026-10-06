@@ -16,7 +16,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-f64 AdvanceCaretPhase(const f64 phase, const f64 deltaSeconds){
+f64 AdvanceCaretPhase(const f64 phase, const f64 deltaSeconds)noexcept{
     const f64 current = IsFinite(phase) && phase > 0.0 ? FMod(phase, 1.0) : 0.0;
     if(!IsFinite(deltaSeconds) || deltaSeconds <= 0.0)
         return current;

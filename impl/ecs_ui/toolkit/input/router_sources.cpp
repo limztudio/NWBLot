@@ -22,17 +22,17 @@ void InputRouter::restoreDefaultBindings(){
     m_bindings.restoreDefaults();
 }
 
-bool InputRouter::wantsKeyboard()const{
-    return hasPopup() || m_focus.valid() || FindIf(m_commandSources.begin(), m_commandSources.end(), [](const CommandSource& source){
+bool InputRouter::wantsKeyboard()const noexcept{
+    return hasPopup() || m_focus.valid() || FindIf(m_commandSources.begin(), m_commandSources.end(), [](const CommandSource& source)noexcept{
         return source.consumed;
     }) != m_commandSources.end();
 }
 
-bool InputRouter::ownsKey(const i32 key)const{
+bool InputRouter::ownsKey(const i32 key)const noexcept{
     return InputBindings::ValidKey(key) && ownsSource({ 0u, static_cast<u64>(key) + 1u });
 }
 
-bool InputRouter::ownsSource(const InputSource& source)const{
+bool InputRouter::ownsSource(const InputSource& source)const noexcept{
     const CommandSource* held = findCommandSource(source);
     return held && held->consumed;
 }
@@ -73,7 +73,7 @@ bool InputRouter::resolveSourceEvent(const InputEvent& event, InputEvent& resolv
     }
     else if(!event.source.valid() || event.source.device == 0u || event.command > InputCommand::ContextMenu)
         return false;
-    auto held = FindIf(m_boundSources.begin(), m_boundSources.end(), [&resolved](const BoundSource& source){
+    auto held = FindIf(m_boundSources.begin(), m_boundSources.end(), [&resolved](const BoundSource& source)noexcept{
         return source.source == resolved.source;
     });
     if(held != m_boundSources.end()){
@@ -110,15 +110,15 @@ bool InputRouter::resolveSourceEvent(const InputEvent& event, InputEvent& resolv
     return true;
 }
 
-InputRouter::CommandSource* InputRouter::findCommandSource(const InputSource& source){
-    const auto found = FindIf(m_commandSources.begin(), m_commandSources.end(), [&source](const CommandSource& current){
+InputRouter::CommandSource* InputRouter::findCommandSource(const InputSource& source)noexcept{
+    const auto found = FindIf(m_commandSources.begin(), m_commandSources.end(), [&source](const CommandSource& current)noexcept{
         return current.source == source;
     });
     return found == m_commandSources.end() ? nullptr : &*found;
 }
 
-const InputRouter::CommandSource* InputRouter::findCommandSource(const InputSource& source)const{
-    const auto found = FindIf(m_commandSources.begin(), m_commandSources.end(), [&source](const CommandSource& current){
+const InputRouter::CommandSource* InputRouter::findCommandSource(const InputSource& source)const noexcept{
+    const auto found = FindIf(m_commandSources.begin(), m_commandSources.end(), [&source](const CommandSource& current)noexcept{
         return current.source == source;
     });
     return found == m_commandSources.end() ? nullptr : &*found;

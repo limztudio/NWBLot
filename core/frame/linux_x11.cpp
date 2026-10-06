@@ -75,35 +75,35 @@ static bool s_KeyStates[s_KeyStateCount] = {};
 static X11FilteredKeyHistory s_FilteredKeyHistory;
 
 
-static ::Display* GetX11Display(const Common::LinuxFrame& frameData){
+static ::Display* GetX11Display(const Common::LinuxFrame& frameData)noexcept{
     return reinterpret_cast<::Display*>(frameData.nativeDisplay());
 }
 
-static void SetX11Display(Common::LinuxFrame& frameData, ::Display* display){
+static void SetX11Display(Common::LinuxFrame& frameData, ::Display* display)noexcept{
     frameData.nativeDisplay() = display;
 }
 
-static ::Window GetX11Window(const Common::LinuxFrame& frameData){
+static ::Window GetX11Window(const Common::LinuxFrame& frameData)noexcept{
     return static_cast<::Window>(frameData.nativeWindowHandle());
 }
 
-static void SetX11Window(Common::LinuxFrame& frameData, ::Window window){
+static void SetX11Window(Common::LinuxFrame& frameData, ::Window window)noexcept{
     frameData.nativeWindowHandle() = static_cast<u64>(window);
 }
 
-static Atom GetDeleteWindowMessage(const Common::LinuxFrame& frameData){
+static Atom GetDeleteWindowMessage(const Common::LinuxFrame& frameData)noexcept{
     return static_cast<Atom>(frameData.nativeAuxValue());
 }
 
-static void SetDeleteWindowMessage(Common::LinuxFrame& frameData, Atom atom){
+static void SetDeleteWindowMessage(Common::LinuxFrame& frameData, Atom atom)noexcept{
     frameData.nativeAuxValue() = static_cast<u64>(atom);
 }
 
-static void ResetKeyStates(){
+static void ResetKeyStates()noexcept{
     GLB_MEMSET(s_KeyStates, 0, sizeof(s_KeyStates));
 }
 
-static i32 TranslateModifiers(u32 state){
+static i32 TranslateModifiers(u32 state)noexcept{
     i32 mods = 0;
 
     if(state & ShiftMask)
@@ -122,7 +122,7 @@ static i32 TranslateModifiers(u32 state){
     return mods;
 }
 
-static i32 TranslateMouseButton(u32 button){
+static i32 TranslateMouseButton(u32 button)noexcept{
     switch(button){
     case Button1: return MouseButton::Left;
     case Button2: return MouseButton::Middle;
@@ -374,7 +374,7 @@ static bool QueryWindowState(Frame& frame, u32& width, u32& height, bool& window
     return true;
 }
 
-static void ResetFrameData(Common::LinuxFrame& frameData){
+static void ResetFrameData(Common::LinuxFrame& frameData)noexcept{
     frameData.setActive(false);
     SetX11Display(frameData, nullptr);
     SetX11Window(frameData, 0);

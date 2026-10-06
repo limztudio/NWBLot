@@ -36,32 +36,32 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] SIMDVector MeshRuntimeValidation::MakeMeshPositionVector(const SIMDVector position){
+[[nodiscard]] SIMDVector MeshRuntimeValidation::MakeMeshPositionVector(const SIMDVector position)noexcept{
     return VectorSetW(position, 0.0f);
 }
 
 
-[[nodiscard]] SIMDVector MeshRuntimeValidation::MakeMeshNormalVector(const SIMDVector normal){
+[[nodiscard]] SIMDVector MeshRuntimeValidation::MakeMeshNormalVector(const SIMDVector normal)noexcept{
     return VectorSetW(normal, 0.0f);
 }
 
 
-[[nodiscard]] SIMDVector MeshRuntimeValidation::MakeMeshTangentVector(const SIMDVector tangent){
+[[nodiscard]] SIMDVector MeshRuntimeValidation::MakeMeshTangentVector(const SIMDVector tangent)noexcept{
     return tangent;
 }
 
 
-[[nodiscard]] SIMDVector MeshRuntimeValidation::MakeMeshUvVector(const SIMDVector uv){
+[[nodiscard]] SIMDVector MeshRuntimeValidation::MakeMeshUvVector(const SIMDVector uv)noexcept{
     return VectorSetW(VectorSetZ(uv, 0.0f), 0.0f);
 }
 
 
-[[nodiscard]] SIMDVector MeshRuntimeValidation::MakeMeshColorVector(const SIMDVector color){
+[[nodiscard]] SIMDVector MeshRuntimeValidation::MakeMeshColorVector(const SIMDVector color)noexcept{
     return color;
 }
 
 
-[[nodiscard]] bool MeshRuntimeValidation::ValidDirectionVector(const SIMDVector direction){
+[[nodiscard]] bool MeshRuntimeValidation::ValidDirectionVector(const SIMDVector direction)noexcept{
     return
         VectorIsFinite(direction, VectorComponentMask::s_XYZ)
         && Vector3NearEqual(Vector3LengthSq(direction), s_SIMDOne, VectorReplicate(__hidden_mesh_validation::s_DirectionLengthTolerance))
@@ -69,7 +69,7 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
 }
 
 
-[[nodiscard]] bool MeshRuntimeValidation::ValidTangentVector(const SIMDVector tangent){
+[[nodiscard]] bool MeshRuntimeValidation::ValidTangentVector(const SIMDVector tangent)noexcept{
     const SIMDVector direction = VectorSetW(tangent, 0.0f);
     return
         VectorIsFinite(tangent, VectorComponentMask::s_XYZW)

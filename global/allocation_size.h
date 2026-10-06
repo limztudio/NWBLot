@@ -18,7 +18,7 @@ using AllocationSizeException = std::bad_array_new_length;
 
 
 template<usize size>
-constexpr inline usize SizeOf(usize count){
+constexpr inline usize SizeOf(usize count)noexcept(size <= 1u){
     constexpr auto overflowIsPossible = size > 1;
 
     if constexpr(overflowIsPossible){

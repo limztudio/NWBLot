@@ -20,7 +20,7 @@ namespace __hidden_ui_builder_skin_palette{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static Color Resolve(const UiSkin& skin, const UiSkinColorRole::Enum role){
+[[nodiscard]] static Color Resolve(const UiSkin& skin, const UiSkinColorRole::Enum role)noexcept{
     const UiSkinColor& value = skin.palette().colors[role];
     return { value.r, value.g, value.b, value.a };
 }
@@ -35,7 +35,7 @@ namespace __hidden_ui_builder_skin_palette{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Builder::setSkin(const UiSkin& skin){
+void Builder::setSkin(const UiSkin& skin)noexcept{
     if(!balanced() || m_context.failed()){
         m_context.fail();
         return;
@@ -46,7 +46,7 @@ void Builder::setSkin(const UiSkin& skin){
         m_style.fontSize = nextDefaultFontSize;
     m_skinDefaultFontSize = nextDefaultFontSize;
     using namespace UiSkinColorRole;
-    const auto resolve = [&skin](const Enum role){
+    const auto resolve = [&skin](const Enum role)noexcept{
         return __hidden_ui_builder_skin_palette::Resolve(skin, role);
     };
 

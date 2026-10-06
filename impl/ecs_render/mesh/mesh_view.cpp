@@ -44,7 +44,7 @@ bool RendererMeshSystem::createMeshViewBuffer(){
     return true;
 }
 
-ECSRenderDetail::MeshViewBufferSnapshot RendererMeshSystem::meshViewBufferSnapshot()const{
+ECSRenderDetail::MeshViewBufferSnapshot RendererMeshSystem::meshViewBufferSnapshot()const noexcept{
     ECSRenderDetail::MeshViewBufferSnapshot snapshot;
     snapshot.buffer = m_meshState.m_meshViewBuffer;
     if(m_meshState.m_frameBindings.meshView.buffer == m_meshState.m_meshViewBuffer)
@@ -82,7 +82,7 @@ void RendererMeshSystem::confirmMeshViewBufferUpload(const ECSRenderDetail::Mesh
     m_meshState.m_meshViewGpuDataValid = true;
 }
 
-void RendererMeshSystem::invalidateMeshViewBufferUploadMirror(){
+void RendererMeshSystem::invalidateMeshViewBufferUploadMirror()noexcept{
     m_meshState.m_meshViewGpuDataValid = false;
 }
 

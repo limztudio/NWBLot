@@ -24,7 +24,7 @@ static constexpr f32 s_DefaultSceneViewYaw = 0.82f;
 static constexpr f32 s_DefaultSceneViewPitch = 0.94f;
 static constexpr f32 s_DefaultSceneViewDepthOffset = 2.2f;
 
-void BuildDefaultSceneViewBasisVectors(SIMDVector& outRight, SIMDVector& outUp, SIMDVector& outForward){
+void BuildDefaultSceneViewBasisVectors(SIMDVector& outRight, SIMDVector& outUp, SIMDVector& outForward)noexcept{
     SIMDVector sinAngles;
     SIMDVector cosAngles;
     VectorSinCos(
@@ -53,7 +53,7 @@ void BuildSceneViewBasisVectors(
     SIMDVector& outRight,
     SIMDVector& outUp,
     SIMDVector& outForward
-){
+)noexcept{
     outRight = Vector3Rotate(s_SIMDIdentityR0, rotation);
     outUp = Vector3Rotate(s_SIMDIdentityR1, rotation);
     outForward = Vector3Rotate(s_SIMDIdentityR2, rotation);
@@ -69,7 +69,7 @@ void BuildSceneViewBasisVectors(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SceneViewBasis BuildDefaultSceneViewBasis(){
+SceneViewBasis BuildDefaultSceneViewBasis()noexcept{
     SceneViewBasis basis;
     SIMDVector right;
     SIMDVector up;
@@ -82,7 +82,7 @@ SceneViewBasis BuildDefaultSceneViewBasis(){
     return basis;
 }
 
-SceneViewBasis BuildSceneViewBasis(const SIMDVector position, const SIMDVector rotation){
+SceneViewBasis BuildSceneViewBasis(const SIMDVector position, const SIMDVector rotation)noexcept{
     SceneViewBasis basis;
     SIMDVector right;
     SIMDVector up;

@@ -43,14 +43,14 @@ inline constexpr COLORREF s_DefaultLogRowBackgroundColor = RGB(230, 230, 230);
 
 class WinFrame : public FrameData{
 public:
-    inline bool isActive()const{ return m_data.u8[s_WinFrameActiveFlagByteIndex] != 0; }
-    inline void setActive(bool value){ m_data.u8[s_WinFrameActiveFlagByteIndex] = value ? 1u : 0u; }
+    inline bool isActive()const noexcept{ return m_data.u8[s_WinFrameActiveFlagByteIndex] != 0; }
+    inline void setActive(bool value)noexcept{ m_data.u8[s_WinFrameActiveFlagByteIndex] = value ? 1u : 0u; }
 
-    inline HINSTANCE instance()const{ return static_cast<HINSTANCE>(m_data.ptr[0]); }
-    inline void setInstance(HINSTANCE value){ m_data.ptr[0] = value; }
+    inline HINSTANCE instance()const noexcept{ return static_cast<HINSTANCE>(m_data.ptr[0]); }
+    inline void setInstance(HINSTANCE value)noexcept{ m_data.ptr[0] = value; }
 
-    inline HWND hwnd()const{ return static_cast<HWND>(m_data.ptr[1]); }
-    inline void setHwnd(HWND value){ m_data.ptr[1] = value; }
+    inline HWND hwnd()const noexcept{ return static_cast<HWND>(m_data.ptr[1]); }
+    inline void setHwnd(HWND value)noexcept{ m_data.ptr[1] = value; }
 };
 
 struct LogRowColors{
@@ -112,15 +112,15 @@ static Futex s_ListMutex;
 static WNDPROC s_OrigListProc = nullptr;
 
 // Callers must already hold s_ListMutex; validates the item index against the live store.
-static bool IsMessageIndexValid(UINT itemID){
+static bool IsMessageIndexValid(UINT itemID)noexcept{
     return s_Store && static_cast<usize>(itemID) < s_Store->messages.size();
 }
 
-static LogRowColors SelectLogRowColors(const bool alternate, const LogRowColors& even, const LogRowColors& odd){
+static LogRowColors SelectLogRowColors(const bool alternate, const LogRowColors& even, const LogRowColors& odd)noexcept{
     return alternate ? odd : even;
 }
 
-static LogRowColors ResolveLogRowColors(const Log::Type::Enum type, const bool alternate){
+static LogRowColors ResolveLogRowColors(const Log::Type::Enum type, const bool alternate)noexcept{
     switch(type){
     case Log::Type::EssentialInfo:
     case Log::Type::Info:

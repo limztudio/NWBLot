@@ -92,7 +92,7 @@ public:
     }
 
 public:
-    virtual void prepare(NWB::Core::ECS::World& world)override{
+    virtual void prepare(NWB::Core::ECS::World& world)noexcept override{
         static_cast<void>(world);
         ++prepares;
     }
@@ -102,7 +102,7 @@ public:
         lastDelta = delta;
 
         world.view<PositionComponent>().each(
-            [](NWB::Core::ECS::EntityID, PositionComponent& position){
+            [](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
                 ++position.x;
             }
         );
@@ -139,7 +139,7 @@ public:
         m_update();
     }
 
-    [[nodiscard]] virtual NWB::Core::CpuTaskOptions taskOptions()const override{ return m_options; }
+    [[nodiscard]] virtual NWB::Core::CpuTaskOptions taskOptions()const noexcept override{ return m_options; }
 
 
 private:
@@ -169,24 +169,24 @@ TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
     usize multiViewCount = 0;
 
     testWorld.world.view<PositionComponent>().each(
-        [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&){
+        [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
             ++singleViewCount;
         }
     );
     testWorld.world.view<PositionComponent, VelocityComponent>().each(
-        [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&){
+        [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&)noexcept{
             ++multiViewCount;
         }
     );
     testWorld.world.view<PositionComponent>().parallelEach(
         testWorld.world.taskScope(),
-        [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&){
+        [&singleViewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
             ++singleViewCount;
         }
     );
     testWorld.world.view<PositionComponent, VelocityComponent>().parallelEach(
         testWorld.world.taskScope(),
-        [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&){
+        [&multiViewCount](NWB::Core::ECS::EntityID, PositionComponent&, VelocityComponent&)noexcept{
             ++multiViewCount;
         }
     );
@@ -327,7 +327,7 @@ TEST(Ecs, DuplicateComponentAddIsStable){
 
     usize viewCount = 0u;
     testWorld.world.view<PositionComponent>().each(
-        [&viewCount](NWB::Core::ECS::EntityID, PositionComponent&){
+        [&viewCount](NWB::Core::ECS::EntityID, PositionComponent&)noexcept{
             ++viewCount;
         }
     );
@@ -357,7 +357,7 @@ TEST(Ecs, ParallelEachNestedInTaskBatchCompletes){
             world.view<PositionComponent>().parallelEach(
                 world.taskScope(),
                 1u,
-                [&visits](NWB::Core::ECS::EntityID, PositionComponent& position){
+                [&visits](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
                     static_cast<void>(position);
                     visits.fetch_add(1u, MemoryOrder::relaxed);
                 }
@@ -395,12 +395,12 @@ TEST(Ecs, SystemDependenciesPreserveRegistrationOrderAcrossComponents){
     i32 velocity = 0;
     i32 observed = 0;
 
-    ScheduledSystem writer(testWorld.arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){ position = 17; });
+    ScheduledSystem writer(testWorld.arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&]()noexcept{ position = 17; });
     ScheduledSystem transfer(testWorld.arena, {
         { positionType, NWB::Core::ECS::AccessMode::Read },
         { velocityType, NWB::Core::ECS::AccessMode::Write },
-    }, [&](){ velocity = position + 1; });
-    ScheduledSystem reader(testWorld.arena, { { velocityType, NWB::Core::ECS::AccessMode::Read } }, [&](){ observed = velocity; });
+    }, [&]()noexcept{ velocity = position + 1; });
+    ScheduledSystem reader(testWorld.arena, { { velocityType, NWB::Core::ECS::AccessMode::Read } }, [&]()noexcept{ observed = velocity; });
 
     NWB::Core::ECS::SystemScheduler scheduler(testWorld.arena);
     scheduler.addSystem(writer);
@@ -430,7 +430,7 @@ TEST(Ecs, SystemDependentsProceedWithoutWaitingForUnrelatedWork){
     Atomic<bool> independentObservedCompletion{ false };
     i32 value = 0;
 
-    ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){ value = 5; });
+    ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&]()noexcept{ value = 5; });
     ScheduledSystem independent(arena, {}, [&](){
         const Timer begin = TimerNow();
         while(!dependentCompleted.load(MemoryOrder::acquire) && DurationInMS<u64>(TimerNow(), begin) < 2000u)
@@ -459,7 +459,7 @@ TEST(Ecs, MainThreadSystemRespectsWorkerDependencies){
     bool executedOnCaller = false;
     i32 value = 0;
 
-    ScheduledSystem worker(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){ value = 23; });
+    ScheduledSystem worker(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&]()noexcept{ value = 23; });
     ScheduledSystem caller(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){
         executedOnCaller = s_EcsCallerThread;
         EXPECT_EQ(value, 23);
@@ -487,7 +487,7 @@ TEST(Ecs, DependentSystemObservesAllNestedQueryTasks){
     usize observed = 0u;
 
     ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){
-        world.view<PositionComponent>().parallelEach(world.taskScope(), 8u, [](NWB::Core::ECS::EntityID, PositionComponent& position){
+        world.view<PositionComponent>().parallelEach(world.taskScope(), 8u, [](NWB::Core::ECS::EntityID, PositionComponent& position)noexcept{
             position.y = position.x + 1;
         });
     });
@@ -516,10 +516,10 @@ TEST(Ecs, SystemCompletionIncludesAsynchronousDescendants){
     ScheduledSystem writer(arena, { { positionType, NWB::Core::ECS::AccessMode::Write } }, [&](){
         world.taskScope().submit([&](){
             SleepMS(25u);
-            world.taskScope().submit([&](){ value.store(41, MemoryOrder::release); });
+            world.taskScope().submit([&]()noexcept{ value.store(41, MemoryOrder::release); });
         });
     });
-    ScheduledSystem reader(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&](){
+    ScheduledSystem reader(arena, { { positionType, NWB::Core::ECS::AccessMode::Read } }, [&]()noexcept{
         observed = value.load(MemoryOrder::acquire);
     });
 

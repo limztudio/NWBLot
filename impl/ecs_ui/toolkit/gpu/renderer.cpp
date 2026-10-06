@@ -287,15 +287,15 @@ bool GpuRenderer::submit(DrawSnapshot&& snapshot){
     return m_state->m_pending != nullptr;
 }
 
-void GpuRenderer::setCommandRecordingMode(const GpuCommandRecordingMode::Enum mode){
+void GpuRenderer::setCommandRecordingMode(const GpuCommandRecordingMode::Enum mode)noexcept{
     m_state->m_recordingMode = mode;
 }
 
-bool GpuRenderer::hasPendingFrame()const{
+bool GpuRenderer::hasPendingFrame()const noexcept{
     return m_state->m_pending != nullptr;
 }
 
-u64 GpuRenderer::lastAcceptedGeneration()const{
+u64 GpuRenderer::lastAcceptedGeneration()const noexcept{
     return m_state->m_lastAcceptedGeneration;
 }
 

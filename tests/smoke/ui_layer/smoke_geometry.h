@@ -26,12 +26,12 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const u64 value){
+[[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const u64 value)noexcept{
     return { static_cast<f32>(value & 15u) / 15.0f, static_cast<f32>((value >> 4u) & 15u) / 15.0f,
         static_cast<f32>((value >> 8u) & 15u) / 15.0f, 1.0f };
 }
 
-[[nodiscard]] inline bool SameSmokeRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right){
+[[nodiscard]] inline bool SameSmokeRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right)noexcept{
     return left.x == right.x && left.y == right.y && left.width == right.width && left.height == right.height;
 }
 
@@ -41,11 +41,11 @@ inline void LogSmokeRect(const TStringView tag, const u32 sequence, const TStrin
     );
 }
 
-[[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const u32 value){
+[[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const u32 value)noexcept{
     return EncodeSmokeColor(static_cast<u64>(value));
 }
 
-[[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const f32 value){
+[[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const f32 value)noexcept{
     return EncodeSmokeColor(static_cast<u64>(Max(0.0f, value) + 0.5f));
 }
 

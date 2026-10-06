@@ -10,34 +10,34 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 TestbedUiRadioGroupSource::instanceGeneration()const{ return 1u; }
+u64 TestbedUiRadioGroupSource::instanceGeneration()const noexcept{ return 1u; }
 
-u64 TestbedUiRadioGroupSource::revision()const{ return 1u; }
+u64 TestbedUiRadioGroupSource::revision()const noexcept{ return 1u; }
 
-u64 TestbedUiRadioGroupSource::rowCount()const{ return 3u; }
+u64 TestbedUiRadioGroupSource::rowCount()const noexcept{ return 3u; }
 
-u64 TestbedUiRadioGroupSource::key(const u64 index)const{ return index < 3u ? index + 1u : 0u; }
+u64 TestbedUiRadioGroupSource::key(const u64 index)const noexcept{ return index < 3u ? index + 1u : 0u; }
 
-bool TestbedUiRadioGroupSource::indexOf(const u64 keyValue, u64& index)const{
+bool TestbedUiRadioGroupSource::indexOf(const u64 keyValue, u64& index)const noexcept{
     if(keyValue == 0u || keyValue > 3u)
         return false;
     index = keyValue - 1u;
     return true;
 }
 
-bool TestbedUiRadioGroupSource::findEnabled(const u64 start, const bool reverse, u64& index)const{
+bool TestbedUiRadioGroupSource::findEnabled(const u64 start, const bool reverse, u64& index)const noexcept{
     if(start >= 3u)
         return false;
     index = start == 2u ? (reverse ? 1u : 3u) : start;
     return index < 3u;
 }
 
-StringView TestbedUiRadioGroupSource::text(const u64 index)const{
+StringView TestbedUiRadioGroupSource::text(const u64 index)const noexcept{
     static constexpr StringView s_Labels[] = { "Balanced", "High quality", "Unavailable" };
     return index < 3u ? s_Labels[index] : StringView{};
 }
 
-bool TestbedUiRadioGroupSource::enabled(const u64 index)const{ return index < 2u; }
+bool TestbedUiRadioGroupSource::enabled(const u64 index)const noexcept{ return index < 2u; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

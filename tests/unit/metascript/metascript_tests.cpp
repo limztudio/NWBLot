@@ -53,12 +53,12 @@ using DestinationArena = NWB::Tests::TestArena<DestinationArenaTag>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static MStringView ViewOf(const AString& text){
+[[nodiscard]] static MStringView ViewOf(const AString& text)noexcept{
     return MStringView(text.data(), text.size());
 }
 
 template<usize N>
-[[nodiscard]] static MStringView LiteralView(const char (&text)[N]){
+[[nodiscard]] static MStringView LiteralView(const char (&text)[N])noexcept{
     return MStringView(text, N > 0u ? N - 1u : 0u);
 }
 

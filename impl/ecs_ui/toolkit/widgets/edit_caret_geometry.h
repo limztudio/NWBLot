@@ -51,7 +51,7 @@ struct EditCaretLine{
 
 // Queries owned projections of validated caret geometry; copied hosts share line, midpoint and preedit endpoint behavior.
 [[nodiscard]] bool HitEditCaretGeometry(const PaintVector<EditCaretLine>& lines, const PaintVector<EditBoxCaretStop>& stops,
-    Point localPoint, usize& committedByte);
+    Point localPoint, usize& committedByte)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -60,9 +60,9 @@ struct EditCaretLine{
 // Owns source bytes, exact font versions and LTR hard-line caret data; no model or service is retained.
 class EditCaretGeometry final{
 public:
-    explicit EditCaretGeometry(Core::Alloc::GlobalArena& arena);
-    EditCaretGeometry(EditCaretGeometry&&) = default;
-    EditCaretGeometry& operator=(EditCaretGeometry&&) = default;
+    explicit EditCaretGeometry(Core::Alloc::GlobalArena& arena)noexcept;
+    EditCaretGeometry(EditCaretGeometry&&)noexcept = default;
+    EditCaretGeometry& operator=(EditCaretGeometry&&)noexcept = default;
 
 
 public:
@@ -75,23 +75,23 @@ public:
     [[nodiscard]] bool adoptLayout(TextLayout&& layout, StringView expectedText,
         const PaintVector<EditCaretMapping>& mapping, usize committedBytes, EditTextMode::Enum mode);
     // Native preedit can address scalar edges inside graphemes; rectangles are local and have zero width.
-    [[nodiscard]] bool caretRect(usize displayByte, Rect& output)const;
-    [[nodiscard]] bool hitTest(Point localPoint, usize& committedByte)const;
-    [[nodiscard]] bool verticalTarget(usize displayCaret, bool down, f32 preferredX, usize& committedByte)const;
+    [[nodiscard]] bool caretRect(usize displayByte, Rect& output)const noexcept;
+    [[nodiscard]] bool hitTest(Point localPoint, usize& committedByte)const noexcept;
+    [[nodiscard]] bool verticalTarget(usize displayCaret, bool down, f32 preferredX, usize& committedByte)const noexcept;
     // A valid nonintersecting range yields an empty rectangle. Selected LF bytes use the supplied trailing cap.
-    [[nodiscard]] bool rangeOnLine(EditBoxRange range, u32 lineIndex, f32 breakWidth, Rect& output)const;
+    [[nodiscard]] bool rangeOnLine(EditBoxRange range, u32 lineIndex, f32 breakWidth, Rect& output)const noexcept;
 
 
 public:
-    [[nodiscard]] const TextLayout& layout()const{ return m_layout; }
-    [[nodiscard]] const PaintVector<EditBoxCaretStop>& caretStops()const{ return m_stops; }
-    [[nodiscard]] const PaintVector<EditCaretLine>& lines()const{ return m_lines; }
-    [[nodiscard]] EditTextMode::Enum textMode()const{ return m_mode; }
-    [[nodiscard]] bool ready()const{ return m_ready; }
+    [[nodiscard]] const TextLayout& layout()const noexcept{ return m_layout; }
+    [[nodiscard]] const PaintVector<EditBoxCaretStop>& caretStops()const noexcept{ return m_stops; }
+    [[nodiscard]] const PaintVector<EditCaretLine>& lines()const noexcept{ return m_lines; }
+    [[nodiscard]] EditTextMode::Enum textMode()const noexcept{ return m_mode; }
+    [[nodiscard]] bool ready()const noexcept{ return m_ready; }
 
 
 private:
-    [[nodiscard]] bool nearestStop(u32 lineIndex, Point point, usize& committedByte)const;
+    [[nodiscard]] bool nearestStop(u32 lineIndex, Point point, usize& committedByte)const noexcept;
 
 
 private:

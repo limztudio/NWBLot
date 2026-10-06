@@ -21,7 +21,7 @@ class GraphicsRuntime;
 
 class IRenderPass{
 public:
-    explicit IRenderPass(GraphicsRuntime& graphics)
+    explicit IRenderPass(GraphicsRuntime& graphics)noexcept
         : m_graphics(graphics)
     {}
     virtual ~IRenderPass() = default;
@@ -42,7 +42,7 @@ public:
     virtual void backBufferResized(u32, u32, u32){}
     virtual void displayScaleChanged(f32, f32){}
 
-    [[nodiscard]] GraphicsRuntime& getGraphics()const{ return m_graphics; }
+    [[nodiscard]] GraphicsRuntime& getGraphics()const noexcept{ return m_graphics; }
 
 
 private:

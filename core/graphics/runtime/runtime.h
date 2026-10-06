@@ -153,33 +153,33 @@ public:
     bool init(const Common::FrameData& data);
     bool createHeadlessDevice();
     bool createInstance(const InstanceParameters& params);
-    bool setDebugRuntimeEnabled(bool enabled);
+    bool setDebugRuntimeEnabled(bool enabled)noexcept;
     // Controls actual hardware RT extensions/features for the next logical device. Must precede instance creation.
-    bool setHardwareRayTracingPolicy(HardwareRayTracingPolicy::Enum policy);
+    bool setHardwareRayTracingPolicy(HardwareRayTracingPolicy::Enum policy)noexcept;
     // Selects the native mesh-shader path when the backend supports it. Disabled configurations use the renderer's
     // compute-emulation path. Must be configured before instance creation.
-    bool setNativeMeshShadersEnabled(bool enabled);
+    bool setNativeMeshShadersEnabled(bool enabled)noexcept;
     // Must be configured before device creation. Unsupported adapters retain the Graphics-only path.
-    bool setAsyncComputeLaneEnabled(bool enabled);
+    bool setAsyncComputeLaneEnabled(bool enabled)noexcept;
     // Must be configured before device creation. Unsupported adapters retain the Graphics/Compute copy fallback.
-    bool setTransferQueueEnabled(bool enabled);
+    bool setTransferQueueEnabled(bool enabled)noexcept;
     // Must be configured before device creation. It may expose every safe additional queue from each active
     // primary family and, with cross-family routing enabled, one auxiliary family for each class; only explicitly
     // opted-in graph tasks may route to them.
-    bool setSameClassMultiQueueEnabled(bool enabled);
+    bool setSameClassMultiQueueEnabled(bool enabled)noexcept;
     // Extends optional same-class discovery to distinct compatible Vulkan families. Individual graph tasks must
     // still explicitly accept the resulting ownership-transfer route.
-    bool setCrossFamilySameClassQueueRoutingEnabled(bool enabled);
+    bool setCrossFamilySameClassQueueRoutingEnabled(bool enabled)noexcept;
     // Selects a Vulkan adapter enumeration index, or -1 for the backend default. Must be configured before device
     // creation so target-hardware probes can reproduce a multi-adapter route on paired processes.
-    bool setAdapterIndex(i32 index);
+    bool setAdapterIndex(i32 index)noexcept;
     // Requests HDR10/PQ presentation where the current display surface supports it. Unsupported surfaces
     // automatically retain the normal SDR swap chain. Must be configured before device creation.
-    bool setHDR10OutputEnabled(bool enabled);
+    bool setHDR10OutputEnabled(bool enabled)noexcept;
     // Requests transfer-source usage for presentation images. Unsupported surfaces retain the normal swap chain
     // and report readback unavailable. Must be configured before device creation.
-    bool setSwapChainReadbackEnabled(bool enabled);
-    bool setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi);
+    bool setSwapChainReadbackEnabled(bool enabled)noexcept;
+    bool setBindlessHeapAbi(const GpuDescriptorHeapAbi& abi)noexcept;
     void setPipelineCacheDirectory(const Path& directory);
     bool setFilesystemFactory(const Filesystem::FilesystemFactory& factory);
     // Keeps the host update/event loop alive while preventing runFrame from recording, submitting, or presenting a
@@ -246,24 +246,24 @@ public:
         return m_taskGraphOutputLayerContributor;
     }
 
-    [[nodiscard]] TStringView getRendererString()const;
-    [[nodiscard]] u64 getFrameIndex()const{ return m_frameIndex; }
+    [[nodiscard]] TStringView getRendererString()const noexcept;
+    [[nodiscard]] u64 getFrameIndex()const noexcept{ return m_frameIndex; }
     // Main-thread lifetime count of accepted native presentations, independent of render callbacks and GPU queries.
     // Preserved across resize, destroy/init and device recreation; this is not a monitor scan-out completion count.
     [[nodiscard]] u64 getSuccessfulPresentationCount()const noexcept{ return m_successfulPresentationCount; }
     // Last actual native present attempt, matched by the complete acquisition identity rather than a later frame.
     [[nodiscard]] const PresentationReceipt& lastPresentationReceipt()const noexcept{ return m_lastPresentationReceipt; }
-    [[nodiscard]] GpuTimingRecorder& gpuTiming(){ return m_gpuTiming; }
-    [[nodiscard]] const GpuTimingRecorder& gpuTiming()const{ return m_gpuTiming; }
-    [[nodiscard]] bool isVsyncEnabled()const{ return m_swapChainState.vsyncEnabled; }
-    [[nodiscard]] bool isHDR10OutputActive()const{ return m_swapChainState.outputMode == SwapChainOutputMode::HDR10; }
-    [[nodiscard]] bool isSwapChainReadbackAvailable()const{ return m_swapChainState.swapChainReadbackAvailable; }
-    void setVSyncEnabled(bool enabled){ m_requestedVSync = enabled; }
-    void reportLiveObjects()const;
+    [[nodiscard]] GpuTimingRecorder& gpuTiming()noexcept{ return m_gpuTiming; }
+    [[nodiscard]] const GpuTimingRecorder& gpuTiming()const noexcept{ return m_gpuTiming; }
+    [[nodiscard]] bool isVsyncEnabled()const noexcept{ return m_swapChainState.vsyncEnabled; }
+    [[nodiscard]] bool isHDR10OutputActive()const noexcept{ return m_swapChainState.outputMode == SwapChainOutputMode::HDR10; }
+    [[nodiscard]] bool isSwapChainReadbackAvailable()const noexcept{ return m_swapChainState.swapChainReadbackAvailable; }
+    void setVSyncEnabled(bool enabled)noexcept{ m_requestedVSync = enabled; }
+    void reportLiveObjects()const noexcept;
 
-    void getWindowDimensions(i32& width, i32& height)const;
-    void getDPIScaleInfo(f32& x, f32& y)const;
-    [[nodiscard]] TStringView getWindowTitle()const{ return m_windowTitle; }
+    void getWindowDimensions(i32& width, i32& height)const noexcept;
+    void getDPIScaleInfo(f32& x, f32& y)const noexcept;
+    [[nodiscard]] TStringView getWindowTitle()const noexcept{ return m_windowTitle; }
     void setWindowTitle(TStringView title);
     void setPointerScaleChangedCallback(PointerScaleChangedCallback callback, void* userData);
 
@@ -271,9 +271,9 @@ public:
     // snapshot owns the exact back buffer and its matching framebuffer so presentation consumers never infer WSI
     // identity from mutable backend state.
     [[nodiscard]] const AcquiredPresentationFrame& acquiredPresentationFrame()const noexcept{ return m_acquiredPresentationFrame; }
-    [[nodiscard]] Texture* getBackBuffer(u32 index)const;
-    [[nodiscard]] u32 getBackBufferCount()const;
-    [[nodiscard]] Framebuffer* getFramebuffer(u32 index)const;
+    [[nodiscard]] Texture* getBackBuffer(u32 index)const noexcept;
+    [[nodiscard]] u32 getBackBufferCount()const noexcept;
+    [[nodiscard]] Framebuffer* getFramebuffer(u32 index)const noexcept;
 
     [[nodiscard]] BufferHandle createBuffer(const BufferDesc& desc)const;
     [[nodiscard]] TextureHandle createTexture(const TextureDesc& desc)const;

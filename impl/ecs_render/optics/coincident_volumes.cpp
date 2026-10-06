@@ -31,7 +31,7 @@ namespace __hidden_coincident_volumes{
 using Candidate = CoincidentOpticalVolumeCandidate;
 using CandidatePointer = NotNull<const Candidate*>;
 
-[[nodiscard]] bool ValidCandidateLanes(SIMDVector positionVec, SIMDVector rotationVec, SIMDVector scaleVec){
+[[nodiscard]] bool ValidCandidateLanes(SIMDVector positionVec, SIMDVector rotationVec, SIMDVector scaleVec)noexcept{
     if(
         !VectorIsFinite(positionVec, VectorComponentMask::s_XYZ)
         || !VectorIsFinite(rotationVec, VectorComponentMask::s_XYZW)
@@ -83,7 +83,7 @@ struct CandidateHasher{
 };
 
 struct CandidateEqual{
-    bool equalTransformLanes(SIMDVector lhsPosition, SIMDVector lhsRotation, SIMDVector lhsScale, SIMDVector rhsPosition, SIMDVector rhsRotation, SIMDVector rhsScale)const{
+    bool equalTransformLanes(SIMDVector lhsPosition, SIMDVector lhsRotation, SIMDVector lhsScale, SIMDVector rhsPosition, SIMDVector rhsRotation, SIMDVector rhsScale)const noexcept{
         return Vector3Equal(lhsPosition, rhsPosition)
             && Vector4Equal(lhsRotation, rhsRotation)
             && Vector3Equal(lhsScale, rhsScale);

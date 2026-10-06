@@ -28,8 +28,8 @@ public:
 
 public:
     [[nodiscard]] bool setFonts(const FontSource* sources, usize count);
-    [[nodiscard]] u64 identity()const{ return m_identity; }
-    [[nodiscard]] u64 generation()const{ return m_generation; }
+    [[nodiscard]] u64 identity()const noexcept{ return m_identity; }
+    [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
     [[nodiscard]] TextLayoutStatus::Enum layout(const ShapeRequest& request, TextLayout& output);
     [[nodiscard]] bool paint(PaintBuilder& paint, const TextLayout& layout, Point topLeft, const Color& color = {});
 

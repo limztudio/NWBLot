@@ -16,8 +16,8 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool LayoutTree::IsValidDescription(const LayoutNodeDesc& description){
-    const auto validSize = [](const LayoutSize& size){
+bool LayoutTree::IsValidDescription(const LayoutNodeDesc& description)noexcept{
+    const auto validSize = [](const LayoutSize& size)noexcept{
         return size.policy <= LayoutSizePolicy::Stretch && IsFinite(size.value) && size.value >= 0.0f
             && (size.policy != LayoutSizePolicy::Stretch || size.value > 0.0f);
     };
@@ -33,7 +33,7 @@ bool LayoutTree::IsValidDescription(const LayoutNodeDesc& description){
     ;
 }
 
-bool LayoutTree::IsValidRectangle(const Rect& rectangle){
+bool LayoutTree::IsValidRectangle(const Rect& rectangle)noexcept{
     return
         IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height)
         && rectangle.width >= 0.0f && rectangle.height >= 0.0f
@@ -41,7 +41,7 @@ bool LayoutTree::IsValidRectangle(const Rect& rectangle){
     ;
 }
 
-Rect LayoutTree::Intersect(const Rect& lhs, const Rect& rhs){
+Rect LayoutTree::Intersect(const Rect& lhs, const Rect& rhs)noexcept{
     const f32 left = Max(lhs.x, rhs.x);
     const f32 top = Max(lhs.y, rhs.y);
     const f32 right = Min(lhs.x + lhs.width, rhs.x + rhs.width);
@@ -49,7 +49,7 @@ Rect LayoutTree::Intersect(const Rect& lhs, const Rect& rhs){
     return { left, top, Max(0.0f, right - left), Max(0.0f, bottom - top) };
 }
 
-Rect LayoutTree::Inset(const Rect& rectangle, const Insets& padding){
+Rect LayoutTree::Inset(const Rect& rectangle, const Insets& padding)noexcept{
     const f32 left = Min(padding.left, rectangle.width);
     const f32 top = Min(padding.top, rectangle.height);
     const f64 width = static_cast<f64>(rectangle.width) - padding.left - padding.right;
@@ -74,7 +74,7 @@ LayoutTree::LayoutTree(Core::Alloc::GlobalArena& arena, const u32 maxNodes)
     m_stagedBoxes.reserve(m_maxNodes);
 }
 
-void LayoutTree::reset(){
+void LayoutTree::reset()noexcept{
     m_nodes.clear();
     m_work.clear();
     m_stagedBoxes.clear();

@@ -69,11 +69,11 @@ UiLayerSystem::~UiLayerSystem(){
     m_graphics.clearTaskGraphOutputLayerContributor(m_renderer);
 }
 
-void UiLayerSystem::setGpuCommandRecordingMode(const Ui::GpuCommandRecordingMode::Enum mode){
+void UiLayerSystem::setGpuCommandRecordingMode(const Ui::GpuCommandRecordingMode::Enum mode)noexcept{
     m_renderer.setCommandRecordingMode(mode);
 }
 
-void UiLayerSystem::requestSkin(const Core::Assets::AssetRef<UiSkin>& skin){
+void UiLayerSystem::requestSkin(const Core::Assets::AssetRef<UiSkin>& skin)noexcept{
     m_skinSelection.requestChange(skin);
 }
 

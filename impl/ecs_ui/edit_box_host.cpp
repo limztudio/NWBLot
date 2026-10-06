@@ -127,7 +127,7 @@ bool UiEditBoxHost::wantsTextInput()const{
     return entry && !entry->displayed.options.readOnly;
 }
 
-bool UiEditBoxHost::takeClipboardFailure(){
+bool UiEditBoxHost::takeClipboardFailure()noexcept{
     if(rejectBorrowedMutation())
         return false;
     const bool failed = m_clipboardFailure;
@@ -192,7 +192,7 @@ void UiEditBoxHost::reset(){
     m_context.input().clearFocus();
 }
 
-UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget){
+UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)noexcept{
     for(auto& entry : m_entries){
         if(entry.widget.id == widget)
             return &entry;
@@ -200,7 +200,7 @@ UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget){
     return nullptr;
 }
 
-const UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)const{
+const UiEditBoxHost::Entry* UiEditBoxHost::find(const Ui::WidgetId widget)const noexcept{
     for(const auto& entry : m_entries){
         if(entry.widget.id == widget)
             return &entry;

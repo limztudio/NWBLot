@@ -107,7 +107,7 @@ public:
         stream.read(&extra, 1);
         return stream.gcount() == 0 && stream.eof();
     }
-    void published(){ m_owned = false; }
+    void published()noexcept{ m_owned = false; }
 
 
 private:

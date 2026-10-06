@@ -59,16 +59,16 @@ public:
     [[nodiscard]] bool parseWithImplicitAsset(MStringView source, MStringView assetType, MStringView assetVariable);
     [[nodiscard]] bool parse(IMetaReader& reader);
 
-    [[nodiscard]] MStringView assetType()const{ return MStringView(m_assetType.data(), m_assetType.size()); }
-    [[nodiscard]] MStringView assetVariable()const{ return MStringView(m_assetVariable.data(), m_assetVariable.size()); }
+    [[nodiscard]] MStringView assetType()const noexcept{ return MStringView(m_assetType.data(), m_assetType.size()); }
+    [[nodiscard]] MStringView assetVariable()const noexcept{ return MStringView(m_assetVariable.data(), m_assetVariable.size()); }
     [[nodiscard]] const Value& asset()const;
     [[nodiscard]] Value& asset();
 
-    [[nodiscard]] const Value* findVariable(MStringView name)const;
-    [[nodiscard]] const DeclarationList& declarations()const{ return m_declarations; }
+    [[nodiscard]] const Value* findVariable(MStringView name)const noexcept;
+    [[nodiscard]] const DeclarationList& declarations()const noexcept{ return m_declarations; }
 
-    [[nodiscard]] bool hasErrors()const{ return !m_errors.empty(); }
-    [[nodiscard]] const ErrorList& errors()const{ return m_errors; }
+    [[nodiscard]] bool hasErrors()const noexcept{ return !m_errors.empty(); }
+    [[nodiscard]] const ErrorList& errors()const noexcept{ return m_errors; }
 
 
 private:

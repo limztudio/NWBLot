@@ -52,7 +52,7 @@ struct SceneShadingSetupGraphTask{
         const Core::GpuTaskRecordContext& context
     );
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
-    static void Discarded(Payload& payload);
+    static void Discarded(Payload& payload)noexcept;
 };
 
 

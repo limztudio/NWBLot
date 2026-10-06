@@ -41,7 +41,7 @@ inline constexpr MeshClassInfo s_MeshClassInfos[] = {
     { "skinned", MeshClass::Skinned, true },
 };
 
-[[nodiscard]] inline const MeshClassInfo* FindMeshClassInfo(const u32 meshClass){
+[[nodiscard]] inline const MeshClassInfo* FindMeshClassInfo(const u32 meshClass)noexcept{
     for(const MeshClassInfo& info : s_MeshClassInfos){
         if(info.meshClass == meshClass)
             return &info;
@@ -49,7 +49,7 @@ inline constexpr MeshClassInfo s_MeshClassInfos[] = {
     return nullptr;
 }
 
-[[nodiscard]] inline const MeshClassInfo* FindMeshClassInfo(const AStringView text){
+[[nodiscard]] inline const MeshClassInfo* FindMeshClassInfo(const AStringView text)noexcept{
     for(const MeshClassInfo& info : s_MeshClassInfos){
         if(info.text == text)
             return &info;
@@ -61,23 +61,23 @@ inline constexpr MeshClassInfo s_MeshClassInfos[] = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ValidMeshClass(const u32 meshClass){
+[[nodiscard]] inline bool ValidMeshClass(const u32 meshClass)noexcept{
     return FindMeshClassInfo(meshClass) != nullptr;
 }
 
-[[nodiscard]] inline bool MeshClassUsesSkinning(const u32 meshClass){
+[[nodiscard]] inline bool MeshClassUsesSkinning(const u32 meshClass)noexcept{
     const MeshClassInfo* info = FindMeshClassInfo(meshClass);
     return info && info->usesSkinning;
 }
 
-[[nodiscard]] inline bool MeshClassMatchesSkinPayload(const u32 meshClass, const bool hasSkin){
+[[nodiscard]] inline bool MeshClassMatchesSkinPayload(const u32 meshClass, const bool hasSkin)noexcept{
     return MeshClassUsesSkinning(meshClass) == hasSkin;
 }
 
 inline constexpr AStringView s_InvalidMeshClassName = "invalid";
 inline constexpr AStringView s_UnknownMeshClassName = "unknown";
 
-[[nodiscard]] inline AStringView MeshClassText(const u32 meshClass){
+[[nodiscard]] inline AStringView MeshClassText(const u32 meshClass)noexcept{
     const MeshClassInfo* info = FindMeshClassInfo(meshClass);
     if(info)
         return info->text;
@@ -86,7 +86,7 @@ inline constexpr AStringView s_UnknownMeshClassName = "unknown";
     return s_UnknownMeshClassName;
 }
 
-[[nodiscard]] inline bool ParseMeshClassText(const AStringView text, u32& outMeshClass){
+[[nodiscard]] inline bool ParseMeshClassText(const AStringView text, u32& outMeshClass)noexcept{
     const MeshClassInfo* info = FindMeshClassInfo(text);
     outMeshClass = info ? info->meshClass : MeshClass::Invalid;
     return info != nullptr;

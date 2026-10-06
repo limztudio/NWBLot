@@ -22,7 +22,7 @@ namespace __hidden_ui_edit_box_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidRect(const Rect& rectangle){
+[[nodiscard]] static bool ValidRect(const Rect& rectangle)noexcept{
     return
         IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height)
         && rectangle.width >= 0.0f && rectangle.height >= 0.0f
@@ -30,7 +30,7 @@ namespace __hidden_ui_edit_box_layout{
     ;
 }
 
-[[nodiscard]] static Rect Intersection(const Rect& first, const Rect& second){
+[[nodiscard]] static Rect Intersection(const Rect& first, const Rect& second)noexcept{
     const f32 left = Max(first.x, second.x);
     const f32 top = Max(first.y, second.y);
     const f32 right = Min(first.x + first.width, second.x + second.width);
@@ -49,7 +49,7 @@ namespace __hidden_ui_edit_box_layout{
 
 
 bool EditBoxView::arrange(const Rect& bounds, const Insets& padding, const Rect& clip,
-    const Point previousScroll, EditBoxPlacement& output, const f32 caretWidth, const bool revealCaret)const{
+    const Point previousScroll, EditBoxPlacement& output, const f32 caretWidth, const bool revealCaret)const noexcept{
     if(
         !m_ready || !__hidden_ui_edit_box_layout::ValidRect(bounds) || !__hidden_ui_edit_box_layout::ValidRect(clip)
         || !IsFinite(padding.left) || !IsFinite(padding.top) || !IsFinite(padding.right) || !IsFinite(padding.bottom)
@@ -66,7 +66,7 @@ bool EditBoxView::arrange(const Rect& bounds, const Insets& padding, const Rect&
 }
 
 bool EditBoxView::arrangeViewport(const Rect& bounds, const Rect& viewport, const Rect& clip,
-    const Point previousScroll, EditBoxPlacement& output, const f32 caretWidth, const bool revealCaret)const{
+    const Point previousScroll, EditBoxPlacement& output, const f32 caretWidth, const bool revealCaret)const noexcept{
     if(
         !m_ready || !__hidden_ui_edit_box_layout::ValidRect(bounds) || !__hidden_ui_edit_box_layout::ValidRect(viewport)
         || !__hidden_ui_edit_box_layout::ValidRect(clip) || viewport.x < bounds.x || viewport.y < bounds.y
@@ -137,7 +137,7 @@ bool EditBoxView::arrangeViewport(const Rect& bounds, const Rect& viewport, cons
     return true;
 }
 
-bool EditBoxView::hitTest(const Point point, const EditBoxPlacement& placement, usize& committedByte)const{
+bool EditBoxView::hitTest(const Point point, const EditBoxPlacement& placement, usize& committedByte)const noexcept{
     if(!m_ready || !IsFinite(point.x) || !IsFinite(point.y) || !IsFinite(placement.textOrigin.x) || !IsFinite(placement.textOrigin.y))
         return false;
     return m_geometry.hitTest({ point.x - placement.textOrigin.x, point.y - placement.textOrigin.y }, committedByte);

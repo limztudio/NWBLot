@@ -22,7 +22,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool IsValidSamplerAddressMode(const Core::SamplerAddressMode::Enum addressMode){
+[[nodiscard]] inline bool IsValidSamplerAddressMode(const Core::SamplerAddressMode::Enum addressMode)noexcept{
     switch(addressMode){
     case Core::SamplerAddressMode::Clamp:
     case Core::SamplerAddressMode::Wrap:
@@ -35,7 +35,7 @@ NWB_IMPL_BEGIN
     }
 }
 
-[[nodiscard]] inline bool IsValidSamplerReductionType(const Core::SamplerReductionType::Enum reductionType){
+[[nodiscard]] inline bool IsValidSamplerReductionType(const Core::SamplerReductionType::Enum reductionType)noexcept{
     switch(reductionType){
     case Core::SamplerReductionType::Standard:
     case Core::SamplerReductionType::Comparison:
@@ -45,7 +45,7 @@ NWB_IMPL_BEGIN
     }
 }
 
-[[nodiscard]] inline bool IsValidSamplerDescription(const Core::SamplerDesc& description){
+[[nodiscard]] inline bool IsValidSamplerDescription(const Core::SamplerDesc& description)noexcept{
     return
         description.borderColor.r == 0.0f
         && description.borderColor.g == 0.0f
@@ -71,9 +71,9 @@ public:
 
 
 public:
-    explicit Sampler(Core::Assets::AssetArena&)
+    explicit Sampler(Core::Assets::AssetArena&)noexcept
     {}
-    Sampler(Core::Assets::AssetArena&, const Name& virtualPath)
+    Sampler(Core::Assets::AssetArena&, const Name& virtualPath)noexcept
         : Core::Assets::TypedAsset<Sampler>(virtualPath)
     {}
 
@@ -82,11 +82,11 @@ public:
     bool loadBinary(const Core::Assets::AssetBytes& binary);
     [[nodiscard]] bool validatePayload()const;
 
-    void setDescription(const Core::SamplerDesc& description){ m_description = description; }
+    void setDescription(const Core::SamplerDesc& description)noexcept{ m_description = description; }
 
 
 public:
-    [[nodiscard]] const Core::SamplerDesc& description()const{ return m_description; }
+    [[nodiscard]] const Core::SamplerDesc& description()const noexcept{ return m_description; }
 
 
 private:

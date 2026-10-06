@@ -136,9 +136,9 @@ public:
         GpuTimingSinkSampleVector& performanceSamples,
         Alloc::ScratchArena& scratchArena
     );
-    [[nodiscard]] bool hasOutputRole(const Name& scopeName)const;
+    [[nodiscard]] bool hasOutputRole(const Name& scopeName)const noexcept;
     void discardPendingRanges()noexcept;
-    void reset();
+    void reset()noexcept;
 
 
 private:

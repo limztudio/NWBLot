@@ -46,15 +46,15 @@ using RuntimeMeshDirtyFlags = u8;
 struct RuntimeMeshHandle{
     u64 value = 0;
 
-    [[nodiscard]] bool valid()const{ return value != 0u; }
-    [[nodiscard]] explicit operator bool()const{ return valid(); }
-    void reset(){ value = 0; }
+    [[nodiscard]] bool valid()const noexcept{ return value != 0u; }
+    [[nodiscard]] explicit operator bool()const noexcept{ return valid(); }
+    void reset()noexcept{ value = 0; }
 };
 
-[[nodiscard]] GLB_INLINE bool operator==(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs){
+[[nodiscard]] GLB_INLINE bool operator==(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs)noexcept{
     return lhs.value == rhs.value;
 }
-[[nodiscard]] GLB_INLINE bool operator!=(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs){
+[[nodiscard]] GLB_INLINE bool operator!=(const RuntimeMeshHandle& lhs, const RuntimeMeshHandle& rhs)noexcept{
     return !(lhs == rhs);
 }
 

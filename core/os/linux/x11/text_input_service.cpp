@@ -37,7 +37,7 @@ static constexpr Array<XIMStyle, 3u> s_PreferredStyles{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ContainsStyle(const XIMStyles& styles, const XIMStyle requested){
+[[nodiscard]] static bool ContainsStyle(const XIMStyles& styles, const XIMStyle requested)noexcept{
     for(unsigned short index = 0u; index < styles.count_styles; ++index){
         if(styles.supported_styles[index] == requested)
             return true;

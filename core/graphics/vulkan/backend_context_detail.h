@@ -98,7 +98,7 @@ static Vector<const char*, Alloc::ScratchArena> StringMapKeysToVector(const Map&
 }
 
 template<typename T>
-static T MakeVkFeatureStruct(VkStructureType sType){
+static T MakeVkFeatureStruct(VkStructureType sType)noexcept(noexcept(T{}) && noexcept(static_cast<T*>(nullptr)->sType = sType) && noexcept(static_cast<T*>(nullptr)->pNext = nullptr) && IsNothrowMoveConstructible_V<T> && IsNothrowDestructible_V<T>){
     T feature = {};
     feature.sType = sType;
     feature.pNext = nullptr;
@@ -122,7 +122,7 @@ struct OptionalDeviceFeatureSet{
     VkPhysicalDeviceTextureCompressionASTCHDRFeatures textureCompressionAstcHdr = MakeVkFeatureStruct<VkPhysicalDeviceTextureCompressionASTCHDRFeatures>(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TEXTURE_COMPRESSION_ASTC_HDR_FEATURES);
 };
 
-inline OptionalDeviceFeatureSet MakeRequestedOptionalDeviceFeatures(){
+inline OptionalDeviceFeatureSet MakeRequestedOptionalDeviceFeatures()noexcept{
     OptionalDeviceFeatureSet features;
 
     features.accelerationStructure.accelerationStructure = VK_TRUE;
@@ -159,7 +159,7 @@ inline OptionalDeviceFeatureSet MakeRequestedOptionalDeviceFeatures(){
     return features;
 }
 
-inline void* GetOptionalDeviceFeatureStruct(OptionalDeviceFeatureSet& features, DeviceExtensionFeature::Enum feature){
+inline void* GetOptionalDeviceFeatureStruct(OptionalDeviceFeatureSet& features, DeviceExtensionFeature::Enum feature)noexcept{
     switch(feature){
     case DeviceExtensionFeature::AccelerationStructure: return &features.accelerationStructure;
     case DeviceExtensionFeature::RayTracingPipeline: return &features.rayTracingPipeline;
@@ -181,7 +181,7 @@ inline void* GetOptionalDeviceFeatureStruct(OptionalDeviceFeatureSet& features, 
     }
 }
 
-inline Format::Enum GetBackBufferFormat(const DeviceCreationParameters& params){
+inline Format::Enum GetBackBufferFormat(const DeviceCreationParameters& params)noexcept{
     if(params.headlessDevice)
         return params.swapChainFormat;
 
@@ -192,11 +192,11 @@ inline Format::Enum GetBackBufferFormat(const DeviceCreationParameters& params){
     return params.swapChainFormat;
 }
 
-inline bool SupportsRequestedValue(VkBool32 requested, VkBool32 supported){
+inline bool SupportsRequestedValue(VkBool32 requested, VkBool32 supported)noexcept{
     return requested != VK_TRUE || supported == VK_TRUE;
 }
 
-inline StringView BoolToString(bool value){
+inline StringView BoolToString(bool value)noexcept{
     return BoolToYesNoText(value);
 }
 
@@ -217,7 +217,7 @@ inline constexpr StringView s_UnknownDebugLabel = "unknown";
 inline constexpr StringView s_DisabledQueueReason = "disabled";
 
 
-inline AStringView PhysicalDeviceTypeToString(VkPhysicalDeviceType type){
+inline AStringView PhysicalDeviceTypeToString(VkPhysicalDeviceType type)noexcept{
     switch(type){
     case VK_PHYSICAL_DEVICE_TYPE_OTHER: return "other";
     case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return "integrated GPU";
@@ -228,7 +228,7 @@ inline AStringView PhysicalDeviceTypeToString(VkPhysicalDeviceType type){
     }
 }
 
-inline AStringView SwapChainFormatToString(VkFormat format){
+inline AStringView SwapChainFormatToString(VkFormat format)noexcept{
     switch(format){
     case VK_FORMAT_A2B10G10R10_UNORM_PACK32: return "VK_FORMAT_A2B10G10R10_UNORM_PACK32";
     case VK_FORMAT_R8G8B8A8_UNORM: return "VK_FORMAT_R8G8B8A8_UNORM";
@@ -239,7 +239,7 @@ inline AStringView SwapChainFormatToString(VkFormat format){
     }
 }
 
-inline AStringView ColorSpaceToString(VkColorSpaceKHR colorSpace){
+inline AStringView ColorSpaceToString(VkColorSpaceKHR colorSpace)noexcept{
     switch(colorSpace){
     case VK_COLOR_SPACE_HDR10_ST2084_EXT: return "VK_COLOR_SPACE_HDR10_ST2084_EXT";
     case VK_COLOR_SPACE_SRGB_NONLINEAR_KHR: return "VK_COLOR_SPACE_SRGB_NONLINEAR_KHR";
@@ -247,7 +247,7 @@ inline AStringView ColorSpaceToString(VkColorSpaceKHR colorSpace){
     }
 }
 
-inline AStringView PresentModeToString(VkPresentModeKHR mode){
+inline AStringView PresentModeToString(VkPresentModeKHR mode)noexcept{
     switch(mode){
     case VK_PRESENT_MODE_IMMEDIATE_KHR: return "VK_PRESENT_MODE_IMMEDIATE_KHR";
     case VK_PRESENT_MODE_MAILBOX_KHR: return "VK_PRESENT_MODE_MAILBOX_KHR";
@@ -314,11 +314,11 @@ inline void PopulateAdapterInfo(const VolkInstanceTable& instanceDispatch, VkPhy
     }
 }
 
-inline u64 BytesToMiB(u64 bytes){
+inline u64 BytesToMiB(u64 bytes)noexcept{
     return bytes / s_BytesPerMiB;
 }
 
-inline bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSet& requested, const OptionalDeviceFeatureSet& supported, DeviceExtensionFeature::Enum feature){
+inline bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSet& requested, const OptionalDeviceFeatureSet& supported, DeviceExtensionFeature::Enum feature)noexcept{
     switch(feature){
     case DeviceExtensionFeature::AccelerationStructure:
         return SupportsRequestedValue(requested.accelerationStructure.accelerationStructure, supported.accelerationStructure.accelerationStructure);
@@ -369,19 +369,19 @@ inline bool SupportsRequestedOptionalDeviceFeature(const OptionalDeviceFeatureSe
     }
 }
 
-inline void FinalizeOptionalDeviceFeatureEnablement(OptionalDeviceFeatureSet& enabled, const OptionalDeviceFeatureSet& supported){
+inline void FinalizeOptionalDeviceFeatureEnablement(OptionalDeviceFeatureSet& enabled, const OptionalDeviceFeatureSet& supported)noexcept{
     enabled.meshShader.taskShader = supported.meshShader.taskShader;
     enabled.rayTracingLinearSweptSpheres.spheres = supported.rayTracingLinearSweptSpheres.spheres;
     enabled.rayTracingLinearSweptSpheres.linearSweptSpheres = supported.rayTracingLinearSweptSpheres.linearSweptSpheres;
     enabled.deviceFault.deviceFaultVendorBinary = supported.deviceFault.deviceFaultVendorBinary;
 }
 
-inline void AppendFeatureStruct(void*& pNext, void* feature){
+inline void AppendFeatureStruct(void*& pNext, void* feature)noexcept{
     reinterpret_cast<VkBaseOutStructure*>(feature)->pNext = reinterpret_cast<VkBaseOutStructure*>(pNext);
     pNext = feature;
 }
 
-inline void AppendOptionalDeviceFeature(void*& pNext, OptionalDeviceFeatureSet& features, DeviceExtensionFeature::Enum feature, bool* appended){
+inline void AppendOptionalDeviceFeature(void*& pNext, OptionalDeviceFeatureSet& features, DeviceExtensionFeature::Enum feature, bool* appended)noexcept{
     if(feature == DeviceExtensionFeature::None || feature == DeviceExtensionFeature::Count)
         return;
 
@@ -395,7 +395,7 @@ inline void AppendOptionalDeviceFeature(void*& pNext, OptionalDeviceFeatureSet& 
     }
 }
 
-[[maybe_unused]] inline AStringView DebugUtilsSeverityToString(const VkDebugUtilsMessageSeverityFlagBitsEXT severity){
+[[maybe_unused]] inline AStringView DebugUtilsSeverityToString(const VkDebugUtilsMessageSeverityFlagBitsEXT severity)noexcept{
     switch(severity){
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT: return "verbose";
     case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT: return "info";

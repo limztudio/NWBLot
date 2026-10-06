@@ -29,7 +29,7 @@ static Atomic<u64> s_NextIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidOptions(const TooltipOptions& options){
+[[nodiscard]] static bool ValidOptions(const TooltipOptions& options)noexcept{
     return
         IsFinite(options.delaySeconds) && options.delaySeconds >= 0.0f
         && IsFinite(options.maximumWidth) && options.maximumWidth > 0.0f
@@ -37,7 +37,7 @@ static Atomic<u64> s_NextIdentity{ 1u };
     ;
 }
 
-[[nodiscard]] static bool SameOptions(const TooltipOptions& lhs, const TooltipOptions& rhs){
+[[nodiscard]] static bool SameOptions(const TooltipOptions& lhs, const TooltipOptions& rhs)noexcept{
     return
         lhs.enabled == rhs.enabled && lhs.delaySeconds == rhs.delaySeconds && lhs.maximumWidth == rhs.maximumWidth
         && lhs.gap == rhs.gap && lhs.side == rhs.side
@@ -54,11 +54,11 @@ static Atomic<u64> s_NextIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TooltipState::TooltipState()
+TooltipState::TooltipState()noexcept
     : m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_tooltip::s_NextIdentity))
 {}
 
-void TooltipState::reset(){
+void TooltipState::reset()noexcept{
     advanceRevision();
     m_owner = {};
     m_ownerDeclaration = 0u;
@@ -74,7 +74,7 @@ void TooltipState::reset(){
     m_visible = false;
 }
 
-void TooltipState::advanceRevision(){
+void TooltipState::advanceRevision()noexcept{
     if(m_revision == Limit<u64>::s_Max)
         TerminateInvariant();
     ++m_revision;
@@ -86,7 +86,7 @@ void TooltipState::advanceRevision(){
 
 bool TooltipBehavior::Update(TooltipState& state, const WidgetId anchor, const u64 declarationGeneration,
     const PopupToken& popup, const u64 focusLossGeneration, const u64 hoverActivityGeneration,
-    const bool hovered, const f32 deltaSeconds, const TooltipOptions& options){
+    const bool hovered, const f32 deltaSeconds, const TooltipOptions& options)noexcept{
     using namespace __hidden_ui_tooltip;
     if(
         !anchor.valid() || declarationGeneration == 0u || (!popup.valid() && !(popup == PopupToken{}))

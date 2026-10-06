@@ -185,7 +185,7 @@ private:
 template<typename T>
 class GpuCommandIrRetainedOwnerBox final : public IGpuCommandIrRetainedOwner{
 public:
-    GpuCommandIrRetainedOwnerBox(GraphicsArena& arena, T owner)
+    GpuCommandIrRetainedOwnerBox(GraphicsArena& arena, T owner)noexcept(IsNothrowMoveConstructible_V<T> && IsNothrowDestructible_V<T>)
         : m_arena(arena)
         , m_owner(Move(owner))
     {}

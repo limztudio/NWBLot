@@ -15,7 +15,7 @@
 
 
 template<typename T>
-[[nodiscard]] constexpr GLB_INLINE T BitMask(const u32 bitIndex){
+[[nodiscard]] constexpr GLB_INLINE T BitMask(const u32 bitIndex)noexcept(IsArithmetic_V<T>){
     return static_cast<T>(1) << bitIndex;
 }
 

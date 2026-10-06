@@ -65,7 +65,7 @@ struct TimerDeltaParts{
 
 using MillisecondDuration = std::chrono::duration<i64, std::milli>;
 
-[[nodiscard]] inline TimerDeltaParts SplitTimerDelta(const TimerDelta& val){
+[[nodiscard]] inline TimerDeltaParts SplitTimerDelta(const TimerDelta& val)noexcept{
     auto duration = MillisecondDuration(static_cast<i64>(val));
     auto h = std::chrono::duration_cast<std::chrono::hours>(duration);
     auto m = std::chrono::duration_cast<std::chrono::minutes>(duration % std::chrono::hours(1));
@@ -98,7 +98,7 @@ namespace std{
 
 template<>
 struct formatter<TimerDelta>{
-    constexpr auto parse(format_parse_context& ctx){ return ctx.begin(); }
+    constexpr auto parse(format_parse_context& ctx)noexcept{ return ctx.begin(); }
     template<typename FormatContext>
     auto format(const TimerDelta& val, FormatContext& ctx)const{
         const auto parts = TimerDetail::SplitTimerDelta(val);
@@ -107,7 +107,7 @@ struct formatter<TimerDelta>{
 };
 template<>
 struct formatter<TimerDelta, wchar>{
-    constexpr auto parse(wformat_parse_context& ctx){ return ctx.begin(); }
+    constexpr auto parse(wformat_parse_context& ctx)noexcept{ return ctx.begin(); }
     template<typename FormatContext>
     auto format(const TimerDelta& val, FormatContext& ctx)const{
         const auto parts = TimerDetail::SplitTimerDelta(val);
@@ -153,7 +153,7 @@ inline Timer s_VeryBegining = TimerNow();
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool GetLocalTime(LocalTime& outTime){
+[[nodiscard]] inline bool GetLocalTime(LocalTime& outTime)noexcept{
     const auto now = std::time(nullptr);
     if(now == static_cast<std::time_t>(-1))
         return false;

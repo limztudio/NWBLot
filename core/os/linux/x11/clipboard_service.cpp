@@ -194,11 +194,11 @@ void X11ClipboardService::pumpNativeRequests(){
     XFlush(&m_display);
 }
 
-Atom X11ClipboardService::selectionAtom(const ClipboardChannel::Enum channel)const{
+Atom X11ClipboardService::selectionAtom(const ClipboardChannel::Enum channel)const noexcept{
     return channel == ClipboardChannel::PrimarySelection ? XA_PRIMARY : m_clipboardAtom;
 }
 
-X11ClipboardService::OwnedSelection* X11ClipboardService::ownedSelection(const Atom selection){
+X11ClipboardService::OwnedSelection* X11ClipboardService::ownedSelection(const Atom selection)noexcept{
     if(selection == m_clipboardAtom)
         return &m_owned[0];
     if(selection == XA_PRIMARY)

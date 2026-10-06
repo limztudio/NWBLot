@@ -28,7 +28,7 @@ bool operator==(const SdfAtlasPageBinding& lhs, const SdfAtlasPageBinding& rhs)n
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SdfAtlasPage::SdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBinding& binding, Pixels&& pixels)
+SdfAtlasPage::SdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBinding& binding, Pixels&& pixels)noexcept
     : m_binding(binding)
     , m_pixels(arena)
 {

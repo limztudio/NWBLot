@@ -29,7 +29,7 @@ struct TimingScopeId{
     u32 index = Limit<u32>::s_Max;
     u32 generation = 0u;
 
-    [[nodiscard]] bool valid()const{ return index != Limit<u32>::s_Max && generation != 0u; }
+    [[nodiscard]] bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
 
 struct TimingStats{
@@ -44,7 +44,7 @@ struct TimingStats{
     u64 lastSampleFrameIndex = 0u;
     u32 sampleCount = 0u;
 
-    [[nodiscard]] bool valid()const{ return sampleCount != 0u; }
+    [[nodiscard]] bool valid()const noexcept{ return sampleCount != 0u; }
 };
 
 
@@ -53,12 +53,12 @@ struct TimingStats{
 
 class TimingAccumulator final : NoCopy{
 public:
-    void clear();
-    void setEnabled(bool enabled);
-    void record(f64 seconds, u64 sampleFrameIndex);
-    void publish(u64 publishFrameIndex);
+    void clear()noexcept;
+    void setEnabled(bool enabled)noexcept;
+    void record(f64 seconds, u64 sampleFrameIndex)noexcept;
+    void publish(u64 publishFrameIndex)noexcept;
 
-    [[nodiscard]] const TimingStats& lastStats()const{ return m_lastStats; }
+    [[nodiscard]] const TimingStats& lastStats()const noexcept{ return m_lastStats; }
 
 
 private:
@@ -90,7 +90,7 @@ public:
 class TimingRecorder final : public TimingSink, NoCopy{
 private:
     struct ScopeRecord : NoCopy{
-        explicit ScopeRecord(const Name& scopeName)
+        explicit ScopeRecord(const Name& scopeName)noexcept
             : name(scopeName)
         {}
 
@@ -113,26 +113,26 @@ public:
 
 
 public:
-    void setEnabled(bool enabled);
+    void setEnabled(bool enabled)noexcept;
     [[nodiscard]] virtual bool enabled()const noexcept override{ return m_enabled; }
-    void clear();
+    void clear()noexcept;
     [[nodiscard]] virtual TimingScopeId registerScope(const Name& scopeName)override;
-    virtual void recordSample(TimingScopeId scope, f64 seconds, u64 sampleFrameIndex)override;
-    void recordSample(const Name& scopeName, f64 seconds);
-    void recordSample(const Name& scopeName, f64 seconds, u64 sampleFrameIndex);
-    void publishFrame();
-    virtual void publishFrame(u64 publishFrameIndex)override;
+    virtual void recordSample(TimingScopeId scope, f64 seconds, u64 sampleFrameIndex)noexcept override;
+    void recordSample(const Name& scopeName, f64 seconds)noexcept;
+    void recordSample(const Name& scopeName, f64 seconds, u64 sampleFrameIndex)noexcept;
+    void publishFrame()noexcept;
+    virtual void publishFrame(u64 publishFrameIndex)noexcept override;
 
-    [[nodiscard]] const TimingStats& stats(const Name& scopeName)const;
-    [[nodiscard]] const TimingStats& stats(TimingScopeId scope)const;
-    [[nodiscard]] usize scopeCount()const{ return m_scopes.size(); }
-    [[nodiscard]] TimingScopeId scopeAt(usize index)const;
-    [[nodiscard]] Name scopeNameAt(usize index)const;
-    [[nodiscard]] const TimingStats& statsAt(usize index)const;
+    [[nodiscard]] const TimingStats& stats(const Name& scopeName)const noexcept;
+    [[nodiscard]] const TimingStats& stats(TimingScopeId scope)const noexcept;
+    [[nodiscard]] usize scopeCount()const noexcept{ return m_scopes.size(); }
+    [[nodiscard]] TimingScopeId scopeAt(usize index)const noexcept;
+    [[nodiscard]] Name scopeNameAt(usize index)const noexcept;
+    [[nodiscard]] const TimingStats& statsAt(usize index)const noexcept;
 
 
 private:
-    [[nodiscard]] ScopeRecord* findScope(TimingScopeId scope)const;
+    [[nodiscard]] ScopeRecord* findScope(TimingScopeId scope)const noexcept;
 
 
 private:
@@ -151,20 +151,20 @@ private:
 
 class TimingView final{
 public:
-    TimingView() = default;
-    explicit TimingView(const TimingRecorder& recorder)
+    TimingView()noexcept = default;
+    explicit TimingView(const TimingRecorder& recorder)noexcept
         : m_recorder(&recorder)
     {}
 
 
 public:
-    [[nodiscard]] bool valid()const{ return m_recorder != nullptr; }
-    [[nodiscard]] const TimingStats& stats(const Name& scopeName)const;
-    [[nodiscard]] const TimingStats& stats(TimingScopeId scope)const;
-    [[nodiscard]] usize scopeCount()const;
-    [[nodiscard]] TimingScopeId scopeAt(usize index)const;
-    [[nodiscard]] Name scopeNameAt(usize index)const;
-    [[nodiscard]] const TimingStats& statsAt(usize index)const;
+    [[nodiscard]] bool valid()const noexcept{ return m_recorder != nullptr; }
+    [[nodiscard]] const TimingStats& stats(const Name& scopeName)const noexcept;
+    [[nodiscard]] const TimingStats& stats(TimingScopeId scope)const noexcept;
+    [[nodiscard]] usize scopeCount()const noexcept;
+    [[nodiscard]] TimingScopeId scopeAt(usize index)const noexcept;
+    [[nodiscard]] Name scopeNameAt(usize index)const noexcept;
+    [[nodiscard]] const TimingStats& statsAt(usize index)const noexcept;
 
 
 private:

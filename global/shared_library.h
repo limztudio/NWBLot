@@ -42,7 +42,7 @@ public:
         return m_handle != nullptr;
     }
 
-    [[nodiscard]] bool isOpen()const{ return m_handle != nullptr; }
+    [[nodiscard]] bool isOpen()const noexcept{ return m_handle != nullptr; }
 
     void close(){
         if(!m_handle)

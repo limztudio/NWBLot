@@ -176,7 +176,7 @@ TEST(CpuTaskMpmcTests, OwnerExternalAndWorkerProducersShareQueuesWithoutLosingOr
             Produce(scheduler, scope, state, 1u + producer);
         });
     }
-    EXPECT_TRUE(WaitUntil([&](){ return state.ready.load(MemoryOrder::acquire) == s_ProducerCount - 1u; }));
+    EXPECT_TRUE(WaitUntil([&]()noexcept{ return state.ready.load(MemoryOrder::acquire) == s_ProducerCount - 1u; }));
     EXPECT_EQ(state.workerMask.load(MemoryOrder::acquire), (1u << s_WorkerCount) - 1u);
     state.start.store(true, MemoryOrder::release);
     Produce(scheduler, scope, state, 0u);
@@ -263,9 +263,9 @@ TEST(CpuTaskMpmcTests, ExternalProducersCanWaitForMainThreadTasksWhileTheOwnerPu
             }
         });
     }
-    EXPECT_TRUE(WaitUntil([&](){ return ready.load(MemoryOrder::acquire) == s_ExternalProducerCount; }));
+    EXPECT_TRUE(WaitUntil([&]()noexcept{ return ready.load(MemoryOrder::acquire) == s_ExternalProducerCount; }));
     start.store(true, MemoryOrder::release);
-    EXPECT_TRUE(WaitUntil([&](){ return firstPublished.load(MemoryOrder::acquire) == s_ExternalProducerCount; }));
+    EXPECT_TRUE(WaitUntil([&]()noexcept{ return firstPublished.load(MemoryOrder::acquire) == s_ExternalProducerCount; }));
     EXPECT_EQ(invoked.load(MemoryOrder::acquire), 0u);
     const Timer begin = TimerNow();
     while(finished.load(MemoryOrder::acquire) != s_ExternalProducerCount){
@@ -302,7 +302,7 @@ TEST(CpuTaskMpmcTests, CanceledCompletionCannotLoseConcurrentHandleScopeOrSchedu
     u32 callbacks = 0u;
     for(u32 round = 0u; round < s_Rounds; ++round){
         CpuTaskScope scope(scheduler);
-        const auto handle = scope.submit([&](){ ++callbacks; }, { .target = CpuTaskTarget::MainThread });
+        const auto handle = scope.submit([&]()noexcept{ ++callbacks; }, { .target = CpuTaskTarget::MainThread });
         ASSERT_TRUE(handle.valid());
         Atomic<bool> start{ false };
         Atomic<bool> expired{ false };
@@ -336,7 +336,7 @@ TEST(CpuTaskMpmcTests, CanceledCompletionCannotLoseConcurrentHandleScopeOrSchedu
         }
         if(round % 2u == 0u){
             start.store(true, MemoryOrder::release);
-            ASSERT_TRUE(WaitUntil([&](){ return entered.load(MemoryOrder::acquire) == s_JoinKinds; }));
+            ASSERT_TRUE(WaitUntil([&]()noexcept{ return entered.load(MemoryOrder::acquire) == s_JoinKinds; }));
         }
         // Alternate retirement racing wait registration with retirement completed before any join starts.
         scope.cancel();

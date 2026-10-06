@@ -65,7 +65,7 @@ struct SoftwareShadowSettings{
     u64 memoryBudgetBytes = s_ShadowDefaultMemoryBudgetBytes;
 };
 
-[[nodiscard]] bool ValidateSoftwareShadowSettings(const SoftwareShadowSettings& settings);
+[[nodiscard]] bool ValidateSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

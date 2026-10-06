@@ -22,7 +22,7 @@ namespace __hidden_ui_edit_box_paint{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidColor(const Color& color){
+[[nodiscard]] static bool ValidColor(const Color& color)noexcept{
     return
         IsFinite(color.r) && IsFinite(color.g) && IsFinite(color.b) && IsFinite(color.a)
         && color.a >= 0.0f && color.a <= 1.0f
@@ -30,7 +30,7 @@ namespace __hidden_ui_edit_box_paint{
 }
 
 [[nodiscard]] static const UiSkinRegion* Background(const UiSkin& skin, const EditBoxStyle& style,
-    const EditBoxPaintFlags& flags){
+    const EditBoxPaintFlags& flags)noexcept{
     const Name& preferred = !flags.enabled ? style.disabled : flags.focused ? style.focused
         : flags.hovered ? style.hover : style.normal;
     const UiSkinRegion* region = skin.findRegion(preferred);

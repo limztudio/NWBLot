@@ -78,7 +78,7 @@ bool MeshViewUploadCommitGraphTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
-){
+)noexcept{
     static_cast<void>(commandList);
     static_cast<void>(context);
     if(!payload.meshSystem || !payload.ready)
@@ -95,7 +95,7 @@ void MeshViewUploadCommitGraphTask::Accepted(Payload& payload, const Core::Queue
 }
 
 
-void MeshViewUploadCommitGraphTask::Discarded(Payload& payload){
+void MeshViewUploadCommitGraphTask::Discarded(Payload& payload)noexcept{
     if(payload.ready)
         *payload.ready = false;
 }

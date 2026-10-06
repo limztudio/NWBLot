@@ -38,7 +38,7 @@ VkBufferMemoryBarrier2 BuildBufferStateBarrier(
     const ResourceStates::Mask oldState,
     const ResourceStates::Mask stateBits,
     const bool rayTracingStageAvailable
-){
+)noexcept{
     const ResourceStates::Mask sourceState = oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common;
     auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
     barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(sourceState, rayTracingStageAvailable);

@@ -36,18 +36,18 @@ struct SinglePassStereoState{
     bool enabled = false;
     bool independentViewportMask = false;
 
-    constexpr SinglePassStereoState& setEnabled(bool value){ enabled = value; return *this; }
-    constexpr SinglePassStereoState& setIndependentViewportMask(bool value){ independentViewportMask = value; return *this; }
-    constexpr SinglePassStereoState& setRenderTargetIndexOffset(u16 value){ renderTargetIndexOffset = static_cast<u8>(value); return *this; }
+    constexpr SinglePassStereoState& setEnabled(bool value)noexcept{ enabled = value; return *this; }
+    constexpr SinglePassStereoState& setIndependentViewportMask(bool value)noexcept{ independentViewportMask = value; return *this; }
+    constexpr SinglePassStereoState& setRenderTargetIndexOffset(u16 value)noexcept{ renderTargetIndexOffset = static_cast<u8>(value); return *this; }
 };
-inline bool operator==(const SinglePassStereoState& lhs, const SinglePassStereoState& rhs){
+inline bool operator==(const SinglePassStereoState& lhs, const SinglePassStereoState& rhs)noexcept{
     return
         lhs.enabled == rhs.enabled
         && lhs.independentViewportMask == rhs.independentViewportMask
         && lhs.renderTargetIndexOffset == rhs.renderTargetIndexOffset
     ;
 }
-inline bool operator!=(const SinglePassStereoState& lhs, const SinglePassStereoState& rhs){ return !(lhs == rhs); }
+inline bool operator!=(const SinglePassStereoState& lhs, const SinglePassStereoState& rhs)noexcept{ return !(lhs == rhs); }
 
 struct RenderState{
     RasterState rasterState;
@@ -55,10 +55,10 @@ struct RenderState{
     DepthStencilState depthStencilState;
     SinglePassStereoState singlePassStereo;
 
-    constexpr RenderState& setBlendState(const BlendState& value){ blendState = value; return *this; }
-    constexpr RenderState& setDepthStencilState(const DepthStencilState& value){ depthStencilState = value; return *this; }
-    constexpr RenderState& setRasterState(const RasterState& value){ rasterState = value; return *this; }
-    constexpr RenderState& setSinglePassStereoState(const SinglePassStereoState& value){ singlePassStereo = value; return *this; }
+    constexpr RenderState& setBlendState(const BlendState& value)noexcept{ blendState = value; return *this; }
+    constexpr RenderState& setDepthStencilState(const DepthStencilState& value)noexcept{ depthStencilState = value; return *this; }
+    constexpr RenderState& setRasterState(const RasterState& value)noexcept{ rasterState = value; return *this; }
+    constexpr RenderState& setSinglePassStereoState(const SinglePassStereoState& value)noexcept{ singlePassStereo = value; return *this; }
 };
 
 namespace VariableShadingRate{
@@ -89,12 +89,12 @@ struct VariableRateShadingState{
     ShadingRateCombiner::Enum imageCombiner = ShadingRateCombiner::Passthrough;
     bool enabled = false;
 
-    constexpr VariableRateShadingState& setEnabled(bool value){ enabled = value; return *this; }
-    constexpr VariableRateShadingState& setShadingRate(VariableShadingRate::Enum value){ shadingRate = value; return *this; }
-    constexpr VariableRateShadingState& setPipelinePrimitiveCombiner(ShadingRateCombiner::Enum value){ pipelinePrimitiveCombiner = value; return *this; }
-    constexpr VariableRateShadingState& setImageCombiner(ShadingRateCombiner::Enum value){ imageCombiner = value; return *this; }
+    constexpr VariableRateShadingState& setEnabled(bool value)noexcept{ enabled = value; return *this; }
+    constexpr VariableRateShadingState& setShadingRate(VariableShadingRate::Enum value)noexcept{ shadingRate = value; return *this; }
+    constexpr VariableRateShadingState& setPipelinePrimitiveCombiner(ShadingRateCombiner::Enum value)noexcept{ pipelinePrimitiveCombiner = value; return *this; }
+    constexpr VariableRateShadingState& setImageCombiner(ShadingRateCombiner::Enum value)noexcept{ imageCombiner = value; return *this; }
 };
-inline bool operator==(const VariableRateShadingState& lhs, const VariableRateShadingState& rhs){
+inline bool operator==(const VariableRateShadingState& lhs, const VariableRateShadingState& rhs)noexcept{
     return
         lhs.enabled == rhs.enabled
         && lhs.shadingRate == rhs.shadingRate
@@ -102,7 +102,7 @@ inline bool operator==(const VariableRateShadingState& lhs, const VariableRateSh
         && lhs.imageCombiner == rhs.imageCombiner
     ;
 }
-inline bool operator!=(const VariableRateShadingState& lhs, const VariableRateShadingState& rhs){ return !(lhs == rhs); }
+inline bool operator!=(const VariableRateShadingState& lhs, const VariableRateShadingState& rhs)noexcept{ return !(lhs == rhs); }
 
 typedef FixedVector<BindingLayoutHandle, s_MaxBindingLayouts> BindingLayoutVector;
 
@@ -124,19 +124,19 @@ struct GraphicsPipelineDesc{
 
     ~GraphicsPipelineDesc();
 
-    constexpr GraphicsPipelineDesc& setPrimType(PrimitiveType::Enum value){ primType = value; return *this; }
-    constexpr GraphicsPipelineDesc& setPatchControlPoints(u32 value){ patchControlPoints = value; return *this; }
-    GraphicsPipelineDesc& setInputLayout(const InputLayoutHandle& value);
-    GraphicsPipelineDesc& setVertexShader(const ShaderHandle& value);
-    GraphicsPipelineDesc& setHullShader(const ShaderHandle& value);
-    GraphicsPipelineDesc& setTessellationControlShader(const ShaderHandle& value);
-    GraphicsPipelineDesc& setDomainShader(const ShaderHandle& value);
-    GraphicsPipelineDesc& setTessellationEvaluationShader(const ShaderHandle& value);
-    GraphicsPipelineDesc& setGeometryShader(const ShaderHandle& value);
-    GraphicsPipelineDesc& setPixelShader(const ShaderHandle& value);
-    GraphicsPipelineDesc& setFragmentShader(const ShaderHandle& value);
-    constexpr GraphicsPipelineDesc& setRenderState(const RenderState& value){ renderState = value; return *this; }
-    constexpr GraphicsPipelineDesc& setVariableRateShadingState(const VariableRateShadingState& value){ shadingRateState = value; return *this; }
+    constexpr GraphicsPipelineDesc& setPrimType(PrimitiveType::Enum value)noexcept{ primType = value; return *this; }
+    constexpr GraphicsPipelineDesc& setPatchControlPoints(u32 value)noexcept{ patchControlPoints = value; return *this; }
+    GraphicsPipelineDesc& setInputLayout(const InputLayoutHandle& value)noexcept;
+    GraphicsPipelineDesc& setVertexShader(const ShaderHandle& value)noexcept;
+    GraphicsPipelineDesc& setHullShader(const ShaderHandle& value)noexcept;
+    GraphicsPipelineDesc& setTessellationControlShader(const ShaderHandle& value)noexcept;
+    GraphicsPipelineDesc& setDomainShader(const ShaderHandle& value)noexcept;
+    GraphicsPipelineDesc& setTessellationEvaluationShader(const ShaderHandle& value)noexcept;
+    GraphicsPipelineDesc& setGeometryShader(const ShaderHandle& value)noexcept;
+    GraphicsPipelineDesc& setPixelShader(const ShaderHandle& value)noexcept;
+    GraphicsPipelineDesc& setFragmentShader(const ShaderHandle& value)noexcept;
+    constexpr GraphicsPipelineDesc& setRenderState(const RenderState& value)noexcept{ renderState = value; return *this; }
+    constexpr GraphicsPipelineDesc& setVariableRateShadingState(const VariableRateShadingState& value)noexcept{ shadingRateState = value; return *this; }
     GraphicsPipelineDesc& addBindingLayout(const BindingLayoutHandle& layout);
 };
 
@@ -149,7 +149,7 @@ struct ComputePipelineDesc{
 
     ~ComputePipelineDesc();
 
-    ComputePipelineDesc& setComputeShader(const ShaderHandle& value);
+    ComputePipelineDesc& setComputeShader(const ShaderHandle& value)noexcept;
     ComputePipelineDesc& addBindingLayout(const BindingLayoutHandle& layout);
 };
 
@@ -168,13 +168,13 @@ struct MeshletPipelineDesc{
 
     ~MeshletPipelineDesc();
 
-    constexpr MeshletPipelineDesc& setPrimType(PrimitiveType::Enum value){ primType = value; return *this; }
-    MeshletPipelineDesc& setTaskShader(const ShaderHandle& value);
-    MeshletPipelineDesc& setAmplificationShader(const ShaderHandle& value);
-    MeshletPipelineDesc& setMeshShader(const ShaderHandle& value);
-    MeshletPipelineDesc& setPixelShader(const ShaderHandle& value);
-    MeshletPipelineDesc& setFragmentShader(const ShaderHandle& value);
-    constexpr MeshletPipelineDesc& setRenderState(const RenderState& value){ renderState = value; return *this; }
+    constexpr MeshletPipelineDesc& setPrimType(PrimitiveType::Enum value)noexcept{ primType = value; return *this; }
+    MeshletPipelineDesc& setTaskShader(const ShaderHandle& value)noexcept;
+    MeshletPipelineDesc& setAmplificationShader(const ShaderHandle& value)noexcept;
+    MeshletPipelineDesc& setMeshShader(const ShaderHandle& value)noexcept;
+    MeshletPipelineDesc& setPixelShader(const ShaderHandle& value)noexcept;
+    MeshletPipelineDesc& setFragmentShader(const ShaderHandle& value)noexcept;
+    constexpr MeshletPipelineDesc& setRenderState(const RenderState& value)noexcept{ renderState = value; return *this; }
     MeshletPipelineDesc& addBindingLayout(const BindingLayoutHandle& layout);
 };
 

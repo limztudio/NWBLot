@@ -42,11 +42,11 @@ template<typename NameT>
 [[nodiscard]] static GpuTaskTimingHistoryDetail::RouteKey StoredRouteKey(
     const GpuTaskTimingKey& key,
     const GpuPhysicalQueueId& physicalQueue
-){
+)noexcept{
     return { key.task.identityHash(), key.variant, key.resolutionClass, key.queue, physicalQueue };
 }
 
-[[nodiscard]] static GpuTaskTimingHistoryDetail::AssignmentKey StoredAssignmentKey(const GpuTaskTimingAssignmentKey& key){
+[[nodiscard]] static GpuTaskTimingHistoryDetail::AssignmentKey StoredAssignmentKey(const GpuTaskTimingAssignmentKey& key)noexcept{
     return { key.task.identityHash(), key.variant, key.resolutionClass };
 }
 

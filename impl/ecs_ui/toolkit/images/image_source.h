@@ -44,7 +44,7 @@ private:
 
 
     private:
-        explicit ConstructionToken() = default;
+        explicit ConstructionToken()noexcept = default;
     };
 
 
@@ -58,9 +58,9 @@ public:
 
 
 public:
-    [[nodiscard]] const Core::Assets::AssetRef<Texture>& identity()const{ return m_identity; }
-    [[nodiscard]] u64 generation()const{ return m_generation; }
-    [[nodiscard]] const Texture& texture()const{ return m_texture; }
+    [[nodiscard]] const Core::Assets::AssetRef<Texture>& identity()const noexcept{ return m_identity; }
+    [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
+    [[nodiscard]] const Texture& texture()const noexcept{ return m_texture; }
 
 
 private:

@@ -20,7 +20,7 @@ NWB_IMPL_UI_BEGIN
 
 // The source owns a cached stable-key view and copies the query; filtering must not change its full-source metadata.
 interface ISearchableListDataSource : public IListDataSource{
-    virtual ~ISearchableListDataSource()override = default;
+    virtual ~ISearchableListDataSource()noexcept override = default;
     [[nodiscard]] virtual bool filter(AStringView query) = 0;
     [[nodiscard]] virtual const IListDataSource& filtered()const = 0;
 };
@@ -55,11 +55,11 @@ public:
 
 
 public:
-    [[nodiscard]] const ComboState& combo()const{ return m_combo; }
-    [[nodiscard]] ComboState& combo(){ return m_combo; }
-    [[nodiscard]] const EditModel& query()const{ return m_query; }
-    [[nodiscard]] EditModel& query(){ return m_query; }
-    [[nodiscard]] const EditBoxState& editorState()const{ return m_editor; }
+    [[nodiscard]] const ComboState& combo()const noexcept{ return m_combo; }
+    [[nodiscard]] ComboState& combo()noexcept{ return m_combo; }
+    [[nodiscard]] const EditModel& query()const noexcept{ return m_query; }
+    [[nodiscard]] EditModel& query()noexcept{ return m_query; }
+    [[nodiscard]] const EditBoxState& editorState()const noexcept{ return m_editor; }
 
 
 private:

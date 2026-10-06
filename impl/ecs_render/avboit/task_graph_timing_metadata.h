@@ -25,7 +25,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline Core::GpuTaskTimingMetadata AvboitComputeStageTimingMetadata(const AvboitFrameTargets& targets){
+[[nodiscard]] inline Core::GpuTaskTimingMetadata AvboitComputeStageTimingMetadata(const AvboitFrameTargets& targets)noexcept{
     constexpr u32 s_ResolutionBucketPixels = 64u;
     constexpr u32 s_ResolutionHeightShiftBits = 16u;
     const auto bucketDimension = [](const u32 dimension){

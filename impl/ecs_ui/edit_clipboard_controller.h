@@ -49,13 +49,13 @@ public:
     );
     [[nodiscard]] UiEditClipboardResult drain(const UiTextEditOwner& owner, Ui::EditModel& model, bool readOnly = false);
     [[nodiscard]] bool cancel();
-    [[nodiscard]] bool pending()const{ return m_token.valid(); }
-    [[nodiscard]] Core::ClipboardRequestToken token()const{ return m_token; }
-    [[nodiscard]] Ui::EditClipboardAction::Enum action()const{ return m_action; }
+    [[nodiscard]] bool pending()const noexcept{ return m_token.valid(); }
+    [[nodiscard]] Core::ClipboardRequestToken token()const noexcept{ return m_token; }
+    [[nodiscard]] Ui::EditClipboardAction::Enum action()const noexcept{ return m_action; }
 
 
 private:
-    void clearRequest();
+    void clearRequest()noexcept;
     [[nodiscard]] UiEditClipboardResult applyCompletion(Ui::EditModel& model, bool readOnly);
 
 

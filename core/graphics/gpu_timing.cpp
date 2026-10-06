@@ -516,7 +516,7 @@ void GpuTimingRecorder::quarantineScope(const GpuTimingScope& scope)noexcept{
         m_pendingAttributionRetirements = true;
 }
 
-GpuTimingSubmissionTicket* GpuTimingRecorder::activeSubmissionTicket()const{
+GpuTimingSubmissionTicket* GpuTimingRecorder::activeSubmissionTicket()const noexcept{
     GpuTimingSubmissionTicket* ticket = s_ActiveSubmissionTicket;
     return ticket && &ticket->m_recorder == this ? ticket : nullptr;
 }
@@ -612,7 +612,7 @@ void GpuTimingRecorder::discardFrameResetLocked(){
         it.value()->discardFrameReset();
 }
 
-void GpuTimingRecorder::noteSkippedScope(const GpuTimingScopeSkipReason::Enum reason){
+void GpuTimingRecorder::noteSkippedScope(const GpuTimingScopeSkipReason::Enum reason)noexcept{
     if(reason < GpuTimingScopeSkipReason::kCount)
         ++m_statistics.skippedScopeCountByReason[reason];
 }

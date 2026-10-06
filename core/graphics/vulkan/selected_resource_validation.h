@@ -26,7 +26,7 @@ inline constexpr u32 s_InvalidQueueOwnershipDomain = Limit<u32>::s_Max;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline u32 GetQueueOwnershipDomain(const Device& device, const GpuPhysicalQueueId& queue){ return device.getQueueFamilyIndex(queue); }
+[[nodiscard]] inline u32 GetQueueOwnershipDomain(const Device& device, const GpuPhysicalQueueId& queue)noexcept{ return device.getQueueFamilyIndex(queue); }
 
 [[nodiscard]] constexpr bool IsBufferResourceStateMaskValid(const ResourceStates::Mask state)noexcept{ return VulkanBufferDetail::IsBufferResourceStateMaskValid(state); }
 

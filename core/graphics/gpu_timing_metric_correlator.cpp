@@ -452,7 +452,7 @@ void GpuTimingMetricCorrelator::recordTimestampRange(
     }
 }
 
-bool GpuTimingMetricCorrelator::hasOutputRole(const Name& scopeName)const{
+bool GpuTimingMetricCorrelator::hasOutputRole(const Name& scopeName)const noexcept{
     for(const OverlapRecord& record : m_overlapRecords){
         if(record.outputScopeName == scopeName)
             return true;
@@ -470,7 +470,7 @@ void GpuTimingMetricCorrelator::discardPendingRanges()noexcept{
     m_pendingPacketEnvelopeMetrics.clear();
 }
 
-void GpuTimingMetricCorrelator::reset(){
+void GpuTimingMetricCorrelator::reset()noexcept{
     m_overlapRecords.clear();
     m_pendingPacketEnvelopeMetrics.clear();
     m_packetEnvelopeMetricOutputRoles.clear();

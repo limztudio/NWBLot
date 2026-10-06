@@ -79,13 +79,13 @@ struct ParsedAssetMetadata{
 };
 
 template<typename T>
-[[nodiscard]] T* FindParsedMetadataExtension(ParsedAssetMetadata& metadata, const Name& extensionName){
+[[nodiscard]] T* FindParsedMetadataExtension(ParsedAssetMetadata& metadata, const Name& extensionName)noexcept{
     auto found = metadata.extensions.find(extensionName);
     return found == metadata.extensions.end() ? nullptr : static_cast<T*>(found.value().get());
 }
 
 template<typename T>
-[[nodiscard]] const T* FindParsedMetadataExtension(const ParsedAssetMetadata& metadata, const Name& extensionName){
+[[nodiscard]] const T* FindParsedMetadataExtension(const ParsedAssetMetadata& metadata, const Name& extensionName)noexcept{
     auto found = metadata.extensions.find(extensionName);
     return found == metadata.extensions.end() ? nullptr : static_cast<const T*>(found.value().get());
 }

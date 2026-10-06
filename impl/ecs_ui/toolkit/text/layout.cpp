@@ -20,15 +20,15 @@ namespace __hidden_ui_text_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ByteBoundary(StringView text, u32 offset){
+[[nodiscard]] static bool ByteBoundary(StringView text, u32 offset)noexcept{
     return offset <= text.size() && (offset == text.size() || (static_cast<u8>(text[offset]) & 0xc0u) != 0x80u);
 }
 
-[[nodiscard]] static bool FitsCoordinate(f64 value){
+[[nodiscard]] static bool FitsCoordinate(f64 value)noexcept{
     return IsFinite(value) && value >= -static_cast<f64>(Limit<f32>::s_Max) && value <= static_cast<f64>(Limit<f32>::s_Max);
 }
 
-[[nodiscard]] static bool TranslateInk(const Point& position, const Rect& ink, Rect& output){
+[[nodiscard]] static bool TranslateInk(const Point& position, const Rect& ink, Rect& output)noexcept{
     const f64 left = static_cast<f64>(position.x) + ink.x;
     const f64 top = static_cast<f64>(position.y) + ink.y;
     if(!FitsCoordinate(left) || !FitsCoordinate(top) || !FitsCoordinate(left + ink.width) || !FitsCoordinate(top + ink.height))
@@ -40,7 +40,7 @@ namespace __hidden_ui_text_layout{
     return true;
 }
 
-[[nodiscard]] static bool ValidateRun(const ShapedRun& run, StringView text, TextDirection::Enum direction){
+[[nodiscard]] static bool ValidateRun(const ShapedRun& run, StringView text, TextDirection::Enum direction)noexcept{
     if(
         !IsFinite(run.metrics.ascender) || !IsFinite(run.metrics.descender) || !IsFinite(run.metrics.lineGap)
         || run.metrics.ascender < 0.0f || run.metrics.descender < 0.0f || run.metrics.lineGap < 0.0f
@@ -76,7 +76,7 @@ namespace __hidden_ui_text_layout{
     return true;
 }
 
-[[nodiscard]] static bool IncludeInk(Rect& bounds, bool& hasInk, const Rect& ink){
+[[nodiscard]] static bool IncludeInk(Rect& bounds, bool& hasInk, const Rect& ink)noexcept{
     if(ink.width <= 0.0f || ink.height <= 0.0f)
         return true;
     if(!hasInk){
@@ -108,14 +108,14 @@ namespace __hidden_ui_text_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextLayout::TextLayout(Core::Alloc::GlobalArena& arena)
+TextLayout::TextLayout(Core::Alloc::GlobalArena& arena)noexcept
     : m_text(arena)
     , m_glyphs(arena)
     , m_clusters(arena)
     , m_lines(arena)
 {}
 
-TextHit TextLayout::hitTest(Point point)const{
+TextHit TextLayout::hitTest(Point point)const noexcept{
     TextHit hit;
     if(m_lines.empty() || !IsFinite(point.x) || !IsFinite(point.y))
         return hit;
@@ -151,7 +151,7 @@ TextHit TextLayout::hitTest(Point point)const{
     return hit;
 }
 
-bool TextLayout::caretRect(u32 byteOffset, TextCaretEdge::Enum edge, Rect& output)const{
+bool TextLayout::caretRect(u32 byteOffset, TextCaretEdge::Enum edge, Rect& output)const noexcept{
     if(edge != TextCaretEdge::Leading && edge != TextCaretEdge::Trailing)
         return false;
     const TextCluster* alternate = nullptr;
@@ -185,7 +185,7 @@ bool TextLayout::caretRect(u32 byteOffset, TextCaretEdge::Enum edge, Rect& outpu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextLayoutBuilder::TextLayoutBuilder(Core::Alloc::GlobalArena& arena, ITextShaper& shaper)
+TextLayoutBuilder::TextLayoutBuilder(Core::Alloc::GlobalArena& arena, ITextShaper& shaper)noexcept
     : m_arena(arena)
     , m_shaper(shaper)
     , m_run(arena)

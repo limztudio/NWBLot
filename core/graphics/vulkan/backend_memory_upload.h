@@ -129,7 +129,7 @@ public:
 
 
 public:
-    [[nodiscard]] const HeapDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] const HeapDesc& getDescription()const noexcept{ return m_desc; }
     Object getNativeHandle(ObjectType objectType);
 
 
@@ -205,7 +205,7 @@ public:
 
 
 public:
-    void clear();
+    void clear()noexcept;
     bool suballocateBuffer(
         u64 size,
         Buffer** pBuffer,
@@ -290,7 +290,7 @@ class Buffer final : public RefCounter<GraphicsResource>, NoCopy{
     friend class UploadManager;
     friend class ShaderTable;
 
-    friend VkDeviceAddress VulkanDetail::GetBufferDeviceAddress(Buffer* bufferResource, u64 offset);
+    friend VkDeviceAddress VulkanDetail::GetBufferDeviceAddress(Buffer* bufferResource, u64 offset)noexcept;
 
 
 private:
@@ -314,10 +314,10 @@ public:
 
 
 public:
-    [[nodiscard]] const BufferDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] const BufferDesc& getDescription()const noexcept{ return m_desc; }
     [[nodiscard]] const BufferDesc& getCreationDescription()const noexcept{ return m_creationDesc; }
     [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
-    [[nodiscard]] GpuVirtualAddress getGpuVirtualAddress()const{ return m_deviceAddress; }
+    [[nodiscard]] GpuVirtualAddress getGpuVirtualAddress()const noexcept{ return m_deviceAddress; }
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
     // Task-graph declarations copy this production admission snapshot while retaining the Buffer itself.
     [[nodiscard]] ResourceQueueAdmissionSnapshot getQueueAdmissionSnapshot()const noexcept{
@@ -450,7 +450,7 @@ public:
 
 
 public:
-    [[nodiscard]] const TextureDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] const TextureDesc& getDescription()const noexcept{ return m_desc; }
     [[nodiscard]] const TextureDesc& getCreationDescription()const noexcept{ return m_creationDesc; }
     [[nodiscard]] bool descriptionMatchesCreation()const noexcept;
     [[nodiscard]] u16 getDeviceGeneration()const noexcept{ return m_context.deviceGeneration; }
@@ -532,7 +532,7 @@ public:
 
 
 public:
-    [[nodiscard]] const TextureDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] const TextureDesc& getDescription()const noexcept{ return m_desc; }
 
 
 private:
@@ -576,7 +576,7 @@ public:
 
 
 public:
-    [[nodiscard]] const SamplerDesc& getDescription()const{ return m_desc; }
+    [[nodiscard]] const SamplerDesc& getDescription()const noexcept{ return m_desc; }
 
 
 private:
@@ -602,15 +602,15 @@ public:
 
 
 public:
-    [[nodiscard]] const ShaderDesc& getDescription()const{ return m_desc; }
-    void getBytecode(const void** ppBytecode, usize* pSize)const{
+    [[nodiscard]] const ShaderDesc& getDescription()const noexcept{ return m_desc; }
+    void getBytecode(const void** ppBytecode, usize* pSize)const noexcept{
         *ppBytecode = m_spirvWords.data();
         *pSize = m_spirvWords.size() * sizeof(u32);
     }
 
 
 private:
-    [[nodiscard]] VkSpecializationInfo makeSpecializationInfo()const;
+    [[nodiscard]] VkSpecializationInfo makeSpecializationInfo()const noexcept;
 
 
 private:
@@ -660,7 +660,7 @@ public:
 
 
 public:
-    void getBytecode(const void** ppBytecode, usize* pSize)const;
+    void getBytecode(const void** ppBytecode, usize* pSize)const noexcept;
     ShaderHandle getShader(AStringView entryName, ShaderType::Mask shaderType);
 
 
@@ -686,15 +686,15 @@ public:
 
 
 public:
-    [[nodiscard]] const VertexAttributeDesc* getAttributeDescription(u32 index)const{
+    [[nodiscard]] const VertexAttributeDesc* getAttributeDescription(u32 index)const noexcept{
         if(index >= m_attributes.size())
             return nullptr;
         return &m_attributes[index];
     }
 
-    [[nodiscard]] u32 getNumAttributes()const{ return static_cast<u32>(m_attributes.size()); }
-    [[nodiscard]] u32 getNumBindings()const{ return static_cast<u32>(m_bindings.size()); }
-    [[nodiscard]] const VkVertexInputBindingDescription* getBindingDescription(u32 index)const{
+    [[nodiscard]] u32 getNumAttributes()const noexcept{ return static_cast<u32>(m_attributes.size()); }
+    [[nodiscard]] u32 getNumBindings()const noexcept{ return static_cast<u32>(m_bindings.size()); }
+    [[nodiscard]] const VkVertexInputBindingDescription* getBindingDescription(u32 index)const noexcept{
         return index < m_bindings.size() ? &m_bindings[index] : nullptr;
     }
 
@@ -722,8 +722,8 @@ public:
 
 
 public:
-    [[nodiscard]] const FramebufferDesc& getDescription()const{ return m_desc; }
-    [[nodiscard]] const FramebufferInfoEx& getFramebufferInfo()const{ return m_framebufferInfo; }
+    [[nodiscard]] const FramebufferDesc& getDescription()const noexcept{ return m_desc; }
+    [[nodiscard]] const FramebufferInfoEx& getFramebufferInfo()const noexcept{ return m_framebufferInfo; }
 
 
 private:

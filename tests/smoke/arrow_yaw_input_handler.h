@@ -30,7 +30,7 @@ public:
         }
     }
 
-    [[nodiscard]] f32 axis()const{
+    [[nodiscard]] f32 axis()const noexcept{
         return (m_rightHeld ? 1.0f : 0.0f) - (m_leftHeld ? 1.0f : 0.0f);
     }
 

@@ -26,7 +26,7 @@ usize Context::StateClaimHash::operator()(const StateClaim& claim)const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Context::ContainsRoot(const WidgetRoot* roots, const usize count, const WidgetRoot& root){
+bool Context::ContainsRoot(const WidgetRoot* roots, const usize count, const WidgetRoot& root)noexcept{
     for(usize index = 0u; index < count; ++index){
         if(roots[index] == root)
             return true;

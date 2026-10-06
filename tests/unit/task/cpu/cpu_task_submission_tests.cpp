@@ -112,7 +112,7 @@ TEST(CpuTaskSubmissionTests, CallableConstructionFailurePublishesNoSchedulerOrSc
     CpuTaskScope scope(scheduler);
     ThrowingCopyTask callable;
     u32 handled = 0u;
-    const auto handleError = [&handled](const u32 error){
+    const auto handleError = [&handled](const u32 error)noexcept{
         ++handled;
         return static_cast<int>(error);
     };
@@ -120,7 +120,7 @@ TEST(CpuTaskSubmissionTests, CallableConstructionFailurePublishesNoSchedulerOrSc
         const auto task = scheduler.submit(callable);
         EXPECT_FALSE(task.valid());
         return -1;
-    }, handleError, [](){ return -2; });
+    }, handleError, []()noexcept{ return -2; });
     EXPECT_EQ(schedulerResult, static_cast<int>(s_ConstructionException));
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 
@@ -128,7 +128,7 @@ TEST(CpuTaskSubmissionTests, CallableConstructionFailurePublishesNoSchedulerOrSc
         const auto task = scope.submit(callable);
         EXPECT_FALSE(task.valid());
         return -1;
-    }, handleError, [](){ return -2; });
+    }, handleError, []()noexcept{ return -2; });
     EXPECT_EQ(scopeResult, static_cast<int>(s_ConstructionException));
     EXPECT_EQ(handled, s_ExpectedDualCount);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
@@ -154,7 +154,7 @@ TEST(CpuTaskSubmissionTests, WorkerCallbackFailureTerminatesWithoutDeferredCalle
                 return 0;
             scheduler.wait(task);
             return 0;
-        }, [](const u32){ return 0; }, [](){ return 0; });
+        }, [](const u32){ return 0; }, []()noexcept{ return 0; });
         ExitTestProcess(static_cast<u32>(result));
     }, "");
 }
@@ -178,7 +178,7 @@ TEST(CpuTaskSubmissionTests, ParallelRangeWorkerFailureTerminatesWithoutDeferred
                 throw s_WorkerException;
             });
             return 0;
-        }, [](const u32){ return 0; }, [](){ return 0; });
+        }, [](const u32){ return 0; }, []()noexcept{ return 0; });
         ExitTestProcess(static_cast<u32>(result));
     }, "");
 }

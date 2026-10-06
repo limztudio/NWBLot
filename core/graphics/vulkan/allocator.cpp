@@ -25,7 +25,7 @@ namespace __hidden_vulkan_allocator{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline VmaAllocationCreateInfo BuildDeviceLocalAllocationInfo(){
+inline VmaAllocationCreateInfo BuildDeviceLocalAllocationInfo()noexcept{
     VmaAllocationCreateInfo allocInfo{};
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
     allocInfo.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -36,7 +36,7 @@ inline VmaAllocationCreateInfo BuildMappedHostAllocationInfo(
     const VkMemoryPropertyFlags requiredFlags,
     const VkMemoryPropertyFlags preferredFlags,
     const VmaAllocationCreateFlags accessFlags
-){
+)noexcept{
     VmaAllocationCreateInfo allocInfo{};
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_HOST;
     allocInfo.requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | requiredFlags;
@@ -45,7 +45,7 @@ inline VmaAllocationCreateInfo BuildMappedHostAllocationInfo(
     return allocInfo;
 }
 
-inline VmaAllocationCreateInfo BuildCpuAccessAllocationInfo(const CpuAccessMode::Enum cpuAccess){
+inline VmaAllocationCreateInfo BuildCpuAccessAllocationInfo(const CpuAccessMode::Enum cpuAccess)noexcept{
     if(cpuAccess == CpuAccessMode::Read){
         return BuildMappedHostAllocationInfo(
             0,
@@ -76,14 +76,14 @@ inline VmaAllocationCreateInfo BuildBufferAllocationInfo(const BufferDesc& desc,
     return allocInfo;
 }
 
-inline VmaAllocationCreateInfo BuildStagingTextureAllocationInfo(const CpuAccessMode::Enum cpuAccess){
+inline VmaAllocationCreateInfo BuildStagingTextureAllocationInfo(const CpuAccessMode::Enum cpuAccess)noexcept{
     return cpuAccess == CpuAccessMode::None
         ? BuildDeviceLocalAllocationInfo()
         : BuildCpuAccessAllocationInfo(cpuAccess)
     ;
 }
 
-inline VmaAllocationCreateInfo BuildHeapAllocationInfo(const HeapDesc& desc){
+inline VmaAllocationCreateInfo BuildHeapAllocationInfo(const HeapDesc& desc)noexcept{
     VmaAllocationCreateInfo allocInfo{};
     allocInfo.usage = VMA_MEMORY_USAGE_UNKNOWN;
 
@@ -113,7 +113,7 @@ inline VmaAllocationCreateInfo BuildHeapAllocationInfo(const HeapDesc& desc){
     return allocInfo;
 }
 
-inline VmaAllocationCreateInfo BuildHostMappedBufferAllocationInfo(){
+inline VmaAllocationCreateInfo BuildHostMappedBufferAllocationInfo()noexcept{
     return BuildMappedHostAllocationInfo(
         VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         0,
@@ -121,7 +121,7 @@ inline VmaAllocationCreateInfo BuildHostMappedBufferAllocationInfo(){
     );
 }
 
-inline bool BuildRequiresInvalidate(const VkPhysicalDeviceMemoryProperties& memoryProperties, const u32 memoryTypeIndex){
+inline bool BuildRequiresInvalidate(const VkPhysicalDeviceMemoryProperties& memoryProperties, const u32 memoryTypeIndex)noexcept{
     if(memoryTypeIndex >= memoryProperties.memoryTypeCount)
         return true;
 
@@ -129,7 +129,7 @@ inline bool BuildRequiresInvalidate(const VkPhysicalDeviceMemoryProperties& memo
     return (propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) != 0 && (propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) == 0;
 }
 
-inline VmaVulkanFunctions BuildVmaVulkanFunctions(const VulkanContext& context){
+inline VmaVulkanFunctions BuildVmaVulkanFunctions(const VulkanContext& context)noexcept{
     VmaVulkanFunctions functions{};
     functions.vkGetInstanceProcAddr = context.getInstanceProcAddr;
     functions.vkGetDeviceProcAddr = context.instanceDispatch.vkGetDeviceProcAddr;
@@ -172,22 +172,22 @@ inline VmaVulkanFunctions BuildVmaVulkanFunctions(const VulkanContext& context){
     return functions;
 }
 
-inline VmaAllocator ToVmaAllocator(const VulkanAllocatorHandle allocator){
+inline VmaAllocator ToVmaAllocator(const VulkanAllocatorHandle allocator)noexcept{
     static_assert(sizeof(VmaAllocator) == sizeof(VulkanAllocatorHandle));
     return reinterpret_cast<VmaAllocator>(allocator);
 }
 
-inline VulkanAllocatorHandle ToVulkanAllocatorHandle(const VmaAllocator allocator){
+inline VulkanAllocatorHandle ToVulkanAllocatorHandle(const VmaAllocator allocator)noexcept{
     static_assert(sizeof(VulkanAllocatorHandle) == sizeof(VmaAllocator));
     return reinterpret_cast<VulkanAllocatorHandle>(allocator);
 }
 
-inline VmaAllocation ToVmaAllocation(const VulkanAllocationHandle allocation){
+inline VmaAllocation ToVmaAllocation(const VulkanAllocationHandle allocation)noexcept{
     static_assert(sizeof(VmaAllocation) == sizeof(VulkanAllocationHandle));
     return reinterpret_cast<VmaAllocation>(allocation);
 }
 
-inline VulkanAllocationHandle ToVulkanAllocationHandle(const VmaAllocation allocation){
+inline VulkanAllocationHandle ToVulkanAllocationHandle(const VmaAllocation allocation)noexcept{
     static_assert(sizeof(VulkanAllocationHandle) == sizeof(VmaAllocation));
     return reinterpret_cast<VulkanAllocationHandle>(allocation);
 }

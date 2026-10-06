@@ -135,7 +135,7 @@ struct ReportFixture{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] usize CountText(const AStringView text, const AStringView needle){
+[[nodiscard]] usize CountText(const AStringView text, const AStringView needle)noexcept{
     usize count = 0u;
     usize offset = 0u;
     while((offset = text.find(needle, offset)) != AStringView::npos){

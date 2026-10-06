@@ -49,7 +49,7 @@ struct OwnedAllocation{
         , pointer(owner.allocate(1u, size))
         , requestedBytes(size)
     {}
-    ~OwnedAllocation(){
+    ~OwnedAllocation()noexcept{
         if(pointer)
             arena.deallocate(pointer, 1u, requestedBytes);
     }

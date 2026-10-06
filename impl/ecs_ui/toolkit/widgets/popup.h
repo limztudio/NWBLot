@@ -49,7 +49,7 @@ class PopupState final : NoCopy{
 
 
 public:
-    PopupState();
+    PopupState()noexcept;
 
 
 public:
@@ -58,16 +58,16 @@ public:
 
 
 public:
-    void open();
-    void close();
-    [[nodiscard]] bool isOpen()const{ return m_open; }
-    [[nodiscard]] u64 instanceGeneration()const{ return m_instanceGeneration; }
-    [[nodiscard]] u64 openGeneration()const{ return m_openGeneration; }
-    [[nodiscard]] const PopupPlacement& placement()const{ return m_placement; }
+    void open()noexcept;
+    void close()noexcept;
+    [[nodiscard]] bool isOpen()const noexcept{ return m_open; }
+    [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_instanceGeneration; }
+    [[nodiscard]] u64 openGeneration()const noexcept{ return m_openGeneration; }
+    [[nodiscard]] const PopupPlacement& placement()const noexcept{ return m_placement; }
 
 
 private:
-    void bindParent(const PopupToken& parent);
+    void bindParent(const PopupToken& parent)noexcept;
 
 
 private:
@@ -83,7 +83,7 @@ private:
 class PopupLayout final{
 public:
     // Anchored placement flips on its requested axis; oversized content shrinks to the logical viewport.
-    [[nodiscard]] static bool Place(const PopupOptions& options, const DisplayMetrics& display, PopupPlacement& placement);
+    [[nodiscard]] static bool Place(const PopupOptions& options, const DisplayMetrics& display, PopupPlacement& placement)noexcept;
 };
 
 

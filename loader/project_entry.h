@@ -107,7 +107,7 @@ struct ProjectRuntimeContext{
     void setTelemetryCapture(const Core::Telemetry::CaptureOptions& options);
     [[nodiscard]] bool flushTelemetryUpload(bool clearAfterUpload = false);
     void setPerfCapture(const Core::Perf::CaptureOptions& options);
-    [[nodiscard]] Core::Perf::TimingView gpuTimingView()const{ return perfSession.gpuTimingView(); }
+    [[nodiscard]] Core::Perf::TimingView gpuTimingView()const noexcept{ return perfSession.gpuTimingView(); }
 };
 
 

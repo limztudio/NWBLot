@@ -25,7 +25,7 @@ bool operator==(const GlyphPageBinding& lhs, const GlyphPageBinding& rhs)noexcep
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GlyphPage::GlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& binding, Pixels&& pixels)
+GlyphPage::GlyphPage(Core::Alloc::GlobalArena& arena, const GlyphPageBinding& binding, Pixels&& pixels)noexcept
     : m_binding(binding)
     , m_pixels(arena)
 {

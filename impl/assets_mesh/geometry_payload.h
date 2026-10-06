@@ -23,27 +23,27 @@ NWB_IMPL_BEGIN
 
 class MeshGeometryPayload{
 public:
-    [[nodiscard]] const Core::Assets::AssetVector<Float3U>& positionStream()const{ return m_positionStream; }
-    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& normalStream()const{ return m_normalStream; }
-    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& tangentStream()const{ return m_tangentStream; }
-    [[nodiscard]] const Core::Assets::AssetVector<Float2U>& uv0Stream()const{ return m_uv0Stream; }
-    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& colorStream()const{ return m_colorStream; }
-    [[nodiscard]] const Core::Assets::AssetVector<MeshletDesc>& meshlets()const{ return m_meshlets; }
-    [[nodiscard]] const Core::Assets::AssetVector<MeshletBounds>& meshletBounds()const{ return m_meshletBounds; }
-    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPositionRefDeltas()const{
+    [[nodiscard]] const Core::Assets::AssetVector<Float3U>& positionStream()const noexcept{ return m_positionStream; }
+    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& normalStream()const noexcept{ return m_normalStream; }
+    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& tangentStream()const noexcept{ return m_tangentStream; }
+    [[nodiscard]] const Core::Assets::AssetVector<Float2U>& uv0Stream()const noexcept{ return m_uv0Stream; }
+    [[nodiscard]] const Core::Assets::AssetVector<Half4U>& colorStream()const noexcept{ return m_colorStream; }
+    [[nodiscard]] const Core::Assets::AssetVector<MeshletDesc>& meshlets()const noexcept{ return m_meshlets; }
+    [[nodiscard]] const Core::Assets::AssetVector<MeshletBounds>& meshletBounds()const noexcept{ return m_meshletBounds; }
+    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPositionRefDeltas()const noexcept{
         return m_meshletPositionRefDeltas;
     }
-    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletAttributeRefDeltas()const{
+    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletAttributeRefDeltas()const noexcept{
         return m_meshletAttributeRefDeltas;
     }
-    [[nodiscard]] const Core::Assets::AssetVector<MeshletLocalVertexRef>& meshletLocalVertexRefs()const{
+    [[nodiscard]] const Core::Assets::AssetVector<MeshletLocalVertexRef>& meshletLocalVertexRefs()const noexcept{
         return m_meshletLocalVertexRefs;
     }
-    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices()const{ return m_meshletPrimitiveIndices; }
+    [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices()const noexcept{ return m_meshletPrimitiveIndices; }
 
 
 protected:
-    explicit MeshGeometryPayload(Core::Assets::AssetArena& arena)
+    explicit MeshGeometryPayload(Core::Assets::AssetArena& arena)noexcept
         : m_positionStream(arena)
         , m_normalStream(arena)
         , m_tangentStream(arena)
@@ -69,7 +69,7 @@ protected:
         Core::Assets::AssetVector<u8>&& meshletAttributeRefDeltas,
         Core::Assets::AssetVector<MeshletLocalVertexRef>&& meshletLocalVertexRefs,
         Core::Assets::AssetVector<u8>&& meshletPrimitiveIndices
-    ){
+    )noexcept{
         m_positionStream = Move(positions);
         m_normalStream = Move(normals);
         m_tangentStream = Move(tangents);
@@ -83,7 +83,7 @@ protected:
         m_meshletPrimitiveIndices = Move(meshletPrimitiveIndices);
     }
 
-    [[nodiscard]] bool hasIncompleteGeometryPayload()const{
+    [[nodiscard]] bool hasIncompleteGeometryPayload()const noexcept{
         return m_positionStream.empty()
             || m_normalStream.empty()
             || m_tangentStream.empty()
@@ -139,7 +139,7 @@ protected:
         );
     }
 
-    void clearGeometryPayload(){
+    void clearGeometryPayload()noexcept{
         m_positionStream.clear();
         m_normalStream.clear();
         m_tangentStream.clear();

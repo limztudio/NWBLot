@@ -166,7 +166,7 @@ private:
         RuntimeBindlessHeapHandles bindlessHeapHandles;
         bool bindlessResourceSlotsUploaded = false;
 
-        [[nodiscard]] bool usesSkinning()const{ return skinCount != 0u && jointCount != 0u; }
+        [[nodiscard]] bool usesSkinning()const noexcept{ return skinCount != 0u && jointCount != 0u; }
         [[nodiscard]] bool hasPersistentHeapDescriptors(const bool hasActiveSkin, const bool hasAttributeBuffer)const{
             const auto storageHandle = [](const Core::GpuDescriptorHandle handle){
                 return handle.valid() && handle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer;

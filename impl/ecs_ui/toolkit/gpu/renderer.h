@@ -54,9 +54,9 @@ public:
     [[nodiscard]] bool setSkin(const Core::Assets::AssetRef<UiSkin>& identity, const UiSkin& skin, u64 skinGeneration);
     // Rejection leaves the caller's snapshot unmoved. One immutable pending generation is admitted at a time.
     [[nodiscard]] bool submit(DrawSnapshot&& snapshot);
-    void setCommandRecordingMode(GpuCommandRecordingMode::Enum mode);
-    [[nodiscard]] bool hasPendingFrame()const;
-    [[nodiscard]] u64 lastAcceptedGeneration()const;
+    void setCommandRecordingMode(GpuCommandRecordingMode::Enum mode)noexcept;
+    [[nodiscard]] bool hasPendingFrame()const noexcept;
+    [[nodiscard]] u64 lastAcceptedGeneration()const noexcept;
     [[nodiscard]] Core::PresentationReceiptStatus::Enum lastAcceptedPresentationStatus()const;
     [[nodiscard]] bool renderStandalone(const Core::AcquiredPresentationFrame& frame);
 

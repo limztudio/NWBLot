@@ -17,7 +17,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ContextMenuState::open(const Rect& anchor){
+bool ContextMenuState::open(const Rect& anchor)noexcept{
     if(
         !IsFinite(anchor.x) || !IsFinite(anchor.y) || !IsFinite(anchor.width) || !IsFinite(anchor.height)
         || anchor.width < 0.0f || anchor.height < 0.0f
@@ -34,13 +34,13 @@ bool ContextMenuState::open(const Rect& anchor){
     return true;
 }
 
-void ContextMenuState::close(){
+void ContextMenuState::close()noexcept{
     m_popup.close();
     m_list.select(0u);
     advanceRevision();
 }
 
-void ContextMenuState::advanceRevision(){
+void ContextMenuState::advanceRevision()noexcept{
     if(m_revision == Limit<u64>::s_Max)
         TerminateInvariant();
     ++m_revision;

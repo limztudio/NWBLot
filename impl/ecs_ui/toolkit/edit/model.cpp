@@ -38,7 +38,7 @@ static Atomic<u64> s_NextIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static EditLimits BoundedLimits(const EditLimits& limits){
+static EditLimits BoundedLimits(const EditLimits& limits)noexcept{
     return { Min(limits.maxBytes, s_MaxBytes), Min(limits.maxHistoryRecords, s_MaxHistoryRecords),
         Min(limits.maxHistoryBytes, s_MaxHistoryBytes) };
 }
@@ -93,7 +93,7 @@ bool EditModel::setText(const AStringView value){
     return true;
 }
 
-bool EditModel::setSelection(const usize anchor, const usize caret){
+bool EditModel::setSelection(const usize anchor, const usize caret)noexcept{
     if(!isBoundary(anchor) || !isBoundary(caret))
         return false;
     cancelComposition();
@@ -179,12 +179,12 @@ bool EditModel::buildBoundaries(const AStringView value, Vector<usize, Core::All
     return GraphemeSegmentation::Build(value, output, m_textMode == EditTextMode::SingleLine);
 }
 
-void EditModel::advanceRevision(){
+void EditModel::advanceRevision()noexcept{
     if(m_revision != Limit<u64>::s_Max)
         ++m_revision;
 }
 
-void EditModel::advanceSelectionGeneration(){
+void EditModel::advanceSelectionGeneration()noexcept{
     if(m_selectionGeneration == Limit<u64>::s_Max)
         TerminateInvariant();
     ++m_selectionGeneration;

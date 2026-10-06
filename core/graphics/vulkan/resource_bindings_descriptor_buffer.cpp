@@ -218,23 +218,23 @@ u32 DescriptorBufferManager::getDescriptorSize(const VkDescriptorType descriptor
     return VulkanDetail::GetDescriptorSize(m_context, m_enabled, descriptorType);
 }
 
-u32 DescriptorBufferManager::getOffsetAlignmentBytes()const{
+u32 DescriptorBufferManager::getOffsetAlignmentBytes()const noexcept{
     return VulkanDetail::GetDescriptorBufferOffsetAlignmentBytes(m_context);
 }
 
-u64 DescriptorBufferManager::getUniformBufferAddressAlignmentBytes()const{
+u64 DescriptorBufferManager::getUniformBufferAddressAlignmentBytes()const noexcept{
     return Max<u64>(m_context.physicalDeviceProperties.limits.minUniformBufferOffsetAlignment, 1u);
 }
 
-u64 DescriptorBufferManager::getStorageBufferAddressAlignmentBytes()const{
+u64 DescriptorBufferManager::getStorageBufferAddressAlignmentBytes()const noexcept{
     return Max<u64>(m_context.physicalDeviceProperties.limits.minStorageBufferOffsetAlignment, 1u);
 }
 
-u64 DescriptorBufferManager::getTexelBufferAddressAlignmentBytes()const{
+u64 DescriptorBufferManager::getTexelBufferAddressAlignmentBytes()const noexcept{
     return Max<u64>(m_context.physicalDeviceProperties.limits.minTexelBufferOffsetAlignment, 1u);
 }
 
-u32 DescriptorBufferManager::getMaxTexelBufferElements()const{
+u32 DescriptorBufferManager::getMaxTexelBufferElements()const noexcept{
     return m_context.physicalDeviceProperties.limits.maxTexelBufferElements;
 }
 
@@ -508,7 +508,7 @@ bool DescriptorBufferManager::isLiveSegmentLocked(
     const SegmentStorage& storage,
     const DescriptorBufferSegment& segment,
     const DescriptorBufferSegmentKind::Enum expectedKind
-)const{
+)const noexcept{
     if(
         !segment.valid()
         || segment.kind != expectedKind

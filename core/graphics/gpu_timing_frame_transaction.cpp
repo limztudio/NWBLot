@@ -76,7 +76,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GpuTimingFrameTransaction::GpuTimingFrameTransaction(GpuTimingRecorder& recorder)
+GpuTimingFrameTransaction::GpuTimingFrameTransaction(GpuTimingRecorder& recorder)noexcept
     : m_recorder(recorder)
 {}
 
@@ -196,7 +196,7 @@ bool GpuTimingFrameTransaction::confirmEndSubmission(
     return true;
 }
 
-bool GpuTimingFrameTransaction::needsRetirement()const{
+bool GpuTimingFrameTransaction::needsRetirement()const noexcept{
     return m_beginSubmission.valid() && m_scope.valid();
 }
 

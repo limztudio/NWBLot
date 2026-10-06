@@ -123,15 +123,15 @@ bool CsgDeformCapBuilder::OrderBoundaryLoop(
     return true;
 }
 
-SIMDVector CsgDeformCapBuilder::AccumulateFanAreaVec(SIMDVector inAreaVec, SIMDVector originVec, SIMDVector firstVec, SIMDVector secondVec){
+SIMDVector CsgDeformCapBuilder::AccumulateFanAreaVec(SIMDVector inAreaVec, SIMDVector originVec, SIMDVector firstVec, SIMDVector secondVec)noexcept{
     return VectorAdd(inAreaVec, Vector3Cross(VectorSubtract(firstVec, originVec), VectorSubtract(secondVec, originVec)));
 }
 
-SIMDVector CsgDeformCapBuilder::ScaleCenterVec(SIMDVector sumVec, SIMDVector loopSizeVec){
+SIMDVector CsgDeformCapBuilder::ScaleCenterVec(SIMDVector sumVec, SIMDVector loopSizeVec)noexcept{
     return VectorDivide(sumVec, loopSizeVec);
 }
 
-SIMDVector CsgDeformCapBuilder::CapCenterNormalVec(SIMDVector loopNormalVec){
+SIMDVector CsgDeformCapBuilder::CapCenterNormalVec(SIMDVector loopNormalVec)noexcept{
     return loopNormalVec;
 }
 
@@ -139,7 +139,7 @@ bool CsgDeformCapBuilder::CapNormal(
     const CsgDeformVertexVector<ScratchArena>& vertices,
     const Vector<u32, ScratchArena>& loop,
     Float4& outNormal
-){
+)noexcept{
     outNormal = s_UpAxis;
     if(loop.size() < s_MinLoopVertices)
         return false;

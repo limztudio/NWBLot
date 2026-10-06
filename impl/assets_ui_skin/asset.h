@@ -150,19 +150,19 @@ public:
     [[nodiscard]] bool validateTexture(const Texture& texture)const;
 
     void setAtlas(Core::Assets::AssetRef<Texture> texture, u32 width, u32 height, f32 referenceDensity, RegionVector&& regions);
-    void setPalette(const UiSkinPalette& palette){ m_palette = palette; }
-    void setTypography(const UiSkinTypography& typography){ m_typography = typography; }
+    void setPalette(const UiSkinPalette& palette)noexcept{ m_palette = palette; }
+    void setTypography(const UiSkinTypography& typography)noexcept{ m_typography = typography; }
 
 
 public:
-    [[nodiscard]] const Core::Assets::AssetRef<Texture>& texture()const{ return m_texture; }
-    [[nodiscard]] u32 atlasWidth()const{ return m_atlasWidth; }
-    [[nodiscard]] u32 atlasHeight()const{ return m_atlasHeight; }
-    [[nodiscard]] f32 referenceDensity()const{ return m_referenceDensity; }
-    [[nodiscard]] const RegionVector& regions()const{ return m_regions; }
-    [[nodiscard]] const UiSkinPalette& palette()const{ return m_palette; }
-    [[nodiscard]] const UiSkinTypography& typography()const{ return m_typography; }
-    [[nodiscard]] const UiSkinRegion* findRegion(const Name& name)const;
+    [[nodiscard]] const Core::Assets::AssetRef<Texture>& texture()const noexcept{ return m_texture; }
+    [[nodiscard]] u32 atlasWidth()const noexcept{ return m_atlasWidth; }
+    [[nodiscard]] u32 atlasHeight()const noexcept{ return m_atlasHeight; }
+    [[nodiscard]] f32 referenceDensity()const noexcept{ return m_referenceDensity; }
+    [[nodiscard]] const RegionVector& regions()const noexcept{ return m_regions; }
+    [[nodiscard]] const UiSkinPalette& palette()const noexcept{ return m_palette; }
+    [[nodiscard]] const UiSkinTypography& typography()const noexcept{ return m_typography; }
+    [[nodiscard]] const UiSkinRegion* findRegion(const Name& name)const noexcept;
 
 
 private:

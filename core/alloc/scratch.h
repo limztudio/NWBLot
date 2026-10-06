@@ -54,7 +54,7 @@ private:
             // excludes the header so cache sizing and arena telemetry keep their contract.
             return new(backing) Chunk(payloadSize, static_cast<u8*>(backing) + payloadOffset);
         }
-        static inline void Destroy(Chunk& chunk){
+        static inline void Destroy(Chunk& chunk)noexcept{
             chunk.~Chunk();
             CoreFreeAligned(&chunk);
         }
@@ -73,13 +73,13 @@ private:
 
 
     public:
-        inline void* allocate(usize size){
+        inline void* allocate(usize size)noexcept{
             auto* ret = m_available;
             m_available = reinterpret_cast<u8*>(m_available) + static_cast<isize>(size);
             m_remaining -= size;
             return ret;
         }
-        inline bool tryPopLifo(void* p, usize size){
+        inline bool tryPopLifo(void* p, usize size)noexcept{
             const usize available = reinterpret_cast<usize>(m_available);
             const usize allocationBegin = reinterpret_cast<usize>(p);
             if(AddOverflows<usize>(allocationBegin, size))
@@ -98,7 +98,7 @@ private:
             m_remaining += size;
             return true;
         }
-        inline usize lifoTopSpan(void* p)const{
+        inline usize lifoTopSpan(void* p)const noexcept{
             const usize bufferBegin = reinterpret_cast<usize>(m_buffer);
             const usize allocationBegin = reinterpret_cast<usize>(p);
             const usize available = reinterpret_cast<usize>(m_available);
@@ -106,7 +106,7 @@ private:
                 return 0;
             return available - allocationBegin;
         }
-        inline bool tryResizeLifoTop(void* p, usize newSize){
+        inline bool tryResizeLifoTop(void* p, usize newSize)noexcept{
             const usize bufferBegin = reinterpret_cast<usize>(m_buffer);
             const usize allocationBegin = reinterpret_cast<usize>(p);
             if(AddOverflows<usize>(allocationBegin, newSize))

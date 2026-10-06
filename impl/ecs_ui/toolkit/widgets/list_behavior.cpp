@@ -38,14 +38,14 @@ namespace __hidden_ui_list_behavior{
     return generation != 0u && revision != 0u && source.instanceGeneration() == generation && source.revision() == revision;
 }
 
-[[nodiscard]] static bool ValidOptions(const ListOptions& options){
+[[nodiscard]] static bool ValidOptions(const ListOptions& options)noexcept{
     return
         options.enabled && IsFinite(options.rowHeight) && options.rowHeight > 0.0f
         && IsFinite(options.wheelRows) && options.wheelRows > 0.0f
     ;
 }
 
-[[nodiscard]] static bool IsReverse(const ControlActionKind::Enum kind){
+[[nodiscard]] static bool IsReverse(const ControlActionKind::Enum kind)noexcept{
     return kind == ControlActionKind::Up || kind == ControlActionKind::PageUp || kind == ControlActionKind::End;
 }
 
@@ -83,7 +83,7 @@ namespace __hidden_ui_list_behavior{
     return true;
 }
 
-[[nodiscard]] static bool WheelOffset(const f64 current, const ControlAction& action, f64& candidate){
+[[nodiscard]] static bool WheelOffset(const f64 current, const ControlAction& action, f64& candidate)noexcept{
     if(
         !IsFinite(action.delta) || !IsFinite(action.step) || action.step <= 0.0
         || !IsFinite(action.maximum) || action.maximum < 0.0

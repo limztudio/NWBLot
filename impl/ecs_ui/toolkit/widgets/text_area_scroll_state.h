@@ -31,13 +31,13 @@ private:
     [[nodiscard]] ControlToken prepare(const WidgetState& widget, const PopupToken& popup, u64 stateGeneration,
         u64 stateRevision, const EditModel& model, bool enabled, bool readOnly,
         const ScrollViewportPlacement& placement,
-        Point step);
-    [[nodiscard]] bool updateOffsets(Point scroll);
-    void retire();
+        Point step)noexcept;
+    [[nodiscard]] bool updateOffsets(Point scroll)noexcept;
+    void retire()noexcept;
 
 
 private:
-    void advanceRevision();
+    void advanceRevision()noexcept;
 
 
 private:

@@ -47,7 +47,7 @@ private:
 
 
 public:
-    explicit CommandListResourceSelection(Alloc::ScratchArena& scratchArena)
+    explicit CommandListResourceSelection(Alloc::ScratchArena& scratchArena)noexcept
         : m_scratchArena(scratchArena)
     {}
     ~CommandListResourceSelection();

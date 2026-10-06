@@ -32,7 +32,7 @@ struct GpuTimingScope{
     // Epoch and reservation distinguish a recreated accumulator and reused query-pool slot from an earlier scope.
     u32 epoch = 0u;
 
-    [[nodiscard]] bool valid()const{ return scopeName != s_NameNone && index != Limit<u32>::s_Max && epoch != 0u && reservation != 0u; }
+    [[nodiscard]] bool valid()const noexcept{ return scopeName != s_NameNone && index != Limit<u32>::s_Max && epoch != 0u && reservation != 0u; }
 };
 
 static_assert(IsTriviallyCopyable_V<GpuTimingScope>, "GPU timing publication must remain allocation-free after native recording begins");
@@ -55,7 +55,7 @@ struct GpuTimingScopeDefinition{
     {}
 
 
-    [[nodiscard]] constexpr bool valid()const{ return identity && !markerLabel.empty(); }
+    [[nodiscard]] constexpr bool valid()const noexcept{ return identity && !markerLabel.empty(); }
 };
 
 
@@ -78,7 +78,7 @@ public:
 
 
 private:
-    constexpr explicit GpuTimingSampleAttribution(const u64 identity)
+    constexpr explicit GpuTimingSampleAttribution(const u64 identity)noexcept
         : m_identity(identity)
     {}
 
@@ -144,7 +144,7 @@ public:
 
 
 private:
-    constexpr explicit GpuTimingSampleSubscription(const u64 identity)
+    constexpr explicit GpuTimingSampleSubscription(const u64 identity)noexcept
         : m_identity(identity)
     {}
 

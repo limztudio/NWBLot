@@ -255,7 +255,7 @@ public:
     void addHandlerToBack(IInputEventHandler& handler);
     void removeHandler(IInputEventHandler& handler);
 
-    void setMousePositionScale(f32 x, f32 y);
+    void setMousePositionScale(f32 x, f32 y)noexcept;
 
     [[nodiscard]] bool windowFocused()const noexcept{ return m_windowFocused; }
     // Focus is window lifecycle state; every current handler observes each transition.
@@ -266,7 +266,7 @@ public:
 
     void keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods);
     // Releases preserve queued character policy; a supplied native scancode selects its captured press/repeat policy.
-    [[nodiscard]] bool keyboardTextBlocked(i32 scancode = -1)const;
+    [[nodiscard]] bool keyboardTextBlocked(i32 scancode = -1)const noexcept;
     void keyboardCharInput(u32 unicode, i32 mods);
     void mousePosUpdate(f64 xpos, f64 ypos);
     void mouseButtonUpdate(i32 button, i32 action, i32 mods);
@@ -293,7 +293,7 @@ private:
 
     void queueOrApplyHandlerMutation(HandlerMutationType::Enum type, IInputEventHandler& handler);
     void applyPendingHandlerMutations();
-    bool isHandlerPendingRemoval(const IInputEventHandler& handler)const;
+    bool isHandlerPendingRemoval(const IInputEventHandler& handler)const noexcept;
 
 
 private:

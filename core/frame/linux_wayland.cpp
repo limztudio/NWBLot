@@ -112,27 +112,27 @@ struct WaylandContext{
 };
 
 
-static wl_display* GetWaylandDisplay(const Common::LinuxFrame& frameData){
+static wl_display* GetWaylandDisplay(const Common::LinuxFrame& frameData)noexcept{
     return reinterpret_cast<wl_display*>(frameData.nativeDisplay());
 }
 
-static void SetWaylandDisplay(Common::LinuxFrame& frameData, wl_display* display){
+static void SetWaylandDisplay(Common::LinuxFrame& frameData, wl_display* display)noexcept{
     frameData.nativeDisplay() = display;
 }
 
-static void SetWaylandSurface(Common::LinuxFrame& frameData, wl_surface* surface){
+static void SetWaylandSurface(Common::LinuxFrame& frameData, wl_surface* surface)noexcept{
     frameData.nativeWindowHandle() = static_cast<u64>(reinterpret_cast<usize>(surface));
 }
 
-static WaylandContext* GetWaylandContext(const Common::LinuxFrame& frameData){
+static WaylandContext* GetWaylandContext(const Common::LinuxFrame& frameData)noexcept{
     return static_cast<WaylandContext*>(frameData.nativeState());
 }
 
-static void SetWaylandContext(Common::LinuxFrame& frameData, WaylandContext* context){
+static void SetWaylandContext(Common::LinuxFrame& frameData, WaylandContext* context)noexcept{
     frameData.nativeState() = context;
 }
 
-static i32 ClampBufferScale(i32 value){
+static i32 ClampBufferScale(i32 value)noexcept{
     return Max(value, 1);
 }
 
@@ -144,13 +144,13 @@ static void ApplyBufferScale(WaylandContext& context, i32 value){
         SetWaylandTextInputBufferScale(*textInput, context.bufferScale);
 }
 
-static i32 LogicalDimensionForPixels(u16 pixelDimension, i32 bufferScale){
+static i32 LogicalDimensionForPixels(u16 pixelDimension, i32 bufferScale)noexcept{
     const i32 scale = ClampBufferScale(bufferScale);
     const i32 pixels = pixelDimension > 0u ? static_cast<i32>(pixelDimension) : 1;
     return (pixels + scale - 1) / scale;
 }
 
-static u16 PixelDimensionForLogical(i32 logicalDimension, i32 bufferScale){
+static u16 PixelDimensionForLogical(i32 logicalDimension, i32 bufferScale)noexcept{
     if(logicalDimension <= 0)
         return 0;
 
@@ -161,11 +161,11 @@ static u16 PixelDimensionForLogical(i32 logicalDimension, i32 bufferScale){
     return static_cast<u16>(pixels);
 }
 
-static f64 SurfaceCoordinateToPixels(wl_fixed_t value, i32 bufferScale){
+static f64 SurfaceCoordinateToPixels(wl_fixed_t value, i32 bufferScale)noexcept{
     return wl_fixed_to_double(value) * static_cast<f64>(ClampBufferScale(bufferScale));
 }
 
-static i32 TranslateModifiers(const WaylandContext& context){
+static i32 TranslateModifiers(const WaylandContext& context)noexcept{
     if(!context.xkbState)
         return 0;
 
@@ -187,7 +187,7 @@ static i32 TranslateModifiers(const WaylandContext& context){
     return mods;
 }
 
-static i32 TranslatePointerButton(u32 button){
+static i32 TranslatePointerButton(u32 button)noexcept{
     switch(button){
     case BTN_LEFT: return MouseButton::Left;
     case BTN_MIDDLE: return MouseButton::Middle;
@@ -363,7 +363,7 @@ static void OnOutputGeometry(
     static_cast<void>(transform);
 }
 
-static void OnOutputMode(void* data, wl_output* output, u32 flags, i32 width, i32 height, i32 refresh){
+static void OnOutputMode(void* data, wl_output* output, u32 flags, i32 width, i32 height, i32 refresh)noexcept{
     static_cast<void>(data);
     static_cast<void>(output);
     static_cast<void>(flags);
@@ -372,7 +372,7 @@ static void OnOutputMode(void* data, wl_output* output, u32 flags, i32 width, i3
     static_cast<void>(refresh);
 }
 
-static void OnOutputDone(void* data, wl_output* output){
+static void OnOutputDone(void* data, wl_output* output)noexcept{
     static_cast<void>(data);
     static_cast<void>(output);
 }
@@ -515,7 +515,7 @@ static void OnToplevelClose(void* data, xdg_toplevel* toplevel){
 }
 
 #if defined(XDG_TOPLEVEL_CONFIGURE_BOUNDS_SINCE_VERSION)
-static void OnToplevelConfigureBounds(void* data, xdg_toplevel* toplevel, i32 width, i32 height){
+static void OnToplevelConfigureBounds(void* data, xdg_toplevel* toplevel, i32 width, i32 height)noexcept{
     static_cast<void>(data);
     static_cast<void>(toplevel);
     static_cast<void>(width);
@@ -524,7 +524,7 @@ static void OnToplevelConfigureBounds(void* data, xdg_toplevel* toplevel, i32 wi
 #endif
 
 #if defined(XDG_TOPLEVEL_WM_CAPABILITIES_SINCE_VERSION)
-static void OnToplevelWmCapabilities(void* data, xdg_toplevel* toplevel, wl_array* capabilities){
+static void OnToplevelWmCapabilities(void* data, xdg_toplevel* toplevel, wl_array* capabilities)noexcept{
     static_cast<void>(data);
     static_cast<void>(toplevel);
     static_cast<void>(capabilities);
@@ -532,7 +532,7 @@ static void OnToplevelWmCapabilities(void* data, xdg_toplevel* toplevel, wl_arra
 #endif
 
 static void OnSeatCapabilities(void* data, wl_seat* seat, u32 capabilities);
-static void OnSeatName(void* data, wl_seat* seat, const char* name){
+static void OnSeatName(void* data, wl_seat* seat, const char* name)noexcept{
     static_cast<void>(data);
     static_cast<void>(seat);
     static_cast<void>(name);
@@ -612,13 +612,13 @@ static void OnPointerFrame(void* data, wl_pointer* pointer){
     DispatchScroll(*static_cast<WaylandContext*>(data));
 }
 
-static void OnPointerAxisSource(void* data, wl_pointer* pointer, u32 axisSource){
+static void OnPointerAxisSource(void* data, wl_pointer* pointer, u32 axisSource)noexcept{
     static_cast<void>(data);
     static_cast<void>(pointer);
     static_cast<void>(axisSource);
 }
 
-static void OnPointerAxisStop(void* data, wl_pointer* pointer, u32 time, u32 axis){
+static void OnPointerAxisStop(void* data, wl_pointer* pointer, u32 time, u32 axis)noexcept{
     static_cast<void>(data);
     static_cast<void>(pointer);
     static_cast<void>(time);
@@ -638,7 +638,7 @@ static void OnPointerAxisDiscrete(void* data, wl_pointer* pointer, u32 axis, i32
 }
 
 #if defined(WL_POINTER_AXIS_VALUE120_SINCE_VERSION)
-static void OnPointerAxisValue120(void* data, wl_pointer* pointer, u32 axis, i32 value120){
+static void OnPointerAxisValue120(void* data, wl_pointer* pointer, u32 axis, i32 value120)noexcept{
     static_cast<void>(data);
     static_cast<void>(pointer);
     static_cast<void>(axis);
@@ -647,7 +647,7 @@ static void OnPointerAxisValue120(void* data, wl_pointer* pointer, u32 axis, i32
 #endif
 
 #if defined(WL_POINTER_AXIS_RELATIVE_DIRECTION_SINCE_VERSION)
-static void OnPointerAxisRelativeDirection(void* data, wl_pointer* pointer, u32 axis, u32 direction){
+static void OnPointerAxisRelativeDirection(void* data, wl_pointer* pointer, u32 axis, u32 direction)noexcept{
     static_cast<void>(data);
     static_cast<void>(pointer);
     static_cast<void>(axis);

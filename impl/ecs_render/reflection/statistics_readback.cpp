@@ -328,7 +328,7 @@ bool ReflectionStatisticsReadback::tryGetLatestStatistics(ReflectionStatistics& 
     return m_control && m_control->tryGetLatestStatistics(outStatistics);
 }
 
-ReflectionStatisticsReadbackSnapshot ReflectionStatisticsReadback::snapshot(const ReflectionStatistics& metadata)const{
+ReflectionStatisticsReadbackSnapshot ReflectionStatisticsReadback::snapshot(const ReflectionStatistics& metadata)const noexcept{
     ReflectionStatisticsReadbackSnapshot result;
     if(!m_control || !m_buffers[0])
         return result;

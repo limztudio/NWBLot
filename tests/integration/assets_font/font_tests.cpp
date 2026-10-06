@@ -79,7 +79,7 @@ using FontTestArena = TestArena<FontTestArenaTag>;
     ;
 }
 
-static void WriteBigU32(u8* bytes, const u32 value){
+static void WriteBigU32(u8* bytes, const u32 value)noexcept{
     bytes[0u] = static_cast<u8>(value >> 24u);
     bytes[1u] = static_cast<u8>(value >> 16u);
     bytes[2u] = static_cast<u8>(value >> 8u);

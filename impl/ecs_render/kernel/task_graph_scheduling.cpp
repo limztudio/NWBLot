@@ -20,7 +20,7 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void EnableSameFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& scheduling, const bool preserveDirectDependency){
+void EnableSameFamilyComputeEffectRouting(Core::GpuTaskSchedulingHint& scheduling, const bool preserveDirectDependency)noexcept{
     scheduling.allowSameClassQueueRouting = true;
     scheduling.preferNonPrimarySameClassQueue = true;
     scheduling.preserveSameClassQueueWithDirectDependency = preserveDirectDependency;

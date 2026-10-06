@@ -67,17 +67,40 @@ template<typename OwnerA, typename OwnerB>
 using OwnerPointerCompareResult_T = CompareThreeWayResult_T<typename OwnerA::pointer, typename OwnerB::pointer>;
 
 template<typename OwnerA, typename OwnerB>
-[[nodiscard]] inline bool OwnerPointerEqual(const OwnerA& a, const OwnerB& b){
+[[nodiscard]] inline bool OwnerPointerEqual(const OwnerA& a, const OwnerB& b)noexcept(
+    IsPointer_V<typename OwnerA::pointer>
+    && IsPointer_V<typename OwnerB::pointer>
+    && IsSame_V<decltype(a.get()), typename OwnerA::pointer>
+    && IsSame_V<decltype(b.get()), typename OwnerB::pointer>
+    && noexcept(a.get())
+    && noexcept(b.get())
+){
     return a.get() == b.get();
 }
 
 template<typename OwnerA, typename OwnerB>
-[[nodiscard]] inline OwnerPointerCompareResult_T<OwnerA, OwnerB> OwnerPointerCompare(const OwnerA& a, const OwnerB& b){
+[[nodiscard]] inline OwnerPointerCompareResult_T<OwnerA, OwnerB> OwnerPointerCompare(const OwnerA& a, const OwnerB& b)noexcept(
+    IsPointer_V<typename OwnerA::pointer>
+    && IsPointer_V<typename OwnerB::pointer>
+    && IsSame_V<decltype(a.get()), typename OwnerA::pointer>
+    && IsSame_V<decltype(b.get()), typename OwnerB::pointer>
+    && noexcept(a.get())
+    && noexcept(b.get())
+){
     return a.get() <=> b.get();
 }
 
 template<typename OwnerA, typename OwnerB>
-[[nodiscard]] inline bool OwnerPointerLess(const OwnerA& a, const OwnerB& b){
+[[nodiscard]] inline bool OwnerPointerLess(const OwnerA& a, const OwnerB& b)noexcept(
+    IsPointer_V<typename OwnerA::pointer>
+    && IsPointer_V<typename OwnerB::pointer>
+    && IsSame_V<decltype(a.get()), typename OwnerA::pointer>
+    && IsSame_V<decltype(b.get()), typename OwnerB::pointer>
+    && noexcept(a.get())
+    && noexcept(b.get())
+    && IsPointer_V<typename CommonType<typename OwnerA::pointer, typename OwnerB::pointer>::type>
+    && noexcept(static_cast<bool>(LessThan<typename CommonType<typename OwnerA::pointer, typename OwnerB::pointer>::type>{}(a.get(), b.get())))
+){
     typedef typename OwnerA::pointer P1;
     typedef typename OwnerB::pointer P2;
     typedef typename CommonType<P1, P2>::type PCommon;
@@ -87,13 +110,23 @@ template<typename OwnerA, typename OwnerB>
 }
 
 template<typename Owner>
-[[nodiscard]] inline bool OwnerPointerLessNull(const Owner& a){
+[[nodiscard]] inline bool OwnerPointerLessNull(const Owner& a)noexcept(
+    IsPointer_V<typename Owner::pointer>
+    && IsSame_V<decltype(a.get()), typename Owner::pointer>
+    && noexcept(a.get())
+    && noexcept(static_cast<bool>(LessThan<typename Owner::pointer>{}(a.get(), nullptr)))
+){
     typedef typename Owner::pointer pointer;
     return LessThan<pointer>()(a.get(), nullptr);
 }
 
 template<typename Owner>
-[[nodiscard]] inline bool NullLessOwnerPointer(const Owner& b){
+[[nodiscard]] inline bool NullLessOwnerPointer(const Owner& b)noexcept(
+    IsPointer_V<typename Owner::pointer>
+    && IsSame_V<decltype(b.get()), typename Owner::pointer>
+    && noexcept(b.get())
+    && noexcept(static_cast<bool>(LessThan<typename Owner::pointer>{}(nullptr, b.get())))
+){
     typedef typename Owner::pointer pointer;
     pointer pT = b.get();
     return LessThan<pointer>()(nullptr, pT);
@@ -111,39 +144,39 @@ template<typename Owner>
 
 #define GLB_SMART_PTR_COMPARISON_OPERATORS(OwnerType) \
 template<typename T1, typename D1, typename T2, typename D2> \
-inline bool operator==(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b){ return SmartPtrDetail::OwnerPointerEqual(a, b); } \
+inline bool operator==(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(SmartPtrDetail::OwnerPointerEqual(a, b))){ return SmartPtrDetail::OwnerPointerEqual(a, b); } \
 template<typename T1, typename D1, typename T2, typename D2> \
 requires ThreeWayComparableWith<typename OwnerType<T1, D1>::pointer, typename OwnerType<T2, D2>::pointer> \
-inline CompareThreeWayResult_T<typename OwnerType<T1, D1>::pointer, typename OwnerType<T2, D2>::pointer> operator<=>(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b){ return SmartPtrDetail::OwnerPointerCompare(a, b); } \
+inline CompareThreeWayResult_T<typename OwnerType<T1, D1>::pointer, typename OwnerType<T2, D2>::pointer> operator<=>(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(SmartPtrDetail::OwnerPointerCompare(a, b))){ return SmartPtrDetail::OwnerPointerCompare(a, b); } \
 template<typename T1, typename D1, typename T2, typename D2> \
-inline bool operator<(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b){ return SmartPtrDetail::OwnerPointerLess(a, b); } \
+inline bool operator<(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(SmartPtrDetail::OwnerPointerLess(a, b))){ return SmartPtrDetail::OwnerPointerLess(a, b); } \
 template<typename T1, typename D1, typename T2, typename D2> \
-inline bool operator>(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b){ return (b < a); } \
+inline bool operator>(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept((b < a))){ return (b < a); } \
 template<typename T1, typename D1, typename T2, typename D2> \
-inline bool operator<=(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b){ return !(b < a); } \
+inline bool operator<=(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(!(b < a))){ return !(b < a); } \
 template<typename T1, typename D1, typename T2, typename D2> \
-inline bool operator>=(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b){ return !(a < b); } \
+inline bool operator>=(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(!(a < b))){ return !(a < b); } \
 template<typename T, typename D> \
 inline bool operator==(const OwnerType<T, D>& a, std::nullptr_t)noexcept{ return !a; } \
 template<typename T, typename D> \
 requires ThreeWayComparableWith<typename OwnerType<T, D>::pointer, std::nullptr_t> \
-inline CompareThreeWayResult_T<typename OwnerType<T, D>::pointer, std::nullptr_t> operator<=>(const OwnerType<T, D>& a, std::nullptr_t){ return a.get() <=> nullptr; } \
+inline CompareThreeWayResult_T<typename OwnerType<T, D>::pointer, std::nullptr_t> operator<=>(const OwnerType<T, D>& a, std::nullptr_t)noexcept(IsPointer_V<typename OwnerType<T, D>::pointer> && noexcept(a.get())){ return a.get() <=> nullptr; } \
 template<typename T, typename D> \
-inline bool operator<(const OwnerType<T, D>& a, std::nullptr_t){ return SmartPtrDetail::OwnerPointerLessNull(a); } \
+inline bool operator<(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(SmartPtrDetail::OwnerPointerLessNull(a))){ return SmartPtrDetail::OwnerPointerLessNull(a); } \
 template<typename T, typename D> \
-inline bool operator<(std::nullptr_t, const OwnerType<T, D>& b){ return SmartPtrDetail::NullLessOwnerPointer(b); } \
+inline bool operator<(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(SmartPtrDetail::NullLessOwnerPointer(b))){ return SmartPtrDetail::NullLessOwnerPointer(b); } \
 template<typename T, typename D> \
-inline bool operator>(const OwnerType<T, D>& a, std::nullptr_t){ return (nullptr < a); } \
+inline bool operator>(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept((nullptr < a))){ return (nullptr < a); } \
 template<typename T, typename D> \
-inline bool operator>(std::nullptr_t, const OwnerType<T, D>& b){ return (b < nullptr); } \
+inline bool operator>(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept((b < nullptr))){ return (b < nullptr); } \
 template<typename T, typename D> \
-inline bool operator<=(const OwnerType<T, D>& a, std::nullptr_t){ return !(nullptr < a); } \
+inline bool operator<=(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(!(nullptr < a))){ return !(nullptr < a); } \
 template<typename T, typename D> \
-inline bool operator<=(std::nullptr_t, const OwnerType<T, D>& b){ return !(b < nullptr); } \
+inline bool operator<=(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(!(b < nullptr))){ return !(b < nullptr); } \
 template<typename T, typename D> \
-inline bool operator>=(const OwnerType<T, D>& a, std::nullptr_t){ return !(a < nullptr); } \
+inline bool operator>=(const OwnerType<T, D>& a, std::nullptr_t)noexcept(noexcept(!(a < nullptr))){ return !(a < nullptr); } \
 template<typename T, typename D> \
-inline bool operator>=(std::nullptr_t, const OwnerType<T, D>& b){ return !(nullptr < b); }
+inline bool operator>=(std::nullptr_t, const OwnerType<T, D>& b)noexcept(noexcept(!(nullptr < b))){ return !(nullptr < b); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

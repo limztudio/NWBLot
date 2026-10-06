@@ -275,11 +275,11 @@ bool SelectedMeshesUseSkinning(
     return true;
 }
 
-bool AssetTypeRequiresSkinning(const OutputAssetType::Enum assetType){
+bool AssetTypeRequiresSkinning(const OutputAssetType::Enum assetType)noexcept{
     return assetType == OutputAssetType::Skeleton || assetType == OutputAssetType::Skin;
 }
 
-bool AssetTypeCanUseSkinning(const OutputAssetType::Enum assetType){
+bool AssetTypeCanUseSkinning(const OutputAssetType::Enum assetType)noexcept{
     return assetType == OutputAssetType::Bunch
         || assetType == OutputAssetType::Model
         || AssetTypeRequiresSkinning(assetType)

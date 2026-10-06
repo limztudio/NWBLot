@@ -19,7 +19,7 @@ NWB_IMPL_UI_BEGIN
 bool WindowLayout::Measure(
     const UiSkinRegion& frame, const UiSkinRegion& title, const UiSkinRegion* collapse,
     const UiSkinRegion* resize, const WidgetStyle& style, const WindowOptions& options,
-    const Point& titleSize, const f32 density, WindowMetrics& metrics){
+    const Point& titleSize, const f32 density, WindowMetrics& metrics)noexcept{
     if(
         !IsFinite(style.windowCollapseExtent) || style.windowCollapseExtent <= 0.0f
         || !IsFinite(style.windowResizeExtent) || style.windowResizeExtent <= 0.0f
@@ -55,19 +55,19 @@ bool WindowLayout::Measure(
         && metrics.titleHeight > 0.0f && metrics.minimumSize.x > 0.0f && metrics.minimumSize.y > 0.0f;
 }
 
-Rect WindowLayout::Visible(const WindowState& state, const WindowMetrics& metrics){
+Rect WindowLayout::Visible(const WindowState& state, const WindowMetrics& metrics)noexcept{
     Rect bounds = state.bounds;
     if(state.collapsed)
         bounds.height = metrics.titleHeight;
     return bounds;
 }
 
-Rect WindowLayout::Content(const WindowState& state, const WindowMetrics& metrics){
+Rect WindowLayout::Content(const WindowState& state, const WindowMetrics& metrics)noexcept{
     return { state.bounds.x, state.bounds.y + metrics.titleHeight, state.bounds.width,
         Max(0.0f, state.bounds.height - metrics.titleHeight) };
 }
 
-Rect WindowLayout::Collapse(const WindowState& state, const WindowMetrics& metrics){
+Rect WindowLayout::Collapse(const WindowState& state, const WindowMetrics& metrics)noexcept{
     return { state.bounds.x + metrics.titlePadding.left,
         state.bounds.y + metrics.titlePadding.top
             + Max(0.0f, (metrics.titleHeight - metrics.titlePadding.top - metrics.titlePadding.bottom
@@ -75,7 +75,7 @@ Rect WindowLayout::Collapse(const WindowState& state, const WindowMetrics& metri
         metrics.collapseExtent, metrics.collapseExtent };
 }
 
-Rect WindowLayout::Resize(const WindowState& state, const WindowMetrics& metrics){
+Rect WindowLayout::Resize(const WindowState& state, const WindowMetrics& metrics)noexcept{
     const f32 extent = Min(metrics.resizeExtent, Min(state.bounds.width, state.bounds.height - metrics.titleHeight));
     return { state.bounds.x + state.bounds.width - extent, state.bounds.y + state.bounds.height - extent, extent, extent };
 }

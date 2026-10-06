@@ -23,29 +23,29 @@ using ScratchArena = Core::Alloc::ScratchArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SIMDVector CsgDeformWallBuilder::MixAttributeVec(SIMDVector firstVec, SIMDVector secondVec, SIMDVector blendVec, SIMDVector otherVec){
+SIMDVector CsgDeformWallBuilder::MixAttributeVec(SIMDVector firstVec, SIMDVector secondVec, SIMDVector blendVec, SIMDVector otherVec)noexcept{
     return VectorAdd(VectorMultiply(firstVec, blendVec), VectorMultiply(secondVec, otherVec));
 }
 
-SIMDVector CsgDeformWallBuilder::NormalizeDirectionVec(SIMDVector direction){
+SIMDVector CsgDeformWallBuilder::NormalizeDirectionVec(SIMDVector direction)noexcept{
     return Vector3Normalize(direction);
 }
 
-SIMDVector CsgDeformWallBuilder::KeepWVec(SIMDVector normalizedVec, SIMDVector sourceVec){
+SIMDVector CsgDeformWallBuilder::KeepWVec(SIMDVector normalizedVec, SIMDVector sourceVec)noexcept{
     return VectorSelect(normalizedVec, sourceVec, s_SIMDMaskW);
 }
 
-SIMDVector CsgDeformWallBuilder::TangentHandednessVec(SIMDVector normalizedTangent, SIMDVector tangentVec){
+SIMDVector CsgDeformWallBuilder::TangentHandednessVec(SIMDVector normalizedTangent, SIMDVector tangentVec)noexcept{
     const SIMDVector wNegative = VectorLess(VectorSplatW(tangentVec), VectorZero());
     const SIMDVector sign = VectorSelect(VectorReplicate(s_OneWeight), VectorReplicate(s_NegativeOne), wNegative);
     return VectorSelect(normalizedTangent, sign, s_SIMDMaskW);
 }
 
-SIMDVector CsgDeformWallBuilder::UpAxisVec(){
+SIMDVector CsgDeformWallBuilder::UpAxisVec()noexcept{
     return VectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 }
 
-CsgDeformVertex CsgDeformWallBuilder::MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight){
+CsgDeformVertex CsgDeformWallBuilder::MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight)noexcept{
     // Preserve first*blend + second*(1-blend) operation order.
     const SIMDVector blendVec = CsgDeformValidator::SaturateVec(VectorReplicate(firstWeight));
     const SIMDVector otherVec = VectorSubtract(s_SIMDOne, blendVec);
@@ -68,7 +68,7 @@ CsgDeformVertex CsgDeformWallBuilder::MixVertices(const CsgDeformVertex& first, 
     return mixed;
 }
 
-bool CsgDeformWallBuilder::NormalizeDeformVertex(CsgDeformVertex& vertex){
+bool CsgDeformWallBuilder::NormalizeDeformVertex(CsgDeformVertex& vertex)noexcept{
     // Preview and commit share the same degenerate fallback and tangent handedness.
     const SIMDVector normalVec = LoadFloat(vertex.normal);
     const f32 normalLengthSq = VectorGetX(Vector3LengthSq(normalVec));

@@ -42,9 +42,9 @@ public:
 
 
 public:
-    explicit Value(MetaArena& arena);
-    Value(i64 val, MetaArena& arena);
-    Value(f64 val, MetaArena& arena);
+    explicit Value(MetaArena& arena)noexcept;
+    Value(i64 val, MetaArena& arena)noexcept;
+    Value(f64 val, MetaArena& arena)noexcept;
     Value(MStringView val, MetaArena& arena);
     [[nodiscard]] static Value Reference(MStringView val, MetaArena& arena);
     ~Value();
@@ -64,16 +64,16 @@ public:
 
 
 public:
-    [[nodiscard]] MetaArena& arena()const{ return m_arena; }
-    [[nodiscard]] ValueType::Enum type()const{ return m_type; }
-    [[nodiscard]] bool isNull()const{ return m_type == ValueType::Null; }
-    [[nodiscard]] bool isInteger()const{ return m_type == ValueType::Integer; }
-    [[nodiscard]] bool isDouble()const{ return m_type == ValueType::Double; }
-    [[nodiscard]] bool isString()const{ return m_type == ValueType::String; }
-    [[nodiscard]] bool isReference()const{ return m_type == ValueType::Reference; }
-    [[nodiscard]] bool isList()const{ return m_type == ValueType::List; }
-    [[nodiscard]] bool isMap()const{ return m_type == ValueType::Map; }
-    [[nodiscard]] bool isNumeric()const{ return m_type == ValueType::Integer || m_type == ValueType::Double; }
+    [[nodiscard]] MetaArena& arena()const noexcept{ return m_arena; }
+    [[nodiscard]] ValueType::Enum type()const noexcept{ return m_type; }
+    [[nodiscard]] bool isNull()const noexcept{ return m_type == ValueType::Null; }
+    [[nodiscard]] bool isInteger()const noexcept{ return m_type == ValueType::Integer; }
+    [[nodiscard]] bool isDouble()const noexcept{ return m_type == ValueType::Double; }
+    [[nodiscard]] bool isString()const noexcept{ return m_type == ValueType::String; }
+    [[nodiscard]] bool isReference()const noexcept{ return m_type == ValueType::Reference; }
+    [[nodiscard]] bool isList()const noexcept{ return m_type == ValueType::List; }
+    [[nodiscard]] bool isMap()const noexcept{ return m_type == ValueType::Map; }
+    [[nodiscard]] bool isNumeric()const noexcept{ return m_type == ValueType::Integer || m_type == ValueType::Double; }
 
     [[nodiscard]] i64 asInteger()const;
     [[nodiscard]] f64 asDouble()const;

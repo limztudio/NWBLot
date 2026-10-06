@@ -38,7 +38,7 @@ struct SdfAtlasPageBinding{
     u32 distanceEncoding = s_SdfDistanceEncodingFreeTypeU8;
 };
 
-[[nodiscard]] inline bool SameSdfAtlasPageKey(const SdfAtlasPageBinding& first, const SdfAtlasPageBinding& second){
+[[nodiscard]] inline bool SameSdfAtlasPageKey(const SdfAtlasPageBinding& first, const SdfAtlasPageBinding& second)noexcept{
     return
         first.font == second.font && first.fontGeneration == second.fontGeneration
         && first.atlasIdentity == second.atlasIdentity && first.generation == second.generation && first.index == second.index
@@ -59,12 +59,12 @@ public:
 
 
 public:
-    SdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBinding& binding, Pixels&& pixels);
+    SdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBinding& binding, Pixels&& pixels)noexcept;
 
 
 public:
-    [[nodiscard]] const SdfAtlasPageBinding& binding()const{ return m_binding; }
-    [[nodiscard]] const Pixels& pixels()const{ return m_pixels; }
+    [[nodiscard]] const SdfAtlasPageBinding& binding()const noexcept{ return m_binding; }
+    [[nodiscard]] const Pixels& pixels()const noexcept{ return m_pixels; }
 
 
 private:

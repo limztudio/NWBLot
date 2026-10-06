@@ -33,7 +33,7 @@ class ReflectionFeedbackScene final{
 public:
     ReflectionFeedbackScene(ProjectRuntimeContext& context, Core::ECS::World& world);
     [[nodiscard]] bool create(AStringView caseName, bool finalState);
-    [[nodiscard]] bool mutationCase()const{ return m_case == ReflectionFeedbackCase::Mutation; }
+    [[nodiscard]] bool mutationCase()const noexcept{ return m_case == ReflectionFeedbackCase::Mutation; }
     [[nodiscard]] bool applyMutation();
 
 private:

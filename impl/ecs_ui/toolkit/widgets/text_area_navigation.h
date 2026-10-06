@@ -24,7 +24,7 @@ public:
     TextAreaNavigationResolver(Core::Alloc::GlobalArena& arena, TextService& text, const Context& context,
         const TextAreaState& state, f32 fontSize,
         u32 scriptTag = TextScriptTag('L', 'a', 't', 'n'), StringView language = "en");
-    virtual ~TextAreaNavigationResolver()override = default;
+    virtual ~TextAreaNavigationResolver()noexcept override = default;
 
 
 public:
@@ -33,7 +33,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool current()const;
+    [[nodiscard]] bool current()const noexcept;
 
 
 private:

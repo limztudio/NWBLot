@@ -313,11 +313,11 @@ void BuildLinuxCrashArchive(Core::Alloc::GlobalArena& arena, CrashTestText& arch
     AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, "00400000-00452000 r-xp 00000000 08:01 123 /tmp/nwb_loader\n");
 }
 
-bool Contains(const CrashTestText& text, const AStringView needle){
+bool Contains(const CrashTestText& text, const AStringView needle)noexcept{
     return AStringView(text.data(), text.size()).find(needle) != AStringView::npos;
 }
 
-bool ContainsMessage(const Log::LogString& text, const TStringView needle){
+bool ContainsMessage(const Log::LogString& text, const TStringView needle)noexcept{
     return TStringView(text.data(), text.size()).find(needle) != TStringView::npos;
 }
 

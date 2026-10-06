@@ -65,7 +65,7 @@ bool LessRecordPointer(NotNull<const ShaderArchive::Record*> lhs, NotNull<const 
 }
 
 
-bool SameShaderVariantStage(const ShaderArchive::Record& lhs, const ShaderArchive::Record& rhs){
+bool SameShaderVariantStage(const ShaderArchive::Record& lhs, const ShaderArchive::Record& rhs)noexcept{
     return lhs.shaderName == rhs.shaderName && lhs.variantName == rhs.variantName && lhs.stage == rhs.stage;
 }
 
@@ -143,7 +143,7 @@ const ShaderArchive::Record* FindRecord(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-const Name& ShaderArchive::IndexVirtualPathName(){
+const Name& ShaderArchive::IndexVirtualPathName()noexcept{
     return s_IndexVirtualPathName;
 }
 

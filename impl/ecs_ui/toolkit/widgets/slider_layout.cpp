@@ -27,7 +27,7 @@ namespace __hidden_ui_slider_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidMetrics(const SliderMetrics& metrics){
+[[nodiscard]] static bool ValidMetrics(const SliderMetrics& metrics)noexcept{
     if(
         !IsValidUiPadding(metrics.padding) || !IsFinite(metrics.thumbExtent.x) || metrics.thumbExtent.x <= 0.0f
         || !IsFinite(metrics.thumbExtent.y) || metrics.thumbExtent.y <= 0.0f
@@ -44,7 +44,7 @@ namespace __hidden_ui_slider_layout{
     ;
 }
 
-[[nodiscard]] static bool MakeRect(const f64 x, const f64 y, const f64 width, const f64 height, Rect& out){
+[[nodiscard]] static bool MakeRect(const f64 x, const f64 y, const f64 width, const f64 height, Rect& out)noexcept{
     if(
         !IsFinite(x) || x < -Limit<f32>::s_Max || x > Limit<f32>::s_Max
         || !IsFinite(y) || y < -Limit<f32>::s_Max || y > Limit<f32>::s_Max
@@ -64,7 +64,7 @@ namespace __hidden_ui_slider_layout{
     return true;
 }
 
-[[nodiscard]] static bool Intersect(const Rect& lhs, const Rect& rhs, Rect& out){
+[[nodiscard]] static bool Intersect(const Rect& lhs, const Rect& rhs, Rect& out)noexcept{
     const f64 left = Max(static_cast<f64>(lhs.x), static_cast<f64>(rhs.x));
     const f64 top = Max(static_cast<f64>(lhs.y), static_cast<f64>(rhs.y));
     const f64 right = Min(static_cast<f64>(lhs.x) + lhs.width, static_cast<f64>(rhs.x) + rhs.width);
@@ -82,7 +82,7 @@ namespace __hidden_ui_slider_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SliderLayout::Measure(const SliderOptions& options, const SliderStyle& style, SliderMetrics& out){
+bool SliderLayout::Measure(const SliderOptions& options, const SliderStyle& style, SliderMetrics& out)noexcept{
     using namespace __hidden_ui_slider_layout;
     if(
         !SliderBehavior::Validate(options) || !IsValidUiPadding(style.padding)
@@ -113,7 +113,7 @@ bool SliderLayout::Place(
     const Rect& clip,
     const SliderMetrics& metrics,
     const f64 normalized,
-    SliderPlacement& out){
+    SliderPlacement& out)noexcept{
     using namespace __hidden_ui_slider_layout;
     if(
         !IsPreciseUiRect(bounds) || !IsPreciseUiRect(clip) || !ValidMetrics(metrics)

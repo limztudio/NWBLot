@@ -144,7 +144,7 @@ struct DeviceDesc{
 
 extern DeviceHandle CreateDevice(const DeviceDesc& desc);
 
-extern VkFormat ConvertFormat(Format::Enum format);
+extern VkFormat ConvertFormat(Format::Enum format)noexcept;
 
 extern TStringView ResultToString(VkResult result);
 

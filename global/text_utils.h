@@ -16,7 +16,7 @@
 
 
 template<typename CharT>
-[[nodiscard]] inline bool IsAsciiSpace(const CharT ch){
+[[nodiscard]] inline bool IsAsciiSpace(const CharT ch)noexcept(IsArithmetic_V<CharT>){
     return ch == CharT(' ') || ch == CharT('\t') || ch == CharT('\n') || ch == CharT('\r') || ch == CharT('\f') || ch == CharT('\v');
 }
 
@@ -34,17 +34,17 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool IsConfirmYesText(const BasicStringView<CharT> text){
+[[nodiscard]] inline bool IsConfirmYesText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return text == BasicStringView<CharT>("y") || text == BasicStringView<CharT>("yes") || text == BasicStringView<CharT>("true") || text == BasicStringView<CharT>("1");
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool IsConfirmNoText(const BasicStringView<CharT> text){
+[[nodiscard]] inline bool IsConfirmNoText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return text == BasicStringView<CharT>("n") || text == BasicStringView<CharT>("no") || text == BasicStringView<CharT>("false") || text == BasicStringView<CharT>("0");
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool ParseConfirmText(const BasicStringView<CharT> text, bool& outValue){
+[[nodiscard]] inline bool ParseConfirmText(const BasicStringView<CharT> text, bool& outValue)noexcept(IsArithmetic_V<CharT>){
     if(IsConfirmYesText(text)){
         outValue = true;
         return true;
@@ -57,7 +57,7 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline BasicStringView<CharT> TruncateView(const BasicStringView<CharT> text, const usize maxChars){
+[[nodiscard]] inline BasicStringView<CharT> TruncateView(const BasicStringView<CharT> text, const usize maxChars)noexcept{
     return text.substr(0u, text.size() < maxChars ? text.size() : maxChars);
 }
 
@@ -147,7 +147,7 @@ struct PathToStringArg{
 
 
 template<typename CharT = char, typename PathT>
-[[nodiscard]] inline TextUtilsDetail::PathToStringArg<CharT, PathT> PathToString(const PathT& path){
+[[nodiscard]] inline TextUtilsDetail::PathToStringArg<CharT, PathT> PathToString(const PathT& path)noexcept{
     return TextUtilsDetail::PathToStringArg<CharT, PathT>{ path };
 }
 
@@ -163,7 +163,7 @@ namespace std{
 
 template<typename RequestedCharT, typename PathT, typename FormatCharT>
 struct formatter<TextUtilsDetail::PathToStringArg<RequestedCharT, PathT>, FormatCharT>{
-    constexpr auto parse(basic_format_parse_context<FormatCharT>& ctx){
+    constexpr auto parse(basic_format_parse_context<FormatCharT>& ctx)noexcept{
         return ctx.begin();
     }
 
@@ -186,7 +186,7 @@ struct formatter<TextUtilsDetail::PathToStringArg<RequestedCharT, PathT>, Format
 
 
 template<typename CharT>
-inline constexpr CharT ToAsciiLower(CharT c){
+inline constexpr CharT ToAsciiLower(CharT c)noexcept(IsArithmetic_V<CharT>){
     return (c >= static_cast<CharT>('A') && c <= static_cast<CharT>('Z'))
         ? static_cast<CharT>(c + (static_cast<CharT>('a') - static_cast<CharT>('A')))
         : c
@@ -194,7 +194,7 @@ inline constexpr CharT ToAsciiLower(CharT c){
 }
 
 template<typename CharT>
-inline constexpr CharT ToAsciiUpper(CharT c){
+inline constexpr CharT ToAsciiUpper(CharT c)noexcept(IsArithmetic_V<CharT>){
     return (c >= static_cast<CharT>('a') && c <= static_cast<CharT>('z'))
         ? static_cast<CharT>(c - (static_cast<CharT>('a') - static_cast<CharT>('A')))
         : c
@@ -236,14 +236,14 @@ template<typename StringT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline BasicStringView<CharT> UnquoteDoubleQuotedView(const BasicStringView<CharT> text){
+[[nodiscard]] inline BasicStringView<CharT> UnquoteDoubleQuotedView(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     if(text.size() < 2u || text.front() != static_cast<CharT>('"') || text.back() != static_cast<CharT>('"'))
         return BasicStringView<CharT>();
     return text.substr(1u, text.size() - 2u);
 }
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool IsAsciiAlphaNumeric(CharT ch){
+[[nodiscard]] inline constexpr bool IsAsciiAlphaNumeric(CharT ch)noexcept(IsArithmetic_V<CharT>){
     return
         (ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9'))
         || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('Z'))
@@ -252,7 +252,7 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool IsAsciiIdentifierChar(CharT ch){
+[[nodiscard]] inline constexpr bool IsAsciiIdentifierChar(CharT ch)noexcept(IsArithmetic_V<CharT>){
     return
         (ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('z'))
         || (ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('Z'))
@@ -262,14 +262,14 @@ template<typename CharT>
 }
 
 template<typename CharT>
-inline constexpr CharT Canonicalize(CharT c){
+inline constexpr CharT Canonicalize(CharT c)noexcept(IsArithmetic_V<CharT>){
     if(c == static_cast<CharT>('\\'))
         return static_cast<CharT>('/');
     return ToAsciiLower(c);
 }
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicStringView<CharT> text, const BasicStringView<CharT> expected){
+[[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicStringView<CharT> text, const BasicStringView<CharT> expected)noexcept(IsArithmetic_V<CharT>){
     if(text == expected)
         return true;
     if(text.size() != expected.size())
@@ -283,16 +283,16 @@ template<typename CharT>
     return true;
 }
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicString<CharT, ArenaT>& text, const BasicStringView<CharT> expected){
+[[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicString<CharT, ArenaT>& text, const BasicStringView<CharT> expected)noexcept(IsArithmetic_V<CharT>){
     return EqualsAsciiIgnoreCase<CharT>(BasicStringView<CharT>{text}, expected);
 }
 template<typename CharT, usize N>
-[[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicStringView<CharT> text, const CharT (&expected)[N]){
+[[nodiscard]] inline constexpr bool EqualsAsciiIgnoreCase(const BasicStringView<CharT> text, const CharT (&expected)[N])noexcept(IsArithmetic_V<CharT>){
     return EqualsAsciiIgnoreCase<CharT>(text, BasicStringView<CharT>(expected, N > 0 ? N - 1 : 0));
 }
 
 template<typename CharT>
-[[nodiscard]] inline constexpr bool ContainsAsciiIgnoreCase(const BasicStringView<CharT> text, const BasicStringView<CharT> expected){
+[[nodiscard]] inline constexpr bool ContainsAsciiIgnoreCase(const BasicStringView<CharT> text, const BasicStringView<CharT> expected)noexcept(IsArithmetic_V<CharT>){
     if(expected.empty())
         return true;
     if(text.size() < expected.size())
@@ -313,7 +313,7 @@ template<typename CharT>
     return false;
 }
 template<typename CharT, usize N>
-[[nodiscard]] inline constexpr bool ContainsAsciiIgnoreCase(const BasicStringView<CharT> text, const CharT (&expected)[N]){
+[[nodiscard]] inline constexpr bool ContainsAsciiIgnoreCase(const BasicStringView<CharT> text, const CharT (&expected)[N])noexcept(IsArithmetic_V<CharT>){
     return ContainsAsciiIgnoreCase<CharT>(text, BasicStringView<CharT>(expected, N > 0 ? N - 1 : 0));
 }
 
@@ -328,7 +328,7 @@ namespace TextUtilsDetail{
 
 
 template<typename CharT>
-inline constexpr bool IsSafeCacheNameChar(CharT ch){
+inline constexpr bool IsSafeCacheNameChar(CharT ch)noexcept(IsArithmetic_V<CharT>){
     const bool alphaNum = (ch >= CharT('a') && ch <= CharT('z'))
         || (ch >= CharT('0') && ch <= CharT('9'));
     const bool safePunctuation = ch == CharT('.') || ch == CharT('_') || ch == CharT('-');
@@ -399,7 +399,7 @@ template<typename StringT>
 
 
 template<typename DstCharT, typename SrcCharT>
-inline constexpr void CopyCanonical(DstCharT* dst, const usize dstSize, const BasicStringView<SrcCharT> src){
+inline constexpr void CopyCanonical(DstCharT* dst, const usize dstSize, const BasicStringView<SrcCharT> src)noexcept(IsArithmetic_V<DstCharT> && IsArithmetic_V<SrcCharT>){
     if(dstSize == 0)
         return;
 
@@ -410,7 +410,7 @@ inline constexpr void CopyCanonical(DstCharT* dst, const usize dstSize, const Ba
 }
 
 template<typename DstCharT, typename SrcCharT>
-inline constexpr void CopyCanonical(DstCharT* dst, const usize dstSize, const SrcCharT* src){
+inline constexpr void CopyCanonical(DstCharT* dst, const usize dstSize, const SrcCharT* src)noexcept(IsArithmetic_V<DstCharT> && IsArithmetic_V<SrcCharT>){
     CopyCanonical(dst, dstSize, src ? BasicStringView<SrcCharT>(src) : BasicStringView<SrcCharT>());
 }
 
@@ -458,7 +458,7 @@ template<typename StringT>
 
 
 template<typename CharT>
-[[nodiscard]] inline bool HasEmbeddedNull(const BasicStringView<CharT> text){
+[[nodiscard]] inline bool HasEmbeddedNull(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     for(const CharT ch : text){
         if(ch == CharT{})
             return true;
@@ -467,7 +467,7 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool HasLineBreak(const BasicStringView<CharT> text){
+[[nodiscard]] inline bool HasLineBreak(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     for(const CharT ch : text){
         if(ch == CharT('\n') || ch == CharT('\r'))
             return true;
@@ -476,11 +476,11 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool IsSingleLinePathText(const BasicStringView<CharT> text){
+[[nodiscard]] inline bool IsSingleLinePathText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     return !text.empty() && !HasEmbeddedNull(text) && !HasLineBreak(text);
 }
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline bool HasEmbeddedNull(const BasicString<CharT, ArenaT>& text){
+[[nodiscard]] inline bool HasEmbeddedNull(const BasicString<CharT, ArenaT>& text)noexcept(IsArithmetic_V<CharT>){
     return HasEmbeddedNull(BasicStringView<CharT>(text));
 }
 template<typename StringT>
@@ -489,7 +489,7 @@ template<typename StringT>
         text.data();
         text.size();
     }
-[[nodiscard]] inline bool HasEmbeddedNull(const StringT& text){
+[[nodiscard]] inline bool HasEmbeddedNull(const StringT& text)noexcept(noexcept(BasicStringView<typename StringT::value_type>(text.data(), text.size())) && IsArithmetic_V<typename StringT::value_type>){
     using CharT = typename StringT::value_type;
     return HasEmbeddedNull(BasicStringView<CharT>(text.data(), text.size()));
 }

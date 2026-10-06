@@ -138,10 +138,10 @@ namespace ApplicationEntryDetail{
 
 class WindowsCommandLineArgs final{
 public:
-    WindowsCommandLineArgs(){
+    WindowsCommandLineArgs()noexcept{
         m_argv = CommandLineToArgvW(GetCommandLineW(), &m_argc);
     }
-    ~WindowsCommandLineArgs(){
+    ~WindowsCommandLineArgs()noexcept{
         if(m_argv)
             LocalFree(m_argv);
     }
@@ -151,9 +151,9 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const{ return m_argv != nullptr; }
-    [[nodiscard]] isize argc()const{ return static_cast<isize>(m_argc); }
-    [[nodiscard]] wchar** argv()const{ return m_argv; }
+    [[nodiscard]] bool valid()const noexcept{ return m_argv != nullptr; }
+    [[nodiscard]] isize argc()const noexcept{ return static_cast<isize>(m_argc); }
+    [[nodiscard]] wchar** argv()const noexcept{ return m_argv; }
 
 private:
     int m_argc = s_EmptyArgCount;

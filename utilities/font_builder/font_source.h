@@ -35,8 +35,8 @@ public:
 
 public:
     [[nodiscard]] bool open(const BakeOptions& options, Impl::FontAtlasPayload& payload);
-    [[nodiscard]] FT_Face face()const{ return m_face; }
-    [[nodiscard]] const Core::Assets::AssetBytes& bytes()const{ return m_bytes; }
+    [[nodiscard]] FT_Face face()const noexcept{ return m_face; }
+    [[nodiscard]] const Core::Assets::AssetBytes& bytes()const noexcept{ return m_bytes; }
 
 
 private:

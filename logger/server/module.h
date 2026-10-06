@@ -113,13 +113,13 @@ extern Server* g_ServerLogger;
 
 class ServerLoggerRegistrationGuard final : NoCopy{
 public:
-    explicit ServerLoggerRegistrationGuard(Server& logger)
+    explicit ServerLoggerRegistrationGuard(Server& logger)noexcept
         : m_previous(ServerLoggerDetail::g_ServerLogger)
     {
         ServerLoggerDetail::g_ServerLogger = &logger;
     }
     ServerLoggerRegistrationGuard(ServerLoggerRegistrationGuard&&) = delete;
-    ~ServerLoggerRegistrationGuard(){
+    ~ServerLoggerRegistrationGuard()noexcept{
         ServerLoggerDetail::g_ServerLogger = m_previous;
     }
 

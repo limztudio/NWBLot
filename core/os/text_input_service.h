@@ -77,8 +77,8 @@ private:
         usize anchorByte, usize caretByte, usize beforeBytes, usize afterBytes, bool caretVisible,
         TextInputDeletionBasis::Enum basis = TextInputDeletionBasis::Caret
     );
-    void clearEvents();
-    void invalidateSession();
+    void clearEvents()noexcept;
+    void invalidateSession()noexcept;
 
 
 private:

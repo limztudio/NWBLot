@@ -55,11 +55,11 @@ struct NumericEditResult{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ValidateIntegerBounds(const IntegerBounds& bounds);
-[[nodiscard]] bool ValidateFloatBounds(const FloatBounds& bounds);
+[[nodiscard]] bool ValidateIntegerBounds(const IntegerBounds& bounds)noexcept;
+[[nodiscard]] bool ValidateFloatBounds(const FloatBounds& bounds)noexcept;
 // ASCII edge whitespace is ignored. Conversion writes output only for a complete, representable value.
-[[nodiscard]] NumericParseStatus::Enum ParseIntegerDraft(AStringView text, i64& output);
-[[nodiscard]] NumericParseStatus::Enum ParseFloatDraft(AStringView text, f64& output);
+[[nodiscard]] NumericParseStatus::Enum ParseIntegerDraft(AStringView text, i64& output)noexcept;
+[[nodiscard]] NumericParseStatus::Enum ParseFloatDraft(AStringView text, f64& output)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

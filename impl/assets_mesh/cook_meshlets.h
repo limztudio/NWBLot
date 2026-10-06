@@ -52,7 +52,7 @@ struct MeshletTrianglePrecompute{
     Core::Assets::AssetVector<u32> positionTriangleIndices;
     Core::Assets::AssetVector<u8> visitedTriangles;
 
-    explicit MeshletTrianglePrecompute(Core::Assets::AssetArena& arena)
+    explicit MeshletTrianglePrecompute(Core::Assets::AssetArena& arena)noexcept
         : triangles(arena)
         , triangleCalculations(arena)
         , positionTriangleOffsets(arena)
@@ -130,15 +130,15 @@ struct MeshletBoundsCalculation{
 
 class MeshCookMeshlets final : NoCopy{
 public:
-    [[nodiscard]] static SIMDVector MakeMeshletPositionVector(const SIMDVector position);
+    [[nodiscard]] static SIMDVector MakeMeshletPositionVector(const SIMDVector position)noexcept;
     [[nodiscard]] static MeshletTriangleVectors MakeMeshletTriangleVectors(
     const SIMDVector position0,
     const SIMDVector position1,
     const SIMDVector position2,
     const SIMDVector centroid,
     const SIMDVector areaNormal
-    );
-    [[nodiscard]] static SIMDVector NormalizeMeshletDirectionOrZero(const SIMDVector value);
+    )noexcept;
+    [[nodiscard]] static SIMDVector NormalizeMeshletDirectionOrZero(const SIMDVector value)noexcept;
     template<typename VectorT>
     [[nodiscard]] static usize MeshletCookVectorBytes(const VectorT& values);
     template<typename CookEntryT>
@@ -149,10 +149,10 @@ public:
     [[nodiscard]] static usize EstimateMeshletSourceBytes(
     const Core::Assets::AssetVector<u32>& indices,
     const MeshCookEntry& entry
-    );
+    )noexcept;
     template<typename CookEntryT>
     [[nodiscard]] static usize EstimateCommonMeshletRuntimeBytes(const CookEntryT& entry);
-    [[nodiscard]] static usize EstimateMeshletRuntimeBytes(const MeshCookEntry& entry);
+    [[nodiscard]] static usize EstimateMeshletRuntimeBytes(const MeshCookEntry& entry)noexcept;
     template<typename CookEntryT>
     [[nodiscard]] static MeshletCookMetrics BuildMeshletCookMetrics(const CookEntryT& entry);
     template<typename CookEntryT>
@@ -191,24 +191,24 @@ public:
     const MeshletTriangleData& triangle,
     u32& outSharedVertexCount
     );
-    static void ResetMeshletScoreState(MeshletScoreState& state);
+    static void ResetMeshletScoreState(MeshletScoreState& state)noexcept;
     static void AccumulateMeshletScoreBounds(
     const SIMDVector (&trianglePositions)[s_MeshletTriangleIndexCount],
     SIMDVector& minBounds,
     SIMDVector& maxBounds
-    );
+    )noexcept;
     [[nodiscard]] static f32 PredictMeshletScoreRadius(
     const MeshletScoreState& state,
     const SIMDVector (&trianglePositions)[s_MeshletTriangleIndexCount]
-    );
-    [[nodiscard]] static f32 MeshletScoreCentroidDistance(const MeshletScoreState& state, const SIMDVector triangleCentroid);
-    [[nodiscard]] static f32 MeshletScoreNormalCoherence(const MeshletScoreState& state, const SIMDVector triangleAreaNormal);
+    )noexcept;
+    [[nodiscard]] static f32 MeshletScoreCentroidDistance(const MeshletScoreState& state, const SIMDVector triangleCentroid)noexcept;
+    [[nodiscard]] static f32 MeshletScoreNormalCoherence(const MeshletScoreState& state, const SIMDVector triangleAreaNormal)noexcept;
     static void UpdateMeshletScoreConeCutoff(
     const SIMDVector axis,
     const SIMDVector triangleAreaNormal,
     bool& hasNormal,
     f32& coneCutoff
-    );
+    )noexcept;
     template<typename TriangleIndexVectorT, typename TriangleAreaNormalAtT>
     [[nodiscard]] static f32 ComputeMeshletScoreConeCutoff(
     const TriangleIndexVectorT& triangleIndices,
@@ -241,7 +241,7 @@ public:
     const MeshletTrianglePrecompute& trianglePrecompute,
     const usize searchOffset,
     u32& outTriangleIndex
-    );
+    )noexcept;
     template<typename VertexRefVectorT>
     [[nodiscard]] static bool MeshletCanFitTriangle(
     const MeshletDesc& meshlet,
@@ -267,7 +267,7 @@ public:
     const MeshletCandidateSearchResult& candidate,
     bool& found,
     MeshletFrontierCandidate& outCandidate
-    );
+    )noexcept;
     template<typename TriangleIndexVectorT, typename VertexRefVectorT>
     [[nodiscard]] static bool FindBestMeshletFrontierCandidate(
     const MeshletTrianglePrecompute& trianglePrecompute,

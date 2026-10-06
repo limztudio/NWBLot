@@ -69,7 +69,7 @@ constexpr ForwardIt LowerBound(ForwardIt first, ForwardIt last, const T& value, 
     const usize currentCapacity,
     const usize requiredCapacity,
     const usize initialCapacity = 1u
-){
+)noexcept{
     usize capacity = currentCapacity > initialCapacity ? currentCapacity : initialCapacity;
     if(capacity == 0u)
         capacity = 1u;
@@ -83,21 +83,21 @@ constexpr ForwardIt LowerBound(ForwardIt first, ForwardIt last, const T& value, 
 }
 
 template<typename T>
-constexpr T AlignUp(const T value, const T alignment){
+constexpr T AlignUp(const T value, const T alignment)noexcept(IsArithmetic_V<T>){
     if(alignment == 0)
         return value;
     return value + (alignment - (value % alignment)) % alignment;
 }
 
 template<typename T>
-constexpr T DivideUp(const T value, const T divisor){
+constexpr T DivideUp(const T value, const T divisor)noexcept(IsArithmetic_V<T>){
     if(value == 0 || divisor == 0)
         return 0;
     return static_cast<T>(1) + ((value - static_cast<T>(1)) / divisor);
 }
 
 template<typename T>
-constexpr bool DivideUpChecked(const T value, const T divisor, T& outValue){
+constexpr bool DivideUpChecked(const T value, const T divisor, T& outValue)noexcept(IsArithmetic_V<T>){
     if(divisor == 0)
         return false;
 
@@ -106,7 +106,7 @@ constexpr bool DivideUpChecked(const T value, const T divisor, T& outValue){
 }
 
 template<typename T>
-constexpr bool AlignUpChecked(const T value, const T alignment, T& outValue){
+constexpr bool AlignUpChecked(const T value, const T alignment, T& outValue)noexcept(IsArithmetic_V<T>){
     if(alignment == 0){
         outValue = value;
         return true;
@@ -126,15 +126,15 @@ constexpr bool AlignUpChecked(const T value, const T alignment, T& outValue){
     return true;
 }
 
-constexpr u32 AlignUpU32(const u32 value, const u32 alignment){
+constexpr u32 AlignUpU32(const u32 value, const u32 alignment)noexcept{
     return AlignUp(value, alignment);
 }
 
-constexpr bool AlignUpU32Checked(const u32 value, const u32 alignment, u32& outValue){
+constexpr bool AlignUpU32Checked(const u32 value, const u32 alignment, u32& outValue)noexcept{
     return AlignUpChecked(value, alignment, outValue);
 }
 
-constexpr bool AlignUpU64Checked(const u64 value, const u64 alignment, u64& outValue){
+constexpr bool AlignUpU64Checked(const u64 value, const u64 alignment, u64& outValue)noexcept{
     return AlignUpChecked(value, alignment, outValue);
 }
 

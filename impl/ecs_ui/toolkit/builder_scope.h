@@ -73,12 +73,12 @@ private:
         bool contextMenu = false;
         bool annotated = false;
 
-        explicit Item(Core::Alloc::GlobalArena& arena)
+        explicit Item(Core::Alloc::GlobalArena& arena)noexcept
             : text(arena)
             , editView(arena)
         {}
-        Item(Item&&) = default;
-        Item& operator=(Item&&) = default;
+        Item(Item&&)noexcept = default;
+        Item& operator=(Item&&)noexcept = default;
         Item(const Item&) = delete;
         Item& operator=(const Item&) = delete;
     };
@@ -94,7 +94,7 @@ private:
         TextLayout title;
         bool firstUse = false;
 
-        explicit WindowFrame(Core::Alloc::GlobalArena& arena)
+        explicit WindowFrame(Core::Alloc::GlobalArena& arena)noexcept
             : title(arena)
         {}
     };
@@ -200,11 +200,11 @@ private:
         u32 anchorIndex = 0u;
         u32 layer = 1u;
 
-        explicit TooltipFrame(Core::Alloc::GlobalArena& arena)
+        explicit TooltipFrame(Core::Alloc::GlobalArena& arena)noexcept
             : text(arena)
         {}
-        TooltipFrame(TooltipFrame&&) = default;
-        TooltipFrame& operator=(TooltipFrame&&) = default;
+        TooltipFrame(TooltipFrame&&)noexcept = default;
+        TooltipFrame& operator=(TooltipFrame&&)noexcept = default;
         TooltipFrame(const TooltipFrame&) = delete;
         TooltipFrame& operator=(const TooltipFrame&) = delete;
     };

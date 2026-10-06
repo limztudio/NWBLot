@@ -26,7 +26,7 @@ namespace __hidden_ui_image_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidSize(const LayoutSize& size){
+[[nodiscard]] static bool ValidSize(const LayoutSize& size)noexcept{
     return
         size.policy <= LayoutSizePolicy::Stretch && IsFinite(size.value) && size.value >= 0.0f
         && (size.policy != LayoutSizePolicy::Stretch || size.value > 0.0f)
@@ -47,7 +47,7 @@ bool ImageLayout::Measure(
     const ImageOptions& options,
     const UiSkinRegion& region,
     const f32 density,
-    ImageMetrics& out){
+    ImageMetrics& out)noexcept{
     using namespace __hidden_ui_image_layout;
     if(
         !ValidSize(options.width) || !ValidSize(options.height) || !IsValidUiColor(options.tint)
@@ -79,7 +79,7 @@ bool ImageLayout::Measure(
     return true;
 }
 
-bool ImageLayout::Measure(const ImageOptions& options, const ImageSource& source, ImageMetrics& out){
+bool ImageLayout::Measure(const ImageOptions& options, const ImageSource& source, ImageMetrics& out)noexcept{
     using namespace __hidden_ui_image_layout;
     if(!ValidSize(options.width) || !ValidSize(options.height) || !IsValidUiColor(options.tint))
         return false;
@@ -90,7 +90,7 @@ bool ImageLayout::Measure(const ImageOptions& options, const ImageSource& source
     return true;
 }
 
-bool ImageLayout::Place(const Rect& bounds, const Rect& clip, ImagePlacement& out){
+bool ImageLayout::Place(const Rect& bounds, const Rect& clip, ImagePlacement& out)noexcept{
     using namespace __hidden_ui_image_layout;
     if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip))
         return false;

@@ -15,7 +15,7 @@ template<typename Tag>
 class TypeCounter{
 public:
     template<typename T>
-    static usize Id(){
+    static usize Id()noexcept{
         static const usize value = s_NextId.fetch_add(1, MemoryOrder::relaxed);
         return value;
     }

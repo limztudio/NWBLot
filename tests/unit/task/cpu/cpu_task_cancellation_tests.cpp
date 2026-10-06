@@ -23,7 +23,7 @@ TEST(CpuTaskCancellationTests, OldGenerationsKeepDistinctResultsAcrossRepeatedRe
     CpuTaskScheduler scheduler(0u);
     for(usize index = 0u; index < s_Count; ++index){
         CpuTaskScope scope(scheduler);
-        history[index] = scope.submit([&](){ ++originalCallbacks; });
+        history[index] = scope.submit([&]()noexcept{ ++originalCallbacks; });
         ASSERT_TRUE(history[index].valid());
         EXPECT_EQ(history[index].index, history[0u].index);
         if(index % s_ExpectedDualCount == 0u)
@@ -33,7 +33,7 @@ TEST(CpuTaskCancellationTests, OldGenerationsKeepDistinctResultsAcrossRepeatedRe
     EXPECT_EQ(originalCallbacks, s_Count / s_ExpectedDualCount);
     for(usize index = 0u; index < s_Count; ++index){
         const u32 before = laterCallbacks;
-        const auto task = scheduler.submit([&](){ ++laterCallbacks; }, history[index]);
+        const auto task = scheduler.submit([&]()noexcept{ ++laterCallbacks; }, history[index]);
         ASSERT_TRUE(task.valid());
         scheduler.wait(task);
         EXPECT_EQ(laterCallbacks - before, index % s_ExpectedDualCount);
@@ -55,8 +55,8 @@ TEST(CpuTaskCancellationTests, CancellationIsIndexedBySlotAsWellAsGeneration){
     CpuTaskScope canceled(scheduler);
     CpuTaskScope completed(scheduler);
     for(usize index = 0u; index < s_Count; ++index){
-        rejected[index] = canceled.submit([&](){ ++canceledCallbacks; });
-        accepted[index] = completed.submit([&](){ ++completedCallbacks; });
+        rejected[index] = canceled.submit([&]()noexcept{ ++canceledCallbacks; });
+        accepted[index] = completed.submit([&]()noexcept{ ++completedCallbacks; });
         ASSERT_TRUE(rejected[index].valid());
         ASSERT_TRUE(accepted[index].valid());
         EXPECT_EQ(rejected[index].generation, accepted[index].generation);
@@ -66,8 +66,8 @@ TEST(CpuTaskCancellationTests, CancellationIsIndexedBySlotAsWellAsGeneration){
     canceled.wait();
     completed.wait();
     for(usize index = 0u; index < s_Count; ++index){
-        ASSERT_TRUE(scheduler.submit([&](){ ++canceledCallbacks; }, rejected[index]).valid());
-        ASSERT_TRUE(scheduler.submit([&](){ ++completedCallbacks; }, accepted[index]).valid());
+        ASSERT_TRUE(scheduler.submit([&]()noexcept{ ++canceledCallbacks; }, rejected[index]).valid());
+        ASSERT_TRUE(scheduler.submit([&]()noexcept{ ++completedCallbacks; }, accepted[index]).valid());
     }
     scheduler.wait();
     EXPECT_EQ(canceledCallbacks, 0u);
@@ -86,13 +86,13 @@ TEST(CpuTaskCancellationTests, ParallelRangesPreserveHistoryInRecycledSlots){
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope canceled(scheduler);
     for(usize index = 0u; index < s_Count; ++index){
-        history[index] = canceled.submit([&](){ ++canceledCallbacks; });
+        history[index] = canceled.submit([&]()noexcept{ ++canceledCallbacks; });
         ASSERT_TRUE(history[index].valid());
     }
     canceled.cancel();
     canceled.wait();
-    scheduler.parallelFor(0u, 1u, 1u, [&](usize){ ++rangeCallbacks; });
-    scheduler.parallelFor(0u, 128u, 1u, [&](usize){ ++rangeCallbacks; });
+    scheduler.parallelFor(0u, 1u, 1u, [&](usize)noexcept{ ++rangeCallbacks; });
+    scheduler.parallelFor(0u, 128u, 1u, [&](usize)noexcept{ ++rangeCallbacks; });
     CpuTaskScope interrupted(scheduler);
     interrupted.parallelFor(0u, 64u, 1u, [&](usize index){
         ++interruptedCallbacks;
@@ -104,7 +104,7 @@ TEST(CpuTaskCancellationTests, ParallelRangesPreserveHistoryInRecycledSlots){
     EXPECT_LT(interruptedCallbacks, 64u);
     const u64 canceledBeforeDependents = scheduler.statistics().canceledTasks;
     for(const auto handle : history)
-        ASSERT_TRUE(scheduler.submit([&](){ ++canceledCallbacks; }, handle).valid());
+        ASSERT_TRUE(scheduler.submit([&]()noexcept{ ++canceledCallbacks; }, handle).valid());
     scheduler.wait();
     EXPECT_EQ(rangeCallbacks, 129u);
     EXPECT_EQ(canceledCallbacks, 0u);

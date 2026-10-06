@@ -212,11 +212,11 @@ class FrameData : public BasicFrameData<s_FrameParamPointerSlotCount>{
 public:
     using BasicFrameData<s_FrameParamPointerSlotCount>::BasicFrameData;
 
-    inline u16& width(){ return m_data.u16[0]; }
-    inline const u16& width()const{ return m_data.u16[0]; }
+    inline u16& width()noexcept{ return m_data.u16[0]; }
+    inline const u16& width()const noexcept{ return m_data.u16[0]; }
 
-    inline u16& height(){ return m_data.u16[1]; }
-    inline const u16& height()const{ return m_data.u16[1]; }
+    inline u16& height()noexcept{ return m_data.u16[1]; }
+    inline const u16& height()const noexcept{ return m_data.u16[1]; }
 };
 #if defined(GLB_PLATFORM_WINDOWS)
 #include <windows.h>
@@ -228,14 +228,14 @@ private:
 
 
 public:
-    inline bool isActive()const{ return m_data.u8[s_ActiveFlagByteIndex] != 0; }
-    inline void setActive(bool value){ m_data.u8[s_ActiveFlagByteIndex] = value ? 1u : 0u; }
+    inline bool isActive()const noexcept{ return m_data.u8[s_ActiveFlagByteIndex] != 0; }
+    inline void setActive(bool value)noexcept{ m_data.u8[s_ActiveFlagByteIndex] = value ? 1u : 0u; }
 
-    inline HINSTANCE instance()const{ return static_cast<HINSTANCE>(m_data.ptr[s_InstancePointerSlot]); }
-    inline void setInstance(HINSTANCE value){ m_data.ptr[s_InstancePointerSlot] = value; }
+    inline HINSTANCE instance()const noexcept{ return static_cast<HINSTANCE>(m_data.ptr[s_InstancePointerSlot]); }
+    inline void setInstance(HINSTANCE value)noexcept{ m_data.ptr[s_InstancePointerSlot] = value; }
 
-    inline HWND hwnd()const{ return static_cast<HWND>(m_data.ptr[s_WindowPointerSlot]); }
-    inline void setHwnd(HWND value){ m_data.ptr[s_WindowPointerSlot] = value; }
+    inline HWND hwnd()const noexcept{ return static_cast<HWND>(m_data.ptr[s_WindowPointerSlot]); }
+    inline void setHwnd(HWND value)noexcept{ m_data.ptr[s_WindowPointerSlot] = value; }
 };
 #elif defined(GLB_PLATFORM_LINUX)
 namespace LinuxFrameBackend{
@@ -257,23 +257,23 @@ private:
 
 
 public:
-    inline bool isActive()const{ return m_data.u8[s_ActiveFlagByteIndex] != 0; }
-    inline void setActive(bool value){ m_data.u8[s_ActiveFlagByteIndex] = value ? 1u : 0u; }
+    inline bool isActive()const noexcept{ return m_data.u8[s_ActiveFlagByteIndex] != 0; }
+    inline void setActive(bool value)noexcept{ m_data.u8[s_ActiveFlagByteIndex] = value ? 1u : 0u; }
 
-    inline LinuxFrameBackend::Enum backend()const{ return static_cast<LinuxFrameBackend::Enum>(m_data.u8[s_BackendByteIndex]); }
-    inline void setBackend(LinuxFrameBackend::Enum value){ m_data.u8[s_BackendByteIndex] = static_cast<u8>(value); }
+    inline LinuxFrameBackend::Enum backend()const noexcept{ return static_cast<LinuxFrameBackend::Enum>(m_data.u8[s_BackendByteIndex]); }
+    inline void setBackend(LinuxFrameBackend::Enum value)noexcept{ m_data.u8[s_BackendByteIndex] = static_cast<u8>(value); }
 
-    inline void*& nativeDisplay(){ return m_data.ptr[s_NativeDisplayPointerSlot]; }
-    inline void* const& nativeDisplay()const{ return m_data.ptr[s_NativeDisplayPointerSlot]; }
+    inline void*& nativeDisplay()noexcept{ return m_data.ptr[s_NativeDisplayPointerSlot]; }
+    inline void* const& nativeDisplay()const noexcept{ return m_data.ptr[s_NativeDisplayPointerSlot]; }
 
-    inline u64& nativeWindowHandle(){ return m_data.u64[s_NativeWindowHandleSlot]; }
-    inline const u64& nativeWindowHandle()const{ return m_data.u64[s_NativeWindowHandleSlot]; }
+    inline u64& nativeWindowHandle()noexcept{ return m_data.u64[s_NativeWindowHandleSlot]; }
+    inline const u64& nativeWindowHandle()const noexcept{ return m_data.u64[s_NativeWindowHandleSlot]; }
 
-    inline void*& nativeState(){ return m_data.ptr[s_NativeStatePointerSlot]; }
-    inline void* const& nativeState()const{ return m_data.ptr[s_NativeStatePointerSlot]; }
+    inline void*& nativeState()noexcept{ return m_data.ptr[s_NativeStatePointerSlot]; }
+    inline void* const& nativeState()const noexcept{ return m_data.ptr[s_NativeStatePointerSlot]; }
 
-    inline u64& nativeAuxValue(){ return m_data.u64[s_NativeAuxValueSlot]; }
-    inline const u64& nativeAuxValue()const{ return m_data.u64[s_NativeAuxValueSlot]; }
+    inline u64& nativeAuxValue()noexcept{ return m_data.u64[s_NativeAuxValueSlot]; }
+    inline const u64& nativeAuxValue()const noexcept{ return m_data.u64[s_NativeAuxValueSlot]; }
 };
 #endif
 

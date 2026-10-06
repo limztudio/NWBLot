@@ -25,7 +25,7 @@ namespace VulkanStateTrackingDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ResourceStates::Mask NormalizeOwnershipState(const ResourceStates::Mask state){
+ResourceStates::Mask NormalizeOwnershipState(const ResourceStates::Mask state)noexcept{
     return state != ResourceStates::Unknown ? state : ResourceStates::Common;
 }
 
@@ -37,7 +37,7 @@ VkImageMemoryBarrier2 BuildTextureOwnershipReleaseBarrier(
     const u32 sourceQueueFamily,
     const u32 destinationQueueFamily,
     const bool rayTracingStageAvailable
-){
+)noexcept{
     const ResourceStates::Mask resolvedState = NormalizeOwnershipState(state);
     auto barrier = BuildTextureStateBarrier(image, aspectMask, subresources, resolvedState, resolvedState, rayTracingStageAvailable);
     barrier.srcQueueFamilyIndex = sourceQueueFamily;
@@ -55,7 +55,7 @@ VkImageMemoryBarrier2 BuildTextureOwnershipAcquireBarrier(
     const u32 sourceQueueFamily,
     const u32 destinationQueueFamily,
     const bool rayTracingStageAvailable
-){
+)noexcept{
     const ResourceStates::Mask resolvedState = NormalizeOwnershipState(state);
     auto barrier = BuildTextureStateBarrier(image, aspectMask, subresources, resolvedState, resolvedState, rayTracingStageAvailable);
     barrier.srcQueueFamilyIndex = sourceQueueFamily;
@@ -72,7 +72,7 @@ VkBufferMemoryBarrier2 BuildBufferOwnershipReleaseBarrier(
     const u32 destinationQueueFamily,
     const bool rayTracingStageAvailable,
     const BufferRange range
-){
+)noexcept{
     const ResourceStates::Mask resolvedState = NormalizeOwnershipState(state);
     auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
     barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(resolvedState, rayTracingStageAvailable);
@@ -94,7 +94,7 @@ VkBufferMemoryBarrier2 BuildBufferOwnershipAcquireBarrier(
     const u32 destinationQueueFamily,
     const bool rayTracingStageAvailable,
     const BufferRange range
-){
+)noexcept{
     const ResourceStates::Mask resolvedState = NormalizeOwnershipState(state);
     auto barrier = VulkanDetail::MakeVkStruct<VkBufferMemoryBarrier2>(VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2);
     barrier.srcStageMask = VK_PIPELINE_STAGE_2_NONE;

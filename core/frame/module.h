@@ -46,11 +46,11 @@ public:
     bool init();
     bool showFrame();
     bool mainLoop();
-    void requestQuit();
+    void requestQuit()noexcept;
 
 public:
     template<typename T>
-    inline T& data(){ return static_cast<T&>(m_data); }
+    inline T& data()noexcept{ return static_cast<T&>(m_data); }
 
 public:
     using ProjectUpdateCallback = bool(*)(void* userData, f32 delta);
@@ -60,28 +60,28 @@ public:
     bool startup();
     void cleanup();
     bool update(f32 delta);
-    bool render();
+    bool render()noexcept;
 
 public:
-    inline void setProjectUpdateCallback(ProjectUpdateCallback callback, void* userData){
+    inline void setProjectUpdateCallback(ProjectUpdateCallback callback, void* userData)noexcept{
         m_projectUpdateCallback = callback;
         m_projectUpdateUserData = userData;
     }
 
-    [[nodiscard]] inline GraphicsRuntime& graphics(){ return m_graphics; }
-    [[nodiscard]] inline const GraphicsRuntime& graphics()const{ return m_graphics; }
+    [[nodiscard]] inline GraphicsRuntime& graphics()noexcept{ return m_graphics; }
+    [[nodiscard]] inline const GraphicsRuntime& graphics()const noexcept{ return m_graphics; }
 
-    [[nodiscard]] inline InputDispatcher& input(){ return m_input; }
-    [[nodiscard]] inline const InputDispatcher& input()const{ return m_input; }
+    [[nodiscard]] inline InputDispatcher& input()noexcept{ return m_input; }
+    [[nodiscard]] inline const InputDispatcher& input()const noexcept{ return m_input; }
 
-    [[nodiscard]] inline Alloc::GlobalArena& projectObjectArena(){ return m_projectObjectArena; }
-    [[nodiscard]] inline const Alloc::GlobalArena& projectObjectArena()const{ return m_projectObjectArena; }
+    [[nodiscard]] inline Alloc::GlobalArena& projectObjectArena()noexcept{ return m_projectObjectArena; }
+    [[nodiscard]] inline const Alloc::GlobalArena& projectObjectArena()const noexcept{ return m_projectObjectArena; }
 
-    [[nodiscard]] inline CpuTaskScheduler& cpuTasks(){ return m_cpuTasks; }
-    [[nodiscard]] inline GpuTaskScheduler& gpuTasks(){ return m_gpuTasks; }
+    [[nodiscard]] inline CpuTaskScheduler& cpuTasks()noexcept{ return m_cpuTasks; }
+    [[nodiscard]] inline GpuTaskScheduler& gpuTasks()noexcept{ return m_gpuTasks; }
 
     void setTelemetryCapture(const Telemetry::CaptureOptions& options);
-    void setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData);
+    void setTelemetryUploadCallback(TelemetryUploadCallback callback, void* userData)noexcept;
     [[nodiscard]] bool flushTelemetryUpload(bool clearAfterUpload = false);
 
     // Toggle perf capture without telemetry; flips both halves of the GPU-timing gate.
@@ -95,16 +95,16 @@ public:
     [[nodiscard]] inline ITextInputService* tryTextInput()noexcept{ return m_textInput.get(); }
 
     // Read-only captured timing data; Session owns the per-scope stats.
-    [[nodiscard]] inline const Perf::Session& perfSession()const{ return m_perfSession; }
+    [[nodiscard]] inline const Perf::Session& perfSession()const noexcept{ return m_perfSession; }
 
-    [[nodiscard]] inline Telemetry::FrameGraphRegistry& frameGraphRegistry(){ return m_frameGraphRegistry; }
-    [[nodiscard]] inline const Telemetry::FrameGraphRegistry& frameGraphRegistry()const{ return m_frameGraphRegistry; }
+    [[nodiscard]] inline Telemetry::FrameGraphRegistry& frameGraphRegistry()noexcept{ return m_frameGraphRegistry; }
+    [[nodiscard]] inline const Telemetry::FrameGraphRegistry& frameGraphRegistry()const noexcept{ return m_frameGraphRegistry; }
 
-    [[nodiscard]] inline FrameString& appliedWindowTitle(){ return m_appliedWindowTitle; }
-    [[nodiscard]] inline const FrameString& appliedWindowTitle()const{ return m_appliedWindowTitle; }
+    [[nodiscard]] inline FrameString& appliedWindowTitle()noexcept{ return m_appliedWindowTitle; }
+    [[nodiscard]] inline const FrameString& appliedWindowTitle()const noexcept{ return m_appliedWindowTitle; }
 
-    [[nodiscard]] TStringView windowTitleOrDefault()const;
-    [[nodiscard]] inline bool quitRequested()const{ return m_quitRequested; }
+    [[nodiscard]] TStringView windowTitleOrDefault()const noexcept;
+    [[nodiscard]] inline bool quitRequested()const noexcept{ return m_quitRequested; }
     [[nodiscard]] Optional<TStringView> syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus);
 
 

@@ -111,7 +111,7 @@ public:
     [[nodiscard]] bool reserveCsgCutterBufferCapacity(usize cutterCount);
     // Preparation owns CSG buffer growth; draw paths consume after prepass.
     [[nodiscard]] bool prepareCsgFrameResources(usize receiverRangeCount, usize cutterCount);
-    [[nodiscard]] ECSRenderDetail::CsgGraphResourceSnapshot csgGraphResourceSnapshot()const;
+    [[nodiscard]] ECSRenderDetail::CsgGraphResourceSnapshot csgGraphResourceSnapshot()const noexcept;
     // Capture frozen CSG uniform bytes as immutable blobs before native recording.
     [[nodiscard]] bool prepareCsgClipContextSlotData(
         const DeferredFrameTargets& targets,

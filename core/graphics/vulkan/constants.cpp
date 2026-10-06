@@ -35,7 +35,7 @@ struct FormatMapping{
         const bool inHasDepth,
         const bool inHasStencil,
         const bool inIsCompressed
-    )
+    )noexcept
         : vkFormat(inVkFormat)
         , bytesPerPixel(inBytesPerPixel)
         , format(inFormat)
@@ -173,7 +173,7 @@ static constexpr FormatMapping s_FormatMappings[] = {
 static constexpr usize s_NumFormatMappings = LengthOf(s_FormatMappings);
 
 
-VkFormat ConvertFormat(Format::Enum format){
+VkFormat ConvertFormat(Format::Enum format)noexcept{
     for(usize i = 0u; i < s_NumFormatMappings; ++i){
         if(s_FormatMappings[i].format == format)
             return s_FormatMappings[i].vkFormat;
@@ -182,7 +182,7 @@ VkFormat ConvertFormat(Format::Enum format){
     return VK_FORMAT_UNDEFINED;
 }
 
-VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states){
+VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states)noexcept{
     VkAccessFlags2 flags = 0;
 
     if(states & ResourceStates::VertexBuffer)
@@ -235,7 +235,7 @@ VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask states){
     return flags;
 }
 
-VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, bool rayTracingStageAvailable){
+VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, bool rayTracingStageAvailable)noexcept{
     VkPipelineStageFlags2 flags = 0;
 
     if(states & ResourceStates::VertexBuffer)
@@ -285,7 +285,7 @@ VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask states, bool 
     return flags;
 }
 
-VkImageLayout GetVkImageLayout(ResourceStates::Mask states){
+VkImageLayout GetVkImageLayout(ResourceStates::Mask states)noexcept{
     if(states & ResourceStates::RenderTarget)
         return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     if(states & ResourceStates::DepthWrite)
@@ -312,7 +312,7 @@ VkImageLayout GetVkImageLayout(ResourceStates::Mask states){
     return VK_IMAGE_LAYOUT_GENERAL;
 }
 
-VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount){
+VkSampleCountFlagBits GetSampleCountFlagBits(u32 sampleCount)noexcept{
     switch(sampleCount){
     case 1:  return VK_SAMPLE_COUNT_1_BIT;
     case 2:  return VK_SAMPLE_COUNT_2_BIT;
@@ -395,7 +395,7 @@ VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMa
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-VkFormat ConvertFormat(Format::Enum format){
+VkFormat ConvertFormat(Format::Enum format)noexcept{
     return VulkanDetail::ConvertFormat(format);
 }
 

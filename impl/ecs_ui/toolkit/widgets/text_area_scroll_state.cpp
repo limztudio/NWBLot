@@ -22,11 +22,11 @@ namespace __hidden_text_area_scroll_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool SameRect(const Rect& first, const Rect& second){
+[[nodiscard]] static bool SameRect(const Rect& first, const Rect& second)noexcept{
     return first.x == second.x && first.y == second.y && first.width == second.width && first.height == second.height;
 }
 
-[[nodiscard]] static bool SameBar(const ScrollbarPlacement& first, const ScrollbarPlacement& second){
+[[nodiscard]] static bool SameBar(const ScrollbarPlacement& first, const ScrollbarPlacement& second)noexcept{
     // Offset and thumb position change during an ordinary drag without changing its accepted press geometry.
     return
         SameRect(first.track, second.track) && first.thumb.width == second.thumb.width && first.thumb.height == second.thumb.height
@@ -48,7 +48,7 @@ namespace __hidden_text_area_scroll_state{
 ControlToken TextAreaScrollState::prepare(const WidgetState& widget, const PopupToken& popup,
     const u64 stateGeneration, const u64 stateRevision, const EditModel& model, const bool enabled, const bool readOnly,
     const ScrollViewportPlacement& placement,
-    const Point step){
+    const Point step)noexcept{
     const Snapshot next{ widget.id, popup, widget.declarationGeneration, stateRevision, model.instanceGeneration(),
         model.revision(), model.externalRevision(), model.selectionGeneration(), model.compositionGeneration(),
         model.anchor(), model.caret(), enabled, readOnly };
@@ -74,11 +74,11 @@ ControlToken TextAreaScrollState::prepare(const WidgetState& widget, const Popup
     return { stateGeneration, next.modelGeneration, m_revision };
 }
 
-bool TextAreaScrollState::updateOffsets(const Point scroll){
+bool TextAreaScrollState::updateOffsets(const Point scroll)noexcept{
     return ScrollbarLayout::UpdateOffsets(scroll, m_placement);
 }
 
-void TextAreaScrollState::retire(){
+void TextAreaScrollState::retire()noexcept{
     advanceRevision();
     m_prepared = false;
     m_snapshot = {};
@@ -86,7 +86,7 @@ void TextAreaScrollState::retire(){
     m_step = {};
 }
 
-void TextAreaScrollState::advanceRevision(){
+void TextAreaScrollState::advanceRevision()noexcept{
     if(m_revision == Limit<u64>::s_Max)
         TerminateInvariant();
     ++m_revision;

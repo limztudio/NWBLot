@@ -93,7 +93,7 @@ static_assert(sizeof(VolumeIndexEntryDisk) == s_VolumeIndexEntryDiskBytes, "Volu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline u64 DefaultMetadataBytes(const u64 segmentSize){
+[[nodiscard]] inline u64 DefaultMetadataBytes(const u64 segmentSize)noexcept{
     u64 output = s_VolumeDefaultMetadataBytes;
     if(output >= segmentSize)
         output = segmentSize / s_VolumeFallbackMetadataDivisor;

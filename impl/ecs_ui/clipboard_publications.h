@@ -52,7 +52,7 @@ public:
     );
     [[nodiscard]] UiClipboardPublicationResult drain();
     [[nodiscard]] bool cancel();
-    [[nodiscard]] usize pending()const{ return m_requests.size(); }
+    [[nodiscard]] usize pending()const noexcept{ return m_requests.size(); }
 
 
 private:

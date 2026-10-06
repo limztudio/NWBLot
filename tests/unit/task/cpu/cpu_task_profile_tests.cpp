@@ -34,7 +34,7 @@ inline constexpr AStringView s_SampleKeys[s_SampleCount] = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] CpuTaskSchedulerConfig WorkerConfig(const u32 workerCount){
+[[nodiscard]] CpuTaskSchedulerConfig WorkerConfig(const u32 workerCount)noexcept{
     CpuTaskSchedulerConfig config;
     config.workerCount = workerCount;
     config.heterogeneous = false;
@@ -155,9 +155,9 @@ void ProfileReadyPrefix(const usize unrelatedCount){
         joinedInvocations = 0u;
         CpuTaskScope joined(scheduler);
         for(usize index = 0u; index < unrelatedCount; ++index)
-            ASSERT_TRUE(scheduler.submit([&](){ ++unrelatedInvocations; }).valid());
+            ASSERT_TRUE(scheduler.submit([&]()noexcept{ ++unrelatedInvocations; }).valid());
         for(usize index = 0u; index < s_ScopeCount; ++index)
-            ASSERT_TRUE(joined.submit([&](){ ++joinedInvocations; }).valid());
+            ASSERT_TRUE(joined.submit([&]()noexcept{ ++joinedInvocations; }).valid());
 
         const Timer begin = TimerNow();
         joined.wait();
@@ -187,18 +187,18 @@ void ProfileNestedFanIn(Alloc::ScratchArena& scratch, const usize chainLength){
         nanoseconds = 0u;
         auto tail = scheduler.submit([&](){
             const Timer begin = TimerNow();
-            const auto child = scheduler.submit([&](){ ++invocations; }, {}, prerequisites.data(), prerequisites.size());
+            const auto child = scheduler.submit([&]()noexcept{ ++invocations; }, {}, prerequisites.data(), prerequisites.size());
             nanoseconds = DurationInNS<u64>(TimerNow(), begin);
             accepted = child.valid();
             ++invocations;
         });
         ASSERT_TRUE(tail.valid());
         for(usize index = 0u; index < chainLength; ++index){
-            tail = scheduler.submit([&](){ ++invocations; }, tail);
+            tail = scheduler.submit([&]()noexcept{ ++invocations; }, tail);
             ASSERT_TRUE(tail.valid());
         }
         for(CpuTaskHandle& prerequisite : prerequisites){
-            prerequisite = scheduler.submit([&](){ ++invocations; });
+            prerequisite = scheduler.submit([&]()noexcept{ ++invocations; });
             ASSERT_TRUE(prerequisite.valid());
         }
         scheduler.wait();
@@ -258,7 +258,7 @@ void ProfileCompletedScopeJoins(const bool submitBeforeJoining){
     CpuTaskScheduler scheduler(0u);
     CpuTaskScope scope(scheduler);
     if(submitBeforeJoining){
-        const auto task = scope.submit([&](){ ++invocations; });
+        const auto task = scope.submit([&]()noexcept{ ++invocations; });
         ASSERT_TRUE(task.valid());
         scheduler.wait(task);
     }
@@ -318,22 +318,22 @@ void ProfilePositiveScopeGraph(Alloc::ScratchArena& scratch, const u32 workers, 
         for(u32 observed = entered.load(MemoryOrder::acquire); observed != workers; observed = entered.load(MemoryOrder::acquire))
             entered.wait(observed, MemoryOrder::acquire);
         for(usize index = 0u; index < s_Roots; ++index){
-            prerequisites[index] = scheduler.submit([&, index](){ ++visits[index]; });
+            prerequisites[index] = scheduler.submit([&, index]()noexcept{ ++visits[index]; });
             ASSERT_TRUE(prerequisites[index].valid());
         }
         auto tail = scheduler.submit(
-            [&](){ continuations.fetch_add(1u, MemoryOrder::relaxed); },
+            [&]()noexcept{ continuations.fetch_add(1u, MemoryOrder::relaxed); },
             {},
             prerequisites.data(),
             s_Roots
         );
         ASSERT_TRUE(tail.valid());
         for(usize index = 0u; index < chainLength; ++index){
-            tail = scheduler.submit([&](){ continuations.fetch_add(1u, MemoryOrder::relaxed); }, tail);
+            tail = scheduler.submit([&]()noexcept{ continuations.fetch_add(1u, MemoryOrder::relaxed); }, tail);
             ASSERT_TRUE(tail.valid());
         }
-        ASSERT_TRUE(first.submit([&](){ leaves.fetch_add(1u, MemoryOrder::relaxed); }, tail).valid());
-        ASSERT_TRUE(second.submit([&](){ leaves.fetch_add(1u, MemoryOrder::relaxed); }, tail).valid());
+        ASSERT_TRUE(first.submit([&]()noexcept{ leaves.fetch_add(1u, MemoryOrder::relaxed); }, tail).valid());
+        ASSERT_TRUE(second.submit([&]()noexcept{ leaves.fetch_add(1u, MemoryOrder::relaxed); }, tail).valid());
         const Timer begin = TimerNow();
         start.store(true, MemoryOrder::release);
         start.notify_all();
@@ -410,17 +410,17 @@ TEST(CpuTaskProfile, DISABLED_UnrelatedScopeJoin){
         CpuTaskScheduler scheduler(0u);
         CpuTaskScope joined(scheduler);
         for(usize index = 0u; index < s_RootCount; ++index){
-            roots[index] = scheduler.submit([&](){ ++unrelatedInvocations; });
+            roots[index] = scheduler.submit([&]()noexcept{ ++unrelatedInvocations; });
             ASSERT_TRUE(roots[index].valid());
         }
-        CpuTaskHandle predecessor = scheduler.submit([&](){ ++unrelatedInvocations; }, {}, roots.data(), roots.size());
+        CpuTaskHandle predecessor = scheduler.submit([&]()noexcept{ ++unrelatedInvocations; }, {}, roots.data(), roots.size());
         ASSERT_TRUE(predecessor.valid());
         for(usize index = 1u; index < s_ChainCount; ++index){
-            predecessor = scheduler.submit([&](){ ++unrelatedInvocations; }, predecessor);
+            predecessor = scheduler.submit([&]()noexcept{ ++unrelatedInvocations; }, predecessor);
             ASSERT_TRUE(predecessor.valid());
         }
         for(usize index = 0u; index < s_ScopeCount; ++index)
-            ASSERT_TRUE(joined.submit([&](){ ++joinedInvocations; }).valid());
+            ASSERT_TRUE(joined.submit([&]()noexcept{ ++joinedInvocations; }).valid());
 
         const Timer begin = TimerNow();
         joined.wait();
@@ -448,7 +448,7 @@ TEST(CpuTaskProfile, DISABLED_CanceledHistoryLookups){
         CpuTaskScheduler scheduler(0u);
         CpuTaskScope canceled(scheduler);
         for(usize index = 0u; index < s_HistoryCount; ++index){
-            history[index] = canceled.submit([&](){ ++invocations; });
+            history[index] = canceled.submit([&]()noexcept{ ++invocations; });
             ASSERT_TRUE(history[index].valid());
         }
         canceled.cancel();
@@ -460,7 +460,7 @@ TEST(CpuTaskProfile, DISABLED_CanceledHistoryLookups){
         const Timer begin = TimerNow();
         for(usize index = 0u; index < s_LookupCount; ++index){
             const CpuTaskHandle dependency = history[(index * 4051u) % s_HistoryCount];
-            const CpuTaskHandle task = scheduler.submit([&](){ ++invocations; }, dependency);
+            const CpuTaskHandle task = scheduler.submit([&]()noexcept{ ++invocations; }, dependency);
             accepted = task.valid() && accepted;
         }
         const u64 nanoseconds = DurationInNS<u64>(TimerNow(), begin);

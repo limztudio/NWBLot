@@ -57,12 +57,12 @@ public:
 
 
 public:
-    [[nodiscard]] u64 inputGeneration()const{ return m_inputGeneration; }
-    [[nodiscard]] u64 selectedKey()const{ return m_selectedKey; }
-    [[nodiscard]] bool isOpen()const{ return m_popup.isOpen(); }
-    [[nodiscard]] const PopupPlacement& placement()const{ return m_popup.placement(); }
-    [[nodiscard]] const Rect& bounds()const{ return m_bounds; }
-    [[nodiscard]] const ListState& listState()const{ return m_list; }
+    [[nodiscard]] u64 inputGeneration()const noexcept{ return m_inputGeneration; }
+    [[nodiscard]] u64 selectedKey()const noexcept{ return m_selectedKey; }
+    [[nodiscard]] bool isOpen()const noexcept{ return m_popup.isOpen(); }
+    [[nodiscard]] const PopupPlacement& placement()const noexcept{ return m_popup.placement(); }
+    [[nodiscard]] const Rect& bounds()const noexcept{ return m_bounds; }
+    [[nodiscard]] const ListState& listState()const noexcept{ return m_list; }
     // Explicit application changes renew the field input lifetime even when the value is unchanged.
     void select(u64 key);
     void open();
@@ -89,7 +89,7 @@ public:
     static void Open(ComboState& state);
     static void Close(ComboState& state);
     [[nodiscard]] static bool Commit(ComboState& state, const IListDataSource& source, u64 key);
-    [[nodiscard]] static ListState& Preview(ComboState& state){ return state.m_list; }
+    [[nodiscard]] static ListState& Preview(ComboState& state)noexcept{ return state.m_list; }
 };
 
 

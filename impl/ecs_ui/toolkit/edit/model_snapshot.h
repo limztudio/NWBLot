@@ -29,11 +29,11 @@ struct EditModelSnapshot{
     u64 m_expectedSelectionGeneration = 0u;
     u64 m_expectedCompositionGeneration = 0u;
 
-    explicit EditModelSnapshot(Core::Alloc::GlobalArena& arena);
+    explicit EditModelSnapshot(Core::Alloc::GlobalArena& arena)noexcept;
 
-    [[nodiscard]] bool matches(const EditModel& model)const;
+    [[nodiscard]] bool matches(const EditModel& model)const noexcept;
     void capture(const EditModel& model);
-    void clear();
+    void clear()noexcept;
 };
 
 

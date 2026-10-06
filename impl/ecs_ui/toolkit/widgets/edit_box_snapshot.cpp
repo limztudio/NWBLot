@@ -16,7 +16,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-EditBoxView::EditBoxView(Core::Alloc::GlobalArena& arena)
+EditBoxView::EditBoxView(Core::Alloc::GlobalArena& arena)noexcept
     : m_arena(&arena)
     , m_display(arena)
     , m_mapping(arena)

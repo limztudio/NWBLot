@@ -43,7 +43,7 @@ Entity World::createEntity(){
 }
 
 
-Entity World::entity(const EntityID entityId){
+Entity World::entity(const EntityID entityId)noexcept{
     return Entity(*this, entityId);
 }
 

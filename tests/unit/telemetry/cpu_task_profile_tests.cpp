@@ -49,7 +49,7 @@ public:
         m_recorder.recordSample(scope, seconds, frameIndex);
         if(m_injectTasks && m_injectionBudget != 0u){
             --m_injectionBudget;
-            const CpuTaskHandle task = m_scheduler.submit([](){});
+            const CpuTaskHandle task = m_scheduler.submit([]()noexcept{});
             ASSERT_TRUE(task.valid());
             m_scheduler.wait(task);
         }
@@ -98,7 +98,7 @@ TEST(CpuTaskProfileIntegration, DelayedTaskTimingPreservesExecutionFrameAtLaterP
     CpuTaskScope scope(scheduler, scopeLabel);
     scheduler.setProfiling(true, 41u);
 
-    const CpuTaskHandle task = scope.submit([](){}, { .profileLabel = taskLabel });
+    const CpuTaskHandle task = scope.submit([]()noexcept{}, { .profileLabel = taskLabel });
     ASSERT_TRUE(task.valid());
     scheduler.wait(task);
     scope.wait();
@@ -138,7 +138,7 @@ TEST(CpuTaskProfileIntegration, DisabledTimingSinkDiscardsBufferedSamples){
     Perf::TimingRecorder timing(arena.arena);
     CpuTaskScheduler scheduler(0u);
     scheduler.setProfiling(true, 7u);
-    ASSERT_TRUE(scheduler.submit([](){}).valid());
+    ASSERT_TRUE(scheduler.submit([]()noexcept{}).valid());
     scheduler.wait();
     ASSERT_GT(scheduler.statistics().profilePendingEvents, 0u);
     Perf::CollectCpuTaskProfile(scheduler, timing);
@@ -157,7 +157,7 @@ TEST(CpuTaskProfileIntegration, CollectorConsumesOnlyItsInitialPendingSnapshot){
     timing.setEnabled(true);
     CpuTaskScheduler scheduler(0u);
     scheduler.setProfiling(true, 11u);
-    ASSERT_TRUE(scheduler.submit([](){}).valid());
+    ASSERT_TRUE(scheduler.submit([]()noexcept{}).valid());
     scheduler.wait();
     const usize pendingBefore = scheduler.statistics().profilePendingEvents;
     ASSERT_GT(pendingBefore, 0u);

@@ -28,7 +28,7 @@ using AssetBytes = AssetVector<u8>;
 #define NWB_DEFINE_ASSET_TYPE(assetTypeLiteral) \
     static constexpr AStringView s_AssetTypeText = assetTypeLiteral; \
     inline static constexpr Name s_AssetTypeName = Name(assetTypeLiteral); \
-    [[nodiscard]] static const Name& AssetTypeName(){ \
+    [[nodiscard]] static const Name& AssetTypeName()noexcept{ \
         return s_AssetTypeName; \
     }
 
@@ -58,7 +58,7 @@ public: \
 class IAsset{
 protected:
     IAsset() = delete;
-    explicit IAsset(const Name& assetType, const Name& virtualPath = s_NameNone)
+    explicit IAsset(const Name& assetType, const Name& virtualPath = s_NameNone)noexcept
         : m_assetType(assetType)
         , m_virtualPath(virtualPath)
     {}
@@ -69,8 +69,8 @@ public:
 
 
 public:
-    [[nodiscard]] const Name& assetType()const{ return m_assetType; }
-    [[nodiscard]] const Name& virtualPath()const{ return m_virtualPath; }
+    [[nodiscard]] const Name& assetType()const noexcept{ return m_assetType; }
+    [[nodiscard]] const Name& virtualPath()const noexcept{ return m_virtualPath; }
 
 public:
     [[nodiscard]] bool checkVirtualPath(const TStringView failureContext)const{
@@ -98,10 +98,10 @@ template<typename ArenaT>
 template<typename AssetT>
 class TypedAsset : public IAsset{
 protected:
-    TypedAsset()
+    TypedAsset()noexcept(noexcept(Name(AssetT::AssetTypeName())))
         : IAsset(AssetT::AssetTypeName())
     {}
-    explicit TypedAsset(const Name& virtualPath)
+    explicit TypedAsset(const Name& virtualPath)noexcept(noexcept(Name(AssetT::AssetTypeName())))
         : IAsset(AssetT::AssetTypeName(), virtualPath)
     {}
 };
@@ -117,7 +117,7 @@ template<typename AssetT>
 class IAssetCodec{
 protected:
     IAssetCodec() = delete;
-    explicit IAssetCodec(const Name& assetType)
+    explicit IAssetCodec(const Name& assetType)noexcept
         : m_assetType(assetType)
     {}
 
@@ -127,7 +127,7 @@ public:
 
 
 public:
-    [[nodiscard]] const Name& assetType()const{ return m_assetType; }
+    [[nodiscard]] const Name& assetType()const noexcept{ return m_assetType; }
 
 public:
     virtual bool deserialize(AssetArena& arena, const Name& virtualPath, const AssetBytes& binary, UniquePtr<IAsset>& outAsset)const = 0;
@@ -161,7 +161,7 @@ private:
 template<typename AssetT>
 class AssetCodec : public IAssetCodec{
 protected:
-    AssetCodec()
+    AssetCodec()noexcept(noexcept(Name(AssetT::AssetTypeName())))
         : IAssetCodec(AssetT::AssetTypeName())
     {}
 

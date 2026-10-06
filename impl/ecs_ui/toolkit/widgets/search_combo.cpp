@@ -52,7 +52,7 @@ struct QuerySnapshot{
 }
 
 [[nodiscard]] static bool Matches(const SearchComboState& state, const QuerySnapshot& query,
-    const u64 comboGeneration, const u64 previewGeneration){
+    const u64 comboGeneration, const u64 previewGeneration)noexcept{
     return
         state.query().instanceGeneration() == query.generation && state.query().externalRevision() == query.externalRevision
         && state.query().revision() == query.revision && state.query().compositionGeneration() == query.compositionGeneration

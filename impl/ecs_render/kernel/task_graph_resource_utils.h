@@ -105,7 +105,7 @@ template<typename Plan>
     const Core::GpuGraphResourceId resource,
     const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource,
     const bool hasIndependentStateSource = false
-){
+)noexcept{
     return Core::GpuTaskResourceUse{
         .resource = resource,
         .range = {},
@@ -121,7 +121,7 @@ template<typename Plan>
     const Core::BufferRange& range,
     const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource,
     const bool hasIndependentStateSource = false
-){
+)noexcept{
     Core::GpuTaskResourceUse result = ReadUse(resource, state, hasIndependentStateSource);
     result.range.bufferRange = range;
     return result;
@@ -132,7 +132,7 @@ template<typename Plan>
     const Core::TextureSubresourceSet& subresources,
     const Core::ResourceStates::Mask state = Core::ResourceStates::ShaderResource,
     const bool hasIndependentStateSource = false
-){
+)noexcept{
     Core::GpuTaskResourceUse result = ReadUse(resource, state, hasIndependentStateSource);
     result.range.textureSubresources = subresources;
     return result;
@@ -141,7 +141,7 @@ template<typename Plan>
 [[nodiscard]] inline Core::GpuTaskResourceUse WriteUse(
     const Core::GpuGraphResourceId resource,
     const Core::ResourceStates::Mask state
-){
+)noexcept{
     return Core::GpuTaskResourceUse{
         .resource = resource,
         .range = {},
@@ -154,7 +154,7 @@ template<typename Plan>
     const Core::GpuGraphResourceId resource,
     const Core::TextureSubresourceSet& subresources,
     const Core::ResourceStates::Mask state
-){
+)noexcept{
     Core::GpuTaskResourceUse result = WriteUse(resource, state);
     result.range.textureSubresources = subresources;
     return result;
@@ -173,7 +173,7 @@ template<typename Plan>
 [[nodiscard]] inline Core::GpuTaskResourceUse ReadWriteUse(
     const Core::GpuGraphResourceId resource,
     const Core::ResourceStates::Mask state
-){
+)noexcept{
     return Core::GpuTaskResourceUse{
         .resource = resource,
         .range = {},
@@ -186,7 +186,7 @@ template<typename Plan>
     const Core::GpuGraphResourceId resource,
     const Core::TextureSubresourceSet& subresources,
     const Core::ResourceStates::Mask state
-){
+)noexcept{
     Core::GpuTaskResourceUse result = ReadWriteUse(resource, state);
     result.range.textureSubresources = subresources;
     return result;

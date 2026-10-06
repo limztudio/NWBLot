@@ -272,7 +272,7 @@ bool DiscoverFilesWithExtension(
     Sort(
         outFiles.begin(),
         outFiles.end(),
-        [](const DiscoveredNwbFile& lhs, const DiscoveredNwbFile& rhs){
+        [](const DiscoveredNwbFile& lhs, const DiscoveredNwbFile& rhs)noexcept{
             return lhs.normalizedPathText < rhs.normalizedPathText;
         }
     );

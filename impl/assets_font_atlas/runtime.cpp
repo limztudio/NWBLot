@@ -48,7 +48,7 @@ bool FontAtlas::validatePayload()const{
     return checkVirtualPath(GLB_TEXT("FontAtlas::validatePayload")) && ValidateFontAtlasPayload(m_payload);
 }
 
-const FontAtlasGlyph* FontAtlas::glyph(const u32 glyphId)const{
+const FontAtlasGlyph* FontAtlas::glyph(const u32 glyphId)const noexcept{
     return glyphId < m_payload.glyphs.size() ? &m_payload.glyphs[glyphId] : nullptr;
 }
 

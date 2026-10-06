@@ -157,13 +157,13 @@ private:
         VkBuildAccelerationStructureFlagsKHR& outBuildFlags,
         const AccelStructGeometryBuildSignature*& outGeometrySignatures,
         usize& outGeometrySignatureCount
-    )const;
+    )const noexcept;
     [[nodiscard]] bool validatePendingAccelStructBuildCommits()const noexcept;
     void commitPendingAccelStructBuildCommits()noexcept;
     void releasePendingAccelStructBuildCommits();
     void abandonPendingAccelStructBuildCommits()noexcept;
     void appendPendingOpacityMicromapBuildCommit(OpacityMicromap& opacityMicromap);
-    [[nodiscard]] bool hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const;
+    [[nodiscard]] bool hasPendingOpacityMicromapBuild(const OpacityMicromap& opacityMicromap)const noexcept;
     void commitPendingOpacityMicromapBuildCommits()noexcept;
     void discardPendingOpacityMicromapBuildCommits()noexcept;
     void clearTrackedReferences()noexcept;

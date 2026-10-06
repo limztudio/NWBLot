@@ -34,7 +34,7 @@ void ExpectSameStats(const ArenaMemoryStats& actual, const ArenaMemoryStats& exp
     EXPECT_EQ(actual.deallocationCount, expected.deallocationCount);
 }
 
-void FillPattern(u8* const bytes, const usize byteCount){
+void FillPattern(u8* const bytes, const usize byteCount)noexcept{
     for(usize index = 0u; index < byteCount; ++index)
         bytes[index] = static_cast<u8>(index * 17u + 3u);
 }

@@ -21,7 +21,7 @@ namespace __hidden_cpu_task_range_tests{
 
 using namespace NWB::Core;
 
-[[nodiscard]] CpuTaskSchedulerConfig OneWorker(){
+[[nodiscard]] CpuTaskSchedulerConfig OneWorker()noexcept{
     CpuTaskSchedulerConfig config;
     config.workerCount = 1u;
     config.heterogeneous = false;
@@ -56,7 +56,7 @@ TEST(CpuTaskRangeTests, SingleChunkJoinsAllSubmittedDescendants){
         ++callbacks;
         ASSERT_TRUE(scheduler.submit([&](){
             ++callbacks;
-            ASSERT_TRUE(scheduler.submit([&](){ ++callbacks; }).valid());
+            ASSERT_TRUE(scheduler.submit([&]()noexcept{ ++callbacks; }).valid());
         }).valid());
     });
     EXPECT_EQ(callbacks, 3u);
@@ -118,7 +118,7 @@ TEST(CpuTaskRangeTests, InvalidBatchOptionsPublishNoTasks){
     u32 callbacks = 0u;
     CpuTaskOptions options;
     options.cost = static_cast<CpuTaskCost::Enum>(255u);
-    EXPECT_THROW(scheduler.parallelFor(0u, 128u, 1u, [&](usize){ ++callbacks; }, options), RuntimeException);
+    EXPECT_THROW(scheduler.parallelFor(0u, 128u, 1u, [&](usize)noexcept{ ++callbacks; }, options), RuntimeException);
     EXPECT_EQ(callbacks, 0u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
 }
@@ -155,7 +155,7 @@ TEST(CpuTaskRangeTests, InlineFailureRetiresSubmittedDescendantsBeforeTerminalHa
         EXPECT_EQ(callbacks, 0u);
         EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
         return failure.code;
-    }, [](){ return -1; });
+    }, []()noexcept{ return -1; });
     EXPECT_EQ(result, 73);
 }
 

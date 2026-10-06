@@ -38,7 +38,7 @@ using TimestampEventVector = Vector<TimestampEvent, Alloc::ScratchArena>;
 [[nodiscard]] static bool LessTimestampRange(
     const GpuComparableTimestampRange& lhs,
     const GpuComparableTimestampRange& rhs
-){
+)noexcept{
     if(lhs.physicalQueue.deviceGeneration != rhs.physicalQueue.deviceGeneration)
         return lhs.physicalQueue.deviceGeneration < rhs.physicalQueue.deviceGeneration;
     if(lhs.physicalQueue.index != rhs.physicalQueue.index)
@@ -48,7 +48,7 @@ using TimestampEventVector = Vector<TimestampEvent, Alloc::ScratchArena>;
     return lhs.endTicks < rhs.endTicks;
 }
 
-[[nodiscard]] static bool LessTimestampEvent(const TimestampEvent& lhs, const TimestampEvent& rhs){
+[[nodiscard]] static bool LessTimestampEvent(const TimestampEvent& lhs, const TimestampEvent& rhs)noexcept{
     return lhs.ticks < rhs.ticks;
 }
 

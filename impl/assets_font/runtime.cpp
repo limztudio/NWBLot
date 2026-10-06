@@ -75,7 +75,7 @@ bool Font::validatePayload()const{
     return checkVirtualPath(GLB_TEXT("Font::validatePayload")) && ValidateFontSource(m_fontBytes, m_faceIndex);
 }
 
-void Font::setFontBytes(Core::Assets::AssetBytes&& bytes, const u32 faceIndex){
+void Font::setFontBytes(Core::Assets::AssetBytes&& bytes, const u32 faceIndex)noexcept{
     m_fontBytes = Move(bytes);
     m_faceIndex = faceIndex;
 }

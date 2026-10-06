@@ -52,7 +52,7 @@ struct X11Property{
     unsigned long remaining = 0u;
     unsigned char* bytes = nullptr;
 
-    ~X11Property();
+    ~X11Property()noexcept;
 };
 
 

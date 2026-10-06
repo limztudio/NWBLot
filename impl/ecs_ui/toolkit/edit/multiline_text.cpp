@@ -31,7 +31,7 @@ struct TextStep{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool IsCanonicalScalar(const u32 scalar){
+[[nodiscard]] static bool IsCanonicalScalar(const u32 scalar)noexcept{
     return scalar == '\n' || (scalar >= 0x20u && (scalar < 0x7Fu || scalar > 0x9Fu) && scalar != 0x2028u && scalar != 0x2029u);
 }
 

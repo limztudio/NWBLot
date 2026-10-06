@@ -30,8 +30,8 @@ struct InputSource{
     u64 device = 0u;
     u64 control = 0u;
 
-    [[nodiscard]] bool valid()const{ return control != 0u; }
-    friend bool operator==(const InputSource& lhs, const InputSource& rhs) = default;
+    [[nodiscard]] bool valid()const noexcept{ return control != 0u; }
+    friend bool operator==(const InputSource& lhs, const InputSource& rhs)noexcept = default;
 };
 
 struct InputCommandIntent{

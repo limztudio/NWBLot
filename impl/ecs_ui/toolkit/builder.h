@@ -105,37 +105,37 @@ public:
         EditBoxState& state, const IntegerEditOptions& options = {});
     [[nodiscard]] NumericEditBoxResult floatEdit(AStringView stableKey, FloatEditModel& model,
         EditBoxState& state, const FloatEditOptions& options = {});
-    [[nodiscard]] bool balanced()const{ return !declarationBlocked() && !m_scope->m_panelActive && !m_scope->m_windowActive && !m_scope->m_popupState; }
+    [[nodiscard]] bool balanced()const noexcept{ return !declarationBlocked() && !m_scope->m_panelActive && !m_scope->m_windowActive && !m_scope->m_popupState; }
     void reset();
     // Observe accepted input without retaining target pointers across frame publication.
-    [[nodiscard]] const InputRouter& input()const{ return m_context.input(); }
-    [[nodiscard]] bool failed()const{ return m_context.failed(); }
-    void setSkin(const UiSkin& skin);
+    [[nodiscard]] const InputRouter& input()const noexcept{ return m_context.input(); }
+    [[nodiscard]] bool failed()const noexcept{ return m_context.failed(); }
+    void setSkin(const UiSkin& skin)noexcept;
     // One explicit left-to-right script/language policy applies to every widget declaration and its deferred paint.
     [[nodiscard]] bool setTextShaping(u32 scriptTag, StringView language);
-    [[nodiscard]] WidgetStyle& style(){ if(declarationBlocked()) m_context.fail(); return m_style; }
-    [[nodiscard]] ScrollbarStyle& scrollbarStyle(){ if(declarationBlocked()) m_context.fail(); return m_scrollbarStyle; }
-    [[nodiscard]] EditBoxStyle& editStyle(){ if(declarationBlocked()) m_context.fail(); return m_editStyle; }
-    [[nodiscard]] PopupStyle& popupStyle(){ if(declarationBlocked()) m_context.fail(); return m_popupStyle; }
-    [[nodiscard]] ListStyle& listStyle(){ if(declarationBlocked()) m_context.fail(); return m_listStyle; }
-    [[nodiscard]] RadioGroupStyle& radioGroupStyle(){ if(declarationBlocked()) m_context.fail(); return m_radioGroupStyle; }
-    [[nodiscard]] SliderStyle& sliderStyle(){ if(declarationBlocked()) m_context.fail(); return m_sliderStyle; }
-    [[nodiscard]] ProgressStyle& progressStyle(){ if(declarationBlocked()) m_context.fail(); return m_progressStyle; }
-    [[nodiscard]] ComboStyle& comboStyle(){ if(declarationBlocked()) m_context.fail(); return m_comboStyle; }
-    [[nodiscard]] TooltipStyle& tooltipStyle(){ if(declarationBlocked()) m_context.fail(); return m_tooltipStyle; }
-    void setEditHost(IEditBoxHost* host){ if(declarationBlocked()) m_context.fail(); else m_editHost = host; }
-    void setDeltaSeconds(f32 delta){ if(declarationBlocked()) m_context.fail(); else m_deltaSeconds = delta; }
-    void setPointerBusy(bool busy){ if(declarationBlocked()) m_context.fail(); else m_pointerBusy = busy; }
+    [[nodiscard]] WidgetStyle& style()noexcept{ if(declarationBlocked()) m_context.fail(); return m_style; }
+    [[nodiscard]] ScrollbarStyle& scrollbarStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_scrollbarStyle; }
+    [[nodiscard]] EditBoxStyle& editStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_editStyle; }
+    [[nodiscard]] PopupStyle& popupStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_popupStyle; }
+    [[nodiscard]] ListStyle& listStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_listStyle; }
+    [[nodiscard]] RadioGroupStyle& radioGroupStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_radioGroupStyle; }
+    [[nodiscard]] SliderStyle& sliderStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_sliderStyle; }
+    [[nodiscard]] ProgressStyle& progressStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_progressStyle; }
+    [[nodiscard]] ComboStyle& comboStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_comboStyle; }
+    [[nodiscard]] TooltipStyle& tooltipStyle()noexcept{ if(declarationBlocked()) m_context.fail(); return m_tooltipStyle; }
+    void setEditHost(IEditBoxHost* host)noexcept{ if(declarationBlocked()) m_context.fail(); else m_editHost = host; }
+    void setDeltaSeconds(f32 delta)noexcept{ if(declarationBlocked()) m_context.fail(); else m_deltaSeconds = delta; }
+    void setPointerBusy(bool busy)noexcept{ if(declarationBlocked()) m_context.fail(); else m_pointerBusy = busy; }
     // Valid while a window scope is open, including a collapsed window.
-    [[nodiscard]] const WindowMetrics& windowMetrics()const{ return m_scope->m_window.metrics; }
+    [[nodiscard]] const WindowMetrics& windowMetrics()const noexcept{ return m_scope->m_window.metrics; }
 
 
 private:
-    [[nodiscard]] bool declarationBlocked()const{ return m_finalizing || m_declaring; }
+    [[nodiscard]] bool declarationBlocked()const noexcept{ return m_finalizing || m_declaring; }
     [[nodiscard]] ShapeRequest textShapeRequest(StringView text, f32 fontSize)const;
     [[nodiscard]] bool beginContainer(AStringView stableKey, LayoutDirection::Enum direction, const ContainerOptions& options);
     [[nodiscard]] Item* addItem(AStringView stableKey, StringView text, WidgetKind::Enum kind, const WidgetOptions& options);
-    [[nodiscard]] const UiSkinRegion* region(const Name& preferred, const Name& fallback)const;
+    [[nodiscard]] const UiSkinRegion* region(const Name& preferred, const Name& fallback)const noexcept;
     void buttonMetrics(Point& size, Insets& padding)const;
     [[nodiscard]] bool paintPanel();
     [[nodiscard]] bool paintWindow();
@@ -149,15 +149,15 @@ private:
     [[nodiscard]] bool paintTextArea(const Item& item, const LayoutBox& box);
     [[nodiscard]] bool applyTextAreaScrollInput(const Item& item, const TextAreaFrame& frame, const ControlToken& token);
     [[nodiscard]] bool paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement, const Rect& clip, const ControlToken& token);
-    [[nodiscard]] bool textAreaAvailable(const EditModel& model, const TextAreaState& state)const;
+    [[nodiscard]] bool textAreaAvailable(const EditModel& model, const TextAreaState& state)const noexcept;
     void snapshotTextArea(TextAreaFrame& frame);
     [[nodiscard]] bool textAreaMatches(const TextAreaFrame& frame)const;
-    void snapshotNumericEdit(NumericEditFrame& frame, const EditModel& draft);
+    void snapshotNumericEdit(NumericEditFrame& frame, const EditModel& draft)noexcept;
     [[nodiscard]] bool numericDraftMatches(const NumericEditFrame& frame, const EditModel& draft)const;
     [[nodiscard]] bool integerEditMatches(const IntegerEditFrame& frame)const;
     [[nodiscard]] bool floatEditMatches(const FloatEditFrame& frame)const;
     [[nodiscard]] bool numericEditMatches(const Item& item)const;
-    [[nodiscard]] bool numericStateAvailable(const EditBoxState& state)const;
+    [[nodiscard]] bool numericStateAvailable(const EditBoxState& state)const noexcept;
     [[nodiscard]] bool prepareEditBox(Item& item, EditModel& model, EditBoxState& state, const EditBoxResult& result);
     [[nodiscard]] bool paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation = nullptr);
     [[nodiscard]] bool paintSelectable(const Item& item, const LayoutBox& box);
@@ -174,7 +174,7 @@ private:
     [[nodiscard]] bool applySliderInput(SliderFrame& frame, const SliderPlacement& placement, bool interactive);
     [[nodiscard]] bool sliderMatches(const SliderFrame& frame)const;
     void publishSliderResults(bool valid);
-    [[nodiscard]] bool applyListGesture(ListState& state, const PointerGesture& gesture);
+    [[nodiscard]] bool applyListGesture(ListState& state, const PointerGesture& gesture)noexcept;
     [[nodiscard]] ComboResult declareCombo(AStringView stableKey, const IListDataSource& source,
         ComboState& state, const ComboOptions& options, SearchComboState* search = nullptr,
         ISearchableListDataSource* searchSource = nullptr, const SearchComboOptions* searchOptions = nullptr);
@@ -186,9 +186,9 @@ private:
     [[nodiscard]] bool applyComboInput(const WidgetState& field, ComboFrame& frame, ComboResult& result);
     [[nodiscard]] bool applyComboListInput(ComboFrame& frame, ComboResult& result);
     [[nodiscard]] bool prepareComboSearch(const WidgetState& field, ComboFrame& frame);
-    void snapshotComboQuery(ComboFrame& frame);
+    void snapshotComboQuery(ComboFrame& frame)noexcept;
     [[nodiscard]] bool paintComboQuery(ComboFrame& frame, LayoutBox& content);
-    [[nodiscard]] Item* annotationAnchor(AStringView stableKey);
+    [[nodiscard]] Item* annotationAnchor(AStringView stableKey)noexcept;
     [[nodiscard]] bool paintDeferred();
     [[nodiscard]] bool paintDeferredContents();
     [[nodiscard]] bool validateDeferredSources()const;
@@ -199,21 +199,21 @@ private:
     [[nodiscard]] bool paintTooltips();
     [[nodiscard]] bool prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& result);
     [[nodiscard]] bool applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result);
-    void snapshotContextMenu(ContextMenuFrame& frame);
+    void snapshotContextMenu(ContextMenuFrame& frame)noexcept;
     [[nodiscard]] bool contextMenuStateMatches(const ContextMenuFrame& frame)const;
     [[nodiscard]] bool contextMenuMatches(const ContextMenuFrame& frame)const;
     [[nodiscard]] bool paintContextMenus();
     [[nodiscard]] bool paintContextMenuPopup(ContextMenuFrame& frame);
     [[nodiscard]] bool paintPopup();
     [[nodiscard]] bool synchronizePopup();
-    [[nodiscard]] bool popupFrameVisible(const BuilderScopeFrame& frame)const;
+    [[nodiscard]] bool popupFrameVisible(const BuilderScopeFrame& frame)const noexcept;
     [[nodiscard]] bool popupAncestorsVisible()const;
     [[nodiscard]] bool finishPopupFamily();
     [[nodiscard]] bool paintPopupFamily(BuilderScopeFrame& frame);
     [[nodiscard]] bool validatePopupFamily();
     void releasePopupFamily();
     [[nodiscard]] bool reserveCompoundPopup(const WidgetState& widget, const PopupToken& token);
-    [[nodiscard]] Rect visibleClip(const Rect& clip)const;
+    [[nodiscard]] Rect visibleClip(const Rect& clip)const noexcept;
 
 
 private:

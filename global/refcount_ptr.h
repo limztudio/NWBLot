@@ -211,12 +211,12 @@ public:
         m_pair.second() = u.getDeleter();
         return *this;
     }
-    this_type& operator=(T* newp){
+    this_type& operator=(T* newp)noexcept(noexcept(reset(newp))){
         reset(newp);
         return *this;
     }
     template<typename U>
-    typename EnableIf<!IsArray<U>::value && IsConvertible<U*, pointer>::value, this_type&>::type operator=(U* newp){
+    typename EnableIf<!IsArray<U>::value && IsConvertible<U*, pointer>::value, this_type&>::type operator=(U* newp)noexcept(noexcept(reset(newp))){
         reset(newp);
         return *this;
     }
@@ -225,7 +225,7 @@ public:
         return *this;
     }
 
-    typename AddLValueReference<T>::type operator*()const{ return *m_pair.first(); }
+    typename AddLValueReference<T>::type operator*()const noexcept(IsPointer_V<pointer>){ return *m_pair.first(); }
     pointer operator->()const noexcept{ return m_pair.first(); }
 
     explicit operator bool()const noexcept{ return (m_pair.first() != pointer()); }

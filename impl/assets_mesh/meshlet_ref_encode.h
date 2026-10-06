@@ -62,7 +62,7 @@ struct MeshletRefEncodeChannel{
 using MeshletPositionRefEncodeChannel = MeshletRefEncodeChannel<MeshletPositionStreamRef>;
 using MeshletAttributeRefEncodeChannel = MeshletRefEncodeChannel<MeshletAttributeStreamRef>;
 
-GLB_INLINE void AddMeshletRefEncodeIndex(MeshletRefEncodeRange& range, const u32 index){
+GLB_INLINE void AddMeshletRefEncodeIndex(MeshletRefEncodeRange& range, const u32 index)noexcept{
     range.minimum = Min(range.minimum, index);
     range.maximum = Max(range.maximum, index);
 }
@@ -70,7 +70,7 @@ GLB_INLINE void AddMeshletRefEncodeIndex(MeshletRefEncodeRange& range, const u32
 GLB_INLINE void AddMeshletAttributeRefEncodeRanges(
     MeshletAttributeRefEncodeRanges& ranges,
     const MeshletAttributeStreamRef& ref
-){
+)noexcept{
     AddMeshletRefEncodeIndex(ranges.normal, ref.normal);
     AddMeshletRefEncodeIndex(ranges.tangent, ref.tangent);
     AddMeshletRefEncodeIndex(ranges.uv0, ref.uv0);
@@ -80,14 +80,14 @@ GLB_INLINE void AddMeshletAttributeRefEncodeRanges(
 GLB_INLINE void StoreMeshletAttributeRefEncodeBases(
     MeshletDesc& meshlet,
     const MeshletAttributeRefEncodeRanges& ranges
-){
+)noexcept{
     meshlet.normalBase = ranges.normal.minimum;
     meshlet.tangentBase = ranges.tangent.minimum;
     meshlet.uv0Base = ranges.uv0.minimum;
     meshlet.colorBase = ranges.color.minimum;
 }
 
-[[nodiscard]] GLB_INLINE MeshletRefDeltaWidth::Enum MeshletRefEncodeRangeWidth(const MeshletRefEncodeRange& range){
+[[nodiscard]] GLB_INLINE MeshletRefDeltaWidth::Enum MeshletRefEncodeRangeWidth(const MeshletRefEncodeRange& range)noexcept{
     return MeshletRefDeltaWidthForMaxDelta(range.maximum - range.minimum);
 }
 
@@ -127,7 +127,7 @@ template<typename RefT, typename RefVectorT, typename DeltaVectorT, typename Fai
     const MeshletPositionStreamRef& decoded,
     const MeshletPositionStreamRef& source,
     const bool skinRequired
-){
+)noexcept{
     return decoded.position == source.position
         && decoded.skin == (skinRequired ? source.skin : s_MeshMissingStreamIndex)
     ;
@@ -136,7 +136,7 @@ template<typename RefT, typename RefVectorT, typename DeltaVectorT, typename Fai
 [[nodiscard]] GLB_INLINE bool MeshletDecodedAttributeRefMatches(
     const MeshletAttributeStreamRef& decoded,
     const MeshletAttributeStreamRef& source
-){
+)noexcept{
     return decoded.normal == source.normal
         && decoded.tangent == source.tangent
         && decoded.uv0 == source.uv0

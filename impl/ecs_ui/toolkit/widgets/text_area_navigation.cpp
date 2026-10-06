@@ -37,7 +37,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool matches(const EditModel& model)const{
+    [[nodiscard]] bool matches(const EditModel& model)const noexcept{
         return
             m_instanceGeneration == model.instanceGeneration() && m_revision == model.revision()
             && m_externalRevision == model.externalRevision() && m_selectionGeneration == model.selectionGeneration()
@@ -62,7 +62,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static const EditBoxCaretStop* FindStop(const EditCaretGeometry& geometry, const usize committedByte){
+[[nodiscard]] static const EditBoxCaretStop* FindStop(const EditCaretGeometry& geometry, const usize committedByte)noexcept{
     for(const EditBoxCaretStop& stop : geometry.caretStops()){
         if(stop.committedByte == committedByte)
             return &stop;
@@ -153,7 +153,7 @@ EditNavigationResult TextAreaNavigationResolver::resolve(const EditModel& model,
     return resolved ? EditNavigationResult{ committedByte, preferredX, true } : EditNavigationResult{};
 }
 
-bool TextAreaNavigationResolver::current()const{
+bool TextAreaNavigationResolver::current()const noexcept{
     return !m_context.failed() && m_state.instanceGeneration() == m_instanceGeneration && m_state.revision() == m_revision;
 }
 

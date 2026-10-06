@@ -214,10 +214,10 @@ public:
     void restorePreparedLightingCpuState(const RayTracingFrameCpuStateSnapshot& snapshot)noexcept;
 
     [[nodiscard]] RayTracingShadowPreparationResourceSnapshot snapshotShadowPreparationResources()const;
-    [[nodiscard]] RayTracingDeferredGraphResourceSnapshot snapshotDeferredGraphResources()const;
+    [[nodiscard]] RayTracingDeferredGraphResourceSnapshot snapshotDeferredGraphResources()const noexcept;
     [[nodiscard]] bool prepareSceneQueryResources();
     [[nodiscard]] RayTracingSceneGraphResources snapshotSceneGraphResources()const;
-    [[nodiscard]] RayTracingSurfelPersistentResourceSnapshot snapshotSurfelPersistentResources()const;
+    [[nodiscard]] RayTracingSurfelPersistentResourceSnapshot snapshotSurfelPersistentResources()const noexcept;
     [[nodiscard]] RayTracingShadowVisibilityGraphPlanSnapshot snapshotShadowVisibilityGraphPlan(
         bool hardwareShadowSupported
     )const noexcept;
@@ -453,9 +453,9 @@ public:
         const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
     void clearShadowVisibility(Core::CommandList& commandList, DeferredFrameTargets& targets);
-    void confirmCausticAccumulatorNonTemporalClear();
+    void confirmCausticAccumulatorNonTemporalClear()noexcept;
     // The temporal bootstrap clear is recorded by a graph task, but this mirror changes only when the containing caustic producer packet accepts.
-    void confirmCausticAccumulatorBootstrapClear();
+    void confirmCausticAccumulatorBootstrapClear()noexcept;
     // A warm temporal accumulator decays in its own graph task before the selected photon producer.  The task shares the producer packet, so the compiler owns the UAV handoff between the two dispatches.
     [[nodiscard]] Core::GpuTaskId declareCausticAccumulatorDecayTask(
         Core::GpuTaskGraph& graph,
@@ -615,8 +615,8 @@ public:
     );
     [[nodiscard]] bool recordSurfelResourceInitializationLifecycle()noexcept;
     // The initialization mirror commits only after the typed-clear producer packet accepts.
-    void finalizeSurfelResourceInitialization();
-    void discardSurfelResourceInitialization();
+    void finalizeSurfelResourceInitialization()noexcept;
+    void discardSurfelResourceInitialization()noexcept;
     [[nodiscard]] Core::GpuTaskId declareSurfelGiAgeFreeTask(
         Core::GpuTaskGraph& graph,
         const Core::GpuTaskDesc& desc,
@@ -961,7 +961,7 @@ private:
     [[nodiscard]] bool ensureCausticGeometryDownsamplePipeline();
     [[nodiscard]] bool causticResolveResourcesReady(const DeferredFrameTargets& targets, f32 temporalDecay)const;
     [[nodiscard]] bool ensureCausticAccumulatorDecayPipeline();
-    [[nodiscard]] f32 causticTemporalDecay();
+    [[nodiscard]] f32 causticTemporalDecay()noexcept;
     // Temporal phase changes only after accepted producer updates.
     [[nodiscard]] u32 causticTemporalPhaseCount();
     void advanceCausticTemporalReuse();

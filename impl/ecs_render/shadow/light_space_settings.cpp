@@ -16,7 +16,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateSoftwareShadowSettings(const SoftwareShadowSettings& settings){
+bool ValidateSoftwareShadowSettings(const SoftwareShadowSettings& settings)noexcept{
     return
         settings.backend <= SoftwareShadowBackend::LightSpace
         && settings.coverage <= SoftwareShadowCoverage::FittedVolume

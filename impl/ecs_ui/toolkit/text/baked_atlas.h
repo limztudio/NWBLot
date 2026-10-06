@@ -30,10 +30,10 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const{ return m_ready; }
-    [[nodiscard]] u32 unitsPerEm()const{ return m_unitsPerEm; }
-    [[nodiscard]] u32 bakePpem()const{ return m_bakePpem; }
-    [[nodiscard]] const FontAtlasGlyph* glyph(u32 glyphId)const;
+    [[nodiscard]] bool valid()const noexcept{ return m_ready; }
+    [[nodiscard]] u32 unitsPerEm()const noexcept{ return m_unitsPerEm; }
+    [[nodiscard]] u32 bakePpem()const noexcept{ return m_bakePpem; }
+    [[nodiscard]] const FontAtlasGlyph* glyph(u32 glyphId)const noexcept;
     [[nodiscard]] const SharedSdfAtlasPage& page(u32 group)const;
 
 

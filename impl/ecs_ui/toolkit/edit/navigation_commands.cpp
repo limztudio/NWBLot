@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TranslateEditNavigation(const InputCommandIntent& intent, EditNavigationDirection::Enum& output){
+bool TranslateEditNavigation(const InputCommandIntent& intent, EditNavigationDirection::Enum& output)noexcept{
     if(!intent.edit)
         return false;
     EditNavigationDirection::Enum direction;

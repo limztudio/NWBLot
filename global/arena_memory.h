@@ -59,7 +59,7 @@ public:
     void releaseRetainedMemory()noexcept;
     void reset(u64 reservedBytes = 0u);
 
-    void addReservedBytes(const u64 bytes){
+    void addReservedBytes(const u64 bytes)noexcept{
         if(bytes != 0u)
             m_reservedBytes.fetch_add(bytes, MemoryOrder::relaxed);
     }
@@ -70,7 +70,7 @@ public:
     }
 
     // Direct arenas derive reservation from usage; hot paths update local counters only.
-    void recordAllocation(const u64 bytes){
+    void recordAllocation(const u64 bytes)noexcept{
         if(bytes == 0u)
             return;
 
@@ -79,7 +79,7 @@ public:
         m_allocationCount.fetch_add(1u, MemoryOrder::relaxed);
     }
 
-    void recordReallocation(const u64 oldBytes, const u64 newBytes){
+    void recordReallocation(const u64 oldBytes, const u64 newBytes)noexcept{
         if(oldBytes == 0u && newBytes == 0u)
             return;
         if(oldBytes == 0u){
@@ -112,7 +112,7 @@ public:
         m_deallocationCount.fetch_add(1u, MemoryOrder::relaxed);
     }
 
-    [[nodiscard]] ArenaMemoryStats snapshot()const{
+    [[nodiscard]] ArenaMemoryStats snapshot()const noexcept{
         ArenaMemoryStats stats;
         stats.usedBytes = m_usedBytes.load(MemoryOrder::relaxed);
         stats.reservedBytes = m_reservation == ArenaMemoryReservation::FollowsUsage
@@ -128,7 +128,7 @@ public:
 
 
 private:
-    void recordPeakUsedBytes(const u64 usedBytes){
+    void recordPeakUsedBytes(const u64 usedBytes)noexcept{
         u64 peakBytes = m_peakUsedBytes.load(MemoryOrder::relaxed);
         while(usedBytes > peakBytes){
             if(m_peakUsedBytes.compare_exchange_weak(peakBytes, usedBytes, MemoryOrder::relaxed))

@@ -17,7 +17,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] TextInputAdmission::Enum ValidateTextInputUtf8(AStringView text, usize maxBytes);
+[[nodiscard]] TextInputAdmission::Enum ValidateTextInputUtf8(AStringView text, usize maxBytes)noexcept;
 [[nodiscard]] bool IsTextInputUtf8Boundary(AStringView text, usize byteOffset)noexcept;
 [[nodiscard]] bool IsTextInputCaretRectValid(TextInputRect rect)noexcept;
 [[nodiscard]] TextInputAdmission::Enum EncodeTextInputCodePoint(u32 codePoint, char (&bytes)[4], usize& length)noexcept;

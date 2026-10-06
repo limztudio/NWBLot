@@ -98,14 +98,14 @@ struct MaterialPipelineAvboitPixelShaderSelection{
     const Core::Assets::AssetRef<Shader>* materialShader = nullptr;
     AStringView debugName = "ECSRender_InvalidAvboitPixelShader";
 
-    [[nodiscard]] bool materialDriven()const{ return materialShader != nullptr && materialShader->valid(); }
-    [[nodiscard]] Name shaderName()const{ return materialDriven() ? materialShader->name() : s_NameNone; }
+    [[nodiscard]] bool materialDriven()const noexcept{ return materialShader != nullptr && materialShader->valid(); }
+    [[nodiscard]] Name shaderName()const noexcept{ return materialDriven() ? materialShader->name() : s_NameNone; }
 };
 
 [[nodiscard]] MaterialPipelineAvboitPixelShaderSelection SelectAvboitPixelShader(
     const MaterialPipelinePass::Enum pass,
     const MaterialSurfaceInfo& materialInfo
-){
+)noexcept{
     MaterialPipelineAvboitPixelShaderSelection selection;
     switch(pass){
     case MaterialPipelinePass::AvboitOccupancy:

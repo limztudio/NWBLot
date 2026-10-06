@@ -52,7 +52,7 @@ void SceneShadingSetupGraphTask::Accepted(Payload& payload, const Core::QueueSub
 }
 
 
-void SceneShadingSetupGraphTask::Discarded(Payload& payload){
+void SceneShadingSetupGraphTask::Discarded(Payload& payload)noexcept{
     if(payload.ready)
         *payload.ready = false;
 }

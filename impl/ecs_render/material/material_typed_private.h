@@ -221,7 +221,7 @@ template<typename DestinationByteVector, typename SourceByteVector, typename Mat
     return true;
 }
 
-[[nodiscard]] inline bool MaterialTypedByteRangeEmptyOffsetValid(const MaterialTypedByteRange& range){
+[[nodiscard]] inline bool MaterialTypedByteRangeEmptyOffsetValid(const MaterialTypedByteRange& range)noexcept{
     return range.byteCount != 0u || range.byteOffset == 0u;
 }
 

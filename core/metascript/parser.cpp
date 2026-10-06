@@ -54,7 +54,7 @@ constexpr usize s_ExpectedTokenFoundSeparatorLength = s_ExpectedTokenFoundSepara
 }
 
 template<usize N>
-[[nodiscard]] constexpr MStringView LiteralView(const char (&text)[N]){
+[[nodiscard]] constexpr MStringView LiteralView(const char (&text)[N])noexcept{
     return MStringView(text, N > 0u ? N - 1u : 0u);
 }
 
@@ -817,7 +817,7 @@ private:
         return Value::Reference(MStringView(text.data(), text.size()), m_arena);
     }
 
-    [[nodiscard]] bool isNameInList(const ScratchNameList& names, MStringView name)const{
+    [[nodiscard]] bool isNameInList(const ScratchNameList& names, MStringView name)const noexcept{
         for(const MStringView currentName : names){
             if(currentName == name)
                 return true;
@@ -825,11 +825,11 @@ private:
         return false;
     }
 
-    [[nodiscard]] bool isDeclaredStruct(MStringView name)const{
+    [[nodiscard]] bool isDeclaredStruct(MStringView name)const noexcept{
         return isNameInList(m_declaredStructs, name);
     }
 
-    [[nodiscard]] bool isDeclaredVariable(MStringView name)const{
+    [[nodiscard]] bool isDeclaredVariable(MStringView name)const noexcept{
         for(const Document::Declaration& declaration : m_declarations){
             if(MStringView(declaration.variable.data(), declaration.variable.size()) == name)
                 return true;
@@ -1214,7 +1214,7 @@ Value& Document::asset(){
     return it.value();
 }
 
-const Value* Document::findVariable(MStringView name)const{
+const Value* Document::findVariable(MStringView name)const noexcept{
     auto it = m_variables.find(name);
     if(it == m_variables.end())
         return nullptr;

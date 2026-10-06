@@ -41,14 +41,14 @@ struct EventRecord{
 
 class EventView final{
 public:
-    EventView() = default;
-    explicit EventView(const Recorder& recorder)
+    EventView()noexcept = default;
+    explicit EventView(const Recorder& recorder)noexcept
         : m_recorder(&recorder)
     {}
 
 
 public:
-    [[nodiscard]] bool valid()const{ return m_recorder != nullptr; }
+    [[nodiscard]] bool valid()const noexcept{ return m_recorder != nullptr; }
     // Views are intended for quiescent export/readback points. Individual reads are serialized,
     // but callers should not clear the recorder while iterating a view.
     [[nodiscard]] usize eventCount()const;
@@ -107,13 +107,13 @@ public:
     void setCaptureOptions(const CaptureOptions& options);
     // Enabled capture retains slots and payload capacity for the next frame. Disabling capture releases them.
     void clear();
-    [[nodiscard]] TelemetryArena& arena(){ return m_arena; }
-    [[nodiscard]] const TelemetryArena& arena()const{ return m_arena; }
+    [[nodiscard]] TelemetryArena& arena()noexcept{ return m_arena; }
+    [[nodiscard]] const TelemetryArena& arena()const noexcept{ return m_arena; }
     [[nodiscard]] CaptureOptions captureOptions()const;
     [[nodiscard]] bool enabled()const;
     [[nodiscard]] bool enabled(EventKind::Enum kind)const;
     [[nodiscard]] usize eventCount()const;
-    [[nodiscard]] EventView view()const{ return EventView(*this); }
+    [[nodiscard]] EventView view()const noexcept{ return EventView(*this); }
 
     [[nodiscard]] bool recordBinary(
         EventKind::Enum kind,
@@ -153,8 +153,8 @@ public:
 
 
 private:
-    [[nodiscard]] bool enabledUnlocked()const{ return m_capture.enabled(); }
-    [[nodiscard]] bool enabledUnlocked(EventKind::Enum kind)const{ return CaptureAllowsEventKind(m_capture, kind); }
+    [[nodiscard]] bool enabledUnlocked()const noexcept{ return m_capture.enabled(); }
+    [[nodiscard]] bool enabledUnlocked(EventKind::Enum kind)const noexcept{ return CaptureAllowsEventKind(m_capture, kind); }
     [[nodiscard]] bool appendUnlocked(EventSlotLease& lease, const EventHeader& header, const void* payload, usize payloadBytes);
     [[nodiscard]] bool appendPayloadUnlocked(EventSlotLease& lease, const EventHeader& header, TelemetryBytes&& payload);
     [[nodiscard]] EventSlotPtr acquireSlotUnlocked();

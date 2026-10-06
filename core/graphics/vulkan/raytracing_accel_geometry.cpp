@@ -30,7 +30,7 @@ inline constexpr u32 s_LssSuccessiveIndicesPerPrimitive = 1u;
 inline constexpr u32 s_AabbStrideAlignment = 8u;
 
 
-VkDeviceAddress GetBufferDeviceAddress(Buffer* bufferResource, u64 offset){
+VkDeviceAddress GetBufferDeviceAddress(Buffer* bufferResource, u64 offset)noexcept{
     if(!bufferResource)
         return 0;
 
@@ -41,7 +41,7 @@ VkDeviceAddress GetBufferDeviceAddress(Buffer* bufferResource, u64 offset){
     return baseAddress + offset;
 }
 
-bool GetRayTracingIndexType(Format::Enum format, VkIndexType& indexType){
+bool GetRayTracingIndexType(Format::Enum format, VkIndexType& indexType)noexcept{
     if(format == Format::R16_UINT){
         indexType = VK_INDEX_TYPE_UINT16;
         return true;
@@ -54,7 +54,7 @@ bool GetRayTracingIndexType(Format::Enum format, VkIndexType& indexType){
     return false;
 }
 
-u64 GetRayTracingIndexElementSize(Format::Enum format){
+u64 GetRayTracingIndexElementSize(Format::Enum format)noexcept{
     if(format == Format::R16_UINT)
         return sizeof(u16);
     if(format == Format::R32_UINT)
@@ -62,7 +62,7 @@ u64 GetRayTracingIndexElementSize(Format::Enum format){
     return 0;
 }
 
-VkRayTracingLssIndexingModeNV ConvertRayTracingLssIndexingMode(RayTracingGeometryLssPrimitiveFormat::Enum format){
+VkRayTracingLssIndexingModeNV ConvertRayTracingLssIndexingMode(RayTracingGeometryLssPrimitiveFormat::Enum format)noexcept{
     switch(format){
     case RayTracingGeometryLssPrimitiveFormat::List:
         return VK_RAY_TRACING_LSS_INDEXING_MODE_LIST_NV;
@@ -73,7 +73,7 @@ VkRayTracingLssIndexingModeNV ConvertRayTracingLssIndexingMode(RayTracingGeometr
     }
 }
 
-VkRayTracingLssPrimitiveEndCapsModeNV ConvertRayTracingLssEndcapMode(RayTracingGeometryLssEndcapMode::Enum mode){
+VkRayTracingLssPrimitiveEndCapsModeNV ConvertRayTracingLssEndcapMode(RayTracingGeometryLssEndcapMode::Enum mode)noexcept{
     switch(mode){
     case RayTracingGeometryLssEndcapMode::None:
         return VK_RAY_TRACING_LSS_PRIMITIVE_END_CAPS_MODE_NONE_NV;
@@ -84,7 +84,7 @@ VkRayTracingLssPrimitiveEndCapsModeNV ConvertRayTracingLssEndcapMode(RayTracingG
     }
 }
 
-bool ComputeStridedRangeByteSize(u32 elementCount, u64 stride, u64 elementSize, u64& outByteSize){
+bool ComputeStridedRangeByteSize(u32 elementCount, u64 stride, u64 elementSize, u64& outByteSize)noexcept{
     if(elementCount == 0){
         outByteSize = 0;
         return true;
@@ -97,7 +97,7 @@ bool ComputeStridedRangeByteSize(u32 elementCount, u64 stride, u64 elementSize, 
     outByteSize = spanCount * stride + elementSize;
     return true;
 }
-u64 GetRayTracingVertexComponentAlignment(const FormatInfo& formatInfo){
+u64 GetRayTracingVertexComponentAlignment(const FormatInfo& formatInfo)noexcept{
     const u32 componentCount = static_cast<u32>(formatInfo.hasRed)
         + static_cast<u32>(formatInfo.hasGreen)
         + static_cast<u32>(formatInfo.hasBlue)

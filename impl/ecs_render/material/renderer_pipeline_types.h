@@ -57,7 +57,7 @@ namespace MaterialPipelineCsgMode{
     };
 };
 
-[[nodiscard]] GLB_INLINE bool MaterialPipelinePassUsesRendererAvboit(const MaterialPipelinePass::Enum pass){
+[[nodiscard]] GLB_INLINE bool MaterialPipelinePassUsesRendererAvboit(const MaterialPipelinePass::Enum pass)noexcept{
     switch(pass){
     case MaterialPipelinePass::AvboitOccupancy:
     case MaterialPipelinePass::AvboitExtinction:
@@ -90,7 +90,7 @@ namespace MaterialPipelineCsgMode{
     }
 }
 
-[[nodiscard]] GLB_INLINE bool MaterialPipelinePassUsesRendererCsgReceiverSurface(const MaterialPipelinePass::Enum pass){
+[[nodiscard]] GLB_INLINE bool MaterialPipelinePassUsesRendererCsgReceiverSurface(const MaterialPipelinePass::Enum pass)noexcept{
     return pass == MaterialPipelinePass::CsgReceiverSurface;
 }
 

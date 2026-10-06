@@ -143,7 +143,7 @@ struct InferredDependencyEqual{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void GpuTaskGraphAnalysis::reset(){
+void GpuTaskGraphAnalysis::reset()noexcept{
     m_edges.clear();
     m_schedulingEdges.clear();
     m_schedulingOutgoingOffsets.clear();

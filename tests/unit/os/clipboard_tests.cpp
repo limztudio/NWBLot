@@ -59,7 +59,7 @@ protected:
         }
     }
 
-    virtual void cancelNativeRequest(const ClipboardRequestToken token)override{
+    virtual void cancelNativeRequest(const ClipboardRequestToken token)noexcept override{
         if(m_nativeToken == token)
             m_nativeToken = {};
     }

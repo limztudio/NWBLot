@@ -35,7 +35,7 @@ private:
         u64 instanceGeneration = 0u;
         WidgetKind::Enum kind = WidgetKind::Panel;
 
-        [[nodiscard]] bool operator==(const StateClaim&)const = default;
+        [[nodiscard]] bool operator==(const StateClaim&)const noexcept = default;
     };
 
     struct StateClaimHash{
@@ -48,7 +48,7 @@ private:
 private:
     static constexpr usize s_SmallStateClaims = 32u;
 
-    [[nodiscard]] static bool ContainsRoot(const WidgetRoot* roots, usize count, const WidgetRoot& root);
+    [[nodiscard]] static bool ContainsRoot(const WidgetRoot* roots, usize count, const WidgetRoot& root)noexcept;
 
 
 public:
@@ -80,12 +80,12 @@ public:
     [[nodiscard]] bool endPopupScope(bool visible);
     // Discard an inactive scope and its descendants without disturbing the current parent activation.
     void discardPopupScope(const PopupToken& token);
-    [[nodiscard]] bool hasPopupScope(const PopupToken& token)const;
-    [[nodiscard]] WidgetId scopeId()const{ return m_scopes.empty() ? WidgetId{} : m_scopes.back(); }
-    [[nodiscard]] PopupToken popupToken()const{ return m_currentPopup; }
-    [[nodiscard]] u32 popupLayer()const{ return m_popupLayer; }
-    [[nodiscard]] u32 popupLayer(const PopupToken& token)const;
-    [[nodiscard]] PopupToken topPopupToken()const{ return m_popups.empty() ? PopupToken{} : m_popups.back().scope.token; }
+    [[nodiscard]] bool hasPopupScope(const PopupToken& token)const noexcept;
+    [[nodiscard]] WidgetId scopeId()const noexcept{ return m_scopes.empty() ? WidgetId{} : m_scopes.back(); }
+    [[nodiscard]] PopupToken popupToken()const noexcept{ return m_currentPopup; }
+    [[nodiscard]] u32 popupLayer()const noexcept{ return m_popupLayer; }
+    [[nodiscard]] u32 popupLayer(const PopupToken& token)const noexcept;
+    [[nodiscard]] PopupToken topPopupToken()const noexcept{ return m_popups.empty() ? PopupToken{} : m_popups.back().scope.token; }
     [[nodiscard]] bool finishFrame();
     // Only the host's exact accepted and successfully presented generation may publish its prepared hit layout.
     [[nodiscard]] bool commitFrame(u64 generation);
@@ -93,13 +93,13 @@ public:
     void resetInput();
     // Retire removed/hidden host roots even while a GPU frame is pending.
     void retainRoots(const WidgetRoot* roots, usize count);
-    void fail(){ m_failed = true; }
-    [[nodiscard]] bool failed()const{ return m_failed; }
-    [[nodiscard]] bool ready()const{ return m_readyGeneration != 0u; }
-    [[nodiscard]] u64 readyGeneration()const{ return m_readyGeneration; }
-    [[nodiscard]] InputRouter& input(){ return m_input; }
-    [[nodiscard]] const InputRouter& input()const{ return m_input; }
-    [[nodiscard]] const WidgetStateStore& states()const{ return m_states; }
+    void fail()noexcept{ m_failed = true; }
+    [[nodiscard]] bool failed()const noexcept{ return m_failed; }
+    [[nodiscard]] bool ready()const noexcept{ return m_readyGeneration != 0u; }
+    [[nodiscard]] u64 readyGeneration()const noexcept{ return m_readyGeneration; }
+    [[nodiscard]] InputRouter& input()noexcept{ return m_input; }
+    [[nodiscard]] const InputRouter& input()const noexcept{ return m_input; }
+    [[nodiscard]] const WidgetStateStore& states()const noexcept{ return m_states; }
 
 
 private:

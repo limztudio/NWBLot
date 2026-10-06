@@ -23,7 +23,7 @@ namespace __hidden_ui_radio_group_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidChoices(const RadioGroupChoices& choices){
+[[nodiscard]] static bool ValidChoices(const RadioGroupChoices& choices)noexcept{
     if(choices.sourceGeneration == 0u || choices.sourceRevision == 0u || choices.count > s_RadioGroupMaxChoices)
         return false;
     for(u32 index = 0u; index < choices.count; ++index){
@@ -37,7 +37,7 @@ namespace __hidden_ui_radio_group_behavior{
     return true;
 }
 
-[[nodiscard]] static bool FindChoice(const RadioGroupChoices& choices, const u64 key, u32& index){
+[[nodiscard]] static bool FindChoice(const RadioGroupChoices& choices, const u64 key, u32& index)noexcept{
     if(key == 0u)
         return false;
     for(u32 candidate = 0u; candidate < choices.count; ++candidate){
@@ -49,7 +49,7 @@ namespace __hidden_ui_radio_group_behavior{
     return false;
 }
 
-[[nodiscard]] static u64 FindEnabled(const RadioGroupChoices& choices, const u32 start, const bool reverse){
+[[nodiscard]] static u64 FindEnabled(const RadioGroupChoices& choices, const u32 start, const bool reverse)noexcept{
     if(choices.count == 0u || start >= choices.count)
         return 0u;
     u32 index = start;
@@ -93,7 +93,7 @@ namespace __hidden_ui_radio_group_behavior{
     return StateCurrent(state, snapshot, reentryObserved, guard) && count == choices.count;
 }
 
-[[nodiscard]] static bool ValidOptions(const RadioGroupOptions& options){
+[[nodiscard]] static bool ValidOptions(const RadioGroupOptions& options)noexcept{
     return
         options.enabled && IsFinite(options.rowHeight) && options.rowHeight >= s_RadioGroupMinimumRowHeight
         && options.width.policy <= LayoutSizePolicy::Stretch && IsFinite(options.width.value) && options.width.value >= 0.0f
@@ -102,7 +102,7 @@ namespace __hidden_ui_radio_group_behavior{
 }
 
 [[nodiscard]] static u64 NavigationTarget(
-    const RadioGroupChoices& choices, const u64 cursor, const ControlActionKind::Enum kind){
+    const RadioGroupChoices& choices, const u64 cursor, const ControlActionKind::Enum kind)noexcept{
     if(choices.count == 0u)
         return 0u;
     if(kind == ControlActionKind::Home)

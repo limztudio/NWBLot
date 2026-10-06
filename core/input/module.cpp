@@ -37,7 +37,7 @@ void InputDispatcher::removeHandler(IInputEventHandler& handler){
     queueOrApplyHandlerMutation(HandlerMutationType::Remove, handler);
 }
 
-void InputDispatcher::setMousePositionScale(f32 x, f32 y){
+void InputDispatcher::setMousePositionScale(f32 x, f32 y)noexcept{
     m_mousePositionScaleX = x != 0.f ? x : 1.f;
     m_mousePositionScaleY = y != 0.f ? y : 1.f;
 }
@@ -99,7 +99,7 @@ void InputDispatcher::keyboardUpdate(i32 key, i32 scancode, i32 action, i32 mods
     });
 }
 
-bool InputDispatcher::keyboardTextBlocked(const i32 scancode)const{
+bool InputDispatcher::keyboardTextBlocked(const i32 scancode)const noexcept{
     if(scancode >= 0 && static_cast<usize>(scancode) < m_keyboardTextPolicies.size())
         return m_keyboardTextPolicies[static_cast<usize>(scancode)];
     return m_keyboardTextBlocked;
@@ -169,7 +169,7 @@ void InputDispatcher::applyPendingHandlerMutations(){
     m_pendingHandlerRemovalCount = 0;
 }
 
-bool InputDispatcher::isHandlerPendingRemoval(const IInputEventHandler& handler)const{
+bool InputDispatcher::isHandlerPendingRemoval(const IInputEventHandler& handler)const noexcept{
     for(const HandlerMutation& mutation : m_pendingHandlerMutations){
         if(mutation.handler == &handler && mutation.type == HandlerMutationType::Remove)
             return true;

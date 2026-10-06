@@ -19,21 +19,21 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool OpenClipboardPipe(int& readFd, int& writeFd);
-[[nodiscard]] bool ConfigureClipboardPipe(int fd);
-void CloseClipboardPipe(int& fd);
+[[nodiscard]] bool OpenClipboardPipe(int& readFd, int& writeFd)noexcept;
+[[nodiscard]] bool ConfigureClipboardPipe(int fd)noexcept;
+void CloseClipboardPipe(int& fd)noexcept;
 [[nodiscard]] ClipboardStatus::Enum ReadClipboardPipe(int fd, ClipboardTextAccumulator& text, bool& finished);
 
 
 class ClipboardPipeWriter final : private NoCopy{
 public:
     explicit ClipboardPipeWriter(Alloc::GlobalArena& arena);
-    ~ClipboardPipeWriter();
+    ~ClipboardPipeWriter()noexcept;
 
 
 public:
     [[nodiscard]] bool begin(int fd, AStringView text);
-    [[nodiscard]] ClipboardStatus::Enum advance();
+    [[nodiscard]] ClipboardStatus::Enum advance()noexcept;
     [[nodiscard]] bool finished()const noexcept{ return m_fd < 0; }
 
 

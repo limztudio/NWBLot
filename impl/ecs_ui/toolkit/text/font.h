@@ -68,12 +68,12 @@ public:
 
 
 public:
-    [[nodiscard]] bool valid()const;
-    [[nodiscard]] const Core::Assets::AssetRef<Font>& identity()const;
-    [[nodiscard]] u64 generation()const;
-    [[nodiscard]] u32 unitsPerEm()const;
-    [[nodiscard]] bool coverageInkReliable()const;
-    [[nodiscard]] const SharedBakedFontAtlas& bakedAtlas()const;
+    [[nodiscard]] bool valid()const noexcept;
+    [[nodiscard]] const Core::Assets::AssetRef<Font>& identity()const noexcept;
+    [[nodiscard]] u64 generation()const noexcept;
+    [[nodiscard]] u32 unitsPerEm()const noexcept;
+    [[nodiscard]] bool coverageInkReliable()const noexcept;
+    [[nodiscard]] const SharedBakedFontAtlas& bakedAtlas()const noexcept;
     [[nodiscard]] bool metrics(f32 fontSize, FontMetrics& output)const;
     [[nodiscard]] bool shape(
         const ShapeRequest& request,

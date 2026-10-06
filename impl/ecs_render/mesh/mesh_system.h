@@ -123,7 +123,7 @@ private:
 
 public:
     template<typename BindingHandler>
-    static void ForEachMeshSourceBindingSlot(BindingHandler&& handler){
+    static void ForEachMeshSourceBindingSlot(BindingHandler&& handler)noexcept(noexcept(handler(s_MeshPositionBindingSlot, false))){
         handler(s_MeshPositionBindingSlot, false);
         handler(s_MeshNormalBindingSlot, false);
         handler(s_MeshTangentBindingSlot, false);
@@ -182,7 +182,7 @@ public:
     [[nodiscard]] bool findRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
     [[nodiscard]] bool prepareComputeEmulationResources(MeshResources& mesh);
     [[nodiscard]] bool prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline);
-    [[nodiscard]] static ECSRenderDetail::ObjectGeometryCacheSnapshot ObjectGeometryCacheSnapshot(const MeshResources& mesh);
+    [[nodiscard]] static ECSRenderDetail::ObjectGeometryCacheSnapshot ObjectGeometryCacheSnapshot(const MeshResources& mesh)noexcept;
     [[nodiscard]] bool confirmObjectGeometryCache(
         const Name& meshKey,
         const RuntimeMeshBuffers& sourceBuffers,
@@ -212,7 +212,7 @@ public:
     void collectRetainedAccelerationStateBuffers(ECSRenderDetail::MeshRetainedAccelerationStateBufferVector& outBuffers)const;
     void collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphStateVector& outStates)const;
     [[nodiscard]] bool createMeshViewBuffer();
-    [[nodiscard]] ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot()const;
+    [[nodiscard]] ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot()const noexcept;
     [[nodiscard]] bool snapshotAcceptedMeshViewWorldToClip(Float44& outWorldToClip)const noexcept;
     // Resolve the per-frame view payload; confirm the CPU mirror after packet accepts.
     [[nodiscard]] bool prepareMeshViewBufferUpload(
@@ -221,7 +221,7 @@ public:
         bool& outUploadRequired
     )const;
     void confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState);
-    void invalidateMeshViewBufferUploadMirror();
+    void invalidateMeshViewBufferUploadMirror()noexcept;
     [[nodiscard]] bool prepareMeshFrameBindings(const ECSRenderDetail::MaterialPassBufferSnapshot& materialBuffers);
     [[nodiscard]] ECSRenderDetail::MeshFrameBindingSnapshot meshFrameBindingSnapshot()const;
     [[nodiscard]] bool meshGeometryHeapHandlesReady(const MeshResources& mesh)const;

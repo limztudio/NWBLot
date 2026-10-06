@@ -57,7 +57,7 @@ struct SpirvEntryPointInstruction{
 };
 
 
-inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel){
+inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel)noexcept{
     switch(executionModel){
     case SpirvExecutionModel::Vertex: return ShaderType::Vertex;
     case SpirvExecutionModel::TessellationControl: return ShaderType::Hull;
@@ -83,7 +83,7 @@ inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel){
     const u32* instructionWords,
     const u16 instructionWordCount,
     SpirvEntryPointInstruction& outEntryPoint
-){
+)noexcept{
     outEntryPoint = SpirvEntryPointInstruction();
 
     if(instructionWordCount <= s_SpirvEntryPointFixedWordCount)
@@ -108,7 +108,7 @@ template<typename EntryPointCallback>
     const u32* words,
     const usize wordCount,
     EntryPointCallback entryPointCallback
-){
+)noexcept(noexcept(entryPointCallback(*static_cast<SpirvEntryPointInstruction*>(nullptr))) && IsNothrowDestructible_V<EntryPointCallback>){
     if(!words || wordCount < s_SpirvHeaderWords)
         return false;
 
@@ -152,11 +152,11 @@ template<typename EntryPointCallback>
 bool IsValidSpirvModuleWords(
     const u32* words,
     const usize wordCount
-){
+)noexcept{
     return __hidden_spirv_entry_point::ScanSpirvEntryPoints(
         words,
         wordCount,
-        [](const __hidden_spirv_entry_point::SpirvEntryPointInstruction&){}
+        [](const __hidden_spirv_entry_point::SpirvEntryPointInstruction&)noexcept{}
     );
 }
 
@@ -170,7 +170,7 @@ SpirvEntryPointLookupResult::Enum ResolveSpirvEntryPointName(
     const AStringView entryName,
     const ShaderType::Mask shaderType,
     AStringView& outEntryPointName
-){
+)noexcept{
     outEntryPointName = {};
 
     if(entryName.empty() || shaderType == ShaderType::None)
@@ -180,7 +180,7 @@ SpirvEntryPointLookupResult::Enum ResolveSpirvEntryPointName(
     const bool validModule = __hidden_spirv_entry_point::ScanSpirvEntryPoints(
         words,
         wordCount,
-        [&](const __hidden_spirv_entry_point::SpirvEntryPointInstruction& entryPoint){
+        [&](const __hidden_spirv_entry_point::SpirvEntryPointInstruction& entryPoint)noexcept{
             if(found || entryPoint.shaderType == ShaderType::None || entryPoint.shaderType != shaderType || entryPoint.name != entryName)
                 return;
 

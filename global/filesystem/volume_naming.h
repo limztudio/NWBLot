@@ -15,7 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ValidVolumeName(const AStringView volumeName){
+[[nodiscard]] inline bool ValidVolumeName(const AStringView volumeName)noexcept{
     if(volumeName.empty())
         return false;
 

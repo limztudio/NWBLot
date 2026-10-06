@@ -39,7 +39,7 @@ static constexpr usize s_SourceBytesPerPixel = 4u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static void WriteU16LE(u8* const destination, const u16 value){
+static void WriteU16LE(u8* const destination, const u16 value)noexcept{
     destination[0] = static_cast<u8>(value & 0xffu);
     destination[1] = static_cast<u8>((value >> 8u) & 0xffu);
 }
@@ -60,7 +60,7 @@ static bool IsSupportedSdrFormat(const Core::Format::Enum format){
     ;
 }
 
-static bool IsBgraFormat(const Core::Format::Enum format){
+static bool IsBgraFormat(const Core::Format::Enum format)noexcept{
     return format == Core::Format::BGRA8_UNORM || format == Core::Format::BGRA8_UNORM_SRGB;
 }
 
@@ -108,14 +108,14 @@ struct FramebufferCapture::ReadbackTask{
         return !commandList.commandRecordingFailed();
     }
 
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
         if(payload.completionState){
             payload.completionState->acceptedToken = token;
             payload.completionState->graphicsFrameIndex = payload.graphicsFrameIndex;
         }
     }
 
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept{
         if(payload.completionState)
             payload.completionState->acceptedToken = {};
     }

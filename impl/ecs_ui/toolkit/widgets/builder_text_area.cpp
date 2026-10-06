@@ -37,7 +37,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool apply(EditModel& model, const EditAction::Enum action, const bool)override{
+    [[nodiscard]] virtual bool apply(EditModel& model, const EditAction::Enum action, const bool)noexcept override{
         if(
             m_context.failed() || &model != &m_model
             || model.instanceGeneration() != m_instanceGeneration || m_state.revision() != m_revision

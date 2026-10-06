@@ -151,7 +151,7 @@ public:
     [[nodiscard]] bool prepareResources();
     void pollCompleted();
     [[nodiscard]] bool tryGetLatestStatistics(ReflectionStatistics& outStatistics)const;
-    [[nodiscard]] ReflectionStatisticsReadbackSnapshot snapshot(const ReflectionStatistics& metadata)const;
+    [[nodiscard]] ReflectionStatisticsReadbackSnapshot snapshot(const ReflectionStatistics& metadata)const noexcept;
 
 private:
     Core::Alloc::GlobalArena& m_arena;

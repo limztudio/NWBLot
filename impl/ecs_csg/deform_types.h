@@ -142,7 +142,7 @@ inline constexpr usize s_RebuildReservePerCut = 16u;
 
 // Canonical edge id keeps (a,b) and (b,a) identical without hashing pointers.
 // Shared by wall splits and cap boundary collection so both observe one seam rule.
-[[nodiscard]] inline u64 CsgDeformEdgeKey(const u32 first, const u32 second){
+[[nodiscard]] inline u64 CsgDeformEdgeKey(const u32 first, const u32 second)noexcept{
     const u32 lo = first < second ? first : second;
     const u32 hi = first < second ? second : first;
     return (static_cast<u64>(lo) << s_EdgeKeyHalfBits) | static_cast<u64>(hi);

@@ -35,7 +35,7 @@ namespace __hidden_material_pass{
 
 inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
 
-[[nodiscard]] static bool MeshletConeCullScaleSafe(const SIMDVector scale){
+[[nodiscard]] static bool MeshletConeCullScaleSafe(const SIMDVector scale)noexcept{
     if(!VectorIsFinite(scale, VectorComponentMask::s_XYZ) || !Vector3Greater(scale, VectorZero()))
         return false;
 
@@ -64,7 +64,7 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
 
 [[nodiscard]] static MaterialPassPipelineResourceSnapshot CapturePipelineResourceSnapshot(
     const MaterialPipelineResources& pipelineResources
-){
+)noexcept{
     return {
         .indexedPipeline = pipelineResources.indexedPipeline,
         .emulationPipeline = pipelineResources.emulationPipeline,
@@ -80,7 +80,7 @@ struct MaterialTypedByteRangeKey{
     Name materialName = s_NameNone;
     u64 typedLayoutHash = 0u;
 
-    friend bool operator==(const MaterialTypedByteRangeKey& lhs, const MaterialTypedByteRangeKey& rhs){
+    friend bool operator==(const MaterialTypedByteRangeKey& lhs, const MaterialTypedByteRangeKey& rhs)noexcept{
         return lhs.materialName == rhs.materialName
             && lhs.typedLayoutHash == rhs.typedLayoutHash
         ;
@@ -105,7 +105,7 @@ struct MaterialTypedByteRangeCache{
 [[nodiscard]] static bool CsgFrameHasReceiverPassWork(
     const CsgFrameState& csgFrameState,
     const CsgReceiverPass::Enum receiverPass
-){
+)noexcept{
     switch(receiverPass){
     case CsgReceiverPass::Opaque: return csgFrameState.hasOpaqueStaticWork || csgFrameState.hasOpaqueSkinnedWork;
     case CsgReceiverPass::Transparent: return csgFrameState.hasTransparentStaticWork || csgFrameState.hasTransparentSkinnedWork;
@@ -115,7 +115,7 @@ struct MaterialTypedByteRangeCache{
 
 inline constexpr Core::GpuTimingScopeDefinition s_NoneGpuTimingScope;
 
-[[nodiscard]] static const Core::GpuTimingScopeDefinition& MaterialPassGpuTimingScope(const MaterialPipelinePass::Enum pass){
+[[nodiscard]] static const Core::GpuTimingScopeDefinition& MaterialPassGpuTimingScope(const MaterialPipelinePass::Enum pass)noexcept{
     switch(pass){
     case MaterialPipelinePass::AvboitOccupancy: return RendererGpuTimingScope::s_AvboitOccupancy;
     case MaterialPipelinePass::AvboitExtinction: return RendererGpuTimingScope::s_AvboitExtinction;

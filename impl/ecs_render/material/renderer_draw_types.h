@@ -84,7 +84,7 @@ template<typename BufferHandler>
 void ForEachMaterialPassMeshSourceBuffer(
     const MaterialPassMeshResourceSnapshot& mesh,
     BufferHandler&& handler
-){
+)noexcept(noexcept(handler(mesh.sourceBuffers.positionBuffer))){
     handler(mesh.sourceBuffers.positionBuffer);
     handler(mesh.sourceBuffers.normalBuffer);
     handler(mesh.sourceBuffers.tangentBuffer);

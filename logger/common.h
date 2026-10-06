@@ -39,7 +39,7 @@ inline constexpr i32 s_LocalTimeMonthBase = 1;
 
 
 inline constexpr TStringView s_UnknownLogLevelName = GLB_TEXT("UNKNOWN");
-[[nodiscard]] inline TStringView MessageTypeToString(Type::Enum type){
+[[nodiscard]] inline TStringView MessageTypeToString(Type::Enum type)noexcept{
     switch(type){
     case Type::Info:
         return GLB_TEXT("INFO");
@@ -59,7 +59,7 @@ inline constexpr TStringView s_UnknownLogLevelName = GLB_TEXT("UNKNOWN");
     return s_UnknownLogLevelName;
 }
 
-[[nodiscard]] inline bool MessageTypeWritesToErrorStream(Type::Enum type){
+[[nodiscard]] inline bool MessageTypeWritesToErrorStream(Type::Enum type)noexcept{
     switch(type){
     case Type::CriticalWarning:
     case Type::Assert:
@@ -71,7 +71,7 @@ inline constexpr TStringView s_UnknownLogLevelName = GLB_TEXT("UNKNOWN");
     }
 }
 
-[[nodiscard]] inline bool IsValidMessageType(Type::Enum type){
+[[nodiscard]] inline bool IsValidMessageType(Type::Enum type)noexcept{
     switch(type){
     case Type::Info:
     case Type::EssentialInfo:
@@ -259,7 +259,7 @@ private:
 template<typename T, const TStringView& loggerName>
 class LoggerWorkerBase{
 protected:
-    static inline bool GlobalInit(){ return true; }
+    static inline bool GlobalInit()noexcept{ return true; }
 
 
 public:
@@ -275,12 +275,12 @@ public:
 
 protected:
     template<typename... Args>
-    inline bool internalInit(Args&&... args){
+    inline bool internalInit(Args&&... args)noexcept{
         (static_cast<void>(args), ...);
         return true;
     }
-    inline void internalDestroy(){}
-    inline bool internalUpdate(){ return true; }
+    inline void internalDestroy()noexcept{}
+    inline bool internalUpdate()noexcept{ return true; }
 
 protected:
     inline bool tryDequeue(MessageType& msg){ return m_messageQueue.try_pop(msg); }
@@ -295,7 +295,7 @@ protected:
 
 
 public:
-    inline LogArena& arena(){ return m_arena; }
+    inline LogArena& arena()noexcept{ return m_arena; }
 
 public:
     template<typename... Args>
@@ -426,7 +426,7 @@ public:
 
 
 protected:
-    [[nodiscard]] inline bool workerCanExit()const{ return true; }
+    [[nodiscard]] inline bool workerCanExit()const noexcept{ return true; }
     void internalDestroy(){ m_semaphore.release(); }
 
 protected:

@@ -91,26 +91,26 @@ bool UiRadioGroupSmokeSource::enabled(const u64 index)const{
     return choice != 0u && choice != 30u;
 }
 
-void UiRadioGroupSmokeSource::reverse(){
+void UiRadioGroupSmokeSource::reverse()noexcept{
     m_reversed = !m_reversed;
     ++m_revision;
 }
 
-void UiRadioGroupSmokeSource::remove(const u64 keyValue){
+void UiRadioGroupSmokeSource::remove(const u64 keyValue)noexcept{
     if(keyValue < 10u || keyValue > 50u || keyValue % 10u != 0u || m_removed != 0u)
         return;
     m_removed = keyValue;
     ++m_revision;
 }
 
-void UiRadioGroupSmokeSource::replace(){
+void UiRadioGroupSmokeSource::replace()noexcept{
     ++m_generation;
     ++m_revision;
     m_removed = 0u;
     m_reversed = false;
 }
 
-void UiRadioGroupSmokeSource::beginFrame(){
+void UiRadioGroupSmokeSource::beginFrame()noexcept{
     m_labelReads = 0u;
 }
 

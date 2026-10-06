@@ -31,10 +31,10 @@ namespace __hidden_graphics_lifecycle{
 
 class ScopedAcquiredPresentationFrameReset final : NoCopy{
 public:
-    explicit ScopedAcquiredPresentationFrameReset(AcquiredPresentationFrame& frame)
+    explicit ScopedAcquiredPresentationFrameReset(AcquiredPresentationFrame& frame)noexcept
         : m_frame(frame)
     {}
-    ~ScopedAcquiredPresentationFrameReset(){ m_frame = {}; }
+    ~ScopedAcquiredPresentationFrameReset()noexcept{ m_frame = {}; }
 
 private:
     AcquiredPresentationFrame& m_frame;
@@ -391,20 +391,20 @@ bool GraphicsRuntime::cancelFramePresentationSignal(const QueueSubmissionPreSubm
 }
 
 
-TStringView GraphicsRuntime::getRendererString()const{
+TStringView GraphicsRuntime::getRendererString()const noexcept{
     return m_backend->getRendererString();
 }
 
-void GraphicsRuntime::reportLiveObjects()const{
+void GraphicsRuntime::reportLiveObjects()const noexcept{
     m_backend->reportLiveObjects();
 }
 
-void GraphicsRuntime::getWindowDimensions(i32& width, i32& height)const{
+void GraphicsRuntime::getWindowDimensions(i32& width, i32& height)const noexcept{
     width = m_swapChainState.backBufferWidth;
     height = m_swapChainState.backBufferHeight;
 }
 
-void GraphicsRuntime::getDPIScaleInfo(f32& x, f32& y)const{
+void GraphicsRuntime::getDPIScaleInfo(f32& x, f32& y)const noexcept{
     x = m_dpiScaleFactorX;
     y = m_dpiScaleFactorY;
 }

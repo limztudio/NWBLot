@@ -89,14 +89,14 @@ TEST(CpuTaskProfilingTests, RingBufferPreservesOrderAcrossPartialDrainsAndReport
     config.profileEventCapacity = 4u;
     CpuTaskScheduler scheduler(config);
     scheduler.setProfiling(true);
-    const auto first = scheduler.submit([](){});
+    const auto first = scheduler.submit([]()noexcept{});
     ASSERT_TRUE(first.valid());
     scheduler.wait(first);
     CpuTaskProfileEvent events[8u];
     ASSERT_EQ(scheduler.readProfileEvents(events, s_ExpectedDualCount), s_ExpectedDualCount);
     EXPECT_EQ(events[0u].kind, CpuTaskProfileKind::QueueDelay);
     EXPECT_EQ(events[1u].kind, CpuTaskProfileKind::Execution);
-    const auto second = scheduler.submit([](){});
+    const auto second = scheduler.submit([]()noexcept{});
     ASSERT_TRUE(second.valid());
     scheduler.wait(second);
     ASSERT_EQ(scheduler.readProfileEvents(events, 8u), 4u);
@@ -106,7 +106,7 @@ TEST(CpuTaskProfilingTests, RingBufferPreservesOrderAcrossPartialDrainsAndReport
     EXPECT_EQ(events[s_ThirdElementIndex].kind, CpuTaskProfileKind::Execution);
     EXPECT_EQ(events[3u].kind, CpuTaskProfileKind::HandleJoin);
     EXPECT_EQ(events[3u].task.generation, second.generation);
-    const auto third = scheduler.submit([](){});
+    const auto third = scheduler.submit([]()noexcept{});
     ASSERT_TRUE(third.valid());
     scheduler.wait(third);
     scheduler.wait();
@@ -127,11 +127,11 @@ TEST(CpuTaskProfilingTests, CaptureRestartRejectsOldReadyAndExecutingTimers){
     const auto parent = scheduler.submit([&](){
         scheduler.setProfiling(false);
         scheduler.setProfiling(true, s_ExpectedDualCount);
-        child = scheduler.submit([](){});
+        child = scheduler.submit([]()noexcept{});
         EXPECT_TRUE(child.valid());
     });
     ASSERT_TRUE(parent.valid());
-    const auto oldReady = scheduler.submit([](){});
+    const auto oldReady = scheduler.submit([]()noexcept{});
     ASSERT_TRUE(oldReady.valid());
     scheduler.wait(parent);
     CpuTaskProfileEvent events[16u];
@@ -166,7 +166,7 @@ TEST(CpuTaskProfilingTests, ForeignLabelsDoNotAliasLocalNames){
     const auto local = second.registerProfileLabel(name);
     EXPECT_NE(foreign.value, local.value);
     second.setProfiling(true);
-    const auto task = second.submit([](){}, { .profileLabel = foreign });
+    const auto task = second.submit([]()noexcept{}, { .profileLabel = foreign });
     ASSERT_TRUE(task.valid());
     second.wait(task);
     CpuTaskProfileEvent events[8u];
@@ -183,7 +183,7 @@ TEST(CpuTaskProfilingTests, ZeroCapacityLeavesCaptureDisabled){
     config.profileEventCapacity = 0u;
     CpuTaskScheduler scheduler(config);
     scheduler.setProfiling(true);
-    scheduler.parallelFor(0u, 1u, [](usize){});
+    scheduler.parallelFor(0u, 1u, [](usize)noexcept{});
     EXPECT_FALSE(scheduler.statistics().profileEnabled);
     EXPECT_EQ(scheduler.statistics().profilePendingEvents, 0u);
     EXPECT_EQ(scheduler.statistics().profileDroppedEvents, 0u);
@@ -232,7 +232,7 @@ TEST(CpuTaskProfilingTests, ConcurrentCaptureChangesDoNotAffectTaskCompletionOrM
     EXPECT_EQ(scheduler.statistics().completedTasks, 256u);
     EXPECT_EQ(scheduler.statistics().outstandingTasks, 0u);
     scheduler.setProfiling(true, 1000u);
-    const auto probe = scheduler.submit([](){});
+    const auto probe = scheduler.submit([]()noexcept{});
     ASSERT_TRUE(probe.valid());
     scheduler.wait(probe);
     CpuTaskProfileEvent events[16u];
@@ -254,11 +254,11 @@ TEST(CpuTaskProfilingTests, EmptyCompletedAndCanceledScopeJoinsRetainTheirProfil
     CpuTaskScope empty(scheduler, scheduler.registerProfileLabel(names[0u]));
     CpuTaskScope completed(scheduler, scheduler.registerProfileLabel(names[1u]));
     CpuTaskScope canceled(scheduler, scheduler.registerProfileLabel(names[s_ThirdElementIndex]));
-    const auto task = completed.submit([](){});
+    const auto task = completed.submit([]()noexcept{});
     ASSERT_TRUE(task.valid());
     scheduler.wait(task);
     u32 canceledCallbacks = 0u;
-    ASSERT_TRUE(canceled.submit([&](){ ++canceledCallbacks; }).valid());
+    ASSERT_TRUE(canceled.submit([&]()noexcept{ ++canceledCallbacks; }).valid());
     canceled.cancel();
     canceled.wait();
     EXPECT_EQ(canceledCallbacks, 0u);

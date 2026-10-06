@@ -22,7 +22,7 @@ namespace __hidden_x11_preedit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ByteOffset(const AStringView text, const usize character, usize& offset){
+[[nodiscard]] static bool ByteOffset(const AStringView text, const usize character, usize& offset)noexcept{
     usize position = 0u;
     usize index = 0u;
     while(position < text.size()){
@@ -43,7 +43,7 @@ namespace __hidden_x11_preedit{
     return true;
 }
 
-[[nodiscard]] static bool ValidUtf8(const AStringView text){
+[[nodiscard]] static bool ValidUtf8(const AStringView text)noexcept{
     if(text.size() > X11PreeditBuffer::s_MaxBytes)
         return false;
     usize position = 0u;
@@ -67,7 +67,7 @@ X11PreeditBuffer::X11PreeditBuffer(Alloc::GlobalArena& arena)
     , m_candidate(arena)
 {}
 
-void X11PreeditBuffer::clear(){
+void X11PreeditBuffer::clear()noexcept{
     m_text.clear();
     m_candidate.clear();
     m_caretByte = 0u;
@@ -103,7 +103,7 @@ bool X11PreeditBuffer::replace(
     return true;
 }
 
-bool X11PreeditBuffer::moveCaret(const usize caretCharacter){
+bool X11PreeditBuffer::moveCaret(const usize caretCharacter)noexcept{
     usize caretByte = 0u;
     if(!__hidden_x11_preedit::ByteOffset(m_text, caretCharacter, caretByte))
         return false;
@@ -111,7 +111,7 @@ bool X11PreeditBuffer::moveCaret(const usize caretCharacter){
     return true;
 }
 
-usize X11PreeditBuffer::moveCaretToEnd(){
+usize X11PreeditBuffer::moveCaretToEnd()noexcept{
     usize characters = 0u;
     for(const char byte : m_text){
         if(!IsUtf8Continuation(static_cast<u8>(byte)))

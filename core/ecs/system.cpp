@@ -92,7 +92,7 @@ void SystemScheduler::removeSystem(ISystem& system){
     auto itr = FindIf(
         m_allSystems.begin(),
         m_allSystems.end(),
-        [&system](ISystem* iterSystem){ return iterSystem == &system; }
+        [&system](ISystem* iterSystem)noexcept{ return iterSystem == &system; }
     );
     if(itr != m_allSystems.end()){
         m_allSystems.erase(itr);

@@ -28,7 +28,7 @@ public:
 
 protected:
     virtual void startNativeRequest(ClipboardRequestToken token, ClipboardOperation::Enum operation, ClipboardChannel::Enum channel, AStringView text)override;
-    virtual void cancelNativeRequest(ClipboardRequestToken token)override;
+    virtual void cancelNativeRequest(ClipboardRequestToken token)noexcept override;
 
 
 private:

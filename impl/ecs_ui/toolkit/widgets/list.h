@@ -21,7 +21,7 @@ NWB_IMPL_UI_BEGIN
 
 // Keys are nonzero and unique within an instance. Lookups must avoid scanning the complete dataset per frame.
 interface IListDataSource{
-    virtual ~IListDataSource() = default;
+    virtual ~IListDataSource()noexcept = default;
     [[nodiscard]] virtual u64 instanceGeneration()const = 0;
     [[nodiscard]] virtual u64 revision()const = 0;
     [[nodiscard]] virtual u64 rowCount()const = 0;
@@ -60,21 +60,21 @@ class ListState final : NoCopy{
 
 
 public:
-    ListState();
+    ListState()noexcept;
     ListState(ListState&&) = delete;
     ListState& operator=(ListState&&) = delete;
 
 
 public:
-    [[nodiscard]] u64 instanceGeneration()const{ return m_scroll.instanceGeneration(); }
-    [[nodiscard]] u64 inputGeneration()const{ return m_inputGeneration; }
-    [[nodiscard]] u64 selectedKey()const{ return m_selected; }
-    [[nodiscard]] u64 cursorKey()const{ return m_cursor; }
-    [[nodiscard]] f64 scrollOffset()const{ return m_scroll.offset(); }
-    [[nodiscard]] const ScrollPlacement& placement()const{ return m_placement; }
+    [[nodiscard]] u64 instanceGeneration()const noexcept{ return m_scroll.instanceGeneration(); }
+    [[nodiscard]] u64 inputGeneration()const noexcept{ return m_inputGeneration; }
+    [[nodiscard]] u64 selectedKey()const noexcept{ return m_selected; }
+    [[nodiscard]] u64 cursorKey()const noexcept{ return m_cursor; }
+    [[nodiscard]] f64 scrollOffset()const noexcept{ return m_scroll.offset(); }
+    [[nodiscard]] const ScrollPlacement& placement()const noexcept{ return m_placement; }
     // Explicit application changes start a new input lifetime even when the value is unchanged.
-    void select(u64 key);
-    [[nodiscard]] bool scrollTo(f64 offset);
+    void select(u64 key)noexcept;
+    [[nodiscard]] bool scrollTo(f64 offset)noexcept;
 
 
 private:

@@ -11,14 +11,14 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TestbedUiListSource::indexOf(const u64 keyValue, u64& index)const{
+bool TestbedUiListSource::indexOf(const u64 keyValue, u64& index)const noexcept{
     if(keyValue == 0u || keyValue > rowCount())
         return false;
     index = keyValue - 1u;
     return true;
 }
 
-bool TestbedUiListSource::findEnabled(const u64 start, const bool reverse, u64& index)const{
+bool TestbedUiListSource::findEnabled(const u64 start, const bool reverse, u64& index)const noexcept{
     static_cast<void>(reverse);
     if(start >= rowCount())
         return false;
@@ -26,7 +26,7 @@ bool TestbedUiListSource::findEnabled(const u64 start, const bool reverse, u64& 
     return true;
 }
 
-StringView TestbedUiListSource::text(const u64 index)const{
+StringView TestbedUiListSource::text(const u64 index)const noexcept{
     u64 remaining = key(index);
     if(remaining == 0u)
         return {};

@@ -61,7 +61,7 @@ BakedFontAtlas::BakedFontAtlas(Core::Alloc::GlobalArena& arena, const FontAtlas&
     m_ready = true;
 }
 
-const FontAtlasGlyph* BakedFontAtlas::glyph(u32 glyphId)const{
+const FontAtlasGlyph* BakedFontAtlas::glyph(u32 glyphId)const noexcept{
     return glyphId < m_glyphs.size() ? &m_glyphs[glyphId] : nullptr;
 }
 

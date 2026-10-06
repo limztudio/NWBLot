@@ -115,7 +115,7 @@ ListResult Builder::virtualList(
     return result;
 }
 
-bool Builder::applyListGesture(ListState& state, const PointerGesture& gesture){
+bool Builder::applyListGesture(ListState& state, const PointerGesture& gesture)noexcept{
     const f64 travel = static_cast<f64>(gesture.referenceRectangle.height) - static_cast<f64>(gesture.targetRectangle.height);
     if(!IsFinite(travel) || travel <= 0.0 || !IsFinite(gesture.maximum) || gesture.maximum < 0.0)
         return false;

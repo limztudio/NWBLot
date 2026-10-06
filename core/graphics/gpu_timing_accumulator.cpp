@@ -237,7 +237,7 @@ void GpuTimingAccumulator::discardFrameReset()noexcept{
     }
 }
 
-void GpuTimingAccumulator::requestQueries(const u32 queryCount){
+void GpuTimingAccumulator::requestQueries(const u32 queryCount)noexcept{
     m_requestedQueryCount = Max(m_requestedQueryCount, queryCount);
 }
 
@@ -563,7 +563,7 @@ bool GpuTimingAccumulator::reserveQueries(Device& device, const u32 queryCount){
     return true;
 }
 
-u32 GpuTimingAccumulator::findAvailableQuery()const{
+u32 GpuTimingAccumulator::findAvailableQuery()const noexcept{
     for(usize i = 0u; i < m_queries.size(); ++i){
         if(m_queries[i].state == QueryState::Available && !m_queries[i].retirementNotificationPending)
             return static_cast<u32>(i);

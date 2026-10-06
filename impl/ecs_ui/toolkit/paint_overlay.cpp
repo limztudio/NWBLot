@@ -24,7 +24,7 @@ bool PaintBuilder::beginOverlay(const u32 layer){
     return true;
 }
 
-bool PaintBuilder::endOverlay(){
+bool PaintBuilder::endOverlay()noexcept{
     if(!m_recording || m_overlayDepth == 0u || m_clips.size() != m_overlays[m_overlayDepth - 1u].clipDepth + 1u)
         return false;
     m_clips.pop_back();

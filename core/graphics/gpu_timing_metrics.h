@@ -28,7 +28,7 @@ struct GpuComparableTimestampRange{
     f64 secondsPerTick = 0.0;
     GpuPhysicalQueueId physicalQueue;
 
-    [[nodiscard]] bool valid()const{
+    [[nodiscard]] bool valid()const noexcept{
         return physicalQueue.valid() && beginTicks <= endTicks && secondsPerTick > 0.0 && IsFinite(secondsPerTick);
     }
 };
@@ -39,7 +39,7 @@ struct GpuComparableTimestampRange{
     const GpuComparableTimestampRange& first,
     const GpuComparableTimestampRange& second,
     u64& outOverlapTicks
-){
+)noexcept{
     outOverlapTicks = 0u;
     if(
         !first.valid()

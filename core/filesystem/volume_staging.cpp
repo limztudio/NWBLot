@@ -82,7 +82,7 @@ StagedDirectoryCleanupGuard::~StagedDirectoryCleanupGuard(){
         );
 }
 
-void StagedDirectoryCleanupGuard::dismiss(){
+void StagedDirectoryCleanupGuard::dismiss()noexcept{
     m_active = false;
 }
 

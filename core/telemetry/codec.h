@@ -65,7 +65,7 @@ struct DecodeResult{
     usize bytesRead = 0u;
     DecodeStatus::Enum status = DecodeStatus::Ok;
 
-    [[nodiscard]] bool ok()const{ return status == DecodeStatus::Ok; }
+    [[nodiscard]] bool ok()const noexcept{ return status == DecodeStatus::Ok; }
 };
 
 

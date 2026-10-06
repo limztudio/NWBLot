@@ -44,17 +44,17 @@ inline constexpr AStringView s_Spirv15TargetProfileText = "spirv_1_5";
 inline constexpr AStringView s_Spirv15RayQueryTargetProfileText = "spirv_1_5+spvrayquerykhr";
 inline constexpr AStringView s_SpvRayQueryCapabilityText = "spvRayQueryKHR";
 
-inline AStringView MeshComputeArchiveStageText(){
+inline AStringView MeshComputeArchiveStageText()noexcept{
     static constexpr AStringView s_StageText = "mesh_compute";
     return s_StageText;
 }
 
-inline AStringView MeshComputeImplicitDefineText(){
+inline AStringView MeshComputeImplicitDefineText()noexcept{
     static constexpr AStringView s_DefineText = "NWB_MESH_SHADER_EMULATION_COMPUTE";
     return s_DefineText;
 }
 
-inline AStringView MeshObjectVertexArchiveStageText(){
+inline AStringView MeshObjectVertexArchiveStageText()noexcept{
     static constexpr AStringView s_StageText = "mesh_object_vertex";
     return s_StageText;
 }

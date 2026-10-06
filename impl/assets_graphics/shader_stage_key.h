@@ -44,7 +44,7 @@ struct ShaderStageKeyHasher{
     }
 };
 
-inline bool operator==(const ShaderStageKey& lhs, const ShaderStageKey& rhs){
+inline bool operator==(const ShaderStageKey& lhs, const ShaderStageKey& rhs)noexcept{
     return lhs.shaderName == rhs.shaderName && lhs.stageName == rhs.stageName;
 }
 

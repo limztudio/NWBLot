@@ -28,8 +28,8 @@ public:
     [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override;
     [[nodiscard]] bool handleMessage(u32 message, usize wParam, isize lParam);
     [[nodiscard]] bool resolveContextMessage(u32 message, usize wParam, isize lParam, isize& forwardedLParam);
-    [[nodiscard]] bool decodeFallbackCharInput(u32 unit, u32& codePoint);
-    [[nodiscard]] bool resetFallbackCharInput();
+    [[nodiscard]] bool decodeFallbackCharInput(u32 unit, u32& codePoint)noexcept;
+    [[nodiscard]] bool resetFallbackCharInput()noexcept;
 
 
 protected:
@@ -50,7 +50,7 @@ private:
     [[nodiscard]] TextInputAdmission::Enum publishCompositionPreedit(
         TextInputSessionToken token, AStringView text, usize anchorByte, usize caretByte
     );
-    void clearCompositionPreedit();
+    void clearCompositionPreedit()noexcept;
     void rejectNativeInput(TextInputSessionToken token, TextInputAdmission::Enum admission);
     void replayContextVisibility();
 

@@ -488,7 +488,7 @@ bool VolumeFileSystem::compact(const bool shrinkSegments){
     Sort(
         layouts.begin(),
         layouts.end(),
-        [](const FileLayout& lhs, const FileLayout& rhs){
+        [](const FileLayout& lhs, const FileLayout& rhs)noexcept{
             return lhs.sourceOffset < rhs.sourceOffset;
         }
     );

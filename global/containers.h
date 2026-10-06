@@ -59,7 +59,11 @@ inline constexpr InPlaceType s_InPlace{};
 template<typename Arg0, typename Arg1>
 using Pair = CompressedPair<Arg0, Arg1>;
 template<typename Arg0, typename Arg1>
-constexpr auto MakePair(Arg0&& arg0, Arg1&& arg1){
+constexpr auto MakePair(Arg0&& arg0, Arg1&& arg1)noexcept(
+    noexcept(Pair<RemoveReferenceWrapper_T<Decay_T<Arg0>>, RemoveReferenceWrapper_T<Decay_T<Arg1>>>(
+        Forward<Arg0>(arg0), Forward<Arg1>(arg1)
+    ))
+){
     using Arg0Type = RemoveReferenceWrapper_T<Decay_T<Arg0>>;
     using Arg1Type = RemoveReferenceWrapper_T<Decay_T<Arg1>>;
     return Pair<Arg0Type, Arg1Type>(Forward<Arg0>(arg0), Forward<Arg1>(arg1));
@@ -68,15 +72,15 @@ constexpr auto MakePair(Arg0&& arg0, Arg1&& arg1){
 template<typename... Args>
 using Tuple = std::tuple<Args...>;
 template<typename... Args>
-constexpr auto MakeTuple(Args&&... args){ return std::make_tuple(Forward<Args>(args)...); }
+constexpr auto MakeTuple(Args&&... args)noexcept(noexcept(std::make_tuple(Forward<Args>(args)...))){ return std::make_tuple(Forward<Args>(args)...); }
 template<typename... Args>
-constexpr auto ForwardAsTuple(Args&&... args){ return Tuple<Args&&...>(Forward<Args>(args)...); }
+constexpr auto ForwardAsTuple(Args&&... args)noexcept{ return Tuple<Args&&...>(Forward<Args>(args)...); }
 template<size_t I, typename... Args>
-constexpr auto& Get(Tuple<Args...>& t){ return std::get<I>(t); }
+constexpr auto& Get(Tuple<Args...>& t)noexcept{ return std::get<I>(t); }
 template<size_t I, typename... Args>
-constexpr const auto& Get(const Tuple<Args...>& t){ return std::get<I>(t); }
+constexpr const auto& Get(const Tuple<Args...>& t)noexcept{ return std::get<I>(t); }
 template<typename... Args>
-constexpr auto Tie(Args&... args){ return std::tie(args...); }
+constexpr auto Tie(Args&... args)noexcept{ return std::tie(args...); }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

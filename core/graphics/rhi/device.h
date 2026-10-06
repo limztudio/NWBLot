@@ -103,12 +103,12 @@ struct QueueSubmissionDesc{
     // pending wait. Normal empty submissions retain their no-op behavior unless this is explicit.
     bool forceNativeSubmission = false;
 
-    constexpr QueueSubmissionDesc& setWaitTokens(const QueueSubmissionToken* value, usize count){
+    constexpr QueueSubmissionDesc& setWaitTokens(const QueueSubmissionToken* value, usize count)noexcept{
         waitTokens = value;
         waitTokenCount = count;
         return *this;
     }
-    constexpr QueueSubmissionDesc& setPreSubmitHook(const QueueSubmissionPreSubmitHook value){
+    constexpr QueueSubmissionDesc& setPreSubmitHook(const QueueSubmissionPreSubmitHook value)noexcept{
         preSubmitHook = value;
         return *this;
     }
@@ -138,21 +138,21 @@ struct CommandListParameters{
     u32 recordingWorkerIndex = 0u;
     // NOTE: u32 kept last; append new fields above the domain pair. queueType stays first (reset in setQueueType).
 
-    constexpr CommandListParameters& setQueueType(CommandQueue::Enum value){
+    constexpr CommandListParameters& setQueueType(CommandQueue::Enum value)noexcept{
         queueType = value;
         physicalQueue = {};
         return *this;
     }
-    constexpr CommandListParameters& setPhysicalQueue(GpuPhysicalQueueId value){
+    constexpr CommandListParameters& setPhysicalQueue(GpuPhysicalQueueId value)noexcept{
         physicalQueue = value;
         return *this;
     }
-    constexpr CommandListParameters& setRecordingWorkerIndex(const u32 value){
+    constexpr CommandListParameters& setRecordingWorkerIndex(const u32 value)noexcept{
         recordingWorkerDomain = 0u;
         recordingWorkerIndex = value;
         return *this;
     }
-    constexpr CommandListParameters& setRecordingWorker(const u64 domain, const u32 index){
+    constexpr CommandListParameters& setRecordingWorker(const u64 domain, const u32 index)noexcept{
         recordingWorkerDomain = index == 0u ? 0u : domain;
         recordingWorkerIndex = index;
         return *this;
@@ -254,7 +254,7 @@ struct GpuCrashReport{
 // layer stays crash-subsystem-agnostic.
 typedef void(*GpuCrashSink)(void* userData, const GpuCrashReport& report);
 
-void RegisterGpuCrashSink(GpuCrashSink sink, void* userData);
+void RegisterGpuCrashSink(GpuCrashSink sink, void* userData)noexcept;
 void DispatchGpuCrash(const GpuCrashReport& report);
 
 

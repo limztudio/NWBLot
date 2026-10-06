@@ -69,7 +69,7 @@ inline constexpr usize s_BitsPerU64 = 64u;
 
 
 template<typename T>
-[[nodiscard]] inline constexpr bool FitsU32(const T value){
+[[nodiscard]] inline constexpr bool FitsU32(const T value)noexcept(IsArithmetic_V<T>){
     if constexpr(IsSigned_V<T>)
         return value >= T(0) && static_cast<u64>(value) <= static_cast<u64>(Limit<u32>::s_Max);
     else
@@ -77,7 +77,7 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] inline constexpr bool CanRepresentU64(const u64 value){
+[[nodiscard]] inline constexpr bool CanRepresentU64(const u64 value)noexcept{
     static_assert(IsArithmetic_V<T>, "CanRepresentU64 requires arithmetic target type");
 
     constexpr bool signedType = static_cast<T>(-1) < static_cast<T>(0);

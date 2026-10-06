@@ -29,7 +29,7 @@ public:
 
 
 public:
-    GpuInitialStateHandoffValidation(const CommandListResourceStateHandoff& states, Alloc::ScratchArena& scratchArena)
+    GpuInitialStateHandoffValidation(const CommandListResourceStateHandoff& states, Alloc::ScratchArena& scratchArena)noexcept
         : m_states(states)
         , m_scratchArena(scratchArena)
     {}

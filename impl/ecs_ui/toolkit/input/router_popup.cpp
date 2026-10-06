@@ -22,7 +22,7 @@ namespace __hidden_ui_router_popup{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool Area(const Rect& rectangle){
+[[nodiscard]] static bool Area(const Rect& rectangle)noexcept{
     return
         IsFinite(rectangle.x) && IsFinite(rectangle.y) && IsFinite(rectangle.width) && IsFinite(rectangle.height)
         && rectangle.width > 0.0f && rectangle.height > 0.0f
@@ -30,7 +30,7 @@ namespace __hidden_ui_router_popup{
     ;
 }
 
-[[nodiscard]] static bool Focusable(const HitTarget* target){
+[[nodiscard]] static bool Focusable(const HitTarget* target)noexcept{
     return
         target && target->enabled && target->focusable
         && Min(target->rectangle.x + target->rectangle.width, target->clip.x + target->clip.width) > Max(target->rectangle.x, target->clip.x)
@@ -100,7 +100,7 @@ bool InputRouter::validPopupTarget(const HitTarget& target)const{
     return false;
 }
 
-const PopupScope* InputRouter::popupScope(const PopupToken& token)const{
+const PopupScope* InputRouter::popupScope(const PopupToken& token)const noexcept{
     for(const auto& record : m_popups){
         if(record.scope.token == token)
             return &record.scope;
@@ -144,7 +144,7 @@ void InputRouter::installPopups(const u64 expectedFocusLossGeneration){
     }
     const PopupToken previousTop = m_popups.empty() ? PopupToken{} : m_popups.back().scope.token;
     const PopupToken nextTop = m_stagedPopups.empty() ? PopupToken{} : m_stagedPopups.back().scope.token;
-    const auto eligible = [this](const WidgetId id, const u64 declaration, const PopupToken& scope){
+    const auto eligible = [this](const WidgetId id, const u64 declaration, const PopupToken& scope)noexcept{
         const HitTarget* target = findTarget(id, declaration);
         return __hidden_ui_router_popup::Focusable(target) && target->popup == scope;
     };

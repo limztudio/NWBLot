@@ -30,8 +30,8 @@ public:
         return index < rowCount() ? s_Labels[index] : StringView{};
     }
 
-    void beginFrame(){ m_labelReads = 0u; }
-    [[nodiscard]] u32 labelReads()const{ return m_labelReads; }
+    void beginFrame()noexcept{ m_labelReads = 0u; }
+    [[nodiscard]] u32 labelReads()const noexcept{ return m_labelReads; }
 
 
 private:

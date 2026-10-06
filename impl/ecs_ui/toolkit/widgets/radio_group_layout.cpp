@@ -27,7 +27,7 @@ namespace __hidden_ui_radio_group_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidMetrics(const RadioGroupMetrics& metrics){
+[[nodiscard]] static bool ValidMetrics(const RadioGroupMetrics& metrics)noexcept{
     if(
         metrics.count > s_RadioGroupMaxChoices || !IsValidUiPadding(metrics.padding) || !IsValidUiExtent(metrics.contentSize)
         || !IsFinite(metrics.rowHeight) || metrics.rowHeight < s_RadioGroupMinimumRowHeight
@@ -47,7 +47,7 @@ namespace __hidden_ui_radio_group_layout{
     ;
 }
 
-[[nodiscard]] static bool MakeRect(const f64 x, const f64 y, const f64 width, const f64 height, Rect& out){
+[[nodiscard]] static bool MakeRect(const f64 x, const f64 y, const f64 width, const f64 height, Rect& out)noexcept{
     if(
         !IsFinite(x) || x < -Limit<f32>::s_Max || x > Limit<f32>::s_Max
         || !IsFinite(y) || y < -Limit<f32>::s_Max || y > Limit<f32>::s_Max
@@ -67,7 +67,7 @@ namespace __hidden_ui_radio_group_layout{
     return true;
 }
 
-[[nodiscard]] static bool Intersect(const Rect& lhs, const Rect& rhs, Rect& out){
+[[nodiscard]] static bool Intersect(const Rect& lhs, const Rect& rhs, Rect& out)noexcept{
     const f64 left = Max(static_cast<f64>(lhs.x), static_cast<f64>(rhs.x));
     const f64 top = Max(static_cast<f64>(lhs.y), static_cast<f64>(rhs.y));
     const f64 right = Min(static_cast<f64>(lhs.x) + lhs.width, static_cast<f64>(rhs.x) + rhs.width);
@@ -90,7 +90,7 @@ bool RadioGroupLayout::Measure(
     const Point& maximumLabel,
     const RadioGroupOptions& options,
     const RadioGroupStyle& style,
-    RadioGroupMetrics& out){
+    RadioGroupMetrics& out)noexcept{
     using namespace __hidden_ui_radio_group_layout;
     if(
         count > s_RadioGroupMaxChoices || !IsValidUiExtent(maximumLabel) || !IsValidUiPadding(style.padding)
@@ -129,7 +129,7 @@ bool RadioGroupLayout::Place(
     const Rect& clip,
     const RadioGroupChoices& choices,
     const RadioGroupMetrics& metrics,
-    RadioGroupPlacement& out){
+    RadioGroupPlacement& out)noexcept{
     using namespace __hidden_ui_radio_group_layout;
     if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !ValidMetrics(metrics) || choices.count != metrics.count)
         return false;

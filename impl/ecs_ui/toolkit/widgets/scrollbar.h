@@ -56,9 +56,9 @@ public:
         f32 thickness,
         f32 minThumb,
         ScrollViewportPlacement& out
-    );
+    )noexcept;
     // Update only clamped offsets and thumb positions after caret reveal; extents and reserved geometry remain fixed.
-    [[nodiscard]] static bool UpdateOffsets(const Point& scroll, ScrollViewportPlacement& out);
+    [[nodiscard]] static bool UpdateOffsets(const Point& scroll, ScrollViewportPlacement& out)noexcept;
 };
 
 

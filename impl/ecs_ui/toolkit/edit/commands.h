@@ -74,7 +74,7 @@ struct EditCommandResult{
 // Bindings or device adapters supply admitted editing intent; native-consumed input is filtered before translation.
 // Accept inserts LF in multiline mode and submits in single-line mode; Submit always submits.
 [[nodiscard]] EditCommandRequest TranslateEditCommand(const InputCommandIntent& intent, bool repeat,
-    EditTextMode::Enum mode = EditTextMode::SingleLine);
+    EditTextMode::Enum mode = EditTextMode::SingleLine)noexcept;
 // Active preedit owns editing keys and Enter. Escape first cancels preedit without cancelling the widget.
 // Clipboard actions describe requests; the host borrows its OS service to perform the actual exchange.
 [[nodiscard]] EditCommandResult ApplyEditCommand(EditModel& model, const EditCommandRequest& request, bool readOnly = false);

@@ -34,27 +34,27 @@ static Atomic<u64> s_NextIdentity{ 1u };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-RadioGroupState::RadioGroupState()
+RadioGroupState::RadioGroupState()noexcept
     : m_instanceGeneration(NextNonWrappingIdentity(__hidden_ui_radio_group_state::s_NextIdentity))
     , m_inputGeneration(NextNonWrappingIdentity(__hidden_ui_radio_group_state::s_NextIdentity))
 {}
 
-RadioGroupSnapshot RadioGroupState::snapshot()const{
+RadioGroupSnapshot RadioGroupState::snapshot()const noexcept{
     return { m_instanceGeneration, m_inputGeneration, m_revision, m_selected, m_cursor, m_sourceGeneration, m_sourceRevision };
 }
 
-bool RadioGroupState::matches(const RadioGroupSnapshot& value)const{
+bool RadioGroupState::matches(const RadioGroupSnapshot& value)const noexcept{
     return snapshot() == value;
 }
 
-void RadioGroupState::select(const u64 key){
+void RadioGroupState::select(const u64 key)noexcept{
     advanceRevision();
     m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_radio_group_state::s_NextIdentity);
     m_selected = key;
     m_cursor = key;
 }
 
-void RadioGroupState::reset(){
+void RadioGroupState::reset()noexcept{
     advanceRevision();
     m_inputGeneration = NextNonWrappingIdentity(__hidden_ui_radio_group_state::s_NextIdentity);
     m_selected = 0u;
@@ -68,7 +68,7 @@ void RadioGroupState::reset(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RadioGroupState::advanceRevision(){
+void RadioGroupState::advanceRevision()noexcept{
     if(m_revision == Limit<u64>::s_Max)
         TerminateInvariant();
     ++m_revision;

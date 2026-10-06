@@ -22,15 +22,15 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Texture* GraphicsRuntime::getBackBuffer(u32 index)const{
+Texture* GraphicsRuntime::getBackBuffer(u32 index)const noexcept{
     return m_backend->getBackBuffer(index);
 }
 
-u32 GraphicsRuntime::getBackBufferCount()const{
+u32 GraphicsRuntime::getBackBufferCount()const noexcept{
     return m_backend->getBackBufferCount();
 }
 
-Framebuffer* GraphicsRuntime::getFramebuffer(u32 index)const{
+Framebuffer* GraphicsRuntime::getFramebuffer(u32 index)const noexcept{
     if(index < m_swapChainFramebuffers.size())
         return m_swapChainFramebuffers[index].get();
     return nullptr;

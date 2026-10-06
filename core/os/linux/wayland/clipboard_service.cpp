@@ -211,7 +211,7 @@ void WaylandClipboardService::pumpNativeRequests(){
         finishRead(ClipboardStatus::NativeFailure);
 }
 
-WaylandClipboardService::Offer* WaylandClipboardService::findOffer(void* const handle, const ClipboardChannel::Enum channel){
+WaylandClipboardService::Offer* WaylandClipboardService::findOffer(void* const handle, const ClipboardChannel::Enum channel)noexcept{
     for(const auto& offer : m_offers){
         if(offer->handle == handle && offer->channel == channel)
             return offer.get();

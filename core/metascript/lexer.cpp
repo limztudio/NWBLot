@@ -24,9 +24,9 @@ inline constexpr MChar s_DigitFirst = '0';
 inline constexpr MChar s_DigitLast = '9';
 
 
-[[nodiscard]] inline bool IsDigit(MChar c){ return c >= s_DigitFirst && c <= s_DigitLast; }
-[[nodiscard]] inline bool IsAlpha(MChar c){ return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; }
-[[nodiscard]] inline bool IsAlphaNumeric(MChar c){ return IsAlpha(c) || IsDigit(c); }
+[[nodiscard]] inline bool IsDigit(MChar c)noexcept{ return c >= s_DigitFirst && c <= s_DigitLast; }
+[[nodiscard]] inline bool IsAlpha(MChar c)noexcept{ return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; }
+[[nodiscard]] inline bool IsAlphaNumeric(MChar c)noexcept{ return IsAlpha(c) || IsDigit(c); }
 
 constexpr usize s_CompoundAssignmentTokenLength = 2u;
 
@@ -40,12 +40,12 @@ constexpr usize s_CompoundAssignmentTokenLength = 2u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Lexer::Lexer(MStringView source)
+Lexer::Lexer(MStringView source)noexcept
     : m_source(source)
 {}
 
 
-Token Lexer::next(){
+Token Lexer::next()noexcept{
     using namespace __hidden_metascript_lexer;
 
     skipWhitespaceAndComments();
@@ -129,7 +129,7 @@ Token Lexer::next(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Lexer::skipWhitespaceAndComments(){
+void Lexer::skipWhitespaceAndComments()noexcept{
     for(;;){
         if(isAtEnd())
             return;
@@ -182,7 +182,7 @@ void Lexer::skipWhitespaceAndComments(){
     }
 }
 
-Token Lexer::readIdentifier(){
+Token Lexer::readIdentifier()noexcept{
     using namespace __hidden_metascript_lexer;
 
     const usize start = m_current;
@@ -200,7 +200,7 @@ Token Lexer::readIdentifier(){
     return tok;
 }
 
-Token Lexer::readNumber(){
+Token Lexer::readNumber()noexcept{
     using namespace __hidden_metascript_lexer;
 
     const usize start = m_current;
@@ -240,7 +240,7 @@ Token Lexer::readNumber(){
     return tok;
 }
 
-Token Lexer::readString(){
+Token Lexer::readString()noexcept{
     const u32 startLine = m_line;
     const u32 startColumn = m_column;
 
@@ -285,7 +285,7 @@ Token Lexer::readString(){
     return tok;
 }
 
-Token Lexer::makeToken(TokenType::Enum type, usize length){
+Token Lexer::makeToken(TokenType::Enum type, usize length)noexcept{
     Token tok;
     tok.type = type;
     tok.text = m_source.substr(m_current, length);
@@ -298,11 +298,11 @@ Token Lexer::makeToken(TokenType::Enum type, usize length){
     return tok;
 }
 
-Token Lexer::makeErrorToken(MStringView message){
+Token Lexer::makeErrorToken(MStringView message)noexcept{
     return makeErrorToken(message, m_line, m_column);
 }
 
-Token Lexer::makeErrorToken(MStringView message, const u32 line, const u32 column){
+Token Lexer::makeErrorToken(MStringView message, const u32 line, const u32 column)noexcept{
     Token tok;
     tok.type = TokenType::Error;
     tok.text = message;
@@ -311,19 +311,19 @@ Token Lexer::makeErrorToken(MStringView message, const u32 line, const u32 colum
     return tok;
 }
 
-MChar Lexer::peek()const{
+MChar Lexer::peek()const noexcept{
     if(isAtEnd())
         return '\0';
     return m_source[m_current];
 }
 
-MChar Lexer::peekNext()const{
+MChar Lexer::peekNext()const noexcept{
     if(m_current + 1 >= m_source.size())
         return '\0';
     return m_source[m_current + 1];
 }
 
-MChar Lexer::advance(){
+MChar Lexer::advance()noexcept{
     if(isAtEnd())
         return '\0';
 

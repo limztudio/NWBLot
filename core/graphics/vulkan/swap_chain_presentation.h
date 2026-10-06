@@ -119,7 +119,7 @@ inline bool SurfaceFormatSupports(
     const VkSurfaceFormatKHR& supported,
     const VkFormat format,
     const VkColorSpaceKHR colorSpace
-){
+)noexcept{
     return supported.colorSpace == colorSpace && (supported.format == format || supported.format == VK_FORMAT_UNDEFINED);
 }
 

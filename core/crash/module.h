@@ -73,11 +73,11 @@ struct CrashSpoolRetentionConfig{
 struct CrashDumpResult{
     CrashDumpStatus::Enum status = CrashDumpStatus::NotInstalled;
 
-    [[nodiscard]] bool requestAccepted()const{
+    [[nodiscard]] bool requestAccepted()const noexcept{
         return status != CrashDumpStatus::NotInstalled && status != CrashDumpStatus::RequestFailed;
     }
 
-    [[nodiscard]] bool packageWritten()const{
+    [[nodiscard]] bool packageWritten()const noexcept{
         return status == CrashDumpStatus::PackageWritten;
     }
 };

@@ -120,7 +120,7 @@ struct VulkanContext{
     bool transferQueueEnabled = false;
 
 
-    explicit VulkanContext(GraphicsAllocator& allocatorRef, CpuTaskScheduler& cpuSchedulerRef, u16 generation = 0u)
+    explicit VulkanContext(GraphicsAllocator& allocatorRef, CpuTaskScheduler& cpuSchedulerRef, u16 generation = 0u)noexcept
         : objectArena(allocatorRef.getObjectArena())
         , allocator(allocatorRef)
         , cpuScheduler(cpuSchedulerRef)
@@ -136,7 +136,7 @@ struct VulkanContext{
         const VolkInstanceTable& instanceDispatchTable,
         const VolkDeviceTable& deviceDispatchTable,
         VkAllocationCallbacks* allocCb,
-        u16 generation = 0u)
+        u16 generation = 0u)noexcept
         : instance(inst)
         , physicalDevice(physDev)
         , device(dev)
@@ -156,7 +156,7 @@ struct QueueFamilySharingInfo{
     Array<u32, 6u> familyIndices = {};
     u32 familyIndexCount = 0u;
 
-    [[nodiscard]] const u32* data()const{ return familyIndexCount > 0u ? familyIndices.data() : nullptr; }
+    [[nodiscard]] const u32* data()const noexcept{ return familyIndexCount > 0u ? familyIndices.data() : nullptr; }
 };
 
 inline QueueFamilySharingInfo ResolveQueueFamilySharing(

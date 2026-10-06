@@ -623,7 +623,7 @@ static constexpr UnicodePropertyRange s_Ranges[] = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GraphemeBreak::Enum LookupGraphemeBreak(const u32 codePoint){
+GraphemeBreak::Enum LookupGraphemeBreak(const u32 codePoint)noexcept{
     if(codePoint >= 0xAC00u && codePoint <= 0xD7A3u)
         return (codePoint - 0xAC00u) % 28u == 0u ? GraphemeBreak::LV : GraphemeBreak::LVT;
     const u8 property = LookupUnicodePropertyRanges(__hidden_ui_unicode_gcb::s_Ranges, codePoint, GraphemeBreak::Other);

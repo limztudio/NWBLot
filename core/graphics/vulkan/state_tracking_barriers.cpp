@@ -321,7 +321,7 @@ VkImageMemoryBarrier2 BuildTextureStateBarrier(
     const ResourceStates::Mask oldState,
     const ResourceStates::Mask stateBits,
     const bool rayTracingStageAvailable
-){
+)noexcept{
     auto barrier = VulkanDetail::MakeVkStruct<VkImageMemoryBarrier2>(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2);
     barrier.srcStageMask = VulkanDetail::GetVkPipelineStageFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common, rayTracingStageAvailable);
     barrier.srcAccessMask = VulkanDetail::GetVkAccessFlags(oldState != ResourceStates::Unknown ? oldState : ResourceStates::Common);
@@ -345,7 +345,7 @@ bool NeedsResourceStateBarrier(
     const ResourceStates::Mask stateBits,
     const bool uavBarrierEnabled,
     const bool forceMemoryDependency
-){
+)noexcept{
     return oldState != stateBits || forceMemoryDependency || (oldState == stateBits && uavBarrierEnabled);
 }
 

@@ -263,7 +263,7 @@ public:
     [[nodiscard]] bool prepareMeshMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool prepareIndexedMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
     [[nodiscard]] bool prepareComputeMaterialPassResourceBindings(const MaterialPassDrawItemVector& drawItems);
-    [[nodiscard]] u32 meshDispatchFlags(const MaterialPassMeshResourceSnapshot& mesh, MaterialPipelinePass::Enum pass, bool twoSided, bool meshletConeCullScaleSafe)const;
+    [[nodiscard]] u32 meshDispatchFlags(const MaterialPassMeshResourceSnapshot& mesh, MaterialPipelinePass::Enum pass, bool twoSided, bool meshletConeCullScaleSafe)const noexcept;
     [[nodiscard]] u32 materialPassDrawDispatchFlags(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh)const;
     void setMaterialPassCommonBufferStates(const MaterialPassDrawContext& context, const MaterialPassMeshResourceSnapshot& mesh);
     [[nodiscard]] bool setMaterialPassDrawPushConstants(const MaterialPassDrawContext& context, const MaterialPassDrawItem& drawItem, const MaterialPassMeshResourceSnapshot& mesh);
@@ -305,7 +305,7 @@ public:
         usize instanceCount,
         usize materialTypedByteCount
     )const;
-    [[nodiscard]] ECSRenderDetail::MaterialPassBufferSnapshot materialPassBufferSnapshot()const;
+    [[nodiscard]] ECSRenderDetail::MaterialPassBufferSnapshot materialPassBufferSnapshot()const noexcept;
     // The CSG context descriptor is selected through every instance's retained heap-slot lane. Graph declaration
     // patches the immutable upload copy before the packet is recorded so every prepared phase keeps the same ABI.
     void prepareMaterialPassInstanceUploadData(

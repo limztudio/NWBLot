@@ -29,11 +29,11 @@ static bool Decode(const AStringView text, const usize offset, u32& scalar, usiz
     return true;
 }
 
-static bool IsSingleLineScalar(const u32 scalar){
+static bool IsSingleLineScalar(const u32 scalar)noexcept{
     return scalar != 0u && scalar != 0xAu && scalar != 0xDu && scalar != 0x2028u && scalar != 0x2029u;
 }
 
-static bool IsControl(const GraphemeBreak::Enum property){
+static bool IsControl(const GraphemeBreak::Enum property)noexcept{
     return property == GraphemeBreak::CR || property == GraphemeBreak::LF || property == GraphemeBreak::Control;
 }
 
@@ -46,7 +46,7 @@ struct BoundaryState{
     bool indicLinker = false;
     bool first = true;
 
-    [[nodiscard]] bool breaksBefore(const GraphemeBreak::Enum current, const IndicConjunct::Enum indic, const bool pictograph)const{
+    [[nodiscard]] bool breaksBefore(const GraphemeBreak::Enum current, const IndicConjunct::Enum indic, const bool pictograph)const noexcept{
         if(first)
             return true;
         if(previous == GraphemeBreak::CR && current == GraphemeBreak::LF)
@@ -81,7 +81,7 @@ struct BoundaryState{
         return true;
     }
 
-    void advance(const GraphemeBreak::Enum current, const IndicConjunct::Enum indic, const bool pictograph){
+    void advance(const GraphemeBreak::Enum current, const IndicConjunct::Enum indic, const bool pictograph)noexcept{
         previousZwjAfterPictograph = current == GraphemeBreak::ZWJ && pictographExtendRun;
         if(pictograph)
             pictographExtendRun = true;
@@ -156,7 +156,7 @@ bool GraphemeSegmentation::Validate(const AStringView text, const bool singleLin
     return true;
 }
 
-bool GraphemeSegmentation::IsScalarBoundary(const AStringView text, const usize position){
+bool GraphemeSegmentation::IsScalarBoundary(const AStringView text, const usize position)noexcept{
     if(position > text.size())
         return false;
     return position == text.size() || !IsUtf8Continuation(static_cast<u8>(text[position]));

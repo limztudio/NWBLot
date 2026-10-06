@@ -259,7 +259,7 @@ bool WriteMeshAsset(const Path& outputPath, const SourceMeshStreams& mesh){
     return true;
 }
 
-bool NameUsed(const UtilityVector<AString>& names, const AStringView name){
+bool NameUsed(const UtilityVector<AString>& names, const AStringView name)noexcept{
     for(const AString& usedName : names){
         if(usedName == name)
             return true;

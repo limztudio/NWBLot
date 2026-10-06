@@ -190,7 +190,7 @@ struct GpuFrameSlot{
 [[nodiscard]] GLB_INLINE bool ResolvePaintPushConstants(
     const GpuFrameData& frame,
     const DrawCommand& draw,
-    GpuPaintPushConstants& push){
+    GpuPaintPushConstants& push)noexcept{
     push.material = static_cast<u32>(draw.material);
     push.textureSlot = NWB_UI_INVALID_HEAP_SLOT;
     if(draw.material == PaintMaterial::Skin)
@@ -235,7 +235,7 @@ struct GpuRasterTask{
         GpuTextureGraphResources textureImages;
     };
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
 };
 
 struct GpuOutputTask{
@@ -250,7 +250,7 @@ struct GpuOutputTask{
         u32 presentationMode = NWB_UI_PRESENTATION_SDR;
     };
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commands, const Core::GpuTaskRecordContext& context);
-    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept;
 };
 
 

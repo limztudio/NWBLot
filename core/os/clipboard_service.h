@@ -62,7 +62,7 @@ protected:
 
 private:
     [[nodiscard]] ClipboardRequestResult enqueue(ClipboardChannel::Enum channel, ClipboardOperation::Enum operation, AStringView text);
-    [[nodiscard]] Request* findRequest(ClipboardRequestToken token);
+    [[nodiscard]] Request* findRequest(ClipboardRequestToken token)noexcept;
 
 
 private:

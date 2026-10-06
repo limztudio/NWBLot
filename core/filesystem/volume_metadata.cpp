@@ -28,7 +28,7 @@ namespace FilesystemVolumeDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ComputeVolumeIndexBytes(const u64 fileCount, u64& outIndexBytes){
+static bool ComputeVolumeIndexBytes(const u64 fileCount, u64& outIndexBytes)noexcept{
     outIndexBytes = 0;
     if(fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(VolumeIndexEntryDisk)))
         return false;
@@ -37,7 +37,7 @@ static bool ComputeVolumeIndexBytes(const u64 fileCount, u64& outIndexBytes){
     return true;
 }
 
-static bool ComputeVolumeMetadataRequirement(const u64 fileCount, u64& outMetadataBytes){
+static bool ComputeVolumeMetadataRequirement(const u64 fileCount, u64& outMetadataBytes)noexcept{
     outMetadataBytes = 0;
 
     u64 indexBytes = 0;
@@ -57,7 +57,7 @@ static bool ComputeVolumeMetadataRequirement(const u64 fileCount, u64& outMetada
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ComputeVolumeMetadataRequirement(const u64 fileCount, u64& outMetadataBytes){
+bool ComputeVolumeMetadataRequirement(const u64 fileCount, u64& outMetadataBytes)noexcept{
     return FilesystemVolumeDetail::ComputeVolumeMetadataRequirement(fileCount, outMetadataBytes);
 }
 
@@ -265,7 +265,7 @@ bool VolumeFileSystem::flushMetadataLocked(){
     return false;
 }
 
-bool VolumeFileSystem::canFitMetadataForFileCountLocked(const u64 fileCount)const{
+bool VolumeFileSystem::canFitMetadataForFileCountLocked(const u64 fileCount)const noexcept{
     u64 metadataBytes = 0;
     if(!FilesystemVolumeDetail::ComputeVolumeMetadataRequirement(fileCount, metadataBytes))
         return false;

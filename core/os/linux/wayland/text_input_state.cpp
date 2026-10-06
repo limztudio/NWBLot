@@ -131,7 +131,7 @@ TextInputRect WaylandTextInputRectForPixels(const TextInputRect pixels, const i3
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void WaylandTextInputSerialTracker::reset(){
+void WaylandTextInputSerialTracker::reset()noexcept{
     m_token = {};
     m_firstSerial = 0u;
     m_lastSerial = 0u;
@@ -142,7 +142,7 @@ void WaylandTextInputSerialTracker::reset(){
 void WaylandTextInputSerialTracker::record(
     const u32 serial,
     const TextInputSessionToken token,
-    const u64 revision){
+    const u64 revision)noexcept{
     if(!token.valid()){
         reset();
         return;

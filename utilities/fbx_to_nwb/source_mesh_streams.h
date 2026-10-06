@@ -48,7 +48,7 @@ struct PositionKey{
 };
 
 struct PositionKeyHasher{
-    usize operator()(const PositionKey& key)const{
+    usize operator()(const PositionKey& key)const noexcept{
         usize seed = Hasher<u32>{}(key.x);
         HashCombine(seed, key.y);
         HashCombine(seed, key.z);
@@ -57,7 +57,7 @@ struct PositionKeyHasher{
 };
 
 struct PositionKeyEqual{
-    bool operator()(const PositionKey& lhs, const PositionKey& rhs)const{
+    bool operator()(const PositionKey& lhs, const PositionKey& rhs)const noexcept{
         return lhs.x == rhs.x && lhs.y == rhs.y && lhs.z == rhs.z;
     }
 };
@@ -71,7 +71,7 @@ using PositionNormalMap = HashMap<PositionKey, PositionNormalCalculation, Positi
 
 
 struct MeshSkinInfluenceHasher{
-    usize operator()(const MeshSkinInfluence& value)const{
+    usize operator()(const MeshSkinInfluence& value)const noexcept{
         usize seed = Hasher<u16>{}(value.joint[0u]);
         for(usize i = 1u; i < s_MeshSkinInfluenceCount; ++i)
             HashCombine(seed, value.joint[i]);
@@ -83,7 +83,7 @@ struct MeshSkinInfluenceHasher{
 
 
 struct SourceVertexRefHasher{
-    usize operator()(const SourceVertexRef& value)const{
+    usize operator()(const SourceVertexRef& value)const noexcept{
         usize seed = Hasher<u32>{}(value.position);
         HashCombine(seed, value.normal);
         HashCombine(seed, value.tangent);
@@ -96,7 +96,7 @@ struct SourceVertexRefHasher{
 
 
 struct SourceVertexRefEqual{
-    bool operator()(const SourceVertexRef& lhs, const SourceVertexRef& rhs)const{
+    bool operator()(const SourceVertexRef& lhs, const SourceVertexRef& rhs)const noexcept{
         return lhs.position == rhs.position
             && lhs.normal == rhs.normal
             && lhs.tangent == rhs.tangent

@@ -14,7 +14,7 @@ NWB_PERF_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Session::setCaptureOptions(const CaptureOptions& options){
+void Session::setCaptureOptions(const CaptureOptions& options)noexcept{
     m_enabled = options.enabled;
     m_cpuTimingEnabled = options.cpuTiming;
     m_gpuTimingEnabled = options.gpuTiming;
@@ -22,14 +22,14 @@ void Session::setCaptureOptions(const CaptureOptions& options){
     applyEnabledState();
 }
 
-void Session::clear(){
+void Session::clear()noexcept{
     m_cpuTiming.clear();
     m_gpuTiming.clear();
     m_memory.clear();
     m_frameIndex = 0u;
 }
 
-void Session::beginFrame(const u64 frameIndex){
+void Session::beginFrame(const u64 frameIndex)noexcept{
     m_frameIndex = frameIndex;
 }
 
@@ -73,7 +73,7 @@ void Session::publishFrame(){
     }
 }
 
-CaptureOptions Session::captureOptions()const{
+CaptureOptions Session::captureOptions()const noexcept{
     CaptureOptions options;
     options.enabled = m_enabled;
     options.cpuTiming = m_cpuTimingEnabled;
@@ -82,7 +82,7 @@ CaptureOptions Session::captureOptions()const{
     return options;
 }
 
-SessionReport Session::report()const{
+SessionReport Session::report()const noexcept{
     SessionReport report;
     report.capture = captureOptions();
     report.frameIndex = m_frameIndex;
@@ -96,7 +96,7 @@ MemoryScopeId Session::registerMemoryScope(const Name& scopeName){
     return m_memory.registerScope(scopeName);
 }
 
-void Session::applyEnabledState(){
+void Session::applyEnabledState()noexcept{
     const CaptureOptions capture = captureOptions();
     m_cpuTiming.setEnabled(capture.cpuTimingActive());
     m_gpuTiming.setEnabled(capture.gpuTimingActive());

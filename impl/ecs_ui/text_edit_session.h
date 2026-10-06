@@ -27,12 +27,12 @@ struct UiTextEditOwner{
     u64 declarationGeneration = 0u;
     u64 modelGeneration = 0u;
 
-    [[nodiscard]] bool valid()const{
+    [[nodiscard]] bool valid()const noexcept{
         return widget.valid() && declarationGeneration != 0u && modelGeneration != 0u;
     }
 };
 
-[[nodiscard]] inline bool operator==(const UiTextEditOwner& lhs, const UiTextEditOwner& rhs){
+[[nodiscard]] inline bool operator==(const UiTextEditOwner& lhs, const UiTextEditOwner& rhs)noexcept{
     return
         lhs.widget == rhs.widget && lhs.declarationGeneration == rhs.declarationGeneration
         && lhs.modelGeneration == rhs.modelGeneration
@@ -84,17 +84,17 @@ public:
     [[nodiscard]] bool end(const UiTextEditOwner& owner, Ui::EditModel& model);
     // Releases native state without a model pointer. The host clears transient preedit on its next synchronous lend.
     [[nodiscard]] bool cancel();
-    [[nodiscard]] Core::TextInputSessionToken token()const{ return m_token; }
-    [[nodiscard]] const UiTextEditOwner& owner()const{ return m_owner; }
-    [[nodiscard]] bool preeditCaretVisible()const{ return m_preeditCaretVisible; }
-    [[nodiscard]] u64 surroundingRevision()const{ return m_token.valid() ? m_surroundingRevision : 0u; }
-    [[nodiscard]] bool matchesPublished(const UiTextEditOwner& owner, const Ui::EditModel& model)const{
+    [[nodiscard]] Core::TextInputSessionToken token()const noexcept{ return m_token; }
+    [[nodiscard]] const UiTextEditOwner& owner()const noexcept{ return m_owner; }
+    [[nodiscard]] bool preeditCaretVisible()const noexcept{ return m_preeditCaretVisible; }
+    [[nodiscard]] u64 surroundingRevision()const noexcept{ return m_token.valid() ? m_surroundingRevision : 0u; }
+    [[nodiscard]] bool matchesPublished(const UiTextEditOwner& owner, const Ui::EditModel& model)const noexcept{
         return m_token.valid() && m_owner == owner && m_expectedModel.matches(model) && matchesPublishedModel(model);
     }
 
 
 private:
-    [[nodiscard]] bool matchesPublishedModel(const Ui::EditModel& model)const;
+    [[nodiscard]] bool matchesPublishedModel(const Ui::EditModel& model)const noexcept;
     [[nodiscard]] Core::TextInputAdmission::Enum publishSurrounding(
         const Ui::EditModel& model, Core::TextInputChangeCause::Enum cause = Core::TextInputChangeCause::InputMethod
     );

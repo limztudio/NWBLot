@@ -233,7 +233,7 @@ static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(
 }
 
 #if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
-[[nodiscard]] static usize FindText(const CrashTestText& text, const AStringView needle){
+[[nodiscard]] static usize FindText(const CrashTestText& text, const AStringView needle)noexcept{
     return AStringView(text.data(), text.size()).find(needle);
 }
 #endif

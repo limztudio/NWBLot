@@ -32,9 +32,9 @@ private:
 
 
     public:
-        virtual u64 instanceGeneration()const override{ return 2u; }
-        virtual u64 revision()const override{ return m_source.m_viewRevision; }
-        virtual u64 rowCount()const override{ return m_source.m_count; }
+        virtual u64 instanceGeneration()const noexcept override{ return 2u; }
+        virtual u64 revision()const noexcept override{ return m_source.m_viewRevision; }
+        virtual u64 rowCount()const noexcept override{ return m_source.m_count; }
         virtual u64 key(u64 index)const override;
         virtual bool indexOf(u64 key, u64& index)const override;
         virtual bool findEnabled(u64 start, bool reverse, u64& index)const override;
@@ -52,18 +52,18 @@ public:
 
 
 public:
-    virtual u64 instanceGeneration()const override{ return 1u; }
-    virtual u64 revision()const override{ return 1u; }
-    virtual u64 rowCount()const override{ return 5u; }
+    virtual u64 instanceGeneration()const noexcept override{ return 1u; }
+    virtual u64 revision()const noexcept override{ return 1u; }
+    virtual u64 rowCount()const noexcept override{ return 5u; }
     virtual u64 key(u64 index)const override{ return index < rowCount() ? index + 1u : 0u; }
     virtual bool indexOf(u64 key, u64& index)const override;
     virtual bool findEnabled(u64 start, bool reverse, u64& index)const override;
     virtual StringView text(u64 index)const override;
     virtual bool enabled(u64 index)const override{ return index < rowCount() && key(index) != 3u; }
     [[nodiscard]] virtual bool filter(AStringView query)override;
-    [[nodiscard]] virtual const Impl::Ui::IListDataSource& filtered()const override{ return m_view; }
-    void beginFrame(){ m_labelReads = 0u; }
-    [[nodiscard]] u32 labelReads()const{ return m_labelReads; }
+    [[nodiscard]] virtual const Impl::Ui::IListDataSource& filtered()const noexcept override{ return m_view; }
+    void beginFrame()noexcept{ m_labelReads = 0u; }
+    [[nodiscard]] u32 labelReads()const noexcept{ return m_labelReads; }
 
 
 private:

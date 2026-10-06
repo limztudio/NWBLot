@@ -37,7 +37,7 @@ bool IFilesystem::readFile(FileCursor& cursor, void* data, const usize bytes, us
     return true;
 }
 
-void IFilesystem::closeFile(FileCursor& cursor)const{
+void IFilesystem::closeFile(FileCursor& cursor)const noexcept{
     if(cursor.filesystem == this)
         cursor = {};
 }

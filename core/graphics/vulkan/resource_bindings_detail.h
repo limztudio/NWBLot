@@ -65,7 +65,7 @@ struct DescriptorBufferStartupPrerequisites{
 }
 
 [[nodiscard]] bool IsDescriptorBufferBackendReady(const VulkanContext& context);
-[[nodiscard]] inline constexpr bool IsSupportedDescriptorBindingType(const ResourceType::Enum type){
+[[nodiscard]] inline constexpr bool IsSupportedDescriptorBindingType(const ResourceType::Enum type)noexcept{
     switch(type){
     case ResourceType::Texture_SRV:
     case ResourceType::Texture_UAV:
@@ -103,7 +103,7 @@ inline u64 s_NextDescriptorBufferStorageIdentity = 1u;
     return identity;
 }
 
-[[nodiscard]] inline constexpr bool UsesDescriptorBufferInfo(const ResourceType::Enum type){
+[[nodiscard]] inline constexpr bool UsesDescriptorBufferInfo(const ResourceType::Enum type)noexcept{
     switch(type){
     case ResourceType::ConstantBuffer:
     case ResourceType::StructuredBuffer_SRV:
@@ -120,7 +120,7 @@ inline u64 s_NextDescriptorBufferStorageIdentity = 1u;
     const VulkanContext& context,
     const bool enabled,
     const VkDescriptorType descriptorType
-){
+)noexcept{
     if(!enabled)
         return 0u;
 
@@ -147,7 +147,7 @@ inline u64 s_NextDescriptorBufferStorageIdentity = 1u;
     const DescriptorWriteItem& item,
     const BufferDesc& bufferDesc,
     BufferRange& outRange
-){
+)noexcept{
     outRange = item.range.resolve(bufferDesc);
     return outRange.byteSize > 0;
 }

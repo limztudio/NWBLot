@@ -81,7 +81,7 @@ bool ParseMaterialParameterTypeText(
 bool ParseMaterialBindResourceFieldTypeText(
     const AStringView typeText,
     MaterialLayoutFieldType::Enum& outFieldType
-);
+)noexcept;
 
 bool ParseMaterialBindSource(
     const Path& bindFilePath,

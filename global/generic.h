@@ -13,8 +13,8 @@
 
 class NoAssign{
 public:
-    NoAssign(const NoAssign&) = default;
-    NoAssign() = default;
+    NoAssign(const NoAssign&)noexcept = default;
+    NoAssign()noexcept = default;
 
     void operator=(const NoAssign&) = delete;
 };
@@ -22,8 +22,8 @@ public:
 class NoCopy : NoAssign{
 public:
     NoCopy(const NoCopy&) = delete;
-    NoCopy(NoCopy&&) = default;
-    NoCopy() = default;
+    NoCopy(NoCopy&&)noexcept = default;
+    NoCopy()noexcept = default;
 
     NoCopy& operator=(NoCopy&&) = delete;
 };

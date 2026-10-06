@@ -43,7 +43,7 @@ inline constexpr Name s_RuntimeMeshPruningArena("impl/ecs_render/runtime_mesh_pr
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool RuntimeMeshSourceMatches(const MeshResources& mesh, const RuntimeMeshDesc& desc){
+[[nodiscard]] static bool RuntimeMeshSourceMatches(const MeshResources& mesh, const RuntimeMeshDesc& desc)noexcept{
     return
         mesh.runtimeMeshVersion == desc.version
         && mesh.positionBuffer == desc.positionBuffer

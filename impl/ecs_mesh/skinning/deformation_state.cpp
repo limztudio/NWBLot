@@ -18,7 +18,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(const MeshSkinningRuntimeInstance& instance){
+MeshSkinningResourceBuffers CaptureMeshSkinningResourceBuffers(const MeshSkinningRuntimeInstance& instance)noexcept{
     return {
         instance.restPositionBuffer,
         instance.restNormalBuffer,

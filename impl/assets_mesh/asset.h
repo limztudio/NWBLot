@@ -27,10 +27,10 @@ public:
 
 
 public:
-    explicit Mesh(Core::Assets::AssetArena& arena)
+    explicit Mesh(Core::Assets::AssetArena& arena)noexcept
         : MeshGeometryPayload(arena)
     {}
-    Mesh(Core::Assets::AssetArena& arena, const Name& virtualPath)
+    Mesh(Core::Assets::AssetArena& arena, const Name& virtualPath)noexcept
         : Core::Assets::TypedAsset<Mesh>(virtualPath)
         , MeshGeometryPayload(arena)
     {}
@@ -42,10 +42,10 @@ public:
 
 public:
     template<typename... GeometryPayloadArgT>
-    void setPayload(GeometryPayloadArgT&&... geometryPayloadArgs){
+    void setPayload(GeometryPayloadArgT&&... geometryPayloadArgs)noexcept(noexcept(setGeometryPayload(Forward<GeometryPayloadArgT>(geometryPayloadArgs)...))){
         setGeometryPayload(Forward<GeometryPayloadArgT>(geometryPayloadArgs)...);
     }
-    [[nodiscard]] u32 meshClass()const{ return Core::Mesh::MeshClass::Static; }
+    [[nodiscard]] u32 meshClass()const noexcept{ return Core::Mesh::MeshClass::Static; }
 };
 
 

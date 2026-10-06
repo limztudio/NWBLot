@@ -27,7 +27,7 @@ namespace __hidden_ui_progress_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ValidPadding(const Insets& padding){
+[[nodiscard]] static bool ValidPadding(const Insets& padding)noexcept{
     return
         IsFinite(padding.left) && padding.left >= 0.0f && IsFinite(padding.top) && padding.top >= 0.0f
         && IsFinite(padding.right) && padding.right >= 0.0f && IsFinite(padding.bottom) && padding.bottom >= 0.0f
@@ -36,7 +36,7 @@ namespace __hidden_ui_progress_layout{
     ;
 }
 
-[[nodiscard]] static bool ValidMetrics(const ProgressMetrics& metrics){
+[[nodiscard]] static bool ValidMetrics(const ProgressMetrics& metrics)noexcept{
     if(!ValidPadding(metrics.padding) || !IsValidUiExtent(metrics.fillMinimum) || !IsValidUiExtent(metrics.contentSize))
         return false;
     const f64 width = static_cast<f64>(metrics.padding.left) + metrics.padding.right + metrics.fillMinimum.x;
@@ -47,7 +47,7 @@ namespace __hidden_ui_progress_layout{
     ;
 }
 
-[[nodiscard]] static bool MinimumSize(const UiSkinRegion& region, const f32 density, Point& out){
+[[nodiscard]] static bool MinimumSize(const UiSkinRegion& region, const f32 density, Point& out)noexcept{
     const Insets padding{ region.padding.left, region.padding.top, region.padding.right, region.padding.bottom };
     if(
         region.rectangle.width == 0u || region.rectangle.height == 0u || !ValidPadding(padding)
@@ -75,7 +75,7 @@ namespace __hidden_ui_progress_layout{
     return true;
 }
 
-[[nodiscard]] static bool MakeRect(const f64 x, const f64 y, const f64 width, const f64 height, Rect& out){
+[[nodiscard]] static bool MakeRect(const f64 x, const f64 y, const f64 width, const f64 height, Rect& out)noexcept{
     if(
         !IsFinite(x) || x < -Limit<f32>::s_Max || x > Limit<f32>::s_Max
         || !IsFinite(y) || y < -Limit<f32>::s_Max || y > Limit<f32>::s_Max
@@ -97,7 +97,7 @@ namespace __hidden_ui_progress_layout{
     return true;
 }
 
-[[nodiscard]] static bool Intersect(const Rect& lhs, const Rect& rhs, Rect& out){
+[[nodiscard]] static bool Intersect(const Rect& lhs, const Rect& rhs, Rect& out)noexcept{
     const f64 left = Max(static_cast<f64>(lhs.x), static_cast<f64>(rhs.x));
     const f64 top = Max(static_cast<f64>(lhs.y), static_cast<f64>(rhs.y));
     const f64 right = Min(static_cast<f64>(lhs.x) + lhs.width, static_cast<f64>(rhs.x) + rhs.width);
@@ -121,7 +121,7 @@ bool ProgressLayout::Measure(
     const UiSkinRegion& track,
     const UiSkinRegion& fill,
     const f32 density,
-    ProgressMetrics& out){
+    ProgressMetrics& out)noexcept{
     using namespace __hidden_ui_progress_layout;
     if(
         options.width.policy > LayoutSizePolicy::Stretch || !IsFinite(options.width.value) || options.width.value < 0.0f
@@ -160,7 +160,7 @@ bool ProgressLayout::Place(
     const Rect& clip,
     const ProgressMetrics& metrics,
     const f64 fraction,
-    ProgressPlacement& out){
+    ProgressPlacement& out)noexcept{
     using namespace __hidden_ui_progress_layout;
     if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip) || !ValidMetrics(metrics) || !IsFinite(fraction))
         return false;

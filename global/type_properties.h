@@ -109,6 +109,9 @@ template<typename T>
 constexpr RemoveReference_T<T>&& Move(T&& v)noexcept{ return static_cast<RemoveReference_T<T>&&>(v); }
 
 template<typename T>
+[[nodiscard]] auto DeclVal()noexcept->decltype(std::declval<T>());
+
+template<typename T>
 constexpr void Swap(T& lhs, T& rhs)noexcept(noexcept(std::swap(lhs, rhs))){ std::swap(lhs, rhs); }
 
 template<typename T, typename U = T>

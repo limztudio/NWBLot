@@ -80,33 +80,33 @@ constexpr CaptureFlag::Mask operator~(const CaptureFlag::Mask value)noexcept{
 struct CaptureOptions{
     CaptureFlag::Mask flags = CaptureFlag::None;
 
-    [[nodiscard]] static constexpr CaptureOptions Disabled(){
+    [[nodiscard]] static constexpr CaptureOptions Disabled()noexcept{
         return {};
     }
 
-    [[nodiscard]] static constexpr CaptureOptions All(){
+    [[nodiscard]] static constexpr CaptureOptions All()noexcept{
         CaptureOptions options;
         options.flags = CaptureFlag::All;
         return options;
     }
 
-    [[nodiscard]] static constexpr CaptureOptions FrameGraphOnly(){
+    [[nodiscard]] static constexpr CaptureOptions FrameGraphOnly()noexcept{
         CaptureOptions options;
         options.flags = CaptureFlag::FrameGraph;
         return options;
     }
 
-    [[nodiscard]] static constexpr CaptureOptions PerfOnly(){
+    [[nodiscard]] static constexpr CaptureOptions PerfOnly()noexcept{
         CaptureOptions options;
         options.flags = CaptureFlag::Perf;
         return options;
     }
 
-    [[nodiscard]] constexpr bool enabled()const{ return AnyCapture(flags); }
-    [[nodiscard]] constexpr bool textLogEnabled()const{ return HasCapture(flags, CaptureFlag::TextLog); }
-    [[nodiscard]] constexpr bool diagnosticEnabled()const{ return HasCapture(flags, CaptureFlag::Diagnostic); }
-    [[nodiscard]] constexpr bool perfEnabled()const{ return HasCapture(flags, CaptureFlag::Perf); }
-    [[nodiscard]] constexpr bool frameGraphEnabled()const{ return HasCapture(flags, CaptureFlag::FrameGraph); }
+    [[nodiscard]] constexpr bool enabled()const noexcept{ return AnyCapture(flags); }
+    [[nodiscard]] constexpr bool textLogEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::TextLog); }
+    [[nodiscard]] constexpr bool diagnosticEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::Diagnostic); }
+    [[nodiscard]] constexpr bool perfEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::Perf); }
+    [[nodiscard]] constexpr bool frameGraphEnabled()const noexcept{ return HasCapture(flags, CaptureFlag::FrameGraph); }
 };
 
 [[nodiscard]] constexpr bool IsValidEventKind(EventKind::Enum kind)noexcept;
@@ -121,7 +121,7 @@ struct EventHeader{
     u16 version = s_TelemetryFormatVersion;
     u8 reserved = 0u;
 
-    [[nodiscard]] bool valid()const{
+    [[nodiscard]] bool valid()const noexcept{
         return magic == s_EventMagic
             && version == s_TelemetryFormatVersion
             && kind != EventKind::Unknown

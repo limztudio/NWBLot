@@ -15,7 +15,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Win32TextInputService::decodeFallbackCharInput(const u32 unit, u32& codePoint){
+bool Win32TextInputService::decodeFallbackCharInput(const u32 unit, u32& codePoint)noexcept{
     codePoint = 0u;
     if(!isOwnerThread() || activeSession().valid())
         return false;
@@ -45,7 +45,7 @@ bool Win32TextInputService::decodeFallbackCharInput(const u32 unit, u32& codePoi
     return true;
 }
 
-bool Win32TextInputService::resetFallbackCharInput(){
+bool Win32TextInputService::resetFallbackCharInput()noexcept{
     if(!isOwnerThread())
         return false;
     m_pendingHighSurrogate = 0u;

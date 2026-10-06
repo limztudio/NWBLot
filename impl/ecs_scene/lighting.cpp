@@ -32,7 +32,7 @@ inline constexpr f32 s_ConeCosineMax = 1.0f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static SIMDVector BuildDirectionalLightDirectionVector(const SIMDVector forward){
+static SIMDVector BuildDirectionalLightDirectionVector(const SIMDVector forward)noexcept{
     return Vector3NormalizeOr(
         VectorNegate(forward),
         VectorSet(0.0f, 0.0f, -1.0f, 0.0f),
@@ -40,7 +40,7 @@ static SIMDVector BuildDirectionalLightDirectionVector(const SIMDVector forward)
     );
 }
 
-static SIMDVector BuildLightEmissionVector(const SIMDVector forward){
+static SIMDVector BuildLightEmissionVector(const SIMDVector forward)noexcept{
     return Vector3NormalizeOr(
         forward,
         VectorSet(0.0f, 0.0f, 1.0f, 0.0f),
@@ -48,7 +48,7 @@ static SIMDVector BuildLightEmissionVector(const SIMDVector forward){
     );
 }
 
-static bool IsValidLightRotation(const SIMDVector rotation){
+static bool IsValidLightRotation(const SIMDVector rotation)noexcept{
     const f32 rotationLengthSquared = VectorGetX(QuaternionLengthSq(rotation));
     return
         !QuaternionIsNaN(rotation)
@@ -58,7 +58,7 @@ static bool IsValidLightRotation(const SIMDVector rotation){
     ;
 }
 
-static bool IsValidLightColorIntensity(const SIMDVector colorIntensity){
+static bool IsValidLightColorIntensity(const SIMDVector colorIntensity)noexcept{
     const f32 intensity = VectorGetW(colorIntensity);
     return
         !Vector3IsNaN(colorIntensity)
@@ -68,7 +68,7 @@ static bool IsValidLightColorIntensity(const SIMDVector colorIntensity){
     ;
 }
 
-static bool IsValidLightCone(const f32 innerConeCos, const f32 outerConeCos){
+static bool IsValidLightCone(const f32 innerConeCos, const f32 outerConeCos)noexcept{
     return
         IsFinite(innerConeCos)
         && IsFinite(outerConeCos)
@@ -159,7 +159,7 @@ Core::ECS::EntityID CreateSpotLightEntity(
     return lightEntity.id();
 }
 
-SceneLight BuildDefaultSceneLight(const SIMDVector forward){
+SceneLight BuildDefaultSceneLight(const SIMDVector forward)noexcept{
     SceneLight light;
     StoreFloat(__hidden_lighting::BuildDirectionalLightDirectionVector(forward), light.direction);
     StoreFloat(s_SIMDOne, light.colorIntensity);
@@ -179,7 +179,7 @@ bool TryBuildSceneLight(
     const LightType::Enum type,
     const bool enableCaustics,
     SceneLight& outLight
-){
+)noexcept{
     outLight = SceneLight{};
     if(!__hidden_lighting::IsValidLightColorIntensity(colorIntensity))
         return false;

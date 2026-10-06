@@ -15,7 +15,7 @@ NWB_IMPL_UI_BEGIN
 
 
 namespace __hidden_ui_image_paint{
-[[nodiscard]] static bool SameTextureKey(const ImageSource& first, const ImageSource& second){
+[[nodiscard]] static bool SameTextureKey(const ImageSource& first, const ImageSource& second)noexcept{
     return first.identity() == second.identity() && first.generation() == second.generation();
 }
 };

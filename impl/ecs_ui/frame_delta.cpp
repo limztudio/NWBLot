@@ -16,20 +16,20 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void UiFrameDelta::add(const f32 deltaSeconds){
+void UiFrameDelta::add(const f32 deltaSeconds)noexcept{
     if(!IsFinite(deltaSeconds) || deltaSeconds < 0.0f)
         return;
     const f64 maximum = static_cast<f64>(Limit<f32>::s_Max);
     m_pendingSeconds = Min(maximum, m_pendingSeconds + static_cast<f64>(deltaSeconds));
 }
 
-f32 UiFrameDelta::consume(){
+f32 UiFrameDelta::consume()noexcept{
     const f32 elapsed = static_cast<f32>(m_pendingSeconds);
     m_pendingSeconds = 0.0;
     return elapsed;
 }
 
-void UiFrameDelta::clear(){
+void UiFrameDelta::clear()noexcept{
     m_pendingSeconds = 0.0;
 }
 

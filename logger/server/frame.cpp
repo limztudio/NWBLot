@@ -18,12 +18,12 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Frame::startup(){
+bool Frame::startup()noexcept{
     return true;
 }
-void Frame::cleanup(){
+void Frame::cleanup()noexcept{
 }
-bool Frame::update(f32){
+bool Frame::update(f32)noexcept{
     return true;
 }
 

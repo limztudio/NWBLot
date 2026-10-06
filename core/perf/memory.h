@@ -35,7 +35,7 @@ struct MemoryScopeId{
     u32 index = Limit<u32>::s_Max;
     u32 generation = 0u;
 
-    [[nodiscard]] bool valid()const{ return index != Limit<u32>::s_Max && generation != 0u; }
+    [[nodiscard]] bool valid()const noexcept{ return index != Limit<u32>::s_Max && generation != 0u; }
 };
 
 struct MemorySnapshot{
@@ -49,7 +49,7 @@ struct MemorySnapshot{
     u64 deallocationCount = 0u;
     MemorySource::Enum source = MemorySource::ExplicitScope;
 
-    [[nodiscard]] bool valid()const{ return scopeName != s_NameNone; }
+    [[nodiscard]] bool valid()const noexcept{ return scopeName != s_NameNone; }
 };
 
 struct MemoryDelta{
@@ -63,7 +63,7 @@ struct MemoryDelta{
     i64 deallocationCount = 0;
     bool hasSamples = false;
 
-    [[nodiscard]] bool valid()const{ return hasSamples; }
+    [[nodiscard]] bool valid()const noexcept{ return hasSamples; }
 };
 
 [[nodiscard]] inline MemorySnapshot MakeMemorySnapshot(
@@ -90,7 +90,7 @@ template<typename Arena>
     return MakeMemorySnapshot(scopeName, frameIndex, arena.memoryStats());
 }
 
-[[nodiscard]] inline MemoryDelta Difference(const MemorySnapshot& current, const MemorySnapshot& previous){
+[[nodiscard]] inline MemoryDelta Difference(const MemorySnapshot& current, const MemorySnapshot& previous)noexcept{
     if(!current.valid() || !previous.valid() || current.scopeName != previous.scopeName || current.source != previous.source)
         return {};
 
@@ -136,7 +136,7 @@ private:
         u32 generation = 0u;
         MemorySource::Enum source = MemorySource::ExplicitScope;
 
-        explicit ScopeRecord(const Name& scopeName, const MemorySource::Enum memorySource)
+        explicit ScopeRecord(const Name& scopeName, const MemorySource::Enum memorySource)noexcept
             : name(scopeName)
             , source(memorySource)
         {}
@@ -156,19 +156,19 @@ public:
 
 
 public:
-    void setEnabled(bool enabled);
-    void clear();
+    void setEnabled(bool enabled)noexcept;
+    void clear()noexcept;
     [[nodiscard]] MemoryScopeId registerScope(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope);
-    void recordSnapshot(MemoryScopeId scope, const ::ArenaMemoryStats& stats, u64 frameIndex);
+    void recordSnapshot(MemoryScopeId scope, const ::ArenaMemoryStats& stats, u64 frameIndex)noexcept;
     void recordSnapshot(
         const Name& scopeName,
         const ::ArenaMemoryStats& stats,
         u64 frameIndex,
         MemorySource::Enum source = MemorySource::ExplicitScope
-    );
+    )noexcept;
 
     template<typename Arena>
-    void recordArenaSnapshot(const MemoryScopeId scope, const Arena& arena, const u64 frameIndex){
+    void recordArenaSnapshot(const MemoryScopeId scope, const Arena& arena, const u64 frameIndex)noexcept(noexcept(recordSnapshot(scope, arena.memoryStats(), frameIndex))){
         recordSnapshot(scope, arena.memoryStats(), frameIndex);
     }
 
@@ -178,19 +178,19 @@ public:
         recordSnapshot(registerScope(scopeName), arena.memoryStats(), frameIndex);
     }
 
-    [[nodiscard]] const MemorySnapshot& snapshot(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const;
-    [[nodiscard]] const MemorySnapshot& snapshot(MemoryScopeId scope)const;
-    [[nodiscard]] const MemoryDelta& delta(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const;
-    [[nodiscard]] const MemoryDelta& delta(MemoryScopeId scope)const;
-    [[nodiscard]] usize scopeCount()const{ return m_scopes.size(); }
-    [[nodiscard]] MemoryScopeId scopeAt(usize index)const;
-    [[nodiscard]] Name scopeNameAt(usize index)const;
-    [[nodiscard]] const MemorySnapshot& snapshotAt(usize index)const;
-    [[nodiscard]] const MemoryDelta& deltaAt(usize index)const;
+    [[nodiscard]] const MemorySnapshot& snapshot(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const noexcept;
+    [[nodiscard]] const MemorySnapshot& snapshot(MemoryScopeId scope)const noexcept;
+    [[nodiscard]] const MemoryDelta& delta(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const noexcept;
+    [[nodiscard]] const MemoryDelta& delta(MemoryScopeId scope)const noexcept;
+    [[nodiscard]] usize scopeCount()const noexcept{ return m_scopes.size(); }
+    [[nodiscard]] MemoryScopeId scopeAt(usize index)const noexcept;
+    [[nodiscard]] Name scopeNameAt(usize index)const noexcept;
+    [[nodiscard]] const MemorySnapshot& snapshotAt(usize index)const noexcept;
+    [[nodiscard]] const MemoryDelta& deltaAt(usize index)const noexcept;
 
 
 private:
-    [[nodiscard]] ScopeRecord* findScope(MemoryScopeId scope)const;
+    [[nodiscard]] ScopeRecord* findScope(MemoryScopeId scope)const noexcept;
 
 
 private:
@@ -209,23 +209,23 @@ private:
 
 class MemoryView final{
 public:
-    MemoryView() = default;
-    explicit MemoryView(const MemoryRecorder& recorder)
+    MemoryView()noexcept = default;
+    explicit MemoryView(const MemoryRecorder& recorder)noexcept
         : m_recorder(&recorder)
     {}
 
 
 public:
-    [[nodiscard]] bool valid()const{ return m_recorder != nullptr; }
-    [[nodiscard]] const MemorySnapshot& snapshot(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const;
-    [[nodiscard]] const MemorySnapshot& snapshot(MemoryScopeId scope)const;
-    [[nodiscard]] const MemoryDelta& delta(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const;
-    [[nodiscard]] const MemoryDelta& delta(MemoryScopeId scope)const;
-    [[nodiscard]] usize scopeCount()const;
-    [[nodiscard]] MemoryScopeId scopeAt(usize index)const;
-    [[nodiscard]] Name scopeNameAt(usize index)const;
-    [[nodiscard]] const MemorySnapshot& snapshotAt(usize index)const;
-    [[nodiscard]] const MemoryDelta& deltaAt(usize index)const;
+    [[nodiscard]] bool valid()const noexcept{ return m_recorder != nullptr; }
+    [[nodiscard]] const MemorySnapshot& snapshot(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const noexcept;
+    [[nodiscard]] const MemorySnapshot& snapshot(MemoryScopeId scope)const noexcept;
+    [[nodiscard]] const MemoryDelta& delta(const Name& scopeName, MemorySource::Enum source = MemorySource::ExplicitScope)const noexcept;
+    [[nodiscard]] const MemoryDelta& delta(MemoryScopeId scope)const noexcept;
+    [[nodiscard]] usize scopeCount()const noexcept;
+    [[nodiscard]] MemoryScopeId scopeAt(usize index)const noexcept;
+    [[nodiscard]] Name scopeNameAt(usize index)const noexcept;
+    [[nodiscard]] const MemorySnapshot& snapshotAt(usize index)const noexcept;
+    [[nodiscard]] const MemoryDelta& deltaAt(usize index)const noexcept;
 
 
 private:

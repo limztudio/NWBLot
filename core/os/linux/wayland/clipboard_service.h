@@ -88,7 +88,7 @@ protected:
 private:
     void releaseDevices();
     void finishRead(ClipboardStatus::Enum status);
-    [[nodiscard]] Offer* findOffer(void* handle, ClipboardChannel::Enum channel);
+    [[nodiscard]] Offer* findOffer(void* handle, ClipboardChannel::Enum channel)noexcept;
     void addOffer(void* handle, ClipboardChannel::Enum channel);
     void selectOffer(void* handle, ClipboardChannel::Enum channel);
     void sendSource(Source& source, int fd);

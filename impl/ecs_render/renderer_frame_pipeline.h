@@ -219,7 +219,7 @@ private:
     void resetDeferredTaskGraphRuntime();
     void resetFrameTaskState();
     void resetSharedDeferredFrameTaskState();
-    void resetGraphicsPrefixTaskState();
+    void resetGraphicsPrefixTaskState()noexcept;
     // Accepted cross-frame scratch and producer-return state survives ordinary recording attempts. Reset it only when the imported target/resource generation changes.
     void resetTargetGenerationStateHandoffs()noexcept;
     void resetInvalidatedResourceStateHandoffs()noexcept;

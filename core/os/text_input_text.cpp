@@ -15,7 +15,7 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TextInputAdmission::Enum ValidateTextInputUtf8(const AStringView text, const usize maxBytes){
+TextInputAdmission::Enum ValidateTextInputUtf8(const AStringView text, const usize maxBytes)noexcept{
     if(text.size() > maxBytes)
         return TextInputAdmission::TooLarge;
     usize offset = 0u;

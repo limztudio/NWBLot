@@ -67,14 +67,14 @@ public:
         const RadioGroupOptions& options,
         const RadioGroupStyle& style,
         RadioGroupMetrics& out
-    );
+    )noexcept;
     [[nodiscard]] static bool Place(
         const Rect& bounds,
         const Rect& clip,
         const RadioGroupChoices& choices,
         const RadioGroupMetrics& metrics,
         RadioGroupPlacement& out
-    );
+    )noexcept;
 };
 
 

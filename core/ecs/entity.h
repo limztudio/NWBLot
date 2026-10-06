@@ -22,8 +22,8 @@ class Entity{
 
 
 public:
-    [[nodiscard]] EntityID id()const{ return m_entity; }
-    [[nodiscard]] bool alive()const{ return m_world.alive(m_entity); }
+    [[nodiscard]] EntityID id()const noexcept{ return m_entity; }
+    [[nodiscard]] bool alive()const noexcept{ return m_world.alive(m_entity); }
 
     void destroy(){ m_world.destroyEntity(m_entity); }
 
@@ -56,7 +56,7 @@ public:
 
 
 private:
-    Entity(World& world, EntityID entityId)
+    Entity(World& world, EntityID entityId)noexcept
         : m_world(world)
         , m_entity(entityId)
     {}

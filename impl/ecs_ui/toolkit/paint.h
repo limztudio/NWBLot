@@ -105,9 +105,9 @@ class DrawSnapshot final{
 
 
 public:
-    explicit DrawSnapshot(Core::Alloc::GlobalArena& arena);
-    DrawSnapshot(DrawSnapshot&&) = default;
-    DrawSnapshot& operator=(DrawSnapshot&&) = default;
+    explicit DrawSnapshot(Core::Alloc::GlobalArena& arena)noexcept;
+    DrawSnapshot(DrawSnapshot&&)noexcept = default;
+    DrawSnapshot& operator=(DrawSnapshot&&)noexcept = default;
 
 
 public:
@@ -116,15 +116,15 @@ public:
 
 
 public:
-    [[nodiscard]] u64 generation()const{ return m_generation; }
-    [[nodiscard]] const DisplayMetrics& displayMetrics()const{ return m_displayMetrics; }
-    [[nodiscard]] const SkinBinding& skinBinding()const{ return m_skinBinding; }
-    [[nodiscard]] const PaintVector<Vertex>& vertices()const{ return m_vertices; }
-    [[nodiscard]] const PaintVector<u32>& indices()const{ return m_indices; }
-    [[nodiscard]] const PaintVector<DrawCommand>& commands()const{ return m_commands; }
-    [[nodiscard]] const PaintVector<SharedGlyphPage>& glyphPages()const{ return m_glyphPages; }
-    [[nodiscard]] const PaintVector<SharedSdfAtlasPage>& sdfPages()const{ return m_sdfPages; }
-    [[nodiscard]] const PaintVector<SharedImageSource>& textureImages()const{ return m_textureImages; }
+    [[nodiscard]] u64 generation()const noexcept{ return m_generation; }
+    [[nodiscard]] const DisplayMetrics& displayMetrics()const noexcept{ return m_displayMetrics; }
+    [[nodiscard]] const SkinBinding& skinBinding()const noexcept{ return m_skinBinding; }
+    [[nodiscard]] const PaintVector<Vertex>& vertices()const noexcept{ return m_vertices; }
+    [[nodiscard]] const PaintVector<u32>& indices()const noexcept{ return m_indices; }
+    [[nodiscard]] const PaintVector<DrawCommand>& commands()const noexcept{ return m_commands; }
+    [[nodiscard]] const PaintVector<SharedGlyphPage>& glyphPages()const noexcept{ return m_glyphPages; }
+    [[nodiscard]] const PaintVector<SharedSdfAtlasPage>& sdfPages()const noexcept{ return m_sdfPages; }
+    [[nodiscard]] const PaintVector<SharedImageSource>& textureImages()const noexcept{ return m_textureImages; }
 
 
 private:
@@ -145,7 +145,7 @@ private:
 
 class PaintBuilder final : NoCopy{
 public:
-    explicit PaintBuilder(Core::Alloc::GlobalArena& arena);
+    explicit PaintBuilder(Core::Alloc::GlobalArena& arena)noexcept;
 
 
 public:
@@ -162,7 +162,7 @@ public:
     [[nodiscard]] bool popClip();
     // Each bounded overlay escapes parent clipping and restores that clip and layer at its balanced end.
     [[nodiscard]] bool beginOverlay(u32 layer);
-    [[nodiscard]] bool endOverlay();
+    [[nodiscard]] bool endOverlay()noexcept;
     void fillRect(const Rect& rectangle, const Color& color = {});
     [[nodiscard]] bool drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint = {});
     // Admit all pages before emitting a label. Failure preserves existing bindings and geometry.
@@ -184,7 +184,7 @@ public:
         const Color& tint = {}
     );
     [[nodiscard]] DrawSnapshot freeze();
-    [[nodiscard]] const DisplayMetrics& displayMetrics()const{ return m_snapshot.displayMetrics(); }
+    [[nodiscard]] const DisplayMetrics& displayMetrics()const noexcept{ return m_snapshot.displayMetrics(); }
     [[nodiscard]] Rect currentClip()const;
 
 

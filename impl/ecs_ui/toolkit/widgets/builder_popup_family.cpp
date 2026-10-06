@@ -14,7 +14,7 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Builder::popupFrameVisible(const BuilderScopeFrame& frame)const{
+bool Builder::popupFrameVisible(const BuilderScopeFrame& frame)const noexcept{
     return
         frame.m_popupState && frame.m_popupState->isOpen()
         && frame.m_popupState->instanceGeneration() == frame.m_popupToken.instanceGeneration

@@ -20,7 +20,7 @@ namespace __hidden_frame_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ActiveCutter(const CsgCutterComponent& cutter){
+[[nodiscard]] bool ActiveCutter(const CsgCutterComponent& cutter)noexcept{
     return cutter.active && cutter.shapeType != s_NameNone;
 }
 
@@ -37,7 +37,7 @@ namespace __hidden_frame_state{
     return desc.receiverVisible(world, entity, receiverKind, receiver, desc.receiverVisibleUserData);
 }
 
-[[nodiscard]] bool ReceiverPassEnabled(const CsgReceiverComponent& receiver, const CsgReceiverPass::Enum receiverPass){
+[[nodiscard]] bool ReceiverPassEnabled(const CsgReceiverComponent& receiver, const CsgReceiverPass::Enum receiverPass)noexcept{
     switch(receiverPass){
     case CsgReceiverPass::Opaque: return receiver.affectOpaquePass;
     case CsgReceiverPass::Transparent: return receiver.affectTransparentPass;
@@ -258,7 +258,7 @@ void AddCsgFrameReceiverWork(
     }
 }
 
-void FinalizeCsgFrameState(CsgFrameState& inOutState){
+void FinalizeCsgFrameState(CsgFrameState& inOutState)noexcept{
     inOutState.hasAnyWork =
         inOutState.hasOpaqueStaticWork
         || inOutState.hasOpaqueSkinnedWork

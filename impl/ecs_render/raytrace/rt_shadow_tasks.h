@@ -412,7 +412,7 @@ struct ShadowTransparentSoftTraceGraphTask{
         return true;
     }
 
-    static void Discarded(Payload& payload){
+    static void Discarded(Payload& payload)noexcept{
         if(payload.transparentTraceProduced)
             *payload.transparentTraceProduced = false;
     }

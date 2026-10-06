@@ -41,7 +41,7 @@ public:
 
 
 public:
-    virtual LogArena& arena()override{ return m_arena; }
+    virtual LogArena& arena()noexcept override{ return m_arena; }
     virtual void enqueue(LogString&& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info)override{
         record(str, type);
     }

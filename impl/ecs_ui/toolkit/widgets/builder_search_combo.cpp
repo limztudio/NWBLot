@@ -83,7 +83,7 @@ bool Builder::prepareComboSearch(const WidgetState& field, ComboFrame& frame){
     return comboMatches(frame);
 }
 
-void Builder::snapshotComboQuery(ComboFrame& frame){
+void Builder::snapshotComboQuery(ComboFrame& frame)noexcept{
     if(!frame.search)
         return;
     const EditModel& query = frame.search->query();

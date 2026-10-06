@@ -26,7 +26,7 @@ public:
     [[nodiscard]] static bool Build(AStringView text, EditBoundaryVector& output, bool singleLine = false);
     [[nodiscard]] static bool Validate(AStringView text, bool singleLine = false);
     // The supplied text must have passed Validate; native preedit selections may use scalar boundaries inside graphemes.
-    [[nodiscard]] static bool IsScalarBoundary(AStringView text, usize position);
+    [[nodiscard]] static bool IsScalarBoundary(AStringView text, usize position)noexcept;
 };
 
 

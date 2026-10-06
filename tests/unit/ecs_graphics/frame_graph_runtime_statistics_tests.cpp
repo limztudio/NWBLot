@@ -301,6 +301,48 @@ TEST(EcsGraphics, FrameGraphRuntimeStatisticsSelectsOnlyMatchingCoherentSnapshot
 }
 
 
+TEST(EcsGraphics, FrameGraphRuntimeStatisticsRejectsInconsistentInheritedWaitElisions){
+    NWB::Core::GpuTaskGraphRuntimeStatistics runtimeStatistics = MakeValidRuntimeStatistics();
+    runtimeStatistics.submission.timelineWaitCount = 0u;
+    runtimeStatistics.submission.inheritedTimelineWaitElisionCount = 1u;
+    ASSERT_TRUE(NWB::Core::Telemetry::IsValidFrameGraphRuntimeStatistics(
+        NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(runtimeStatistics, 41u, 41u)
+    ));
+    ++runtimeStatistics.submission.inheritedTimelineWaitElisionCount;
+    EXPECT_FALSE(NWB::Impl::ECSRenderDetail::BuildFrameGraphRuntimeStatistics(runtimeStatistics, 41u, 41u).present);
+
+    PhysicalQueueRuntimeSnapshots snapshots = MakeValidPhysicalQueueRuntimeSnapshots();
+    snapshots.submission.timelineWaitCount = 1u;
+    snapshots.submission.inheritedTimelineWaitElisionCount = 1u;
+    ASSERT_TRUE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(
+        NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
+            snapshots.compile,
+            snapshots.recording,
+            snapshots.submission
+        )
+    ));
+    ++snapshots.submission.inheritedTimelineWaitElisionCount;
+    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(
+        NWB::Impl::ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
+            snapshots.compile,
+            snapshots.recording,
+            snapshots.submission
+        )
+    ));
+
+    NWB::Core::GpuTaskGraphPacketSubmissionStatistics packetStatistics = MakeValidPacketSubmissionStatistics();
+    packetStatistics.timelineWaitCount = 0u;
+    packetStatistics.inheritedTimelineWaitElisionCount = 1u;
+    ASSERT_TRUE(NWB::Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(
+        NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(packetStatistics, 4u)
+    ));
+    ++packetStatistics.inheritedTimelineWaitElisionCount;
+    EXPECT_FALSE(NWB::Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(
+        NWB::Impl::ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(packetStatistics, 4u)
+    ));
+}
+
+
 TEST(EcsGraphics, FrameGraphRuntimeStatisticsOmitsResetArtifactsForMatchingFrame){
     NWB::Tests::TestArena<> testArena;
     NWB::Core::GpuTaskGraph graph(testArena.arena);

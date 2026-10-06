@@ -134,6 +134,7 @@ struct FrameGraphSubmissionRuntimeStatistics{
     u64 sameQueueWaitElisionCount = 0u;
     u64 timelineWaitCount = 0u;
     u64 mergedTimelineWaitCount = 0u;
+    u64 inheritedTimelineWaitElisionCount = 0u;
     u64 acceptedFrontierSubmissionCount = 0u;
     u64 recoverySubmissionCount = 0u;
     f64 submissionSeconds = 0.0;
@@ -193,6 +194,7 @@ struct FrameGraphPhysicalQueueSubmissionRuntimeStatistics{
     u64 sameQueueWaitElisionCount = 0u;
     u64 timelineWaitCount = 0u;
     u64 mergedTimelineWaitCount = 0u;
+    u64 inheritedTimelineWaitElisionCount = 0u;
     u64 acceptedFrontierSubmissionCount = 0u;
     u64 recoverySubmissionCount = 0u;
     f64 submissionSeconds = 0.0;
@@ -231,6 +233,7 @@ struct FrameGraphPacketSubmissionStatisticsRecord{
     u64 sameQueueWaitElisionCount = 0u;
     u64 timelineWaitCount = 0u;
     u64 mergedTimelineWaitCount = 0u;
+    u64 inheritedTimelineWaitElisionCount = 0u;
     f64 submissionSeconds = 0.0;
 };
 

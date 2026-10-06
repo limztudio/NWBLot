@@ -170,6 +170,13 @@ inline void AttachGraphicsPipelineFixedState(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Synchronization2 gives sampled images and read-only attachments one shared native layout.
+inline constexpr VkImageLayout s_ReadOnlyImageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 VkAccessFlags2 GetVkAccessFlags(ResourceStates::Mask state)noexcept;
 VkPipelineStageFlags2 GetVkPipelineStageFlags(ResourceStates::Mask state, bool rayTracingStageAvailable)noexcept;
 VkImageLayout GetVkImageLayout(ResourceStates::Mask state)noexcept;

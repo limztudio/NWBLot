@@ -222,6 +222,7 @@ template<typename OutputT, typename InputT>
     converted.sameQueueWaitElisionCount = statistics.sameQueueWaitElisionCount;
     converted.timelineWaitCount = statistics.timelineWaitCount;
     converted.mergedTimelineWaitCount = statistics.mergedTimelineWaitCount;
+    converted.inheritedTimelineWaitElisionCount = statistics.inheritedTimelineWaitElisionCount;
     converted.acceptedFrontierSubmissionCount = statistics.acceptedFrontierSubmissionCount;
     converted.submissionSeconds = statistics.submissionSeconds;
     converted.recoverySubmissionCount = statistics.recoverySubmissionCount;
@@ -444,6 +445,11 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
             total.submission.mergedTimelineWaitCount
         )
         || !AccumulateBoundedCount(
+            submission.inheritedTimelineWaitElisionCount,
+            ownerSubmission.inheritedTimelineWaitElisionCount,
+            total.submission.inheritedTimelineWaitElisionCount
+        )
+        || !AccumulateBoundedCount(
             submission.acceptedFrontierSubmissionCount,
             ownerSubmission.acceptedFrontierSubmissionCount,
             total.submission.acceptedFrontierSubmissionCount
@@ -588,6 +594,7 @@ template<typename OutputT, typename InputT>
         .sameQueueWaitElisionCount = statistics.sameQueueWaitElisionCount,
         .timelineWaitCount = statistics.timelineWaitCount,
         .mergedTimelineWaitCount = statistics.mergedTimelineWaitCount,
+        .inheritedTimelineWaitElisionCount = statistics.inheritedTimelineWaitElisionCount,
         .submissionSeconds = statistics.submissionSeconds,
     };
 }
@@ -616,6 +623,7 @@ template<typename OutputT, typename InputT>
         .sameQueueWaitElisionCount = encoded.sameQueueWaitElisionCount,
         .timelineWaitCount = encoded.timelineWaitCount,
         .mergedTimelineWaitCount = encoded.mergedTimelineWaitCount,
+        .inheritedTimelineWaitElisionCount = encoded.inheritedTimelineWaitElisionCount,
         .submissionSeconds = encoded.submissionSeconds,
     };
     return IsValidFrameGraphPacketSubmissionStatistics(outStatistics);
@@ -629,6 +637,7 @@ struct FrameGraphPacketSubmissionStatisticsAccumulator{
     u64 sameQueueWaitElisionCount = 0u;
     u64 timelineWaitCount = 0u;
     u64 mergedTimelineWaitCount = 0u;
+    u64 inheritedTimelineWaitElisionCount = 0u;
     u64 acceptedFrontierSubmissionCount = 0u;
     u64 recoverySubmissionCount = 0u;
     f64 submissionSeconds = 0.0;
@@ -679,6 +688,11 @@ struct FrameGraphPacketSubmissionStatisticsAccumulator{
             total.mergedTimelineWaitCount
         )
         && AccumulateBoundedCount(
+            statistics.inheritedTimelineWaitElisionCount,
+            ownerStatistics.inheritedTimelineWaitElisionCount,
+            total.inheritedTimelineWaitElisionCount
+        )
+        && AccumulateBoundedCount(
             statistics.joinsAcceptedQueueFrontier ? 1u : 0u,
             ownerStatistics.acceptedFrontierSubmissionCount,
             total.acceptedFrontierSubmissionCount
@@ -723,6 +737,7 @@ template<typename SubmissionStatistics>
         || total.sameQueueWaitElisionCount != statistics.sameQueueWaitElisionCount
         || total.timelineWaitCount != statistics.timelineWaitCount
         || total.mergedTimelineWaitCount != statistics.mergedTimelineWaitCount
+        || total.inheritedTimelineWaitElisionCount != statistics.inheritedTimelineWaitElisionCount
         || total.acceptedFrontierSubmissionCount != statistics.acceptedFrontierSubmissionCount
         || total.recoverySubmissionCount != statistics.recoverySubmissionCount
         || total.taskCount > statistics.acceptedTaskCount

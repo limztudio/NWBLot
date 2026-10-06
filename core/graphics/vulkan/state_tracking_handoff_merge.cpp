@@ -3,6 +3,7 @@
 
 
 #include "backend.h"
+#include "selected_resource_validation.h"
 
 #include <core/alloc/scratch.h>
 #include <global/algorithm.h>
@@ -264,10 +265,20 @@ bool CommandListResourceStateHandoff::buildFanIn(
                 ? &base.m_textureStates[*resultIndex]
                 : nullptr
             ;
+            TextureState& resultState = m_textureStates[*resultIndex];
+            if(
+                GraphicsBackend::AreTextureReadStatesCompatible(resultState.state, state.state)
+                && resultState.queueSharing == state.queueSharing
+                && resultState.ownerQueue == state.ownerQueue
+                && resultState.releaseDestinationQueue == state.releaseDestinationQueue
+            ){
+                // Retain both read scopes for the next transition without changing native layout or ownership.
+                resultState.state |= state.state;
+                return true;
+            }
             if(baseState && sameTextureState(state, *baseState))
                 return true;
 
-            TextureState& resultState = m_textureStates[*resultIndex];
             if((!baseState || !sameTextureState(resultState, *baseState)) && !sameTextureState(resultState, state))
                 return false;
 

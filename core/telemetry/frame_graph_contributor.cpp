@@ -154,6 +154,7 @@ bool FrameGraphBuilder::addPacketSubmissionStatistics(
         || statistics.sameQueueWaitElisionCount > ownerStatistics.submission.sameQueueWaitElisionCount
         || statistics.timelineWaitCount > ownerStatistics.submission.timelineWaitCount
         || statistics.mergedTimelineWaitCount > ownerStatistics.submission.mergedTimelineWaitCount
+        || statistics.inheritedTimelineWaitElisionCount > ownerStatistics.submission.inheritedTimelineWaitElisionCount
         || statistics.submissionSeconds > ownerStatistics.submission.submissionSeconds
         || (
             statistics.joinsAcceptedQueueFrontier

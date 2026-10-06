@@ -17,7 +17,7 @@ NWB_TELEMETRY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u16 s_FrameGraphPayloadVersion = 9u;
+inline constexpr u16 s_FrameGraphPayloadVersion = 10u;
 inline constexpr u32 s_FrameGraphPayloadMagic = 0x4E574647u; // NWFG
 
 namespace FrameGraphNodeKind{

@@ -717,6 +717,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         ),
         traceMaterialSampledTextureSet,
         effectsTask,
+        useLaggedLightingHistory,
         m_deferredSurfelGiCounterReadbackCompletion,
         surfelGiTimingTicket,
         surfelGiAsyncTiming

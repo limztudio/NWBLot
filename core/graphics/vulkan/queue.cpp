@@ -58,6 +58,7 @@ Queue::Queue(
     , m_waitSemaphoreValues(context.objectArena)
     , m_signalSemaphores(context.objectArena)
     , m_signalSemaphoreValues(context.objectArena)
+    , m_acceptedTimelineWaits(context.objectArena)
     , m_submitDescriptorHeapUseCommitTickets(context.objectArena)
     , m_submitValidatedTimerQueryCommandBuffers(context.objectArena)
     , m_submitWaitInfos(context.objectArena)

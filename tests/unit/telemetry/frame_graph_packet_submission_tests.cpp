@@ -36,10 +36,11 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsValidation){
         .queueClass = Telemetry::FrameGraphQueueClass::Compute,
         .joinsAcceptedQueueFrontier = true,
         .recoverySubmission = true,
-        .plannedWaitTokenCount = 3u,
+        .plannedWaitTokenCount = 4u,
         .sameQueueWaitElisionCount = 1u,
         .timelineWaitCount = 1u,
         .mergedTimelineWaitCount = 1u,
+        .inheritedTimelineWaitElisionCount = 1u,
         .submissionSeconds = 0.125,
     };
     EXPECT_TRUE(Telemetry::IsValidFrameGraphPacketSubmissionStatistics(statistics));
@@ -50,11 +51,86 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsValidation){
     ++statistics.timelineWaitCount;
     EXPECT_FALSE(Telemetry::IsValidFrameGraphPacketSubmissionStatistics(statistics));
     --statistics.timelineWaitCount;
+    ++statistics.inheritedTimelineWaitElisionCount;
+    EXPECT_FALSE(Telemetry::IsValidFrameGraphPacketSubmissionStatistics(statistics));
+    statistics.inheritedTimelineWaitElisionCount = Limit<u64>::s_Max;
+    EXPECT_FALSE(Telemetry::IsValidFrameGraphPacketSubmissionStatistics(statistics));
+    statistics.inheritedTimelineWaitElisionCount = 1u;
     statistics.commandListCount = 0u;
     EXPECT_FALSE(Telemetry::IsValidFrameGraphPacketSubmissionStatistics(statistics));
     statistics.commandListCount = 1u;
     statistics.submissionSeconds = Limit<f64>::s_QuietNaN;
     EXPECT_FALSE(Telemetry::IsValidFrameGraphPacketSubmissionStatistics(statistics));
+}
+
+TEST(Telemetry, InheritedWaitStatisticsRejectMalformedCountsAndMismatchedTotals){
+    TestArena testArena;
+    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
+    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
+    Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics(testArena.arena);
+    Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetSubmissionStatistics(testArena.arena);
+    BuildTestPacketSubmissionFrameGraph(
+        testArena.arena,
+        nodes,
+        edges,
+        physicalQueueRuntimeStatistics,
+        packetSubmissionStatistics
+    );
+    ++nodes[0u].runtimeStatistics.submission.plannedWaitTokenCount;
+    ++nodes[0u].runtimeStatistics.submission.inheritedTimelineWaitElisionCount;
+    ++physicalQueueRuntimeStatistics[0u].statistics.submission.plannedWaitTokenCount;
+    ++physicalQueueRuntimeStatistics[0u].statistics.submission.inheritedTimelineWaitElisionCount;
+    ++packetSubmissionStatistics[s_ThirdElementIndex].plannedWaitTokenCount;
+    ++packetSubmissionStatistics[s_ThirdElementIndex].inheritedTimelineWaitElisionCount;
+
+    Telemetry::TelemetryBytes payload(testArena.arena);
+    ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena, 921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload
+    ));
+    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_EQ(parsed.nodes[0u].runtimeStatistics.submission.inheritedTimelineWaitElisionCount, 1u);
+    EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[1u].statistics.submission.inheritedTimelineWaitElisionCount, 1u);
+    EXPECT_EQ(parsed.packetSubmissionStatistics[1u].inheritedTimelineWaitElisionCount, 1u);
+
+    const usize computePacketOffset = sizeof(Telemetry::EncodedFrameGraphPayloadHeader)
+        + sizeof(Telemetry::EncodedFrameGraphNode)
+        + sizeof(Telemetry::EncodedFrameGraphRuntimeStatistics)
+        + sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics) * s_ExpectedDualCount
+        + sizeof(Telemetry::EncodedFrameGraphPacketSubmissionStatistics)
+    ;
+    Telemetry::EncodedFrameGraphPacketSubmissionStatistics encoded;
+    GLB_MEMCPY(&encoded, sizeof(encoded), payload.data() + computePacketOffset, sizeof(encoded));
+    encoded.inheritedTimelineWaitElisionCount = Limit<u64>::s_Max;
+    GLB_MEMCPY(payload.data() + computePacketOffset, payload.size() - computePacketOffset, &encoded, sizeof(encoded));
+    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+
+    nodes[0u].runtimeStatistics.submission.inheritedTimelineWaitElisionCount = 0u;
+    ++nodes[0u].runtimeStatistics.submission.timelineWaitCount;
+    ASSERT_TRUE(Telemetry::IsValidFrameGraphRuntimeStatistics(nodes[0u].runtimeStatistics));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena, 921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload
+    ));
+    EXPECT_TRUE(payload.empty());
+
+    nodes[0u].runtimeStatistics.submission.inheritedTimelineWaitElisionCount = 1u;
+    --nodes[0u].runtimeStatistics.submission.timelineWaitCount;
+    physicalQueueRuntimeStatistics[0u].statistics.submission.inheritedTimelineWaitElisionCount = 0u;
+    ++physicalQueueRuntimeStatistics[0u].statistics.submission.timelineWaitCount;
+    ASSERT_TRUE(Telemetry::IsValidFrameGraphPhysicalQueueRuntimeStatistics(physicalQueueRuntimeStatistics[0u].statistics));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena, 921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload
+    ));
+    EXPECT_TRUE(payload.empty());
+
+    physicalQueueRuntimeStatistics.clear();
+    packetSubmissionStatistics[s_ThirdElementIndex].inheritedTimelineWaitElisionCount = 0u;
+    ++packetSubmissionStatistics[s_ThirdElementIndex].timelineWaitCount;
+    ASSERT_TRUE(Telemetry::IsValidFrameGraphPacketSubmissionStatistics(packetSubmissionStatistics[s_ThirdElementIndex]));
+    EXPECT_FALSE(Telemetry::BuildFrameGraphPayload(
+        testArena.arena, 921u, nodes, edges, physicalQueueRuntimeStatistics, packetSubmissionStatistics, payload
+    ));
+    EXPECT_TRUE(payload.empty());
 }
 
 TEST(Telemetry, PacketSubmissionEncodingIsIndependentOfInputOrder){
@@ -107,7 +183,7 @@ TEST(Telemetry, PacketSubmissionEncodingIsIndependentOfInputOrder){
     EXPECT_EQ(GLB_MEMCMP(payload.data(), reorderedPayload.data(), payload.size()), 0);
 }
 
-TEST(Telemetry, FrameGraphPacketSubmissionStatisticsV8PreservesExactEmptyAndAbsent){
+TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPreservesExactEmptyAndAbsent){
     TestArena testArena;
     Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
     Telemetry::FrameGraphEdgeDescs edges(testArena.arena);

@@ -209,7 +209,7 @@ TEST(Telemetry, TelemetryReportRejectsNonCurrentFrameGraphPayloads){
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 55u, nodes, edges, 15u));
 
     const u16 unsupportedVersions[] = {
-        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u,
+        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u,
         static_cast<u16>(Telemetry::s_FrameGraphPayloadVersion + 1u),
         Limit<u16>::s_Max,
     };

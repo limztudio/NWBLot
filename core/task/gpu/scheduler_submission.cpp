@@ -285,7 +285,6 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     );
     nativeSubmissionInfo.plannedWaitTokenCount = waitStatistics.plannedWaitTokenCount;
     nativeSubmissionInfo.sameQueueWaitElisionCount = waitStatistics.sameQueueWaitElisionCount;
-    nativeSubmissionInfo.timelineWaitCount = waitStatistics.timelineWaitCount;
     nativeSubmissionInfo.mergedTimelineWaitCount = waitStatistics.mergedTimelineWaitCount;
 
     // A bad dependency or external completion is a pre-submit input error. Preserve the completed native packet so the caller can retry it with corrected tokens
@@ -301,7 +300,9 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     preparedTimingTicketsUnwind.abandonOnUnwind();
     submittingPacketUnwind.arm(packetID, submissionLease);
 
+    usize emittedTimelineWaitCount = 0u;
     QueueSubmissionDesc submitDesc;
+    submitDesc.outTimelineWaitCount = &emittedTimelineWaitCount;
     if(!waitTokens.empty())
         submitDesc.setWaitTokens(waitTokens.data(), waitTokens.size());
     if(preSubmitHook)
@@ -355,6 +356,10 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     }
 
     GLB_ASSERT(token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration));
+    if(emittedTimelineWaitCount > waitStatistics.timelineWaitCount)
+        TerminateInvariant();
+    nativeSubmissionInfo.timelineWaitCount = emittedTimelineWaitCount;
+    nativeSubmissionInfo.inheritedTimelineWaitElisionCount = waitStatistics.timelineWaitCount - emittedTimelineWaitCount;
     nativeSubmissionInfo.submissionSeconds = DurationInSeconds<f64>(TimerNow(), submissionBegin);
     resolutionPreparedTimingTicketsUnwind.release();
     resolutionSubmittingPacketUnwind.release();

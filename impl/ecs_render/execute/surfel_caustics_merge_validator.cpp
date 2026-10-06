@@ -205,7 +205,6 @@ void SurfelCausticsMergeValidator::validate(
             causticsTask
         )
     ;
-    // Keep Snapshot Copy and the GI endpoint separate with distinct boundaries.
     outResult.surfelGiSnapshotCopyAndTimingPacketsAreDistinct =
         !pipeline.m_deferredSurfelGiSnapshotCopyTask.valid()
         || !compiledPlan.tasksSharePacket(

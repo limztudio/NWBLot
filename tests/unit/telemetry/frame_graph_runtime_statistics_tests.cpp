@@ -147,6 +147,20 @@ static constexpr FrameGraphRuntimeStatisticsMutation s_FrameGraphRuntimeStatisti
         ;
     },
     [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
+        statistics.submission.inheritedTimelineWaitElisionCount = statistics.submission.plannedWaitTokenCount
+            - statistics.submission.sameQueueWaitElisionCount
+            - statistics.submission.mergedTimelineWaitCount + 1u
+        ;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
+        statistics.submission.inheritedTimelineWaitElisionCount = Limit<u64>::s_Max;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
+        statistics.submission = {};
+        statistics.submission.plannedWaitTokenCount = 1u;
+        statistics.submission.inheritedTimelineWaitElisionCount = 1u;
+    },
+    [](Telemetry::FrameGraphRuntimeStatistics& statistics)noexcept{
         ++statistics.submission.timelineWaitCount;
     },
 };

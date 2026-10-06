@@ -37,11 +37,11 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraphAnalysis& analysis,
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies,
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies,
-    Vector<GpuPacketDependency, Alloc::ScratchArena>& terminalFinalizationDependencies,
+    Vector<GpuPacketDependency, Alloc::ScratchArena>& resourceStateDependencies,
     GpuTaskGraphCompiledPlanStorage& compiledPlan,
     Alloc::ScratchArena& scratchArena){
     const usize packetCount = compiledPlan.packets.size();
-    const bool plansTerminalFinalizationDependencies = !terminalFinalizationDependencies.empty();
+    const bool plansResourceStateDependencies = !resourceStateDependencies.empty();
     if(
         packetCount > static_cast<usize>(Limit<u32>::s_Max)
         || compiledPlan.packetDependencies.size() > static_cast<usize>(Limit<u32>::s_Max)
@@ -49,7 +49,7 @@ namespace GpuTaskGraphCompilerDetail{
     )
         return false;
 
-    for(const GpuPacketDependency& dependency : terminalFinalizationDependencies){
+    for(const GpuPacketDependency& dependency : resourceStateDependencies){
         if(
             !dependency.producer.valid()
             || !dependency.consumer.valid()
@@ -75,10 +75,10 @@ namespace GpuTaskGraphCompilerDetail{
             return false;
     }
 
-    if(plansTerminalFinalizationDependencies){
+    if(plansResourceStateDependencies){
         Sort(
-            terminalFinalizationDependencies.begin(),
-            terminalFinalizationDependencies.end(),
+            resourceStateDependencies.begin(),
+            resourceStateDependencies.end(),
             [](const GpuPacketDependency& lhs, const GpuPacketDependency& rhs){
                 if(lhs.consumer.index != rhs.consumer.index)
                     return lhs.consumer.index < rhs.consumer.index;
@@ -97,7 +97,7 @@ namespace GpuTaskGraphCompilerDetail{
     constexpr usize s_BitsPerPacketReachabilityWord = sizeof(u64) * 8u;
     Vector<u64, Alloc::ScratchArena> packetReachability(scratchArena);
     usize packetReachabilityWordsPerPacket = 0u;
-    if(plansTerminalFinalizationDependencies && packetCount == 0u)
+    if(plansResourceStateDependencies && packetCount == 0u)
         return false;
     const auto publishPacketDependency = [&](const GpuSubmissionPacketId producer, const GpuSubmissionPacketId consumer){
         if(
@@ -143,7 +143,7 @@ namespace GpuTaskGraphCompilerDetail{
 
     usize initialOwnershipDependencyIndex = 0u;
     usize initialAvailabilityDependencyIndex = 0u;
-    usize terminalFinalizationDependencyIndex = 0u;
+    usize resourceStateDependencyIndex = 0u;
     for(usize consumerPacketIndex = 0u; consumerPacketIndex < compiledPlan.packets.size(); ++consumerPacketIndex){
         GpuSubmissionPacket& consumerPacket = compiledPlan.packets[consumerPacketIndex];
         const GpuSubmissionPacketId consumerPacketID{
@@ -238,14 +238,14 @@ namespace GpuTaskGraphCompilerDetail{
                     return false;
             }
         }
-        if(!plansTerminalFinalizationDependencies)
+        if(!plansResourceStateDependencies)
             continue;
 
         bool consumerDependsOnNonRoot = false;
-        const bool hasTerminalConsumerGroup = terminalFinalizationDependencyIndex < terminalFinalizationDependencies.size()
-            && terminalFinalizationDependencies[terminalFinalizationDependencyIndex].consumer == consumerPacketID
+        const bool hasResourceStateConsumerGroup = resourceStateDependencyIndex < resourceStateDependencies.size()
+            && resourceStateDependencies[resourceStateDependencyIndex].consumer == consumerPacketID
         ;
-        if(packetReachabilityWordsPerPacket != 0u || hasTerminalConsumerGroup){
+        if(packetReachabilityWordsPerPacket != 0u || hasResourceStateConsumerGroup){
             for(u32 dependencyIndex = 0u; dependencyIndex < consumerPacket.dependencyCount; ++dependencyIndex){
                 const GpuPacketDependency& dependency = compiledPlan.packetDependencies[
                     consumerPacket.dependencyOffset + dependencyIndex
@@ -259,17 +259,17 @@ namespace GpuTaskGraphCompilerDetail{
             }
         }
 
-        // Each consumer group is ordered nearest-producer first. If an existing or newly added path already joins
-        // an older producer into this terminal packet, avoid adding a redundant direct edge while retaining the
+        // Each state-synchronization consumer group is ordered nearest-producer first. If an existing or newly added path already joins
+        // an older producer into this packet, avoid adding a redundant direct edge while retaining the
         // canonical dependency order.
         while(
-            terminalFinalizationDependencyIndex < terminalFinalizationDependencies.size()
-            && terminalFinalizationDependencies[terminalFinalizationDependencyIndex].consumer == consumerPacketID
+            resourceStateDependencyIndex < resourceStateDependencies.size()
+            && resourceStateDependencies[resourceStateDependencyIndex].consumer == consumerPacketID
         ){
             const GpuSubmissionPacketId producerPacketID =
-                terminalFinalizationDependencies[terminalFinalizationDependencyIndex].producer
+                resourceStateDependencies[resourceStateDependencyIndex].producer
             ;
-            ++terminalFinalizationDependencyIndex;
+            ++resourceStateDependencyIndex;
             if(packetDependencyConsumerMarkers[producerPacketID.index] == consumerPacketID.index)
                 continue;
             if(
@@ -300,7 +300,7 @@ namespace GpuTaskGraphCompilerDetail{
         return false;
     if(initialAvailabilityDependencyIndex != initialAvailabilityDependencies.size())
         return false;
-    if(terminalFinalizationDependencyIndex != terminalFinalizationDependencies.size())
+    if(resourceStateDependencyIndex != resourceStateDependencies.size())
         return false;
 
     // Packet dependencies are already constrained to earlier compiler-order packets and remain the authoritative

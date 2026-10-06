@@ -414,7 +414,7 @@ NWB_IMPL_BEGIN
     bool shadowStateReady = true;
     bool causticStateReady = true;
     bool surfelStateReady = true;
-    if(context->runsOnCompute && !context->usesLaggedHistory){
+    if(!context->usesLaggedHistory){
         shadowStateReady = context->renderer->m_shadowVisibilityReturnState.buildFilteredResourceSubset(
             *context->shadowReturnStateCandidate,
             *finalState,
@@ -476,7 +476,7 @@ NWB_IMPL_BEGIN
     bool shadowStateReady = true;
     bool causticStateReady = true;
     bool surfelStateReady = true;
-    if(context->runsOnCompute && !context->usesLaggedHistory){
+    if(!context->usesLaggedHistory){
         shadowStateReady = renderer.m_shadowVisibilityReturnState.commit(*context->shadowReturnStateCandidate);
         causticStateReady = renderer.m_causticIrradianceReturnState.commit(*context->causticReturnStateCandidate);
         surfelStateReady = renderer.m_surfelIrradianceReturnState.commit(*context->surfelReturnStateCandidate);

@@ -99,6 +99,7 @@ Telemetry::EncodedFrameGraphRuntimeStatistics EncodeTestFrameGraphRuntimeStatist
             .sameQueueWaitElisionCount = statistics.submission.sameQueueWaitElisionCount,
             .timelineWaitCount = statistics.submission.timelineWaitCount,
             .mergedTimelineWaitCount = statistics.submission.mergedTimelineWaitCount,
+            .inheritedTimelineWaitElisionCount = statistics.submission.inheritedTimelineWaitElisionCount,
             .acceptedFrontierSubmissionCount = statistics.submission.acceptedFrontierSubmissionCount,
             .submissionSeconds = statistics.submission.submissionSeconds,
             .recoverySubmissionCount = statistics.submission.recoverySubmissionCount,

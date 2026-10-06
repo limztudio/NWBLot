@@ -104,7 +104,7 @@ struct GpuTaskGraphResourceStatePlan{
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena>& pendingEpilogueBarriers;
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies;
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies;
-    Vector<GpuPacketDependency, Alloc::ScratchArena>& terminalFinalizationDependencies;
+    Vector<GpuPacketDependency, Alloc::ScratchArena>& resourceStateDependencies;
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& stateFragments;
     Vector<GpuTaskResourceRange, Alloc::ScratchArena>& taskFirstUseRanges;
 };
@@ -549,7 +549,7 @@ struct GpuTaskQueuePlacementGroup{
     const GpuTaskGraphAnalysis& analysis,
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialOwnershipDependencies,
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies,
-    Vector<GpuPacketDependency, Alloc::ScratchArena>& terminalFinalizationDependencies,
+    Vector<GpuPacketDependency, Alloc::ScratchArena>& resourceStateDependencies,
     GpuTaskGraphCompiledPlanStorage& compiledPlan,
     Alloc::ScratchArena& scratchArena
 );

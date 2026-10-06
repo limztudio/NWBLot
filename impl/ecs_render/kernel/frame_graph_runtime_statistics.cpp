@@ -158,6 +158,7 @@ Core::Telemetry::FrameGraphRuntimeStatistics ECSRenderDetail::BuildFrameGraphRun
             .sameQueueWaitElisionCount = static_cast<u64>(submissionStatistics.sameQueueWaitElisionCount),
             .timelineWaitCount = static_cast<u64>(submissionStatistics.timelineWaitCount),
             .mergedTimelineWaitCount = static_cast<u64>(submissionStatistics.mergedTimelineWaitCount),
+            .inheritedTimelineWaitElisionCount = static_cast<u64>(submissionStatistics.inheritedTimelineWaitElisionCount),
             .acceptedFrontierSubmissionCount = static_cast<u64>(
                 submissionStatistics.acceptedFrontierSubmissionCount
             ),
@@ -201,6 +202,7 @@ ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(
         .sameQueueWaitElisionCount = static_cast<u64>(statistics.sameQueueWaitElisionCount),
         .timelineWaitCount = static_cast<u64>(statistics.timelineWaitCount),
         .mergedTimelineWaitCount = static_cast<u64>(statistics.mergedTimelineWaitCount),
+        .inheritedTimelineWaitElisionCount = static_cast<u64>(statistics.inheritedTimelineWaitElisionCount),
         .submissionSeconds = statistics.submissionSeconds,
     };
     if(!Core::Telemetry::IsValidFrameGraphPacketSubmissionStatistics(result))
@@ -300,6 +302,7 @@ ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
             .sameQueueWaitElisionCount = static_cast<u64>(submissionStatistics.sameQueueWaitElisionCount),
             .timelineWaitCount = static_cast<u64>(submissionStatistics.timelineWaitCount),
             .mergedTimelineWaitCount = static_cast<u64>(submissionStatistics.mergedTimelineWaitCount),
+            .inheritedTimelineWaitElisionCount = static_cast<u64>(submissionStatistics.inheritedTimelineWaitElisionCount),
             .acceptedFrontierSubmissionCount = static_cast<u64>(
                 submissionStatistics.acceptedFrontierSubmissionCount
             ),

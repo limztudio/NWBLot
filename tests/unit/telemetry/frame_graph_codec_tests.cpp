@@ -71,7 +71,7 @@ TEST(Telemetry, FrameGraphPayloadRejectsNonCurrentVersions){
     ASSERT_GT(header.packetSubmissionStatisticsCount, 0u);
 
     const u16 unsupportedVersions[] = {
-        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u,
+        0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u,
         static_cast<u16>(Telemetry::s_FrameGraphPayloadVersion + 1u),
         Limit<u16>::s_Max,
     };
@@ -112,7 +112,7 @@ TEST(Telemetry, FrameGraphPayloadRejectsHistoricalEmptyPayloads){
     ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
     EXPECT_EQ(parsed.frameIndex, 907u);
 
-    const usize historicalHeaderBytes[] = { 28u, 32u, 36u, 40u, 44u, 44u, 48u, 52u };
+    const usize historicalHeaderBytes[] = { 28u, 32u, 36u, 40u, 44u, 44u, 48u, 52u, 52u };
     for(usize versionIndex = 0u; versionIndex < LengthOf(historicalHeaderBytes); ++versionIndex){
         header.version = static_cast<u16>(versionIndex + 1u);
         SCOPED_TRACE(header.version);

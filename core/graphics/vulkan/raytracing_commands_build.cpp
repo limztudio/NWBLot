@@ -425,10 +425,7 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
         reuseBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
         reuseBarrier.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
 
-        auto reuseDepInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
-        reuseDepInfo.memoryBarrierCount = 1;
-        reuseDepInfo.pMemoryBarriers = &reuseBarrier;
-        executePipelineBarrier(reuseDepInfo);
+        executePipelineBarrier({ &reuseBarrier, 1u }, {}, {});
     }
     if(m_commandRecordingFailed)
         return false;
@@ -954,10 +951,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         reuseBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
         reuseBarrier.dstAccessMask = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
 
-        auto reuseDepInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
-        reuseDepInfo.memoryBarrierCount = 1;
-        reuseDepInfo.pMemoryBarriers = &reuseBarrier;
-        executePipelineBarrier(reuseDepInfo);
+        executePipelineBarrier({ &reuseBarrier, 1u }, {}, {});
     }
 
     if(hasOpacityMicromap){
@@ -967,10 +961,7 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         micromapBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR;
         micromapBarrier.dstAccessMask = VK_ACCESS_2_MICROMAP_READ_BIT_EXT;
 
-        auto micromapDepInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
-        micromapDepInfo.memoryBarrierCount = 1u;
-        micromapDepInfo.pMemoryBarriers = &micromapBarrier;
-        executePipelineBarrier(micromapDepInfo);
+        executePipelineBarrier({ &micromapBarrier, 1u }, {}, {});
     }
     if(m_commandRecordingFailed)
         return;

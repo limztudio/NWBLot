@@ -31,6 +31,8 @@ capture point only when investigating a specific temporal phase:
 python -m launcher async-shadow-m4 -- --pixel-capture-frames 128
 ```
 
+A separate diagnostic launch of either benchmark may set `NWB_STRESS_FRAME_GRAPH_FILE` to an output path while using `NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME`. Before publishing the held-frame marker, the benchmark writes readable JSON plus the encoded public telemetry stream at `<path>.nwbs`. This capture request rejects presentation-measurement mode or a missing pixel freeze; keep it unset for ordinary paired timing runs. The snapshot includes task assignments, packet boundaries, barrier counts, and accepted submission waits for the completed frame. Submission counters distinguish emitted timeline waits, same-queue elisions, duplicate merges, and inherited elisions covered by prior accepted waits. Public analysis edges do not export compiled state-seed IDs or extra compiler dependency IDs; the snapshot explicitly marks those limits and does not qualify performance.
+
 On Windows, the M4 capture path restores, raises, and foregrounds the benchmark window before waiting for that
 held-frame marker. It then requires `DwmSetWindowAttribute(DWMWA_WINDOW_CORNER_PREFERENCE=33,
 DWMWCP_DONOTROUND=1)` and `DwmFlush` to succeed before the existing raw client-area screen capture. This is scoped to
@@ -64,3 +66,21 @@ After wall-clock warmup, the runner snapshots the timing file's EOF and waits fo
 The default gate needs at least six timing intervals, a median graph-owned `render.async_shadow` duration of at least `0.01 ms`, no more than `3%` median `render.frame` regression, no forbidden validation/ownership logs, and pixel differences inside the reported tolerance. Tune those thresholds explicitly on the command line for a device's known noise floor. `--report-only` always preserves the report while returning success for a failed rollout gate.
 
 Artifacts include `async.timing.txt`, `sync.timing.txt`, captured logs and BMPs, plus `m4_report.json` and `m4_report.md`. A flat or negative performance result is useful data: retain the Graphics queue route and use the report to decide whether another job merits a separate async proposal.
+
+## Recorded qualification: 2026-10-06
+
+Three serial repeats of the frozen final Windows ARM64 / Clang Optimize binaries passed the unchanged M4 gate on the recorded Qualcomm Adreno X2-90 GPU. Each mode used four seconds of wall-clock warmup, post-warmup timing-boundary admission, and thirty seconds of measurement on the same 1280x900 fixed-yaw workload. The async arm retained a real distinct dedicated Compute queue and the `+3%` critical-path limit.
+
+| Repeat | Sync `render.frame` ms | Async `render.frame` ms | Delta | Async shadow ms | Gate |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 1 | 12.15025 | 11.37095 | -6.414% | 2.5729 | PASS |
+| 2 | 11.35080 | 11.48525 | +1.184% | 2.6121 | PASS |
+| 3 | 11.49145 | 11.51470 | +0.202% | 2.6048 | PASS |
+
+Each arm supplied 60 required timing samples per repeat; all 60 async shadow samples were positive. Pixel max-absolute difference was 6 in each repeat, with mean-absolute differences 0.158335, 0.152716, and 0.149893. Forbidden-log and severity scans were clean. Five preserved original `ae06f1faa` binary repeats (`baseline_round2` through `baseline_round6`) failed the critical-path gate at +3.840% to +7.550%; their queue, shadow-work, pixel, and log gates passed.
+
+These results qualify the recorded device and workload at the unchanged tolerance. The final repeats include both faster and slightly slower async results, so they do not establish a universal async speedup or a frame-rate claim for another GPU. Shader work, routing requirements, scene quality, capture tolerances, and rollout thresholds were preserved.
+
+A separate version-10 diagnostic snapshot of one completed final frame recorded 103 tasks, 12 accepted submissions, two emitted timeline waits, and three inherited wait elisions. Its dedicated Compute queue retained 27 tasks in two packets; the compiled plan also contained one unexecuted conditional recovery packet. This is one frame's scheduling evidence, not a fixed packet-count contract or a performance measurement.
+
+Evidence remains under ignored `__cmake/verification_async_performance_20261006/`: `qualification_repeats.json`, `baseline_binary_manifest.json`, `final_round1/` through `final_round3/` reports and raw artifacts, and `graph_final/frame_graph.json` with its encoded telemetry stream. The reports retain the admitted timing byte offsets. This record covers the M4 workload; other configuration and workflow qualification is recorded separately.

@@ -45,6 +45,8 @@ target_sources(nwb_gpu_task PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/compiler_resource_history.h"
     "${CMAKE_CURRENT_LIST_DIR}/compiler_resource_ranges.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/compiler_resource_state.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/compiler_read_state_sources.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/compiler_read_state_sources.h"
     "${CMAKE_CURRENT_LIST_DIR}/compiler_resource_versions.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/packet_runtime.h"
     "${CMAKE_CURRENT_LIST_DIR}/packet_runtime_artifact.h"

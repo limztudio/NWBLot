@@ -360,6 +360,7 @@ private:
         Core::GpuGraphResourceSetId traceGeometrySet,
         Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
         Core::GpuTaskId effectsTask,
+        bool useLaggedLightingHistory,
         Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
         Core::GpuTimingSubmissionTicket& timingTicket,
         Optional<Core::GpuTimingMeasure>& asyncTiming

@@ -291,11 +291,11 @@ VkImageLayout GetVkImageLayout(ResourceStates::Mask states)noexcept{
     if(states & ResourceStates::DepthWrite)
         return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     if(states & ResourceStates::DepthRead)
-        return VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+        return s_ReadOnlyImageLayout;
     if(states & ResourceStates::UnorderedAccess)
         return VK_IMAGE_LAYOUT_GENERAL;
     if(states & ResourceStates::ShaderResource)
-        return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        return s_ReadOnlyImageLayout;
     if(states & ResourceStates::CopyDest)
         return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     if(states & ResourceStates::CopySource)

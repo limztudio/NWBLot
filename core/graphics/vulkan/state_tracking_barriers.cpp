@@ -3,7 +3,6 @@
 
 
 #include "backend.h"
-#include "arena_names.h"
 #include "state_tracking_detail.h"
 
 #include <core/common/log.h>
@@ -430,9 +429,20 @@ void AppendTextureStateBarriersBefore(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
+void CommandList::executePipelineBarrier(
+    const Span<VkMemoryBarrier2> memoryBarriers,
+    const Span<VkImageMemoryBarrier2> imageBarriers,
+    const Span<VkBufferMemoryBarrier2> bufferBarriers){
     if(!validateCommandRecordingScope(GLB_TEXT("pipeline barrier")))
         return;
+
+    auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
+    depInfo.memoryBarrierCount = static_cast<u32>(memoryBarriers.size());
+    depInfo.pMemoryBarriers = memoryBarriers.data();
+    depInfo.imageMemoryBarrierCount = static_cast<u32>(imageBarriers.size());
+    depInfo.pImageMemoryBarriers = imageBarriers.data();
+    depInfo.bufferMemoryBarrierCount = static_cast<u32>(bufferBarriers.size());
+    depInfo.pBufferMemoryBarriers = bufferBarriers.data();
 
     Framebuffer* resumeFramebuffer = nullptr;
     if(m_renderPassActive){
@@ -472,13 +482,7 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
         m_renderPassFramebuffer = nullptr;
     }
 
-    // Normalize against the exact queue, not its broad API class. Cross-queue semaphore waits already make an
-    // unsupported producer scope available, so lower that side to NONE instead of an illegal local access.
-    VkDependencyInfo queueCompatibleDepInfo = depInfo;
-    Alloc::ScratchArena scratchArena(VulkanArenaScope::s_StateHandoffArena);
-    Vector<VkMemoryBarrier2, Alloc::ScratchArena> queueCompatibleMemoryBarriers{scratchArena};
-    Vector<VkImageMemoryBarrier2, Alloc::ScratchArena> queueCompatibleImageBarriers{scratchArena};
-    Vector<VkBufferMemoryBarrier2, Alloc::ScratchArena> queueCompatibleBufferBarriers{scratchArena};
+    // Cross-queue semaphore waits cover unsupported producer scopes; lower them to NONE on the exact queue.
     const GpuPhysicalQueueInfo* const exactQueueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     const GpuQueueCapability::Mask exactQueueCapabilities = exactQueueInfo
         ? exactQueueInfo->capabilities
@@ -489,35 +493,18 @@ void CommandList::executePipelineBarrier(const VkDependencyInfo& depInfo){
     const bool computeCapable = (exactCapabilityBits & static_cast<u8>(GpuQueueCapability::Compute)) != 0u;
     const bool universalGraphicsCompute = graphicsCapable && computeCapable;
     if(!universalGraphicsCompute){
-        queueCompatibleMemoryBarriers.reserve(depInfo.memoryBarrierCount);
-        for(u32 index = 0u; index < depInfo.memoryBarrierCount; ++index){
-            VkMemoryBarrier2 barrier = depInfo.pMemoryBarriers[index];
-            VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.srcStageMask, barrier.srcAccessMask);
-            VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.dstStageMask, barrier.dstAccessMask);
-            queueCompatibleMemoryBarriers.push_back(barrier);
-        }
-        queueCompatibleDepInfo.pMemoryBarriers = queueCompatibleMemoryBarriers.data();
-
-        queueCompatibleImageBarriers.reserve(depInfo.imageMemoryBarrierCount);
-        for(u32 index = 0u; index < depInfo.imageMemoryBarrierCount; ++index){
-            VkImageMemoryBarrier2 barrier = depInfo.pImageMemoryBarriers[index];
-            VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.srcStageMask, barrier.srcAccessMask);
-            VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.dstStageMask, barrier.dstAccessMask);
-            queueCompatibleImageBarriers.push_back(barrier);
-        }
-        queueCompatibleDepInfo.pImageMemoryBarriers = queueCompatibleImageBarriers.data();
-
-        queueCompatibleBufferBarriers.reserve(depInfo.bufferMemoryBarrierCount);
-        for(u32 index = 0u; index < depInfo.bufferMemoryBarrierCount; ++index){
-            VkBufferMemoryBarrier2 barrier = depInfo.pBufferMemoryBarriers[index];
-            VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.srcStageMask, barrier.srcAccessMask);
-            VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.dstStageMask, barrier.dstAccessMask);
-            queueCompatibleBufferBarriers.push_back(barrier);
-        }
-        queueCompatibleDepInfo.pBufferMemoryBarriers = queueCompatibleBufferBarriers.data();
+        const auto normalizeBarrierScopes = [&](const auto barriers)noexcept{
+            for(auto& barrier : barriers){
+                VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.srcStageMask, barrier.srcAccessMask);
+                VulkanStateTrackingDetail::NormalizeBarrierScopeForQueueCapabilities(exactQueueCapabilities, barrier.dstStageMask, barrier.dstAccessMask);
+            }
+        };
+        normalizeBarrierScopes(memoryBarriers);
+        normalizeBarrierScopes(imageBarriers);
+        normalizeBarrierScopes(bufferBarriers);
     }
 
-    m_context.deviceDispatch.vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &queueCompatibleDepInfo);
+    m_context.deviceDispatch.vkCmdPipelineBarrier2(m_currentCmdBuf->m_cmdBuf, &depInfo);
 
     if(resumeFramebuffer){
         RenderPassParameters params = {};
@@ -540,13 +527,11 @@ void CommandList::commitBarriers(){
     if(m_pendingImageBarriers.empty() && m_pendingBufferBarriers.empty())
         return;
 
-    auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
-    depInfo.imageMemoryBarrierCount = static_cast<u32>(m_pendingImageBarriers.size());
-    depInfo.pImageMemoryBarriers = m_pendingImageBarriers.data();
-    depInfo.bufferMemoryBarrierCount = static_cast<u32>(m_pendingBufferBarriers.size());
-    depInfo.pBufferMemoryBarriers = m_pendingBufferBarriers.data();
-
-    executePipelineBarrier(depInfo);
+    executePipelineBarrier(
+        {},
+        { m_pendingImageBarriers.data(), m_pendingImageBarriers.size() },
+        { m_pendingBufferBarriers.data(), m_pendingBufferBarriers.size() }
+    );
 
     m_pendingImageBarriers.clear();
     m_pendingBufferBarriers.clear();
@@ -660,7 +645,7 @@ void CommandList::setTextureState(
         return;
 
     if(!usePerSubresourceBarriers){
-        const VkImageMemoryBarrier2 barrier = VulkanStateTrackingDetail::BuildTextureStateBarrier(
+        VkImageMemoryBarrier2 barrier = VulkanStateTrackingDetail::BuildTextureStateBarrier(
             texture.m_image,
             texture.m_aspectMask,
             resolvedSubresources,
@@ -677,11 +662,7 @@ void CommandList::setTextureState(
             return;
         }
 
-        auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
-        depInfo.imageMemoryBarrierCount = 1;
-        depInfo.pImageMemoryBarriers = &barrier;
-
-        executePipelineBarrier(depInfo);
+        executePipelineBarrier({}, { &barrier, 1u }, {});
         return;
     }
 
@@ -695,11 +676,7 @@ void CommandList::setTextureState(
     if(newBarrierCount == 0)
         return;
 
-    auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
-    depInfo.imageMemoryBarrierCount = static_cast<u32>(newBarrierCount);
-    depInfo.pImageMemoryBarriers = m_pendingImageBarriers.data() + firstBarrierIndex;
-
-    executePipelineBarrier(depInfo);
+    executePipelineBarrier({}, { m_pendingImageBarriers.data() + firstBarrierIndex, newBarrierCount }, {});
     m_pendingImageBarriers.resize(firstBarrierIndex);
 }
 

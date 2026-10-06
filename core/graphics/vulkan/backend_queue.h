@@ -89,7 +89,8 @@ public:
         VkResult* outNativeResult = nullptr,
         const SubmissionSignal* localSignals = nullptr,
         usize localSignalCount = 0u,
-        bool forceNativeSubmission = false
+        bool forceNativeSubmission = false,
+        usize* outTimelineWaitCount = nullptr
     );
     [[nodiscard]] VkResult updateLastFinishedID();
 
@@ -183,6 +184,9 @@ private:
     Vector<u64, Alloc::GlobalArena> m_waitSemaphoreValues;
     Vector<VkSemaphore, Alloc::GlobalArena> m_signalSemaphores;
     Vector<u64, Alloc::GlobalArena> m_signalSemaphoreValues;
+    // Successful ALL_COMMANDS waits cover later commands on this exact queue. Zero-valued entries only reserve
+    // owned tracking-semaphore identity before the native call; coverage advances solely on acceptance.
+    Vector<SubmissionWait, Alloc::GlobalArena> m_acceptedTimelineWaits;
     // Queue::submit holds m_mutex throughout, so this persistent high-water workspace can be reused without
     // allocation or deallocation after vkQueueSubmit2 accepts the submission.
     Vector<DescriptorHeapUseCommitTicket, Alloc::GlobalArena> m_submitDescriptorHeapUseCommitTickets;

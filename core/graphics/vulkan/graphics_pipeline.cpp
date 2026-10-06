@@ -189,7 +189,7 @@ bool CommandList::beginDynamicRendering(Framebuffer& framebuffer, const RenderPa
 
         const VkImageLayout depthStencilLayout =
             fbDesc.depthAttachment.isReadOnly
-            ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+            ? VulkanDetail::s_ReadOnlyImageLayout
             : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
         ;
         if((depthTex->m_aspectMask & VK_IMAGE_ASPECT_DEPTH_BIT) != 0){

@@ -76,6 +76,7 @@ GpuTaskGraphPacketSubmissionStatistics GpuGraphSubmissionTransaction::packetSubm
         .sameQueueWaitElisionCount = runtime.sameQueueWaitElisionCount,
         .timelineWaitCount = runtime.timelineWaitCount,
         .mergedTimelineWaitCount = runtime.mergedTimelineWaitCount,
+        .inheritedTimelineWaitElisionCount = runtime.inheritedTimelineWaitElisionCount,
         .submissionSeconds = runtime.submissionSeconds,
     };
 }
@@ -126,6 +127,7 @@ GpuTaskGraphPhysicalQueueSubmissionStatistics GpuGraphSubmissionTransaction::phy
             statistics.sameQueueWaitElisionCount += runtime.sameQueueWaitElisionCount;
             statistics.timelineWaitCount += runtime.timelineWaitCount;
             statistics.mergedTimelineWaitCount += runtime.mergedTimelineWaitCount;
+            statistics.inheritedTimelineWaitElisionCount += runtime.inheritedTimelineWaitElisionCount;
             statistics.submissionSeconds += runtime.submissionSeconds;
             if(packet.joinsAcceptedQueueFrontier)
                 ++statistics.acceptedFrontierSubmissionCount;

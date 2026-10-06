@@ -84,8 +84,8 @@ u64 Queue::submit(
     VkResult* const outNativeResult,
     const SubmissionSignal* const localSignals,
     const usize localSignalCount,
-    const bool forceNativeSubmission
-){
+    const bool forceNativeSubmission,
+    usize* const outTimelineWaitCount){
     ScopedLock lock(m_mutex);
     DescriptorBufferManager* const descriptorBufferManager = m_context.descriptorBufferManager;
     GpuDescriptorHeap* submissionDescriptorHeap = nullptr;
@@ -109,6 +109,8 @@ u64 Queue::submit(
         *outSubmissionAccepted = false;
     if(outNativeResult)
         *outNativeResult = VK_SUCCESS;
+    if(outTimelineWaitCount)
+        *outTimelineWaitCount = 0u;
     if(m_device.submissionsBlocked())
         return m_lastSubmittedID;
 
@@ -306,15 +308,42 @@ u64 Queue::submit(
     timelineSignal.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
     waitInfos.reserve(localWaitCount + m_waitSemaphores.size());
+    usize emittedTimelineWaitCount = 0u;
     for(usize i = 0u; i < localWaitCount; ++i){
-        if(localWaits[i].semaphore == VK_NULL_HANDLE){
+        const SubmissionWait& wait = localWaits[i];
+        if(wait.semaphore == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to submit command lists: local wait semaphore is null"));
             return m_lastSubmittedID;
         }
 
+        SubmissionWait* acceptedWait = nullptr;
+        if(wait.value != 0u){
+            for(SubmissionWait& accepted : m_acceptedTimelineWaits){
+                if(accepted.semaphore == wait.semaphore){
+                    acceptedWait = &accepted;
+                    break;
+                }
+            }
+            if(!acceptedWait){
+                for(const Queue* const producerQueue : m_device.m_physicalQueues){
+                    if(producerQueue && producerQueue->m_trackingSemaphore == wait.semaphore){
+                        m_acceptedTimelineWaits.reserve(m_device.m_physicalQueues.size());
+                        m_acceptedTimelineWaits.push_back(SubmissionWait{ wait.semaphore, 0u });
+                        acceptedWait = &m_acceptedTimelineWaits.back();
+                        break;
+                    }
+                }
+            }
+        }
+        if(acceptedWait){
+            if(wait.value <= acceptedWait->value)
+                continue;
+            ++emittedTimelineWaitCount;
+        }
+
         VkSemaphoreSubmitInfo waitInfo = VulkanDetail::MakeVkStruct<VkSemaphoreSubmitInfo>(VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO);
-        waitInfo.semaphore = localWaits[i].semaphore;
-        waitInfo.value = localWaits[i].value;
+        waitInfo.semaphore = wait.semaphore;
+        waitInfo.value = wait.value;
         waitInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
         waitInfos.push_back(waitInfo);
     }
@@ -479,6 +508,17 @@ u64 Queue::submit(
     }
 
     m_lastSubmittedID = submissionID;
+    for(usize i = 0u; i < localWaitCount; ++i){
+        const SubmissionWait& wait = localWaits[i];
+        if(wait.value == 0u)
+            continue;
+        for(SubmissionWait& accepted : m_acceptedTimelineWaits){
+            if(accepted.semaphore == wait.semaphore){
+                accepted.value = Max(accepted.value, wait.value);
+                break;
+            }
+        }
+    }
 
     for(const DescriptorHeapUseCommitTicket& ticket : descriptorHeapUseCommitTickets)
         ticket.heap->commitCommandBufferUseSubmissionLocked(*ticket.commandBuffer, submissionToken, ticket.heapUseIndex);
@@ -499,6 +539,8 @@ u64 Queue::submit(
     }
     if(outSubmissionAccepted)
         *outSubmissionAccepted = true;
+    if(outTimelineWaitCount)
+        *outTimelineWaitCount = emittedTimelineWaitCount;
 
     return submissionID;
 }

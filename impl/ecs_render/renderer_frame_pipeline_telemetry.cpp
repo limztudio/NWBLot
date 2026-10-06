@@ -242,7 +242,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             "Raw barriers: transitions={} UAV={} ownership releases={} ownership acquires={} state exports={}\n"
             "Logical ownership transfers: records={} signatures={} repeated signatures={} concurrent-sharing candidate records={} advised repeated resources={} route records internal/import/export={}/{}/{}\n"
             "Recording: packets={} tasks={} command lists={} barriers={} worker-routed={} overlapped={}\n"
-            "Submission: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} submissions={} accepted frontier={} recovery submissions={} command lists={} waits={} failed submissions={}\n"
+            "Submission: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} submissions={} accepted frontier={} recovery submissions={} command lists={} waits={} inherited wait elisions={} failed submissions={}\n"
             "CPU: declaration={:.3f} ms compile={:.3f} ms native recording elapsed={:.3f} ms submit={:.3f} ms\n"
             "CPU compile phases: analysis={:.3f} ms queue assignment={:.3f} ms planning={:.3f} ms\n"
             "CPU analysis detail: validation={:.3f} ms dependencies={:.3f} ms hazards={:.3f} ms cycles/topology={:.3f} ms\n"
@@ -294,6 +294,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
             submissionStatistics.recoverySubmissionCount,
             submissionStatistics.nativeCommandListCount,
             submissionStatistics.timelineWaitCount,
+            submissionStatistics.inheritedTimelineWaitElisionCount,
             submissionStatistics.rejectedSubmissionCount,
             compileStatistics.declarationSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
             compileStatistics.totalSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,
@@ -357,7 +358,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
 
             StringAppendFormat(
                 m_frameGraphRendererLabel,
-                "\nPhysical queue index={} generation={} class={} family index={} native queue index={} dedicated={}: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} native submissions={} rejected submit paths={} command lists={} planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={} accepted frontier={} recovery submissions={} CPU={:.3f} ms"
+                "\nPhysical queue index={} generation={} class={} family index={} native queue index={} dedicated={}: accepted packets={} accepted tasks={} rejected packets={} rejected tasks={} native submissions={} rejected submit paths={} command lists={} planned waits={} same-queue elisions={} timeline waits={} merged timeline waits={} inherited wait elisions={} accepted frontier={} recovery submissions={} CPU={:.3f} ms"
                 "\n  Compile plan: tasks={} packets={} merged tasks={} prologue barriers={} epilogue barriers={} raw ownership release barriers (subset)={} raw ownership acquire barriers (subset)={}"
                 "\n  Logical ownership: incoming/outgoing records={}/{} signatures={}/{} repeated signatures={}/{} attributed advice resources={}"
                 "\n  Recording: packets={} tasks={} command lists={} barriers={} worker-routed={} overlapped={} CPU summed spans: command-list acquisition={:.3f} ms graph barrier lowering={:.3f} ms task={:.3f} ms packet={:.3f} ms"
@@ -379,6 +380,7 @@ bool RendererFramePipeline::appendFrameGraph(Core::Telemetry::FrameGraphBuilder&
                 queueStatistics.sameQueueWaitElisionCount,
                 queueStatistics.timelineWaitCount,
                 queueStatistics.mergedTimelineWaitCount,
+                queueStatistics.inheritedTimelineWaitElisionCount,
                 queueStatistics.acceptedFrontierSubmissionCount,
                 queueStatistics.recoverySubmissionCount,
                 queueStatistics.submissionSeconds * __hidden_frame_graph_export::s_MillisecondsPerSecondTelemetry,

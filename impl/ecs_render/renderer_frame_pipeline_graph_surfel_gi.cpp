@@ -45,10 +45,10 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     const Core::GpuGraphResourceSetId traceGeometrySet,
     const Core::GpuGraphResourceSetId traceMaterialSampledTextureSet,
     const Core::GpuTaskId effectsTask,
+    const bool useLaggedLightingHistory,
     const Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>& asyncTiming
-){
+    Optional<Core::GpuTimingMeasure>& asyncTiming){
     using namespace RendererTaskGraphDetail;
 
     m_deferredSurfelGiPreparationTask = {};
@@ -418,8 +418,11 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
 
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Large;
-    scheduling.forceSubmissionBoundary = true;
-    scheduling.allowPacketMerge = false;
+    // Live Lighting joins both effects; lagged Lighting retains their independent publication boundaries.
+    scheduling.forceSubmissionBoundary = useLaggedLightingHistory;
+    scheduling.allowPacketMerge = !useLaggedLightingHistory;
+    scheduling.mergeWithPrevious = !useLaggedLightingHistory;
+    scheduling.allowMergeAcrossConsumerFrontier = !useLaggedLightingHistory;
     const Core::GpuExternalCompletionId* const surfelGiExternalDependencies =
         surfelCounterReadbackCompletion.valid() ? &surfelCounterReadbackCompletion : nullptr
     ;
@@ -458,7 +461,9 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     Core::GpuTaskSchedulingHint surfelIrradianceClearScheduling;
     surfelIrradianceClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
     surfelIrradianceClearScheduling.allowPacketMerge = true;
-    // Start the GI packet after its snapshot; the chain retains that queue.
+    surfelIrradianceClearScheduling.mergeWithPrevious = !useLaggedLightingHistory;
+    surfelIrradianceClearScheduling.allowMergeAcrossConsumerFrontier = !useLaggedLightingHistory;
+    // Compatible live effects share the snapshot packet; the GI chain retains its selected queue.
     EnableSameFamilyComputeEffectRouting(surfelIrradianceClearScheduling, false);
     EnableCrossFamilyComputeEffectRouting(surfelIrradianceClearScheduling);
     const Core::GpuTaskResourceUse surfelIrradianceClearResourceUse = WriteTextureUse(

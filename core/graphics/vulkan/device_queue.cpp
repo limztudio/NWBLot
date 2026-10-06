@@ -544,6 +544,8 @@ QueueSubmissionToken Device::executeCommandListsInternal(
     const bool graphSubmissionAuthorized,
     const DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy
 ){
+    if(submitDesc.outTimelineWaitCount)
+        *submitDesc.outTimelineWaitCount = 0u;
     SubmissionOperationLease submissionOperation(*this);
     if(!submissionOperation.valid())
         return {};
@@ -690,7 +692,8 @@ QueueSubmissionToken Device::executeCommandListsInternal(
         &nativeSubmissionResult,
         localSignals,
         localSignalCount,
-        submitDesc.forceNativeSubmission
+        submitDesc.forceNativeSubmission,
+        submitDesc.outTimelineWaitCount
     );
     const QueueSubmissionToken submissionToken = submissionAccepted
         ? QueueSubmissionToken{

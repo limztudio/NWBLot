@@ -210,6 +210,64 @@ TEST(GpuTaskGraph, ChoosesComputePlacementFromOverlapAndExternalQueueLoad){
     EXPECT_EQ(loadedAssignment->queueClass, Graphics::CommandQueue::Graphics);
 }
 
+TEST(GpuTaskGraph, ConditionalRecoveryDoesNotCreateOverlapForSerialNormalWork){
+    TestArena testArena;
+    Graphics::GpuTaskGraph graph(testArena.arena);
+    Graphics::GpuTaskCommandRequirements graphicsCommands;
+    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
+    Graphics::GpuTaskSchedulingHint graphicsScheduling;
+    graphicsScheduling.cost = Graphics::GpuTaskCostHint::Large;
+    const Graphics::GpuTaskId prefix = AddTaskWithCommands(
+        graph, Name("tests/task_graph/recovery_overlap_prefix"), "Recovery Overlap Prefix", graphicsCommands, graphicsScheduling
+    );
+    ASSERT_TRUE(prefix.valid());
+    const Graphics::GpuTaskId middle = AddTaskWithCommands(
+        graph, Name("tests/task_graph/recovery_overlap_middle"), "Recovery Overlap Middle", ComputeCommands(), {}, {}, &prefix, 1u
+    );
+    ASSERT_TRUE(middle.valid());
+    const Graphics::GpuTaskId suffix = AddTaskWithCommands(
+        graph, Name("tests/task_graph/recovery_overlap_suffix"), "Recovery Overlap Suffix", graphicsCommands, graphicsScheduling, {}, &middle, 1u
+    );
+    ASSERT_TRUE(suffix.valid());
+
+    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
+    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
+    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
+    Graphics::GpuTaskGraphQueueAssignments normalAssignments(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    ASSERT_TRUE(Assign(graph, analysis, topology, normalAssignments));
+    const Graphics::GpuTaskQueueAssignment* const normalMiddle = normalAssignments.find(middle);
+    ASSERT_NE(normalMiddle, nullptr);
+    ASSERT_EQ(normalMiddle->queue, queues[0u].id);
+
+    Graphics::GpuTaskSchedulingHint recoveryScheduling;
+    recoveryScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
+    recoveryScheduling.forceSubmissionBoundary = true;
+    recoveryScheduling.allowPacketMerge = false;
+    recoveryScheduling.joinsAcceptedQueueFrontier = true;
+    recoveryScheduling.isRecoverySubmission = true;
+    const Graphics::GpuTaskId recovery = AddTaskWithCommands(
+        graph, Name("tests/task_graph/recovery_overlap_fallback"), "Recovery Overlap Fallback", graphicsCommands, recoveryScheduling
+    );
+    ASSERT_TRUE(recovery.valid());
+    Graphics::GpuTaskGraphQueueAssignments recoveryAssignments(testArena.arena);
+    ASSERT_TRUE(Analyze(graph, analysis));
+    ASSERT_TRUE(Assign(graph, analysis, topology, recoveryAssignments));
+    const Graphics::GpuTaskId normalTasks[] = { prefix, middle, suffix };
+    for(const Graphics::GpuTaskId task : normalTasks){
+        const Graphics::GpuTaskQueueAssignment* const before = normalAssignments.find(task);
+        const Graphics::GpuTaskQueueAssignment* const after = recoveryAssignments.find(task);
+        ASSERT_NE(before, nullptr);
+        ASSERT_NE(after, nullptr);
+        EXPECT_EQ(after->queue, before->queue);
+        EXPECT_EQ(after->score.overlap, 0);
+    }
+    const Graphics::GpuTaskQueueAssignment* const recoveryAssignment = recoveryAssignments.find(recovery);
+    ASSERT_NE(recoveryAssignment, nullptr);
+    EXPECT_EQ(recoveryAssignment->queue, queues[0u].id);
+}
+
+
 TEST(GpuTaskGraph, ChoosesAutomaticPlacementDeterministicallyAcrossTopologyOrder){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);

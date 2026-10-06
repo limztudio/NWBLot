@@ -17,6 +17,8 @@
 #include "native_texture_provenance.h"
 #include "submitted_command_buffer_owner_lookup.h"
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -474,7 +476,11 @@ private:
     void endDynamicRendering();
     bool ensureGraphicsRenderPass(Framebuffer* framebuffer);
     void endActiveRenderPass();
-    void executePipelineBarrier(const VkDependencyInfo& depInfo);
+    void executePipelineBarrier(
+        Span<VkMemoryBarrier2> memoryBarriers,
+        Span<VkImageMemoryBarrier2> imageBarriers,
+        Span<VkBufferMemoryBarrier2> bufferBarriers
+    );
     [[nodiscard]] bool validateCommandRecordingScope(TStringView operationName);
     [[nodiscard]] bool recordAndValidateCommandCapability(GpuQueueCapability::Mask requiredCapabilities, TStringView operationName);
     [[nodiscard]] bool recordAndValidateAnyCommandCapability(GpuQueueCapability::Mask alternativeCapabilities, TStringView operationName);

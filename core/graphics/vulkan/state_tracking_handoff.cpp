@@ -460,12 +460,11 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
     }
 
     if(!acquireImageBarriers.empty() || !acquireBufferBarriers.empty()){
-        auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
-        depInfo.imageMemoryBarrierCount = static_cast<u32>(acquireImageBarriers.size());
-        depInfo.pImageMemoryBarriers = acquireImageBarriers.data();
-        depInfo.bufferMemoryBarrierCount = static_cast<u32>(acquireBufferBarriers.size());
-        depInfo.pBufferMemoryBarriers = acquireBufferBarriers.data();
-        executePipelineBarrier(depInfo);
+        executePipelineBarrier(
+            {},
+            { acquireImageBarriers.data(), acquireImageBarriers.size() },
+            { acquireBufferBarriers.data(), acquireBufferBarriers.size() }
+        );
         if(m_commandRecordingFailed)
             return false;
     }

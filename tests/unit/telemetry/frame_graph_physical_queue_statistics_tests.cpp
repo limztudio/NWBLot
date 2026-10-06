@@ -47,6 +47,18 @@ s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutations[] = {
         statistics.submission.submissionSeconds = Limit<f64>::s_QuietNaN;
     },
     [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+        statistics.submission.inheritedTimelineWaitElisionCount = Limit<u64>::s_Max;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+        --statistics.submission.timelineWaitCount;
+        ++statistics.submission.inheritedTimelineWaitElisionCount;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
+        statistics.submission = {};
+        statistics.submission.plannedWaitTokenCount = 1u;
+        statistics.submission.inheritedTimelineWaitElisionCount = 1u;
+    },
+    [](Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics& statistics)noexcept{
         statistics.submission.recoverySubmissionCount =
             statistics.submission.acceptedFrontierSubmissionCount + 1u
         ;

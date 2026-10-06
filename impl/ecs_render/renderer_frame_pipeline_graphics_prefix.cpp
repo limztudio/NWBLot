@@ -1593,16 +1593,14 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         const Core::GpuGraphResourceId resource = shadowTraceGeometryResources[resourceIndex];
         if(!resource.valid())
             return false;
-        // This task actually restores the state after G-buffer, so it owns an outgoing Prefix state seed instead of
-        // looking like an optional same-state reader.
         if(!shadowTraceGeometryStatesGraphOwned)
-            normalizeResourceUses.push_back(ReadWriteUse(resource, Core::ResourceStates::ShaderResource));
+            normalizeResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
     const Core::GpuTaskResourceSetUse shadowTraceGeometrySetUse{
         .resourceSet = shadowTraceGeometrySet,
         .range = {},
         .requiredState = Core::ResourceStates::ShaderResource,
-        .access = Core::GpuTaskResourceAccess::ReadWrite,
+        .access = Core::GpuTaskResourceAccess::Read,
     };
     Core::GpuTaskSchedulingHint normalizeScheduling;
     normalizeScheduling.cost = Core::GpuTaskCostHint::Tiny;

@@ -444,6 +444,7 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(
     runtime.sameQueueWaitElisionCount = nativeSubmissionInfo.sameQueueWaitElisionCount;
     runtime.timelineWaitCount = nativeSubmissionInfo.timelineWaitCount;
     runtime.mergedTimelineWaitCount = nativeSubmissionInfo.mergedTimelineWaitCount;
+    runtime.inheritedTimelineWaitElisionCount = nativeSubmissionInfo.inheritedTimelineWaitElisionCount;
     runtime.submissionSeconds = nativeSubmissionInfo.submissionSeconds;
 
     if(m_acceptedSubmissionCount >= m_packets.size()){
@@ -461,6 +462,7 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(
     m_submissionStatistics.sameQueueWaitElisionCount += nativeSubmissionInfo.sameQueueWaitElisionCount;
     m_submissionStatistics.timelineWaitCount += nativeSubmissionInfo.timelineWaitCount;
     m_submissionStatistics.mergedTimelineWaitCount += nativeSubmissionInfo.mergedTimelineWaitCount;
+    m_submissionStatistics.inheritedTimelineWaitElisionCount += nativeSubmissionInfo.inheritedTimelineWaitElisionCount;
     m_submissionStatistics.submissionSeconds += nativeSubmissionInfo.submissionSeconds;
     if(packet.joinsAcceptedQueueFrontier)
         ++m_submissionStatistics.acceptedFrontierSubmissionCount;

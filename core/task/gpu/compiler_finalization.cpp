@@ -61,8 +61,8 @@ namespace GpuTaskGraphCompilerDetail{
     const Vector<TrackedCompiledResourceState, Alloc::ScratchArena>& trackedResourceStates = plan.trackedResourceStates;
     const TrackedResourceStateHistory& resourceHistory = plan.resourceHistory;
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena>& pendingEpilogueBarriers = plan.pendingEpilogueBarriers;
-    Vector<GpuPacketDependency, Alloc::ScratchArena>& terminalFinalizationDependencies =
-        plan.terminalFinalizationDependencies
+    Vector<GpuPacketDependency, Alloc::ScratchArena>& resourceStateDependencies =
+        plan.resourceStateDependencies
     ;
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& stateFragments = plan.stateFragments;
     using namespace __hidden_gpu_task_graph_finalization;
@@ -70,23 +70,23 @@ namespace GpuTaskGraphCompilerDetail{
     Optional<TerminalDependencyIndex> indexedTerminalDependencies;
     const auto appendTerminalFinalizationDependency = [&](const GpuPacketDependency& dependency){
         constexpr usize s_InlineTerminalDependencyCount = 8u;
-        if(!indexedTerminalDependencies && terminalFinalizationDependencies.size() <= s_InlineTerminalDependencyCount){
-            for(const GpuPacketDependency& previous : terminalFinalizationDependencies){
+        if(!indexedTerminalDependencies && resourceStateDependencies.size() <= s_InlineTerminalDependencyCount){
+            for(const GpuPacketDependency& previous : resourceStateDependencies){
                 if(TerminalPacketDependencyEqual{}(previous, dependency))
                     return;
             }
-            if(terminalFinalizationDependencies.size() < s_InlineTerminalDependencyCount){
-                terminalFinalizationDependencies.push_back(dependency);
+            if(resourceStateDependencies.size() < s_InlineTerminalDependencyCount){
+                resourceStateDependencies.push_back(dependency);
                 return;
             }
         }
         if(!indexedTerminalDependencies){
-            indexedTerminalDependencies.emplace(Max(graph.taskCount(), terminalFinalizationDependencies.size()), scratchArena);
-            indexedTerminalDependencies->insert(terminalFinalizationDependencies.begin(), terminalFinalizationDependencies.end());
+            indexedTerminalDependencies.emplace(Max(graph.taskCount(), resourceStateDependencies.size()), scratchArena);
+            indexedTerminalDependencies->insert(resourceStateDependencies.begin(), resourceStateDependencies.end());
         }
         if(!indexedTerminalDependencies->insert(dependency).second)
             return;
-        terminalFinalizationDependencies.push_back(dependency);
+        resourceStateDependencies.push_back(dependency);
     };
 
     // Imported metadata may require a graph-owned terminal state for post-graph resume. Texture/buffer keep every

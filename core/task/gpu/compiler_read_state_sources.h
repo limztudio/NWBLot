@@ -1,0 +1,72 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "compiler_internal.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace GpuTaskGraphCompilerDetail{
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool TaskPreservesReadState(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphTaskView& task,
+    const TaskResourceUseIndex& useHistory,
+    const GpuTaskGraphResourceView& resource,
+    const GpuTaskResourceRange& range,
+    usize useIndex
+)noexcept;
+
+[[nodiscard]] const TrackedCompiledResourceState* FindConcurrentReadStateSource(
+    const GpuTaskGraphResourceStatePlan& plan,
+    const GpuTaskGraphResourceView& resource,
+    const GpuTaskResourceRange& range,
+    const TrackedCompiledResourceState& previousState,
+    const GpuTaskResourceUse& use,
+    const GpuPhysicalQueueInfo& destinationQueue
+)noexcept;
+
+[[nodiscard]] ResourceStates::Mask ReadStateSourceSnapshotState(
+    const GpuTaskGraph::DeclarationReadView& graph,
+    const GpuTaskGraphResourceView& resource,
+    ResourceStates::Mask state
+)noexcept;
+
+[[nodiscard]] bool AppendOverlappingReaderDependencies(
+    GpuTaskGraphResourceStatePlan& plan,
+    const GpuTaskGraphResourceView& resource,
+    const GpuTaskResourceRange& range,
+    const TrackedCompiledResourceState& previousState,
+    const GpuSubmissionPacketId& consumer
+);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB_CORE_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

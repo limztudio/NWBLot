@@ -426,11 +426,8 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
     if(m_commandRecordingFailed)
         return;
 
-    const VkMemoryBarrier2 reuseBarrier = VulkanDetail::BuildOpacityMicromapWriteAfterWriteBarrier();
-    auto reuseDepInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
-    reuseDepInfo.memoryBarrierCount = 1u;
-    reuseDepInfo.pMemoryBarriers = &reuseBarrier;
-    executePipelineBarrier(reuseDepInfo);
+    VkMemoryBarrier2 reuseBarrier = VulkanDetail::BuildOpacityMicromapWriteAfterWriteBarrier();
+    executePipelineBarrier({ &reuseBarrier, 1u }, {}, {});
     if(m_commandRecordingFailed)
         return;
 

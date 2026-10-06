@@ -287,7 +287,7 @@ bool DescriptorBufferManager::writeDescriptor(
             imageInfo.imageView = texture->getView(item.subresources, item.dimension, item.format);
             if(imageInfo.imageView == VK_NULL_HANDLE)
                 return false;
-            imageInfo.imageLayout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            imageInfo.imageLayout = item.type == ResourceType::Texture_UAV ? VK_IMAGE_LAYOUT_GENERAL : VulkanDetail::s_ReadOnlyImageLayout;
             getInfo.data.pSampledImage = &imageInfo;
             getInfo.data.pStorageImage = &imageInfo;
             break;

@@ -493,6 +493,7 @@ struct GpuTaskGraphSubmissionStatistics{
     usize sameQueueWaitElisionCount = 0u;
     usize timelineWaitCount = 0u;
     usize mergedTimelineWaitCount = 0u;
+    usize inheritedTimelineWaitElisionCount = 0u;
     usize acceptedFrontierSubmissionCount = 0u;
     usize recoverySubmissionCount = 0u;
     usize nativeSubmissionCountByQueueClass[s_QueueClassCount] = {};
@@ -506,7 +507,7 @@ struct GpuTaskGraphSubmissionStatistics{
 
 // Immutable-by-value native submission telemetry for one compiler packet.
 // The query accepts only an exact current compiled-plan handle whose packet reached Accepted through Device::executeCommandLists()
-// Wait counters preserve the scheduler-owned native submission decomposition: planned tokens equal same-queue elisions plus emitted and merged timeline waits.
+// Planned wait tokens equal same-queue elisions, duplicate merges, inherited wait elisions, and emitted timeline waits.
 struct GpuTaskGraphPacketSubmissionStatistics{
     u64 graphGeneration = 0u;
     u64 planGeneration = 0u;
@@ -523,6 +524,7 @@ struct GpuTaskGraphPacketSubmissionStatistics{
     usize sameQueueWaitElisionCount = 0u;
     usize timelineWaitCount = 0u;
     usize mergedTimelineWaitCount = 0u;
+    usize inheritedTimelineWaitElisionCount = 0u;
     f64 submissionSeconds = 0.0;
 
     [[nodiscard]] bool valid()const noexcept{
@@ -560,6 +562,7 @@ struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
     usize sameQueueWaitElisionCount = 0u;
     usize timelineWaitCount = 0u;
     usize mergedTimelineWaitCount = 0u;
+    usize inheritedTimelineWaitElisionCount = 0u;
     usize acceptedFrontierSubmissionCount = 0u;
     usize recoverySubmissionCount = 0u;
     f64 submissionSeconds = 0.0;
@@ -619,6 +622,7 @@ private:
         usize sameQueueWaitElisionCount = 0u;
         usize timelineWaitCount = 0u;
         usize mergedTimelineWaitCount = 0u;
+        usize inheritedTimelineWaitElisionCount = 0u;
         f64 submissionSeconds = 0.0;
         // A post-reservation submit-path failure is terminally rejected, but ordinary discard/rejection never sets this flag.
         // It can occur before the backend execute call, such as while validating a timing ticket.
@@ -686,6 +690,7 @@ private:
         usize sameQueueWaitElisionCount = 0u;
         usize timelineWaitCount = 0u;
         usize mergedTimelineWaitCount = 0u;
+        usize inheritedTimelineWaitElisionCount = 0u;
         f64 submissionSeconds = 0.0;
     };
 

@@ -93,12 +93,15 @@ public:
     [[nodiscard]] constexpr bool valid()const noexcept{ return invoke != nullptr && resolved != nullptr; }
 };
 
-// Submission-local cross-queue dependencies. Same-queue tokens collapse to normal queue order; distinct queue
-// tokens become timeline waits on the consuming submission. The caller owns the token array until submit returns.
+// Submission-local cross-queue dependencies. Same-queue tokens collapse to normal queue order; prior accepted
+// waits may cover distinct-queue tokens. The caller owns the token array until submit returns.
 struct QueueSubmissionDesc{
     const QueueSubmissionToken* waitTokens = nullptr;
     usize waitTokenCount = 0;
     QueueSubmissionPreSubmitHook preSubmitHook;
+    // Optional accepted native timeline-wait count for waitTokens, after same-queue, duplicate and inherited-wait
+    // elimination. Excludes synchronization supplied outside this descriptor; rejection/no-op writes zero.
+    usize* outTimelineWaitCount = nullptr;
     // Error-recovery paths may require an exact queue timeline submission even after earlier work consumed every
     // pending wait. Normal empty submissions retain their no-op behavior unless this is explicit.
     bool forceNativeSubmission = false;

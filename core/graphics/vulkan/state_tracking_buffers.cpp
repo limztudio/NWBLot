@@ -267,10 +267,7 @@ void CommandList::setBufferState(
     const usize newBarrierCount = m_pendingBufferBarriers.size() - firstBarrierIndex;
     if(!m_enableAutomaticBarriers || newBarrierCount == 0u)
         return;
-    auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
-    depInfo.bufferMemoryBarrierCount = static_cast<u32>(newBarrierCount);
-    depInfo.pBufferMemoryBarriers = m_pendingBufferBarriers.data() + firstBarrierIndex;
-    executePipelineBarrier(depInfo);
+    executePipelineBarrier({}, {}, { m_pendingBufferBarriers.data() + firstBarrierIndex, newBarrierCount });
     m_pendingBufferBarriers.resize(firstBarrierIndex);
 }
 

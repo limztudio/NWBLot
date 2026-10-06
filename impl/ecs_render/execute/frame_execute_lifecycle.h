@@ -115,7 +115,6 @@ public:
         usize shadowReturnTextureCount = 0u;
         usize causticReturnTextureCount = 0u;
         usize surfelReturnTextureCount = 0u;
-        bool runsOnCompute = false;
         bool usesLaggedHistory = false;
         bool statePrepared = false;
         bool stateReady = false;

@@ -32,6 +32,7 @@ struct TrackedCompiledResourceState{
     ResourceStates::Mask state = ResourceStates::Unknown;
     GpuTaskResourceAccess::Enum access = GpuTaskResourceAccess::Read;
     GpuPhysicalQueueId queue;
+    usize readStateSourceIndex = Limit<usize>::s_Max;
 };
 
 // This compilation-local index retains global vector indices, never element pointers. Only append() mutates the

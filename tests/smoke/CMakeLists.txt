@@ -1246,6 +1246,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         # Both M4 arms share assets; the runner requires a distinct Compute queue for the async arm.
         nwb_declare_executable(nwb_async_shadow_m4_sync_benchmark)
         target_sources(nwb_async_shadow_m4_sync_benchmark PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.h"
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
@@ -1266,10 +1268,13 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             nwb_ecs_model
             nwb_ecs_mesh_skinning
         )
+        target_link_libraries(nwb_async_shadow_m4_sync_benchmark PRIVATE nwb_telemetry)
         add_dependencies(nwb_async_shadow_m4_sync_benchmark nwb_skinning_culling_benchmark_assets)
 
         nwb_declare_executable(nwb_async_shadow_m4_async_benchmark)
         target_sources(nwb_async_shadow_m4_async_benchmark PRIVATE
+            "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/stress_frame_graph_snapshot.h"
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
@@ -1289,6 +1294,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             nwb_ecs_model
             nwb_ecs_mesh_skinning
         )
+        target_link_libraries(nwb_async_shadow_m4_async_benchmark PRIVATE nwb_telemetry)
         add_dependencies(nwb_async_shadow_m4_async_benchmark nwb_skinning_culling_benchmark_assets)
 
         nwb_declare_executable(nwb_flicker_test_smoke)

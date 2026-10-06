@@ -40,10 +40,12 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
     for(usize costGroup = 0u; costGroup < GpuTaskCostHint::kCount; ++costGroup)
         m_costGroupWeights[costGroup] = QueueCostWeight(static_cast<GpuTaskCostHint::Enum>(costGroup));
     for(usize taskIndex = 0u; taskIndex < m_taskCosts.size(); ++taskIndex){
-        const auto costGroup = graph.taskAt(taskIndex).scheduling.cost;
+        const GpuTaskSchedulingHint& scheduling = graph.taskAt(taskIndex).scheduling;
+        const auto costGroup = scheduling.cost;
         if(!m_taskCostGroups.empty())
             m_taskCostGroups[taskIndex] = static_cast<u8>(costGroup);
-        m_taskCosts[taskIndex] = m_costGroupWeights[costGroup];
+        // Recovery joins accepted work only after normal execution fails, so it supplies no expected normal overlap or load.
+        m_taskCosts[taskIndex] = scheduling.isRecoverySubmission ? 0u : m_costGroupWeights[costGroup];
     }
 
     // Hazard kinds and ranges remain available in analysis for diagnostics.
@@ -124,6 +126,8 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(
         m_totalAssignedCost = 0u;
         for(const GpuTaskQueueAssignment& assignment : assignments){
             const u64 cost = m_taskCosts[assignment.task.index];
+            if(cost == 0u)
+                continue;
             m_totalAssignedCost += cost;
             for(GpuTaskQueueLoad& load : m_assignedQueueLoads){
                 if(load.queue == assignment.queue){
@@ -151,6 +155,8 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(
     // Valid graph indices are u32 and each task cost is at most eight, so graph-only totals fit in u64.
     for(const GpuTaskQueueAssignment& assignment : assignments){
         const u64 cost = m_taskCosts[assignment.task.index];
+        if(cost == 0u)
+            continue;
         m_totalAssignedCost += cost;
         const usize wordIndex = m_taskCostGroups[assignment.task.index] * m_costWordsPerGroup + assignment.task.index / s_BitsPerWord;
         const u64 mask = static_cast<u64>(1u) << (assignment.task.index % s_BitsPerWord);
@@ -175,6 +181,8 @@ void GpuTaskQueueScoringData::updateAssignmentLoads(
     if(previousQueue == selectedQueue)
         return;
     const u64 cost = m_taskCosts[task.index];
+    if(cost == 0u)
+        return;
     if(m_assignedCostWords.empty()){
         for(GpuTaskQueueLoad& load : m_assignedQueueLoads){
             if(load.queue == previousQueue){

@@ -366,7 +366,7 @@ bool GpuTaskGraphCompiler::compile(
     Vector<PendingCompiledEpilogueBarrier, Alloc::ScratchArena> pendingEpilogueBarriers(scratchArena);
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialOwnershipDependencies(scratchArena);
     Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena> initialAvailabilityDependencies(scratchArena);
-    Vector<GpuPacketDependency, Alloc::ScratchArena> terminalFinalizationDependencies(scratchArena);
+    Vector<GpuPacketDependency, Alloc::ScratchArena> resourceStateDependencies(scratchArena);
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena> stateFragments(scratchArena);
     Vector<GpuTaskResourceRange, Alloc::ScratchArena> taskFirstUseRanges(scratchArena);
     // taskAt() exposes the expanded resource-use set. Each use appends at most one tracked state.
@@ -382,7 +382,7 @@ bool GpuTaskGraphCompiler::compile(
     pendingEpilogueBarriers.reserve(graph.taskCount());
     initialOwnershipDependencies.reserve(graph.taskCount());
     initialAvailabilityDependencies.reserve(graph.taskCount());
-    terminalFinalizationDependencies.reserve(graph.taskCount());
+    resourceStateDependencies.reserve(graph.taskCount());
     stateFragments.reserve(graph.taskCount());
     taskFirstUseRanges.reserve(graph.taskCount());
     GpuTaskGraphResourceStatePlan resourceStatePlan{
@@ -396,7 +396,7 @@ bool GpuTaskGraphCompiler::compile(
         .pendingEpilogueBarriers = pendingEpilogueBarriers,
         .initialOwnershipDependencies = initialOwnershipDependencies,
         .initialAvailabilityDependencies = initialAvailabilityDependencies,
-        .terminalFinalizationDependencies = terminalFinalizationDependencies,
+        .resourceStateDependencies = resourceStateDependencies,
         .stateFragments = stateFragments,
         .taskFirstUseRanges = taskFirstUseRanges,
     };
@@ -415,7 +415,7 @@ bool GpuTaskGraphCompiler::compile(
         outAnalysis,
         initialOwnershipDependencies,
         initialAvailabilityDependencies,
-        terminalFinalizationDependencies,
+        resourceStateDependencies,
         compiledPlan,
         scratchArena
     )){

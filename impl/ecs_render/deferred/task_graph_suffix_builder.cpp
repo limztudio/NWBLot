@@ -141,8 +141,9 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     Core::GpuTaskSchedulingHint compositeScheduling;
     compositeScheduling.cost = Core::GpuTaskCostHint::Medium;
     compositeScheduling.avoidQueueCrossing = inputs.useLaggedLightingHistory;
-    compositeScheduling.forceSubmissionBoundary = true;
-    compositeScheduling.allowPacketMerge = false;
+    compositeScheduling.forceSubmissionBoundary = false;
+    compositeScheduling.allowPacketMerge = true;
+    compositeScheduling.mergeWithPrevious = true;
     const Core::GpuTaskId compositeDependencies[] = {
         inputs.lightingTask,
         inputs.avboitFinalTask,
@@ -157,7 +158,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         .setDependencies(compositeDependencies, LengthOf(compositeDependencies))
         .setResourceUses(compositeResourceUses, LengthOf(compositeResourceUses))
     ;
-    // Composite remains a distinct packet joining graph-owned AVBOIT and Lighting.
+    // Composite may share its compatible serial predecessor while retaining all graph-owned joins.
     outResult.compositeTask = m_deferredSystem.declareDeferredCompositeTask(
         m_graph,
         compositeDesc,

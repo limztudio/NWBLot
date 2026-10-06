@@ -6,6 +6,9 @@
 #include "avboit_timing_render_pass.h"
 #include "gpu_pass_timing_probe.h"
 #include "stress_cpu_timing_probe.h"
+#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
+#include "stress_frame_graph_snapshot.h"
+#endif
 #include "stress_csg_scene.h"
 #include "presentation_fps_probe.h"
 #include "presentation_pacing_ring.h"
@@ -472,6 +475,16 @@ public:
         );
 #endif
 
+#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
+        if(
+            NWB::Tests::Smoke::ReadSmokeEnvironmentText("NWB_STRESS_FRAME_GRAPH_FILE", m_frameGraphSnapshotPath)
+            && (m_timingEnabled || M4PixelCaptureFreezeFrame() == 0u)
+        ){
+            NWB_LOGGER_ERROR(GLB_TEXT("StressTestSmokeProject: frame graph snapshot requires pixel freeze and excludes presentation measurement"));
+            return false;
+        }
+#endif
+
         if(!ReadCharactersPerClass(m_charactersPerClass))
             return false;
         NWB::Impl::ReflectionSettings reflectionSettings;
@@ -643,6 +656,13 @@ public:
         const u32 m4CaptureFreezeFrame = M4PixelCaptureFreezeFrame();
         if(m4CaptureFreezeFrame != 0u && m_m4RenderedFrameCount >= m4CaptureFreezeFrame){
             if(!m_m4PixelCapturePaused){
+#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
+                if(
+                    !m_frameGraphSnapshotPath.empty()
+                    && !NWB::Tests::Smoke::CaptureStressFrameGraphSnapshot(m_context, m_frameGraphSnapshotPath, m_m4RenderedFrameCount)
+                )
+                    return false;
+#endif
                 // Stop runFrame before publishing the marker. The external M4 harness can therefore settle and capture
                 // the last completed image without advancing temporal shadow/caustic history after this frame index.
                 m_context.graphics.setFrameSubmissionSuspended(true);
@@ -717,6 +737,9 @@ private:
     u32 m_m4RenderedFrameCount = 0u;
     bool m_m4PixelCapturePaused = false;
     bool m_rendererBaselineCapturePaused = false;
+#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
+    NWB::Tests::Smoke::SmokeEnvironmentString m_frameGraphSnapshotPath{ m_context.objectArena };
+#endif
 };
 
 

@@ -47,6 +47,7 @@ template<typename StatisticsT>
         || submission.nativeSubmissionCount > submission.nativeCommandListCount
         || submission.nativeCommandListCount > recording.commandListCount
         || submission.sameQueueWaitElisionCount > submission.plannedWaitTokenCount
+        || (submission.nativeSubmissionCount == 0u && submission.inheritedTimelineWaitElisionCount != 0u)
     )
         return false;
 
@@ -54,6 +55,9 @@ template<typename StatisticsT>
     if(submission.mergedTimelineWaitCount > remainingWaitTokenCount)
         return false;
     remainingWaitTokenCount -= submission.mergedTimelineWaitCount;
+    if(submission.inheritedTimelineWaitElisionCount > remainingWaitTokenCount)
+        return false;
+    remainingWaitTokenCount -= submission.inheritedTimelineWaitElisionCount;
     if(submission.timelineWaitCount != remainingWaitTokenCount)
         return false;
 
@@ -396,6 +400,7 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatistics(const FrameGraphPhysicalQue
             || submission.sameQueueWaitElisionCount != 0u
             || submission.timelineWaitCount != 0u
             || submission.mergedTimelineWaitCount != 0u
+            || submission.inheritedTimelineWaitElisionCount != 0u
             || submission.acceptedFrontierSubmissionCount != 0u
             || submission.recoverySubmissionCount != 0u
             || submission.submissionSeconds != 0.0
@@ -497,6 +502,7 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhy
         && submission.sameQueueWaitElisionCount <= ownerSubmission.sameQueueWaitElisionCount
         && submission.timelineWaitCount <= ownerSubmission.timelineWaitCount
         && submission.mergedTimelineWaitCount <= ownerSubmission.mergedTimelineWaitCount
+        && submission.inheritedTimelineWaitElisionCount <= ownerSubmission.inheritedTimelineWaitElisionCount
         && submission.acceptedFrontierSubmissionCount <= ownerSubmission.acceptedFrontierSubmissionCount
         && submission.recoverySubmissionCount <= ownerSubmission.recoverySubmissionCount
         && submission.acceptedTaskCount - submission.acceptedPacketCount
@@ -530,6 +536,9 @@ bool IsValidFrameGraphPacketSubmissionStatistics(const FrameGraphPacketSubmissio
     if(statistics.mergedTimelineWaitCount > remainingWaitTokenCount)
         return false;
     remainingWaitTokenCount -= statistics.mergedTimelineWaitCount;
+    if(statistics.inheritedTimelineWaitElisionCount > remainingWaitTokenCount)
+        return false;
+    remainingWaitTokenCount -= statistics.inheritedTimelineWaitElisionCount;
     return statistics.timelineWaitCount == remainingWaitTokenCount;
 }
 

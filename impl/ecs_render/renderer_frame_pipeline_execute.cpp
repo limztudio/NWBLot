@@ -799,7 +799,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || (m_deferredPresentationOverlayRequired
             && deferredPresentationOverlayQueue->id != primaryGraphicsQueue)
         || terminalPresentationQueue->id != primaryGraphicsQueue
-        || !surfelGiSnapshotCopyAndTimingPacketsAreDistinct
+        || (laggedAsyncLightingSchedule && !surfelGiSnapshotCopyAndTimingPacketsAreDistinct)
         || (static_cast<u8>(deferredLightingQueue->capabilities)
             & static_cast<u8>(Core::GpuQueueCapability::Compute)) == 0u
         || (static_cast<u8>(deferredCompositeQueue->capabilities)
@@ -831,7 +831,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         m_rayTracingState.restorePreparedLightingCpuState(rayTracingCpuState);
         return;
     }
-    const bool deferredLightingRunsOnCompute = deferredLightingQueue->queueClass == Core::CommandQueue::Compute;
     const auto discardTimingTickets = [
         &shadowPrepareTimingTicket,
         &discardGraphicsPrefixTimingTickets,
@@ -1166,7 +1165,6 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         .shadowReturnTextureCount = LengthOf(deferredLightingShadowReturnTextures),
         .causticReturnTextureCount = LengthOf(deferredLightingCausticReturnTextures),
         .surfelReturnTextureCount = LengthOf(deferredLightingSurfelReturnTextures),
-        .runsOnCompute = deferredLightingRunsOnCompute,
         .usesLaggedHistory = laggedAsyncLightingSchedule,
     };
 

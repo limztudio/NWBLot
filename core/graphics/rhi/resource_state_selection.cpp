@@ -114,8 +114,7 @@ bool CommandListResourceSelection::grow(){
     if(!storage)
         return false;
 
-    // Entries occupy the prefix and survive trivial relocation. Growing moves only the bucket region, which is
-    // rebuilt before publication. Reallocate releases its former top block even when it creates a new arena chunk.
+    // Entries occupy the prefix and survive trivial relocation. Growing moves only the bucket region, which is rebuilt before publication. Reallocate releases its former top block even when it creates a new arena chunk.
     for(usize index = 0u; index < m_size; ++index){
         Entry entry;
         const void* const source = m_storage

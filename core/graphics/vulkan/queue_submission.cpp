@@ -85,7 +85,8 @@ u64 Queue::submit(
     const SubmissionSignal* const localSignals,
     const usize localSignalCount,
     const bool forceNativeSubmission,
-    usize* const outTimelineWaitCount){
+    usize* const outTimelineWaitCount
+){
     ScopedLock lock(m_mutex);
     DescriptorBufferManager* const descriptorBufferManager = m_context.descriptorBufferManager;
     GpuDescriptorHeap* submissionDescriptorHeap = nullptr;
@@ -554,8 +555,7 @@ VkResult Queue::updateLastFinishedID(){
     u64 completedValue = 0;
     const VkResult res = m_context.deviceDispatch.vkGetSemaphoreCounterValue(m_context.device, m_trackingSemaphore, &completedValue);
     if(res == VK_SUCCESS)
-        // vkQueueWaitIdle() establishes a stronger completion fact than a later timeline query. Never let a stale
-        // driver value make already-retired command buffers or descriptor uses appear in flight again.
+        // vkQueueWaitIdle() establishes a stronger completion fact than a later timeline query. Never let a stale driver value make already-retired command buffers or descriptor uses appear in flight again.
         m_lastFinishedID = Max(m_lastFinishedID, completedValue);
     else if(res == VK_ERROR_DEVICE_LOST)
         m_device.markDeviceLost();
@@ -637,8 +637,7 @@ Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(
         return next;
     }
 
-    // Queue submission/timeline retirement holds m_mutex before arriving here. It may take a worker arena lock,
-    // but worker recording never takes m_mutex, so the lock order cannot form a cycle.
+    // Queue submission/timeline retirement holds m_mutex before arriving here. It may take a worker arena lock, but worker recording never takes m_mutex, so the lock order cannot form a cycle.
     ScopedLock lock(workerArena->mutex);
 
     GLB_ASSERT(source.get_allocator() == workerArena->commandBuffersPool.get_allocator());
@@ -675,8 +674,7 @@ u64 Device::queueGetCompletedInstance(CommandQueue::Enum queue){
 }
 
 u64 Device::queueGetCompletedInstance(const GpuPhysicalQueueId& queue){
-    // Rejected-submit cleanup retires CPU-side bookkeeping; device-lost already marked the device terminal,
-    // so skip the second timeline query here.
+    // Rejected-submit cleanup retires CPU-side bookkeeping; device-lost already marked the device terminal, so skip the second timeline query here.
     if(isDeviceLost())
         return 0;
 

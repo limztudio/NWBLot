@@ -34,11 +34,15 @@ namespace ECSRenderDetail{
 struct ShadowPrepareGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer, true };
 
+    // The raytracing system, the preparation outcome, the frame targets, and the timing ticket are
+    // required: the prepare task always preflights shadow resources for this frame. References (not
+    // nullable pointers) carry those bindings so a missing binding fails at declaration time instead
+    // of silently returning `false` inside Record.
     struct Payload{
-        RendererRayTracingSystem* raytracingSystem = nullptr;
-        ShadowPreparationOutcome* outcome = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        RendererRayTracingSystem& raytracingSystem;
+        ShadowPreparationOutcome& outcome;
+        DeferredFrameTargets& targets;
+        Core::GpuTimingSubmissionTicket& timingTicket;
         bool deferredBindlessSlotsWereUploaded = false;
         bool currentBindlessSlotsGraphOwned = false;
         bool shadowMaterialContextBatchGraphOwned = false;
@@ -65,10 +69,13 @@ struct ShadowPrepareGraphTask{
 struct ShadowPrepareSoftwareBvhBuildGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // The raytracing system and the timing ticket are required: every enqueued software BVH build
+    // records against this frame's ticket. References (not nullable pointers) carry those bindings
+    // so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererRayTracingSystem* raytracingSystem = nullptr;
+        RendererRayTracingSystem& raytracingSystem;
         PreparedMeshSwBvhBuild build;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        Core::GpuTimingSubmissionTicket& timingTicket;
     };
 
     [[nodiscard]] static bool Record(

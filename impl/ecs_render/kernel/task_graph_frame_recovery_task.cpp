@@ -28,11 +28,8 @@ namespace ECSRenderDetail{
     const Core::GpuTaskRecordContext& context
 ){
     static_cast<void>(context);
-    return payload.frameTimingTransaction
-        && payload.armed
-        && payload.retiresFrameTiming
-        && *payload.armed
-        && (!*payload.retiresFrameTiming || payload.frameTimingTransaction->recordEnd(commandList))
+    return payload.armed
+        && (!payload.retiresFrameTiming || payload.frameTimingTransaction.recordEnd(commandList))
     ;
 }
 
@@ -40,27 +37,20 @@ void FrameRecoveryGraphTask::Accepted(Payload& payload, const Core::QueueSubmiss
     if(
         payload.armed
         && payload.retiresFrameTiming
-        && *payload.armed
-        && *payload.retiresFrameTiming
-        && payload.frameTimingTransaction
-        && !payload.frameTimingTransaction->confirmEndSubmission(token, false)
+        && !payload.frameTimingTransaction.confirmEndSubmission(token, false)
     ){
         NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: failed to retire frame recovery timing query"));
-        payload.frameTimingTransaction->discard();
+        payload.frameTimingTransaction.discard();
     }
-    if(payload.armed)
-        *payload.armed = false;
-    if(payload.retiresFrameTiming)
-        *payload.retiresFrameTiming = false;
+    payload.armed = false;
+    payload.retiresFrameTiming = false;
 }
 
 void FrameRecoveryGraphTask::Discarded(Payload& payload){
-    if(payload.armed && *payload.armed && payload.frameTimingTransaction)
-        payload.frameTimingTransaction->discard();
     if(payload.armed)
-        *payload.armed = false;
-    if(payload.retiresFrameTiming)
-        *payload.retiresFrameTiming = false;
+        payload.frameTimingTransaction.discard();
+    payload.armed = false;
+    payload.retiresFrameTiming = false;
 }
 
 

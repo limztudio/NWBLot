@@ -36,29 +36,28 @@ static constexpr AStringView s_HwHitGroupExportName = "CausticHwHitGroup";
 
 template<typename Payload>
 static void ConfirmCausticAccumulatorClears(Payload& payload){
-    if(payload.raytracingSystem && payload.graphOwnsNonTemporalAccumulatorClear)
-        payload.raytracingSystem->confirmCausticAccumulatorNonTemporalClear();
+    if(payload.graphOwnsNonTemporalAccumulatorClear)
+        payload.raytracingSystem.confirmCausticAccumulatorNonTemporalClear();
     if(
-        payload.raytracingSystem
-        && payload.graphOwnsAccumulatorBootstrapClear
+        payload.graphOwnsAccumulatorBootstrapClear
         && payload.causticProducerDispatched
-        && *payload.causticProducerDispatched
     )
-        payload.raytracingSystem->confirmCausticAccumulatorBootstrapClear();
+        payload.raytracingSystem.confirmCausticAccumulatorBootstrapClear();
 }
 
 // A warm temporal accumulator decays before either photon route writes its atomic splats.  This remains a separate graph task so the compiler lowers the accumulator's UAV dependency into the producer callback rather than depending on a packet-local state reassertion after the decay dispatch.
 struct CausticAccumulatorDecayGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // All bindings are required: decay always brackets the caustic-photon timing against this frame's ticket. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererRayTracingSystem* raytracingSystem = nullptr;
-        Core::GraphicsRuntime* graphics = nullptr;
-        DeferredFrameTargets* targets = nullptr;
+        RendererRayTracingSystem& raytracingSystem;
+        Core::GraphicsRuntime& graphics;
+        DeferredFrameTargets& targets;
         ECSRenderDetail::MeshViewBufferSnapshot meshView;
-        const bool* shadowVisibilityPrepared = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr;
+        const bool& shadowVisibilityPrepared;
+        Core::GpuTimingSubmissionTicket& timingTicket;
+        Optional<Core::GpuTimingMeasure>& causticPhotonTiming;
         f32 decayFactor = 0.f;
         bool hardwareCaustics = false;
     };
@@ -69,50 +68,42 @@ struct CausticAccumulatorDecayGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(
-            !payload.raytracingSystem
-            || !payload.graphics
-            || !payload.targets
-            || !payload.timingTicket
-            || !payload.causticPhotonTiming
-        )
-            return false;
 
         // Match the selected producer's existing no-work and failed-shadow behavior.  A graph declaration can still retain the accumulator dependency, but no dispatch is issued unless the producer would run.
-        if(!payload.shadowVisibilityPrepared || !*payload.shadowVisibilityPrepared)
+        if(!payload.shadowVisibilityPrepared)
             return true;
         const bool hasWork = payload.hardwareCaustics
-            ? payload.raytracingSystem->hasHwCausticWork(payload.meshView)
-            : payload.raytracingSystem->hasCausticWork(payload.meshView)
+            ? payload.raytracingSystem.hasHwCausticWork(payload.meshView)
+            : payload.raytracingSystem.hasCausticWork(payload.meshView)
         ;
         if(!hasWork)
             return true;
 
         // A prior rejected record can retry this task before its graph transaction gets discarded.  Release the incomplete query reservation before starting the retry's one caustic-photons interval.
-        DiscardGpuTimingMeasure(payload.causticPhotonTiming);
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        payload.causticPhotonTiming->emplace(
-            payload.graphics->gpuTiming(),
+        DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
+        payload.causticPhotonTiming.emplace(
+            payload.graphics.gpuTiming(),
             RendererGpuTimingScope::s_CausticPhotons,
-            payload.graphics->getDevice(),
+            payload.graphics.getDevice(),
             commandList
         );
-        if(!Core::FinishSplitGpuTimingMarker(payload.causticPhotonTiming))
+        if(!Core::FinishSplitGpuTimingMarker(&payload.causticPhotonTiming))
             return false;
-        const bool dispatched = payload.raytracingSystem->dispatchCausticAccumulatorDecay(
+        const bool dispatched = payload.raytracingSystem.dispatchCausticAccumulatorDecay(
             commandList,
-            *payload.targets,
+            payload.targets,
             payload.decayFactor
         );
         if(!dispatched){
-            DiscardGpuTimingMeasure(payload.causticPhotonTiming);
+            DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
             NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: graph-owned caustic accumulator decay pass failed"));
         }
         return true;
     }
 
     static void Discarded(Payload& payload){
-        DiscardGpuTimingMeasure(payload.causticPhotonTiming);
+        DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
     }
 };
 
@@ -121,17 +112,18 @@ struct CausticAccumulatorDecayGraphTask{
 struct SoftwareCausticsGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // All bindings are required: software photons always record against this frame's ticket and publish dispatch. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererRayTracingSystem* raytracingSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
+        RendererRayTracingSystem& raytracingSystem;
+        DeferredFrameTargets& targets;
         DeferredLightingGraphResources deferredLightingResources;
         ECSRenderDetail::MeshViewBufferSnapshot meshView;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        const bool* shadowVisibilityPrepared = nullptr;
-        Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr;
+        Core::GpuTimingSubmissionTicket& timingTicket;
+        const bool& shadowVisibilityPrepared;
+        Optional<Core::GpuTimingMeasure>& causticPhotonTiming;
         bool graphOwnsAccumulatorBootstrapClear = false;
         bool graphOwnsNonTemporalAccumulatorClear = false;
-        bool* causticProducerDispatched = nullptr;
+        bool& causticProducerDispatched;
     };
 
     [[nodiscard]] static bool Record(
@@ -140,25 +132,23 @@ struct SoftwareCausticsGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(payload.causticProducerDispatched)
-            *payload.causticProducerDispatched = false;
-        if(!payload.raytracingSystem || !payload.targets || !payload.deferredLightingResources.valid() || !payload.timingTicket)
+        payload.causticProducerDispatched = false;
+        if(!payload.deferredLightingResources.valid())
             return false;
 
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
         // Typed clears and warm decay precede photons; acceptance publishes their CPU lifecycle.
-        if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
-            const bool causticsDispatched = payload.raytracingSystem->renderGpuBvhCaustics(
+        if(payload.shadowVisibilityPrepared){
+            const bool causticsDispatched = payload.raytracingSystem.renderGpuBvhCaustics(
                 commandList,
                 payload.meshView,
-                *payload.targets,
-                payload.causticPhotonTiming
+                payload.targets,
+                &payload.causticPhotonTiming
             );
             if(!causticsDispatched)
-                DiscardGpuTimingMeasure(payload.causticPhotonTiming);
-            if(payload.causticProducerDispatched)
-                *payload.causticProducerDispatched = causticsDispatched;
-            if(!causticsDispatched && payload.raytracingSystem->hasCausticWork(payload.meshView))
+                DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
+            payload.causticProducerDispatched = causticsDispatched;
+            if(!causticsDispatched && payload.raytracingSystem.hasCausticWork(payload.meshView))
                 NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: software caustic render pass failed"));
         }
         return true;
@@ -170,9 +160,8 @@ struct SoftwareCausticsGraphTask{
     }
 
     static void Discarded(Payload& payload){
-        if(payload.causticProducerDispatched)
-            *payload.causticProducerDispatched = false;
-        Core::DiscardGpuTimingMeasure(payload.causticPhotonTiming);
+        payload.causticProducerDispatched = false;
+        Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
     }
 };
 
@@ -180,17 +169,18 @@ struct SoftwareCausticsGraphTask{
 struct HardwareCausticsGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // All bindings are required: hardware photons always record against this frame's ticket and publish dispatch. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererRayTracingSystem* raytracingSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
+        RendererRayTracingSystem& raytracingSystem;
+        DeferredFrameTargets& targets;
         DeferredLightingGraphResources deferredLightingResources;
         ECSRenderDetail::MeshViewBufferSnapshot meshView;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        const bool* shadowVisibilityPrepared = nullptr;
-        Optional<Core::GpuTimingMeasure>* causticPhotonTiming = nullptr;
+        Core::GpuTimingSubmissionTicket& timingTicket;
+        const bool& shadowVisibilityPrepared;
+        Optional<Core::GpuTimingMeasure>& causticPhotonTiming;
         bool graphOwnsAccumulatorBootstrapClear = false;
         bool graphOwnsNonTemporalAccumulatorClear = false;
-        bool* causticProducerDispatched = nullptr;
+        bool& causticProducerDispatched;
     };
 
     [[nodiscard]] static bool Record(
@@ -199,25 +189,23 @@ struct HardwareCausticsGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(payload.causticProducerDispatched)
-            *payload.causticProducerDispatched = false;
-        if(!payload.raytracingSystem || !payload.targets || !payload.deferredLightingResources.valid() || !payload.timingTicket)
+        payload.causticProducerDispatched = false;
+        if(!payload.deferredLightingResources.valid())
             return false;
 
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
         // Typed clears and warm decay precede photons; acceptance publishes their CPU lifecycle.
-        if(payload.shadowVisibilityPrepared && *payload.shadowVisibilityPrepared){
-            const bool causticsDispatched = payload.raytracingSystem->renderHwCaustics(
+        if(payload.shadowVisibilityPrepared){
+            const bool causticsDispatched = payload.raytracingSystem.renderHwCaustics(
                 commandList,
                 payload.meshView,
-                *payload.targets,
-                payload.causticPhotonTiming
+                payload.targets,
+                &payload.causticPhotonTiming
             );
             if(!causticsDispatched)
-                DiscardGpuTimingMeasure(payload.causticPhotonTiming);
-            if(payload.causticProducerDispatched)
-                *payload.causticProducerDispatched = causticsDispatched;
-            if(!causticsDispatched && payload.raytracingSystem->hasHwCausticWork(payload.meshView))
+                DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
+            payload.causticProducerDispatched = causticsDispatched;
+            if(!causticsDispatched && payload.raytracingSystem.hasHwCausticWork(payload.meshView))
                 NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: hardware caustic render pass failed"));
         }
         return true;
@@ -229,9 +217,8 @@ struct HardwareCausticsGraphTask{
     }
 
     static void Discarded(Payload& payload){
-        if(payload.causticProducerDispatched)
-            *payload.causticProducerDispatched = false;
-        Core::DiscardGpuTimingMeasure(payload.causticPhotonTiming);
+        payload.causticProducerDispatched = false;
+        Core::DiscardGpuTimingMeasure(&payload.causticPhotonTiming);
     }
 };
 
@@ -240,13 +227,14 @@ struct HardwareCausticsGraphTask{
 struct CausticGeometryDownsampleGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // All bindings are required: geometry downsample always brackets the caustic-resolve timing against this frame's ticket. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererRayTracingSystem* raytracingSystem = nullptr;
-        Core::GraphicsRuntime* graphics = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        const bool* causticProducerDispatched = nullptr;
-        Optional<Core::GpuTimingMeasure>* causticResolveTiming = nullptr;
+        RendererRayTracingSystem& raytracingSystem;
+        Core::GraphicsRuntime& graphics;
+        DeferredFrameTargets& targets;
+        Core::GpuTimingSubmissionTicket& timingTicket;
+        const bool& causticProducerDispatched;
+        Optional<Core::GpuTimingMeasure>& causticResolveTiming;
     };
 
     [[nodiscard]] static bool Record(
@@ -255,29 +243,27 @@ struct CausticGeometryDownsampleGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.raytracingSystem || !payload.graphics || !payload.targets || !payload.timingTicket || !payload.causticResolveTiming)
-            return false;
-        DiscardGpuTimingMeasure(payload.causticResolveTiming);
-        if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
+        DiscardGpuTimingMeasure(&payload.causticResolveTiming);
+        if(!payload.causticProducerDispatched)
             return true;
 
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        payload.causticResolveTiming->emplace(
-            payload.graphics->gpuTiming(),
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
+        payload.causticResolveTiming.emplace(
+            payload.graphics.gpuTiming(),
             RendererGpuTimingScope::s_CausticResolve,
-            payload.graphics->getDevice(),
+            payload.graphics.getDevice(),
             commandList
         );
-        payload.raytracingSystem->dispatchCausticGeometryDownsample(
+        payload.raytracingSystem.dispatchCausticGeometryDownsample(
             commandList,
-            *payload.targets
+            payload.targets
         );
         // The next callback writes the timestamp endpoint on this same primary command list. Close this callback's nested marker now, before the packet recorder advances to the wavelet task marker.
-        return Core::FinishSplitGpuTimingMarker(payload.causticResolveTiming);
+        return Core::FinishSplitGpuTimingMarker(&payload.causticResolveTiming);
     }
 
     static void Discarded(Payload& payload){
-        DiscardGpuTimingMeasure(payload.causticResolveTiming);
+        DiscardGpuTimingMeasure(&payload.causticResolveTiming);
     }
 };
 
@@ -286,10 +272,11 @@ struct CausticGeometryDownsampleGraphTask{
 struct CausticResolvePrepareGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // All bindings are required: resolve prepare always records against this frame's targets and activity. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererRayTracingSystem* raytracingSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        const bool* causticProducerDispatched = nullptr;
+        RendererRayTracingSystem& raytracingSystem;
+        DeferredFrameTargets& targets;
+        const bool& causticProducerDispatched;
         CausticResolveActivitySnapshot activity;
     };
 
@@ -299,15 +286,13 @@ struct CausticResolvePrepareGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.raytracingSystem || !payload.targets)
+        if(!payload.activity.matches(payload.raytracingSystem.causticResolveActivitySnapshot(payload.targets)))
             return false;
-        if(!payload.activity.matches(payload.raytracingSystem->causticResolveActivitySnapshot(*payload.targets)))
-            return false;
-        if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
+        if(!payload.causticProducerDispatched)
             return true;
-        payload.raytracingSystem->dispatchCausticResolvePrepare(
+        payload.raytracingSystem.dispatchCausticResolvePrepare(
             commandList,
-            *payload.targets
+            payload.targets
         );
         return true;
     }
@@ -318,10 +303,11 @@ struct CausticResolvePrepareGraphTask{
 struct CausticResolveWaveletGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // All bindings are required: first wavelet always records against this frame's targets and activity. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererRayTracingSystem* raytracingSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        const bool* causticProducerDispatched = nullptr;
+        RendererRayTracingSystem& raytracingSystem;
+        DeferredFrameTargets& targets;
+        const bool& causticProducerDispatched;
         CausticResolveActivitySnapshot activity;
     };
 
@@ -331,13 +317,11 @@ struct CausticResolveWaveletGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.raytracingSystem || !payload.targets)
+        if(!payload.activity.matches(payload.raytracingSystem.causticResolveActivitySnapshot(payload.targets)))
             return false;
-        if(!payload.activity.matches(payload.raytracingSystem->causticResolveActivitySnapshot(*payload.targets)))
-            return false;
-        if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
+        if(!payload.causticProducerDispatched)
             return true;
-        payload.raytracingSystem->dispatchCausticResolveWaveletPass(commandList, *payload.targets, 0u);
+        payload.raytracingSystem.dispatchCausticResolveWaveletPass(commandList, payload.targets, 0u);
         return true;
     }
 };
@@ -348,10 +332,11 @@ struct CausticResolveWaveletGraphTask{
 struct CausticResolveSecondWaveletGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // All bindings are required: second wavelet always records against this frame's targets and activity. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererRayTracingSystem* raytracingSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        const bool* causticProducerDispatched = nullptr;
+        RendererRayTracingSystem& raytracingSystem;
+        DeferredFrameTargets& targets;
+        const bool& causticProducerDispatched;
         CausticResolveActivitySnapshot activity;
     };
 
@@ -361,13 +346,11 @@ struct CausticResolveSecondWaveletGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.raytracingSystem || !payload.targets)
+        if(!payload.activity.matches(payload.raytracingSystem.causticResolveActivitySnapshot(payload.targets)))
             return false;
-        if(!payload.activity.matches(payload.raytracingSystem->causticResolveActivitySnapshot(*payload.targets)))
-            return false;
-        if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
+        if(!payload.causticProducerDispatched)
             return true;
-        payload.raytracingSystem->dispatchCausticResolveWaveletPass(commandList, *payload.targets, 1u);
+        payload.raytracingSystem.dispatchCausticResolveWaveletPass(commandList, payload.targets, 1u);
         return true;
     }
 };
@@ -378,10 +361,11 @@ struct CausticResolveSecondWaveletGraphTask{
 struct CausticResolveThirdWaveletGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // All bindings are required: third wavelet always records against this frame's targets and activity. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererRayTracingSystem* raytracingSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        const bool* causticProducerDispatched = nullptr;
+        RendererRayTracingSystem& raytracingSystem;
+        DeferredFrameTargets& targets;
+        const bool& causticProducerDispatched;
         CausticResolveActivitySnapshot activity;
     };
 
@@ -391,13 +375,11 @@ struct CausticResolveThirdWaveletGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.raytracingSystem || !payload.targets)
+        if(!payload.activity.matches(payload.raytracingSystem.causticResolveActivitySnapshot(payload.targets)))
             return false;
-        if(!payload.activity.matches(payload.raytracingSystem->causticResolveActivitySnapshot(*payload.targets)))
-            return false;
-        if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
+        if(!payload.causticProducerDispatched)
             return true;
-        payload.raytracingSystem->dispatchCausticResolveWaveletPass(commandList, *payload.targets, 2u);
+        payload.raytracingSystem.dispatchCausticResolveWaveletPass(commandList, payload.targets, 2u);
         return true;
     }
 };
@@ -408,10 +390,11 @@ struct CausticResolveThirdWaveletGraphTask{
 struct CausticResolveFourthWaveletGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // All bindings are required: fourth wavelet always records against this frame's targets and activity. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererRayTracingSystem* raytracingSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        const bool* causticProducerDispatched = nullptr;
+        RendererRayTracingSystem& raytracingSystem;
+        DeferredFrameTargets& targets;
+        const bool& causticProducerDispatched;
         CausticResolveActivitySnapshot activity;
     };
 
@@ -421,13 +404,11 @@ struct CausticResolveFourthWaveletGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.raytracingSystem || !payload.targets)
+        if(!payload.activity.matches(payload.raytracingSystem.causticResolveActivitySnapshot(payload.targets)))
             return false;
-        if(!payload.activity.matches(payload.raytracingSystem->causticResolveActivitySnapshot(*payload.targets)))
-            return false;
-        if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
+        if(!payload.causticProducerDispatched)
             return true;
-        payload.raytracingSystem->dispatchCausticResolveWaveletPass(commandList, *payload.targets, 3u);
+        payload.raytracingSystem.dispatchCausticResolveWaveletPass(commandList, payload.targets, 3u);
         return true;
     }
 };
@@ -438,10 +419,11 @@ struct CausticResolveFourthWaveletGraphTask{
 struct CausticResolveFifthWaveletGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // All bindings are required: fifth wavelet always records against this frame's targets and activity. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererRayTracingSystem* raytracingSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        const bool* causticProducerDispatched = nullptr;
+        RendererRayTracingSystem& raytracingSystem;
+        DeferredFrameTargets& targets;
+        const bool& causticProducerDispatched;
         CausticResolveActivitySnapshot activity;
     };
 
@@ -451,13 +433,11 @@ struct CausticResolveFifthWaveletGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.raytracingSystem || !payload.targets)
+        if(!payload.activity.matches(payload.raytracingSystem.causticResolveActivitySnapshot(payload.targets)))
             return false;
-        if(!payload.activity.matches(payload.raytracingSystem->causticResolveActivitySnapshot(*payload.targets)))
-            return false;
-        if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
+        if(!payload.causticProducerDispatched)
             return true;
-        payload.raytracingSystem->dispatchCausticResolveWaveletPass(commandList, *payload.targets, 4u);
+        payload.raytracingSystem.dispatchCausticResolveWaveletPass(commandList, payload.targets, 4u);
         return true;
     }
 };
@@ -467,10 +447,11 @@ struct CausticResolveFifthWaveletGraphTask{
 struct CausticResolveUpsampleGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // All bindings are required: upsample always records against this frame's targets and activity. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererRayTracingSystem* raytracingSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        const bool* causticProducerDispatched = nullptr;
+        RendererRayTracingSystem& raytracingSystem;
+        DeferredFrameTargets& targets;
+        const bool& causticProducerDispatched;
         CausticResolveActivitySnapshot activity;
     };
 
@@ -480,15 +461,13 @@ struct CausticResolveUpsampleGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.raytracingSystem || !payload.targets)
+        if(!payload.activity.matches(payload.raytracingSystem.causticResolveActivitySnapshot(payload.targets)))
             return false;
-        if(!payload.activity.matches(payload.raytracingSystem->causticResolveActivitySnapshot(*payload.targets)))
-            return false;
-        if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched)
+        if(!payload.causticProducerDispatched)
             return true;
-        payload.raytracingSystem->dispatchCausticResolveUpsample(
+        payload.raytracingSystem.dispatchCausticResolveUpsample(
             commandList,
-            *payload.targets
+            payload.targets
         );
         return true;
     }
@@ -499,10 +478,11 @@ struct CausticResolveUpsampleGraphTask{
 struct CausticResolveGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
+    // All bindings are required: resolve always closes the caustic-resolve timing against this frame's ticket. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        const bool* causticProducerDispatched = nullptr;
-        Optional<Core::GpuTimingMeasure>* causticResolveTiming = nullptr;
+        Core::GpuTimingSubmissionTicket& timingTicket;
+        const bool& causticProducerDispatched;
+        Optional<Core::GpuTimingMeasure>& causticResolveTiming;
     };
 
     [[nodiscard]] static bool Record(
@@ -511,24 +491,22 @@ struct CausticResolveGraphTask{
         const Core::GpuTaskRecordContext& context
     ){
         static_cast<void>(context);
-        if(!payload.timingTicket || !payload.causticResolveTiming)
-            return false;
         // Preserve the existing no-producer contract: the graph-owned irradiance clear remains authoritative and no resolve dispatch is emitted when the selected photon producer did not record.
-        if(!payload.causticProducerDispatched || !*payload.causticProducerDispatched){
-            DiscardGpuTimingMeasure(payload.causticResolveTiming);
+        if(!payload.causticProducerDispatched){
+            DiscardGpuTimingMeasure(&payload.causticResolveTiming);
             return true;
         }
-        if(!payload.causticResolveTiming->has_value())
+        if(!payload.causticResolveTiming.has_value())
             return false;
 
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-        payload.causticResolveTiming->value().finishTiming(commandList);
-        payload.causticResolveTiming->reset();
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
+        payload.causticResolveTiming.value().finishTiming(commandList);
+        payload.causticResolveTiming.reset();
         return true;
     }
 
     static void Discarded(Payload& payload){
-        DiscardGpuTimingMeasure(payload.causticResolveTiming);
+        DiscardGpuTimingMeasure(&payload.causticResolveTiming);
     }
 };
 

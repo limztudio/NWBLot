@@ -186,7 +186,7 @@ bool FrameGraphReflectionResolve::declare(
             .setResourceSetUses(refractionSets, refractionSetCount);
         refractionResolveTask = m_graph.addTask<RefractionResolveGraphTask>(refractionDesc,
             RefractionResolveGraphTask::Payload{
-                .system = &m_raytracingSystem, .targets = &deferredTargets, .resources = refractionResources,
+                .system = m_raytracingSystem, .targets = deferredTargets, .resources = refractionResources,
                 .hardwarePreparationReady = inputs.hardwarePreparationReady,
                 .dispatchLogged = refractionResources.usesHardwareTrace
                     ? inputs.refractionHardwareLogged : inputs.refractionScreenLogged,

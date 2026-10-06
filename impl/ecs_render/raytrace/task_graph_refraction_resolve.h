@@ -28,9 +28,14 @@ namespace RendererTaskGraphDetail{
 struct RefractionResolveGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // The raytracing system and the frame targets are required: the resolve always records against
+    // this frame's targets. The readiness flag and dispatch latches stay optional: the screen
+    // fallback route declares no hardware preparation, and only the traced route publishes a dispatch
+    // diagnostic. References (not nullable pointers) carry the required bindings so a missing binding
+    // fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererRayTracingSystem* system = nullptr;
-        const DeferredFrameTargets* targets = nullptr;
+        RendererRayTracingSystem& system;
+        const DeferredFrameTargets& targets;
         RayTracingRefractionGraphResources resources;
         const bool* hardwarePreparationReady = nullptr;
         bool* dispatchLogged = nullptr;
@@ -38,8 +43,7 @@ struct RefractionResolveGraphTask{
     };
 
     static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-        if(!payload.system || !payload.targets)
-            return false;
+
         RayTracingRefractionGraphResources resources = payload.resources;
         if(resources.usesHardwareTrace && (!payload.hardwarePreparationReady || !*payload.hardwarePreparationReady)){
             // Shared preparation can accept a nonfatal TLAS miss. Use the already prepared screen pipeline, whose
@@ -49,7 +53,7 @@ struct RefractionResolveGraphTask{
             resources.tlasHeapHandle = Core::GpuDescriptorHandle::Invalid();
             resources.materialContextSlotsHeapSlot = 0u;
         }
-        return payload.system->recordRefractionResolve(commandList, *payload.targets, resources);
+        return payload.system.recordRefractionResolve(commandList, payload.targets, resources);
     }
 
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken&){

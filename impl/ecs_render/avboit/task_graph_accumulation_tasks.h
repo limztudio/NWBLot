@@ -44,14 +44,15 @@ namespace RendererTaskGraphDetail{
 struct AvboitAccumulationComputeEmulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // The graphics runtime, the material system, the frame targets, the timing ticket, and the timing slot are required: compute emulation always generates against this frame's bindings. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        Core::GraphicsRuntime* graphics = nullptr;
-        RendererMaterialSystem* materialSystem = nullptr;
+        Core::GraphicsRuntime& graphics;
+        RendererMaterialSystem& materialSystem;
         ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        Optional<Core::GpuTimingMeasure>* accumulationTiming = nullptr;
+        DeferredFrameTargets& targets;
+        Core::GpuTimingSubmissionTicket& timingTicket;
+        Optional<Core::GpuTimingMeasure>& accumulationTiming;
         ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan plan;
         ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan csgPlan;
         usize instanceCount = 0u;
@@ -62,8 +63,20 @@ struct AvboitAccumulationComputeEmulationGraphTask{
         bool materialGeometryStatesGraphOwned = false;
         bool conservativeGeometryScissor = false;
 
-        explicit Payload(Core::Alloc::GlobalArena& arena)
-            : plan(arena)
+        explicit Payload(
+            Core::Alloc::GlobalArena& arena,
+            Core::GraphicsRuntime& graphicsIn,
+            RendererMaterialSystem& materialSystemIn,
+            DeferredFrameTargets& targetsIn,
+            Core::GpuTimingSubmissionTicket& timingTicketIn,
+            Optional<Core::GpuTimingMeasure>& accumulationTimingIn
+        )
+            : graphics(graphicsIn)
+            , materialSystem(materialSystemIn)
+            , targets(targetsIn)
+            , timingTicket(timingTicketIn)
+            , accumulationTiming(accumulationTimingIn)
+            , plan(arena)
             , csgPlan(arena)
         {}
     };
@@ -75,7 +88,7 @@ struct AvboitAccumulationComputeEmulationGraphTask{
     );
 
     static void Discarded(Payload& payload){
-        Core::DiscardGpuTimingMeasure(payload.accumulationTiming);
+        Core::DiscardGpuTimingMeasure(&payload.accumulationTiming);
     }
 };
 
@@ -89,12 +102,13 @@ struct AvboitAccumulationSharedComputeEmulationGraphTask{
         };
     };
 
+    // The graphics runtime, the material system, the frame targets, the timing ticket, and the timing slot are required: shared emulation always generates against this frame's bindings. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        Core::GraphicsRuntime* graphics = nullptr;
-        RendererMaterialSystem* materialSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        Optional<Core::GpuTimingMeasure>* accumulationTiming = nullptr;
+        Core::GraphicsRuntime& graphics;
+        RendererMaterialSystem& materialSystem;
+        DeferredFrameTargets& targets;
+        Core::GpuTimingSubmissionTicket& timingTicket;
+        Optional<Core::GpuTimingMeasure>& accumulationTiming;
         ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::RegularSharedComputeEmulationGraphPlan plan;
         usize drawIndex = 0u;
@@ -119,7 +133,7 @@ struct AvboitAccumulationSharedComputeEmulationGraphTask{
     );
 
     static void Discarded(Payload& payload){
-        Core::DiscardGpuTimingMeasure(payload.accumulationTiming);
+        Core::DiscardGpuTimingMeasure(&payload.accumulationTiming);
     }
 };
 
@@ -127,10 +141,11 @@ struct AvboitAccumulationSharedComputeEmulationGraphTask{
 struct AvboitAccumulationGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
 
+    // The avboit system, the frame targets, and the timing ticket are required: accumulation always records against this frame's bindings. References (not nullable pointers) carry those bindings so a missing binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererAvboitSystem* avboitSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        RendererAvboitSystem& avboitSystem;
+        DeferredFrameTargets& targets;
+        Core::GpuTimingSubmissionTicket& timingTicket;
         ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::TransparentMaterialPassGraphSnapshot accumulationSnapshot;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
@@ -143,8 +158,16 @@ struct AvboitAccumulationGraphTask{
         Optional<Core::GpuTimingMeasure>* accumulationComputeEmulationTiming = nullptr;
         bool hasTransparentRenderers = false;
 
-        explicit Payload(Core::Alloc::GlobalArena& arena)
-            : accumulationSnapshot(arena)
+        explicit Payload(
+            Core::Alloc::GlobalArena& arena,
+            RendererAvboitSystem& avboitSystemIn,
+            DeferredFrameTargets& targetsIn,
+            Core::GpuTimingSubmissionTicket& timingTicketIn
+        )
+            : avboitSystem(avboitSystemIn)
+            , targets(targetsIn)
+            , timingTicket(timingTicketIn)
+            , accumulationSnapshot(arena)
         {}
     };
 

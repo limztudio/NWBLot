@@ -98,10 +98,10 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
     outResult.meshViewSetupTask = m_graph.addTask<ECSRenderDetail::MeshViewSetupGraphTask>(
         meshViewSetupDesc,
         ECSRenderDetail::MeshViewSetupGraphTask::Payload{
-            .graphics = &m_graphics,
-            .asyncPrefixTiming = inputs.asyncPrefixTiming,
-            .timingTicket = inputs.meshViewSetupTimingTicket,
-            .asyncPrefixTimingSpansOnePacket = inputs.asyncPrefixTimingSpansOnePacket,
+            .graphics = m_graphics,
+            .asyncPrefixTiming = *inputs.asyncPrefixTiming,
+            .timingTicket = *inputs.meshViewSetupTimingTicket,
+            .asyncPrefixTimingSpansOnePacket = *inputs.asyncPrefixTimingSpansOnePacket,
             .shadowVisibilityTask = inputs.shadowVisibilityTask,
         }
     );
@@ -157,10 +157,10 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
     const Core::GpuTaskId meshViewCommitTask = m_graph.addTask<ECSRenderDetail::MeshViewUploadCommitGraphTask>(
         meshViewCommitDesc,
         ECSRenderDetail::MeshViewUploadCommitGraphTask::Payload{
-            .meshSystem = &m_meshSystem,
+            .meshSystem = m_meshSystem,
             .viewState = meshViewState,
             .uploadRequired = meshViewUploadRequired,
-            .ready = inputs.meshViewSetupReady,
+            .ready = *inputs.meshViewSetupReady,
         }
     );
     if(!meshViewCommitTask.valid())
@@ -240,17 +240,18 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
         .setScheduling(sceneShadingSetupScheduling)
         .setDependencies(&sceneUploadTask, 1u)
     ;
-    ECSRenderDetail::SceneShadingSetupGraphTask::Payload sceneShadingSetupPayload;
-    sceneShadingSetupPayload.deferredSystem = &m_deferredSystem;
-    sceneShadingSetupPayload.timingTicket = inputs.sceneShadingSetupTimingTicket;
-    sceneShadingSetupPayload.ready = inputs.sceneShadingSetupReady;
+    ECSRenderDetail::SceneShadingSetupGraphTask::Payload sceneShadingSetupPayload{
+        .deferredSystem = m_deferredSystem,
+        .timingTicket = *inputs.sceneShadingSetupTimingTicket,
+        .ready = *inputs.sceneShadingSetupReady,
+        .sceneShadingState = sceneShadingState,
+    };
     GLB_MEMCPY(
         sceneShadingSetupPayload.lightData,
         sizeof(sceneShadingSetupPayload.lightData),
         sceneLightData,
         sizeof(sceneLightData)
     );
-    sceneShadingSetupPayload.sceneShadingState = sceneShadingState;
     sceneShadingSetupPayload.lightCount = sceneLightCount;
     sceneShadingSetupPayload.lightUploadRequired = sceneLightUploadRequired;
     sceneShadingSetupPayload.sceneShadingUploadRequired = sceneShadingUploadRequired;

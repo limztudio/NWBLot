@@ -35,24 +35,14 @@ namespace ECSRenderDetail{
     const Core::GpuTaskRecordContext& context
 ){
     static_cast<void>(context);
-    if(
-        !payload.graphics
-        || !payload.materialSystem
-        || !payload.csgSystem
-        || !payload.targets
-        || !payload.timingTicket
-        || !*payload.timingTicket
-        || !payload.meshViewSetupReady
-        || !payload.sceneShadingSetupReady
-        || !payload.opaqueDrawSnapshot.captured
-    )
+    if(!payload.opaqueDrawSnapshot.captured)
         return false;
 
-    Core::GraphicsRuntime& graphics = *payload.graphics;
-    RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    RendererCsgSystem& csgSystem = *payload.csgSystem;
-    DeferredFrameTargets& deferredTargets = *payload.targets;
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
+    Core::GraphicsRuntime& graphics = payload.graphics;
+    RendererMaterialSystem& materialSystem = payload.materialSystem;
+    RendererCsgSystem& csgSystem = payload.csgSystem;
+    DeferredFrameTargets& deferredTargets = payload.targets;
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
     MaterialPassDrawItemPartitions opaqueDrawItems{ scratchArena };

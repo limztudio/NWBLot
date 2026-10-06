@@ -314,11 +314,6 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
 
     if(accumulationComputeEmulationOutputStatesGraphOwned && !generatedGeometryReused){
         computeEmulationPayload.conservativeGeometryScissor = inputs.producesReusableGeometry;
-        computeEmulationPayload.graphics = &m_graphics;
-        computeEmulationPayload.materialSystem = &m_materialSystem;
-        computeEmulationPayload.targets = inputs.targets;
-        computeEmulationPayload.timingTicket = accumulationPayload.timingTicket;
-        computeEmulationPayload.accumulationTiming = inputs.accumulationComputeEmulationTiming;
         computeEmulationPayload.materialDrawBuffersUploaded = inputs.streamsUploaded;
         computeEmulationPayload.csgFrameBuffersUploaded = inputs.csgStreamsUploaded;
         computeEmulationPayload.materialFrameStatesGraphOwned =
@@ -479,14 +474,15 @@ AvboitAccumulationRecordBuilder::AvboitAccumulationRecordBuilder(
                 resourceSetUses,
                 resourceSetUseCount
             );
-            AvboitAccumulationSharedComputeEmulationGraphTask::Payload payload;
-            payload.frameBindings = frameBindings;
-            payload.graphics = &m_graphics;
-            payload.materialSystem = &m_materialSystem;
-            payload.targets = inputs.targets;
-            payload.timingTicket = inputs.accumulationTimingTicket;
-            payload.accumulationTiming = inputs.accumulationComputeEmulationTiming;
-            payload.plan = inputs.sharedComputeEmulationPlan;
+            AvboitAccumulationSharedComputeEmulationGraphTask::Payload payload{
+                .graphics = m_graphics,
+                .materialSystem = m_materialSystem,
+                .targets = *inputs.targets,
+                .timingTicket = *inputs.accumulationTimingTicket,
+                .accumulationTiming = *inputs.accumulationComputeEmulationTiming,
+                .frameBindings = frameBindings,
+                .plan = inputs.sharedComputeEmulationPlan,
+            };
             payload.drawIndex = drawIndex;
             payload.instanceCount = inputs.sharedComputeEmulationInstanceCount;
             payload.materialTypedByteCount = inputs.sharedComputeEmulationMaterialTypedByteCount;

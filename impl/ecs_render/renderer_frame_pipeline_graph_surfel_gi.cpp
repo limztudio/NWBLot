@@ -572,7 +572,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             deferredTargets,
             deferredLightingResources,
             timingTicket,
-            &asyncTiming
+            asyncTiming
         );
         if(!m_deferredSurfelGiHashBuildTask.valid()){
             NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred surfel-GI hash-build graph task"));
@@ -603,7 +603,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             deferredTargets,
             deferredLightingResources,
             timingTicket,
-            &asyncTiming
+            asyncTiming
         );
         if(!m_deferredSurfelGiSpawnTask.valid()){
             NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred surfel-GI spawn graph task"));
@@ -631,7 +631,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             deferredTargets,
             deferredLightingResources,
             timingTicket,
-            &asyncTiming
+            asyncTiming
         );
         if(!m_deferredSurfelGiTraceBuildArgsTask.valid()){
             NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred surfel-GI trace-build-args graph task"));
@@ -660,7 +660,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             deferredTargets,
             deferredLightingResources,
             timingTicket,
-            &asyncTiming
+            asyncTiming
         );
         if(!m_deferredSurfelGiTraceTask.valid()){
             NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred surfel-GI trace graph task"));
@@ -685,7 +685,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             deferredTargets,
             deferredLightingResources,
             timingTicket,
-            &asyncTiming
+            asyncTiming
         );
         if(!m_deferredSurfelGiResolveTask.valid()){
             NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred surfel-GI resolve graph task"));

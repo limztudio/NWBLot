@@ -85,8 +85,6 @@ class FrameGraphTransparentCsgTasks final : NoCopy{
 public:
     FrameGraphTransparentCsgTasks(
         Core::GpuTaskGraph& graph,
-        RendererMaterialSystem& materialSystem,
-        RendererCsgSystem& csgSystem,
         RendererAvboitSystem& avboitSystem
     );
 
@@ -104,8 +102,6 @@ public:
 
 private:
     Core::GpuTaskGraph& m_graph;
-    RendererMaterialSystem& m_materialSystem;
-    RendererCsgSystem& m_csgSystem;
     RendererAvboitSystem& m_avboitSystem;
 };
 

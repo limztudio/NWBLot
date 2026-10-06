@@ -106,9 +106,9 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)
     outResult.recoveryTask = m_graph.addTask<ECSRenderDetail::FrameRecoveryGraphTask>(
         recoveryDesc,
         ECSRenderDetail::FrameRecoveryGraphTask::Payload{
-            .frameTimingTransaction = &inputs.frameTimingTransaction,
-            .armed = &inputs.recoveryArmed,
-            .retiresFrameTiming = &inputs.recoveryRetiresFrameTiming,
+            .frameTimingTransaction = inputs.frameTimingTransaction,
+            .armed = inputs.recoveryArmed,
+            .retiresFrameTiming = inputs.recoveryRetiresFrameTiming,
         }
     );
     if(!outResult.recoveryTask.valid()){

@@ -84,9 +84,12 @@ namespace __hidden_refraction_capture{
 }
 
 struct CaptureDrawTask{
+    // The material system and the frame targets are required: capture always draws against this
+    // frame's targets. References (not nullable pointers) carry those bindings so a missing binding
+    // fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererMaterialSystem* materialSystem = nullptr;
-        const DeferredFrameTargets* deferredTargets = nullptr;
+        RendererMaterialSystem& materialSystem;
+        const DeferredFrameTargets& deferredTargets;
         AvboitFrameTargets avboitTargets;
         ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         ECSRenderDetail::CsgGraphResourceSnapshot csgResources;
@@ -98,7 +101,11 @@ struct CaptureDrawTask{
         bool generate = false;
         bool conservativeGeometryScissor = false;
 
-        explicit Payload(Core::Alloc::GlobalArena& arena) : drawItems(arena){}
+        explicit Payload(Core::Alloc::GlobalArena& arena, RendererMaterialSystem& materialSystemIn, const DeferredFrameTargets& deferredTargetsIn)
+            : materialSystem(materialSystemIn)
+            , deferredTargets(deferredTargetsIn)
+            , drawItems(arena)
+        {}
     };
 
     [[nodiscard]] static constexpr Core::GpuTaskCommandRequirements CommandRequirements(const Payload& payload)noexcept{
@@ -106,7 +113,7 @@ struct CaptureDrawTask{
     }
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext&){
-        if(!payload.materialSystem || !payload.deferredTargets || !payload.avboitTargets.refractionFramebuffer
+        if(!payload.avboitTargets.refractionFramebuffer
             || !payload.frameBindings.frameReady(payload.instanceCount, payload.materialTypedByteCount)
             || (payload.csg && !payload.csgResources.bindingValid()))
             return false;
@@ -118,13 +125,13 @@ struct CaptureDrawTask{
         bool resourcesReady = false;
         switch(payload.renderPath){
         case RenderPath::MeshShader:
-            resourcesReady = payload.materialSystem->meshMaterialPassDrawResourcesReady(drawItems, payload.frameBindings);
+            resourcesReady = payload.materialSystem.meshMaterialPassDrawResourcesReady(drawItems, payload.frameBindings);
             break;
         case RenderPath::VertexIndexed:
-            resourcesReady = payload.materialSystem->indexedMaterialPassDrawResourcesReady(drawItems, payload.frameBindings);
+            resourcesReady = payload.materialSystem.indexedMaterialPassDrawResourcesReady(drawItems, payload.frameBindings);
             break;
         case RenderPath::ComputeEmulation:
-            resourcesReady = payload.materialSystem->computeMaterialPassDrawResourcesReady(drawItems, payload.frameBindings);
+            resourcesReady = payload.materialSystem.computeMaterialPassDrawResourcesReady(drawItems, payload.frameBindings);
             break;
         default:
             return false;
@@ -149,13 +156,13 @@ struct CaptureDrawTask{
             payload.conservativeGeometryScissor
         };
         if(payload.generate)
-            payload.materialSystem->generateComputeMaterialPassDrawItems(drawContext, drawItems);
+            payload.materialSystem.generateComputeMaterialPassDrawItems(drawContext, drawItems);
         else if(payload.renderPath == RenderPath::ComputeEmulation)
-            payload.materialSystem->renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems);
+            payload.materialSystem.renderComputeMaterialPassDrawItemsRasterOnly(drawContext, drawItems);
         else if(payload.renderPath == RenderPath::VertexIndexed)
-            payload.materialSystem->renderIndexedMaterialPassDrawItems(drawContext, drawItems);
+            payload.materialSystem.renderIndexedMaterialPassDrawItems(drawContext, drawItems);
         else
-            payload.materialSystem->renderMeshMaterialPassDrawItems(drawContext, drawItems);
+            payload.materialSystem.renderMeshMaterialPassDrawItems(drawContext, drawItems);
         commandList.endRenderPass();
         return true;
     }
@@ -386,9 +393,7 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         const auto identityText = StringFormat(scratch, "render.refraction.capture.draw_{}", drawTaskIndex++);
         Core::GpuTaskDesc desc = TaskDesc(ToName(identityText), generate ? "Refraction Capture Generate" : "Refraction Capture Raster", dependency);
         desc.setResourceUses(uses.data(), uses.size()).setResourceSetUses(setUses, setUseCount);
-        CaptureDrawTask::Payload payload{arena};
-        payload.materialSystem = &materialSystem;
-        payload.deferredTargets = &targets;
+        CaptureDrawTask::Payload payload{arena, materialSystem, targets};
         payload.avboitTargets = targets.avboit;
         payload.frameBindings = frameBindings;
         payload.csgResources = csgResources;

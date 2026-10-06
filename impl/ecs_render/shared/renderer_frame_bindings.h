@@ -107,6 +107,14 @@ namespace ECSRenderDetail{
             && *sceneShadingSetupReady
         ;
     }
+
+    // Reference overload for task payloads that carry the required setup flags by reference.
+    [[nodiscard]] inline bool FrameSetupReady(
+        const bool& meshViewSetupReady,
+        const bool& sceneShadingSetupReady
+    )noexcept{
+        return meshViewSetupReady && sceneShadingSetupReady;
+    }
 };
 
 

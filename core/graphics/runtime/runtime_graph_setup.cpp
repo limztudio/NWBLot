@@ -71,11 +71,32 @@ struct SetupUploadReadinessBridgeGraphTask{
 };
 
 // A standalone graph owns no renderer finalization packet. Predeclare this no-op Graphics tail so a later rejection can join every accepted physical queue before this call returns.
+// The retirement variant below owns the frame-timing reservation by reference; the plain variant covers
+// graphs without frame timing, so no task carries a nullable transaction pointer with a silent no-op guard.
 struct StandaloneTaskGraphRecoveryTask{
     inline static constexpr GpuTaskCommandRequirements s_CommandRequirements{ GpuQueueCapability::None, true };
 
     struct Payload{
-        GpuTimingFrameTransaction* frameTimingTransaction = nullptr;
+    };
+
+
+    [[nodiscard]] static bool Record(
+        const Payload& payload,
+        CommandList& commandList,
+        const GpuTaskRecordContext& context
+    )noexcept{
+        static_cast<void>(payload);
+        static_cast<void>(commandList);
+        static_cast<void>(context);
+        return true;
+    }
+};
+
+struct StandaloneTaskGraphTimingRetirementTask{
+    inline static constexpr GpuTaskCommandRequirements s_CommandRequirements{ GpuQueueCapability::None, true };
+
+    struct Payload{
+        GpuTimingFrameTransaction& frameTimingTransaction;
     };
 
 
@@ -85,9 +106,8 @@ struct StandaloneTaskGraphRecoveryTask{
         const GpuTaskRecordContext& context
     )noexcept{
         static_cast<void>(context);
-        return !payload.frameTimingTransaction
-            || !payload.frameTimingTransaction->needsRetirement()
-            || payload.frameTimingTransaction->recordEnd(commandList)
+        return !payload.frameTimingTransaction.needsRetirement()
+            || payload.frameTimingTransaction.recordEnd(commandList)
         ;
     }
 };
@@ -109,9 +129,14 @@ struct StandaloneTaskGraphRecoveryTask{
         .setMarkerLabel("Standalone Task Graph Recovery")
         .setScheduling(scheduling)
     ;
-    return graph.addTask<StandaloneTaskGraphRecoveryTask>(
+    if(frameTimingTransaction == nullptr)
+        return graph.addTask<StandaloneTaskGraphRecoveryTask>(
+            recoveryDesc,
+            StandaloneTaskGraphRecoveryTask::Payload{}
+        );
+    return graph.addTask<StandaloneTaskGraphTimingRetirementTask>(
         recoveryDesc,
-        StandaloneTaskGraphRecoveryTask::Payload{ frameTimingTransaction }
+        StandaloneTaskGraphTimingRetirementTask::Payload{ *frameTimingTransaction }
     );
 }
 

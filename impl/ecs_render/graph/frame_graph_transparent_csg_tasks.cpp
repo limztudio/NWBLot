@@ -25,13 +25,9 @@ NWB_IMPL_BEGIN
 
 FrameGraphTransparentCsgTasks::FrameGraphTransparentCsgTasks(
     Core::GpuTaskGraph& graph,
-    RendererMaterialSystem& materialSystem,
-    RendererCsgSystem& csgSystem,
     RendererAvboitSystem& avboitSystem
 )
     : m_graph(graph)
-    , m_materialSystem(materialSystem)
-    , m_csgSystem(csgSystem)
     , m_avboitSystem(avboitSystem){
 }
 
@@ -235,11 +231,6 @@ bool FrameGraphTransparentCsgTasks::declare(
             csgReceiverSpanCountSubresources,
             Core::ResourceStates::UnorderedAccess
         ));
-        avboitCsgReceiverSpanPayload.materialSystem = &m_materialSystem;
-        avboitCsgReceiverSpanPayload.csgSystem = &m_csgSystem;
-        avboitCsgReceiverSpanPayload.targets = &deferredTargets;
-        avboitCsgReceiverSpanPayload.timingTicket = inputs.timingTicket;
-        avboitCsgReceiverSpanPayload.transparentCsgIntervalsTiming = inputs.transparentCsgIntervalsTiming;
     }
     if(avboitCsgIntervalCombineGraphOwned){
         constexpr usize s_IntervalCombineResourceUseCapacity = 11u;
@@ -297,11 +288,6 @@ bool FrameGraphTransparentCsgTasks::declare(
             csgRemovedIntervalCountSubresources,
             Core::ResourceStates::UnorderedAccess
         ));
-        avboitCsgIntervalCombinePayload.materialSystem = &m_materialSystem;
-        avboitCsgIntervalCombinePayload.csgSystem = &m_csgSystem;
-        avboitCsgIntervalCombinePayload.targets = &deferredTargets;
-        avboitCsgIntervalCombinePayload.timingTicket = inputs.timingTicket;
-        avboitCsgIntervalCombinePayload.transparentCsgIntervalsTiming = inputs.transparentCsgIntervalsTiming;
     }
     m_avboitSystem.taskGraphStage().m_preTask = m_graph.addTask<AvboitPreGraphTask>(
         avboitIntervalDesc,

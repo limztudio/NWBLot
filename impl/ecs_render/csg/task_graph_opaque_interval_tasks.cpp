@@ -36,22 +36,13 @@ bool CsgReceiverSpanBuildGraphTask::Record(
     const Core::GpuTaskRecordContext& context
 ){
     static_cast<void>(context);
-    if(
-        !payload.materialSystem
-        || !payload.csgSystem
-        || !payload.targets
-        || !payload.timingTicket
-        || !*payload.timingTicket
-        || !payload.meshViewSetupReady
-        || !payload.sceneShadingSetupReady
-        || !payload.opaqueDrawSnapshot.captured
-    )
+    if(!payload.opaqueDrawSnapshot.captured)
         return false;
 
-    RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    RendererCsgSystem& csgSystem = *payload.csgSystem;
-    DeferredFrameTargets& deferredTargets = *payload.targets;
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
+    RendererMaterialSystem& materialSystem = payload.materialSystem;
+    RendererCsgSystem& csgSystem = payload.csgSystem;
+    DeferredFrameTargets& deferredTargets = payload.targets;
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
     MaterialPassDrawItemPartitions opaqueDrawItems{ scratchArena };
@@ -106,22 +97,13 @@ bool CsgIntervalCombineGraphTask::Record(
     const Core::GpuTaskRecordContext& context
 ){
     static_cast<void>(context);
-    if(
-        !payload.materialSystem
-        || !payload.csgSystem
-        || !payload.targets
-        || !payload.timingTicket
-        || !*payload.timingTicket
-        || !payload.meshViewSetupReady
-        || !payload.sceneShadingSetupReady
-        || !payload.opaqueDrawSnapshot.captured
-    )
+    if(!payload.opaqueDrawSnapshot.captured)
         return false;
 
-    RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    RendererCsgSystem& csgSystem = *payload.csgSystem;
-    DeferredFrameTargets& deferredTargets = *payload.targets;
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
+    RendererMaterialSystem& materialSystem = payload.materialSystem;
+    RendererCsgSystem& csgSystem = payload.csgSystem;
+    DeferredFrameTargets& deferredTargets = payload.targets;
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
     MaterialPassDrawItemPartitions opaqueDrawItems{ scratchArena };
@@ -170,8 +152,24 @@ bool CsgIntervalCombineGraphTask::Record(
 }
 
 
-CsgIntervalSampleGraphTask::Payload::Payload(Core::Alloc::GlobalArena& arena)
-    : opaqueDrawSnapshot(arena)
+CsgIntervalSampleGraphTask::Payload::Payload(
+    Core::Alloc::GlobalArena& arena,
+    Core::GraphicsRuntime& graphicsIn,
+    RendererMaterialSystem& materialSystemIn,
+    RendererCsgSystem& csgSystemIn,
+    DeferredFrameTargets& targetsIn,
+    Core::GpuTimingSubmissionTicket*& timingTicketIn,
+    const bool& meshViewSetupReadyIn,
+    const bool& sceneShadingSetupReadyIn
+)
+    : graphics(graphicsIn)
+    , materialSystem(materialSystemIn)
+    , csgSystem(csgSystemIn)
+    , targets(targetsIn)
+    , timingTicket(timingTicketIn)
+    , meshViewSetupReady(meshViewSetupReadyIn)
+    , sceneShadingSetupReady(sceneShadingSetupReadyIn)
+    , opaqueDrawSnapshot(arena)
 {}
 
 
@@ -182,25 +180,17 @@ bool CsgIntervalSampleGraphTask::Record(
 ){
     static_cast<void>(context);
     if(
-        !payload.graphics
-        || !payload.materialSystem
-        || !payload.csgSystem
-        || !payload.targets
-        || !payload.timingTicket
-        || !*payload.timingTicket
-        || !payload.meshViewSetupReady
-        || !payload.sceneShadingSetupReady
-        || !payload.opaqueDrawSnapshot.captured
+        !payload.opaqueDrawSnapshot.captured
         || (payload.csgComputeEmulationOutputStatesGraphOwned
             && !payload.opaqueCsgComputeEmulationTiming)
     )
         return false;
 
-    Core::GraphicsRuntime& graphics = *payload.graphics;
-    RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    RendererCsgSystem& csgSystem = *payload.csgSystem;
-    DeferredFrameTargets& deferredTargets = *payload.targets;
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
+    Core::GraphicsRuntime& graphics = payload.graphics;
+    RendererMaterialSystem& materialSystem = payload.materialSystem;
+    RendererCsgSystem& csgSystem = payload.csgSystem;
+    DeferredFrameTargets& deferredTargets = payload.targets;
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
 
     MaterialPassDrawItemPartitions opaqueDrawItems{ scratchArena };

@@ -89,8 +89,8 @@ bool RendererFramePipeline::declareFrameTimingBeginTask(Core::GpuTimingFrameTran
             .setMarkerLabel("Frame Timing Begin")
             .setScheduling(scheduling),
         Core::FrameTimingBeginGraphTask::Payload{
-            .frameTimingTransaction = &frameTimingTransaction,
-            .device = &m_graphics.getDevice(),
+            .frameTimingTransaction = frameTimingTransaction,
+            .device = m_graphics.getDevice(),
             .scopeDefinition = RendererGpuTimingScope::s_Frame,
         }
     );

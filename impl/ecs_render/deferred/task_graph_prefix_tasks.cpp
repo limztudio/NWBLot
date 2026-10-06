@@ -29,20 +29,16 @@ namespace ECSRenderDetail{
 ){
     static_cast<void>(commandList);
     static_cast<void>(context);
-    if(!payload.deferredSystem || !payload.timingTicket || !*payload.timingTicket || !payload.ready)
-        return false;
 
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
-    *payload.ready = true;
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+    payload.ready = true;
     return true;
 }
 
 
 void SceneShadingSetupGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
     static_cast<void>(token);
-    if(!payload.deferredSystem)
-        return;
-    payload.deferredSystem->confirmSceneShadingBufferUploads(
+    payload.deferredSystem.confirmSceneShadingBufferUploads(
         payload.lightData,
         payload.lightCount,
         payload.lightUploadRequired,
@@ -53,8 +49,7 @@ void SceneShadingSetupGraphTask::Accepted(Payload& payload, const Core::QueueSub
 
 
 void SceneShadingSetupGraphTask::Discarded(Payload& payload)noexcept{
-    if(payload.ready)
-        *payload.ready = false;
+    payload.ready = false;
 }
 
 

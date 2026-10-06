@@ -92,9 +92,9 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
         m_avboitSystem.taskGraphStage().m_depthWarpTask = m_graph.addTask<AvboitDepthWarpGraphTask>(
             depthWarpDesc,
             AvboitDepthWarpGraphTask::Payload{
-                .avboitSystem = &m_avboitSystem,
-                .targets = inputs.targets,
-                .timingTicket = inputs.depthWarpTimingTicket,
+                .avboitSystem = m_avboitSystem,
+                .targets = *inputs.targets,
+                .timingTicket = *inputs.depthWarpTimingTicket,
                 .timingFeedback = inputs.timingFeedback,
                 .timingScope = &RendererGpuTimingScope::s_AvboitDepthWarp,
             }
@@ -169,9 +169,9 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
     m_avboitSystem.taskGraphStage().m_integrationTask = m_graph.addTask<AvboitIntegrationGraphTask>(
         integrationDesc,
         AvboitIntegrationGraphTask::Payload{
-            .avboitSystem = &m_avboitSystem,
-            .targets = inputs.targets,
-            .timingTicket = inputs.integrationTimingTicket,
+            .avboitSystem = m_avboitSystem,
+            .targets = *inputs.targets,
+            .timingTicket = *inputs.integrationTimingTicket,
             .timingFeedback = inputs.timingFeedback,
             .timingScope = &RendererGpuTimingScope::s_AvboitIntegration,
         }

@@ -39,18 +39,29 @@ namespace ECSRenderDetail{
 struct AvboitCsgReceiverSpanGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // The material/CSG systems, the frame targets, the timing ticket, and the intervals timing slot
+    // are required: the transparent interval passes always bracket their dispatches with the frame
+    // timing. References (not nullable pointers) carry those bindings so a missing binding fails at
+    // declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererMaterialSystem* materialSystem = nullptr;
-        RendererCsgSystem* csgSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        Optional<Core::GpuTimingMeasure>* transparentCsgIntervalsTiming = nullptr;
+        RendererMaterialSystem& materialSystem;
+        RendererCsgSystem& csgSystem;
+        DeferredFrameTargets& targets;
+        Core::GpuTimingSubmissionTicket& timingTicket;
+        Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTiming;
         MeshFrameBindingSnapshot frameBindings;
         CsgGraphResourceSnapshot csgResources;
         TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
         bool csgFrameBuffersUploaded = false;
 
-        explicit Payload(Core::Alloc::GlobalArena& arena);
+        explicit Payload(
+            Core::Alloc::GlobalArena& arena,
+            RendererMaterialSystem& materialSystemIn,
+            RendererCsgSystem& csgSystemIn,
+            DeferredFrameTargets& targetsIn,
+            Core::GpuTimingSubmissionTicket& timingTicketIn,
+            Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTimingIn
+        );
     };
 
     [[nodiscard]] static bool Record(
@@ -60,7 +71,7 @@ struct AvboitCsgReceiverSpanGraphTask{
     );
 
     static void Discarded(Payload& payload){
-        Core::DiscardGpuTimingMeasure(payload.transparentCsgIntervalsTiming);
+        Core::DiscardGpuTimingMeasure(&payload.transparentCsgIntervalsTiming);
     }
 };
 
@@ -69,18 +80,29 @@ struct AvboitCsgReceiverSpanGraphTask{
 struct AvboitCsgIntervalCombineGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // The material/CSG systems, the frame targets, the timing ticket, and the intervals timing slot
+    // are required: the transparent interval passes always bracket their dispatches with the frame
+    // timing. References (not nullable pointers) carry those bindings so a missing binding fails at
+    // declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererMaterialSystem* materialSystem = nullptr;
-        RendererCsgSystem* csgSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        Optional<Core::GpuTimingMeasure>* transparentCsgIntervalsTiming = nullptr;
+        RendererMaterialSystem& materialSystem;
+        RendererCsgSystem& csgSystem;
+        DeferredFrameTargets& targets;
+        Core::GpuTimingSubmissionTicket& timingTicket;
+        Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTiming;
         MeshFrameBindingSnapshot frameBindings;
         CsgGraphResourceSnapshot csgResources;
         TransparentCsgIntervalGraphSnapshot transparentCsgSnapshot;
         bool csgFrameBuffersUploaded = false;
 
-        explicit Payload(Core::Alloc::GlobalArena& arena);
+        explicit Payload(
+            Core::Alloc::GlobalArena& arena,
+            RendererMaterialSystem& materialSystemIn,
+            RendererCsgSystem& csgSystemIn,
+            DeferredFrameTargets& targetsIn,
+            Core::GpuTimingSubmissionTicket& timingTicketIn,
+            Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTimingIn
+        );
     };
 
     [[nodiscard]] static bool Record(
@@ -90,7 +112,7 @@ struct AvboitCsgIntervalCombineGraphTask{
     );
 
     static void Discarded(Payload& payload){
-        Core::DiscardGpuTimingMeasure(payload.transparentCsgIntervalsTiming);
+        Core::DiscardGpuTimingMeasure(&payload.transparentCsgIntervalsTiming);
     }
 };
 

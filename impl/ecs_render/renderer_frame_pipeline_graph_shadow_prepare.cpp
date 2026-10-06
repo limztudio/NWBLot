@@ -847,9 +847,9 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             >(
                 buildDesc,
                 ECSRenderDetail::ShadowPrepareSoftwareBvhBuildGraphTask::Payload{
-                    .raytracingSystem = &m_raytracingSystem,
+                    .raytracingSystem = m_raytracingSystem,
                     .build = build,
-                    .timingTicket = &timingTicket,
+                    .timingTicket = timingTicket,
                 }
             );
             if(!buildTask.valid()){
@@ -915,10 +915,10 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     m_deferredShadowPrepareTask = m_deferredLightingTaskGraph.addTask<ECSRenderDetail::ShadowPrepareGraphTask>(
         desc,
         ECSRenderDetail::ShadowPrepareGraphTask::Payload{
-            .raytracingSystem = &m_raytracingSystem,
-            .outcome = &m_shadowPreparationOutcome,
-            .targets = &deferredTargets,
-            .timingTicket = &timingTicket,
+            .raytracingSystem = m_raytracingSystem,
+            .outcome = m_shadowPreparationOutcome,
+            .targets = deferredTargets,
+            .timingTicket = timingTicket,
             .deferredBindlessSlotsWereUploaded = deferredTargets.bindless.slotsUploaded,
             .currentBindlessSlotsGraphOwned = currentBindlessSlotsGraphOwned,
             .shadowMaterialContextBatchGraphOwned = shadowMaterialContextBatchGraphOwned,

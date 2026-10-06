@@ -44,10 +44,8 @@ public:
 
 TEST(OutputLayer, FinalPresentAcceptanceForwardsExactImmutableGenerationAndConsumerToken){
     RecordingLayerContributor contributor;
-    Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::Payload payload;
-    payload.outputLayer.frameGeneration = 17u;
-    payload.outputLayerContributor = &contributor;
-    Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::Accepted(payload, {});
+    Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(nullptr, 17u, {});
+    Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, 17u, {});
     EXPECT_EQ(contributor.m_acceptanceCount, 0u);
     const Core::QueueSubmissionToken consumerToken{
         .value = 101u,
@@ -55,13 +53,12 @@ TEST(OutputLayer, FinalPresentAcceptanceForwardsExactImmutableGenerationAndConsu
         .deviceGeneration = 3u,
         .queue = Core::CommandQueue::Graphics,
     };
-    Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::Accepted(payload, consumerToken);
+    Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, 17u, consumerToken);
     EXPECT_EQ(contributor.m_acceptanceCount, 1u);
     EXPECT_EQ(contributor.m_acceptedGeneration, 17u);
     EXPECT_EQ(contributor.m_acceptedToken.value, consumerToken.value);
     EXPECT_TRUE(contributor.m_acceptedToken.matchesPhysicalQueue(0u, 3u));
-    payload.outputLayer.frameGeneration = 0u;
-    Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::Accepted(payload, consumerToken);
+    Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, 0u, consumerToken);
     EXPECT_EQ(contributor.m_acceptanceCount, 1u);
 }
 

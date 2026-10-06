@@ -296,11 +296,6 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
 
     if(extinctionComputeEmulationOutputStatesGraphOwned && !generatedGeometryReused){
         computeEmulationPayload.conservativeGeometryScissor = inputs.producesReusableGeometry;
-        computeEmulationPayload.graphics = &m_graphics;
-        computeEmulationPayload.materialSystem = &m_materialSystem;
-        computeEmulationPayload.targets = inputs.targets;
-        computeEmulationPayload.timingTicket = extinctionPayload.timingTicket;
-        computeEmulationPayload.extinctionTiming = inputs.extinctionComputeEmulationTiming;
         computeEmulationPayload.instanceCount = extinctionPayload.extinctionSnapshot.instanceCount;
         computeEmulationPayload.materialTypedByteCount = extinctionPayload.extinctionSnapshot.materialTypedByteCount;
         computeEmulationPayload.materialDrawBuffersUploaded = inputs.streamsUploaded;
@@ -457,7 +452,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
             streamsUploaded,
             extinctionMaterialFrameStatesGraphOwned = extinctionPayload.extinctionMaterialFrameStatesGraphOwned,
             extinctionMaterialGeometryStatesGraphOwned = extinctionPayload.extinctionMaterialGeometryStatesGraphOwned,
-            phaseTimingTicket = extinctionPayload.timingTicket
+            phaseTimingTicket = &extinctionPayload.timingTicket
         ](
             const Name identity,
             const AStringView markerLabel,
@@ -480,14 +475,15 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
                 resourceSetUses,
                 resourceSetUseCount
             );
-            AvboitExtinctionSharedComputeEmulationGraphTask::Payload payload;
-            payload.frameBindings = frameBindings;
-            payload.graphics = graphicsAlias;
-            payload.materialSystem = materialSystemAlias;
-            payload.targets = deferredTargetsPtr;
-            payload.timingTicket = phaseTimingTicket;
-            payload.extinctionTiming = &avboitExtinctionComputeEmulationTiming;
-            payload.plan = planAlias;
+            AvboitExtinctionSharedComputeEmulationGraphTask::Payload payload{
+                .graphics = *graphicsAlias,
+                .materialSystem = *materialSystemAlias,
+                .targets = *deferredTargetsPtr,
+                .timingTicket = *phaseTimingTicket,
+                .extinctionTiming = avboitExtinctionComputeEmulationTiming,
+                .frameBindings = frameBindings,
+                .plan = planAlias,
+            };
             payload.drawIndex = drawIndex;
             payload.instanceCount = countAlias;
             payload.materialTypedByteCount = bytesAlias;

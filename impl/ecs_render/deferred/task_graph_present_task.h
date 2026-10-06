@@ -39,17 +39,22 @@ struct DeferredPresentGraphTask{
     // Acquired backbuffer recording belongs to the primary presentation timeline.
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics, true };
 
+    // The deferred system, the graphics runtime, the frame targets, the async-final timing slot,
+    // the timing ticket, and the shadow-visibility task are required: present always closes the
+    // async-final range when shadow visibility runs on compute. Only the output-layer contributor
+    // stays optional. References (not nullable pointers) carry the required bindings so a missing
+    // binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        RendererDeferredSystem* deferredSystem = nullptr;
-        Core::GraphicsRuntime* graphics = nullptr;
-        DeferredFrameTargets* targets = nullptr;
+        RendererDeferredSystem& deferredSystem;
+        Core::GraphicsRuntime& graphics;
+        DeferredFrameTargets& targets;
         Core::AcquiredPresentationFrame presentationFrame;
         Core::GpuGraphResourceId backBuffer;
         Core::GpuTaskGraphOutputLayer outputLayer;
         Core::IGpuTaskGraphOutputLayerContributor* outputLayerContributor = nullptr;
-        Optional<Core::GpuTimingMeasure>* asyncFinalTiming = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
-        const Core::GpuTaskId* shadowVisibilityTask = nullptr;
+        Optional<Core::GpuTimingMeasure>& asyncFinalTiming;
+        Core::GpuTimingSubmissionTicket& timingTicket;
+        const Core::GpuTaskId& shadowVisibilityTask;
     };
 
     [[nodiscard]] static bool Record(
@@ -58,6 +63,13 @@ struct DeferredPresentGraphTask{
         const Core::GpuTaskRecordContext& context
     );
     static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token);
+    // Narrow output-layer acceptance: the only optional coupling inside Accepted. Unit tests cover
+    // this helper directly so they never need a full frame Payload for the handshake contract.
+    static void AcceptOutputLayer(
+        Core::IGpuTaskGraphOutputLayerContributor* contributor,
+        u64 frameGeneration,
+        const Core::QueueSubmissionToken& token
+    );
 };
 
 

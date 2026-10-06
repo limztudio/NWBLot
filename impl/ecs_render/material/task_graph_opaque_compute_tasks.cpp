@@ -28,8 +28,20 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-OpaqueRegularComputeEmulationGraphTask::Payload::Payload(Core::Alloc::GlobalArena& arena)
-    : plan(arena)
+OpaqueRegularComputeEmulationGraphTask::Payload::Payload(
+    Core::Alloc::GlobalArena& arena,
+    RendererMaterialSystem& materialSystemIn,
+    DeferredFrameTargets& targetsIn,
+    Core::GpuTimingSubmissionTicket*& timingTicketIn,
+    const bool& meshViewSetupReadyIn,
+    const bool& sceneShadingSetupReadyIn
+)
+    : materialSystem(materialSystemIn)
+    , targets(targetsIn)
+    , timingTicket(timingTicketIn)
+    , meshViewSetupReady(meshViewSetupReadyIn)
+    , sceneShadingSetupReady(sceneShadingSetupReadyIn)
+    , plan(arena)
 {}
 
 
@@ -39,19 +51,11 @@ bool OpaqueRegularComputeEmulationGraphTask::Record(
     const Core::GpuTaskRecordContext& context
 ){
     static_cast<void>(context);
-    if(
-        !payload.materialSystem
-        || !payload.targets
-        || !payload.timingTicket
-        || !*payload.timingTicket
-        || !payload.meshViewSetupReady
-        || !payload.sceneShadingSetupReady
-        || !payload.plan.captured
-    )
+    if(!payload.plan.captured)
         return false;
 
-    RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
+    RendererMaterialSystem& materialSystem = payload.materialSystem;
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
         payload.meshViewSetupReady,
         payload.sceneShadingSetupReady
@@ -77,7 +81,7 @@ bool OpaqueRegularComputeEmulationGraphTask::Record(
 
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(
-        payload.targets->framebuffer->getFramebufferInfo().getViewport()
+        payload.targets.framebuffer->getFramebufferInfo().getViewport()
     );
     const MaterialPassDrawContext drawContext{
         commandList,
@@ -102,27 +106,18 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::Record(
     const Core::GpuTaskRecordContext& context
 ){
     static_cast<void>(context);
-    if(
-        !payload.materialSystem
-        || !payload.targets
-        || !payload.timingTicket
-        || !*payload.timingTicket
-        || !payload.meshViewSetupReady
-        || !payload.sceneShadingSetupReady
-        || !payload.opaqueRegularTiming
-        || !payload.plan.captured
-    )
+    if(!payload.plan.captured)
         return false;
 
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     // G-buffer starts the preserved range only when frozen resources are ready; later miss is a no-op.
-    if(!payload.opaqueRegularTiming->has_value()){
+    if(!payload.opaqueRegularTiming.has_value()){
         if(payload.phase == Phase::Raster)
             commandList.endRenderPass();
         return true;
     }
 
-    RendererMaterialSystem& materialSystem = *payload.materialSystem;
+    RendererMaterialSystem& materialSystem = payload.materialSystem;
     const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
         payload.meshViewSetupReady,
         payload.sceneShadingSetupReady
@@ -141,7 +136,7 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::Record(
         )
         || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
     ){
-        DiscardGpuTimingMeasure(payload.opaqueRegularTiming);
+        DiscardGpuTimingMeasure(&payload.opaqueRegularTiming);
         if(payload.phase == Phase::Raster)
             commandList.endRenderPass();
         return true;
@@ -149,11 +144,11 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::Record(
 
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(
-        payload.targets->framebuffer->getFramebufferInfo().getViewport()
+        payload.targets.framebuffer->getFramebufferInfo().getViewport()
     );
     const MaterialPassDrawContext drawContext{
         commandList,
-        payload.phase == Phase::Raster ? payload.targets->framebuffer.get() : nullptr,
+        payload.phase == Phase::Raster ? payload.targets.framebuffer.get() : nullptr,
         nullptr,
         deferredViewportState,
         nullptr,
@@ -171,8 +166,8 @@ bool OpaqueRegularSharedComputeEmulationGraphTask::Record(
             drawItems.computeDrawItems
         );
         if(payload.finishTiming){
-            payload.opaqueRegularTiming->value().finishTiming(commandList);
-            payload.opaqueRegularTiming->reset();
+            payload.opaqueRegularTiming.value().finishTiming(commandList);
+            payload.opaqueRegularTiming.reset();
         }
         commandList.endRenderPass();
     }

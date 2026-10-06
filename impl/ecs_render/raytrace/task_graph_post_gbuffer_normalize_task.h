@@ -35,10 +35,16 @@ namespace RendererTaskGraphDetail{
 struct PostGbufferNormalizeGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
+    // The raytracing system and the timing-ticket slot are required: the slot always points at the
+    // normalize ticket selected by the graphics prefix. Async timing and the shadow-visibility task are
+    // optional: async timing only spans one packet on the compute route, and the shadow task lookup
+    // may be absent when no visibility pass runs. References (not nullable pointers) carry the
+    // required bindings so a missing binding fails at declaration time instead of silently
+    // returning `false` inside Record.
     struct Payload{
-        RendererRayTracingSystem* raytracingSystem = nullptr;
+        RendererRayTracingSystem& raytracingSystem;
         Optional<Core::GpuTimingMeasure>* asyncPrefixTiming = nullptr;
-        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
+        Core::GpuTimingSubmissionTicket*& timingTicket;
         const Core::GpuTaskId* shadowVisibilityTask = nullptr;
     };
 

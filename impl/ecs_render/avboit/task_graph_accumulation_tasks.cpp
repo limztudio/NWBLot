@@ -41,7 +41,7 @@ namespace RendererTaskGraphDetail{
         MaterialPipelinePass::AvboitAccumulate,
         &AvboitFrameTargets::accumulationFramebuffer,
     };
-    return RecordAvboitComputeEmulationFromPayload(payload, commandList, context, &Payload::accumulationTiming, trait);
+    return RecordAvboitComputeEmulationFromPayload(payload, commandList, context, &payload.accumulationTiming, trait);
 }
 
 [[nodiscard]] bool AvboitAccumulationSharedComputeEmulationGraphTask::Record(
@@ -56,7 +56,7 @@ namespace RendererTaskGraphDetail{
         MaterialPipelinePass::AvboitAccumulate,
         &AvboitFrameTargets::accumulationFramebuffer,
     };
-    return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, context, &Payload::accumulationTiming, payload.phase == AvboitAccumulationSharedComputeEmulationGraphTask::Phase::Raster, trait);
+    return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, context, &payload.accumulationTiming, payload.phase == AvboitAccumulationSharedComputeEmulationGraphTask::Phase::Raster, trait);
 }
 
 [[nodiscard]] bool AvboitAccumulationGraphTask::Record(
@@ -73,7 +73,7 @@ namespace RendererTaskGraphDetail{
         &Payload::accumulationSnapshot,
         &Payload::accumulationComputeEmulationOutputStatesGraphOwned,
         &Payload::accumulationCsgComputeEmulationOutputStatesGraphOwned,
-        &Payload::accumulationComputeEmulationTiming,
+        payload.accumulationComputeEmulationTiming,
         [&](
             Core::CommandList& dispatchCommandList,
             const MaterialPassDrawItemPartitions& dispatchDrawItems,
@@ -81,9 +81,9 @@ namespace RendererTaskGraphDetail{
             const usize dispatchInstanceCount,
             const usize dispatchMaterialTypedByteCount
         ){
-            payload.avboitSystem->renderAvboitAccumulatePass(
+            payload.avboitSystem.renderAvboitAccumulatePass(
                 dispatchCommandList,
-                *payload.targets,
+                payload.targets,
                 dispatchDrawItems,
                 dispatchCsgFrameData,
                 payload.csgResources,

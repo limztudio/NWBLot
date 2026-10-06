@@ -609,11 +609,11 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
                 accumulatorDecayDesc,
                 (*inputs.targets),
                 (*inputs.meshViewSnapshot),
-                inputs.shadowPreparationReady,
+                *inputs.shadowPreparationReady,
                 inputs.rayTracingResources->causticTemporalDecay,
                 true,
                 (*inputs.timingTicket),
-                inputs.photonTiming
+                *inputs.photonTiming
             );
             if(!accumulatorDecayTask.valid()){
                 NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics accumulator decay"));
@@ -647,12 +647,12 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             (*inputs.targets),
             (*inputs.lightingResources),
             (*inputs.meshViewSnapshot),
-            inputs.shadowPreparationReady,
+            *inputs.shadowPreparationReady,
             (*inputs.timingTicket),
+            *inputs.photonTiming,
+            *inputs.producerDispatched,
             graphOwnsAccumulatorBootstrapClear,
-            graphOwnsNonTemporalAccumulatorClear,
-            inputs.photonTiming,
-            inputs.producerDispatched
+            graphOwnsNonTemporalAccumulatorClear
         );
         if(!outResult.causticPhotonTask.valid()){
             NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare hardware-caustics photon graph task"));
@@ -674,8 +674,8 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             hardwareGeometryDesc,
             (*inputs.targets),
             (*inputs.timingTicket),
-            inputs.producerDispatched,
-            inputs.resolveTiming
+            *inputs.producerDispatched,
+            *inputs.resolveTiming
         );
         if(!outResult.causticGeometryTask.valid()){
             NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare hardware-caustics geometry graph task"));

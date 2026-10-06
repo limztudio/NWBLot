@@ -244,16 +244,16 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     outResult.presentTask = m_graph.addTask<DeferredPresentGraphTask>(
         presentDesc,
         DeferredPresentGraphTask::Payload{
-            .deferredSystem = &m_deferredSystem,
-            .graphics = &m_graphics,
-            .targets = &targets,
+            .deferredSystem = m_deferredSystem,
+            .graphics = m_graphics,
+            .targets = targets,
             .presentationFrame = presentationFrame,
             .backBuffer = backbuffer,
             .outputLayer = outputLayer,
             .outputLayerContributor = m_outputLayerContributor,
-            .asyncFinalTiming = &asyncFinalTiming,
-            .timingTicket = &presentTimingTicket,
-            .shadowVisibilityTask = &shadowVisibilityTask,
+            .asyncFinalTiming = asyncFinalTiming,
+            .timingTicket = presentTimingTicket,
+            .shadowVisibilityTask = shadowVisibilityTask,
         }
     );
     if(!outResult.presentTask.valid()){
@@ -297,7 +297,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     outResult.frameTimingEndTask = m_graph.addTask<FrameTimingEndGraphTask>(
         frameTimingEndDesc,
         FrameTimingEndGraphTask::Payload{
-            .frameTimingTransaction = &frameTimingTransaction,
+            .frameTimingTransaction = frameTimingTransaction,
         }
     );
     if(!outResult.frameTimingEndTask.valid()){

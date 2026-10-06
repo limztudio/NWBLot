@@ -781,13 +781,29 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
         m_deferredHardwareCausticsTask = hardwareCausticsStageResult.hardwareCausticsTask;
     }
 
-    AvboitPreGraphTask::Payload avboitPrePayload{ m_arena };
-    ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload avboitCsgReceiverSpanPayload{ m_arena };
-    ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload avboitCsgIntervalCombinePayload{ m_arena };
-    avboitPrePayload.avboitSystem = &m_avboitSystem;
-    avboitPrePayload.targets = &deferredTargets;
-    avboitPrePayload.timingTicket = &avboitPreTimingTicket;
-    avboitPrePayload.transparentCsgIntervalsTiming = &transparentCsgIntervalsTiming;
+    AvboitPreGraphTask::Payload avboitPrePayload{
+        m_arena,
+        m_avboitSystem,
+        deferredTargets,
+        avboitPreTimingTicket,
+        transparentCsgIntervalsTiming,
+    };
+    ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload avboitCsgReceiverSpanPayload{
+        m_arena,
+        m_materialSystem,
+        m_csgSystem,
+        deferredTargets,
+        avboitPreTimingTicket,
+        transparentCsgIntervalsTiming,
+    };
+    ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload avboitCsgIntervalCombinePayload{
+        m_arena,
+        m_materialSystem,
+        m_csgSystem,
+        deferredTargets,
+        avboitPreTimingTicket,
+        transparentCsgIntervalsTiming,
+    };
     avboitPrePayload.hasTransparentRenderers = hasTransparentRenderers;
     avboitPrePayload.frameBindings = frameBindings;
     avboitPrePayload.csgResources = csgResources;
@@ -836,8 +852,6 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
     FrameGraphTransparentCsgTasks transparentCsgTasks(
         m_deferredLightingTaskGraph,
-        m_materialSystem,
-        m_csgSystem,
         m_avboitSystem
     );
     FrameGraphTransparentCsgTaskResult transparentCsgTaskResult;
@@ -890,13 +904,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     }
     const Core::GpuTaskId avboitIntervalCompletionTask = transparentCsgTaskResult.intervalCompletionTask;
     const bool avboitIntervalOutputsGraphOwned = transparentCsgTaskResult.intervalOutputsGraphOwned;
-    AvboitOccupancyGraphTask::Payload avboitOccupancyPayload{ m_arena };
-    AvboitOccupancyComputeEmulationGraphTask::Payload avboitOccupancyComputeEmulationPayload{ m_arena };
+    AvboitOccupancyGraphTask::Payload avboitOccupancyPayload{ m_arena, m_avboitSystem, deferredTargets, avboitPreTimingTicket };
+    AvboitOccupancyComputeEmulationGraphTask::Payload avboitOccupancyComputeEmulationPayload{ m_arena, m_graphics, m_materialSystem, deferredTargets, avboitPreTimingTicket, avboitOccupancyComputeEmulationTiming };
     avboitOccupancyPayload.frameBindings = frameBindings;
     avboitOccupancyComputeEmulationPayload.frameBindings = frameBindings;
-    avboitOccupancyPayload.avboitSystem = &m_avboitSystem;
-    avboitOccupancyPayload.targets = &deferredTargets;
-    avboitOccupancyPayload.timingTicket = &avboitPreTimingTicket;
     avboitOccupancyPayload.hasTransparentRenderers = hasTransparentRenderers;
     avboitOccupancyPayload.csgResources = csgResources;
     avboitOccupancyComputeEmulationPayload.csgResources = csgResources;
@@ -1082,13 +1093,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     if(hasTransparentRenderers){
     // Snapshot Extinction after Depth Warp so phases never overwrite each other.
-    AvboitExtinctionGraphTask::Payload avboitExtinctionPayload{ m_arena };
-    AvboitExtinctionComputeEmulationGraphTask::Payload avboitExtinctionComputeEmulationPayload{ m_arena };
+    AvboitExtinctionGraphTask::Payload avboitExtinctionPayload{ m_arena, m_avboitSystem, deferredTargets, avboitExtinctionTimingTicket };
+    AvboitExtinctionComputeEmulationGraphTask::Payload avboitExtinctionComputeEmulationPayload{ m_arena, m_graphics, m_materialSystem, deferredTargets, avboitExtinctionTimingTicket, avboitExtinctionComputeEmulationTiming };
     avboitExtinctionPayload.frameBindings = frameBindings;
     avboitExtinctionComputeEmulationPayload.frameBindings = frameBindings;
-    avboitExtinctionPayload.avboitSystem = &m_avboitSystem;
-    avboitExtinctionPayload.targets = &deferredTargets;
-    avboitExtinctionPayload.timingTicket = &avboitExtinctionTimingTicket;
     avboitExtinctionPayload.hasTransparentRenderers = hasTransparentRenderers;
     avboitExtinctionPayload.csgResources = csgResources;
     avboitExtinctionComputeEmulationPayload.csgResources = csgResources;
@@ -1230,13 +1238,10 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
 
 // Accumulation is another independent write point; freeze bytes after integration.
-    AvboitAccumulationGraphTask::Payload avboitAccumulationPayload{ m_arena };
-    AvboitAccumulationComputeEmulationGraphTask::Payload avboitAccumulationComputeEmulationPayload{ m_arena };
+    AvboitAccumulationGraphTask::Payload avboitAccumulationPayload{ m_arena, m_avboitSystem, deferredTargets, avboitAccumulationTimingTicket };
+    AvboitAccumulationComputeEmulationGraphTask::Payload avboitAccumulationComputeEmulationPayload{ m_arena, m_graphics, m_materialSystem, deferredTargets, avboitAccumulationTimingTicket, avboitAccumulationComputeEmulationTiming };
     avboitAccumulationPayload.frameBindings = frameBindings;
     avboitAccumulationComputeEmulationPayload.frameBindings = frameBindings;
-    avboitAccumulationPayload.avboitSystem = &m_avboitSystem;
-    avboitAccumulationPayload.targets = &deferredTargets;
-    avboitAccumulationPayload.timingTicket = &avboitAccumulationTimingTicket;
     avboitAccumulationPayload.hasTransparentRenderers = hasTransparentRenderers;
     avboitAccumulationPayload.csgResources = csgResources;
     avboitAccumulationComputeEmulationPayload.csgResources = csgResources;

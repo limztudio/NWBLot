@@ -34,6 +34,15 @@ namespace ECSRenderDetail{
     return context.compiledPlan.queueInfoForTask(*task);
 }
 
+[[nodiscard]] inline const Core::GpuPhysicalQueueInfo* QueueForTask(
+    const Core::GpuTaskRecordContext& context,
+    const Core::GpuTaskId& task
+){
+    if(!task.valid())
+        return nullptr;
+    return context.compiledPlan.queueInfoForTask(task);
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

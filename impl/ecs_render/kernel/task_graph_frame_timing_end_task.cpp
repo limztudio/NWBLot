@@ -26,7 +26,7 @@ namespace RendererTaskGraphDetail{
     const Core::GpuTaskRecordContext& context
 ){
     static_cast<void>(context);
-    return payload.frameTimingTransaction && payload.frameTimingTransaction->recordEnd(commandList);
+    return payload.frameTimingTransaction.recordEnd(commandList);
 }
 
 

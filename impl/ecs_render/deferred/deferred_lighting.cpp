@@ -44,10 +44,14 @@ static_assert(sizeof(PushConstants) == sizeof(u32) * 2u);
 struct DeferredLightingGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // The deferred system, the frame targets, and the timing ticket are required: the pass always
+    // records against this frame's targets. References (not nullable pointers) carry those bindings
+    // so a missing binding fails at declaration time instead of silently returning `false` from
+    // the shared record helper.
     struct Payload{
-        RendererDeferredSystem* deferredSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        RendererDeferredSystem& deferredSystem;
+        DeferredFrameTargets& targets;
+        Core::GpuTimingSubmissionTicket& timingTicket;
         bool useLaggedLightingHistory = false;
     };
 
@@ -190,9 +194,9 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredLightingTask(
     return graph.addTask<__hidden_deferred_lighting::DeferredLightingGraphTask>(
         desc,
         __hidden_deferred_lighting::DeferredLightingGraphTask::Payload{
-            .deferredSystem = this,
-            .targets = &targets,
-            .timingTicket = &timingTicket,
+            .deferredSystem = *this,
+            .targets = targets,
+            .timingTicket = timingTicket,
             .useLaggedLightingHistory = useLaggedLightingHistory,
         }
     );

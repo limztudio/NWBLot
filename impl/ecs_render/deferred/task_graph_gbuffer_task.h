@@ -41,14 +41,18 @@ namespace ECSRenderDetail{
 struct GbufferGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
 
+    // The graphics runtime, the material/CSG systems, the frame targets, the timing-ticket slot,
+    // and the setup readiness flags are required: G-buffer always records the opaque pass against
+    // this frame's bindings. References (not nullable pointers) carry those bindings so a missing
+    // binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        Core::GraphicsRuntime* graphics = nullptr;
-        RendererMaterialSystem* materialSystem = nullptr;
-        RendererCsgSystem* csgSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
-        const bool* meshViewSetupReady = nullptr;
-        const bool* sceneShadingSetupReady = nullptr;
+        Core::GraphicsRuntime& graphics;
+        RendererMaterialSystem& materialSystem;
+        RendererCsgSystem& csgSystem;
+        DeferredFrameTargets& targets;
+        Core::GpuTimingSubmissionTicket*& timingTicket;
+        const bool& meshViewSetupReady;
+        const bool& sceneShadingSetupReady;
         ECSRenderDetail::MeshFrameBindingSnapshot frameBindings;
         CsgGraphResourceSnapshot csgResources;
         OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
@@ -62,8 +66,24 @@ struct GbufferGraphTask{
         bool csgReceiverComputeEmulationOutputStatesGraphOwned = false;
         Optional<Core::GpuTimingMeasure>* regularSharedComputeEmulationTiming = nullptr;
 
-        explicit Payload(Core::Alloc::GlobalArena& arena)
-            : opaqueDrawSnapshot(arena)
+        explicit Payload(
+            Core::Alloc::GlobalArena& arena,
+            Core::GraphicsRuntime& graphicsIn,
+            RendererMaterialSystem& materialSystemIn,
+            RendererCsgSystem& csgSystemIn,
+            DeferredFrameTargets& targetsIn,
+            Core::GpuTimingSubmissionTicket*& timingTicketIn,
+            const bool& meshViewSetupReadyIn,
+            const bool& sceneShadingSetupReadyIn
+        )
+            : graphics(graphicsIn)
+            , materialSystem(materialSystemIn)
+            , csgSystem(csgSystemIn)
+            , targets(targetsIn)
+            , timingTicket(timingTicketIn)
+            , meshViewSetupReady(meshViewSetupReadyIn)
+            , sceneShadingSetupReady(sceneShadingSetupReadyIn)
+            , opaqueDrawSnapshot(arena)
         {}
     };
 

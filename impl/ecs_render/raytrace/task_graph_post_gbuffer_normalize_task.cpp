@@ -35,15 +35,10 @@ bool PostGbufferNormalizeGraphTask::Record(
         context,
         payload.shadowVisibilityTask
     );
-    if(
-        !payload.raytracingSystem
-        || !payload.timingTicket
-        || !*payload.timingTicket
-        || !shadowVisibilityQueue
-    )
+    if(!shadowVisibilityQueue)
         return false;
 
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     // Explicit uses below lower G-buffer, scene, and trace-geometry states first.
     if(
         shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute
@@ -59,8 +54,7 @@ bool PostGbufferNormalizeGraphTask::Record(
 
 void PostGbufferNormalizeGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
     static_cast<void>(token);
-    if(payload.raytracingSystem)
-        payload.raytracingSystem->confirmPreparedShadowTraceGeometryNormalization();
+    payload.raytracingSystem.confirmPreparedShadowTraceGeometryNormalization();
 }
 
 

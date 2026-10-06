@@ -35,10 +35,14 @@ namespace ECSRenderDetail{
 struct SceneShadingSetupGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {};
 
+    // The deferred system, the timing-ticket slot, and the ready flag are required: setup always
+    // uploads scene shading for this frame and publishes readiness. References (not nullable
+    // pointers) carry those bindings so a missing binding fails at declaration time instead of
+    // silently returning `false` inside Record.
     struct Payload{
-        RendererDeferredSystem* deferredSystem = nullptr;
-        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
-        bool* ready = nullptr;
+        RendererDeferredSystem& deferredSystem;
+        Core::GpuTimingSubmissionTicket*& timingTicket;
+        bool& ready;
         ECSRenderDetail::SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS] = {};
         ECSRenderDetail::SceneShadingGpuData sceneShadingState;
         u32 lightCount = 0u;

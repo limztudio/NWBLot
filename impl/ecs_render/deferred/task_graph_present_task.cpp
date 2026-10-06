@@ -38,14 +38,9 @@ namespace RendererTaskGraphDetail{
     const bool shadowVisibilityRunsOnCompute = shadowVisibilityQueue
         && shadowVisibilityQueue->queueClass == Core::CommandQueue::Compute;
     if(
-        !payload.deferredSystem
-        || !payload.graphics
-        || !payload.targets
-        || !payload.presentationFrame.valid()
+        !payload.presentationFrame.valid()
         || !payload.backBuffer.valid()
-        || !payload.timingTicket
         || !shadowVisibilityQueue
-        || (shadowVisibilityRunsOnCompute && !payload.asyncFinalTiming)
     )
         return false;
     const Core::Framebuffer& presentationFramebuffer = *payload.presentationFrame.framebuffer;
@@ -57,35 +52,44 @@ namespace RendererTaskGraphDetail{
     )
         return false;
 
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
     if(shadowVisibilityRunsOnCompute){
-        payload.asyncFinalTiming->emplace(
-            payload.graphics->gpuTiming(),
+        payload.asyncFinalTiming.emplace(
+            payload.graphics.gpuTiming(),
             RendererGpuTimingScope::s_AsyncFinal,
-            payload.graphics->getDevice(),
+            payload.graphics.getDevice(),
             commandList
         );
-        if(!Core::FinishSplitGpuTimingMarker(payload.asyncFinalTiming))
+        if(!Core::FinishSplitGpuTimingMarker(&payload.asyncFinalTiming))
             return false;
     }
 
-    const bool presentRecorded = payload.deferredSystem->renderDeferredPresent(
+    const bool presentRecorded = payload.deferredSystem.renderDeferredPresent(
         commandList,
-        *payload.targets,
+        payload.targets,
         payload.presentationFrame,
         payload.outputLayer.sampledImage
     );
-    if(shadowVisibilityRunsOnCompute && presentRecorded && payload.asyncFinalTiming->has_value()){
-        payload.asyncFinalTiming->value().finishTiming(commandList);
-        payload.asyncFinalTiming->reset();
+    if(shadowVisibilityRunsOnCompute && presentRecorded && payload.asyncFinalTiming.has_value()){
+        payload.asyncFinalTiming.value().finishTiming(commandList);
+        payload.asyncFinalTiming.reset();
     }
     return presentRecorded;
 }
 
 
 void DeferredPresentGraphTask::Accepted(Payload& payload, const Core::QueueSubmissionToken& token){
-    if(payload.outputLayerContributor && payload.outputLayer.frameGeneration != 0u && token.valid())
-        payload.outputLayerContributor->acceptTaskGraphOutputLayer(payload.outputLayer.frameGeneration, token);
+    AcceptOutputLayer(payload.outputLayerContributor, payload.outputLayer.frameGeneration, token);
+}
+
+
+void DeferredPresentGraphTask::AcceptOutputLayer(
+    Core::IGpuTaskGraphOutputLayerContributor* contributor,
+    const u64 frameGeneration,
+    const Core::QueueSubmissionToken& token
+){
+    if(contributor && frameGeneration != 0u && token.valid())
+        contributor->acceptTaskGraphOutputLayer(frameGeneration, token);
 }
 
 

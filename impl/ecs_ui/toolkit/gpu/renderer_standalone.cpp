@@ -54,8 +54,8 @@ Core::GpuTaskId GpuRendererState::declareStandalone(
             .setScheduling(beginScheduling)
             .setTimingMetadata({ 0u, 0u, Core::GpuTaskTimingPolicy::PacketOnly }),
         Core::FrameTimingBeginGraphTask::Payload{
-            .frameTimingTransaction = &frameTimingTransaction,
-            .device = &m_graphics.getDevice(),
+            .frameTimingTransaction = frameTimingTransaction,
+            .device = m_graphics.getDevice(),
             .scopeDefinition = m_frameTimingScopePrepared ? GpuRendererTimingScope::s_Frame : Core::GpuTimingScopeDefinition{},
         }
     );
@@ -118,7 +118,7 @@ Core::GpuTaskId GpuRendererState::declareStandalone(
         Core::GpuTaskDesc().setIdentity(Name("ui.frame_timing_end")).setMarkerLabel("UI Frame Timing End")
             .setScheduling(timingEndScheduling).setDependencies(&timingEndDependency, 1u)
             .setTimingMetadata({ 0u, 0u, Core::GpuTaskTimingPolicy::PacketOnly }),
-        GpuFrameTimingEndTask::Payload{ &frameTimingTransaction }
+        GpuFrameTimingEndTask::Payload{ frameTimingTransaction }
     );
     if(!terminal.valid() || !graph.declarePresentEndpoint({ terminal, backBuffer }))
         return {};

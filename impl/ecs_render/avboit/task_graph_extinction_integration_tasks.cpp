@@ -43,7 +43,7 @@ namespace RendererTaskGraphDetail{
         MaterialPipelinePass::AvboitExtinction,
         &AvboitFrameTargets::lowFramebuffer,
     };
-    return RecordAvboitComputeEmulationFromPayload(payload, commandList, context, &Payload::extinctionTiming, trait);
+    return RecordAvboitComputeEmulationFromPayload(payload, commandList, context, &payload.extinctionTiming, trait);
 }
 
 [[nodiscard]] bool AvboitExtinctionSharedComputeEmulationGraphTask::Record(
@@ -58,7 +58,7 @@ namespace RendererTaskGraphDetail{
         MaterialPipelinePass::AvboitExtinction,
         &AvboitFrameTargets::lowFramebuffer,
     };
-    return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, context, &Payload::extinctionTiming, payload.phase == AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Raster, trait);
+    return RecordAvboitSharedComputeEmulationFromPayload(payload, commandList, context, &payload.extinctionTiming, payload.phase == AvboitExtinctionSharedComputeEmulationGraphTask::Phase::Raster, trait);
 }
 
 [[nodiscard]] bool AvboitExtinctionGraphTask::Record(
@@ -75,7 +75,7 @@ namespace RendererTaskGraphDetail{
         &Payload::extinctionSnapshot,
         &Payload::extinctionComputeEmulationOutputStatesGraphOwned,
         &Payload::extinctionCsgComputeEmulationOutputStatesGraphOwned,
-        &Payload::extinctionComputeEmulationTiming,
+        payload.extinctionComputeEmulationTiming,
         [&](
             Core::CommandList& dispatchCommandList,
             const MaterialPassDrawItemPartitions& dispatchDrawItems,
@@ -83,9 +83,9 @@ namespace RendererTaskGraphDetail{
             const usize dispatchInstanceCount,
             const usize dispatchMaterialTypedByteCount
         ){
-            payload.avboitSystem->renderAvboitExtinctionPass(
+            payload.avboitSystem.renderAvboitExtinctionPass(
                 dispatchCommandList,
-                *payload.targets,
+                                payload.targets,
                 dispatchDrawItems,
                 dispatchCsgFrameData,
                 payload.csgResources,
@@ -108,15 +108,12 @@ namespace RendererTaskGraphDetail{
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context
 ){
-    if(!payload.avboitSystem || !payload.targets || !payload.timingTicket)
-        return false;
-
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
     bool timingRecorded = false;
     payload.timingAttribution = ECSRenderDetail::BeginTaskTimingSample(payload.timingFeedback, payload.timingScope, context);
-    payload.avboitSystem->dispatchAvboitIntegration(
+    payload.avboitSystem.dispatchAvboitIntegration(
         commandList,
-        *payload.targets,
+        payload.targets,
         payload.timingAttribution,
         &timingRecorded
     );

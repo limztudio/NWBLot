@@ -22,18 +22,14 @@ bool FrameTimingBeginGraphTask::Record(
     const GpuTaskRecordContext& context
 ){
     static_cast<void>(context);
-    return payload.frameTimingTransaction
-        && payload.device
-        && payload.frameTimingTransaction->begin(payload.scopeDefinition, *payload.device, commandList)
+    return payload.frameTimingTransaction.begin(payload.scopeDefinition, payload.device, commandList)
     ;
 }
 
 void FrameTimingBeginGraphTask::Accepted(Payload& payload, const QueueSubmissionToken& token){
-    if(!payload.frameTimingTransaction)
-        return;
-    if(!payload.frameTimingTransaction->confirmBeginSubmission(token)){
+    if(!payload.frameTimingTransaction.confirmBeginSubmission(token)){
         NWB_LOGGER_WARNING(GLB_TEXT("GPU task graph: failed to confirm accepted frame timing begin; discarding timing reservation"));
-        payload.frameTimingTransaction->discard();
+        payload.frameTimingTransaction.discard();
     }
 }
 

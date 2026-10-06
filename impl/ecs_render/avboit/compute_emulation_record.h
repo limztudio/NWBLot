@@ -124,16 +124,16 @@ template<typename PayloadT>
     const PayloadT& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context,
-    Optional<Core::GpuTimingMeasure>* PayloadT::* timingMember,
+    Optional<Core::GpuTimingMeasure>* timing,
     const AvboitComputeEmulationRecordTrait& trait
 ){
     static_cast<void>(context);
     const AvboitComputeEmulationRecordInputs inputs{
-        payload.graphics,
-        payload.materialSystem,
-        payload.targets,
-        payload.timingTicket,
-        payload.*timingMember,
+        &payload.graphics,
+        &payload.materialSystem,
+        &payload.targets,
+        &payload.timingTicket,
+        timing,
         &payload.frameBindings,
         &payload.csgResources,
         &payload.plan,
@@ -158,20 +158,17 @@ template<typename PayloadT, typename DispatchFn>
     const ECSRenderDetail::TransparentMaterialPassGraphSnapshot PayloadT::* snapshotMember,
     const bool PayloadT::* emuOutputStatesMember,
     const bool PayloadT::* csgEmuOutputStatesMember,
-    Optional<Core::GpuTimingMeasure>* PayloadT::* timingMember,
+    Optional<Core::GpuTimingMeasure>* timing,
     DispatchFn&& dispatch
 ){
     static_cast<void>(context);
     if(
-        !payload.avboitSystem
-        || !payload.targets
-        || !payload.timingTicket
-        || ((payload.*emuOutputStatesMember || payload.*csgEmuOutputStatesMember)
-            && !payload.generatedGeometryReused && !(payload.*timingMember))
+        ((payload.*emuOutputStatesMember || payload.*csgEmuOutputStatesMember)
+            && !payload.generatedGeometryReused && !timing)
     )
         return false;
 
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
     Core::Alloc::ScratchArena scratchArena(RendererArenaScope::s_RenderArena);
     MaterialPassDrawItemPartitions drawItems{ scratchArena };
     CsgFrameGpuData csgFrameData{ scratchArena };
@@ -201,17 +198,17 @@ template<typename PayloadT>
     const PayloadT& payload,
     Core::CommandList& commandList,
     const Core::GpuTaskRecordContext& context,
-    Optional<Core::GpuTimingMeasure>* PayloadT::* timingMember,
+    Optional<Core::GpuTimingMeasure>* timing,
     const bool isRasterPhase,
     const AvboitSharedComputeEmulationRecordTrait& trait
 ){
     static_cast<void>(context);
     const AvboitSharedComputeEmulationRecordInputs inputs{
-        payload.graphics,
-        payload.materialSystem,
-        payload.targets,
-        payload.timingTicket,
-        payload.*timingMember,
+        &payload.graphics,
+        &payload.materialSystem,
+        &payload.targets,
+        &payload.timingTicket,
+        timing,
         &payload.frameBindings,
         &payload.plan,
         payload.drawIndex,

@@ -29,8 +29,20 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-OpaqueCsgReceiverComputeEmulationGraphTask::Payload::Payload(Core::Alloc::GlobalArena& arena)
-    : plan(arena)
+OpaqueCsgReceiverComputeEmulationGraphTask::Payload::Payload(
+    Core::Alloc::GlobalArena& arena,
+    RendererMaterialSystem& materialSystemIn,
+    DeferredFrameTargets& targetsIn,
+    Core::GpuTimingSubmissionTicket*& timingTicketIn,
+    const bool& meshViewSetupReadyIn,
+    const bool& sceneShadingSetupReadyIn
+)
+    : materialSystem(materialSystemIn)
+    , targets(targetsIn)
+    , timingTicket(timingTicketIn)
+    , meshViewSetupReady(meshViewSetupReadyIn)
+    , sceneShadingSetupReady(sceneShadingSetupReadyIn)
+    , plan(arena)
 {}
 
 
@@ -40,19 +52,11 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::Record(
     const Core::GpuTaskRecordContext& context
 ){
     static_cast<void>(context);
-    if(
-        !payload.materialSystem
-        || !payload.targets
-        || !payload.timingTicket
-        || !*payload.timingTicket
-        || !payload.meshViewSetupReady
-        || !payload.sceneShadingSetupReady
-        || !payload.plan.captured
-    )
+    if(!payload.plan.captured)
         return false;
 
-    RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
+    RendererMaterialSystem& materialSystem = payload.materialSystem;
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
         payload.meshViewSetupReady,
         payload.sceneShadingSetupReady
@@ -89,12 +93,12 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::Record(
 
     Core::ViewportState csgViewportState;
     csgViewportState
-        .addViewport(payload.targets->framebuffer->getFramebufferInfo().getViewport())
-        .addScissorRect(csgFrameData.workRegion.resolveRect(payload.targets->width, payload.targets->height))
+        .addViewport(payload.targets.framebuffer->getFramebufferInfo().getViewport())
+        .addScissorRect(csgFrameData.workRegion.resolveRect(payload.targets.width, payload.targets.height))
     ;
     const MaterialPassDrawContext drawContext{
         commandList,
-        payload.targets->framebuffer.get(),
+        payload.targets.framebuffer.get(),
         nullptr,
         csgViewportState,
         &payload.csgResources,
@@ -109,8 +113,24 @@ bool OpaqueCsgReceiverComputeEmulationGraphTask::Record(
 }
 
 
-OpaqueCsgIntervalSampleComputeEmulationGraphTask::Payload::Payload(Core::Alloc::GlobalArena& arena)
-    : plan(arena)
+OpaqueCsgIntervalSampleComputeEmulationGraphTask::Payload::Payload(
+    Core::Alloc::GlobalArena& arena,
+    Core::GraphicsRuntime& graphicsIn,
+    RendererMaterialSystem& materialSystemIn,
+    DeferredFrameTargets& targetsIn,
+    Core::GpuTimingSubmissionTicket*& timingTicketIn,
+    const bool& meshViewSetupReadyIn,
+    const bool& sceneShadingSetupReadyIn,
+    Optional<Core::GpuTimingMeasure>& opaqueCsgTimingIn
+)
+    : graphics(graphicsIn)
+    , materialSystem(materialSystemIn)
+    , targets(targetsIn)
+    , timingTicket(timingTicketIn)
+    , meshViewSetupReady(meshViewSetupReadyIn)
+    , sceneShadingSetupReady(sceneShadingSetupReadyIn)
+    , opaqueCsgTiming(opaqueCsgTimingIn)
+    , plan(arena)
 {}
 
 
@@ -120,22 +140,12 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(
     const Core::GpuTaskRecordContext& context
 ){
     static_cast<void>(context);
-    if(
-        !payload.graphics
-        || !payload.materialSystem
-        || !payload.targets
-        || !payload.timingTicket
-        || !*payload.timingTicket
-        || !payload.meshViewSetupReady
-        || !payload.sceneShadingSetupReady
-        || !payload.opaqueCsgTiming
-        || !payload.plan.captured
-    )
+    if(!payload.plan.captured)
         return false;
 
-    Core::GraphicsRuntime& graphics = *payload.graphics;
-    RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(**payload.timingTicket);
+    Core::GraphicsRuntime& graphics = payload.graphics;
+    RendererMaterialSystem& materialSystem = payload.materialSystem;
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
     const bool frameSetupReady = ECSRenderDetail::FrameSetupReady(
         payload.meshViewSetupReady,
         payload.sceneShadingSetupReady
@@ -169,21 +179,21 @@ bool OpaqueCsgIntervalSampleComputeEmulationGraphTask::Record(
         || !materialSystem.materialPassDrawResourcesReady(drawItems, payload.frameBindings)
     )
         return true;
-    if(payload.opaqueCsgTiming->has_value())
+    if(payload.opaqueCsgTiming.has_value())
         return false;
 
     Core::ViewportState deferredViewportState;
     deferredViewportState.addViewportAndScissorRect(
-        payload.targets->framebuffer->getFramebufferInfo().getViewport()
+        payload.targets.framebuffer->getFramebufferInfo().getViewport()
     );
-    payload.opaqueCsgTiming->emplace(
+    payload.opaqueCsgTiming.emplace(
         graphics.gpuTiming(),
         RendererGpuTimingScope::s_OpaqueCsg,
         graphics.getDevice(),
         commandList
     );
     // Close the marker here; the sample callback owns finishTiming/discard.
-    if(!Core::FinishSplitGpuTimingMarker(payload.opaqueCsgTiming))
+    if(!Core::FinishSplitGpuTimingMarker(&payload.opaqueCsgTiming))
         return false;
     const MaterialPassDrawContext drawContext{
         commandList,

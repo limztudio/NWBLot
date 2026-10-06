@@ -61,10 +61,14 @@ static_assert(sizeof(PresentPushConstants) == sizeof(u32) * 6u);
 struct DeferredCompositeGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // The deferred system, the frame targets, and the timing ticket are required: the pass always
+    // records against this frame's targets. References (not nullable pointers) carry those bindings
+    // so a missing binding fails at declaration time instead of silently returning `false` from
+    // the shared record helper.
     struct Payload{
-        RendererDeferredSystem* deferredSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        RendererDeferredSystem& deferredSystem;
+        DeferredFrameTargets& targets;
+        Core::GpuTimingSubmissionTicket& timingTicket;
         ReflectionCompositeInputs reflectionInputs;
     };
 
@@ -231,9 +235,9 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredCompositeTask(
     return graph.addTask<__hidden_deferred_composite::DeferredCompositeGraphTask>(
         desc,
         __hidden_deferred_composite::DeferredCompositeGraphTask::Payload{
-            .deferredSystem = this,
-            .targets = &targets,
-            .timingTicket = &timingTicket,
+            .deferredSystem = *this,
+            .targets = targets,
+            .timingTicket = timingTicket,
             .reflectionInputs = reflectionInputs,
         }
     );

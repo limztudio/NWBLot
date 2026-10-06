@@ -29,12 +29,12 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiAgeFreeTask(
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiAgeFreeGraphTask>(
         desc,
         RayTracingSurfelGiTaskDetail::SurfelGiAgeFreeGraphTask::Payload{
-            .raytracingSystem = this,
-            .graphics = &m_graphics,
-            .targets = &targets,
+            .raytracingSystem = *this,
+            .graphics = m_graphics,
+            .targets = targets,
             .deferredLightingResources = deferredLightingResources,
-            .timingTicket = &timingTicket,
-            .asyncTiming = &asyncTiming,
+            .timingTicket = timingTicket,
+            .asyncTiming = asyncTiming,
         }
     );
 }
@@ -45,15 +45,15 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiHashBuildTask(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>* const asyncTiming
+    Optional<Core::GpuTimingMeasure>& asyncTiming
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask>(
         desc,
         RayTracingSurfelGiTaskDetail::SurfelGiHashBuildGraphTask::Payload{
-            .raytracingSystem = this,
-            .targets = &targets,
+            .raytracingSystem = *this,
+            .targets = targets,
             .deferredLightingResources = deferredLightingResources,
-            .timingTicket = &timingTicket,
+            .timingTicket = timingTicket,
             .asyncTiming = asyncTiming,
         }
     );
@@ -65,15 +65,15 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiSpawnTask(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>* const asyncTiming
+    Optional<Core::GpuTimingMeasure>& asyncTiming
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask>(
         desc,
         RayTracingSurfelGiTaskDetail::SurfelGiSpawnGraphTask::Payload{
-            .raytracingSystem = this,
-            .targets = &targets,
+            .raytracingSystem = *this,
+            .targets = targets,
             .deferredLightingResources = deferredLightingResources,
-            .timingTicket = &timingTicket,
+            .timingTicket = timingTicket,
             .asyncTiming = asyncTiming,
         }
     );
@@ -85,15 +85,15 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceBuildArgsTask(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>* const asyncTiming
+    Optional<Core::GpuTimingMeasure>& asyncTiming
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiTraceBuildArgsGraphTask>(
         desc,
         RayTracingSurfelGiTaskDetail::SurfelGiTraceBuildArgsGraphTask::Payload{
-            .raytracingSystem = this,
-            .targets = &targets,
+            .raytracingSystem = *this,
+            .targets = targets,
             .deferredLightingResources = deferredLightingResources,
-            .timingTicket = &timingTicket,
+            .timingTicket = timingTicket,
             .asyncTiming = asyncTiming,
         }
     );
@@ -105,15 +105,15 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTraceTask(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>* const asyncTiming
+    Optional<Core::GpuTimingMeasure>& asyncTiming
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask>(
         desc,
         RayTracingSurfelGiTaskDetail::SurfelGiTraceGraphTask::Payload{
-            .raytracingSystem = this,
-            .targets = &targets,
+            .raytracingSystem = *this,
+            .targets = targets,
             .deferredLightingResources = deferredLightingResources,
-            .timingTicket = &timingTicket,
+            .timingTicket = timingTicket,
             .asyncTiming = asyncTiming,
         }
     );
@@ -125,15 +125,15 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiResolveTask(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>* const asyncTiming
+    Optional<Core::GpuTimingMeasure>& asyncTiming
 ){
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask>(
         desc,
         RayTracingSurfelGiTaskDetail::SurfelGiResolveGraphTask::Payload{
-            .raytracingSystem = this,
-            .targets = &targets,
+            .raytracingSystem = *this,
+            .targets = targets,
             .deferredLightingResources = deferredLightingResources,
-            .timingTicket = &timingTicket,
+            .timingTicket = timingTicket,
             .asyncTiming = asyncTiming,
         }
     );
@@ -150,10 +150,10 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelGiTask(
     return graph.addTask<RayTracingSurfelGiTaskDetail::SurfelGiGraphTask>(
         desc,
         RayTracingSurfelGiTaskDetail::SurfelGiGraphTask::Payload{
-            .raytracingSystem = this,
-            .targets = &targets,
+            .raytracingSystem = *this,
+            .targets = targets,
             .deferredLightingResources = deferredLightingResources,
-            .timingTicket = &timingTicket,
+            .timingTicket = timingTicket,
             .asyncTiming = asyncTiming,
         }
     );
@@ -167,7 +167,7 @@ Core::GpuTaskId RendererRayTracingSystem::declareSurfelResourceInitializationLif
     return graph.addTask<SurfelGiInitializationLifecycleGraphTask>(
         desc,
         SurfelGiInitializationLifecycleGraphTask::Payload{
-            .raytracingSystem = this,
+            .raytracingSystem = *this,
         }
     );
 }

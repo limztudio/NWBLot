@@ -95,14 +95,19 @@ static constexpr bool s_RuntimeSkinningMeshletConeCullingEnabled = false; // Def
 struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // The skinning system and the timing ticket are required: deformation always records against
+    // this frame's ticket. References (not nullable pointers) carry those bindings so a missing
+    // binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        explicit Payload(Core::Alloc::GlobalArena& arena)
-            : plans(arena)
-        {}
-
-        MeshSkinningSystem* system = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        MeshSkinningSystem& system;
+        Core::GpuTimingSubmissionTicket& timingTicket;
         Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
+
+        explicit Payload(Core::Alloc::GlobalArena& arena, MeshSkinningSystem& systemIn, Core::GpuTimingSubmissionTicket& timingTicketIn)
+            : system(systemIn)
+            , timingTicket(timingTicketIn)
+            , plans(arena)
+        {}
     };
 
     [[nodiscard]] static bool Record(
@@ -110,12 +115,12 @@ struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        if(!payload.system || !payload.timingTicket || payload.plans.empty())
+        if(payload.plans.empty())
             return false;
 
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
         for(const MeshSkinningGraphDispatchPlan& plan : payload.plans){
-            if(!payload.system->recordGraphOwnedSkinningDeformation(plan, commandList, context))
+            if(!payload.system.recordGraphOwnedSkinningDeformation(plan, commandList, context))
                 return false;
         }
         return true;
@@ -127,14 +132,19 @@ struct MeshSkinningSystem::TaskGraphSkinningDeformationTask{
 struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Compute };
 
+    // The skinning system and the timing ticket are required: bounds/repack always records against
+    // this frame's ticket. References (not nullable pointers) carry those bindings so a missing
+    // binding fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        explicit Payload(Core::Alloc::GlobalArena& arena)
-            : plans(arena)
-        {}
-
-        MeshSkinningSystem* system = nullptr;
-        Core::GpuTimingSubmissionTicket* timingTicket = nullptr;
+        MeshSkinningSystem& system;
+        Core::GpuTimingSubmissionTicket& timingTicket;
         Vector<MeshSkinningGraphDispatchPlan, Core::Alloc::GlobalArena> plans;
+
+        explicit Payload(Core::Alloc::GlobalArena& arena, MeshSkinningSystem& systemIn, Core::GpuTimingSubmissionTicket& timingTicketIn)
+            : system(systemIn)
+            , timingTicket(timingTicketIn)
+            , plans(arena)
+        {}
     };
 
     [[nodiscard]] static bool Record(
@@ -142,12 +152,12 @@ struct MeshSkinningSystem::TaskGraphSkinningPostDispatchTask{
         Core::CommandList& commandList,
         const Core::GpuTaskRecordContext& context
     ){
-        if(!payload.system || !payload.timingTicket || payload.plans.empty())
+        if(payload.plans.empty())
             return false;
 
-        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
+        Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
         for(const MeshSkinningGraphDispatchPlan& plan : payload.plans){
-            if(!payload.system->recordGraphOwnedSkinningPostDispatch(plan, commandList, context))
+            if(!payload.system.recordGraphOwnedSkinningPostDispatch(plan, commandList, context))
                 return false;
         }
         return true;
@@ -835,9 +845,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     }
     Core::GpuTaskId postDispatchDependency = terminalTask;
     if(!resourceUses.deformation.empty()){
-        TaskGraphSkinningDeformationTask::Payload deformationPayload(m_arena);
-        deformationPayload.system = this;
-        deformationPayload.timingTicket = &timingTicket;
+        TaskGraphSkinningDeformationTask::Payload deformationPayload(m_arena, *this, timingTicket);
         deformationPayload.plans.clear();
         deformationPayload.plans.reserve(dispatchPlans.size());
         for(const MeshSkinningGraphDispatchPlan& plan : dispatchPlans){
@@ -867,9 +875,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         postDispatchDependency = deformationTask;
     }
 
-    TaskGraphSkinningPostDispatchTask::Payload postDispatchPayload(m_arena);
-    postDispatchPayload.system = this;
-    postDispatchPayload.timingTicket = &timingTicket;
+    TaskGraphSkinningPostDispatchTask::Payload postDispatchPayload(m_arena, *this, timingTicket);
     postDispatchPayload.plans = Move(dispatchPlans);
     Core::GpuTaskDesc postDispatchDesc;
     postDispatchDesc

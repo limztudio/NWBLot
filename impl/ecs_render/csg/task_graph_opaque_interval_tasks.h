@@ -54,21 +54,39 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// The material/CSG systems, the frame targets, the timing-ticket slot, and the setup readiness flags
+// are required: every interval record pass works against this frame's bindings. References (not
+// nullable pointers) carry those bindings so a missing binding fails at declaration time instead of
+// silently returning `false` inside Record.
 struct CsgOpaqueIntervalRecordInputs{
-    RendererMaterialSystem* materialSystem = nullptr;
-    RendererCsgSystem* csgSystem = nullptr;
-    DeferredFrameTargets* targets = nullptr;
-    Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
-    const bool* meshViewSetupReady = nullptr;
-    const bool* sceneShadingSetupReady = nullptr;
+    RendererMaterialSystem& materialSystem;
+    RendererCsgSystem& csgSystem;
+    DeferredFrameTargets& targets;
+    Core::GpuTimingSubmissionTicket*& timingTicket;
+    const bool& meshViewSetupReady;
+    const bool& sceneShadingSetupReady;
     MeshFrameBindingSnapshot frameBindings;
     CsgGraphResourceSnapshot csgResources;
     OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
     bool materialDrawBuffersUploaded = false;
     bool csgFrameBuffersUploaded = false;
 
-    explicit CsgOpaqueIntervalRecordInputs(Core::Alloc::GlobalArena& arena)
-        : opaqueDrawSnapshot(arena)
+    explicit CsgOpaqueIntervalRecordInputs(
+        Core::Alloc::GlobalArena& arena,
+        RendererMaterialSystem& materialSystemIn,
+        RendererCsgSystem& csgSystemIn,
+        DeferredFrameTargets& targetsIn,
+        Core::GpuTimingSubmissionTicket*& timingTicketIn,
+        const bool& meshViewSetupReadyIn,
+        const bool& sceneShadingSetupReadyIn
+    )
+        : materialSystem(materialSystemIn)
+        , csgSystem(csgSystemIn)
+        , targets(targetsIn)
+        , timingTicket(timingTicketIn)
+        , meshViewSetupReady(meshViewSetupReadyIn)
+        , sceneShadingSetupReady(sceneShadingSetupReadyIn)
+        , opaqueDrawSnapshot(arena)
     {}
 };
 
@@ -77,8 +95,24 @@ struct CsgReceiverSpanBuildGraphTask{
 
     struct Payload : public CsgOpaqueIntervalRecordInputs{
 
-        explicit Payload(Core::Alloc::GlobalArena& arena)
-            : CsgOpaqueIntervalRecordInputs(arena)
+        explicit Payload(
+            Core::Alloc::GlobalArena& arena,
+            RendererMaterialSystem& materialSystemIn,
+            RendererCsgSystem& csgSystemIn,
+            DeferredFrameTargets& targetsIn,
+            Core::GpuTimingSubmissionTicket*& timingTicketIn,
+            const bool& meshViewSetupReadyIn,
+            const bool& sceneShadingSetupReadyIn
+        )
+            : CsgOpaqueIntervalRecordInputs(
+                arena,
+                materialSystemIn,
+                csgSystemIn,
+                targetsIn,
+                timingTicketIn,
+                meshViewSetupReadyIn,
+                sceneShadingSetupReadyIn
+            )
         {}
     };
 
@@ -96,8 +130,24 @@ struct CsgIntervalCombineGraphTask{
 
     struct Payload : public CsgOpaqueIntervalRecordInputs{
 
-        explicit Payload(Core::Alloc::GlobalArena& arena)
-            : CsgOpaqueIntervalRecordInputs(arena)
+        explicit Payload(
+            Core::Alloc::GlobalArena& arena,
+            RendererMaterialSystem& materialSystemIn,
+            RendererCsgSystem& csgSystemIn,
+            DeferredFrameTargets& targetsIn,
+            Core::GpuTimingSubmissionTicket*& timingTicketIn,
+            const bool& meshViewSetupReadyIn,
+            const bool& sceneShadingSetupReadyIn
+        )
+            : CsgOpaqueIntervalRecordInputs(
+                arena,
+                materialSystemIn,
+                csgSystemIn,
+                targetsIn,
+                timingTicketIn,
+                meshViewSetupReadyIn,
+                sceneShadingSetupReadyIn
+            )
         {}
     };
 
@@ -113,14 +163,19 @@ struct CsgIntervalCombineGraphTask{
 struct CsgIntervalSampleGraphTask{
     static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = { Core::GpuQueueCapability::Graphics | Core::GpuQueueCapability::Compute };
 
+    // The graphics runtime, the material/CSG systems, the frame targets, the timing-ticket slot, and
+    // the setup readiness flags are required: interval sample always rasterizes this frame's CSG pass.
+    // The compute-emulation timing stays optional: it is bound only when the emulation output is
+    // graph-owned. References (not nullable pointers) carry the required bindings so a missing binding
+    // fails at declaration time instead of silently returning `false` inside Record.
     struct Payload{
-        Core::GraphicsRuntime* graphics = nullptr;
-        RendererMaterialSystem* materialSystem = nullptr;
-        RendererCsgSystem* csgSystem = nullptr;
-        DeferredFrameTargets* targets = nullptr;
-        Core::GpuTimingSubmissionTicket** timingTicket = nullptr;
-        const bool* meshViewSetupReady = nullptr;
-        const bool* sceneShadingSetupReady = nullptr;
+        Core::GraphicsRuntime& graphics;
+        RendererMaterialSystem& materialSystem;
+        RendererCsgSystem& csgSystem;
+        DeferredFrameTargets& targets;
+        Core::GpuTimingSubmissionTicket*& timingTicket;
+        const bool& meshViewSetupReady;
+        const bool& sceneShadingSetupReady;
         MeshFrameBindingSnapshot frameBindings;
         CsgGraphResourceSnapshot csgResources;
         OpaqueMaterialPassGraphSnapshot opaqueDrawSnapshot;
@@ -132,7 +187,16 @@ struct CsgIntervalSampleGraphTask{
         bool csgComputeEmulationOutputStatesGraphOwned = false;
         Optional<Core::GpuTimingMeasure>* opaqueCsgComputeEmulationTiming = nullptr;
 
-        explicit Payload(Core::Alloc::GlobalArena& arena);
+        explicit Payload(
+            Core::Alloc::GlobalArena& arena,
+            Core::GraphicsRuntime& graphicsIn,
+            RendererMaterialSystem& materialSystemIn,
+            RendererCsgSystem& csgSystemIn,
+            DeferredFrameTargets& targetsIn,
+            Core::GpuTimingSubmissionTicket*& timingTicketIn,
+            const bool& meshViewSetupReadyIn,
+            const bool& sceneShadingSetupReadyIn
+        );
     };
 
     [[nodiscard]] static bool Record(

@@ -29,8 +29,20 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AvboitCsgReceiverSpanGraphTask::Payload::Payload(Core::Alloc::GlobalArena& arena)
-    : transparentCsgSnapshot(arena)
+AvboitCsgReceiverSpanGraphTask::Payload::Payload(
+    Core::Alloc::GlobalArena& arena,
+    RendererMaterialSystem& materialSystemIn,
+    RendererCsgSystem& csgSystemIn,
+    DeferredFrameTargets& targetsIn,
+    Core::GpuTimingSubmissionTicket& timingTicketIn,
+    Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTimingIn
+)
+    : materialSystem(materialSystemIn)
+    , csgSystem(csgSystemIn)
+    , targets(targetsIn)
+    , timingTicket(timingTicketIn)
+    , transparentCsgIntervalsTiming(transparentCsgIntervalsTimingIn)
+    , transparentCsgSnapshot(arena)
 {}
 
 
@@ -40,18 +52,11 @@ bool AvboitCsgReceiverSpanGraphTask::Record(
     const Core::GpuTaskRecordContext& context
 ){
     static_cast<void>(context);
-    if(
-        !payload.materialSystem
-        || !payload.csgSystem
-        || !payload.targets
-        || !payload.timingTicket
-        || !payload.transparentCsgIntervalsTiming
-        || !payload.transparentCsgSnapshot.captured
-    )
+    if(!payload.transparentCsgSnapshot.captured)
         return false;
 
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    if(!payload.transparentCsgIntervalsTiming->has_value()){
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
+    if(!payload.transparentCsgIntervalsTiming.has_value()){
         commandList.endRenderPass();
         return true;
     }
@@ -59,8 +64,8 @@ bool AvboitCsgReceiverSpanGraphTask::Record(
     MaterialPassDrawItems receiverSurfaceDrawItems{ scratchArena };
     CsgFrameGpuData csgFrameData{ scratchArena };
     payload.transparentCsgSnapshot.materialize(receiverSurfaceDrawItems, csgFrameData);
-    RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    RendererCsgSystem& csgSystem = *payload.csgSystem;
+    RendererMaterialSystem& materialSystem = payload.materialSystem;
+    RendererCsgSystem& csgSystem = payload.csgSystem;
     const bool drawBuffersReady = payload.frameBindings.frameReady(
         payload.transparentCsgSnapshot.instanceCount,
         payload.transparentCsgSnapshot.materialTypedByteCount
@@ -72,7 +77,7 @@ bool AvboitCsgReceiverSpanGraphTask::Record(
     );
     const bool spanReady =
         payload.csgFrameBuffersUploaded
-        && payload.targets->framebuffer
+        && payload.targets.framebuffer
         && !receiverSurfaceDrawItems.empty()
         && csgFrameData.hasWork()
         && drawBuffersReady
@@ -82,22 +87,34 @@ bool AvboitCsgReceiverSpanGraphTask::Record(
     if(spanReady){
         csgSystem.dispatchCsgReceiverSpanBuild(
             commandList,
-            *payload.targets,
+            payload.targets,
             csgFrameData,
             payload.csgResources
         );
     }
     else{
         // Drop the reservation on mismatch; never feed Combine a stale image.
-        DiscardGpuTimingMeasure(payload.transparentCsgIntervalsTiming);
+        DiscardGpuTimingMeasure(&payload.transparentCsgIntervalsTiming);
     }
     commandList.endRenderPass();
     return true;
 }
 
 
-AvboitCsgIntervalCombineGraphTask::Payload::Payload(Core::Alloc::GlobalArena& arena)
-    : transparentCsgSnapshot(arena)
+AvboitCsgIntervalCombineGraphTask::Payload::Payload(
+    Core::Alloc::GlobalArena& arena,
+    RendererMaterialSystem& materialSystemIn,
+    RendererCsgSystem& csgSystemIn,
+    DeferredFrameTargets& targetsIn,
+    Core::GpuTimingSubmissionTicket& timingTicketIn,
+    Optional<Core::GpuTimingMeasure>& transparentCsgIntervalsTimingIn
+)
+    : materialSystem(materialSystemIn)
+    , csgSystem(csgSystemIn)
+    , targets(targetsIn)
+    , timingTicket(timingTicketIn)
+    , transparentCsgIntervalsTiming(transparentCsgIntervalsTimingIn)
+    , transparentCsgSnapshot(arena)
 {}
 
 
@@ -107,18 +124,11 @@ bool AvboitCsgIntervalCombineGraphTask::Record(
     const Core::GpuTaskRecordContext& context
 ){
     static_cast<void>(context);
-    if(
-        !payload.materialSystem
-        || !payload.csgSystem
-        || !payload.targets
-        || !payload.timingTicket
-        || !payload.transparentCsgIntervalsTiming
-        || !payload.transparentCsgSnapshot.captured
-    )
+    if(!payload.transparentCsgSnapshot.captured)
         return false;
 
-    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(*payload.timingTicket);
-    if(!payload.transparentCsgIntervalsTiming->has_value()){
+    Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
+    if(!payload.transparentCsgIntervalsTiming.has_value()){
         commandList.endRenderPass();
         return true;
     }
@@ -126,8 +136,8 @@ bool AvboitCsgIntervalCombineGraphTask::Record(
     MaterialPassDrawItems receiverSurfaceDrawItems{ scratchArena };
     CsgFrameGpuData csgFrameData{ scratchArena };
     payload.transparentCsgSnapshot.materialize(receiverSurfaceDrawItems, csgFrameData);
-    RendererMaterialSystem& materialSystem = *payload.materialSystem;
-    RendererCsgSystem& csgSystem = *payload.csgSystem;
+    RendererMaterialSystem& materialSystem = payload.materialSystem;
+    RendererCsgSystem& csgSystem = payload.csgSystem;
     const bool drawBuffersReady = payload.frameBindings.frameReady(
         payload.transparentCsgSnapshot.instanceCount,
         payload.transparentCsgSnapshot.materialTypedByteCount
@@ -139,7 +149,7 @@ bool AvboitCsgIntervalCombineGraphTask::Record(
     );
     const bool combineReady =
         payload.csgFrameBuffersUploaded
-        && payload.targets->framebuffer
+        && payload.targets.framebuffer
         && !receiverSurfaceDrawItems.empty()
         && csgFrameData.hasWork()
         && drawBuffersReady
@@ -149,16 +159,16 @@ bool AvboitCsgIntervalCombineGraphTask::Record(
     if(combineReady){
         csgSystem.dispatchCsgIntervalCombine(
             commandList,
-            *payload.targets,
+            payload.targets,
             csgFrameData,
             payload.csgResources
         );
-        payload.transparentCsgIntervalsTiming->value().finishTiming(commandList);
-        payload.transparentCsgIntervalsTiming->reset();
+        payload.transparentCsgIntervalsTiming.value().finishTiming(commandList);
+        payload.transparentCsgIntervalsTiming.reset();
     }
     else{
         // Drop the reservation on mismatch; never publish a stale image.
-        DiscardGpuTimingMeasure(payload.transparentCsgIntervalsTiming);
+        DiscardGpuTimingMeasure(&payload.transparentCsgIntervalsTiming);
     }
     commandList.endRenderPass();
     return true;

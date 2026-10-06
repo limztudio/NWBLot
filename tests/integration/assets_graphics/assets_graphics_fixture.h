@@ -54,7 +54,6 @@
 #include <global/math/convert.h>
 #include <global/simdmath.h>
 
-#include <cmath>
 
 #include <core/common/log.h>
 
@@ -142,31 +141,6 @@ namespace Tests{
 ];
 
 )"
-#define NWB_ASSETS_GRAPHICS_TEST_QUAD_NORMALS R"(asset.normals = [
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-    [0.0, 0.0, 1.0],
-];
-
-)"
-#define NWB_ASSETS_GRAPHICS_TEST_QUAD_TANGENTS R"(asset.tangents = [
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-    [1.0, 0.0, 0.0, 1.0],
-];
-
-)"
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-using NWB::Tests::MakeQuadTriangleIndices;
-using NWB::Tests::MakeTriangleIndices;
-
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -188,20 +162,11 @@ public:
         AStringView assetFilename = "";
     };
 
-    using CookSingleMetaFn = bool(*)(AStringView, AStringView, TestArena&, Path&, Path&);
-    using LoadCookedAssetFn = bool(*)(TestArena&, const Path&, UniquePtr<NWB::Core::Assets::IAsset>&);
-
-    struct MinimalAssetKind{
-        enum Enum : u8{
-            Mesh = 0u,
-        };
-    };
-
 
 public:
 
     static constexpr Name s_MaterialScratchArena = Name("tests/integration/assets_graphics/material");
-    static constexpr Name s_MaterialCookScratchArena = Name("tests/integration/assets_graphics/material_cook");
+
     static constexpr Name s_ShaderScratchArena = Name("tests/integration/assets_graphics/shader");
     static constexpr Name s_ModelFixtureScratchArena = Name("tests/integration/assets_graphics/model_fixture");
     static constexpr Name s_CodecScratchArena = Name("tests/integration/assets_graphics/codec");
@@ -307,111 +272,8 @@ public:
     NwbTestRuntimeMaterial runtime;
 
     )NWB_BIND";
-    static constexpr AStringView s_AssetResourceMaterialBindSource = R"NWB_BIND([material_constant]
-    struct NwbAssetResourceSurfaceMaterial{
-    [default("float4(1.0, 1.0, 1.0, 1.0)")]
-    float4 base_color;
 
-    texture2d base_color_map;
 
-    sampler base_color_sampler;
-    };
-
-    [material_mutable]
-    struct NwbAssetResourceRuntimeMaterial{
-    [default("float(1.0)")]
-    float fade_alpha;
-    };
-
-    NwbAssetResourceSurfaceMaterial surface;
-    NwbAssetResourceRuntimeMaterial runtime;
-
-    )NWB_BIND";
-    static constexpr AStringView s_StaticResourceFixtureMaterialBindSource = R"NWB_BIND([material_constant]
-    struct NwbFixtureSurfaceMaterial{
-    [fixture("builtin/material_fixture/checker_rgba8")]
-    texture2d base_color_map;
-    [fixture("builtin/material_fixture/linear_clamp")]
-    sampler base_color_sampler;
-    };
-
-    [material_mutable]
-    struct NwbFixtureRuntimeMaterial{
-    [default("float(1.0)")]
-    float fade_alpha;
-    };
-
-    NwbFixtureSurfaceMaterial surface;
-    NwbFixtureRuntimeMaterial runtime;
-
-    )NWB_BIND";
-    static constexpr AStringView s_SecondAssetResourceMaterialBindSource = R"NWB_BIND([material_constant]
-    struct NwbSecondAssetResourceSurfaceMaterial{
-    [default("float4(1.0, 1.0, 1.0, 1.0)")]
-    float4 base_color;
-
-    texture2d base_color_map;
-
-    sampler base_color_sampler;
-    };
-
-    [material_mutable]
-    struct NwbSecondAssetResourceRuntimeMaterial{
-    [default("float(1.0)")]
-    float fade_alpha;
-    };
-
-    NwbSecondAssetResourceSurfaceMaterial surface;
-    NwbSecondAssetResourceRuntimeMaterial runtime;
-
-    )NWB_BIND";
-    static constexpr AStringView s_AssetResourceMaterialMeta = R"NWB_META(material asset;
-
-    asset.interface = "project/material_interfaces/test_surface.bind";
-    asset.bxdf = "project/shaders/material_bxdf.bxdf";
-    asset.transparent = 0;
-    asset.two_sided = 0;
-    asset.refractive = 0;
-
-    asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-    };
-    asset.shader_variant = "default";
-
-    asset.parameters = {
-    "surface": {
-        "base_color": "float4(0.25, 0.5, 0.75, 1.0)",
-        "base_color_map": "project/textures/test_checker",
-        "base_color_sampler": "engine/samplers/linear_clamp",
-    },
-    "runtime": {
-        "fade_alpha": "float(0.75)",
-    },
-    };
-
-    )NWB_META";
-    static constexpr AStringView s_StaticResourceFixtureMaterialMeta = R"NWB_META(material asset;
-
-    asset.interface = "project/material_interfaces/test_surface.bind";
-    asset.bxdf = "project/shaders/material_bxdf.bxdf";
-    asset.transparent = 0;
-    asset.two_sided = 0;
-    asset.refractive = 0;
-
-    asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-    };
-    asset.shader_variant = "default";
-
-    asset.parameters = {
-    "runtime": {
-        "fade_alpha": "float(0.75)",
-    },
-    };
-
-    )NWB_META";
     static constexpr AStringView s_MaterialBindMeshSource = R"NWB_SLANG(#include "mesh/authoring.slangi"
 
     NwbMeshGeneratedVertex nwbMeshBuildVertex(
@@ -458,15 +320,7 @@ public:
     }
 
     )NWB_SLANG";
-    static constexpr AStringView s_ViewDependentTransparentMaterialSurfaceSource = R"NWB_SLANG(NwbMeshSurface nwbMaterialSurface(){
-    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
-    const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
-    NwbMeshSurface result = nwbMakeMeshSurface(half3(surface.base_color.rgb), inNormal);
-    result.renderCoverage = half(saturate(dot(inIncidentDirection, inNormal) * 0.5 + 0.5));
-    return result;
-    }
 
-    )NWB_SLANG";
     static constexpr AStringView s_ShadowDispatchSharedSurfaceHelperSource = R"NWB_SLANG(#ifndef NWB_TEST_SHADOW_DISPATCH_SHARED_SURFACE_HELPER_SLANGI
     #define NWB_TEST_SHADOW_DISPATCH_SHARED_SURFACE_HELPER_SLANGI
 
@@ -547,92 +401,8 @@ public:
     };
 
     )NWB_META";
-    static constexpr AStringView s_AssetResourceShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
-    #include "project/material_interfaces/test_surface.bind"
 
-    NwbMeshSurface nwbMaterialSurface(){
-    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
-    const NwbAssetResourceSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
-    const float4 sampledColor = nwbMaterialBindLoadSurfaceBaseColorMap(instance).SampleLevel(
-        nwbMaterialBindLoadSurfaceBaseColorSampler(instance),
-        inUv0,
-        0.0
-    );
-    return nwbMakeMeshSurface(half3(surface.base_color.rgb * sampledColor.rgb), inNormal);
-    }
 
-    )NWB_SLANG";
-    static constexpr AStringView s_StaticResourceFixtureShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
-    #include "project/material_interfaces/test_surface.bind"
-
-    NwbMeshSurface nwbMaterialSurface(){
-    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
-    const float4 fixtureColor = nwbMaterialBindLoadSurfaceBaseColorMap(instance).SampleLevel(
-        nwbMaterialBindLoadSurfaceBaseColorSampler(instance),
-        inUv0,
-        0.0
-    );
-    return nwbMakeMeshSurface(half3(fixtureColor.rgb), inNormal);
-    }
-
-    )NWB_SLANG";
-    static constexpr AStringView s_HalfMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
-    #include "project/material_interfaces/test_surface.bind"
-
-    NwbMeshSurface nwbMaterialSurface(){
-    const bool materialBindConstantsValid =
-        NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE == 20u
-        && NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE == 0u
-        && NWB_MATERIAL_BIND_SURFACE_STORAGE == NWB_MATERIAL_BIND_STORAGE_CONSTANT
-        && NWB_MATERIAL_BIND_SURFACE_BYTE_OFFSET == 0u
-        && NWB_MATERIAL_BIND_SURFACE_BYTE_SIZE == 20u
-        && NWB_MATERIAL_BIND_SURFACE_ROUGHNESS_BYTE_OFFSET == 0u
-        && NWB_MATERIAL_BIND_SURFACE_RANGE_BYTE_OFFSET == 2u
-        && NWB_MATERIAL_BIND_SURFACE_TINT_BYTE_OFFSET == 6u
-        && NWB_MATERIAL_BIND_SURFACE_BASE_COLOR_BYTE_OFFSET == 12u;
-    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
-    const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
-    const float3 baseColor = float3(
-        float(surface.base_color.x),
-        float(surface.base_color.y),
-        float(surface.base_color.z)
-    );
-    return nwbMakeMeshSurface(
-        materialBindConstantsValid ? half3(baseColor) : half3(1.0h, 0.0h, 1.0h),
-        inNormal
-    );
-    }
-
-    )NWB_SLANG";
-    static constexpr AStringView s_CompactIntegerMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
-    #include "project/material_interfaces/test_surface.bind"
-
-    NwbMeshSurface nwbMaterialSurface(){
-    const bool materialBindConstantsValid =
-        NWB_MATERIAL_BIND_CONSTANT_BYTE_SIZE == 20u
-        && NWB_MATERIAL_BIND_MUTABLE_BYTE_SIZE == 0u
-        && NWB_MATERIAL_BIND_SURFACE_STORAGE == NWB_MATERIAL_BIND_STORAGE_CONSTANT
-        && NWB_MATERIAL_BIND_SURFACE_BYTE_OFFSET == 0u
-        && NWB_MATERIAL_BIND_SURFACE_BYTE_SIZE == 20u
-        && NWB_MATERIAL_BIND_SURFACE_ENABLED_BYTE_OFFSET == 0u
-        && NWB_MATERIAL_BIND_SURFACE_SIGNED_BYTES_BYTE_OFFSET == 4u
-        && NWB_MATERIAL_BIND_SURFACE_BYTES_BYTE_OFFSET == 8u
-        && NWB_MATERIAL_BIND_SURFACE_SIGNED_WORDS_BYTE_OFFSET == 12u
-        && NWB_MATERIAL_BIND_SURFACE_WORDS_BYTE_OFFSET == 16u;
-    const NwbMeshInstanceData instance = nwbMeshLoadInstance();
-    const NwbTestSurfaceMaterial surface = nwbMaterialBindLoadSurface(instance);
-    const float3 baseColor = float3(
-        surface.enabled.x ? 1.0 : 0.0,
-        float(surface.bytes.z) / 255.0,
-        float(surface.signed_words.y) / 32767.0
-    );
-    return nwbMakeMeshSurface(
-        materialBindConstantsValid ? half3(baseColor) : half3(1.0h, 0.0h, 1.0h),
-        inNormal
-    );
-    }
-
-    )NWB_SLANG";
     #if defined(GLB_FINAL)
     static constexpr AStringView s_OtherMaterialBindShaderProbeSource = R"NWB_SLANG(#include "mesh/material_ps_authoring.slangi"
     #include "project/material_interfaces/other_surface.bind"
@@ -692,80 +462,8 @@ public:
     };
 
     )NWB_META";
-    static constexpr AStringView s_HalfMaterialMeta = R"NWB_META(material asset;
 
-    asset.interface = "project/material_interfaces/test_surface.bind";
-    asset.bxdf = "project/shaders/material_bxdf.bxdf";
-    asset.transparent = 0;
-    asset.two_sided = 0;
-    asset.refractive = 0;
 
-    asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-    };
-    asset.shader_variant = "default";
-
-    asset.parameters = {
-    "surface": {
-        "roughness": "half(0.25h)",
-        "range": "half2(0.125h, 0.5h)",
-        "tint": "half3(1.0h, 0.75h, 0.5h)",
-        "base_color": "half4(1.0h, 0.5h, 0.25h, 0.0h)",
-    },
-    };
-
-    )NWB_META";
-    static constexpr AStringView s_MixedHalfMaterialMeta = R"NWB_META(material asset;
-
-    asset.interface = "project/material_interfaces/test_surface.bind";
-    asset.bxdf = "project/shaders/material_bxdf.bxdf";
-    asset.transparent = 0;
-    asset.two_sided = 0;
-    asset.refractive = 0;
-
-    asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-    };
-    asset.shader_variant = "default";
-
-    asset.parameters = {
-    "surface": {
-        "roughness": "half(0.25)",
-        "metallic": "float(0.75)",
-        "tint": "half3(1.0, 0.5, 0.25)",
-        "flags": "uint(42u)",
-        "tail": "half(0.875)",
-    },
-    };
-
-    )NWB_META";
-    static constexpr AStringView s_CompactIntegerMaterialMeta = R"NWB_META(material asset;
-
-    asset.interface = "project/material_interfaces/test_surface.bind";
-    asset.bxdf = "project/shaders/material_bxdf.bxdf";
-    asset.transparent = 0;
-    asset.two_sided = 0;
-    asset.refractive = 0;
-
-    asset.shaders = {
-    "mesh": "project/shaders/material_mesh",
-    "ps": "project/shaders/material_ps",
-    };
-    asset.shader_variant = "default";
-
-    asset.parameters = {
-    "surface": {
-        "enabled": "bool4(false, true, false, true)",
-        "signed_bytes": "char4(-128, -2, 2, 64)",
-        "bytes": "uchar4(3u, 4u, 5u, 6u)",
-        "signed_words": "short2(-1234, 2345)",
-        "words": "ushort2(7u, 65534u)",
-    },
-    };
-
-    )NWB_META";
     static constexpr AStringView s_TransparentMaterialMeta = R"NWB_META(material asset;
 
     asset.interface = "project/material_interfaces/test_surface.bind";
@@ -1008,66 +706,8 @@ public:
     NwbTestSurfaceMaterial surface;
 
     )NWB_BIND";
-    static constexpr AStringView s_HalfMaterialBindSource = R"NWB_BIND([material_constant]
-    struct NwbTestSurfaceMaterial{
-    [default("half(0.5h)")]
-    half roughness;
 
-    [default("half2(0.0h, 1.0h)")]
-    half2 range;
 
-    [default("half3(0.25h, 0.5h, 0.75h)")]
-    half3 tint;
-
-    [default("half4(1.0h, 1.0h, 1.0h, 1.0h)")]
-    half4 base_color;
-    };
-
-    NwbTestSurfaceMaterial surface;
-
-    )NWB_BIND";
-    static constexpr AStringView s_MixedHalfMaterialBindSource = R"NWB_BIND([material_constant]
-    struct NwbTestSurfaceMaterial{
-    [default("half(0.5)")]
-    half roughness;
-
-    [default("float(1.0)")]
-    float metallic;
-
-    [default("half3(0.25, 0.5, 0.75)")]
-    half3 tint;
-
-    [default("uint(7u)")]
-    uint flags;
-
-    [default("half(0.125)")]
-    half tail;
-    };
-
-    NwbTestSurfaceMaterial surface;
-
-    )NWB_BIND";
-    static constexpr AStringView s_CompactIntegerMaterialBindSource = R"NWB_BIND([material_constant]
-    struct NwbTestSurfaceMaterial{
-    [default("bool4(true, false, true, false)")]
-    bool4 enabled;
-
-    [default("char4(-1, 0, 1, 127)")]
-    char4 signed_bytes;
-
-    [default("uchar4(0u, 1u, 254u, 255u)")]
-    uchar4 bytes;
-
-    [default("short2(-32768, 32767)")]
-    short2 signed_words;
-
-    [default("ushort2(0u, 65535u)")]
-    ushort2 words;
-    };
-
-    NwbTestSurfaceMaterial surface;
-
-    )NWB_BIND";
     static constexpr AStringView s_UnknownBlockClassMaterialBindSource = R"NWB_BIND([material_project]
     struct NwbTestSurfaceMaterial{
     float base_color;
@@ -1273,13 +913,7 @@ public:
         AStringView sourceFilename,
         const AStringView sourceText
     );
-    static bool CookMaterialBindShaderProbe(
-        const AStringView bindText,
-        const AStringView caseName,
-        TestArena& testArena,
-        Path& outRoot,
-        Path& outOutputDirectory
-    );
+
     static bool WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
         TestArena& testArena,
         const Path& assetRoot,
@@ -1293,12 +927,7 @@ public:
         const AStringView bindText,
         const AStringView materialText
     );
-    static bool WriteMaterialSurfaceIntegrationAssets(
-        const Path& assetRoot,
-        const AStringView bindText,
-        const AStringView materialText,
-        const AStringView surfaceSourceText
-    );
+
     static bool CookMaterialBindMaterialIntegrationWithPixelSource(
         const AStringView bindText,
         const AStringView materialText,
@@ -1308,15 +937,7 @@ public:
         Path& outRoot,
         Path& outOutputDirectory
     );
-    static bool CookMaterialSurfaceIntegration(
-        const AStringView bindText,
-        const AStringView materialText,
-        const AStringView surfaceSourceText,
-        const AStringView caseName,
-        TestArena& testArena,
-        Path& outRoot,
-        Path& outOutputDirectory
-    );
+
     static bool CookMaterialBindMaterialIntegration(
         const AStringView bindText,
         const AStringView materialText,
@@ -1388,85 +1009,6 @@ public:
 
 
 public:
-    static bool CookAndLoadMinimalAsset(
-        TestArena& testArena,
-        const AStringView metaText,
-        const AStringView caseName,
-        Path& outRoot,
-        UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset,
-        CookSingleMetaFn cookSingleMeta,
-        LoadCookedAssetFn loadCookedAsset
-    );
-    static bool CookAndLoadMinimalAssetByKind(
-        TestArena& testArena,
-        const AStringView metaText,
-        const AStringView caseName,
-        Path& outRoot,
-        UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset,
-        const MinimalAssetKind::Enum assetKind
-    );
-    template<typename MeshT>
-    static void CheckMinimalRuntimeMeshletPayload(
-        const MeshT& loadedMesh
-    ){
-        EXPECT_EQ(loadedMesh.meshlets().size(), 1u);
-        EXPECT_EQ(loadedMesh.meshletBounds().size(), 1u);
-        EXPECT_EQ(loadedMesh.meshletLocalVertexRefs().size(), 3u);
-        EXPECT_EQ(loadedMesh.meshletPrimitiveIndices().size(), 3u);
-
-        const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];
-        const bool skinRequired = NWB::Core::Mesh::MeshClassUsesSkinning(loadedMesh.meshClass());
-        usize expectedPositionRefBytes = 0u;
-        usize expectedAttributeRefBytes = 0u;
-        EXPECT_EQ(NWB::Impl::MeshletVertexCount(meshlet), 3u);
-        EXPECT_EQ(NWB::Impl::MeshletPrimitiveCount(meshlet), 1u);
-        EXPECT_EQ(NWB::Impl::MeshletPositionCount(meshlet), 3u);
-        EXPECT_EQ(NWB::Impl::MeshletAttributeCount(meshlet), 3u);
-        EXPECT_TRUE(NWB::Impl::MeshletEncodedPositionRefByteCount(meshlet, skinRequired, expectedPositionRefBytes));
-        EXPECT_TRUE(NWB::Impl::MeshletEncodedAttributeRefByteCount(meshlet, expectedAttributeRefBytes));
-        EXPECT_EQ(loadedMesh.meshletPositionRefDeltas().size(), expectedPositionRefBytes);
-        EXPECT_EQ(loadedMesh.meshletAttributeRefDeltas().size(), expectedAttributeRefBytes);
-        EXPECT_EQ(meshlet.positionBase, 0u);
-        const u32 expectedSkinBase = skinRequired ? 0u : NWB::Impl::s_MeshMissingStreamIndex;
-        EXPECT_EQ(meshlet.skinBase, expectedSkinBase);
-        EXPECT_EQ(meshlet.normalBase, 0u);
-        EXPECT_EQ(meshlet.tangentBase, 0u);
-        EXPECT_EQ(meshlet.uv0Base, 0u);
-        EXPECT_EQ(meshlet.colorBase, 0u);
-        EXPECT_EQ(meshlet.encoding, 0u);
-        EXPECT_GT(loadedMesh.meshletBounds()[0u].sphere.w, 0.0f);
-        EXPECT_TRUE(NWB::Impl::MeshletConeEnabled(loadedMesh.meshletBounds()[0u]));
-    }
-    template<typename AssetT, typename CheckLoadedAssetFn>
-    static void CookAndCheckMinimalTypedAsset(
-        const AStringView metaText,
-        const AStringView caseName,
-        const MinimalAssetKind::Enum assetKind,
-        CheckLoadedAssetFn&& checkLoadedAsset
-    ){
-        CapturingLogger logger;
-        NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-        TestArena testArena;
-        Path root(testArena.arena);
-        UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        if(!CookAndLoadMinimalAssetByKind(
-            testArena,
-            metaText,
-            caseName,
-            root,
-            loadedAsset,
-            assetKind
-        ))
-            return;
-
-        const AssetT& loadedTypedAsset = static_cast<const AssetT&>(*loadedAsset);
-        checkLoadedAsset(loadedTypedAsset);
-
-        ErrorCode errorCode;
-        EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
-        EXPECT_EQ(logger.errorCount(), 0u);
-    }
     template<typename T>
     static bool OverwritePOD(NWB::Core::Assets::AssetBytes& binary, const usize offset, const T value){
         if(offset > binary.size() || sizeof(value) > binary.size() - offset)

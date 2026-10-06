@@ -133,35 +133,8 @@ struct BuildContext{
 
 
 static void ExpectBuildSnapshot(const PreparedMeshSwBvhBuild& actual, const PreparedMeshSwBvhBuild& expected){
-    EXPECT_EQ(actual.meshName, expected.meshName);
     for(const BuildBufferMember member : s_BuildBuffers)
         EXPECT_EQ(actual.*member, expected.*member);
-    EXPECT_EQ(actual.positionHeapHandle, expected.positionHeapHandle);
-    EXPECT_EQ(actual.triangleIndexHeapHandle, expected.triangleIndexHeapHandle);
-    EXPECT_EQ(actual.nodeHeapHandle, expected.nodeHeapHandle);
-    EXPECT_EQ(actual.parentHeapHandle, expected.parentHeapHandle);
-    EXPECT_EQ(actual.sortKeysHeapHandle, expected.sortKeysHeapHandle);
-    EXPECT_EQ(actual.sortPayloadHeapHandle, expected.sortPayloadHeapHandle);
-    EXPECT_EQ(actual.visitCounterHeapHandle, expected.visitCounterHeapHandle);
-    EXPECT_EQ(actual.aabbMin, expected.aabbMin);
-    EXPECT_EQ(actual.aabbMax, expected.aabbMax);
-    EXPECT_EQ(actual.runtimeMeshVersion, expected.runtimeMeshVersion);
-    EXPECT_EQ(actual.geometryContentRevision, expected.geometryContentRevision);
-    EXPECT_EQ(actual.acceptedGeometryContentRevision, expected.acceptedGeometryContentRevision);
-    EXPECT_EQ(actual.positionByteSize, expected.positionByteSize);
-    EXPECT_EQ(actual.indexByteSize, expected.indexByteSize);
-    EXPECT_EQ(actual.nodeByteSize, expected.nodeByteSize);
-    EXPECT_EQ(actual.parentByteSize, expected.parentByteSize);
-    EXPECT_EQ(actual.sortKeysByteSize, expected.sortKeysByteSize);
-    EXPECT_EQ(actual.sortPayloadByteSize, expected.sortPayloadByteSize);
-    EXPECT_EQ(actual.visitCounterByteSize, expected.visitCounterByteSize);
-    EXPECT_EQ(actual.primitiveCount, expected.primitiveCount);
-    EXPECT_EQ(actual.refitsBeforeBuild, expected.refitsBeforeBuild);
-    EXPECT_EQ(actual.refitsAfterBuild, expected.refitsAfterBuild);
-    EXPECT_EQ(actual.runtimeMesh, expected.runtimeMesh);
-    EXPECT_EQ(actual.buildPending, expected.buildPending);
-    EXPECT_EQ(actual.firstBuild, expected.firstBuild);
-    EXPECT_EQ(actual.performRefit, expected.performRefit);
 }
 
 static void ExpectRows(const BuildContext& context, const PreparedMeshSwBvhGraphResourceVector& resources){

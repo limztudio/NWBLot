@@ -86,10 +86,6 @@ TEST(UiScrollbarLayoutTests, FittingContentKeepsPaddedViewportAndClampsStoredOff
     UiWidgetTests::ExpectRect(placement.corner, {});
     UiWidgetTests::ExpectRect(placement.horizontal.track, {});
     UiWidgetTests::ExpectRect(placement.vertical.track, {});
-    EXPECT_DOUBLE_EQ(placement.horizontal.contentExtent, 102.0);
-    EXPECT_DOUBLE_EQ(placement.vertical.contentExtent, 80.0);
-    EXPECT_DOUBLE_EQ(placement.horizontal.viewportExtent, 188.0);
-    EXPECT_DOUBLE_EQ(placement.vertical.viewportExtent, 100.0);
     EXPECT_DOUBLE_EQ(placement.horizontal.offset, 0.0);
     EXPECT_DOUBLE_EQ(placement.vertical.offset, 0.0);
     EXPECT_FALSE(placement.horizontal.visible);

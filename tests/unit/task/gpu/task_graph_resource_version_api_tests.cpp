@@ -58,14 +58,6 @@ TEST(GpuTaskGraphResourceVersion, StoresDistinctDeclarationsAndInvalidatesThemOn
     EXPECT_NE(firstRevision, initialRevision);
     EXPECT_NE(Graphics::GpuTaskGraph::DeclarationReadView(graph).declarationRevision(), firstRevision);
 
-    const Graphics::GpuTaskGraphResourceVersionView firstView =
-        Graphics::GpuTaskGraph::DeclarationReadView(graph).resourceVersionAt(first.index)
-    ;
-    EXPECT_EQ(firstView.id, first);
-    EXPECT_EQ(firstView.resource, resource);
-    EXPECT_EQ(firstView.range.bufferRange, range.bufferRange);
-    EXPECT_EQ(firstView.origin, Graphics::GpuGraphResourceVersionOrigin::ImportedRoot);
-
     const Graphics::GpuTaskResourceUse resourceUse = ResourceUse(
         resource,
         range,

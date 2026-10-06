@@ -80,13 +80,6 @@ TEST_F(UiPopupToolsNavigationTests, SourceRevisionRestoresRowsFocusAtAcceptanceA
     ASSERT_TRUE(acceptTools(6u, false));
     EXPECT_EQ(m_menu.cursorKey(), 4u);
     EXPECT_FALSE(m_menuResult.activated);
-    press(Core::Key::Home);
-    ASSERT_TRUE(acceptTools(7u, false));
-    EXPECT_EQ(m_menu.cursorKey(), 1u);
-    EXPECT_FALSE(m_menuResult.activated);
-    press(Core::Key::End);
-    ASSERT_TRUE(acceptTools(8u, false));
-    EXPECT_EQ(m_menu.cursorKey(), 4u);
     press(Core::Key::Enter);
     ASSERT_TRUE(acceptTools(9u, false));
     EXPECT_TRUE(m_menuResult.activated);

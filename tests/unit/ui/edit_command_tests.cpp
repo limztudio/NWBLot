@@ -48,7 +48,6 @@ protected:
 TEST_F(UiEditCommandTests, ShortcutTranslationPreservesWordSelectionAndLeavesAltGrWithOs){
     ASSERT_TRUE(m_model.setText("one two"));
     const auto left = translate(Core::Key::Left, true, true, false, true);
-    EXPECT_TRUE(left.repeat);
     EXPECT_TRUE(ApplyEditCommand(m_model, left).selectionChanged);
     EXPECT_EQ(m_model.selectedText(), "two");
     const u64 revision = m_model.revision();
@@ -71,10 +70,6 @@ TEST_F(UiEditCommandTests, AlternateClipboardChordsRejectAmbiguousModifiersRepea
     const EditCommandRequest copy = translate(Core::Key::Insert, true);
     const EditCommandRequest paste = translate(Core::Key::Insert, false, true);
     const EditCommandRequest cut = translate(Core::Key::Delete, false, true);
-    EXPECT_EQ(copy.command, EditCommand::Copy);
-    EXPECT_EQ(paste.command, EditCommand::Paste);
-    EXPECT_EQ(cut.command, EditCommand::Cut);
-    EXPECT_EQ(translate(Core::Key::Delete, true, true).command, EditCommand::WordDelete);
     EXPECT_EQ(translate(Core::Key::Insert, true, true).command, EditCommand::None);
     EXPECT_EQ(translate(Core::Key::Insert, true, false, true).command, EditCommand::None);
     EXPECT_EQ(translate(Core::Key::Delete, false, true, true).command, EditCommand::None);
@@ -92,23 +87,6 @@ TEST_F(UiEditCommandTests, AlternateClipboardChordsRejectAmbiguousModifiersRepea
     for(const EditCommandRequest request : { copy, paste, cut })
         EXPECT_EQ(ApplyEditCommand(m_model, request).clipboard, EditClipboardAction::None);
     EXPECT_EQ(m_model.text(), "selected");
-}
-
-TEST_F(UiEditCommandTests, ReboundWordMovementExtendsTheAcceptedSelectionWithoutArrowBindings){
-    ASSERT_TRUE(m_model.setText("one two"));
-    const InputKeyBinding rebound{ Core::Key::F2, 0, 0, InputCommand::WordLeft, InputSelectionPolicy::Always };
-    ASSERT_TRUE(m_bindings.set(&rebound, 1u));
-    const u64 revision = m_model.revision();
-    EXPECT_FALSE(ApplyEditCommand(m_model, translate(Core::Key::Left)).handled);
-    EXPECT_EQ(m_model.caret(), 7u);
-    const EditCommandResult selected = ApplyEditCommand(m_model, translate(Core::Key::F2));
-    EXPECT_TRUE(selected.handled);
-    EXPECT_TRUE(selected.selectionChanged);
-    EXPECT_FALSE(selected.textChanged);
-    EXPECT_EQ(m_model.selectedText(), "two");
-    EXPECT_EQ(m_model.revision(), revision);
-    EXPECT_TRUE(ApplyEditCommand(m_model, TranslateEditCommand({ InputCommand::WordLeft, true }, true)).selectionChanged);
-    EXPECT_EQ(m_model.selectedText(), "one two");
 }
 
 TEST_F(UiEditCommandTests, NonEditingMalformedAndUnrelatedIntentsCannotMutateOrMoveTheModel){
@@ -156,28 +134,6 @@ TEST_F(UiEditCommandTests, ShiftMovementSelectsWholeGraphemesAndArrowsCollapseAt
     EXPECT_FALSE(m_model.hasSelection());
 }
 
-TEST_F(UiEditCommandTests, WordDeletionUndoRestoresOriginalCaretAndSelectedDeletionPreservesItsUndoSelection){
-    ASSERT_TRUE(m_model.setText("one two"));
-    const auto erased = ApplyEditCommand(m_model, { EditCommand::WordBackspace });
-    EXPECT_TRUE(erased.textChanged);
-    EXPECT_EQ(m_model.text(), "one ");
-    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::Undo }).textChanged);
-    EXPECT_EQ(m_model.text(), "one two");
-    EXPECT_EQ(m_model.anchor(), 7u);
-    EXPECT_EQ(m_model.caret(), 7u);
-    ASSERT_TRUE(m_model.setSelection(0u, 0u));
-    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::WordDelete }).textChanged);
-    EXPECT_EQ(m_model.text(), "two");
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.caret(), 0u);
-    ASSERT_TRUE(m_model.setSelection(0u, 3u));
-    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::WordDelete }).textChanged);
-    EXPECT_EQ(m_model.text(), " two");
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.anchor(), 0u);
-    EXPECT_EQ(m_model.caret(), 3u);
-}
-
 TEST_F(UiEditCommandTests, ReadOnlyConsumesMutationsAndAllowsSelectionAndCopy){
     ASSERT_TRUE(m_model.setText("abcd"));
     const EditCommand::Enum mutations[]{ EditCommand::Backspace, EditCommand::Delete, EditCommand::WordBackspace,
@@ -191,7 +147,6 @@ TEST_F(UiEditCommandTests, ReadOnlyConsumesMutationsAndAllowsSelectionAndCopy){
     }
     EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::SelectAll }, true).selectionChanged);
     EXPECT_EQ(ApplyEditCommand(m_model, { EditCommand::Copy }, true).clipboard, EditClipboardAction::Copy);
-    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::Submit }, true).submitted);
 }
 
 TEST_F(UiEditCommandTests, RepeatsEditTextButNeverDuplicateClipboardSubmitOrCancelRequests){

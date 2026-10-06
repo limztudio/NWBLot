@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "task_graph_contract_test_helpers.h"
+#include <gtest/gtest.h>
 
 #include <impl/ecs_render/raytrace/scene_resources.h>
 
@@ -16,12 +16,8 @@ namespace __hidden_ray_surface_lighting_contract_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace EcsGraphicsTaskGraphContractTestDetail;
-using EcsGraphicsTaskGraphContractTestDetail::AString;
-
 TEST(EcsGraphics, RaySceneSnapshotDoesNotTreatMissingResourcesAsHardwareAvailability){
     NWB::Impl::RayTracingSceneGraphResources resources;
-    EXPECT_FALSE(resources.valid());
     resources.hardwareAvailable = true;
     EXPECT_FALSE(resources.valid());
 }

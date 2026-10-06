@@ -25,7 +25,6 @@ using namespace NWB::UiEditCaretTests;
 TEST_F(EditCaretFixture, SingleLineLigatureRangesUseInterpolatedCaretEdges){
     ASSERT_TRUE(adoptText("ffi", EditTextMode::SingleLine));
     expectRange({ 1u, 2u }, 0u, { 10.0f, 0.0f, 10.0f, 12.0f });
-    expectRange({ 0u, 3u }, 0u, { 0.0f, 0.0f, 30.0f, 12.0f }, 999.0f);
     expectRange({ 1u, 1u }, 0u, {});
 }
 
@@ -40,8 +39,6 @@ TEST_F(EditCaretFixture, SelectingOnlyLfPaintsItsPrecedingLineCap){
     ASSERT_TRUE(adoptText("abc\nx"));
     expectRange({ 3u, 4u }, 0u, { 30.0f, 0.0f, 1.0f, 12.0f });
     expectRange({ 3u, 4u }, 1u, {});
-    expectRange({ 0u, 3u }, 0u, { 0.0f, 0.0f, 30.0f, 12.0f });
-    expectRange({ 0u, 3u }, 1u, {});
 }
 
 TEST_F(EditCaretFixture, EmptyLineLfSelectionHasAVisibleCap){

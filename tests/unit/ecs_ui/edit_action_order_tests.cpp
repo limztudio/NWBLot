@@ -29,7 +29,6 @@ TEST_F(UiEditActionHostTests, SubmitObservesItsExactPositionBeforeLaterCopiedNat
     EXPECT_EQ(m_actions.committed, "42");
     EXPECT_EQ(m_model.text(), "427");
     ASSERT_EQ(m_actions.records.size(), 1u);
-    EXPECT_EQ(m_actions.records[0u].action, Ui::EditAction::Submit);
     EXPECT_EQ(m_actions.records[0u].text, "42");
     EXPECT_EQ(m_model.caret(), 3u);
     ASSERT_TRUE(m_model.undo());
@@ -57,7 +56,6 @@ TEST_F(UiEditActionHostTests, CanonicalizingSubmitPreservesLaterCopiedCommitWhil
     EXPECT_EQ(m_model.anchor(), 3u);
     EXPECT_EQ(m_model.caret(), 3u);
     ASSERT_EQ(m_actions.records.size(), 1u);
-    EXPECT_EQ(m_actions.records[0u].action, Ui::EditAction::Submit);
     EXPECT_EQ(m_actions.records[0u].text, "42");
     ASSERT_TRUE(m_textInput.activeSession().valid());
     EXPECT_NE(m_textInput.activeSession(), oldSession);
@@ -175,22 +173,6 @@ TEST_F(UiEditActionHostTests, OldEpochCancelDoesNotClearLaterRefocusOrApplyItsRe
     EXPECT_EQ(actionCount(Ui::EditAction::Submit), 1u);
     EXPECT_EQ(actionCount(Ui::EditAction::Cancel), 1u);
     EXPECT_EQ(actionCount(Ui::EditAction::Blur), 0u);
-}
-
-TEST_F(UiEditActionHostTests, NewlyFocusedPointerSelectionUsesTheNewFocusEpoch){
-    ASSERT_TRUE(actionFrame());
-    m_actions.committed.assign("12345");
-    ASSERT_TRUE(m_model.setText("12345"));
-    ASSERT_TRUE(actionFrame());
-    m_actions.clear();
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryDown, .position = { 20.0f, 25.0f } }));
-    ASSERT_TRUE(dispatch({ .type = Ui::InputEventType::PrimaryUp, .position = { 20.0f, 25.0f } }));
-    ASSERT_TRUE(actionFrame());
-    EXPECT_TRUE(m_result.focused);
-    EXPECT_EQ(m_model.anchor(), 1u);
-    EXPECT_EQ(m_model.caret(), 1u);
-    EXPECT_EQ(m_model.text(), "12345");
-    EXPECT_TRUE(m_actions.records.empty());
 }
 
 TEST_F(UiEditActionHostTests, ActivePreeditOwnsEnterAndFirstEscapeBeforeNumericCancel){

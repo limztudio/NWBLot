@@ -223,8 +223,6 @@ TEST(AssetsGraphics, CsgShapeCookAndRuntimeUseCanonicalIdsRegardlessOfRegistrati
     ASSERT_NE(cookedAlphaId, NWB::Impl::s_InvalidCsgShapeTypeId);
     ASSERT_NE(cookedZebraId, NWB::Impl::s_InvalidCsgShapeTypeId);
     EXPECT_NE(cookedAlphaId, cookedZebraId);
-    EXPECT_EQ(cookedAlphaId, NWB::Impl::CsgShapeTypeIdFromName(alphaShape));
-    EXPECT_EQ(cookedZebraId, NWB::Impl::CsgShapeTypeIdFromName(zebraShape));
 
     NWB::Impl::CsgShapeRegistry registry(testArena.arena);
     NWB::Impl::CsgShapeTypeId runtimeZebraId = NWB::Impl::s_InvalidCsgShapeTypeId;

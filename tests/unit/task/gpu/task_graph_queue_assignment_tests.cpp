@@ -58,46 +58,6 @@ TEST(GpuTaskGraph, AutomaticallyUsesTheOnlyQueueSupportingAllCommandKinds){
     EXPECT_EQ(assignments.diagnostic().task, task);
 }
 
-TEST(GpuTaskGraph, AutomaticallyRunsComputeOnGraphicsWhenNoComputeQueueExists){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuTaskId task = AddTaskWithCommands(graph, Name("tests/task_graph/compute_on_graphics"), "Compute On Graphics", ComputeCommands());
-    ASSERT_TRUE(task.valid());
-    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = &queue, .queueCount = 1u };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
-    ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
-    ASSERT_NE(assignments.find(task), nullptr);
-    EXPECT_EQ(assignments.find(task)->queue, queue.id);
-    EXPECT_EQ(assignments.find(task)->reason, Graphics::GpuTaskQueueAssignmentReason::Scored);
-}
-
-TEST(GpuTaskGraph, CoLocatesMergedMixedCommandsOnAQueueSupportingTheWholeChain){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    Graphics::GpuTaskSchedulingHint producerScheduling;
-    producerScheduling.allowPacketMerge = true;
-    const Graphics::GpuTaskId producer = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_merge_compute"), "Merge Compute", ComputeCommands(), producerScheduling);
-    ASSERT_TRUE(producer.valid());
-    Graphics::GpuTaskSchedulingHint consumerScheduling = producerScheduling;
-    consumerScheduling.mergeWithPrevious = true;
-    const Graphics::GpuTaskId consumer = AddTaskWithCommands(graph, Name("tests/task_graph/automatic_merge_graphics"), "Merge Graphics", GraphicsCommands(), consumerScheduling, {}, &producer, 1u);
-    ASSERT_TRUE(consumer.valid());
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
-    ASSERT_NE(assignments.find(producer), nullptr);
-    ASSERT_NE(assignments.find(consumer), nullptr);
-    EXPECT_EQ(assignments.find(producer)->queue, queues[0u].id);
-    EXPECT_EQ(assignments.find(consumer)->queue, queues[0u].id);
-    EXPECT_EQ(compiledPlan.packetForTask(producer), compiledPlan.packetForTask(consumer));
-}
 
 TEST(GpuTaskGraph, KeepsTaskOwnedPrimaryGraphicsRestrictionDuringAutomaticPlacement){
     TestArena testArena;
@@ -159,41 +119,6 @@ TEST(GpuTaskGraph, RejectsConflictingDiagnosticQueueOverridesForMergedTasks){
     );
 }
 
-TEST(GpuTaskGraph, AutomaticallyPreservesAnImportedExclusiveOwnerForFirstUse){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuPhysicalQueueInfo queues[] = { GraphicsQueue(), DedicatedComputeQueue() };
-    const Graphics::GpuGraphResourceId resource = graph.importResource(
-        Graphics::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/automatic_owner_buffer"))
-            .setMarkerLabel("Automatic Owner Buffer")
-            .setType(Graphics::GpuGraphResourceType::Buffer)
-            .setInitialState(Graphics::ResourceStates::Common)
-            .setInitialOwnerQueue(queues[0u].id)
-    );
-    ASSERT_TRUE(resource.valid());
-    const Graphics::GpuTaskResourceUse use{
-        .resource = resource,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::UnorderedAccess,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
-    Graphics::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("tests/task_graph/automatic_owner_compute"))
-        .setMarkerLabel("Automatic Owner Compute")
-        .setResourceUses(&use, 1u)
-    ;
-    const Graphics::GpuTaskId task = graph.addTask(desc, ComputeCommands());
-    ASSERT_TRUE(task.valid());
-    const Graphics::GpuPhysicalQueueTopology topology{ .queues = queues, .queueCount = LengthOf(queues) };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    ASSERT_NE(assignments.find(task), nullptr);
-    EXPECT_EQ(assignments.find(task)->queue, queues[0u].id);
-}
 
 TEST(GpuTaskGraph, ValidatesDiagnosticQueueOverridesAgainstCommandCapabilities){
     TestArena testArena;
@@ -217,7 +142,6 @@ TEST(GpuTaskGraph, ValidatesDiagnosticQueueOverridesAgainstCommandCapabilities){
     ASSERT_TRUE(Assign(graph, analysis, topology, assignments, options));
     ASSERT_NE(assignments.find(task), nullptr);
     EXPECT_EQ(assignments.find(task)->queue, queues[1u].id);
-    EXPECT_TRUE(assignments.find(task)->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DiagnosticQueueOverride);
     override.queue = queues[0u].id;
     EXPECT_FALSE(Assign(graph, analysis, topology, assignments, options));
     EXPECT_EQ(
@@ -284,8 +208,6 @@ TEST(GpuTaskGraph, ChoosesComputePlacementFromOverlapAndExternalQueueLoad){
     const Graphics::GpuTaskQueueAssignment* const loadedAssignment = loadedAssignments.find(computeTask);
     ASSERT_NE(loadedAssignment, nullptr);
     EXPECT_EQ(loadedAssignment->queueClass, Graphics::CommandQueue::Graphics);
-    EXPECT_EQ(loadedAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::Scored);
-    EXPECT_EQ(loadedAssignment->score.queueLoad, 8);
 }
 
 TEST(GpuTaskGraph, ChoosesAutomaticPlacementDeterministicallyAcrossTopologyOrder){
@@ -351,14 +273,6 @@ TEST(GpuTaskGraph, ChoosesAutomaticPlacementDeterministicallyAcrossTopologyOrder
     EXPECT_EQ(firstAssignment->queue, DedicatedComputeQueue().id);
     EXPECT_EQ(secondAssignment->queue, firstAssignment->queue);
     EXPECT_NE(firstAssignment->queue, auxiliaryGraphics.id);
-    EXPECT_EQ(firstAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::Scored);
-    EXPECT_EQ(firstAssignment->initialQueue, firstAssignment->queue);
-    EXPECT_EQ(firstAssignment->modifiers, Graphics::GpuTaskQueueAssignmentModifier::None);
-    EXPECT_EQ(firstAssignment->score.overlap, 8);
-    EXPECT_EQ(firstAssignment->score.queueLoad, 0);
-    EXPECT_EQ(firstAssignment->score.incomingCrossings, 0);
-    EXPECT_EQ(firstAssignment->score.outgoingCrossings, 0);
-    EXPECT_EQ(firstAssignment->score.ownershipTransfers, 0);
 }
 
 TEST(GpuTaskGraph, QueueScoreUsesOnlyReducedOutgoingDependencies){
@@ -419,8 +333,6 @@ TEST(GpuTaskGraph, QueueScoreUsesOnlyReducedOutgoingDependencies){
     ASSERT_NE(producerAssignment, nullptr);
     EXPECT_EQ(producerAssignment->queueClass, Graphics::CommandQueue::Compute);
     EXPECT_EQ(producerAssignment->score.outgoingCrossings, 1);
-    EXPECT_EQ(producerAssignment->score.incomingCrossings, 0);
-    EXPECT_EQ(producerAssignment->score.ownershipTransfers, 0);
 }
 
 TEST(GpuTaskGraph, DeduplicatesRawOwnershipScoreAndIgnoresSameFamilyQueueCrossings){

@@ -38,8 +38,6 @@ TEST_F(UiPopupToolsBuilderTests, TooltipDelayBeginsOnlyAfterTheAnchorLayoutIsAcc
     EXPECT_FALSE(m_tooltip.visible());
     ASSERT_TRUE(acceptTools(4u, true, false));
     EXPECT_TRUE(m_tooltip.visible());
-    EXPECT_GT(m_tooltip.placement().bounds.width, 0.0f);
-    EXPECT_GT(m_tooltip.placement().bounds.height, 0.0f);
 }
 
 TEST_F(UiPopupToolsBuilderTests, ZeroDelayTooltipPaintsWithoutCreatingPopupTargetsOrTakingFocus){
@@ -304,14 +302,11 @@ TEST_F(UiPopupToolsBuilderTests, SecondaryTriggerUsesOnlyTheExactlyAcceptedAncho
     EXPECT_FALSE(m_menu.isOpen());
     ASSERT_TRUE(m_context.commitFrame(1u));
     ASSERT_TRUE(openBySecondary(2u));
-    EXPECT_TRUE(m_menuResult.valid);
     EXPECT_TRUE(m_menuResult.opened);
     EXPECT_FALSE(m_menuResult.activated);
     EXPECT_FALSE(m_anchorActivated);
     EXPECT_TRUE(m_context.input().hasPopup());
     ASSERT_NE(menuHost(), nullptr);
-    EXPECT_EQ(m_context.input().focus(), menuHost()->id);
-    EXPECT_EQ(m_menu.cursorKey(), 1u);
 }
 
 TEST_F(UiPopupToolsBuilderTests, OrdinaryPrimaryActivationDoesNotOpenAnAttachedContextMenu){

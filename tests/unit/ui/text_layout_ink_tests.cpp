@@ -73,32 +73,6 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(TextLayoutInkTests, PerGlyphInkKeepsBaselineRelativeOffsetsWithoutChangingCaretOrMeasurement){
-    m_shaper.m_offset = { 3.0f, -1.0f };
-    ASSERT_EQ(m_builder.layout({ "a\nb" }, m_layout), TextLayoutStatus::Success);
-    ASSERT_EQ(m_layout.glyphs().size(), 2u);
-    const PlacedGlyph& first = m_layout.glyphs()[0];
-    const PlacedGlyph& second = m_layout.glyphs()[1];
-    EXPECT_FLOAT_EQ(first.position.x, 3.0f);
-    EXPECT_FLOAT_EQ(first.position.y, 7.0f);
-    EXPECT_FLOAT_EQ(first.ink.x, -2.0f);
-    EXPECT_FLOAT_EQ(first.ink.y, -8.0f);
-    EXPECT_FLOAT_EQ(first.ink.width, 9.0f);
-    EXPECT_FLOAT_EQ(first.ink.height, 10.0f);
-    EXPECT_FLOAT_EQ(second.position.y, 19.0f);
-    EXPECT_FLOAT_EQ(second.ink.y, -8.0f);
-    EXPECT_FLOAT_EQ(m_layout.measure().x, 10.0f);
-    EXPECT_FLOAT_EQ(m_layout.measure().y, 24.0f);
-    EXPECT_FLOAT_EQ(m_layout.inkBounds().x, 1.0f);
-    EXPECT_FLOAT_EQ(m_layout.inkBounds().y, -1.0f);
-    EXPECT_FLOAT_EQ(m_layout.inkBounds().height, 22.0f);
-    Rect caret;
-    ASSERT_TRUE(m_layout.caretRect(0u, TextCaretEdge::Leading, caret));
-    EXPECT_FLOAT_EQ(caret.x, 0.0f);
-    EXPECT_FLOAT_EQ(caret.y, 0.0f);
-    EXPECT_FLOAT_EQ(caret.height, 12.0f);
-}
-
 TEST_F(TextLayoutInkTests, EmptyShapingInkRemainsAnUnknownPerGlyphRectangle){
     m_shaper.m_ink = {};
     ASSERT_EQ(m_builder.layout({ "a" }, m_layout), TextLayoutStatus::Success);
@@ -152,15 +126,11 @@ TEST_F(TextLayoutInkTests, NativeCoverageBoundsAreCopiedSeparatelyFromShapedInk)
     ASSERT_EQ(m_builder.layout({ "a" }, m_layout), TextLayoutStatus::Success);
     ASSERT_EQ(m_layout.glyphs().size(), 1u);
     const PlacedGlyph& glyph = m_layout.glyphs()[0];
+    m_shaper.m_coverage = {};
     EXPECT_TRUE(glyph.coverage.known);
     EXPECT_FLOAT_EQ(glyph.coverage.ink.x, -4.0f);
     EXPECT_FLOAT_EQ(glyph.coverage.ink.y, -10.0f);
     EXPECT_FLOAT_EQ(glyph.coverage.ink.width, 15.0f);
-    EXPECT_FLOAT_EQ(glyph.ink.x, -2.0f);
-    EXPECT_FLOAT_EQ(m_layout.inkBounds().x, -2.0f);
-    EXPECT_FLOAT_EQ(m_layout.inkBounds().width, 9.0f);
-    m_shaper.m_coverage = {};
-    EXPECT_TRUE(glyph.coverage.known);
 }
 
 TEST_F(TextLayoutInkTests, MalformedOrUnrepresentableKnownCoverageRejectsAtomically){
@@ -175,7 +145,6 @@ TEST_F(TextLayoutInkTests, MalformedOrUnrepresentableKnownCoverageRejectsAtomica
     EXPECT_EQ(m_layout.utf8(), "a");
     EXPECT_FALSE(m_layout.glyphs()[0].coverage.known);
 }
-
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

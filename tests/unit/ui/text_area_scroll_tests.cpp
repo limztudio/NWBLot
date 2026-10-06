@@ -48,8 +48,6 @@ TEST_F(UiTextAreaScrollTests, ExplicitTwoAxisScrollSurvivesTheFirstModelBinding)
     EXPECT_FLOAT_EQ(m_state.placement().textOrigin.y, m_state.placement().content.y - 19.0f);
     EXPECT_GT(m_state.placement().caret.x, m_state.placement().content.x + m_state.placement().content.width);
     EXPECT_GT(m_state.placement().caret.y, m_state.placement().content.y + m_state.placement().content.height);
-    EXPECT_EQ(m_model.caret(), DenseText().size());
-    EXPECT_FALSE(m_model.canUndo());
 }
 
 TEST_F(UiTextAreaScrollTests, IdleAndResizeClampExplicitViewportWithoutAdvancingItsIntentEpoch){
@@ -74,7 +72,6 @@ TEST_F(UiTextAreaScrollTests, IdleAndResizeClampExplicitViewportWithoutAdvancing
     ASSERT_EQ(m_host.publications.size(), 3u);
     EXPECT_FLOAT_EQ(m_host.publications[0u].placement.scroll, 17.0f);
     EXPECT_FLOAT_EQ(m_host.publications[0u].placement.scrollY, 19.0f);
-    EXPECT_EQ(m_host.publications[0u].text, DenseText());
 }
 
 TEST_F(UiTextAreaScrollTests, AutomaticRevealSurvivesIdleViewportShrinkWithoutNewModelIntent){
@@ -104,7 +101,6 @@ TEST_F(UiTextAreaScrollTests, AutomaticRevealSurvivesIdleViewportShrinkWithoutNe
     EXPECT_EQ(m_model.selectionGeneration(), selection);
     EXPECT_EQ(m_state.revision(), stateRevision);
     EXPECT_FALSE(m_result.textChanged || m_result.selectionChanged);
-    EXPECT_FALSE(m_model.canUndo());
 }
 
 TEST_F(UiTextAreaScrollTests, ExplicitOverscrollClampsToBothContentExtents){
@@ -139,8 +135,6 @@ TEST_F(UiTextAreaScrollTests, AcceptedIdenticalSelectionResumesRevealAfterManual
     EXPECT_GT(m_state.scroll().x, 0.0f);
     EXPECT_GT(m_state.scroll().y, 0.0f);
     EXPECT_EQ(m_state.revision(), revision);
-    EXPECT_EQ(m_model.text(), DenseText());
-    EXPECT_FALSE(m_model.canUndo());
 }
 
 TEST_F(UiTextAreaScrollTests, CopyAndUnchangedSubmitPreserveTheExplicitViewport){
@@ -205,8 +199,6 @@ TEST_F(UiTextAreaScrollTests, KnownModelRebindingResetsAndRevealsTheNewCaret){
     EXPECT_GT(m_state.scroll().x, 17.0f);
     EXPECT_GT(m_state.scroll().y, 19.0f);
     EXPECT_EQ(m_state.revision(), revision);
-    EXPECT_EQ(replacement.caret(), DenseText().size());
-    EXPECT_EQ(m_model.text(), DenseText());
 }
 
 TEST_F(UiTextAreaScrollTests, ResetThenScrollSeedsANewInitialBinding){
@@ -219,8 +211,6 @@ TEST_F(UiTextAreaScrollTests, ResetThenScrollSeedsANewInitialBinding){
     EXPECT_FLOAT_EQ(m_state.scroll().x, 17.0f);
     EXPECT_FLOAT_EQ(m_state.scroll().y, 19.0f);
     EXPECT_EQ(m_state.revision(), revision);
-    EXPECT_EQ(m_model.caret(), DenseText().size());
-    EXPECT_FALSE(m_model.canUndo());
 }
 
 

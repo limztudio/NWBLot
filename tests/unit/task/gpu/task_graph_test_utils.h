@@ -271,17 +271,6 @@ struct ThreeQueueCompile{
     return Graphics::GpuTaskCommandRequirements{ Graphics::GpuQueueCapability::Compute };
 }
 
-[[nodiscard]] Telemetry::FrameGraphQueueAssignmentModifier::Mask ExpectedTelemetryModifiers(
-    const Graphics::GpuTaskQueueAssignmentModifier::Mask modifiers
-);
-
-void ExpectPlannedQueueAssignmentTelemetry(
-    const Graphics::GpuTaskQueueAssignment& source,
-    const Telemetry::FrameGraphQueueAssignment& telemetry,
-    const Telemetry::FrameGraphQueueClass::Enum queueClass,
-    const Telemetry::FrameGraphQueueAssignmentReason::Enum reason
-);
-
 struct TransferOwnershipPair{
     Graphics::GpuGraphResourceId texture;
     Graphics::GpuTaskId producer;

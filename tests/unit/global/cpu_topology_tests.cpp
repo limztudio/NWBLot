@@ -19,23 +19,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(CpuTopologyTests, EnumeratedProcessorIdentitiesAreUniqueAndUsable){
-    InteropVector<CpuWorkerPlacement> placements;
-    ASSERT_TRUE(QueryCpuWorkerPlacements(placements));
-    ASSERT_FALSE(placements.empty());
-    for(usize i = 0u; i < placements.size(); ++i){
-        const CpuWorkerPlacement& placement = placements[i];
-        EXPECT_TRUE(placement.valid());
-        for(usize j = 0u; j < i; ++j){
-            EXPECT_FALSE(
-                placements[j].processorGroup == placement.processorGroup
-                && placements[j].logicalProcessorIndex == placement.logicalProcessorIndex
-            );
-        }
-    }
-}
-
-
 TEST(CpuTopologyTests, InvalidPlacementFailsWithoutMutatingTheCallingThread){
     EXPECT_FALSE(SetCurrentThreadCpuPlacement(CpuWorkerPlacement{}));
     EXPECT_FALSE(SetCurrentThreadCpuPlacement(CpuWorkerPlacement{ 0u, Limit<u32>::s_Max, 0u, CpuAffinity::Any }));

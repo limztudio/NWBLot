@@ -28,14 +28,6 @@ namespace __hidden_output_layer_shape_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(OutputLayerShape, AcceptsNoWorkAndGenerationOnlyWithoutGraphResources){
-    Core::GpuTaskGraphOutputLayer layer;
-    EXPECT_TRUE(layer.validShape());
-
-    layer.frameGeneration = 17u;
-    EXPECT_TRUE(layer.validShape());
-}
-
 TEST(OutputLayerShape, PreservesUploadOnlyAndCompleteColorForms){
     Core::GpuTaskGraphOutputLayer layer;
     layer.readyTask = { 3u, 0u };

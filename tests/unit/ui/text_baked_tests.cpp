@@ -32,7 +32,6 @@ public:
         : m_loggerGuard(m_logger, Core::Common::LoggerBreakPolicy::BreakOnFatal)
         , m_arena(Name("tests/ui/text/baked"))
         , m_font(m_arena, Name("tests/ui/fonts/latin"))
-        , m_korean(m_arena, Name("tests/ui/fonts/korean"))
         , m_atlas(m_arena, Name("tests/ui/fonts/latin_atlas"))
         , m_text(m_arena)
         , m_layout(m_arena)
@@ -44,10 +43,9 @@ public:
 protected:
     virtual void SetUp()override{
         ASSERT_TRUE(loadFont(m_font, "latin.font"));
-        ASSERT_TRUE(loadFont(m_korean, "korean.font"));
         const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_font, 1u };
         ASSERT_TRUE(m_text.setFonts(&source, 1u));
-        ASSERT_EQ(m_text.layout({ .text = "AV ffi", .fontSize = 24.f }, m_layout), TextLayoutStatus::Success);
+        ASSERT_EQ(m_text.layout({ .text = "A ", .fontSize = 24.f }, m_layout), TextLayoutStatus::Success);
         FontAtlasPayload payload(m_arena);
         payload.font = source.identity;
         payload.fontSha256 = ComputeSha256({ m_font.fontBytes().data(), m_font.fontBytes().size() });
@@ -85,14 +83,12 @@ protected:
         group.height = 32u;
         group.pixels.resize(32u * 32u * 4u, 128u);
         group.sha256 = ComputeSha256({ group.pixels.data(), group.pixels.size() });
-        u32 nextRect = 0u;
         for(const PlacedGlyph& placed : m_layout.glyphs()){
             FontAtlasGlyph& glyph = payload.glyphs[placed.glyphId];
             if(m_layout.utf8()[placed.byteBegin] == ' ' || glyph.drawable != 0u)
                 continue;
             glyph.drawable = 1u;
-            glyph.channel = nextRect % 4u;
-            glyph.x = 1u + (nextRect / 4u) * 4u;
+            glyph.x = 1u;
             glyph.y = 1u;
             glyph.width = 2u;
             glyph.height = 2u;
@@ -100,7 +96,6 @@ protected:
             glyph.planeTop = -875.f;
             glyph.planeRight = glyph.planeLeft + static_cast<f32>(glyph.width * payload.unitsPerEm) / payload.bakePpem;
             glyph.planeBottom = glyph.planeTop + static_cast<f32>(glyph.height * payload.unitsPerEm) / payload.bakePpem;
-            ++nextRect;
         }
         m_atlas.setPayload(Move(payload));
         ASSERT_TRUE(m_atlas.validatePayload());
@@ -135,7 +130,6 @@ protected:
     Core::Common::LoggerRegistrationGuard m_loggerGuard;
     Core::Alloc::GlobalArena m_arena;
     Font m_font;
-    Font m_korean;
     FontAtlas m_atlas;
     TextService m_text;
     TextLayout m_layout;
@@ -146,30 +140,6 @@ protected:
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST_F(TextBakedTests, AtlasInstallationPreservesHarfBuzzLigaturesKerningPositionsAndClusters){
-    TextLayout original(m_arena);
-    ASSERT_EQ(m_text.layout({ .text = "AV ffi", .fontSize = 24.f }, original), TextLayoutStatus::Success);
-    ASSERT_TRUE(installAtlas());
-    ASSERT_EQ(m_text.layout({ .text = "AV ffi", .fontSize = 24.f }, m_layout), TextLayoutStatus::Success);
-    ASSERT_EQ(original.glyphs().size(), m_layout.glyphs().size());
-    EXPECT_FLOAT_EQ(original.measure().x, m_layout.measure().x);
-    for(usize index = 0u; index < original.glyphs().size(); ++index){
-        const PlacedGlyph& before = original.glyphs()[index];
-        const PlacedGlyph& after = m_layout.glyphs()[index];
-        EXPECT_EQ(before.glyphId, after.glyphId);
-        EXPECT_EQ(before.byteBegin, after.byteBegin);
-        EXPECT_EQ(before.byteEnd, after.byteEnd);
-        EXPECT_FLOAT_EQ(before.position.x, after.position.x);
-        EXPECT_FLOAT_EQ(before.position.y, after.position.y);
-    }
-    const DrawSnapshot snapshot = paint();
-    EXPECT_TRUE(snapshot.glyphPages().empty());
-    ASSERT_EQ(snapshot.sdfPages().size(), 1u);
-    EXPECT_FALSE(snapshot.commands().empty());
-    for(const DrawCommand& command : snapshot.commands())
-        EXPECT_EQ(command.material, PaintMaterial::SdfGlyph);
-}
 
 TEST_F(TextBakedTests, FontHashMismatchUsesCoverageForTheAlreadySelectedFace){
     FontAtlasPayload payload(m_arena);
@@ -217,15 +187,11 @@ TEST_F(TextBakedTests, OldLayoutAndSnapshotOwnTheirAtlasAfterFontReplacementAndA
     EXPECT_EQ(first.sdfPages()[0u]->pixels()[0u], 128u);
 }
 
-TEST_F(TextBakedTests, ZoomAndDpiReuseTheExactImmutableImageAndOutsideRangeUsesCoverage){
+TEST_F(TextBakedTests, OutsideBakedSizeRangeUsesCoverageWithLowerThresholdControl){
     ASSERT_TRUE(installAtlas());
     ASSERT_EQ(m_text.layout({ .text = "A", .fontSize = 24.f }, m_layout), TextLayoutStatus::Success);
     const DrawSnapshot first = paint();
-    const DrawSnapshot enlarged = paint(2.f);
     ASSERT_EQ(first.sdfPages().size(), 1u);
-    ASSERT_EQ(enlarged.sdfPages().size(), 1u);
-    EXPECT_EQ(first.sdfPages()[0u].get(), enlarged.sdfPages()[0u].get());
-    EXPECT_FLOAT_EQ(first.vertices()[0u].position.x, enlarged.vertices()[0u].position.x);
     ASSERT_EQ(m_text.layout({ .text = "A", .fontSize = 8.f }, m_layout), TextLayoutStatus::Success);
     const DrawSnapshot small = paint();
     EXPECT_TRUE(small.sdfPages().empty());

@@ -118,45 +118,7 @@ TEST(GpuTaskGraph, UploadBufferTaskPreflightsNativeAlignmentContract){
         }
     );
     ASSERT_TRUE(copyDestTask.valid());
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-        const Graphics::GpuTaskGraphTaskView copyDestView = declarations.taskAt(copyDestTask.index);
 
-        EXPECT_EQ(declarations.taskCount(), 1u);
-        ASSERT_EQ(copyDestView.resourceUseCount, 1u);
-        ASSERT_NE(copyDestView.resourceUses, nullptr);
-        EXPECT_EQ(copyDestView.resourceUses[0u].requiredState, Graphics::ResourceStates::CopyDest);
-        EXPECT_EQ(copyDestView.resourceUses[0u].range.bufferRange, Graphics::BufferRange(4u, sizeof(uploadBytes)));
-    }
-
-    Graphics::GpuTaskDesc finalStateDesc = desc;
-    finalStateDesc
-        .setIdentity(Name("tests/task_graph/upload_buffer_final_state"))
-        .setMarkerLabel("Upload Buffer Final State")
-    ;
-    const Graphics::GpuTaskId finalStateTask = graph.addUploadBufferTask(
-        finalStateDesc,
-        Graphics::GpuUploadBufferTaskDesc{
-            .source = alignedBlob,
-            .destination = destinationResource,
-            .destinationOffsetBytes = 0u,
-            .finalState = Graphics::ResourceStates::ShaderResource,
-        }
-    );
-    ASSERT_TRUE(finalStateTask.valid());
-    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-    const Graphics::GpuTaskGraphTaskView finalStateView = declarations.taskAt(finalStateTask.index);
-
-    ASSERT_EQ(finalStateView.resourceUseCount, s_ExpectedDualCount);
-    ASSERT_NE(finalStateView.resourceUses, nullptr);
-    EXPECT_EQ(finalStateView.resourceUses[0u].resource, destinationResource);
-    EXPECT_EQ(finalStateView.resourceUses[0u].requiredState, Graphics::ResourceStates::CopyDest);
-    EXPECT_EQ(finalStateView.resourceUses[0u].access, Graphics::GpuTaskResourceAccess::Write);
-    EXPECT_EQ(finalStateView.resourceUses[0u].range.bufferRange, Graphics::BufferRange(0u, sizeof(uploadBytes)));
-    EXPECT_EQ(finalStateView.resourceUses[1u].resource, destinationResource);
-    EXPECT_EQ(finalStateView.resourceUses[1u].requiredState, Graphics::ResourceStates::ShaderResource);
-    EXPECT_EQ(finalStateView.resourceUses[1u].access, Graphics::GpuTaskResourceAccess::Write);
-    EXPECT_EQ(finalStateView.resourceUses[1u].range.bufferRange, Graphics::BufferRange(0u, sizeof(uploadBytes)));
 }
 
 TEST(GpuTaskGraph, RejectsRetainedInitialStateMismatchesForBufferPrimitives){

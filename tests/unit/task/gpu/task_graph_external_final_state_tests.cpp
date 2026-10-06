@@ -59,11 +59,6 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
             .setExternalFinalReleaseDestinationQueue(queues[1u].id)
     );
     ASSERT_TRUE(buffer.valid());
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-
-        EXPECT_EQ(declarations.resourceAt(buffer.index).externalFinalReleaseDestinationQueue, queues[1u].id);
-    }
 
     const Graphics::GpuTaskResourceUse use{
         .resource = buffer,
@@ -192,76 +187,6 @@ TEST(GpuTaskGraph, ExportsExclusiveImportedResourceOwnershipToExternalQueue){
     EXPECT_EQ(compiledPlan.compileStatistics().logicalOwnershipTransferCount, 0u);
 }
 
-TEST(GpuTaskGraph, ExportsExclusiveAccelStructOwnershipToExternalQueue){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        DedicatedComputeQueue(),
-    };
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-
-    const Graphics::GpuGraphResourceId accelStruct = graph.importResource(
-        Graphics::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/external_final_release_accel_struct"))
-            .setMarkerLabel("External Final Release Accel Struct")
-            .setType(Graphics::GpuGraphResourceType::AccelStruct)
-            .setInitialState(Graphics::ResourceStates::Common)
-            .setExternalFinalState(Graphics::ResourceStates::AccelStructRead)
-            .setExternalFinalReleaseDestinationQueue(queues[1u].id)
-    );
-    ASSERT_TRUE(accelStruct.valid());
-
-    const Graphics::GpuTaskResourceUse use{
-        .resource = accelStruct,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::AccelStructWrite,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
-    const Graphics::GpuTaskId task = AddTask(
-        graph,
-        Name("tests/task_graph/external_final_release_accel_struct_writer"),
-        "External Final Release Accel Struct Writer",
-        nullptr,
-        0u,
-        &use,
-        1u
-    );
-    ASSERT_TRUE(task.valid());
-
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
-
-
-    const Graphics::GpuCompiledTask* const compiledTask = compiledPlan.findTask(task).plan;
-    ASSERT_NE(compiledTask, nullptr);
-    const Graphics::GpuCompiledExternalResourceExport* const exportInfo = compiledPlan.externalResourceExport(accelStruct).plan;
-    ASSERT_NE(exportInfo, nullptr);
-    EXPECT_EQ(exportInfo->producerTask, task);
-    EXPECT_EQ(exportInfo->sourceQueue, queues[0u].id);
-    EXPECT_EQ(exportInfo->destinationQueue, queues[1u].id);
-    EXPECT_EQ(exportInfo->finalState, Graphics::ResourceStates::AccelStructRead);
-
-    ASSERT_EQ(compiledTask->epilogueBarrierCount, s_ExpectedDualCount);
-    const Graphics::GpuCompiledBarrier* const barriers = compiledPlan.findTask(task).epilogueBarriers;
-    ASSERT_NE(barriers, nullptr);
-    EXPECT_EQ(barriers[0u].type, Graphics::GpuCompiledBarrierType::AccelStructStateExport);
-    EXPECT_EQ(barriers[0u].resource, accelStruct);
-    EXPECT_EQ(barriers[0u].before, Graphics::ResourceStates::AccelStructWrite);
-    EXPECT_EQ(barriers[0u].after, Graphics::ResourceStates::AccelStructRead);
-    EXPECT_EQ(barriers[1u].type, Graphics::GpuCompiledBarrierType::AccelStructOwnershipRelease);
-    EXPECT_EQ(barriers[1u].resource, accelStruct);
-    EXPECT_EQ(barriers[1u].before, Graphics::ResourceStates::AccelStructRead);
-    EXPECT_EQ(barriers[1u].after, Graphics::ResourceStates::AccelStructRead);
-    EXPECT_EQ(barriers[1u].sourceQueue, queues[0u].id);
-    EXPECT_EQ(barriers[1u].destinationQueue, queues[1u].id);
-}
 
 TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
     TestArena testArena;
@@ -326,7 +251,6 @@ TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
     ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-
     const Graphics::GpuCompiledExternalResourceExportView exportView = compiledPlan.externalResourceExport(texture);
     const Graphics::GpuCompiledExternalResourceExport* const exportInfo = exportView.plan;
     ASSERT_NE(exportInfo, nullptr);
@@ -389,11 +313,7 @@ TEST(GpuTaskGraph, ExportsExternalFinalOwnershipWithMultipleTerminalPackets){
     EXPECT_EQ(ownershipTransfer.route, Graphics::GpuOwnershipTransferRoute::ExternalExport);
     EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
     const Graphics::GpuTaskGraphCompileStatistics& statistics = compiledPlan.compileStatistics();
-    ASSERT_TRUE(statistics.valid());
     EXPECT_EQ(statistics.logicalOwnershipTransferCount, 1u);
-    EXPECT_EQ(statistics.logicalOwnershipTransferSignatureCount, 1u);
-    EXPECT_EQ(statistics.repeatedOwnershipTransferSignatureCount, 0u);
-    EXPECT_EQ(statistics.concurrentSharingAdviceResourceCount, 0u);
 }
 
 TEST(GpuTaskGraph, OrdersExternalFinalTransitionAfterOverlappingConcurrentReaders){

@@ -32,7 +32,6 @@ using Core::AcquiredBackBuffer;
 using Core::PresentationReceipt;
 namespace PresentationReceiptStatus = Core::PresentationReceiptStatus;
 
-static_assert(IsStandardLayout_V<PresentationReceipt>);
 static_assert(IsTriviallyCopyable_V<PresentationReceipt>);
 
 

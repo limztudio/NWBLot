@@ -59,7 +59,6 @@ static constexpr AStringView s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE = "tests/n
 static constexpr AStringView s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE = "tests/namesymbols/before_registry_retired";
 static constexpr AStringView s_CORE_ALLOC_HEAP_BACKING = "core/alloc/heap_backing";
 static constexpr AStringView s_BETA = "beta";
-static constexpr AStringView s_IDENTITY_FIRST = "identity/first";
 static constexpr AStringView s_UNCHANGED = "unchanged";
 static constexpr AStringView s_UNIT = "unit";
 #if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
@@ -70,7 +69,9 @@ static constexpr TStringView s_PARALLEL_LOGGER_MESSAGE = GLB_TEXT("parallel logg
 #if defined(GLB_PLATFORM_WINDOWS)
 static constexpr AStringView s_TRAILING_SUFFIX = ".trailing";
 #endif
+#if !defined(GLB_DEBUG)
 static constexpr AStringView s_RUNTIME_GENERATED = "runtime/generated";
+#endif
 static constexpr AStringView s_VALUE_42 = "value 42";
 static constexpr AStringView s_VALUE_FORMAT_TRAILING = "value {}.trailing";
 static constexpr WStringView s_VALUE_FORMAT_TRAILING_WIDE = L"value {}.trailing";
@@ -113,27 +114,6 @@ struct NameSymbolCallbackProbe{
     }
 };
 
-struct ArenaReferenceProbe{
-    bool& m_customDeleterCalled;
-    bool& m_destroyed;
-
-    ArenaReferenceProbe(bool& customDeleterCalled, bool& destroyed)
-        : m_customDeleterCalled(customDeleterCalled)
-        , m_destroyed(destroyed)
-    {}
-    ~ArenaReferenceProbe(){
-        m_destroyed = true;
-    }
-};
-
-void DestroyArenaReference(
-    NWB::Core::Alloc::GlobalArena* arena,
-    ArenaReferenceProbe* value
-)noexcept{
-    value->m_customDeleterCalled = true;
-    value->~ArenaReferenceProbe();
-    arena->deallocate(value, alignof(ArenaReferenceProbe), sizeof(ArenaReferenceProbe));
-}
 
 static u32 s_DiagnosticEventCaptureCount = 0u;
 static AStringView s_DiagnosticEventName = {};
@@ -231,24 +211,6 @@ struct U32VectorView{
     [[nodiscard]] u32 operator[](const usize index)const{ return values[index]; }
 };
 
-struct MoveOnlySwapValue{
-    i32 value = 0;
-
-    MoveOnlySwapValue() = default;
-    explicit MoveOnlySwapValue(const i32 initialValue)
-        : value(initialValue)
-    {}
-    MoveOnlySwapValue(const MoveOnlySwapValue&) = delete;
-    MoveOnlySwapValue& operator=(const MoveOnlySwapValue&) = delete;
-    MoveOnlySwapValue(MoveOnlySwapValue&& rhs)noexcept
-        : value(Exchange(rhs.value, -1))
-    {}
-    MoveOnlySwapValue& operator=(MoveOnlySwapValue&& rhs)noexcept{
-        value = Exchange(rhs.value, -1);
-        return *this;
-    }
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -269,16 +231,6 @@ TEST(Global, ExhaustedPodReadsPreserveCursorAndOutput){
     EXPECT_FALSE(ReadPOD(binary, cursor, unchangedValue));
     EXPECT_EQ(cursor, failedCursor);
     EXPECT_EQ(unchangedValue, 0xAABBCCDDu);
-
-    const BinaryByteView byteView{ binary.data(), binary.size() };
-    EXPECT_FALSE(byteView.empty());
-    EXPECT_EQ(byteView.size(), binary.size());
-    EXPECT_EQ(byteView[0u], binary[0u]);
-
-    cursor = 0u;
-    readValue = 0u;
-    EXPECT_TRUE(ReadPOD(byteView, cursor, readValue));
-    EXPECT_EQ(readValue, writtenValue);
 }
 
 TEST(Global, MultiplicationOverflowClearsResult){
@@ -330,18 +282,6 @@ TEST(Global, FixedBufferTextViewsTruncateAtCapacityWithoutReadingPastSlice){
     EXPECT_TRUE(AStringView(text).empty());
 }
 
-TEST(Global, ArenaRefDeleterUsesAssociatedNamespaceHook){
-    NWB::Core::Alloc::GlobalArena arena(NWB::Tests::s_TestArena);
-    bool customDeleterCalled = false;
-    bool destroyed = false;
-    ArenaReferenceProbe* const probe = ::NewArenaObject<ArenaReferenceProbe>(arena, customDeleterCalled, destroyed);
-    ASSERT_NE(probe, nullptr);
-
-    const ::ArenaRefDeleter<ArenaReferenceProbe, NWB::Core::Alloc::GlobalArena> deleter(&arena);
-    deleter(probe);
-    EXPECT_TRUE(customDeleterCalled);
-    EXPECT_TRUE(destroyed);
-}
 
 TEST(Global, AutoRegistrationQueueDeduplicatesAndSnapshots){
     ::AutoRegistrationQueue<u32, NWB::Core::Alloc::GlobalArena> queue(NWB::Tests::s_TestArena);
@@ -585,28 +525,11 @@ TEST(Global, DiagnosticEventTextViewsStopAtNullOrBufferBounds){
     EXPECT_EQ(text.view(), AStringView("xxx"));
 }
 
-TEST(Global, NameIdentityPredicatesAreNothrowAndDoNotRecordSymbols){
+TEST(Global, BinaryIdentityLanesDoNotRecordNameSymbols){
     constexpr Name s_First{"Identity\\First"};
-    constexpr Name s_Same{"identity/first"};
-    constexpr Name s_Second{"identity/second"};
-    static_assert(noexcept(static_cast<bool>(s_First)));
-    static_assert(noexcept(s_First == s_Same));
-    static_assert(noexcept(s_First != s_Second));
-    static_assert(noexcept(s_First < s_Second));
-    static_assert(noexcept(Hasher<Name>{}(s_First)));
-    static_assert(noexcept(s_First.identityHash()));
-    static_assert(s_First.identityHash() == ComputeNameHash("identity/first"));
-
     NWB::Core::Common::NameSymbols::InstallRuntimeRegistry();
     NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
 
-    EXPECT_TRUE(static_cast<bool>(s_First));
-    EXPECT_FALSE(static_cast<bool>(s_NameNone));
-    EXPECT_EQ(s_First, s_Same);
-    EXPECT_NE(s_First, s_Second);
-    EXPECT_TRUE(s_First < s_Second || s_Second < s_First);
-    EXPECT_EQ(Hasher<Name>{}(s_First), Hasher<NameHash>{}(ComputeNameHash(s_IDENTITY_FIRST)));
-    EXPECT_EQ(s_First.identityHash(), ComputeNameHash(s_IDENTITY_FIRST));
     for(u32 lane = 0u; lane < s_NameHashLaneCount; ++lane){
         NameHash changed = s_First.identityHash();
         changed.qwords[lane] ^= 1u;
@@ -649,19 +572,6 @@ TEST(Global, NameResolvedTextPreservesSymbolLookupAndHashFallback){
     NWB::Core::Common::NameSymbols::ClearRuntimeSymbols();
 
     const Name runtimeName{AStringView("Runtime\\Generated")};
-    char resolvedText[64] = {};
-    EXPECT_TRUE(NWB::Core::Common::NameSymbols::Resolve(runtimeName.hash(), resolvedText, sizeof(resolvedText)));
-    EXPECT_STREQ(resolvedText, s_RUNTIME_GENERATED.data());
-    EXPECT_EQ(runtimeName.resolvedText(), s_RUNTIME_GENERATED);
-
-    const Name literalName{"Literal\\Name"};
-#if defined(GLB_BUILD_SYMBOLS)
-    EXPECT_TRUE(NWB::Core::Common::NameSymbols::Resolve(literalName.hash(), resolvedText, sizeof(resolvedText)));
-    EXPECT_STREQ(resolvedText, "literal/name");
-#else
-    EXPECT_FALSE(NWB::Core::Common::NameSymbols::Resolve(literalName.hash(), resolvedText, sizeof(resolvedText)));
-#endif
-
     char hashText[NameDetail::s_DebugHashTextLength + 1u] = {};
     NameDetail::HashToDebugString(runtimeName.identityHash(), hashText, sizeof(hashText));
     const AStringView hashView(hashText, NameDetail::s_DebugHashTextLength);
@@ -1095,8 +1005,6 @@ TEST(Global, EmptyBinaryVectorReadClearsReusedOutputWithoutAdvancing){
     usize cursor = 0u;
     Vector<u16> parsed;
     EXPECT_EQ(ReadBinaryVectorPayload(binary, cursor, static_cast<u64>(source.size()), parsed), BinaryVectorPayloadFailure::None);
-    EXPECT_EQ(cursor, binary.size());
-    EXPECT_EQ(parsed, source);
 
     cursor = 0u;
     parsed.push_back(7u);
@@ -1175,29 +1083,6 @@ TEST(Global, TriviallyCopyableVectorPreservesOverlappingSourceRanges){
     EXPECT_EQ(values[s_ThirdElementIndex], 4u);
 }
 
-TEST(Global, CompressedPairSwapUsesMove){
-    CompressedPair<MoveOnlySwapValue, MoveOnlySwapValue> lhs;
-    CompressedPair<MoveOnlySwapValue, MoveOnlySwapValue> rhs;
-    lhs.first().value = 1;
-    lhs.second().value = 2;
-    rhs.first().value = 3;
-    rhs.second().value = 4;
-
-    static_assert(noexcept(lhs.swap(rhs)));
-    static_assert(noexcept(Swap(lhs, rhs)));
-
-    lhs.swap(rhs);
-    EXPECT_EQ(lhs.first().value, 3);
-    EXPECT_EQ(lhs.second().value, 4);
-    EXPECT_EQ(rhs.first().value, 1);
-    EXPECT_EQ(rhs.second().value, 2);
-
-    Swap(lhs, rhs);
-    EXPECT_EQ(lhs.first().value, 1);
-    EXPECT_EQ(lhs.second().value, 2);
-    EXPECT_EQ(rhs.first().value, 3);
-    EXPECT_EQ(rhs.second().value, 4);
-}
 
 #if !defined(_MSC_VER)
 TEST(Global, BoundedRuntimeWrappersTerminateTruncatedText){

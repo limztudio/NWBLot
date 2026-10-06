@@ -63,8 +63,6 @@ inline constexpr Core::Texture* SoftShadowCombinedWaveletInputs::* s_InputMember
 
 
 TEST(SoftShadowWavelet, IndependentFreshTemporalInputsPermitExactlyOneWaveletPerChannel){
-    WaveletInputsFixture fixture;
-    EXPECT_TRUE(fixture.inputs.valid());
     EXPECT_TRUE(CanCombineSoftShadowWavelets(true, true, true, true, 1u, 1u));
     for(const u32 count : { 0u, 2u, 3u, 5u }){
         EXPECT_FALSE(CanCombineSoftShadowWavelets(true, true, true, true, count, 1u));

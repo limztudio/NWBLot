@@ -24,7 +24,6 @@ using namespace NWB::UiWidgetTests;
 struct ImagePaintSample{
     Rect bounds;
     Color color;
-    f32 firstQuadWidth = 0.0f;
     f32 maximumU = 0.0f;
     usize quads = 0u;
 };
@@ -47,7 +46,7 @@ protected:
         configureImages();
     }
 
-    void configureImages(const f32 density = 1.0f){
+    void configureImages(){
         configureSkin();
         UiSkin::RegionVector regions(m_arena);
         for(const UiSkinRegion& region : m_skin.regions())
@@ -57,16 +56,7 @@ protected:
         sprite.rectangle = { 0u, 16u, 20u, 12u };
         sprite.padding = { 9.0f, 9.0f, 9.0f, 9.0f };
         regions.push_back(Move(sprite));
-        UiSkinRegion slice;
-        slice.name = Name("image.slice");
-        slice.rectangle = { 96u, 8u, 24u, 24u };
-        slice.sliceInsets = { 6u, 6u, 6u, 6u };
-        slice.minimumWidth = 12.0f;
-        slice.minimumHeight = 12.0f;
-        slice.padding = { 9.0f, 9.0f, 9.0f, 9.0f };
-        slice.drawMode = UiSkinDrawMode::NineSlice;
-        regions.push_back(Move(slice));
-        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 128u, 32u, density, Move(regions));
+        m_skin.setAtlas(Core::Assets::AssetRef<Texture>("tests/ui/texture"), 128u, 32u, 1.0f, Move(regions));
         ASSERT_TRUE(m_skin.validatePayload());
         m_builder.setSkin(m_skin);
     }
@@ -101,7 +91,6 @@ protected:
                     candidate.bounds.x = first.position.x;
                     candidate.bounds.y = first.position.y;
                     candidate.color = first.color;
-                    candidate.firstQuadWidth = opposite.position.x - first.position.x;
                     right = opposite.position.x;
                     bottom = opposite.position.y;
                 }

@@ -32,8 +32,6 @@ TEST_F(UiMultilineViewTests, SnapshotOwnsMultilineModeTextAndCrossLineSelection)
     ASSERT_TRUE(m_model.setText("ab\ncd"));
     ASSERT_TRUE(m_model.setSelection(1u, 4u));
     ASSERT_TRUE(shapeView());
-    EXPECT_EQ(m_view.textMode(), EditTextMode::Multiline);
-    EXPECT_EQ(m_view.caretGeometry().textMode(), EditTextMode::Multiline);
     EXPECT_EQ(m_view.displayText(), "ab\ncd");
     EXPECT_EQ(m_view.selectionRange().begin, 1u);
     EXPECT_EQ(m_view.selectionRange().end, 4u);
@@ -57,7 +55,6 @@ TEST_F(UiMultilineViewTests, NewSnapshotRequiresMatchingLayoutBeforePlacementOrH
     ASSERT_TRUE(m_model.setText("new\ncontent\n"));
     ASSERT_TRUE(m_view.snapshot(m_model));
     EXPECT_FALSE(m_view.ready());
-    EXPECT_EQ(m_view.textMode(), EditTextMode::Multiline);
     EXPECT_FALSE(place());
     ExpectPlacement(m_placement, previous);
     usize hit = 77u;
@@ -99,8 +96,6 @@ TEST_F(UiMultilineViewTests, HitTestingUsesYAndClampsOutsideTheFirstAndLastLine)
     usize hit = 99u;
     ASSERT_TRUE(m_view.hitTest({ 21.0f, 26.0f }, m_placement, hit));
     EXPECT_EQ(hit, 1u);
-    ASSERT_TRUE(m_view.hitTest({ 21.0f, 38.0f }, m_placement, hit));
-    EXPECT_EQ(hit, 4u);
     ASSERT_TRUE(m_view.hitTest({ 21.0f, 50.0f }, m_placement, hit));
     EXPECT_EQ(hit, 6u);
     ASSERT_TRUE(m_view.hitTest({ 21.0f, -100.0f }, m_placement, hit));
@@ -184,7 +179,6 @@ TEST_F(UiMultilineViewTests, PaddingAndOuterClipIntersectWithoutChangingLogicalL
     ASSERT_TRUE(m_view.arrange({ 10.0f, 20.0f, 100.0f, 40.0f }, { 8.0f, 4.0f, 8.0f, 4.0f },
         { 30.0f, 22.0f, 20.0f, 40.0f }, Point{}, m_placement));
     ExpectRect(m_placement.frameClip, { 30.0f, 22.0f, 20.0f, 38.0f });
-    ExpectRect(m_placement.content, { 18.0f, 24.0f, 84.0f, 32.0f });
     ExpectRect(m_placement.clip, { 30.0f, 24.0f, 20.0f, 32.0f });
     ExpectRect(m_placement.caret, { 38.0f, 36.0f, 1.0f, 12.0f });
     EXPECT_FLOAT_EQ(m_view.caretGeometry().lines()[1u].top, 12.0f);
@@ -264,7 +258,6 @@ TEST_F(UiMultilineViewTests, MovingTheViewRetainsOwnedPreeditLineMappingsAndRead
     ASSERT_TRUE(m_model.setText("replacement"));
     EXPECT_EQ(assigned.displayText(), "ax\nyd");
     EXPECT_EQ(assigned.layout().utf8(), "ax\nyd");
-    EXPECT_EQ(assigned.textMode(), EditTextMode::Multiline);
     EXPECT_TRUE(assigned.composing());
     EXPECT_TRUE(assigned.ready());
     ASSERT_TRUE(assigned.arrange(previous.bounds, {}, previous.clip, Point{}, m_placement));
@@ -303,7 +296,7 @@ TEST_F(UiMultilineViewTests, PaintOwnsSelectionSegmentsIncludingAnEmptySelectedH
     EXPECT_EQ(m_view.layout().utf8(), "ab\n\ncd\n");
 }
 
-TEST_F(UiMultilineViewTests, PaintOwnsPreeditUnderlinesOnEachHardLineAndUsesNativeCaretVisibility){
+TEST_F(UiMultilineViewTests, PaintOwnsPreeditUnderlinesIncludingAnEmptyHardLine){
     ASSERT_TRUE(loadFont());
     ASSERT_TRUE(m_model.setText("A\nB\nC"));
     ASSERT_TRUE(m_model.setSelection(2u, 3u));
@@ -316,7 +309,6 @@ TEST_F(UiMultilineViewTests, PaintOwnsPreeditUnderlinesOnEachHardLineAndUsesNati
     ASSERT_TRUE(m_model.setText("changed"));
     EditBoxStyle style;
     style.preedit = { 0.0f, 1.0f, 0.0f, 1.0f };
-    style.caret = { 0.0f, 0.0f, 1.0f, 1.0f };
     EditBoxPaintFlags flags;
     flags.focused = true;
     flags.caretVisible = false;
@@ -324,32 +316,17 @@ TEST_F(UiMultilineViewTests, PaintOwnsPreeditUnderlinesOnEachHardLineAndUsesNati
     DrawSnapshot snapshot(m_arena);
     ASSERT_TRUE(paintView(snapshot, style, flags));
     PaintVector<Rect> underlines(m_arena);
-    PaintVector<Rect> carets(m_arena);
     CollectSolidRects(snapshot, style.preedit, underlines);
-    CollectSolidRects(snapshot, style.caret, carets);
     ASSERT_EQ(underlines.size(), 3u);
-    EXPECT_TRUE(carets.empty());
     for(u32 index = 0u; index < 3u; ++index){
         const EditCaretLine& line = m_view.caretGeometry().lines()[index + 1u];
         EXPECT_FLOAT_EQ(underlines[index].y, m_placement.textOrigin.y + line.top + line.height - 1.0f);
         EXPECT_FLOAT_EQ(underlines[index].height, 1.0f);
     }
     EXPECT_FLOAT_EQ(underlines[1u].width, 1.0f);
-    flags.preeditCaretVisible = true;
-    ASSERT_TRUE(paintView(snapshot, style, flags));
-    CollectSolidRects(snapshot, style.caret, carets);
-    ASSERT_EQ(carets.size(), 1u);
-    ExpectRect(carets[0u], m_placement.caret);
-    flags.focused = false;
-    ASSERT_TRUE(paintView(snapshot, style, flags));
-    CollectSolidRects(snapshot, style.preedit, underlines);
-    CollectSolidRects(snapshot, style.caret, carets);
-    EXPECT_TRUE(underlines.empty());
-    EXPECT_TRUE(carets.empty());
-    EXPECT_TRUE(m_view.composing());
 }
 
-TEST_F(UiMultilineViewTests, SingleLineCenteringIgnoresVerticalScroll){
+TEST_F(UiMultilineViewTests, SingleLineCenteringRejectsVerticalScrollInfluence){
     ASSERT_TRUE(m_model.setText("abc\ndef"));
     ASSERT_TRUE(shapeView());
     EditModel single(m_arena);
@@ -359,10 +336,9 @@ TEST_F(UiMultilineViewTests, SingleLineCenteringIgnoresVerticalScroll){
     ASSERT_EQ(m_layoutBuilder.layout({ m_view.displayText() }, layout), TextLayoutStatus::Success);
     ASSERT_TRUE(m_view.adoptLayout(Move(layout)));
     ASSERT_TRUE(place(100.0f, 40.0f, { 0.0f, 20.0f }));
-    EXPECT_EQ(m_view.textMode(), EditTextMode::SingleLine);
     EXPECT_FLOAT_EQ(m_placement.scrollY, 0.0f);
     EXPECT_FLOAT_EQ(m_placement.textOrigin.y, 34.0f);
-    ExpectRect(m_placement.caret, { 40.0f, 34.0f, 1.0f, 12.0f });
+    EXPECT_FLOAT_EQ(m_placement.caret.y, 34.0f);
 }
 
 

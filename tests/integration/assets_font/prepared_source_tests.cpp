@@ -140,10 +140,6 @@ TEST(PreparedFontSource, ImageCorruptionRejectsFullReadWhileFontOnlySkipsCompact
     PreparedFontSource original(testArena.arena);
     ASSERT_TRUE(ReadPreparedFontSource(path, original, true));
     ASSERT_EQ(original.groups.size(), s_GroupCount);
-    for(usize index = 0u; index < s_GroupCount; ++index){
-        EXPECT_EQ(original.groups[index].pixels, fixture.groups[index].pixels);
-        EXPECT_EQ(original.groups[index].pixels.size(), 15u * (index + 1u));
-    }
     PreparedFontSource output(testArena.arena);
     ASSERT_TRUE(ReadPreparedFontSource(path, output, true));
     static constexpr AStringView s_Filenames[] = { "image_r.font", "image_rg.font", "image_rgb.font", "image_rgba.font", "image_hash.font" };

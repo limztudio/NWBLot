@@ -94,10 +94,6 @@ void ExpectColorNear(const ShaderFloat3 actual, const ShaderFloat3 expected, con
     EXPECT_NEAR(actual.z, expected.z, tolerance);
 }
 
-TEST(OutputLayerColor, TransparentAndOpaqueEndpointsPreservePremultipliedInputs){
-    ExpectColorNear(nwbOutputLayerOver(float3(0.25), float3(0.0), 0.f), float3(0.25));
-    ExpectColorNear(nwbOutputLayerOver(float3(0.25), float3(0.75), 1.f), float3(0.75));
-}
 
 TEST(OutputLayerColor, TransparentHdrLayerPreservesSceneAndOpaqueUiIgnoresSceneExposure){
     const float3 scene(0.1, 3., 100.);

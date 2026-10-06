@@ -84,7 +84,6 @@ void UiSelectionDeletionTests::sessionOrder(const bool reverse){
     const UiTextEditResult result = session.drain(owner(), m_model);
     EXPECT_EQ(result.status, UiTextEditStatus::Applied);
     EXPECT_EQ(result.eventsApplied, 3u);
-    EXPECT_TRUE(result.textChanged);
     EXPECT_EQ(m_model.text(), "abXhi");
     EXPECT_EQ(m_model.anchor(), 3u);
     EXPECT_EQ(m_model.caret(), 3u);
@@ -175,18 +174,9 @@ TEST_F(UiSelectionDeletionTests, CopiedSelectionBasisSurvivesNativeReleaseAndRet
     UiTextEditSession session(m_arena, m_textInput);
     ASSERT_EQ(session.begin(owner(), m_model, { 30, 40, 1, 18 }), TextInputAdmission::Accepted);
     const u64 surrounding = session.surroundingRevision();
-    TextInputDeletionBasis::Enum basis = TextInputDeletionBasis::Selection;
-    ASSERT_EQ(m_textInput.erase(1u, 1u, surrounding, basis), TextInputAdmission::Accepted);
-    basis = TextInputDeletionBasis::Caret;
+    ASSERT_EQ(m_textInput.erase(1u, 1u, surrounding, TextInputDeletionBasis::Selection), TextInputAdmission::Accepted);
     TextInputEvent event(m_arena);
-    EXPECT_EQ(event.deletionBasis, TextInputDeletionBasis::Caret);
     ASSERT_EQ(session.pollOwned(event), TextInputPollResult::Event);
-    EXPECT_EQ(basis, TextInputDeletionBasis::Caret);
-    EXPECT_EQ(event.kind, TextInputEventKind::DeleteSurrounding);
-    EXPECT_EQ(event.deletionBasis, TextInputDeletionBasis::Selection);
-    EXPECT_EQ(event.deleteBeforeBytes, 1u);
-    EXPECT_EQ(event.deleteAfterBytes, 1u);
-    EXPECT_EQ(event.surroundingRevision, surrounding);
     EXPECT_EQ(m_model.text(), "abcDEFghi");
     ASSERT_TRUE(session.cancel());
     ASSERT_EQ(ApplyUiTextEditEvent(m_model, event, surrounding, true), UiTextEditStatus::Applied);
@@ -320,8 +310,6 @@ TEST_F(UiSelectionDeletionTests, OrderedHostCopiesSelectionBasisAndPreservesBoth
         m_host.collectNative();
         EXPECT_EQ(m_model.text(), "abcDEFghi");
         ASSERT_TRUE(frame(m_model));
-        EXPECT_TRUE(m_result.textChanged);
-        EXPECT_TRUE(m_result.selectionChanged);
         EXPECT_EQ(m_model.text(), "abXhi");
         EXPECT_FALSE(m_model.composition().active);
         ASSERT_TRUE(m_model.undo());

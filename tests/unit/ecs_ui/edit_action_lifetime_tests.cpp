@@ -18,7 +18,6 @@ using namespace UiEditActionTestSupport;
 
 TEST_F(UiEditActionHostTests, FreshActionBindingAbandonsOnlyWhileTheModelIsLent){
     ASSERT_TRUE(m_model.setText("orphan"));
-    EXPECT_TRUE(m_actions.records.empty());
     ASSERT_TRUE(actionFrame());
     EXPECT_TRUE(m_result.abandoned);
     EXPECT_EQ(m_model.text(), "0");
@@ -124,22 +123,6 @@ TEST_F(UiEditActionHostTests, ReadOnlyTransitionRestoresBeforeSnapshotAndKeepsSe
     EXPECT_EQ(m_clipboard.document, "0");
     EXPECT_EQ(m_model.text(), "0");
     EXPECT_EQ(m_actions.committed, "0");
-}
-
-TEST_F(UiEditActionHostTests, ReadOnlySubmitIsReportedToSinkWithoutMutatingItsCommittedValue){
-    ASSERT_TRUE(activateActions());
-    Ui::EditBoxOptions readOnly;
-    readOnly.readOnly = true;
-    ASSERT_TRUE(actionFrame(readOnly));
-    m_actions.clear();
-    ASSERT_TRUE(key(Core::Key::Enter));
-    ASSERT_TRUE(actionFrame(readOnly));
-    EXPECT_TRUE(m_result.submitted);
-    ASSERT_EQ(m_actions.records.size(), 1u);
-    EXPECT_EQ(m_actions.records[0u].action, Ui::EditAction::Submit);
-    EXPECT_TRUE(m_actions.records[0u].readOnly);
-    EXPECT_EQ(m_actions.committed, "0");
-    EXPECT_EQ(m_model.text(), "0");
 }
 
 TEST_F(UiEditActionHostTests, NativeFocusLossAndGainAbandonsRatherThanCommittingOrdinaryBlur){

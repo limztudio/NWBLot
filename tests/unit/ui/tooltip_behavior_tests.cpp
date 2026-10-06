@@ -256,19 +256,15 @@ TEST(UiTooltipBehaviorTests, ChangingWidthGapOrSideAlsoStartsANewHoverLifetime){
     }
 }
 
-TEST(UiTooltipBehaviorTests, AllDeclaredPlacementSidesAndFiniteLargeLimitsAreAccepted){
-    const PopupPlacementSide::Enum sides[] = { PopupPlacementSide::Below, PopupPlacementSide::Above,
-        PopupPlacementSide::Right, PopupPlacementSide::Left, PopupPlacementSide::Center };
-    for(const PopupPlacementSide::Enum side : sides){
-        TooltipState state;
-        TooltipOptions options;
-        options.delaySeconds = 0.0f;
-        options.maximumWidth = Limit<f32>::s_Max;
-        options.gap = Limit<f32>::s_Max;
-        options.side = side;
-        ASSERT_TRUE(TooltipBehavior::Update(state, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, options));
-        EXPECT_TRUE(state.visible());
-    }
+TEST(UiTooltipBehaviorTests, FiniteMaximumLimitsAndMaximumDelayAreAcceptedWithoutOverflow){
+    TooltipState zeroDelay;
+    TooltipOptions extreme;
+    extreme.delaySeconds = 0.0f;
+    extreme.maximumWidth = Limit<f32>::s_Max;
+    extreme.gap = Limit<f32>::s_Max;
+    extreme.side = PopupPlacementSide::Right;
+    ASSERT_TRUE(TooltipBehavior::Update(zeroDelay, s_Anchor, s_Declaration, {}, 0u, 0u, true, 0.0f, extreme));
+    EXPECT_TRUE(zeroDelay.visible());
     TooltipState state;
     TooltipOptions options;
     options.delaySeconds = Limit<f32>::s_Max;

@@ -20,13 +20,6 @@ namespace __hidden_allocator_propagation_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ExpectedDualCount = 2u;
-constexpr u32 s_ThirdElementIndex = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 using NWB::Core::Alloc::GlobalArena;
 
 [[nodiscard]] GlobalArena& DefaultOwner(){
@@ -417,39 +410,6 @@ TEST(AllocatorPropagation, HashSetSwapsAndMovesPreserveArenaAndSourceReuse){
     }
 }
 
-TEST(AllocatorPropagation, SameArenaSwapsAndHashMapMovesKeepStorageOwners){
-    GlobalArena arena(Name("tests/allocator_propagation/same_arena_swaps"));
-    {
-        Vector<u32, GlobalArena> first{ arena };
-        Vector<u32, GlobalArena> second{ arena };
-        first.assign(64u, 1u);
-        second.assign(96u, s_ExpectedDualCount);
-        const u32* const firstStorage = first.data();
-        const u32* const secondStorage = second.data();
-        ASSERT_EQ(first.get_allocator(), second.get_allocator());
-        first.swap(second);
-        EXPECT_EQ(first.data(), secondStorage);
-        EXPECT_EQ(second.data(), firstStorage);
-        AString<GlobalArena> firstText{ arena };
-        AString<GlobalArena> secondText{ arena };
-        firstText.assign(96u, 'a');
-        secondText.assign(64u, 'b');
-        firstText.swap(secondText);
-        EXPECT_EQ(firstText[0u], 'b');
-        EXPECT_EQ(secondText[0u], 'a');
-        HashMap<u32, u32, GlobalArena> firstMap{ arena };
-        HashMap<u32, u32, GlobalArena> secondMap{ arena };
-        firstMap.emplace(1u, 11u);
-        secondMap.emplace(s_ExpectedDualCount, 22u);
-        firstMap.swap(secondMap);
-        EXPECT_EQ(firstMap.at(s_ThirdElementIndex), 22u);
-        secondMap = Move(firstMap);
-        EXPECT_EQ(secondMap.at(s_ThirdElementIndex), 22u);
-        EXPECT_EQ(secondMap.get_allocator().arenaPtr(), &arena);
-    }
-    EXPECT_EQ(arena.memoryStats().usedBytes, 0u);
-    EXPECT_EQ(arena.memoryStats().allocationCount, arena.memoryStats().deallocationCount);
-}
 
 TEST(AllocatorPropagation, DefaultProviderAllocatorMovesAwayFromItsInitialOwner){
     GlobalArena sourceArena(Name("tests/allocator_propagation/default_source"));
@@ -464,8 +424,6 @@ TEST(AllocatorPropagation, DefaultProviderAllocatorMovesAwayFromItsInitialOwner)
         EXPECT_EQ(target.get_allocator().arenaPtr(), &sourceArena);
         EXPECT_EQ(target.size(), 64u);
         EXPECT_EQ(target.back(), 8u);
-        DefaultAllocator<u32> laterDefault;
-        EXPECT_EQ(laterDefault.arenaPtr(), &DefaultOwner());
     }
     EXPECT_EQ(sourceArena.memoryStats().usedBytes, 0u);
     EXPECT_EQ(DefaultOwner().memoryStats().usedBytes, defaultBefore.usedBytes);

@@ -9,9 +9,6 @@
 
 #include <tests/common/test_context.h>
 
-#include <global/filesystem/operations.h>
-#include <global/filesystem/path.h>
-
 #include <gtest/gtest.h>
 
 
@@ -29,8 +26,6 @@ constexpr u32 s_ExpectedDualCount = 2u;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
 
 struct PhysicalQueueRuntimeSnapshots{
     NWB::Core::GpuTaskGraphPhysicalQueueCompileStatistics compile;

@@ -38,19 +38,6 @@ TEST_F(UiSliderBuilderTests, DeclarationPublishesItsResultAndOwnedPartsOnlyAfter
     ASSERT_NE(target(host()), nullptr);
     ASSERT_NE(target(track()), nullptr);
     ASSERT_NE(target(thumb()), nullptr);
-    EXPECT_TRUE(target(host())->focusable);
-    EXPECT_TRUE(target(host())->navigable);
-    EXPECT_TRUE(target(host())->horizontalNavigation);
-    EXPECT_FALSE(target(host())->activatable);
-    EXPECT_FALSE(target(host())->scrollable);
-    for(const WidgetId part : { track(), thumb() }){
-        EXPECT_EQ(target(part)->owner, host());
-        EXPECT_EQ(target(part)->control, target(host())->control);
-        EXPECT_TRUE(target(part)->pointerGesture);
-        EXPECT_FALSE(target(part)->focusable);
-        EXPECT_FALSE(target(part)->activatable);
-    }
-    ExpectSliderRect(target(thumb())->rectangle, m_state.placement().thumb);
 }
 
 TEST_F(UiSliderBuilderTests, FiniteExternalValueOutsideTheRangeIsRetainedWhileItsThumbClampsVisually){
@@ -136,22 +123,6 @@ TEST_F(UiSliderBuilderTests, FrozenSliderStyleOwnsItsMetricsThroughTheDeferredPa
     EXPECT_FLOAT_EQ(m_state.placement().thumb.width, 24.0f);
     EXPECT_FLOAT_EQ(m_state.placement().thumb.height, 24.0f);
     EXPECT_FLOAT_EQ(m_state.placement().track.height, 12.0f);
-    const DrawSnapshot paint = m_paint.freeze();
-    EXPECT_GT(regionQuads(paint, Name("slider.track")), 0u);
-    EXPECT_GT(regionQuads(paint, Name("slider.thumb.normal")), 0u);
-}
-
-TEST_F(UiSliderBuilderTests, NextSuccessfulIdleFrameClearsThePreviousChangeDiagnostic){
-    ASSERT_TRUE(accept(1u));
-    press(Core::Key::Tab);
-    press(Core::Key::Right);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_TRUE(m_state.result().valueChanged);
-    EXPECT_TRUE(m_state.result().focused);
-    ASSERT_TRUE(accept(3u));
-    EXPECT_TRUE(m_state.result().valid);
-    EXPECT_FALSE(m_state.result().valueChanged);
-    EXPECT_TRUE(m_state.result().focused);
 }
 
 

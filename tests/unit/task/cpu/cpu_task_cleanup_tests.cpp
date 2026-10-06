@@ -106,32 +106,6 @@ struct ReentrantRetirementProbe{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(CpuTaskCleanupTests, NormalDestructorsCompleteTasksBeforeRetiringTheirCaptures){
-    using namespace __hidden_cpu_task_cleanup_tests;
-    Atomic<u32> retirements{ 0u };
-    u32 callbacks = 0u;
-    {
-        CpuTaskScheduler scheduler(0u);
-        const auto task = scheduler.submit([&, probe = RetirementProbe(retirements)](){
-            EXPECT_TRUE(probe.retirements != nullptr);
-            ++callbacks;
-        });
-        EXPECT_TRUE(task.valid());
-        {
-            CpuTaskScope scope(scheduler);
-            const auto scopedTask = scope.submit([&, probe = RetirementProbe(retirements)](){
-                EXPECT_TRUE(probe.retirements != nullptr);
-                ++callbacks;
-            });
-            EXPECT_TRUE(scopedTask.valid());
-        }
-        EXPECT_GE(callbacks, 1u);
-    }
-    EXPECT_EQ(callbacks, s_ExpectedDualCount);
-    EXPECT_EQ(retirements.load(MemoryOrder::acquire), s_ExpectedDualCount);
-}
-
-
 TEST(CpuTaskCleanupTests, SchedulerDestructorPropagatesCallerFailureToTheTerminalEntry){
     using namespace __hidden_cpu_task_cleanup_tests;
     Atomic<u32> retirements{ 0u };

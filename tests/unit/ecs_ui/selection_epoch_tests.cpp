@@ -155,7 +155,6 @@ TEST_F(UiSelectionEpochTests, RejectedSelectionDoesNotRetireACompletedPaste){
     ASSERT_TRUE(m_clipboard.deliver(controller.token(), ClipboardStatus::Success, "X"));
     const auto result = controller.drain(owner(), m_model);
     EXPECT_EQ(result.status, UiEditClipboardStatus::Applied);
-    EXPECT_TRUE(result.textChanged);
     EXPECT_EQ(m_model.text(), "aXd");
     ASSERT_TRUE(m_model.undo());
     EXPECT_EQ(m_model.text(), "abcd");

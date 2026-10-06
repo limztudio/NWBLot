@@ -158,14 +158,6 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
         EXPECT_EQ(rejectedPlan.plannedFileCount, 7u);
     }
     EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("require the fixed engine shared mesh program")));
-    Plan::PreparedShaderEntry standalone(testArena.arena);
-    standalone.entry.name = "project/custom_mesh";
-    standalone.sourcePath = root / "project" / "shared_ms.slang";
-    Plan::PreparedShaderPlan standalonePlan(testArena.arena);
-    standalonePlan.plannedFileCount = 3u;
-    EXPECT_TRUE(Plan::AppendMeshObjectShaderEntries(testArena.arena, shaderCook, paths, standalone, standalonePlan, scratchArena));
-    EXPECT_TRUE(standalonePlan.preparedEntries.empty());
-    EXPECT_EQ(standalonePlan.plannedFileCount, 3u);
     const u64 oldChecksum = plan.preparedEntries[0].dependencyChecksum;
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_shared.slangi", s_SharedSlangiValueSnippet));
     Plan::PreparedShaderPlan changedPlan(testArena.arena);

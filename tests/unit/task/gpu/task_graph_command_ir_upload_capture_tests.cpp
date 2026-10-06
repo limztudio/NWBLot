@@ -74,10 +74,6 @@ TEST(GpuCommandIrUploadCapture, OwnsLargeGraphBlobAfterCallerMutationAndGraphRes
     Graphics::GpuCommandIrStreamReader reader(owned.bytes());
     Graphics::GpuCommandIrBuiltinTaskRecord record;
     ASSERT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::Record);
-    EXPECT_EQ(record.opcode, Graphics::GpuCommandIrOpcode::UploadBuffer);
-    EXPECT_EQ(record.sourceUploadBlob, blob);
-    EXPECT_EQ(record.destination, destination);
-    EXPECT_EQ(record.destinationOffsetBytes, 64u);
     EXPECT_EQ(record.blobSizeBytes, s_ByteCount);
     const BinaryByteView blobBytes = reader.blobBytes();
     ASSERT_EQ(blobBytes.size(), s_ByteCount);

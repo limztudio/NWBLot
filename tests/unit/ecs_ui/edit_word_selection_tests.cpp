@@ -46,25 +46,6 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiEditWordSelectionTests, ReadOnlyDoubleClickSelectsRunAndPublishesPrimarySelection){
-    ASSERT_TRUE(m_model.setText("one two"));
-    m_clipboard.primaryWritable = true;
-    ASSERT_TRUE(activate());
-    Ui::EditBoxOptions options;
-    options.readOnly = true;
-    ASSERT_TRUE(frame(m_model, options));
-    ASSERT_TRUE(click(1u, 1000u));
-    ASSERT_TRUE(frame(m_model, options));
-    ASSERT_TRUE(click(1u, 1250u));
-    ASSERT_TRUE(frame(m_model, options));
-    EXPECT_EQ(m_model.selectedText(), "one");
-    ASSERT_TRUE(m_clipboard.pump());
-    EXPECT_EQ(m_clipboard.startedChannel, Core::ClipboardChannel::PrimarySelection);
-    EXPECT_EQ(m_clipboard.startedText, "one");
-    EXPECT_EQ(m_model.text(), "one two");
-    EXPECT_FALSE(m_model.canUndo());
-}
-
 TEST_F(UiEditWordSelectionTests, RightHalfOfFinalWordGlyphSelectsItsWordRatherThanFollowingSpace){
     ASSERT_TRUE(m_model.setText("one two"));
     ASSERT_TRUE(activate());

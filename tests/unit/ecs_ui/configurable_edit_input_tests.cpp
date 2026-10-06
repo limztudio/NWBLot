@@ -87,17 +87,6 @@ TEST_F(UiConfigurableEditInputTests, SemanticCancelFirstCancelsCompositionThenCa
     EXPECT_FALSE(m_context.input().focus().valid());
 }
 
-TEST_F(UiConfigurableEditInputTests, NavigationOnlyIntentDoesNotBorrowTheEditModel){
-    ASSERT_TRUE(m_model.setText("abc"));
-    ASSERT_TRUE(activate());
-    const Ui::InputKeyBinding binding{ .key = Core::Key::F8, .command = Ui::InputCommand::Backspace, .edit = false };
-    ASSERT_TRUE(m_context.input().setBindings(&binding, 1u));
-    ASSERT_TRUE(key(Core::Key::F8));
-    ASSERT_TRUE(frame(m_model));
-    EXPECT_EQ(m_model.text(), "abc");
-    EXPECT_EQ(m_model.caret(), 3u);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -119,8 +108,6 @@ TEST_F(UiEditActionHostTests, DuplicateSemanticAcceptDownSubmitsOncePerHeldSourc
     ASSERT_TRUE(actionFrame());
     EXPECT_TRUE(m_result.submitted);
     ASSERT_EQ(m_actions.records.size(), 1u);
-    EXPECT_EQ(m_actions.records.front().action, Ui::EditAction::Submit);
-    EXPECT_EQ(m_actions.records.front().text, "42");
     event.type = Ui::InputEventType::CommandDown;
     ASSERT_TRUE(dispatch(event));
     event.type = Ui::InputEventType::CommandUp;

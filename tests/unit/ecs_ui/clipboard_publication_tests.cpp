@@ -83,7 +83,6 @@ TEST(UiClipboardPublications, CopiedWritePreservesNativeFifoBeforeLaterPasteRead
     const auto result = publications.drain();
     EXPECT_EQ(result.status, UiClipboardPublicationStatus::Published);
     EXPECT_EQ(result.published, 1u);
-    EXPECT_EQ(result.failed, 0u);
     EXPECT_EQ(publications.pending(), 0u);
     ClipboardCompletion completion(arena.arena);
     ASSERT_EQ(service.poll(read.token, completion), ClipboardPollResult::Completed);

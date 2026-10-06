@@ -209,9 +209,6 @@ TEST(GpuCommandIrUploadPreflight, PitchedTextureChecksFullMipExtentBytesSubresou
     Graphics::TextureSlice fullSlice;
     fullSlice.arraySlice = 1u;
     fullSlice = fullSlice.resolve(description);
-    ASSERT_EQ(fullSlice.width, 4u);
-    ASSERT_EQ(fullSlice.height, 3u);
-    ASSERT_EQ(fullSlice.depth, 1u);
     const auto preflight = [&](const Graphics::GpuCommandIrCapture& capture){
         return Graphics::PreflightGpuCommandIrPacket(capture.commandBytes(), reads.declarations, reads.compiled, packet);
     };

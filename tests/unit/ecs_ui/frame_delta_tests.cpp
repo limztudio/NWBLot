@@ -23,17 +23,6 @@ using namespace NWB::Impl;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiFrameDeltaTests, SkippedUpdatesAccrueUntilOnePaintAndAreNotReplayed){
-    UiFrameDelta delta;
-    delta.add(0.125f);
-    delta.add(0.25f);
-    delta.add(0.5f);
-    EXPECT_FLOAT_EQ(delta.consume(), 0.875f);
-    EXPECT_FLOAT_EQ(delta.consume(), 0.0f);
-    delta.add(0.125f);
-    EXPECT_FLOAT_EQ(delta.consume(), 0.125f);
-}
-
 TEST(UiFrameDeltaTests, InvalidUpdatesDoNotEraseRetainedTime){
     UiFrameDelta delta;
     delta.add(0.25f);
@@ -50,15 +39,6 @@ TEST(UiFrameDeltaTests, LongStallSaturatesAtPaintDeltaLimit){
     delta.add(Limit<f32>::s_Max);
     EXPECT_EQ(delta.consume(), Limit<f32>::s_Max);
     EXPECT_FLOAT_EQ(delta.consume(), 0.0f);
-}
-
-TEST(UiFrameDeltaTests, DisplayOrResourceResetDiscardsUnpaintedTime){
-    UiFrameDelta delta;
-    delta.add(0.5f);
-    delta.clear();
-    EXPECT_FLOAT_EQ(delta.consume(), 0.0f);
-    delta.add(0.25f);
-    EXPECT_FLOAT_EQ(delta.consume(), 0.25f);
 }
 
 

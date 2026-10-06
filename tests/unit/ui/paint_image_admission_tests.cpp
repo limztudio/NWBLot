@@ -144,11 +144,9 @@ TEST_F(PaintImageFixture, NullThirdKindRejectsEarlierCandidatesAtomicallyAndAVal
 }
 
 TEST_F(PaintImageFixture, SamePathFreshVersionsCoexistWhileCopiedHandlesUseOneSlotPerVersion){
-    const SharedGlyphPage glyph = makeGlyph();
-    const SharedSdfAtlasPage sdf = makeSdf();
     SharedImageSource first = makeImage("tests/ui/versioned_image", 37u);
     SharedImageSource second = makeImage("tests/ui/versioned_image", 81u);
-    ASSERT_TRUE(glyph && sdf && first && second);
+    ASSERT_TRUE(first && second);
     ASSERT_EQ(first->identity(), second->identity());
     ASSERT_NE(first->generation(), second->generation());
     ASSERT_NE(first.get(), second.get());
@@ -158,7 +156,7 @@ TEST_F(PaintImageFixture, SamePathFreshVersionsCoexistWhileCopiedHandlesUseOneSl
     const auto* firstPointer = first.get();
     const auto* secondPointer = second.get();
     Array<SharedImageSource, 4u> candidates{ first, copy, second, first };
-    ASSERT_TRUE(m_builder.prepareImages(&glyph, 1u, &sdf, 1u, candidates.data(), candidates.size()));
+    ASSERT_TRUE(m_builder.prepareTextureImages(candidates.data(), candidates.size()));
     ASSERT_TRUE(m_builder.prepareTextureImages(&copy, 1u));
     for(SharedImageSource& candidate : candidates)
         candidate.reset();
@@ -166,11 +164,7 @@ TEST_F(PaintImageFixture, SamePathFreshVersionsCoexistWhileCopiedHandlesUseOneSl
     second.reset();
     copy.reset();
     const DrawSnapshot actual = m_builder.freeze();
-    ASSERT_EQ(actual.glyphPages().size(), 1u);
-    ASSERT_EQ(actual.sdfPages().size(), 1u);
     ASSERT_EQ(actual.textureImages().size(), 2u);
-    EXPECT_EQ(actual.glyphPages()[0u].get(), glyph.get());
-    EXPECT_EQ(actual.sdfPages()[0u].get(), sdf.get());
     EXPECT_EQ(actual.textureImages()[0u].get(), firstPointer);
     EXPECT_EQ(actual.textureImages()[1u].get(), secondPointer);
     EXPECT_EQ(actual.textureImages()[0u]->generation(), firstGeneration);
@@ -178,9 +172,6 @@ TEST_F(PaintImageFixture, SamePathFreshVersionsCoexistWhileCopiedHandlesUseOneSl
     EXPECT_EQ(actual.textureImages()[0u]->identity(), actual.textureImages()[1u]->identity());
     EXPECT_EQ(actual.textureImages()[0u]->texture().payloadBytes()[0u], 37u);
     EXPECT_EQ(actual.textureImages()[1u]->texture().payloadBytes()[0u], 81u);
-    EXPECT_TRUE(actual.vertices().empty());
-    EXPECT_TRUE(actual.indices().empty());
-    EXPECT_TRUE(actual.commands().empty());
 }
 
 

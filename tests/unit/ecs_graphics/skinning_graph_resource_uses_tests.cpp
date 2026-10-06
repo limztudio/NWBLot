@@ -58,20 +58,6 @@ using namespace NWB::Impl;
     return plan;
 }
 
-void VerifyUse(
-    const Core::GpuTaskResourceUse& use,
-    const Core::GpuGraphResourceId resource,
-    const Core::ResourceStates::Mask state,
-    const Core::GpuTaskResourceAccess::Enum access){
-    EXPECT_EQ(use.resource, resource);
-    EXPECT_EQ(use.requiredState, state);
-    EXPECT_EQ(use.access, access);
-    EXPECT_FALSE(use.hasIndependentStateSource);
-    EXPECT_EQ(use.range.bufferRange.byteOffset, 0u);
-    EXPECT_EQ(use.range.bufferRange.byteSize, Core::s_EntireBuffer.byteSize);
-}
-
-
 TEST(SkinningGraphResourceUses, DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence){
     Core::Alloc::ScratchArena scratch(Name("tests/skinning_graph_uses/repeated"));
     MeshSkinningGraphResourceUses uses(scratch);

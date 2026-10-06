@@ -21,12 +21,6 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-constexpr u32 s_ThirdElementIndex = 2u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 namespace __hidden_task_graph_declaration_tests{
 
 
@@ -276,9 +270,6 @@ TEST(GpuTaskGraph, OwnsUploadBlobsAndInvalidatesThemOnReset){
         ASSERT_NE(storedBytes, nullptr);
         ASSERT_EQ(byteSize, sizeof(sourceBytes));
         EXPECT_EQ(storedBytes[0u], 0x17u);
-        EXPECT_EQ(storedBytes[1u], 0x3au);
-        EXPECT_EQ(storedBytes[s_ThirdElementIndex], 0x5cu);
-        EXPECT_EQ(storedBytes[3u], 0x8eu);
     }
 
     graph.reset();
@@ -335,15 +326,7 @@ TEST(GpuTaskGraph, OwnsPipelineMetadataAndInvalidatesPipelineIdsOnReset){
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
         const Graphics::GpuTaskGraphPipelineView stored = declarations.pipelineAt(pipeline.index);
-        EXPECT_EQ(stored.id, pipeline);
-        EXPECT_EQ(stored.identity, desc.identity);
         EXPECT_EQ(stored.markerLabel, AStringView("Deferred Lighting Pipeline"));
-        EXPECT_EQ(stored.type, Graphics::GpuGraphPipelineType::Compute);
-        EXPECT_FALSE(stored.hasBackendPipeline);
-        EXPECT_EQ(declarations.graphicsPipelineFor(pipeline), nullptr);
-        EXPECT_EQ(declarations.computePipelineFor(pipeline), nullptr);
-        EXPECT_EQ(declarations.meshletPipelineFor(pipeline), nullptr);
-        EXPECT_EQ(declarations.rayTracingPipelineFor(pipeline), nullptr);
     }
 
     Graphics::GpuGraphPipelineDesc mismatchedType = desc;

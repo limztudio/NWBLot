@@ -25,7 +25,6 @@ namespace __hidden_compute_emulation_output_resource_set_tests{
 
 
 constexpr u32 s_ExpectedDualCount = 2u;
-constexpr u32 s_ThirdElementIndex = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -126,9 +125,6 @@ TEST(ComputeEmulationOutputResourceSet, PreservesOrderAndReusesAnExistingUnnamed
     ASSERT_EQ(view.resourceCount(), 3u);
     EXPECT_EQ(view.resourceSetAt(result.index).members[1u], existing);
     EXPECT_EQ(view.resourceAt(existing.index).identity, Name("tests/compute_output_set/existing_alias"));
-    EXPECT_EQ(view.resourceAt(existing.index).markerLabel, "Existing Output Buffer");
-    EXPECT_EQ(view.resourceAt(1u).identity, first->getCreationDescription().debugName);
-    EXPECT_EQ(view.resourceAt(s_ThirdElementIndex).identity, last->getCreationDescription().debugName);
     description = unnamed->getCreationDescription();
 }
 

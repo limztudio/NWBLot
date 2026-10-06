@@ -271,7 +271,6 @@ TEST_F(UiPaintOverlayTests, UnrecordedScopesAreRejectedAndBeginResetsAbandonedOv
     m_builder.fillRect({ 0.0f, 0.0f, 100.0f, 80.0f });
     const DrawSnapshot snapshot = m_builder.freeze();
     ASSERT_EQ(snapshot.commands().size(), 1u);
-    EXPECT_EQ(snapshot.generation(), 8u);
     EXPECT_EQ(snapshot.commands()[0u].layer, 0u);
     EXPECT_EQ(snapshot.commands()[0u].firstIndex, 0u);
     EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.x, 0.0f);

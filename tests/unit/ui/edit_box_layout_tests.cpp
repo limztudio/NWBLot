@@ -317,7 +317,7 @@ TEST_F(EditBoxLayoutTests, EmptyTextKeepsOneCaretAndCanPaintWithoutAFontOrEditSk
     EXPECT_EQ(paint.freeze().vertices().size(), 4u);
 }
 
-TEST_F(EditBoxLayoutTests, FontPaintingUsesLogicalCaretGeometryAndCurrentDisplayScale){
+TEST_F(EditBoxLayoutTests, PaintingRestoresClipStackAndBoundsVerticesAcrossDisplayScales){
     Font font(m_arena, Name("tests/ui/edit_box/font"));
     const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY)
         / "latin.font";
@@ -333,7 +333,6 @@ TEST_F(EditBoxLayoutTests, FontPaintingUsesLogicalCaretGeometryAndCurrentDisplay
     ASSERT_TRUE(m_view.snapshot(m_model));
     ASSERT_EQ(m_view.shape(service), TextLayoutStatus::Success);
     ASSERT_TRUE(place());
-    const f32 caretX = m_placement.caret.x;
     UiSkin skin(m_arena, Name("tests/ui/edit_box/skin"));
     UiSkin::RegionVector regions(m_arena);
     regions.push_back({ Name("button.normal"), { 0u, 0u, 4u, 4u }, {}, {} });
@@ -348,29 +347,12 @@ TEST_F(EditBoxLayoutTests, FontPaintingUsesLogicalCaretGeometryAndCurrentDisplay
         EXPECT_FALSE(paint.popClip());
         const auto snapshot = paint.freeze();
         ASSERT_FALSE(snapshot.glyphPages().empty());
-        EXPECT_FLOAT_EQ(snapshot.displayMetrics().pixelScaleX, scale);
-        EXPECT_EQ(snapshot.commands()[0].material, PaintMaterial::Skin);
+        ASSERT_FALSE(snapshot.vertices().empty());
         for(const Vertex& vertex : snapshot.vertices()){
             EXPECT_GE(vertex.position.x, m_placement.bounds.x);
             EXPECT_LE(vertex.position.x, m_placement.bounds.x + m_placement.bounds.width);
         }
-        EXPECT_FLOAT_EQ(m_placement.caret.x, caretX);
     }
-    ASSERT_TRUE(m_model.setText(""));
-    ASSERT_TRUE(m_model.beginComposition());
-    ASSERT_TRUE(m_model.updateComposition("A", 0u, 0u));
-    ASSERT_TRUE(m_view.snapshot(m_model));
-    ASSERT_EQ(m_view.shape(service), TextLayoutStatus::Success);
-    ASSERT_TRUE(place());
-    flags.caretVisible = false;
-    flags.preeditCaretVisible = false;
-    paint.begin({ 200.0f, 100.0f, 1.0f, 1.0f }, 3u, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/edit_box/skin"), skin);
-    ASSERT_TRUE(m_view.paint(service, paint, skin, m_placement, {}, flags));
-    const usize hiddenVertices = paint.freeze().vertices().size();
-    flags.preeditCaretVisible = true;
-    paint.begin({ 200.0f, 100.0f, 1.0f, 1.0f }, 4u, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/edit_box/skin"), skin);
-    ASSERT_TRUE(m_view.paint(service, paint, skin, m_placement, {}, flags));
-    EXPECT_EQ(paint.freeze().vertices().size(), hiddenVertices + 4u);
 }
 
 

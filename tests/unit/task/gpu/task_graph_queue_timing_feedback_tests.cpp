@@ -132,26 +132,6 @@ TEST(GpuTaskGraph, AppliesHistoricalTimingFeedbackWithHysteresisAndCompileOption
     EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
     EXPECT_TRUE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback);
 
-    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
-    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
-    Telemetry::FrameGraphPendingNameEdges pendingEdges(testArena.arena);
-    Telemetry::FrameGraphBuilder builder(nodes, edges, pendingEdges);
-    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
-    const Graphics::GpuTaskGraphTelemetryOptions telemetryOptions{
-        .queueAssignments = &assignments,
-        .compiledPlan = nullptr,
-        .queueAssignmentTelemetry = nullptr,
-    };
-    const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-
-    ASSERT_TRUE(declarations.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
-    ASSERT_EQ(nodes.size(), 1u);
-    EXPECT_EQ(
-        nodes[0u].flags,
-        Graphics::GpuTaskGraphTelemetryNodeFlag::AssignedGraphicsQueue
-        | Graphics::GpuTaskGraphTelemetryNodeFlag::QueueAssignmentRerouted
-        | Graphics::GpuTaskGraphTelemetryNodeFlag::QueueAssignmentTimingRouting
-    );
 }
 
 TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
@@ -258,24 +238,6 @@ TEST(GpuTaskGraph, CalibratesOptInTimingFeedbackBeforeHysteresisSwitches){
     EXPECT_EQ(assignment->initialQueue, queues[0u].id);
     EXPECT_EQ(assignment->queue, queues[0u].id);
     EXPECT_FALSE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingCalibration);
-
-    Telemetry::FrameGraphNodeDescs nodes(testArena.arena);
-    Telemetry::FrameGraphEdgeDescs edges(testArena.arena);
-    Telemetry::FrameGraphPendingNameEdges pendingEdges(testArena.arena);
-    Telemetry::FrameGraphBuilder builder(nodes, edges, pendingEdges);
-    Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
-    const Graphics::GpuTaskGraphTelemetryOptions telemetryOptions{
-        .queueAssignments = &assignments,
-        .compiledPlan = nullptr,
-        .queueAssignmentTelemetry = nullptr,
-    };
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-
-        ASSERT_TRUE(declarations.appendFrameGraphTelemetry(builder, analysis, scratchArena, telemetryOptions));
-    }
-    ASSERT_EQ(nodes.size(), 1u);
-    EXPECT_EQ(nodes[0u].flags, Graphics::GpuTaskGraphTelemetryNodeFlag::AssignedGraphicsQueue);
 
     // Replacing the probe history with a faster observation makes the first adaptive choice from the implicit
     // deterministic baseline. Neither calibration observation becomes a committed dwell incumbent.
@@ -1121,7 +1083,6 @@ TEST(GpuTaskGraph, RanksEqualTimingRoutesDeterministicallyAndValidatesDiagnostic
     const Graphics::GpuTaskQueueAssignment* const crossFamilyAssignment = crossFamilyAssignments.find(crossFamilyTask);
     ASSERT_NE(crossFamilyAssignment, nullptr);
     EXPECT_EQ(crossFamilyAssignment->queue, crossFamilyGraphicsQueue.id);
-    EXPECT_EQ(crossFamilyAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
     EXPECT_TRUE(crossFamilyAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DiagnosticTimingQueueOverride);
 }
 

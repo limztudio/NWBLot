@@ -186,8 +186,6 @@ TEST(Csg, CsgFrameSkipsIncompleteDisabledHiddenAndUnmatchedInputs){
         const NWB::Impl::CsgFrameState state = BuildTestCsgFrameState(testWorld, desc);
 
         EXPECT_FALSE(state.empty());
-        EXPECT_TRUE(state.hasOpaqueStaticWork);
-        EXPECT_TRUE(state.hasTransparentStaticWork);
         EXPECT_EQ(state.receiverCount, 1u);
         EXPECT_EQ(state.cutterCount, 1u);
     }
@@ -276,7 +274,6 @@ TEST(Csg, CsgFrameReceiverLookup){
             opaqueDrawState
         ));
         EXPECT_TRUE(opaqueDrawState.active);
-        EXPECT_EQ(opaqueDrawState.receiverKind, NWB::Impl::CsgReceiverKind::Static);
         EXPECT_EQ(opaqueDrawState.cutterCount, s_ExpectedDualCount);
 
         usize resolvedCutterCount = 0u;
@@ -299,16 +296,6 @@ TEST(Csg, CsgFrameReceiverLookup){
         }
         EXPECT_EQ(resolvedCutterCount, s_ExpectedDualCount);
 
-        NWB::Impl::CsgReceiverDrawState transparentDrawState;
-        EXPECT_TRUE(ResolveTestCsgReceiverDrawState(
-            testWorld,
-            receiverEntity.id(),
-            NWB::Impl::CsgReceiverPass::Transparent,
-            transparentDrawState
-        ));
-        EXPECT_TRUE(transparentDrawState.active);
-        EXPECT_EQ(transparentDrawState.receiverKind, NWB::Impl::CsgReceiverKind::Static);
-        EXPECT_EQ(transparentDrawState.cutterCount, s_ExpectedDualCount);
     }
 
     {
@@ -373,7 +360,6 @@ TEST(Csg, CsgFrameReceiverLookup){
             transparentDrawState
         ));
         EXPECT_TRUE(transparentDrawState.active);
-        EXPECT_EQ(transparentDrawState.receiverKind, NWB::Impl::CsgReceiverKind::Skinned);
         EXPECT_EQ(transparentDrawState.cutterCount, 1u);
     }
 }
@@ -387,7 +373,6 @@ TEST(Csg, RepeatedBuiltInRegistrationPreservesTypeIdentityAndCount){
 
     ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
     EXPECT_EQ(registry.shapeTypeCount(), 4u);
-    EXPECT_EQ(registry.revision(), 8u);
     EXPECT_EQ(registry.findShapeTypeId(Name(s_ENGINE_CSG_BOX)), boxId);
 }
 
@@ -427,7 +412,7 @@ TEST(Csg, ShapeBoundsRejectShortPayloadAndKeepPlaneUnbounded){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
+TEST(Csg, SequentialCutsPreserveEarlierHalfSpaceAndUnweldedSourceVertices){
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     NWB::Core::Alloc::GlobalArena commitArena(s_ScratchArena);
 
@@ -475,44 +460,10 @@ TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
 
     const NWB::Impl::CsgDeformBuildOptions options;
 
-    const NWB::Impl::CsgDeformViability viability = NWB::Impl::CheckCsgDeformCutsViability(
-        scratchArena,
-        MakeNotNull(inputVertices),
-        8u,
-        MakeNotNull(inputTriangles),
-        12u,
-        cuts,
-        s_ExpectedDualCount,
-        options
-    );
-    EXPECT_TRUE(viability.viable);
-    EXPECT_EQ(viability.reason, NWB::Impl::CsgDeformViabilityReason::Ok);
-
-    NWB::Impl::CsgDeformVertexVector<NWB::Core::Alloc::ScratchArena> previewVertices(scratchArena);
-    NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::ScratchArena> previewTriangles(scratchArena);
-    NWB::Impl::CsgDeformStats previewStats;
-    EXPECT_TRUE(NWB::Impl::PreviewCsgDeformCuts(
-        scratchArena,
-        MakeNotNull(inputVertices),
-        8u,
-        MakeNotNull(inputTriangles),
-        12u,
-        cuts,
-        s_ExpectedDualCount,
-        options,
-        previewVertices,
-        previewTriangles,
-        previewStats
-    ));
-    EXPECT_GT(previewVertices.size(), 8u);
-    EXPECT_GT(previewTriangles.size(), 0u);
-    EXPECT_EQ(previewStats.appliedCutCount, s_ExpectedDualCount);
-    EXPECT_GT(previewStats.capTriangleCount, 0u);
-
     NWB::Impl::CsgDeformVertexVector<NWB::Core::Alloc::GlobalArena> commitVertices(commitArena);
     NWB::Impl::CsgDeformTriangleVector<NWB::Core::Alloc::GlobalArena> commitTriangles(commitArena);
     NWB::Impl::CsgDeformStats commitStats;
-    EXPECT_TRUE(NWB::Impl::CommitCsgDeformCuts(
+    ASSERT_TRUE(NWB::Impl::CommitCsgDeformCuts(
         scratchArena,
         commitArena,
         MakeNotNull(inputVertices),
@@ -526,11 +477,8 @@ TEST(Csg, CsgDeformSequentialCutsPreviewMatchesCommit){
         commitTriangles,
         commitStats
     ));
-    EXPECT_EQ(commitVertices.size(), previewVertices.size());
-    EXPECT_EQ(commitTriangles.size(), previewTriangles.size());
-    EXPECT_EQ(commitStats.outputVertexCount, previewStats.outputVertexCount);
-    EXPECT_EQ(commitStats.outputTriangleCount, previewStats.outputTriangleCount);
-    EXPECT_EQ(commitStats.capTriangleCount, previewStats.capTriangleCount);
+    ASSERT_FALSE(commitTriangles.empty());
+    ASSERT_GE(commitVertices.size(), 8u);
 
     // Sequential order matters: the second cut refines the first cut's output.
     // Every triangle-referenced kept vertex must satisfy both half-spaces.

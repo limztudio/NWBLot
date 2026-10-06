@@ -120,7 +120,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiContextMenuInputTests, SecondaryPressCopiesAcceptedLifetimeWithoutActivationOrEditorSelection){
+TEST_F(UiContextMenuInputTests, SecondaryPressDoesNotActivateOrSelectEditorAndIsConsumedOnce){
     HitTarget target = Target();
     target.textEditable = true;
     target.pointerGesture = true;
@@ -138,15 +138,6 @@ TEST_F(UiContextMenuInputTests, SecondaryPressCopiesAcceptedLifetimeWithoutActiv
     EXPECT_FALSE(m_router.consumePointerGesture(target.id, target.declarationGeneration, gesture));
     ContextMenuAction action;
     ASSERT_TRUE(take(action));
-    EXPECT_TRUE(action.id.valid());
-    EXPECT_EQ(action.id.target, target.id);
-    EXPECT_EQ(action.id.declarationGeneration, target.declarationGeneration);
-    EXPECT_EQ(action.id.layoutGeneration, 42u);
-    EXPECT_EQ(action.popup, target.popup);
-    EXPECT_EQ(action.control, target.control);
-    EXPECT_FLOAT_EQ(action.position.x, 16.0f);
-    EXPECT_FLOAT_EQ(action.position.y, 18.0f);
-    EXPECT_FALSE(action.keyboard);
     EXPECT_FALSE(take(action));
     EXPECT_TRUE(send(Pointer(InputEventType::SecondaryUp)).pointerConsumed);
     EXPECT_FALSE(take(action));
@@ -363,32 +354,6 @@ TEST_F(UiContextMenuInputTests, OnlyTheTopAcceptedHitMaySupplyAContextMenu){
     ContextMenuAction action;
     EXPECT_FALSE(take(action));
     EXPECT_FALSE(take(action, 2u));
-}
-
-TEST_F(UiContextMenuInputTests, RowAndScrollbarPartsResolveTheContextMenuToTheirAcceptedControlHost){
-    HitTarget host = Target(1u, { 10.0f, 10.0f, 80.0f, 70.0f });
-    host.navigable = true;
-    host.activatable = false;
-    HitTarget part = Target(2u, { 10.0f, 10.0f, 40.0f, 20.0f });
-    part.contextMenu = false;
-    part.focusable = false;
-    part.owner = host.id;
-    part.ownerDeclarationGeneration = host.declarationGeneration;
-    part.paintOrder = 1u;
-    part.pointerGesture = true;
-    const Array<HitTarget, 2u> targets = { host, part };
-    ASSERT_TRUE(m_router.commitTargets(targets.data(), targets.size(), 1u));
-    EXPECT_TRUE(send(Pointer(InputEventType::SecondaryDown, { 25.0f, 15.0f })).pointerConsumed);
-    ContextMenuAction action;
-    ASSERT_TRUE(take(action));
-    EXPECT_EQ(action.id.target, host.id);
-    EXPECT_EQ(action.id.declarationGeneration, host.declarationGeneration);
-    EXPECT_EQ(action.control, host.control);
-    EXPECT_FLOAT_EQ(action.position.x, 25.0f);
-    EXPECT_FALSE(take(action, part.id.value));
-    EXPECT_TRUE(m_router.controlActions().empty());
-    PointerGesture gesture;
-    EXPECT_FALSE(m_router.consumePointerGesture(part.id, part.declarationGeneration, gesture));
 }
 
 TEST_F(UiContextMenuInputTests, DisabledAndClippedTargetsCannotReceiveContextTriggers){

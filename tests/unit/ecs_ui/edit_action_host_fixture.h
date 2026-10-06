@@ -22,7 +22,6 @@ using namespace UiEditBoxTestSupport;
 struct ActionRecord{
     Ui::EditAction::Enum action = Ui::EditAction::Submit;
     AString<Alloc::GlobalArena> text;
-    bool readOnly = false;
 
     explicit ActionRecord(Alloc::GlobalArena& arena) : text(arena){}
 };
@@ -44,7 +43,6 @@ public:
         ActionRecord record(m_arena);
         record.action = action;
         record.text.assign(draft.text().data(), draft.text().size());
-        record.readOnly = readOnly;
         records.push_back(Move(record));
         if(failSubmit && action == Ui::EditAction::Submit)
             return false;

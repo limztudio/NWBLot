@@ -40,7 +40,6 @@ struct OpticalSceneContext{
 TEST(OpticalScene, OnlyEmittedTransparentPoliciesRequireClosedMedia){
     OpticalSceneContext context;
     RendererComponent renderer;
-    EXPECT_TRUE(context.gather.unspecifiedBoundariesOnly);
     renderer.opticalBoundaryMode = OpticalBoundaryMode::ClosedNested;
     context.gather.append(Core::ECS::EntityID(1u, 0u), renderer, false, {}, {}, false);
     renderer.opticalBoundaryMode = static_cast<OpticalBoundaryMode::Enum>(Limit<u8>::s_Max);

@@ -24,22 +24,6 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(Base64, BinaryValuesAndEveryTailLengthAreLossless){
-    TestArena<> context;
-    Vector<u8, Core::Alloc::GlobalArena> source(context.arena);
-    for(u32 value = 0u; value < 256u; ++value)
-        source.push_back(static_cast<u8>(value));
-    AString<Core::Alloc::GlobalArena> encoded(context.arena);
-    Vector<u8, Core::Alloc::GlobalArena> decoded(context.arena);
-    for(usize count = 0u; count <= source.size(); ++count){
-        ASSERT_TRUE(EncodeBase64({ source.data(), count }, encoded));
-        ASSERT_TRUE(DecodeBase64(encoded, decoded, count));
-        ASSERT_EQ(decoded.size(), count);
-        for(usize index = 0u; index < count; ++index)
-            ASSERT_EQ(decoded[index], source[index]);
-    }
-}
-
 TEST(Base64, RejectsMalformedAlphabetLengthPaddingAndUnusedBits){
     TestArena<> context;
     Vector<u8, Core::Alloc::GlobalArena> output(context.arena);

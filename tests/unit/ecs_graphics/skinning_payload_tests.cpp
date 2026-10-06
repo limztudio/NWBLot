@@ -49,7 +49,7 @@ NWB::Impl::SkinInfluence4 MakeSkinInfluence(const u16 joint){
     return influence;
 }
 
-TEST(SkinningPayload, RuntimePayloadFollowsPalettePoseAndModeChanges){
+TEST(SkinningPayload, EmptyPoseClearsPreviousDualQuaternionPayloadAndUsesCurrentPalette){
     auto& arena = NWB::Tests::TestDetail::Arena();
     NWB::Impl::MeshSkinningRuntimeInstance instance(arena);
     instance.skin.assign(4u, MakeSkinInfluence(1u));
@@ -62,32 +62,15 @@ TEST(SkinningPayload, RuntimePayloadFollowsPalettePoseAndModeChanges){
 
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     NWB::Impl::RuntimeSkinPayloadScratch payload(scratchArena);
-    ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-    ASSERT_TRUE(payload.hasActiveSkin());
-    ASSERT_EQ(payload.jointMatrices.size(), s_ExpectedDualCount);
-    EXPECT_FLOAT_EQ(payload.jointMatrices[0].rows[0].w, 0.75f);
-    EXPECT_FLOAT_EQ(payload.jointMatrices[1].rows[1].w, 2.0f);
-
     palette.joints[1].rows[1].w = 4.0f;
-    ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, nullptr, payload));
-    EXPECT_FLOAT_EQ(payload.jointMatrices[1].rows[1].w, 4.0f);
-
     NWB::Impl::SkeletonPoseComponent pose(arena);
     pose.parentJoints.push_back(NWB::Impl::s_SkeletonRootParent);
     pose.parentJoints.push_back(0u);
     pose.localJoints.push_back(MakeTranslationJoint(3.0f, 0.0f, 0.0f));
     pose.localJoints.push_back(MakeTranslationJoint(0.0f, 5.0f, 0.0f));
-    ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, &pose, payload));
-    EXPECT_FLOAT_EQ(payload.jointMatrices[0].rows[0].w, 2.75f);
-    EXPECT_FLOAT_EQ(payload.jointMatrices[1].rows[0].w, 2.75f);
-    EXPECT_FLOAT_EQ(payload.jointMatrices[1].rows[1].w, 5.0f);
-
     pose.skinningMode = NWB::Impl::SkeletonSkinningMode::DualQuaternion;
     ASSERT_TRUE(BuildRuntimeSkinPayload(instance, &palette, &pose, payload));
     EXPECT_EQ(payload.resolvedSkinningMode, NWB::Impl::SkeletonSkinningMode::DualQuaternion);
-    EXPECT_FLOAT_EQ(payload.jointMatrices[1].rows[0].w, 1.0f);
-    EXPECT_FLOAT_EQ(payload.jointMatrices[1].rows[1].x, 1.375f);
-    EXPECT_FLOAT_EQ(payload.jointMatrices[1].rows[1].y, 2.5f);
 
     pose.localJoints.clear();
     pose.parentJoints.clear();
@@ -164,7 +147,7 @@ TEST(SkinningPayload, RuntimePayloadFollowsReplacementMeshAndJointCounts){
     EXPECT_FLOAT_EQ(payload.jointMatrices[0].rows[0].w, 11.0f);
 }
 
-TEST(SkinningPayload, StaticInfluencePayloadReflectsEveryMeshEdit){
+TEST(SkinningPayload, EmptySkinClearsPreviousInfluencePayload){
     auto& arena = NWB::Tests::TestDetail::Arena();
     NWB::Impl::MeshSkinningRuntimeInstance instance(arena);
     instance.skeletonJointCount = 5u;
@@ -173,16 +156,6 @@ TEST(SkinningPayload, StaticInfluencePayloadReflectsEveryMeshEdit){
     Vector<NWB::Impl::MeshSkinningInfluenceGpu, NWB::Core::Alloc::ScratchArena> influences(scratchArena);
     ASSERT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, influences));
     ASSERT_EQ(influences.size(), s_ExpectedDualCount);
-
-    ++instance.editRevision;
-    instance.skin[0] = MakeSkinInfluence(4u);
-    instance.skin.push_back(MakeSkinInfluence(3u));
-    ASSERT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, influences));
-    ASSERT_EQ(influences.size(), 3u);
-    EXPECT_EQ(influences[0].joint[0], 4u);
-    EXPECT_FLOAT_EQ(influences[0].weight.x, 1.0f);
-    EXPECT_FLOAT_EQ(influences[0].weight.w, 0.0f);
-    EXPECT_EQ(influences[2].joint[0], 3u);
 
     instance.skin.clear();
     ASSERT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, influences));

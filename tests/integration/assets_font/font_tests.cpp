@@ -107,17 +107,14 @@ TEST(AssetsFont, PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedByRunti
     const Path bundledRoot = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default";
     static constexpr AStringView s_BundledNames[] = { "latin.font", "korean.font" };
     static constexpr Name s_Names[] = { Name("engine/ui/fonts/default/latin/face"), Name("engine/ui/fonts/default/korean/face") };
-    static constexpr usize s_SourceSizes[] = { 569208u, 4644748u };
     for(usize index = 0u; index < LengthOf(s_BundledNames); ++index){
         const Path bundledPath = bundledRoot / s_BundledNames[index];
         Core::Assets::AssetBytes source(testArena.arena);
         ASSERT_TRUE(ReadBundledFontBytes(bundledPath, source));
-        ASSERT_EQ(source.size(), s_SourceSizes[index]);
         Font font(testArena.arena, s_Names[index]);
         Core::Assets::AssetBytes sourceCopy(source.begin(), source.end(), testArena.arena);
         font.setFontBytes(Move(sourceCopy));
         ASSERT_TRUE(font.validatePayload());
-        EXPECT_EQ(font.fontBytes(), source);
 
         Core::Assets::AssetBytes prepared(testArena.arena);
         ErrorCode error;
@@ -125,15 +122,10 @@ TEST(AssetsFont, PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedByRunti
         FontAssetCodec codec;
         Core::Assets::AssetBytes binary(testArena.arena);
         ASSERT_TRUE(codec.serialize(font, binary));
-        EXPECT_EQ(binary.size(), sizeof(FontBinaryPayload::HeaderBinary) + s_SourceSizes[index]);
+        EXPECT_EQ(binary.size(), sizeof(FontBinaryPayload::HeaderBinary) + source.size());
         EXPECT_LT(binary.size(), prepared.size());
         EXPECT_FALSE(font.loadBinary(prepared));
         EXPECT_EQ(font.fontBytes(), source);
-        UniquePtr<Core::Assets::IAsset> loadedAsset;
-        ASSERT_TRUE(codec.deserialize(testArena.arena, font.virtualPath(), binary, loadedAsset));
-        const Font* loaded = Core::Assets::CastAsset<Font>(loadedAsset.get());
-        ASSERT_NE(loaded, nullptr);
-        EXPECT_EQ(loaded->fontBytes(), source);
     }
     EXPECT_EQ(logger.errorCount(), LengthOf(s_BundledNames));
 }

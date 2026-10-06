@@ -1,7 +1,7 @@
 # Test layout
 
 - `common/` holds shared test-only entry points, fixtures, and helpers. It is not a CTest suite.
-- `unit/` holds deterministic subsystem, policy, and pure-Python helper tests that do not require a live runtime workflow.
+- `unit/` holds deterministic subsystem and pure-Python helper tests that do not require a live runtime workflow.
 - `integration/` holds tests that cross asset, tool, crash, server, or filesystem/process boundaries.
 - `smoke/` holds runtime and hardware validation, including GPU-optional probes.
 - `ab/` holds manually launched A/B measurement workflows. Each runnable workflow has a terminal `launch.py`; capture, timing, and result artifacts stay local under `.cozter/out/ab-results/`.
@@ -23,6 +23,8 @@ manual use; select `--no-gpu-validation` when using a `fin` executable. The gene
 off; request `--gpu-validation` with a `dbg` or `opt` executable when validation is required. Validation cannot be enabled
 by capturing an already-running `--window-handle`.
 
-Keep test sources focused on one domain within their suite. When a file grows to cover several domains, split its tests into named sources such as resource imports, command validation, presentation, or telemetry codecs, and register each source in the nearest `CMakeLists.txt`. Preserve the existing executable, suite, and case names so CTest commands and GoogleTest filters continue to work.
+Unit tests cover concrete boundaries and regressions: invalid or unsupported input, exact bounds, overflow, empty or degenerate data, aliasing, stale generations, ownership, cancellation, reentry, concurrency, ordering, and failure recovery. Remove routine defaults, getters/setters, argument forwarding, name mappings, successful round trips, and source-text wiring checks. In mixed cases, keep the boundary and the setup or successful control needed to prove it. This scope also applies to Python parser tests and harness self-tests registered as unit suites. Actual CLI and runtime workflows remain in integration/smoke coverage; disabled benchmarks remain explicit performance workloads.
+
+Keep test sources focused on one domain within their suite. When a file grows to cover several domains, split its tests into named sources such as resource imports, command validation, presentation, or telemetry codecs, and register each source in the nearest `CMakeLists.txt`. Keep executable and suite names stable where possible, and name cases after their tested boundary. Remove unused fixtures and CMake registrations with their tests.
 
 Keep helpers beside the tests that use them. Share fixtures and declarations through small headers in a named test detail namespace; place substantial shared implementations in `.cpp` files. Keep domain-specific helpers with their tests, and avoid collecting test bodies in shared headers or numbered source fragments.

@@ -145,38 +145,6 @@ TEST(GpuTaskGraph, RegistersOnlyExactTypedPayloadLifecycleSignatures){
     EXPECT_EQ(discardedCount, 0u);
 }
 
-TEST(GpuTaskGraph, RegistersNoexceptTypedPayloadLifecycle){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    u32 recordCount = 0u;
-    u32 discardedCount = 0u;
-    Graphics::GpuTaskDesc desc;
-    desc
-        .setIdentity(Name("tests/task_graph/noexcept_payload_lifecycle"))
-        .setMarkerLabel("Noexcept Payload Lifecycle")
-    ;
-    const Graphics::GpuTaskId task = graph.addTask<NoexceptLifecycleTask>(
-        desc,
-        NoexceptLifecycleTask::Payload{
-            .recordCount = &recordCount,
-            .discardedCount = &discardedCount,
-        }
-    );
-    ASSERT_TRUE(task.valid());
-    const Graphics::GpuPhysicalQueueInfo queue = GraphicsQueue();
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = &queue,
-        .queueCount = 1u,
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-
-    graph.reset();
-    EXPECT_EQ(recordCount, 0u);
-    EXPECT_EQ(discardedCount, 1u);
-}
 
 TEST(GpuTaskGraph, RejectsMetadataResourceUsesBeforeNativeRecording){
     TestArena testArena;

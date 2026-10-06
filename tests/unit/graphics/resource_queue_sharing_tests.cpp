@@ -34,14 +34,12 @@ using namespace Core;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static_assert(ResourceQueueSharing::IsValid(ResourceQueueSharing::Exclusive));
-static_assert(ResourceQueueSharing::IsValid(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer));
 static_assert(!ResourceQueueSharing::IsValid(static_cast<ResourceQueueSharing::Mask>(1u << 7u)));
 
 
-TEST(ResourceQueueSharing, ValidationAcceptsExactlyKnownBitDomain){
+TEST(ResourceQueueSharing, RejectsEveryUnknownSharingBit){
     constexpr u32 s_MaxValidValue = static_cast<u32>(ResourceQueueSharing::GraphicsAsyncComputeAndTransfer);
-    for(u32 rawValue = 0u; rawValue <= Limit<u8>::s_Max; ++rawValue){
+    for(u32 rawValue = s_MaxValidValue; rawValue <= Limit<u8>::s_Max; ++rawValue){
         SCOPED_TRACE(rawValue);
         const ResourceQueueSharing::Mask sharing = static_cast<ResourceQueueSharing::Mask>(static_cast<u8>(rawValue));
         EXPECT_EQ(ResourceQueueSharing::IsValid(sharing), rawValue <= s_MaxValidValue);

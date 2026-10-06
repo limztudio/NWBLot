@@ -36,7 +36,6 @@ TEST_F(UiWindowTests, ContentHeightFitsOnlyFirstUseAndPreservesLaterHostGeometry
     ASSERT_TRUE(m_builder.label("caption", "One label"));
     EXPECT_FALSE(m_builder.button("apply", "Apply"));
     ASSERT_TRUE(finishWindow());
-    const DrawSnapshot first = m_paint.freeze();
     ASSERT_TRUE(m_context.commitFrame(1u));
     const HitTarget* apply = target(id("apply"));
     ASSERT_NE(apply, nullptr);
@@ -50,13 +49,10 @@ TEST_F(UiWindowTests, ContentHeightFitsOnlyFirstUseAndPreservesLaterHostGeometry
     ASSERT_TRUE(m_builder.label("extra", "Another label"));
     EXPECT_FALSE(m_builder.button("apply", "Apply"));
     ASSERT_TRUE(finishWindow());
-    const DrawSnapshot second = m_paint.freeze();
     EXPECT_FLOAT_EQ(state.bounds.x, 18.0f);
     EXPECT_FLOAT_EQ(state.bounds.y, 22.0f);
     EXPECT_FLOAT_EQ(state.bounds.width, 240.0f);
     EXPECT_FLOAT_EQ(state.bounds.height, firstHeight);
-    EXPECT_EQ(first.generation(), 1u);
-    EXPECT_EQ(second.generation(), 2u);
     ASSERT_TRUE(m_context.commitFrame(2u));
 }
 

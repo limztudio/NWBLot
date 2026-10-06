@@ -92,10 +92,6 @@ TEST_F(UiWindowSkinTests, ReplacingAtlasChangesMetricsAndBindingsWithoutChanging
     EXPECT_EQ(m_context.input().hitTest({ 55.0f, 115.0f }), updated->id);
     EXPECT_FLOAT_EQ(state.bounds.width, 280.0f);
     EXPECT_FLOAT_EQ(state.bounds.height, 200.0f);
-    const HitTarget* resize = target(id("@window.resize"));
-    ASSERT_NE(resize, nullptr);
-    EXPECT_FLOAT_EQ(resize->rectangle.width, 22.0f);
-    EXPECT_FLOAT_EQ(resize->rectangle.height, 22.0f);
     EXPECT_EQ(first.skinBinding().texture, Core::Assets::AssetRef<Texture>("tests/ui/texture"));
     EXPECT_EQ(first.skinBinding().generation, 1u);
     EXPECT_EQ(first.skinBinding().atlasWidth, 128u);

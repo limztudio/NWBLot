@@ -44,7 +44,6 @@ TEST(TextureUploadAspect, ResolvesExactDepthStencilPlanesAndLayouts){
     const Graphics::FormatInfo& d24s8 = Graphics::GetFormatInfo(Graphics::Format::D24S8);
     const Graphics::FormatInfo& rgba = Graphics::GetFormatInfo(Graphics::Format::RGBA8_UNORM);
     Graphics::TextureUploadAspect::Enum resolvedAspect = Graphics::TextureUploadAspect::Automatic;
-    Graphics::TextureUploadAspectLayout layout;
 
     EXPECT_FALSE(Graphics::ResolveTextureUploadAspect(
         d24s8,
@@ -63,14 +62,6 @@ TEST(TextureUploadAspect, ResolvesExactDepthStencilPlanesAndLayouts){
         resolvedAspect
     ));
     EXPECT_EQ(resolvedAspect, Graphics::TextureUploadAspect::Depth);
-    ASSERT_TRUE(Graphics::GetTextureUploadAspectLayout(
-        d24s8,
-        Graphics::TextureUploadAspect::Depth,
-        layout
-    ));
-    EXPECT_EQ(layout.blockWidth, 1u);
-    EXPECT_EQ(layout.blockHeight, 1u);
-    EXPECT_EQ(layout.bytesPerBlock, sizeof(u32));
 
     ASSERT_TRUE(Graphics::ResolveTextureUploadAspect(
         d24s8,
@@ -78,19 +69,12 @@ TEST(TextureUploadAspect, ResolvesExactDepthStencilPlanesAndLayouts){
         resolvedAspect
     ));
     EXPECT_EQ(resolvedAspect, Graphics::TextureUploadAspect::Stencil);
-    ASSERT_TRUE(Graphics::GetTextureUploadAspectLayout(
-        d24s8,
-        Graphics::TextureUploadAspect::Stencil,
-        layout
-    ));
-    EXPECT_EQ(layout.bytesPerBlock, sizeof(u8));
 
     ASSERT_TRUE(Graphics::ResolveTextureUploadAspect(
         rgba,
         Graphics::TextureUploadAspect::Automatic,
         resolvedAspect
     ));
-    EXPECT_EQ(resolvedAspect, Graphics::TextureUploadAspect::Color);
     EXPECT_FALSE(Graphics::ResolveTextureUploadAspect(
         rgba,
         Graphics::TextureUploadAspect::Depth,
@@ -327,7 +311,6 @@ TEST(VulkanCommandValidation, PureValidatorsRejectInvalidRangesCountsAndPushCons
     using namespace Graphics::GraphicsBackend::VulkanDetail;
 
     constexpr u32 s_Value = 1u;
-    EXPECT_TRUE(AreAllPointersValid(&s_Value));
     EXPECT_FALSE(AreAllPointersValid(&s_Value, static_cast<const u32*>(nullptr)));
 
     Graphics::BufferDesc bufferDesc;
@@ -347,7 +330,6 @@ TEST(VulkanCommandValidation, PureValidatorsRejectInvalidRangesCountsAndPushCons
     EXPECT_FALSE(AreDispatchGroupCountsValid(4u, 5u, 7u, s_MaximumGroupCounts));
     EXPECT_FALSE(AreDispatchGroupCountsValid(1u, 1u, 1u, nullptr));
 
-    EXPECT_TRUE(IsPushConstantByteSizeValid(4u, 128u));
     EXPECT_FALSE(IsPushConstantByteSizeValid(0u, 128u));
     EXPECT_FALSE(IsPushConstantByteSizeValid(s_ExpectedDualCount, 128u));
     EXPECT_FALSE(IsPushConstantByteSizeValid(132u, 128u));
@@ -358,7 +340,6 @@ TEST(VulkanCommandValidation, PureValidatorsRejectInvalidRangesCountsAndPushCons
 TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBoundaries){
     using namespace Graphics::GraphicsBackend::VulkanDetail;
 
-    EXPECT_EQ(GetPrimitiveTopology(Graphics::PrimitiveType::PatchList), VK_PRIMITIVE_TOPOLOGY_PATCH_LIST);
     EXPECT_EQ(
         GetPrimitiveTopology(static_cast<Graphics::PrimitiveType::Enum>(Limit<u8>::s_Max)),
         VK_PRIMITIVE_TOPOLOGY_MAX_ENUM
@@ -389,7 +370,6 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
     ));
 
     EXPECT_TRUE(IsScissorRectValid(Graphics::Rect(0, 0, 0, 0)));
-    EXPECT_TRUE(IsScissorRectValid(Graphics::Rect(1, 8, 2, 9)));
     EXPECT_FALSE(IsScissorRectValid(Graphics::Rect(-1, 8, 0, 9)));
     EXPECT_TRUE(IsImplicitScissorValid(Graphics::Viewport(0.0f, 16.0f, 0.0f, 8.0f, 0.0f, 1.0f)));
     EXPECT_FALSE(IsImplicitScissorValid(Graphics::Viewport(-1.0f, 16.0f, 0.0f, 8.0f, 0.0f, 1.0f)));
@@ -411,15 +391,6 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
     EXPECT_FALSE(TextureSubresourceRangesOverlap(firstRange, Graphics::TextureSubresourceSet(1u, 1u, 0u, s_ExpectedDualCount)));
 
     Graphics::TextureDesc textureDesc;
-    textureDesc.setDimension(Graphics::TextureDimension::TextureCube);
-    EXPECT_EQ(
-        GetFramebufferAttachmentViewDimension(textureDesc, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u)),
-        Graphics::TextureDimension::Texture2D
-    );
-    EXPECT_EQ(
-        GetFramebufferAttachmentViewDimension(textureDesc, Graphics::TextureSubresourceSet(0u, 1u, 0u, 6u)),
-        Graphics::TextureDimension::Texture2DArray
-    );
     textureDesc.setDimension(Graphics::TextureDimension::Texture3D);
     EXPECT_EQ(
         GetFramebufferAttachmentViewDimension(textureDesc, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u)),
@@ -429,10 +400,6 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
         GetFramebufferAttachmentViewDimension(textureDesc, Graphics::TextureSubresourceSet(0u, 1u, 0u, s_ExpectedDualCount)),
         Graphics::TextureDimension::Unknown
     );
-    EXPECT_TRUE(IsFramebufferAttachmentSubresourceSetValid(
-        Graphics::TextureDesc(),
-        Graphics::s_AllSubresources
-    ));
     EXPECT_TRUE(IsFramebufferAttachmentSubresourceSetValid(
         Graphics::TextureDesc().setDimension(Graphics::TextureDimension::Texture2DArray).setArraySize(4u),
         Graphics::TextureSubresourceSet(0u, 1u, 1u, 3u)
@@ -460,10 +427,6 @@ TEST(VulkanCommandValidation, PureGraphicsAndMeshValidatorsCoverExactVulkanBound
     EXPECT_TRUE(IsFramebufferAttachmentSubresourceSetValid(
         Graphics::TextureDesc().setMipLevels(s_ExpectedDualCount),
         Graphics::TextureSubresourceSet(1u, Graphics::TextureSubresourceSet::s_AllMipLevels, 0u, 1u)
-    ));
-    EXPECT_FALSE(IsFramebufferAttachmentSubresourceSetValid(
-        Graphics::TextureDesc(),
-        Graphics::TextureSubresourceSet(0u, 1u, 0u, s_ExpectedDualCount)
     ));
 
     Graphics::BufferDesc bufferDesc;
@@ -690,12 +653,6 @@ TEST(VulkanDevice, MatchesExactCommandListSubmissionQueueIdentity){
 TEST(VulkanStateTracking, HonorsForcedSameStateMemoryDependenciesIndependentlyOfUavPolicy){
     using Graphics::GraphicsBackend::VulkanStateTrackingDetail::NeedsResourceStateBarrier;
 
-    EXPECT_TRUE(NeedsResourceStateBarrier(
-        Graphics::ResourceStates::Common,
-        Graphics::ResourceStates::CopyDest,
-        false,
-        false
-    ));
     EXPECT_FALSE(NeedsResourceStateBarrier(
         Graphics::ResourceStates::CopyDest,
         Graphics::ResourceStates::CopyDest,

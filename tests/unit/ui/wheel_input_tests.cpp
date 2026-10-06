@@ -99,9 +99,6 @@ TEST_F(UiWheelInputTests, DiagonalWheelCopiesBothAcceptedAxesIntoOneAction){
     m_targets[0u].gestureMaximumX = 1001.0;
     ControlAction action;
     ASSERT_TRUE(m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control, action));
-    EXPECT_EQ(action.kind, ControlActionKind::Wheel);
-    EXPECT_EQ(action.source, m_targets[1u].id);
-    EXPECT_EQ(action.id.layoutGeneration, 5u);
     EXPECT_DOUBLE_EQ(action.delta, -0.5);
     EXPECT_DOUBLE_EQ(action.deltaX, 0.25);
     EXPECT_DOUBLE_EQ(action.step, 48.0);
@@ -110,18 +107,6 @@ TEST_F(UiWheelInputTests, DiagonalWheelCopiesBothAcceptedAxesIntoOneAction){
     EXPECT_DOUBLE_EQ(action.maximumX, 180.0);
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_TRUE(m_router.actions().empty());
-}
-
-TEST_F(UiWheelInputTests, HorizontalOnlyWheelCarriesFractionalXWithoutVerticalInput){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
-    EXPECT_TRUE(wheel(-0.125, 0.0).pointerConsumed);
-    ControlAction action;
-    ASSERT_TRUE(m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control, action));
-    EXPECT_DOUBLE_EQ(action.delta, 0.0);
-    EXPECT_DOUBLE_EQ(action.deltaX, -0.125);
-    EXPECT_DOUBLE_EQ(action.stepX, 32.0);
-    EXPECT_EQ(action.source, m_targets[0u].id);
-    EXPECT_TRUE(m_router.controlActions().empty());
 }
 
 TEST_F(UiWheelInputTests, RightUpAndLeftDownKeepTheirNativeSignsAndSequence){

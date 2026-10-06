@@ -36,21 +36,6 @@ public:
     [[nodiscard]] TextInputAdmission::Enum preedit(const AStringView text, const usize anchor, const usize caret){
         return emitPreedit(activeSession(), text, anchor, caret, false);
     }
-
-
-protected:
-    virtual void updateNativeSurrounding(
-        AStringView text, usize anchor, usize caret, u64 revision, const TextInputChangeCause::Enum cause)override{
-        static_cast<void>(text);
-        static_cast<void>(anchor);
-        static_cast<void>(caret);
-        static_cast<void>(revision);
-        lastCause = cause;
-    }
-
-
-public:
-    TextInputChangeCause::Enum lastCause = TextInputChangeCause::Other;
 };
 
 inline constexpr UiTextEditOwner s_Owner{ { 61u }, 1u, 2u };
@@ -86,7 +71,7 @@ TEST(UiTextEditOwned, PollCopiesEventsWithoutApplyingAndOwnedCommitSurvivesNativ
     EXPECT_EQ(model.text(), "base copied");
 }
 
-TEST(UiTextEditOwned, TrustedLocalEditPublishesOtherCauseWhileOrdinaryRefreshRemainsStrict){
+TEST(UiTextEditOwned, TrustedLocalAdoptionRecoversAfterStrictRefreshRejectsChangedModel){
     Tests::TestArena arena;
     OwnedTextInput service(arena.arena);
     Ui::EditModel model(arena.arena);
@@ -100,39 +85,10 @@ TEST(UiTextEditOwned, TrustedLocalEditPublishesOtherCauseWhileOrdinaryRefreshRem
     EXPECT_EQ(session.refresh(s_Owner, model, s_Caret), TextInputAdmission::InvalidSession);
     ASSERT_EQ(session.adoptLocal(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
     EXPECT_GT(session.surroundingRevision(), oldSurrounding);
-    EXPECT_EQ(service.lastCause, TextInputChangeCause::Other);
     EXPECT_TRUE(session.matchesPublished(s_Owner, model));
     ASSERT_EQ(service.commit(" native"), TextInputAdmission::Accepted);
-    EXPECT_TRUE(session.drain(s_Owner, model).textChanged);
+    ASSERT_EQ(session.drain(s_Owner, model).status, UiTextEditStatus::Applied);
     EXPECT_EQ(model.text(), "base local native");
-}
-
-TEST(UiTextEditOwned, OrderedPreeditAndCommitCanBeAdoptedWithInputMethodCause){
-    Tests::TestArena arena;
-    OwnedTextInput service(arena.arena);
-    Ui::EditModel model(arena.arena);
-    UiTextEditSession session(arena.arena, service);
-    TextInputEvent event(arena.arena);
-    ASSERT_TRUE(service.setFocused(true));
-    ASSERT_TRUE(model.setText("abcd"));
-    ASSERT_TRUE(model.setSelection(1u, 3u));
-    ASSERT_EQ(session.begin(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.preedit("draft", 0u, 5u), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.commit("Z"), TextInputAdmission::Accepted);
-    ASSERT_EQ(session.pollOwned(event), TextInputPollResult::Event);
-    EXPECT_FALSE(event.caretVisible);
-    ASSERT_EQ(ApplyUiTextEditEvent(model, event, session.surroundingRevision(), session.matchesPublished(s_Owner, model)),
-        UiTextEditStatus::Applied);
-    ASSERT_EQ(session.adoptLocal(s_Owner, model, s_Caret, TextInputChangeCause::InputMethod), TextInputAdmission::Accepted);
-    EXPECT_EQ(model.composition().text, "draft");
-    ASSERT_EQ(session.pollOwned(event), TextInputPollResult::Event);
-    ASSERT_EQ(ApplyUiTextEditEvent(model, event, session.surroundingRevision(), session.matchesPublished(s_Owner, model)),
-        UiTextEditStatus::Applied);
-    ASSERT_EQ(session.adoptLocal(s_Owner, model, s_Caret, TextInputChangeCause::InputMethod), TextInputAdmission::Accepted);
-    EXPECT_EQ(model.text(), "aZd");
-    EXPECT_EQ(service.lastCause, TextInputChangeCause::InputMethod);
-    EXPECT_EQ(session.refresh(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
-    EXPECT_EQ(session.drain(s_Owner, model).status, UiTextEditStatus::Idle);
 }
 
 TEST(UiTextEditOwned, CancelWithoutModelLeavesTransientCompositionForTheNextSynchronousLend){

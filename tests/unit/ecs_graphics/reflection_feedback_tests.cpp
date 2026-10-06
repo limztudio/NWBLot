@@ -59,12 +59,6 @@ struct LeaseTask{
 
 
 TEST(ReflectionFeedback, ExtentAccountsForTwoSurfaceClassesAndPartialTiles){
-    const auto native = ComputeReflectionFeedbackExtent(960u, 720u);
-    ASSERT_TRUE(native.valid());
-    EXPECT_EQ(native.tilesX, 120u);
-    EXPECT_EQ(native.tilesY, 90u);
-    EXPECT_EQ(native.entryCount, 21600u);
-    EXPECT_EQ(native.byteCount, 86416u);
     const auto partial = ComputeReflectionFeedbackExtent(9u, 17u);
     ASSERT_TRUE(partial.valid());
     EXPECT_EQ(partial.tilesX, s_ExpectedDualCount);

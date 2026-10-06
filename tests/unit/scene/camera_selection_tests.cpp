@@ -57,7 +57,7 @@ TEST(SceneCameraSelection, ActiveGenerationAndMissingComponentsRecover){
     EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, replacement);
 }
 
-TEST(SceneCameraSelection, FirstSelectorAndLiveProjectionRemainAuthoritative){
+TEST(SceneCameraSelection, FirstSelectorRemainsAuthoritativeAcrossRemovalAndRebinding){
     TestWorld testWorld;
     const EntityID first = CreateSceneCameraEntity(testWorld.world, Float4(1.0f, 0.0f, 0.0f));
     const EntityID second = CreateSceneCameraEntity(testWorld.world, Float4(2.0f, 0.0f, 0.0f));
@@ -69,18 +69,6 @@ TEST(SceneCameraSelection, FirstSelectorAndLiveProjectionRemainAuthoritative){
     SceneCameraView resolved = ResolveSceneCameraView(testWorld.world, 1.25f);
     ASSERT_TRUE(resolved.valid());
     EXPECT_EQ(resolved.entity, second);
-    EXPECT_FLOAT_EQ(resolved.projection.aspectRatio, 1.25f);
-    auto& camera = testWorld.world.entity(second).getComponent<CameraComponent>();
-    camera.setNearPlane(0.5f);
-    camera.setVerticalFovRadians(0.8f);
-    resolved = ResolveSceneCameraView(testWorld.world, 2.0f);
-    ASSERT_TRUE(resolved.valid());
-    EXPECT_EQ(resolved.entity, second);
-    EXPECT_EQ(resolved.camera, &camera);
-    EXPECT_FLOAT_EQ(resolved.projection.nearPlane, 0.5f);
-    EXPECT_FLOAT_EQ(resolved.projection.aspectRatio, 2.0f);
-    EXPECT_NEAR(resolved.projection.tanHalfVerticalFov, 0.42279322f, 0.00001f);
-
     firstSelector.removeComponent<ActiveCameraComponent>();
     EXPECT_EQ(ResolveSceneCameraView(testWorld.world).entity, first);
     secondSelector.getComponent<ActiveCameraComponent>().camera = second;

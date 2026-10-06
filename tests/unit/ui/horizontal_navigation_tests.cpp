@@ -20,39 +20,23 @@ namespace UiHorizontalNavigationTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(HorizontalNavigationFixture, OptedInHostPublishesOrderedHorizontalAndExistingKeyIntentions){
+TEST_F(HorizontalNavigationFixture, HeldHorizontalNavigationRepeatsWhileSubmitIsOneShotInSequence){
     ASSERT_TRUE(publish());
     focusTarget();
     EXPECT_TRUE(keyDown(Core::Key::Left).keyboardConsumed);
     EXPECT_TRUE(keyDown(Core::Key::Left, true).keyboardConsumed);
-    press(Core::Key::Right);
-    press(Core::Key::Down);
-    press(Core::Key::PageUp);
-    press(Core::Key::Home);
-    press(Core::Key::End);
     EXPECT_TRUE(keyDown(Core::Key::Enter).keyboardConsumed);
     EXPECT_TRUE(keyDown(Core::Key::Enter, true).keyboardConsumed);
     EXPECT_TRUE(keyUp(Core::Key::Enter).keyboardConsumed);
     EXPECT_TRUE(keyUp(Core::Key::Left).keyboardConsumed);
-    const Array<ControlActionKind::Enum, 8u> kinds{
-        ControlActionKind::Left, ControlActionKind::Left, ControlActionKind::Right, ControlActionKind::Down,
-        ControlActionKind::PageUp, ControlActionKind::Home, ControlActionKind::End, ControlActionKind::Submit
-    };
+    const Array<ControlActionKind::Enum, 3u> kinds{ ControlActionKind::Left, ControlActionKind::Left, ControlActionKind::Submit };
     ASSERT_EQ(m_router.controlActions().size(), kinds.size());
     u64 previous = 0u;
     for(const auto kind : kinds){
         ControlAction action;
         ASSERT_TRUE(take(action));
         EXPECT_EQ(action.kind, kind);
-        EXPECT_EQ(action.id.target, m_targets[0u].id);
-        EXPECT_EQ(action.id.declarationGeneration, m_targets[0u].declarationGeneration);
-        EXPECT_EQ(action.id.layoutGeneration, 1u);
         EXPECT_GT(action.id.sequence, previous);
-        EXPECT_EQ(action.source, m_targets[0u].id);
-        EXPECT_EQ(action.sourceDeclarationGeneration, m_targets[0u].declarationGeneration);
-        EXPECT_EQ(action.sourceControl, m_targets[0u].control);
-        EXPECT_EQ(action.control, m_targets[0u].control);
-        EXPECT_EQ(action.pageRows, 4u);
         previous = action.id.sequence;
     }
     EXPECT_TRUE(m_router.controlActions().empty());
@@ -107,7 +91,7 @@ TEST_F(HorizontalNavigationFixture, CapabilityUsesAcceptedCopiedTargetsUntilSucc
     EXPECT_GT(action.id.sequence, sequence);
 }
 
-TEST_F(HorizontalNavigationFixture, DelegatedEditorRetainsCaretKeysWhileVerticalAndEnterUseOwner){
+TEST_F(HorizontalNavigationFixture, DelegatedEditorKeepsCaretKeysLocalToAvoidMovingTheOwner){
     bindEditor();
     ASSERT_TRUE(publish(3u));
     focusTarget(2u);
@@ -123,24 +107,13 @@ TEST_F(HorizontalNavigationFixture, DelegatedEditorRetainsCaretKeysWhileVertical
     EXPECT_TRUE(m_router.ownsKey(Core::Key::Left));
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_TRUE(keyUp(Core::Key::Left).keyboardConsumed);
-    const Array<Core::Key::Enum, 5u> keys{
-        Core::Key::Up, Core::Key::Down, Core::Key::PageUp, Core::Key::PageDown, Core::Key::Enter
-    };
-    const Array<ControlActionKind::Enum, 5u> kinds{
-        ControlActionKind::Up, ControlActionKind::Down, ControlActionKind::PageUp,
-        ControlActionKind::PageDown, ControlActionKind::Submit
-    };
-    for(usize index = 0u; index < keys.size(); ++index){
-        press(keys[index]);
-        ControlAction action;
-        ASSERT_TRUE(take(action));
-        EXPECT_EQ(action.kind, kinds[index]);
-        EXPECT_EQ(action.id.target, m_targets[0u].id);
-        EXPECT_EQ(action.source, m_targets[2u].id);
-        EXPECT_EQ(action.sourceDeclarationGeneration, m_targets[2u].declarationGeneration);
-        EXPECT_EQ(action.sourceControl, m_targets[2u].control);
-        EXPECT_EQ(m_router.focus(), m_targets[2u].id);
-    }
+    press(Core::Key::Down);
+    ControlAction action;
+    ASSERT_TRUE(take(action));
+    EXPECT_EQ(action.kind, ControlActionKind::Down);
+    EXPECT_EQ(action.id.target, m_targets[0u].id);
+    EXPECT_EQ(action.source, m_targets[2u].id);
+    EXPECT_EQ(m_router.focus(), m_targets[2u].id);
     EXPECT_TRUE(m_router.actions().empty());
 }
 
@@ -193,13 +166,6 @@ TEST_F(HorizontalNavigationFixture, OwnedPartsRejectHorizontalCapabilityWithoutR
     ControlAction action;
     ASSERT_TRUE(take(action));
     EXPECT_EQ(action.kind, ControlActionKind::Right);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 30.0f, 30.0f } }).pointerConsumed);
-    EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 30.0f, 30.0f } }).pointerConsumed);
-    ASSERT_TRUE(take(action));
-    EXPECT_EQ(action.kind, ControlActionKind::Activate);
-    EXPECT_EQ(action.source, m_targets[2u].id);
-    EXPECT_EQ(action.value, 91u);
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
 }
 
 

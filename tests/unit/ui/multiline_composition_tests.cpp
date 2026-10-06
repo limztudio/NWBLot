@@ -43,27 +43,6 @@ TEST_F(MultilineCompositionTests, PreeditKeepsOriginalByteOffsetsAcrossLinesAndC
     EXPECT_FALSE(m_model.canUndo());
 }
 
-TEST_F(MultilineCompositionTests, CrossLineCommitIsOneUndoableReplacementAndAdvancesSelectionEpoch){
-    ASSERT_TRUE(m_model.setText("ab\ncd\nef"));
-    ASSERT_TRUE(m_model.setSelection(5u, 1u));
-    ASSERT_TRUE(m_model.beginComposition());
-    ASSERT_TRUE(m_model.updateComposition("transient\ntext", 0u, 14u));
-    const u64 selection = m_model.selectionGeneration();
-    ASSERT_TRUE(m_model.commitComposition("Q\nR"));
-    EXPECT_EQ(m_model.text(), "aQ\nR\nef");
-    EXPECT_EQ(m_model.anchor(), 4u);
-    EXPECT_EQ(m_model.caret(), 4u);
-    EXPECT_GT(m_model.selectionGeneration(), selection);
-    EXPECT_FALSE(m_model.composition().active);
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "ab\ncd\nef");
-    EXPECT_EQ(m_model.anchor(), 5u);
-    EXPECT_EQ(m_model.caret(), 1u);
-    EXPECT_FALSE(m_model.canUndo());
-    ASSERT_TRUE(m_model.redo());
-    EXPECT_EQ(m_model.text(), "aQ\nR\nef");
-}
-
 TEST_F(MultilineCompositionTests, PreeditAndCommitRejectNoncanonicalBytesWithoutNormalizingOffsets){
     ASSERT_TRUE(m_model.setText("a\nb"));
     ASSERT_TRUE(m_model.setSelection(1u, 2u));

@@ -52,27 +52,18 @@ namespace __hidden_ui_gpu_texture_image_validation_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(GpuTextureImageValidationFixture, GeneratedMixedMaterialsAndSameIdentityVersionsPassEveryValidator){
+TEST_F(GpuTextureImageValidationFixture, SameIdentityDistinctGenerationsRemainValidImageBindings){
     const SharedImageSource first = makeImage("tests/ui/versioned_gpu_image", 37u);
     const SharedImageSource second = makeImage("tests/ui/versioned_gpu_image", 73u);
-    const SharedGlyphPage glyph = makeGlyph();
-    const SharedSdfAtlasPage sdf = makeSdf();
-    ASSERT_TRUE(first && second && glyph && sdf);
+    ASSERT_TRUE(first && second);
     ASSERT_EQ(first->identity(), second->identity());
     ASSERT_NE(first->generation(), second->generation());
     const Rect rectangle{ 2.0f, 3.0f, 16.0f, 8.0f };
-    const Rect uv{ 0.0f, 0.0f, 1.0f, 1.0f };
-    m_builder.fillRect(rectangle);
-    ASSERT_TRUE(m_builder.drawRegion(Name("sprite"), rectangle));
-    ASSERT_TRUE(m_builder.drawGlyph(glyph, rectangle, uv));
-    ASSERT_TRUE(m_builder.drawSdfGlyph(sdf, 3u, rectangle, uv));
     ASSERT_TRUE(m_builder.drawImage(first, rectangle));
     ASSERT_TRUE(m_builder.drawImage(second, rectangle));
     const DrawSnapshot snapshot = m_builder.freeze();
-    ASSERT_EQ(snapshot.glyphPages().size(), 1u);
-    ASSERT_EQ(snapshot.sdfPages().size(), 1u);
     ASSERT_EQ(snapshot.textureImages().size(), 2u);
-    ASSERT_EQ(snapshot.commands().size(), 6u);
+    ASSERT_EQ(snapshot.commands().size(), 2u);
     EXPECT_TRUE(GpuRendererState::ValidateGlyphPages(snapshot));
     EXPECT_TRUE(GpuRendererState::ValidateSdfPages(snapshot));
     EXPECT_TRUE(GpuRendererState::ValidateTextureImages(snapshot));

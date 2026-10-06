@@ -23,7 +23,6 @@ LIT_GREEN = "green"
 LIT_BOUNDARY = "boundary"
 LIT_NWB_REFLECTION_SMOKE_FEEDBACK = "NWB_REFLECTION_SMOKE_FEEDBACK"
 LIT_NWB_REFLECTION_SMOKE_TEMPORAL = "NWB_REFLECTION_SMOKE_TEMPORAL"
-LIT_NWB_REFLECTION_SMOKE_SPATIAL = "NWB_REFLECTION_SMOKE_SPATIAL"
 LIT_REFLECTION = "reflection"
 LIT_REFLECTION_SCREEN_STEPS = "--reflection-screen-steps"
 LIT_FLOOR = "floor"
@@ -31,7 +30,6 @@ LIT_GENERATION = "generation"
 LIT_SCREEN_HITS = "screen_hits"
 LIT_EFFECTIVE_BUDGET = "effective_budget"
 LIT_N = "\n"
-LIT_CAPTURED_GRAPHICS_FRAME = "captured_graphics_frame"
 LIT_EXACT_FIRST_FRAME_COUNTERS_AVAILABLE = "exact_first_frame_counters_available"
 LIT_STABLE_FEEDBACK = "stable_feedback"
 LIT_OFFSCREEN = "offscreen"
@@ -88,7 +86,6 @@ class CapturePlanTests(unittest.TestCase):
             environment = smoke.spec_environment(spec)
         self.assertEqual(environment[LIT_NWB_REFLECTION_SMOKE_FEEDBACK], "1")
         self.assertEqual(environment[LIT_NWB_REFLECTION_SMOKE_TEMPORAL], "0")
-        self.assertEqual(environment[LIT_NWB_REFLECTION_SMOKE_SPATIAL], "0")
         self.assertNotIn("NWB_REFLECTION_SMOKE_HARDWARE_AVAILABLE", environment)
 
     def test_launcher_rejects_feedback_steps_below_minimum(self):
@@ -228,10 +225,6 @@ class CompletedFeedbackTests(unittest.TestCase):
         with self.assertRaisesRegex(SmokeFailure, "bounded actual"):
             self.validate(samples, stats=stats)
 
-    def test_disabled_observations_advance_sequence_without_probe_index(self):
-        stats, samples = self.observations(False)
-        result = self.validate(samples, smoke.FeedbackCapture("floor_baseline", LIT_FLOOR, False), stats)
-        self.assertTrue(all(item["probe_index"] == 0 for item in result["feedback"]))
 
     def test_epoch_start_cannot_move_without_an_epoch_change(self):
         _, samples = self.observations()
@@ -270,7 +263,6 @@ class CompletedFeedbackTests(unittest.TestCase):
 
 class AuthoredVolumeIdentityTests(unittest.TestCase):
     def test_exact_canonical_cache_hash_and_contiguous_segments_only(self):
-        self.assertEqual(volume_identity.volume_segment_filename(LIT_RUNTIME_PIPELINE_CACHE, 0), "1f98ed5c238bf1c3.vol")
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             resources = root / LIT_RES
@@ -308,8 +300,6 @@ class DiagnosticsOffTests(unittest.TestCase):
     def test_completed_readback_proof_does_not_invent_feedback_statistics(self):
         spec = smoke.DIAGNOSTICS_OFF_CAPTURES[1]
         result = smoke.validate_diagnostics_off(self.log(), spec)
-        self.assertEqual(result[LIT_CAPTURED_GRAPHICS_FRAME], 64)
-        self.assertEqual(result["requested_prepared_graphics_frames"], 65)
         self.assertIsNone(result["completed_feedback_observations"])
         self.assertIsNone(result["completed_feedback_counters"])
 

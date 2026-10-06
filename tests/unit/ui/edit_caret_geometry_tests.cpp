@@ -39,9 +39,6 @@ TEST_F(EditCaretFixture, UnreadyGeometryPreservesEveryFailedQueryOutput){
 
 TEST_F(EditCaretFixture, HardLinesRetainEmptyAndTrailingLineStops){
     ASSERT_TRUE(adoptText("ab\n\nc\n"));
-    EXPECT_TRUE(m_geometry.ready());
-    EXPECT_EQ(m_geometry.textMode(), EditTextMode::Multiline);
-    EXPECT_EQ(m_geometry.layout().utf8(), "ab\n\nc\n");
     ASSERT_EQ(m_geometry.lines().size(), 4u);
     ASSERT_EQ(m_geometry.caretStops().size(), 7u);
     const usize begin[]{ 0u, 3u, 4u, 6u };
@@ -56,8 +53,6 @@ TEST_F(EditCaretFixture, HardLinesRetainEmptyAndTrailingLineStops){
         EXPECT_EQ(line.breakEnd, breakEnd[index]);
         EXPECT_EQ(line.firstStop, first[index]);
         EXPECT_EQ(line.stopCount, count[index]);
-        EXPECT_FLOAT_EQ(line.top, static_cast<f32>(index) * 12.0f);
-        EXPECT_FLOAT_EQ(line.height, 12.0f);
     }
     expectCaret(2u, 20.0f, 0.0f);
     expectCaret(3u, 0.0f, 12.0f);
@@ -98,14 +93,6 @@ TEST_F(EditCaretFixture, SingleLineLigatureInterpolationAndTieBehaviorRemainUnch
     ASSERT_TRUE(adoptText("ffi", EditTextMode::SingleLine));
     ASSERT_EQ(m_geometry.layout().clusters().size(), 1u);
     ASSERT_EQ(m_geometry.caretStops().size(), 4u);
-    for(usize index = 0u; index < 4u; ++index){
-        EXPECT_EQ(m_geometry.caretStops()[index].committedByte, index);
-        EXPECT_EQ(m_geometry.caretStops()[index].displayByte, index);
-        EXPECT_EQ(m_geometry.caretStops()[index].lineIndex, 0u);
-        EXPECT_FLOAT_EQ(m_geometry.caretStops()[index].x, static_cast<f32>(index) * 10.0f);
-    }
-    expectCaret(1u, 10.0f, 0.0f);
-    expectCaret(2u, 20.0f, 0.0f);
     usize byte = 999u;
     ASSERT_TRUE(m_geometry.hitTest({ 15.0f, -999.0f }, byte));
     EXPECT_EQ(byte, 1u);

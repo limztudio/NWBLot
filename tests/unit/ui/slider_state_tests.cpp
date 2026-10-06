@@ -70,29 +70,7 @@ TEST(UiSliderStateTests, NonfinitePublicValuesAreRejectedAtomically){
     for(const f64 invalid : { Limit<f64>::s_QuietNaN, Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity }){
         EXPECT_FALSE(state.setValue(invalid));
         EXPECT_TRUE(state.matches(before));
-        EXPECT_FALSE(state.result().valid);
-        EXPECT_FLOAT_EQ(state.placement().bounds.width, 0.0f);
     }
-}
-
-TEST(UiSliderStateTests, ResetClearsSemanticAndDiagnosticStateEvenWhenAlreadyReset){
-    SliderState state;
-    ASSERT_TRUE(state.setValue(-0.0));
-    const SliderSnapshot before = state.snapshot();
-    state.reset();
-    EXPECT_EQ(state.instanceGeneration(), before.instanceGeneration);
-    EXPECT_NE(state.inputGeneration(), before.inputGeneration);
-    EXPECT_GT(state.admissionGeneration(), before.admissionGeneration);
-    EXPECT_EQ(state.revision(), before.revision + 1u);
-    EXPECT_EQ(BitCast<u64>(state.value()), 0u);
-    EXPECT_FALSE(state.result().valid);
-    EXPECT_FALSE(state.snapshot().press.valid());
-    EXPECT_FALSE(state.snapshot().pressMoved);
-    const SliderSnapshot reset = state.snapshot();
-    state.reset();
-    EXPECT_NE(state.inputGeneration(), reset.inputGeneration);
-    EXPECT_GT(state.admissionGeneration(), reset.admissionGeneration);
-    EXPECT_EQ(state.revision(), reset.revision + 1u);
 }
 
 

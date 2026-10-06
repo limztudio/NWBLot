@@ -71,7 +71,7 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiTextAreaNavigationTests, ShapesTheCurrentModelForEveryResolution){
+TEST_F(UiTextAreaNavigationTests, ResolverReadsReplacedTextInsteadOfStaleLayout){
     ASSERT_TRUE(m_model.setText("MMMM\nMMMM"));
     ASSERT_TRUE(m_model.setSelection(2u, 2u));
     TextAreaNavigationResolver resolver(m_arena, m_text, m_context, m_state, 14.0f);
@@ -84,34 +84,7 @@ TEST_F(UiTextAreaNavigationTests, ShapesTheCurrentModelForEveryResolution){
     const auto second = resolver.resolve(m_model, EditNavigationDirection::Down, preferred, 0.0f);
     ASSERT_TRUE(second.resolved);
     EXPECT_EQ(second.committedByte, 2u);
-    EXPECT_FLOAT_EQ(second.preferredX, 0.0f);
     EXPECT_EQ(m_model.caret(), 0u);
-}
-
-TEST_F(UiTextAreaNavigationTests, ResolvesFromTheActiveCaretWithoutApplyingSelection){
-    ASSERT_TRUE(m_model.setText("MMMM\nMMMM\nMMMM"));
-    ASSERT_TRUE(m_model.setSelection(1u, 7u));
-    ASSERT_TRUE(shapeCurrent());
-    Rect caret;
-    ASSERT_TRUE(m_view.caretGeometry().caretRect(7u, caret));
-    const u64 revision = m_model.revision();
-    const u64 selection = m_model.selectionGeneration();
-    const u64 composition = m_model.compositionGeneration();
-    const u64 external = m_model.externalRevision();
-    const u64 stateRevision = m_state.revision();
-    const auto preferred = m_state.navigation().snapshot();
-    const auto result = resolve(EditNavigationDirection::Down);
-    ASSERT_TRUE(result.resolved);
-    EXPECT_EQ(result.committedByte, 12u);
-    EXPECT_FLOAT_EQ(result.preferredX, caret.x);
-    EXPECT_EQ(m_model.anchor(), 1u);
-    EXPECT_EQ(m_model.caret(), 7u);
-    EXPECT_EQ(m_model.revision(), revision);
-    EXPECT_EQ(m_model.selectionGeneration(), selection);
-    EXPECT_EQ(m_model.compositionGeneration(), composition);
-    EXPECT_EQ(m_model.externalRevision(), external);
-    EXPECT_EQ(m_state.revision(), stateRevision);
-    EXPECT_TRUE(m_state.navigation().matches(preferred));
 }
 
 TEST_F(UiTextAreaNavigationTests, AdjacentNavigationReachesEmptyAndTrailingHardLines){

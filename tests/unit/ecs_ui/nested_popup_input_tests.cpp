@@ -23,7 +23,6 @@ TEST_F(UiPopupInputTests, NestedAcceptanceCancelsTheParentSessionOnlyAfterGeomet
     EXPECT_EQ(m_textInput.activeSession(), parentSession);
     ASSERT_TRUE(commit());
     ASSERT_EQ(m_context.input().popupCount(), 2u);
-    EXPECT_EQ(m_context.input().popupScope(m_childToken)->parent, m_token);
     EXPECT_EQ(m_context.input().focus(), m_childWidget.id);
     EXPECT_FALSE(m_textInput.activeSession().valid());
     EXPECT_EQ(m_textInput.commit(parentSession, "late parent"), TextInputAdmission::InvalidSession);

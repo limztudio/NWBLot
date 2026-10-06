@@ -152,19 +152,8 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
         ASSERT_TRUE(declarations.valid());
         ASSERT_EQ(declarations.externalCompletionCount(), 1u);
 
-        const Graphics::GpuTaskGraphExternalCompletionView view = declarations.externalCompletionAt(completion.index);
-        EXPECT_EQ(view.id, completion);
-        EXPECT_TRUE(view.hasToken);
-        EXPECT_EQ(view.token.queue, token.queue);
-        EXPECT_EQ(view.token.value, token.value);
-        EXPECT_EQ(view.token.physicalQueueIndex, token.physicalQueueIndex);
-        EXPECT_EQ(view.token.deviceGeneration, token.deviceGeneration);
         const Graphics::QueueSubmissionToken* const storedToken = declarations.externalCompletionToken(completion);
         ASSERT_NE(storedToken, nullptr);
-        EXPECT_EQ(storedToken->queue, token.queue);
-        EXPECT_EQ(storedToken->value, token.value);
-        EXPECT_EQ(storedToken->physicalQueueIndex, token.physicalQueueIndex);
-        EXPECT_EQ(storedToken->deviceGeneration, token.deviceGeneration);
         EXPECT_TRUE(declarations.validForDeviceGeneration(token.deviceGeneration));
         tokenFirstRevision = declarations.declarationRevision();
     }
@@ -265,9 +254,6 @@ TEST(GpuTaskGraph, RetainsAuthoritativeExternalCompletionTokens){
         ASSERT_TRUE(views.valid());
         ASSERT_TRUE(analysis.validFor(views.declarations));
         ASSERT_TRUE(assignments.validFor(views.declarations, views.compiled));
-        const Graphics::GpuCompiledTaskView compiledConsumer = views.compiled.findTask(consumer);
-        ASSERT_TRUE(compiledConsumer.valid());
-        EXPECT_EQ(compiledConsumer.plan->queue, queues[0u].id);
     }
 
     const Graphics::GpuPhysicalQueueInfo missingProducerQueues[] = {

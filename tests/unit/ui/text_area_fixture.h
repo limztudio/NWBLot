@@ -47,10 +47,6 @@ struct AreaPublication{
     AString<Core::Alloc::GlobalArena> text;
     EditBoxPlacement placement;
     PopupToken popup;
-    EditBoxRange selection;
-    EditBoxRange preedit;
-    WidgetId widget;
-    EditTextMode::Enum mode = EditTextMode::SingleLine;
 
     explicit AreaPublication(Core::Alloc::GlobalArena& arena) : text(arena){}
 };
@@ -60,7 +56,6 @@ struct AreaResolution{
     EditNavigationSnapshot preferred;
     EditNavigationResult result;
     usize caret = 0u;
-    EditNavigationDirection::Enum direction = EditNavigationDirection::Up;
 
     explicit AreaResolution(Core::Alloc::GlobalArena& arena) : text(arena){}
 };
@@ -128,7 +123,6 @@ public:
         IEditNavigationResolver& resolver, IEditActionSink& sink)override{
         ++loans;
         lastPopup = popup;
-        lastOptions = options;
         EditBoxResult result;
         result.valid = true;
         result.focused = options.enabled && focused;
@@ -160,7 +154,6 @@ public:
                     AreaResolution& call = resolutions.back();
                     call.text.assign(model.text().data(), model.text().size());
                     call.caret = model.caret();
-                    call.direction = direction;
                     call.preferred = navigation.snapshot();
                     call.result = resolver.resolve(model, direction, call.preferred, viewportHeight);
                     const usize targetAnchor = event.intent.extend ? model.anchor() : call.result.committedByte;
@@ -203,10 +196,6 @@ public:
         record.text.assign(view.displayText().data(), view.displayText().size());
         record.placement = placement;
         record.popup = m_context.popupToken();
-        record.selection = view.selectionRange();
-        record.preedit = view.preeditRange();
-        record.widget = widget.id;
-        record.mode = view.textMode();
         viewportHeight = placement.content.height;
         if(publishHook && (!publishHookWidget.valid() || publishHookWidget == widget.id)){
             Function<void()> hook = Move(publishHook);
@@ -246,7 +235,6 @@ public:
     WidgetId loanHookWidget;
     WidgetId publishHookWidget;
     PopupToken lastPopup;
-    EditBoxOptions lastOptions;
     f32 viewportHeight = 80.0f;
     f32 seededColumn = 0.0f;
     usize loans = 0u;

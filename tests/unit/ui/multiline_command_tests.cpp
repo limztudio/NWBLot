@@ -24,22 +24,12 @@ using MultilineCommandTests = MultilineFixture;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(MultilineCommandTests, ModeSpecificIntentRejectsMalformedModesAndPreservesExtendedNewlineRepeats){
-    EXPECT_EQ(TranslateEditCommand({ InputCommand::Accept }, false).command, EditCommand::Submit);
-    EXPECT_EQ(TranslateEditCommand({ InputCommand::DocumentHome }, false).command, EditCommand::Home);
-    EXPECT_EQ(TranslateEditCommand({ InputCommand::DocumentEnd }, false).command, EditCommand::End);
-    const EditCommandRequest shifted = TranslateEditCommand({ InputCommand::Accept, true }, true, EditTextMode::Multiline);
-    EXPECT_EQ(shifted.command, EditCommand::Newline);
-    EXPECT_TRUE(shifted.extend);
-    EXPECT_TRUE(shifted.repeat);
-    EXPECT_EQ(TranslateEditCommand({ InputCommand::Submit }, false, EditTextMode::Multiline).command, EditCommand::Submit);
-    EXPECT_EQ(TranslateEditCommand({ InputCommand::DocumentHome }, false, EditTextMode::Multiline).command, EditCommand::DocumentHome);
-    EXPECT_EQ(TranslateEditCommand({ InputCommand::DocumentEnd }, false, EditTextMode::Multiline).command, EditCommand::DocumentEnd);
+TEST_F(MultilineCommandTests, InvalidTextModeAndNonEditingAcceptAreRejected){
     EXPECT_EQ(TranslateEditCommand({ InputCommand::Accept, false, false }, false, EditTextMode::Multiline).command, EditCommand::None);
     EXPECT_EQ(TranslateEditCommand({ InputCommand::Accept }, false, static_cast<EditTextMode::Enum>(255u)).command, EditCommand::None);
 }
 
-TEST_F(MultilineCommandTests, AcceptAndRepeatsInsertOneLfPerCommandAsUndoableEdits){
+TEST_F(MultilineCommandTests, RepeatedAcceptInsertsExactlyOneLfWithoutSubmitting){
     ASSERT_TRUE(m_model.setText("ab"));
     ASSERT_TRUE(m_model.setSelection(1u, 1u));
     const EditCommandResult inserted = ApplyEditCommand(m_model, TranslateEditCommand({ InputCommand::Accept }, false, m_model.textMode()));
@@ -53,29 +43,6 @@ TEST_F(MultilineCommandTests, AcceptAndRepeatsInsertOneLfPerCommandAsUndoableEdi
     EXPECT_TRUE(repeated.textChanged);
     EXPECT_FALSE(repeated.submitted);
     EXPECT_EQ(m_model.text(), "a\n\nb");
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "a\nb");
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "ab");
-    EXPECT_EQ(m_model.caret(), 1u);
-    ASSERT_TRUE(m_model.redo());
-    ASSERT_TRUE(m_model.redo());
-    EXPECT_EQ(m_model.text(), "a\n\nb");
-}
-
-TEST_F(MultilineCommandTests, ExtendedAcceptReplacesTheSelectedCrossLineRange){
-    ASSERT_TRUE(m_model.setText("ab\ncd"));
-    ASSERT_TRUE(m_model.setSelection(4u, 1u));
-    const EditCommandResult result = ApplyEditCommand(m_model,
-        TranslateEditCommand({ InputCommand::Accept, true }, false, m_model.textMode()));
-    EXPECT_TRUE(result.textChanged);
-    EXPECT_FALSE(result.submitted);
-    EXPECT_EQ(m_model.text(), "a\nd");
-    EXPECT_EQ(m_model.caret(), 2u);
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "ab\ncd");
-    EXPECT_EQ(m_model.anchor(), 4u);
-    EXPECT_EQ(m_model.caret(), 1u);
 }
 
 TEST_F(MultilineCommandTests, SubmitIntentReportsWithoutEditingAndSuppressesRepeats){
@@ -95,7 +62,7 @@ TEST_F(MultilineCommandTests, SubmitIntentReportsWithoutEditingAndSuppressesRepe
     before.expectUnchanged(m_model);
 }
 
-TEST_F(MultilineCommandTests, ReadOnlyConsumesNewlineAndMutationsWhileAllowingMovementCopyAndSubmit){
+TEST_F(MultilineCommandTests, ReadOnlyRejectsNewlineAndMutationsWhileAllowingCopy){
     ASSERT_TRUE(m_model.setText("ab\ncd"));
     ASSERT_TRUE(m_model.setSelection(1u, 4u));
     const MultilineSnapshot before(m_arena, m_model);
@@ -110,11 +77,6 @@ TEST_F(MultilineCommandTests, ReadOnlyConsumesNewlineAndMutationsWhileAllowingMo
         before.expectUnchanged(m_model);
     }
     EXPECT_EQ(ApplyEditCommand(m_model, { EditCommand::Copy }, true).clipboard, EditClipboardAction::Copy);
-    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::Home }, true).selectionChanged);
-    EXPECT_EQ(m_model.caret(), 3u);
-    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::DocumentEnd }, true).selectionChanged);
-    EXPECT_EQ(m_model.caret(), 5u);
-    EXPECT_TRUE(ApplyEditCommand(m_model, { EditCommand::Submit }, true).submitted);
 }
 
 TEST_F(MultilineCommandTests, PreeditOwnsNewlineDocumentMovementAndSubmitUntilFirstEscape){

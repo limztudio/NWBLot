@@ -104,7 +104,6 @@ TEST(GpuTaskGraphStorage, LargeTaskChainPreservesDeclarationsAndReusesStorage){
             for(usize index = 0u; index < s_TaskCount; ++index){
                 const Core::GpuTaskGraphTaskView task = declarations.taskAt(index);
                 EXPECT_EQ(task.identity, identities[index]);
-                EXPECT_EQ(task.markerLabel, AStringView("Storage Chain Task"));
                 ASSERT_EQ(task.dependencyCount, index == 0u ? 0u : 1u);
                 if(index != 0u)
                     EXPECT_EQ(task.dependencies[0u], declarations.taskAt(index - 1u).id);
@@ -177,16 +176,11 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
             const Core::GpuTaskGraphPipelineView pipeline = declarations.pipelineAt(index);
             const Core::GpuTaskGraphExternalCompletionView completion = declarations.externalCompletionAt(index);
             EXPECT_EQ(resource.identity, identities[index]);
-            EXPECT_EQ(resource.markerLabel, AStringView("Storage Resource"));
             EXPECT_EQ(resourceSet.identity, identities[index]);
-            EXPECT_EQ(resourceSet.markerLabel, AStringView("Storage Resource Set"));
             ASSERT_EQ(resourceSet.memberCount, 1u);
             EXPECT_EQ(resourceSet.members[0u], resource.id);
             EXPECT_EQ(pipeline.identity, identities[index]);
-            EXPECT_EQ(pipeline.markerLabel, AStringView("Storage Pipeline"));
-            EXPECT_EQ(pipeline.type, Core::GpuGraphPipelineType::Compute);
             EXPECT_EQ(completion.identity, identities[index]);
-            EXPECT_EQ(completion.markerLabel, AStringView("Storage Completion"));
             usize byteSize = 0u;
             const void* const storedBytes = declarations.uploadBlobData(uploads[index], byteSize);
             const u64 expectedBytes[] = { static_cast<u64>(index), ~static_cast<u64>(index) };

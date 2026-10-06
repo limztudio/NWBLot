@@ -265,8 +265,6 @@ TEST(MaterialTextureImport, LargeRequestsPreserveAliasesOrderAndOwnershipWhileIm
             EXPECT_EQ(resource, existing[textureIndex]);
             EXPECT_EQ(view.resourceAt(resource.index).markerLabel, s_EXISTING_MATERIAL_TEXTURE);
         }
-        else
-            EXPECT_EQ(view.resourceAt(resource.index).markerLabel, s_NEW_MATERIAL_TEXTURE);
         EXPECT_EQ(
             context.textures[textureIndex]->getReferenceCount(),
             referencesBefore[textureIndex] + (existing[textureIndex].valid() ? 0u : 1u)

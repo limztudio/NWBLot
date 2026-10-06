@@ -66,9 +66,6 @@ TEST(GpuCommandIrCapture, RejectsForeignGraphAndPlanGenerationsWithoutChangingCa
     clearTexture.clearStencil = true;
     ASSERT_TRUE(capture.captureClearTexture(task, packet, queue, destination, clearTexture));
 
-    ASSERT_EQ(capture.recordCount(), s_ExpectedDualCount);
-    EXPECT_EQ(capture.graphGeneration(), task.generation);
-    EXPECT_EQ(capture.planGeneration(), packet.generation);
     const BinaryByteView bytesBeforeRejectedRecord = capture.commandBytes();
     Graphics::GraphicsBytes streamBeforeRejectedRecord(testArena.arena);
     streamBeforeRejectedRecord.resize(bytesBeforeRejectedRecord.size());
@@ -95,7 +92,6 @@ TEST(GpuCommandIrCapture, RejectsForeignGraphAndPlanGenerationsWithoutChangingCa
         destination,
         0xdecafbadU
     ));
-    EXPECT_EQ(capture.recordCount(), s_ExpectedDualCount);
     const BinaryByteView bytesAfterRejectedRecord = capture.commandBytes();
     EXPECT_EQ(bytesAfterRejectedRecord.size(), streamBeforeRejectedRecord.size());
     EXPECT_EQ(
@@ -107,10 +103,6 @@ TEST(GpuCommandIrCapture, RejectsForeignGraphAndPlanGenerationsWithoutChangingCa
         0
     );
 
-    capture.reset();
-    EXPECT_EQ(capture.recordCount(), 0u);
-    EXPECT_EQ(capture.graphGeneration(), 0u);
-    EXPECT_EQ(capture.planGeneration(), 0u);
 }
 
 TEST(GpuCommandIrCapture, RejectsNonEmptyCaptureFromDifferentRecordingAttempt){

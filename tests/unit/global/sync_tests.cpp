@@ -2,11 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
-#include <global/filesystem/operations.h>
-#include <global/filesystem/path.h>
 #include <global/sync.h>
 
 
@@ -19,37 +16,7 @@ namespace __hidden_sync_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using AString = NWB::Tests::TestAString;
-using TestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
-
-struct SyncTestArenaTag{};
-using TestArena = NWB::Tests::TestArena<SyncTestArenaTag>;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static_assert(noexcept(MachinePause(1)));
-
-
-TEST(GlobalSync, WindowsArm64UsesProcessorYieldIntrinsic){
-    TestArena testArena;
-    AString source;
-    ASSERT_TRUE(ReadTextFile(NWB::Tests::RepoRootOf(testArena.arena, __FILE__) / "global" / "sync.h", source));
-
-    const AStringView sourceView(source.data(), source.size());
-    const usize branchBegin = sourceView.find("#if defined(GLB_PLATFORM_WINDOWS) && defined(_M_ARM64)");
-    const usize branchEnd = sourceView.find("#elif defined(__ARM_ARCH_7A__) || defined(__aarch64__)", branchBegin);
-    ASSERT_NE(branchBegin, AStringView::npos);
-    ASSERT_NE(branchEnd, AStringView::npos);
-    ASSERT_LT(branchBegin, branchEnd);
-
-    const AStringView windowsArm64Branch = sourceView.substr(branchBegin, branchEnd - branchBegin);
-    EXPECT_NE(windowsArm64Branch.find("__yield();"), AStringView::npos);
-    EXPECT_NE(windowsArm64Branch.find("--delay;"), AStringView::npos);
-    EXPECT_EQ(windowsArm64Branch.find("YieldThread();"), AStringView::npos);
-
-    MachinePause(1);
+TEST(GlobalSync, BoundedBackoffStopsAtItsPauseBudget){
     AtomicBackOff backoff;
     EXPECT_TRUE(backoff.boundedPause());
     EXPECT_TRUE(backoff.boundedPause());

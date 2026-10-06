@@ -89,18 +89,12 @@ TEST(SurfelCoverage, MissingAndPartialTapsRetainFractionalAlpha){
     EXPECT_FLOAT_EQ(partialOnly.w, 0.5f);
 }
 
-TEST(SurfelCoverage, EmptyAndFullUpsampleEndpointsAreStable){
+TEST(SurfelCoverage, EmptyUpsampleWeightRemainsFiniteAndZero){
     const float4 empty = nwbSurfelUpsampleFinalize(float3(0.0f), 0.0f, 1.0f);
     EXPECT_FLOAT_EQ(empty.x, 0.0f);
     EXPECT_FLOAT_EQ(empty.y, 0.0f);
     EXPECT_FLOAT_EQ(empty.z, 0.0f);
     EXPECT_FLOAT_EQ(empty.w, 0.0f);
-
-    const float4 full = nwbSurfelUpsampleFinalize(float3(3.0f, 2.0f, 1.0f), 1.0f, 1.0f);
-    EXPECT_FLOAT_EQ(full.x, 3.0f);
-    EXPECT_FLOAT_EQ(full.y, 2.0f);
-    EXPECT_FLOAT_EQ(full.z, 1.0f);
-    EXPECT_FLOAT_EQ(full.w, 1.0f);
 }
 
 

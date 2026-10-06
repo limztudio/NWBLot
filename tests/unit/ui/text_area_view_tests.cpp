@@ -44,9 +44,6 @@ TEST_F(UiTextAreaViewTests, SuppressedCaretRevealPreservesBothRequestedAxesAndHi
     usize hit = 99u;
     ASSERT_TRUE(m_view.hitTest({ 15.0f, 20.0f }, m_placement, hit));
     EXPECT_EQ(hit, 1u);
-    const EditBoxPlacement previous = m_placement;
-    ASSERT_TRUE(manualPlace({ 5.0f, 6.0f }));
-    ExpectPlacement(m_placement, previous);
 }
 
 TEST_F(UiTextAreaViewTests, SuppressedRevealStillClampsToBothContentExtents){

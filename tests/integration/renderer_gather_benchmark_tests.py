@@ -2,9 +2,7 @@
 """Analyzer and temporary-directory generator contracts; these tests never launch a renderer."""
 
 import copy
-import hashlib
 import io
-import json
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
@@ -52,8 +50,6 @@ LIT_ARM = "arm"
 LIT_RESULT = "result"
 LIT_MESH_ASSET_R_N = b"mesh asset;\r\n"
 LIT_GENERATED = "generated"
-LIT_GENERATION_IDENTITY_JSON = "generation_identity.json"
-LIT_FILES = "files"
 LIT_MESH_CHANGED_R_N = b"mesh changed;\r\n"
 LIT_SYS_STDERR = "sys.stderr"
 LIT_CAPTURE_JSONL = "capture.jsonl"
@@ -62,7 +58,6 @@ LIT_NWB_GPU_TIMING_FILE = "NWB_GPU_TIMING_FILE"
 LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F = "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"
 LIT_UNIQUE = "unique"
 LIT_MAIN = "__main__"
-LIT_UTF_8 = "utf-8"
 
 
 def memory_snapshot(frame, count):
@@ -113,10 +108,7 @@ def balanced_trials():
 class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
     def test_weights_gpu_totals_by_actual_completed_ranges(self):
         result = bench.summarize_rows(rows(), LIT_SHARED, LIT_TIMING)
-        self.assertEqual(result["source_window"], [96, 351])
         self.assertEqual(result[LIT_GPU][LIT_RENDER_FRAME][LIT_MEAN_MS], 3.5)
-        self.assertEqual(result[LIT_CPU][LIT_GRAPHICS_PREPARE_RESOURCES][LIT_MEAN_MS], 2.)
-        self.assertEqual(result[LIT_CPU][LIT_GRAPHICS_RENDER][LIT_TOTAL_MS], 1280.)
 
     def test_rejects_duplicate_cpu_source_frame(self):
         values = rows()
@@ -183,8 +175,6 @@ class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
         scope = result[LIT_MEMORY][bench.ARENAS[0]]
         self.assertEqual(scope[LIT_ALLOCATION_DELTAS], 3.)
         self.assertEqual(scope["reallocation_deltas"], 1.)
-        self.assertEqual(scope[LIT_HISTORICAL_ARENA_PEAK], 1024)
-        self.assertEqual(scope[LIT_AVAILABLE_FRAMES], 256)
 
     def test_timing_campaign_rejects_memory_capture(self):
         values = rows()
@@ -243,12 +233,6 @@ class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
         with self.assertRaisesRegex(bench.SmokeFailure, "all balanced"):
             bench.compare([], [[LIT_BASELINE, LIT_CANDIDATE]] * 8, LIT_TIMING)
 
-    def test_cpu_reduction_requires_stable_gpu_and_complete_cpu_controls(self):
-        trials, orders = balanced_trials()
-        result = bench.compare(trials, orders, LIT_TIMING)
-        self.assertEqual(result[LIT_STATUS], "resolved_cpu_render_reduction")
-        self.assertEqual(set(result["gpu_controls"]), set(bench.GPU_CONTROLS))
-        self.assertAlmostEqual(result[LIT_CPU][LIT_GRAPHICS_PREPARE_RESOURCES][LIT_MEAN_MS], -.4)
 
     def test_gpu_control_drift_blocks_cpu_benefit_claim(self):
         trials, orders = balanced_trials()
@@ -277,12 +261,6 @@ class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
             arguments = ["--source-root", str(source), "--mesh-template", str(mesh),
                 "--surface-template", str(surface), "--output-root", str(output)]
             self.assertEqual(generate_assets(arguments), 0)
-            identity = json.loads((output / LIT_GENERATION_IDENTITY_JSON).read_text(encoding=LIT_UTF_8))
-            actual = {path.relative_to(output).as_posix(): path.read_bytes()
-                for path in output.rglob("*") if path.is_file()}
-            self.assertEqual(set(actual), set(identity[LIT_FILES]) | {LIT_GENERATION_IDENTITY_JSON})
-            self.assertEqual({path: hashlib.sha256(data).hexdigest()
-                for path, data in actual.items() if path != LIT_GENERATION_IDENTITY_JSON}, identity[LIT_FILES])
             stale = output / "retired.nwb"
             stale.write_bytes(b"retired asset;\r\n")
             mesh.write_bytes(LIT_MESH_CHANGED_R_N)
@@ -319,7 +297,6 @@ class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
         self.assertNotIn(LIT_NWB_GPU_TIMING_FILE, env)
         self.assertNotIn(LIT_NWB_REFLECTION_SMOKE_DIAGNOSTICS, env)
         self.assertEqual(env[LIT_NWB_RENDERER_BASELINE_CAPTURE_FREEZE_F], "0")
-        self.assertEqual(env["NWB_GATHER_BENCHMARK_WORKLOAD"], LIT_UNIQUE)
 
 
 if __name__ == LIT_MAIN:

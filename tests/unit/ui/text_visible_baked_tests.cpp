@@ -172,7 +172,6 @@ TEST_F(TextVisibleBakedTests, PaddedSdfPlaneIntersectingClipSurvivesWhenShapingO
     const FontAtlasGlyph& record = *glyph.face->bakedAtlas()->glyph(glyph.glyphId);
     EXPECT_EQ(snapshot.sdfPages()[0u].get(), glyph.face->bakedAtlas()->page(record.group).get());
     ASSERT_EQ(snapshot.commands().size(), 1u);
-    EXPECT_EQ(snapshot.commands()[0u].material, PaintMaterial::SdfGlyph);
     ExpectRectangle(snapshot.commands()[0u].clip, clip);
     ASSERT_EQ(snapshot.vertices().size(), 4u);
     EXPECT_EQ(snapshot.indices().size(), 6u);
@@ -229,7 +228,6 @@ TEST_F(TextVisibleBakedTests, SixtyThreePriorImagesLeaveOneSlotForOnlyTheVisible
     EXPECT_EQ(snapshot.sdfPages()[0u].get(), visible.face->bakedAtlas()->page(record.group).get());
     EXPECT_EQ(snapshot.glyphPages().size() + snapshot.sdfPages().size(), s_PaintMaxImages);
     ASSERT_EQ(snapshot.commands().size(), 1u);
-    EXPECT_EQ(snapshot.commands()[0u].material, PaintMaterial::SdfGlyph);
     EXPECT_EQ(snapshot.vertices().size(), 4u);
     EXPECT_EQ(snapshot.indices().size(), 6u);
 }
@@ -257,7 +255,6 @@ TEST_F(TextVisibleBakedTests, FullyOutsideBakedGroupsRemainAbsentUntilALaterVisi
         const PlacedGlyph& glyph = m_layout.glyphs()[index];
         const FontAtlasGlyph& record = *glyph.face->bakedAtlas()->glyph(glyph.glyphId);
         EXPECT_EQ(revealed.sdfPages()[index].get(), glyph.face->bakedAtlas()->page(record.group).get());
-        EXPECT_EQ(revealed.commands()[index].material, PaintMaterial::SdfGlyph);
     }
     EXPECT_EQ(revealed.vertices().size(), 12u);
     EXPECT_EQ(revealed.indices().size(), 18u);

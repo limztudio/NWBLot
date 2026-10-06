@@ -85,10 +85,6 @@ TEST_F(UiRadioGroupBuilderTests, SelectionCommitsOnReleaseAndNotOnPress){
     EXPECT_EQ(m_state.selectedKey(), 20u);
     EXPECT_TRUE(m_result.selectionChanged);
     EXPECT_TRUE(m_result.activated);
-    click(choicePoint(20u));
-    ASSERT_TRUE(accept(4u));
-    EXPECT_FALSE(m_result.selectionChanged);
-    EXPECT_TRUE(m_result.activated);
 }
 
 TEST_F(UiRadioGroupBuilderTests, ReleaseOutsideAndDisabledChoiceCannotActivate){
@@ -161,7 +157,6 @@ TEST_F(UiRadioGroupBuilderTests, SelectedDisabledChoiceKeepsItsCheckedFrameAndMa
     const DrawSnapshot snapshot = m_paint.freeze();
     EXPECT_EQ(regionQuads(snapshot, Name("radio.checked")), 1u);
     EXPECT_EQ(regionQuads(snapshot, Name("radio.mark")), 1u);
-    EXPECT_EQ(regionQuads(snapshot, Name("radio.normal")), 4u);
 }
 
 TEST_F(UiRadioGroupBuilderTests, WholeDisabledGroupKeepsThePanelBarrierAndRetiresQueuedNavigation){

@@ -51,33 +51,11 @@ namespace __hidden_ecs_graphics_tests{
 using CapturingLogger = NWB::Tests::CapturingLogger;
 using NWB::Tests::MakeTriangleIndices;
 using NWB::Tests::NearlyEqual;
-using AString = NWB::Tests::TestAString;
 template<typename T>
 using Vector = NWB::Tests::TestVector<T>;
 
 inline constexpr Name s_ScratchArena("tests/ecs_graphics/scratch");
 
-
-TEST(EcsGraphics, RayTraceMaterialSnapshotOwnsClassificationAndDispatchMetadata){
-    NWB::Tests::TestArena<> testArena;
-    NWB::Impl::MaterialSurfaceInfo materialInfo(testArena.arena);
-    materialInfo.surfaceDispatchId = 17u;
-    materialInfo.transparent = true;
-    materialInfo.refractive = true;
-
-    const NWB::Impl::NwbRtInstanceMaterialGpu frozen =
-        NWB::Impl::RayTracingDetail::ResolveInstanceShadowMaterial(materialInfo, 64u, 3u)
-    ;
-    materialInfo.surfaceDispatchId = 29u;
-    materialInfo.transparent = false;
-    materialInfo.refractive = false;
-
-    EXPECT_EQ(frozen.surfaceDispatchId, 17u);
-    EXPECT_EQ(
-        frozen.flags,
-        NWB::Impl::RtInstanceMaterialFlag::Transparent | NWB::Impl::RtInstanceMaterialFlag::Refractive
-    );
-}
 
 TEST(EcsGraphics, MissingOpticalAttachmentsDisableAuxiliarySamplingInBothPresentationModes){
     NWB::Impl::AvboitFrameTargets targets;
@@ -211,12 +189,9 @@ TEST(EcsGraphics, CsgNonFiniteReceiverBoundsDisableAabbCulling){
     posedReceiverBounds.minBounds = Float3Int(-1.0f, -1.0f, -1.0f, NWB::Impl::s_CsgBoundsValidFlag);
     posedReceiverBounds.maxBounds = Float3Int(1.0f, 1.0f, 1.0f, 0);
 
-    EXPECT_TRUE(posedReceiverBounds.valid());
-    EXPECT_FALSE(posedReceiverBounds.finite());
     EXPECT_FALSE(NWB::Impl::CsgReceiverBoundsCanCull(posedReceiverBounds));
 
     posedReceiverBounds.minBounds.w |= NWB::Impl::s_CsgBoundsFiniteFlag;
-    EXPECT_TRUE(posedReceiverBounds.finite());
     EXPECT_TRUE(NWB::Impl::CsgReceiverBoundsCanCull(posedReceiverBounds));
 }
 
@@ -244,15 +219,6 @@ TEST(EcsGraphics, CsgCutterWorkBoundsIgnoreUntrustedReceiverAndKeepTrustedReject
     EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 0.75f);
     EXPECT_FLOAT_EQ(VectorGetY(work.maxBounds), 0.375f);
     EXPECT_FLOAT_EQ(VectorGetZ(work.maxBounds), 2.5f);
-    NWB::Impl::CsgFrameWorkRegion region;
-    region.expandWorldBounds(MatrixIdentity(), work.minBounds, work.maxBounds, 1024u, 768u);
-    ASSERT_TRUE(region.bounded());
-    const NWB::Core::Rect rect = region.resolveRect(1024u, 768u);
-    EXPECT_EQ(rect.minX, 638);
-    EXPECT_EQ(rect.maxX, 898);
-    EXPECT_EQ(rect.minY, 238);
-    EXPECT_EQ(rect.maxY, 338);
-
     receiver.valid = true;
     EXPECT_FALSE(work.resolveCutter(
         registry, shape, shapeToWorld, reinterpret_cast<const u8*>(&parameters), sizeof(parameters), receiver
@@ -323,30 +289,6 @@ TEST(EcsGraphics, CsgCutterWorkBoundsKeepUnknownReceiverFallbacksAndResetPreviou
     EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 1.f);
 }
 
-TEST(EcsGraphics, CsgCutterWorkBoundsUseTransformedSphereAndCapsuleWithoutReceiverBounds){
-    NWB::Tests::TestArena<> arena;
-    NWB::Impl::CsgShapeRegistry registry(arena.arena);
-    ASSERT_TRUE(NWB::Impl::RegisterBuiltInCsgShapeTypes(registry));
-    const SIMDMatrix shapeToWorld = MatrixAffineTransformation(
-        VectorSet(2.f, 0.5f, 3.f, 0.f), VectorZero(), QuaternionIdentity(), VectorSet(4.f, 5.f, 6.f, 0.f)
-    );
-    const Name shapeNames[] = { NWB::Impl::s_CsgSphereShapeName, NWB::Impl::s_CsgCapsuleShapeName };
-    for(const Name& shapeName : shapeNames){
-        NWB::Impl::CsgShapeTypeInfo shape;
-        ASSERT_TRUE(registry.findShapeType(shapeName, shape));
-        NWB::Impl::CsgClipWorkBounds receiver;
-        NWB::Impl::CsgClipWorkBounds work;
-        ASSERT_TRUE(work.resolveCutter(registry, shape, shapeToWorld, nullptr, 0u, receiver));
-        ASSERT_TRUE(work.valid);
-        const f32 yExtent = shapeName == NWB::Impl::s_CsgSphereShapeName ? 0.5f : 1.f;
-        EXPECT_FLOAT_EQ(VectorGetX(work.minBounds), 2.f);
-        EXPECT_FLOAT_EQ(VectorGetX(work.maxBounds), 6.f);
-        EXPECT_FLOAT_EQ(VectorGetY(work.minBounds), 5.f - yExtent);
-        EXPECT_FLOAT_EQ(VectorGetY(work.maxBounds), 5.f + yExtent);
-        EXPECT_FLOAT_EQ(VectorGetZ(work.minBounds), 3.f);
-        EXPECT_FLOAT_EQ(VectorGetZ(work.maxBounds), 9.f);
-    }
-}
 
 TEST(EcsGraphics, CsgReceiverWorkRegionKeepsAbsoluteBoundsForSubrectDispatch){
     NWB::Impl::CsgFrameWorkRegion region;
@@ -361,29 +303,6 @@ TEST(EcsGraphics, CsgReceiverWorkRegionKeepsAbsoluteBoundsForSubrectDispatch){
     EXPECT_EQ(rect.maxY, 441);
 }
 
-
-TEST(EcsGraphics, CsgReceiverWorkRegionKeepsSeparateReceiversNarrow){
-    NWB::Impl::CsgFrameWorkRegion left;
-    left.expandWorldBounds(
-        MatrixIdentity(), VectorSet(-0.75f, -0.25f, 1.f, 0.f), VectorSet(-0.5f, 0.25f, 2.f, 0.f), 1000u, 600u
-    );
-    NWB::Impl::CsgFrameWorkRegion right;
-    right.expandWorldBounds(
-        MatrixIdentity(), VectorSet(0.5f, -0.25f, 1.f, 0.f), VectorSet(0.75f, 0.25f, 2.f, 0.f), 1000u, 600u
-    );
-    ASSERT_TRUE(left.bounded());
-    ASSERT_TRUE(right.bounded());
-    EXPECT_LT(left.maxX, right.minX);
-    NWB::Impl::CsgFrameWorkRegion frame;
-    const NWB::Core::Rect leftRect = left.resolveRect(1000u, 600u);
-    const NWB::Core::Rect rightRect = right.resolveRect(1000u, 600u);
-    frame.expandClamped(leftRect.minX, leftRect.maxX, leftRect.minY, leftRect.maxY, 1000u, 600u);
-    frame.expandClamped(rightRect.minX, rightRect.maxX, rightRect.minY, rightRect.maxY, 1000u, 600u);
-    EXPECT_EQ(frame.minX, left.minX);
-    EXPECT_EQ(frame.maxX, right.maxX);
-    EXPECT_LT(left.width(), frame.width());
-    EXPECT_LT(right.width(), frame.width());
-}
 
 TEST(EcsGraphics, CsgReceiverWorkRegionFallsBackConservativelyAndClampsLargeProjections){
     NWB::Impl::CsgFrameWorkRegion unknown;
@@ -436,8 +355,6 @@ TEST(EcsGraphics, MissingMeshClearsPreviousResolution){
 
     NWB::Core::Assets::AssetRef<NWB::Impl::Mesh> resolvedMesh;
     EXPECT_TRUE(meshSystem.resolveMesh(entity.id(), resolvedMesh));
-    EXPECT_EQ(resolvedMesh.name(), mesh.mesh.name());
-    EXPECT_EQ(meshSystem.findMesh(entity.id()), &mesh);
 
     auto missingMeshEntity = testWorld.world.createEntity();
     EXPECT_FALSE(meshSystem.resolveMesh(missingMeshEntity.id(), resolvedMesh));

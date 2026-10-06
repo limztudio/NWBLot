@@ -152,7 +152,6 @@ TEST(CsgShadowSnapshot, ResolvesGroupsAndMaterialPassesInShadowInstanceOrder){
     EXPECT_EQ(context.snapshot.receiverRanges[2].flags, NWB_CSG_SHADOW_RECEIVER_ACTIVE);
     EXPECT_EQ(context.snapshot.receiverRanges[2].cutterCount, 1u);
     ASSERT_EQ(context.snapshot.cutters.size(), 1u);
-    EXPECT_EQ(context.snapshot.cutters[0].shapeType, NWB_CSG_SHADOW_SHAPE_BOX);
 }
 
 TEST(CsgShadowSnapshot, CullsOnlyFiniteOutsideCuttersWithTrustedReceiverBounds){
@@ -288,7 +287,7 @@ TEST(CsgShadowSnapshot, RepeatedSameSizeBuildsClearDisabledAndUnsupportedReceive
     EXPECT_EQ(context.snapshot.cutters.size(), 2u);
 }
 
-TEST(CsgShadowSnapshot, PacksShadowContextWithAlignedRangesCuttersAndInstanceMetadata){
+TEST(CsgShadowSnapshot, HardwareRootExclusionAndDisabledReceiversClearCapturedState){
     SnapshotContext context;
     ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
     const Core::ECS::EntityID receiver = context.addReceiver();

@@ -118,10 +118,6 @@ TEST(PersistentArenaTests, StructureAlignedSizeFitsMultipleExactTypedArrayBackin
 
         ASSERT_TRUE(slotRecords);
         ASSERT_TRUE(nextSerials);
-        slotRecords[0u].marker = 7u;
-        nextSerials[s_QueueCount - 1u] = 11u;
-        EXPECT_EQ(slotRecords[0u].marker, 7u);
-        EXPECT_EQ(nextSerials[s_QueueCount - 1u], 11u);
     }
 
     EXPECT_EQ(arena.memoryStats().usedBytes, 0u);

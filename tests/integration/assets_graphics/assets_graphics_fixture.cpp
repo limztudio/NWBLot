@@ -29,8 +29,6 @@ NWB::Core::Assets::AssetBytes AssetsGraphicsFixture::MakeAssetBytes(AssetsGraphi
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLB_FINAL)
-#endif
 void AssetsGraphicsFixture::AppendTestMeta(AssetsGraphicsFixture::AString& inOutMeta, const AStringView text)
 {
     inOutMeta.append(text.data(), text.size());
@@ -80,24 +78,6 @@ AssetsGraphicsFixture::AString AssetsGraphicsFixture::BuildMeshTriangleMeta(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#endif
-#if defined(GLB_FINAL)
-#endif
-#if defined(GLB_FINAL)
-#endif
-#if defined(GLB_FINAL)
-#endif
-#if defined(GLB_FINAL)
-#endif
-#if defined(GLB_FINAL)
-#endif
-#if defined(GLB_FINAL)
-#endif
-#if defined(GLB_FINAL)
-#endif
-#if defined(GLB_FINAL)
-#endif
-#if defined(GLB_FINAL)
 #endif
 bool AssetsGraphicsFixture::PrepareCleanDirectory(const AssetsGraphicsFixture::Path& directory)
 {
@@ -542,38 +522,6 @@ bool AssetsGraphicsFixture::WriteMaterialBindShaderProbeSource(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetsGraphicsFixture::CookMaterialBindShaderProbe(
-    const AStringView bindText,
-    const AStringView caseName,
-    AssetsGraphicsFixture::TestArena& testArena,
-    AssetsGraphicsFixture::Path& outRoot,
-    AssetsGraphicsFixture::Path& outOutputDirectory
-)
-{
-    if(!PrepareAssetsGraphicsCookCase(testArena, caseName, outRoot, outOutputDirectory))
-        return false;
-
-    const Path assetRoot = outRoot / "assets";
-    if(!WriteTextFile(assetRoot / "material_interfaces" / "test_surface.bind", bindText))
-        return false;
-    // The typed-binding probe is a pixel shader because it reads typed material data and includes the generated bind.
-    if(!WriteMaterialBindShaderProbeSource(
-        testArena,
-        assetRoot,
-        "ps",
-        "bind_probe.nwb",
-        "bind_probe.slang",
-        s_MaterialBindShaderProbeSource
-    ))
-        return false;
-
-    return CookPreparedGraphicsAssetRoots(testArena, outRoot, outOutputDirectory, { assetRoot });
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
     AssetsGraphicsFixture::TestArena& testArena,
     const AssetsGraphicsFixture::Path& assetRoot,
@@ -631,26 +579,6 @@ bool AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssets(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool AssetsGraphicsFixture::WriteMaterialSurfaceIntegrationAssets(
-    const AssetsGraphicsFixture::Path& assetRoot,
-    const AStringView bindText,
-    const AStringView materialText,
-    const AStringView surfaceSourceText
-)
-{
-    if(!WriteTextFile(assetRoot / "material_interfaces" / "test_surface.bind", bindText))
-        return false;
-    if(!WriteTextFile(assetRoot / "shaders" / "material_bxdf.bxdf", s_MaterialBindBxdfSource))
-        return false;
-    if(!WriteTextFile(assetRoot / "shaders" / "material_surface.surface", surfaceSourceText))
-        return false;
-    return WriteTextFile(assetRoot / "materials" / "test_material.nwb", materialText);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 bool AssetsGraphicsFixture::CookMaterialBindMaterialIntegrationWithPixelSource(
     const AStringView bindText,
     const AStringView materialText,
@@ -675,31 +603,6 @@ bool AssetsGraphicsFixture::CookMaterialBindMaterialIntegrationWithPixelSource(
         return false;
 
     return CookPreparedGraphicsAssetRoots(testArena, outRoot, outOutputDirectory, { assetRoot });
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool AssetsGraphicsFixture::CookMaterialSurfaceIntegration(
-    const AStringView bindText,
-    const AStringView materialText,
-    const AStringView surfaceSourceText,
-    const AStringView caseName,
-    AssetsGraphicsFixture::TestArena& testArena,
-    AssetsGraphicsFixture::Path& outRoot,
-    AssetsGraphicsFixture::Path& outOutputDirectory
-)
-{
-    if(!PrepareAssetsGraphicsCookCase(testArena, caseName, outRoot, outOutputDirectory))
-        return false;
-
-    const Path assetRoot = outRoot / "assets";
-    if(!WriteMaterialSurfaceIntegrationAssets(assetRoot, bindText, materialText, surfaceSourceText))
-        return false;
-
-    const Path engineAssetRoot = AssetsGraphicsTestRepoRoot(testArena) / "impl" / "assets";
-    return CookPreparedGraphicsAssetRoots(testArena, outRoot, outOutputDirectory, { engineAssetRoot, assetRoot });
 }
 
 
@@ -812,74 +715,6 @@ bool AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(
     const bool deserialized = NWB::Core::ShaderArchive::DeserializeIndex(indexBinary, outRecords);
     EXPECT_TRUE(deserialized);
     return deserialized;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool AssetsGraphicsFixture::CookAndLoadMinimalAsset(
-    AssetsGraphicsFixture::TestArena& testArena,
-    const AStringView metaText,
-    const AStringView caseName,
-    AssetsGraphicsFixture::Path& outRoot,
-    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset,
-    AssetsGraphicsFixture::CookSingleMetaFn cookSingleMeta,
-    AssetsGraphicsFixture::LoadCookedAssetFn loadCookedAsset
-)
-{
-    AssetsGraphicsFixture::Path outputDirectory(testArena.arena);
-    const bool cooked = cookSingleMeta(metaText, caseName, testArena, outRoot, outputDirectory);
-
-    EXPECT_TRUE(cooked);
-    if(!cooked){
-        ErrorCode errorCode;
-        EXPECT_TRUE(RemoveAllIfExists(outRoot, errorCode));
-        return false;
-    }
-
-    if(loadCookedAsset(testArena, outputDirectory, outLoadedAsset))
-        return true;
-
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(outRoot, errorCode));
-    return false;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool AssetsGraphicsFixture::CookAndLoadMinimalAssetByKind(
-    AssetsGraphicsFixture::TestArena& testArena,
-    const AStringView metaText,
-    const AStringView caseName,
-    AssetsGraphicsFixture::Path& outRoot,
-    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset,
-    const AssetsGraphicsFixture::MinimalAssetKind::Enum assetKind
-)
-{
-    AssetsGraphicsFixture::CookSingleMetaFn cookSingleMeta = nullptr;
-    AssetsGraphicsFixture::LoadCookedAssetFn loadCookedAsset = nullptr;
-    switch(assetKind){
-    case AssetsGraphicsFixture::MinimalAssetKind::Mesh:
-        cookSingleMeta = CookSingleMeshMeta;
-        loadCookedAsset = LoadCookedMinimalMesh;
-        break;
-    default:
-        ADD_FAILURE();
-        return false;
-    }
-
-    return CookAndLoadMinimalAsset(
-        testArena,
-        metaText,
-        caseName,
-        outRoot,
-        outLoadedAsset,
-        cookSingleMeta,
-        loadCookedAsset
-    );
 }
 
 

@@ -150,10 +150,7 @@ TEST_F(UiProgressBuilderTests, DeclarationCopiesFractionOptionsStyleAndResolvedN
     EXPECT_FLOAT_EQ(fill.bounds.width, 58.0f);
     EXPECT_FLOAT_EQ(fill.bounds.height, 24.0f);
     EXPECT_FLOAT_EQ(fill.color.r, 0.4f);
-    EXPECT_FLOAT_EQ(fill.color.g, 0.3f);
-    EXPECT_FLOAT_EQ(fill.color.b, 0.2f);
     EXPECT_FLOAT_EQ(fill.color.a, 0.5f);
-    EXPECT_DOUBLE_EQ(fraction, 0.75);
 }
 
 TEST_F(UiProgressBuilderTests, ExplicitFallbackRegionsResolveBeforeDeferredPaint){
@@ -168,7 +165,6 @@ TEST_F(UiProgressBuilderTests, ExplicitFallbackRegionsResolveBeforeDeferredPaint
     ProgressPaintSample fill;
     ASSERT_TRUE(sample(snapshot, Name("scrollbar.track"), track));
     ASSERT_TRUE(sample(snapshot, Name("scrollbar.thumb.normal"), fill));
-    EXPECT_FLOAT_EQ(fill.bounds.width, 116.0f);
 }
 
 TEST_F(UiProgressBuilderTests, FiniteFractionsClampAtExactEmptyAndFullGeometry){

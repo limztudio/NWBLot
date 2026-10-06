@@ -228,6 +228,10 @@ TEST_F(HorizontalNavigationFixture, PreservedTextFenceClearsHorizontalCapability
     EXPECT_TRUE(send({ .type = InputEventType::PrimaryDown, .position = { 10.0f, 10.0f } }).pointerConsumed);
     EXPECT_TRUE(keyDown(Core::Key::Left).keyboardConsumed);
     ASSERT_EQ(m_router.controlActions().size(), 1u);
+    m_router.fenceControl(m_targets[0u].id, m_targets[0u].declarationGeneration, m_targets[0u].control);
+    EXPECT_TRUE(m_router.targets()[0u].horizontalNavigation);
+    EXPECT_EQ(m_router.controlActions().size(), 1u);
+    EXPECT_EQ(m_router.capture(), m_targets[0u].id);
     ++m_targets[0u].control.contentRevision;
     m_router.fenceControl(m_targets[0u].id, m_targets[0u].declarationGeneration, m_targets[0u].control);
     ASSERT_EQ(m_router.targets().size(), 1u);
@@ -256,22 +260,6 @@ TEST_F(HorizontalNavigationFixture, PreservedTextFenceClearsHorizontalCapability
     EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 10.0f, 10.0f } }).pointerConsumed);
     EXPECT_FALSE(m_router.capture().valid());
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-}
-
-TEST_F(HorizontalNavigationFixture, MatchingControlFencePreservesHorizontalActionAndHeldOwner){
-    ASSERT_TRUE(publish());
-    focusTarget();
-    EXPECT_TRUE(keyDown(Core::Key::Left).keyboardConsumed);
-    m_router.fenceControl(m_targets[0u].id, m_targets[0u].declarationGeneration, m_targets[0u].control);
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    EXPECT_TRUE(m_router.targets()[0u].horizontalNavigation);
-    ControlAction action;
-    ASSERT_TRUE(take(action));
-    EXPECT_EQ(action.kind, ControlActionKind::Left);
-    EXPECT_TRUE(keyDown(Core::Key::Left, true).keyboardConsumed);
-    ASSERT_TRUE(take(action));
-    EXPECT_EQ(action.kind, ControlActionKind::Left);
-    EXPECT_TRUE(keyUp(Core::Key::Left).keyboardConsumed);
 }
 
 

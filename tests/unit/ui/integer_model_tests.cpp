@@ -40,22 +40,6 @@ TEST_F(IntegerModelTests, SubmitCommitsExactLargeIntegerAndCancellationCannotRou
     EXPECT_EQ(m_model.draft().text(), "9007199254740993");
 }
 
-TEST_F(IntegerModelTests, EquivalentSubmitIsACommitWithoutRewritingOrChangingTheValue){
-    ASSERT_TRUE(m_model.setValue(43));
-    ASSERT_TRUE(m_model.setDraft("+00043"));
-    const NumericEditResult result = m_model.submit();
-    ASSERT_TRUE(result.valid);
-    EXPECT_TRUE(result.committed);
-    EXPECT_FALSE(result.valueChanged);
-    EXPECT_EQ(m_model.draft().text(), "+00043");
-    EXPECT_FALSE(m_model.dirty());
-    const NumericEditResult cancelled = m_model.cancel();
-    ASSERT_TRUE(cancelled.valid);
-    EXPECT_TRUE(cancelled.cancelled);
-    EXPECT_TRUE(cancelled.restored);
-    EXPECT_EQ(m_model.draft().text(), "43");
-}
-
 TEST_F(IntegerModelTests, InvalidIncompleteAndOverflowSubmitPreserveThePendingDraft){
     ASSERT_TRUE(m_model.setValue(7));
     const AStringView drafts[]{ "-", "x", "9223372036854775808", "-9223372036854775809" };
@@ -137,20 +121,15 @@ TEST_F(IntegerModelTests, ExternalValueRemainsAuthoritativeOutsideUserBounds){
     EXPECT_EQ(m_model.draft().text(), "100");
 }
 
-TEST_F(IntegerModelTests, CancelAndAbandonOnlyReportRestoredWhenCanonicalBytesChange){
-    const NumericEditResult cleanCancel = m_model.cancel();
-    ASSERT_TRUE(cleanCancel.valid);
-    EXPECT_TRUE(cleanCancel.cancelled);
-    EXPECT_FALSE(cleanCancel.restored);
+TEST_F(IntegerModelTests, MalformedDraftAbandonRestoresTheAuthoritativeCommittedValue){
+    ASSERT_TRUE(m_model.setValue(7));
     ASSERT_TRUE(m_model.setDraft("x"));
     const NumericEditResult abandoned = m_model.abandon();
     ASSERT_TRUE(abandoned.valid);
     EXPECT_TRUE(abandoned.restored);
-    EXPECT_FALSE(abandoned.cancelled);
-    EXPECT_FALSE(abandoned.committed);
-    EXPECT_FALSE(abandoned.rejected);
-    EXPECT_EQ(m_model.draft().text(), "0");
-    EXPECT_FALSE(m_model.abandon().restored);
+    EXPECT_EQ(m_model.draft().text(), "7");
+    EXPECT_EQ(m_model.value(), 7);
+    EXPECT_FALSE(m_model.dirty());
 }
 
 

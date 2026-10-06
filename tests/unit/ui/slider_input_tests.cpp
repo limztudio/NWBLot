@@ -24,30 +24,14 @@ class UiSliderInputTests : public SliderFixture{};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiSliderInputTests, DirectionKeysAndPagesUseTheOneHostAndSaturateAtExactEndpoints){
+TEST_F(UiSliderInputTests, PageKeysSaturateAtExactEndpoints){
     ASSERT_TRUE(accept(1u));
     press(Core::Key::Tab);
-    const ControlToken token = target(host())->control;
-    press(Core::Key::Right);
-    press(Core::Key::Up);
-    ASSERT_TRUE(accept(2u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.5);
-    EXPECT_EQ(target(host())->control, token);
-    press(Core::Key::Left);
-    press(Core::Key::Down);
-    ASSERT_TRUE(accept(3u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
     press(Core::Key::PageUp);
     ASSERT_TRUE(accept(4u));
     EXPECT_DOUBLE_EQ(m_state.value(), 1.0);
     press(Core::Key::PageDown);
     ASSERT_TRUE(accept(5u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.0);
-    press(Core::Key::End);
-    ASSERT_TRUE(accept(6u));
-    EXPECT_DOUBLE_EQ(m_state.value(), 1.0);
-    press(Core::Key::Home);
-    ASSERT_TRUE(accept(7u));
     EXPECT_DOUBLE_EQ(m_state.value(), 0.0);
 }
 

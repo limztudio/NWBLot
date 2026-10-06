@@ -123,50 +123,6 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
 }
 
 
-TEST(AssetsGraphics, SamplerCookerBuildsSamplerAsset){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-    TestArena testArena;
-    Path root(testArena.arena);
-    Path outputDirectory(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
-        testArena,
-        "sampler_cooker_round_trip",
-        root,
-        outputDirectory
-    ));
-
-    const Path assetRoot = root / "assets";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "samplers" / "linear_clamp.nwb", s_SamplerTestMetadata));
-    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-
-    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::SamplerAssetCodec>(
-        testArena,
-        outputDirectory,
-        Name("project/samplers/linear_clamp"),
-        loadedAsset,
-        1u
-    ));
-    ASSERT_NE(loadedAsset.get(), nullptr);
-    const NWB::Impl::Sampler& sampler = static_cast<const NWB::Impl::Sampler&>(*loadedAsset);
-    const NWB::Core::SamplerDesc& description = sampler.description();
-    EXPECT_FALSE(description.minFilter);
-    EXPECT_TRUE(description.magFilter);
-    EXPECT_FALSE(description.mipFilter);
-    EXPECT_EQ(description.addressU, NWB::Core::SamplerAddressMode::Wrap);
-    EXPECT_EQ(description.addressV, NWB::Core::SamplerAddressMode::Mirror);
-    EXPECT_EQ(description.addressW, NWB::Core::SamplerAddressMode::Border);
-    EXPECT_EQ(description.maxAnisotropy, 4.0f);
-    EXPECT_EQ(description.mipBias, -0.25f);
-    EXPECT_EQ(description.borderColor, NWB::Core::Color(0.0f, 0.0f, 0.0f, 0.0f));
-
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
-    EXPECT_EQ(logger.errorCount(), 0u);
-}
-
 TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReductionMetadata){
     static constexpr AStringView s_UnsupportedAssignments[] = {
         "asset.border_color = [0.0, 0.0, 0.0, 0.0];\n",

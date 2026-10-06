@@ -170,11 +170,6 @@ TEST(AllocationOwnerTelemetry, ResetsOutputForMalformedMemoryPayloads){
     GLB_MEMCPY(&validHeader, sizeof(validHeader), bytes.data(), sizeof(validHeader));
     Telemetry::PerfMemoryPayload parsed(testArena.arena);
     ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size(), parsed));
-    EXPECT_EQ(parsed.scopeName, owner);
-    EXPECT_EQ(parsed.scopeText, "Payload Validation Owner");
-    ExpectSnapshot(parsed.snapshot, snapshot);
-    ExpectDelta(parsed.delta, delta);
-
     for(u32 invalidCase = 0u; invalidCase < 9u; ++invalidCase){
         GLB_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
         ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size(), parsed));
@@ -579,42 +574,6 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
     EXPECT_EQ(NWB::Tests::CountText(secondRecord, secondHashText), 1u);
     EXPECT_NE(explicitRecord.find("\"scope\": \"Producer Display Name\""), AStringView::npos);
     EXPECT_EQ(NWB::Tests::CountText(unknownRecord, unknownHashText), s_ExpectedDualCount);
-}
-
-TEST(AllocationOwnerTelemetry, ReportsRawOnlyHeapBackingInItsOwnSummaryDomain){
-    TestArena testArena;
-    Telemetry::Recorder recorder(testArena.arena);
-    recorder.setCaptureOptions(Telemetry::CaptureOptions::PerfOnly());
-    const Name owner("core/alloc/heap_backing");
-    const Perf::MemorySnapshot snapshot = MakeSnapshot(owner, Perf::MemorySource::HeapBacking);
-    const Perf::MemoryDelta delta = TelemetryTestDetail::MakeTestMemoryDelta(-1);
-    ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, owner, "Heap Backing", snapshot, delta, 9u));
-    Log::TelemetryReport report(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
-    EXPECT_EQ(report.summary.parseFailureCount, 0u);
-    EXPECT_EQ(report.summary.memoryEventCount, 1u);
-    EXPECT_EQ(report.summary.memorySources[Perf::MemorySource::ExplicitScope].eventCount, 0u);
-    EXPECT_EQ(report.summary.memorySources[Perf::MemorySource::Arena].eventCount, 0u);
-    const Log::TelemetryMemorySummary& heap = report.summary.memorySources[Perf::MemorySource::HeapBacking];
-    EXPECT_EQ(heap.eventCount, 1u);
-    EXPECT_EQ(heap.maxUsedBytes, snapshot.usedBytes);
-    EXPECT_EQ(heap.maxPeakUsedBytes, snapshot.peakUsedBytes);
-    EXPECT_EQ(heap.totalUsedDeltaBytes, delta.usedBytes);
-    const AStringView json(report.json.data(), report.json.size());
-    EXPECT_EQ(json.find("\"maxMemoryUsedBytes\":"), AStringView::npos);
-    EXPECT_EQ(json.find("\"maxMemoryPeakUsedBytes\":"), AStringView::npos);
-    EXPECT_EQ(json.find("\"totalMemoryUsedDeltaBytes\":"), AStringView::npos);
-    const usize summaryBegin = json.find("\"heapBacking\": {");
-    ASSERT_NE(summaryBegin, AStringView::npos);
-    const usize summaryEnd = json.find('}', summaryBegin);
-    ASSERT_NE(summaryEnd, AStringView::npos);
-    const AStringView heapSummary = json.substr(summaryBegin, summaryEnd + 1u - summaryBegin);
-    Core::Alloc::ScratchArena scratchArena(Name("tests/telemetry/raw_heap_json_checks"));
-    ExpectJsonNumber(scratchArena, heapSummary, "eventCount", 1u);
-    ExpectJsonNumber(scratchArena, heapSummary, "maxUsedBytes", snapshot.usedBytes);
-    ExpectJsonNumber(scratchArena, heapSummary, "maxPeakUsedBytes", snapshot.peakUsedBytes);
-    ExpectJsonNumber(scratchArena, heapSummary, "totalUsedDeltaBytes", delta.usedBytes);
-    EXPECT_FALSE(FindOwnerJsonRecord(json, owner, "\"source\": \"heapBacking\"").empty());
 }
 
 

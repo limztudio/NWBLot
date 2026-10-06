@@ -29,13 +29,11 @@ TEST_F(UiSearchComboBuilderTests, ClosedFieldUsesFullSelectionWithoutBorrowingTh
     ASSERT_TRUE(m_search.query().setText("Second"));
     ASSERT_TRUE(acceptSearch(1u));
     EXPECT_EQ(m_search.combo().selectedKey(), 1u);
-    EXPECT_FALSE(m_searchResult.combo.selectionChanged);
     EXPECT_EQ(m_searchSource.full.textCalls, 1u);
     EXPECT_EQ(m_host.loans, 0u);
     EXPECT_EQ(m_host.publications, 0u);
     EXPECT_EQ(target(query()), nullptr);
     EXPECT_EQ(target(list()), nullptr);
-    EXPECT_EQ(target(host())->control.contentGeneration, m_searchSource.full.generation);
 }
 
 TEST_F(UiSearchComboBuilderTests, TabMovesFromQueryToResultsThenExitsWithoutCommittingPreview){

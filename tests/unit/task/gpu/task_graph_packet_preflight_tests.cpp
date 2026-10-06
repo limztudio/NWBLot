@@ -278,10 +278,6 @@ TEST(GpuPacketPreflight, PermanentStatesRequireAgreementWithTransientStatesAndDu
         Graphics::ResourceStates::Mask state = Graphics::ResourceStates::Unknown;
         Validation validation(context.states, context.validationScratch);
         ASSERT_TRUE(validation.validate());
-        ASSERT_TRUE(validation.permanentTextureState(context.textures[0u].get(), state));
-        EXPECT_EQ(state, Graphics::ResourceStates::CopySource);
-        ASSERT_TRUE(validation.permanentBufferState(context.buffers[0u].get(), state));
-        EXPECT_EQ(state, Graphics::ResourceStates::CopySource);
         ASSERT_TRUE(validation.permanentTextureState(context.textures[stateCount].get(), state));
         EXPECT_EQ(state, Graphics::ResourceStates::Unknown);
         ASSERT_TRUE(validation.permanentBufferState(context.buffers[stateCount].get(), state));

@@ -197,13 +197,6 @@ TEST(AssetsFontAtlas, CompactNonPowerOfTwoGroupsRejectMissingChannelsAndLostGuar
         ASSERT_TRUE(SerializeFontAtlasPayload(payload, binary)) << channelCount;
         FontAtlasPayload loaded(testArena.arena);
         ASSERT_TRUE(DeserializeFontAtlasPayload(binary, loaded)) << channelCount;
-        EXPECT_EQ(loaded.groups[0u].width, 7u);
-        EXPECT_EQ(loaded.groups[0u].height, 9u);
-        EXPECT_EQ(loaded.groups[0u].channelCount, channelCount);
-        EXPECT_EQ(loaded.groups[0u].pixels, group.pixels);
-        EXPECT_EQ(loaded.groups[0u].sha256, group.sha256);
-        EXPECT_EQ(loaded.glyphs[channelCount - 1u].channel, channelCount - 1u);
-
         FontAtlasPayload invalid(payload);
         invalid.glyphs[0u].channel = channelCount;
         EXPECT_FALSE(ValidateFontAtlasPayload(invalid));

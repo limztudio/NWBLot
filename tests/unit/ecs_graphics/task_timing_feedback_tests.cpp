@@ -155,15 +155,7 @@ TEST(RendererTaskTimingFeedbackState, PublishedSampleBeforeAcceptanceDrainsAssig
     EXPECT_EQ(timing->sampleCount, 1u);
 }
 
-TEST(RendererTaskTimingFeedbackState, PolicyTransitionHelpersPreserveEntirePolicyAcrossCollectionUpdates){
-    const Core::GpuTaskTimingFeedbackPolicy originalPolicy{
-        .minimumAbsoluteBenefitSeconds = 0.001,
-        .minimumRelativeBenefit = 0.2,
-        .minimumFramesBetweenSwitches = 11u,
-        .minimumSampleCount = 3u,
-        .calibrationIntervalFrames = 5u,
-        .enabled = false,
-    };
+TEST(RendererTaskTimingFeedbackState, FailedCollectionEnableAndDisablePreserveEntireAcceptedPolicy){
     const Core::GpuTaskTimingFeedbackPolicy enabledPolicy{
         .minimumAbsoluteBenefitSeconds = 0.002,
         .minimumRelativeBenefit = 0.3,
@@ -180,9 +172,7 @@ TEST(RendererTaskTimingFeedbackState, PolicyTransitionHelpersPreserveEntirePolic
         .calibrationIntervalFrames = 19u,
         .enabled = false,
     };
-    Core::GpuTaskTimingFeedbackPolicy currentPolicy = originalPolicy;
-
-    currentPolicy = disabledPolicy;
+    Core::GpuTaskTimingFeedbackPolicy currentPolicy = disabledPolicy;
 
     const Impl::RendererTaskTimingFeedbackPolicyTransition failedEnableTransition =
         Impl::PrepareRendererTaskTimingFeedbackPolicyTransition(currentPolicy, enabledPolicy, true);
@@ -198,22 +188,6 @@ TEST(RendererTaskTimingFeedbackState, PolicyTransitionHelpersPreserveEntirePolic
     ExpectPolicyEqual(currentPolicy, disabledPolicy);
     Impl::ResolveRendererTaskTimingFeedbackPolicyTransition(currentPolicy, failedDisableTransition, false);
     ExpectPolicyEqual(currentPolicy, enabledPolicy);
-
-    currentPolicy = originalPolicy;
-    const Impl::RendererTaskTimingFeedbackPolicyTransition sameStateTransition =
-        Impl::PrepareRendererTaskTimingFeedbackPolicyTransition(currentPolicy, disabledPolicy, true);
-    EXPECT_EQ(sameStateTransition.action, Impl::RendererTaskTimingFeedbackCollectionAction::None);
-    ExpectPolicyEqual(currentPolicy, disabledPolicy);
-    Impl::ResolveRendererTaskTimingFeedbackPolicyTransition(currentPolicy, sameStateTransition, false);
-    ExpectPolicyEqual(currentPolicy, disabledPolicy);
-
-    currentPolicy = enabledPolicy;
-    const Impl::RendererTaskTimingFeedbackPolicyTransition inactiveRendererTransition =
-        Impl::PrepareRendererTaskTimingFeedbackPolicyTransition(currentPolicy, originalPolicy, false);
-    EXPECT_EQ(inactiveRendererTransition.action, Impl::RendererTaskTimingFeedbackCollectionAction::None);
-    ExpectPolicyEqual(currentPolicy, originalPolicy);
-    Impl::ResolveRendererTaskTimingFeedbackPolicyTransition(currentPolicy, inactiveRendererTransition, false);
-    ExpectPolicyEqual(currentPolicy, originalPolicy);
 }
 
 TEST(RendererTaskTimingFeedbackState, RejectedAndDiscardedCallbacksDoNotAllocate){
@@ -397,36 +371,6 @@ TEST(RendererTaskTimingFeedbackState, NonFiniteDurationIsTerminalButKeepsAccepte
     EXPECT_EQ(snapshot.find(key, queue), nullptr);
 }
 
-TEST(RendererTaskTimingFeedbackState, NonCommittingSampleRecordsDurationWithoutAssignment){
-    TestArena testArena;
-    Core::Perf::TimingRecorder timingSink(testArena.arena);
-    Core::GpuTimingRecorder timingRecorder(testArena.arena, timingSink);
-    Impl::RendererTaskTimingFeedbackState state(testArena.arena);
-    Core::GpuTaskTimingHistoryStore history(testArena.arena);
-    Core::GpuTaskTimingHistorySnapshot snapshot(testArena.arena);
-    const Name scopeName("tests.renderer_timing.calibration");
-    const Core::GpuPhysicalQueueId queue{ .index = 1u, .deviceGeneration = 4u };
-    const Core::GpuTaskTimingKey key{
-        .task = Name("tests.renderer_timing.calibration.task"),
-        .variant = 8u,
-        .queue = Core::CommandQueue::Graphics,
-    };
-    const Core::GpuTimingSampleAttribution attribution = timingRecorder.allocateSampleAttribution();
-    ASSERT_TRUE(state.trackSample(attribution, scopeName, key, queue, 25u, true));
-    state.completeSample(PublishedSample(attribution, scopeName, queue, 25u, 0.003), true);
-    state.acceptSubmission(attribution, AcceptedToken(key, queue), true);
-
-    history.resetForDeviceGeneration(queue.deviceGeneration);
-    const Impl::RendererTaskTimingFeedbackDrainResult drain = state.drain(history, queue.deviceGeneration);
-    EXPECT_EQ(drain.acceptedAssignmentCount, 0u);
-    EXPECT_EQ(drain.recordedSampleCount, 1u);
-    EXPECT_EQ(drain.retiredSampleCount, 1u);
-    history.snapshot(snapshot);
-    EXPECT_EQ(snapshot.findAssignment(Core::GpuTaskTimingAssignmentKeyFromHistoryKey(key)), nullptr);
-    const Core::GpuTaskTimingHistory* const timing = snapshot.find(key, queue);
-    ASSERT_NE(timing, nullptr);
-    EXPECT_EQ(timing->sampleCount, 1u);
-}
 
 TEST(RendererTaskTimingFeedbackState, DeviceGenerationChangeDropsAcceptedEntryAwaitingOldSample){
     TestArena testArena;

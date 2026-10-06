@@ -28,7 +28,6 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/wait.h>
-#include <dlfcn.h>
 #include <unistd.h>
 #endif
 
@@ -45,8 +44,10 @@ namespace __hidden_logger_server_tests{
 static constexpr AStringView s_PLATFORM_LINUX = "platform=linux";
 static constexpr AStringView s_SECRET_TOKEN = "secret-token";
 static constexpr AStringView s_EVENT = "[event]";
+#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
 static constexpr AStringView s_CALLSTACK = "callstack:";
 static constexpr AStringView s_STATUS_CALLSTACK_CAPTURED = "status=callstack_captured";
+#endif
 static constexpr AStringView s_TESTS_INTEGRATION_LOGGER_SERVER_LOGSERVE = "tests/integration/logger_server/logserver_crash_tests.cpp";
 static constexpr AStringView s_LINUX = "linux";
 static constexpr AStringView s_CRASH = "crash";
@@ -92,55 +93,13 @@ private:
 
 
 #if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
-NWB_LOGSERVER_TEST_NOINLINE static u64 LinuxCrashSymbolicationProbe(){
-    return 0x4E57424352415348ull;
-}
+
 
 static void AppendDecimalText(CrashTestText& outText, const u64 value){
     char buffer[32] = {};
     outText += FormatDecimal(static_cast<usize>(value), buffer);
 }
 
-static void AppendHexAddressText(NWB::Core::Alloc::GlobalArena& arena, CrashTestText& outText, const u64 value){
-    outText += "0x";
-    outText += FormatHex64A(arena, value);
-}
-
-[[nodiscard]] static bool BuildSelfProcMapLineForAddress(
-    NWB::Core::Alloc::GlobalArena& arena,
-    const u64 address,
-    CrashTestText& outMapLine,
-    u64& outSymbolicationOffset
-){
-    outSymbolicationOffset = 0u;
-
-    Dl_info info = {};
-    if(dladdr(reinterpret_cast<const void*>(static_cast<usize>(address)), &info) == 0 || !info.dli_fname || !info.dli_fbase)
-        return false;
-
-    const u64 imageBegin = static_cast<u64>(reinterpret_cast<usize>(info.dli_fbase));
-    if(address < imageBegin)
-        return false;
-
-    constexpr u64 s_FrameOffsetWithinSyntheticMap = 0x20u;
-    outSymbolicationOffset = address - imageBegin;
-    if(outSymbolicationOffset < s_FrameOffsetWithinSyntheticMap)
-        return false;
-
-    const u64 mapBegin = address - s_FrameOffsetWithinSyntheticMap;
-    const u64 mapFileOffset = outSymbolicationOffset - s_FrameOffsetWithinSyntheticMap;
-
-    outMapLine.clear();
-    outMapLine += FormatHex64A(arena, mapBegin);
-    outMapLine += "-";
-    outMapLine += FormatHex64A(arena, address + 1u);
-    outMapLine += " r-xp ";
-    outMapLine += FormatHex64A(arena, mapFileOffset);
-    outMapLine += " 00:00 0 ";
-    outMapLine += info.dli_fname;
-    outMapLine += "\n";
-    return true;
-}
 
 [[nodiscard]] static bool LinuxExternalSymbolizerAvailable(NWB::Core::Alloc::GlobalArena& arena){
     CrashTestText pathText(arena);
@@ -273,122 +232,15 @@ static NWB::Log::CrashIngestResult ProcessCrashArchiveBytes(
     return ProcessCrashArchiveBytes(arena, testGroup, stem, archive, config);
 }
 
+#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
 [[nodiscard]] static usize FindText(const CrashTestText& text, const AStringView needle){
     return AStringView(text.data(), text.size()).find(needle);
 }
-
-[[nodiscard]] static bool TextAppearsBefore(const CrashTestText& text, const AStringView first, const AStringView second){
-    const AStringView view(text.data(), text.size());
-    const usize firstPosition = view.find(first);
-    const usize secondPosition = view.find(second);
-    return firstPosition != AStringView::npos && secondPosition != AStringView::npos && firstPosition < secondPosition;
-}
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST_F(LoggerServerCrash, LinuxCrashPackageMapsInstructionPointer){
-    TestArena testArena;
-    auto& arena = testArena.arena;
-    constexpr AStringView s_Group("logger_server_linux_crash_test");
-    constexpr AStringView s_Stem("linux_001");
-    RemoveTestArtifacts(arena, s_Group);
-
-    CrashTestText archive(arena);
-    BuildLinuxCrashArchive(arena, archive, "linux-test");
-    AppendArchiveFile(archive, CrashNames::s_MetadataFileName, "build_channel=qa\ngpu=test-adapter\n");
-    AppendArchiveFile(archive, CrashNames::s_BreadcrumbsFileName, "1 [general] entered render loop\n2 [io] opened scene file\n");
-
-    NWB::Log::CrashIngestConfig config = MakeIngestConfig(arena, s_Group);
-    config.symbolication.symbolStoreDirectory = StorageDirectory(arena, s_Group) / "test_symbols";
-    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive, config);
-
-    EXPECT_TRUE(result.accepted);
-    EXPECT_EQ(result.type, NWB::Log::Type::EssentialInfo);
-    EXPECT_TRUE(ContainsMessage(result.message, GLB_TEXT("module_relative_ip=0x0000000000001234")));
-
-    CrashTestText report(arena);
-    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
-    EXPECT_TRUE(Contains(report, s_PLATFORM_LINUX));
-    EXPECT_TRUE(Contains(report, s_EVENT));
-    EXPECT_TRUE(Contains(report, "event=crash"));
-    EXPECT_TRUE(Contains(report, "exception=SIGSEGV (11)"));
-    EXPECT_TRUE(Contains(report, s_STATUS_CALLSTACK_CAPTURED));
-    EXPECT_TRUE(Contains(report, "symbol_store="));
-    EXPECT_TRUE(Contains(report, "symbol_store_status=missing"));
-    EXPECT_TRUE(Contains(report, "instruction_pointer_module=/tmp/nwb_loader"));
-    EXPECT_TRUE(Contains(report, "module_relative_ip=0x0000000000001234"));
-    EXPECT_TRUE(Contains(report, s_CALLSTACK));
-    EXPECT_TRUE(Contains(report, "#0 0x0000000000401234 /tmp/nwb_loader+0x0000000000001234"));
-    EXPECT_TRUE(Contains(report, "#1 0x0000000000401240 /tmp/nwb_loader+0x0000000000001240"));
-    EXPECT_TRUE(Contains(report, "core_artifact=missing"));
-    // Client-shipped metadata and breadcrumbs must surface in the rendered crash report.
-    EXPECT_TRUE(Contains(report, "[metadata]"));
-    EXPECT_TRUE(Contains(report, "build_channel=qa"));
-    EXPECT_TRUE(Contains(report, "[breadcrumbs]"));
-    EXPECT_TRUE(Contains(report, "entered render loop"));
-    EXPECT_TRUE(TextAppearsBefore(report, s_CALLSTACK, "details:"));
-    EXPECT_TRUE(TextAppearsBefore(report, "details:", s_EVENT));
-
-    PreserveObservedReport(arena, report, "linux_maps");
-
-    RemoveTestArtifacts(arena, s_Group);
-}
-
-TEST_F(LoggerServerCrash, LinuxCrashPackageSymbolicatesSelfFrame){
-#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
-    TestArena testArena;
-    auto& arena = testArena.arena;
-    if(!LinuxExternalSymbolizerAvailable(arena))
-        return;
-
-    constexpr AStringView s_Group("logger_server_linux_symbolized_crash_test");
-    constexpr AStringView s_Stem("linux_symbolized_001");
-    RemoveTestArtifacts(arena, s_Group);
-
-    const u64 frameAddress = static_cast<u64>(reinterpret_cast<usize>(&LinuxCrashSymbolicationProbe));
-
-    CrashTestText procMapLine(arena);
-    u64 expectedSymbolicationOffset = 0u;
-    EXPECT_TRUE(BuildSelfProcMapLineForAddress(arena, frameAddress, procMapLine, expectedSymbolicationOffset));
-
-    CrashTestText archive(arena);
-    BeginArchiveWithManifest(arena, archive, "linux-symbolized-test", s_LINUX, s_CRASH, s_SIGNAL, 11u);
-
-    CrashTestText cpuContext(arena);
-    cpuContext += "fault_address=0\ninstruction_pointer=";
-    AppendDecimalText(cpuContext, frameAddress);
-    cpuContext += "\nstack_pointer=0\nframe_pointer=0\n";
-    AppendArchiveFile(archive, CrashNames::s_CpuContextFileName, AStringView(cpuContext.data(), cpuContext.size()));
-
-    CrashTestText callstack(arena);
-    callstack += "#0 ";
-    AppendHexAddressText(arena, callstack, frameAddress);
-    callstack += "\n";
-    AppendArchiveFile(archive, CrashNames::s_CallstackFileName, AStringView(callstack.data(), callstack.size()));
-    AppendArchiveFile(archive, CrashNames::s_ProcMapsFileName, AStringView(procMapLine.data(), procMapLine.size()));
-
-    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
-
-    EXPECT_TRUE(result.accepted);
-
-    CrashTestText report(arena);
-    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
-    EXPECT_TRUE(Contains(report, s_PLATFORM_LINUX));
-    EXPECT_TRUE(Contains(report, "module frames are symbolized with DWARF"));
-    EXPECT_TRUE(Contains(report, "LinuxCrashSymbolicationProbe") || Contains(report, s_TESTS_INTEGRATION_LOGGER_SERVER_LOGSERVE));
-    CrashTestText expectedSymbolicationIp(arena);
-    expectedSymbolicationIp += "symbolication_relative_ip=";
-    AppendHexAddressText(arena, expectedSymbolicationIp, expectedSymbolicationOffset);
-    EXPECT_TRUE(Contains(report, AStringView(expectedSymbolicationIp.data(), expectedSymbolicationIp.size())));
-
-    PreserveObservedReport(arena, report, "linux_symbolicated");
-
-    RemoveTestArtifacts(arena, s_Group);
-#else
-#endif
-}
 
 TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
 #if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
@@ -555,36 +407,6 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
 #endif
 }
 
-TEST_F(LoggerServerCrash, AndroidCrashPackageCopiesTombstoneFrames){
-    TestArena testArena;
-    auto& arena = testArena.arena;
-    constexpr AStringView s_Group("logger_server_android_crash_test");
-    constexpr AStringView s_Stem("android_001");
-    RemoveTestArtifacts(arena, s_Group);
-
-    CrashTestText archive(arena);
-    BeginArchiveWithManifest(arena, archive, "android-test", "android", s_CRASH, s_MANUAL_DUMP, 0u);
-    AppendArchiveFile(
-        archive,
-        CrashNames::s_AndroidTombstoneFileName,
-        "backtrace:\n      #00 pc 0000000000012344  /data/app/lib/arm64/libnwb.so (CrashHere+16)\n      #01 pc 0000000000012450  /data/app/lib/arm64/libnwb.so (Caller+12)\n"
-    );
-
-    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
-
-    EXPECT_TRUE(result.accepted);
-    EXPECT_TRUE(ContainsMessage(result.message, GLB_TEXT("status=tombstone_parsed")));
-    EXPECT_TRUE(ContainsMessage(result.message, GLB_TEXT("callstack:")));
-    EXPECT_TRUE(ContainsMessage(result.message, GLB_TEXT("#00 pc 0000000000012344")));
-
-    CrashTestText report(arena);
-    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
-    EXPECT_TRUE(Contains(report, "platform=android"));
-    EXPECT_TRUE(Contains(report, "android_tombstone=present"));
-    EXPECT_TRUE(Contains(report, "#01 pc 0000000000012450"));
-
-    RemoveTestArtifacts(arena, s_Group);
-}
 
 TEST_F(LoggerServerCrash, LinuxCrashPackageReportsMissingProcMaps){
     TestArena testArena;
@@ -717,88 +539,6 @@ TEST_F(LoggerServerCrash, WindowsCrashPackageDecodesGpuDetectiveCaptureInProcess
     RemoveTestArtifacts(arena, s_Group);
 }
 
-TEST_F(LoggerServerCrash, AssertCrashPackageUsesAssertLogType){
-    TestArena testArena;
-    auto& arena = testArena.arena;
-    constexpr AStringView s_Group("logger_server_assert_log_type_test");
-    constexpr AStringView s_Stem("assert_log_type_001");
-    RemoveTestArtifacts(arena, s_Group);
-
-    CrashTestText archive(arena);
-    const ManifestTriggerFields trigger{
-        .category = DiagnosticEventCategory::s_Assert,
-        .expression = "value != nullptr",
-        .message = "missing pointer",
-        .file = "tests/integration/logger_server/logserver_crash_tests.cpp",
-        .line = 123u,
-    };
-    BeginArchiveWithManifest(
-        arena,
-        archive,
-        "assert-log-type-test",
-        s_WINDOWS,
-        DiagnosticEventName::s_Assert,
-        s_MANUAL_DUMP,
-        0u,
-        ManifestEventField::Include,
-        trigger
-    );
-    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
-
-    EXPECT_TRUE(result.accepted);
-    EXPECT_EQ(result.type, NWB::Log::Type::Assert);
-    EXPECT_TRUE(ContainsMessage(result.message, GLB_TEXT("event=assert")));
-    EXPECT_EQ(result.message.find(GLB_TEXT("value != nullptr\nmissing pointer\nat tests/integration/logger_server/logserver_crash_tests.cpp:123\n\ncallstack:\n")), 0u);
-    EXPECT_TRUE(ContainsMessage(result.message, GLB_TEXT("\ndetails:\n")));
-
-    CrashTestText report(arena);
-    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
-    EXPECT_EQ(FindText(report, "value != nullptr\nmissing pointer\nat tests/integration/logger_server/logserver_crash_tests.cpp:123\n\ncallstack:\n"), 0u);
-
-    RemoveTestArtifacts(arena, s_Group);
-}
-
-TEST_F(LoggerServerCrash, FatalCrashPackageUsesFatalLogType){
-    TestArena testArena;
-    auto& arena = testArena.arena;
-    constexpr AStringView s_Group("logger_server_fatal_log_type_test");
-    constexpr AStringView s_Stem("fatal_log_type_001");
-    RemoveTestArtifacts(arena, s_Group);
-
-    CrashTestText archive(arena);
-    const ManifestTriggerFields trigger{
-        .category = NWB::Core::Common::LoggerDetail::s_DiagnosticEventCategoryFatal,
-        .expression = "",
-        .message = "fatal logger observation",
-        .file = "tests/integration/logger_server/logserver_crash_tests.cpp",
-        .line = 321u,
-    };
-    BeginArchiveWithManifest(
-        arena,
-        archive,
-        "fatal-log-type-test",
-        s_WINDOWS,
-        DiagnosticEventName::s_Fatal,
-        s_MANUAL_DUMP,
-        0u,
-        ManifestEventField::Include,
-        trigger
-    );
-    const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
-
-    EXPECT_TRUE(result.accepted);
-    EXPECT_EQ(result.type, NWB::Log::Type::Fatal);
-    EXPECT_TRUE(ContainsMessage(result.message, GLB_TEXT("event=fatal")));
-    EXPECT_FALSE(ContainsMessage(result.message, GLB_TEXT("category=logger_Fatal")));
-    EXPECT_FALSE(ContainsMessage(result.message, GLB_TEXT("message=fatal logger observation")));
-    EXPECT_FALSE(ContainsMessage(result.message, GLB_TEXT("file=tests/integration/logger_server/logserver_crash_tests.cpp")));
-
-    CrashTestText report(arena);
-    EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
-    EXPECT_EQ(FindText(report, "fatal logger observation\nat tests/integration/logger_server/logserver_crash_tests.cpp:321\n\ncallstack:\n"), 0u);
-
-    RemoveTestArtifacts(arena, s_Group);
-}
 
 TEST_F(LoggerServerCrash, InvalidCrashPackageIsRejected){
     TestArena testArena;

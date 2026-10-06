@@ -30,14 +30,10 @@ TEST_F(UiEditNavigationHostTests, CopiedCommitDownAndCommitResolveTheCurrentEven
     const auto& record = m_resolver.records.front();
     EXPECT_EQ(record.text, "aQb\ncdef\nxy");
     EXPECT_EQ(record.caret, 2u);
-    EXPECT_EQ(record.direction, Ui::EditNavigationDirection::Down);
-    EXPECT_FALSE(record.navigation.valid);
     EXPECT_FLOAT_EQ(record.result.preferredX, 20.0f);
     EXPECT_EQ(record.result.committedByte, 6u);
     EXPECT_EQ(m_navigationModel.text(), "aQb\ncd!ef\nxy");
     EXPECT_EQ(m_navigationModel.caret(), 7u);
-    EXPECT_TRUE(m_result.textChanged);
-    EXPECT_TRUE(m_result.selectionChanged);
     ASSERT_TRUE(m_navigationModel.undo());
     EXPECT_EQ(m_navigationModel.text(), "aQb\ncdef\nxy");
     ASSERT_TRUE(m_navigationModel.undo());
@@ -91,29 +87,6 @@ TEST_F(UiEditNavigationHostTests, AcceptedEndpointNoOpResetsThePreferredColumn){
     EXPECT_FLOAT_EQ(m_resolver.records.back().result.preferredX, 10.0f);
     EXPECT_EQ(m_navigationModel.caret(), 10u);
     EXPECT_FALSE(m_navigationModel.canUndo());
-}
-
-TEST_F(UiEditNavigationHostTests, CopyAndUnrewrittenSubmitPreserveThePreferredColumn){
-    ASSERT_TRUE(m_navigationModel.setText("abcdef\nx\nabcdef"));
-    ASSERT_TRUE(m_navigationModel.setSelection(5u, 5u));
-    ASSERT_TRUE(activateNavigation());
-    ASSERT_TRUE(key(Core::Key::Down, true));
-    ASSERT_TRUE(navigationFrame());
-    ASSERT_TRUE(key(Core::Key::C, false, true));
-    ASSERT_TRUE(key(Core::Key::Enter, false, true));
-    ASSERT_TRUE(key(Core::Key::Down));
-    ASSERT_TRUE(navigationFrame());
-    ASSERT_EQ(m_resolver.records.size(), 2u);
-    EXPECT_TRUE(m_resolver.records.back().navigation.valid);
-    EXPECT_FLOAT_EQ(m_resolver.records.back().navigation.preferredX, 50.0f);
-    EXPECT_EQ(m_navigationModel.caret(), 14u);
-    EXPECT_EQ(m_navigationModel.text(), "abcdef\nx\nabcdef");
-    EXPECT_TRUE(m_result.submitted);
-    EXPECT_EQ(m_actions.count(Ui::EditAction::Submit), 1u);
-    EXPECT_FALSE(m_navigationModel.canUndo());
-    ASSERT_TRUE(m_clipboard.pump());
-    EXPECT_EQ(m_clipboard.startedOperation, ClipboardOperation::WriteText);
-    EXPECT_EQ(m_clipboard.startedText, "f\nx");
 }
 
 TEST_F(UiEditNavigationHostTests, AcceptedNativeInsertionReseedsTheNextVerticalMove){

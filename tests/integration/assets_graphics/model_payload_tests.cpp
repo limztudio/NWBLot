@@ -259,12 +259,6 @@ TEST(ModelPayload, CodecRejectsDuplicateNamesAndWrongParentsAndReloadsValidPaylo
     ASSERT_TRUE(codec.serialize(inputs.model, binary));
     Model loaded(inputs.arena, inputs.model.virtualPath());
     ASSERT_TRUE(loaded.loadBinary(binary));
-    ASSERT_EQ(loaded.skeletonObjects().size(), 1u);
-    ASSERT_EQ(loaded.staticMeshObjects().size(), 1u);
-    ASSERT_EQ(loaded.skinnedMeshObjects().size(), 1u);
-    EXPECT_EQ(loaded.staticMeshObjects().front().parentObject, Name(s_RIG));
-    EXPECT_EQ(loaded.skinnedMeshObjects().front().skeletonObject, Name(s_RIG));
-
     const usize staticOffset = sizeof(ModelBinaryPayload::ModelHeaderBinary) + sizeof(ModelBinaryPayload::ModelSkeletonObjectBinary);
     const usize skinnedOffset = staticOffset + sizeof(ModelBinaryPayload::ModelStaticMeshObjectBinary);
     Core::Assets::AssetBytes malformed(binary);

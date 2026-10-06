@@ -127,33 +127,23 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiControlInputTests, EmptyAndCompleteTokensAreDistinctFromPartialLifetimes){
-    const ControlToken empty;
-    EXPECT_TRUE(empty.empty());
-    EXPECT_FALSE(empty.valid());
+TEST_F(UiControlInputTests, PartialControlLifetimesAreRejectedBesideACompleteToken){
     const ControlToken valid{ 1u, 2u, 3u };
     EXPECT_TRUE(valid.valid());
     EXPECT_FALSE(valid.empty());
-    EXPECT_EQ(valid, (ControlToken{ 1u, 2u, 3u }));
-    EXPECT_NE(valid, (ControlToken{ 4u, 2u, 3u }));
-    EXPECT_NE(valid, (ControlToken{ 1u, 4u, 3u }));
-    EXPECT_NE(valid, (ControlToken{ 1u, 2u, 4u }));
     EXPECT_FALSE((ControlToken{ 0u, 2u, 3u }).valid());
     EXPECT_FALSE((ControlToken{ 0u, 2u, 3u }).empty());
 }
 
-TEST_F(UiControlInputTests, WheelCopiesAcceptedStepWithoutChangingFocusOrCreatingActivation){
+TEST_F(UiControlInputTests, AcceptedWheelOwnsItsStepAfterCallerTargetMutation){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 5u));
     EXPECT_TRUE(wheel(-0.25).pointerConsumed);
     EXPECT_FALSE(m_router.focus().valid());
     m_targets[0u].scrollStep = 120.0;
     ControlAction action;
     ASSERT_TRUE(take(action));
-    EXPECT_EQ(action.kind, ControlActionKind::Wheel);
     EXPECT_DOUBLE_EQ(action.delta, -0.25);
     EXPECT_DOUBLE_EQ(action.step, 72.0);
-    EXPECT_EQ(action.pageRows, 4u);
-    EXPECT_EQ(action.id.layoutGeneration, 5u);
     EXPECT_TRUE(m_router.actions().empty());
 }
 
@@ -232,6 +222,13 @@ TEST_F(UiControlInputTests, ReplacedContentFencesCaptureActionsAndFocusUntilAcce
     click();
     EXPECT_TRUE(wheel().pointerConsumed);
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown)).pointerConsumed);
+    const usize pending = m_router.controlActions().size();
+    ASSERT_GT(pending, 0u);
+    ASSERT_EQ(m_router.capture(), m_targets[1u].id);
+    m_router.fenceControl(m_targets[0u].id, m_targets[0u].declarationGeneration, m_targets[0u].control);
+    EXPECT_EQ(m_router.capture(), m_targets[1u].id);
+    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
+    EXPECT_EQ(m_router.controlActions().size(), pending);
     revise();
     m_router.fenceControl(m_targets[0u].id, m_targets[0u].declarationGeneration, m_targets[0u].control);
     EXPECT_FALSE(m_router.capture().valid());
@@ -244,15 +241,6 @@ TEST_F(UiControlInputTests, ReplacedContentFencesCaptureActionsAndFocusUntilAcce
     ControlAction action;
     ASSERT_TRUE(take(action));
     EXPECT_EQ(action.control.contentRevision, 32u);
-}
-
-TEST_F(UiControlInputTests, SameControlFencePreservesAcceptedInteraction){
-    ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
-    click();
-    m_router.fenceControl(m_targets[0u].id, m_targets[0u].declarationGeneration, m_targets[0u].control);
-    EXPECT_EQ(m_router.focus(), m_targets[0u].id);
-    ControlAction action;
-    EXPECT_TRUE(take(action));
 }
 
 TEST_F(UiControlInputTests, CommitOfNewEpochRejectsOldPressWithoutLeakingItsRelease){

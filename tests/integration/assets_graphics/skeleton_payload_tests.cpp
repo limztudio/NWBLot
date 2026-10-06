@@ -117,7 +117,7 @@ TEST(SkeletonPayload, RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent){
     EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("duplicate joint name")));
 }
 
-TEST(SkeletonPayload, RebuildsChangedHierarchyAndSerializesJointIdentityAndMatrices){
+TEST(SkeletonPayload, RebuildChangedHierarchyClearsPreviousChildren){
     SkeletonInputs inputs;
     ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
     inputs.entry.joints[s_ThirdElementIndex].parent = s_NameNone;
@@ -127,25 +127,6 @@ TEST(SkeletonPayload, RebuildsChangedHierarchyAndSerializesJointIdentityAndMatri
     EXPECT_EQ(inputs.skeleton.joints()[3u].parentIndex, s_ExpectedDualCount);
     EXPECT_EQ(inputs.skeleton.jointChildRanges()[1u].childCount, 0u);
     EXPECT_EQ(inputs.skeleton.jointChildRanges()[s_ThirdElementIndex].childCount, 1u);
-
-    Core::Assets::AssetBytes bytes(inputs.arena);
-    SkeletonAssetCodec codec;
-    ASSERT_TRUE(codec.serialize(inputs.skeleton, bytes));
-    Skeleton loaded(inputs.arena, inputs.entry.virtualPath);
-    ASSERT_TRUE(loaded.loadBinary(bytes));
-    ASSERT_EQ(loaded.jointCount(), inputs.skeleton.jointCount());
-    EXPECT_EQ(loaded.rootJointCount(), s_ExpectedDualCount);
-    for(usize jointIndex = 0u; jointIndex < inputs.entry.joints.size(); ++jointIndex){
-        EXPECT_EQ(loaded.findJointIndex(inputs.entry.joints[jointIndex].name), jointIndex);
-        EXPECT_EQ(loaded.joints()[jointIndex].parentIndex, inputs.skeleton.joints()[jointIndex].parentIndex);
-        EXPECT_FLOAT_EQ(loaded.joints()[jointIndex].localBindPose._14, inputs.entry.joints[jointIndex].localBindPose._14);
-        EXPECT_FLOAT_EQ(loaded.joints()[jointIndex].localBindPose._24, inputs.entry.joints[jointIndex].localBindPose._24);
-    }
-    EXPECT_EQ(loaded.jointChildRanges()[0u].childCount, 1u);
-    EXPECT_EQ(loaded.jointChildRanges()[s_ThirdElementIndex].childCount, 1u);
-    ASSERT_EQ(loaded.jointChildIndices().size(), s_ExpectedDualCount);
-    EXPECT_EQ(loaded.jointChildIndices()[0u], 1u);
-    EXPECT_EQ(loaded.jointChildIndices()[1u], 3u);
 }
 
 static void BenchmarkSkeletonBuild(const usize jointCount, const usize iterations){

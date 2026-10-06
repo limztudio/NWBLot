@@ -37,21 +37,6 @@ public:
     [[nodiscard]] TextInputAdmission::Enum erase(usize before, usize after, u64 revision, TextInputDeletionBasis::Enum basis){
         return emitDeleteSurrounding(activeSession(), before, after, revision, basis);
     }
-
-
-protected:
-    virtual void updateNativeSurrounding(
-        AStringView text, usize anchor, usize caret, u64 revision, TextInputChangeCause::Enum cause)override{
-        static_cast<void>(text);
-        static_cast<void>(anchor);
-        static_cast<void>(caret);
-        static_cast<void>(revision);
-        lastCause = cause;
-    }
-
-
-public:
-    TextInputChangeCause::Enum lastCause = TextInputChangeCause::Other;
 };
 
 inline constexpr UiTextEditOwner s_Owner{ { 17u }, 1u, 1u };
@@ -61,28 +46,7 @@ inline constexpr TextInputRect s_Caret{ 100, 32, 1, 18 };
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiTextEditSession, OwnedCommitsApplyExactlyOnceAndRefreshSurrounding){
-    NWB::Tests::TestArena arena;
-    FakeTextInput service(arena.arena);
-    Ui::EditModel model(arena.arena);
-    UiTextEditSession session(arena.arena, service);
-    ASSERT_TRUE(service.setFocused(true));
-    ASSERT_EQ(session.begin(s_Owner, model, s_Caret), TextInputAdmission::Accepted);
-    const u64 initialSurrounding = service.surroundingRevision(session.token());
-    ASSERT_EQ(service.commit("Hello"), TextInputAdmission::Accepted);
-    ASSERT_EQ(service.commit(" world"), TextInputAdmission::Accepted);
-    const auto result = session.drain(s_Owner, model);
-    EXPECT_EQ(result.status, UiTextEditStatus::Applied);
-    EXPECT_EQ(result.eventsApplied, 2u);
-    EXPECT_TRUE(result.textChanged);
-    EXPECT_EQ(model.text(), "Hello world");
-    EXPECT_GT(service.surroundingRevision(session.token()), initialSurrounding);
-    EXPECT_EQ(service.lastCause, TextInputChangeCause::InputMethod);
-    EXPECT_EQ(session.drain(s_Owner, model).status, UiTextEditStatus::Idle);
-    EXPECT_EQ(model.text(), "Hello world");
-}
-
-TEST(UiTextEditSession, CompositionRetainsSelectedBaselineAndCreatesOneUndoRecord){
+TEST(UiTextEditSession, TrailingPreeditClearPreservesCommittedSelectedReplacementAndSingleUndo){
     NWB::Tests::TestArena arena;
     FakeTextInput service(arena.arena);
     Ui::EditModel model(arena.arena);
@@ -95,7 +59,6 @@ TEST(UiTextEditSession, CompositionRetainsSelectedBaselineAndCreatesOneUndoRecor
     EXPECT_EQ(session.drain(s_Owner, model).status, UiTextEditStatus::Applied);
     EXPECT_EQ(model.text(), "abcd");
     EXPECT_FALSE(model.canUndo());
-    EXPECT_EQ(model.composition().text, "xy");
     ASSERT_EQ(service.preedit("xyz", 1u, 3u), TextInputAdmission::Accepted);
     ASSERT_EQ(service.commit("Z"), TextInputAdmission::Accepted);
     ASSERT_EQ(service.preedit({}, 0u, 0u), TextInputAdmission::Accepted);

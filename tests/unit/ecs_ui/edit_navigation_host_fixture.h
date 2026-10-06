@@ -25,12 +25,9 @@ struct NavigationCall{
     AString<Alloc::GlobalArena> text;
     Ui::EditNavigationSnapshot navigation;
     Ui::EditNavigationResult result;
-    u64 revision = 0u;
     u64 selectionGeneration = 0u;
-    usize anchor = 0u;
     usize caret = 0u;
     f32 viewportHeight = 0.0f;
-    Ui::EditNavigationDirection::Enum direction = Ui::EditNavigationDirection::Up;
 
     explicit NavigationCall(Alloc::GlobalArena& arena) : text(arena){}
 };
@@ -53,12 +50,9 @@ public:
         NavigationCall& record = records.back();
         record.text.assign(model.text().data(), model.text().size());
         record.navigation = navigation;
-        record.revision = model.revision();
         record.selectionGeneration = model.selectionGeneration();
-        record.anchor = model.anchor();
         record.caret = model.caret();
         record.viewportHeight = viewportHeight;
-        record.direction = direction;
 
         Ui::EditNavigationResult result;
         Ui::EditBoxView view(m_arena);
@@ -104,7 +98,6 @@ private:
 struct NavigationAction{
     AString<Alloc::GlobalArena> text;
     Ui::EditAction::Enum action = Ui::EditAction::Abandon;
-    bool readOnly = false;
 
     explicit NavigationAction(Alloc::GlobalArena& arena) : text(arena){}
 };
@@ -119,16 +112,10 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool apply(Ui::EditModel& model, const Ui::EditAction::Enum action, const bool readOnly)override{
+    [[nodiscard]] virtual bool apply(Ui::EditModel& model, const Ui::EditAction::Enum action, const bool)override{
         records.emplace_back(m_arena);
         records.back().text.assign(model.text().data(), model.text().size());
         records.back().action = action;
-        records.back().readOnly = readOnly;
-        if(action == Ui::EditAction::Submit && submitHook){
-            Function<void()> callback = Move(submitHook);
-            submitHook = {};
-            callback();
-        }
         return true;
     }
 
@@ -142,7 +129,6 @@ public:
 
 public:
     Vector<NavigationAction, Alloc::GlobalArena> records;
-    Function<void()> submitHook;
 
 
 private:

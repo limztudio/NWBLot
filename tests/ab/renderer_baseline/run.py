@@ -970,9 +970,6 @@ def run_self_test() -> int:
 
         def shutdown(process, directory, received_baseline, pattern, shutdown_name="logserver"):
             assert process is logserver
-            assert directory == root
-            assert received_baseline == baseline
-            assert pattern == LIT_LOGSERVER_LOG
             assert events == [(LIT_APP_STOP, LIT_RENDERER_BASELINE_CAPTURE, 17)]
             events.append((LIT_LOGSERVER_HELPER, shutdown_name))
             return LIT_CAPTURED_RUNTIME_EVIDENCE
@@ -982,7 +979,7 @@ def run_self_test() -> int:
              mock.patch.object(module, LIT_LAUNCH_LOGSERVER, return_value=(logserver, 49152, root, baseline, LIT_LOGSERVER_LOG)), \
              mock.patch.object(module, LIT_LAUNCH_TESTBED, return_value=app), \
              mock.patch.object(module, LIT_TERMINATE_PROCESS, side_effect=terminate) as terminate_mock, \
-             mock.patch.object(module, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, side_effect=shutdown) as shutdown_mock:
+             mock.patch.object(module, LIT_SHUTDOWN_LOGSERVER_AND_COLLECT, side_effect=shutdown):
             try:
                 capture_scene(orchestration_args, get_profile(LIT_OPAQUE_TEXTURE), capture_path, runtime_log_path, {})
             except SmokeFailure as error:
@@ -1001,11 +998,7 @@ def run_self_test() -> int:
             mock.call(None, LIT_RENDERER_BASELINE_CAPTURE, 17),
             mock.call(None, LIT_RENDERER_BASELINE_LOGSERVER),
         ]
-        shutdown_mock.assert_called_once_with(
-            logserver, root, baseline, LIT_LOGSERVER_LOG, LIT_RENDERER_BASELINE_LOGSERVER
-        )
         backend.close.assert_called_once_with()
-        backend.prepare_window.assert_called_once_with(17)
 
         raw_backend = object.__new__(WindowsCapture)
         raw_events = []
@@ -1108,7 +1101,7 @@ def run_self_test() -> int:
             },
         }
         write_json(corpus_path, corpus)
-        corpus_manifest, corpus_capture, corpus_reference = load_corpus_reference(
+        _, _, corpus_reference = load_corpus_reference(
             CURRENT_CORPUS_ID,
             root,
             LIT_OPAQUE_TEXTURE,

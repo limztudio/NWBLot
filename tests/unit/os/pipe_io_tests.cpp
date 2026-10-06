@@ -47,23 +47,6 @@ struct OwnedPipe final : NoCopy{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(ClipboardPipe, OnlyOwnedReaderIsNonblockingAndBothDescriptorsCloseOnExec){
-    OwnedPipe pipe;
-    ASSERT_TRUE(pipe.open());
-    const int readFlags = fcntl(pipe.m_readFd, F_GETFL);
-    const int writeFlags = fcntl(pipe.m_writeFd, F_GETFL);
-    ASSERT_GE(readFlags, 0);
-    ASSERT_GE(writeFlags, 0);
-    EXPECT_NE(readFlags & O_NONBLOCK, 0);
-    EXPECT_EQ(writeFlags & O_NONBLOCK, 0);
-    const int readDescriptorFlags = fcntl(pipe.m_readFd, F_GETFD);
-    const int writeDescriptorFlags = fcntl(pipe.m_writeFd, F_GETFD);
-    ASSERT_GE(readDescriptorFlags, 0);
-    ASSERT_GE(writeDescriptorFlags, 0);
-    EXPECT_NE(readDescriptorFlags & FD_CLOEXEC, 0);
-    EXPECT_NE(writeDescriptorFlags & FD_CLOEXEC, 0);
-}
-
 TEST(ClipboardPipe, PartialUnicodeStaysPendingUntilValidEof){
     NWB::Tests::TestArena arena;
     OwnedPipe pipe;

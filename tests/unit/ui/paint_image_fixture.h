@@ -43,14 +43,9 @@ public:
 
 
 protected:
-    void beginPaint(
-        PaintBuilder& builder, u64 generation = 1u,
-        const DisplayMetrics& display = { 200.0f, 100.0f, 1.25f, 1.5f }
-    );
-    [[nodiscard]] SharedGlyphPage makeGlyph(u64 atlasIdentity = 11u, u64 generation = 1u, u32 index = 0u);
-    [[nodiscard]] SharedSdfAtlasPage makeSdf(
-        u64 atlasIdentity = 22u, u64 generation = 1u, u32 index = 0u, u8 pixel = 255u
-    );
+    void beginPaint(PaintBuilder& builder, u64 generation = 1u);
+    [[nodiscard]] SharedGlyphPage makeGlyph(u64 atlasIdentity = 11u, u64 generation = 1u);
+    [[nodiscard]] SharedSdfAtlasPage makeSdf(u64 atlasIdentity = 22u);
     [[nodiscard]] SharedImageSource makeImage(
         StringView path = "tests/ui/image", u8 seed = 37u, u32 width = 8u, u32 height = 4u
     );

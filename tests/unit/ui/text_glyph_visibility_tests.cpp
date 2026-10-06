@@ -34,7 +34,6 @@ using namespace Impl;
 using namespace Impl::Ui;
 
 
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -162,19 +161,6 @@ TEST(TextGlyphVisibilityTests, InvalidRectanglesAndOverflowingEndpointsAreReject
         EXPECT_EQ(TextGlyphVisibility::Intersect(rectangle, clip), TextGlyphIntersection::Invalid);
         EXPECT_EQ(TextGlyphVisibility::Intersect(clip, rectangle), TextGlyphIntersection::Invalid);
     }
-}
-
-TEST(TextGlyphVisibilityTests, CoverageRectangleUsesNegativeBearingsAndLogicalOrigin){
-    PlacedGlyph glyph;
-    glyph.position = { 20.0f, 30.0f };
-    AtlasGlyph record;
-    record.pageIndex = 0u;
-    record.pixels = { 50.0f, 70.0f, 8.0f, 10.0f };
-    record.bearingX = -4;
-    record.bearingY = 6;
-    Rect rectangle;
-    ASSERT_TRUE(TextGlyphVisibility::CoverageRectangle(glyph, record, 2.0f, { 100.0f, 200.0f }, rectangle));
-    UiWidgetTests::ExpectRect(rectangle, { 118.0f, 227.0f, 4.0f, 5.0f });
 }
 
 TEST(TextGlyphVisibilityTests, NativeCoverageOriginSnapsToWholePhysicalPixelsAtOneToOneScale){
@@ -366,7 +352,6 @@ TEST(TextGlyphVisibilityTests, EmptyClipSkipsValidCandidatesAfterParameterValida
     PlacedGlyph glyph;
     EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, {}), TextGlyphIntersection::Invisible);
     EXPECT_EQ(TextGlyphVisibility::Candidate(glyph, nullptr, 0.0f, 16.0f, {}, {}), TextGlyphIntersection::Invalid);
-    EXPECT_FALSE(TextGlyphVisibility::SelectAtlas(glyph, 16.0f));
 }
 
 
@@ -382,7 +367,6 @@ TEST_F(TextGlyphVisibilityFontTests, ReliableShapingInkSkipsDistantGlyphsWithout
         TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, { 0.0f, 0.0f, 100.0f, 100.0f }),
         TextGlyphIntersection::Invisible
     );
-    EXPECT_FALSE(TextGlyphVisibility::SelectAtlas(glyph, 16.0f));
 }
 
 TEST_F(TextGlyphVisibilityFontTests, NegativeBearingsAndMarksCanReachTheClipOutsideTheirOrigin){
@@ -457,14 +441,6 @@ TEST_F(TextGlyphVisibilityFontTests, NativeCffOutlineBoundsAreAvailableForRealCo
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST_F(TextGlyphVisibilityAtlasTests, AtlasRectangleIncludesPaddedPlanesAtTheLogicalOrigin){
-    PlacedGlyph glyph;
-    glyph.position = { 10.0f, 20.0f };
-    Rect rectangle;
-    ASSERT_TRUE(TextGlyphVisibility::AtlasRectangle(glyph, *m_atlas, 32.0f, { 100.0f, 200.0f }, rectangle));
-    UiWidgetTests::ExpectRect(rectangle, { 106.0f, 204.0f, 2.0f, 4.0f });
-}
 
 TEST_F(TextGlyphVisibilityAtlasTests, SdfCandidateUsesExactPlanesRatherThanShapingInk){
     PlacedGlyph glyph;

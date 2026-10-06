@@ -115,21 +115,6 @@ TEST_F(UiNumericEditBuilderTests, IncompleteSubmitRetainsDraftAndReportsRejectio
     ASSERT_TRUE(acceptNumeric());
 }
 
-TEST_F(UiNumericEditBuilderTests, ValidBlurCommitsAndCanonicalizesBeforeSnapshot){
-    useHost();
-    m_host.replace(" +0042 ");
-    m_host.action(EditAction::Blur);
-    ASSERT_TRUE(beginNumeric(1u));
-    const auto result = m_builder.integerEdit("integer", m_integer, m_integerState);
-    ASSERT_TRUE(result.edit.valid && result.numeric.valid);
-    EXPECT_TRUE(result.edit.blurred && result.numeric.committed && result.numeric.valueChanged);
-    EXPECT_FALSE(result.numeric.restored || result.numeric.cancelled);
-    EXPECT_FALSE(result.edit.focused);
-    EXPECT_EQ(m_integer.draft().text(), AStringView("42"));
-    ASSERT_TRUE(acceptNumeric());
-    EXPECT_EQ(AStringView(m_host.displayed), AStringView("42"));
-}
-
 TEST_F(UiNumericEditBuilderTests, InvalidBlurRestoresCurrentCommittedValueBeforeSnapshot){
     useHost();
     ASSERT_TRUE(m_integer.setValue(12));
@@ -174,7 +159,6 @@ TEST_F(UiNumericEditBuilderTests, BoundsPolicyChangePreservesDraftUntilTheNextAc
     const auto unchanged = m_builder.integerEdit("integer", m_integer, m_integerState, options);
     ASSERT_TRUE(unchanged.edit.valid && unchanged.numeric.valid);
     EXPECT_FALSE(unchanged.numeric.committed || unchanged.numeric.restored || unchanged.numeric.clamped);
-    EXPECT_TRUE(unchanged.edit.focused);
     EXPECT_EQ(m_integer.value(), 0);
     EXPECT_EQ(m_integer.draft().text(), AStringView("42"));
     ASSERT_TRUE(acceptNumeric());

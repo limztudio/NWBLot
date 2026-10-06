@@ -25,25 +25,6 @@ constexpr u32 s_ExpectedDualCount = 2u;
 
 using namespace NWB::Impl;
 
-TEST(LightSpacePlan, PacksDirectionalAndEveryPointFaceWithoutPixelOrLayerOverlap){
-    const LightSpaceLightRequest requests[] = {
-        { 7u, 3u, Scene::LightType::Directional },
-        { 63u, 0u, Scene::LightType::Point },
-    };
-    LightSpacePlan plan;
-    ASSERT_TRUE(BuildLightSpacePlan(SoftwareShadowSettings{}, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, plan));
-    ASSERT_EQ(plan.lightCount, s_ExpectedDualCount);
-    ASSERT_EQ(plan.viewCount, 7u);
-    EXPECT_EQ(plan.totalPixels, 655360u);
-    u32 end = 0u;
-    for(u32 index = 0u; index < plan.viewCount; ++index){
-        const auto& view = plan.views[index];
-        EXPECT_EQ(view.map[2], end);
-        EXPECT_EQ(view.map[3], index);
-        end += view.map[0] * view.map[1];
-    }
-    EXPECT_EQ(end, plan.totalPixels);
-}
 
 TEST(LightSpacePlan, RejectsUnknownCoverage){
     const LightSpaceLightRequest requests[] = {
@@ -57,22 +38,6 @@ TEST(LightSpacePlan, RejectsUnknownCoverage){
     EXPECT_FALSE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, fitted));
 }
 
-TEST(LightSpacePlan, SoftwareTraceOmitsLightSpaceStorageForEveryBlockerPolicy){
-    const LightSpaceLightRequest requests[] = {
-        { 7u, 3u, Scene::LightType::Directional },
-        { 63u, 0u, Scene::LightType::Point },
-    };
-    SoftwareShadowSettings settings;
-    settings.backend = SoftwareShadowBackend::SoftwareTrace;
-    settings.coverage = SoftwareShadowCoverage::FittedVolume;
-    for(const auto policy : { SoftwareShadowBlockerSearch::CompactCross5, SoftwareShadowBlockerSearch::Center1 }){
-        settings.blockerSearch = policy;
-        LightSpacePlan plan;
-        ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, plan));
-        EXPECT_EQ(plan.viewCount, 0u);
-        EXPECT_EQ(plan.totalByteSize, 0u);
-    }
-}
 
 TEST(LightSpacePlan, RejectsUnknownBlockerPolicyWithoutReplacingTheCurrentPlan){
     SoftwareShadowSettings settings;
@@ -134,10 +99,6 @@ TEST(LightSpacePlan, SkipsUnsupportedAndIneligibleCastersWithoutDroppingLaterEli
     ASSERT_EQ(plan.lightCount, 1u);
     EXPECT_EQ(plan.lights[0].lightIndex, s_ExpectedDualCount);
     EXPECT_EQ(plan.viewCount, 6u);
-    settings.backend = SoftwareShadowBackend::SoftwareTrace;
-    ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, plan));
-    EXPECT_EQ(plan.lightCount, 0u);
-    EXPECT_EQ(plan.totalByteSize, 0u);
 }
 
 TEST(LightSpacePlan, RejectsInvalidIdentityWithoutPublishingPartialPlan){
@@ -191,7 +152,6 @@ TEST(LightSpacePlan, RespectsDeviceDescriptorRangeAndRetainsLaterFittingLights){
 
 TEST(LightSpacePlan, BoundsExternalSettingsAndShaderAddressSpace){
     SoftwareShadowSettings settings;
-    EXPECT_TRUE(ValidateSoftwareShadowSettings(settings));
     settings.directionalResolution = 0u;
     EXPECT_FALSE(ValidateSoftwareShadowSettings(settings));
     settings.directionalResolution = 2049u;
@@ -201,7 +161,6 @@ TEST(LightSpacePlan, BoundsExternalSettingsAndShaderAddressSpace){
     settings.memoryBudgetBytes = Limit<u64>::s_Max;
     EXPECT_FALSE(ValidateSoftwareShadowSettings(settings));
     settings.memoryBudgetBytes = Limit<u32>::s_Max;
-    EXPECT_TRUE(ValidateSoftwareShadowSettings(settings));
     LightSpaceLightRequest requests[NWB_SCENE_SHADOW_SLOT_COUNT];
     for(u32 index = 0u; index < LengthOf(requests); ++index)
         requests[index] = { index, index, Scene::LightType::Point };

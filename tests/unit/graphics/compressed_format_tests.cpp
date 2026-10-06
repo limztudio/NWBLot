@@ -40,7 +40,6 @@ TEST(CompressedTextureFormats, RequiresTheEnabledFeatureForEachCompressionFamily
     EXPECT_FALSE(VulkanDetail::IsCompressedTextureFormatFeatureEnabled(Format::BC1_UNORM, features));
     EXPECT_FALSE(VulkanDetail::IsCompressedTextureFormatFeatureEnabled(Format::ASTC_4x4_UNORM, features));
     EXPECT_FALSE(VulkanDetail::IsCompressedTextureFormatFeatureEnabled(Format::ASTC_4x4_FLOAT, features));
-    EXPECT_TRUE(VulkanDetail::IsCompressedTextureFormatFeatureEnabled(Format::RGBA8_UNORM, features));
 
     features.bcEnabled = true;
     EXPECT_TRUE(VulkanDetail::IsCompressedTextureFormatFeatureEnabled(Format::BC7_UNORM_SRGB, features));

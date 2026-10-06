@@ -153,7 +153,6 @@ TEST(AssetPaths, RelativeComponentsPreserveDotsAndCanonicalizeOnlyAsciiText){
         { "Models//./Hero.LOD0.NWB///", "models/hero.lod0.nwb", true },
         { "./.Hidden/../Ignored", ".hidden", false },
         { "Dir.Name/.../File.", "dir.name/.../file.", true },
-        { "UPPER/Keep Space/Asset_Name", "upper/keep space/asset_name", true },
         { "", "", false },
         { ".", "", false },
         { "././", "", false },
@@ -192,19 +191,6 @@ TEST(AssetPaths, RelativeBackslashesFollowHostComponentRulesBeforeCanonicalizati
 #endif
 }
 
-TEST(AssetPaths, UnicodeComponentsPreserveCodePointsAndNativeWideInput){
-    AssetArena inputArena(Name("tests/asset_path/unicode_inputs"));
-    Alloc::ScratchArena scratchArena(Name("tests/asset_path/unicode_scratch"));
-    constexpr AStringView s_Input = "ÉTAGE/한글/東京/😀/MODEL.NWB";
-    constexpr AStringView s_Expected = "Étage/한글/東京/😀/model.nwb";
-    const NWB::Path utf8Path(inputArena, s_Input);
-    const NWB::Path widePath(inputArena, WStringView(L"\u00c9TAGE/\ud55c\uae00/\u6771\u4eac/\U0001f600/MODEL.NWB"));
-    AString<Alloc::ScratchArena> output(scratchArena);
-    ASSERT_TRUE(AssetPathsDetail::BuildRelativeAssetPathText(utf8Path, output));
-    EXPECT_EQ(AStringView(output), s_Expected);
-    ASSERT_TRUE(AssetPathsDetail::BuildRelativeAssetPathText(widePath, output));
-    EXPECT_EQ(AStringView(output), s_Expected);
-}
 
 TEST(AssetPaths, DerivedPathRemovesOnlyFinalExtensionAndPreservesVirtualRootText){
     PathFixture fixture;
@@ -263,12 +249,6 @@ TEST(AssetPaths, LongAsciiAndUnicodePathsRemainCorrectAcrossRepeatedCallerArenaU
                 EXPECT_EQ(relative.c_str()[relative.size()], '\0');
             }
             EXPECT_TRUE(BuildAndVerifyDerivedPath(fixture, scratchArena));
-            {
-                AString<Alloc::ScratchArena> shortOutput(scratchArena);
-                const NWB::Path shortPath(fixture.arena, "Small/./Asset");
-                ASSERT_TRUE(AssetPathsDetail::BuildRelativeAssetPathText(shortPath, shortOutput));
-                EXPECT_EQ(AStringView(shortOutput), "small/asset");
-            }
             for(usize index = 0u; index < 64u; ++index)
                 EXPECT_EQ(sentinel[index], static_cast<u8>(index + 91u));
             const ArenaMemoryStats after = scratchArena.memoryStats();

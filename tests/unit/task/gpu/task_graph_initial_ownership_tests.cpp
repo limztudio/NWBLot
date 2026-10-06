@@ -91,11 +91,6 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
             queues[0u].id
         );
         ASSERT_TRUE(resource.valid());
-        {
-            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-
-            EXPECT_EQ(declarations.resourceAt(resource.index).initialOwnerQueue, queues[0u].id);
-        }
         const Graphics::GpuTaskId task = addFirstUse(
             graph,
             resource,

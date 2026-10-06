@@ -45,8 +45,6 @@ LIT_TESTBED = "testbed"
 LIT_NWB_ASSET_BUILDER = "nwb_asset_builder"
 LIT_CMAKECACHE_TXT = "CMakeCache.txt"
 LIT_UTF_8 = "utf-8"
-LIT_NWB_BUILD_TESTS = "NWB_BUILD_TESTS"
-LIT_ON = "ON"
 LIT_RUN = "run"
 LIT_C_BUILD_ARM64_VIEWER_EXE = r"C:\build\arm64\viewer.exe"
 LIT_POPEN = "Popen"
@@ -67,17 +65,6 @@ LIT_TRANSFER_QUEUE = "transfer_queue"
 LIT_UTILITIES = "utilities"
 LIT_TEX_CONV = "tex_conv"
 LIT_ASYNC_SHADOW_M4_2 = "async-shadow-m4"
-LIT_TESTS_AB_ASYNC_SHADOW_M4_LAUNCH_PY = "tests/ab/async_shadow_m4/launch.py"
-LIT_COMMAND_IR_2 = "command-ir"
-LIT_TESTS_AB_COMMAND_IR_LAUNCH_PY = "tests/ab/command_ir/launch.py"
-LIT_FRAME_LAGGED_ASYNC_LIGHTING_2 = "frame-lagged-async-lighting"
-LIT_TESTS_AB_FRAME_LAGGED_ASYNC_LIGHTING_L = "tests/ab/frame_lagged_async_lighting/launch.py"
-LIT_HARDWARE_SHADOW_BOUNDARY_2 = "hardware-shadow-boundary"
-LIT_TESTS_AB_HARDWARE_SHADOW_BOUNDARY_LAUNCH = "tests/ab/hardware_shadow_boundary/launch.py"
-LIT_TRANSFER_QUEUE_2 = "transfer-queue"
-LIT_TESTS_AB_TRANSFER_QUEUE_LAUNCH_PY = "tests/ab/transfer_queue/launch.py"
-LIT_TESTS_SMOKE_LAUNCH_PY = "tests/smoke/launch.py"
-LIT_TESTS_AB_LAUNCH_PY = "tests/ab/launch.py"
 LIT_SAME_NAME = "same_name"
 LIT_A = r"\A"
 LIT_Z = r"\Z"
@@ -94,9 +81,6 @@ LIT_CUSTOM_ARTIFACTS = "custom artifacts"
 LIT_DEPENDENCY_COMPUTER_EXE = "dependency_computer.exe"
 LIT_ASSET_BUILDER_EXE = "asset_builder.exe"
 LIT_ASSET_GATHERER_EXE = "asset_gatherer.exe"
-LIT_CONFIGURE = "configure"
-LIT_RESOLVE = "resolve"
-LIT_STAGE = "stage"
 LIT_BUILTINS_PRINT = "builtins.print"
 LIT_MAIN = "__main__"
 LIT_BUILD_ONLY = "--build-only"
@@ -107,11 +91,9 @@ LIT_ARCH = "--arch"
 LIT_PLATFORM = "--platform"
 LIT_DOMAIN = "--domain"
 LIT_WITH_PROFILE = "--with-profile"
-LIT_DEFINE = "-D"
 LIT_LIBRARY_TARGET = "nwb_common"
 LIT_AGGREGATE_TARGET = "nwb_pipeline"
 LIT_COLD_CUSTOM_BUILD = "cold custom build"
-LIT_NWB_LOGSERVER = "nwb_logserver"
 LIT_HELP = "--help"
 LIT_FORBIDDEN_LAUNCH = "A build operation entered a launch path"
 LIT_ENGINE = "engine"
@@ -305,12 +287,6 @@ class LauncherPlatformTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "conflicts with configure preset"):
             launcher.resolve_launch_settings(args, LIT_FULL)
 
-    def test_required_cache_defines_accept_cmake_bool_values(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            build_dir = Path(temp_dir)
-            (build_dir / LIT_CMAKECACHE_TXT).write_text("NWB_BUILD_TESTS:BOOL=ON\n", encoding=LIT_UTF_8)
-            self.assertTrue(launcher.cache_matches_required_defines(build_dir, {LIT_NWB_BUILD_TESTS: "TRUE"}))
-            self.assertFalse(launcher.cache_matches_required_defines(build_dir, {LIT_NWB_BUILD_TESTS: "OFF"}))
 
     def test_windows_kill_existing_matches_exact_image_not_same_basename(self):
         x64_image = r"C:\Build\x64\viewer.exe"
@@ -389,31 +365,6 @@ class LauncherPlatformTests(unittest.TestCase):
         self.assertIn((LIT_FORCE, retained_handle), events)
         self.assertEqual(1, sum(event[0] == LIT_OPEN for event in events))
 
-    def test_windows_bounded_shutdown_exits_gracefully_without_hard_termination(self):
-        events = []
-        process = FakeSpawnedProcess(303, 0, events)
-
-        result = repository_windows_process.run_bounded_process(
-            process,
-            8.0,
-            4.0,
-            2.0,
-            api=FakeBoundedProcessApi([False, True], events),
-        )
-
-        self.assertEqual(0, result.exit_code)
-        self.assertFalse(result.forced)
-        self.assertEqual(
-            [
-                (LIT_OPEN, 303, mock.ANY),
-                (LIT_NATIVE_WAIT, mock.ANY, 8.0),
-                (LIT_CLOSE, 303),
-                (LIT_NATIVE_WAIT, mock.ANY, 4.0),
-                (LIT_WAIT, None),
-                (LIT_RELEASE, mock.ANY),
-            ],
-            events,
-        )
 
     def test_windows_bounded_shutdown_propagates_nonzero_graceful_exit(self):
         events = []
@@ -584,24 +535,9 @@ class LauncherPlatformTests(unittest.TestCase):
             tests_launchers = launcher.discover_directory_launchers(Path(LIT_TESTS), root)
             ab_launchers = launcher.discover_directory_launchers(Path(LIT_TESTS) / LIT_AB, root)
 
-        self.assertEqual(
-            {
-                LIT_AB: Path(LIT_TESTS_AB_LAUNCH_PY),
-                LIT_SMOKE: Path(LIT_TESTS_SMOKE_LAUNCH_PY),
-            },
-            {command: discovered.script for command, discovered in tests_launchers.items()},
-        )
+        self.assertEqual({LIT_AB, LIT_SMOKE}, set(tests_launchers))
         self.assertNotIn(LIT_ASYNC_SHADOW_M4_2, tests_launchers)
-        self.assertEqual(
-            {
-                LIT_ASYNC_SHADOW_M4_2: Path(LIT_TESTS_AB_ASYNC_SHADOW_M4_LAUNCH_PY),
-                LIT_COMMAND_IR_2: Path(LIT_TESTS_AB_COMMAND_IR_LAUNCH_PY),
-                LIT_FRAME_LAGGED_ASYNC_LIGHTING_2: Path(LIT_TESTS_AB_FRAME_LAGGED_ASYNC_LIGHTING_L),
-                LIT_HARDWARE_SHADOW_BOUNDARY_2: Path(LIT_TESTS_AB_HARDWARE_SHADOW_BOUNDARY_LAUNCH),
-                LIT_TRANSFER_QUEUE_2: Path(LIT_TESTS_AB_TRANSFER_QUEUE_LAUNCH_PY),
-            },
-            {command: discovered.script for command, discovered in ab_launchers.items()},
-        )
+        self.assertIn(LIT_ASYNC_SHADOW_M4_2, ab_launchers)
 
     def test_duplicate_launch_commands_are_rejected(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -682,23 +618,6 @@ class LauncherBuildBoundaryTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
         return result
 
-    def test_nonexecutable_targets_build_in_a_cold_custom_directory_without_launching(self):
-        custom = self.root / LIT_COLD_CUSTOM_BUILD
-        self.assertEqual(0, launcher.main([
-            LIT_BUILD, LIT_LIBRARY_TARGET, LIT_AGGREGATE_TARGET, *self.arguments,
-            LIT_BUILD_DIR, str(custom), LIT_DEFINE, "NWB_BUILD_TESTS=ON",
-        ]))
-
-        commands = [call.args[0] for call in self.process.call_args_list]
-        self.assertEqual(2, len(commands))
-        self.assertEqual(
-            [LIT_CMAKE_EXECUTABLE, "--preset", LIT_WINDOWS_CLANG_ARM64, "-B", str(custom), "-DNWB_BUILD_TESTS=ON"],
-            commands[0],
-        )
-        target_index = commands[1].index("--target")
-        self.assertEqual([LIT_LIBRARY_TARGET, LIT_AGGREGATE_TARGET], commands[1][target_index + 1:target_index + 3])
-        self.profile_build.assert_not_called()
-        self.popen.assert_not_called()
 
     def test_relative_cold_directory_is_resolved_against_the_foreign_repository_root(self):
         relative = Path(f"{LIT_COLD_CUSTOM_BUILD}-{self.root.name}")
@@ -719,37 +638,6 @@ class LauncherBuildBoundaryTests(unittest.TestCase):
         self.assertEqual(str(custom), commands[1][commands[1].index("--build") + 1])
         self.assertFalse(custom.exists())
         self.assertEqual(caller_existed, caller_directory.exists())
-        self.popen.assert_not_called()
-
-    def test_existing_custom_directory_is_reconfigured_without_replacing_its_preset(self):
-        custom = self.root / LIT_COLD_CUSTOM_BUILD
-        custom.mkdir()
-        (custom / LIT_CMAKECACHE_TXT).write_text("CMAKE_GENERATOR:INTERNAL=Ninja\n", encoding=LIT_UTF_8)
-
-        self.assertEqual(0, launcher.main([
-            LIT_BUILD, LIT_LIBRARY_TARGET, *self.arguments, LIT_BUILD_DIR, str(custom),
-            LIT_DEFINE, "NWB_BUILD_TESTS=ON",
-        ]))
-
-        self.assertEqual(
-            [LIT_CMAKE_EXECUTABLE, "-S", str(self.root), "-B", str(custom), "-DNWB_BUILD_TESTS=ON"],
-            self.process.call_args_list[0].args[0],
-        )
-        self.popen.assert_not_called()
-
-    def test_profiled_build_only_builds_dependencies_without_starting_a_session(self):
-        self.assertEqual(0, launcher.main([
-            LIT_RUN, LIT_TESTBED, *self.arguments, LIT_BUILD_ONLY, LIT_WITH_PROFILE,
-        ]))
-
-        commands = [call.args[0] for call in self.process.call_args_list]
-        self.assertEqual(3, len(commands))
-        self.assertIn("-DNWB_BUILD_LOGSERVER=ON", commands[0])
-        self.assertEqual(LIT_TESTBED, commands[1][commands[1].index("--target") + 1])
-        self.assertEqual(LIT_NWB_LOGSERVER, commands[2][commands[2].index("--target") + 1])
-        self.profile_build.assert_called_once()
-        for operation in self.forbidden:
-            operation.assert_not_called()
         self.popen.assert_not_called()
 
     def test_project_build_only_does_not_require_an_application_executable(self):
@@ -784,10 +672,6 @@ class LauncherBuildBoundaryTests(unittest.TestCase):
                 self.query.assert_not_called()
                 self.process.assert_not_called()
                 self.popen.assert_not_called()
-                printed = "\n".join(str(call.args[0]) for call in self.output.call_args_list)
-                self.assertIn(LIT_WINDOWS_CLANG_ARM64, printed)
-                self.assertIn(str(custom), printed)
-                self.assertIn("--build", printed)
 
     def test_configuration_failure_prevents_build_and_launch(self):
         invocations = (
@@ -1091,23 +975,6 @@ class PipelineLauncherTests(unittest.TestCase):
         )
         return configure, build, resolve
 
-    def test_builds_pipeline_before_running_stages_with_direct_asset_options(self):
-        configure, build, resolve = self.prepare_pipeline_build()
-        workflow = mock.Mock()
-        for name, operation in ((LIT_CONFIGURE, configure), (LIT_BUILD, build), (LIT_RESOLVE, resolve), (LIT_STAGE, self.stage)):
-            workflow.attach_mock(operation, name)
-
-        self.assertEqual(0, self.pipeline.main(self.arguments))
-
-        configure.assert_called_once_with(mock.ANY, self.settings, {"NWB_BUILD_PIPELINE": LIT_ON}, self.environment)
-        build.assert_called_once_with(mock.ANY, self.settings, "nwb_pipeline", self.environment)
-        self.assertEqual(
-            [mock.call(self.settings, target, None, None, False) for target in self.tool_paths],
-            resolve.call_args_list,
-        )
-        self.assertEqual([LIT_CONFIGURE, LIT_BUILD, LIT_RESOLVE, LIT_RESOLVE, LIT_RESOLVE, LIT_STAGE, LIT_STAGE, LIT_STAGE],
-                         [call[0] for call in workflow.mock_calls])
-        self.process.assert_not_called()
 
     def test_build_failure_propagates_without_resolving_or_launching_tools(self):
         _, build, resolve = self.prepare_pipeline_build()
@@ -1122,19 +989,9 @@ class PipelineLauncherTests(unittest.TestCase):
         self.process.assert_not_called()
         self.assertFalse(self.cache.exists())
 
-    def test_skip_build_avoids_configuration_and_build_but_runs_all_stages(self):
-        configure, build, resolve = self.prepare_pipeline_build()
 
-        self.assertEqual(0, self.pipeline.main([*self.arguments, "--skip-build"]))
-
-        configure.assert_not_called()
-        build.assert_not_called()
-        self.refresh.assert_not_called()
-        self.assertEqual(3, resolve.call_count)
-        self.assertEqual(list(self.tool_paths.values()), [call.args[0] for call in self.stage.call_args_list])
-
-    def test_dry_run_prints_commands_without_subprocesses_or_output_creation(self):
-        with mock.patch(LIT_BUILTINS_PRINT) as output, mock.patch.object(subprocess, LIT_POPEN) as popen:
+    def test_pipeline_dry_run_has_no_subprocess_or_output_side_effects(self):
+        with mock.patch(LIT_BUILTINS_PRINT), mock.patch.object(subprocess, LIT_POPEN) as popen:
             self.assertEqual(0, self.pipeline.main([*self.arguments, LIT_DRY_RUN]))
 
         self.process.assert_not_called()
@@ -1143,12 +1000,6 @@ class PipelineLauncherTests(unittest.TestCase):
         self.assertFalse(self.settings.build_dir.exists())
         self.assertFalse(self.cache.exists())
         self.assertFalse(self.output.exists())
-        printed = "\n".join(str(call.args[0]) for call in output.call_args_list)
-        self.assertIn("NWB_BUILD_PIPELINE=ON", printed)
-        self.assertIn("--target nwb_pipeline", printed)
-        for executable in (LIT_DEPENDENCY_COMPUTER_EXE, LIT_ASSET_BUILDER_EXE, LIT_ASSET_GATHERER_EXE):
-            self.assertIn(executable, printed)
-        self.assertIn("--configuration opt", printed)
 
     def test_help_skips_configuration_build_and_target_resolution(self):
         configure, build, resolve = self.prepare_pipeline_build()

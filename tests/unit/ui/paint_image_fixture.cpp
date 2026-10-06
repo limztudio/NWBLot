@@ -131,12 +131,12 @@ PaintImageFixture::PaintImageFixture()
     beginPaint(m_builder);
 }
 
-void PaintImageFixture::beginPaint(PaintBuilder& builder, const u64 generation, const DisplayMetrics& display){
-    builder.begin(display, generation, 3u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
+void PaintImageFixture::beginPaint(PaintBuilder& builder, const u64 generation){
+    builder.begin({ 200.0f, 100.0f, 1.25f, 1.5f }, generation, 3u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
     builder.reserve(16u);
 }
 
-SharedGlyphPage PaintImageFixture::makeGlyph(const u64 atlasIdentity, const u64 generation, const u32 index){
+SharedGlyphPage PaintImageFixture::makeGlyph(const u64 atlasIdentity, const u64 generation){
     GlyphPage::Pixels pixels(m_arena);
     pixels.resize(64u, 0u);
     pixels[0u] = 64u;
@@ -147,19 +147,19 @@ SharedGlyphPage PaintImageFixture::makeGlyph(const u64 atlasIdentity, const u64 
         .fontGeneration = 9u,
         .atlasIdentity = atlasIdentity,
         .generation = generation,
-        .index = index,
+        .index = 0u,
         .width = 8u,
         .height = 8u,
     };
     return CreateGlyphPage(m_arena, binding, Move(pixels));
 }
 
-SharedSdfAtlasPage PaintImageFixture::makeSdf(const u64 atlasIdentity, const u64 generation, const u32 index, const u8 pixel){
+SharedSdfAtlasPage PaintImageFixture::makeSdf(const u64 atlasIdentity){
     SdfAtlasPage::Pixels pixels(m_arena);
     pixels.resize(8u * 8u * 4u, 0u);
     pixels[0u] = 32u;
     pixels[1u] = 128u;
-    pixels[2u] = pixel;
+    pixels[2u] = 255u;
     pixels[3u] = 192u;
     const SdfAtlasPageBinding binding{
         .font = Core::Assets::AssetRef<Font>("tests/ui/font"),
@@ -167,8 +167,8 @@ SharedSdfAtlasPage PaintImageFixture::makeSdf(const u64 atlasIdentity, const u64
         .pixelsSha256 = {},
         .fontGeneration = 9u,
         .atlasIdentity = atlasIdentity,
-        .generation = generation,
-        .index = index,
+        .generation = 1u,
+        .index = 0u,
         .width = 8u,
         .height = 8u,
         .spreadPixels = 8u,

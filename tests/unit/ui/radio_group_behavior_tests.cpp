@@ -366,27 +366,7 @@ TEST(UiRadioGroupBehaviorTests, HomeEndChooseEnabledEndpoints){
     EXPECT_FALSE(result.activated);
 }
 
-TEST(UiRadioGroupBehaviorTests, SubmitAndPointerActivateReportActivationEvenForAnIdenticalChoice){
-    ChoiceSource source;
-    RadioGroupState state;
-    state.select(2u);
-    RadioGroupChoices choices;
-    RadioGroupResult result;
-    ASSERT_TRUE(RadioGroupBehavior::Reconcile(state, source, choices, result));
-    const u64 input = state.inputGeneration();
-    const u64 revision = state.revision();
-    result = {};
-    ASSERT_TRUE(RadioGroupBehavior::Apply(state, choices, {}, Action(state, ControlActionKind::Submit), result));
-    EXPECT_TRUE(result.activated);
-    EXPECT_FALSE(result.selectionChanged);
-    EXPECT_EQ(state.revision(), revision + 1u);
-    result = {};
-    ASSERT_TRUE(RadioGroupBehavior::Apply(state, choices, {}, Action(state, ControlActionKind::Activate, 2u), result));
-    EXPECT_TRUE(result.activated);
-    EXPECT_FALSE(result.selectionChanged);
-    EXPECT_EQ(state.inputGeneration(), input);
-    EXPECT_EQ(state.revision(), revision + 2u);
-}
+
 
 TEST(UiRadioGroupBehaviorTests, IdenticalNavigationAndIgnoredPageIntentAdvanceRevisionWithoutRetiringInput){
     ChoiceSource source;

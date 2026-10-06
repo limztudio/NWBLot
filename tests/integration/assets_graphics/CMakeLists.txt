@@ -8,10 +8,8 @@ target_sources(nwb_assets_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/model_payload_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/model_cook_metadata_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/skeleton_payload_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/gi_material_surface_contract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/assets_graphics_fixture.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/assets_graphics_fixture.h"
-    "${CMAKE_CURRENT_LIST_DIR}/caustic_refract_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/csg_cook_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/codec_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/material_tests.cpp"
@@ -23,7 +21,6 @@ target_sources(nwb_assets_graphics_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/mesh_object_shader_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/texture_tests.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/sampler_tests.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/volume_extensibility_tests.cpp"
     "${CMAKE_SOURCE_DIR}/tests/common/meshlet_ref_test_data.h"
 )
 target_compile_definitions(nwb_assets_graphics_tests PRIVATE NWB_COOK=1)

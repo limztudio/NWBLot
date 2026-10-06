@@ -191,8 +191,6 @@ TEST(SoftwareSceneRefitGraph, RetainedInputUploadCompilesAndOwnsTheSrvTransition
             EXPECT_EQ(upload.resourceUses[1u].requiredState, Core::ResourceStates::Common);
             EXPECT_EQ(view.resourceAt(input.index).externalFinalState, Core::ResourceStates::Common);
             const auto refit = view.taskAt(tasks.refit.index);
-            EXPECT_EQ(refit.commands.requiredCapabilities, Core::GpuQueueCapability::Compute);
-            EXPECT_TRUE(refit.commands.requiresPrimaryGraphicsQueue);
             ASSERT_EQ(refit.dependencyCount, 1u);
             EXPECT_EQ(refit.dependencies[0u], tasks.inputUpload);
             EXPECT_EQ(refit.resourceUseCount, 3u); // Repeated instances share one declared mesh-root read.

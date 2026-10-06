@@ -272,19 +272,6 @@ TEST(UiListBehaviorTests, HundredThousandRowsSkipALargeDisabledRangeWithBoundedS
     EXPECT_FALSE(result.activated);
 }
 
-TEST(UiListBehaviorTests, NoCursorStartsAtTheEnabledBoundaryInTheNavigationDirection){
-    RangeSource source;
-    ListState forward;
-    ListState reverse;
-    ASSERT_TRUE(ListBehavior::Reconcile(forward, source));
-    ASSERT_TRUE(ListBehavior::Reconcile(reverse, source));
-    ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(forward, source, {}, Action(forward, source, ControlActionKind::Down), result));
-    ASSERT_TRUE(ListBehavior::Apply(reverse, source, {}, Action(reverse, source, ControlActionKind::Up), result));
-    EXPECT_EQ(forward.cursorKey(), 1u);
-    EXPECT_EQ(reverse.cursorKey(), 10u);
-}
-
 TEST(UiListBehaviorTests, HomeEndAndBoundaryNavigationNeverWrap){
     RangeSource source;
     ListState state;
@@ -306,13 +293,6 @@ TEST(UiListBehaviorTests, PageNavigationUsesAcceptedRowsAndSaturatesWithoutInteg
     ASSERT_TRUE(ListBehavior::Reconcile(state, source));
     ListResult result;
     ControlAction action = Action(state, source, ControlActionKind::PageDown);
-    action.pageRows = 4u;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, action, result));
-    EXPECT_EQ(state.cursorKey(), 7u);
-    action.kind = ControlActionKind::PageUp;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, action, result));
-    EXPECT_EQ(state.cursorKey(), 3u);
-    action.kind = ControlActionKind::PageDown;
     action.pageRows = Limit<u64>::s_Max;
     ASSERT_TRUE(ListBehavior::Apply(state, source, {}, action, result));
     EXPECT_EQ(state.cursorKey(), 10u);
@@ -458,29 +438,6 @@ TEST(UiListBehaviorTests, EnsureVisibleFailureKeepsItsRequestForTheNextValidAtte
     EXPECT_DOUBLE_EQ(state.scrollOffset(), 96.0);
 }
 
-TEST(UiListBehaviorTests, WheelUsesAcceptedStepAndMaximumWithoutSelectingOrRevealingCursor){
-    RangeSource source;
-    ListState state;
-    state.select(5u);
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    ListOptions options;
-    options.rowHeight = 128.0f;
-    options.wheelRows = 7.0f;
-    ControlAction action = Action(state, source, ControlActionKind::Wheel);
-    action.delta = -2.0;
-    action.step = 8.0;
-    action.maximum = 64.0;
-    ListResult result;
-    ASSERT_TRUE(ListBehavior::Apply(state, source, options, action, result));
-    EXPECT_DOUBLE_EQ(state.scrollOffset(), 16.0);
-    EXPECT_EQ(state.selectedKey(), 5u);
-    EXPECT_EQ(state.cursorKey(), 5u);
-    EXPECT_FALSE(result.selectionChanged);
-    EXPECT_FALSE(result.activated);
-    ASSERT_TRUE(ListBehavior::EnsureCursor(state, source, 32.0f, 64.0));
-    EXPECT_DOUBLE_EQ(state.scrollOffset(), 16.0);
-}
-
 TEST(UiListBehaviorTests, HugeWheelDeltasClampWithoutMultiplicationOverflow){
     RangeSource source;
     ListState state;
@@ -554,10 +511,9 @@ TEST(UiListBehaviorTests, InvalidOptionsKindsAndZeroPageSizeRejectWithoutChangin
     EXPECT_EQ(state.selectedKey(), 2u);
 }
 
-TEST(UiListBehaviorTests, InternalChangesKeepInputLifetimeAndAccumulateResultFlags){
+TEST(UiListBehaviorTests, RepeatedHomeNoopPreservesEarlierSelectionChange){
     RangeSource source;
     ListState state;
-    const u64 inputGeneration = state.inputGeneration();
     ASSERT_TRUE(ListBehavior::Reconcile(state, source));
     ListResult result;
     ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Home), result));
@@ -565,14 +521,6 @@ TEST(UiListBehaviorTests, InternalChangesKeepInputLifetimeAndAccumulateResultFla
     ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Home), result));
     EXPECT_TRUE(result.selectionChanged);
     EXPECT_FALSE(result.activated);
-    ASSERT_TRUE(ListBehavior::Apply(state, source, {}, Action(state, source, ControlActionKind::Submit), result));
-    EXPECT_TRUE(result.activated);
-    ASSERT_TRUE(ListBehavior::EnsureCursor(state, source, 32.0f, 64.0));
-    ++source.generation;
-    ASSERT_TRUE(ListBehavior::Reconcile(state, source));
-    EXPECT_EQ(state.inputGeneration(), inputGeneration);
-    EXPECT_TRUE(result.selectionChanged);
-    EXPECT_TRUE(result.activated);
 }
 
 

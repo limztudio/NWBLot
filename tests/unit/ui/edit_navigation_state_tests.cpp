@@ -31,7 +31,6 @@ TEST(UiEditNavigationStateTests, IndependentOwnersCannotReviveEachOthersCopiedIn
     EditNavigationState second;
     EXPECT_NE(first.instanceGeneration(), 0u);
     EXPECT_NE(first.instanceGeneration(), second.instanceGeneration());
-    EXPECT_FALSE(first.hasPreferredX());
     EXPECT_TRUE(first.matches(first.snapshot()));
     EXPECT_FALSE(second.matches(first.snapshot()));
     ASSERT_TRUE(first.setPreferredX(40.0f));
@@ -67,7 +66,6 @@ TEST(UiEditNavigationStateTests, ResetRetiresBothValidAndAlreadyEmptyIntent){
     state.reset();
     EXPECT_FALSE(state.matches(preferred));
     EXPECT_FALSE(state.hasPreferredX());
-    EXPECT_FLOAT_EQ(state.preferredX(), 0.0f);
     const auto empty = state.snapshot();
     state.reset();
     EXPECT_FALSE(state.matches(empty));

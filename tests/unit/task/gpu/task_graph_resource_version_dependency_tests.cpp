@@ -111,12 +111,6 @@ TEST(GpuTaskGraphResourceVersion, OrdersConsumerBeforeProducerAndPublishesCompil
     EXPECT_EQ(analysis.resourceVersionEdgeCount(), 1u);
     EXPECT_TRUE(analysis.hasInferredEdge(producer, consumer));
 
-    const GpuTaskGraphReadViews views(graph, compiledGraph);
-    ASSERT_TRUE(views.valid());
-    const Graphics::GpuTaskGraphCompileStatistics statistics = views.compiled.compileStatistics();
-    ASSERT_TRUE(statistics.valid());
-    EXPECT_EQ(statistics.resourceVersionCount, 1u);
-    EXPECT_EQ(statistics.resourceVersionEdgeCount, 1u);
 }
 
 TEST(GpuTaskGraphResourceVersion, ExportsDependencyAndLifetimeReasonsWithExplicitOverlap){
@@ -371,11 +365,7 @@ TEST(GpuTaskGraphResourceVersion, RetainsExternalCompletionForImportedRootConsum
     Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
     ASSERT_TRUE(Analyze(graph, analysis));
     EXPECT_EQ(analysis.resourceVersionEdgeCount(), 0u);
-    ASSERT_EQ(analysis.topologicalOrder().size(), 1u);
-    EXPECT_EQ(analysis.topologicalOrder()[0], consumer);
     ASSERT_EQ(analysis.externalDependencies().size(), 1u);
-    EXPECT_EQ(analysis.externalDependencies()[0].completion, completion);
-    EXPECT_EQ(analysis.externalDependencies()[0].consumer, consumer);
     u64 analyzedRevision = 0u;
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);

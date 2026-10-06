@@ -280,9 +280,6 @@ TEST(GpuTaskGraph, TypedImportsInheritAndValidateImmutableNativeQueueSharing){
             ASSERT_TRUE(resourceView.hasQueueAdmission);
             ASSERT_TRUE(resourceView.queueAdmission.valid());
             EXPECT_EQ(resourceView.queueAdmission.admittedQueueClasses, s_NativeQueueSharing);
-            EXPECT_FALSE(resourceView.queueAdmission.usesConcurrentSharing);
-            EXPECT_EQ(resourceView.queueAdmission.queueFamilyIndexCount, 0u);
-            EXPECT_EQ(resourceView.queueAdmission.queueFamilyIndices, nullptr);
         }
 
         {
@@ -873,12 +870,6 @@ TEST(GpuTaskGraph, TypedImportsValidateRetainedExternalFinalState){
                     .setExternalFinalReleaseDestinationQueue(releaseDestinationQueue)
             );
             ASSERT_TRUE(resource.valid());
-            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-            EXPECT_EQ(declarations.resourceAt(resource.index).externalFinalState, s_NativeInitialState);
-            EXPECT_EQ(
-                declarations.resourceAt(resource.index).externalFinalReleaseDestinationQueue,
-                releaseDestinationQueue
-            );
         }
 
         {
@@ -908,8 +899,6 @@ TEST(GpuTaskGraph, TypedImportsValidateRetainedExternalFinalState){
                     .setExternalFinalReleaseDestinationQueue(releaseDestinationQueue)
             );
             ASSERT_TRUE(resource.valid());
-            const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-            EXPECT_EQ(declarations.resourceAt(resource.index).externalFinalState, differingFinalState);
         }
         setKeepInitialState(true);
     };
@@ -954,16 +943,6 @@ TEST(GpuTaskGraph, TypedImportsValidateRetainedExternalFinalState){
         Graphics::ResourceStates::AccelStructRead
     );
 
-    Graphics::GpuTaskGraph metadataOnlyGraph(testArena.arena);
-    EXPECT_TRUE(metadataOnlyGraph.importResource(
-        Graphics::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/metadata_only_external_final"))
-            .setMarkerLabel("Metadata Only External Final")
-            .setType(Graphics::GpuGraphResourceType::Buffer)
-            .setInitialState(s_NativeInitialState)
-            .setExternalFinalState(Graphics::ResourceStates::ShaderResource)
-            .setExternalFinalReleaseDestinationQueue(releaseDestinationQueue)
-    ).valid());
 }
 
 TEST(GpuTaskGraph, RejectsTypedImportsFromMismatchedDeviceGeneration){

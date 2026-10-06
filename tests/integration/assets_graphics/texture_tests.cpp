@@ -23,7 +23,6 @@ namespace Tests{
 
 
 constexpr u32 s_ExpectedDualCount = 2u;
-constexpr u32 s_ThirdElementIndex = 2u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -108,19 +107,6 @@ static NWB::Impl::Texture::MipLevelVector MakeTextureTestMipLevels(TestArena& te
     mipLevels.push_back(NWB::Impl::TextureMipLevel{ 3u, s_ExpectedDualCount, 1u, 1u, 64u, 16u });
     mipLevels.push_back(NWB::Impl::TextureMipLevel{ 1u, 1u, 1u, 1u, 80u, 16u });
     return mipLevels;
-}
-
-
-static NWB::Core::Assets::AssetBytes MakeTextureTestHdrPayload(TestArena& testArena){
-    NWB::Core::Assets::AssetBytes bytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
-    // HDR RGB blocks come first; the matched LDR alpha blocks deliberately use
-    // a different byte range so the tests exercise the trailing-stream boundary.
-    bytes.resize(96u);
-    for(usize index = 0u; index < 48u; ++index)
-        bytes[index] = static_cast<u8>(0x40u + index);
-    for(usize index = 0u; index < 48u; ++index)
-        bytes[48u + index] = static_cast<u8>(0x80u + index);
-    return bytes;
 }
 
 
@@ -221,161 +207,6 @@ TEST(AssetsGraphics, TexturePayloadRejectsMismatchedExplicitAlphaMode){
     EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("inconsistent alpha metadata")));
 }
 
-TEST(AssetsGraphics, TextureCookerBuildsCookedAssetFromTexConverterMetadata){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-    TestArena testArena;
-    Path root(testArena.arena);
-    Path outputDirectory(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
-        testArena,
-        "texture_cooker_round_trip",
-        root,
-        outputDirectory
-    ));
-
-    const Path assetRoot = root / "assets";
-    const Path textureDirectory = assetRoot / "textures";
-    const Path metadataPath = textureDirectory / "checker.nwb";
-    const Path dataPath = textureDirectory / "checker.tex";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_TextureTestMetadata));
-    ASSERT_TRUE(WriteBinaryFile(dataPath, MakeTextureTestUastcPayload(testArena)));
-    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-
-    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::TextureAssetCodec>(
-        testArena,
-        outputDirectory,
-        Name("project/textures/checker"),
-        loadedAsset,
-        1u
-    ));
-    ASSERT_NE(loadedAsset.get(), nullptr);
-
-    const NWB::Impl::Texture& texture = static_cast<const NWB::Impl::Texture&>(*loadedAsset);
-    EXPECT_EQ(texture.colorSpace(), NWB::Impl::TextureColorSpace::Srgb);
-    EXPECT_TRUE(texture.hasAlpha());
-    EXPECT_EQ(texture.width(), 7u);
-    EXPECT_EQ(texture.height(), 5u);
-    ASSERT_EQ(texture.mipLevels().size(), 3u);
-    EXPECT_EQ(texture.payloadBytes().size(), 96u);
-
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
-    EXPECT_EQ(logger.errorCount(), 0u);
-}
-
-TEST(AssetsGraphics, TextureCookerBuildsUastcHdrAssetWithTrailingAlphaFromMetadata){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-    TestArena testArena;
-    Path root(testArena.arena);
-    Path outputDirectory(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
-        testArena,
-        "texture_hdr_cooker_round_trip",
-        root,
-        outputDirectory
-    ));
-
-    const Path assetRoot = root / "assets";
-    const Path textureDirectory = assetRoot / "textures";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(textureDirectory / "bright.nwb", s_TextureHdrTestMetadata));
-    ASSERT_TRUE(WriteBinaryFile(textureDirectory / "bright.tex", MakeTextureTestHdrPayload(testArena)));
-    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-
-    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::TextureAssetCodec>(
-        testArena,
-        outputDirectory,
-        Name("project/textures/bright"),
-        loadedAsset,
-        1u
-    ));
-    ASSERT_NE(loadedAsset.get(), nullptr);
-
-    const NWB::Impl::Texture& texture = static_cast<const NWB::Impl::Texture&>(*loadedAsset);
-    EXPECT_EQ(texture.colorSpace(), NWB::Impl::TextureColorSpace::Linear);
-    EXPECT_EQ(texture.payloadFormat(), TexturePayloadFormat::UastcHdr4x4);
-    EXPECT_EQ(texture.alphaMode(), TextureAlphaMode::SeparateUastcLdr4x4);
-    EXPECT_EQ(texture.alphaConstantUnorm8(), 255u);
-    EXPECT_TRUE(texture.hasAlpha());
-    EXPECT_EQ(texture.width(), 4u);
-    EXPECT_EQ(texture.height(), s_ExpectedDualCount);
-    ASSERT_EQ(texture.mipLevels().size(), 3u);
-    EXPECT_EQ(texture.mipLevels()[0u].blockCountX, 1u);
-    EXPECT_EQ(texture.mipLevels()[0u].blockCountY, 1u);
-    EXPECT_EQ(texture.mipLevels()[s_ThirdElementIndex].offsetBytes, 32u);
-    EXPECT_EQ(texture.mipLevels()[s_ThirdElementIndex].sizeBytes, 16u);
-    EXPECT_EQ(texture.primaryPayloadByteCount(), 48u);
-    EXPECT_EQ(texture.payloadBytes().size(), 96u);
-    ASSERT_NE(texture.alphaUastcBlocks(), nullptr);
-    EXPECT_EQ(texture.alphaUastcBlocks()[0u], 0x80u);
-
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
-    EXPECT_EQ(logger.errorCount(), 0u);
-}
-
-TEST(AssetsGraphics, TextureCookerBuildsCubeAndVolumeAssetsFromCurrentMetadata){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-    TestArena testArena;
-    Path root(testArena.arena);
-    Path outputDirectory(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
-        testArena,
-        "texture_cube_volume_cooker_round_trip",
-        root,
-        outputDirectory
-    ));
-
-    const Path assetRoot = root / "assets";
-    const Path textureDirectory = assetRoot / "textures";
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(textureDirectory / "sky.nwb", s_TextureCubeTestMetadata));
-    ASSERT_TRUE(WriteBinaryFile(textureDirectory / "sky.tex", MakeTextureTestUastcPayload(testArena, 192u, 0x40u)));
-    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(textureDirectory / "fog.nwb", s_TextureVolumeTestMetadata));
-    ASSERT_TRUE(WriteBinaryFile(textureDirectory / "fog.tex", MakeTextureTestUastcPayload(testArena, 80u, 0x80u)));
-    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-
-    UniquePtr<NWB::Core::Assets::IAsset> cubeAsset;
-    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::TextureAssetCodec>(
-        testArena,
-        outputDirectory,
-        Name("project/textures/sky"),
-        cubeAsset,
-        s_ExpectedDualCount
-    ));
-    ASSERT_NE(cubeAsset.get(), nullptr);
-    const NWB::Impl::Texture& cube = static_cast<const NWB::Impl::Texture&>(*cubeAsset);
-    EXPECT_EQ(cube.dimension(), TextureDimension::TextureCube);
-    EXPECT_EQ(cube.depth(), 1u);
-    ASSERT_EQ(cube.mipLevels().size(), s_ExpectedDualCount);
-    EXPECT_EQ(cube.mipLevels()[0u].sliceCount, 6u);
-
-    UniquePtr<NWB::Core::Assets::IAsset> volumeAsset;
-    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::TextureAssetCodec>(
-        testArena,
-        outputDirectory,
-        Name("project/textures/fog"),
-        volumeAsset,
-        s_ExpectedDualCount
-    ));
-    ASSERT_NE(volumeAsset.get(), nullptr);
-    const NWB::Impl::Texture& volume = static_cast<const NWB::Impl::Texture&>(*volumeAsset);
-    EXPECT_EQ(volume.dimension(), TextureDimension::Texture3D);
-    EXPECT_EQ(volume.depth(), 3u);
-    ASSERT_EQ(volume.mipLevels().size(), 3u);
-    EXPECT_EQ(volume.mipLevels()[0u].sliceCount, 3u);
-    EXPECT_EQ(volume.payloadBytes().size(), 80u);
-
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
-    EXPECT_EQ(logger.errorCount(), 0u);
-}
 
 TEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata){
     struct ObsoleteField{

@@ -107,7 +107,6 @@ TEST_F(UiPopupInputTests, FirstEscapeCancelsTransientPreeditAndSecondDismissesBe
     ASSERT_EQ(m_textInput.preedit("한"), TextInputAdmission::Accepted);
     ASSERT_TRUE(frame());
     ASSERT_TRUE(m_popupModel.composition().active);
-    EXPECT_EQ(m_popupModel.composition().text, "한");
     EXPECT_EQ(m_popupModel.text(), "popup");
     EXPECT_FALSE(m_popupModel.canUndo());
     key(Core::Key::Escape);

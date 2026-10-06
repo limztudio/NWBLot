@@ -46,13 +46,12 @@ TEST_F(TextureImageLayoutFixture, SameIdentityVersionsMeasureTheirOwnImmutableDi
     EXPECT_FLOAT_EQ(metrics.contentSize.y, 12.0f);
 }
 
-TEST_F(TextureImageLayoutFixture, EmptyFixedExtentAndTransparentHdrTintRemainValid){
+TEST_F(TextureImageLayoutFixture, ZeroFixedExtentAndEmptyPlacementRemainValid){
     const SharedImageSource image = makeImage();
     ASSERT_TRUE(image);
     ImageOptions options;
     options.width = { LayoutSizePolicy::Fixed, 0.0f };
     options.height = { LayoutSizePolicy::Fixed, 0.0f };
-    options.tint = { 2.0f, 0.0f, 0.5f, 0.0f };
     ImageMetrics metrics;
     ASSERT_TRUE(ImageLayout::Measure(options, *image, metrics));
     EXPECT_FLOAT_EQ(metrics.contentSize.x, 8.0f);

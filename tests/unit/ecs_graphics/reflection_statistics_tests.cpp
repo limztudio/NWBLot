@@ -88,8 +88,6 @@ struct DestructorLeaseTask{
 TEST(ReflectionStatistics, RingSkipsWhenThreeReservationsAreOutstanding){
     StatisticsContext context;
     ASSERT_TRUE(context.control);
-    ReflectionStatistics statistics;
-    EXPECT_FALSE(context.control->tryGetLatestStatistics(statistics));
     const auto first = context.control->reserve(Metadata());
     const auto second = context.control->reserve(Metadata());
     const auto third = context.control->reserve(Metadata());

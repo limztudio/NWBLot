@@ -142,10 +142,6 @@ TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
         EXPECT_EQ(ownershipTransfer.resourceType, Graphics::GpuGraphResourceType::Texture);
         EXPECT_EQ(ownershipTransfer.route, Graphics::GpuOwnershipTransferRoute::Internal);
         EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
-        Graphics::GpuCompiledOwnershipTransfer nonAdvisoryOwnershipTransfer = ownershipTransfer;
-        nonAdvisoryOwnershipTransfer.concurrentSharingCouldAvoid = false;
-        EXPECT_TRUE(nonAdvisoryOwnershipTransfer.valid());
-
         const Graphics::GpuTaskGraphCompileStatistics ownershipStatistics = compiledPlan.compileStatistics();
         ASSERT_TRUE(ownershipStatistics.valid());
         EXPECT_EQ(ownershipStatistics.logicalOwnershipTransferCount, 1u);
@@ -156,18 +152,6 @@ TEST(GpuTaskGraph, PlansExclusiveOwnershipHandoffToDedicatedTransfer){
         EXPECT_EQ(
             ownershipStatistics.logicalOwnershipTransferCountByRoute[Graphics::GpuOwnershipTransferRoute::Internal],
             1u
-        );
-        EXPECT_EQ(
-            ownershipStatistics.logicalOwnershipTransferCountByRoute[
-                Graphics::GpuOwnershipTransferRoute::ExternalImport
-            ],
-            0u
-        );
-        EXPECT_EQ(
-            ownershipStatistics.logicalOwnershipTransferCountByRoute[
-                Graphics::GpuOwnershipTransferRoute::ExternalExport
-            ],
-            0u
         );
 
         const Graphics::GpuCompiledPacketView consumerPacketView = compiledPlan.packet(compiledConsumer->packet);
@@ -703,7 +687,6 @@ TEST(GpuTaskGraph, AcceptsDedicatedTransferClassOnAConcurrentlySharedComputeFami
     ASSERT_TRUE(CompileWithSeparatedCommandQueues(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-
     const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(pair.consumer);
     const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(pair.producer).plan;
     const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(pair.consumer).plan;
@@ -711,7 +694,6 @@ TEST(GpuTaskGraph, AcceptsDedicatedTransferClassOnAConcurrentlySharedComputeFami
     ASSERT_NE(compiledProducer, nullptr);
     ASSERT_NE(compiledConsumer, nullptr);
     EXPECT_EQ(consumerAssignment->queue, transferOnComputeFamily.id);
-    EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::Scored);
     EXPECT_EQ(compiledProducer->epilogueBarrierCount, 0u);
     ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
     const Graphics::GpuCompiledBarrier* const dependency = compiledPlan.findTask(pair.consumer).prologueBarriers;

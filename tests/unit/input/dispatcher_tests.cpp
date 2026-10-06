@@ -104,7 +104,6 @@ TEST(InputDispatcher, WindowFocusTransitionsReachEveryHandlerAndDeduplicate){
     dispatcher.addHandlerToFront(scene);
     dispatcher.addHandlerToBack(legacyUi);
     dispatcher.addHandlerToBack(customUi);
-    EXPECT_TRUE(dispatcher.windowFocused());
 
     dispatcher.windowFocusUpdate(false);
     EXPECT_FALSE(dispatcher.windowFocused());

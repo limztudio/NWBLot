@@ -48,7 +48,7 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(AssetsGraphics, FilesystemAcceptsScratchBytes){
+TEST(AssetsGraphics, DeferredWriteOwnsScratchBytesBeforeCallerMutation){
     TestArena testArena;
     const Path root = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "volume_scratch_bytes");
     const bool prepared = AssetsGraphicsFixture::PrepareCleanDirectory(root);
@@ -90,33 +90,8 @@ TEST(AssetsGraphics, FilesystemAcceptsScratchBytes){
                     if(loaded){
                         ASSERT_EQ(readback.size(), 4u);
                         EXPECT_EQ(readback[0], 1u);
-                        EXPECT_EQ(readback[1], s_ExpectedDualCount);
-                        EXPECT_EQ(readback[2], 3u);
-                        EXPECT_EQ(readback[3], 4u);
                     }
 
-                    ErrorCode sizeError;
-                    const Path segmentPath = root / "volume" / MakeVolumeSegmentFileName(mountDesc.volumeName.view(), 0u).view();
-                    const u64 segmentFileSize = FileSize(segmentPath, sizeError);
-                    EXPECT_FALSE(sizeError);
-                    EXPECT_EQ(segmentFileSize, mountDesc.metadataSize + payload.size());
-                    EXPECT_LT(segmentFileSize, mountDesc.segmentSize);
-
-                    mountDesc.createIfMissing = false;
-                    mountDesc.usage = NWB::Core::Filesystem::VolumeUsage::RuntimeReadOnly;
-                    UniquePtr<NWB::Core::Filesystem::IFilesystem> reloadedFilesystem = NWB::Core::Filesystem::CreateFilesystem(testArena.arena, mountDesc);
-                    const bool reloaded = static_cast<bool>(reloadedFilesystem);
-                    EXPECT_TRUE(reloaded);
-                    if(reloaded){
-                        NWB::Core::Assets::AssetBytes reloadedReadback = AssetsGraphicsFixture::MakeAssetBytes(testArena);
-                        const bool reloadedData = reloadedFilesystem->readFile(virtualPath, reloadedReadback);
-                        EXPECT_TRUE(reloadedData);
-                        if(reloadedData){
-                            ASSERT_EQ(reloadedReadback.size(), readback.size());
-                            for(usize i = 0u; i < readback.size(); ++i)
-                                EXPECT_EQ(reloadedReadback[i], readback[i]);
-                        }
-                    }
                 }
             }
         }

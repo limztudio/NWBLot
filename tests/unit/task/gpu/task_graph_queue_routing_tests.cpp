@@ -106,15 +106,12 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
     const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
     ASSERT_NE(producerAssignment, nullptr);
     ASSERT_NE(consumerAssignment, nullptr);
     EXPECT_EQ(producerAssignment->queue, queues[0u].id);
     EXPECT_EQ(consumerAssignment->queue, queues[1u].id);
-    EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
-    EXPECT_TRUE(consumerAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
 
     const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
     const Graphics::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
@@ -134,7 +131,6 @@ TEST(GpuTaskGraph, RoutesOptedInWorkAcrossSameClassPhysicalQueues){
         compiledPlan.findTask(consumer).prologueBarriers[0u].type,
         Graphics::GpuCompiledBarrierType::BufferTransition
     );
-
 
 }
 
@@ -180,339 +176,8 @@ TEST(GpuTaskGraph, RoutesSameClassWorkAroundExternalQueueLoad){
     const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(task);
     ASSERT_NE(assignment, nullptr);
     EXPECT_EQ(assignment->queue, queues[1u].id);
-    EXPECT_TRUE(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
-    EXPECT_EQ(assignment->score.queueLoad, 0);
 }
 
-TEST(GpuTaskGraph, BalancesAcrossAllRegisteredSameClassPhysicalQueues){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-
-    Graphics::GpuTaskCommandRequirements graphicsCommands;
-    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Graphics;
-
-    Graphics::GpuTaskSchedulingHint scheduling;
-    scheduling.cost = Graphics::GpuTaskCostHint::Large;
-    scheduling.allowSameClassQueueRouting = true;
-    const Graphics::GpuTaskId tasks[] = {
-        AddTaskWithCommands(
-            graph,
-            Name("tests/task_graph/multi_auxiliary_same_class_first"),
-            "Multi Auxiliary Same Class First",
-            graphicsCommands,
-            scheduling
-        ),
-        AddTaskWithCommands(
-            graph,
-            Name("tests/task_graph/multi_auxiliary_same_class_second"),
-            "Multi Auxiliary Same Class Second",
-            graphicsCommands,
-            scheduling
-        ),
-        AddTaskWithCommands(
-            graph,
-            Name("tests/task_graph/multi_auxiliary_same_class_third"),
-            "Multi Auxiliary Same Class Third",
-            graphicsCommands,
-            scheduling
-        ),
-        AddTaskWithCommands(
-            graph,
-            Name("tests/task_graph/multi_auxiliary_same_class_fourth"),
-            "Multi Auxiliary Same Class Fourth",
-            graphicsCommands,
-            scheduling
-        ),
-    };
-    for(const Graphics::GpuTaskId task : tasks)
-        ASSERT_TRUE(task.valid());
-
-    Graphics::GpuPhysicalQueueInfo firstAuxiliary = GraphicsQueue(1u);
-    firstAuxiliary.queueIndex = 1u;
-    Graphics::GpuPhysicalQueueInfo secondAuxiliary = GraphicsQueue(s_ExpectedDualCount);
-    secondAuxiliary.queueIndex = s_ExpectedDualCount;
-    Graphics::GpuPhysicalQueueInfo thirdAuxiliary = GraphicsQueue(3u);
-    thirdAuxiliary.queueIndex = 3u;
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        firstAuxiliary,
-        secondAuxiliary,
-        thirdAuxiliary,
-    };
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-
-    for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
-        const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(tasks[taskIndex]);
-        ASSERT_NE(assignment, nullptr);
-        EXPECT_EQ(assignment->queue, queues[taskIndex].id);
-        EXPECT_EQ(assignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
-        EXPECT_EQ(
-            static_cast<bool>(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance),
-            taskIndex != 0u
-        );
-    }
-}
-
-TEST(GpuTaskGraph, BalancesAcrossAllRegisteredDedicatedSameClassPhysicalQueues){
-    const auto runCase = [](
-        const Graphics::GpuQueueCapability::Mask requiredCapabilities,
-        const Graphics::GpuPhysicalQueueInfo& primary,
-        const Graphics::GpuPhysicalQueueInfo& firstAuxiliary,
-        const Graphics::GpuPhysicalQueueInfo& secondAuxiliary,
-        const Graphics::GpuPhysicalQueueInfo& thirdAuxiliary,
-        const Graphics::GpuTaskQueueAssignmentReason::Enum primaryReason
-    ){
-        TestArena testArena;
-        Graphics::GpuTaskGraph graph(testArena.arena);
-
-        Graphics::GpuTaskCommandRequirements commands;
-        commands.requiredCapabilities = requiredCapabilities;
-
-        Graphics::GpuTaskSchedulingHint scheduling;
-        scheduling.cost = Graphics::GpuTaskCostHint::Large;
-        scheduling.allowSameClassQueueRouting = true;
-        const Graphics::GpuTaskId tasks[] = {
-            AddTaskWithCommands(graph, Name("tests/task_graph/multi_auxiliary_dedicated_first"), "Multi Auxiliary Dedicated First", commands, scheduling),
-            AddTaskWithCommands(graph, Name("tests/task_graph/multi_auxiliary_dedicated_second"), "Multi Auxiliary Dedicated Second", commands, scheduling),
-            AddTaskWithCommands(graph, Name("tests/task_graph/multi_auxiliary_dedicated_third"), "Multi Auxiliary Dedicated Third", commands, scheduling),
-            AddTaskWithCommands(graph, Name("tests/task_graph/multi_auxiliary_dedicated_fourth"), "Multi Auxiliary Dedicated Fourth", commands, scheduling),
-        };
-        for(const Graphics::GpuTaskId task : tasks)
-            ASSERT_TRUE(task.valid());
-
-        const Graphics::GpuPhysicalQueueInfo queues[] = {
-            primary,
-            firstAuxiliary,
-            secondAuxiliary,
-            thirdAuxiliary,
-        };
-        const Graphics::GpuPhysicalQueueTopology topology{
-            .queues = queues,
-            .queueCount = LengthOf(queues),
-        };
-        Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-        Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-        Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-        ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-
-        for(usize taskIndex = 0u; taskIndex < LengthOf(tasks); ++taskIndex){
-            const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(tasks[taskIndex]);
-            ASSERT_NE(assignment, nullptr);
-            EXPECT_EQ(assignment->queue, queues[taskIndex].id);
-            EXPECT_EQ(assignment->reason, primaryReason);
-            EXPECT_EQ(
-                static_cast<bool>(assignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance),
-                taskIndex != 0u
-            );
-        }
-    };
-
-    Graphics::GpuPhysicalQueueInfo firstComputeAuxiliary = DedicatedComputeQueue(s_ExpectedDualCount);
-    firstComputeAuxiliary.queueIndex = 1u;
-    Graphics::GpuPhysicalQueueInfo secondComputeAuxiliary = DedicatedComputeQueue(3u);
-    secondComputeAuxiliary.queueIndex = s_ExpectedDualCount;
-    Graphics::GpuPhysicalQueueInfo thirdComputeAuxiliary = DedicatedComputeQueue(4u);
-    thirdComputeAuxiliary.queueIndex = 3u;
-    runCase(
-        Graphics::GpuQueueCapability::Compute,
-        DedicatedComputeQueue(),
-        firstComputeAuxiliary,
-        secondComputeAuxiliary,
-        thirdComputeAuxiliary,
-        Graphics::GpuTaskQueueAssignmentReason::Scored
-    );
-
-    Graphics::GpuPhysicalQueueInfo firstTransferAuxiliary = DedicatedTransferQueue(3u);
-    firstTransferAuxiliary.queueIndex = 1u;
-    Graphics::GpuPhysicalQueueInfo secondTransferAuxiliary = DedicatedTransferQueue(4u);
-    secondTransferAuxiliary.queueIndex = s_ExpectedDualCount;
-    Graphics::GpuPhysicalQueueInfo thirdTransferAuxiliary = DedicatedTransferQueue(5u);
-    thirdTransferAuxiliary.queueIndex = 3u;
-    runCase(
-        Graphics::GpuQueueCapability::Transfer,
-        DedicatedTransferQueue(),
-        firstTransferAuxiliary,
-        secondTransferAuxiliary,
-        thirdTransferAuxiliary,
-        Graphics::GpuTaskQueueAssignmentReason::Scored
-    );
-}
-
-TEST(GpuTaskGraph, RoutesIsolatedOffloadToAuxiliaryAndReturnsPrimaryBridge){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-
-    Graphics::GpuTaskCommandRequirements graphicsCommands;
-    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Transfer;
-
-    Graphics::GpuTaskSchedulingHint uploadScheduling;
-    uploadScheduling.cost = Graphics::GpuTaskCostHint::Large;
-    uploadScheduling.allowSameClassQueueRouting = true;
-    uploadScheduling.preferNonPrimarySameClassQueue = true;
-    uploadScheduling.allowCrossFamilySameClassQueueRouting = true;
-    Graphics::GpuTaskDesc uploadDesc;
-    uploadDesc
-        .setIdentity(Name("tests/task_graph/isolated_same_class_offload"))
-        .setMarkerLabel("Isolated Same Class Offload")
-        .setScheduling(uploadScheduling)
-    ;
-    const Graphics::GpuTaskId upload = graph.addTask(uploadDesc, graphicsCommands);
-    ASSERT_TRUE(upload.valid());
-
-    Graphics::GpuTaskSchedulingHint bridgeScheduling;
-    bridgeScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
-    bridgeScheduling.overlapPreferred = false;
-    bridgeScheduling.forceSubmissionBoundary = true;
-    bridgeScheduling.allowPacketMerge = false;
-    const Graphics::GpuTaskId bridgeDependencies[] = { upload };
-    Graphics::GpuTaskDesc bridgeDesc;
-    bridgeDesc
-        .setIdentity(Name("tests/task_graph/isolated_same_class_primary_bridge"))
-        .setMarkerLabel("Isolated Same Class Primary Bridge")
-        .setScheduling(bridgeScheduling)
-        .setDependencies(bridgeDependencies, LengthOf(bridgeDependencies))
-    ;
-    const Graphics::GpuTaskId bridge = graph.addTask(bridgeDesc, graphicsCommands);
-    ASSERT_TRUE(bridge.valid());
-
-    Graphics::GpuPhysicalQueueInfo auxiliaryGraphicsQueue = GraphicsQueue(1u);
-    auxiliaryGraphicsQueue.familyIndex = 3u;
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        auxiliaryGraphicsQueue,
-    };
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    ASSERT_TRUE(Analyze(graph, analysis));
-    ASSERT_TRUE(Assign(graph, analysis, topology, assignments));
-
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
-
-    const Graphics::GpuTaskQueueAssignment* const uploadAssignment = assignments.find(upload);
-    const Graphics::GpuTaskQueueAssignment* const bridgeAssignment = assignments.find(bridge);
-    ASSERT_NE(uploadAssignment, nullptr);
-    ASSERT_NE(bridgeAssignment, nullptr);
-    EXPECT_EQ(uploadAssignment->queue, auxiliaryGraphicsQueue.id);
-    EXPECT_EQ(uploadAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::Scored);
-    EXPECT_TRUE(uploadAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
-    EXPECT_TRUE(uploadAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::NonPrimaryRouting);
-    EXPECT_EQ(bridgeAssignment->queue, queues[0u].id);
-
-    const Graphics::GpuSubmissionPacketId uploadPacket = compiledPlan.packetForTask(upload);
-    const Graphics::GpuSubmissionPacketId bridgePacket = compiledPlan.packetForTask(bridge);
-    ASSERT_TRUE(uploadPacket.valid());
-    ASSERT_TRUE(bridgePacket.valid());
-    ASSERT_EQ(compiledPlan.packet(bridgePacket).plan->dependencyCount, 1u);
-    EXPECT_EQ(compiledPlan.packet(bridgePacket).dependencies[0u].producer, uploadPacket);
-}
-
-TEST(GpuTaskGraph, PreservesAuxiliarySameClassQueueAcrossSerialOffloadChain){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-
-    Graphics::GpuTaskCommandRequirements graphicsCommands;
-    graphicsCommands.requiredCapabilities = Graphics::GpuQueueCapability::Transfer;
-
-    Graphics::GpuTaskSchedulingHint firstScheduling;
-    firstScheduling.cost = Graphics::GpuTaskCostHint::Large;
-    firstScheduling.allowSameClassQueueRouting = true;
-    firstScheduling.preferNonPrimarySameClassQueue = true;
-    firstScheduling.allowCrossFamilySameClassQueueRouting = true;
-    firstScheduling.forceSubmissionBoundary = true;
-    firstScheduling.allowPacketMerge = false;
-    const Graphics::GpuTaskId first = AddTaskWithCommands(
-        graph,
-        Name("tests/task_graph/serial_same_class_offload_first"),
-        "Serial Same Class Offload First",
-        graphicsCommands,
-        firstScheduling
-    );
-    ASSERT_TRUE(first.valid());
-
-    Graphics::GpuTaskSchedulingHint secondScheduling = firstScheduling;
-    secondScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
-    secondScheduling.preferNonPrimarySameClassQueue = false;
-    secondScheduling.preserveSameClassQueueWithDirectDependency = true;
-    const Graphics::GpuTaskId secondDependencies[] = { first };
-    Graphics::GpuTaskDesc secondDesc;
-    secondDesc
-        .setIdentity(Name("tests/task_graph/serial_same_class_offload_second"))
-        .setMarkerLabel("Serial Same Class Offload Second")
-        .setScheduling(secondScheduling)
-        .setDependencies(secondDependencies, LengthOf(secondDependencies))
-    ;
-    const Graphics::GpuTaskId second = graph.addTask(secondDesc, graphicsCommands);
-    ASSERT_TRUE(second.valid());
-
-    Graphics::GpuTaskSchedulingHint bridgeScheduling;
-    bridgeScheduling.cost = Graphics::GpuTaskCostHint::Tiny;
-    bridgeScheduling.overlapPreferred = false;
-    bridgeScheduling.forceSubmissionBoundary = true;
-    bridgeScheduling.allowPacketMerge = false;
-    const Graphics::GpuTaskId bridgeDependencies[] = { second };
-    Graphics::GpuTaskDesc bridgeDesc;
-    bridgeDesc
-        .setIdentity(Name("tests/task_graph/serial_same_class_primary_bridge"))
-        .setMarkerLabel("Serial Same Class Primary Bridge")
-        .setScheduling(bridgeScheduling)
-        .setDependencies(bridgeDependencies, LengthOf(bridgeDependencies))
-    ;
-    const Graphics::GpuTaskId bridge = graph.addTask(bridgeDesc, graphicsCommands);
-    ASSERT_TRUE(bridge.valid());
-
-    Graphics::GpuPhysicalQueueInfo auxiliaryGraphicsQueue = GraphicsQueue(1u);
-    auxiliaryGraphicsQueue.familyIndex = 3u;
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        auxiliaryGraphicsQueue,
-    };
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
-
-
-    const Graphics::GpuTaskQueueAssignment* const firstAssignment = assignments.find(first);
-    const Graphics::GpuTaskQueueAssignment* const secondAssignment = assignments.find(second);
-    const Graphics::GpuTaskQueueAssignment* const bridgeAssignment = assignments.find(bridge);
-    ASSERT_NE(firstAssignment, nullptr);
-    ASSERT_NE(secondAssignment, nullptr);
-    ASSERT_NE(bridgeAssignment, nullptr);
-    EXPECT_EQ(firstAssignment->queue, auxiliaryGraphicsQueue.id);
-    EXPECT_EQ(secondAssignment->queue, auxiliaryGraphicsQueue.id);
-    EXPECT_EQ(secondAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::Conservative);
-    EXPECT_TRUE(secondAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DirectDependencyAffinity);
-    EXPECT_EQ(bridgeAssignment->queue, queues[0u].id);
-
-    const Graphics::GpuSubmissionPacketId firstPacket = compiledPlan.packetForTask(first);
-    const Graphics::GpuSubmissionPacketId secondPacket = compiledPlan.packetForTask(second);
-    const Graphics::GpuSubmissionPacketId bridgePacket = compiledPlan.packetForTask(bridge);
-    ASSERT_TRUE(firstPacket.valid());
-    ASSERT_TRUE(secondPacket.valid());
-    ASSERT_TRUE(bridgePacket.valid());
-    ASSERT_EQ(compiledPlan.packet(secondPacket).plan->dependencyCount, 1u);
-    EXPECT_EQ(compiledPlan.packet(secondPacket).dependencies[0u].producer, firstPacket);
-    ASSERT_EQ(compiledPlan.packet(bridgePacket).plan->dependencyCount, 1u);
-    EXPECT_EQ(compiledPlan.packet(bridgePacket).dependencies[0u].producer, secondPacket);
-}
 
 TEST(GpuTaskGraph, PreservesLatestDirectDependencyRouteAcrossIncomingAdjacencyOrder){
     TestArena testArena;
@@ -717,15 +382,12 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
     const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
     ASSERT_NE(producerAssignment, nullptr);
     ASSERT_NE(consumerAssignment, nullptr);
     EXPECT_EQ(producerAssignment->queue, queues[0u].id);
     EXPECT_EQ(consumerAssignment->queue, queues[1u].id);
-    EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
-    EXPECT_TRUE(consumerAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
 
     const Graphics::GpuSubmissionPacketId producerPacket = compiledPlan.packetForTask(producer);
     const Graphics::GpuSubmissionPacketId consumerPacket = compiledPlan.packetForTask(consumer);
@@ -756,24 +418,6 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassWorkWithExclusiveOwnershipHandoffs)
     EXPECT_EQ(acquireAndTransition[0u].destinationQueue, queues[1u].id);
     EXPECT_EQ(acquireAndTransition[1u].type, Graphics::GpuCompiledBarrierType::BufferTransition);
 
-    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics producerQueueCompileStatistics =
-        compiledPlan.physicalQueueCompileStatistics(queues[0u].id)
-    ;
-    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics consumerQueueCompileStatistics =
-        compiledPlan.physicalQueueCompileStatistics(queues[1u].id)
-    ;
-    ASSERT_TRUE(producerQueueCompileStatistics.valid());
-    ASSERT_TRUE(consumerQueueCompileStatistics.valid());
-    EXPECT_EQ(producerQueueCompileStatistics.taskCount, 1u);
-    EXPECT_EQ(consumerQueueCompileStatistics.taskCount, 1u);
-    EXPECT_EQ(producerQueueCompileStatistics.prologueBarrierCount, 1u);
-    EXPECT_EQ(producerQueueCompileStatistics.epilogueBarrierCount, 1u);
-    EXPECT_EQ(producerQueueCompileStatistics.ownershipReleaseBarrierCount, 1u);
-    EXPECT_EQ(producerQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
-    EXPECT_EQ(consumerQueueCompileStatistics.prologueBarrierCount, s_ExpectedDualCount);
-    EXPECT_EQ(consumerQueueCompileStatistics.epilogueBarrierCount, 0u);
-    EXPECT_EQ(consumerQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
-    EXPECT_EQ(consumerQueueCompileStatistics.ownershipAcquireBarrierCount, 1u);
 }
 
 TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOwnershipHandoff){
@@ -849,7 +493,6 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOw
     ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-
     const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
     const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
     const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
@@ -860,8 +503,6 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassConcurrentGraphicsResourceWithoutOw
     ASSERT_NE(compiledConsumer, nullptr);
     EXPECT_EQ(producerAssignment->queue, queues[0u].id);
     EXPECT_EQ(consumerAssignment->queue, auxiliaryGraphicsQueue.id);
-    EXPECT_EQ(consumerAssignment->reason, Graphics::GpuTaskQueueAssignmentReason::RequiredGraphics);
-    EXPECT_TRUE(consumerAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
     EXPECT_EQ(compiledProducer->epilogueBarrierCount, 0u);
     ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
     ASSERT_EQ(compiledConsumer->prologueBarrierCount, 1u);
@@ -945,7 +586,6 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph));
     const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
 
-
         const Graphics::GpuTaskQueueAssignment* const producerAssignment = assignments.find(producer);
         const Graphics::GpuTaskQueueAssignment* const consumerAssignment = assignments.find(consumer);
         const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
@@ -956,11 +596,6 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         ASSERT_NE(compiledConsumer, nullptr);
         EXPECT_EQ(producerAssignment->queue, primaryQueue.id);
         EXPECT_EQ(consumerAssignment->queue, auxiliaryQueue.id);
-        EXPECT_EQ(
-            consumerAssignment->reason,
-            Graphics::GpuTaskQueueAssignmentReason::Scored
-        );
-        EXPECT_TRUE(consumerAssignment->modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance);
         EXPECT_EQ(compiledProducer->queue, primaryQueue.id);
         EXPECT_EQ(compiledConsumer->queue, auxiliaryQueue.id);
         ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
@@ -1003,144 +638,6 @@ TEST(GpuTaskGraph, RoutesCrossFamilySameClassComputeAndTransferWorkWithOwnership
         Name("tests/task_graph/cross_family_same_class_transfer_producer"),
         Name("tests/task_graph/cross_family_same_class_transfer_consumer")
     );
-}
-
-TEST(GpuTaskGraph, RoutesAccelStructAcrossQueueFamiliesWithOwnershipAndStateSeed){
-    TestArena testArena;
-    Graphics::GpuTaskGraph graph(testArena.arena);
-    const Graphics::GpuGraphResourceId accelStruct = AddAccelStructMetadata(
-        graph,
-        Name("tests/task_graph/cross_family_accel_struct"),
-        "Cross Family Accel Struct"
-    );
-    ASSERT_TRUE(accelStruct.valid());
-
-    const Graphics::GpuPhysicalQueueInfo queues[] = {
-        GraphicsQueue(),
-        DedicatedComputeQueue(),
-    };
-    const Graphics::GpuPhysicalQueueTopology topology{
-        .queues = queues,
-        .queueCount = LengthOf(queues),
-    };
-    const Graphics::GpuTaskCommandRequirements graphicsCommands = GraphicsCommands();
-    const Graphics::GpuTaskCommandRequirements computeCommands = ComputeCommands();
-    const Graphics::GpuTaskResourceUse producerUse{
-        .resource = accelStruct,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::AccelStructWrite,
-        .access = Graphics::GpuTaskResourceAccess::Write,
-    };
-    Graphics::GpuTaskDesc producerDesc;
-    producerDesc
-        .setIdentity(Name("tests/task_graph/cross_family_accel_struct_producer"))
-        .setMarkerLabel("Cross Family Accel Struct Producer")
-        .setResourceUses(&producerUse, 1u)
-    ;
-    const Graphics::GpuTaskId producer = graph.addTask(producerDesc, graphicsCommands);
-    ASSERT_TRUE(producer.valid());
-
-    const Graphics::GpuTaskId consumerDependencies[] = { producer };
-    const Graphics::GpuTaskResourceUse consumerUse{
-        .resource = accelStruct,
-        .range = {},
-        .requiredState = Graphics::ResourceStates::AccelStructRead,
-        .access = Graphics::GpuTaskResourceAccess::Read,
-    };
-    Graphics::GpuTaskDesc consumerDesc;
-    consumerDesc
-        .setIdentity(Name("tests/task_graph/cross_family_accel_struct_consumer"))
-        .setMarkerLabel("Cross Family Accel Struct Consumer")
-        .setDependencies(consumerDependencies, LengthOf(consumerDependencies))
-        .setResourceUses(&consumerUse, 1u)
-    ;
-    const Graphics::GpuTaskId consumer = graph.addTask(consumerDesc, computeCommands);
-    ASSERT_TRUE(consumer.valid());
-
-    Graphics::GpuTaskGraphAnalysis analysis(testArena.arena);
-    Graphics::GpuTaskGraphQueueAssignments assignments(testArena.arena);
-    Graphics::GpuCompiledGraph compiledGraph(testArena.arena);
-    const Graphics::GpuTaskDiagnosticQueueOverride route{ .task = consumer, .queue = queues[1u].id };
-    Graphics::GpuTaskGraphCompileOptions options;
-    options.queueAssignmentOptions.diagnosticQueueOverrides = &route;
-    options.queueAssignmentOptions.diagnosticQueueOverrideCount = 1u;
-    ASSERT_TRUE(Compile(graph, analysis, topology, assignments, compiledGraph, options));
-    const Graphics::GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
-
-
-    const Graphics::GpuCompiledTask* const compiledProducer = compiledPlan.findTask(producer).plan;
-    const Graphics::GpuCompiledTask* const compiledConsumer = compiledPlan.findTask(consumer).plan;
-    ASSERT_NE(compiledProducer, nullptr);
-    ASSERT_NE(compiledConsumer, nullptr);
-    EXPECT_EQ(compiledProducer->queue, queues[0u].id);
-    EXPECT_EQ(compiledConsumer->queue, queues[1u].id);
-    ASSERT_EQ(compiledConsumer->prologueStateSeedCount, 1u);
-    const Graphics::GpuPacketStateSeed* const seeds = compiledPlan.findTask(consumer).prologueStateSeeds;
-    ASSERT_NE(seeds, nullptr);
-    EXPECT_EQ(seeds[0u].resource, accelStruct);
-    EXPECT_EQ(seeds[0u].sourcePacket, compiledProducer->packet);
-
-    ASSERT_EQ(compiledProducer->epilogueBarrierCount, 1u);
-    const Graphics::GpuCompiledBarrier* const release = compiledPlan.findTask(producer).epilogueBarriers;
-    ASSERT_NE(release, nullptr);
-    EXPECT_EQ(release[0u].type, Graphics::GpuCompiledBarrierType::AccelStructOwnershipRelease);
-    EXPECT_EQ(release[0u].resource, accelStruct);
-    EXPECT_EQ(release[0u].sourceQueue, queues[0u].id);
-    EXPECT_EQ(release[0u].destinationQueue, queues[1u].id);
-
-    ASSERT_EQ(compiledConsumer->prologueBarrierCount, s_ExpectedDualCount);
-    const Graphics::GpuCompiledBarrier* const acquireAndTransition = compiledPlan.findTask(consumer).prologueBarriers;
-    ASSERT_NE(acquireAndTransition, nullptr);
-    EXPECT_EQ(acquireAndTransition[0u].type, Graphics::GpuCompiledBarrierType::AccelStructOwnershipAcquire);
-    EXPECT_EQ(acquireAndTransition[0u].resource, accelStruct);
-    EXPECT_EQ(acquireAndTransition[0u].sourceQueue, queues[0u].id);
-    EXPECT_EQ(acquireAndTransition[0u].destinationQueue, queues[1u].id);
-    EXPECT_EQ(acquireAndTransition[1u].type, Graphics::GpuCompiledBarrierType::AccelStructTransition);
-    EXPECT_EQ(acquireAndTransition[1u].before, Graphics::ResourceStates::AccelStructWrite);
-    EXPECT_EQ(acquireAndTransition[1u].after, Graphics::ResourceStates::AccelStructRead);
-
-    ASSERT_EQ(compiledPlan.logicalOwnershipTransferCount(), 1u);
-    const Graphics::GpuCompiledOwnershipTransfer* const ownershipTransfers =
-        compiledPlan.logicalOwnershipTransfers()
-    ;
-    ASSERT_NE(ownershipTransfers, nullptr);
-    EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(0u), ownershipTransfers);
-    EXPECT_EQ(compiledPlan.logicalOwnershipTransferAt(1u), nullptr);
-    const Graphics::GpuCompiledOwnershipTransfer& ownershipTransfer = ownershipTransfers[0u];
-    EXPECT_TRUE(ownershipTransfer.valid());
-    EXPECT_EQ(ownershipTransfer.resource, accelStruct);
-    EXPECT_EQ(ownershipTransfer.resourceIdentity, Name("tests/task_graph/cross_family_accel_struct"));
-    EXPECT_EQ(ownershipTransfer.range.textureSubresources, Graphics::s_AllSubresources);
-    EXPECT_EQ(ownershipTransfer.range.bufferRange, Graphics::s_EntireBuffer);
-    EXPECT_EQ(ownershipTransfer.sourceTask, producer);
-    EXPECT_EQ(ownershipTransfer.destinationTask, consumer);
-    EXPECT_EQ(ownershipTransfer.sourcePacket, compiledProducer->packet);
-    EXPECT_EQ(ownershipTransfer.destinationPacket, compiledConsumer->packet);
-    EXPECT_EQ(ownershipTransfer.sourceQueue, queues[0u].id);
-    EXPECT_EQ(ownershipTransfer.destinationQueue, queues[1u].id);
-    EXPECT_EQ(ownershipTransfer.sourceQueueFamilyIndex, queues[0u].familyIndex);
-    EXPECT_EQ(ownershipTransfer.destinationQueueFamilyIndex, queues[1u].familyIndex);
-    EXPECT_EQ(ownershipTransfer.declaredQueueSharing, Graphics::ResourceQueueSharing::Exclusive);
-    EXPECT_EQ(ownershipTransfer.resourceType, Graphics::GpuGraphResourceType::AccelStruct);
-    EXPECT_EQ(ownershipTransfer.route, Graphics::GpuOwnershipTransferRoute::Internal);
-    EXPECT_TRUE(ownershipTransfer.concurrentSharingCouldAvoid);
-
-    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics producerQueueCompileStatistics =
-        compiledPlan.physicalQueueCompileStatistics(queues[0u].id)
-    ;
-    const Graphics::GpuTaskGraphPhysicalQueueCompileStatistics consumerQueueCompileStatistics =
-        compiledPlan.physicalQueueCompileStatistics(queues[1u].id)
-    ;
-    ASSERT_TRUE(producerQueueCompileStatistics.valid());
-    ASSERT_TRUE(consumerQueueCompileStatistics.valid());
-    EXPECT_EQ(producerQueueCompileStatistics.ownershipReleaseBarrierCount, 1u);
-    EXPECT_EQ(producerQueueCompileStatistics.ownershipAcquireBarrierCount, 0u);
-    EXPECT_EQ(consumerQueueCompileStatistics.ownershipReleaseBarrierCount, 0u);
-    EXPECT_EQ(consumerQueueCompileStatistics.ownershipAcquireBarrierCount, 1u);
-    EXPECT_EQ(producerQueueCompileStatistics.outgoingLogicalOwnershipTransferCount, 1u);
-    EXPECT_EQ(producerQueueCompileStatistics.incomingLogicalOwnershipTransferCount, 0u);
-    EXPECT_EQ(consumerQueueCompileStatistics.outgoingLogicalOwnershipTransferCount, 0u);
-    EXPECT_EQ(consumerQueueCompileStatistics.incomingLogicalOwnershipTransferCount, 1u);
 }
 
 

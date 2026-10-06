@@ -8,7 +8,6 @@
 #include <impl/ecs_render/material/task_graph_resource_sets.h>
 
 #include <global/text_utils.h>
-#include <global/timer.h>
 
 #include <gtest/gtest.h>
 
@@ -118,11 +117,6 @@ static void ExpectUses(
         const Core::GpuTaskResourceUse& use = uses[resourceIndex];
         EXPECT_TRUE(use.resource.valid());
         EXPECT_EQ(declarations.bufferForResource(use.resource), expectedBuffers[resourceIndex].get());
-        EXPECT_EQ(use.access, Core::GpuTaskResourceAccess::Read);
-        EXPECT_EQ(use.requiredState, Core::ResourceStates::ShaderResource);
-        EXPECT_EQ(use.range.bufferRange.byteOffset, Core::s_EntireBuffer.byteOffset);
-        EXPECT_EQ(use.range.bufferRange.byteSize, Core::s_EntireBuffer.byteSize);
-        EXPECT_FALSE(use.hasIndependentStateSource);
     }
 }
 

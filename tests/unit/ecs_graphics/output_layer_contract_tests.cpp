@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "task_graph_contract_test_helpers.h"
+#include <gtest/gtest.h>
 
 #include <impl/ecs_render/deferred/task_graph_present_task.h>
 
@@ -16,8 +16,6 @@ namespace __hidden_output_layer_contract_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using namespace EcsGraphicsTaskGraphContractTestDetail;
-using EcsGraphicsTaskGraphContractTestDetail::AString;
 using namespace NWB;
 
 class RecordingLayerContributor final : public Core::IGpuTaskGraphOutputLayerContributor{

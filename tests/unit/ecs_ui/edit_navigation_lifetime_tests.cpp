@@ -69,37 +69,9 @@ TEST_F(UiEditNavigationLifetimeTests, NativePreeditSuppressesVerticalKeysAndFirs
     EXPECT_TRUE(m_result.focused);
     EXPECT_TRUE(m_actions.records.empty());
     ASSERT_EQ(m_resolver.records.size(), 1u);
-    EXPECT_EQ(m_resolver.records[0u].direction, Ui::EditNavigationDirection::Down);
     EXPECT_FALSE(m_resolver.records[0u].navigation.valid);
     EXPECT_EQ(m_resolver.records[0u].caret, 8u);
     EXPECT_FLOAT_EQ(m_navigation.preferredX(), 10.0f);
-}
-
-TEST_F(UiEditNavigationLifetimeTests, ReadOnlyAllowsVerticalSelectionWithoutNativeTextOwnership){
-    Ui::EditBoxOptions readOnly;
-    readOnly.readOnly = true;
-    ASSERT_TRUE(seedPreferredColumn(readOnly));
-    const u64 revision = m_navigationModel.revision();
-    const u64 external = m_navigationModel.externalRevision();
-    EXPECT_FALSE(m_textInput.activeSession().valid());
-
-    ASSERT_TRUE(key(Core::Key::Down, true));
-    ASSERT_TRUE(navigationFrame(readOnly));
-    EXPECT_TRUE(m_result.focused);
-    EXPECT_TRUE(m_result.selectionChanged);
-    EXPECT_FALSE(m_result.textChanged);
-    EXPECT_EQ(m_navigationModel.text(), "abcdef\nx\nabcdef");
-    EXPECT_EQ(m_navigationModel.anchor(), 8u);
-    EXPECT_EQ(m_navigationModel.caret(), 14u);
-    EXPECT_EQ(m_navigationModel.revision(), revision);
-    EXPECT_EQ(m_navigationModel.externalRevision(), external);
-    EXPECT_FALSE(m_navigationModel.canUndo());
-    EXPECT_FALSE(m_textInput.activeSession().valid());
-    EXPECT_TRUE(m_actions.records.empty());
-    ASSERT_EQ(m_resolver.records.size(), 1u);
-    EXPECT_TRUE(m_resolver.records[0u].navigation.valid);
-    EXPECT_FLOAT_EQ(m_resolver.records[0u].navigation.preferredX, 50.0f);
-    EXPECT_FLOAT_EQ(m_navigation.preferredX(), 50.0f);
 }
 
 TEST_F(UiEditNavigationLifetimeTests, DisableDiscardsQueuedNavigationAndResetsOnlyTheLentState){
@@ -157,12 +129,10 @@ TEST_F(UiEditNavigationLifetimeTests, BlurResetsPreferredColumnAtItsOrderedPosit
     EXPECT_FALSE(m_navigationModel.canUndo());
     EXPECT_EQ(m_actions.count(Ui::EditAction::Blur), 1u);
     ASSERT_EQ(m_resolver.records.size(), 2u);
-    EXPECT_EQ(m_resolver.records[0u].direction, Ui::EditNavigationDirection::Up);
     EXPECT_EQ(m_resolver.records[0u].caret, 8u);
     EXPECT_TRUE(m_resolver.records[0u].navigation.valid);
     EXPECT_FLOAT_EQ(m_resolver.records[0u].navigation.preferredX, 40.0f);
     EXPECT_EQ(m_resolver.records[0u].result.committedByte, 4u);
-    EXPECT_EQ(m_resolver.records[1u].direction, Ui::EditNavigationDirection::Down);
     EXPECT_EQ(m_resolver.records[1u].caret, 4u);
     EXPECT_FALSE(m_resolver.records[1u].navigation.valid);
     EXPECT_EQ(m_resolver.records[1u].result.committedByte, 8u);

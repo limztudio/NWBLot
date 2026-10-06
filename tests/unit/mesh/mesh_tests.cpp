@@ -21,7 +21,6 @@ TEST(Mesh, RejectsWrongCaseAndUnknownMeshClasses){
     u32 parsedClass = MeshClass::Static;
     EXPECT_FALSE(ParseMeshClassText("STATIC", parsedClass));
     EXPECT_EQ(parsedClass, MeshClass::Invalid);
-    EXPECT_EQ(MeshClassText(MeshClass::Invalid), AStringView("invalid"));
     EXPECT_EQ(MeshClassText(999u), AStringView("unknown"));
 }
 

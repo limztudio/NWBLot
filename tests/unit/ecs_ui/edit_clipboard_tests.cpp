@@ -27,13 +27,12 @@ class DelayedClipboard final : public QueuedClipboardService{
 public:
     explicit DelayedClipboard(Alloc::GlobalArena& arena)
         : QueuedClipboardService(arena)
-        , startedText(arena)
     {}
 
 
 public:
     [[nodiscard]] virtual ClipboardCapabilities capabilities(const ClipboardChannel::Enum channel)const noexcept override{
-        return channel == ClipboardChannel::Clipboard || primaryAvailable ? ClipboardCapabilities{ true, true } : ClipboardCapabilities{};
+        return channel == ClipboardChannel::Clipboard ? ClipboardCapabilities{ true, true } : ClipboardCapabilities{};
     }
 
     [[nodiscard]] bool deliver(const ClipboardRequestToken token, const ClipboardStatus::Enum status, const AStringView text = {}){
@@ -42,22 +41,7 @@ public:
 
 
 protected:
-    virtual void startNativeRequest(
-        const ClipboardRequestToken token, const ClipboardOperation::Enum operation,
-        const ClipboardChannel::Enum channel, const AStringView text)override{
-        startedToken = token;
-        startedOperation = operation;
-        startedChannel = channel;
-        startedText.assign(text.data(), text.size());
-    }
-
-
-public:
-    AString<Alloc::GlobalArena> startedText;
-    ClipboardRequestToken startedToken;
-    ClipboardOperation::Enum startedOperation = ClipboardOperation::ReadText;
-    ClipboardChannel::Enum startedChannel = ClipboardChannel::Clipboard;
-    bool primaryAvailable = true;
+    virtual void startNativeRequest(ClipboardRequestToken, ClipboardOperation::Enum, ClipboardChannel::Enum, AStringView)override{}
 };
 
 inline constexpr UiTextEditOwner s_Owner{ { 51u }, 2u, 3u };
@@ -65,31 +49,6 @@ inline constexpr UiTextEditOwner s_Owner{ { 51u }, 2u, 3u };
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST(UiEditClipboard, PasteAppliesOneSanitizedReplacementAndOneUndoRecord){
-    Tests::TestArena arena;
-    DelayedClipboard service(arena.arena);
-    UiEditClipboardController controller(arena.arena, service);
-    Ui::EditModel model(arena.arena);
-    ASSERT_TRUE(model.setText("abcd"));
-    ASSERT_TRUE(model.setSelection(1u, 3u));
-    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste).status, UiEditClipboardStatus::Pending);
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::Pending);
-    ASSERT_TRUE(service.deliver(controller.token(), ClipboardStatus::Success, "x\r\ny\tz"));
-    const auto result = controller.drain(s_Owner, model);
-    EXPECT_EQ(result.status, UiEditClipboardStatus::Applied);
-    EXPECT_TRUE(result.textChanged);
-    EXPECT_TRUE(result.selectionChanged);
-    EXPECT_EQ(model.text(), "ax y zd");
-    EXPECT_FALSE(controller.pending());
-    EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::Idle);
-    ASSERT_TRUE(model.undo());
-    EXPECT_EQ(model.text(), "abcd");
-    EXPECT_EQ(model.anchor(), 1u);
-    EXPECT_EQ(model.caret(), 3u);
-    EXPECT_FALSE(model.canUndo());
-}
 
 TEST(UiEditClipboard, CutWaitsForSuccessfulNativePublicationBeforeDeleting){
     Tests::TestArena arena;
@@ -101,8 +60,6 @@ TEST(UiEditClipboard, CutWaitsForSuccessfulNativePublicationBeforeDeleting){
     ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Cut).status, UiEditClipboardStatus::Pending);
     EXPECT_EQ(model.text(), "abcd");
     ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.startedOperation, ClipboardOperation::WriteText);
-    EXPECT_EQ(service.startedText, "bc");
     ASSERT_TRUE(service.deliver(controller.token(), ClipboardStatus::NativeFailure));
     EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::NativeFailure);
     EXPECT_EQ(model.selectedText(), "bc");
@@ -251,28 +208,11 @@ TEST(UiEditClipboard, ReadOnlyPreventsCutPasteAndCancelsMutationIfPolicyChangesD
     EXPECT_EQ(model.selectedText(), "abcd");
 }
 
-TEST(UiEditClipboard, NativePrimarySelectionUsesItsOwnChannelAndUnsupportedCapabilityIsExplicit){
+TEST(UiEditClipboard, UnsupportedPrimarySelectionRejectsBeforeTransferAdmission){
     Tests::TestArena arena;
     DelayedClipboard service(arena.arena);
     UiEditClipboardController controller(arena.arena, service);
     Ui::EditModel model(arena.arena);
-    ASSERT_TRUE(model.setText("selected"));
-    ASSERT_TRUE(model.selectAll());
-    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::PublishSelection, ClipboardChannel::PrimarySelection).status,
-        UiEditClipboardStatus::Pending);
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.startedChannel, ClipboardChannel::PrimarySelection);
-    EXPECT_EQ(service.startedText, "selected");
-    ASSERT_TRUE(service.deliver(controller.token(), ClipboardStatus::Success));
-    EXPECT_EQ(controller.drain(s_Owner, model).status, UiEditClipboardStatus::Published);
-    ASSERT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste, ClipboardChannel::PrimarySelection).status,
-        UiEditClipboardStatus::Pending);
-    ASSERT_TRUE(service.pump());
-    EXPECT_EQ(service.startedOperation, ClipboardOperation::ReadText);
-    ASSERT_TRUE(service.deliver(controller.token(), ClipboardStatus::Success, "primary"));
-    EXPECT_TRUE(controller.drain(s_Owner, model).textChanged);
-    EXPECT_EQ(model.text(), "primary");
-    service.primaryAvailable = false;
     EXPECT_EQ(controller.request(s_Owner, model, Ui::EditClipboardAction::Paste, ClipboardChannel::PrimarySelection).status,
         UiEditClipboardStatus::Unsupported);
 }

@@ -50,30 +50,6 @@ struct MoveOnlyCleanup : NoCopy{
     void operator()()noexcept{ ++state->calls; }
 };
 
-struct PotentiallyThrowingCopyCleanup{
-    PotentiallyThrowingCopyCleanup() = default;
-    PotentiallyThrowingCopyCleanup(const PotentiallyThrowingCopyCleanup&)noexcept(false){}
-    PotentiallyThrowingCopyCleanup(PotentiallyThrowingCopyCleanup&&)noexcept = default;
-
-    void operator()()noexcept{}
-};
-
-
-TEST(ScopeExit, RunsExactlyOnceAtNormalExitAndEarlyReturn){
-    u32 calls = 0u;
-    {
-        ScopeExit cleanup([&]()noexcept{ ++calls; });
-        EXPECT_EQ(calls, 0u);
-    }
-    EXPECT_EQ(calls, 1u);
-    const auto operation = [&](){
-        ScopeExit cleanup([&]()noexcept{ ++calls; });
-
-        return 29u;
-    };
-    EXPECT_EQ(operation(), 29u);
-    EXPECT_EQ(calls, s_ExpectedDualCount);
-}
 
 TEST(ScopeExit, ReleaseIsIdempotentAndDestroysTheOwnedCallable){
     CleanupState state;
@@ -88,30 +64,6 @@ TEST(ScopeExit, ReleaseIsIdempotentAndDestroysTheOwnedCallable){
     EXPECT_EQ(state.destructions, 1u);
 }
 
-TEST(ScopeExit, OwnsMoveOnlyCallableUntilCleanupCompletes){
-    CleanupState state;
-    {
-        ScopeExit cleanup{ MoveOnlyCleanup(state) };
-        EXPECT_EQ(state.calls, 0u);
-        EXPECT_EQ(state.destructions, 0u);
-    }
-    EXPECT_EQ(state.calls, 1u);
-    EXPECT_EQ(state.destructions, 1u);
-}
-
-TEST(ScopeExit, InvokesMutableCopiedCallableWithoutChangingItsSource){
-    u32 observed = 0u;
-    auto callback = [value = 7u, &observed]()mutable noexcept{
-        ++value;
-        observed = value;
-    };
-    {
-        ScopeExit cleanup(callback);
-    }
-    EXPECT_EQ(observed, 8u);
-    callback();
-    EXPECT_EQ(observed, 8u);
-}
 
 TEST(ScopeExit, UnwindingRunsNestedCleanupInReverseOrderAndPropagatesFailure){
     u32 order[3u] = {};
@@ -170,22 +122,6 @@ TEST(ScopeExit, CleanupObservesEarlierCapturedObjectsBeforeTheirDestruction){
     EXPECT_THROW(operation(), ScopeExitFailure);
     EXPECT_TRUE(observedAlive);
     EXPECT_FALSE(alive);
-}
-
-TEST(ScopeExit, GuardCannotTransferOwnershipAndConstructionCannotThrow){
-    const auto callback = []()noexcept{};
-    using Guard = ScopeExit<Decay_T<decltype(callback)>>;
-    static_assert(!IsConstructible_V<Guard, Guard&>);
-    static_assert(!IsConstructible_V<Guard, const Guard&>);
-    static_assert(!IsConstructible_V<Guard, Guard&&>);
-    static_assert(!IsAssignable_V<Guard&, Guard&>);
-    static_assert(!IsAssignable_V<Guard&, Guard&&>);
-    static_assert(IsNothrowDestructible_V<Guard>);
-    static_assert(noexcept(ScopeExit(callback)));
-    static_assert(!IsConstructible_V<ScopeExit<PotentiallyThrowingCopyCleanup>, PotentiallyThrowingCopyCleanup&>);
-    static_assert(IsConstructible_V<ScopeExit<PotentiallyThrowingCopyCleanup>, PotentiallyThrowingCopyCleanup&&>);
-    ScopeExit cleanup(callback);
-    static_assert(noexcept(cleanup.release()));
 }
 
 

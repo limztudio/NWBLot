@@ -227,27 +227,6 @@ void SliderFixture::expectAccepted(const SliderAcceptedFrame& saved, const bool 
     }
 }
 
-usize SliderFixture::regionQuads(const DrawSnapshot& snapshot, const Name& name)const{
-    const UiSkinRegion* region = m_skin.findRegion(name);
-    if(!region)
-        return 0u;
-    const f32 left = static_cast<f32>(region->rectangle.x) / static_cast<f32>(m_skin.atlasWidth());
-    const f32 right = static_cast<f32>(region->rectangle.x + region->rectangle.width)
-        / static_cast<f32>(m_skin.atlasWidth());
-    usize count = 0u;
-    for(const DrawCommand& command : snapshot.commands()){
-        if(command.material != PaintMaterial::Skin)
-            continue;
-        for(u32 index = command.firstIndex; index + 5u < command.firstIndex + command.indexCount; index += 6u){
-            const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
-            const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
-            if(first.texCoord.x >= left && opposite.texCoord.x <= right && opposite.texCoord.x > first.texCoord.x)
-                ++count;
-        }
-    }
-    return count;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

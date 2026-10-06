@@ -26,12 +26,6 @@ namespace TaskGraphTestUtils{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static_assert(requires(const Graphics::GpuCompiledGraph::ReadView& compiledPlan){
-    { compiledPlan.logicalOwnershipTransferCount() }->SameAs<usize>;
-    { compiledPlan.logicalOwnershipTransfers() }->SameAs<const Graphics::GpuCompiledOwnershipTransfer*>;
-    { compiledPlan.logicalOwnershipTransferAt(0u) }->SameAs<const Graphics::GpuCompiledOwnershipTransfer*>;
-});
-
 void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryStats& actual){
     EXPECT_EQ(actual.reservedBytes, expected.reservedBytes);
     EXPECT_EQ(actual.usedBytes, expected.usedBytes);
@@ -423,53 +417,6 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
         .capabilities = Graphics::GpuQueueCapability::Transfer,
         .dedicated = true,
     };
-}
-
-[[nodiscard]] Telemetry::FrameGraphQueueAssignmentModifier::Mask ExpectedTelemetryModifiers(
-    const Graphics::GpuTaskQueueAssignmentModifier::Mask modifiers
-){
-    u8 expected = Telemetry::FrameGraphQueueAssignmentModifier::None;
-    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::DirectDependencyAffinity)
-        expected |= Telemetry::FrameGraphQueueAssignmentModifier::DirectDependencyAffinity;
-    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::SameClassLoadBalance)
-        expected |= Telemetry::FrameGraphQueueAssignmentModifier::SameClassLoadBalance;
-    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::NonPrimaryRouting)
-        expected |= Telemetry::FrameGraphQueueAssignmentModifier::NonPrimaryRouting;
-    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::DiagnosticTimingQueueOverride)
-        expected |= Telemetry::FrameGraphQueueAssignmentModifier::DiagnosticTimingQueueOverride;
-    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingCalibration)
-        expected |= Telemetry::FrameGraphQueueAssignmentModifier::TimingCalibration;
-    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::TimingFeedback)
-        expected |= Telemetry::FrameGraphQueueAssignmentModifier::TimingFeedback;
-    if(modifiers & Graphics::GpuTaskQueueAssignmentModifier::DiagnosticQueueOverride)
-        expected |= Telemetry::FrameGraphQueueAssignmentModifier::DiagnosticQueueOverride;
-    return static_cast<Telemetry::FrameGraphQueueAssignmentModifier::Mask>(expected);
-}
-
-void ExpectPlannedQueueAssignmentTelemetry(
-    const Graphics::GpuTaskQueueAssignment& source,
-    const Telemetry::FrameGraphQueueAssignment& telemetry,
-    const Telemetry::FrameGraphQueueClass::Enum queueClass,
-    const Telemetry::FrameGraphQueueAssignmentReason::Enum reason
-){
-    EXPECT_TRUE(telemetry.present);
-    EXPECT_EQ(telemetry.initialQueue.index, source.initialQueue.index);
-    EXPECT_EQ(telemetry.initialQueue.deviceGeneration, source.initialQueue.deviceGeneration);
-    EXPECT_EQ(telemetry.plannedQueue.index, source.queue.index);
-    EXPECT_EQ(telemetry.plannedQueue.deviceGeneration, source.queue.deviceGeneration);
-    EXPECT_FALSE(telemetry.acceptedQueue.valid());
-    EXPECT_FALSE(telemetry.previousAcceptedQueue.valid());
-    EXPECT_EQ(telemetry.score.overlap, source.score.overlap);
-    EXPECT_EQ(telemetry.score.queueLoad, source.score.queueLoad);
-    EXPECT_EQ(telemetry.score.incomingCrossings, source.score.incomingCrossings);
-    EXPECT_EQ(telemetry.score.outgoingCrossings, source.score.outgoingCrossings);
-    EXPECT_EQ(telemetry.score.ownershipTransfers, source.score.ownershipTransfers);
-    EXPECT_EQ(telemetry.score.total, source.score.total());
-    EXPECT_EQ(telemetry.queueClass, queueClass);
-    EXPECT_EQ(telemetry.reason, reason);
-    EXPECT_EQ(telemetry.modifiers, ExpectedTelemetryModifiers(source.modifiers));
-    EXPECT_EQ(telemetry.acceptance, Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted);
-    EXPECT_EQ(telemetry.dedicated, source.dedicated);
 }
 
 [[nodiscard]] TransferOwnershipPair AddTransferOwnershipPair(

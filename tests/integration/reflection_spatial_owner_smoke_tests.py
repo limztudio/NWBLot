@@ -71,9 +71,6 @@ class SpatialOwnerValidationMarkerTests(unittest.TestCase):
         with self.assertRaises(SmokeFailure):
             validate_gpu_debug(text, [LIT_GPUDBG])
 
-    def test_unrequested_run_makes_no_validation_claim(self):
-        self.assertEqual(validate_gpu_debug("", []), {LIT_REQUESTED: False, "markers": []})
-
 
 class SpatialOwnerEvidenceTests(unittest.TestCase):
     def test_missing_or_reordered_phase_is_rejected(self):

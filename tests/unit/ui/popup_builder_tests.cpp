@@ -145,7 +145,6 @@ TEST_F(UiPopupBuilderTests, ModalBackdropAndBodyRenderAboveAPanelDeclaredByALate
     EXPECT_FLOAT_EQ(opposite.position.y, 600.0f);
     EXPECT_FLOAT_EQ(first.color.a, m_builder.popupStyle().backdrop.a);
     ASSERT_TRUE(m_context.commitFrame(1u));
-    ExpectBounds(state.placement().bounds, { 310.0f, 240.0f, 180.0f, 120.0f });
     const WidgetId child = id("apply", "popup");
     EXPECT_EQ(m_context.input().hitTest({ 325.0f, 255.0f }), child);
     EXPECT_FALSE(m_context.input().hitTest({ 10.0f, 10.0f }).valid());

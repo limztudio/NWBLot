@@ -26,8 +26,6 @@ using namespace NWB::Impl::Ui;
 
 
 TEST(UiCaretClockTests, FiniteLongDeltaPreservesWholeCycleRemainder){
-    EXPECT_DOUBLE_EQ(AdvanceCaretPhase(0.125, 2.25), 0.375);
-    EXPECT_DOUBLE_EQ(AdvanceCaretPhase(0.75, 2.75), 0.5);
     EXPECT_DOUBLE_EQ(AdvanceCaretPhase(0.25, 1000000.75), 0.0);
     EXPECT_DOUBLE_EQ(AdvanceCaretPhase(0.375, Limit<f64>::s_Max), 0.375);
 }

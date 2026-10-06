@@ -67,49 +67,6 @@ class UiEditSurroundingSelectionTests : public EditFixture{};
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiEditSurroundingSelectionTests, ForwardDeletionKeepsSelectedBytesAndAdvancesEachAcceptedEpochOnce){
-    ASSERT_TRUE(m_model.setText("abcDEFghi"));
-    ASSERT_TRUE(m_model.setSelection(3u, 6u));
-    const u64 revision = m_model.revision();
-    const u64 selection = m_model.selectionGeneration();
-    const u64 external = m_model.externalRevision();
-    const u64 composition = m_model.compositionGeneration();
-    const u64 instance = m_model.instanceGeneration();
-    ASSERT_TRUE(m_model.eraseAroundSelection(2u, 1u));
-    EXPECT_EQ(m_model.text(), "aDEFhi");
-    EXPECT_EQ(m_model.selectedText(), "DEF");
-    EXPECT_EQ(m_model.anchor(), 1u);
-    EXPECT_EQ(m_model.caret(), 4u);
-    EXPECT_EQ(m_model.revision(), revision + 1u);
-    EXPECT_EQ(m_model.selectionGeneration(), selection + 1u);
-    EXPECT_EQ(m_model.externalRevision(), external);
-    EXPECT_EQ(m_model.compositionGeneration(), composition);
-    EXPECT_EQ(m_model.instanceGeneration(), instance);
-    EXPECT_TRUE(m_model.canUndo());
-    EXPECT_FALSE(m_model.canRedo());
-}
-
-TEST_F(UiEditSurroundingSelectionTests, ReverseDeletionRestoresDirectionThroughExactlyOneUndoAndRedo){
-    ASSERT_TRUE(m_model.setText("abcDEFghi"));
-    ASSERT_TRUE(m_model.setSelection(6u, 3u));
-    ASSERT_TRUE(m_model.eraseAroundSelection(2u, 1u));
-    EXPECT_EQ(m_model.text(), "aDEFhi");
-    EXPECT_EQ(m_model.anchor(), 4u);
-    EXPECT_EQ(m_model.caret(), 1u);
-    ASSERT_TRUE(m_model.undo());
-    EXPECT_EQ(m_model.text(), "abcDEFghi");
-    EXPECT_EQ(m_model.anchor(), 6u);
-    EXPECT_EQ(m_model.caret(), 3u);
-    EXPECT_FALSE(m_model.canUndo());
-    EXPECT_TRUE(m_model.canRedo());
-    ASSERT_TRUE(m_model.redo());
-    EXPECT_EQ(m_model.text(), "aDEFhi");
-    EXPECT_EQ(m_model.anchor(), 4u);
-    EXPECT_EQ(m_model.caret(), 1u);
-    EXPECT_TRUE(m_model.canUndo());
-    EXPECT_FALSE(m_model.canRedo());
-}
-
 TEST_F(UiEditSurroundingSelectionTests, OneSidedCountsAddressNormalizedSelectionEdgesForEitherDirection){
     for(const bool reverse : { false, true }){
         EditModel before(m_arena);

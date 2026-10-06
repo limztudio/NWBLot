@@ -182,28 +182,6 @@ struct ReentrantTelemetryDuringDeclarationTask{
     };
 };
 
-struct NoexceptLifecycleTask{
-    static constexpr Graphics::GpuTaskCommandRequirements s_CommandRequirements{ Graphics::GpuQueueCapability::Graphics };
-    struct Payload{
-        u32* recordCount = nullptr;
-        u32* discardedCount = nullptr;
-    };
-
-    static bool Record(const Payload& payload, Graphics::CommandList&, const Graphics::GpuTaskRecordContext&)noexcept{
-        if(payload.recordCount)
-            ++*payload.recordCount;
-        return true;
-    }
-
-    static void Accepted(Payload&, const Graphics::QueueSubmissionToken&)noexcept{
-    }
-
-    static void Discarded(Payload& payload)noexcept{
-        if(payload.discardedCount)
-            ++*payload.discardedCount;
-    }
-};
-
 struct NativeRecordProbeTask{
     static constexpr Graphics::GpuTaskCommandRequirements s_CommandRequirements{ Graphics::GpuQueueCapability::Graphics };
     struct Payload{

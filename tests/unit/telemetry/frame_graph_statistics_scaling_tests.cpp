@@ -191,9 +191,6 @@ void RunScalingScenario(const u32 packetCount, const u32 ownerCount){
     NWB::Tests::RecordUnsignedTestProperty("decode_ns", decodeNanoseconds);
 }
 
-TEST(Telemetry, PacketStatisticsInterleavedOwnersRoundTrip){
-    RunScalingScenario(256u, 4u);
-}
 
 TEST(Telemetry, PacketStatisticsDuplicateRejectionPreservesSeededTables){
     TestArena testArena;

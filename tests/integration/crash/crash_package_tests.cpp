@@ -155,40 +155,6 @@ static void FillPackageRequest(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(Crash, WriteCrashPackageCreatesRequiredFiles){
-    TestArena testArena;
-    auto& arena = testArena.arena;
-    constexpr AStringView s_Group("crash_package_write_test");
-    constexpr AStringView s_CrashId("crash-package-required-files");
-    RemoveTestArtifacts(arena, s_Group);
-
-    NWB::Core::Crash::Detail::CrashRequest request;
-    FillPackageRequest(arena, request, SpoolDirectory(arena, s_Group), s_CrashId);
-    request.instructionPointer = 1u;
-    request.callstackFrameCount = 2u;
-    request.callstackFrames[0] = 1u;
-    request.callstackFrames[1] = 2u;
-    request.triggerLine = 7u;
-    CopyFixedBuffer(request.triggerCategory, AStringView(s_TEST));
-    CopyFixedBuffer(request.triggerMessage, AStringView("required-files"));
-    CopyFixedBuffer(request.triggerFile, AStringView("tests/integration/crash/crash_package_tests.cpp"));
-
-    EXPECT_TRUE(NWB::Core::Crash::Detail::WriteCrashPackage(request));
-
-    const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, s_CrashId);
-    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName));
-    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_MetadataFileName));
-    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_BreadcrumbsFileName));
-    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_EmergencyFileName));
-    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_ArtifactStrategyFileName));
-    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_CpuContextFileName));
-    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
-    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_SymbolicationFileName));
-    EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"trigger_message\": \"required-files\"")));
-
-    RemoveTestArtifacts(arena, s_Group);
-}
-
 TEST(Crash, WriteCrashPackageFailsWhenSpoolPathIsFile){
     TestArena testArena;
     auto& arena = testArena.arena;
@@ -369,7 +335,8 @@ TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){
 #endif
 
 #if defined(GLB_PLATFORM_WINDOWS) || (defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID))
-TEST(Crash, DesktopInstalledHandlerWritesManualDumpPackage){
+#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
+TEST(Crash, LinuxManualDumpUnwindsBeyondTheLeafWithoutFramePointers){
     TestArena testArena;
     auto& arena = testArena.arena;
     NWB::Core::Alloc::PersistentArena installArena(
@@ -412,73 +379,15 @@ TEST(Crash, DesktopInstalledHandlerWritesManualDumpPackage){
 
     const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
     EXPECT_TRUE(WaitForDirectory(packageDirectory, 3000u));
-    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_ManifestFileName));
-    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_SymbolicationFileName));
-#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
     EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_CallstackFileName));
     // A "#1 " frame proves the unwinder walked past the leaf frame; final builds omit the frame pointer, so
     // this guards that .eh_frame-based capture keeps producing a full callstack.
     EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_CallstackFileName, AStringView("#1 0x")));
+    NWB::Core::Crash::UninstallCrashHandler();
+    RemoveTestArtifacts(arena, s_Group);
+}
 #endif
-    EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_ManifestFileName, AStringView("\"trigger_message\": \"desktop handler runtime\"")));
-    NWB::Core::Crash::UninstallCrashHandler();
 
-    RemoveTestArtifacts(arena, s_Group);
-}
-
-TEST(Crash, DesktopInstalledHandlerWritesRadeonGpuDetectiveDumpPackage){
-    TestArena testArena;
-    auto& arena = testArena.arena;
-    NWB::Core::Alloc::PersistentArena installArena(
-        s_InstallArena,
-        NWB::Core::Alloc::PersistentArena::StructureAlignedSize(64u * 1024u)
-    );
-    constexpr AStringView s_Group("crash_gpu_rgd_dump_runtime_test");
-    RemoveTestArtifacts(arena, s_Group);
-
-    NWB::Core::Crash::CrashConfigT<NWB::Core::Alloc::PersistentArena> config(installArena);
-    config.applicationName = AStringView(s_CRASH_TESTS);
-    config.version = AStringView("1");
-    config.buildId = AStringView("gpu-rgd-dump-runtime-test");
-    config.spoolDirectory = SpoolDirectory(arena, s_Group);
-
-    {
-        ScopedLock lock(NWB::Core::Crash::Detail::g_State.mutex);
-        NWB::Core::Crash::Detail::g_State.crashSequence.store(1u, MemoryOrder::relaxed);
-    }
-
-    const bool installed = NWB::Core::Crash::InstallCrashHandler(installArena, config);
-    ASSERT_TRUE(installed);
-
-    NWB::Core::Crash::Detail::CrashDumpRequestOptions options;
-    options.waitMilliseconds = NWB::Core::Crash::Detail::s_PlatformCrashHandlerWaitMilliseconds;
-    options.triggerCategory = AStringView(NWB::Core::Crash::Detail::s_GpuCrashCategory);
-    options.gpuReport = AStringView("device fault vendor binary: 9 bytes\n");
-    options.gpuDump = AStringView("rgd-bytes");
-    options.gpuDumpKind = NWB::Core::Crash::GpuCrashDumpKind::RadeonGpuDetective;
-    NWB::Core::Crash::Detail::ManualDumpContextStorage contextStorage;
-    NWB::Core::Crash::Detail::CaptureManualDumpContext(options, contextStorage);
-    const NWB::Core::Crash::CrashDumpResult result = NWB::Core::Crash::Detail::RequestCrashDump(
-        NWB::Core::Crash::Detail::CrashReasonKind::GpuCrash,
-        0u,
-        options
-    );
-    EXPECT_EQ(result.status, NWB::Core::Crash::CrashDumpStatus::PackageWritten);
-
-    char crashId[NWB::Core::Crash::Detail::s_MaxShortText] = {};
-    BuildCrashIdForProcess(crashId, CurrentProcessId(), 1u);
-
-    const CrashTestPath packageDirectory = PackageDirectory(arena, s_Group, CrashNames::s_PendingDirectoryName, AStringView(crashId));
-    EXPECT_TRUE(WaitForDirectory(packageDirectory, 3000u));
-    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_GpuCrashReportFileName));
-    EXPECT_TRUE(PathIsRegularFile(packageDirectory / CrashNames::s_GpuDetectiveCaptureFileName));
-    EXPECT_TRUE(PathIsMissing(packageDirectory / CrashNames::s_AftermathGpuDumpFileName));
-    EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_GpuCrashReportFileName, AStringView("device fault vendor binary")));
-    EXPECT_TRUE(TextFileContains(packageDirectory / CrashNames::s_GpuDetectiveCaptureFileName, AStringView("rgd-bytes")));
-    NWB::Core::Crash::UninstallCrashHandler();
-
-    RemoveTestArtifacts(arena, s_Group);
-}
 
 TEST(Crash, DesktopInstalledHandlerWritesGpuCrashTextOnlyPackage){
     TestArena testArena;

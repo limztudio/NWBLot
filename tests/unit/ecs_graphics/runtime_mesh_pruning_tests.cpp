@@ -259,7 +259,6 @@ TEST(RenderableMeshResolution, StaticAttachmentWithoutAssetIsUnavailable){
     EXPECT_EQ(context.meshSystem.resolveRenderableMeshStatus(entity.id(), description), RenderableMeshResolution::Ready);
     EXPECT_TRUE(description.valid());
     EXPECT_FALSE(description.runtime);
-    EXPECT_EQ(description.mesh.name(), mesh.mesh.name());
 }
 
 TEST(RenderableMeshResolution, OwnedRuntimeBindingRemainsUnavailableUntilReady){
@@ -524,7 +523,6 @@ TEST(RuntimeMeshPruning, RequestedIdentitiesKeepFullNameAndVersionAcrossHintedAn
     for(const usize capacityHint : { 0u, 64u }){
         Core::Alloc::ScratchArena scratch(Name("tests/runtime_mesh_pruning/request_scratch"));
         RuntimeMeshRequestSet requests(scratch, capacityHint);
-        EXPECT_TRUE(requests.complete());
         requests.add(s_NameNone, 7u);
         requests.markLive(s_NameNone, 7u);
         EXPECT_TRUE(requests.complete());

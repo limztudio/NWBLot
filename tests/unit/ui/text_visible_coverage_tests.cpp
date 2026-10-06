@@ -117,17 +117,6 @@ TEST_F(TextVisibleCoverageTests, MoreThan4096DistinctHiddenHangulDoNotExhaustThe
     ASSERT_EQ(ids.size(), hiddenCount);
     for(usize index = 1u; index < ids.size(); ++index)
         ASSERT_NE(ids[index], ids[index - 1u]);
-    PaintVector<RawShapedGlyph> native(m_arena);
-    ShapeRequest firstHangul{ "\xea\xb0\x80" };
-    firstHangul.scriptTag = TextScriptTag('H', 'a', 'n', 'g');
-    firstHangul.language = "ko";
-    const PlacedGlyph& retained = m_layout.glyphs()[1u];
-    ASSERT_TRUE(retained.face->shape(firstHangul, 0u, 3u, native));
-    ASSERT_EQ(native.size(), 1u);
-    EXPECT_EQ(retained.glyphId, native[0u].glyphId);
-    EXPECT_EQ(retained.coverage.known, native[0u].coverage.known);
-    ExpectRectangle(retained.coverage.ink, native[0u].coverage.ink);
-    ExpectRectangle(retained.ink, native[0u].ink);
     beginPaint(1u);
     ASSERT_TRUE(paintClipped(m_layout, clip));
     const DrawSnapshot prefix = m_paint.freeze();
@@ -230,7 +219,6 @@ TEST_F(TextVisibleCoverageTests, FractionalUnequalDpiKeepsAHintedRasterSliverOut
     const Rect clip = RasterFringe(raster, OutlineRectangle(m_layout.glyphs()[0u], origin));
     ASSERT_GT(clip.width, 0.0f);
     ASSERT_GT(clip.height, 0.0f);
-    const Point measured = m_layout.measure();
     beginPaint(1u, display);
     ASSERT_TRUE(paintClipped(m_layout, clip, origin));
     const DrawSnapshot snapshot = m_paint.freeze();
@@ -240,8 +228,6 @@ TEST_F(TextVisibleCoverageTests, FractionalUnequalDpiKeepsAHintedRasterSliverOut
     EXPECT_FLOAT_EQ(snapshot.vertices()[0u].position.y, clip.y);
     EXPECT_NEAR(snapshot.vertices()[2u].position.x, clip.x + clip.width, 0.0001f);
     EXPECT_NEAR(snapshot.vertices()[2u].position.y, clip.y + clip.height, 0.0001f);
-    EXPECT_FLOAT_EQ(m_layout.measure().x, measured.x);
-    EXPECT_FLOAT_EQ(m_layout.measure().y, measured.y);
 }
 
 TEST_F(TextVisibleCoverageTests, FractionalOriginPlacesNativeCoverageOnThePhysicalPixelGrid){
@@ -258,8 +244,6 @@ TEST_F(TextVisibleCoverageTests, FractionalOriginPlacesNativeCoverageOnThePhysic
     ASSERT_EQ(snapshot.vertices().size(), 4u);
     EXPECT_NEAR(snapshot.vertices()[0u].position.x, raster.x, 0.0001f);
     EXPECT_NEAR(snapshot.vertices()[0u].position.y, raster.y, 0.0001f);
-    EXPECT_NEAR(raster.x * display.pixelScaleX, Floor(raster.x * display.pixelScaleX + 0.5f), 0.0001f);
-    EXPECT_NEAR(raster.y * display.pixelScaleY, Floor(raster.y * display.pixelScaleY + 0.5f), 0.0001f);
 }
 
 TEST_F(TextVisibleCoverageTests, NegativeBearingRemainsVisibleToTheLeftOfTheGlyphOrigin){

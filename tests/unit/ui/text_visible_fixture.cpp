@@ -117,15 +117,15 @@ void TextVisibleFixture::beginPaint(const u64 generation, const DisplayMetrics& 
     m_paint.begin(display, generation, 1u, Core::Assets::AssetRef<UiSkin>("tests/ui/skin"), m_skin);
 }
 
-SharedGlyphPage TextVisibleFixture::makePage(const u64 atlasIdentity, const u64 generation, const u32 index){
+SharedGlyphPage TextVisibleFixture::makePage(const u64 atlasIdentity){
     GlyphPage::Pixels pixels(m_arena);
     pixels.resize(64u, 128u);
     const GlyphPageBinding binding{
         .font = Core::Assets::AssetRef<Font>("tests/ui/independent_font"),
         .fontGeneration = 1u,
         .atlasIdentity = atlasIdentity,
-        .generation = generation,
-        .index = index,
+        .generation = 1u,
+        .index = 0u,
         .width = 8u,
         .height = 8u,
     };

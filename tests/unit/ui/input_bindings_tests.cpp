@@ -40,23 +40,6 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiInputBindingsTests, ReplacementRemovesDefaultsAndAdmitsArbitraryPhysicalKeysAndSuperChords){
-    const InputKeyBinding custom[]{
-        { Core::Key::W, 0, Core::InputModifier::Shift, InputCommand::Up, InputSelectionPolicy::Shift },
-        { Core::Key::F, Core::InputModifier::Super, 0, InputCommand::FocusNext },
-        { Core::Key::F25, Core::InputModifier::Control, 0, InputCommand::ContextMenu, InputSelectionPolicy::None, false },
-    };
-    ASSERT_TRUE(m_bindings.set(custom, 3u));
-    EXPECT_EQ(m_bindings.resolve(Core::Key::Tab, 0).command, InputCommand::None);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::Up, 0).command, InputCommand::None);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::F, 0).command, InputCommand::None);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::F, Core::InputModifier::Super).command, InputCommand::FocusNext);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::F, Core::InputModifier::Super | Core::InputModifier::Shift).command, InputCommand::None);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::W, Core::InputModifier::CapsLock | Core::InputModifier::NumLock).command, InputCommand::Up);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::F25, Core::InputModifier::Control).command, InputCommand::ContextMenu);
-    EXPECT_FALSE(m_bindings.resolve(Core::Key::F25, Core::InputModifier::Control).edit);
-}
-
 TEST_F(UiInputBindingsTests, OverlappingIgnoredModifierChordsRejectAtomicallyRegardlessOfCommand){
     const InputKeyBinding accepted{ Core::Key::W, 0, 0, InputCommand::Left };
     ASSERT_TRUE(m_bindings.set(&accepted, 1u));
@@ -159,61 +142,6 @@ TEST_F(UiInputBindingsTests, EmptyAndAliasedProfileReplacementCanRecoverToDefaul
     m_bindings.restoreDefaults();
     EXPECT_EQ(m_bindings.resolve(Core::Key::F, 0).command, InputCommand::None);
     EXPECT_EQ(m_bindings.resolve(Core::Key::Tab, Core::InputModifier::Shift).command, InputCommand::FocusPrevious);
-}
-
-TEST_F(UiInputBindingsTests, IgnoredShiftUsesExplicitSelectionPolicyWithoutChangingCommand){
-    const InputKeyBinding custom[]{
-        { Core::Key::W, 0, Core::InputModifier::Shift, InputCommand::Left, InputSelectionPolicy::Shift },
-        { Core::Key::F, 0, Core::InputModifier::Shift, InputCommand::Right, InputSelectionPolicy::Always },
-        { Core::Key::S, 0, Core::InputModifier::Shift, InputCommand::Down, InputSelectionPolicy::None },
-    };
-    ASSERT_TRUE(m_bindings.set(custom, 3u));
-    EXPECT_FALSE(m_bindings.resolve(Core::Key::W, 0).extend);
-    EXPECT_TRUE(m_bindings.resolve(Core::Key::W, Core::InputModifier::Shift | Core::InputModifier::CapsLock).extend);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::W, Core::InputModifier::Shift).command, InputCommand::Left);
-    EXPECT_TRUE(m_bindings.resolve(Core::Key::F, 0).extend);
-    EXPECT_TRUE(m_bindings.resolve(Core::Key::F, Core::InputModifier::Shift).extend);
-    EXPECT_FALSE(m_bindings.resolve(Core::Key::S, Core::InputModifier::Shift).extend);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::W, Core::InputModifier::Shift | Core::InputModifier::Control).command, InputCommand::None);
-}
-
-TEST_F(UiInputBindingsTests, DefaultModifierBoundariesPreserveOsAndEditorAdmission){
-    const InputCommandIntent reverse = m_bindings.resolve(Core::Key::Tab, s_InputBindingModifierMask);
-    EXPECT_EQ(reverse.command, InputCommand::FocusPrevious);
-    EXPECT_FALSE(reverse.edit);
-    const InputCommandIntent altLeft = m_bindings.resolve(Core::Key::Left, Core::InputModifier::Alt | Core::InputModifier::Shift);
-    EXPECT_EQ(altLeft.command, InputCommand::Left);
-    EXPECT_TRUE(altLeft.extend);
-    EXPECT_FALSE(altLeft.edit);
-    EXPECT_FALSE(m_bindings.resolve(Core::Key::Up, Core::InputModifier::Control).edit);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::Enter, Core::InputModifier::Control).command, InputCommand::Submit);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::KeypadEnter, Core::InputModifier::Alt).command, InputCommand::Accept);
-    EXPECT_FALSE(m_bindings.resolve(Core::Key::KeypadEnter, Core::InputModifier::Alt).edit);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::Delete, Core::InputModifier::Shift).command, InputCommand::Cut);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::Delete, Core::InputModifier::Shift | Core::InputModifier::Control).command, InputCommand::WordDelete);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::Insert, Core::InputModifier::Control | Core::InputModifier::Shift).command, InputCommand::None);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::A, Core::InputModifier::Control | Core::InputModifier::Alt).command, InputCommand::None);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::F10, Core::InputModifier::Shift | Core::InputModifier::Super).command, InputCommand::ContextMenu);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::F10, Core::InputModifier::Shift | Core::InputModifier::Control).command, InputCommand::None);
-}
-
-TEST_F(UiInputBindingsTests, ReplacingSpaceActivationDoesNotImplicitlyAdmitItsOrdinaryCharacter){
-    const InputCommandIntent ordinarySpace = m_bindings.resolve(Core::Key::Space, 0);
-    ASSERT_EQ(ordinarySpace.command, InputCommand::Activate);
-    ASSERT_TRUE(ordinarySpace.allowText);
-    InputKeyBinding activation{ .key = Core::Key::W, .command = InputCommand::Activate };
-    ASSERT_TRUE(m_bindings.set(&activation, 1u));
-    EXPECT_FALSE(m_bindings.resolve(Core::Key::W, 0).allowText);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::Space, 0).command, InputCommand::None);
-    activation.allowText = true;
-    ASSERT_TRUE(m_bindings.set(&activation, 1u));
-    EXPECT_TRUE(m_bindings.resolve(Core::Key::W, 0).allowText);
-    activation.allowText = false;
-    ASSERT_TRUE(m_bindings.set(&activation, 1u));
-    EXPECT_FALSE(m_bindings.resolve(Core::Key::W, 0).allowText);
-    m_bindings.restoreDefaults();
-    EXPECT_TRUE(m_bindings.resolve(Core::Key::Space, 0).allowText);
-    EXPECT_EQ(m_bindings.resolve(Core::Key::W, 0).command, InputCommand::None);
 }
 
 

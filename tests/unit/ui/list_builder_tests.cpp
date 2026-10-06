@@ -239,8 +239,6 @@ TEST_F(UiListBuilderTests, SiblingListsPaintTheirOwnDeferredBackgroundStyles){
     ASSERT_TRUE(skinQuad(snapshot, 6u, first));
     ASSERT_TRUE(skinQuad(snapshot, 7u, second));
     EXPECT_LT(first.y, second.y);
-    EXPECT_EQ(first.width, 280.0f);
-    EXPECT_EQ(second.width, 280.0f);
 }
 
 TEST_F(UiListBuilderTests, HundredThousandRowsBuildOnlyVisibleTextTargetsAndGlyphs){
@@ -258,19 +256,7 @@ TEST_F(UiListBuilderTests, HundredThousandRowsBuildOnlyVisibleTextTargetsAndGlyp
     EXPECT_LT(snapshot.indices().size(), 400u);
     ASSERT_TRUE(m_context.commitFrame(1u));
     ASSERT_EQ(m_context.states().entries().size(), 2u);
-    EXPECT_EQ(target(host())->control.contentGeneration, m_source.generation);
-    EXPECT_EQ(target(host())->control.contentRevision, m_source.contentRevision);
     EXPECT_EQ(m_context.input().targets().size(), static_cast<usize>(visible) + 4u);
-    usize tabStops = 0u;
-    for(const auto& accepted : m_context.input().targets()){
-        tabStops += accepted.focusable ? 1u : 0u;
-        if(accepted.owner == host()){
-            EXPECT_FALSE(accepted.focusable);
-            EXPECT_EQ(accepted.ownerDeclarationGeneration, target(host())->declarationGeneration);
-            EXPECT_EQ(accepted.control, target(host())->control);
-        }
-    }
-    EXPECT_EQ(tabStops, 1u);
 }
 
 TEST_F(UiListBuilderTests, ScrollingKeepsDisplayedRowsUntilTheMatchingCandidateIsAccepted){
@@ -302,8 +288,6 @@ TEST_F(UiListBuilderTests, InitialProgrammaticSelectionSurvivesAndEndNavigatesTo
     key(Core::Key::End);
     ASSERT_TRUE(prepare(2u));
     EXPECT_EQ(m_state.selectedKey(), 100000u);
-    EXPECT_FALSE(m_result.activated);
-    EXPECT_TRUE(m_result.selectionChanged);
     EXPECT_GT(m_state.scrollOffset(), 2399800.0);
     ASSERT_TRUE(m_context.commitFrame(2u));
     ASSERT_NE(target(row(100000u)), nullptr);

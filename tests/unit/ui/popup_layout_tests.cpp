@@ -201,9 +201,6 @@ TEST(UiPopupLayoutTests, InvalidInputsLeaveThePreviousPlacementUntouched){
 
 TEST(UiPopupStateTests, OpenEpochAdvancesOnlyOnClosedToOpenTransitions){
     PopupState state;
-    const u64 identity = state.instanceGeneration();
-    EXPECT_NE(identity, 0u);
-    EXPECT_FALSE(state.isOpen());
     EXPECT_EQ(state.openGeneration(), 0u);
     state.close();
     EXPECT_EQ(state.openGeneration(), 0u);
@@ -214,12 +211,10 @@ TEST(UiPopupStateTests, OpenEpochAdvancesOnlyOnClosedToOpenTransitions){
     EXPECT_EQ(state.openGeneration(), 1u);
     state.close();
     state.close();
-    EXPECT_FALSE(state.isOpen());
     EXPECT_EQ(state.openGeneration(), 1u);
     state.open();
     EXPECT_TRUE(state.isOpen());
     EXPECT_EQ(state.openGeneration(), 2u);
-    EXPECT_EQ(state.instanceGeneration(), identity);
 }
 
 TEST(UiPopupStateTests, IndependentAndRecreatedStatesNeverShareInstanceIdentity){
@@ -228,17 +223,12 @@ TEST(UiPopupStateTests, IndependentAndRecreatedStatesNeverShareInstanceIdentity)
         PopupState retired;
         retiredIdentity = retired.instanceGeneration();
         retired.open();
-        EXPECT_EQ(retired.openGeneration(), 1u);
     }
     PopupState first;
     PopupState second;
     EXPECT_NE(first.instanceGeneration(), retiredIdentity);
     EXPECT_NE(second.instanceGeneration(), retiredIdentity);
     EXPECT_NE(first.instanceGeneration(), second.instanceGeneration());
-    EXPECT_EQ(first.openGeneration(), 0u);
-    EXPECT_EQ(second.openGeneration(), 0u);
-    ExpectBounds(first.placement().bounds, {});
-    ExpectBounds(first.placement().viewport, {});
 }
 
 

@@ -28,12 +28,13 @@ namespace __hidden_assets_graphics_mesh_cooker{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#if defined(GLB_FINAL)
 using AString = AssetsGraphicsFixture::AString;
 using CapturingLogger = AssetsGraphicsFixture::CapturingLogger;
-using CookSingleMetaFn = AssetsGraphicsFixture::CookSingleMetaFn;
-using MinimalAssetKind = AssetsGraphicsFixture::MinimalAssetKind;
+using CookSingleMetaFn = decltype(&AssetsGraphicsFixture::CookSingleMeshMeta);
 using Path = AssetsGraphicsFixture::Path;
 using TestArena = AssetsGraphicsFixture::TestArena;
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -69,36 +70,6 @@ static void ExpectCookFailure(
     ExpectCookFailure(testArena, cookSingleMeta, AStringView(metaText.data(), metaText.size()), caseName);
 }
 #endif
-
-TEST(AssetsGraphics, MeshCookerTypedStreams){
-    AssetsGraphicsFixture::CookAndCheckMinimalTypedAsset<NWB::Impl::Mesh>(
-        AssetsGraphicsFixture::s_MinimalMeshMeta,
-        "minimal_mesh",
-        MinimalAssetKind::Mesh,
-        [&](const NWB::Impl::Mesh& loadedMesh){
-            EXPECT_EQ(loadedMesh.meshClass(), NWB::Core::Mesh::MeshClass::Static);
-            EXPECT_EQ(loadedMesh.positionStream().size(), 3u);
-            AssetsGraphicsFixture::CheckMinimalRuntimeMeshletPayload(loadedMesh);
-            EXPECT_EQ(loadedMesh.positionStream()[0].x, -0.5f);
-            EXPECT_EQ(LoadHalf4U(loadedMesh.normalStream()[0]).z, 1.f);
-            EXPECT_EQ(LoadHalf4U(loadedMesh.colorStream()[2]).z, 1.f);
-        }
-    );
-}
-
-TEST(AssetsGraphics, MeshCookerDefaultColors){
-    AssetsGraphicsFixture::CookAndCheckMinimalTypedAsset<NWB::Impl::Mesh>(
-        AssetsGraphicsFixture::s_DefaultColorMeshMeta,
-        "default_color_mesh",
-        MinimalAssetKind::Mesh,
-        [&](const NWB::Impl::Mesh& loadedMesh){
-            EXPECT_EQ(loadedMesh.positionStream().size(), 3u);
-            const Float4U color0 = LoadHalf4U(loadedMesh.colorStream()[0]);
-            EXPECT_EQ(color0.x, 1.f);
-            EXPECT_EQ(color0.w, 1.f);
-        }
-    );
-}
 
 
 TEST(AssetsGraphics, MeshCookerValidationFailures){

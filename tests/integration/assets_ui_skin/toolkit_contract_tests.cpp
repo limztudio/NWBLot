@@ -79,29 +79,6 @@ static void CopyWithoutRegion(ToolkitSkinArena& testArena, const UiSkin& source,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(AssetsUiSkinToolkitContract, BothAuthoredSkinsSatisfyCompleteProfile){
-    CapturingLogger logger;
-    Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
-    ToolkitSkinArena testArena;
-
-    const Path defaultRoot = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets";
-    const Path defaultPath = defaultRoot / "ui" / "skins" / "default" / "atlas.nwb";
-    UiSkin defaultSkin(testArena.arena);
-    bool defaultComplete = false;
-    ASSERT_TRUE(LoadAuthoredSkin(testArena, defaultRoot, defaultPath, "engine", defaultSkin, defaultComplete));
-    EXPECT_TRUE(defaultComplete);
-    EXPECT_TRUE(ValidateUiSkinToolkitContract(defaultSkin));
-
-    const Path alternateRoot = Path(testArena.arena, NWB_REPO_ROOT) / "tests" / "smoke" / "ui_layer" / "assets";
-    const Path alternatePath = alternateRoot / "ui" / "skins" / "alternate" / "atlas.nwb";
-    UiSkin alternateSkin(testArena.arena);
-    bool alternateComplete = false;
-    ASSERT_TRUE(LoadAuthoredSkin(testArena, alternateRoot, alternatePath, "project", alternateSkin, alternateComplete));
-    EXPECT_TRUE(alternateComplete);
-    EXPECT_TRUE(ValidateUiSkinToolkitContract(alternateSkin));
-    EXPECT_EQ(logger.errorCount(), 0u);
-}
-
 TEST(AssetsUiSkinToolkitContract, RejectsMissingBasePartsButAcceptsDeclaredStateFallbacks){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);

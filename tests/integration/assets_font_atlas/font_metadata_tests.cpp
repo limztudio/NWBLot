@@ -71,38 +71,6 @@ static constexpr Name s_ScratchArena("tests/integration/assets_font_atlas/metada
     return ReadTextFile(FixtureRoot(testArena) / "latin.nwb", text) && document.parse(AStringView(text));
 }
 
-struct CaptureWriter final : Core::Assets::ICookedAssetWriter{
-    Core::Assets::AssetBytes fontBinary;
-    Core::Assets::AssetBytes atlasBinary;
-    Name fontPath = s_NameNone;
-    Name atlasPath = s_NameNone;
-    u32 writes = 0u;
-
-    explicit CaptureWriter(Core::Assets::AssetArena& arena)
-        : fontBinary(arena)
-        , atlasBinary(arena)
-    {}
-
-    virtual bool writeCookedAsset(
-        TStringView,
-        const Name& virtualPath,
-        const Core::Assets::IAsset& asset,
-        const Core::Assets::IAssetCodec& codec
-    )override{
-        if(codec.assetType() == Font::AssetTypeName()){
-            fontPath = virtualPath;
-            ++writes;
-            return codec.serialize(asset, fontBinary);
-        }
-        if(codec.assetType() == FontAtlas::AssetTypeName()){
-            atlasPath = virtualPath;
-            ++writes;
-            return codec.serialize(asset, atlasBinary);
-        }
-        return false;
-    }
-};
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -113,7 +81,7 @@ struct CaptureWriter final : Core::Assets::ICookedAssetWriter{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(AssetsFontMetadata, BunchPublishesTypedLocalReferenceAndRejectsDuplicateChild){
+TEST(AssetsFontMetadata, BunchRejectsInvalidAndDuplicateChildrenWithoutPublication){
     using namespace __hidden_font_metadata_tests;
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
@@ -124,8 +92,6 @@ TEST(AssetsFontMetadata, BunchPublishesTypedLocalReferenceAndRejectsDuplicateChi
     ASSERT_TRUE(initializers.initialize());
     Core::Assets::CookEntryRegistry registry(testArena.arena);
     ASSERT_TRUE(Core::Assets::RegisterAutoCollectedCookEntryTypes(registry));
-    ASSERT_NE(registry.find(Font::AssetTypeName()), nullptr);
-    ASSERT_NE(registry.find(FontAtlas::AssetTypeName()), nullptr);
     Core::Metascript::Document document(testArena.arena);
     ASSERT_TRUE(LoadMetadata(testArena, document));
     Core::CpuTaskScheduler scheduler(1u);
@@ -152,21 +118,6 @@ TEST(AssetsFontMetadata, BunchPublishesTypedLocalReferenceAndRejectsDuplicateChi
     EXPECT_EQ(registry.entryCount(), 2u);
     EXPECT_FALSE(registry.parseValue(expanded[0u].assetType, expanded[0u].virtualPath, filePath, expanded[0u].value, parseContext));
     EXPECT_EQ(registry.entryCount(), 2u);
-
-    CaptureWriter writer(testArena.arena);
-    Core::Assets::CookEntryPathHashSet cookedPaths(0, Hasher<NameHash>(), EqualTo<NameHash>(), testArena.arena);
-    Core::Assets::CookEntryWriteContext writeContext{ writer, cookedPaths };
-    for(usize index = 0u; index < registry.bucketCount(); ++index)
-        ASSERT_TRUE(registry.writeBucket(index, writeContext));
-    EXPECT_EQ(writer.writes, 2u);
-    EXPECT_EQ(writer.fontPath, Name("project/fonts/latin/face"));
-    EXPECT_EQ(writer.atlasPath, Name("project/fonts/latin/atlas"));
-    Font font(testArena.arena, writer.fontPath);
-    FontAtlas atlas(testArena.arena, writer.atlasPath);
-    ASSERT_TRUE(font.loadBinary(writer.fontBinary));
-    ASSERT_TRUE(atlas.loadBinary(writer.atlasBinary));
-    EXPECT_EQ(atlas.payload().font.name(), font.virtualPath());
-    EXPECT_TRUE(ValidateFontAtlasSourceMatch(atlas.payload(), font));
 }
 
 

@@ -27,7 +27,6 @@ struct TextureImagePaintSample{
     Rect bounds;
     Rect uv;
     Color color;
-    u32 textureImageIndex = Limit<u32>::s_Max;
     u32 layer = 0u;
     usize quads = 0u;
 };
@@ -94,7 +93,6 @@ struct TextureImagePaintSample{
                 candidate.uv = { first.texCoord.x, first.texCoord.y,
                     opposite.texCoord.x - first.texCoord.x, opposite.texCoord.y - first.texCoord.y };
                 candidate.color = first.color;
-                candidate.textureImageIndex = command.textureImageIndex;
                 candidate.layer = command.layer;
                 right = opposite.position.x;
                 bottom = opposite.position.y;
@@ -126,7 +124,7 @@ protected:
 
 
 protected:
-    [[nodiscard]] bool panel(u64 generation, const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f });
+    [[nodiscard]] bool panel(u64 generation);
 };
 
 
@@ -154,8 +152,8 @@ PopupOptions UiTextureImageBuilderTests::ChildOptions(){
     return options;
 }
 
-bool UiTextureImageBuilderTests::panel(const u64 generation, const DisplayMetrics& display){
-    return begin(generation, display) && m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 400.0f });
+bool UiTextureImageBuilderTests::panel(const u64 generation){
+    return begin(generation) && m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 400.0f });
 }
 
 

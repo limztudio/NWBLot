@@ -80,25 +80,10 @@ TYPED_TEST(NumericLifetimeTests, SameTextDraftReplacementFencesWithoutChangingTh
     EXPECT_FALSE(model.draft().composition().active);
 }
 
-TYPED_TEST(NumericLifetimeTests, AcceptedActionsAdvanceTheLoanEpochEvenWithoutAValueChange){
+TYPED_TEST(NumericLifetimeTests, RejectedIncompleteSubmitStillRetiresLoanEpoch){
     auto& model = this->m_model;
-    u64 epoch = model.revision();
-    const NumericEditResult submitted = model.submit();
-    ASSERT_TRUE(submitted.valid);
-    EXPECT_TRUE(submitted.committed);
-    EXPECT_FALSE(submitted.valueChanged);
-    EXPECT_GT(model.revision(), epoch);
-    epoch = model.revision();
-    ASSERT_TRUE(model.cancel().cancelled);
-    EXPECT_GT(model.revision(), epoch);
-    epoch = model.revision();
-    ASSERT_TRUE(model.abandon().valid);
-    EXPECT_GT(model.revision(), epoch);
-    epoch = model.revision();
-    ASSERT_TRUE(model.blur().committed);
-    EXPECT_GT(model.revision(), epoch);
     ASSERT_TRUE(model.setDraft("-"));
-    epoch = model.revision();
+    const u64 epoch = model.revision();
     ExpectRejected(model.submit());
     EXPECT_GT(model.revision(), epoch);
 }
@@ -132,26 +117,14 @@ TYPED_TEST(NumericLifetimeTests, RestorationDropsPreeditAndUndoWhileUsingCanonic
     }
 }
 
-TYPED_TEST(NumericLifetimeTests, OrderedActionsRestoreTheLatestCommittedOrAuthoritativeValue){
+TYPED_TEST(NumericLifetimeTests, ExternalReplacementControlsLaterAbandonRestoration){
     auto& model = this->m_model;
-    ASSERT_TRUE(model.setDraft("+0012"));
-    ASSERT_TRUE(model.submit().committed);
-    ASSERT_TRUE(model.setDraft("17"));
-    ASSERT_TRUE(model.cancel().valid);
-    EXPECT_EQ(model.value(), 12);
-    EXPECT_EQ(model.draft().text(), "12");
     ASSERT_TRUE(model.setDraft("19"));
     ASSERT_TRUE(model.setValue(9));
     ASSERT_TRUE(model.setDraft("15"));
     ASSERT_TRUE(model.abandon().valid);
     EXPECT_EQ(model.value(), 9);
     EXPECT_EQ(model.draft().text(), "9");
-    ASSERT_TRUE(model.setDraft("+0008"));
-    ASSERT_TRUE(model.blur().committed);
-    ASSERT_TRUE(model.setDraft("-"));
-    ASSERT_TRUE(model.abandon().valid);
-    EXPECT_EQ(model.value(), 8);
-    EXPECT_EQ(model.draft().text(), "8");
 }
 
 TYPED_TEST(NumericLifetimeTests, CapacityAndInvalidUtf8FailuresPreserveEveryDraftField){

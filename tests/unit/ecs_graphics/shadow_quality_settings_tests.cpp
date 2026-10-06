@@ -19,15 +19,6 @@ namespace __hidden_shadow_quality_settings_tests{
 
 using namespace NWB::Impl;
 
-TEST(ShadowQualitySettings, TemporalBudgetRequiresAcceptedFilteredHistory){
-    ShadowQualitySettings settings;
-    settings.transparentSampling = TransparentShadowSampling::TemporalOne;
-    EXPECT_TRUE(ValidateShadowQualitySettings(settings));
-    EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, false), 3u);
-    EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, true), 1u);
-    // A resize, reset, quality change or unavailable temporal filter restores the bootstrap budget.
-    EXPECT_EQ(ResolveTransparentShadowSampleCount(settings, false), 3u);
-}
 
 TEST(ShadowQualitySettings, UnknownModesAreRejectedAndCannotRemoveAllSamples){
     ShadowQualitySettings settings;

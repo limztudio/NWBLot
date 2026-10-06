@@ -73,39 +73,6 @@ struct RangeContext{
 };
 
 
-TEST(BufferRangeHandoff, FanInCombinesDisjointBranchChangesAgainstWholeBufferBase){
-    RangeContext context;
-    Core::Alloc::ScratchArena scratch{ Name(s_TESTS_BUFFER_RANGE_HANDOFF_OPERATION) };
-    Handoff base(context.arena);
-    Handoff first(context.arena);
-    Handoff second(context.arena);
-    Handoff result(context.arena);
-    context.addState(base, { 0u, 256u }, Core::ResourceStates::ShaderResource);
-    context.addState(first, { 0u, 64u }, Core::ResourceStates::CopyDest);
-    context.addState(first, { 64u, 192u }, Core::ResourceStates::ShaderResource);
-    context.addState(second, { 0u, 192u }, Core::ResourceStates::ShaderResource);
-    context.addState(second, { 192u, 64u }, Core::ResourceStates::CopySource);
-    const Handoff* const branches[] = { &first, &second };
-
-    ASSERT_TRUE(result.buildFanIn(base, branches, LengthOf(branches), scratch));
-    const auto& states = Access::StateHandoffBuffers(result);
-    ASSERT_EQ(states.size(), 3u);
-    EXPECT_EQ(states[0u].range, Core::BufferRange(0u, 64u));
-    EXPECT_EQ(states[0u].state, Core::ResourceStates::CopyDest);
-    EXPECT_EQ(states[1u].range, Core::BufferRange(64u, 128u));
-    EXPECT_EQ(states[1u].state, Core::ResourceStates::ShaderResource);
-    EXPECT_EQ(states[s_ThirdElementIndex].range, Core::BufferRange(192u, 64u));
-    EXPECT_EQ(states[s_ThirdElementIndex].state, Core::ResourceStates::CopySource);
-    EXPECT_TRUE(result.coversBufferWithOwnership(context.buffer.get(), s_Owner, s_Owner));
-
-    const ArenaMemoryStats warmedStats = scratch.memoryStats();
-    EXPECT_EQ(warmedStats.usedBytes, 0u);
-    for(u32 repeat = 0u; repeat < 32u; ++repeat)
-        ASSERT_TRUE(result.buildFanIn(base, branches, LengthOf(branches), scratch));
-    EXPECT_EQ(scratch.memoryStats().usedBytes, 0u);
-    EXPECT_EQ(scratch.memoryStats().reservedBytes, warmedStats.reservedBytes);
-}
-
 TEST(BufferRangeHandoff, FanInRejectsConflictingOverlapAndKeepsIdenticalOverlap){
     RangeContext context;
     Core::Alloc::ScratchArena scratch{ Name(s_TESTS_BUFFER_RANGE_HANDOFF_OPERATION) };

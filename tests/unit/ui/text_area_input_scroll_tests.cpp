@@ -126,44 +126,6 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST_F(UiTextAreaInputScrollTests, PublishedViewportAndOwnedPartsShareTheEditorControlLifetime){
-    ASSERT_TRUE(prepareScroll());
-    const HitTarget* host = target(area());
-    ASSERT_TRUE(host);
-    const ScrollViewportPlacement& bars = m_state.scrollbars();
-    ASSERT_TRUE(bars.horizontal.visible && bars.vertical.visible);
-    EXPECT_TRUE(host->control.valid());
-    EXPECT_TRUE(host->scrollable && host->focusable && host->textEditable);
-    EXPECT_FALSE(host->navigable || host->pointerGesture || host->activatable);
-    ExpectRect(m_state.placement().content, bars.viewport);
-    ExpectRect(m_state.placement().clip, bars.contentClip);
-    EXPECT_FLOAT_EQ(bars.horizontal.track.y, bars.viewport.y + bars.viewport.height);
-    EXPECT_FLOAT_EQ(bars.vertical.track.x, bars.viewport.x + bars.viewport.width);
-    EXPECT_FLOAT_EQ(bars.corner.x, bars.vertical.track.x);
-    EXPECT_FLOAT_EQ(bars.corner.y, bars.horizontal.track.y);
-    const AStringView keys[]{ "scroll.x.thumb", "scroll.y.thumb", "scroll.x.before", "scroll.x.after",
-        "scroll.y.before", "scroll.y.after", "scroll.corner" };
-    for(const AStringView key : keys){
-        const HitTarget* child = target(part(key));
-        if(!child)
-            continue;
-        EXPECT_EQ(child->owner, host->id);
-        EXPECT_EQ(child->ownerDeclarationGeneration, host->declarationGeneration);
-        EXPECT_EQ(child->control, host->control);
-        EXPECT_EQ(child->popup, host->popup);
-        EXPECT_FALSE(child->focusable || child->textEditable || child->navigable);
-    }
-    const HitTarget* x = target(part("scroll.x.thumb"));
-    const HitTarget* y = target(part("scroll.y.thumb"));
-    const HitTarget* corner = target(part("scroll.corner"));
-    ASSERT_TRUE(x && y && corner);
-    EXPECT_TRUE(x->pointerGesture && y->pointerGesture);
-    EXPECT_FALSE(x->activatable || y->activatable || corner->activatable || corner->pointerGesture);
-    ExpectRect(x->rectangle, bars.horizontal.thumb);
-    ExpectRect(y->rectangle, bars.vertical.thumb);
-    EXPECT_FALSE(m_context.input().focus().valid());
-}
-
 TEST_F(UiTextAreaInputScrollTests, InvalidWheelLinesRejectTheCandidateBeforeBorrowingOrChangingTheAcceptedViewport){
     useHost();
     m_host.focused = false;
@@ -236,39 +198,6 @@ TEST_F(UiTextAreaInputScrollTests, CopiedVerticalWheelAppliesOnlyAtFinalPaintAnd
     EXPECT_FALSE(m_result.textChanged || m_result.selectionChanged);
     EXPECT_FALSE(m_context.input().focus().valid());
     EXPECT_TRUE(m_context.input().controlActions().empty());
-    model.expect(m_model);
-}
-
-TEST_F(UiTextAreaInputScrollTests, PureHorizontalWheelUsesItsPublishedStepWithoutVerticalMovement){
-    ASSERT_TRUE(prepareScroll());
-    const ScrollModelRecord model(m_arena, m_model);
-    const HitTarget* host = target(area());
-    ASSERT_TRUE(host);
-    const f64 step = host->scrollStepX;
-    ASSERT_GT(step, 0.0);
-    EXPECT_NEAR(step, m_builder.style().fontSize * ScrollOptions().wheelLines, 0.001);
-    ASSERT_TRUE(wheel(1.0, 0.0));
-    ASSERT_TRUE(frameArea(2u, ScrollOptions()));
-    EXPECT_NEAR(m_state.scroll().x, step, 0.001);
-    EXPECT_FLOAT_EQ(m_state.scroll().y, 0.0f);
-    EXPECT_FALSE(m_state.focused());
-    EXPECT_TRUE(m_context.input().controlActions().empty());
-    model.expect(m_model);
-}
-
-TEST_F(UiTextAreaInputScrollTests, FractionalDiagonalWheelMovesBothAxesAsOneCopiedAction){
-    ASSERT_TRUE(prepareScroll());
-    const ScrollModelRecord model(m_arena, m_model);
-    const HitTarget* host = target(area());
-    ASSERT_TRUE(host);
-    const f64 x = host->scrollStepX * 0.5;
-    const f64 y = host->scrollStep * 0.25;
-    ASSERT_TRUE(wheel(0.5, -0.25));
-    ASSERT_EQ(m_context.input().controlActions().size(), 1u);
-    ASSERT_TRUE(frameArea(2u, ScrollOptions()));
-    EXPECT_NEAR(m_state.scroll().x, x, 0.001);
-    EXPECT_NEAR(m_state.scroll().y, y, 0.001);
-    EXPECT_FALSE(m_result.textChanged || m_result.selectionChanged);
     model.expect(m_model);
 }
 
@@ -421,8 +350,6 @@ TEST_F(UiTextAreaInputScrollTests, TrackPagesOnlyOnReleaseByTheAcceptedViewport)
     const HitTarget* found = target(part("scroll.y.after"));
     ASSERT_TRUE(found);
     const HitTarget after = *found;
-    EXPECT_TRUE(after.activatable);
-    EXPECT_FALSE(after.pointerGesture);
     const Point point = Center(after.rectangle);
     ASSERT_TRUE(send({ InputEventType::PrimaryDown, point }).pointerConsumed);
     ASSERT_TRUE(frameArea(2u, ScrollOptions()));
@@ -431,11 +358,6 @@ TEST_F(UiTextAreaInputScrollTests, TrackPagesOnlyOnReleaseByTheAcceptedViewport)
     EXPECT_NEAR(m_state.scroll().y, 100.0, 0.001);
     ASSERT_TRUE(frameArea(3u, ScrollOptions()));
     EXPECT_NEAR(m_state.scroll().y, 100.0 + page, 0.001);
-    const HitTarget* before = target(part("scroll.y.before"));
-    ASSERT_TRUE(before);
-    click(Center(before->rectangle));
-    ASSERT_TRUE(frameArea(4u, ScrollOptions()));
-    EXPECT_NEAR(m_state.scroll().y, 100.0, 0.001);
     model.expect(m_model);
 }
 

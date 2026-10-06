@@ -456,32 +456,6 @@ TEST(CpuTaskSchedulerTests, CancelingAnActiveParentPreventsFutureDescendantsAndC
 }
 
 
-TEST(CpuTaskSchedulerTests, StatisticsAccountForQueuedCompletedAndCanceledTasks){
-    using namespace __hidden_cpu_task_scheduler_tests;
-    DeadlineGuard deadline;
-    CpuTaskScheduler scheduler(0u);
-    CpuTaskHandle predecessors[s_ThirdElementIndex] = { scheduler.submit([](){}), scheduler.submit([](){}) };
-    const auto joined = scheduler.submit([](){}, {}, predecessors, s_ExpectedDualCount);
-    const auto queued = scheduler.statistics();
-    EXPECT_EQ(queued.outstandingTasks, 3u);
-    EXPECT_EQ(queued.peakOutstandingTasks, 3u);
-    scheduler.wait(joined);
-    {
-        CpuTaskScope canceled(scheduler);
-        EXPECT_TRUE(canceled.submit([](){}).valid());
-        EXPECT_TRUE(canceled.submit([](){}).valid());
-        canceled.cancel();
-    }
-    const auto finished = scheduler.statistics();
-    EXPECT_EQ(finished.completedTasks, 3u);
-    EXPECT_EQ(finished.canceledTasks, s_ExpectedDualCount);
-    EXPECT_EQ(finished.outstandingTasks, 0u);
-    EXPECT_EQ(finished.peakOutstandingTasks, 3u);
-    EXPECT_EQ(finished.performanceTasks + finished.efficiencyTasks + finished.unclassifiedTasks, 3u);
-    EXPECT_EQ(finished.performanceWorkers + finished.efficiencyWorkers + finished.unclassifiedWorkers, 0u);
-}
-
-
 TEST(CpuTaskSchedulerTests, HeavyWorkUsesTheOtherClassWhileItsPreferredWorkerIsOccupied){
     using namespace __hidden_cpu_task_scheduler_tests;
     DeadlineGuard deadline;

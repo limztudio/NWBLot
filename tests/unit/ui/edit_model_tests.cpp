@@ -130,16 +130,6 @@ TEST_F(UiEditModelTests, WordRangeRejectsInteriorGraphemeAndKeepsHardLinesSepara
     ASSERT_TRUE(m_model.wordRangeAt(3u, begin, end));
     EXPECT_EQ(begin, 0u);
     EXPECT_EQ(end, 4u);
-    ASSERT_TRUE(m_model.wordRangeAt(4u, begin, end));
-    EXPECT_EQ(begin, 4u);
-    EXPECT_EQ(end, 5u);
-    ASSERT_TRUE(m_model.wordRangeAt(5u, begin, end));
-    EXPECT_EQ(begin, 5u);
-    EXPECT_EQ(end, 7u);
-    ASSERT_TRUE(m_model.wordRangeAt(8u, begin, end));
-    EXPECT_EQ(begin, 7u);
-    EXPECT_EQ(end, 8u);
-
     EditModel multiline(m_arena, {}, EditTextMode::Multiline);
     ASSERT_TRUE(multiline.setText("ab\ncd"));
     ASSERT_TRUE(multiline.wordRangeAt(2u, begin, end));

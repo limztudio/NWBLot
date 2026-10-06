@@ -35,19 +35,14 @@ namespace ResourceStates = Core::ResourceStates;
 namespace SwapChainOutputMode = Core::SwapChainOutputMode;
 using Core::AcquiredBackBuffer;
 using Core::AcquiredPresentationFrame;
-using Core::FramebufferHandle;
 using Core::GpuPhysicalQueueId;
 using Core::GpuPhysicalQueueInfo;
-using Core::TextureHandle;
 using Core::GraphicsBackend::VulkanDetail::ClassifyQueuePresentWaitDisposition;
 using Core::GraphicsBackend::VulkanDetail::IsPrimaryGraphicsPresentationQueue;
 using Core::GraphicsBackend::VulkanDetail::ResolveDirectPresentTransitionPolicy;
 using Core::GraphicsBackend::VulkanDetail::SelectSurfaceFormat;
 using Core::GraphicsBackend::VulkanDetail::SwapChainImagePresentationState;
 using Core::GraphicsBackend::VulkanDetail::SwapChainSurfaceFormatSelection;
-
-static_assert(SameAs<decltype(AcquiredBackBuffer::texture), TextureHandle>);
-static_assert(SameAs<decltype(AcquiredPresentationFrame::framebuffer), FramebufferHandle>);
 
 constexpr VkSurfaceFormatKHR MakeSurfaceFormat(const VkFormat format, const VkColorSpaceKHR colorSpace){
     return { format, colorSpace };

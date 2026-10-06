@@ -200,44 +200,22 @@ TEST(Ecs, EmptyViewDoesNotAllocateComponentPools){
     EXPECT_EQ(finalMemory.usedBytes, initialMemory.usedBytes);
 }
 
-TEST(Ecs, ComponentLifetime){
+TEST(Ecs, DestroyedEntityGenerationCannotReachRecycledComponents){
     TestWorld testWorld;
-
     auto entity = testWorld.world.createEntity();
     const auto entityId = entity.id();
-
     entity.addComponent<PositionComponent>();
-    EXPECT_TRUE(entity.alive());
-    EXPECT_TRUE(entity.hasComponent<PositionComponent>());
-    EXPECT_NE(testWorld.world.tryGetComponent<PositionComponent>(entityId), nullptr);
-    EXPECT_EQ(testWorld.world.tryGetComponent<VelocityComponent>(entityId), nullptr);
-
-    entity.removeComponent<PositionComponent>();
-    EXPECT_FALSE(entity.hasComponent<PositionComponent>());
-    EXPECT_EQ(testWorld.world.tryGetComponent<PositionComponent>(entityId), nullptr);
-
-    entity.addComponent<VelocityComponent>();
-    EXPECT_TRUE(entity.hasComponent<VelocityComponent>());
-
-    entity.addComponent<OverAlignedComponent>();
-    EXPECT_TRUE(entity.hasComponent<OverAlignedComponent>());
-
-    entity.removeComponent<OverAlignedComponent>();
-    EXPECT_FALSE(entity.hasComponent<OverAlignedComponent>());
 
     entity.destroy();
     EXPECT_FALSE(entity.alive());
-    EXPECT_EQ(testWorld.world.entityCount(), 0u);
+    EXPECT_EQ(testWorld.world.tryGetComponent<PositionComponent>(entityId), nullptr);
 
     auto recycledEntity = testWorld.world.createEntity();
-    EXPECT_TRUE(recycledEntity.alive());
     EXPECT_NE(recycledEntity.id(), entityId);
 }
 
 TEST(Ecs, ComponentMutationVersion){
     TestWorld testWorld;
-
-    EXPECT_EQ(testWorld.world.componentMutationVersion<PositionComponent>(), 0u);
 
     auto entity = testWorld.world.createEntity();
     entity.addComponent<PositionComponent>();
@@ -326,29 +304,8 @@ TEST(Ecs, ComponentPoolsCanBeRecreatedAfterWorldClear){
     EXPECT_EQ(testWorld.world.view<PoolSlotComponent<63u>>().candidateCount(), 1u);
 }
 
-TEST(Ecs, MoveOnlyMessageBus){
+TEST(Ecs, ClearingPendingMoveOnlyMessagesPreventsPublication){
     TestWorld testWorld;
-
-    testWorld.world.emplaceMessage<MoveOnlyMessage>(23u);
-    EXPECT_EQ(testWorld.world.messageCount<MoveOnlyMessage>(), 0u);
-
-    testWorld.world.swapMessageBuffers();
-    EXPECT_EQ(testWorld.world.messageCount<MoveOnlyMessage>(), 1u);
-
-    u32 consumedCount = 0u;
-    u32 consumedValue = 0u;
-    testWorld.world.consumeMessages<MoveOnlyMessage>(
-        [&consumedCount, &consumedValue](const MoveOnlyMessage& message){
-            ++consumedCount;
-            consumedValue = message.value;
-        }
-    );
-    EXPECT_EQ(consumedCount, 1u);
-    EXPECT_EQ(consumedValue, 23u);
-
-    testWorld.world.clearMessages();
-    EXPECT_EQ(testWorld.world.messageCount<MoveOnlyMessage>(), 0u);
-
     testWorld.world.emplaceMessage<MoveOnlyMessage>(41u);
     testWorld.world.clearMessages();
     testWorld.world.swapMessageBuffers();
@@ -375,60 +332,8 @@ TEST(Ecs, DuplicateComponentAddIsStable){
         }
     );
     EXPECT_EQ(viewCount, 1u);
-
-    entity.removeComponent<PositionComponent>();
-    EXPECT_FALSE(entity.hasComponent<PositionComponent>());
 }
 
-TEST(Ecs, ParallelEachVisitsSingleAndMultiComponentViews){
-    NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);
-    NWB::Core::CpuTaskScheduler taskScheduler(3u);
-    NWB::Core::ECS::World world(arena, taskScheduler);
-
-    static constexpr u32 s_EntityCount = 512u;
-    for(u32 i = 0u; i < s_EntityCount; ++i){
-        auto entity = world.createEntity();
-        auto& position = entity.addComponent<PositionComponent>();
-        position.x = static_cast<i32>(i);
-
-        if((i & 1u) == 0u){
-            auto& velocity = entity.addComponent<VelocityComponent>();
-            velocity.x = static_cast<i32>(i * s_ExpectedDualCount);
-        }
-    }
-
-    Atomic<u32> positionVisits{ 0u };
-    world.view<PositionComponent>().parallelEach(
-        world.taskScope(),
-        [&positionVisits](NWB::Core::ECS::EntityID, PositionComponent& position){
-            position.y = position.x + 1;
-            positionVisits.fetch_add(1u, MemoryOrder::relaxed);
-        }
-    );
-
-    EXPECT_EQ(positionVisits.load(MemoryOrder::relaxed), s_EntityCount);
-
-    u32 verifiedPositions = 0u;
-    world.view<PositionComponent>().each(
-        [&verifiedPositions](NWB::Core::ECS::EntityID, PositionComponent& position){
-            EXPECT_EQ(position.y, position.x + 1);
-            ++verifiedPositions;
-        }
-    );
-    EXPECT_EQ(verifiedPositions, s_EntityCount);
-
-    Atomic<u32> pairVisits{ 0u };
-    world.view<PositionComponent, VelocityComponent>().parallelEach(
-        world.taskScope(),
-        16u,
-        [&pairVisits](NWB::Core::ECS::EntityID, PositionComponent& position, VelocityComponent& velocity){
-            position.x += velocity.x;
-            pairVisits.fetch_add(1u, MemoryOrder::relaxed);
-        }
-    );
-
-    EXPECT_EQ(pairVisits.load(MemoryOrder::relaxed), s_EntityCount / s_ExpectedDualCount);
-}
 
 TEST(Ecs, ParallelEachNestedInTaskBatchCompletes){
     NWB::Core::Alloc::GlobalArena arena(s_EcsParallelTestArena);

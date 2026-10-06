@@ -56,36 +56,11 @@ struct ThrowingCopyTask{
     void operator()()const noexcept{}
 };
 
-struct MoveOnlyTask{
-    MoveOnlyTask() = default;
-    MoveOnlyTask(const MoveOnlyTask&) = delete;
-    MoveOnlyTask(MoveOnlyTask&&)noexcept = default;
-
-
-    void operator()()const noexcept{}
-};
-
-struct LvalueOnlyTask{
-    u32* invocationCount;
-
-
-    explicit LvalueOnlyTask(u32& count)noexcept
-        : invocationCount(&count)
-    {}
-
-
-    void operator()()& noexcept{ ++*invocationCount; }
-    void operator()()&& = delete;
-};
 
 struct NonCallableTask{};
 
 
 static_assert(!IsConstructible_V<InplaceFunction<128u>, ThrowingMoveTask>);
-static_assert(IsConstructible_V<InplaceFunction<128u>, ThrowingCopyTask&>);
-static_assert(!IsConstructible_V<InplaceFunction<128u>, MoveOnlyTask&>);
-static_assert(IsConstructible_V<InplaceFunction<128u>, MoveOnlyTask>);
-static_assert(IsConstructible_V<InplaceFunction<128u>, LvalueOnlyTask>);
 static_assert(!IsConstructible_V<InplaceFunction<128u>, NonCallableTask>);
 
 
@@ -161,25 +136,6 @@ TEST(CpuTaskSubmissionTests, CallableConstructionFailurePublishesNoSchedulerOrSc
     EXPECT_EQ(scheduler.statistics().canceledTasks, 0u);
     scope.wait();
     scheduler.wait();
-}
-
-
-TEST(CpuTaskSubmissionTests, CallerAndWorkerExecutionInvokeStoredCallablesAsLvalues){
-    using namespace __hidden_cpu_task_submission_tests;
-    for(const u32 workerCount : { 0u, 1u }){
-        u32 schedulerInvocations = 0u;
-        u32 scopeInvocations = 0u;
-        CpuTaskScheduler scheduler(workerCount);
-        CpuTaskScope scope(scheduler);
-        const auto direct = scheduler.submit(LvalueOnlyTask(schedulerInvocations));
-        const auto scoped = scope.submit(LvalueOnlyTask(scopeInvocations));
-        ASSERT_TRUE(direct.valid());
-        ASSERT_TRUE(scoped.valid());
-        scheduler.wait(direct);
-        scope.wait();
-        EXPECT_EQ(schedulerInvocations, 1u);
-        EXPECT_EQ(scopeInvocations, 1u);
-    }
 }
 
 

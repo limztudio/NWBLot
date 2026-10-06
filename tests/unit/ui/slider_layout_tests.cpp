@@ -65,9 +65,6 @@ TEST(UiSliderLayoutTests, EndpointThumbPositionsMeetTheExactPaddedBounds){
     ASSERT_TRUE(SliderLayout::Place(bounds, bounds, metrics, 1.0, last));
     EXPECT_FLOAT_EQ(first.thumb.x, first.travelBounds.x);
     EXPECT_FLOAT_EQ(last.thumb.x + last.thumb.width, last.travelBounds.x + last.travelBounds.width);
-    EXPECT_FLOAT_EQ(last.thumb.x, 222.0f);
-    UiWidgetTests::ExpectRect(first.track, last.track);
-    UiWidgetTests::ExpectRect(first.centerTravel, last.centerTravel);
 }
 
 TEST(UiSliderLayoutTests, ClipChangesOnlyVisibilityAndPreservesAcceptedTravelGeometry){

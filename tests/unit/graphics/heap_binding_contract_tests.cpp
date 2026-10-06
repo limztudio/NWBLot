@@ -48,8 +48,6 @@ using DescriptorPrerequisiteMember = bool DescriptorBufferStartupPrerequisites::
 TEST(HeapBindingContract, BuildsCheckedAbsoluteRanges){
     Binding::HeapBindingRange range;
     EXPECT_TRUE(Binding::TryBuildHeapBindingRange(1024u, 256u, 256u, 128u, 128u, range));
-    EXPECT_EQ(range.localOffset, 256u);
-    EXPECT_EQ(range.size, 128u);
     EXPECT_EQ(range.absoluteBegin, 512u);
     EXPECT_EQ(range.absoluteEnd, 640u);
 

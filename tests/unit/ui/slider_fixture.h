@@ -109,7 +109,6 @@ protected:
     void press(Core::Key::Enum key, bool repeat = false);
     [[nodiscard]] SliderAcceptedFrame accepted()const;
     void expectAccepted(const SliderAcceptedFrame& saved, bool popupFocus = true)const;
-    [[nodiscard]] usize regionQuads(const DrawSnapshot& snapshot, const Name& region)const;
 
 
 protected:

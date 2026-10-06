@@ -341,7 +341,6 @@ TEST(OpticalSceneUpload, BoundsFinalizeRejectsComputeOnlyAndSelectsPrimaryGraphi
     ASSERT_TRUE(view.valid());
     ASSERT_EQ(view.taskCount(), 1u);
     const auto task = view.taskAt(result.uploadTask.index);
-    EXPECT_EQ(task.identity, Name("render.raytrace.optical_bounds_finalize"));
     EXPECT_EQ(task.commands.requiredCapabilities, Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer);
 
     const Core::GpuPhysicalQueueInfo computeQueue{

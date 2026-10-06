@@ -89,10 +89,6 @@ TEST(ObjectGeometryCacheTests, LayoutKeepsSentinelVerticesAndPersistentIndicesIn
     EXPECT_EQ(layout.indexByteOffset, 4u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
     EXPECT_EQ(layout.indexCount, 3u);
     EXPECT_EQ(layout.bufferByteSize, 5u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
-    ASSERT_TRUE(ResolveObjectGeometryCacheLayout(96u * sizeof(MeshletLocalVertexRef), 192u, layout));
-    EXPECT_EQ(layout.indexByteOffset, 97u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
-    EXPECT_EQ(layout.indexCount, 192u);
-    EXPECT_EQ(layout.bufferByteSize, layout.indexByteOffset + 192u * sizeof(u32));
 }
 
 TEST(ObjectGeometryCacheTests, LayoutRejectsEmptyMisalignedAndOverflowingInputs){

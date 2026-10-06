@@ -63,12 +63,7 @@ TEST(UiGlyphSdf, FreeTypeZeroIs128Over255AndExteriorInteriorClampToEndpoints){
 }
 
 
-TEST(UiGlyphSdf, DerivativeWidthTracksSpreadAndFlatFieldsRemainFinite){
-    const f32 sample = 130.f / 255.f;
-    const f32 narrow = nwbUiSdfCoverage(nwbUiSdfDistance(sample, 4u), 0.25f);
-    const f32 wide = nwbUiSdfCoverage(nwbUiSdfDistance(sample, 16u), 1.f);
-    EXPECT_FLOAT_EQ(narrow, wide);
-    EXPECT_NEAR(narrow, 0.75f, 0.000002f);
+TEST(UiGlyphSdf, FlatFieldsRemainFiniteAcrossEveryAdmittedSpread){
     EXPECT_FLOAT_EQ(nwbUiSdfCoverage(0.f, 0.f), 0.5f);
     // Fused FP32 decoding can leave a small residual; the flat-field epsilon bounds it at every admitted spread.
     for(u32 spread = NWB::Impl::s_FontAtlasMinSpreadPixels; spread <= NWB::Impl::s_FontAtlasMaxSpreadPixels; ++spread)

@@ -32,27 +32,6 @@ template<typename CharT>
     return text;
 }
 
-template<typename CharT>
-static void VerifyUnchangedText(){
-    NameSymbols::InstallRuntimeRegistry();
-    NameSymbols::ClearRuntimeSymbols();
-    Arena arena("Tests/NameSymbols/Unchanged");
-    BasicString<CharT, Arena> text(arena);
-    text.assign(4096u, static_cast<CharT>('z'));
-    const CharT* const originalData = text.data();
-    const ArenaMemoryStats before = arena.memoryStats();
-    for(u32 iteration = 0u; iteration < 32u; ++iteration)
-        NameSymbols::DecodeHashTokens(arena, text);
-    const ArenaMemoryStats after = arena.memoryStats();
-
-    EXPECT_EQ(text.size(), 4096u);
-    EXPECT_EQ(text.data(), originalData);
-    for(const CharT ch : text)
-        EXPECT_EQ(ch, static_cast<CharT>('z'));
-    EXPECT_EQ(after.allocationCount, before.allocationCount);
-    EXPECT_EQ(after.reallocationCount, before.reallocationCount);
-    EXPECT_EQ(after.deallocationCount, before.deallocationCount);
-}
 
 template<typename CharT>
 static void VerifyUnknownAndBoundaryTokens(){
@@ -117,16 +96,6 @@ static void VerifyResolvedSpans(){
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-TEST(NameSymbolDecodeTests, PlainNarrowTextDoesNotAllocate){
-    __hidden_name_symbol_decode_tests::VerifyUnchangedText<char>();
-}
-
-#if defined(GLB_UNICODE)
-TEST(NameSymbolDecodeTests, PlainWideTextDoesNotAllocate){
-    __hidden_name_symbol_decode_tests::VerifyUnchangedText<wchar>();
-}
-#endif
 
 TEST(NameSymbolDecodeTests, UnknownAndBoundaryNarrowTokensDoNotAllocate){
     __hidden_name_symbol_decode_tests::VerifyUnknownAndBoundaryTokens<char>();

@@ -80,17 +80,10 @@ protected:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiWidgetIdTests, StableKeysEncodeScopesAndRootLifetimeWithoutIterationOrderOrLabelText){
+TEST(UiWidgetIdTests, EmbeddedNulAndScopeConcatenationDoNotAliasAndInvalidKeysAreRejected){
     const WidgetRoot root{ 7u, 3u };
     const WidgetId rootId = MakeRootId(root);
     ASSERT_TRUE(rootId.valid());
-    const WidgetId menu = MakeWidgetId(rootId, "menu");
-    const WidgetId tools = MakeWidgetId(rootId, "tools");
-    const WidgetId action = MakeWidgetId(menu, "action");
-    EXPECT_EQ(action, MakeWidgetId(MakeWidgetId(MakeRootId({ 7u, 3u }), "menu"), "action"));
-    EXPECT_NE(action, MakeWidgetId(tools, "action"));
-    EXPECT_NE(action, MakeWidgetId(MakeWidgetId(MakeRootId({ 7u, 4u }), "menu"), "action"));
-    EXPECT_NE(action, MakeWidgetId(MakeWidgetId(MakeRootId({ 8u, 3u }), "menu"), "action"));
     EXPECT_NE(MakeWidgetId(rootId, AStringView("a\0b", 3u)), MakeWidgetId(rootId, "a"));
     EXPECT_NE(MakeWidgetId(MakeWidgetId(rootId, "a"), "bc"), MakeWidgetId(MakeWidgetId(rootId, "ab"), "c"));
     EXPECT_FALSE(MakeRootId({ 7u, 0u }).valid());

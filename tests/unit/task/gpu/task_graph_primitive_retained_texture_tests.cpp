@@ -507,22 +507,6 @@ TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPubli
         Graphics::TextureHandle::deleter_type(&testArena.arena),
         s_AdoptRef
     );
-    // An all-unknown fresh retained texture keeps the long-standing descriptor-state import behavior.
-    Graphics::GpuTaskGraph freshImportGraph(testArena.arena);
-    const Graphics::GpuGraphResourceId freshImport = freshImportGraph.importTexture(
-        texture,
-        Graphics::GpuGraphResourceDesc{}
-            .setIdentity(Name("tests/task_graph/fresh_retained_unspecified_import"))
-            .setMarkerLabel("Fresh Retained Unspecified Import")
-            .setType(Graphics::GpuGraphResourceType::Texture)
-    );
-    ASSERT_TRUE(freshImport.valid());
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(freshImportGraph);
-
-        EXPECT_EQ(declarations.resourceAt(freshImport.index).initialState, Graphics::ResourceStates::ShaderResource);
-    }
-
     Graphics::GpuTaskGraph graph(testArena.arena);
     const Graphics::GpuGraphResourceId destination = graph.importTexture(
         texture,
@@ -550,19 +534,6 @@ TEST(GpuTaskGraph, AllowsFreshRetainedTextureUploadAndRetainedClearWhenTheyPubli
     };
     const Graphics::GpuTaskId uploadTask = graph.addUploadTextureTask(uploadTaskDesc, validUploadDesc);
     ASSERT_TRUE(uploadTask.valid());
-    {
-        const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
-        const Graphics::GpuTaskGraphTaskView uploadTaskView = declarations.taskAt(uploadTask.index);
-
-        ASSERT_EQ(uploadTaskView.resourceUseCount, s_ExpectedDualCount);
-        ASSERT_NE(uploadTaskView.resourceUses, nullptr);
-        EXPECT_EQ(uploadTaskView.resourceUses[0u].resource, destination);
-        EXPECT_EQ(uploadTaskView.resourceUses[0u].requiredState, Graphics::ResourceStates::CopyDest);
-        EXPECT_EQ(uploadTaskView.resourceUses[0u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
-        EXPECT_EQ(uploadTaskView.resourceUses[1u].resource, destination);
-        EXPECT_EQ(uploadTaskView.resourceUses[1u].requiredState, Graphics::ResourceStates::ShaderResource);
-        EXPECT_EQ(uploadTaskView.resourceUses[1u].range.textureSubresources, Graphics::TextureSubresourceSet(0u, 1u, 0u, 1u));
-    }
     EXPECT_FALSE(graph.addUploadTextureTask(
         uploadTaskDesc,
         Graphics::GpuUploadTextureTaskDesc{

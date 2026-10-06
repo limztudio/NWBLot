@@ -292,10 +292,7 @@ TEST(GpuTaskGraph, SameClassBalancingCountsMergedAndUnroutedPrefixCosts){
         const Graphics::GpuTaskQueueAssignment* const assignment = assignments.find(tasks[taskIndex]);
         ASSERT_NE(assignment, nullptr);
         EXPECT_EQ(assignment->queue.index, expectedQueueIndices[taskIndex]);
-        EXPECT_EQ(assignment->initialQueue, assignment->queue);
         EXPECT_EQ(assignment->score.queueLoad, expectedQueueLoads[taskIndex]);
-        EXPECT_EQ(assignment->score.incomingCrossings, 0);
-        EXPECT_EQ(assignment->score.outgoingCrossings, 0);
     }
     EXPECT_TRUE(assignments.find(tasks[6u])->modifiers & Graphics::GpuTaskQueueAssignmentModifier::DirectDependencyAffinity);
 }

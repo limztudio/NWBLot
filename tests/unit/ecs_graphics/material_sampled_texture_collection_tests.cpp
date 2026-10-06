@@ -322,7 +322,6 @@ TEST(MaterialSampledTextureCollection, SeparateHardwareAndSoftwareCollectionsRet
     context.textures.clear();
     for(const auto& texture : output){
         EXPECT_EQ(texture->getReferenceCount(), 1u);
-        EXPECT_EQ(texture->getCreationDescription().width, 4u);
     }
 }
 

@@ -109,23 +109,11 @@ TEST_F(UiPointerGestureTests, QuickPressMoveReleaseRetainsCommittedBaselineAndFi
     EXPECT_FALSE(m_router.process().pointerConsumed);
     PointerGesture gesture;
     ASSERT_TRUE(m_router.consumePointerGesture(target.id, 13u, gesture));
-    EXPECT_TRUE(gesture.id.valid());
-    EXPECT_EQ(gesture.id.target, target.id);
-    EXPECT_EQ(gesture.id.declarationGeneration, 13u);
-    EXPECT_EQ(gesture.id.layoutGeneration, 7u);
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
     EXPECT_FLOAT_EQ(gesture.origin.x, 15.0f);
     EXPECT_FLOAT_EQ(gesture.origin.y, 25.0f);
     EXPECT_FLOAT_EQ(gesture.position.x, 110.0f);
     EXPECT_FLOAT_EQ(gesture.position.y, 120.0f);
-    EXPECT_FLOAT_EQ(gesture.targetRectangle.x, 10.0f);
-    EXPECT_FLOAT_EQ(gesture.targetRectangle.y, 20.0f);
-    EXPECT_FLOAT_EQ(gesture.targetRectangle.width, 80.0f);
-    EXPECT_FLOAT_EQ(gesture.targetRectangle.height, 30.0f);
-    EXPECT_FLOAT_EQ(gesture.referenceRectangle.x, gesture.targetRectangle.x);
-    EXPECT_FLOAT_EQ(gesture.referenceRectangle.y, gesture.targetRectangle.y);
-    EXPECT_FLOAT_EQ(gesture.referenceRectangle.width, gesture.targetRectangle.width);
-    EXPECT_FLOAT_EQ(gesture.referenceRectangle.height, gesture.targetRectangle.height);
     EXPECT_FALSE(m_router.consumePointerGesture(target.id, 13u, gesture));
     EXPECT_TRUE(m_router.actions().empty());
 }

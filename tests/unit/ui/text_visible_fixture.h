@@ -46,7 +46,7 @@ protected:
     [[nodiscard]] bool loadFont(Font& font, StringView filename);
     [[nodiscard]] bool installCoverageFonts();
     void beginPaint(u64 generation, const DisplayMetrics& display = { 800.0f, 600.0f, 1.0f, 1.0f });
-    [[nodiscard]] SharedGlyphPage makePage(u64 atlasIdentity, u64 generation = 1u, u32 index = 0u);
+    [[nodiscard]] SharedGlyphPage makePage(u64 atlasIdentity);
 
 
 protected:

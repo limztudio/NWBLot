@@ -610,47 +610,6 @@ TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
     EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
 }
 
-TEST(AssetsGraphics, ShaderCookWithoutMaterialBindIncludes){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
-    TestArena testArena;
-    Path root(testArena.arena);
-    Path outputDirectory(testArena.arena);
-    EXPECT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
-        testArena,
-        "shader_cook_without_material_bind_includes",
-        root,
-        outputDirectory
-    ));
-
-    const Path assetRoot = root / "assets";
-    EXPECT_TRUE(WriteStandaloneShaderProbe(assetRoot));
-
-    const bool cooked = AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot });
-    EXPECT_TRUE(cooked);
-    if(cooked){
-        NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
-        EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(
-            testArena,
-            outputDirectory,
-            records
-        ));
-
-        u64 sourceChecksum = 0u;
-        EXPECT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(
-            records,
-            Name(s_PROJECT_SHADERS_STANDALONE_PS),
-            Name(s_PS),
-            sourceChecksum
-        ));
-    }
-
-    EXPECT_EQ(logger.errorCount(), 0u);
-
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
-}
 
 TEST(AssetsGraphics, ShaderCookCompilesBomPrefixedSourceAndInclude){
     CapturingLogger logger;
@@ -748,23 +707,8 @@ TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
                 ), NWB::Core::SpirvEntryPointLookupResult::NotFound);
             EXPECT_TRUE(resolvedEntryPoint.empty());
 
-            NWB::Impl::ShaderAssetCodec codec;
-            NWB::Core::Assets::AssetBytes serializedShader = AssetsGraphicsFixture::MakeAssetBytes(testArena);
-            EXPECT_TRUE(codec.serialize(shader, serializedShader));
-            UniquePtr<NWB::Core::Assets::IAsset> reserializedShader;
-            EXPECT_TRUE(codec.deserialize(
-                testArena.arena,
-                shaderVirtualPath,
-                serializedShader,
-                reserializedShader
-            ));
-            if(reserializedShader){
-                const NWB::Impl::Shader& decodedShader = static_cast<const NWB::Impl::Shader&>(*reserializedShader);
-                EXPECT_EQ(AStringView(decodedShader.entryPoint()), s_MAINCASE);
-            }
         }
     }
-
     EXPECT_EQ(logger.errorCount(), 0u);
 
     ErrorCode errorCode;

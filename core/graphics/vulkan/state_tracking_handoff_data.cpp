@@ -97,69 +97,90 @@ bool CommandListResourceStateHandoff::buildResourceSubset(
     if(!source.valid() || source.m_deviceGeneration == 0u || !selection.valid())
         return false;
 
-    usize textureStateCount = 0u;
-    for(const TextureState& state : source.m_textureStates){
-        if(selection.containsTexture(state.texture))
-            ++textureStateCount;
-    }
-    usize bufferStateCount = 0u;
-    for(const BufferState& state : source.m_bufferStates){
-        if(selection.containsBuffer(state.buffer))
-            ++bufferStateCount;
-    }
-    usize permanentTextureStateCount = 0u;
-    for(const PermanentTextureState& state : source.m_permanentTextureStates){
-        if(selection.containsTexture(state.texture))
-            ++permanentTextureStateCount;
-    }
-    usize permanentBufferStateCount = 0u;
-    for(const BufferState& state : source.m_permanentBufferStates){
-        if(selection.containsBuffer(state.buffer))
-            ++permanentBufferStateCount;
-    }
-
-    // Reserve every destination vector before changing logical state. An allocation exception therefore leaves the
-    // published snapshot intact, while the commit phase only copies trivially copyable states into warmed storage.
-    m_textureStates.reserve(textureStateCount);
-    m_bufferStates.reserve(bufferStateCount);
-    m_permanentTextureStates.reserve(permanentTextureStateCount);
-    m_permanentBufferStates.reserve(permanentBufferStateCount);
+    const bool hasTextures = selection.textureCount() != 0u;
+    const bool hasBuffers = selection.bufferCount() != 0u;
     const u16 sourceDeviceGeneration = source.m_deviceGeneration;
     if(this == &source){
         using namespace __hidden_command_list_state_handoff;
-        RetainSelectedStates(m_textureStates, [&](const TextureState& state){
-            return selection.containsTexture(state.texture);
-        });
-        RetainSelectedStates(m_bufferStates, [&](const BufferState& state){
-            return selection.containsBuffer(state.buffer);
-        });
-        RetainSelectedStates(m_permanentTextureStates, [&](const PermanentTextureState& state){
-            return selection.containsTexture(state.texture);
-        });
-        RetainSelectedStates(m_permanentBufferStates, [&](const BufferState& state){
-            return selection.containsBuffer(state.buffer);
-        });
+        if(hasTextures){
+            RetainSelectedStates(m_textureStates, [&](const TextureState& state)noexcept{
+                return selection.containsTexture(state.texture);
+            });
+            RetainSelectedStates(m_permanentTextureStates, [&](const PermanentTextureState& state)noexcept{
+                return selection.containsTexture(state.texture);
+            });
+        }
+        else{
+            m_textureStates.clear();
+            m_permanentTextureStates.clear();
+        }
+        if(hasBuffers){
+            RetainSelectedStates(m_bufferStates, [&](const BufferState& state)noexcept{
+                return selection.containsBuffer(state.buffer);
+            });
+            RetainSelectedStates(m_permanentBufferStates, [&](const BufferState& state)noexcept{
+                return selection.containsBuffer(state.buffer);
+            });
+        }
+        else{
+            m_bufferStates.clear();
+            m_permanentBufferStates.clear();
+        }
     }
     else{
+        usize textureStateCount = 0u;
+        usize permanentTextureStateCount = 0u;
+        if(hasTextures){
+            for(const TextureState& state : source.m_textureStates){
+                if(selection.containsTexture(state.texture))
+                    ++textureStateCount;
+            }
+            for(const PermanentTextureState& state : source.m_permanentTextureStates){
+                if(selection.containsTexture(state.texture))
+                    ++permanentTextureStateCount;
+            }
+        }
+        usize bufferStateCount = 0u;
+        usize permanentBufferStateCount = 0u;
+        if(hasBuffers){
+            for(const BufferState& state : source.m_bufferStates){
+                if(selection.containsBuffer(state.buffer))
+                    ++bufferStateCount;
+            }
+            for(const BufferState& state : source.m_permanentBufferStates){
+                if(selection.containsBuffer(state.buffer))
+                    ++permanentBufferStateCount;
+            }
+        }
+
+        // Reserve all selected families before publication so allocation failure preserves the snapshot.
+        m_textureStates.reserve(textureStateCount);
+        m_bufferStates.reserve(bufferStateCount);
+        m_permanentTextureStates.reserve(permanentTextureStateCount);
+        m_permanentBufferStates.reserve(permanentBufferStateCount);
         m_textureStates.clear();
         m_bufferStates.clear();
         m_permanentTextureStates.clear();
         m_permanentBufferStates.clear();
-        for(const TextureState& state : source.m_textureStates){
-            if(selection.containsTexture(state.texture))
-                m_textureStates.push_back(state);
+        if(hasTextures){
+            for(const TextureState& state : source.m_textureStates){
+                if(selection.containsTexture(state.texture))
+                    m_textureStates.push_back(state);
+            }
+            for(const PermanentTextureState& state : source.m_permanentTextureStates){
+                if(selection.containsTexture(state.texture))
+                    m_permanentTextureStates.push_back(state);
+            }
         }
-        for(const BufferState& state : source.m_bufferStates){
-            if(selection.containsBuffer(state.buffer))
-                m_bufferStates.push_back(state);
-        }
-        for(const PermanentTextureState& state : source.m_permanentTextureStates){
-            if(selection.containsTexture(state.texture))
-                m_permanentTextureStates.push_back(state);
-        }
-        for(const BufferState& state : source.m_permanentBufferStates){
-            if(selection.containsBuffer(state.buffer))
-                m_permanentBufferStates.push_back(state);
+        if(hasBuffers){
+            for(const BufferState& state : source.m_bufferStates){
+                if(selection.containsBuffer(state.buffer))
+                    m_bufferStates.push_back(state);
+            }
+            for(const BufferState& state : source.m_permanentBufferStates){
+                if(selection.containsBuffer(state.buffer))
+                    m_permanentBufferStates.push_back(state);
+            }
         }
     }
     m_deviceGeneration = sourceDeviceGeneration;

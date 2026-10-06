@@ -113,3 +113,80 @@ Run `MaterialTypedDedupBenchmark.*` in `ecs_graphics_tests.exe` with `--gtest_al
 ### Remaining opportunities
 
 Further optimization should start with representative profiles: reuse the command initial-state indices that are already sorted, gather caustic typed data directly rather than copying intermediate blocks, reuse one asset-volume compaction buffer, and measure UI root-membership indexing against its retained-memory cost. Source review also found potential scheduler, telemetry, diagnostics, container, and X11 text-input work, but those changes need workload, concurrency, lifetime, or platform evidence before implementation. No speculative cache or ownership shortcut was introduced to exhaust the list.
+
+## October 6, 2026: command recording and resource-state planning
+
+Two bounded changes in `core/task/gpu/compiler_resource_ranges.cpp` were accepted. First-use discovery subtracts the first earlier same-resource use directly into an empty working vector, so complete coverage needs no allocation. Terminal-state discovery omits a covered bound when subtraction already leaves no uncovered fragment. Both changes preserve traversal and fragment order, validate the first selected range before stopping, and retain the existing clear/reserve/copy steps. No persistent cache, resource field, task hook, provider interface, or retained storage was added. The existing `GpuTaskUseIndex.CompleteCoverageStopsBeforeLaterInvalidRangeButSelectedInvalidPrefixStillFails` regression distinguishes legitimate early termination from skipping a malformed selected prefix.
+
+Two provider-private changes remove repeated command-recording work without adding storage. Capability admission reuses its immediately preceding successful scope validation instead of repeating the native lease and exact-queue proof. Initial public authorization, debug attempted-capability accounting, required-mask checks, rejection logging, and failure invalidation remain. Optimized ARM64 disassembly confirms the scope helper still contains its lease call and capability admission still calls that helper once; the second lease call is gone. The capability function decreases from 155 to 131 decoded instructions (620 to 524 instruction bytes, including cold diagnostics). This is an object-code result, not total executable size or an isolated frame-time speedup.
+
+Resource-state subset filtering skips texture or buffer families absent from the selection. Self-alias filtering compacts directly because it cannot grow the vectors; foreign-source replacement still completes all exact reservations before clearing published state. Invalid-input admission, state order, generation, handles, ranges, ownership, and logical snapshot preservation on allocation failure remain. No backend-specific fixture, production hook, native test backend, or per-resource field was added.
+
+CPU comparison used Windows ARM64 Opt executables in 48 serial processes ordered ABBA/BAAB, with 24 samples per side and all nine workloads passing in every process. Graph setup is outside measurement. Each new opt-in workload warms persistent analysis/compiled output once, then records 64 compiles with a fresh scratch arena per compile. Workloads cover serial whole and half-buffer overwrites, repeated same-buffer uses inside one task, and disjoint writers followed by one covering reader. Their task, terminal-export, barrier-range, and ordering assertions check compiled results. They use the existing neutral `GpuTaskGraphCompiler::compile` entry defined in `compiler_internal.h`, as existing compiler workloads do; that header is an internal compiler entry, not a public include. The cases use neutral metadata and existing public compiled views, without provider types, native resources, private planning helpers, a fake backend, or new production hooks.
+
+The benchmark body was frozen before production edits, SHA-256 `b7ed79cfd0fdda6e8d8a034dde4e6d6dae8cdb1278587de89069c7b2973afa7a`. The preserved baseline compiler implements `fb0cac07d50e691e5ab345008cb7bd4a3508c50c`; its executable already links the two provider changes, which these metadata-only CPU workloads do not exercise. It is therefore a frozen original-compiler baseline, not a claim that the whole executable is an untouched checkout of that commit. Baseline executable SHA-256 is `ede0f6d14a841e91b28eca216b11b0c0ce9100248b64218eebd9acec179807e4`; accepted candidate executable is `e4733fbcb990c044afbe20b705cd2b85629d7c9fbfb7cec25bb195271c5db47d`.
+
+Values below are per-compile medians derived from `cpu_paired_summary_v2.json`: each batch median divided by its fixed repetition count. Times are microseconds, rounded to three decimal places; exact decimal values are retained in `gpu_range_planning_per_compile_medians.json`. External elapsed time brackets compilation; compiler-total and resource-planning time use the existing compile statistics. These are elapsed clock durations of CPU work, not OS process CPU time, cycle counts, process RSS, or a whole-frame FPS claim.
+
+| Workload | Planning before → after (µs) | Compiler total before → after (µs) | External elapsed before → after (µs) | External elapsed change |
+| --- | ---: | ---: | ---: | ---: |
+| Whole overwrite, 128 uses | 11.362 → 11.155 | 47.387 → 47.306 | 47.470 → 47.393 | -0.16% |
+| Whole overwrite, 512 uses | 43.808 → 42.516 | 194.674 → 191.213 | 194.774 → 191.295 | -1.79% |
+| Partial overwrite, 128 uses | 16.425 → 16.146 | 63.403 → 63.112 | 63.488 → 63.198 | -0.46% |
+| Partial overwrite, 512 uses | 65.408 → 63.944 | 263.933 → 266.104 | 264.039 → 266.197 | +0.82% |
+| Internal whole use, 128 uses | 5.353 → 4.466 | 10.968 → 10.055 | 11.055 → 10.135 | -8.32% |
+| Internal whole use, 512 uses | 21.145 → 17.127 | 40.764 → 35.852 | 40.852 → 35.939 | -12.03% |
+| Fragmented fan-in, 128 fragments | 43.129 → 41.731 | 109.806 → 108.874 | 109.879 → 108.955 | -0.84% |
+| Fragmented fan-in, 512 fragments | 525.898 → 522.197 | 1142.968 → 1136.737 | 1143.101 → 1136.841 | -0.55% |
+| Pending epilogue control, 1,024 tasks | 128.450 → 128.006 | Not reported | 387.569 → 380.044 | -1.94% |
+
+The clear timing improvement is repeated whole-buffer use inside one task: planning falls 16.58% for 128 uses and 19.00% for 512 uses; external elapsed falls 8.32% and 12.03%. Other timing differences are small relative to observed variability and controls, and do not establish individual speedups. In particular, partial-overwrite 512-use external elapsed is 0.82% higher despite lower planning time. The unchanged pending-epilogue control has planning −0.35% and elapsed −1.94%, so a small downward shift alone is insufficient evidence of improvement.
+
+Scratch values are arena accounting, in bytes and allocation calls. Each new case reports the maximum per-compile value across its 64 fresh arenas; those values are stable across the paired samples. Retained means `usedBytes` when compilation returns, before arena destruction. It describes temporary operation storage, not persistent resource or application memory.
+
+| Workload | Scratch peak before → after (bytes) | Scratch used at return before → after (bytes) | Allocation count before → after |
+| --- | ---: | ---: | ---: |
+| Whole overwrite, 128 uses | 78,816 → 69,728 | 68,576 → 59,488 | 59 → 47 |
+| Whole overwrite, 512 uses | 324,256 → 278,624 | 283,296 → 237,664 | 63 → 47 |
+| Partial overwrite, 128 uses | 114,784 → 105,728 | 104,544 → 95,488 | 442 → 431 |
+| Partial overwrite, 512 uses | 467,744 → 422,144 | 426,784 → 381,184 | 1,598 → 1,583 |
+| Internal whole use, 128 uses | 27,272 → 23,616 | 22,760 → 13,672 | 177 → 38 |
+| Internal whole use, 512 uses | 121,992 → 94,272 | 99,240 → 53,608 | 565 → 38 |
+| Fragmented fan-in, 128 fragments | 133,480 → 126,568 | 128,968 → 119,880 | 454 → 442 |
+| Fragmented fan-in, 512 fragments | 559,496 → 525,160 | 536,744 → 491,112 | 1,614 → 1,598 |
+
+The existing 1,024-task pending-epilogue control uses one scratch arena through warmup and eight compiles, rather than fresh arenas. Its arena peak remains 4,280,320 bytes in both binaries; it exposes no used-at-return or allocation-count metric. The lifetime distinction prevents treating its peak as directly comparable to the eight new per-compile cases.
+
+Three working/remainder vector swaps were tested in the first candidate and rejected. In the same 24-sample-per-side comparison, fragmented 512-use planning rose 10.69% and external elapsed rose 4.99%, despite a 4.67% reduction in scratch peak. Restoring all three original clear/reserve/copy loops removes that demonstrated CPU regression in the second comparison. Both vectors share the arena and propagating allocator, so swaps did not corrupt ownership, but out-of-order scratch deallocation may retain an older buffer until arena destruction. Alternating vector capacities/destruction order and extra bookkeeping are plausible costs when a fragment step saves only one small bound copy; the measurements establish the regression, not a unique cause. The first candidate source and measurements remain decision evidence.
+
+Build and opt into the neutral compiler workloads through the launcher and normal test binary:
+
+```powershell
+python -m launcher build nwb_gpu_task_tests --arch arm64 --config opt --configure always --jobs 6
+& "__exec/windows/arm64/full/opt/gpu_task_tests.exe" --gtest_also_run_disabled_tests "--gtest_filter=GpuTaskGraphRangePlanning.*:GpuTaskGraphBufferRange.DISABLED_PendingEpilogueGroupingBenchmark1024Tasks" "--gtest_output=xml:range_planning.xml"
+```
+
+Compare preserved original and candidate binaries in alternating serial rounds, with builds and native smoke runs outside the timed interval. Local evidence is under `__cmake/verification_followup_performance_20261006/`, including `cpu_paired_samples_v2.json`, `cpu_paired_summary_v2.json`, per-process XML, binary/source manifests, and both compiler-candidate audits. The disabled cases are explicit opt-in performance workloads under `tests/`; the ordinary edge suite remains separate. Selected native runtime, diagnostic, async-performance, and visual gates qualify separate behavior and should be reported alongside these metadata-only CPU measurements.
+
+
+After updating the source base to `0f6dc7c3678b9a0f87d39eb1c1199be8f88b6356`, the rebuilt Opt candidate (SHA-256 `c41e452b6294047c8ac47ee71669b9e513f4d979f3e5abc213c87cff43d991e9`) repeated the same paired protocol against the preserved original-compiler baseline: all nine unchanged workloads passed in 48 processes, with 24 samples per side. `upstream_format_token_review.json` records identical non-comment raw tokens in the three upstream-edited files. In `cpu_paired_summary_latest.json`, internal 128-use planning is 5.351 to 4.468 µs per compile (16.50% lower), and external elapsed is 11.056 to 10.295 µs (6.89% lower); internal 512-use planning is 20.752 to 17.228 µs (16.98% lower), and external elapsed is 39.968 to 37.048 µs (7.30% lower). Scratch peak, used-at-return, and allocation results reproduce the table exactly, including 121,992 to 94,272 bytes peak and 565 to 38 allocations for 512 internal uses. Fragmented 512-use external elapsed changes by +0.14%, while the pending-epilogue control changes by -0.71%; these and other small timing movements remain inconclusive. This replication retains the elapsed-time and arena-accounting limits above and does not replace the historical comparison table.
+
+### Final build, runtime, and visual qualification
+
+The retained production sources and frozen benchmark were qualified after integrating `0f6dc7c3678b9a0f87d39eb1c1199be8f88b6356`. Launcher `build all` completed in Windows ARM64 Debug, Optimize, and Final with no compiler diagnostics. All 28 selected native CTest entries passed in each configuration: 2,707 active GoogleTest cases in Debug, 2,707 in Optimize, and 2,712 in Final, with zero failures or skips. The opt-in CPU cases remain disabled during ordinary correctness runs. `qualified_latest_manifest.json` records source/binary hashes, build commands/results, and source hygiene; the native reports are `ctest_latest_dbg.json`, `ctest_latest_opt.json`, and `ctest_latest_fin.json`.
+
+Three fresh serial M4 repeats used the final Optimize binaries with the same 1280x900 fixed-yaw workload, four seconds of wall-clock warmup, thirty seconds of admitted measurement per mode, and the unchanged +3% critical-path limit. Each arm supplied 60 required timing samples, all async shadow samples were positive, and the dedicated Compute route remained active.
+
+| Repeat | Sync `render.frame` ms | Async `render.frame` ms | Delta | Async shadow ms | Gate |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 1 | 11.48585 | 11.51210 | +0.229% | 2.6191 | PASS |
+| 2 | 11.45020 | 11.01015 | -3.843% | 2.3924 | PASS |
+| 3 | 11.53225 | 11.49730 | -0.303% | 2.5922 | PASS |
+
+Pixel max-absolute differences were 7, 6, and 8; mean-absolute differences were 0.166839, 0.145786, and 0.159396, within the unchanged 16/0.75 limits. A fresh preserved `fb0cac07` baseline repeat also passed at +0.818%. These runs qualify continued async behavior on this adapter; they do not isolate a GPU or frame-rate gain from the CPU changes. The separate version-10 diagnostic snapshot records 103 renderer tasks, 12 accepted packets covering 102 accepted tasks, no rejected/failed/recovery submissions, and 27 Compute tasks in two packets. Its 53 planned waits comprise 39 same-queue elisions, nine merges, three inherited elisions, and two emitted waits. The thirteenth compiled packet is unused conditional recovery. This is one completed frame's public scheduling evidence, not a timing result or a reconstruction of unexported state-seed/dependency IDs.
+
+All four Optimize rendered workflows passed without skips: Testbed startup/shutdown, UI raster direct/replay parity, 65 TextArea checkpoints, and software CSG analytic cut/uncut shadows. They produced 76 BMPs. All four raster pairs have identical entire BMP bytes across 2,035,200 pixels. The CSG oracle checks 26 regions; maximum mean channel error is 0.660603 bytes against a 12-byte tolerance. The final audit scans 25 complete application logs from these workflows, all three M4 repeats, and the diagnostic launch; it finds no unexpected warning, error, fatal, assertion, device-loss, or VUID diagnostic. Every log confirms GPU debug validation and actual Khronos validation-layer activation. Intentional negative-unit diagnostics are outside this application-log audit. Synchronization-validation settings were requested for the separate diagnostic launch; individual setting activation is not claimed beyond the verified layer markers.
+
+Manual inspection covers 21 workflow originals, two final M4 originals, and one preserved baseline M4 original. Reviewed geometry, shadow content, clipping, skin states, multilingual text, selection, scroll positions, and resized layouts show no rendering regression. The harness checks all captures; manual inspection does not cover every image. Long labels in the existing TextArea fixture buttons crop within their fixed 112-pixel bounds, outside these optimization changes. Testbed has no paired baseline image comparison in this pass.
+
+Evidence remains under ignored `__cmake/verification_followup_performance_20261006/`: `qualification_repeats.json`, `final_round1/` through `final_round3/`, `graph_final/`, `visual_opt.json`, `runtime_visual_audit.json`, `independent_raster_testbed_visual_review.json`, and `backend_record_visual_review.json`, alongside the paired CPU reports and immutable binaries. Native execution and measured results apply to this Windows ARM64 host; other platforms received source review. Renderer cache reuse and broader dependency pruning still need representative profiles and lifetime/concurrency evidence before implementation.

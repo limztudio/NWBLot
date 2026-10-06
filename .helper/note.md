@@ -115,6 +115,8 @@
 
 22. Inherited native wait elision requires a previously accepted wait covering all commands on the exact consuming physical queue and the same current-device owned producer timeline at an equal or greater value. Keep original token arrays for validation, timing prerequisites, and lifecycle admission. Publish coverage only after native acceptance, leave binary/external waits explicit, and allocate identity storage before the native call. Keep `inheritedTimelineWaitElisionCount` separate from duplicate merges and emitted waits, with exact planned-token conservation in runtime statistics and current telemetry.
 
+23. Resource-range planning may stop after a fully covering first indexed predecessor, but must not scan past a malformed selected prefix to find that coverage. Validate historical bounds before excluding already-covered terminal states and preserve fragment/source order. Qualify scratch-vector changes with fragmented CPU and peak/used-memory workloads, since swapping can change LIFO reclamation.
+
 ## Project Bootstrap Invariants
 
 1. `CreateInitialProjectWorld` / `DestroyInitialProjectWorld` are strict engine bootstrap APIs for required core world/system setup and teardown.

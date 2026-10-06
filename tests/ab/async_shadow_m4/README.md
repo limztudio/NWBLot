@@ -84,3 +84,17 @@ These results qualify the recorded device and workload at the unchanged toleranc
 A separate version-10 diagnostic snapshot of one completed final frame recorded 103 tasks, 12 accepted submissions, two emitted timeline waits, and three inherited wait elisions. Its dedicated Compute queue retained 27 tasks in two packets; the compiled plan also contained one unexecuted conditional recovery packet. This is one frame's scheduling evidence, not a fixed packet-count contract or a performance measurement.
 
 Evidence remains under ignored `__cmake/verification_async_performance_20261006/`: `qualification_repeats.json`, `baseline_binary_manifest.json`, `final_round1/` through `final_round3/` reports and raw artifacts, and `graph_final/frame_graph.json` with its encoded telemetry stream. The reports retain the admitted timing byte offsets. This record covers the M4 workload; other configuration and workflow qualification is recorded separately.
+
+## Follow-up optimization qualification: 2026-10-06
+
+After the additional command-recording and resource-range-planning changes, three fresh serial repeats of the final Windows ARM64 Optimize binaries passed the unchanged gate on the same Qualcomm Adreno X2-90. Each mode used four seconds of warmup, thirty seconds of admitted measurement, the same 1280x900 fixed-yaw scene, and the real dedicated Compute route. Each arm supplied 60 required timing samples; all 60 async shadow samples were positive.
+
+| Repeat | Sync `render.frame` ms | Async `render.frame` ms | Delta | Async shadow ms | Gate |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 1 | 11.48585 | 11.51210 | +0.229% | 2.6191 | PASS |
+| 2 | 11.45020 | 11.01015 | -3.843% | 2.3924 | PASS |
+| 3 | 11.53225 | 11.49730 | -0.303% | 2.5922 | PASS |
+
+Pixel max-absolute differences were 7, 6, and 8, with mean-absolute differences 0.166839, 0.145786, and 0.159396. The +3% critical-path limit and 16/0.75 pixel limits were preserved. All runtime/validation log gates passed, and logs confirm GPU debug validation and Khronos layer activation. A fresh preserved `fb0cac07` baseline repeat also passed at +0.818%. These repeats qualify the existing async workload; they do not isolate a GPU or whole-frame speedup from the CPU optimizations.
+
+The separate one-frame version-10 snapshot records 103 renderer tasks, 12 accepted packets, 27 Compute tasks in two packets, two emitted waits, and three inherited wait elisions; the additional compiled recovery packet remains unused. This is scheduling evidence, not a performance measurement. Fresh evidence is under `__cmake/verification_followup_performance_20261006/`, separate from the earlier qualification above. See the [optimization audit](../../../docs/project_optimization_audit.md#october-6-2026-command-recording-and-resource-state-planning) for paired CPU/scratch measurements, three-configuration native results, rendered workflow checks, and review limits.

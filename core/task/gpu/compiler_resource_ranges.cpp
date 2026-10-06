@@ -294,12 +294,19 @@ static void AppendResourceRangeRemainder(
         return true;
     }
 
+    GpuTaskResourceRange firstPreviousRange;
+    if(!ResolveResourceRangeForPlanning(graph, resource, task.resourceUses[firstUse].range, firstPreviousRange))
+        return false;
+    ResourceRangeBounds firstPreviousBounds;
+    if(!ResourceRangeBoundsFrom(resource.type, firstPreviousRange, firstPreviousBounds))
+        return false;
+
     Vector<ResourceRangeBounds, Alloc::ScratchArena> uncovered(scratchArena);
     Vector<ResourceRangeBounds, Alloc::ScratchArena> remainders(scratchArena);
-    uncovered.push_back(requestedBounds);
+    AppendResourceRangeRemainder(requestedBounds, firstPreviousBounds, uncovered);
 
     for(
-        usize previousUseIndex = firstUse;
+        usize previousUseIndex = useHistory.next(firstUse);
         previousUseIndex < useIndex && !uncovered.empty();
         previousUseIndex = useHistory.next(previousUseIndex)
     ){
@@ -511,7 +518,8 @@ static void AppendResourceStateFragmentsInStateOrder(
                 .stateIndex = stateIndex,
             });
         }
-        covered.push_back(stateBounds);
+        if(!remaining.empty())
+            covered.push_back(stateBounds);
     }
 
     AppendResourceStateFragmentsInStateOrder(discovered, outFragments);

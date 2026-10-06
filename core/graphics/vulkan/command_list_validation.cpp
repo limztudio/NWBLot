@@ -217,17 +217,7 @@ bool CommandList::recordAndValidateCommandCapability(
     const u8 availableBits = queueInfo ? static_cast<u8>(queueInfo->capabilities) : 0u;
     const CommandQueue::Enum exactQueueClass = queueInfo ? queueInfo->queueClass : CommandQueue::kCount;
     const bool validRequiredMask = requiredBits != 0u && (requiredBits & ~s_KnownCapabilityBits) == 0u;
-    const bool validRecordingScope = matchesActiveNativeLeaseIdentity();
-    const bool validExactQueue = m_creationDesc.physicalQueue.valid()
-        && queueInfo
-        && queueInfo->id == m_creationDesc.physicalQueue
-        && queueInfo->queueClass == m_creationDesc.queueType
-    ;
-    const bool supported = validRequiredMask
-        && validRecordingScope
-        && validExactQueue
-        && (availableBits & requiredBits) == requiredBits
-    ;
+    const bool supported = validRequiredMask && (availableBits & requiredBits) == requiredBits;
     if(supported)
         return true;
 
@@ -240,7 +230,7 @@ bool CommandList::recordAndValidateCommandCapability(
         static_cast<u32>(exactQueueClass),
         static_cast<u32>(requiredBits),
         static_cast<u32>(availableBits),
-        validRecordingScope
+        true
     );
     invalidateCommandRecording();
     return false;

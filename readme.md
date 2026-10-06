@@ -123,3 +123,5 @@ Third-party packages are vendored as flat top-level directories under `3rd_parti
 ## Documentation
 
 Start with the [NWBLot Wiki](https://github.com/limztudio/NWBLot/wiki), then use [Architecture](https://github.com/limztudio/NWBLot/wiki/Architecture), [Asset Flow](https://github.com/limztudio/NWBLot/wiki/Asset-Flow), [Runtime and ECS](https://github.com/limztudio/NWBLot/wiki/Runtime-and-ECS), and [Build and Verification](https://github.com/limztudio/NWBLot/wiki/Build-and-Verification) for the corresponding subsystem.
+
+The [project optimization audit](docs/project_optimization_audit.md) records CPU and scratch-memory measurements, rejected candidates, and runtime qualification for retained changes.

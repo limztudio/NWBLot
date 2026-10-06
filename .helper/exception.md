@@ -6,6 +6,8 @@ Read this before changing code for the dependency-inversion cleanup schedule.
 
 Project-owned assets may implement an engine-defined runtime contract without being treated as dependency inversion.
 
+Test asset trees and their test-only code must remain under `tests/`. These dependency-inversion exceptions do not permit test-related code or assets in production directories; follow `.helper/standard.md` section 20.
+
 Project material + BXDF policy is project-owned. Do not move a project's material shader stages (the surface/geometry mesh + pixel shaders), material shader includes (the surface material interface + color helpers), per-material BXDF lighting models, or material metadata selectors into `impl/assets` or any `engine/...` virtual asset path. Each project or test asset tree that needs materials must own its own project-local material interface, such as `project/shaders/surface`, its `project/shaders/surface*` / `project/shaders/material*` stage + helper assets, and its per-material BXDF lighting models (e.g. `project/shaders/lambert_bxdf`) selected via the material `bxdf` field. (Note: "BXDF" means only the deferred lighting shading model; the G-buffer-writing surface/geometry pipeline is "surface"/"material", not "bxdf".)
 
 This includes project material/shader assets, such as the surface/geometry shader stages + the per-material BXDF lighting models under a project asset tree, being referenced by project material metadata and consumed by the engine through typed asset references, virtual asset paths, or declared shader-stage contracts.

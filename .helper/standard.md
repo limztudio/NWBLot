@@ -276,7 +276,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - For console I/O, prefer project stream macros from `global/compile.h` (`GLB_COUT`, `GLB_CERR`, `GLB_TCOUT`, `GLB_TCERR`) instead of direct `std::cout`/`std::cerr` or `fprintf(stdout/stderr, ...)`.
 - For standalone command-line utilities that own logger setup, initialize `NWB::Log::ClientStandalone` in the entry point and route non-interactive status, validation, failure, and listing output through `NWB_LOGGER_*` macros. Keep direct stream output only for interactive prompts, CLI help/error routing, terminal pause prompts, and logger-initialization fallback messages.
 - Do not use raw/fixed-buffer environment-variable probes for production, runtime, or cooker feature/configuration control.
-  - Test suites and smoke-test diagnostics may use test-local environment helpers.
+  - Test suites and smoke-test diagnostics may use test-local environment helpers under `tests/`.
   - For engine/runtime/cook behavior, prefer explicit typed configuration paths such as command-line options, CMake cache options, project metadata, or existing config objects. Platform/session discovery and explicit debug diagnostic gates must stay isolated in named helpers and use project string APIs instead of caller-provided raw buffers.
 - When exposing inherited member functions without changing behavior, prefer `using BaseType::functionName;` over trivial forwarding wrappers like `inline foo(...){ return BaseType::foo(...); }`.
 - Keep forwarding wrappers only when they add behavior, transform contracts, or intentionally change the exposed API shape.
@@ -515,7 +515,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Do not add or keep production per-component headers such as `camera_component.h`, `light_component.h`, `scene_component.h`, or `transform_component.h`.
 - Core modules must not own implementation ECS components or world-query helpers. Current production scene transform, view-basis, camera, active-camera, and light components/helpers live in `impl/ecs_scene` under `NWB::Impl::Scene` and target `nwb_ecs_scene`.
 - Avoid compatibility aliases that expose implementation ECS component types from `core/*`; they preserve the wrong dependency direction.
-- Test-only fixture components may stay local to the test source file that defines them.
+- Test-only fixture components may stay local to the test source file that defines them under `tests/`.
 
 ## 17. Third-Party Packages
 - Every vendored package lives as one flat top-level directory under `3rd_parties/<name>`. Do not keep nested `external/`, `imported/`, `third_party/`, or bundled duplicate copies inside another package; lift shared dependencies to their own top-level package.
@@ -540,17 +540,20 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Keep `core/graphics/backend_selection.h` and the narrow headers under `core/graphics/backend_selection/` as the active compile-time provider boundary. They are architecture entry points, not obsolete compatibility shims; do not remove them merely because Vulkan is the only implemented provider today.
 - Production code outside `core/graphics/vulkan/` must use neutral `core/graphics/rhi/` contracts or selected headers. Its only entry to Vulkan backend headers is the selection boundary; never include Vulkan SDK or Volk headers directly in production graphics consumers, GPU tasks, implementation modules, or applications.
 - Keep Vulkan native handles, usage flags, physical-device limits, and validation details inside the Vulkan provider. Shared code passes neutral resource states, descriptions, ranges, and queue requirements through narrow selected operations. Do not expose native-detail namespaces through aliases as a substitute for a neutral contract.
-- Unit tests, fixtures, and test-only helpers belong under `tests/`. Backend qualification tests may include existing private headers of the provider they exercise directly. Do not add a test backend or a test-specific provider-selection facade to production code.
+- All test-related code belongs only under `tests/`, following section 20. Backend qualification tests may include existing private headers of the provider they exercise directly. Do not add a test backend or a test-specific provider-selection facade to production code.
 - Select one provider at compile time, with Vulkan as the current default. Match CMake provider sources/dependencies and public selection definitions. Reject conflicting or unimplemented selections explicitly; a future Metal provider must implement the same neutral contracts and add its own selected branches.
 - Preserve direct concrete calls, resource ownership, and layout. Do not introduce runtime backend dispatch, virtual interfaces, extra per-resource storage, or allocations merely to restore the include boundary. Prefer narrow selected headers over putting every provider detail in one umbrella.
 - Preserve validation frequency and inlining in selected operations used by task declarations or command replay. Avoid generated extra forwarding calls, full native-contract temporaries, and output copies solely for adapting neutral results. Keep native validation rules single-sourced and inspect optimized output when an adapter can change CPU or stack cost.
 
-## 20. Unit Test Scope
+## 20. Test Ownership and Unit Test Scope
+- All test-related code and test assets must exist only under the repository's `tests/` tree in their owning domain. This includes unit, integration, smoke, and performance tests; benchmarks; test applications and scripts; harnesses; fixtures; mocks/fakes; and support utilities.
+- Test-only hooks, accessors, forward declarations, friend declarations, dispatch backends, and conditional test implementations also belong only under `tests/`. Do not embed them in production headers, sources, shaders, or modules, even behind test-build flags. Exercise production code through its existing contracts.
+- Production code must not include, link, or depend on test implementations. Define test targets and test-only build support under `tests/`; the root build may register that tree.
 - Unit tests must target a concrete edge case or regression: exact bounds, overflow/underflow, malformed or unsupported input, empty or degenerate data, aliasing, stale generations, lifetime/ownership, cancellation, reentry, concurrency, ordering, or failure-atomic state changes.
 - Do not add or keep tests whose only purpose is checking default values, trivial getters/setters, builder argument forwarding, enum/name mappings, ordinary successful round trips, or routine happy-path behavior. Remove those tests and their unused fixtures, helpers, and source registrations.
 - A test's size or a complex fixture does not make it an edge-case test. Identify the failure scenario in its name or a short comment and assert the externally observable consequence; do not merely mirror implementation details or search source text for routine wiring.
 - Keep successful setup and control assertions when they establish the boundary, prove failure recovery, or distinguish an edge case from normal operation. For mixed tests, retain the edge-case checks and trim unrelated basic assertions instead of deleting useful coverage.
-- Keep unit-test sources, fixtures, and test-only helpers under `tests/` in their owning domain, never in production directories. Broader workflow coverage belongs in integration/smoke tests; explicit opt-in performance benchmarks remain performance workloads, separate from unit correctness coverage.
+- Broader workflow coverage belongs in integration/smoke tests under `tests/`; explicit opt-in performance benchmarks also stay under `tests/` as performance workloads, separate from unit correctness coverage.
 - After pruning tests, build the affected targets, run the remaining suites, and check that deleted files or fixtures leave no stale CMake references. Never delete a failing test merely to obtain a passing run.
 
 ## 21. Current Contracts Only

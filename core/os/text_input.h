@@ -122,7 +122,7 @@ struct TextInputEvent{
 // poll consumes an event and copies its text into the caller's arena. A service admits only one active session.
 // Focus loss or event overflow discards pending events and leaves one terminal Cancelled event for that token.
 // A cancelled token can poll that event once; end or a new begin invalidates it. Stale/foreign native delivery is rejected.
-interface ITextInputService : private NoCopy{
+struct ITextInputService : private NoCopy{
 public:
     virtual ~ITextInputService() = default;
 

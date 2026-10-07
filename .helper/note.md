@@ -90,6 +90,8 @@
 
 84. NWBLot-owned utility, configuration, diagnostic, namespace, and shader feature macro APIs use `NWB_`, including global utilities. Application-owned macro APIs use the application prefix, such as `TESTBED_`. Preserve external/compiler interoperability spellings and existing `g_*` shader resource-view aliases under the shader symbol contract in standard section 15. Root `engine_namespace.h` alone owns the engine namespace wrappers; applications use their own namespace header and receive engine wrappers only transitively through the engine APIs they consume. Testbed classes and helpers live in `Testbed`; only the required loader adapter functions remain in `NWB`. Global utility symbols retain their existing scopes, and public `NWB::Impl` feature contracts remain valid while private/detail and graphics-provider boundaries stay enforced.
 
+85. CMake emits `NWB_DEBUG`, `NWB_OPTIMIZE`, and `NWB_FINAL` directly for `dbg`, `opt`, and `fin`; do not add intermediate configuration aliases. Declare project-owned interfaces with plain `struct`, without a lowercase keyword-like alias or wrapper macro. External SDK/compiler macro spellings remain externally owned.
+
 ## Scheduler Architecture
 
 1. `Frame` owns one `Core::CpuTaskScheduler`, initialized with the configured worker budget before graphics and project work starts. Standalone tools own one scheduler for their process work and pass it to consumers.

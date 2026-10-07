@@ -107,11 +107,11 @@ function(nwb_apply_codegen target)
 
     target_compile_definitions(${target} PRIVATE
         $<$<CONFIG:dbg>:_DEBUG>
-        $<$<CONFIG:dbg>:PROP_DBG>
+        $<$<CONFIG:dbg>:NWB_DEBUG>
         $<$<CONFIG:opt>:NDEBUG>
-        $<$<CONFIG:opt>:PROP_OPT>
+        $<$<CONFIG:opt>:NWB_OPTIMIZE>
         $<$<CONFIG:fin>:NDEBUG>
-        $<$<CONFIG:fin>:PROP_FIN>
+        $<$<CONFIG:fin>:NWB_FINAL>
     )
 
     if(WIN32)

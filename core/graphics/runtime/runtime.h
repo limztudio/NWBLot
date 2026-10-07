@@ -20,8 +20,8 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-interface IGpuTaskGraphPresentationContributor;
-interface IGpuTaskGraphOutputLayerContributor;
+struct IGpuTaskGraphPresentationContributor;
+struct IGpuTaskGraphOutputLayerContributor;
 class GpuTaskScheduler;
 class GpuTaskGraph;
 struct GpuTaskId;

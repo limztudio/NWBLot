@@ -25,13 +25,10 @@
 #include <poll.h>
 #include <sys/mman.h>
 #include <unistd.h>
-#pragma push_macro("interface")
-#undef interface
 #include <wayland-client.h>
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <xkbcommon/xkbcommon.h>
 #include <xdg-shell-client-protocol.h>
-#pragma pop_macro("interface")
 #include <cerrno>
 
 

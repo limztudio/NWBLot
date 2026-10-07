@@ -69,7 +69,7 @@ private:
 
 
 // Resolve current committed text at the key's ordered event position. Return values; never retain the model or snapshot.
-interface IEditNavigationResolver : private NoCopy{
+struct IEditNavigationResolver : private NoCopy{
 public:
     virtual ~IEditNavigationResolver()noexcept = default;
 

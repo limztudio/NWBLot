@@ -82,7 +82,7 @@ struct ClipboardCompletion{
 // Text excludes embedded NUL. Native Windows writes use CRLF and reads normalize CRLF to LF.
 // Cancel invalidates pending or completed delivery, but cannot undo a write already performed by pump(). Destroy
 // cancels all undelivered work. Tokens never reference client objects and stale/foreign tokens are rejected.
-interface IClipboardService : private NoCopy{
+struct IClipboardService : private NoCopy{
 public:
     virtual ~IClipboardService() = default;
 

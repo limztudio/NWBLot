@@ -20,7 +20,7 @@ NWB_IMPL_UI_BEGIN
 
 
 // Keys are nonzero and unique within an instance. Lookups must avoid scanning the complete dataset per frame.
-interface IListDataSource{
+struct IListDataSource{
     virtual ~IListDataSource()noexcept = default;
     [[nodiscard]] virtual u64 instanceGeneration()const = 0;
     [[nodiscard]] virtual u64 revision()const = 0;

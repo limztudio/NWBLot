@@ -23,7 +23,7 @@ NWB_FILESYSTEM_BEGIN
 
 static constexpr usize s_ByteElementSize = 1;
 
-interface IFilesystem;
+struct IFilesystem;
 
 namespace FileSeekOrigin{
     static constexpr u8 s_FileSeekOriginBeginBase = 0;
@@ -42,7 +42,7 @@ struct FileCursor{
 };
 
 
-interface IFilesystem{
+struct IFilesystem{
 public:
     IFilesystem() = default;
     virtual ~IFilesystem() = default;

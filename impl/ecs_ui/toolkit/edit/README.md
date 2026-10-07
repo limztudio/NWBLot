@@ -28,7 +28,7 @@ Rendering stays in `impl/ecs_ui/toolkit/widgets/edit_box*`: an owned `EditBoxVie
 
 ## Ordered component actions
 
-`actions.h` defines `interface IEditActionSink` for Submit, Cancel, Blur and Abandon. A host lends the matching `EditModel` and action sink only for one synchronous event drain. The sink runs at the action's exact position before later copied input and before the Builder text snapshot. It must retain neither reference. Returning false rejects the borrowed transaction and stops later callbacks; an incomplete or invalid draft can accept the action without committing a typed value.
+`actions.h` defines `IEditActionSink` for Submit, Cancel, Blur and Abandon. A host lends the matching `EditModel` and action sink only for one synchronous event drain. The sink runs at the action's exact position before later copied input and before the Builder text snapshot. It must retain neither reference. Returning false rejects the borrowed transaction and stops later callbacks; an incomplete or invalid draft can accept the action without committing a typed value.
 
 `IEditBoxHost::editActions()` accepts an explicit popup token and this borrowed sink. The host must implement this interface method explicitly; there is no inherited adapter from ordinary editing. Processing the aggregate flags from an ordinary `edit()` result afterward would lose event order: typing `42`, Enter and `7` in one batch must let Submit observe `42` before the draft becomes `427`. Aggregate submitted/cancelled/blurred/abandoned flags remain observations of the completed drain.
 

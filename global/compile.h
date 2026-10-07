@@ -15,10 +15,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#ifndef interface
-#define interface struct
-#endif
-
 #ifndef __has_attribute
 #define __has_attribute(x) 0
 #endif
@@ -53,14 +49,6 @@
 #define NWB_COMPILER_FRONTEND_GNU 1
 #else
 #define NWB_COMPILER_FRONTEND_GNU 0
-#endif
-
-#if defined(PROP_DBG)
-#define NWB_DEBUG
-#elif defined(PROP_OPT)
-#define NWB_OPTIMIZE
-#elif defined(PROP_FIN)
-#define NWB_FINAL
 #endif
 
 #if !defined(NWB_DEBUG) && (defined(DEBUG) || defined(_DEBUG))

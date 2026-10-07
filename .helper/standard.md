@@ -66,6 +66,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - NWBLot-owned utility, configuration, diagnostic, namespace, and shader feature macro APIs use the `NWB_` prefix, including those under `global/`. The prefix identifies ownership; the defining header and directory identify the domain.
 - Application-owned macro APIs use that application's prefix, such as `TESTBED_`; preserve required external API, compiler interoperability, toolchain, and third-party macro spellings. Consuming an engine-owned shader or runtime contract from a project does not change that contract's prefix.
 - Existing shader resource-view aliases follow the shader symbol contract in section 15, including `g_*` resource aliases. Preserve those resource names; a utility/configuration macro-prefix migration does not rename shader resources or rewrite their authored contracts.
+- Declare project-owned interfaces with plain `struct`; do not define a lowercase keyword-like `interface` alias or add a wrapper macro for these declarations. Preserve external SDK/compiler macro ownership without redefining their spellings.
 - Preserve project scalar aliases, template parameter conventions, required standard-library customization/iterator names, and external API/entry-point spellings. Project-owned methods that merely resemble standard APIs follow the project method convention.
 - Python uses `snake_case` functions, parameters, and variables, `PascalCase` classes, and `UPPER_SNAKE_CASE` module constants. Project CMake helpers use the `nwb_` prefix.
 - For virtual overrides, explicitly write both `virtual` and `override`.
@@ -399,6 +400,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Use CMake target commands such as `add_library`, `add_executable`, and `target_sources`; generated IDE projects are build artifacts, not authored source manifests.
 - Do not add or maintain `.vcxitems` or `.vcxproj` files for source registration.
 - Express platform, architecture, and configuration variants through CMake target conditions and checked-in configure/build presets.
+- CMake emits the canonical `NWB_DEBUG`, `NWB_OPTIMIZE`, and `NWB_FINAL` configuration macros directly for `dbg`, `opt`, and `fin`, respectively. Do not introduce intermediate configuration aliases that merely rename those macros.
 
 ## 12. Class/Struct Layout and Order
 - `struct` layout rule: declare member variables first, then member functions.

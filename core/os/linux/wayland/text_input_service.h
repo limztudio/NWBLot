@@ -11,13 +11,10 @@
 #include <core/os/text_input_service.h>
 #include <core/os/text_input_text.h>
 
-#pragma push_macro("interface")
-#undef interface
 #include <wayland-client.h>
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
 #include <text-input-v3-client-protocol.h>
 #endif
-#pragma pop_macro("interface")
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

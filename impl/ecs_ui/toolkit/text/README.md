@@ -47,11 +47,11 @@ font does not establish paragraph bidi, Unicode line breaking, or native IME sup
 
 ## Layout, measurement, and hit testing
 
-`TextLayoutBuilder` consumes `ITextShaper`, using the project's `interface` keyword,
-and publishes a move-only `TextLayout`. `layout()` returns `TextLayoutStatus` and leaves
-the previous output unchanged on failure. The layout owns copied UTF-8 text, positioned
-glyphs, cluster records, and line records in the builder's arena. It has no automatic
-wrapping, alignment, editing model, selection, or undo state.
+`TextLayoutBuilder` consumes `ITextShaper` and publishes a move-only `TextLayout`.
+`layout()` returns `TextLayoutStatus` and leaves the previous output unchanged on
+failure. The layout owns copied UTF-8 text, positioned glyphs, cluster records,
+and line records in the builder's arena. It has no automatic wrapping, alignment,
+editing model, selection, or undo state.
 
 All positions use logical units with a top-left origin. Glyph positions identify their
 baseline origin plus shaping offsets. `measure()` reports maximum line advance and

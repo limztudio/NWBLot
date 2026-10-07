@@ -54,8 +54,7 @@ ConstantBuffer<NwbReflectionView, Std140DataLayout> g_NwbHeapReflectionViews[];
 #define g_NwbReflectionQueue g_NwbHeapStorageBuffers[g_NwbReflectionParameters.queueSlot]
 #define g_NwbReflectionCounters g_NwbHeapStorageBuffers[g_NwbReflectionParameters.counterSlot]
 
-// Candidate allocation and the feedback receiver bound are scheduling inputs. This helper is only for optional
-// diagnostic counters; disabling their writes never changes trace eligibility, queue contents, or feedback decisions.
+// Candidate allocation and the feedback receiver bound are scheduling inputs. This helper is only for optional diagnostic counters; disabling their writes never changes trace eligibility, queue contents, or feedback decisions.
 void nwbReflectionRecordDiagnostic(const uint byteOffset, const uint value){
     if(g_NwbReflectionParameters.diagnosticsEnabled != 0u && value != 0u){
         uint previousCount;
@@ -81,8 +80,7 @@ half3 nwbReflectionEnvironment(const float3 direction){
 void nwbReflectionStore(const uint2 pixel, const bool glass, const half3 radiance, const float source){
     // Radiance clamp plus the source tag fit half; widen only at the float4 store.
     const half4 output = half4(max(radiance, half3(0.0h)), half(source));
-    // Mixed queue lanes select the surface, but each store keeps a uniform descriptor index. This avoids requiring
-    // storage-image nonuniform indexing beyond the existing device contract.
+    // Mixed queue lanes select the surface, but each store keeps a uniform descriptor index. This avoids requiring storage-image nonuniform indexing beyond the existing device contract.
     if(glass)
         nwbHeapStorageImage2DFloat4(g_NwbReflectionParameters.glassOutputSlot)[pixel] = float4(output);
     else
@@ -93,14 +91,16 @@ bool nwbReflectionFeedbackWriting(){
     return (g_NwbReflectionParameters.feedbackFlags & NWB_REFLECTION_FEEDBACK_WRITE_ENABLED) != 0u
         && g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HYBRID
         && g_NwbReflectionParameters.dimensionsAndRoute.w != 0u
-        && min(g_NwbReflectionParameters.maxHardwareRays, g_NwbReflectionParameters.queueCapacity) > 0u;
+        && min(g_NwbReflectionParameters.maxHardwareRays, g_NwbReflectionParameters.queueCapacity) > 0u
+    ;
 }
 
 bool nwbReflectionLoadSurface(
     const uint2 pixel,
     const bool glass,
     out NwbReflectionSurface surface,
-    out bool stableTraceEligible){
+    out bool stableTraceEligible
+){
     stableTraceEligible = false;
     surface = (NwbReflectionSurface)0;
     const int3 texel = int3(pixel, 0);
@@ -113,8 +113,7 @@ bool nwbReflectionLoadSurface(
         packedNormal = nwbHeapSampledImage2DNonUniform(normalSlot).Load(texel);
         if(!isfinite(packedNormal.w) || packedNormal.w <= 1.0001)
             return false;
-        // Glass reflection and transmission share the same optical boundary. Its IOR determines F0, so the two
-        // entry terms remain complementary even when an authored opaque-reflection parameter is absent.
+        // Glass reflection and transmission share the same optical boundary. Its IOR determines F0, so the two entry terms remain complementary even when an authored opaque-reflection parameter is absent.
         const float ior = clamp(packedNormal.w, 1.0, 4.0);
         const half ratio = half((ior - 1.0) / (ior + 1.0));
         f0 = half3(ratio * ratio);
@@ -143,8 +142,7 @@ bool nwbReflectionLoadSurface(
     surface.normal = nwbSafeNormalize(glass ? packedNormal.xyz : packedNormal.xyz * 2.0 - 1.0, -incident);
     if(dot(surface.normal, incident) > 0.0)
         surface.normal = -surface.normal;
-    // Project the component-wise FP16 raster-position bound onto the offset normal. Captured glass instead bounds
-    // four representable D32 depth steps, retaining the inverse arithmetic margin in the final bias below.
+    // Project the component-wise FP16 raster-position bound onto the offset normal. Captured glass instead bounds four representable D32 depth steps, retaining the inverse arithmetic margin in the final bias below.
     float originUncertainty = dot(abs(surface.position) * 0.0009765625, abs(surface.normal));
     if(glass){
         const float nextDepth = min(asfloat(asuint(depth) + 4u), 1.0);
@@ -164,23 +162,13 @@ bool nwbReflectionLoadSurface(
     const half3 weight = half3(f0) + (half3(1.0h) - half3(f0)) * half(pow(half(1.0h) - cosine, half(5.0h)));
     surface.weight = weight;
     surface.bias = max(0.001, originUncertainty + length(cameraRay) * 1e-5);
-    if(
-        !isfinite(surface.bias) || !all(isfinite(surface.direction)) || !all(isfinite(surface.weight))
-        || !all(isfinite(surface.position + surface.normal * surface.bias))
-    )
+    if(!isfinite(surface.bias) || !all(isfinite(surface.direction)) || !all(isfinite(surface.weight)) || !all(isfinite(surface.position + surface.normal * surface.bias)))
         return false;
-    // The scheduling upper bound precedes stochastic VNDF outcomes, including zero or rejected samples. A prior
-    // frame's actual candidates cannot prove that a later rough sample fits the same hardware queue budget.
-    stableTraceEligible = surface.roughness <= g_NwbReflectionParameters.roughnessCutoff
-        && surface.bias < g_NwbReflectionParameters.maxRayDistance;
+    // The scheduling upper bound precedes stochastic VNDF outcomes, including zero or rejected samples. A prior frame's actual candidates cannot prove that a later rough sample fits the same hardware queue budget.
+    stableTraceEligible = surface.roughness <= g_NwbReflectionParameters.roughnessCutoff && surface.bias < g_NwbReflectionParameters.maxRayDistance;
     if(!glass && surface.roughness > 0.0){
-        const float2 randomSample = nwbReflectionSample2D(
-            pixel, uint2(g_NwbReflectionParameters.sampleBaseX, g_NwbReflectionParameters.sampleBaseY),
-            g_NwbReflectionParameters.samplingSeed
-        );
-        nwbReflectionSampleGgx(
-            surface.normal, -incident, f0, surface.roughness, randomSample, surface.direction, surface.weight
-        );
+        const float2 randomSample = nwbReflectionSample2D(pixel, uint2(g_NwbReflectionParameters.sampleBaseX, g_NwbReflectionParameters.sampleBaseY), g_NwbReflectionParameters.samplingSeed);
+        nwbReflectionSampleGgx(surface.normal, -incident, f0, surface.roughness, randomSample, surface.direction, surface.weight);
     }
     // Clear glass has zero AVBOIT coverage; coverage never scales its Fresnel reflection.
     return all(isfinite(surface.direction)) && all(isfinite(surface.weight));

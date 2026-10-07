@@ -6,6 +6,13 @@
 
 #include <core/common/log.h>
 
+#include <global/blocking_io.h>
+#include <global/scope_exit.h>
+
+#if !defined(GLB_PLATFORM_WINDOWS)
+#include <fcntl.h>
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -29,21 +36,9 @@ inline constexpr AStringView s_NwbOutputExtension = ".nwb";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void RemoveTemporaryFile(const Path& path){
-    ErrorCode errorCode;
-    if(!RemoveFile(path, errorCode)){
-        if(errorCode){
-            NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("tex_conv: failed to remove temporary output '{}': {}")
-                , PathToString<tchar>(path)
-                , StringConvert(errorCode.message())
-            );
-        }
-    }
-}
-
 bool CheckOutputPath(const Path& path, const bool force, const bool temporary){
     ErrorCode errorCode;
-    const bool exists = FileExists(path, errorCode);
+    const bool exists = FileExistsNoFollow(path, errorCode);
     if(errorCode){
         NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to query output path '{}': {}")
             , PathToString<tchar>(path)
@@ -54,7 +49,7 @@ bool CheckOutputPath(const Path& path, const bool force, const bool temporary){
     if(!exists)
         return true;
 
-    const bool directory = IsDirectory(path, errorCode);
+    const bool regular = IsRegularFile(path, errorCode);
     if(errorCode){
         NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to inspect output path '{}': {}")
             , PathToString<tchar>(path)
@@ -62,12 +57,12 @@ bool CheckOutputPath(const Path& path, const bool force, const bool temporary){
         );
         return false;
     }
-    if(directory){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: output path is a directory: '{}'"), PathToString<tchar>(path));
+    if(!regular){
+        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: output path is not a regular file: '{}'"), PathToString<tchar>(path));
         return false;
     }
     if(temporary){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: temporary output already exists: '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: publication work path already exists: '{}'"), PathToString<tchar>(path));
         return false;
     }
     if(!force){
@@ -78,34 +73,6 @@ bool CheckOutputPath(const Path& path, const bool force, const bool temporary){
     }
 
     return true;
-}
-
-bool RemoveOutputPath(const Path& path){
-    ErrorCode errorCode;
-    const bool removed = RemoveFile(path, errorCode);
-    if(errorCode){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to replace output '{}': {}")
-            , PathToString<tchar>(path)
-            , StringConvert(errorCode.message())
-        );
-        return false;
-    }
-    if(removed)
-        return true;
-
-    const bool exists = FileExists(path, errorCode);
-    if(errorCode){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to query output '{}': {}")
-            , PathToString<tchar>(path)
-            , StringConvert(errorCode.message())
-        );
-        return false;
-    }
-    if(!exists)
-        return true;
-
-    NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to remove existing output '{}'."), PathToString<tchar>(path));
-    return false;
 }
 
 AString BuildMetadata(const TexturePayload& payload, const Path& dataPath){
@@ -170,28 +137,40 @@ AString BuildMetadata(const TexturePayload& payload, const Path& dataPath){
     return output.str();
 }
 
-bool WriteTexturePayloadPart(OutputFileStream& stream, const Vector<u8>& bytes){
-    if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(bytes.size())))
+[[nodiscard]] bool StageOutput(
+    const Path& path,
+    const void* const data,
+    const usize count,
+    const void* const tail,
+    const usize tailCount,
+    bool& outOwned)noexcept{
+#if defined(GLB_PLATFORM_WINDOWS)
+    const HANDLE handle = CreateFile(path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if(handle == INVALID_HANDLE_VALUE)
         return false;
-    if(bytes.empty())
-        return true;
-
-    stream.write(
-        reinterpret_cast<const char*>(bytes.data()),
-        static_cast<StreamSize>(bytes.size())
-    );
-    return stream.good();
+    outOwned = true;
+    const bool written = WriteAllWin32Handle(handle, data, count) && WriteAllWin32Handle(handle, tail, tailCount);
+    const bool flushed = written && FlushFileBuffers(handle);
+    const bool closed = CloseHandle(handle);
+#else
+    const int descriptor = open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0666u);
+    if(descriptor < 0)
+        return false;
+    outOwned = true;
+    const bool written = WriteAllFileDescriptor(descriptor, data, count) && WriteAllFileDescriptor(descriptor, tail, tailCount);
+    const bool flushed = written && fsync(descriptor) == 0;
+    const bool closed = close(descriptor) == 0;
+#endif
+    return written && flushed && closed;
 }
 
-bool WriteTexturePayload(const Path& path, const TexturePayload& payload){
-    OutputFileStream stream(path, s_FileOpenBinary | s_FileOpenTruncate);
-    if(!stream.is_open())
-        return false;
-
-    return
-        WriteTexturePayloadPart(stream, payload.bytes)
-        && WriteTexturePayloadPart(stream, payload.alphaBytes)
-    ;
+void CaptureCleanupFailure(const Path& path, const ErrorCode& error)noexcept{
+    const DiagnosticEventText diagnostic = MakeDiagnosticEventText(
+        "tex_conv: publication cleanup failed for '{}', error {}",
+        path.c_str(),
+        error.value()
+    );
+    CaptureDiagnosticEvent("tex_conv_publication", diagnostic.view(), __FILE__, __LINE__);
 }
 
 
@@ -233,10 +212,17 @@ bool ResolveOutputPaths(const Path& inputPath, const AStringView outputArgument,
 }
 
 bool ValidateOutputPaths(const OutputPaths& outputPaths, const bool force){
-    return __hidden_output::CheckOutputPath(outputPaths.metadata, force, false)
+    Path dataBackup(outputPaths.data);
+    Path metadataBackup(outputPaths.metadata);
+    dataBackup += ".old";
+    metadataBackup += ".old";
+    return
+        __hidden_output::CheckOutputPath(outputPaths.metadata, force, false)
         && __hidden_output::CheckOutputPath(outputPaths.data, force, false)
         && __hidden_output::CheckOutputPath(outputPaths.metadataTemporary, false, true)
         && __hidden_output::CheckOutputPath(outputPaths.dataTemporary, false, true)
+        && __hidden_output::CheckOutputPath(dataBackup, false, true)
+        && __hidden_output::CheckOutputPath(metadataBackup, false, true)
     ;
 }
 
@@ -250,52 +236,141 @@ bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload,
         NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: texture payload is too large to write."));
         return false;
     }
-    if(!__hidden_output::WriteTexturePayload(outputPaths.dataTemporary, payload)){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to write output data file '{}'.")
-            , PathToString<tchar>(outputPaths.dataTemporary)
-        );
-        __hidden_output::RemoveTemporaryFile(outputPaths.dataTemporary);
+    if(!ValidateOutputPaths(outputPaths, force))
         return false;
-    }
-    if(!WriteTextFile(outputPaths.metadataTemporary, metadata)){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to write output metadata file '{}'.")
-            , PathToString<tchar>(outputPaths.metadataTemporary)
-        );
-        __hidden_output::RemoveTemporaryFile(outputPaths.dataTemporary);
-        __hidden_output::RemoveTemporaryFile(outputPaths.metadataTemporary);
-        return false;
-    }
 
-    if(force){
-        if(!__hidden_output::RemoveOutputPath(outputPaths.data) || !__hidden_output::RemoveOutputPath(outputPaths.metadata)){
-            __hidden_output::RemoveTemporaryFile(outputPaths.dataTemporary);
-            __hidden_output::RemoveTemporaryFile(outputPaths.metadataTemporary);
+    Path backups[] = { outputPaths.data, outputPaths.metadata };
+    for(Path& backup : backups)
+        backup += ".old";
+    const Path* outputs[] = { &outputPaths.data, &outputPaths.metadata };
+    const Path* temporaries[] = { &outputPaths.dataTemporary, &outputPaths.metadataTemporary };
+    bool ownedTemporary[2u] = {};
+    bool backedUp[2u] = {};
+    bool published[2u] = {};
+    ErrorCode removalErrors[2u];
+    ErrorCode restorationErrors[2u];
+    ErrorCode temporaryErrors[2u];
+
+    // Cleanup never allocates or logs through the throwing logger while an unexpected exception unwinds.
+    const auto rollback = [&]()noexcept{
+        for(u32 index = 2u; index > 0u; --index){
+            const u32 current = index - 1u;
+            if(published[current]){
+                if(!RemoveFile(*outputs[current], removalErrors[current]) && removalErrors[current])
+                    __hidden_output::CaptureCleanupFailure(*outputs[current], removalErrors[current]);
+            }
+            if(backedUp[current] && !removalErrors[current]){
+                if(!RenamePath(backups[current], *outputs[current], restorationErrors[current]))
+                    __hidden_output::CaptureCleanupFailure(backups[current], restorationErrors[current]);
+            }
+            if(ownedTemporary[current]){
+                if(!RemoveFile(*temporaries[current], temporaryErrors[current]) && temporaryErrors[current])
+                    __hidden_output::CaptureCleanupFailure(*temporaries[current], temporaryErrors[current]);
+            }
+        }
+    };
+    ScopeExit restoreOnFailure(rollback);
+
+    const auto publish = [&](){
+        if(!__hidden_output::StageOutput(
+            outputPaths.dataTemporary,
+            payload.bytes.data(),
+            payload.bytes.size(),
+            payload.alphaBytes.data(),
+            payload.alphaBytes.size(),
+            ownedTemporary[0u]
+        )){
+            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to stage output data file '{}'"), PathToString<tchar>(outputPaths.dataTemporary));
             return false;
         }
-    }
+        if(!__hidden_output::StageOutput(
+            outputPaths.metadataTemporary,
+            metadata.data(),
+            metadata.size(),
+            nullptr,
+            0u,
+            ownedTemporary[1u]
+        )){
+            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to stage output metadata file '{}'"), PathToString<tchar>(outputPaths.metadataTemporary));
+            return false;
+        }
 
-    ErrorCode errorCode;
-    if(!RenamePath(outputPaths.dataTemporary, outputPaths.data, errorCode)){
-        NWB_LOGGER_ERROR(
-            GLB_TEXT("tex_conv: failed to finalize output data file '{}': {}")
-            , PathToString<tchar>(outputPaths.data)
-            , StringConvert(errorCode.message())
-        );
-        __hidden_output::RemoveTemporaryFile(outputPaths.dataTemporary);
-        __hidden_output::RemoveTemporaryFile(outputPaths.metadataTemporary);
+        for(u32 index = 0u; index < 2u; ++index){
+            ErrorCode error;
+            const bool present = FileExistsNoFollow(*outputs[index], error);
+            if(error){
+                NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to inspect existing output '{}'"), PathToString<tchar>(*outputs[index]));
+                return false;
+            }
+            if(!present)
+                continue;
+            if(!__hidden_output::CheckOutputPath(*outputs[index], force, false))
+                return false;
+            if(!__hidden_output::CheckOutputPath(backups[index], false, true))
+                return false;
+            if(!RenamePath(*outputs[index], backups[index], error)){
+                NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to preserve existing output '{}': {}")
+                    , PathToString<tchar>(*outputs[index])
+                    , StringConvert(error.message())
+                );
+                return false;
+            }
+            backedUp[index] = true;
+        }
+        for(u32 index = 0u; index < 2u; ++index){
+            ErrorCode error;
+            if(!RenamePath(*temporaries[index], *outputs[index], error)){
+                NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to finalize output '{}': {}")
+                    , PathToString<tchar>(*outputs[index])
+                    , StringConvert(error.message())
+                );
+                return false;
+            }
+            published[index] = true;
+            ownedTemporary[index] = false;
+        }
+        return true;
+    };
+    if(!publish()){
+        rollback();
+        restoreOnFailure.release();
+        for(u32 index = 0u; index < 2u; ++index){
+            if(backedUp[index] && (removalErrors[index] || restorationErrors[index])){
+                NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to restore '{}'; previous output retained at '{}' (remove {}, restore {})")
+                    , PathToString<tchar>(*outputs[index])
+                    , PathToString<tchar>(backups[index])
+                    , removalErrors[index].value()
+                    , restorationErrors[index].value()
+                );
+            }
+            if(!backedUp[index] && removalErrors[index]){
+                NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to remove newly published output '{}': {}")
+                    , PathToString<tchar>(*outputs[index])
+                    , StringConvert(removalErrors[index].message())
+                );
+            }
+            if(temporaryErrors[index]){
+                NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("tex_conv: failed to remove unpublished temporary '{}': {}")
+                    , PathToString<tchar>(*temporaries[index])
+                    , StringConvert(temporaryErrors[index].message())
+                );
+            }
+        }
         return false;
     }
-    if(!RenamePath(outputPaths.metadataTemporary, outputPaths.metadata, errorCode)){
-        NWB_LOGGER_ERROR(
-            GLB_TEXT("tex_conv: failed to finalize output metadata file '{}': {}")
-            , PathToString<tchar>(outputPaths.metadata)
-            , StringConvert(errorCode.message())
-        );
-        __hidden_output::RemoveTemporaryFile(outputPaths.data);
-        __hidden_output::RemoveTemporaryFile(outputPaths.metadataTemporary);
-        return false;
-    }
 
+    restoreOnFailure.release();
+    for(u32 index = 0u; index < 2u; ++index){
+        if(!backedUp[index])
+            continue;
+        ErrorCode error;
+        if(!RemoveFile(backups[index], error) && error){
+            NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("tex_conv: published output pair but could not remove previous backup '{}': {}")
+                , PathToString<tchar>(backups[index])
+                , StringConvert(error.message())
+            );
+        }
+    }
     return true;
 }
 

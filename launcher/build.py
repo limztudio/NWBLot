@@ -8,7 +8,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, Optional, Sequence, Tuple
 from launcher.models import LaunchSettings
 from launcher.constants import (
     CMAKE_BUILD_FLAG,
@@ -102,11 +102,6 @@ class BuildController:
         return os.environ.copy()
 
     @staticmethod
-    def normalize_application_args(args: Sequence[str]) -> List[str]:
-        values = list(args)
-        return values
-
-    @staticmethod
     def build_command(args) -> int:
         import launcher as _facade
         env = _facade.build_environment(args)
@@ -123,5 +118,4 @@ build_profile_targets = BuildController.build_profile_targets
 resolve_executable_path = BuildController.resolve_executable_path
 resolve_working_directory = BuildController.resolve_working_directory
 build_environment = BuildController.build_environment
-normalize_application_args = BuildController.normalize_application_args
 build_command = BuildController.build_command

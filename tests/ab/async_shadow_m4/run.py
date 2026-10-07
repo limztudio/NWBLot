@@ -78,7 +78,6 @@ LIT_ARTIFACTS = "## Artifacts"
 LIT_GATES = "gates"
 LIT_PASSED = "passed"
 LIT_PIXEL_DIFF = "pixel_diff"
-LIT_NWB_RENDER_UNFOCUSED = "NWB_RENDER_UNFOCUSED"
 LIT_NWB_STRESS_TEST_SPIN_ANGLE = "NWB_STRESS_TEST_SPIN_ANGLE"
 LIT_BENCHMARK_RUNNER_COULD_NOT_SELECT_A_RU = "benchmark runner could not select a runtime-log directory"
 LIT_BENCHMARK_LOGSERVER = "benchmark logserver"
@@ -133,6 +132,7 @@ DEFAULT_FORBIDDEN_LOGS = (
 )
 M4_PIXEL_CAPTURE_READY_LOG = "StressTestSmokeProject: M4 pixel capture ready after"
 M4_PIXEL_CAPTURE_SUBMISSION_PAUSED_LOG = "render submission suspended"
+M4_RENDER_UNFOCUSED_LOG = "AvboitTimingProbe: render unfocused 1"
 
 
 class DedicatedComputeUnavailable(SmokeSkip):
@@ -519,7 +519,6 @@ def run_frame_locked_capture(
 
     launch_args = make_runtime_launch_args(args)
     environment = build_launch_environment(launch_args)
-    environment[LIT_NWB_RENDER_UNFOCUSED] = "1"
     environment[LIT_NWB_STRESS_TEST_SPIN_ANGLE] = args.frozen_yaw
     environment["NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME"] = str(args.pixel_capture_frames)
 
@@ -548,6 +547,14 @@ def run_frame_locked_capture(
             args.startup_timeout,
         )
         validate_lane_for_mode(mode, lane)
+        wait_for_log_message(
+            app_process,
+            log_directory,
+            log_baseline,
+            log_pattern,
+            M4_RENDER_UNFOCUSED_LOG,
+            args.startup_timeout,
+        )
 
         window = capture_backend.wait_for_window(app_process.pid, args.startup_timeout, args.window_title)
         if not window:
@@ -616,7 +623,6 @@ def run_single_mode(
 
     launch_args = make_runtime_launch_args(args)
     environment = build_launch_environment(launch_args)
-    environment[LIT_NWB_RENDER_UNFOCUSED] = "1"
     environment["NWB_GPU_TIMING_FILE"] = str(timing_path)
     environment[LIT_NWB_STRESS_TEST_SPIN_ANGLE] = args.frozen_yaw
 
@@ -645,6 +651,14 @@ def run_single_mode(
             args.startup_timeout,
         )
         validate_lane_for_mode(mode, lane)
+        wait_for_log_message(
+            app_process,
+            log_directory,
+            log_baseline,
+            log_pattern,
+            M4_RENDER_UNFOCUSED_LOG,
+            args.startup_timeout,
+        )
 
         window = capture_backend.wait_for_window(app_process.pid, args.startup_timeout, args.window_title)
         if not window:

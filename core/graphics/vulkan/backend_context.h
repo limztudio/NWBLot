@@ -189,7 +189,6 @@ public:
     // A hook that reached a rejected or abandoned submission cannot be reused blindly; retire that binary signal
     // before the next frame instead of allowing it to leak into another present.
     [[nodiscard]] bool cancelFramePresentationSignal(const QueueSubmissionPreSubmitHook& claim);
-    void reportLiveObjects()const noexcept{}
 
 private:
     void initDefaultExtensions();

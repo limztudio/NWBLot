@@ -58,7 +58,6 @@ static int MainLogic(
     if(!logger.init(logPort, __hidden_logger_server_main::s_LogFileNameBase, crashSymbolStoreDirectory, crashRetentionConfig, crashUploadToken))
         return __hidden_logger_server_main::s_LoggerServerExitFailure;
     NWB::Log::ServerLoggerRegistrationGuard loggerRegistrationGuard(logger);
-    logger.enqueue(StringFormat(logger.arena(), GLB_TEXT("Log server: listening on port {}"), logPort), NWB::Log::Type::EssentialInfo);
 
     return ::InvokeTerminalEntry<GeneralException>([&](){
         NWB::Log::Frame frame(inst);
@@ -67,10 +66,8 @@ static int MainLogic(
             return __hidden_logger_server_main::s_LoggerServerExitFailure;
         }
 
-        if(!frame.showFrame()){
-            logger.enqueue(BasicStringView<tchar>(GLB_TEXT("Log server frame show failed")), NWB::Log::Type::Error);
-            return __hidden_logger_server_main::s_LoggerServerExitFailure;
-        }
+        logger.enqueue(StringFormat(logger.arena(), GLB_TEXT("Log server: listening on port {}"), logPort), NWB::Log::Type::EssentialInfo);
+        frame.showFrame();
 
         if(!frame.mainLoop()){
             logger.enqueue(BasicStringView<tchar>(GLB_TEXT("Log server main loop failed")), NWB::Log::Type::Error);

@@ -126,8 +126,7 @@ class RendererFramePipeline final : NoCopy{
     friend class ShadowVisibilityMergeValidator;
 
 private:
-    // This is deliberately diagnostic-only: lifecycle ownership remains below in RendererFramePipeline,
-    // the transition-only report lets the opt-in Vulkan smoke prove which accepted-history branch actually ran.
+    // Transition reports observe accepted-history lifecycle decisions without owning them.
     enum class LaggedLightingReport : u8{
         Unreported,
         NoDedicatedAsyncCompute,
@@ -642,8 +641,7 @@ private:
 private:
     // Declare every callback owner before graph storage. Reverse member destruction keeps graph storage lifetime strictly inside those owners during normal destruction and constructor unwinding. Active graph lifecycle is externally quiesced before pipeline teardown.
     RendererTaskTimingFeedback m_deferredTaskTimingFeedback;
-    // Shadow Preparation, the native Graphics prefix, Shadow Visibility, Software Caustics, Surfel GI, AVBOIT, Hardware Caustics, Deferred Lighting, Composite, Present, optional lagged-history copy, and recovery share one packet graph.
-    // The prefix's five command lists remain a temporary recording bridge inside its first Graphics packet.
+    // All renderer stages, presentation, optional history copies, and recovery share one packet graph.
     Core::GpuTaskGraph m_deferredLightingTaskGraph;
     Core::GpuTaskGraphAnalysis m_deferredLightingTaskGraphAnalysis;
     Core::GpuTaskGraphQueueAssignments m_deferredLightingTaskGraphQueueAssignments;

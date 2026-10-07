@@ -209,11 +209,6 @@ bool Client::internalUpdate(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ClientStandalone::GlobalInit(){
-    return true;
-}
-
-
 ClientStandalone::ClientStandalone()
     : ClientBaseType("NWB::Log::ClientStandalone")
     , m_processedMessageFile(BaseType::arena())
@@ -236,7 +231,8 @@ bool ClientStandalone::internalUpdate(){
         const LogString formattedMessage = FormatMessageForProcessing(BaseType::arena(), msg);
 
         GLB_TCOUT << formattedMessage << static_cast<tchar>('\n');
-        m_processedMessageFile.writeLine(formattedMessage);
+        if(!m_processedMessageFile.writeLine(formattedMessage))
+            GLB_TCERR << GLB_TEXT("Log client: failed to write processed message to file.\n");
     }
 
     return true;

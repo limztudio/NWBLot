@@ -52,18 +52,12 @@ public:
 
 public:
     bool init();
-    bool showFrame();
+    void showFrame();
     bool mainLoop();
 
 public:
     template<typename T>
     inline T& data()noexcept{ return static_cast<T&>(m_data); }
-
-public:
-    bool startup()noexcept;
-    void cleanup()noexcept;
-    bool update(f32 delta)noexcept;
-
 
 private:
     FrameDetail::FrameData m_data;

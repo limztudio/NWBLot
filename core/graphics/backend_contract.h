@@ -56,7 +56,6 @@ concept BackendApi = requires(
     { backend.confirmFramePresentationSignal(presentationClaim, submissionToken) }->SameAs<bool>;
     { backend.cancelFramePresentationSignal(presentationClaim) }->SameAs<bool>;
     { backend.present(presentationAccepted) }->SameAs<bool>;
-    backend.reportLiveObjects();
 };
 
 template<typename T>

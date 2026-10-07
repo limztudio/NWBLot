@@ -60,6 +60,7 @@
 #include <impl/ecs_mesh/module.h>
 
 #include <global/environment.h>
+#include <global/not_null.h>
 #include <global/text_utils.h>
 
 
@@ -528,7 +529,7 @@ u32 BuildSceneBvhNode(
     const u32 hi,
     const SceneBvhPrimitiveCalculation* primitiveBounds,
     Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes,
-    const u32* instanceLeafCost = nullptr
+    const NotNull<const u32*> instanceLeafCost
 );
 [[nodiscard]] NwbRtInstanceMaterialGpu ResolveInstanceShadowMaterial(
     const MaterialSurfaceInfo& materialInfo,

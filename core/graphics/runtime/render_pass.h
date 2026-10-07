@@ -28,7 +28,6 @@ public:
 
 
 public:
-    virtual void setLatewarpOptions(){}
     virtual bool shouldRenderUnfocused(){ return false; }
 
     virtual bool validateResources(u32, u32, u32){ return true; }

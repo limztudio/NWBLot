@@ -135,10 +135,6 @@ class ClientStandalone final : public ClientBase<ClientStandalone, s_ClientStand
     using UpdateBaseType = ClientBaseType::UpdateBaseType;
 
 
-private:
-    static bool GlobalInit();
-
-
 public:
     ClientStandalone();
     virtual ~ClientStandalone()override;

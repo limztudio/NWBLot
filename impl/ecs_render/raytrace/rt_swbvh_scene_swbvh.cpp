@@ -417,7 +417,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             instanceCount,
             instanceBvhPrimitives.data(),
             buildNodes,
-            instanceLeafCost.data()
+            NotNull<const u32*>(instanceLeafCost.data())
         );
         GLB_ASSERT(buildNodes.size() == requiredNodeCount);
 

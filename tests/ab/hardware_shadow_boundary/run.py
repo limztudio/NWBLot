@@ -269,7 +269,6 @@ def run_single_arm(
     capture_path = args.output_dir / f"{mode}.bmp"
     launch_args = make_runtime_launch_args(args)
     environment = build_launch_environment(launch_args)
-    environment["NWB_RENDER_UNFOCUSED"] = "1"
     environment["NWB_GPU_TIMING_FILE"] = str(timing_path)
     environment["NWB_STRESS_TEST_SPIN_ANGLE"] = f"{args.frozen_yaw:.8g}"
     environment["NWB_STRESS_CHARACTERS_PER_CLASS"] = "5"

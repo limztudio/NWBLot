@@ -372,6 +372,16 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
+[[nodiscard]] inline bool FileExistsNoFollow(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
+#if defined(GLB_PLATFORM_WINDOWS)
+    return GlobalFilesystemDetail::FileAttributes(path, outError) != INVALID_FILE_ATTRIBUTES;
+#else
+    struct stat pathStat;
+    return GlobalFilesystemDetail::LStatPath(path, pathStat, outError);
+#endif
+}
+
+template<typename ArenaT>
 [[nodiscard]] inline bool IsDirectory(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
 #if defined(GLB_PLATFORM_WINDOWS)
     const DWORD attributes = GlobalFilesystemDetail::FileAttributes(path, outError);

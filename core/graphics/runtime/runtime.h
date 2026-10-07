@@ -259,7 +259,6 @@ public:
     [[nodiscard]] bool isHDR10OutputActive()const noexcept{ return m_swapChainState.outputMode == SwapChainOutputMode::HDR10; }
     [[nodiscard]] bool isSwapChainReadbackAvailable()const noexcept{ return m_swapChainState.swapChainReadbackAvailable; }
     void setVSyncEnabled(bool enabled)noexcept{ m_requestedVSync = enabled; }
-    void reportLiveObjects()const noexcept;
 
     void getWindowDimensions(i32& width, i32& height)const noexcept;
     void getDPIScaleInfo(f32& x, f32& y)const noexcept;

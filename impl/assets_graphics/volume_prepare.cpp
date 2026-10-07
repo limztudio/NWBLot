@@ -400,10 +400,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         return false;
 
     auto& shaderCookArena = graphicsMetadata.shaderEntries.get_allocator().arena();
-    const auto appendGeneratedPixelShaderEntry = [&](
-        const GeneratedMaterialPixelShader& generatedPixelShader,
-        const ShaderOptimizationLevel::Enum optimizationLevel = ShaderOptimizationLevel::Default
-    ) -> bool{
+    const auto appendGeneratedPixelShaderEntry = [&](const GeneratedMaterialPixelShader& generatedPixelShader) -> bool{
         ShaderCook::ShaderEntry pixelShaderEntry(shaderCookArena);
         pixelShaderEntry.name.assign(AStringView(generatedPixelShader.name));
         pixelShaderEntry.source.assign(AStringView(generatedPixelShader.source));
@@ -413,7 +410,6 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
             return false;
         }
         static constexpr AStringView s_EngineGraphicsIncludeRoot = "engine/graphics";
-        pixelShaderEntry.optimizationLevel = optimizationLevel;
         pixelShaderEntry.includeRoots.push_back(ShaderCook::CookString(s_EngineGraphicsIncludeRoot, shaderCookArena));
         pixelShaderEntry.emitMeshComputeShadow = false;
 
@@ -435,9 +431,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
             return false;
     }
     for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedAvboitAccumulatePixelShaders){
-        // Slang 1.4.313's default SPIR-V optimizer asserts while lowering the generated BXDF-dispatch path used
-        // only by transparent accumulation. Preserve normal optimization for the other generated material passes.
-        if(!appendGeneratedPixelShaderEntry(generatedPixelShader, ShaderOptimizationLevel::None))
+        if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
             return false;
     }
     for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedAvboitOccupancyPixelShaders){

@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
@@ -28,6 +29,7 @@ from launcher.constants import (
     MSG_MISSING_WORKDIR,
     MSG_NO_EXIT_STATUS,
     MSG_NO_PKILL,
+    MSG_PKILL_FAILED,
     MSG_RUN_FORCED,
     MSG_RUN_GRACEFUL,
     MSG_RUN_REQUEST,
@@ -36,6 +38,7 @@ from launcher.constants import (
     OPTION_RUN_SECONDS,
     PKILL_COMMAND,
     PKILL_FOLLOW_FLAG,
+    PKILL_STDERR_MAX_BYTES,
     PLATFORM_WINDOWS,
     PROFILE_LOGSERVER_TERMINATE_TIMEOUT_SECONDS,
     PROFILE_LOG_READY_POLL_SECONDS,
@@ -61,11 +64,20 @@ class ProcessLauncher:
             return
 
         if shutil.which(PKILL_COMMAND) is None:
-            print(MSG_NO_PKILL, flush=True)
-            return
+            raise SystemExit(MSG_NO_PKILL)
 
         pattern = re.escape(str(executable.resolve()))
-        subprocess.run([PKILL_COMMAND, PKILL_FOLLOW_FLAG, pattern], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        with tempfile.TemporaryFile() as diagnostic:
+            completed = subprocess.run(
+                [PKILL_COMMAND, PKILL_FOLLOW_FLAG, pattern],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=diagnostic,
+            )
+            diagnostic.seek(0)
+            detail = diagnostic.read(PKILL_STDERR_MAX_BYTES).decode("utf-8", errors="replace").strip()
+            if completed.returncode not in (0, 1) or detail:
+                raise SystemExit(MSG_PKILL_FAILED.format(executable=executable, exit_code=completed.returncode, detail=detail))
 
     @staticmethod
     def validate_launch_paths(executable: Path, working_directory: Path, dry_run: bool) -> None:
@@ -115,25 +127,25 @@ class ProcessLauncher:
         paths_validated: bool = False,
     ) -> int:
         import launcher as _facade
-        if not paths_validated:
-            _facade.validate_launch_paths(executable, working_directory, args.dry_run)
-
-        if args.kill_existing and not args.dry_run:
-            _facade.stop_existing_process(executable, _facade.host_platform_name())
-
-        launch = [str(executable)]
-        if args.gpudbg:
-            launch.append(GPUDBG_FLAG)
-        launch += _facade.profile_client_args(args, profile_session)
-        launch += list(application_args)
-
-        print("+ " + _facade.format_command(launch), flush=True)
-        print(CWD_PREFIX + str(working_directory), flush=True)
-        if args.dry_run:
-            return 0
-
         process: Optional[subprocess.Popen] = None
         try:
+            if not paths_validated:
+                _facade.validate_launch_paths(executable, working_directory, args.dry_run)
+
+            if args.kill_existing and not args.dry_run:
+                _facade.stop_existing_process(executable, _facade.host_platform_name())
+
+            launch = [str(executable)]
+            if args.gpudbg:
+                launch.append(GPUDBG_FLAG)
+            launch += _facade.profile_client_args(args, profile_session)
+            launch += list(application_args)
+
+            print("+ " + _facade.format_command(launch), flush=True)
+            print(CWD_PREFIX + str(working_directory), flush=True)
+            if args.dry_run:
+                return 0
+
             process = subprocess.Popen(launch, cwd=working_directory, env=env, stdout=sys.stdout, stderr=sys.stderr)
             print(MSG_LAUNCHED_APP.format(executable=executable, process=process), flush=True)
             if args.detach:
@@ -175,8 +187,7 @@ class ProcessLauncher:
             if (
                 profile_session is not None
                 and profile_session.process is not None
-                and not args.detach
-                and (process is None or process.poll() is not None)
+                and (process is None or (not args.detach and process.poll() is not None))
             ):
                 _facade.terminate_process(profile_session.process, LOGSERVER_LABEL)
 

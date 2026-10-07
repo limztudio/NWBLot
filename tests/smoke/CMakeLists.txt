@@ -1,5 +1,22 @@
 find_package(Python3 COMPONENTS Interpreter)
 
+if(TARGET nwb_logserver AND Python3_Interpreter_FOUND)
+    add_test(
+        NAME nwb_logger_busy_spin_smoke
+        COMMAND
+            "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_LIST_DIR}/logger_busy_spin_smoke.py"
+            "--executable" "$<TARGET_FILE:nwb_logserver>"
+            "--working-directory" "$<TARGET_FILE_DIR:nwb_logserver>"
+            "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/logger_busy_spin"
+    )
+    set_tests_properties(nwb_logger_busy_spin_smoke PROPERTIES
+        RESOURCE_LOCK nwb_display
+        SKIP_RETURN_CODE 77
+        TIMEOUT 60
+    )
+endif()
+
 nwb_declare_gtest_executable(nwb_presentation_fps_probe_tests)
 target_sources(nwb_presentation_fps_probe_tests PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"

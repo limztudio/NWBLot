@@ -224,7 +224,6 @@ def run(args: argparse.Namespace) -> int:
 
     launch_args = make_runtime_launch_args(args)
     environment = build_launch_environment(launch_args)
-    environment["NWB_RENDER_UNFOCUSED"] = "1"
     capture_backend = None
     logserver_process = None
     app_process = None

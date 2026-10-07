@@ -258,7 +258,7 @@ def smoke_command(args) -> int:
         executable,
         working_directory,
         env,
-        ROOT_LAUNCHER.normalize_application_args(args.application_args),
+        args.application_args,
     )
 
 

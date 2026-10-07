@@ -584,6 +584,62 @@ class LauncherPlatformTests(unittest.TestCase):
             ):
                 launcher.discover_repo_launchers(root)
 
+
+class LauncherProcessStopTests(unittest.TestCase):
+    def test_no_matching_posix_process_does_not_prevent_launch(self):
+        with (
+            mock.patch("launcher.process.shutil.which", return_value="/usr/bin/pkill"),
+            mock.patch.object(subprocess, "run", return_value=mock.Mock(returncode=1)),
+        ):
+            launcher.stop_existing_process(Path("absent-application"), launcher.PLATFORM_LINUX)
+
+    def test_posix_stop_failure_prevents_another_application_and_bounds_diagnostic(self):
+        diagnostic = b"permission denied " + b"x" * launcher.PKILL_STDERR_MAX_BYTES + b"UNBOUNDED_TAIL"
+        args = argparse.Namespace(dry_run=False, kill_existing=True)
+        for exit_code in (0, 1, 2, 3, -9):
+            with self.subTest(exit_code=exit_code):
+                def fail_stop(*_arguments, **options):
+                    options["stderr"].write(diagnostic)
+                    return mock.Mock(returncode=exit_code)
+
+                with (
+                    mock.patch("launcher.process.shutil.which", return_value="/usr/bin/pkill"),
+                    mock.patch.object(subprocess, "run", side_effect=fail_stop),
+                    mock.patch.object(launcher, "validate_launch_paths"),
+                    mock.patch.object(launcher, "host_platform_name", return_value=launcher.PLATFORM_LINUX),
+                    mock.patch.object(subprocess, "Popen") as spawn,
+                ):
+                    with self.assertRaisesRegex(SystemExit, "permission denied") as failure:
+                        launcher.launch_process(args, Path("application"), ROOT, {}, [])
+                    self.assertNotIn("UNBOUNDED_TAIL", str(failure.exception))
+                    spawn.assert_not_called()
+
+    def test_missing_posix_stop_tool_rejects_requested_stop(self):
+        with mock.patch("launcher.process.shutil.which", return_value=None):
+            with self.assertRaisesRegex(SystemExit, "requires pkill"):
+                launcher.stop_existing_process(Path("application"), launcher.PLATFORM_LINUX)
+
+    def test_stop_failure_closes_started_profile_session_before_application_spawn(self):
+        for detach in (False, True):
+            with self.subTest(detach=detach):
+                args = argparse.Namespace(dry_run=False, kill_existing=True, detach=detach)
+                profile_process = mock.Mock()
+                session = launcher.ProfileSession(12345, Path("logserver"), profile_process)
+                with (
+                    mock.patch.object(launcher, "validate_launch_paths"),
+                    mock.patch.object(launcher, "start_profile_session", return_value=session) as start_profile,
+                    mock.patch.object(launcher, "host_platform_name", return_value=launcher.PLATFORM_LINUX),
+                    mock.patch.object(launcher, "stop_existing_process", side_effect=SystemExit("requested stop refused")),
+                    mock.patch.object(launcher, "terminate_process") as terminate,
+                    mock.patch.object(subprocess, "Popen") as spawn,
+                ):
+                    with self.assertRaisesRegex(SystemExit, "requested stop refused"):
+                        launcher.launch_with_optional_profile(args, mock.sentinel.settings, Path("application"), ROOT, {}, [])
+                    start_profile.assert_called_once_with(args, mock.sentinel.settings, ROOT, {})
+                    spawn.assert_not_called()
+                    terminate.assert_called_once_with(profile_process, launcher.LOGSERVER_LABEL)
+
+
 class LauncherBuildBoundaryTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()

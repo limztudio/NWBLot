@@ -58,9 +58,7 @@ void Frame::Print(BasicStringView<tchar> str, Log::Type::Enum type){
 
 Frame::Frame(void*){
 }
-Frame::~Frame(){
-    cleanup();
-}
+Frame::~Frame() = default;
 
 bool Frame::init(){
     FrameDetail::s_ShouldExit = 0;
@@ -70,25 +68,14 @@ bool Frame::init(){
     if(!SetSignalHandler(ProcessSignal::Terminate, FrameDetail::SignalHandler))
         return false;
 
-    return startup();
-}
-bool Frame::showFrame(){
-    GLB_TCOUT << GLB_TEXT("nwb_logserver is running in console mode. Press Ctrl+C to exit.") << static_cast<tchar>('\n');
     return true;
 }
+void Frame::showFrame(){
+    GLB_TCOUT << GLB_TEXT("nwb_logserver is running in console mode. Press Ctrl+C to exit.") << static_cast<tchar>('\n');
+}
 bool Frame::mainLoop(){
-    Timer lateTime(TimerNow());
-
-    while(!FrameDetail::s_ShouldExit){
-        Timer currentTime(TimerNow());
-        const f32 delta = DurationInSeconds<f32>(currentTime, lateTime);
-        lateTime = currentTime;
-
-        if(!update(delta))
-            return false;
-
+    while(!FrameDetail::s_ShouldExit)
         SleepMS(FrameDetail::s_ConsoleUpdateIntervalMilliseconds);
-    }
 
     return true;
 }

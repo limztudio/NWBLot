@@ -23,6 +23,14 @@ writes `foobar.nwb` and `foobar.tex` beside the first input unless `--output`
 selects a different base name. `--linear` marks and filters the image data as
 linear data; HDR sources are always linear. `--force` is required to replace either existing output file.
 
+Publication stages both files before moving existing regular outputs to sibling
+`.old` backups. It removes the backups after both replacements succeed and
+restores the previous outputs on failure. Existing `.tmp` or `.old` work paths
+cause refusal. If the filesystem also refuses rollback, the converter reports the
+failure and retains the previous `.old` files for recovery.
+The transaction handles one conversion's reported failures and exception unwind;
+it does not atomically swap the pair against process crashes or concurrent writers.
+
 Use `--alpha` to choose an alpha source independently of the RGB image:
 
     python -m launcher tex-conv --working-directory . -- rgb.png --alpha opacity.png

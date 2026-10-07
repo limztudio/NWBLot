@@ -589,7 +589,7 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     dispatchBuildKernel(*m_rayTracingState.m_bvhMortonPipeline, DivideUp(primitiveCount, static_cast<u32>(NWB_BVH_BUILD_GROUP_SIZE)));
     bvhBuildBarrier();
 
-    // Separates rebuild-sort timing from the one-shot self-test.
+    // Attribute sorting to the mesh rebuild at its call site.
     {
         Core::GpuTimingMeasure timing(m_graphics.gpuTiming(), RendererGpuTimingScope::s_SwBvhSort, m_graphics.getDevice(), commandList);
         if(!bvhBitonicSort(commandList, primitiveCount, paddedCount))

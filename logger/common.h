@@ -236,7 +236,7 @@ public:
             m_stream.close();
     }
 
-    bool writeLine(BasicStringView<tchar> line){
+    [[nodiscard]] bool writeLine(BasicStringView<tchar> line){
         if(!m_stream.is_open())
             return false;
 
@@ -258,10 +258,6 @@ private:
 
 template<typename T, const TStringView& loggerName>
 class LoggerWorkerBase{
-protected:
-    static inline bool GlobalInit()noexcept{ return true; }
-
-
 public:
     explicit LoggerWorkerBase(const AStringView allocationLog)
         : m_arena(Name(allocationLog))
@@ -272,15 +268,6 @@ public:
         stopWorker();
     }
 
-
-protected:
-    template<typename... Args>
-    inline bool internalInit(Args&&... args)noexcept{
-        (static_cast<void>(args), ...);
-        return true;
-    }
-    inline void internalDestroy()noexcept{}
-    inline bool internalUpdate()noexcept{ return true; }
 
 protected:
     inline bool tryDequeue(MessageType& msg){ return m_messageQueue.try_pop(msg); }
@@ -300,12 +287,14 @@ public:
 public:
     template<typename... Args>
     inline bool init(Args&&... args){
-        if(!static_cast<T*>(this)->s_GlobalInit){
-            if(!static_cast<T*>(this)->GlobalInit()){
-                static_cast<T*>(this)->T::enqueue(StringFormat(m_arena, GLB_TEXT("Failed to global initialization on {}"), loggerName), Type::Fatal);
-                return false;
+        if constexpr(requires{ T::GlobalInit(); }){
+            if(!T::s_GlobalInit){
+                if(!T::GlobalInit()){
+                    static_cast<T*>(this)->T::enqueue(StringFormat(m_arena, GLB_TEXT("Failed to initialize {} globally"), loggerName), Type::Fatal);
+                    return false;
+                }
+                T::s_GlobalInit = true;
             }
-            static_cast<T*>(this)->s_GlobalInit = true;
         }
 
         const bool initialized = static_cast<T*>(this)->internalInit(Forward<Args>(args)...);

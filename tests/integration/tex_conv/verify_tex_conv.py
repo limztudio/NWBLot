@@ -268,6 +268,106 @@ def require_texture_payload_byte_count(texture_path: pathlib.Path, expected_byte
         raise AssertionError(f"texture payload expected {expected_bytes} bytes, got {actual_bytes}: {texture_path}")
 
 
+def verify_publication_failure_preserves_outputs(
+    executable: str,
+    source_path: pathlib.Path,
+    metadata_path: pathlib.Path,
+    texture_path: pathlib.Path,
+    output_dir: pathlib.Path,
+) -> None:
+    outputs = (texture_path, metadata_path)
+    originals = tuple(path.read_bytes() for path in outputs)
+    backups = tuple(pathlib.Path(str(path) + ".old") for path in outputs)
+    temporaries = tuple(pathlib.Path(str(path) + LIT_TMP_SUFFIX) for path in outputs)
+
+    def require_preserved_pair() -> None:
+        if tuple(path.read_bytes() for path in outputs) != originals:
+            raise AssertionError("failed forced publication changed the previous texture pair")
+        if any(path.exists() for path in temporaries):
+            raise AssertionError("failed publication retained a temporary owned by the converter")
+
+    for backup in backups:
+        sentinel = b"unrelated recovery file"
+        backup.write_bytes(sentinel)
+        try:
+            result = subprocess.run(
+                [executable, str(source_path), "--force", LIT_LINEAR_2],
+                cwd=output_dir,
+                text=True,
+                capture_output=True,
+            )
+            if result.returncode != 1:
+                raise AssertionError("tex_conv did not refuse an occupied publication backup path")
+            if backup.read_bytes() != sentinel:
+                raise AssertionError("tex_conv overwrote an existing recovery file")
+            require_preserved_pair()
+        finally:
+            backup.unlink()
+
+    if sys.platform.startswith("linux"):
+        missing_target = output_dir / "absent_publication_backup_target"
+        if missing_target.exists():
+            raise AssertionError("dangling-link fixture target unexpectedly exists")
+        backups[0].symlink_to(missing_target.name)
+        try:
+            result = subprocess.run(
+                [executable, str(source_path), "--force", LIT_LINEAR_2],
+                cwd=output_dir,
+                text=True,
+                capture_output=True,
+            )
+            if result.returncode != 1 or not backups[0].is_symlink():
+                raise AssertionError("tex_conv did not preserve an occupied dangling backup link")
+            require_preserved_pair()
+        finally:
+            backups[0].unlink()
+
+    if sys.platform == "win32":
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateFileW.argtypes = (
+            wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+            wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
+        )
+        kernel32.CreateFileW.restype = wintypes.HANDLE
+        kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        # Deny deletion of the second destination so the first backup must be restored.
+        handle = kernel32.CreateFileW(str(metadata_path), 0x80000000, 0x1 | 0x2, None, 3, 0x80, None)
+        if handle == ctypes.c_void_p(-1).value:
+            raise OSError(ctypes.get_last_error(), "could not lock publication fixture")
+        try:
+            result = subprocess.run(
+                [executable, str(source_path), "--force", LIT_LINEAR_2],
+                cwd=output_dir,
+                text=True,
+                capture_output=True,
+            )
+        finally:
+            if not kernel32.CloseHandle(handle):
+                raise OSError(ctypes.get_last_error(), "could not release publication fixture")
+        if result.returncode != 1 or "failed to preserve existing output" not in result.stdout + result.stderr:
+            raise AssertionError("the sharing lock did not exercise second-output backup failure")
+        require_preserved_pair()
+        if any(path.exists() for path in backups):
+            raise AssertionError("rollback did not restore the previous output locations")
+
+    recovered = subprocess.run(
+        [executable, str(source_path), "--force"],
+        cwd=output_dir,
+        text=True,
+        capture_output=True,
+    )
+    if recovered.returncode != 0:
+        raise AssertionError("tex_conv could not publish after the obstruction was removed")
+    if tuple(path.read_bytes() for path in outputs) != originals:
+        raise AssertionError("publication after failure did not recover the original conversion")
+    if any(path.exists() for path in (*backups, *temporaries)):
+        raise AssertionError("successful recovery left publication work files")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--tex-conv", required=True)
@@ -442,6 +542,9 @@ def main() -> int:
             f"tex_conv --force failed with {forced.returncode}\nstdout:\n{forced.stdout}\nstderr:\n{forced.stderr}"
         )
     read_texture_metadata(metadata_path)
+    verify_publication_failure_preserves_outputs(
+        args.tex_conv, source_path, metadata_path, texture_path, output_dir,
+    )
 
     linear = subprocess.run(
         [args.tex_conv, str(source_path), LIT_OUTPUT, str(output_dir / LIT_LINEAR), LIT_LINEAR_2],

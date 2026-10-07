@@ -4,8 +4,6 @@
 
 #include "module.h"
 
-#include <core/common/log.h>
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -16,12 +14,11 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename EnumT, typename TextFunction, typename ParseFunction, typename ErrorFunction>
+template<typename EnumT, typename TextFunction, typename ParseFunction>
 static bool ValidateOptionText(
     AString& inOutValue,
     TextFunction textFunction,
     ParseFunction parseValue,
-    ErrorFunction errorText,
     const EnumT initial
 ){
     inOutValue = NormalizeOptionText(Move(inOutValue));
@@ -31,7 +28,6 @@ static bool ValidateOptionText(
         return true;
     }
 
-    NWB_LOGGER_WARNING(StringConvert(errorText()));
     return false;
 }
 
@@ -95,7 +91,7 @@ bool ParseAssetTypeText(const AStringView value, OutputAssetType::Enum& outAsset
 }
 
 bool ValidateAssetTypeText(AString& inOutValue){
-    return ValidateOptionText<OutputAssetType::Enum>(inOutValue, OutputAssetTypeText, ParseNormalizedAssetTypeText, OutputAssetTypeErrorText, OutputAssetType::Mesh);
+    return ValidateOptionText<OutputAssetType::Enum>(inOutValue, OutputAssetTypeText, ParseNormalizedAssetTypeText, OutputAssetType::Mesh);
 }
 
 static AStringView NormalModeText(const NormalMode::Enum normalMode){
@@ -140,7 +136,7 @@ bool ParseNormalModeText(const AStringView value, NormalMode::Enum& outNormalMod
 }
 
 bool ValidateNormalModeText(AString& inOutValue){
-    return ValidateOptionText<NormalMode::Enum>(inOutValue, NormalModeText, ParseNormalizedNormalModeText, NormalModeErrorText, NormalMode::Imported);
+    return ValidateOptionText<NormalMode::Enum>(inOutValue, NormalModeText, ParseNormalizedNormalModeText, NormalMode::Imported);
 }
 
 AStringView SourceTangentModeText(const SourceTangentMode::Enum mode){

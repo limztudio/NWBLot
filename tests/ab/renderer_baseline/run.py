@@ -365,7 +365,6 @@ def capture_scene(
 
     launch_args = make_runtime_launch_args(args)
     environment = build_launch_environment(launch_args)
-    environment["NWB_RENDER_UNFOCUSED"] = "1"
     environment.update(frozen_environment)
     if profile.capture_freeze_frame != 0:
         environment["NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME"] = str(profile.capture_freeze_frame)

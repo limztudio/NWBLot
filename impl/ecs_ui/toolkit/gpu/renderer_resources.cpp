@@ -73,7 +73,7 @@ struct TargetReadyTask{
 [[nodiscard]] static Core::RenderState PaintRenderState(){
     Core::RenderState state;
     state.depthStencilState.disableDepthTest().disableDepthWrite();
-    state.rasterState.enableDepthClip().enableScissor().setCullNone();
+    state.rasterState.enableDepthClip().setCullNone();
     state.blendState.targets[NWB_UI_COLOR_TARGET_LOCATION]
         .enableBlend()
         .setSrcBlend(Core::BlendFactor::One)

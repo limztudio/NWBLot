@@ -11,7 +11,7 @@
 
 #if defined(GLB_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(GLB_PLATFORM_LINUX) || defined(GLB_PLATFORM_ANDROID)
+#elif defined(GLB_PLATFORM_LINUX) || defined(GLB_PLATFORM_ANDROID) || defined(GLB_PLATFORM_APPLE) || defined(GLB_PLATFORM_UNIX)
 #include <errno.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -21,7 +21,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLB_PLATFORM_LINUX) || defined(GLB_PLATFORM_ANDROID)
+#if defined(GLB_PLATFORM_LINUX) || defined(GLB_PLATFORM_ANDROID) || defined(GLB_PLATFORM_APPLE) || defined(GLB_PLATFORM_UNIX)
 template<typename PointerT, typename OperationT>
 [[nodiscard]] inline bool TransferAllPosix(PointerT cursor, const usize byteCount, OperationT operation)noexcept{
     usize remaining = byteCount;

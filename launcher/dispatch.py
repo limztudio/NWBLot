@@ -42,7 +42,7 @@ class DispatchRouter:
             executable,
             working_directory,
             env,
-            _facade.normalize_application_args(args.application_args),
+            args.application_args,
         )
 
     @staticmethod

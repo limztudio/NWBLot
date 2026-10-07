@@ -126,7 +126,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         if(output)
             continue;
         Core::RasterState raster;
-        raster.setCullMode(Core::RasterCullMode::None).enableDepthClip().enableScissor();
+        raster.setCullMode(Core::RasterCullMode::None).enableDepthClip();
         Core::DepthStencilState depth;
         depth.setDepthTestEnable(transparent == 0u).setDepthWriteEnable(transparent == 0u).setDepthFunc(Core::ComparisonFunc::Less);
         Core::RenderState render;

@@ -73,8 +73,18 @@ VkShaderStageFlags ConvertShaderStages(ShaderType::Mask stages)noexcept{
         flags |= VK_SHADER_STAGE_TASK_BIT_EXT;
     if(stages & ShaderType::Mesh)
         flags |= VK_SHADER_STAGE_MESH_BIT_EXT;
-    if(stages & ShaderType::AllRayTracing)
-        flags |= VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
+    if(stages & ShaderType::RayGeneration)
+        flags |= VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+    if(stages & ShaderType::AnyHit)
+        flags |= VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
+    if(stages & ShaderType::ClosestHit)
+        flags |= VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+    if(stages & ShaderType::Miss)
+        flags |= VK_SHADER_STAGE_MISS_BIT_KHR;
+    if(stages & ShaderType::Intersection)
+        flags |= VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
+    if(stages & ShaderType::Callable)
+        flags |= VK_SHADER_STAGE_CALLABLE_BIT_KHR;
 
     if(flags == 0)
         flags = VK_SHADER_STAGE_ALL;
@@ -511,6 +521,10 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 
     if(desc.descriptorSetIndex == Limit<u32>::s_Max){
         NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create bindless layout: an explicit descriptor-set index is required."));
+        return nullptr;
+    }
+    if((static_cast<u16>(desc.visibility) & ~static_cast<u16>(ShaderType::All)) != 0u){
+        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create bindless layout: shader visibility contains unknown bits."));
         return nullptr;
     }
 

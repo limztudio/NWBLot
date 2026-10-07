@@ -17,7 +17,6 @@
 
 
 #include <windows.h>
-#include <global/win32_message_loop.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,7 +34,6 @@ namespace FrameDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr usize s_WinFrameActiveFlagByteIndex = 4u;
 inline constexpr SHORT s_ControlKeyDownMask = 0x8000;
 inline constexpr WPARAM s_CopyControlKey = static_cast<WPARAM>('C');
 inline constexpr COLORREF s_DefaultLogRowTextColor = RGB(0, 0, 0);
@@ -43,9 +41,6 @@ inline constexpr COLORREF s_DefaultLogRowBackgroundColor = RGB(230, 230, 230);
 
 class WinFrame : public FrameData{
 public:
-    inline bool isActive()const noexcept{ return m_data.u8[s_WinFrameActiveFlagByteIndex] != 0; }
-    inline void setActive(bool value)noexcept{ m_data.u8[s_WinFrameActiveFlagByteIndex] = value ? 1u : 0u; }
-
     inline HINSTANCE instance()const noexcept{ return static_cast<HINSTANCE>(m_data.ptr[0]); }
     inline void setInstance(HINSTANCE value)noexcept{ m_data.ptr[0] = value; }
 
@@ -170,25 +165,28 @@ static LRESULT CALLBACK ListProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPa
 
 static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam){
     if(auto* frame = s_Frame){
-        LRESULT lifecycleResult = 0;
-        if(
-            ::HandleWin32FrameLifecycleMessage(
-            hwnd,
-            uMsg,
-            wParam,
-            [](){
-                if(s_Font){
-                    DeleteObject(s_Font);
-                    s_Font = nullptr;
-                }
-            },
-            [&](const bool isActive){ frame->data<WinFrame>().setActive(isActive); },
-            lifecycleResult
-            )
-        )
-            return lifecycleResult;
-
         switch(uMsg){
+        case WM_DESTROY:
+        {
+            if(s_Font){
+                if(!DeleteObject(s_Font))
+                    GLB_TCERR << GLB_TEXT("Log server: failed to delete its font.\n");
+                s_Font = nullptr;
+            }
+            {
+                ScopedLock lock(s_ListMutex);
+                s_ListHwnd = nullptr;
+            }
+            frame->data<WinFrame>().setHwnd(nullptr);
+            PostQuitMessage(0);
+        }
+        return 0;
+
+        case WM_CLOSE:
+            if(!DestroyWindow(hwnd))
+                GLB_TCERR << GLB_TEXT("Log server: failed to destroy its window.\n");
+            return 0;
+
         case WM_CREATE:
         {
             s_Font = CreateFont(
@@ -381,13 +379,13 @@ Frame::Frame(void* inst){
     data<FrameDetail::WinFrame>().setInstance(reinterpret_cast<HINSTANCE>(inst));
 }
 Frame::~Frame(){
-    // Destroy the window before its store, while the allocator runtime is alive.
-    // Clear s_Frame/s_Store under s_ListMutex so late worker prints become no-ops.
-    cleanup();
-
-    FrameDetail::s_Frame = nullptr;
+    const HWND hwnd = data<FrameDetail::WinFrame>().hwnd();
+    if(hwnd && !DestroyWindow(hwnd))
+        GLB_TCERR << GLB_TEXT("Log server: failed to destroy its window during shutdown.\n");
 
     ScopedLock lock(FrameDetail::s_ListMutex);
+    FrameDetail::s_Frame = nullptr;
+    FrameDetail::s_ListHwnd = nullptr;
     FrameDetail::s_Store.reset();
 }
 
@@ -429,21 +427,23 @@ bool Frame::init(){
     if(!data<FrameDetail::WinFrame>().hwnd())
         return false;
 
-    if(!startup())
-        return false;
-
     return true;
 }
-bool Frame::showFrame(){
+void Frame::showFrame(){
     ShowWindow(data<FrameDetail::WinFrame>().hwnd(), SW_SHOW);
-    return true;
 }
 bool Frame::mainLoop(){
-    return ::RunWin32TimedFrameLoop(
-        [&](){ return data<FrameDetail::WinFrame>().isActive(); },
-        [](){},
-        [&](const f32 timeDifference){ return update(timeDifference); }
-    );
+    MSG message = {};
+    for(;;){
+        const BOOL result = GetMessage(&message, nullptr, 0, 0);
+        if(result == -1)
+            return false;
+        if(result == 0)
+            return true;
+
+        TranslateMessage(&message);
+        DispatchMessage(&message);
+    }
 }
 
 void Frame::Print(BasicStringView<tchar> str, Log::Type::Enum type){

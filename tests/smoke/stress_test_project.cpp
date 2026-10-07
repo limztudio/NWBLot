@@ -499,13 +499,21 @@ public:
         NWB::Core::Perf::CaptureOptions capture = NWB::Core::Perf::CaptureOptions::GpuTimingOnly();
         capture.cpuTiming = m_cpuDiagnosticsEnabled;
         m_context.setPerfCapture(capture);
+        if(
+            m_timingEnabled
+            && (M4PixelCaptureFreezeFrame() != 0u || RendererBaselineCaptureFreezeFrame() != 0u || !m_context.requestQuit)
+        ){
+            NWB_LOGGER_ERROR(GLB_TEXT("StressTestSmokeProject: timing requires continuous submissions and a quit callback"));
+            return false;
+        }
+#if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK) || defined(NWB_HARDWARE_SHADOW_BOUNDARY_BENCHMARK)
+        constexpr bool s_ContinuousBenchmarkRendering = true;
+#else
+        constexpr bool s_ContinuousBenchmarkRendering = false;
+#endif
+        if((m_timingEnabled || s_ContinuousBenchmarkRendering) && !m_timingRenderPass.start(true))
+            return false;
         if(m_timingEnabled){
-            if(M4PixelCaptureFreezeFrame() != 0u || RendererBaselineCaptureFreezeFrame() != 0u || !m_context.requestQuit){
-                NWB_LOGGER_ERROR(GLB_TEXT("StressTestSmokeProject: timing requires continuous submissions and a quit callback"));
-                return false;
-            }
-            if(!m_timingRenderPass.start(true))
-                return false;
             m_pacingRing.reset();
             NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("StressTestSmokeProject: presentation timing warmup_seconds=5 measure_seconds=30 clock=steady accepted_native_present=1"));
             NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("StressTestSmokeProject: device capability meshlets={} rayquery={} raypipeline={} accelstruct={} wavelanes={} renderer={}")

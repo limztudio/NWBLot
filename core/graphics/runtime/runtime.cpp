@@ -397,10 +397,6 @@ TStringView GraphicsRuntime::getRendererString()const noexcept{
     return m_backend->getRendererString();
 }
 
-void GraphicsRuntime::reportLiveObjects()const noexcept{
-    m_backend->reportLiveObjects();
-}
-
 void GraphicsRuntime::getWindowDimensions(i32& width, i32& height)const noexcept{
     width = m_swapChainState.backBufferWidth;
     height = m_swapChainState.backBufferHeight;
@@ -425,10 +421,8 @@ void GraphicsRuntime::setPointerScaleChangedCallback(PointerScaleChangedCallback
 }
 
 void GraphicsRuntime::animate(f64 elapsedTime){
-    for(auto* renderPass : m_renderPasses){
+    for(auto* renderPass : m_renderPasses)
         renderPass->animate(static_cast<f32>(elapsedTime));
-        renderPass->setLatewarpOptions();
-    }
 }
 
 bool GraphicsRuntime::prepareFramePreamble(){

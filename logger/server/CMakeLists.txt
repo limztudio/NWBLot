@@ -8,7 +8,6 @@ target_sources(nwb_logserver PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_rgd.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_symbolicate_aftermath.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/frame.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/main.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/module.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/crash_auth.h"

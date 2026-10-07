@@ -153,19 +153,9 @@ struct RasterState{
     RasterCullMode::Enum cullMode = RasterCullMode::Back;
     bool frontCounterClockwise = false;
     bool depthClipEnable = false;
-    bool scissorEnable = false;
-    bool multisampleEnable = false;
-    bool antialiasedLineEnable = false;
     i32 depthBias = 0;
     f32 depthBiasClamp = 0.f;
     f32 slopeScaledDepthBias = 0.f;
-
-    u8 forcedSampleCount = 0;
-    bool programmableSamplePositionsEnable = false;
-    bool conservativeRasterEnable = false;
-    bool quadFillEnable = false;
-    char samplePositionsX[s_MaxProgrammableSamplePositions]{};
-    char samplePositionsY[s_MaxProgrammableSamplePositions]{};
 
     constexpr RasterState& setFillMode(RasterFillMode::Enum value)noexcept{ fillMode = value; return *this; }
     constexpr RasterState& setFillSolid()noexcept{ fillMode = RasterFillMode::Solid; return *this; }
@@ -178,38 +168,9 @@ struct RasterState{
     constexpr RasterState& setDepthClipEnable(bool value)noexcept{ depthClipEnable = value; return *this; }
     constexpr RasterState& enableDepthClip()noexcept{ depthClipEnable = true; return *this; }
     constexpr RasterState& disableDepthClip()noexcept{ depthClipEnable = false; return *this; }
-    constexpr RasterState& setScissorEnable(bool value)noexcept{ scissorEnable = value; return *this; }
-    constexpr RasterState& enableScissor()noexcept{ scissorEnable = true; return *this; }
-    constexpr RasterState& disableScissor()noexcept{ scissorEnable = false; return *this; }
-    constexpr RasterState& setMultisampleEnable(bool value)noexcept{ multisampleEnable = value; return *this; }
-    constexpr RasterState& enableMultisample()noexcept{ multisampleEnable = true; return *this; }
-    constexpr RasterState& disableMultisample()noexcept{ multisampleEnable = false; return *this; }
-    constexpr RasterState& setAntialiasedLineEnable(bool value)noexcept{ antialiasedLineEnable = value; return *this; }
-    constexpr RasterState& enableAntialiasedLine()noexcept{ antialiasedLineEnable = true; return *this; }
-    constexpr RasterState& disableAntialiasedLine()noexcept{ antialiasedLineEnable = false; return *this; }
     constexpr RasterState& setDepthBias(i32 value)noexcept{ depthBias = value; return *this; }
     constexpr RasterState& setDepthBiasClamp(f32 value)noexcept{ depthBiasClamp = value; return *this; }
     constexpr RasterState& setSlopeScaleDepthBias(f32 value)noexcept{ slopeScaledDepthBias = value; return *this; }
-    constexpr RasterState& setForcedSampleCount(u8 value)noexcept{ forcedSampleCount = value; return *this; }
-    constexpr RasterState& setProgrammableSamplePositionsEnable(bool value)noexcept{ programmableSamplePositionsEnable = value; return *this; }
-    constexpr RasterState& enableProgrammableSamplePositions()noexcept{ programmableSamplePositionsEnable = true; return *this; }
-    constexpr RasterState& disableProgrammableSamplePositions()noexcept{ programmableSamplePositionsEnable = false; return *this; }
-    constexpr RasterState& setConservativeRasterEnable(bool value)noexcept{ conservativeRasterEnable = value; return *this; }
-    constexpr RasterState& enableConservativeRaster()noexcept{ conservativeRasterEnable = true; return *this; }
-    constexpr RasterState& disableConservativeRaster()noexcept{ conservativeRasterEnable = false; return *this; }
-    constexpr RasterState& setQuadFillEnable(bool value)noexcept{ quadFillEnable = value; return *this; }
-    constexpr RasterState& enableQuadFill()noexcept{ quadFillEnable = true; return *this; }
-    constexpr RasterState& disableQuadFill()noexcept{ quadFillEnable = false; return *this; }
-    constexpr RasterState& setSamplePositions(const i8* x, const i8* y, usize count)noexcept{
-        if(!x || !y)
-            return *this;
-        const usize samplePositionCount = count < s_MaxProgrammableSamplePositions ? count : s_MaxProgrammableSamplePositions;
-        for(usize i = 0u; i < samplePositionCount; ++i){
-            samplePositionsX[i] = x[i];
-            samplePositionsY[i] = y[i];
-        }
-        return *this;
-    }
 };
 
 

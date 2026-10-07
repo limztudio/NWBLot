@@ -16,18 +16,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Test-only caustic path override.
-#ifndef NWB_CAUSTIC_DEBUG_FORCE_GREY
-#define NWB_CAUSTIC_DEBUG_FORCE_GREY 0
-#endif
-
 // Engine-owned scene-light transport limits. Keep these tunables here rather than in binding_slots.h: the latter is
 // included by C++ as well, while these values intentionally use Slang half/half3 expressions. Project BXDFs own
 // BRDF and tone-map policy.
-#ifndef NWB_SCENE_CAUSTIC_DEBUG_IRRADIANCE
-#define NWB_SCENE_CAUSTIC_DEBUG_IRRADIANCE half3(0.15h, 0.15h, 0.15h)
-#endif
-
 #ifndef NWB_SCENE_LIGHT_RADIANCE_COLOR_MAX
 #define NWB_SCENE_LIGHT_RADIANCE_COLOR_MAX 1.5h
 #endif
@@ -66,9 +57,7 @@ half3 nwbBxdfLightTransmittance(int2 pixel, uint lightIndex){
 
 // Black is the additive caustic no-op; negative pixels bypass opaque-G-buffer sampling.
 half3 nwbBxdfCausticIrradiance(int2 pixel){
-#if NWB_CAUSTIC_DEBUG_FORCE_GREY
-    return NWB_SCENE_CAUSTIC_DEBUG_IRRADIANCE;
-#elif defined(NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED)
+#if defined(NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED)
     return half3(0.0h, 0.0h, 0.0h);
 #else
     if(pixel.x < 0)

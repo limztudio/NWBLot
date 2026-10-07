@@ -574,7 +574,13 @@ bool Server::internalUpdate(){
         Core::Common::NameSymbols::DecodeHashTokens(BaseType::arena(), formattedMessage);
 
         Frame::Print(formattedMessage, type);
-        m_processedMessageFile.writeLine(formattedMessage);
+        if(!m_processedMessageFile.writeLine(formattedMessage)){
+            constexpr TStringView s_WriteFailure = GLB_TEXT("Log server: failed to write processed message to file.");
+            Frame::Print(s_WriteFailure, Type::Error);
+#if defined(GLB_PLATFORM_WINDOWS)
+            GLB_TCERR << s_WriteFailure << static_cast<tchar>('\n');
+#endif
+        }
     }
 
     return true;

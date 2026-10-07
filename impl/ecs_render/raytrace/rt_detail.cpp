@@ -130,7 +130,7 @@ u32 BuildSceneBvhNode(
     const u32 hi,
     const SceneBvhPrimitiveCalculation* primitiveBounds,
     Vector<SceneBvhNodeCalculation, Core::Alloc::ScratchArena>& nodes,
-    const u32* instanceLeafCost
+    const NotNull<const u32*> instanceLeafCost
 ){
     const u32 nodeIndex = static_cast<u32>(nodes.size());
     nodes.push_back(SceneBvhNodeCalculation{});
@@ -146,12 +146,7 @@ u32 BuildSceneBvhNode(
         return nodeIndex;
     }
 
-    // Per-instance leaf cost: primitive count in production, uniform (1) in the self-test path. Uniform cost is
-    // the uniform-cost TLAS model where every instance intersection costs the same; the production weight is what makes
-    // SAH at TLAS scale meaningful (a 100k-triangle instance should bias the tree like a large primitive).
-    auto leafCostOf = [instanceLeafCost](const u32 instance) -> f32 {
-        return instanceLeafCost ? static_cast<f32>(instanceLeafCost[instance]) : 1.0f;
-    };
+    // Primitive counts weight scene-level SAH so high-cost instances influence partitioning.
 
     // Bounding centroid extent over the slice: the per-axis extent picks which axes are binable (a zero extent
     // axis cannot separate any instances and is skipped).
@@ -198,7 +193,7 @@ u32 BuildSceneBvhNode(
                 b = s_SceneBvhSahBinCount - 1u;
             binMin[b] = VectorMin(binMin[b], primitiveBounds[instance].aabbMin);
             binMax[b] = VectorMax(binMax[b], primitiveBounds[instance].aabbMax);
-            binCost[b] += leafCostOf(instance);
+            binCost[b] += static_cast<f32>(instanceLeafCost.get()[instance]);
             ++binCount[b];
         }
 

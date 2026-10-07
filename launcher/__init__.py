@@ -36,10 +36,6 @@ from launcher.dispatch import DispatchRouter  # noqa: F401
 from launcher.cli import LauncherCli  # noqa: F401
 from launcher import repository_windows_process  # noqa: F401
 
-from launcher.models import LaunchSettings  # noqa: F401
-from launcher.models import CMakeTargetInfo  # noqa: F401
-from launcher.models import RepoLauncher  # noqa: F401
-from launcher.models import ProfileSession  # noqa: F401
 from launcher.cmake_settings import repo_root  # noqa: F401
 from launcher.discovery import launch_command_from_directory  # noqa: F401
 from launcher.discovery import validate_launch_command  # noqa: F401
@@ -86,7 +82,6 @@ from launcher.build import resolve_executable_path  # noqa: F401
 from launcher.build import resolve_working_directory  # noqa: F401
 from launcher.cmake_settings import resolve_path  # noqa: F401
 from launcher.build import build_environment  # noqa: F401
-from launcher.build import normalize_application_args  # noqa: F401
 from launcher.process import stop_existing_process  # noqa: F401
 from launcher.process import validate_launch_paths  # noqa: F401
 from launcher.process import terminate_process  # noqa: F401
@@ -239,6 +234,7 @@ __all__ = [
     'STOP_KIND_GRACEFUL',
     'PKILL_COMMAND',
     'PKILL_FOLLOW_FLAG',
+    'PKILL_STDERR_MAX_BYTES',
     'GPUDBG_FLAG',
     'PROFILE_CLIENT_ADDRESS_FLAG',
     'PROFILE_CLIENT_PORT_FLAG',
@@ -266,6 +262,7 @@ __all__ = [
     'MSG_EXECUTABLE_METADATA_REQUIRED',
     'MSG_EXECUTABLE_ARTIFACT_REQUIRED',
     'MSG_NO_PKILL',
+    'MSG_PKILL_FAILED',
     'MSG_MISSING_EXECUTABLE',
     'MSG_MISSING_WORKDIR',
     'MSG_PORT_BUSY',
@@ -415,7 +412,6 @@ __all__ = [
     'resolve_working_directory',
     'resolve_path',
     'build_environment',
-    'normalize_application_args',
     'stop_existing_process',
     'validate_launch_paths',
     'terminate_process',

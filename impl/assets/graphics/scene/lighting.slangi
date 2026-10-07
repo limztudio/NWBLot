@@ -16,9 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Engine-owned scene-light transport limits. Keep these tunables here rather than in binding_slots.h: the latter is
-// included by C++ as well, while these values intentionally use Slang half/half3 expressions. Project BXDFs own
-// BRDF and tone-map policy.
+// Engine-owned scene-light transport limits. Keep these tunables here rather than in binding_slots.h: the latter is included by C++ as well, while these values intentionally use Slang half/half3 expressions. Project BXDFs own BRDF and tone-map policy.
 #ifndef NWB_SCENE_LIGHT_RADIANCE_COLOR_MAX
 #define NWB_SCENE_LIGHT_RADIANCE_COLOR_MAX 1.5h
 #endif
@@ -72,8 +70,7 @@ half3 nwbBxdfCausticIrradiance(int2 pixel){
 
 
 void nwbSceneResolveLight(NwbSceneLight light, float3 worldPosition, out float3 lightVector, out half3 radiance){
-    const half3 baseRadiance = clamp(half3(light.colorIntensity.xyz), half3(0.0h), half3(NWB_SCENE_LIGHT_RADIANCE_COLOR_MAX))
-        * clamp(half(light.colorIntensity.w), half(0.0h), half(NWB_SCENE_LIGHT_RADIANCE_INTENSITY_MAX));
+    const half3 baseRadiance = clamp(half3(light.colorIntensity.xyz), half3(0.0h), half3(NWB_SCENE_LIGHT_RADIANCE_COLOR_MAX))  * clamp(half(light.colorIntensity.w), half(0.0h), half(NWB_SCENE_LIGHT_RADIANCE_INTENSITY_MAX));
     // Light-type tag selects the branch only; the discriminant constants (0.5/1.5) are exactly representable in half.
     const half lightType = half(light.params.y);
 

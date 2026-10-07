@@ -26,8 +26,7 @@ static const uint NWB_REFLECTION_ROUGH_OBSERVATION = 1u << 7u;
 static const uint NWB_REFLECTION_ATTEMPT_OBSERVATION = 1u << 14u;
 static const uint NWB_REFLECTION_RETURN_OBSERVATION = 1u << 21u;
 
-// Shared integer operations do not require optional subgroup ballot or 64-bit atomic support. Screen work packs
-// iterations in 16 bits (at most 128*256), then limit misses and bypassed pixels in 8 bits each (at most 128 each).
+// Shared integer operations do not require optional subgroup ballot or 64-bit atomic support. Screen work packs iterations in 16 bits (at most 128*256), then limit misses and bypassed pixels in 8 bits each (at most 128 each).
 groupshared uint g_NwbReflectionCandidateMasks[4];
 groupshared uint g_NwbReflectionCandidateBase;
 groupshared uint g_NwbReflectionObservations[2];
@@ -42,36 +41,23 @@ struct NwbReflectionFeedbackTile{
 
 NwbReflectionFeedbackTile nwbReflectionLoadFeedbackTile(const uint2 pixel, const bool glass){
     NwbReflectionFeedbackTile tile = (NwbReflectionFeedbackTile)0;
-    if(
-        !nwbReflectionFeedbackWriting()
-        || (g_NwbReflectionParameters.feedbackFlags & NWB_REFLECTION_FEEDBACK_PREVIOUS_VALID) == 0u
-    )
+    if(!nwbReflectionFeedbackWriting() || (g_NwbReflectionParameters.feedbackFlags & NWB_REFLECTION_FEEDBACK_PREVIOUS_VALID) == 0u)
         return tile;
-    const uint tilesX = (g_NwbReflectionParameters.dimensionsAndRoute.x + NWB_REFLECTION_FEEDBACK_GROUP_SIZE - 1u)
-        / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
-    const uint tilesY = (g_NwbReflectionParameters.dimensionsAndRoute.y + NWB_REFLECTION_FEEDBACK_GROUP_SIZE - 1u)
-        / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
-    // The CPU declares this previous-bank read only for a compatible accepted observation. Check the published
-    // header before accessing tile entries; invalid selectors are never touched when the frame flag is absent.
+    const uint tilesX = (g_NwbReflectionParameters.dimensionsAndRoute.x + NWB_REFLECTION_FEEDBACK_GROUP_SIZE - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
+    const uint tilesY = (g_NwbReflectionParameters.dimensionsAndRoute.y + NWB_REFLECTION_FEEDBACK_GROUP_SIZE - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
+    // The CPU declares this previous-bank read only for a compatible accepted observation. Check the published header before accessing tile entries; invalid selectors are never touched when the frame flag is absent.
     const uint4 header = nwbHeapRawBuffer(g_NwbReflectionParameters.feedbackReadSlot).Load4(0u);
-    if(
-        (header.w & NWB_REFLECTION_FEEDBACK_HEADER_VALID) == 0u || header.z != tilesX * tilesY
-        || header.y != g_NwbReflectionParameters.feedbackProbeIndex - 1u
-    )
+    if((header.w & NWB_REFLECTION_FEEDBACK_HEADER_VALID) == 0u || header.z != tilesX * tilesY || header.y != g_NwbReflectionParameters.feedbackProbeIndex - 1u)
         return tile;
-    const uint tileIndex = (pixel.y / NWB_REFLECTION_FEEDBACK_GROUP_SIZE) * tilesX
-        + pixel.x / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
+    const uint tileIndex = (pixel.y / NWB_REFLECTION_FEEDBACK_GROUP_SIZE) * tilesX + pixel.x / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
     const uint entryIndex = tileIndex * NWB_REFLECTION_FEEDBACK_SURFACE_COUNT + (glass ? 1u : 0u);
-    const uint entry = nwbHeapRawBuffer(g_NwbReflectionParameters.feedbackReadSlot).Load(
-        NWB_REFLECTION_FEEDBACK_HEADER_BYTES + entryIndex * NWB_REFLECTION_FEEDBACK_ENTRY_BYTES
-    );
+    const uint entry = nwbHeapRawBuffer(g_NwbReflectionParameters.feedbackReadSlot).Load(NWB_REFLECTION_FEEDBACK_HEADER_BYTES + entryIndex * NWB_REFLECTION_FEEDBACK_ENTRY_BYTES);
     if(entry > NWB_REFLECTION_FEEDBACK_DORMANT)
         return tile;
     tile.state = entry;
     tile.previousValid = true;
     const uint budget = min(g_NwbReflectionParameters.maxHardwareRays, g_NwbReflectionParameters.queueCapacity);
-    // Reserving groups can arrive in a different order when SSR is skipped. Every potential receiver must fit,
-    // including other rough pixels whose current VNDF sample may differ from the last accepted frame.
+    // Reserving groups can arrive in a different order when SSR is skipped. Every potential receiver must fit, including other rough pixels whose current VNDF sample may differ from the last accepted frame.
     if(entry == NWB_REFLECTION_FEEDBACK_DORMANT && header.x <= budget){
         const uint phase = nwbReflectionSamplingHash(entryIndex) & (NWB_REFLECTION_FEEDBACK_PROBE_PERIOD - 1u);
         tile.probe = (g_NwbReflectionParameters.feedbackProbeIndex & (NWB_REFLECTION_FEEDBACK_PROBE_PERIOD - 1u)) == phase;
@@ -102,7 +88,8 @@ bool nwbReflectionClassifySurface(
     const NwbReflectionFeedbackTile tile,
     out float4 result,
     out uint observations,
-    out uint screenWork){
+    out uint screenWork
+){
     result = float4(0.0);
     observations = 0u;
     screenWork = 0u;
@@ -118,9 +105,7 @@ bool nwbReflectionClassifySurface(
     }
     if(!valid)
         return false;
-    nwbReflectionRecordDiagnostic(
-        glass ? NWB_REFLECTION_COUNTER_GLASS_PIXELS : NWB_REFLECTION_COUNTER_OPAQUE_PIXELS, 1u
-    );
+    nwbReflectionRecordDiagnostic(glass ? NWB_REFLECTION_COUNTER_GLASS_PIXELS : NWB_REFLECTION_COUNTER_OPAQUE_PIXELS, 1u);
     if(!any(surface.weight > half3(0.0h))){
         // Below-horizon VNDF samples remain true zeros, but still contributed to stable eligibility above.
         result.a = 1.0;
@@ -128,8 +113,7 @@ bool nwbReflectionClassifySurface(
     }
     const half3 environment = nwbReflectionEnvironment(surface.direction);
     result = float4(float3(surface.weight * environment), 1.0);
-    const bool screen = g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_SCREEN
-        || g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HYBRID;
+    const bool screen = g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_SCREEN || g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HYBRID;
     if(screen && stableTraceEligible){
         if(tile.bypass && surface.roughness == 0.0)
             screenWork = 1u << 24u;
@@ -144,8 +128,7 @@ bool nwbReflectionClassifySurface(
             screenWork = iterations | (limited ? 1u << 16u : 0u);
             if(returned){
                 observations |= NWB_REFLECTION_RETURN_OBSERVATION;
-                // Even provisional low-confidence radiance keeps the tile active. Hardware replaces it only
-                // through the ordinary fallback route; feedback never drops a useful screen return.
+                // Even provisional low-confidence radiance keeps the tile active. Hardware replaces it only through the ordinary fallback route; feedback never drops a useful screen return.
                 // Weighted blend is half color math: weight/environment/radiance/confidence all fit FP16.
                 // Widen only at the float4 store and the float threshold compare.
                 result = float4(float3(half3(surface.weight) * lerp(half3(environment), radiance, confidence)), 2.0 + 0.5 * float(confidence));
@@ -157,9 +140,7 @@ bool nwbReflectionClassifySurface(
         }
     }
     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_FALLBACK_PIXELS, 1u);
-    const bool hardware = g_NwbReflectionParameters.dimensionsAndRoute.w != 0u
-        && (g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HARDWARE
-            || g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HYBRID);
+    const bool hardware = g_NwbReflectionParameters.dimensionsAndRoute.w != 0u && (g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HARDWARE || g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HYBRID);
     return hardware && stableTraceEligible;
 }
 
@@ -170,9 +151,7 @@ bool nwbReflectionClassifySurface(
 [numthreads(NWB_REFLECTION_CLASSIFY_GROUP_SIZE, NWB_REFLECTION_CLASSIFY_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex){
     const uint2 pixel = dispatchThreadId.xy;
-    const bool hardware = g_NwbReflectionParameters.dimensionsAndRoute.w != 0u
-        && (g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HARDWARE
-            || g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HYBRID);
+    const bool hardware = g_NwbReflectionParameters.dimensionsAndRoute.w != 0u && (g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HARDWARE || g_NwbReflectionParameters.dimensionsAndRoute.z == NWB_REFLECTION_MODE_HYBRID);
     const bool diagnostics = g_NwbReflectionParameters.diagnosticsEnabled != 0u;
     const bool feedbackWrites = nwbReflectionFeedbackWriting();
     const bool observe = diagnostics || feedbackWrites;
@@ -225,8 +204,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint groupIndex : SV_Gro
         GroupMemoryBarrierWithGroupSync();
         if(groupIndex == 0u){
             if(hardware){
-                const uint candidates = countbits(g_NwbReflectionCandidateMasks[0]) + countbits(g_NwbReflectionCandidateMasks[1])
-                    + countbits(g_NwbReflectionCandidateMasks[2]) + countbits(g_NwbReflectionCandidateMasks[3]);
+                const uint candidates = countbits(g_NwbReflectionCandidateMasks[0]) + countbits(g_NwbReflectionCandidateMasks[1]) + countbits(g_NwbReflectionCandidateMasks[2]) + countbits(g_NwbReflectionCandidateMasks[3]);
                 g_NwbReflectionCandidateBase = 0u;
                 if(candidates != 0u){
                     uint firstCandidate;
@@ -244,17 +222,11 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint groupIndex : SV_Gro
                 }
                 nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_SCREEN_RETURNS, (opaque >> 21u) + (glass >> 21u));
                 if(feedbackWrites){
-                    const uint tilesX = (g_NwbReflectionParameters.dimensionsAndRoute.x + NWB_REFLECTION_FEEDBACK_GROUP_SIZE - 1u)
-                        / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
-                    const uint tileIndex = (pixel.y / NWB_REFLECTION_FEEDBACK_GROUP_SIZE) * tilesX
-                        + pixel.x / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
-                    const uint byteOffset = NWB_REFLECTION_FEEDBACK_HEADER_BYTES
-                        + tileIndex * NWB_REFLECTION_FEEDBACK_SURFACE_COUNT * NWB_REFLECTION_FEEDBACK_ENTRY_BYTES;
-                    g_NwbHeapStorageBuffers[g_NwbReflectionParameters.feedbackWriteSlot].Store2(byteOffset, uint2(
-                        nwbReflectionNextFeedbackState(opaqueTile, opaque), nwbReflectionNextFeedbackState(glassTile, glass)
-                    ));
-                    const uint probes = (opaqueTile.probe && ((opaque >> 14u) & 127u) != 0u ? 1u : 0u)
-                        + (glassTile.probe && ((glass >> 14u) & 127u) != 0u ? 1u : 0u);
+                    const uint tilesX = (g_NwbReflectionParameters.dimensionsAndRoute.x + NWB_REFLECTION_FEEDBACK_GROUP_SIZE - 1u) / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
+                    const uint tileIndex = (pixel.y / NWB_REFLECTION_FEEDBACK_GROUP_SIZE) * tilesX + pixel.x / NWB_REFLECTION_FEEDBACK_GROUP_SIZE;
+                    const uint byteOffset = NWB_REFLECTION_FEEDBACK_HEADER_BYTES + tileIndex * NWB_REFLECTION_FEEDBACK_SURFACE_COUNT * NWB_REFLECTION_FEEDBACK_ENTRY_BYTES;
+                    g_NwbHeapStorageBuffers[g_NwbReflectionParameters.feedbackWriteSlot].Store2(byteOffset, uint2(nwbReflectionNextFeedbackState(opaqueTile, opaque), nwbReflectionNextFeedbackState(glassTile, glass)));
+                    const uint probes = (opaqueTile.probe && ((opaque >> 14u) & 127u) != 0u ? 1u : 0u) + (glassTile.probe && ((glass >> 14u) & 127u) != 0u ? 1u : 0u);
                     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_FEEDBACK_PROBE_TILES, probes);
                 }
             }
@@ -276,20 +248,20 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID, uint groupIndex : SV_Gro
             const uint precedingBits = bit - 1u;
             const uint budget = min(g_NwbReflectionParameters.maxHardwareRays, g_NwbReflectionParameters.queueCapacity);
             if(opaqueCandidate){
-                const uint prefix = countbits(g_NwbReflectionCandidateMasks[maskIndex] & precedingBits)
-                    + (maskIndex == 0u ? 0u : countbits(g_NwbReflectionCandidateMasks[0]));
+                const uint prefix = countbits(g_NwbReflectionCandidateMasks[maskIndex] & precedingBits) + (maskIndex == 0u ? 0u : countbits(g_NwbReflectionCandidateMasks[0]));
                 const uint queueIndex = g_NwbReflectionCandidateBase + prefix;
                 if(queueIndex < budget)
                     g_NwbReflectionQueue.Store(queueIndex * 4u, pixel.y * g_NwbReflectionParameters.dimensionsAndRoute.x + pixel.x);
             }
             if(glassCandidate){
-                const uint prefix = countbits(g_NwbReflectionCandidateMasks[0]) + countbits(g_NwbReflectionCandidateMasks[1])
+                const uint prefix = countbits(g_NwbReflectionCandidateMasks[0])
+                    + countbits(g_NwbReflectionCandidateMasks[1])
                     + countbits(g_NwbReflectionCandidateMasks[maskIndex + 2u] & precedingBits)
-                    + (maskIndex == 0u ? 0u : countbits(g_NwbReflectionCandidateMasks[2]));
+                    + (maskIndex == 0u ? 0u : countbits(g_NwbReflectionCandidateMasks[2]))
+                ;
                 const uint queueIndex = g_NwbReflectionCandidateBase + prefix;
                 if(queueIndex < budget){
-                    const uint packedPixel = pixel.y * g_NwbReflectionParameters.dimensionsAndRoute.x + pixel.x
-                        + g_NwbReflectionParameters.dimensionsAndRoute.x * g_NwbReflectionParameters.dimensionsAndRoute.y;
+                    const uint packedPixel = pixel.y * g_NwbReflectionParameters.dimensionsAndRoute.x + pixel.x + g_NwbReflectionParameters.dimensionsAndRoute.x * g_NwbReflectionParameters.dimensionsAndRoute.y;
                     g_NwbReflectionQueue.Store(queueIndex * 4u, packedPixel);
                 }
             }

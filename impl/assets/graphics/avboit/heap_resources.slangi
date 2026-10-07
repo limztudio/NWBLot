@@ -9,9 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The including AVBOIT common header supplies the push-constant expression that selects the shared deferred slot
-// payload. That payload, in turn, names the five work-buffer StorageBuffer entries and writable transmittance
-// StorageImage entry in the global heap.
+// The including AVBOIT common header supplies the push-constant expression that selects the shared deferred slot payload. That payload, in turn, names the five work-buffer StorageBuffer entries and writable transmittance StorageImage entry in the global heap.
 #ifndef NWB_AVBOIT_DEFERRED_SLOTS_DESCRIPTOR_SLOT
 #error "NWB_AVBOIT_DEFERRED_SLOTS_DESCRIPTOR_SLOT must select the deferred slot-payload descriptor before including avboit/heap_resources.slangi"
 #endif
@@ -22,12 +20,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES \
-    g_NwbHeapDeferredBindlessResources[NWB_AVBOIT_DEFERRED_SLOTS_DESCRIPTOR_SLOT]
+#define NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES g_NwbHeapDeferredBindlessResources[NWB_AVBOIT_DEFERRED_SLOTS_DESCRIPTOR_SLOT]
 
-// A StorageBuffer descriptor carries no fixed structured stride or read/write qualifier.  These typed views share
-// the global StorageBuffer table declared by bindless_heap.slangi, while making AVBOIT's uint work-buffer accesses
-// explicit at each call site.
+// A StorageBuffer descriptor carries no fixed structured stride or read/write qualifier. These typed views share the global StorageBuffer table declared by bindless_heap.slangi, while making AVBOIT's uint work-buffer accesses explicit at each call site.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed read/write aliases of the global StorageBuffer descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]

@@ -8,8 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Every work buffer is selected from the global StorageBuffer heap through the shared target-generation slot
-// payload. Keep the established names below so the warp algorithm remains readable.
+// Every work buffer is selected from the global StorageBuffer heap through the shared target-generation slot payload. Keep the established names below so the warp algorithm remains readable.
 #define g_CoverageWords nwbAvboitCoverageWords()
 #define g_DepthWarp nwbAvboitDepthWarpUav()
 #define g_Control nwbAvboitControlUav()
@@ -47,7 +46,8 @@ bool nwbAvboitCoarseBinOccupied(
     uint coarseBin,
     uint compressionShift,
     inout uint cachedWordIndex,
-    inout uint cachedCoverageWord){
+    inout uint cachedCoverageWord
+){
     const uint beginSlice = coarseBin << compressionShift;
     if(compressionShift <= NWB_AVBOIT_COVERAGE_WORD_SHIFT){
         const uint wordIndex = beginSlice >> NWB_AVBOIT_COVERAGE_WORD_SHIFT;

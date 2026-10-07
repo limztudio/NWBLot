@@ -24,8 +24,7 @@ struct NwbBvhNode{
     uint rightChild;
 };
 
-// Per-dispatch constants shared by the LBVH build kernels (Morton, topology, fit). aabbMin/aabbMax are the
-// mesh object-space bounds used to quantize triangle centroids into Morton codes.
+// Per-dispatch constants shared by the LBVH build kernels (Morton, topology, fit). aabbMin/aabbMax are the mesh object-space bounds used to quantize triangle centroids into Morton codes.
 struct NwbBvhBuildPushConstants{
     uint primitiveCount;
     uint internalCount;
@@ -55,8 +54,7 @@ uint nwbBvhLeafPrimitive(const NwbBvhNode node){
     return node.leftChild & ~NWB_BVH_LEAF_FLAG;
 }
 
-// Preserve the all-bits invalid sentinel while stripping the CPU scene-BVH transparent-subtree tag from a valid
-// right-child link. Per-mesh GPU BVHs never set the tag, so this is also their identity decode.
+// Preserve the all-bits invalid sentinel while stripping the CPU scene-BVH transparent-subtree tag from a valid right-child link. Per-mesh GPU BVHs never set the tag, so this is also their identity decode.
 uint nwbBvhNodeRightChildIndex(const NwbBvhNode node){
     return node.rightChild == NWB_BVH_INVALID
         ? NWB_BVH_INVALID

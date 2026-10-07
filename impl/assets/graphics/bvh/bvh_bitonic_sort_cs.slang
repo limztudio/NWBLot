@@ -59,11 +59,7 @@ groupshared uint g_tilePayload[NWB_BVH_SORT_GROUP_SIZE];
 
 
 [numthreads(NWB_BVH_SORT_GROUP_SIZE, 1, 1)]
-void main(
-    uint3 dispatchThreadID : SV_DispatchThreadID,
-    uint3 groupID : SV_GroupID,
-    uint3 groupThreadID : SV_GroupThreadID
-){
+void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     const uint mode = g_NwbBvhBitonicSortPushConstants.mode;
 
     if(mode == NWB_BVH_SORT_MODE_GLOBAL){

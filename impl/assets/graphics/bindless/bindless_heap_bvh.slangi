@@ -10,13 +10,8 @@
 
 
 // Global descriptor heap - structured BVH-node view over the StorageBuffer class.
-//
-// Software per-mesh node buffers are read as StructuredBuffer<NwbBvhNode>; other geometry uses raw
-// ByteAddressBuffer (bindless_heap.slangi). This alias is separate so only node-traversing passes include
-// NwbBvhNode / bvh_common, keeping hardware shadow, caustic, and GI include graphs BVH-free.
-//
-// Same set/binding as the raw arrays (one Vulkan descriptor; 32-byte stride is per-view decoration): node buffers
-// need no second registration.
+// Software per-mesh node buffers are read as StructuredBuffer<NwbBvhNode>; other geometry uses raw ByteAddressBuffer (bindless_heap.slangi). This alias is separate so only node-traversing passes include NwbBvhNode / bvh_common, keeping hardware shadow, caustic, and GI include graphs BVH-free.
+// Same set/binding as the raw arrays (one Vulkan descriptor; 32-byte stride is per-view decoration): node buffers need no second registration.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,9 +34,7 @@ StructuredBuffer<NwbBvhNode> g_NwbHeapBvhNodeBuffers[];
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Slot accessor for the structured node view. Like nwbHeapRawBuffer(), the varying per-mesh slot is wrapped in
-// NonUniformResourceIndex() here so every SW node fetch decorates identically. Returns the buffer by value (an opaque
-// handle) so the caller subscripts by node index.
+// Slot accessor for the structured node view. Like nwbHeapRawBuffer(), the varying per-mesh slot is wrapped in NonUniformResourceIndex() here so every SW node fetch decorates identically. Returns the buffer by value (an opaque handle) so the caller subscripts by node index.
 StructuredBuffer<NwbBvhNode> nwbHeapBvhNodes(const uint slot){
     return g_NwbHeapBvhNodeBuffers[NonUniformResourceIndex(slot)];
 }

@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// AVBOIT-occupancy authoring: engine owns entry + coverage math; alpha comes from the shared surface hook
-// (surface.renderCoverage), so all passes agree. Minimal alpha-only context (no scene/lighting/BXDF).
+// AVBOIT-occupancy authoring: engine owns entry + coverage math; alpha comes from the shared surface hook (surface.renderCoverage), so all passes agree. Minimal alpha-only context (no scene/lighting/BXDF).
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

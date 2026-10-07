@@ -18,8 +18,7 @@
 #define NWB_MESH_MATERIAL_CONTEXT_PROVIDED
 
 #include "common.slangi"
-// This alias resolves the target-generation payload through the UniformBuffer heap slot carried by the AVBOIT draw
-// push constants.
+// This alias resolves the target-generation payload through the UniformBuffer heap slot carried by the AVBOIT draw push constants.
 #define g_NwbDeferredBindlessResources NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES
 #include "../mesh/gbuffer_io.slangi"
 #include "material_context_authoring.slangi"

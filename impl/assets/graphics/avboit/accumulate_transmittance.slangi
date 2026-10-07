@@ -31,11 +31,7 @@ float nwbAvboitPhysicalSliceFromVirtualSampleSlice(float sampleSlice){
 half nwbAvboitLinearBiasedTransmittance(float2 fragCoord, float depth){
     const uint virtualSliceCount = nwbAvboitVirtualSliceCount();
     const float virtualSliceMax = max(float(virtualSliceCount) - 1.0, 0.0);
-    const float sampleSlice = clamp(
-        depth * float(virtualSliceCount) - nwbAvboitSelfOcclusionSliceBias(),
-        0.0,
-        virtualSliceMax
-    );
+    const float sampleSlice = clamp(depth * float(virtualSliceCount) - nwbAvboitSelfOcclusionSliceBias(), 0.0, virtualSliceMax);
     const float physicalSlice = nwbAvboitPhysicalSliceFromVirtualSampleSlice(sampleSlice);
     const float physicalSliceUv = (physicalSlice + 0.5) / max(float(nwbAvboitPhysicalSliceCount()), 1.0);
     return half(nwbAvboitTransmittanceTexture().Sample(

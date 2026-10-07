@@ -10,7 +10,6 @@
 
 
 // Global descriptor heap - shader accessor surface.
-//
 // One unbounded array per resource class at the set/binding in binding_slots.h; aliased views share one binding with different SPIR-V access/stride.
 // A slot varying across a wave needs NonUniformResourceIndex() at the subscript (single-invocation tests exempt).
 // TLAS is a dedicated fixed descriptor-buffer set; commands record the handle block offset so retired descriptors stay immutable until drain.
@@ -21,9 +20,7 @@
 
 #include "binding_slots.h"
 
-// Most shaders include the heap for buffer/sampler access but do not access a TLAS. Give those variants an explicit
-// disabled value: Slang evaluates the right side of `defined(...) && ...` and emits
-// a warning for an undefined identifier, even though the expression ultimately evaluates to false.
+// Most shaders include the heap for buffer/sampler access but do not access a TLAS. Give those variants an explicit disabled value: Slang evaluates the right side of `defined(...) && ...` and emits a warning for an undefined identifier, even though the expression ultimately evaluates to false.
 #ifndef NWB_BINDLESS_TLAS
 #define NWB_BINDLESS_TLAS 0
 #endif
@@ -32,8 +29,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Element type of the uniform-buffer (CBV) heap array. A CBV is at least a 16-byte float4 lane; the payload is the
-// leading uint, the rest pads the constant-buffer row.
+// Element type of the uniform-buffer (CBV) heap array. A CBV is at least a 16-byte float4 lane; the payload is the leading uint, the rest pads the constant-buffer row.
 struct NwbBindlessHeapUint{
     uint value;
     uint3 _pad;
@@ -46,26 +42,22 @@ struct NwbBindlessHeapUint{
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 Texture2D<float4> g_NwbHeapSampledImages[];
 
-// Texture2DArray requires a distinct shader declaration from Texture2D even though both are Vulkan sampled-image
-// descriptors. It therefore owns a separate binding/class while sharing the resource-slot namespace.
+// Texture2DArray requires a distinct shader declaration from Texture2D even though both are Vulkan sampled-image descriptors. It therefore owns a separate binding/class while sharing the resource-slot namespace.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 Texture2DArray<float4> g_NwbHeapSampledImage2DArrays[];
 
-// Texture3D needs another sampled-image binding because Slang's resource type determines the SPIR-V image view
-// dimension. It shares the global resource-slot namespace with the other non-sampler classes.
+// Texture3D needs another sampled-image binding because Slang's resource type determines the SPIR-V image view dimension. It shares the global resource-slot namespace with the other non-sampler classes.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_3D, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 Texture3D<float4> g_NwbHeapSampledImage3Ds[];
 
-// TextureCube likewise needs its own declaration and descriptor binding: a cube image view cannot be addressed
-// through the Texture2D table even though both are sampled-image descriptors in Vulkan.
+// TextureCube likewise needs its own declaration and descriptor binding: a cube image view cannot be addressed through the Texture2D table even though both are sampled-image descriptors in Vulkan.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_CUBE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 TextureCube<float4> g_NwbHeapSampledImageCubes[];
 
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 RWTexture2D<float4> g_NwbHeapStorageImages[];
 
-// The caustic accumulator is a 2DArray<uint>, while a few scalar storage passes use 2D uint images.  Keep typed
-// aliases at the same StorageImage binding so all writable images share one descriptor class/table.
+// The caustic accumulator is a 2DArray<uint>, while a few scalar storage passes use 2D uint images. Keep typed aliases at the same StorageImage binding so all writable images share one descriptor class/table.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed aliases of the StorageImage descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
@@ -117,14 +109,12 @@ RaytracingAccelerationStructure g_NwbHeapAccelStruct;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Read-only raw slot accessor; centralizes NonUniformResourceIndex (per-mesh slots vary across a wave). Returns
-// the buffer by value for caller-offset loads.
+// Read-only raw slot accessor; centralizes NonUniformResourceIndex (per-mesh slots vary across a wave). Returns the buffer by value for caller-offset loads.
 ByteAddressBuffer nwbHeapRawBuffer(const uint slot){
     return g_NwbHeapRawBuffers[NonUniformResourceIndex(slot)];
 }
 
-// Deferred/compositor resource-slot buffers are constant across their fullscreen draw. Keep these indices uniform:
-// unlike per-mesh fetches they do not require sampler/image non-uniform-indexing capability on the portability path.
+// Deferred/compositor resource-slot buffers are constant across their fullscreen draw. Keep these indices uniform: unlike per-mesh fetches they do not require sampler/image non-uniform-indexing capability on the portability path.
 Texture2D<float4> nwbHeapSampledImage2D(const uint slot){
     return g_NwbHeapSampledImages[slot];
 }
@@ -146,8 +136,7 @@ TextureCube<float4> nwbHeapSampledImageCube(const uint slot){
     return g_NwbHeapSampledImageCubes[slot];
 }
 
-// CSG's slot cbuffer is uniform per draw/dispatch, so these array lookups remain uniform like the fullscreen image
-// helpers above. Per-invocation storage-image indexing requires NonUniformResourceIndex.
+// CSG's slot cbuffer is uniform per draw/dispatch, so these array lookups remain uniform like the fullscreen image helpers above. Per-invocation storage-image indexing requires NonUniformResourceIndex.
 RWTexture2DArray<float4> nwbHeapStorageImage2DArrayFloat4(const uint slot){
     return g_NwbHeapStorageImage2DArrayFloat4s[slot];
 }

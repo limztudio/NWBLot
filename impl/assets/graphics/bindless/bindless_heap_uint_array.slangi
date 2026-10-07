@@ -9,9 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Typed uint image-array view over the global descriptor heap. Keep this opt-in: ordinary material shaders do not
-// need the R32_UINT table, and declaring it only in consumers avoids compiling unused typed image arrays into every
-// raster pipeline.
+// Typed uint image-array view over the global descriptor heap. Keep this opt-in: ordinary material shaders do not need the R32_UINT table, and declaring it only in consumers avoids compiling unused typed image arrays into every raster pipeline.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -23,9 +21,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// This deliberately has its own descriptor table instead of aliasing Texture2DArray<float4> at binding 5. Vulkan
-// image descriptors are format-agnostic, but distinct shader image types at one binding are not portable through
-// driver pipeline compilers.
+// This deliberately has its own descriptor table instead of aliasing Texture2DArray<float4> at binding 5. Vulkan image descriptors are format-agnostic, but distinct shader image types at one binding are not portable through driver pipeline compilers.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_SAMPLED_IMAGE_2D_ARRAY_UINT, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 Texture2DArray<uint> g_NwbHeapSampledImage2DArrayUints[];
 

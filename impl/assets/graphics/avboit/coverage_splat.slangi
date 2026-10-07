@@ -10,10 +10,7 @@
 
 
 void nwbAvboitMarkCoverageSlice(uint virtualSlice){
-    InterlockedOr(
-        nwbAvboitCoverageWordsUav()[virtualSlice >> NWB_AVBOIT_COVERAGE_WORD_SHIFT],
-        1u << (virtualSlice & NWB_AVBOIT_COVERAGE_BIT_MASK)
-    );
+    InterlockedOr(nwbAvboitCoverageWordsUav()[virtualSlice >> NWB_AVBOIT_COVERAGE_WORD_SHIFT], 1u << (virtualSlice & NWB_AVBOIT_COVERAGE_BIT_MASK));
 }
 
 void nwbAvboitMarkCoverageFromDepth(float depth){

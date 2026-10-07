@@ -14,6 +14,35 @@ from window_capture_smoke import LinuxXEvent, SmokeFailure
 
 
 class TextAreaNativeInput(NumericEditNativeInput):
+    def focus_click(self, x, y, *, deadline):
+        """Keep the physical cursor at the caret until posted release retires."""
+        if not self.windows:
+            # XSendEvent preserves release/motion order without moving the physical cursor.
+            self.click(x, y)
+            return
+        click_deadline = min(deadline, time.monotonic() + 2.0)
+        self.pointer(x, y)
+        self._wait_for_capture(None, click_deadline, "before press")
+        self.button(True, x, y)
+        try:
+            self._wait_for_capture(self.handle, click_deadline, "press")
+        finally:
+            self.button(False, x, y)
+        self._wait_for_capture(None, click_deadline, "release")
+
+    def _wait_for_capture(self, expected_owner, deadline, phase):
+        while True:
+            self.maintain_pointer()
+            observed_owner = self.capture_owner()
+            if observed_owner == expected_owner:
+                return
+            remaining = deadline - time.monotonic()
+            if remaining <= 0.0:
+                raise SmokeFailure(f"TextArea focus click {phase} did not acknowledge capture: "
+                    f"expected owner {expected_owner!r}, observed {observed_owner!r}, "
+                    f"fixture {self.handle:#x}, native window {self.observe_window()}")
+            time.sleep(min(0.01, remaining))
+
     def text_down_text(self, first, last):
         """Preserve native event order without an intermediate display wait."""
         self.text(first, settle=False)

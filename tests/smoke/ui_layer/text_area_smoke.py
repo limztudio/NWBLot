@@ -54,7 +54,7 @@ class TextAreaRun:
         cx, cy, cw, ch = self.snapshot["rectangles"]["content"]
         target = (min(max(x + width * 0.5, cx + 1.0), cx + cw - 1.0),
             min(max(y + height * 0.5, cy + 1.0), cy + ch - 1.0))
-        self.native.click(*self.point(*target))
+        self.native.focus_click(*self.point(*target), deadline=self.deadline)
         self.native.pointer(*self.point(28.0, 394.0))
         self.checkpoint(stage, focus=1, anchor=self.snapshot["caret"], preferred_valid=0, preferred_bits=0)
 

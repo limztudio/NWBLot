@@ -21,7 +21,7 @@ SMOKE_DIRECTORY = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 
 from window_capture_smoke import (  # noqa: E402
-    LinuxXEvent, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip,
+    LinuxXEvent, SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, WinRect,
     build_launch_environment, collect_log_delta, create_capture_backend, ensure_process_running,
     launch_logserver, launch_testbed, read_bmp_24_rows, require_normal_process_exit,
     shutdown_logserver_and_collect, terminate_process, validate_expected_log_text,
@@ -61,6 +61,15 @@ class WinInputUnion(ctypes.Union):
 
 class WinInput(ctypes.Structure):
     _fields_ = [("type", ctypes.c_uint32), ("data", WinInputUnion)]
+
+
+class WinGuiThreadInfo(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", ctypes.c_uint32), ("flags", ctypes.c_uint32),
+        ("hwndActive", ctypes.c_void_p), ("hwndFocus", ctypes.c_void_p), ("hwndCapture", ctypes.c_void_p),
+        ("hwndMenuOwner", ctypes.c_void_p), ("hwndMoveSize", ctypes.c_void_p), ("hwndCaret", ctypes.c_void_p),
+        ("rcCaret", WinRect),
+    ]
 
 
 def parse_args(argv, *, description=__doc__):
@@ -126,6 +135,18 @@ class NativeInput:
             backend.user32.GetForegroundWindow.restype = ctypes.c_void_p
             backend.user32.SendInput.argtypes = [ctypes.c_uint32, ctypes.POINTER(WinInput), ctypes.c_int]
             backend.user32.SendInput.restype = ctypes.c_uint32
+            backend.user32.GetWindowThreadProcessId.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+            backend.user32.GetWindowThreadProcessId.restype = ctypes.c_uint32
+            backend.user32.GetGUIThreadInfo.argtypes = [ctypes.c_uint32, ctypes.POINTER(WinGuiThreadInfo)]
+            backend.user32.GetGUIThreadInfo.restype = ctypes.c_int
+
+    def capture_owner(self):
+        thread_id = self.backend.user32.GetWindowThreadProcessId(ctypes.c_void_p(self.handle), None)
+        info = WinGuiThreadInfo(cbSize=ctypes.sizeof(WinGuiThreadInfo))
+        if not thread_id or not self.backend.user32.GetGUIThreadInfo(thread_id, ctypes.byref(info)):
+            raise SmokeFailure(f"failed to observe capture for window {self.handle:#x}, "
+                f"thread {thread_id}: Win32 error {ctypes.get_last_error()}")
+        return info.hwndCapture
 
     def _post(self, message, parameter=0, data=0):
         if not self.backend.user32.PostMessageW(ctypes.c_void_p(self.handle), message, parameter, data):

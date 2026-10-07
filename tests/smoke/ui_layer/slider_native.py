@@ -5,7 +5,7 @@ import ctypes
 import time
 
 from guarded_native import GuardedNativeInput
-from window_capture_smoke import SmokeFailure, WinRect
+from window_capture_smoke import SmokeFailure
 
 
 COMMAND_KEYS = {
@@ -18,15 +18,6 @@ COMMAND_KEYS = {
 }
 
 
-class SliderGuiThreadInfo(ctypes.Structure):
-    _fields_ = [
-        ("cbSize", ctypes.c_uint32), ("flags", ctypes.c_uint32),
-        ("hwndActive", ctypes.c_void_p), ("hwndFocus", ctypes.c_void_p), ("hwndCapture", ctypes.c_void_p),
-        ("hwndMenuOwner", ctypes.c_void_p), ("hwndMoveSize", ctypes.c_void_p), ("hwndCaret", ctypes.c_void_p),
-        ("rcCaret", WinRect),
-    ]
-
-
 class SliderNativeInput(GuardedNativeInput):
     def __init__(self, backend, handle):
         super().__init__(backend, handle)
@@ -35,8 +26,6 @@ class SliderNativeInput(GuardedNativeInput):
         if self.windows:
             backend.user32.ScreenToClient.argtypes = [ctypes.c_void_p, ctypes.POINTER(backend.POINT)]
             backend.user32.ScreenToClient.restype = ctypes.c_int
-            backend.user32.GetGUIThreadInfo.argtypes = [ctypes.c_uint32, ctypes.POINTER(SliderGuiThreadInfo)]
-            backend.user32.GetGUIThreadInfo.restype = ctypes.c_int
 
     def record(self, action, **details):
         observation = {"time": round(time.monotonic() - self.trace_started, 6), "action": action,
@@ -82,11 +71,7 @@ class SliderNativeInput(GuardedNativeInput):
             if not self.backend.user32.ScreenToClient(ctypes.c_void_p(self.handle), ctypes.byref(observed)):
                 raise SmokeFailure("failed to observe the slider cursor client position")
             observation["cursor_client"] = [observed.x, observed.y]
-        thread_id = self.backend.user32.GetWindowThreadProcessId(ctypes.c_void_p(self.handle), None)
-        info = SliderGuiThreadInfo(cbSize=ctypes.sizeof(SliderGuiThreadInfo))
-        if not thread_id or not self.backend.user32.GetGUIThreadInfo(thread_id, ctypes.byref(info)):
-            raise SmokeFailure("failed to observe the slider window thread capture")
-        observation["capture_is_fixture"] = info.hwndCapture == self.handle
+        observation["capture_is_fixture"] = self.capture_owner() == self.handle
         return observation
 
     def command(self, name):

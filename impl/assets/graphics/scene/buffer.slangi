@@ -24,8 +24,7 @@ struct NwbSceneShadingBuffer{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Scene shading and the light list are renderer-global heap resources. Every consumer provides the two uniform
-// heap-slot expressions before including this header; local scene descriptor bindings are intentionally unsupported.
+// Scene shading and the light list are renderer-global heap resources. Every consumer provides the two uniform heap-slot expressions before including this header; local scene descriptor bindings are intentionally unsupported.
 #if !defined(NWB_SCENE_SHADING_HEAP_SLOT) || !defined(NWB_SCENE_LIGHT_LIST_HEAP_SLOT)
 #error "Renderer scene buffers require shading and light-list heap slots"
 #endif
@@ -43,8 +42,7 @@ struct NwbSceneLight{
     float4 colorIntensity;
     // x = range, y = light type, z = shadow slot (negative = none), w = caustic slot (negative = none).
     float4 params;
-    // Soft-shadow source size: x = directional angular radius (radians, cone half-angle), y = punctual source
-    // radius (world units, emissive sphere). z/w reserved. The shadow trace jitters the ray over this source.
+    // Soft-shadow source size: x = directional angular radius (radians, cone half-angle), y = punctual source radius (world units, emissive sphere). z/w reserved. The shadow trace jitters the ray over this source.
     float4 params2;
 };
 

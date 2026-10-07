@@ -38,11 +38,11 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     const bool splitOpaqueSoftResolve,
     const GraphOwnedAdaptiveShadowPlan* const graphOwnedAdaptivePlan,
     const LightSpaceShadowSnapshot* const lightSpace){
-    GLB_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
+    NWB_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
     if(!targets.shadowVisibility)
         return false;
-    GLB_ASSERT(targets.bindless.valid());
-    GLB_ASSERT(deferredLightingResources.valid());
+    NWB_ASSERT(targets.bindless.valid());
+    NWB_ASSERT(deferredLightingResources.valid());
     if(!m_rayTracingState.m_sceneBvhNodeBuffer || m_rayTracingState.m_sceneBvhInstanceCount == 0u)
         return false;
     if(!m_rayTracingState.m_swShadowOpaquePrepassPipeline || m_rayTracingState.m_swShadowMeshCount == 0u)
@@ -62,7 +62,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_swShadowEdgeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_swShadowIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: software-shadow heap resources are incomplete"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software-shadow heap resources are incomplete"));
         return false;
     }
 
@@ -167,7 +167,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                 ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP
                 : NWB_SW_SHADOW_SOFT_SPP;
             if(lightSpace && lightSpace->ready){
-                GLB_ASSERT(splitSoftTransparentFold);
+                NWB_ASSERT(splitSoftTransparentFold);
                 if(!RecordLightSpaceResolve(
                     commandList, heap, m_graphics.gpuTiming(), *lightSpace, *targets.shadowSoftHalfA, frameIndex, softTracePush.softSampleCount,
                     targets.bindless.shadowSoftHalfAStorage.slot(), false
@@ -175,13 +175,13 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                     return false;
                 if((lightSpace->push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u && !m_lightSpaceShadow.m_csgDispatchLogged){
                     m_lightSpaceShadow.m_csgDispatchLogged = true;
-                    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("RendererSystem: dispatched CSG light-space shadows (hardware_compose=0, {} instances)")
+                    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched CSG light-space shadows (hardware_compose=0, {} instances)")
                         , static_cast<u64>(lightSpace->push.instanceCount)
                     );
                 }
                 if(!m_lightSpaceShadow.m_dispatchLogged){
                     m_lightSpaceShadow.m_dispatchLogged = true;
-                    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("RendererSystem: dispatched light-space shadow maps"));
+                    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched light-space shadow maps"));
                 }
             }
             else{

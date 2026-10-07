@@ -13,7 +13,7 @@
 
 template<typename ArenaT>
 [[nodiscard]] inline u64 FileSize(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
     WIN32_FILE_ATTRIBUTE_DATA data = {};
     if(!GetFileAttributesEx(path.c_str(), GetFileExInfoStandard, &data)){
         GlobalFilesystemDetail::SetLastSystemError(outError);

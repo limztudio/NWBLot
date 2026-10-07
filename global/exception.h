@@ -14,7 +14,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE i32 UncaughtExceptionCount()noexcept{
+[[nodiscard]] NWB_INLINE i32 UncaughtExceptionCount()noexcept{
     return std::uncaught_exceptions();
 }
 

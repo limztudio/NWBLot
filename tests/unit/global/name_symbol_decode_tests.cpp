@@ -101,7 +101,7 @@ TEST(NameSymbolDecodeTests, UnknownAndBoundaryNarrowTokensDoNotAllocate){
     __hidden_name_symbol_decode_tests::VerifyUnknownAndBoundaryTokens<char>();
 }
 
-#if defined(GLB_UNICODE)
+#if defined(NWB_UNICODE)
 TEST(NameSymbolDecodeTests, UnknownAndBoundaryWideTokensDoNotAllocate){
     __hidden_name_symbol_decode_tests::VerifyUnknownAndBoundaryTokens<wchar>();
 }
@@ -111,7 +111,7 @@ TEST(NameSymbolDecodeTests, ResolvesNarrowSpansWithoutChangingUnresolvedText){
     __hidden_name_symbol_decode_tests::VerifyResolvedSpans<char>();
 }
 
-#if defined(GLB_UNICODE)
+#if defined(NWB_UNICODE)
 TEST(NameSymbolDecodeTests, ResolvesWideSpansWithoutChangingUnresolvedText){
     __hidden_name_symbol_decode_tests::VerifyResolvedSpans<wchar>();
 }

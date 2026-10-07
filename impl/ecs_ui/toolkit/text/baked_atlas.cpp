@@ -28,7 +28,7 @@ static Atomic<u64> s_NextIdentity{ 1u };
 
 [[nodiscard]] static u64 NewIdentity(){
     const u64 identity = s_NextIdentity.fetch_add(1u, MemoryOrder::relaxed);
-    GLB_FATAL_ASSERT_MSG(identity != 0u, GLB_TEXT("Baked font atlas identity overflow"));
+    NWB_FATAL_ASSERT_MSG(identity != 0u, NWB_TEXT("Baked font atlas identity overflow"));
     return identity;
 }
 
@@ -66,7 +66,7 @@ const FontAtlasGlyph* BakedFontAtlas::glyph(u32 glyphId)const noexcept{
 }
 
 const SharedSdfAtlasPage& BakedFontAtlas::page(u32 group)const{
-    GLB_FATAL_ASSERT(group < m_pages.size());
+    NWB_FATAL_ASSERT(group < m_pages.size());
     return m_pages[group];
 }
 

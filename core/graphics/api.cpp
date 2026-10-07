@@ -197,7 +197,7 @@ static constexpr FormatInfo s_FormatInfo[Format::kCount] = {
 };
 
 const FormatInfo& GetFormatInfo(Format::Enum format)noexcept{
-    GLB_ASSERT_MSG(static_cast<usize>(format) < static_cast<usize>(Format::kCount), GLB_TEXT("Format::Enum out of range"));
+    NWB_ASSERT_MSG(static_cast<usize>(format) < static_cast<usize>(Format::kCount), NWB_TEXT("Format::Enum out of range"));
     if(static_cast<usize>(format) >= static_cast<usize>(Format::kCount))
         return s_FormatInfo[static_cast<u32>(Format::UNKNOWN)];
 
@@ -326,7 +326,7 @@ bool GetTextureUploadAspectLayout(
 
 
 TextureSlice TextureSlice::resolve(const TextureDesc& desc)const{
-    GLB_ASSERT(mipLevel < desc.mipLevels);
+    NWB_ASSERT(mipLevel < desc.mipLevels);
     const MipLevel resolvedMipLevel = (desc.mipLevels > 0 && mipLevel < desc.mipLevels) ? mipLevel : 0;
 
     const u32 mipWidth = Max(desc.width >> resolvedMipLevel, static_cast<u32>(1));
@@ -456,7 +456,7 @@ bool BlendState::RenderTarget::usesConstantColor()const noexcept{
 }
 
 bool BlendState::usesConstantColor(u32 numTargets)const{
-    GLB_ASSERT(numTargets <= s_MaxRenderTargets);
+    NWB_ASSERT(numTargets <= s_MaxRenderTargets);
     for(u32 rt = 0u; rt < numTargets; ++rt){
         if(targets[rt].usesConstantColor())
             return true;
@@ -570,7 +570,7 @@ usize GetCooperativeVectorDataTypeSize(CooperativeVectorDataType::Enum type){
     case CooperativeVectorDataType::Float64:
         return 8;
     }
-    GLB_FATAL_ASSERT_MSG(false, GLB_TEXT("Unknown CooperativeVectorDataType::Enum value"));
+    NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Unknown CooperativeVectorDataType::Enum value"));
     return 0;
 }
 

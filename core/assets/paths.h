@@ -64,7 +64,7 @@ struct RelativeAssetPathLayout{
             continue;
         if(
             GlobalFilesystemPathDetail::IsDotDot(component)
-            || component.find_first_of(Path::native_string_view{ GLB_TEXT("/\\"), 2u }) != Path::native_string_view::npos
+            || component.find_first_of(Path::native_string_view{ NWB_TEXT("/\\"), 2u }) != Path::native_string_view::npos
         ){
             layout.acceptedEnd = componentIt;
             layout.byteCount = counter.byteCount;
@@ -95,7 +95,7 @@ inline void WriteRelativeAssetPathText(
         BasicStringDetail::WriteConvertedText<char>(cursor, component);
         hasComponent = true;
     }
-    GLB_ASSERT(static_cast<usize>(cursor - output.get()) == layout.byteCount);
+    NWB_ASSERT(static_cast<usize>(cursor - output.get()) == layout.byteCount);
     for(char* character = output.get(); character != cursor; ++character)
         *character = Canonicalize(*character);
 }
@@ -136,7 +136,7 @@ template<typename StringT>
 
     const Path relativePath = sourceOrMetaPath.lexicallyRelative(assetRoot);
     if(relativePath.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Assets: failed to derive asset path from '{}' relative to asset root '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("Assets: failed to derive asset path from '{}' relative to asset root '{}'")
             , PathToString<tchar>(sourceOrMetaPath)
             , PathToString<tchar>(assetRoot)
         );
@@ -148,7 +148,7 @@ template<typename StringT>
 
     const RelativeAssetPathLayout layout = MeasureRelativeAssetPathText(logicalPath);
     if(!layout.accepted){
-        NWB_LOGGER_ERROR(GLB_TEXT("Assets: asset '{}' is not under asset root '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("Assets: asset '{}' is not under asset root '{}'")
             , PathToString<tchar>(sourceOrMetaPath)
             , PathToString<tchar>(assetRoot)
         );
@@ -159,7 +159,7 @@ template<typename StringT>
         virtualRoot.size() > Limit<usize>::s_Max - 1u
         || layout.byteCount > Limit<usize>::s_Max - virtualRoot.size() - 1u
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("Assets: derived asset virtual path size overflows for '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("Assets: derived asset virtual path size overflows for '{}'")
             , PathToString<tchar>(sourceOrMetaPath)
         );
         return false;
@@ -168,7 +168,7 @@ template<typename StringT>
     const usize virtualPathSize = virtualRoot.size() + 1u + layout.byteCount;
     outVirtualPath.resize(virtualPathSize);
     if(!virtualRoot.empty())
-        GLB_MEMCPY(outVirtualPath.data(), virtualPathSize, virtualRoot.data(), virtualRoot.size());
+        NWB_MEMCPY(outVirtualPath.data(), virtualPathSize, virtualRoot.data(), virtualRoot.size());
     outVirtualPath[virtualRoot.size()] = '/';
     WriteRelativeAssetPathText(logicalPath, layout, MakeNotNull(outVirtualPath.data() + virtualRoot.size() + 1u));
     return true;
@@ -204,7 +204,7 @@ template<typename StringT>
 
     outVirtualPath = Name(AStringView(virtualPathText));
     if(!outVirtualPath){
-        NWB_LOGGER_ERROR(GLB_TEXT("Assets: failed to derive asset name from '{}'"), PathToString<tchar>(sourceOrMetaPath));
+        NWB_LOGGER_ERROR(NWB_TEXT("Assets: failed to derive asset name from '{}'"), PathToString<tchar>(sourceOrMetaPath));
         return false;
     }
 
@@ -263,7 +263,7 @@ template<typename AssetRootVector>
             AString<Alloc::ScratchArena> componentText = PathToString(scratchArena, *componentIt);
             CanonicalizeTextInPlace(componentText);
             if(componentText.empty() || componentText == "." || componentText == ".." || componentText.find('/') != AString<Alloc::ScratchArena>::npos){
-                NWB_LOGGER_ERROR(GLB_TEXT("Assets: invalid virtual path '{}'; components must not be empty, '.', '..' or contain path separators")
+                NWB_LOGGER_ERROR(NWB_TEXT("Assets: invalid virtual path '{}'; components must not be empty, '.', '..' or contain path separators")
                     , StringConvert(virtualPath)
                 );
                 outResolvedPath.clear();
@@ -286,7 +286,7 @@ template<typename StringT>
 
     const Path parentDirectory = nwbFilePath.parentPath();
     if(parentDirectory.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': failed to resolve paired source because the metadata directory is empty")
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to resolve paired source because the metadata directory is empty")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -295,7 +295,7 @@ template<typename StringT>
     auto nwbStem = PathToString(arena, nwbFilePath.stem());
     CanonicalizeTextInPlace(nwbStem);
     if(nwbStem.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': failed to resolve paired source because the metadata filename stem is empty")
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to resolve paired source because the metadata filename stem is empty")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -305,7 +305,7 @@ template<typename StringT>
     Path matchedSourcePath(arena);
     usize matchCount = 0;
     const auto logDirectoryScanError = [&](){
-        NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': failed to scan metadata directory '{}': {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to scan metadata directory '{}': {}")
             , PathToString<tchar>(nwbFilePath)
             , PathToString<tchar>(parentDirectory)
             , StringConvert(errorCode.message())
@@ -320,7 +320,7 @@ template<typename StringT>
         errorCode.clear();
         const bool isRegularFile = dirEntry.isRegularFile(errorCode);
         if(errorCode){
-            NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': failed to inspect '{}' while resolving paired source: {}")
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to inspect '{}' while resolving paired source: {}")
                 , PathToString<tchar>(nwbFilePath)
                 , PathToString<tchar>(dirEntry.path())
                 , StringConvert(errorCode.message())
@@ -343,7 +343,7 @@ template<typename StringT>
         matchedSourcePath = candidatePath.lexicallyNormal();
         ++matchCount;
         if(matchCount > 1){
-            NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': paired source is ambiguous; multiple source files share stem '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': paired source is ambiguous; multiple source files share stem '{}'")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(nwbStem)
             );
@@ -357,7 +357,7 @@ template<typename StringT>
     }
 
     if(matchCount == 0){
-        NWB_LOGGER_ERROR(GLB_TEXT("Meta '{}': failed to find a paired source file with stem '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': failed to find a paired source file with stem '{}'")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(nwbStem)
         );
@@ -393,7 +393,7 @@ template<typename MetadataValue, typename IsAllowedField>
         if(isAllowedField(fieldNameText))
             continue;
 
-        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': unsupported asset field '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': unsupported asset field '{}'")
             , StringConvert(diagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldNameText)
@@ -439,7 +439,7 @@ template<typename MetadataValue>
         if(!required)
             return true;
 
-        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' is required")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required")
             , StringConvert(diagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -449,7 +449,7 @@ template<typename MetadataValue>
     if(outPresent)
         *outPresent = true;
     if(!fieldValue->isString()){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' must be a string")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a string")
             , StringConvert(diagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -460,7 +460,7 @@ template<typename MetadataValue>
     const auto text = fieldValue->asString();
     outText = AStringView(text.data(), text.size());
     if(required && outText.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' must not be empty")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must not be empty")
             , StringConvert(diagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -500,7 +500,7 @@ template<typename MetadataValue>
         return true;
 
     if(!value.isNumeric()){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' must be numeric")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be numeric")
             , StringConvert(diagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -508,7 +508,7 @@ template<typename MetadataValue>
         return false;
     }
 
-    NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' is outside the supported float range")
+    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is outside the supported float range")
         , StringConvert(diagnosticPrefix)
         , PathToString<tchar>(nwbFilePath)
         , StringConvert(fieldName)
@@ -531,7 +531,7 @@ template<typename MetadataValue>
         if(!required)
             return true;
 
-        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' is required")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required")
             , StringConvert(diagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -558,7 +558,7 @@ template<typename MetadataValue>
     if(!present)
         return true;
     if(!outValue.assign(text)){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' exceeds ACompactString capacity")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' exceeds ACompactString capacity")
             , StringConvert(diagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -589,7 +589,7 @@ template<typename MetadataValue>
 
     outName = Name(text);
     if(required && !outName){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' must not be empty")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must not be empty")
             , StringConvert(diagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -652,7 +652,7 @@ template<typename SourceStringT, typename MetadataDocument, typename ParseDocume
     ParseDocument&& parseDoc
 ){
     if(!ReadTextFile(filePath, ioText)){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': failed to read source text")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': failed to read source text")
             , StringConvert(diagnosticPrefix)
             , PathToString<tchar>(filePath)
         );
@@ -662,7 +662,7 @@ template<typename SourceStringT, typename MetadataDocument, typename ParseDocume
 
     if(!parseDoc(AStringView(ioText))){
         for(const auto& err : outDoc.errors()){
-            NWB_LOGGER_ERROR(GLB_TEXT("{} '{}' parse error at {}:{}: {}")
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}' parse error at {}:{}: {}")
                 , StringConvert(diagnosticPrefix)
                 , PathToString<tchar>(filePath)
                 , err.line
@@ -689,7 +689,7 @@ template<typename ScratchArenaT, typename SourceStringT>
     if(AStringView(extension) == expectedExtension)
         return true;
 
-    NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': paired source '{}' must use '{}' extension")
+    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': paired source '{}' must use '{}' extension")
         , StringConvert(diagnosticPrefix)
         , PathToString<tchar>(nwbFilePath)
         , StringConvert(sourcePath)
@@ -709,7 +709,7 @@ template<typename MetadataValue>
     if(fieldValue && fieldValue->isList())
         return fieldValue;
 
-    NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' must be a list")
+    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a list")
         , StringConvert(diagnosticPrefix)
         , PathToString<tchar>(nwbFilePath)
         , StringConvert(fieldName)
@@ -728,7 +728,7 @@ template<typename CookEntryT>
     if(outEntry.virtualPath)
         return true;
 
-    NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': virtual path must not be empty")
+    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': virtual path must not be empty")
         , StringConvert(diagnosticPrefix)
         , PathToString<tchar>(nwbFilePath)
     );
@@ -744,7 +744,7 @@ template<typename MetadataValue>
     if(asset.isMap())
         return true;
 
-    NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': asset is not a map")
+    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset is not a map")
         , StringConvert(diagnosticPrefix)
         , PathToString<tchar>(nwbFilePath)
     );
@@ -760,7 +760,7 @@ template<typename MetadataDocument, typename MetadataValue>
     const auto assetVariable = doc.assetVariable();
     const auto* asset = doc.findVariable(assetVariable);
     if(!asset){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': asset variable '{}' has no assignments")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': asset variable '{}' has no assignments")
             , StringConvert(diagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(AStringView(assetVariable.data(), assetVariable.size()))
@@ -792,7 +792,7 @@ template<typename NamedEnumT, typename MetadataValue>
     if(ParseNamedEnumText<NamedEnumT>(text, outValue, cases, caseCount))
         return true;
 
-    NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' {}")
+    NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' {}")
         , StringConvert(diagnosticPrefix)
         , PathToString<tchar>(nwbFilePath)
         , StringConvert(fieldName)

@@ -9,13 +9,13 @@
 
 #include <cstdlib>
 
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
 #include <global/blocking_io.h>
-#if defined(_MSC_VER) && defined(GLB_DEBUG)
+#if defined(_MSC_VER) && defined(NWB_DEBUG)
 #include <crtdbg.h>
 #endif
 #include <windows.h>
-#elif defined(GLB_PLATFORM_LINUX)
+#elif defined(NWB_PLATFORM_LINUX)
 #include <global/blocking_io.h>
 #include <signal.h>
 #endif
@@ -61,9 +61,9 @@ static Detail::CrashAck MakeAck(const Detail::CrashRequest& request, const bool 
 }
 
 static void SilenceProcess()noexcept{
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
     SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX | SEM_NOOPENFILEERRORBOX);
-#if defined(_MSC_VER) && defined(GLB_DEBUG)
+#if defined(_MSC_VER) && defined(NWB_DEBUG)
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
     _CrtSetReportMode(_CRT_WARN, 0);
     _CrtSetReportMode(_CRT_ERROR, 0);
@@ -71,7 +71,7 @@ static void SilenceProcess()noexcept{
 #endif
     if(HWND consoleWindow = GetConsoleWindow())
         ShowWindow(consoleWindow, SW_HIDE);
-#elif defined(GLB_PLATFORM_LINUX)
+#elif defined(NWB_PLATFORM_LINUX)
     signal(SIGPIPE, SIG_IGN);
 #endif
 }
@@ -90,7 +90,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
     __hidden_crash_handler::SilenceProcess();
     Detail::InitializeDumpArena();
 
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
     HANDLE requestReadHandle = INVALID_HANDLE_VALUE;
     HANDLE ackWriteHandle = INVALID_HANDLE_VALUE;
     HANDLE ackEvent = nullptr;
@@ -130,7 +130,7 @@ int RunCrashHandlerProcess(const isize argc, tchar** argv){
     }
 
     return __hidden_crash_handler::s_ProcessSuccessExitCode;
-#elif defined(GLB_PLATFORM_LINUX)
+#elif defined(NWB_PLATFORM_LINUX)
     int requestReadFd = -1;
     int ackWriteFd = -1;
     for(isize i = 1; i + 1 < argc; ++i){

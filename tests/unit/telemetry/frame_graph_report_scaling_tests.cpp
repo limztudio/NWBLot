@@ -297,7 +297,7 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
         testArena.arena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, original
     ));
     Telemetry::EncodedFrameGraphPayloadHeader header;
-    GLB_MEMCPY(&header, sizeof(header), original.data(), sizeof(header));
+    NWB_MEMCPY(&header, sizeof(header), original.data(), sizeof(header));
     ASSERT_EQ(header.queueAssignmentCount, 0u);
     ASSERT_EQ(header.compiledTaskCount, 0u);
     ASSERT_EQ(header.edgeCount, 0u);
@@ -314,26 +314,26 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
 
     Telemetry::TelemetryBytes malformed(original);
     Telemetry::EncodedFrameGraphPacketSubmissionStatistics packet;
-    GLB_MEMCPY(&packet, sizeof(packet), malformed.data() + packetOffset, sizeof(packet));
+    NWB_MEMCPY(&packet, sizeof(packet), malformed.data() + packetOffset, sizeof(packet));
     packet.ownerNodeIndex = header.nodeCount;
-    GLB_MEMCPY(malformed.data() + packetOffset, malformed.size() - packetOffset, &packet, sizeof(packet));
+    NWB_MEMCPY(malformed.data() + packetOffset, malformed.size() - packetOffset, &packet, sizeof(packet));
     ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 918u, malformed.data(), malformed.size(), 1u));
 
     malformed = original;
     Telemetry::EncodedFrameGraphPacketSubmissionStatistics nextPacket;
-    GLB_MEMCPY(&packet, sizeof(packet), original.data() + packetOffset, sizeof(packet));
-    GLB_MEMCPY(&nextPacket, sizeof(nextPacket), original.data() + packetOffset + sizeof(packet), sizeof(nextPacket));
-    GLB_MEMCPY(malformed.data() + packetOffset, malformed.size() - packetOffset, &nextPacket, sizeof(nextPacket));
-    GLB_MEMCPY(malformed.data() + packetOffset + sizeof(packet), sizeof(packet), &packet, sizeof(packet));
+    NWB_MEMCPY(&packet, sizeof(packet), original.data() + packetOffset, sizeof(packet));
+    NWB_MEMCPY(&nextPacket, sizeof(nextPacket), original.data() + packetOffset + sizeof(packet), sizeof(nextPacket));
+    NWB_MEMCPY(malformed.data() + packetOffset, malformed.size() - packetOffset, &nextPacket, sizeof(nextPacket));
+    NWB_MEMCPY(malformed.data() + packetOffset + sizeof(packet), sizeof(packet), &packet, sizeof(packet));
     ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 918u, malformed.data(), malformed.size(), s_ExpectedDualCount));
 
     malformed = original;
     Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics queue;
     Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics nextQueue;
-    GLB_MEMCPY(&queue, sizeof(queue), original.data() + queueOffset, sizeof(queue));
-    GLB_MEMCPY(&nextQueue, sizeof(nextQueue), original.data() + queueOffset + sizeof(queue), sizeof(nextQueue));
-    GLB_MEMCPY(malformed.data() + queueOffset, malformed.size() - queueOffset, &nextQueue, sizeof(nextQueue));
-    GLB_MEMCPY(malformed.data() + queueOffset + sizeof(queue), sizeof(queue), &queue, sizeof(queue));
+    NWB_MEMCPY(&queue, sizeof(queue), original.data() + queueOffset, sizeof(queue));
+    NWB_MEMCPY(&nextQueue, sizeof(nextQueue), original.data() + queueOffset + sizeof(queue), sizeof(nextQueue));
+    NWB_MEMCPY(malformed.data() + queueOffset, malformed.size() - queueOffset, &nextQueue, sizeof(nextQueue));
+    NWB_MEMCPY(malformed.data() + queueOffset + sizeof(queue), sizeof(queue), &queue, sizeof(queue));
     ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 918u, malformed.data(), malformed.size(), 3u));
     ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 918u, original.data(), original.size(), 4u));
 

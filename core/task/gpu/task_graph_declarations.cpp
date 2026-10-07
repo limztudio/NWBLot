@@ -34,7 +34,7 @@ u64 GpuTaskGraph::AllocateGeneration()noexcept{
     u64 nextGeneration = s_NextGeneration.load(MemoryOrder::relaxed);
     for(;;){
         if(nextGeneration == 0u || nextGeneration == Limit<u64>::s_Max){
-            GLB_FATAL_ASSERT_MSG(false, "GPU task graph generation identity space is exhausted");
+            NWB_FATAL_ASSERT_MSG(false, "GPU task graph generation identity space is exhausted");
             TerminateInvariant();
         }
         if(s_NextGeneration.compare_exchange_weak(
@@ -100,7 +100,7 @@ GpuTaskGraph::~GpuTaskGraph()noexcept(false){
             resetCompletion.activateWithinLock();
         }
     }
-    GLB_FATAL_ASSERT_MSG(teardownValid, "GpuTaskGraph destruction requires in-flight task work to resolve first");
+    NWB_FATAL_ASSERT_MSG(teardownValid, "GpuTaskGraph destruction requires in-flight task work to resolve first");
     if(!teardownValid)
         TerminateInvariant();
 
@@ -109,7 +109,7 @@ GpuTaskGraph::~GpuTaskGraph()noexcept(false){
         : destroyTaskPayloads()
     ;
     if(!taskPayloadsDestroyed){
-        GLB_FATAL_ASSERT_MSG(false, "GpuTaskGraph destruction requires in-flight task work to resolve first");
+        NWB_FATAL_ASSERT_MSG(false, "GpuTaskGraph destruction requires in-flight task work to resolve first");
         TerminateInvariant();
     }
     resetCompletion.complete();

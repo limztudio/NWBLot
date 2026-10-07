@@ -80,7 +80,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
         MaterialPassDrawItemPartitions transparentCsgDrawItems{ transparentCsgUploadScratch };
         InstanceGpuDataVector transparentCsgInstanceData{ transparentCsgUploadScratch };
         CsgFrameGpuData transparentCsgFrameData{ transparentCsgUploadScratch };
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
         ECSRenderDetail::MaterialTypedInstanceRangeVector transparentCsgMaterialTypedRanges{ transparentCsgUploadScratch };
 #endif
         MaterialTypedByteDataVector transparentCsgMaterialTypedBytes{ transparentCsgUploadScratch };
@@ -92,7 +92,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
             transparentCsgDrawItems,
             transparentCsgInstanceData,
             transparentCsgFrameData,
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
             transparentCsgMaterialTypedRanges,
 #endif
             transparentCsgMaterialTypedBytes,
@@ -118,7 +118,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
                     (*inputs.frameBindings)
                 )
             ){
-                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: prepared transparent CSG interval resources were unavailable during graph declaration"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared transparent CSG interval resources were unavailable during graph declaration"));
                 return false;
             }
 
@@ -135,7 +135,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
                 transparentCsgMaterialGeometrySet
             );
             if(!avboitPrePayload.transparentCsgMaterialGeometryStatesGraphOwned){
-                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare prepared transparent CSG material geometry states"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared transparent CSG material geometry states"));
                 return false;
             }
             const bool transparentCsgMaterialSampledTexturesCollected =
@@ -152,21 +152,21 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
                 )
             ;
             if(!transparentCsgMaterialSampledTexturesCollected){
-                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare prepared transparent CSG material sampled textures"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared transparent CSG material sampled textures"));
                 return false;
             }
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(transparentCsgInstanceData, (*inputs.csgResources));
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
             if(
                 transparentCsgInstanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
                 || transparentCsgFrameData.receiverRanges.size() > Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData)
                 || transparentCsgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
             ){
-                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: transparent CSG interval upload size overflows graph blob capacity"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: transparent CSG interval upload size overflows graph blob capacity"));
                 return false;
             }
-            GLB_ASSERT(transparentCsgInstanceData.size() == transparentCsgMaterialTypedRanges.size());
+            NWB_ASSERT(transparentCsgInstanceData.size() == transparentCsgMaterialTypedRanges.size());
             ECSRenderDetail::AssertMaterialTypedUploadRanges(
                 transparentCsgMaterialTypedRanges,
                 transparentCsgMaterialTypedBytes
@@ -191,7 +191,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
                     transparentCsgIntervalSampleStateData
                 )
             ){
-                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not snapshot transparent CSG interval auxiliary upload data"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot transparent CSG interval auxiliary upload data"));
                 return false;
             }
 
@@ -235,7 +235,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
                 || !transparentCsgClipContextSlotsBlob.valid()
                 || !transparentCsgIntervalSampleStateBlob.valid()
             ){
-                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not retain immutable transparent CSG interval upload data"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable transparent CSG interval upload data"));
                 return false;
             }
 
@@ -264,7 +264,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
                 }
             );
             if(!outResult.uploadTask.valid()){
-                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare transparent CSG material instance upload"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG material instance upload"));
                 return false;
             }
 
@@ -284,7 +284,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
                 }
             );
             if(!outResult.uploadTask.valid()){
-                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare transparent CSG material typed upload"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG material typed upload"));
                 return false;
             }
 
@@ -304,7 +304,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
                 }
             );
             if(!outResult.uploadTask.valid()){
-                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare transparent CSG receiver-range upload"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG receiver-range upload"));
                 return false;
             }
 
@@ -324,7 +324,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
                 }
             );
             if(!outResult.uploadTask.valid()){
-                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare transparent CSG cutter upload"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG cutter upload"));
                 return false;
             }
 
@@ -344,7 +344,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
                 }
             );
             if(!outResult.uploadTask.valid()){
-                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare transparent CSG clip-context upload"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG clip-context upload"));
                 return false;
             }
 
@@ -364,7 +364,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
                 }
             );
             if(!outResult.uploadTask.valid()){
-                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare transparent CSG interval-state upload"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG interval-state upload"));
                 return false;
             }
 
@@ -392,7 +392,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
                 || !receiverSpanPayload.transparentCsgSnapshot.captured
                 || !intervalCombinePayload.transparentCsgSnapshot.captured
             ){
-                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not capture transparent CSG interval graph snapshots"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not capture transparent CSG interval graph snapshots"));
                 return false;
             }
             intervalCombinePayload.csgFrameBuffersUploaded = true;
@@ -452,7 +452,7 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
                 }
             );
         if(!m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearFirstTask.valid()){
-            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare graph-owned transparent CSG interval-id clear"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned transparent CSG interval-id clear"));
             return false;
         }
         Core::GpuTaskSchedulingHint transparentCsgIntervalClearTailScheduling = transparentCsgIntervalClearScheduling;
@@ -475,11 +475,11 @@ TransparentCsgIntervalBuilder::TransparentCsgIntervalBuilder(
             }
         );
         if(!m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearTask.valid()){
-            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare graph-owned transparent CSG receiver-event clear"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned transparent CSG receiver-event clear"));
             return false;
         }
         outResult.uploadTask = m_avboitSystem.taskGraphStage().m_transparentCsgIntervalClearTask;
-        GLB_ASSERT(
+        NWB_ASSERT(
             avboitPrePayload.transparentCsgStreamsUploaded
             && avboitPrePayload.transparentCsgSnapshot.captured
         );

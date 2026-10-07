@@ -110,7 +110,7 @@ UiNestedPopupSmokeSource::UiNestedPopupSmokeSource(Core::Alloc::GlobalArena& are
     , m_view(*this)
 {
     const bool initialized = filter({});
-    GLB_FATAL_ASSERT(initialized);
+    NWB_FATAL_ASSERT(initialized);
 }
 
 bool UiNestedPopupSmokeSource::indexOf(const u64 keyValue, u64& index)const{

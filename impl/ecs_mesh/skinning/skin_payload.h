@@ -74,7 +74,7 @@ template<typename SkinInfluenceVector>
         || instance.skeletonJointCount > static_cast<u32>(Limit<u16>::s_Max) + 1u
         || instance.skin.size() > static_cast<usize>(Limit<u32>::s_Max)
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: runtime mesh '{}' skin influence counts are invalid"), instance.handle.value);
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skin influence counts are invalid"), instance.handle.value);
         return false;
     }
 
@@ -88,7 +88,7 @@ template<typename SkinInfluenceVector>
             || !SkinValidation::SkinInfluenceFitsSkeleton(sourceSkin, instance.skeletonJointCount, failedSkeletonJoint)
         ){
             outSkinInfluences.clear();
-            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: runtime mesh '{}' skin influence {} is invalid")
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skin influence {} is invalid")
                 , instance.handle.value
                 , vertexIndex
             );
@@ -115,7 +115,7 @@ template<typename SourceJointVector, typename JointPaletteVector>
     if(instance.skin.empty() || sourceJoints.empty())
         return true;
     if(!ValidSkeletonSkinningMode(skinningMode)){
-        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: runtime mesh '{}' skinning mode {} is invalid")
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skinning mode {} is invalid")
             , instance.handle.value
             , skinningMode
         );
@@ -127,15 +127,15 @@ template<typename SourceJointVector, typename JointPaletteVector>
         || instance.skin.size() > static_cast<usize>(Limit<u32>::s_Max)
         || sourceJoints.size() > static_cast<usize>(Limit<u32>::s_Max)
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint payload counts are invalid"), instance.handle.value);
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint payload counts are invalid"), instance.handle.value);
         return false;
     }
     if(!SkinValidation::ValidInverseBindMatrixCount(instance.inverseBindMatrices.size(), instance.skeletonJointCount)){
-        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: runtime mesh '{}' inverse bind matrix count is invalid"), instance.handle.value);
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' inverse bind matrix count is invalid"), instance.handle.value);
         return false;
     }
     if(sourceJoints.size() < static_cast<usize>(instance.skeletonJointCount)){
-        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette count {} is smaller than skeleton joint count {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette count {} is smaller than skeleton joint count {}")
             , instance.handle.value
             , sourceJoints.size()
             , instance.skeletonJointCount
@@ -147,7 +147,7 @@ template<typename SourceJointVector, typename JointPaletteVector>
     const bool useDualQuaternionPayload = skinningMode == SkeletonSkinningMode::DualQuaternion;
     const bool hasInverseBindMatrices = !instance.inverseBindMatrices.empty();
     if(hasInverseBindMatrices && jointCount != instance.inverseBindMatrices.size()){
-        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette count {} differs from inverse bind matrix count {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette count {} differs from inverse bind matrix count {}")
             , instance.handle.value
             , jointCount
             , instance.inverseBindMatrices.size()
@@ -171,7 +171,7 @@ template<typename SourceJointVector, typename JointPaletteVector>
             jointMatrix
         )){
             outJointPalette.clear();
-            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix")
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} is not a finite invertible affine matrix")
                 , instance.handle.value
                 , jointIndex
             );
@@ -197,7 +197,7 @@ template<typename SourceJointVector, typename JointPaletteVector>
             }
             else{
                 outJointPalette.clear();
-                NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} failed dual-quaternion payload build")
+                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' joint palette entry {} failed dual-quaternion payload build")
                     , instance.handle.value
                     , jointIndex
                 );
@@ -226,7 +226,7 @@ template<typename SourceJointVector, typename JointPaletteVector>
     if(SkeletonRuntime::HasSkeletonPose(skeletonPose)){
         if(!SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*skeletonPose, payload.poseJoints, payload.resolvedSkinningMode)){
             payload.poseJoints.clear();
-            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: runtime mesh '{}' skeleton pose is invalid"), instance.handle.value);
             return false;
         }
         if(!BuildSkinJointPalette(

@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
     const TStringView meshPathText,
     const TStringView detailText
 ){
-    NWB_LOGGER_ERROR(GLB_TEXT("{} failed: mesh '{}' {}")
+    NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' {}")
         , contextText
         , meshPathText
         , detailText
@@ -35,7 +35,7 @@ NWB_IMPL_BEGIN
     const usize itemIndex,
     const TStringView detailText
 ){
-    NWB_LOGGER_ERROR(GLB_TEXT("{} failed: mesh '{}' {} {} {}")
+    NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' {} {} {}")
         , contextText
         , meshPathText
         , itemText
@@ -52,7 +52,7 @@ NWB_IMPL_BEGIN
     const usize meshletIndex,
     const TStringView detailText
 ){
-    NWB_LOGGER_ERROR(GLB_TEXT("{} failed: mesh '{}' meshlet {} {}")
+    NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} {}")
         , contextText
         , meshPathText
         , meshletIndex
@@ -69,7 +69,7 @@ NWB_IMPL_BEGIN
     const usize attributeIndex,
     const TStringView detailText
 ){
-    NWB_LOGGER_ERROR(GLB_TEXT("{} failed: mesh '{}' meshlet {} has attribute ref {} {}")
+    NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} has attribute ref {} {}")
         , contextText
         , meshPathText
         , meshletIndex
@@ -87,7 +87,7 @@ NWB_IMPL_BEGIN
     const usize primitiveIndex,
     const TStringView detailText
 ){
-    NWB_LOGGER_ERROR(GLB_TEXT("{} failed: mesh '{}' meshlet {} primitive {} {}")
+    NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mesh '{}' meshlet {} primitive {} {}")
         , contextText
         , meshPathText
         , meshletIndex

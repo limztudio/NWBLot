@@ -213,7 +213,7 @@ TEST(UiSkinSelectionTests, IncompleteCookedCandidateCannotReachGpuBindOrReplaceS
     EXPECT_EQ(live.generation(), 1u);
     EXPECT_EQ(gpuBinds, 0u);
     EXPECT_TRUE(live.changeFailed());
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("missing required region 'window.normal'")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("missing required region 'window.normal'")));
 }
 
 

@@ -30,14 +30,14 @@ NWB_VULKAN_BEGIN
 
 
 // Command operation labels shared by command-list recording paths.
-inline constexpr TStringView s_CloseCommandListOperation = GLB_TEXT("close command list");
-inline constexpr TStringView s_OwnershipReleaseBarriersOperation = GLB_TEXT("append ownership-release barriers");
-inline constexpr TStringView s_DispatchRaysOperation = GLB_TEXT("dispatch rays");
-inline constexpr TStringView s_CopyBufferOperation = GLB_TEXT("copy buffer");
-inline constexpr TStringView s_ClearTextureBoxOperation = GLB_TEXT("clear texture box");
-inline constexpr TStringView s_ReleaseTextureOwnershipOperation = GLB_TEXT("release texture ownership");
-inline constexpr TStringView s_SetPushConstantsOperation = GLB_TEXT("set push constants");
-inline constexpr TStringView s_DirectCommandIrCopyBufferOperation = GLB_TEXT("direct command-IR copy buffer");
+inline constexpr TStringView s_CloseCommandListOperation = NWB_TEXT("close command list");
+inline constexpr TStringView s_OwnershipReleaseBarriersOperation = NWB_TEXT("append ownership-release barriers");
+inline constexpr TStringView s_DispatchRaysOperation = NWB_TEXT("dispatch rays");
+inline constexpr TStringView s_CopyBufferOperation = NWB_TEXT("copy buffer");
+inline constexpr TStringView s_ClearTextureBoxOperation = NWB_TEXT("clear texture box");
+inline constexpr TStringView s_ReleaseTextureOwnershipOperation = NWB_TEXT("release texture ownership");
+inline constexpr TStringView s_SetPushConstantsOperation = NWB_TEXT("set push constants");
+inline constexpr TStringView s_DirectCommandIrCopyBufferOperation = NWB_TEXT("direct command-IR copy buffer");
 
 
 class CommandList final : public RefCounter<GraphicsResource>, NoCopy{
@@ -322,7 +322,7 @@ public:
     void endMarker();
     void abandonMarker()noexcept;
 
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
     // Task-graph recording opens one scope around each record thunk. Command methods report the capabilities they
     // actually consume so the packet recorder can reject a declaration that is incompatible with that task.
     void beginTaskCapabilityTracking(GpuQueueCapability::Mask declaredCapabilities);
@@ -590,7 +590,7 @@ private:
     bool m_commandRecordingFailed = false;
     bool m_renderPassActive = false;
     bool m_descriptorBuffersBound = false;
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
     GpuQueueCapability::Mask m_taskCapabilitiesUsed = GpuQueueCapability::None;
     GpuQueueCapability::Mask m_taskDeclaredCapabilities = GpuQueueCapability::None;
     bool m_taskCapabilityTracking = false;

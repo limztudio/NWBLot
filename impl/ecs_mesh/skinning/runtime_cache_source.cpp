@@ -57,13 +57,13 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
             static_cast<void>(attributeIndex);
             static_cast<void>(previousSkin);
             static_cast<void>(skinIndex);
-            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: source meshlet {} shares an attribute across skin identities")
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} shares an attribute across skin identities")
                 , meshletIndex
             );
             return false;
         },
         [](const usize attributeIndex){
-            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: source attribute ref {} is unreferenced")
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source attribute ref {} is unreferenced")
                 , attributeIndex
             );
             return false;
@@ -74,7 +74,7 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
 [[nodiscard]] bool BuildRuntimeLocalBounds(MeshSkinningRuntimeInstance& instance){
     instance.localBounds = RuntimeMeshLocalBounds{};
     if(instance.restPositions.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has no positions for runtime bounds")
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has no positions for runtime bounds")
             , StringConvert(instance.sourceName.resolvedText())
         );
         return false;
@@ -87,7 +87,7 @@ template<typename MeshletVectorT, typename PositionRefVectorT, typename LocalVer
         AabbTests::Expand(LoadFloat(position), minBounds, maxBounds);
 
     if(!AabbTests::Valid(minBounds, maxBounds)){
-        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has invalid runtime bounds")
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning source '{}' has invalid runtime bounds")
             , StringConvert(instance.sourceName.resolvedText())
         );
         return false;
@@ -153,7 +153,7 @@ template<typename MeshT, typename SkinStreamT>
                 || !MeshMeshletRefValidation::MeshletPositionRefInRange(sourceRef, mesh.positionStream().size(), skinStream.size(), false)
                 || sourceRef.position >= skinStream.size()
             ){
-                NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: source meshlet {} position ref {} is invalid")
+                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} position ref {} is invalid")
                     , meshletIndex
                     , localPositionIndex
                 );
@@ -185,7 +185,7 @@ template<typename MeshT, typename SkinStreamT>
                     mesh.colorStream().size()
                 )
             ){
-                NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: source meshlet {} attribute ref {} is invalid")
+                NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} attribute ref {} is invalid")
                     , meshletIndex
                     , localAttributeIndex
                 );
@@ -219,7 +219,7 @@ template<typename MeshT, typename SkinStreamT>
         instance.meshletAttributeRefDeltas,
         true,
         [&](const usize meshletIndex, const TStringView reason){
-            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: runtime meshlet {} {}")
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: runtime meshlet {} {}")
                 , meshletIndex
                 , reason
             );
@@ -282,7 +282,7 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
     const Mesh* mesh = source.mesh();
     const Skin* skin = source.skin();
     if(!mesh || !skin){
-        GLB_ASSERT(false);
+        NWB_ASSERT(false);
         return false;
     }
 
@@ -331,7 +331,7 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
     MeshSkinningSource*& outSource){
     outSource = nullptr;
     if(!skinAsset.valid()){
-        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningRuntimeCache: skinning binding source assets are incomplete"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning binding source assets are incomplete"));
         return false;
     }
 
@@ -349,7 +349,7 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
     const Skin* loadedSkin = m_assetManager.loadTypedSync<Skin>(
         skinAsset.name(),
         loadedSkinAsset,
-        GLB_TEXT("MeshSkinningRuntimeCache"),
+        NWB_TEXT("MeshSkinningRuntimeCache"),
         "skin"
     );
     if(!loadedSkin)
@@ -359,7 +359,7 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
     const Mesh* loadedMesh = m_assetManager.loadTypedSync<Mesh>(
         loadedSkin->mesh().name(),
         loadedMeshAsset,
-        GLB_TEXT("MeshSkinningRuntimeCache"),
+        NWB_TEXT("MeshSkinningRuntimeCache"),
         Mesh::s_AssetTypeText
     );
     if(!loadedMesh)

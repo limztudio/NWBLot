@@ -5,7 +5,15 @@
 #pragma once
 
 
+#include "namespace.h"
+
 #include <impl/ecs_ui/toolkit/widgets/search_combo.h>
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TESTBED_BEGIN
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -13,7 +21,7 @@
 
 // Immutable demo rows share key navigation without adding per-source row or label storage.
 template<typename Source, usize LabelCount, u64 DisabledKey, typename Interface = NWB::Impl::Ui::IListDataSource>
-class TestbedUiImmutableListSource : public Interface, NoCopy{
+class UiImmutableListSource : public Interface, NoCopy{
 public:
     virtual u64 instanceGeneration()const noexcept override final{ return 1u; }
     virtual u64 revision()const noexcept override final{ return 1u; }
@@ -56,11 +64,11 @@ public:
 
 
 template<typename Source, usize LabelCount, u64 DisabledKey>
-class TestbedUiFilteredListSource : public TestbedUiImmutableListSource<Source, LabelCount, DisabledKey, NWB::Impl::Ui::ISearchableListDataSource>{
+class UiFilteredListSource : public UiImmutableListSource<Source, LabelCount, DisabledKey, NWB::Impl::Ui::ISearchableListDataSource>{
 private:
     class View final : public NWB::Impl::Ui::IListDataSource, NoCopy{
     public:
-        explicit View(const TestbedUiFilteredListSource& source) : m_source(source){}
+        explicit View(const UiFilteredListSource& source) : m_source(source){}
 
 
     public:
@@ -101,7 +109,7 @@ private:
 
 
     private:
-        const TestbedUiFilteredListSource& m_source;
+        const UiFilteredListSource& m_source;
     };
 
 
@@ -129,7 +137,7 @@ private:
 
 
 public:
-    explicit TestbedUiFilteredListSource(NWB::Core::Alloc::GlobalArena& arena)
+    explicit UiFilteredListSource(NWB::Core::Alloc::GlobalArena& arena)
         : m_query(arena)
         , m_view(*this)
         , m_count(LabelCount)
@@ -169,6 +177,9 @@ private:
     u64 m_count = 0u;
     u64 m_viewRevision = 0u;
 };
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "namespace.h"
 #include "ui_popup_tools_source.h"
 
 #include <impl/ecs_ui/components.h>
@@ -15,18 +16,27 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiPopupToolsGallery final : NoCopy{
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiPopupToolsGallery final : NoCopy{
 public:
     void paint(NWB::Impl::UiPaintContext& context, f32 x, f32 y);
 
 
 private:
-    TestbedUiPopupToolsSource m_source;
+    UiPopupToolsSource m_source;
     NWB::Impl::Ui::ContextMenuState m_menu;
     NWB::Impl::Ui::TooltipState m_tooltip;
     u64 m_command = 0u;
     u32 m_anchorClicks = 0u;
 };
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

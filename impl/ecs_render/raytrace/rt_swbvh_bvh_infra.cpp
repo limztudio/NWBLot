@@ -31,7 +31,7 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: software BVH sort requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software BVH sort requires the initialized global descriptor heap"));
         m_rayTracingState.m_bvhSortPipelineFailed = true;
         return false;
     }
@@ -44,7 +44,7 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
 
         m_rayTracingState.m_bvhSortBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_bvhSortBindingLayout){
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create BVH sort binding layout"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort binding layout"));
             m_rayTracingState.m_bvhSortPipelineFailed = true;
             return false;
         }
@@ -70,7 +70,7 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
     ;
     m_rayTracingState.m_bvhSortPipeline = device.createComputePipeline(pipelineDesc);
     if(!m_rayTracingState.m_bvhSortPipeline){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create BVH sort compute pipeline"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort compute pipeline"));
         m_rayTracingState.m_bvhSortPipelineFailed = true;
         return false;
     }
@@ -109,7 +109,7 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
         ){
             RayTracingDetail::RetireHeapHandle(heap, acquiredKeys);
             RayTracingDetail::RetireHeapHandle(heap, acquiredPayload);
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register existing BVH sort scratch in the descriptor heap"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register existing BVH sort scratch in the descriptor heap"));
             return false;
         }
         if(acquiredKeys.valid())
@@ -136,7 +136,7 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
     ;
     Core::BufferHandle keysBuffer = m_graphics.createBuffer(keysBufferDesc);
     if(!keysBuffer){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create BVH sort keys buffer"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort keys buffer"));
         return false;
     }
 
@@ -151,7 +151,7 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
     ;
     Core::BufferHandle payloadBuffer = m_graphics.createBuffer(payloadBufferDesc);
     if(!payloadBuffer){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create BVH sort payload buffer"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH sort payload buffer"));
         return false;
     }
 
@@ -163,7 +163,7 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
     ){
         RayTracingDetail::RetireHeapHandle(heap, keysHeapHandle);
         RayTracingDetail::RetireHeapHandle(heap, payloadHeapHandle);
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register BVH sort scratch in the descriptor heap"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register BVH sort scratch in the descriptor heap"));
         return false;
     }
 
@@ -178,11 +178,11 @@ bool RendererRayTracingSystem::ensureBvhSortBuffers(usize paddedCount){
 }
 
 bool RendererRayTracingSystem::bvhBitonicSort(Core::CommandList& commandList, u32 elementCount, u32 paddedCount){
-    GLB_ASSERT(m_rayTracingState.m_bvhSortPipeline);
-    GLB_ASSERT(m_rayTracingState.m_bvhSortKeysBuffer);
-    GLB_ASSERT(m_rayTracingState.m_bvhSortPayloadBuffer);
-    GLB_ASSERT(RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle));
-    GLB_ASSERT(RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle));
+    NWB_ASSERT(m_rayTracingState.m_bvhSortPipeline);
+    NWB_ASSERT(m_rayTracingState.m_bvhSortKeysBuffer);
+    NWB_ASSERT(m_rayTracingState.m_bvhSortPayloadBuffer);
+    NWB_ASSERT(RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortKeysHeapHandle));
+    NWB_ASSERT(RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(m_rayTracingState.m_bvhSortPayloadHeapHandle));
 
     // Padded count is power-of-two and group-aligned.
     if(paddedCount < static_cast<u32>(NWB_BVH_SORT_GROUP_SIZE))
@@ -260,7 +260,7 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: software BVH build requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software BVH build requires the initialized global descriptor heap"));
         m_rayTracingState.m_bvhBuildPipelineFailed = true;
         return false;
     }
@@ -273,7 +273,7 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
 
         m_rayTracingState.m_bvhBuildBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_bvhBuildBindingLayout){
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create BVH build binding layout"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH build binding layout"));
             m_rayTracingState.m_bvhBuildPipelineFailed = true;
             return false;
         }
@@ -306,7 +306,7 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
         || !createBuildPipeline(m_rayTracingState.m_bvhTopologyShader, m_rayTracingState.m_bvhTopologyPipeline, AssetsGraphicsBvh::s_BvhTopologyShaderName, "ECSRender_BvhTopology")
         || !createBuildPipeline(m_rayTracingState.m_bvhFitShader, m_rayTracingState.m_bvhFitPipeline, AssetsGraphicsBvh::s_BvhFitShaderName, "ECSRender_BvhFit")
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create BVH build compute pipeline"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH build compute pipeline"));
         m_rayTracingState.m_bvhBuildPipelineFailed = true;
         return false;
     }
@@ -330,7 +330,7 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
             return true;
         }
         RayTracingDetail::RetireHeapHandle(heap, acquired);
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register existing BVH visit counter in the descriptor heap"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register existing BVH visit counter in the descriptor heap"));
         return false;
     }
 
@@ -352,13 +352,13 @@ bool RendererRayTracingSystem::ensureBvhVisitCounterBuffer(usize primitiveCount)
     ;
     Core::BufferHandle counterBuffer = m_graphics.createBuffer(counterBufferDesc);
     if(!counterBuffer){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create BVH visit counter buffer"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create BVH visit counter buffer"));
         return false;
     }
 
     Core::GpuDescriptorHandle counterHeapHandle = Core::GpuDescriptorHandle::Invalid();
     if(!RayTracingSoftwareBvhDetail::RegisterWritableBvhBuffer(heap, *counterBuffer.get(), counterHeapHandle)){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register BVH visit counter in the descriptor heap"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register BVH visit counter in the descriptor heap"));
         return false;
     }
 
@@ -396,7 +396,7 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
         ){
             RayTracingDetail::RetireHeapHandle(heap, acquiredNode);
             RayTracingDetail::RetireHeapHandle(heap, acquiredParent);
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register existing per-mesh BVH storage in the descriptor heap"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register existing per-mesh BVH storage in the descriptor heap"));
             return false;
         }
         if(acquiredNode.valid())
@@ -409,7 +409,7 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
         ;
     }
     if(nodeBuffer || parentBuffer){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: per-mesh BVH storage is partially allocated"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: per-mesh BVH storage is partially allocated"));
         return false;
     }
 
@@ -427,7 +427,7 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
     ;
     Core::BufferHandle newNodeBuffer = m_graphics.createBuffer(nodeBufferDesc);
     if(!newNodeBuffer){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create per-mesh BVH node buffer"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create per-mesh BVH node buffer"));
         return false;
     }
 
@@ -442,7 +442,7 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
     ;
     Core::BufferHandle newParentBuffer = m_graphics.createBuffer(parentBufferDesc);
     if(!newParentBuffer){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create per-mesh BVH parent buffer"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create per-mesh BVH parent buffer"));
         return false;
     }
 
@@ -454,7 +454,7 @@ bool RendererRayTracingSystem::createMeshBvhStorage(
     ){
         RayTracingDetail::RetireHeapHandle(heap, newNodeHeapHandle);
         RayTracingDetail::RetireHeapHandle(heap, newParentHeapHandle);
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register per-mesh BVH storage in the descriptor heap"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register per-mesh BVH storage in the descriptor heap"));
         return false;
     }
 
@@ -473,7 +473,7 @@ bool RendererRayTracingSystem::ensureMeshSwBvhResources(
     Core::GpuDescriptorHandle& parentHeapHandle
 ){
     if(primitiveCount > s_BvhMaxPrimitivesPerMesh){
-        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: mesh exceeds software BVH primitive cap ({} > {}), shadows skipped")
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: mesh exceeds software BVH primitive cap ({} > {}), shadows skipped")
             , static_cast<u64>(primitiveCount)
             , static_cast<u64>(s_BvhMaxPrimitivesPerMesh)
         );
@@ -678,7 +678,7 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
         ;
         Core::BufferHandle nodeBuffer = m_graphics.createBuffer(nodeBufferDesc);
         if(!nodeBuffer){
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create scene BVH node buffer"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene BVH node buffer"));
             return false;
         }
         // Register the new view before replacing ownership to keep the old pair retryable.
@@ -705,14 +705,14 @@ bool RendererRayTracingSystem::ensureSceneBvhBuffers(u32 instanceCount){
         ;
         Core::BufferHandle instanceBuffer = m_graphics.createBuffer(instanceBufferDesc);
         if(!instanceBuffer){
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create scene BVH instance buffer"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene BVH instance buffer"));
             return false;
         }
         if(!replaceRayTraceMaterialContextHeapHandle(*instanceBuffer.get(), m_rayTracingState.m_sceneInstanceHeapHandle))
             return false;
         m_rayTracingState.m_sceneInstanceBuffer = Move(instanceBuffer);
         m_rayTracingState.m_sceneInstanceCapacity = capacity;
-        NWB_LOGGER_INFO(GLB_TEXT("RendererSystem: created software scene BVH buffers (capacity {} instances)")
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created software scene BVH buffers (capacity {} instances)")
             , static_cast<u64>(capacity)
         );
     }

@@ -44,13 +44,13 @@ bool MeshSkinningSystem::ResolveRestToSkinnedCopyByteCounts(
         if(stride != 0u && TryMultiply<usize>(count, stride, outBytes))
             return true;
 
-        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
         return false;
     };
     return
-        resolvePayloadBytes(instance.restPositions.size(), sizeof(Float3U), outPositionBytes, GLB_TEXT("rest position"))
-        && resolvePayloadBytes(instance.restNormals.size(), sizeof(Half4U), outNormalBytes, GLB_TEXT("rest normal"))
-        && resolvePayloadBytes(instance.restTangents.size(), sizeof(Half4U), outTangentBytes, GLB_TEXT("rest tangent"))
+        resolvePayloadBytes(instance.restPositions.size(), sizeof(Float3U), outPositionBytes, NWB_TEXT("rest position"))
+        && resolvePayloadBytes(instance.restNormals.size(), sizeof(Half4U), outNormalBytes, NWB_TEXT("rest normal"))
+        && resolvePayloadBytes(instance.restTangents.size(), sizeof(Half4U), outTangentBytes, NWB_TEXT("rest tangent"))
     ;
 }
 

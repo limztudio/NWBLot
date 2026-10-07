@@ -764,7 +764,7 @@ private:
 
 
     Value* resolveTarget(const ScratchPath& path, const bool allowCreateRoot, const u32 errorLine, const u32 errorColumn){
-        GLB_ASSERT(!path.empty());
+        NWB_ASSERT(!path.empty());
 
         const auto rootName = path[0];
         if(!isDeclaredVariable(rootName)){
@@ -800,7 +800,7 @@ private:
     }
 
     Value makeReference(const ScratchPath& path){
-        GLB_ASSERT(!path.empty());
+        NWB_ASSERT(!path.empty());
 
         if(!isDeclaredVariable(path[0])){
             error("references must target a declared variable");
@@ -867,7 +867,7 @@ private:
     }
 
     [[nodiscard]] bool containsBindInstanceName(const Value& instances, MStringView instanceName)const{
-        GLB_ASSERT(instances.isList());
+        NWB_ASSERT(instances.isList());
 
         for(const Value& instance : instances.asList()){
             if(!instance.isMap())
@@ -1203,14 +1203,14 @@ bool Document::parse(IMetaReader& reader){
 const Value& Document::asset()const{
     const MStringView key(m_assetVariable.data(), m_assetVariable.size());
     auto it = m_variables.find(key);
-    GLB_ASSERT(it != m_variables.end());
+    NWB_ASSERT(it != m_variables.end());
     return it.value();
 }
 
 Value& Document::asset(){
     const MStringView key(m_assetVariable.data(), m_assetVariable.size());
     auto it = m_variables.find(key);
-    GLB_ASSERT(it != m_variables.end());
+    NWB_ASSERT(it != m_variables.end());
     return it.value();
 }
 

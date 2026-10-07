@@ -12,7 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLB_PLATFORM_LINUX)
+#if defined(NWB_PLATFORM_LINUX)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -51,7 +51,7 @@ static void SignalHandler(i32)noexcept{
 void Frame::Print(BasicStringView<tchar> str, Log::Type::Enum type){
     ScopedLock lock(FrameDetail::s_PrintMutex);
 
-    auto& stream = Log::MessageTypeWritesToErrorStream(type) ? GLB_TCERR : GLB_TCOUT;
+    auto& stream = Log::MessageTypeWritesToErrorStream(type) ? NWB_TCERR : NWB_TCOUT;
     stream << str << static_cast<tchar>('\n');
     stream.flush();
 }
@@ -71,7 +71,7 @@ bool Frame::init(){
     return true;
 }
 void Frame::showFrame(){
-    GLB_TCOUT << GLB_TEXT("nwb_logserver is running in console mode. Press Ctrl+C to exit.") << static_cast<tchar>('\n');
+    NWB_TCOUT << NWB_TEXT("nwb_logserver is running in console mode. Press Ctrl+C to exit.") << static_cast<tchar>('\n');
 }
 bool Frame::mainLoop(){
     while(!FrameDetail::s_ShouldExit)
@@ -90,7 +90,7 @@ NWB_LOG_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#endif //GLB_PLATFORM_LINUX
+#endif //NWB_PLATFORM_LINUX
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

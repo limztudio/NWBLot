@@ -253,13 +253,13 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
     InstanceGpuDataVector instances{scratch};
     MaterialTypedByteDataVector typedBytes{scratch};
     CsgFrameGpuData csgFrameData{scratch};
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
     ECSRenderDetail::MaterialTypedInstanceRangeVector typedRanges{scratch};
 #endif
     materialSystem.gatherMaterialPassDrawItems(
         targets.avboit.refractionFramebuffer.get(), MaterialPipelinePass::AvboitRefractionCapture, true,
         csgFrameState, drawItems, instances, csgFrameData,
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
         typedRanges,
 #endif
         typedBytes, RendererResourceLookupMode::PreparedOnly, &meshViewState

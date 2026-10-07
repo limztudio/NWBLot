@@ -13,6 +13,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_testbed_ui_gallery{
 
 
@@ -50,7 +56,7 @@ static constexpr Array<StringView, Section::kCount> s_SectionNames{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NWB::Impl::Ui::Rect TestbedUiWidgetGallery::LayoutBounds(const NWB::Impl::Ui::DisplayMetrics& display){
+NWB::Impl::Ui::Rect UiWidgetGallery::LayoutBounds(const NWB::Impl::Ui::DisplayMetrics& display){
     using namespace __hidden_testbed_ui_gallery;
     const f32 height = s_SelectorHeight + s_ContentGap + s_ContentHeight;
     return {
@@ -65,7 +71,7 @@ NWB::Impl::Ui::Rect TestbedUiWidgetGallery::LayoutBounds(const NWB::Impl::Ui::Di
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TestbedUiWidgetGallery::TestbedUiWidgetGallery(
+UiWidgetGallery::UiWidgetGallery(
     NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets)
     : m_edits(arena)
     , m_searchCombos(arena)
@@ -75,7 +81,7 @@ TestbedUiWidgetGallery::TestbedUiWidgetGallery(
     , m_images(arena, assets)
 {}
 
-void TestbedUiWidgetGallery::paint(NWB::Impl::UiPaintContext& context){
+void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context){
     using namespace NWB::Impl::Ui;
     using namespace __hidden_testbed_ui_gallery;
     Builder& ui = context.ui;
@@ -108,11 +114,11 @@ void TestbedUiWidgetGallery::paint(NWB::Impl::UiPaintContext& context){
     valid = ui.label("section", { caption.data(), caption.size() }) && valid;
     valid = ui.endPanel() && valid;
     if(!valid){
-        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: UI gallery selector declaration failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: UI gallery selector declaration failed"));
         return;
     }
     if(previous != selected)
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Testbed: UI gallery section={}"), m_selectedGallery + 1u);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: UI gallery section={}"), m_selectedGallery + 1u);
 
     const f32 width = selected == Section::TextArea ? s_SelectorWidth : s_OrdinaryGalleryWidth;
     const f32 x = bounds.x + (bounds.width - width) * 0.5f;
@@ -138,14 +144,14 @@ void TestbedUiWidgetGallery::paint(NWB::Impl::UiPaintContext& context){
     }
 }
 
-void TestbedUiWidgetGallery::paintControls(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
+void UiWidgetGallery::paintControls(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
     if(!ui.beginPanel("interactive_gallery", { x, y, 280.0f, 180.0f }))
         return;
     bool valid = ui.label("title", "Interactive custom UI");
     if(ui.checkbox("enabled", "Enable counter", m_enabled))
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Testbed: custom UI counter enabled={}"), m_enabled);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom UI counter enabled={}"), m_enabled);
     valid = ui.beginRow("actions") && valid;
     WidgetOptions options;
     options.enabled = m_enabled;
@@ -153,7 +159,7 @@ void TestbedUiWidgetGallery::paintControls(NWB::Impl::UiPaintContext& context, c
     if(ui.button("increase", "Increase", options)){
         if(m_count != Limit<u32>::s_Max)
             ++m_count;
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Testbed: custom UI counter={}"), m_count);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom UI counter={}"), m_count);
     }
     if(ui.button("reset", "Reset"))
         m_count = 0u;
@@ -165,8 +171,11 @@ void TestbedUiWidgetGallery::paintControls(NWB::Impl::UiPaintContext& context, c
     valid = ui.label("keyboard_hint", "Tab / Shift+Tab, Enter / Space") && valid;
     valid = ui.endPanel() && valid;
     if(!valid)
-        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: custom UI widget declaration failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI widget declaration failed"));
 }
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

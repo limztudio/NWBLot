@@ -31,7 +31,7 @@ void CompactAtlasGroups(Impl::FontAtlasPayload& payload){
             endY = Max(endY, glyph.y + glyph.height + payload.guardTexels);
             channelCount = Max(channelCount, glyph.channel + 1u);
         }
-        GLB_ASSERT(channelCount > 0u);
+        NWB_ASSERT(channelCount > 0u);
         const u32 width = endX - firstX;
         const u32 height = endY - firstY;
         Core::Assets::AssetBytes compactPixels(group.pixels.get_allocator().arena());

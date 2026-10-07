@@ -73,7 +73,7 @@ public:
             m_world, m_context.objectArena, mesh, m_preview ? s_Preview : s_Glass, s_Interface, tint, position, scale
         );
 
-        GLB_FATAL_ASSERT_MSG(entity.valid(), GLB_TEXT("RefractionSmokeProject: gallery object creation failed"));
+        NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: gallery object creation failed"));
         auto* transform = m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity);
         StoreFloat(QuaternionRotationRollPitchYaw(pitch, yaw, roll), transform->rotation);
         if(!m_preview){
@@ -111,7 +111,7 @@ public:
             m_world, m_context.objectArena, s_Plane, material, s_Interface, tint,
             Float4(x, y, z, 0.0f), Float4(halfWidth, 1.0f, halfHeight, 0.0f)
         );
-        GLB_FATAL_ASSERT_MSG(entity.valid(), GLB_TEXT("RefractionSmokeProject: gallery backdrop creation failed"));
+        NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: gallery backdrop creation failed"));
         auto* transform = m_world.tryGetComponent<Impl::Scene::TransformComponent>(entity);
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform->rotation);
     }
@@ -249,11 +249,11 @@ bool CreateRefractionGalleryScene(
             Float4(0.08f, 1.4f, 0.0f, 0.0f), Float4(1.15f, 1.15f, 1.15f, 0.0f), false, 0.0f, 0.95f, 0.1f, 0.2f
         );
     else{
-        NWB_LOGGER_WARNING(GLB_TEXT("RefractionSmokeProject: unknown gallery case"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RefractionSmokeProject: unknown gallery case"));
         return false;
     }
     scene.backdrop();
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("RefractionSmokeProject: gallery case {} created"), StringConvert(caseName));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: gallery case {} created"), StringConvert(caseName));
     return true;
 }
 

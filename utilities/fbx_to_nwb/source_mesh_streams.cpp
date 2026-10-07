@@ -87,7 +87,7 @@ void FbxSourceMeshStreams::DropSourceMeshTangents(SourceMeshStreams& mesh){
     }
 
     for(u32& index : mesh.indices){
-        GLB_ASSERT(index < vertexRefRemap.size());
+        NWB_ASSERT(index < vertexRefRemap.size());
         index = vertexRefRemap[index];
     }
     mesh.vertexRefs = Move(compactVertexRefs);
@@ -99,7 +99,7 @@ bool FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(
     UtilityVector<u32>& inOutTriangleIndices
 ){
     if(mesh.max_face_triangles > Limit<usize>::s_Max / s_TriangleIndexCount){
-        NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: mesh face triangulation scratch size overflows"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh face triangulation scratch size overflows"));
         return false;
     }
 
@@ -118,16 +118,16 @@ bool FbxSourceMeshStreams::GenerateSourceMeshTangents(
     using RebuildVertex = ::TangentFrameRebuildVertex;
 
     outTangentReport = SourceTangentReport{};
-    GLB_ASSERT(!mesh.vertexRefs.empty());
-    GLB_ASSERT(!mesh.indices.empty());
-    GLB_ASSERT((mesh.indices.size() % s_TriangleIndexCount) == 0u);
+    NWB_ASSERT(!mesh.vertexRefs.empty());
+    NWB_ASSERT(!mesh.indices.empty());
+    NWB_ASSERT((mesh.indices.size() % s_TriangleIndexCount) == 0u);
 
     UtilityVector<RebuildVertex> rebuildVertices;
     rebuildVertices.reserve(mesh.vertexRefs.size());
     for(const SourceVertexRef& ref : mesh.vertexRefs){
-        GLB_ASSERT(ref.position < mesh.positions.size());
-        GLB_ASSERT(ref.normal < mesh.normals.size());
-        GLB_ASSERT(ref.uv0 < mesh.uv0.size());
+        NWB_ASSERT(ref.position < mesh.positions.size());
+        NWB_ASSERT(ref.normal < mesh.normals.size());
+        NWB_ASSERT(ref.uv0 < mesh.uv0.size());
 
         const Vec3& position = mesh.positions[ref.position];
         const Vec3& normal = mesh.normals[ref.normal];
@@ -145,9 +145,9 @@ bool FbxSourceMeshStreams::GenerateSourceMeshTangents(
         const u32 i0 = mesh.indices[indexBase + 0u];
         const u32 i1 = mesh.indices[indexBase + 1u];
         const u32 i2 = mesh.indices[indexBase + 2u];
-        GLB_ASSERT(i0 < rebuildVertices.size());
-        GLB_ASSERT(i1 < rebuildVertices.size());
-        GLB_ASSERT(i2 < rebuildVertices.size());
+        NWB_ASSERT(i0 < rebuildVertices.size());
+        NWB_ASSERT(i1 < rebuildVertices.size());
+        NWB_ASSERT(i2 < rebuildVertices.size());
         if(i0 == i1 || i0 == i2 || i1 == i2)
             continue;
 
@@ -164,14 +164,14 @@ bool FbxSourceMeshStreams::GenerateSourceMeshTangents(
         rebuildIndices.push_back(i2);
     }
     if(rebuildIndices.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: mesh has no valid triangles for tangent generation"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh has no valid triangles for tangent generation"));
         return false;
     }
 
     Core::Alloc::ScratchArena scratchArena(UtilityDetail::s_SourceTangentRebuildScratch);
     TangentFrameRebuildResult rebuildResult;
     if(!::RebuildTangentFrames(scratchArena, rebuildVertices, rebuildIndices, &rebuildResult)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: failed to generate source tangent stream"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate source tangent stream"));
         return false;
     }
 
@@ -192,7 +192,7 @@ bool FbxSourceMeshStreams::GenerateSourceMeshTangents(
             ::FrameFallbackTangent(normal)
         );
         if(!::FrameValidDirection(tangent)){
-            NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: failed to resolve generated source tangent"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to resolve generated source tangent"));
             return false;
         }
 

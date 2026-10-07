@@ -139,20 +139,20 @@ void CommandList::releaseTextureOwnership(
 
     Texture& texture = *textureResource;
     if(!isTextureReadyForCommandQueue(&texture)){
-        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, GLB_TEXT("texture is not ready for this exact command queue"));
+        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("texture is not ready for this exact command queue"));
         return;
     }
     if(m_stateTracker.isPermanentTexture(texture)){
         rejectCommandRecording(
             s_ReleaseTextureOwnershipOperation,
-            GLB_TEXT("permanently tracked textures cannot transfer ownership")
+            NWB_TEXT("permanently tracked textures cannot transfer ownership")
         );
         return;
     }
     if(texture.m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT){
         rejectCommandRecording(
             s_ReleaseTextureOwnershipOperation,
-            GLB_TEXT("concurrently shared textures do not have exclusive ownership")
+            NWB_TEXT("concurrently shared textures do not have exclusive ownership")
         );
         return;
     }
@@ -164,13 +164,13 @@ void CommandList::releaseTextureOwnership(
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
         rejectCommandRecording(
             s_ReleaseTextureOwnershipOperation,
-            GLB_TEXT("subresource range is empty or outside the texture")
+            NWB_TEXT("subresource range is empty or outside the texture")
         );
         return;
     }
 
     if(!m_device.getQueue(destinationQueue)){
-        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, GLB_TEXT("destination queue is unavailable"));
+        rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("destination queue is unavailable"));
         return;
     }
 
@@ -183,7 +183,7 @@ void CommandList::releaseTextureOwnership(
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
             const ResourceStates::Mask state = m_stateTracker.getTextureState(&texture, arraySlice, mipLevel);
             if(state == ResourceStates::Unknown){
-                rejectCommandRecording(s_ReleaseTextureOwnershipOperation, GLB_TEXT("final resource state is unknown"));
+                rejectCommandRecording(s_ReleaseTextureOwnershipOperation, NWB_TEXT("final resource state is unknown"));
                 return;
             }
             const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
@@ -191,7 +191,7 @@ void CommandList::releaseTextureOwnership(
             if(existing != m_textureOwnershipReleaseDestinations.end() && existing.value() != destinationQueue){
                 rejectCommandRecording(
                     s_ReleaseTextureOwnershipOperation,
-                    GLB_TEXT("subresource already targets a conflicting destination queue")
+                    NWB_TEXT("subresource already targets a conflicting destination queue")
                 );
                 return;
             }
@@ -218,17 +218,17 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
     if(!validateCommandRecordingScope(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel))
         return;
     if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, GLB_TEXT("permanent state cannot be unknown"));
+        rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, NWB_TEXT("permanent state cannot be unknown"));
         return;
     }
     if(!isTextureReadyForCommandQueue(texture)){
-        rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, GLB_TEXT("texture is not ready for this exact command queue"));
+        rejectCommandRecording(VulkanArenaScope::s_SetPermanentTextureStateCommandLabel, NWB_TEXT("texture is not ready for this exact command queue"));
         return;
     }
     if(texture->m_creationDesc.keepInitialState && texture->m_creationDesc.initialState != stateBits){
         rejectCommandRecording(
             VulkanArenaScope::s_SetPermanentTextureStateCommandLabel,
-            GLB_TEXT("permanent state conflicts with the retained initial state")
+            NWB_TEXT("permanent state conflicts with the retained initial state")
         );
         return;
     }
@@ -237,7 +237,7 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
         rejectCommandRecording(
             VulkanArenaScope::s_SetPermanentTextureStateCommandLabel,
-            GLB_TEXT("a different permanent state is already tracked")
+            NWB_TEXT("a different permanent state is already tracked")
         );
         return;
     }
@@ -245,7 +245,7 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
         if(it->first.texture == texture){
             rejectCommandRecording(
                 VulkanArenaScope::s_SetPermanentTextureStateCommandLabel,
-                GLB_TEXT("texture already has a pending ownership release")
+                NWB_TEXT("texture already has a pending ownership release")
             );
             return;
         }
@@ -261,11 +261,11 @@ void CommandList::setPermanentTextureState(Texture* texture, ResourceStates::Mas
 void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask stateBits){
     if(!buffer)
         return;
-    constexpr TStringView s_OperationName = GLB_TEXT("set permanent buffer state");
+    constexpr TStringView s_OperationName = NWB_TEXT("set permanent buffer state");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(stateBits == ResourceStates::Unknown){
-        rejectCommandRecording(s_OperationName, GLB_TEXT("permanent state cannot be unknown"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("permanent state cannot be unknown"));
         return;
     }
     if(!validateBufferForGpuState(buffer, stateBits, s_OperationName))
@@ -273,7 +273,7 @@ void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask s
     if(buffer->m_creationDesc.keepInitialState && buffer->m_creationDesc.initialState != stateBits){
         rejectCommandRecording(
             s_OperationName,
-            GLB_TEXT("permanent state conflicts with the retained initial state")
+            NWB_TEXT("permanent state conflicts with the retained initial state")
         );
         return;
     }
@@ -282,14 +282,14 @@ void CommandList::setPermanentBufferState(Buffer* buffer, ResourceStates::Mask s
     if(permanentState != ResourceStates::Unknown && permanentState != stateBits){
         rejectCommandRecording(
             s_OperationName,
-            GLB_TEXT("a different permanent state is already tracked")
+            NWB_TEXT("a different permanent state is already tracked")
         );
         return;
     }
     if(m_bufferOwnershipReleaseDestinations.find(buffer) != m_bufferOwnershipReleaseDestinations.end()){
         rejectCommandRecording(
             s_OperationName,
-            GLB_TEXT("buffer already has a pending ownership release")
+            NWB_TEXT("buffer already has a pending ownership release")
         );
         return;
     }

@@ -38,7 +38,7 @@
 #include "atomic.h"
 #include "thread.h"
 
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
 
@@ -46,7 +46,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
 inline void YieldThread()noexcept{ SwitchToThread(); }
 #else
 inline void YieldThread()noexcept{ std::this_thread::yield(); }
@@ -54,7 +54,7 @@ inline void YieldThread()noexcept{ std::this_thread::yield(); }
 
 
 inline void MachinePause(i32 delay)noexcept{
-#if defined(GLB_PLATFORM_WINDOWS) && defined(_M_ARM64)
+#if defined(NWB_PLATFORM_WINDOWS) && defined(_M_ARM64)
     while(delay > 0){
         __yield();
         --delay;

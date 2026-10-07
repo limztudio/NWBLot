@@ -98,15 +98,15 @@ u32 Skeleton::findJointIndex(const Name jointName)const{
 }
 
 bool Skeleton::validatePayload()const{
-    if(!checkVirtualPath(GLB_TEXT("Skeleton::validatePayload")))
+    if(!checkVirtualPath(NWB_TEXT("Skeleton::validatePayload")))
         return false;
     if(m_joints.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Skeleton::validatePayload failed: skeleton has no joints"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: skeleton has no joints"));
         return false;
     }
 
     if(m_jointIndices.size() != m_joints.size()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Skeleton::validatePayload failed: joint lookup count does not match joint count"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint lookup count does not match joint count"));
         return false;
     }
 
@@ -116,18 +116,18 @@ bool Skeleton::validatePayload()const{
         const Name jointName = jointLookup.first;
         const u32 jointIndex = jointLookup.second;
         if(!jointName){
-            NWB_LOGGER_ERROR(GLB_TEXT("Skeleton::validatePayload failed: joint lookup contains an empty name"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint lookup contains an empty name"));
             return false;
         }
         if(jointIndex >= m_joints.size()){
-            NWB_LOGGER_ERROR(GLB_TEXT("Skeleton::validatePayload failed: joint lookup '{}' has invalid index {}")
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint lookup '{}' has invalid index {}")
                 , StringConvert(jointName.resolvedText())
                 , jointIndex
             );
             return false;
         }
         if(namedJoints[jointIndex] != 0u){
-            NWB_LOGGER_ERROR(GLB_TEXT("Skeleton::validatePayload failed: joint {} has multiple names"), jointIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has multiple names"), jointIndex);
             return false;
         }
         namedJoints[jointIndex] = 1u;
@@ -136,14 +136,14 @@ bool Skeleton::validatePayload()const{
         if(namedJoints[jointIndex] != 0u)
             continue;
 
-        NWB_LOGGER_ERROR(GLB_TEXT("Skeleton::validatePayload failed: joint {} has no name"), jointIndex);
+        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has no name"), jointIndex);
         return false;
     }
 
     for(usize i = 0u; i < m_joints.size(); ++i){
         const SkeletonJoint& joint = m_joints[i];
         if(joint.parentIndex != s_SkeletonInvalidJointIndex && joint.parentIndex >= i){
-            NWB_LOGGER_ERROR(GLB_TEXT("Skeleton::validatePayload failed: joint {} has invalid parent {}")
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has invalid parent {}")
                 , i
                 , joint.parentIndex
             );
@@ -152,7 +152,7 @@ bool Skeleton::validatePayload()const{
     }
 
     if(m_childRanges.size() != m_joints.size()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Skeleton::validatePayload failed: hierarchy range count does not match joint count"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: hierarchy range count does not match joint count"));
         return false;
     }
 
@@ -162,7 +162,7 @@ bool Skeleton::validatePayload()const{
             ++expectedChildCount;
     }
     if(m_childIndices.size() != expectedChildCount){
-        NWB_LOGGER_ERROR(GLB_TEXT("Skeleton::validatePayload failed: hierarchy child index count does not match parent links"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: hierarchy child index count does not match parent links"));
         return false;
     }
 
@@ -171,7 +171,7 @@ bool Skeleton::validatePayload()const{
         const SkeletonJointChildRange& range = m_childRanges[jointIndex];
         const u64 rangeEnd = static_cast<u64>(range.firstChild) + static_cast<u64>(range.childCount);
         if(rangeEnd > m_childIndices.size()){
-            NWB_LOGGER_ERROR(GLB_TEXT("Skeleton::validatePayload failed: joint {} has invalid child range"), jointIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has invalid child range"), jointIndex);
             return false;
         }
 
@@ -179,7 +179,7 @@ bool Skeleton::validatePayload()const{
         for(u32 childOffset = 0u; childOffset < range.childCount; ++childOffset){
             const u32 childIndex = m_childIndices[range.firstChild + childOffset];
             if(childIndex >= m_joints.size() || m_joints[childIndex].parentIndex != jointIndex){
-                NWB_LOGGER_ERROR(GLB_TEXT("Skeleton::validatePayload failed: joint {} has invalid child {}")
+                NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: joint {} has invalid child {}")
                     , jointIndex
                     , childIndex
                 );
@@ -188,7 +188,7 @@ bool Skeleton::validatePayload()const{
         }
     }
     if(referencedChildCount != expectedChildCount){
-        NWB_LOGGER_ERROR(GLB_TEXT("Skeleton::validatePayload failed: hierarchy child ranges do not cover parent links"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::validatePayload failed: hierarchy child ranges do not cover parent links"));
         return false;
     }
 
@@ -208,8 +208,8 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header,
         SkeletonBinaryPayload::s_SkeletonMagic,
-        GLB_TEXT("Skeleton::loadBinary"),
-        GLB_TEXT("skeleton")
+        NWB_TEXT("Skeleton::loadBinary"),
+        NWB_TEXT("skeleton")
     ))
         return false;
 
@@ -219,8 +219,8 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
         cursor,
         header.jointCount,
         jointBinaries,
-        GLB_TEXT("Skeleton::loadBinary"),
-        GLB_TEXT("joints")
+        NWB_TEXT("Skeleton::loadBinary"),
+        NWB_TEXT("joints")
     ))
         return false;
 
@@ -228,7 +228,7 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
     for(const SkeletonBinaryPayload::JointBinary& jointBinary : jointBinaries){
         const Name jointName(jointBinary.nameHash);
         if(!m_jointIndices.emplace(jointName, static_cast<u32>(m_joints.size())).second){
-            NWB_LOGGER_ERROR(GLB_TEXT("Skeleton::loadBinary failed: duplicate joint '{}'"), StringConvert(jointName.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("Skeleton::loadBinary failed: duplicate joint '{}'"), StringConvert(jointName.resolvedText()));
             return false;
         }
 
@@ -239,7 +239,7 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
     }
     rebuildHierarchy();
 
-    return Core::Assets::ReadCompletePayload(binary, cursor, GLB_TEXT("Skeleton::loadBinary"))
+    return Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("Skeleton::loadBinary"))
         && validatePayload()
     ;
 }

@@ -176,7 +176,7 @@ TEST(AssetPaths, RelativeBackslashesFollowHostComponentRulesBeforeCanonicalizati
     Alloc::ScratchArena scratchArena(Name("tests/asset_path/separator_scratch"));
     AString<Alloc::ScratchArena> output(scratchArena);
     const NWB::Path path(inputArena, "Prefix/Upper\\Name//./File");
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
     ASSERT_TRUE(AssetPathsDetail::BuildRelativeAssetPathText(path, output));
     EXPECT_EQ(AStringView(output), "prefix/upper/name/file");
     const NWB::Path driveRoot(inputArena, "C:\\Root\\File");

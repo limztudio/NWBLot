@@ -82,7 +82,7 @@ template<typename ArenaT>
         return nullptr;
 
     if(!text.empty())
-        GLB_MEMCPY(copy, byteCount, text.data(), text.size());
+        NWB_MEMCPY(copy, byteCount, text.data(), text.size());
     copy[text.size()] = 0;
     return copy;
 }
@@ -95,7 +95,7 @@ template<typename ArenaT>
     const usize byteCount = count * size;
     void* const ptr = AllocateArenaCMemory(arena, byteCount);
     if(ptr)
-        GLB_MEMSET(ptr, 0, byteCount);
+        NWB_MEMSET(ptr, 0, byteCount);
     return ptr;
 }
 

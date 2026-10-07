@@ -101,25 +101,25 @@ bool SelectBuildInputs(
     Vector<u8, Assets::ScratchArena> selected(files.size(), u8(0), scratchArena);
     // Borrow discovered canonical paths until selection finishes; compact the owning file vector only afterward.
     const __hidden_build_inputs::PathSelectionIndex fileIndex(files, scratchArena, false);
-#if !defined(GLB_PLATFORM_WINDOWS)
+#if !defined(NWB_PLATFORM_WINDOWS)
     Optional<__hidden_build_inputs::PathSelectionIndex> directoryIndex;
 #endif
     for(const Assets::AssetString& input : options.inputs){
         ErrorCode error;
         Path path(paths.repoRoot.arena());
         if(!ResolveAbsolutePath(paths.repoRoot, AStringView(input), path, error)){
-            NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to resolve input '{}'"), StringConvert(input));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve input '{}'"), StringConvert(input));
             return false;
         }
 
         const bool isDirectory = IsDirectory(path, error);
         if(error || (!isDirectory && !IsRegularFile(path, error))){
-            NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: input is not a file or directory '{}'"), PathToString<tchar>(path));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input is not a file or directory '{}'"), PathToString<tchar>(path));
             return false;
         }
 
         Assets::ScratchString normalized = PathToString(scratchArena, path.lexicallyNormal());
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
         CanonicalizeTextInPlace(normalized);
 #else
         if(!isDirectory)
@@ -129,7 +129,7 @@ bool SelectBuildInputs(
         if(isDirectory){
             for(const Assets::ResolvedAssetRoot& root : paths.assetRoots){
                 Assets::ScratchString rootText = PathToString(scratchArena, root.path.lexicallyNormal());
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
                 CanonicalizeTextInPlace(rootText);
 #endif
                 if(IsPathPrefixText(AStringView(rootText.data(), rootText.size()), AStringView(normalized.data(), normalized.size()))){
@@ -138,13 +138,13 @@ bool SelectBuildInputs(
                 }
             }
             if(!matched){
-                NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: input directory is outside the asset roots '{}'"), PathToString<tchar>(path));
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input directory is outside the asset roots '{}'"), PathToString<tchar>(path));
                 return false;
             }
         }
 
         const __hidden_build_inputs::PathSelectionIndex* selectionIndex = &fileIndex;
-#if !defined(GLB_PLATFORM_WINDOWS)
+#if !defined(NWB_PLATFORM_WINDOWS)
         // Directory containment follows host case rules; explicit asset identities retain their canonical spelling.
         if(isDirectory){
             if(!directoryIndex)
@@ -159,7 +159,7 @@ bool SelectBuildInputs(
             matched |= __hidden_build_inputs::SelectPathRange(*selectionIndex, normalized, true, selected);
         }
         if(!matched){
-            NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: input is not a .nwb asset within the asset roots '{}'"), PathToString<tchar>(path));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input is not a .nwb asset within the asset roots '{}'"), PathToString<tchar>(path));
             return false;
         }
     }

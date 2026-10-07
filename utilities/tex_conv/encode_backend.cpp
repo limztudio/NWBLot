@@ -69,11 +69,11 @@ void ResetPayload(
     const basist::basis_tex_format expectedFormat
 ){
     if(backendOutput.m_tex_format != expectedFormat){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: Basis Universal produced an unexpected UASTC block format."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal produced an unexpected UASTC block format."));
         return false;
     }
     if(backendOutput.m_slice_desc.empty() || backendOutput.m_slice_desc.size() != backendOutput.m_slice_image_data.size()){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC slice payload."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC slice payload."));
         return false;
     }
     return true;
@@ -104,16 +104,16 @@ void ResetPayload(
         blocksY,
         planeByteCount
     ) || planeByteCount > Limit<usize>::s_Max){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: UASTC mip block layout exceeds supported limits."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: UASTC mip block layout exceeds supported limits."));
         return false;
     }
     if(planeByteCount > Limit<u64>::s_Max / planeCount){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: UASTC mip payload size overflowed."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: UASTC mip payload size overflowed."));
         return false;
     }
     const u64 mipByteCount = planeByteCount * planeCount;
     if(mipByteCount > Limit<usize>::s_Max || inOutPayload.bytes.size() > Limit<usize>::s_Max - static_cast<usize>(mipByteCount)){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: UASTC payload is too large to store."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: UASTC payload is too large to store."));
         return false;
     }
 
@@ -130,13 +130,13 @@ void ResetPayload(
             || descriptor.m_num_blocks_y != blocksY
             || sliceForPlane[descriptor.m_source_file_index] != s_InvalidBackendSlice
         ){
-            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: Basis Universal returned an unexpected texture-slice layout."));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal returned an unexpected texture-slice layout."));
             return false;
         }
 
         const basisu::uint8_vec& encodedBlocks = backendOutput.m_slice_image_data[backendSliceIndex];
         if(encodedBlocks.size_in_bytes() != planeByteCount){
-            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: Basis Universal produced an invalid UASTC block layout."));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal produced an invalid UASTC block layout."));
             return false;
         }
         sliceForPlane[descriptor.m_source_file_index] = backendSliceIndex;
@@ -144,7 +144,7 @@ void ResetPayload(
 
     for(u32 planeIndex = 0u; planeIndex < planeCount; ++planeIndex){
         if(sliceForPlane[planeIndex] == s_InvalidBackendSlice){
-            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: Basis Universal omitted a required UASTC plane."));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal omitted a required UASTC plane."));
             return false;
         }
     }
@@ -182,14 +182,14 @@ void ResetPayload(
     const AString alphaPathText = PathToGenericString<AString>(alphaSource.path);
     if(IsHdrInputPath(alphaSource.path)){
         if(!basisu::load_image_hdr(alphaPathText.c_str(), outMask, false)){
-            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to decode alpha image '{}'."), PathToString<tchar>(alphaSource.path));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to decode alpha image '{}'."), PathToString<tchar>(alphaSource.path));
             return false;
         }
     }
     else{
         basisu::image sourceMask;
         if(!basisu::load_image(alphaPathText.c_str(), sourceMask)){
-            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to decode alpha image '{}'."), PathToString<tchar>(alphaSource.path));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to decode alpha image '{}'."), PathToString<tchar>(alphaSource.path));
             return false;
         }
         outMask.resize(sourceMask.get_width(), sourceMask.get_height());
@@ -199,7 +199,7 @@ void ResetPayload(
         }
     }
     if(outMask.get_width() != expectedWidth || outMask.get_height() != expectedHeight){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: alpha image resolution must match the texture input resolution."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image resolution must match the texture input resolution."));
         return false;
     }
 
@@ -212,7 +212,7 @@ void ResetPayload(
             const f32 alpha2 = outMask(x + 2u, y)[0u];
             const f32 alpha3 = outMask(x + 3u, y)[0u];
             if(!IsFinite(alpha0) || !IsFinite(alpha1) || !IsFinite(alpha2) || !IsFinite(alpha3)){
-                NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: alpha image contains a non-finite red-channel value."));
+                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image contains a non-finite red-channel value."));
                 return false;
             }
             const SIMDVector saturatedLanes = VectorSaturate(VectorSet(alpha0, alpha1, alpha2, alpha3));
@@ -224,7 +224,7 @@ void ResetPayload(
         for(; x < expectedWidth; ++x){
             f32& alpha = outMask(x, y)[0u];
             if(!IsFinite(alpha)){
-                NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: alpha image contains a non-finite red-channel value."));
+                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image contains a non-finite red-channel value."));
                 return false;
             }
             alpha = VectorGetX(VectorSaturate(VectorReplicate(alpha)));

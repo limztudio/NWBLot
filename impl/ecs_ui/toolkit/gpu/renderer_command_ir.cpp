@@ -179,7 +179,7 @@ bool RecordRasterCommandIr(
     if(!__hidden_ui_gpu_command_ir::ReplayCaptured(frame, context, commands, capture))
         return false;
     if(hasDraw)
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiGpuRenderer: raster command IR replay active"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiGpuRenderer: raster command IR replay active"));
     return true;
 }
 

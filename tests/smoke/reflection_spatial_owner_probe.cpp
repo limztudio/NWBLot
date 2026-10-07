@@ -47,7 +47,7 @@ bool ReflectionSpatialOwnerProbe::configure(const AStringView selection, Impl::R
     else if(selection == "sequence1")
         m_lastPhase = 3u;
     else{
-        NWB_LOGGER_ERROR(GLB_TEXT("ReflectionSpatialOwner: unknown selection"));
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: unknown selection"));
         return false;
     }
     if(
@@ -55,12 +55,12 @@ bool ReflectionSpatialOwnerProbe::configure(const AStringView selection, Impl::R
         || !settings.temporalEnabled || settings.temporalMaxSamples != 1u
         || !settings.spatialFilterEnabled || settings.screenFeedbackEnabled
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("ReflectionSpatialOwner: requires hardware, diagnostics, spatial, temporal cap1 and feedback off"));
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: requires hardware, diagnostics, spatial, temporal cap1 and feedback off"));
         return false;
     }
     settings.spatialRadius = m_radii[0];
     settings.samplingSeed = 99u;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("ReflectionSpatialOwner: selection={} initial_radius={} final_radius={} phases={}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwner: selection={} initial_radius={} final_radius={} phases={}")
         , StringConvert(selection), m_radii[0], m_radii[m_lastPhase], m_lastPhase + 1u
     );
     return true;
@@ -86,8 +86,8 @@ bool ReflectionSpatialOwnerProbe::update(
         || !m_phaseWork.valid() || statistics.graphicsFrameIndex < m_phaseWork.lastSampleFrameIndex
     )
         return true;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("ReflectionSpatialOwnerWarm: index={} sequence={} generation={} graphics_frame={} epoch={}")
-        GLB_TEXT(" start_graphics_frame={} sample_index={} seed={} work_publish={} work_first={} work_last={} work_samples={}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerWarm: index={} sequence={} generation={} graphics_frame={} epoch={}")
+        NWB_TEXT(" start_graphics_frame={} sample_index={} seed={} work_publish={} work_first={} work_last={} work_samples={}")
         , m_phase, statistics.sequence, statistics.generation, statistics.graphicsFrameIndex, statistics.historyEpoch
         , statistics.historyStartGraphicsFrame, statistics.sampleIndex, statistics.samplingSeed
         , m_phaseWork.publishFrameIndex, m_phaseWork.firstSampleFrameIndex, m_phaseWork.lastSampleFrameIndex, m_phaseWork.sampleCount
@@ -98,12 +98,12 @@ bool ReflectionSpatialOwnerProbe::update(
     }
     settings.samplingSeed = 0u;
     if(!m_renderer.setReflectionSettings(settings)){
-        NWB_LOGGER_ERROR(GLB_TEXT("ReflectionSpatialOwner: final seed reset rejected"));
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: final seed reset rejected"));
         return false;
     }
     m_finalSource = m_context.graphics.getFrameIndex();
     m_finalReset = true;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("ReflectionSpatialOwnerCapture: radius={} graphics_frame={} seed=0")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerCapture: radius={} graphics_frame={} seed=0")
         , settings.spatialRadius, m_finalSource
     );
     return true;
@@ -128,12 +128,12 @@ bool ReflectionSpatialOwnerProbe::observeTiming(const Core::Perf::TimingView& ti
         || work.sampleCount > work.lastSampleFrameIndex - work.firstSampleFrameIndex + 1u
         || !IsFinite(work.seconds) || work.seconds < 0.0
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("ReflectionSpatialOwner: invalid completed spatial window"));
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: invalid completed spatial window"));
         return false;
     }
     m_hasPublication = true;
     m_lastPublish = work.publishFrameIndex;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("ReflectionSpatialOwnerWork: publish={} first={} last={} samples={}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerWork: publish={} first={} last={} samples={}")
         , work.publishFrameIndex, work.firstSampleFrameIndex, work.lastSampleFrameIndex, work.sampleCount
     );
     if(m_started && !m_finalReset && !m_phaseWork.valid() && work.firstSampleFrameIndex >= m_phaseSource)
@@ -152,13 +152,13 @@ bool ReflectionSpatialOwnerProbe::beginPhase(Impl::ReflectionSettings& settings)
     settings.spatialRadius = m_radii[m_phase];
     settings.samplingSeed = 101u + m_phase;
     if(!m_renderer.setReflectionSettings(settings)){
-        NWB_LOGGER_ERROR(GLB_TEXT("ReflectionSpatialOwner: radius transition rejected"));
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: radius transition rejected"));
         return false;
     }
     m_phaseSource = m_context.graphics.getFrameIndex();
     m_phaseWork = {};
     m_started = true;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("ReflectionSpatialOwnerPhase: index={} radius={} seed={} graphics_frame={}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSpatialOwnerPhase: index={} radius={} seed={} graphics_frame={}")
         , m_phase, settings.spatialRadius, settings.samplingSeed, m_phaseSource
     );
     return true;

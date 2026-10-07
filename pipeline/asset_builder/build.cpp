@@ -43,7 +43,7 @@ namespace Assets = Core::Assets;
 bool BuildAssets(const AssetBuildOptions& options){
     Assets::AssetArena& arena = options.assetRoots.get_allocator().arena();
     if(options.assetType.view() != s_GraphicsAssetBuildType){
-        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: unsupported --asset-type '{}'. Available types: graphics"), StringConvert(options.assetType.view()));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: unsupported --asset-type '{}'. Available types: graphics"), StringConvert(options.assetType.view()));
         return false;
     }
 
@@ -123,7 +123,7 @@ bool BuildAssets(const AssetBuildOptions& options){
     if(!Assets::BuiltAssetDetail::WriteBuiltAssets(resolvedPaths.outputDirectory, manifest))
         return false;
 
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("AssetBuilder: built {} assets into '{}'"), manifest.entries.size(), StringConvert(options.outputDirectory));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AssetBuilder: built {} assets into '{}'"), manifest.entries.size(), StringConvert(options.outputDirectory));
     return true;
 }
 

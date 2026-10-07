@@ -96,7 +96,7 @@ bool CpuTaskScheduler::contributesToScopeLocked(const u32 index, const ScopeWait
                     }
                 }
             }
-            GLB_ASSERT(m_scopeContributionVisits[index] == positiveStamp);
+            NWB_ASSERT(m_scopeContributionVisits[index] == positiveStamp);
             return true;
         }
         const auto visit = [this](const TaskHandle handle){

@@ -49,7 +49,7 @@ bool AppendMeshObjectShaderEntries(
     static constexpr AStringView s_GraphicsPathToken = "graphics";
     static constexpr AStringView s_MeshPathToken = "mesh";
     static constexpr AStringView s_SharedMeshSourceFile = "shared_ms.slang";
-    if(mesh.name != s_SharedMeshProgramName && !TStringView(meshEntry.sourcePath.native()).ends_with(GLB_TEXT("shared_ms.slang")))
+    if(mesh.name != s_SharedMeshProgramName && !TStringView(meshEntry.sourcePath.native()).ends_with(NWB_TEXT("shared_ms.slang")))
         return true;
 
     const Path expectedSource = resolvedPaths.repoRoot / s_ImplPathToken / s_AssetsPathToken / s_GraphicsPathToken / s_MeshPathToken / s_SharedMeshSourceFile;
@@ -63,7 +63,7 @@ bool AppendMeshObjectShaderEntries(
         || !hasFixedSource
         || !mesh.emitMeshComputeShadow
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: object geometry stages require the fixed engine shared mesh program"));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: object geometry stages require the fixed engine shared mesh program"));
         return false;
     }
 
@@ -80,7 +80,7 @@ bool AppendMeshObjectShaderEntries(
 
     ErrorCode errorCode;
     if(!IsRegularFile(prepared.sourcePath, errorCode) || errorCode){
-        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: fixed object geometry shader is missing: '{}'"), PathToString<tchar>(prepared.sourcePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: fixed object geometry shader is missing: '{}'"), PathToString<tchar>(prepared.sourcePath));
         return false;
     }
     if(!shaderCook.gatherShaderDependencies(prepared.sourcePath, prepared.includeDirectories, prepared.dependencies, scratchArena))

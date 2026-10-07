@@ -203,10 +203,10 @@ void CommandBufferResourceReferences::clear()noexcept{
 
 void CommandBufferResourceReferences::promoteMembershipIndex(){
     using namespace __hidden_command_buffer_resource_references;
-    GLB_ASSERT(!m_membership);
-    GLB_ASSERT(m_resources.size() <= s_LinearCapacity);
-    GLB_ASSERT(m_buffers.size() <= s_LinearCapacity);
-    GLB_ASSERT(m_textures.size() <= s_LinearCapacity);
+    NWB_ASSERT(!m_membership);
+    NWB_ASSERT(m_resources.size() <= s_LinearCapacity);
+    NWB_ASSERT(m_buffers.size() <= s_LinearCapacity);
+    NWB_ASSERT(m_textures.size() <= s_LinearCapacity);
     const usize maximumEntries = m_resources.size() + m_buffers.size() + m_textures.size();
     MembershipIndex membership(maximumEntries * 2u, MembershipIndex::allocator_type(m_arena));
     for(const Handle<GraphicsResource>& resource : m_resources)

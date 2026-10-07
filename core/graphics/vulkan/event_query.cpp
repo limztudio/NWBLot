@@ -25,8 +25,8 @@ EventQuery::EventQuery(const VulkanContext& context)
     const VkResult res = m_context.deviceDispatch.vkCreateFence(m_context.device, &fenceInfo, m_context.allocationCallbacks, &m_fence);
     if(res != VK_SUCCESS){
         m_fence = VK_NULL_HANDLE;
-        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create fence for EventQuery"));
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create fence for EventQuery: {}"), ResultToString(res));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create fence for EventQuery"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create fence for EventQuery: {}"), ResultToString(res));
     }
 }
 
@@ -68,7 +68,7 @@ bool Device::setEventQueryInternal(
 
     Queue* const q = getQueue(queue);
     if(!q){
-        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to set event query: requested queue is not available"));
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to set event query: requested queue is not available"));
         return false;
     }
 
@@ -78,7 +78,7 @@ bool Device::setEventQueryInternal(
     {
         ScopedLock queryLock(query.m_mutex);
         if(query.m_started){
-            NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Refusing to reset an event query fence while its submission is pending."));
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Refusing to reset an event query fence while its submission is pending."));
             return false;
         }
         ScopedLock lock(q->m_mutex);
@@ -111,9 +111,9 @@ bool Device::setEventQueryInternal(
         captureDeviceLoss(deviceLossContext);
     if(submissionSuppressed || res != VK_SUCCESS){
         if(submissionSuppressed)
-            NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Event query submission was suppressed because the device requires recreation."));
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Event query submission was suppressed because the device requires recreation."));
         else
-            NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to submit event query fence: {}"), ResultToString(res));
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to submit event query fence: {}"), ResultToString(res));
         return false;
     }
 
@@ -175,7 +175,7 @@ bool Device::waitEventQueryInternal(
         if(res == VK_ERROR_DEVICE_LOST && deviceLossDiagnosticPolicy == DeviceLossDiagnosticPolicy::Capture)
             captureDeviceLoss("event query wait");
         if(deviceLossDiagnosticPolicy == DeviceLossDiagnosticPolicy::Capture)
-            NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to wait event query fence: {}"), ResultToString(res));
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait event query fence: {}"), ResultToString(res));
     }
     return res == VK_SUCCESS;
 }

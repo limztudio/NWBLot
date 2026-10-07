@@ -162,9 +162,9 @@ bool CsgDeformWallBuilder::ClipShell(
     const usize triangleCount = inOutTriangles.size();
     for(usize triangleIndex = 0u; triangleIndex < triangleCount; ++triangleIndex){
         const CsgDeformTriangle triangle = inOutTriangles[triangleIndex];
-        GLB_ASSERT(triangle.indices[0u] < inOutVertices.size());
-        GLB_ASSERT(triangle.indices[1u] < inOutVertices.size());
-        GLB_ASSERT(triangle.indices[2u] < inOutVertices.size());
+        NWB_ASSERT(triangle.indices[0u] < inOutVertices.size());
+        NWB_ASSERT(triangle.indices[1u] < inOutVertices.size());
+        NWB_ASSERT(triangle.indices[2u] < inOutVertices.size());
         const f32 distances[s_TriangleCornerCount] = {
             scratchDistances[triangle.indices[0u]],
             scratchDistances[triangle.indices[1u]],

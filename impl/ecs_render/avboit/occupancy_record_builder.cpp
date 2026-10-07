@@ -94,7 +94,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
     m_avboitSystem.taskGraphStage().m_occupancyReusedGeometryProducer = inputs.reusedGeometryProducer;
 
     const bool hasCsgIntervalReads = inputs.csgStreamsUploaded;
-    GLB_ASSERT(
+    NWB_ASSERT(
         !hasCsgIntervalReads
         || (
             occupancyPayload.occupancyStreamsUploaded
@@ -139,7 +139,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
         occupancyComputeEmulationPlanCaptured
         && !occupancyComputeEmulationOutputStatesGraphOwned
     ){
-        NWB_LOGGER_WARNING(GLB_TEXT(
+        NWB_LOGGER_WARNING(NWB_TEXT(
             "RendererSystem: could not declare graph-owned AVBOIT Occupancy compute-emulation output states"
         ));
     }
@@ -172,7 +172,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
         inputs.sharedComputeEmulationPlanCaptured
         && !occupancySharedComputeEmulationOutputStatesGraphOwned
     ){
-        NWB_LOGGER_WARNING(GLB_TEXT(
+        NWB_LOGGER_WARNING(NWB_TEXT(
             "RendererSystem: could not declare graph-owned AVBOIT Occupancy shared compute-emulation output state"
         ));
     }
@@ -392,7 +392,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
             Move(computeEmulationPayload)
         );
         if(!m_avboitSystem.taskGraphStage().m_occupancyComputeEmulationTask.valid()){
-            NWB_LOGGER_WARNING(GLB_TEXT(
+            NWB_LOGGER_WARNING(NWB_TEXT(
                 "RendererSystem: could not declare AVBOIT Occupancy compute-emulation producer"
             ));
             return false;
@@ -533,10 +533,10 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
                 occupancySharedComputeEmulationPlan.drawCount
             )
         ;
-        GLB_ASSERT(ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(
+        NWB_ASSERT(ECSRenderDetail::IsSupportedSharedComputeEmulationDrawCount(
             occupancySharedComputeEmulationPlan.drawCount
         ));
-        GLB_ASSERT(
+        NWB_ASSERT(
             occupancySharedComputeEmulationPhaseCount
             <= LengthOf(occupancySharedComputeEmulationPhaseIdentities)
         );
@@ -564,7 +564,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
                 )
             ;
             if(!m_avboitSystem.taskGraphStage().m_occupancySharedComputeEmulationTasks[phaseIndex].valid()){
-                NWB_LOGGER_WARNING(GLB_TEXT(
+                NWB_LOGGER_WARNING(NWB_TEXT(
                     "RendererSystem: could not declare AVBOIT Occupancy shared compute-emulation phase"
                 ));
                 return false;
@@ -597,7 +597,7 @@ AvboitOccupancyRecordBuilder::AvboitOccupancyRecordBuilder(
             Move(occupancyPayload)
         );
         if(!m_avboitSystem.taskGraphStage().m_occupancyTask.valid()){
-            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred AVBOIT occupancy graph task"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT occupancy graph task"));
             return false;
         }
     }

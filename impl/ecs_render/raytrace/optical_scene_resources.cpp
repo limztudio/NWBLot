@@ -50,7 +50,7 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
     m_runtimeBoundsRequired = !gather.runtimeBounds.empty();
     m_runtimeBoundsSnapshot.reset();
     if(gather.instances.size() > (Limit<u32>::s_Max - sizeof(gather.header)) / sizeof(RayTracingOpticalInstanceGpu)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Ray optical scene: instance table exceeds the shader address range"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: instance table exceeds the shader address range"));
         return false;
     }
     const usize instanceBytes = gather.instances.size() * sizeof(RayTracingOpticalInstanceGpu);
@@ -58,11 +58,11 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Ray optical scene: descriptor heap is unavailable during preflight"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: descriptor heap is unavailable during preflight"));
         return false;
     }
     if(m_resources.buffer && m_resources.buffer->getDeviceGeneration() != device.getDeviceGeneration()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Ray optical scene: stale device resources require owner invalidation"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: stale device resources require owner invalidation"));
         return false;
     }
     if(!m_resources.buffer || !m_resources.uploadState || m_capacity < byteCount){
@@ -76,14 +76,14 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
         ;
         Core::BufferHandle buffer = m_graphics.createBuffer(desc);
         if(!buffer){
-            NWB_LOGGER_ERROR(GLB_TEXT("Ray optical scene: failed to create {}-byte metadata buffer"), byteCount);
+            NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: failed to create {}-byte metadata buffer"), byteCount);
             return false;
         }
         const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
         if(!descriptor.valid() || !heap.write(descriptor, Core::DescriptorWriteItem::RawBufferSrv(0u, buffer.get()))){
             if(descriptor.valid())
                 heap.free(descriptor);
-            NWB_LOGGER_ERROR(GLB_TEXT("Ray optical scene: failed to register metadata buffer"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: failed to register metadata buffer"));
             return false;
         }
         RayTracingOpticalUploadControlHandle uploadState = CreateRayTracingOpticalUploadControl(
@@ -91,7 +91,7 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
         );
         if(!uploadState){
             heap.free(descriptor);
-            NWB_LOGGER_ERROR(GLB_TEXT("Ray optical scene: failed to create accepted upload control"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Ray optical scene: failed to create accepted upload control"));
             return false;
         }
         if(m_resources.uploadState)
@@ -106,8 +106,8 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
     const bool samePayload =
         m_resources.upload
         && m_resources.upload->bytes.size() == byteCount
-        && GLB_MEMCMP(m_resources.upload->bytes.data(), &gather.header, sizeof(gather.header)) == 0
-        && (instanceBytes == 0u || GLB_MEMCMP(
+        && NWB_MEMCMP(m_resources.upload->bytes.data(), &gather.header, sizeof(gather.header)) == 0
+        && (instanceBytes == 0u || NWB_MEMCMP(
             m_resources.upload->bytes.data() + sizeof(gather.header), gather.instances.data(), instanceBytes
         ) == 0)
     ;

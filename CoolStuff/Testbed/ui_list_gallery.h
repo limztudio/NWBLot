@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "namespace.h"
+
 #include <impl/ecs_ui/components.h>
 #include <impl/ecs_ui/toolkit/widgets/list.h>
 
@@ -12,7 +14,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiListSource final : public NWB::Impl::Ui::IListDataSource, NoCopy{
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiListSource final : public NWB::Impl::Ui::IListDataSource, NoCopy{
 public:
     virtual u64 instanceGeneration()const noexcept override{ return 1u; }
     virtual u64 revision()const noexcept override{ return 1u; }
@@ -28,15 +36,18 @@ private:
     mutable Array<char, 32u> m_label{};
 };
 
-class TestbedUiListGallery final : NoCopy{
+class UiListGallery final : NoCopy{
 public:
     void paint(NWB::Impl::UiPaintContext& context, f32 x, f32 y);
 
 
 private:
-    TestbedUiListSource m_source;
+    UiListSource m_source;
     NWB::Impl::Ui::ListState m_state;
 };
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

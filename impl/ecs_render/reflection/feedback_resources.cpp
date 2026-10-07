@@ -56,7 +56,7 @@ bool RendererReflectionFeedback::prepareResources(
     const bool enabled){
     const ReflectionFeedbackExtent extent = ComputeReflectionFeedbackExtent(width, height);
     if(!extent.valid()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Reflection feedback: invalid extent or feedback address range ({}x{})"), width, height);
+        NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: invalid extent or feedback address range ({}x{})"), width, height);
         return false;
     }
     auto& device = m_graphics.getDevice();
@@ -64,7 +64,7 @@ bool RendererReflectionFeedback::prepareResources(
     if(!m_control)
         m_control = CreateReflectionFeedbackControl(m_arena, deviceGeneration);
     if(!m_control){
-        NWB_LOGGER_ERROR(GLB_TEXT("Reflection feedback: failed to allocate acceptance control"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: failed to allocate acceptance control"));
         return false;
     }
     const bool changed = width != m_extent.width || height != m_extent.height || deviceGeneration != m_deviceGeneration;
@@ -124,7 +124,7 @@ bool RendererReflectionFeedback::prepareBank(ReflectionFeedbackBinding& bank, co
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Reflection feedback: descriptor heap is unavailable during preflight"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: descriptor heap is unavailable during preflight"));
         return false;
     }
     Core::BufferDesc desc;
@@ -137,14 +137,14 @@ bool RendererReflectionFeedback::prepareBank(ReflectionFeedbackBinding& bank, co
     ;
     Core::BufferHandle buffer = m_graphics.createBuffer(desc);
     if(!buffer){
-        NWB_LOGGER_ERROR(GLB_TEXT("Reflection feedback: failed to create {}-byte buffer"), byteCount);
+        NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: failed to create {}-byte buffer"), byteCount);
         return false;
     }
     const Core::GpuDescriptorHandle descriptor = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(!descriptor.valid() || !heap.write(descriptor, Core::DescriptorWriteItem::RawBufferUav(0u, buffer.get()))){
         if(descriptor.valid())
             heap.free(descriptor);
-        NWB_LOGGER_ERROR(GLB_TEXT("Reflection feedback: failed to register storage buffer"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: failed to register storage buffer"));
         return false;
     }
     bank = ReflectionFeedbackBinding{Move(buffer), descriptor};

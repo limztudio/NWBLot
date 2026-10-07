@@ -34,13 +34,13 @@ namespace __hidden_ui_nested_popup_smoke{
 static constexpr Impl::Ui::Rect s_Open{ 32.0f, 52.0f, 140.0f, 28.0f };
 static constexpr Impl::Ui::Rect s_Counter{ 176.0f, 52.0f, 140.0f, 28.0f };
 static constexpr Array<TStringView, 26u> s_RectNames{
-    GLB_TEXT("open"), GLB_TEXT("counter"), GLB_TEXT("parent"), GLB_TEXT("child"),
-    GLB_TEXT("before_button"), GLB_TEXT("before_edit"), GLB_TEXT("before_list"), GLB_TEXT("before_row2"),
-    GLB_TEXT("child_open"), GLB_TEXT("after_button"), GLB_TEXT("after_edit"), GLB_TEXT("after_list"),
-    GLB_TEXT("after_row2"), GLB_TEXT("child_action"), GLB_TEXT("child_edit"), GLB_TEXT("close_branch"),
-    GLB_TEXT("combo"), GLB_TEXT("combo_popup"), GLB_TEXT("combo_row2"), GLB_TEXT("search"),
-    GLB_TEXT("search_popup"), GLB_TEXT("search_query"), GLB_TEXT("search_row2"), GLB_TEXT("menu_anchor"),
-    GLB_TEXT("menu"), GLB_TEXT("menu_row2")
+    NWB_TEXT("open"), NWB_TEXT("counter"), NWB_TEXT("parent"), NWB_TEXT("child"),
+    NWB_TEXT("before_button"), NWB_TEXT("before_edit"), NWB_TEXT("before_list"), NWB_TEXT("before_row2"),
+    NWB_TEXT("child_open"), NWB_TEXT("after_button"), NWB_TEXT("after_edit"), NWB_TEXT("after_list"),
+    NWB_TEXT("after_row2"), NWB_TEXT("child_action"), NWB_TEXT("child_edit"), NWB_TEXT("close_branch"),
+    NWB_TEXT("combo"), NWB_TEXT("combo_popup"), NWB_TEXT("combo_row2"), NWB_TEXT("search"),
+    NWB_TEXT("search_popup"), NWB_TEXT("search_query"), NWB_TEXT("search_row2"), NWB_TEXT("menu_anchor"),
+    NWB_TEXT("menu"), NWB_TEXT("menu_row2")
 };
 
 
@@ -62,7 +62,7 @@ UiNestedPopupSmokeScene::UiNestedPopupSmokeScene(Core::Alloc::GlobalArena& arena
     , m_childText(arena)
 {
     const bool initialized = m_beforeText.setText("Before") && m_afterText.setText("After") && m_childText.setText("Child");
-    GLB_FATAL_ASSERT(initialized);
+    NWB_FATAL_ASSERT(initialized);
     m_combo.select(1u);
     m_search.combo().select(1u);
     m_input.addHandlerToBack(*this);
@@ -207,7 +207,7 @@ void UiNestedPopupSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& dis
         return;
     m_lastDisplay = display;
     m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiNestedPopupSmoke: display logical={}x{} scale={}x{}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiNestedPopupSmoke: display logical={}x{} scale={}x{}")
         , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
     );
 }
@@ -289,14 +289,14 @@ void UiNestedPopupSmokeScene::observeState(Impl::UiPaintContext& context){
     m_lastValues = current;
     m_lastRectangles = m_rectangles;
     m_displayChanged = false;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiNestedPopupSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiNestedPopupSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
         , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5], current[6]
         , current[7], current[8], current[9], current[10], current[11], current[12], current[13]
         , current[14], current[15], current[16], current[17], current[18], current[19], current[20]
         , current[21], current[22], current[23], current[24], current[25], current[26], current[27], current[28]
     );
     for(usize index = 0u; index < m_rectangles.size(); ++index)
-        LogSmokeRect(GLB_TEXT("UiNestedPopupSmoke"), m_sequence, __hidden_ui_nested_popup_smoke::s_RectNames[index], m_rectangles[index]);
+        LogSmokeRect(NWB_TEXT("UiNestedPopupSmoke"), m_sequence, __hidden_ui_nested_popup_smoke::s_RectNames[index], m_rectangles[index]);
 }
 
 void UiNestedPopupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{

@@ -94,7 +94,7 @@ struct ResourceUseCollector : NoCopy{
     }
 
     void promoteIndex(){
-        GLB_ASSERT(!m_index && m_count == InlineCapacity);
+        NWB_ASSERT(!m_index && m_count == InlineCapacity);
         Index index(InlineCapacity * 4u, ResourceHash{}, EqualTo<Core::GpuGraphResourceId>{}, m_scratchArena);
         for(const ResourceUseEntry& entry : m_inline)
             index.emplace(entry.resource, entry.info);
@@ -156,7 +156,7 @@ bool BuildMeshSkinningGraphResourceUses(
     if(planCount == 0u)
         return true;
     if(!plans){
-        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: graph resource uses require dispatch plans"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph resource uses require dispatch plans"));
         return false;
     }
 
@@ -187,7 +187,7 @@ bool BuildMeshSkinningGraphResourceUses(
             || !deformation.add(plan.skinResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
             || !deformation.add(plan.jointPaletteResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
         ){
-            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to declare graph resource uses for skinning deformation"));
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph resource uses for skinning deformation"));
             return false;
         }
     }
@@ -215,7 +215,7 @@ bool BuildMeshSkinningGraphResourceUses(
                 || !postDispatch.add(plan.attributeResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
             ))
         ){
-            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to declare graph resource uses for skinning bounds/repack"));
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph resource uses for skinning bounds/repack"));
             return false;
         }
     }
@@ -229,7 +229,7 @@ bool BuildMeshSkinningGraphResourceUses(
             || !localBounds.add(plan.meshletLocalBoundsResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read)
             || !localBounds.add(plan.localBoundsResource, Core::ResourceStates::UnorderedAccess, Core::GpuTaskResourceAccess::Write)
         ){
-            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to declare local bounds reduction resources"));
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare local bounds reduction resources"));
             return false;
         }
     }
@@ -248,12 +248,12 @@ bool BuildMeshSkinningGraphResourceUses(
             ))
             || (plan.repacksNormals && !finalizer.add(plan.attributeResource, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read))
         ){
-            NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning final states"));
+            NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to declare graph-owned skinning final states"));
             return false;
         }
     }
     if(finalizer.m_count == 0u){
-        NWB_LOGGER_ERROR(GLB_TEXT("MeshSkinningSystem: graph-owned skinning dispatch has no final state"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: graph-owned skinning dispatch has no final state"));
         return false;
     }
 

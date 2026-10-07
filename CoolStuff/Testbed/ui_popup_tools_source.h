@@ -5,14 +5,21 @@
 #pragma once
 
 
+#include "namespace.h"
 #include "ui_immutable_list_source.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiPopupToolsSource final : public TestbedUiImmutableListSource<TestbedUiPopupToolsSource, 5u, 3u>{
-    friend class TestbedUiImmutableListSource<TestbedUiPopupToolsSource, 5u, 3u>;
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiPopupToolsSource final : public UiImmutableListSource<UiPopupToolsSource, 5u, 3u>{
+    friend class UiImmutableListSource<UiPopupToolsSource, 5u, 3u>;
 
 
 private:
@@ -20,8 +27,11 @@ private:
 
 
 public:
-    using TestbedUiImmutableListSource<TestbedUiPopupToolsSource, 5u, 3u>::TestbedUiImmutableListSource;
+    using UiImmutableListSource<UiPopupToolsSource, 5u, 3u>::UiImmutableListSource;
 };
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

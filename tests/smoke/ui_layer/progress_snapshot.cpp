@@ -32,9 +32,9 @@ namespace __hidden_ui_progress_snapshot{
 
 
 static constexpr Array<TStringView, 15u> s_RectNames{
-    GLB_TEXT("before"), GLB_TEXT("after"), GLB_TEXT("zero"), GLB_TEXT("quarter"), GLB_TEXT("full"),
-    GLB_TEXT("below"), GLB_TEXT("above"), GLB_TEXT("tiny"), GLB_TEXT("frozen"), GLB_TEXT("external"),
-    GLB_TEXT("external_clip"), GLB_TEXT("parent_progress"), GLB_TEXT("child_progress"), GLB_TEXT("parent"), GLB_TEXT("child")
+    NWB_TEXT("before"), NWB_TEXT("after"), NWB_TEXT("zero"), NWB_TEXT("quarter"), NWB_TEXT("full"),
+    NWB_TEXT("below"), NWB_TEXT("above"), NWB_TEXT("tiny"), NWB_TEXT("frozen"), NWB_TEXT("external"),
+    NWB_TEXT("external_clip"), NWB_TEXT("parent_progress"), NWB_TEXT("child_progress"), NWB_TEXT("parent"), NWB_TEXT("child")
 };
 
 
@@ -90,18 +90,18 @@ void UiProgressSmokeScene::observeState(Impl::UiPaintContext& context){
     current.sequence = m_snapshot.sequence + 1u;
     m_snapshot = current;
     if(displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiProgressSmoke: display logical={}x{} scale={}x{}")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiProgressSmoke: display logical={}x{} scale={}x{}")
             , current.display.logicalWidth, current.display.logicalHeight
             , current.display.pixelScaleX, current.display.pixelScaleY
         );
     }
     const auto& value = current.values;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiProgressSmoke: state sequence={} values={},{},{},{},{},{},{},{} bits={},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiProgressSmoke: state sequence={} values={},{},{},{},{},{},{},{} bits={},{}")
         , current.sequence, value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7]
         , current.bits[0], current.bits[1]
     );
     for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(GLB_TEXT("UiProgressSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
+        LogSmokeRect(NWB_TEXT("UiProgressSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
 }
 
 void UiProgressSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{

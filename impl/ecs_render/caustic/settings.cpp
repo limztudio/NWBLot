@@ -24,9 +24,9 @@ CausticPhotonBudget MakeCausticPhotonBudget(
     const CausticQualitySettings& settings,
     const u32 baseGridSide,
     const u32 temporalPhaseCount){
-    GLB_ASSERT(ValidateCausticQualitySettings(settings));
-    GLB_ASSERT(baseGridSide == 128u || baseGridSide == 512u);
-    GLB_ASSERT(temporalPhaseCount == 1u || temporalPhaseCount == 2u || temporalPhaseCount == 4u);
+    NWB_ASSERT(ValidateCausticQualitySettings(settings));
+    NWB_ASSERT(baseGridSide == 128u || baseGridSide == 512u);
+    NWB_ASSERT(temporalPhaseCount == 1u || temporalPhaseCount == 2u || temporalPhaseCount == 4u);
     const u32 gridSide = baseGridSide / settings.photonGridDivisor;
     const u32 fullGridCount = gridSide * gridSide;
     return { gridSide, fullGridCount, fullGridCount / temporalPhaseCount };

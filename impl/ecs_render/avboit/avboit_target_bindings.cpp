@@ -101,24 +101,24 @@ bool RendererAvboitSystem::registerAvboitFrameTargetDescriptors(
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: AVBOIT target bindings require the descriptor-buffer global heap"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT target bindings require the descriptor-buffer global heap"));
         return false;
     }
-    GLB_ASSERT(createdTargets.bindless.slotsBufferDescriptor.valid());
-    GLB_ASSERT(createdTargets.bindless.slotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
-    GLB_ASSERT(!createdTargets.bindless.slotsUploaded);
-    GLB_ASSERT(avboitTargets.coverageBuffer);
-    GLB_ASSERT(avboitTargets.depthWarpBuffer);
-    GLB_ASSERT(avboitTargets.controlBuffer);
-    GLB_ASSERT(avboitTargets.extinctionBuffer);
-    GLB_ASSERT(avboitTargets.extinctionOverflowBuffer);
-    GLB_ASSERT(avboitTargets.transmittanceTexture);
-    GLB_ASSERT(!avboitTargets.coverageBufferDescriptor.valid());
-    GLB_ASSERT(!avboitTargets.depthWarpBufferDescriptor.valid());
-    GLB_ASSERT(!avboitTargets.controlBufferDescriptor.valid());
-    GLB_ASSERT(!avboitTargets.extinctionBufferDescriptor.valid());
-    GLB_ASSERT(!avboitTargets.extinctionOverflowBufferDescriptor.valid());
-    GLB_ASSERT(!avboitTargets.transmittanceTextureStorageDescriptor.valid());
+    NWB_ASSERT(createdTargets.bindless.slotsBufferDescriptor.valid());
+    NWB_ASSERT(createdTargets.bindless.slotsBufferDescriptor.descriptorClass() == Core::GpuDescriptorClass::UniformBuffer);
+    NWB_ASSERT(!createdTargets.bindless.slotsUploaded);
+    NWB_ASSERT(avboitTargets.coverageBuffer);
+    NWB_ASSERT(avboitTargets.depthWarpBuffer);
+    NWB_ASSERT(avboitTargets.controlBuffer);
+    NWB_ASSERT(avboitTargets.extinctionBuffer);
+    NWB_ASSERT(avboitTargets.extinctionOverflowBuffer);
+    NWB_ASSERT(avboitTargets.transmittanceTexture);
+    NWB_ASSERT(!avboitTargets.coverageBufferDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.depthWarpBufferDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.controlBufferDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.extinctionBufferDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.extinctionOverflowBufferDescriptor.valid());
+    NWB_ASSERT(!avboitTargets.transmittanceTextureStorageDescriptor.valid());
 
     const bool targetResourcesRegistered =
         __hidden_avboit_target_bindings::RegisterWorkBuffer(heap, avboitTargets.coverageBufferDescriptor, avboitTargets.coverageBuffer.get())
@@ -135,7 +135,7 @@ bool RendererAvboitSystem::registerAvboitFrameTargetDescriptors(
     ;
     if(!targetResourcesRegistered){
         __hidden_avboit_target_bindings::RetireTargetDescriptors(heap, avboitTargets);
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register AVBOIT work resources in the descriptor heap"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register AVBOIT work resources in the descriptor heap"));
         return false;
     }
 

@@ -261,14 +261,14 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedR
         SCOPED_TRACE(mutationIndex);
         ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
         Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics encodedStatistics;
-        GLB_MEMCPY(
+        NWB_MEMCPY(
             &encodedStatistics,
             sizeof(encodedStatistics),
             payload.data() + statisticsOffset,
             sizeof(encodedStatistics)
         );
         s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutations[mutationIndex](encodedStatistics);
-        GLB_MEMCPY(
+        NWB_MEMCPY(
             payload.data() + statisticsOffset,
             payload.size() - statisticsOffset,
             &encodedStatistics,
@@ -282,14 +282,14 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedR
         + sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics)
     ;
     Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics encodedStatistics;
-    GLB_MEMCPY(
+    NWB_MEMCPY(
         &encodedStatistics,
         sizeof(encodedStatistics),
         payload.data() + secondStatisticsOffset,
         sizeof(encodedStatistics)
     );
     encodedStatistics.queue.index = 1u;
-    GLB_MEMCPY(
+    NWB_MEMCPY(
         payload.data() + secondStatisticsOffset,
         payload.size() - secondStatisticsOffset,
         &encodedStatistics,
@@ -299,9 +299,9 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedR
 
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
     Telemetry::EncodedFrameGraphPayloadHeader header;
-    GLB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     ++header.physicalQueueRuntimeStatisticsCount;
-    GLB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+    NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));

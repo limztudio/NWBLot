@@ -5,15 +5,22 @@
 #pragma once
 
 
+#include "namespace.h"
 #include "ui_immutable_list_source.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiNestedPopupSource final : public TestbedUiFilteredListSource<TestbedUiNestedPopupSource, 5u, 3u>{
-    friend class TestbedUiImmutableListSource<TestbedUiNestedPopupSource, 5u, 3u, NWB::Impl::Ui::ISearchableListDataSource>;
-    friend class TestbedUiFilteredListSource<TestbedUiNestedPopupSource, 5u, 3u>;
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiNestedPopupSource final : public UiFilteredListSource<UiNestedPopupSource, 5u, 3u>{
+    friend class UiImmutableListSource<UiNestedPopupSource, 5u, 3u, NWB::Impl::Ui::ISearchableListDataSource>;
+    friend class UiFilteredListSource<UiNestedPopupSource, 5u, 3u>;
 
 
 private:
@@ -21,7 +28,7 @@ private:
 
 
 public:
-    using TestbedUiFilteredListSource<TestbedUiNestedPopupSource, 5u, 3u>::TestbedUiFilteredListSource;
+    using UiFilteredListSource<UiNestedPopupSource, 5u, 3u>::UiFilteredListSource;
 
 
 public:
@@ -37,6 +44,9 @@ public:
 private:
     mutable u32 m_labelReads = 0u;
 };
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

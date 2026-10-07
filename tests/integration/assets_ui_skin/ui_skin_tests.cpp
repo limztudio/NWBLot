@@ -273,7 +273,7 @@ TEST(AssetsUiSkin, RejectsObsoleteBinaryVersionsWithoutReplacingCurrentSkin){
         EXPECT_EQ(skin.regions().size(), 1u);
         EXPECT_FLOAT_EQ(skin.typography().defaultFontSize, 16.0f);
     }
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("recook required")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("recook required")));
 }
 
 TEST(AssetsUiSkin, LoadRejectsMalformedHeaderAndCountWithoutReplacingSkin){
@@ -313,7 +313,7 @@ TEST(AssetsUiSkin, LoadRejectsMalformedHeaderAndCountWithoutReplacingSkin){
     binary = MakeBinary(testArena, validHeader, validRegion);
     binary.push_back(0u);
     EXPECT_FALSE(skin.loadBinary(binary));
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("trailing bytes")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("trailing bytes")));
 }
 
 TEST(AssetsUiSkin, LoadRejectsInvalidRegionBoundsMetricsAndFlags){
@@ -358,7 +358,7 @@ TEST(AssetsUiSkin, RejectsOverLimitCountsBeforeReadingOrCopyingRegions){
     binary.reserve(sizeof(header));
     AppendPOD(binary, header);
     EXPECT_FALSE(skin.loadBinary(binary));
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("UiSkin::loadBinary failed: region count 4097 exceeds schema limit 4096")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("UiSkin::loadBinary failed: region count 4097 exceeds schema limit 4096")));
     ASSERT_EQ(skin.regions().size(), 1u);
     EXPECT_EQ(skin.regions().front().name, Name("panel.normal"));
 
@@ -375,7 +375,7 @@ TEST(AssetsUiSkin, RejectsOverLimitCountsBeforeReadingOrCopyingRegions){
     const Path metadataPath = assetRoot / "ui" / "atlas.nwb";
     Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
     EXPECT_FALSE(ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("regions exceed schema limit 4096")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("regions exceed schema limit 4096")));
     EXPECT_TRUE(entry.regions.empty());
     EXPECT_EQ(entry.virtualPath, s_NameNone);
 
@@ -386,7 +386,7 @@ TEST(AssetsUiSkin, RejectsOverLimitCountsBeforeReadingOrCopyingRegions){
     UiSkin constructed(testArena.arena, skin.virtualPath());
     constructed.setAtlas(skin.texture(), skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity(), Move(oversized));
     EXPECT_FALSE(constructed.validatePayload());
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("UiSkin::validatePayload failed: region count 4097 exceeds schema limit 4096")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("UiSkin::validatePayload failed: region count 4097 exceeds schema limit 4096")));
 }
 
 TEST(AssetsUiSkin, CookRejectsObsoleteMetadataUnknownFieldsAndMalformedArrays){
@@ -425,8 +425,8 @@ TEST(AssetsUiSkin, CookRejectsObsoleteMetadataUnknownFieldsAndMalformedArrays){
         EXPECT_TRUE(entry.regions.empty());
         EXPECT_EQ(entry.virtualPath, s_NameNone);
     }
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("unsupported asset field")));
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("toolkit_contract must be 'widgets'")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("toolkit_contract must be 'widgets'")));
 }
 
 TEST(AssetsUiSkin, RetiredSpriteSliceFieldsPreservePriorCookEntry){
@@ -458,7 +458,7 @@ TEST(AssetsUiSkin, RetiredSpriteSliceFieldsPreservePriorCookEntry){
         EXPECT_EQ(entry.regions.front().sliceInsets.right, 5u);
         EXPECT_EQ(entry.regions.front().sliceInsets.bottom, 6u);
     }
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("unsupported asset field 'slice'")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'slice'")));
     TestAString spriteMetadata(PaletteMetadata());
     spriteMetadata.append("asset.regions = [{ \"name\": \"sprite\", \"rect\": [0, 0, 4, 4], \"draw_mode\": \"sprite\" }];\r\n");
     UiSkinCookEntry spriteEntry(testArena.arena);
@@ -484,7 +484,7 @@ TEST(AssetsUiSkin, CookRejectsDuplicateNamesAndAtlasOrSliceOverflow){
         UiSkinCookEntry entry(testArena.arena);
         EXPECT_FALSE(ParseMetadata(testArena, metadata, entry)) << overrideText;
     }
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("duplicate region")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate region")));
 }
 
 TEST(AssetsUiSkin, TextureValidationRejectsIdentityDimensionAndExtentMismatch){

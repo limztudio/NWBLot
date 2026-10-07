@@ -9,7 +9,7 @@
 #include <global/blocking_io.h>
 #include <global/scope_exit.h>
 
-#if !defined(GLB_PLATFORM_WINDOWS)
+#if !defined(NWB_PLATFORM_WINDOWS)
 #include <fcntl.h>
 #endif
 
@@ -40,7 +40,7 @@ bool CheckOutputPath(const Path& path, const bool force, const bool temporary){
     ErrorCode errorCode;
     const bool exists = FileExistsNoFollow(path, errorCode);
     if(errorCode){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to query output path '{}': {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to query output path '{}': {}")
             , PathToString<tchar>(path)
             , StringConvert(errorCode.message())
         );
@@ -51,22 +51,22 @@ bool CheckOutputPath(const Path& path, const bool force, const bool temporary){
 
     const bool regular = IsRegularFile(path, errorCode);
     if(errorCode){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to inspect output path '{}': {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect output path '{}': {}")
             , PathToString<tchar>(path)
             , StringConvert(errorCode.message())
         );
         return false;
     }
     if(!regular){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: output path is not a regular file: '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: output path is not a regular file: '{}'"), PathToString<tchar>(path));
         return false;
     }
     if(temporary){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: publication work path already exists: '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: publication work path already exists: '{}'"), PathToString<tchar>(path));
         return false;
     }
     if(!force){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: Output already exists: '{}'. Pass --force to replace both output files.")
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Output already exists: '{}'. Pass --force to replace both output files.")
             , PathToString<tchar>(path)
         );
         return false;
@@ -144,7 +144,7 @@ AString BuildMetadata(const TexturePayload& payload, const Path& dataPath){
     const void* const tail,
     const usize tailCount,
     bool& outOwned)noexcept{
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
     const HANDLE handle = CreateFile(path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
     if(handle == INVALID_HANDLE_VALUE)
         return false;
@@ -196,7 +196,7 @@ bool ResolveOutputPaths(const Path& inputPath, const AStringView outputArgument,
         else if(extension == __hidden_output::s_NwbOutputExtension)
             outOutputPaths.metadata = outputBase;
         else{
-            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: --output must be an output base name or a .nwb filename."));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: --output must be an output base name or a .nwb filename."));
             return false;
         }
         outOutputPaths.metadata.replaceExtension(__hidden_output::s_NwbOutputExtension);
@@ -229,11 +229,11 @@ bool ValidateOutputPaths(const OutputPaths& outputPaths, const bool force){
 bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload, const bool force){
     const AString metadata = __hidden_output::BuildMetadata(payload, outputPaths.data);
     if(metadata.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: cannot write an unsupported texture payload format."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: cannot write an unsupported texture payload format."));
         return false;
     }
     if(payload.alphaBytes.size() > Limit<usize>::s_Max - payload.bytes.size()){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: texture payload is too large to write."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: texture payload is too large to write."));
         return false;
     }
     if(!ValidateOutputPaths(outputPaths, force))
@@ -280,7 +280,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload,
             payload.alphaBytes.size(),
             ownedTemporary[0u]
         )){
-            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to stage output data file '{}'"), PathToString<tchar>(outputPaths.dataTemporary));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output data file '{}'"), PathToString<tchar>(outputPaths.dataTemporary));
             return false;
         }
         if(!__hidden_output::StageOutput(
@@ -291,7 +291,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload,
             0u,
             ownedTemporary[1u]
         )){
-            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to stage output metadata file '{}'"), PathToString<tchar>(outputPaths.metadataTemporary));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to stage output metadata file '{}'"), PathToString<tchar>(outputPaths.metadataTemporary));
             return false;
         }
 
@@ -299,7 +299,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload,
             ErrorCode error;
             const bool present = FileExistsNoFollow(*outputs[index], error);
             if(error){
-                NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to inspect existing output '{}'"), PathToString<tchar>(*outputs[index]));
+                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect existing output '{}'"), PathToString<tchar>(*outputs[index]));
                 return false;
             }
             if(!present)
@@ -309,7 +309,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload,
             if(!__hidden_output::CheckOutputPath(backups[index], false, true))
                 return false;
             if(!RenamePath(*outputs[index], backups[index], error)){
-                NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to preserve existing output '{}': {}")
+                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to preserve existing output '{}': {}")
                     , PathToString<tchar>(*outputs[index])
                     , StringConvert(error.message())
                 );
@@ -320,7 +320,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload,
         for(u32 index = 0u; index < 2u; ++index){
             ErrorCode error;
             if(!RenamePath(*temporaries[index], *outputs[index], error)){
-                NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to finalize output '{}': {}")
+                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to finalize output '{}': {}")
                     , PathToString<tchar>(*outputs[index])
                     , StringConvert(error.message())
                 );
@@ -336,7 +336,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload,
         restoreOnFailure.release();
         for(u32 index = 0u; index < 2u; ++index){
             if(backedUp[index] && (removalErrors[index] || restorationErrors[index])){
-                NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to restore '{}'; previous output retained at '{}' (remove {}, restore {})")
+                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to restore '{}'; previous output retained at '{}' (remove {}, restore {})")
                     , PathToString<tchar>(*outputs[index])
                     , PathToString<tchar>(backups[index])
                     , removalErrors[index].value()
@@ -344,13 +344,13 @@ bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload,
                 );
             }
             if(!backedUp[index] && removalErrors[index]){
-                NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to remove newly published output '{}': {}")
+                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to remove newly published output '{}': {}")
                     , PathToString<tchar>(*outputs[index])
                     , StringConvert(removalErrors[index].message())
                 );
             }
             if(temporaryErrors[index]){
-                NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("tex_conv: failed to remove unpublished temporary '{}': {}")
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("tex_conv: failed to remove unpublished temporary '{}': {}")
                     , PathToString<tchar>(*temporaries[index])
                     , StringConvert(temporaryErrors[index].message())
                 );
@@ -365,7 +365,7 @@ bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload,
             continue;
         ErrorCode error;
         if(!RemoveFile(backups[index], error) && error){
-            NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("tex_conv: published output pair but could not remove previous backup '{}': {}")
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("tex_conv: published output pair but could not remove previous backup '{}': {}")
                 , PathToString<tchar>(backups[index])
                 , StringConvert(error.message())
             );

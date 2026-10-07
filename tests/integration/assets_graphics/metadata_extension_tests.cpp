@@ -468,7 +468,7 @@ TEST(MetadataExtensionOwnership, GraphicsParserFailureReleasesItsActualExtension
         }
         EXPECT_EQ(ownerArena.memoryStats().usedBytes, 0u);
     }
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("asset is not a map")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("asset is not a map")));
     EXPECT_TRUE(document.asset().isNull());
 }
 
@@ -531,7 +531,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
         }
         EXPECT_EQ(parseArena.memoryStats().usedBytes, 0u);
         if(rejectDuplicate)
-            EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("duplicate property asset virtual path")));
+            EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate property asset virtual path")));
         else
             EXPECT_EQ(logger.errorCount(), 0u);
     }

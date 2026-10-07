@@ -77,7 +77,7 @@ inline bool operator==(const MaterialTypedByteContentKey& lhs, const MaterialTyp
     if(lhs.bytes.empty())
         return true;
 
-    return GLB_MEMCMP(lhs.bytes.data(), rhs.bytes.data(), lhs.bytes.size()) == 0;
+    return NWB_MEMCMP(lhs.bytes.data(), rhs.bytes.data(), lhs.bytes.size()) == 0;
 }
 
 struct MaterialTypedByteContentKeyHasher{
@@ -107,7 +107,7 @@ struct MaterialTypedByteContentKeyEqual{
         if(lhs.bytes.empty())
             return true;
 
-        return GLB_MEMCMP(lhs.bytes.data(), rhs.bytes.data(), lhs.bytes.size()) == 0;
+        return NWB_MEMCMP(lhs.bytes.data(), rhs.bytes.data(), lhs.bytes.size()) == 0;
     }
 };
 
@@ -125,28 +125,28 @@ using MaterialTypedByteContentRangeMap = HashMap<MaterialTypedByteContentKey, Ma
         return true;
 
     if(appendByteCount > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: material typed byte count exceeds u32 limits"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte count exceeds u32 limits"));
         return false;
     }
 
     usize alignedByteBegin = 0u;
     if(!AlignUpChecked(currentByteCount, s_MaterialTypedWordBytes, alignedByteBegin)){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: material typed byte offset overflows alignment"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte offset overflows alignment"));
         return false;
     }
     if(appendByteCount > Limit<usize>::s_Max - alignedByteBegin){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: gathered material typed byte count overflows"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count overflows"));
         return false;
     }
 
     const usize byteEnd = alignedByteBegin + appendByteCount;
     usize alignedByteEnd = 0u;
     if(!AlignUpChecked(byteEnd, s_MaterialTypedWordBytes, alignedByteEnd)){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: material typed byte end overflows alignment"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte end overflows alignment"));
         return false;
     }
     if(alignedByteBegin > static_cast<usize>(Limit<u32>::s_Max) || alignedByteEnd > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: gathered material typed byte count exceeds u32 limits"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count exceeds u32 limits"));
         return false;
     }
 
@@ -215,7 +215,7 @@ template<typename DestinationByteVector, typename SourceByteVector, typename Mat
 
     const auto insertedRange = rangeMap.emplace(Move(rangeKey), outRange);
     if(!insertedRange.second){
-        GLB_ASSERT_MSG(false, GLB_TEXT("RendererSystem: material typed range insertion duplicated a missing key"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("RendererSystem: material typed range insertion duplicated a missing key"));
         return false;
     }
     return true;
@@ -229,8 +229,8 @@ inline InstanceGpuData BuildInstanceGpuData(
     const NWB::Impl::Scene::TransformComponent* transform,
     const MaterialTypedInstanceRanges& materialTypedRanges
 ){
-    GLB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(materialTypedRanges.constantRange));
-    GLB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(materialTypedRanges.mutableRange));
+    NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(materialTypedRanges.constantRange));
+    NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(materialTypedRanges.mutableRange));
 
     InstanceGpuData data;
     if(transform){
@@ -254,13 +254,13 @@ template<typename MaterialTypedByteVector>
     usize& outUploadByteCount
 ){
     outUploadByteCount = materialTypedBytes.size();
-    GLB_ASSERT_MSG(
+    NWB_ASSERT_MSG(
         outUploadByteCount != 0u,
-        GLB_TEXT("RendererSystem: material typed data upload is empty")
+        NWB_TEXT("RendererSystem: material typed data upload is empty")
     );
-    GLB_ASSERT_MSG(
+    NWB_ASSERT_MSG(
         (outUploadByteCount & (s_MaterialTypedWordBytes - 1u)) == 0u,
-        GLB_TEXT("RendererSystem: material typed data upload is not word-aligned")
+        NWB_TEXT("RendererSystem: material typed data upload is not word-aligned")
     );
 
     return true;
@@ -270,7 +270,7 @@ template<typename MaterialTypedByteVector>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -282,29 +282,29 @@ inline void AssertMaterialTypedUploadRange(
     [[maybe_unused]] const TStringView rangeName
 ){
     if(range.byteCount == 0u){
-        GLB_ASSERT_MSG(
+        NWB_ASSERT_MSG(
             MaterialTypedByteRangeEmptyOffsetValid(range),
-            GLB_TEXT("RendererSystem: {} material typed byte range has zero count with nonzero offset"),
+            NWB_TEXT("RendererSystem: {} material typed byte range has zero count with nonzero offset"),
             rangeName
         );
         return;
     }
 
-    GLB_ASSERT_MSG(
+    NWB_ASSERT_MSG(
         ((range.byteOffset | range.byteCount) & static_cast<u32>(NWB_MATERIAL_TYPED_WORD_BYTES - 1u)) == 0u,
-        GLB_TEXT("RendererSystem: {} material typed byte range is not word-aligned"),
+        NWB_TEXT("RendererSystem: {} material typed byte range is not word-aligned"),
         rangeName
     );
 
     const usize byteOffset = static_cast<usize>(range.byteOffset);
-    GLB_ASSERT_MSG(
+    NWB_ASSERT_MSG(
         byteOffset <= uploadByteCount,
-        GLB_TEXT("RendererSystem: {} material typed byte range offset exceeds upload data"),
+        NWB_TEXT("RendererSystem: {} material typed byte range offset exceeds upload data"),
         rangeName
     );
-    GLB_ASSERT_MSG(
+    NWB_ASSERT_MSG(
         byteOffset <= uploadByteCount && static_cast<usize>(range.byteCount) <= uploadByteCount - byteOffset,
-        GLB_TEXT("RendererSystem: {} material typed byte range exceeds upload data"),
+        NWB_TEXT("RendererSystem: {} material typed byte range exceeds upload data"),
         rangeName
     );
 }
@@ -313,8 +313,8 @@ inline void AssertMaterialTypedInstanceRange(
     const MaterialTypedInstanceRanges& ranges,
     const usize uploadByteCount
 ){
-    AssertMaterialTypedUploadRange(ranges.constantRange, uploadByteCount, GLB_TEXT("constant"));
-    AssertMaterialTypedUploadRange(ranges.mutableRange, uploadByteCount, GLB_TEXT("mutable"));
+    AssertMaterialTypedUploadRange(ranges.constantRange, uploadByteCount, NWB_TEXT("constant"));
+    AssertMaterialTypedUploadRange(ranges.mutableRange, uploadByteCount, NWB_TEXT("mutable"));
 }
 
 struct MaterialTypedInstanceRangeVector{
@@ -343,13 +343,13 @@ inline void AssertMaterialTypedUploadRanges(
         return;
 
     const usize uploadByteCount = materialTypedBytes.size();
-    GLB_ASSERT_MSG(
+    NWB_ASSERT_MSG(
         uploadByteCount != 0u,
-        GLB_TEXT("RendererSystem: material typed data upload is empty")
+        NWB_TEXT("RendererSystem: material typed data upload is empty")
     );
-    GLB_ASSERT_MSG(
+    NWB_ASSERT_MSG(
         (uploadByteCount & (s_MaterialTypedWordBytes - 1u)) == 0u,
-        GLB_TEXT("RendererSystem: material typed data upload is not word-aligned")
+        NWB_TEXT("RendererSystem: material typed data upload is not word-aligned")
     );
 
     for(const MaterialTypedInstanceRanges& ranges : instanceRanges){

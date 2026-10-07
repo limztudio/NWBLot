@@ -56,9 +56,9 @@ inline void WriteCommandIrPod(
     const usize byteOffset,
     const PodT& value
 ){
-    GLB_ASSERT(byteOffset <= bytes.size());
-    GLB_ASSERT(bytes.size() - byteOffset >= sizeof(PodT));
-    GLB_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value));
+    NWB_ASSERT(byteOffset <= bytes.size());
+    NWB_ASSERT(bytes.size() - byteOffset >= sizeof(PodT));
+    NWB_MEMCPY(bytes.data() + byteOffset, bytes.size() - byteOffset, &value, sizeof(value));
 }
 
 

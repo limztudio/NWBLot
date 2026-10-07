@@ -38,7 +38,7 @@ void AssetsGraphicsFixture::AppendTestMeta(AssetsGraphicsFixture::AString& inOut
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLB_FINAL)
+#if defined(NWB_FINAL)
 AssetsGraphicsFixture::AString AssetsGraphicsFixture::BuildTriangleMeta(
     const AStringView assetHeader,
     const AStringView normalField,
@@ -115,9 +115,9 @@ bool AssetsGraphicsFixture::WriteTextFile(const AssetsGraphicsFixture::Path& fil
 
 AStringView AssetsGraphicsFixture::AssetsGraphicsTestConfigurationName()
 {
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
     return "dbg";
-#elif defined(GLB_FINAL)
+#elif defined(NWB_FINAL)
     return "fin";
 #else
     return "opt";
@@ -455,7 +455,7 @@ bool AssetsGraphicsFixture::ParseMaterialBindFromText(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLB_FINAL)
+#if defined(NWB_FINAL)
 bool AssetsGraphicsFixture::CookDuplicateGeneratedMaterialBindIncludePath(
     const AStringView caseName,
     AssetsGraphicsFixture::TestArena& testArena,

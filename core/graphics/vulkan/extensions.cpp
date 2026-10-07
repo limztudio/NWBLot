@@ -23,11 +23,11 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
     if(byteSize == 0)
         return;
     if(!VulkanDetail::AreAllPointersValid(data)){
-        rejectCommandRecording(s_SetPushConstantsOperation, GLB_TEXT("data is null"));
+        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("data is null"));
         return;
     }
     if(byteSize > UINT32_MAX){
-        rejectCommandRecording(s_SetPushConstantsOperation, GLB_TEXT("byte size exceeds uint32 range"));
+        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("byte size exceeds uint32 range"));
         return;
     }
 
@@ -36,7 +36,7 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
         pushConstantByteSize,
         m_context.physicalDeviceProperties.limits.maxPushConstantsSize
     )){
-        rejectCommandRecording(s_SetPushConstantsOperation, GLB_TEXT("byte size is unaligned or exceeds the device limit"));
+        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("byte size is unaligned or exceeds the device limit"));
         return;
     }
 
@@ -79,7 +79,7 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
     if(activePipelineCount != 1u || layout == VK_NULL_HANDLE){
         rejectCommandRecording(
             s_SetPushConstantsOperation,
-            GLB_TEXT("exactly one active valid pipeline layout is required")
+            NWB_TEXT("exactly one active valid pipeline layout is required")
         );
         return;
     }
@@ -87,13 +87,13 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
         return;
 
     if(pipelinePushConstantByteSize == 0){
-        rejectCommandRecording(s_SetPushConstantsOperation, GLB_TEXT("active pipeline layout has no push constant range"));
+        rejectCommandRecording(s_SetPushConstantsOperation, NWB_TEXT("active pipeline layout has no push constant range"));
         return;
     }
     if(pushConstantByteSize > pipelinePushConstantByteSize){
         rejectCommandRecording(
             s_SetPushConstantsOperation,
-            GLB_TEXT("byte size exceeds the active pipeline push constant range")
+            NWB_TEXT("byte size exceeds the active pipeline push constant range")
         );
         return;
     }
@@ -106,7 +106,7 @@ void CommandList::setPushConstants(const void* data, usize byteSize){
 
 
 void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDesc const* convertDescs, usize numDescs){
-    constexpr TStringView s_OperationName = GLB_TEXT("convert cooperative-vector matrices");
+    constexpr TStringView s_OperationName = NWB_TEXT("convert cooperative-vector matrices");
     constexpr GpuQueueCapability::Mask s_ConvertCapabilities = static_cast<GpuQueueCapability::Mask>(
         static_cast<u8>(GpuQueueCapability::Graphics) | static_cast<u8>(GpuQueueCapability::Compute)
     );
@@ -119,18 +119,18 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         || !m_context.deviceDispatch.vkConvertCooperativeVectorMatrixNV
         || !m_context.deviceDispatch.vkCmdConvertCooperativeVectorMatrixNV
     ){
-        rejectCommandRecording(s_OperationName, GLB_TEXT("cooperative-vector feature or entry points are unavailable"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("cooperative-vector feature or entry points are unavailable"));
         return;
     }
 
     if(numDescs == 0)
         return;
     if(!convertDescs){
-        rejectCommandRecording(s_OperationName, GLB_TEXT("descriptors are null"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("descriptors are null"));
         return;
     }
     if(numDescs > UINT32_MAX || numDescs > Limit<usize>::s_Max / 2u){
-        rejectCommandRecording(s_OperationName, GLB_TEXT("descriptor count exceeds supported limits"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("descriptor count exceeds supported limits"));
         return;
     }
 
@@ -143,7 +143,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         nullptr
     );
     if(result != VK_SUCCESS){
-        rejectCommandRecording(s_OperationName, GLB_TEXT("failed to enumerate cooperative-vector component types"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("failed to enumerate cooperative-vector component types"));
         return;
     }
 
@@ -162,7 +162,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
             cooperativeVectorProperties.data()
         );
         if(result != VK_SUCCESS){
-            rejectCommandRecording(s_OperationName, GLB_TEXT("failed to enumerate cooperative-vector component types"));
+            rejectCommandRecording(s_OperationName, NWB_TEXT("failed to enumerate cooperative-vector component types"));
             return;
         }
     }
@@ -406,11 +406,11 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
     for(usize i = 0u; i < numDescs; ++i){
         const CooperativeVectorConvertMatrixLayoutDesc& convertDesc = convertDescs[i];
         if(!convertDesc.src.buffer || !convertDesc.dst.buffer){
-            rejectCommandRecording(s_OperationName, GLB_TEXT("a source or destination buffer is null"));
+            rejectCommandRecording(s_OperationName, NWB_TEXT("a source or destination buffer is null"));
             return;
         }
         if(convertDesc.numRows == 0u || convertDesc.numColumns == 0u){
-            rejectCommandRecording(s_OperationName, GLB_TEXT("matrix dimensions must be nonzero"));
+            rejectCommandRecording(s_OperationName, NWB_TEXT("matrix dimensions must be nonzero"));
             return;
         }
 
@@ -424,7 +424,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
             || convertDesc.dst.type == CooperativeVectorDataType::UInt8Packed
             || convertDesc.dst.type == CooperativeVectorDataType::SInt8Packed
         ){
-            rejectCommandRecording(s_OperationName, GLB_TEXT("matrix type or layout is invalid"));
+            rejectCommandRecording(s_OperationName, NWB_TEXT("matrix type or layout is invalid"));
             return;
         }
 
@@ -433,11 +433,11 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
         VkCooperativeVectorMatrixLayoutNV srcLayout = VulkanDetail::ConvertCoopVecMatrixLayout(convertDesc.src.layout);
         VkCooperativeVectorMatrixLayoutNV dstLayout = VulkanDetail::ConvertCoopVecMatrixLayout(convertDesc.dst.layout);
         if(!isComponentTypeSupported(srcComponentType) || !isComponentTypeSupported(dstComponentType)){
-            rejectCommandRecording(s_OperationName, GLB_TEXT("a matrix component type is unsupported"));
+            rejectCommandRecording(s_OperationName, NWB_TEXT("a matrix component type is unsupported"));
             return;
         }
         if(!isTypeConversionSupported(srcComponentType, dstComponentType)){
-            rejectCommandRecording(s_OperationName, GLB_TEXT("the matrix component type conversion is unsupported"));
+            rejectCommandRecording(s_OperationName, NWB_TEXT("the matrix component type conversion is unsupported"));
             return;
         }
         if(
@@ -445,7 +445,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
             && dstLayout != VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_INFERENCING_OPTIMAL_NV
             && dstLayout != VK_COOPERATIVE_VECTOR_MATRIX_LAYOUT_TRAINING_OPTIMAL_NV
         ){
-            rejectCommandRecording(s_OperationName, GLB_TEXT("float8 destinations require an optimal matrix layout"));
+            rejectCommandRecording(s_OperationName, NWB_TEXT("float8 destinations require an optimal matrix layout"));
             return;
         }
 
@@ -473,7 +473,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
                 dstByteSize
             )
         ){
-            rejectCommandRecording(s_OperationName, GLB_TEXT("matrix type, layout, stride, or size query is invalid"));
+            rejectCommandRecording(s_OperationName, NWB_TEXT("matrix type, layout, stride, or size query is invalid"));
             return;
         }
 
@@ -495,7 +495,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
                 dstRange
             )
         ){
-            rejectCommandRecording(s_OperationName, GLB_TEXT("a matrix range is undersized, out of bounds, overflowing, or not 64-byte aligned"));
+            rejectCommandRecording(s_OperationName, NWB_TEXT("a matrix range is undersized, out of bounds, overflowing, or not 64-byte aligned"));
             return;
         }
 
@@ -511,12 +511,12 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
                 dstRange.address,
                 dstRange.byteSize
             )){
-                rejectCommandRecording(s_OperationName, GLB_TEXT("cooperative-vector conversion memory ranges overlap"));
+                rejectCommandRecording(s_OperationName, NWB_TEXT("cooperative-vector conversion memory ranges overlap"));
                 return;
             }
         }
         if(VulkanDetail::BufferRangesOverlap(srcRange.address, srcRange.byteSize, dstRange.address, dstRange.byteSize)){
-            rejectCommandRecording(s_OperationName, GLB_TEXT("cooperative-vector conversion memory ranges overlap"));
+            rejectCommandRecording(s_OperationName, NWB_TEXT("cooperative-vector conversion memory ranges overlap"));
             return;
         }
         accessedRanges.push_back(srcRange);
@@ -526,7 +526,7 @@ void CommandList::convertCoopVecMatrices(CooperativeVectorConvertMatrixLayoutDes
             !addRequiredBufferState(*convertDesc.src.buffer, ResourceStates::ConvertCoopVecMatrixInput)
             || !addRequiredBufferState(*convertDesc.dst.buffer, ResourceStates::ConvertCoopVecMatrixOutput)
         ){
-            rejectCommandRecording(s_OperationName, GLB_TEXT("distinct buffer objects alias the same native buffer"));
+            rejectCommandRecording(s_OperationName, NWB_TEXT("distinct buffer objects alias the same native buffer"));
             return;
         }
 

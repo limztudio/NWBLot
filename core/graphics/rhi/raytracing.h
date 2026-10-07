@@ -280,7 +280,7 @@ struct RayTracingGeometryDesc{
         : geometryData{}
     {}
 
-    RayTracingGeometryDesc& setTransform(const AffineTransform& value)noexcept{ GLB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); useTransform = true; return *this; }
+    RayTracingGeometryDesc& setTransform(const AffineTransform& value)noexcept{ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); useTransform = true; return *this; }
     constexpr RayTracingGeometryDesc& setFlags(RayTracingGeometryFlags::Mask value)noexcept{ flags = value; return *this; }
     constexpr RayTracingGeometryDesc& setTriangles(const RayTracingGeometryTriangles& value)noexcept{ geometryData.triangles = value; geometryType = RayTracingGeometryType::Triangles; return *this; }
     constexpr RayTracingGeometryDesc& setAABBs(const RayTracingGeometryAABBs& value)noexcept{ geometryData.aabbs = value; geometryType = RayTracingGeometryType::AABBs; return *this; }
@@ -330,7 +330,7 @@ struct RayTracingInstanceDesc{
     constexpr RayTracingInstanceDesc& setInstanceID(u32 value)noexcept{ instanceID = value; return *this; }
     constexpr RayTracingInstanceDesc& setInstanceContributionToHitGroupIndex(u32 value)noexcept{ instanceContributionToHitGroupIndex = value; return *this; }
     constexpr RayTracingInstanceDesc& setInstanceMask(u32 value)noexcept{ instanceMask = value; return *this; }
-    RayTracingInstanceDesc& setTransform(const AffineTransform& value)noexcept{ GLB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); return *this; }
+    RayTracingInstanceDesc& setTransform(const AffineTransform& value)noexcept{ NWB_MEMCPY(&transform, sizeof(transform), &value, sizeof(AffineTransform)); return *this; }
     constexpr RayTracingInstanceDesc& setFlags(RayTracingInstanceFlags::Mask value)noexcept{ flags = value; return *this; }
     constexpr RayTracingInstanceDesc& setBLAS(RayTracingAccelStruct* value)noexcept{ bottomLevelAS = value; return *this; }
 };

@@ -10,40 +10,46 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-u64 TestbedUiRadioGroupSource::instanceGeneration()const noexcept{ return 1u; }
+TESTBED_BEGIN
 
-u64 TestbedUiRadioGroupSource::revision()const noexcept{ return 1u; }
 
-u64 TestbedUiRadioGroupSource::rowCount()const noexcept{ return 3u; }
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-u64 TestbedUiRadioGroupSource::key(const u64 index)const noexcept{ return index < 3u ? index + 1u : 0u; }
 
-bool TestbedUiRadioGroupSource::indexOf(const u64 keyValue, u64& index)const noexcept{
+u64 UiRadioGroupSource::instanceGeneration()const noexcept{ return 1u; }
+
+u64 UiRadioGroupSource::revision()const noexcept{ return 1u; }
+
+u64 UiRadioGroupSource::rowCount()const noexcept{ return 3u; }
+
+u64 UiRadioGroupSource::key(const u64 index)const noexcept{ return index < 3u ? index + 1u : 0u; }
+
+bool UiRadioGroupSource::indexOf(const u64 keyValue, u64& index)const noexcept{
     if(keyValue == 0u || keyValue > 3u)
         return false;
     index = keyValue - 1u;
     return true;
 }
 
-bool TestbedUiRadioGroupSource::findEnabled(const u64 start, const bool reverse, u64& index)const noexcept{
+bool UiRadioGroupSource::findEnabled(const u64 start, const bool reverse, u64& index)const noexcept{
     if(start >= 3u)
         return false;
     index = start == 2u ? (reverse ? 1u : 3u) : start;
     return index < 3u;
 }
 
-StringView TestbedUiRadioGroupSource::text(const u64 index)const noexcept{
+StringView UiRadioGroupSource::text(const u64 index)const noexcept{
     static constexpr StringView s_Labels[] = { "Balanced", "High quality", "Unavailable" };
     return index < 3u ? s_Labels[index] : StringView{};
 }
 
-bool TestbedUiRadioGroupSource::enabled(const u64 index)const noexcept{ return index < 2u; }
+bool UiRadioGroupSource::enabled(const u64 index)const noexcept{ return index < 2u; }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void TestbedUiRadioGroupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
+void UiRadioGroupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
     if(!ui.beginPanel("radio_group_gallery", { x, y, 280.0f, 208.0f }))
@@ -53,10 +59,13 @@ void TestbedUiRadioGroupGallery::paint(NWB::Impl::UiPaintContext& context, const
     valid = ui.label("hint", "Arrows select; Enter / Space sets") && result.valid && valid;
     valid = ui.endPanel() && valid;
     if(result.activated)
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Testbed: custom radio choice key={}"), m_state.selectedKey());
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom radio choice key={}"), m_state.selectedKey());
     if(!valid)
-        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: custom radio group declaration failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom radio group declaration failed"));
 }
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

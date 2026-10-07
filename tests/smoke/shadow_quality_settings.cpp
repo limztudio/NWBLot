@@ -42,7 +42,7 @@ bool ApplyShadowQualitySmokeSettings(
     }
     if(!renderer.setShadowQualitySettings(settings))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("ShadowQualitySmoke: requested transparent_sampling={} receiver_factor={}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ShadowQualitySmoke: requested transparent_sampling={} receiver_factor={}")
         , static_cast<u32>(settings.transparentSampling)
         , static_cast<u32>(settings.receiverResolution)
     );

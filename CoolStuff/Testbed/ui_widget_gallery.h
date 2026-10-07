@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "namespace.h"
 #include "ui_combo_gallery.h"
 #include "ui_edit_gallery.h"
 #include "ui_list_gallery.h"
@@ -25,13 +26,19 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiWidgetGallery final : NoCopy{
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiWidgetGallery final : NoCopy{
 public:
     [[nodiscard]] static NWB::Impl::Ui::Rect LayoutBounds(const NWB::Impl::Ui::DisplayMetrics& display);
 
 
 public:
-    TestbedUiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets);
+    UiWidgetGallery(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets);
 
 
 public:
@@ -43,23 +50,26 @@ private:
 
 
 private:
-    TestbedUiEditGallery m_edits;
-    TestbedUiListGallery m_lists;
-    TestbedUiComboGallery m_combos;
-    TestbedUiSearchComboGallery m_searchCombos;
-    TestbedUiPopupGallery m_popups;
-    TestbedUiPopupToolsGallery m_popupTools;
-    TestbedUiNestedPopupGallery m_nestedPopups;
-    TestbedUiNumericEditGallery m_numericEdits;
-    TestbedUiTextAreaGallery m_textAreas;
-    TestbedUiRadioGroupGallery m_radioGroups;
-    TestbedUiSliderGallery m_sliders;
-    TestbedUiProgressGallery m_progress;
-    TestbedUiImageGallery m_images;
+    UiEditGallery m_edits;
+    UiListGallery m_lists;
+    UiComboGallery m_combos;
+    UiSearchComboGallery m_searchCombos;
+    UiPopupGallery m_popups;
+    UiPopupToolsGallery m_popupTools;
+    UiNestedPopupGallery m_nestedPopups;
+    UiNumericEditGallery m_numericEdits;
+    UiTextAreaGallery m_textAreas;
+    UiRadioGroupGallery m_radioGroups;
+    UiSliderGallery m_sliders;
+    UiProgressGallery m_progress;
+    UiImageGallery m_images;
     u32 m_count = 0u;
     u32 m_selectedGallery = 0u;
     bool m_enabled = true;
 };
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

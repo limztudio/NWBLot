@@ -454,7 +454,7 @@ private:
 
 private:
     template<class ExecutionQueue>
-    [[nodiscard]] GLB_INLINE QueueSubmissionToken submitToQueue(
+    [[nodiscard]] NWB_INLINE QueueSubmissionToken submitToQueue(
         Device& device,
         CommandList* const* commandLists,
         usize commandListCount,

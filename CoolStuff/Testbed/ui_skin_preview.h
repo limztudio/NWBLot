@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "namespace.h"
 #include "ui_widget_gallery.h"
 
 #include <impl/ecs_ui/components.h>
@@ -14,9 +15,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiSkinPreview final : NoCopy{
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiSkinPreview final : NoCopy{
 public:
-    TestbedUiSkinPreview(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets);
+    UiSkinPreview(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets);
 
 
 public:
@@ -31,8 +38,11 @@ private:
     NWB::Impl::Ui::Label m_edit;
     NWB::Impl::Ui::Label m_caption;
     NWB::Impl::Ui::Label m_korean;
-    TestbedUiWidgetGallery m_widgets;
+    UiWidgetGallery m_widgets;
 };
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

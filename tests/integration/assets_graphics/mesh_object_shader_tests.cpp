@@ -157,7 +157,7 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
         EXPECT_TRUE(rejectedPlan.preparedEntries.empty());
         EXPECT_EQ(rejectedPlan.plannedFileCount, 7u);
     }
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("require the fixed engine shared mesh program")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("require the fixed engine shared mesh program")));
     const u64 oldChecksum = plan.preparedEntries[0].dependencyChecksum;
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_shared.slangi", s_SharedSlangiValueSnippet));
     Plan::PreparedShaderPlan changedPlan(testArena.arena);

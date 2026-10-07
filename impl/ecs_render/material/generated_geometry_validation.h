@@ -24,7 +24,7 @@ namespace ECSRenderDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE bool MatchesRetainedGeneratedGeometryOutputs(
+[[nodiscard]] NWB_INLINE bool MatchesRetainedGeneratedGeometryOutputs(
     const bool captured,
     const Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>& drawItems,
     const Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outputBuffers,

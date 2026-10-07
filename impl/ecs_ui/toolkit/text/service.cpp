@@ -30,7 +30,7 @@ static Atomic<u64> s_NextServiceIdentity{ 1u };
 
 [[nodiscard]] static u64 NewIdentity(){
     const u64 identity = s_NextServiceIdentity.fetch_add(1u, MemoryOrder::relaxed);
-    GLB_FATAL_ASSERT_MSG(identity != 0u, GLB_TEXT("UI text service identity overflow"));
+    NWB_FATAL_ASSERT_MSG(identity != 0u, NWB_TEXT("UI text service identity overflow"));
     return identity;
 }
 

@@ -37,7 +37,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_ShaderAssetCodecAutoRegistrar, ShaderAssetCod
 
 
 bool Shader::loadBinary(const Core::Assets::AssetBytes& binary){
-    if(!checkVirtualPath(GLB_TEXT("Shader::loadBinary")))
+    if(!checkVirtualPath(NWB_TEXT("Shader::loadBinary")))
         return false;
 
     Core::Assets::AssetString entryPoint(m_entryPoint.get_allocator().arena());
@@ -46,19 +46,19 @@ bool Shader::loadBinary(const Core::Assets::AssetBytes& binary){
     case ShaderBinaryPayload::AssetPayloadFailure::None:
         break;
     case ShaderBinaryPayload::AssetPayloadFailure::InvalidHeader:
-        NWB_LOGGER_ERROR(GLB_TEXT("Shader::loadBinary failed: invalid shader payload header"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader::loadBinary failed: invalid shader payload header"));
         return false;
     case ShaderBinaryPayload::AssetPayloadFailure::UnsupportedVersion:
-        NWB_LOGGER_ERROR(GLB_TEXT("Shader::loadBinary failed: unsupported shader payload version"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader::loadBinary failed: unsupported shader payload version"));
         return false;
     case ShaderBinaryPayload::AssetPayloadFailure::InvalidEntryPoint:
-        NWB_LOGGER_ERROR(GLB_TEXT("Shader::loadBinary failed: invalid shader entry point"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader::loadBinary failed: invalid shader entry point"));
         return false;
     case ShaderBinaryPayload::AssetPayloadFailure::InvalidBytecode:
-        NWB_LOGGER_ERROR(GLB_TEXT("Shader::loadBinary failed: invalid SPIR-V bytecode"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader::loadBinary failed: invalid SPIR-V bytecode"));
         return false;
     case ShaderBinaryPayload::AssetPayloadFailure::OutputSizeOverflow:
-        NWB_LOGGER_ERROR(GLB_TEXT("Shader::loadBinary failed: shader payload exceeds runtime limits"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader::loadBinary failed: shader payload exceeds runtime limits"));
         return false;
     }
 

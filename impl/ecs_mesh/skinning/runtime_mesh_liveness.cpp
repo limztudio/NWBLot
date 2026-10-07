@@ -32,13 +32,13 @@ bool ResolveSkinnedRuntimeMeshIdentity(
         return false;
     if((instance->dirtyFlags & (RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)) != 0u)
         return false;
-    GLB_ASSERT(instance->valid());
-    GLB_ASSERT(instance->meshlets.size() <= static_cast<usize>(Limit<u32>::s_Max));
-    GLB_ASSERT(instance->meshletPrimitiveIndices.size() <= static_cast<usize>(Limit<u32>::s_Max));
+    NWB_ASSERT(instance->valid());
+    NWB_ASSERT(instance->meshlets.size() <= static_cast<usize>(Limit<u32>::s_Max));
+    NWB_ASSERT(instance->meshletPrimitiveIndices.size() <= static_cast<usize>(Limit<u32>::s_Max));
 
     outMeshKey = DeriveRuntimeResourceName(instance->sourceName, instance->handle.value, instance->editRevision, "skinned_draw");
     outVersion = instance->editRevision;
-    GLB_ASSERT(outMeshKey);
+    NWB_ASSERT(outMeshKey);
     return true;
 }
 
@@ -78,7 +78,7 @@ bool BuildSkinnedRuntimeMeshDesc(
     outMesh.meshletPrimitiveIndexCount = static_cast<u32>(instance->meshletPrimitiveIndices.size());
     outMesh.dynamicMeshletBoundsFresh = boundsFresh;
     outMesh.dynamicMeshletConesFresh = conesFresh;
-    GLB_ASSERT(outMesh.valid());
+    NWB_ASSERT(outMesh.valid());
     return true;
 }
 

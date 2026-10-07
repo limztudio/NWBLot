@@ -16,16 +16,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_AssertColon = GLB_TEXT(":");
-inline constexpr TStringView s_AssertNewline = GLB_TEXT("\n");
-inline constexpr TStringView s_AssertLabel = GLB_TEXT("ASSERT ");
-inline constexpr TStringView s_FatalAssertLabel = GLB_TEXT("FATAL ASSERT ");
+inline constexpr TStringView s_AssertColon = NWB_TEXT(":");
+inline constexpr TStringView s_AssertNewline = NWB_TEXT("\n");
+inline constexpr TStringView s_AssertLabel = NWB_TEXT("ASSERT ");
+inline constexpr TStringView s_FatalAssertLabel = NWB_TEXT("FATAL ASSERT ");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define GLB_DETAIL_ASSERT_CAPTURE(categoryValue, conditionValue, messageTextValue)       \
+#define NWB_DETAIL_ASSERT_CAPTURE(categoryValue, conditionValue, messageTextValue)       \
     ::CaptureDiagnosticEvent(::DiagnosticEventRecord{                                    \
         .event = ::DiagnosticEventName::s_Assert,                                        \
         .category = categoryValue,                                                       \
@@ -36,24 +36,24 @@ inline constexpr TStringView s_FatalAssertLabel = GLB_TEXT("FATAL ASSERT ");
         .terminatesProcess = true,                                                       \
     })
 
-#define GLB_DETAIL_ASSERT_ABORT(label)                                                   \
-    GLB_TCERR << label << GLB_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline; \
+#define NWB_DETAIL_ASSERT_ABORT(label)                                                   \
+    NWB_TCERR << label << NWB_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline; \
     ::std::abort()
 
-#define GLB_DETAIL_ASSERT_BODY(categoryValue, label, condition)                          \
+#define NWB_DETAIL_ASSERT_BODY(categoryValue, label, condition)                          \
 {                                                                                        \
     if(!(condition)){                                                                    \
-        GLB_DETAIL_ASSERT_CAPTURE(categoryValue, condition, ::StringView{});             \
-        GLB_DETAIL_ASSERT_ABORT(label);                                                  \
+        NWB_DETAIL_ASSERT_CAPTURE(categoryValue, condition, ::StringView{});             \
+        NWB_DETAIL_ASSERT_ABORT(label);                                                  \
     }                                                                                    \
 }
 
-#define GLB_DETAIL_ASSERT_MSG_BODY(categoryValue, label, condition, ...)                 \
+#define NWB_DETAIL_ASSERT_MSG_BODY(categoryValue, label, condition, ...)                 \
 {                                                                                        \
     if(!(condition)){                                                                    \
         const auto diagnosticMessage = ::MakeDiagnosticEventText(__VA_ARGS__);            \
-        GLB_DETAIL_ASSERT_CAPTURE(categoryValue, condition, diagnosticMessage.view());  \
-        GLB_TCERR << label << GLB_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline << diagnosticMessage.c_str() << s_AssertNewline; \
+        NWB_DETAIL_ASSERT_CAPTURE(categoryValue, condition, diagnosticMessage.view());  \
+        NWB_TCERR << label << NWB_TEXT(__FILE__) << s_AssertColon << __LINE__ << s_AssertNewline << diagnosticMessage.c_str() << s_AssertNewline; \
         ::std::abort();                                                                  \
     }                                                                                    \
 }
@@ -62,24 +62,24 @@ inline constexpr TStringView s_FatalAssertLabel = GLB_TEXT("FATAL ASSERT ");
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if GLB_OCCUR_ASSERT
-#define GLB_ASSERT(condition) GLB_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_Assert, s_AssertLabel, condition)
-#define GLB_ASSERT_MSG(condition, ...) GLB_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_Assert, s_AssertLabel, condition, __VA_ARGS__)
+#if NWB_OCCUR_ASSERT
+#define NWB_ASSERT(condition) NWB_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_Assert, s_AssertLabel, condition)
+#define NWB_ASSERT_MSG(condition, ...) NWB_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_Assert, s_AssertLabel, condition, __VA_ARGS__)
 #else
-#define GLB_ASSERT(condition)
-#define GLB_ASSERT_MSG(condition, ...)
+#define NWB_ASSERT(condition)
+#define NWB_ASSERT_MSG(condition, ...)
 #endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if GLB_OCCUR_FATAL_ASSERT
-#define GLB_FATAL_ASSERT(condition) GLB_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_FatalAssert, s_FatalAssertLabel, condition)
-#define GLB_FATAL_ASSERT_MSG(condition, ...) GLB_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_FatalAssert, s_FatalAssertLabel, condition, __VA_ARGS__)
+#if NWB_OCCUR_FATAL_ASSERT
+#define NWB_FATAL_ASSERT(condition) NWB_DETAIL_ASSERT_BODY(::DiagnosticEventCategory::s_FatalAssert, s_FatalAssertLabel, condition)
+#define NWB_FATAL_ASSERT_MSG(condition, ...) NWB_DETAIL_ASSERT_MSG_BODY(::DiagnosticEventCategory::s_FatalAssert, s_FatalAssertLabel, condition, __VA_ARGS__)
 #else
-#define GLB_FATAL_ASSERT(condition)
-#define GLB_FATAL_ASSERT_MSG(condition, ...)
+#define NWB_FATAL_ASSERT(condition)
+#define NWB_FATAL_ASSERT_MSG(condition, ...)
 #endif
 
 

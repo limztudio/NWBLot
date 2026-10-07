@@ -19,10 +19,10 @@ namespace TriangleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] SIMDVector GLB_SIMD_CALL EdgeCross2D(SIMDVector a, SIMDVector b, SIMDVector c)noexcept;
-[[nodiscard]] SIMDVector GLB_SIMD_CALL SignedArea2D(SIMDVector a, SIMDVector b, SIMDVector c)noexcept;
-[[nodiscard]] SIMDVector GLB_SIMD_CALL AreaNormal(SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
-[[nodiscard]] bool GLB_SIMD_CALL ContainsPoint2D(
+[[nodiscard]] SIMDVector NWB_SIMD_CALL EdgeCross2D(SIMDVector a, SIMDVector b, SIMDVector c)noexcept;
+[[nodiscard]] SIMDVector NWB_SIMD_CALL SignedArea2D(SIMDVector a, SIMDVector b, SIMDVector c)noexcept;
+[[nodiscard]] SIMDVector NWB_SIMD_CALL AreaNormal(SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
+[[nodiscard]] bool NWB_SIMD_CALL ContainsPoint2D(
     SIMDVector point,
     SIMDVector a,
     SIMDVector b,
@@ -30,7 +30,7 @@ namespace TriangleTests{
     SIMDVector tolerance
 )noexcept;
 
-[[nodiscard]] bool GLB_SIMD_CALL Intersects(
+[[nodiscard]] bool NWB_SIMD_CALL Intersects(
     SIMDVector origin,
     SIMDVector direction,
     SIMDVector v0,
@@ -39,7 +39,7 @@ namespace TriangleTests{
     f32& outDistance
 )noexcept;
 
-[[nodiscard]] bool GLB_SIMD_CALL Intersects(
+[[nodiscard]] bool NWB_SIMD_CALL Intersects(
     SIMDVector a0,
     SIMDVector a1,
     SIMDVector a2,
@@ -48,14 +48,14 @@ namespace TriangleTests{
     SIMDVector b2
 )noexcept;
 
-[[nodiscard]] PlaneIntersectionType::Enum GLB_SIMD_CALL Intersects(
+[[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL Intersects(
     SIMDVector v0,
     SIMDVector v1,
     SIMDVector v2,
     SIMDVector plane
 )noexcept;
 
-[[nodiscard]] ContainmentType::Enum GLB_SIMD_CALL ContainedBy(
+[[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL ContainedBy(
     SIMDVector v0,
     SIMDVector v1,
     SIMDVector v2,
@@ -77,7 +77,7 @@ namespace TriangleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE SIMDVector GLB_SIMD_CALL TriangleTests::EdgeCross2D(
+[[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL TriangleTests::EdgeCross2D(
     const SIMDVector a,
     const SIMDVector b,
     const SIMDVector c
@@ -91,7 +91,7 @@ namespace TriangleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE SIMDVector GLB_SIMD_CALL TriangleTests::SignedArea2D(
+[[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL TriangleTests::SignedArea2D(
     const SIMDVector a,
     const SIMDVector b,
     const SIMDVector c
@@ -103,7 +103,7 @@ namespace TriangleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE SIMDVector GLB_SIMD_CALL TriangleTests::AreaNormal(
+[[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL TriangleTests::AreaNormal(
     const SIMDVector v0,
     const SIMDVector v1,
     const SIMDVector v2
@@ -115,7 +115,7 @@ namespace TriangleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE bool GLB_SIMD_CALL TriangleTests::ContainsPoint2D(
+[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL TriangleTests::ContainsPoint2D(
     const SIMDVector point,
     const SIMDVector a,
     const SIMDVector b,
@@ -136,7 +136,7 @@ namespace TriangleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool GLB_SIMD_CALL TriangleTests::Intersects(
+[[nodiscard]] inline bool NWB_SIMD_CALL TriangleTests::Intersects(
     const SIMDVector origin,
     const SIMDVector direction,
     const SIMDVector v0,
@@ -151,7 +151,7 @@ namespace TriangleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool GLB_SIMD_CALL TriangleTests::Intersects(
+[[nodiscard]] inline bool NWB_SIMD_CALL TriangleTests::Intersects(
     const SIMDVector a0,
     const SIMDVector a1,
     const SIMDVector a2,
@@ -181,7 +181,7 @@ namespace TriangleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline PlaneIntersectionType::Enum GLB_SIMD_CALL TriangleTests::Intersects(
+[[nodiscard]] inline PlaneIntersectionType::Enum NWB_SIMD_CALL TriangleTests::Intersects(
     const SIMDVector v0,
     const SIMDVector v1,
     const SIMDVector v2,
@@ -203,7 +203,7 @@ namespace TriangleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline ContainmentType::Enum GLB_SIMD_CALL TriangleTests::ContainedBy(
+[[nodiscard]] inline ContainmentType::Enum NWB_SIMD_CALL TriangleTests::ContainedBy(
     const SIMDVector v0,
     const SIMDVector v1,
     const SIMDVector v2,

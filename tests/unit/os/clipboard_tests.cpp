@@ -48,14 +48,14 @@ protected:
                 return;
             m_nativeToken = {};
             if(!completeNativeRequest(token, readStatus, text))
-                GLB_FATAL_ASSERT(false);
+                NWB_FATAL_ASSERT(false);
         }
         else{
             ++writeCount;
             text.assign(input.data(), input.size());
             m_nativeToken = {};
             if(!completeNativeRequest(token, ClipboardStatus::Success))
-                GLB_FATAL_ASSERT(false);
+                NWB_FATAL_ASSERT(false);
         }
     }
 

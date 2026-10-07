@@ -209,7 +209,7 @@ bool FbxMeshBuild::BuildSmoothPositionNormals(
     for(auto it = outNormals.begin(); it != outNormals.end(); ++it){
         SIMDVector normal;
         if(!Vector3TryNormalize(it.value().value, normal)){
-            NWB_LOGGER_WARNING(GLB_TEXT("Mesh build: degenerate accumulated vertex normal left un-normalized"));
+            NWB_LOGGER_WARNING(NWB_TEXT("Mesh build: degenerate accumulated vertex normal left un-normalized"));
             continue;
         }
         it.value().value = normal;
@@ -234,15 +234,15 @@ bool FbxMeshBuild::AppendInstanceMesh(
     ufbx_mesh* mesh = instance.mesh;
     ufbx_node* node = instance.node;
     if(!mesh || !node){
-        NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: mesh instance is missing mesh or node"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh instance is missing mesh or node"));
         return false;
     }
     if(!mesh->vertex_position.exists){
-        NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: mesh is missing positions"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh is missing positions"));
         return false;
     }
     if(normalMode == NormalMode::Imported && !mesh->vertex_normal.exists){
-        NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: imported normal mode requires mesh normals after ufbx import"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: imported normal mode requires mesh normals after ufbx import"));
         return false;
     }
 
@@ -256,7 +256,7 @@ bool FbxMeshBuild::AppendInstanceMesh(
     if(wantsSkinning){
         if(mesh->skin_deformers.count != 1u){
             NWB_LOGGER_ERROR(
-                GLB_TEXT("Failed to build mesh: skinned mesh requires exactly one skin deformer per selected mesh")
+                NWB_TEXT("Failed to build mesh: skinned mesh requires exactly one skin deformer per selected mesh")
             );
             return false;
         }
@@ -300,11 +300,11 @@ bool FbxMeshBuild::AppendInstanceMesh(
             else if(normalMode == NormalMode::Smooth){
                 auto foundNormal = smoothNormals.find(MakePositionKey(position));
                 if(foundNormal == smoothNormals.end()){
-                    NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
+                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
                     return false;
                 }
                 if(!Vector3TryNormalize(foundNormal.value().value, normal)){
-                    NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
+                    NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate smooth mesh normal"));
                     return false;
                 }
             }
@@ -371,7 +371,7 @@ bool FbxMeshBuild::AppendInstanceMesh(
                 wantsSkinning,
                 skinWeights
             )){
-                NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: mesh contains non-finite vertex data"));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh contains non-finite vertex data"));
                 return false;
             }
 
@@ -400,7 +400,7 @@ bool FbxMeshBuild::AppendInstanceMesh(
             );
             SIMDVector normalizedFaceNormal;
             if(!Vector3TryNormalize(faceNormal, normalizedFaceNormal)){
-                NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: failed to regenerate mesh face normal"));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to regenerate mesh face normal"));
                 return false;
             }
             for(SourceTriangleCorner& corner : triangleCorners)
@@ -426,17 +426,17 @@ bool FbxMeshBuild::EstimateSelectedTriangleCorners(
     outTriangleCorners = 0u;
     for(const usize instanceIndex : selection){
         if(instanceIndex >= instances.size()){
-            NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: selected mesh index is out of range"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected mesh index is out of range"));
             return false;
         }
 
         const ufbx_mesh* const mesh = instances[instanceIndex].mesh;
         if(!mesh){
-            NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: selected mesh instance is missing mesh"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected mesh instance is missing mesh"));
             return false;
         }
         if(mesh->num_triangles > (Limit<usize>::s_Max - outTriangleCorners) / s_TriangleIndexCount){
-            NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: selected meshes have too many triangle corners"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes have too many triangle corners"));
             return false;
         }
 

@@ -21,16 +21,16 @@ bool CommandList::resetTimerQuery(TimerQuery& query){
     if(!publicCommandStateAccessible())
         return false;
     if(query.m_queryPool == VK_NULL_HANDLE || &query.m_context != &m_context){
-        NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Cannot reset an invalid or foreign timer query"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot reset an invalid or foreign timer query"));
         invalidateCommandRecording();
         return false;
     }
 
-    if(!validateCommandRecordingScope(GLB_TEXT("reset timer query")))
+    if(!validateCommandRecordingScope(NWB_TEXT("reset timer query")))
         return false;
     if(!canResetTimerQueryHereUnchecked()){
         NWB_LOGGER_CRITICAL_WARNING(
-            GLB_TEXT("Vulkan: Cannot reset a timer query outside recording or on an exact physical queue without Graphics or Compute capability")
+            NWB_TEXT("Vulkan: Cannot reset a timer query outside recording or on an exact physical queue without Graphics or Compute capability")
         );
         invalidateCommandRecording();
         return false;
@@ -49,7 +49,7 @@ bool CommandList::resetTimerQuery(TimerQuery& query){
             || query.m_cycleGeneration != 0u
             || (query.m_resetRecordingOwner.commandBuffer && !resetOwnedByCurrentCommandBuffer)
         ){
-            NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Cannot reset a timer query while another recording transaction is active"));
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot reset a timer query while another recording transaction is active"));
             invalidateCommandRecording();
             return false;
         }
@@ -115,7 +115,7 @@ bool CommandList::resetTimerQuery(TimerQuery& query){
         }
     }
     if(!resetRecorded){
-        NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Cannot reset a timer query while another recording transaction is active"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot reset a timer query while another recording transaction is active"));
         invalidateCommandRecording();
     }
     return resetRecorded;
@@ -205,18 +205,18 @@ bool CommandList::beginTimerQuery(TimerQuery& query, TimerQueryRecordingToken& o
     if(!publicCommandStateAccessible())
         return false;
     if(query.m_queryPool == VK_NULL_HANDLE || &query.m_context != &m_context){
-        NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to begin an invalid or foreign timer query"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to begin an invalid or foreign timer query"));
         invalidateCommandRecording();
         return false;
     }
-    if(!validateCommandRecordingScope(GLB_TEXT("begin timer query")))
+    if(!validateCommandRecordingScope(NWB_TEXT("begin timer query")))
         return false;
     const bool recordsInlineReset = canResetTimerQueryHereUnchecked();
 
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     constexpr u32 s_CompleteTimestampValidBits = 64u;
     if(!queueInfo || queueInfo->timestampValidBits == 0u || queueInfo->timestampValidBits > s_CompleteTimestampValidBits){
-        NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to begin timer query on a queue without timestamp support"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to begin timer query on a queue without timestamp support"));
         invalidateCommandRecording();
         return false;
     }
@@ -235,7 +235,7 @@ bool CommandList::beginTimerQuery(TimerQuery& query, TimerQueryRecordingToken& o
             || (query.m_resetRecordingOwner.commandBuffer && !resetOwnedByCurrentCommandBuffer)
             || (!recordsInlineReset && !resetOwnedByCurrentCommandBuffer && !query.m_resetAuthorizationAvailable)
         ){
-            NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Refusing a timer-query begin without an exclusive cycle and ordered reset"));
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Refusing a timer-query begin without an exclusive cycle and ordered reset"));
             invalidateCommandRecording();
             return false;
         }
@@ -350,7 +350,7 @@ bool CommandList::beginTimerQuery(TimerQuery& query, TimerQueryRecordingToken& o
         }
     }
     if(!beginRecorded){
-        NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Refusing a timer-query begin while another recording cycle is active"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Refusing a timer-query begin while another recording cycle is active"));
         invalidateCommandRecording();
         return false;
     }
@@ -361,15 +361,15 @@ bool CommandList::endTimerQuery(TimerQuery& query, const TimerQueryRecordingToke
     if(!publicCommandStateAccessible())
         return false;
     if(query.m_queryPool == VK_NULL_HANDLE || &query.m_context != &m_context){
-        NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to end an invalid or foreign timer query"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to end an invalid or foreign timer query"));
         invalidateCommandRecording();
         return false;
     }
-    if(!validateCommandRecordingScope(GLB_TEXT("end timer query")))
+    if(!validateCommandRecordingScope(NWB_TEXT("end timer query")))
         return false;
 
     if(!token.valid() || token.query != &query || token.queryIncarnation != query.m_incarnation){
-        NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to end a timer query with an invalid recording token"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to end a timer query with an invalid recording token"));
         invalidateCommandRecording();
         return false;
     }
@@ -422,7 +422,7 @@ bool CommandList::endTimerQuery(TimerQuery& query, const TimerQueryRecordingToke
         }
     }
     if(!matchingActiveCycle){
-        NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to end a timer query without an active cycle on the same physical queue"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to end a timer query without an active cycle on the same physical queue"));
         invalidateCommandRecording();
         return false;
     }

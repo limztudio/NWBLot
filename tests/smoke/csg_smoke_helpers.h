@@ -35,7 +35,7 @@ namespace Smoke{
 template<typename ParameterT>
 inline void AssignCsgCutterParameters(Impl::CsgCutterComponent& cutter, const ParameterT& parameters){
     cutter.parameterBytes.resize(sizeof(ParameterT));
-    GLB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
+    NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameters, sizeof(ParameterT));
 }
 
 inline void AssignCsgCutterTransform(

@@ -48,13 +48,13 @@ TrackedCommandBuffer::TrackedCommandBuffer(
             &m_cmdPool
         );
         if(createResult != VK_SUCCESS){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create private command pool: {}"), ResultToString(createResult));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create private command pool: {}"), ResultToString(createResult));
             m_cmdPool = VK_NULL_HANDLE;
             return;
         }
     }
     else if(m_cmdPool == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Cannot allocate a command buffer without a worker command pool."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Cannot allocate a command buffer without a worker command pool."));
         return;
     }
 
@@ -65,7 +65,7 @@ TrackedCommandBuffer::TrackedCommandBuffer(
 
     const VkResult allocateResult = m_context.deviceDispatch.vkAllocateCommandBuffers(m_context.device, &allocInfo, &m_cmdBuf);
     if(allocateResult != VK_SUCCESS){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to allocate command buffer: {}"), ResultToString(allocateResult));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate command buffer: {}"), ResultToString(allocateResult));
         m_cmdBuf = VK_NULL_HANDLE;
         if(m_ownsCmdPool)
             m_context.deviceDispatch.vkDestroyCommandPool(m_context.device, m_cmdPool, m_context.allocationCallbacks);
@@ -444,8 +444,8 @@ bool TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
     const AccelStructGeometryBuildSignature* const geometrySignatures,
     const usize geometrySignatureCount
 ){
-    GLB_ASSERT(geometrySignatureCount <= UINT32_MAX);
-    GLB_ASSERT(geometrySignatureCount == 0u || geometrySignatures);
+    NWB_ASSERT(geometrySignatureCount <= UINT32_MAX);
+    NWB_ASSERT(geometrySignatureCount == 0u || geometrySignatures);
     if(geometrySignatureCount > UINT32_MAX || (geometrySignatureCount != 0u && !geometrySignatures))
         return false;
 

@@ -53,7 +53,7 @@ QueuedClipboardService::QueuedClipboardService(Alloc::GlobalArena& arena)
 }
 
 QueuedClipboardService::~QueuedClipboardService(){
-    GLB_ASSERT(isOwnerThread());
+    NWB_ASSERT(isOwnerThread());
 }
 
 ClipboardRequestResult QueuedClipboardService::requestReadText(const ClipboardChannel::Enum channel){

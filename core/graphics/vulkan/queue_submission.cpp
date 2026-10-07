@@ -119,22 +119,22 @@ u64 Queue::submit(
         return m_lastSubmittedID;
 
     if(numCmd > 0u && !ppCmd){
-        NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to submit command lists: command list array is null"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list array is null"));
         return m_lastSubmittedID;
     }
     const bool hasCommands = numCmd > 0u;
     if(hasCommands && !expectedCommandLists){
-        NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to submit command lists: expected command-list identity array is null"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: expected command-list identity array is null"));
         return m_lastSubmittedID;
     }
     // Queue-global synchronization belongs to the next accepted native submission. Validation and injected
     // pre-driver rejection must leave it pending, especially when it contains the acquired swap-chain semaphore.
     if(localWaitCount > 0u && !localWaits){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to submit command lists: local wait array is null"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait array is null"));
         return m_lastSubmittedID;
     }
     if(localSignalCount > 0u && !localSignals){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to submit command lists: local signal array is null"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local signal array is null"));
         return m_lastSubmittedID;
     }
 
@@ -146,7 +146,7 @@ u64 Queue::submit(
     const bool requiresNativeSubmission = forceNativeSubmission || hasCommands || hasPendingSemaphores;
 
     if(hasCommands && numCmd > UINT32_MAX){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to submit command lists: command list count exceeds Vulkan limit"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list count exceeds Vulkan limit"));
         return m_lastSubmittedID;
     }
     if(
@@ -155,11 +155,11 @@ u64 Queue::submit(
         || localSignalCount >= static_cast<usize>(Limit<u32>::s_Max)
         || m_signalSemaphores.size() >= static_cast<usize>(Limit<u32>::s_Max) - localSignalCount
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to submit command lists: queued semaphore count exceeds Vulkan limit"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queued semaphore count exceeds Vulkan limit"));
         return m_lastSubmittedID;
     }
     if(requiresNativeSubmission && m_lastSubmittedID == Limit<u64>::s_Max){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to submit command lists: queue submission ID exhausted"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queue submission ID exhausted"));
         return m_lastSubmittedID;
     }
     if(hasCommands){
@@ -168,28 +168,28 @@ u64 Queue::submit(
             const SubmissionCommandListIdentity& expected = expectedCommandLists[i];
             for(usize previous = 0u; previous < i; ++previous){
                 if(ppCmd[previous] == cmdList){
-                    NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to submit command lists: command list {} is duplicated"), i);
+                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is duplicated"), i);
                     return m_lastSubmittedID;
                 }
             }
             if(!cmdList || &cmdList->m_device != &m_device){
-                NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to submit command lists: command list {} is null or foreign"), i);
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is null or foreign"), i);
                 return m_lastSubmittedID;
             }
             if(!cmdList->matchesSubmissionLease(m_physicalQueue, m_queueID, expected.graphSubmissionAuthorized)){
-                NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Command-list lease provenance does not match execution queue"));
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command-list lease provenance does not match execution queue"));
                 return m_lastSubmittedID;
             }
             if(!cmdList->m_currentCmdBuf || cmdList->m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE){
-                NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to submit command lists: command list {} has no native command buffer"), i);
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} has no native command buffer"), i);
                 return m_lastSubmittedID;
             }
             if(cmdList->m_commandRecordingFailed){
-                NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to submit command lists: a command list has a sticky native recording failure"));
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: a command list has a sticky native recording failure"));
                 return m_lastSubmittedID;
             }
             if(cmdList->m_isRecording){
-                NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to submit command lists: command list {} is still recording"), i);
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is still recording"), i);
                 return m_lastSubmittedID;
             }
             if(
@@ -207,7 +207,7 @@ u64 Queue::submit(
                 || expected.recordingWorkerIndex != cmdList->m_creationDesc.recordingWorkerIndex
                 || expected.recordingWorkerIndex != cmdList->m_currentCmdBuf->m_recordingWorkerIndex
             ){
-                NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to submit command lists: command list {} replaced its validated native recording lease"), i);
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} replaced its validated native recording lease"), i);
                 return m_lastSubmittedID;
             }
             if(!cmdList->validateTrackedResourcesReadyForSubmission())
@@ -226,7 +226,7 @@ u64 Queue::submit(
                 validatedTimerQueryCommandBuffers.empty() ? nullptr : validatedTimerQueryCommandBuffers.data(),
                 validatedTimerQueryCommandBuffers.size()
             )){
-                NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to submit command lists: timer-query recording order is stale or unresolved"));
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: timer-query recording order is stale or unresolved"));
                 return m_lastSubmittedID;
             }
             validatedTimerQueryCommandBuffers.push_back(tracked);
@@ -242,7 +242,7 @@ u64 Queue::submit(
                 if(!heap)
                     continue;
                 if(heap != &m_device.m_gpuDescriptorHeap){
-                    NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Command buffer references a foreign descriptor heap."));
+                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command buffer references a foreign descriptor heap."));
                     return m_lastSubmittedID;
                 }
                 submissionDescriptorHeap = heap;
@@ -277,7 +277,7 @@ u64 Queue::submit(
                 )
             ){
                 NWB_LOGGER_CRITICAL_WARNING(
-                    GLB_TEXT("Vulkan: Failed to submit command lists: descriptor-buffer binding generation is stale")
+                    NWB_TEXT("Vulkan: Failed to submit command lists: descriptor-buffer binding generation is stale")
                 );
                 return m_lastSubmittedID;
             }
@@ -285,7 +285,7 @@ u64 Queue::submit(
     }
     for(usize i = 0u; i < localSignalCount; ++i){
         if(localSignals[i].semaphore == VK_NULL_HANDLE){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to submit command lists: local signal semaphore is null"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local signal semaphore is null"));
             return m_lastSubmittedID;
         }
     }
@@ -294,7 +294,7 @@ u64 Queue::submit(
         return m_lastSubmittedID;
 
     if(m_trackingSemaphore == VK_NULL_HANDLE){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Queue submission skipped because timeline semaphore is unavailable."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Queue submission skipped because timeline semaphore is unavailable."));
         return m_lastSubmittedID;
     }
 
@@ -316,7 +316,7 @@ u64 Queue::submit(
     for(usize i = 0u; i < localWaitCount; ++i){
         const SubmissionWait& wait = localWaits[i];
         if(wait.semaphore == VK_NULL_HANDLE){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to submit command lists: local wait semaphore is null"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait semaphore is null"));
             return m_lastSubmittedID;
         }
 
@@ -390,14 +390,14 @@ u64 Queue::submit(
             cmdBufInfos.push_back(commandBufferInfo);
         }
     }
-    GLB_ASSERT(preparedCommandBuffers.get_allocator() == m_commandBuffersInFlight.get_allocator());
+    NWB_ASSERT(preparedCommandBuffers.get_allocator() == m_commandBuffersInFlight.get_allocator());
     for(usize i = 0u; i < numCmd; ++i){
         TrackedCommandBuffer* const tracked = ppCmd[i]->m_currentCmdBuf.get();
         if(!tracked || !validateCommandBufferSubmissionState(*tracked))
             return m_lastSubmittedID;
         if(!tracked->validatePendingAccelStructBuildCommits()){
             NWB_LOGGER_CRITICAL_WARNING(
-                GLB_TEXT("Vulkan: Native submission cannot publish acceleration-structure signatures across allocator domains")
+                NWB_TEXT("Vulkan: Native submission cannot publish acceleration-structure signatures across allocator domains")
             );
             return m_lastSubmittedID;
         }
@@ -410,7 +410,7 @@ u64 Queue::submit(
                 return m_lastSubmittedID;
             for(const DescriptorHeapUseCommitTicket& ticket : descriptorHeapUseCommitTickets){
                 if(ticket.heap == heap && ticket.heapUseIndex == heapUseIndex){
-                    NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Native submission contains a duplicate descriptor-heap use."));
+                    NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission contains a duplicate descriptor-heap use."));
                     return m_lastSubmittedID;
                 }
             }
@@ -499,13 +499,13 @@ u64 Queue::submit(
             rejectedCommandBuffer = recycleCommandBuffer(m_commandBuffersInFlight, rejectedCommandBuffer);
 
         if(submissionSuppressed){
-            NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Queue submission was suppressed because the device requires recreation."));
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Queue submission was suppressed because the device requires recreation."));
         }
         else if(res == VK_ERROR_OUT_OF_HOST_MEMORY || res == VK_ERROR_OUT_OF_DEVICE_MEMORY){
-            NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Queue submission was rejected: {}"), ResultToString(res));
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Queue submission was rejected: {}"), ResultToString(res));
         }
         else if(res != VK_ERROR_DEVICE_LOST){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to submit command buffers to queue: {}"), ResultToString(res));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command buffers to queue: {}"), ResultToString(res));
         }
 
         return m_lastSubmittedID;
@@ -584,7 +584,7 @@ void Queue::waitForIdle(){
     if(res == VK_ERROR_DEVICE_LOST)
         m_device.captureDeviceLoss("queue wait idle");
     if(res != VK_SUCCESS)
-        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Queue wait-for-idle failed: {}"), ResultToString(res));
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Queue wait-for-idle failed: {}"), ResultToString(res));
 }
 
 void Queue::clearPendingSemaphores()noexcept{
@@ -609,8 +609,8 @@ Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(
     if(!cmdBuf)
         return source.erase(commandBuffer);
     if(&cmdBuf->m_queue != this || &cmdBuf->m_context != &m_context){
-        NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Cannot recycle a command buffer through a foreign queue"));
-        GLB_ASSERT_MSG(false, GLB_TEXT("Command buffer recycle owner mismatch"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Cannot recycle a command buffer through a foreign queue"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Command buffer recycle owner mismatch"));
         return next;
     }
 
@@ -618,7 +618,7 @@ Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(
     cmdBuf->clearTrackedReferences();
     transitionCommandBufferState(*cmdBuf, TrackedCommandBufferArenaState::Reusable);
     if(cmdBuf->m_recordingWorkerIndex == 0u){
-        GLB_ASSERT(source.get_allocator() == m_commandBuffersPool.get_allocator());
+        NWB_ASSERT(source.get_allocator() == m_commandBuffersPool.get_allocator());
         m_commandBuffersPool.splice(m_commandBuffersPool.end(), source, commandBuffer);
         return next;
     }
@@ -629,13 +629,13 @@ Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(
     );
     if(!workerArena){
         NWB_LOGGER_ERROR(
-            GLB_TEXT("Vulkan: Cannot recycle command buffer because physical queue {} worker {}:{} no longer has a command arena"),
+            NWB_TEXT("Vulkan: Cannot recycle command buffer because physical queue {} worker {}:{} no longer has a command arena"),
             m_physicalQueue.index,
             cmdBuf->m_recordingWorkerDomain,
             cmdBuf->m_recordingWorkerIndex
         );
-        GLB_ASSERT_MSG(false, GLB_TEXT("Worker command buffer lost its owning command arena"));
-        GLB_ASSERT(source.get_allocator() == m_commandBuffersPool.get_allocator());
+        NWB_ASSERT_MSG(false, NWB_TEXT("Worker command buffer lost its owning command arena"));
+        NWB_ASSERT(source.get_allocator() == m_commandBuffersPool.get_allocator());
         m_commandBuffersPool.splice(m_commandBuffersPool.end(), source, commandBuffer);
         return next;
     }
@@ -643,7 +643,7 @@ Queue::CommandBufferList::iterator Queue::recycleCommandBuffer(
     // Queue submission/timeline retirement holds m_mutex before arriving here. It may take a worker arena lock, but worker recording never takes m_mutex, so the lock order cannot form a cycle.
     ScopedLock lock(workerArena->mutex);
 
-    GLB_ASSERT(source.get_allocator() == workerArena->commandBuffersPool.get_allocator());
+    NWB_ASSERT(source.get_allocator() == workerArena->commandBuffersPool.get_allocator());
     workerArena->commandBuffersPool.splice(workerArena->commandBuffersPool.end(), source, commandBuffer);
     return next;
 }
@@ -693,7 +693,7 @@ u64 Device::queueGetCompletedInstance(const GpuPhysicalQueueId& queue){
         if(result == VK_ERROR_DEVICE_LOST)
             captureDeviceLoss("queue timeline query");
         if(result != VK_SUCCESS)
-            NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(result));
+            NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to query queue timeline semaphore value: {}"), ResultToString(result));
         return completedInstance;
     }
     return 0;

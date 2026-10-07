@@ -44,17 +44,17 @@ inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_textur
 ){
     outTotalByteCount = 0u;
     if(!desc.destination){
-        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to upload texture batch: destination texture is null"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch: destination texture is null"));
         return false;
     }
     if(!desc.regions || desc.regionCount == 0u){
-        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': regions are empty")
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': regions are empty")
             , StringConvert(desc.destination->getCreationDescription().name.resolvedText())
         );
         return false;
     }
     if(desc.finalState == ResourceStates::Unknown){
-        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': final state is unknown")
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': final state is unknown")
             , StringConvert(desc.destination->getCreationDescription().name.resolvedText())
         );
         return false;
@@ -62,19 +62,19 @@ inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_textur
 
     const TextureDesc& textureDesc = desc.destination->getCreationDescription();
     if(textureDesc.keepInitialState && textureDesc.initialState == ResourceStates::Unknown){
-        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': keep-initial-state uploads require a concrete initial state")
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': keep-initial-state uploads require a concrete initial state")
             , StringConvert(textureDesc.name.resolvedText())
         );
         return false;
     }
     if(static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::kCount)){
-        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': texture format is invalid")
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': texture format is invalid")
             , StringConvert(textureDesc.name.resolvedText())
         );
         return false;
     }
     if(textureDesc.keepInitialState && desc.finalState != textureDesc.initialState){
-        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': keep-initial-state requires final state {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': keep-initial-state requires final state {}")
             , StringConvert(textureDesc.name.resolvedText())
             , static_cast<u32>(textureDesc.initialState)
         );
@@ -86,7 +86,7 @@ inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_textur
         && desc.physicalInitialState != ResourceStates::Unknown
         && desc.physicalInitialState != textureDesc.initialState
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': retained textures require their declared physical initial state to match initialState")
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': retained textures require their declared physical initial state to match initialState")
             , StringConvert(textureDesc.name.resolvedText())
         );
         return false;
@@ -106,7 +106,7 @@ inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_textur
         if(!GraphicsModuleDetail::ValidateTextureSetupUpload(regionDesc))
             return false;
         if(AddOverflows<usize>(outTotalByteCount, region.dataSize)){
-            NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': byte count overflows")
+            NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': byte count overflows")
                 , StringConvert(textureDesc.name.resolvedText())
             );
             return false;
@@ -155,7 +155,7 @@ inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_textur
     case CommandQueue::Graphics:
         return CommandQueue::Graphics;
     default:
-        GLB_ASSERT_MSG(false, GLB_TEXT("GraphicsRuntime: texture batch upload requested an invalid command queue"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("GraphicsRuntime: texture batch upload requested an invalid command queue"));
         return CommandQueue::Graphics;
     }
 }
@@ -296,7 +296,7 @@ bool GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)cons
         sameClassRouting.enabled ? sameClassRouting.primaryQueue : GpuPhysicalQueueId{}
     );
     if(!submitted){
-        NWB_LOGGER_ERROR(GLB_TEXT("GraphicsRuntime: failed to submit graph-owned texture upload batch '{}'"), StringConvert(textureDesc.name.resolvedText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to submit graph-owned texture upload batch '{}'"), StringConvert(textureDesc.name.resolvedText()));
         return false;
     }
 

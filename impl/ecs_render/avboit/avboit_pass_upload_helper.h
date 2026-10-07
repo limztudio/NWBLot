@@ -69,7 +69,7 @@ public:
         MaterialPassDrawItemPartitions& drawItems,
         InstanceGpuDataVector& instanceData,
         CsgFrameGpuData& csgFrameData,
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
         ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif
         MaterialTypedByteDataVector& materialTypedBytes,

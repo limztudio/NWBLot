@@ -40,12 +40,12 @@ static constexpr AStringView s_MaterialInterface = "project/shaders/smoke_surfac
 class RefractionSmokeProject final : public NWB::IProjectEntryCallbacks{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, GLB_TEXT("RefractionSmokeProject"));
+        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("RefractionSmokeProject"));
         auto& renderer = AddSmokeRenderSystems(*world, context);
         // These comparisons isolate transmission. Reflection has its own combined optical capture matrix.
         NWB::Impl::ReflectionSettings reflection;
         reflection.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
-        GLB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), GLB_TEXT("RefractionSmokeProject: invalid reflection settings"));
+        NWB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), NWB_TEXT("RefractionSmokeProject: invalid reflection settings"));
         f32 enabled = 1.0f;
         const bool refractionEnabled = !ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_ENABLED", enabled)
             || enabled != 0.0f
@@ -57,13 +57,13 @@ private:
         ;
         renderer.setRefractionHardwareTracingEnabled(hardwareEnabled);
         NWB_LOGGER_ESSENTIAL_INFO(
-            GLB_TEXT("RefractionSmokeProject: refraction {}"), refractionEnabled ? GLB_TEXT("enabled") : GLB_TEXT("disabled")
+            NWB_TEXT("RefractionSmokeProject: refraction {}"), refractionEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
         );
         return world;
     }
 
     bool configureFramebufferCapture(){
-        return ConfigureSmokeFramebufferCapture(m_context, GLB_TEXT("RefractionSmokeProject"), 16u, m_framebufferCapture);
+        return ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("RefractionSmokeProject"), 16u, m_framebufferCapture);
     }
 
     void destroyWorld(){
@@ -79,7 +79,7 @@ private:
         const auto entity = CreateTintedStaticMeshEntity(
             *m_world, m_context.objectArena, s_PlaneMesh, material, s_MaterialInterface, tint, position, scale
         );
-        GLB_FATAL_ASSERT_MSG(entity.valid(), GLB_TEXT("RefractionSmokeProject: panel creation failed"));
+        NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: panel creation failed"));
         auto* transform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
         // The plane starts in XZ with a +Y normal; face the camera along -Z.
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform->rotation);
@@ -114,7 +114,7 @@ public:
             Float4(1.0f, 1.0f, 1.0f, 1.0f), Float4(0.0f, 1.4f, 0.0f, 0.0f),
             Float4(1.15f, 1.15f, 1.15f, 0.0f)
         );
-        GLB_FATAL_ASSERT_MSG(camera.valid() && glass.valid() && light.valid(), GLB_TEXT("RefractionSmokeProject: camera/glass/light creation failed"));
+        NWB_FATAL_ASSERT_MSG(camera.valid() && glass.valid() && light.valid(), NWB_TEXT("RefractionSmokeProject: camera/glass/light creation failed"));
 
         // Fixed opaque stripes make displaced edges measurable. Unlit materials
         // keep the comparison independent of GI, shadows, and caustic histories.
@@ -132,14 +132,14 @@ public:
             Float4(0.0f, 1.9f, 1.6f, 0.0f), Float4(2.0f, 1.0f, 0.12f, 0.0f));
 
         NWB_LOGGER_ESSENTIAL_INFO(
-            GLB_TEXT("RefractionSmokeProject: zero-coverage clear sphere + opaque stripes + foreground/background AVBOIT panels created")
+            NWB_TEXT("RefractionSmokeProject: zero-coverage clear sphere + opaque stripes + foreground/background AVBOIT panels created")
         );
         return true;
     }
 
     virtual void onShutdown()override{
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("RefractionSmokeProject: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: shutdown"));
     }
 
     virtual bool onUpdate(const f32 delta)override{
@@ -167,7 +167,7 @@ private:
 
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){ return { 960, 720 }; }
-TStringView NWB::QueryProjectWindowTitle(){ return GLB_TEXT("NWB Refraction Smoke"); }
+TStringView NWB::QueryProjectWindowTitle(){ return NWB_TEXT("NWB Refraction Smoke"); }
 UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
     return MakeUnique<__hidden_refraction_smoke::RefractionSmokeProject>(context);
 }

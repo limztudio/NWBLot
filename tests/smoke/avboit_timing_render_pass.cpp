@@ -65,7 +65,7 @@ bool AvboitTimingRenderPass::start(const bool includeCaustics){
     auto& device = graphics.getDevice();
     for(const Name& scope : scopes){
         if(!graphics.gpuTiming().prepareScopeQueries(scope, device, s_InFlightRanges)){
-            NWB_LOGGER_ERROR(GLB_TEXT("AvboitTimingProbe: failed to prepare scope '{}'"), StringConvert(scope.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AvboitTimingProbe: failed to prepare scope '{}'"), StringConvert(scope.resolvedText()));
             return false;
         }
     }
@@ -76,7 +76,7 @@ bool AvboitTimingRenderPass::start(const bool includeCaustics){
         };
         for(const Name& scope : causticScopes){
             if(!graphics.gpuTiming().prepareScopeQueries(scope, device, s_InFlightRanges)){
-                NWB_LOGGER_ERROR(GLB_TEXT("AvboitTimingProbe: failed to prepare scope '{}'"), StringConvert(scope.resolvedText()));
+                NWB_LOGGER_ERROR(NWB_TEXT("AvboitTimingProbe: failed to prepare scope '{}'"), StringConvert(scope.resolvedText()));
                 return false;
             }
         }
@@ -84,10 +84,10 @@ bool AvboitTimingRenderPass::start(const bool includeCaustics){
     graphics.addRenderPassToBack(*this);
     m_registered = true;
     m_includeCaustics = includeCaustics;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("AvboitTimingProbe: in-flight ranges {}"), s_InFlightRanges);
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("AvboitTimingProbe: render unfocused 1"));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AvboitTimingProbe: in-flight ranges {}"), s_InFlightRanges);
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AvboitTimingProbe: render unfocused 1"));
     if(includeCaustics)
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("AvboitTimingProbe: caustic in-flight ranges {}"), s_InFlightRanges);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AvboitTimingProbe: caustic in-flight ranges {}"), s_InFlightRanges);
     return true;
 }
 

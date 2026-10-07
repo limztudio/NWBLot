@@ -29,11 +29,11 @@ namespace TriangleAreaDetail{
 
 
 #if defined(__AVX2__) || defined(_M_AVX2)
-[[nodiscard]] GLB_INLINE __m256d MakeVector3F64(const SIMDVector value)noexcept{
+[[nodiscard]] NWB_INLINE __m256d MakeVector3F64(const SIMDVector value)noexcept{
     return _mm256_cvtps_pd(value);
 }
 
-[[nodiscard]] GLB_INLINE TriangleAreaNormal64 MakeTriangleAreaNormal64(const __m256d value)noexcept{
+[[nodiscard]] NWB_INLINE TriangleAreaNormal64 MakeTriangleAreaNormal64(const __m256d value)noexcept{
     const __m128d xy = _mm256_castpd256_pd128(value);
     const __m128d z0 = _mm256_extractf128_pd(value, 1);
     return TriangleAreaNormal64{
@@ -43,7 +43,7 @@ namespace TriangleAreaDetail{
     };
 }
 
-[[nodiscard]] GLB_INLINE TriangleAreaNormal64 CrossVector3F64(const __m256d ab, const __m256d ac)noexcept{
+[[nodiscard]] NWB_INLINE TriangleAreaNormal64 CrossVector3F64(const __m256d ab, const __m256d ac)noexcept{
     const __m256d abYzx = _mm256_permute4x64_pd(ab, _MM_SHUFFLE(3, 0, 2, 1));
     const __m256d abZxy = _mm256_permute4x64_pd(ab, _MM_SHUFFLE(3, 1, 0, 2));
     const __m256d acYzx = _mm256_permute4x64_pd(ac, _MM_SHUFFLE(3, 0, 2, 1));
@@ -55,7 +55,7 @@ namespace TriangleAreaDetail{
 }
 #endif
 
-[[nodiscard]] GLB_INLINE TriangleAreaNormal64 BuildTriangleAreaNormal64FromEdges(
+[[nodiscard]] NWB_INLINE TriangleAreaNormal64 BuildTriangleAreaNormal64FromEdges(
     const f64 abX,
     const f64 abY,
     const f64 abZ,
@@ -63,7 +63,7 @@ namespace TriangleAreaDetail{
     const f64 acY,
     const f64 acZ
 )noexcept{
-#if defined(GLB_HAS_SSE4)
+#if defined(NWB_HAS_SSE4)
     const __m128d xy = _mm_sub_pd(
         _mm_mul_pd(_mm_set_pd(abZ, abY), _mm_set_pd(acX, acZ)),
         _mm_mul_pd(_mm_set_pd(abX, abZ), _mm_set_pd(acZ, acY))
@@ -75,7 +75,7 @@ namespace TriangleAreaDetail{
         _mm_cvtsd_f64(_mm_unpackhi_pd(xy, xy)),
         _mm_cvtsd_f64(z),
     };
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
 #if defined(__aarch64__) || defined(_M_ARM64)
     float64x2_t abZY = vdupq_n_f64(abY);
     abZY = vsetq_lane_f64(abZ, abZY, 1);
@@ -123,7 +123,7 @@ namespace TriangleAreaDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE TriangleAreaNormal64 BuildTriangleAreaNormal64(
+[[nodiscard]] NWB_INLINE TriangleAreaNormal64 BuildTriangleAreaNormal64(
     const SIMDVector a,
     const SIMDVector b,
     const SIMDVector c
@@ -143,7 +143,7 @@ namespace TriangleAreaDetail{
 #endif
 }
 
-[[nodiscard]] GLB_INLINE f64 TriangleAreaNormalLengthSquared(const TriangleAreaNormal64& areaNormal)noexcept{
+[[nodiscard]] NWB_INLINE f64 TriangleAreaNormalLengthSquared(const TriangleAreaNormal64& areaNormal)noexcept{
 #if defined(__AVX2__) || defined(_M_AVX2)
     const __m256d normal = _mm256_set_pd(0.0, areaNormal.z, areaNormal.y, areaNormal.x);
     const __m256d squared = _mm256_mul_pd(normal, normal);
@@ -152,13 +152,13 @@ namespace TriangleAreaDetail{
     const __m128d xzY = _mm_add_pd(xy, z0);
     const __m128d sum = _mm_add_sd(xzY, _mm_unpackhi_pd(xzY, xzY));
     return _mm_cvtsd_f64(sum);
-#elif defined(GLB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE4)
     const __m128d xy = _mm_set_pd(areaNormal.y, areaNormal.x);
     const __m128d xySquared = _mm_mul_pd(xy, xy);
     const __m128d xySum = _mm_add_sd(xySquared, _mm_unpackhi_pd(xySquared, xySquared));
     const __m128d zSquared = _mm_mul_sd(_mm_set_sd(areaNormal.z), _mm_set_sd(areaNormal.z));
     return _mm_cvtsd_f64(_mm_add_sd(xySum, zSquared));
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
 #if defined(__aarch64__) || defined(_M_ARM64)
     float64x2_t xy = vdupq_n_f64(areaNormal.x);
     xy = vsetq_lane_f64(areaNormal.y, xy, 1);
@@ -174,7 +174,7 @@ namespace TriangleAreaDetail{
 #endif
 }
 
-[[nodiscard]] GLB_INLINE bool TriangleHasArea(
+[[nodiscard]] NWB_INLINE bool TriangleHasArea(
     const SIMDVector a,
     const SIMDVector b,
     const SIMDVector c,

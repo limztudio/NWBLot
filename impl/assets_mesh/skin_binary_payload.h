@@ -24,7 +24,7 @@ namespace SkinBinaryPayload{
 
 
 inline constexpr u32 s_SkinMagic = 0x534B4E31u; // SKN1
-inline constexpr TStringView s_SkinAssetKindLabel = GLB_TEXT("skin");
+inline constexpr TStringView s_SkinAssetKindLabel = NWB_TEXT("skin");
 
 struct HeaderBinary{
     u32 magic = s_SkinMagic;

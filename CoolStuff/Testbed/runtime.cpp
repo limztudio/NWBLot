@@ -21,6 +21,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_runtime{
 
 
@@ -56,11 +62,11 @@ static constexpr TestbedModelRef s_FemaleModel{"project/characters/female/model"
 static constexpr TestbedMaterialRef s_ModelMaterial{"project/materials/mat_skinned_uv"};
 static constexpr TestbedModelRef s_GroundPlaneModel{"project/meshes/ground_plane/model"};
 static constexpr TestbedMaterialRef s_GroundPlaneMaterial{"project/materials/mat_white_opaque"};
-static constexpr TStringView s_DefaultSceneDescription = GLB_TEXT("45-degree directional + point light, female skinned character on a white ground plane");
-static constexpr TStringView s_InitWorldFailedText = GLB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false");
-static constexpr TStringView s_CharacterInvalidText = GLB_TEXT("ProjectTestbed initialization failed: character creation returned an invalid entity");
-static constexpr TStringView s_StartupSceneText = GLB_TEXT("ProjectTestbed: startup scene created ({})");
-static constexpr TStringView s_ShutdownText = GLB_TEXT("ProjectTestbed: shutdown");
+static constexpr TStringView s_DefaultSceneDescription = NWB_TEXT("45-degree directional + point light, female skinned character on a white ground plane");
+static constexpr TStringView s_InitWorldFailedText = NWB_TEXT("ProjectTestbed initialization failed: CreateInitialProjectWorld returned false");
+static constexpr TStringView s_CharacterInvalidText = NWB_TEXT("ProjectTestbed initialization failed: character creation returned an invalid entity");
+static constexpr TStringView s_StartupSceneText = NWB_TEXT("ProjectTestbed: startup scene created ({})");
+static constexpr TStringView s_ShutdownText = NWB_TEXT("ProjectTestbed: shutdown");
 static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initialization failed";
 
 
@@ -87,13 +93,13 @@ static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initializ
 
 [[nodiscard]] static bool UiWantsKeyboardCapture(NWB::Core::ECS::World& world){
     const auto* ui = world.getSystem<NWB::Impl::UiLayerSystem>();
-    GLB_ASSERT(ui);
+    NWB_ASSERT(ui);
     return ui->wantsKeyboard();
 }
 
 [[nodiscard]] static bool UiWantsMouseCapture(NWB::Core::ECS::World& world){
     const auto* ui = world.getSystem<NWB::Impl::UiLayerSystem>();
-    GLB_ASSERT(ui);
+    NWB_ASSERT(ui);
     return ui->wantsPointer();
 }
 
@@ -188,7 +194,7 @@ static void ApplyFlyCameraInputToMainCamera(
     const f32 delta
 ){
     const NWB::Impl::Scene::SceneCameraView cameraView = NWB::Impl::Scene::ResolveSceneCameraView(world);
-    GLB_ASSERT(cameraView.valid());
+    NWB_ASSERT(cameraView.valid());
 
     f32 yawRadians = 0.0f;
     f32 pitchRadians = 0.0f;
@@ -236,7 +242,7 @@ static void ApplyFlyCameraInputToMainCamera(
 
 static void CreateStaticGroundPlaneEntity(NWB::Core::ECS::World& world){
     const auto groundEntity = CreateModelEntity(world, s_GroundPlaneModel, s_GroundPlaneMaterial);
-    GLB_FATAL_ASSERT(groundEntity.valid());
+    NWB_FATAL_ASSERT(groundEntity.valid());
 }
 
 
@@ -249,7 +255,7 @@ static void CreateStaticGroundPlaneEntity(NWB::Core::ECS::World& world){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::CreateInitialWorldOrDie(NWB::ProjectRuntimeContext& context){
+NotNullUniquePtr<NWB::Core::ECS::World> Project::CreateInitialWorldOrDie(NWB::ProjectRuntimeContext& context){
     UniquePtr<NWB::Core::ECS::World> world;
     if(!NWB::CreateInitialProjectWorld(context, world)){
         NWB_LOGGER_FATAL(__hidden_runtime::s_InitWorldFailedText);
@@ -258,25 +264,25 @@ NotNullUniquePtr<NWB::Core::ECS::World> ProjectTestbed::CreateInitialWorldOrDie(
     return MakeNotNullUnique(Move(world));
 }
 
-ProjectTestbed::ProjectTestbed(NWB::ProjectRuntimeContext& context)
+Project::Project(NWB::ProjectRuntimeContext& context)
     : m_context(context)
     , m_world(CreateInitialWorldOrDie(context))
     , m_uiPreview(context.objectArena, context.assetManager)
 {}
 
-ProjectTestbed::~ProjectTestbed(){
+Project::~Project(){
     unregisterInputHandler();
     destroyWorld();
 }
 
-void ProjectTestbed::destroyWorld(){
+void Project::destroyWorld(){
     if(!m_world.owner())
         return;
 
     NWB::DestroyInitialProjectWorld(m_context, m_world.owner());
 }
 
-bool ProjectTestbed::onStartup(){
+bool Project::onStartup(){
     auto activeCameraEntity = m_world->createEntity();
     auto& activeCamera = activeCameraEntity.addComponent<NWB::Impl::Scene::ActiveCameraComponent>();
     const Float4 cameraPosition(
@@ -286,8 +292,8 @@ bool ProjectTestbed::onStartup(){
     );
     activeCamera.camera = NWB::Impl::Scene::CreateSceneCameraEntity(*m_world, cameraPosition);
     auto* cameraTransform = m_world->tryGetComponent<NWB::Impl::Scene::TransformComponent>(activeCamera.camera);
-    GLB_ASSERT(activeCamera.camera.valid());
-    GLB_ASSERT(cameraTransform);
+    NWB_ASSERT(activeCamera.camera.valid());
+    NWB_ASSERT(cameraTransform);
     StoreFloat(QuaternionRotationRollPitchYaw(0.0f, __hidden_runtime::s_CameraStartYaw, 0.0f), cameraTransform->rotation);
     const auto directionalLight = NWB::Impl::Scene::CreateDirectionalLightEntity(
         *m_world,
@@ -310,14 +316,14 @@ bool ProjectTestbed::onStartup(){
     if(!createDefaultScene())
         return false;
     auto* modelSystemPtr = m_world->getSystem<NWB::Impl::ModelSystem>();
-    GLB_ASSERT(modelSystemPtr);
+    NWB_ASSERT(modelSystemPtr);
     NWB::Impl::ModelSystem& modelSystem = *modelSystemPtr;
     modelSystem.syncModelRuntimes();
     registerInputHandler();
     return true;
 }
 
-bool ProjectTestbed::createDefaultScene(){
+bool Project::createDefaultScene(){
     if(!__hidden_runtime::CreateSkinnedCharacterEntity(*m_world).valid()){
         NWB_LOGGER_ERROR(__hidden_runtime::s_CharacterInvalidText);
         return false;
@@ -338,14 +344,14 @@ bool ProjectTestbed::createDefaultScene(){
     return true;
 }
 
-void ProjectTestbed::onShutdown(){
+void Project::onShutdown(){
     unregisterInputHandler();
     clearInputState();
     destroyWorld();
     NWB_LOGGER_ESSENTIAL_INFO(__hidden_runtime::s_ShutdownText);
 }
 
-bool ProjectTestbed::onUpdate(f32 delta){
+bool Project::onUpdate(f32 delta){
     const f32 safeDelta = VectorGetX(VectorMax(VectorSet(IsFinite(delta) ? delta : 0.0f, 0.0f, 0.0f, 0.0f), VectorZero()));
 
     updateMainCamera(safeDelta);
@@ -353,7 +359,7 @@ bool ProjectTestbed::onUpdate(f32 delta){
     return true;
 }
 
-void ProjectTestbed::registerInputHandler(){
+void Project::registerInputHandler(){
     if(m_inputRegistered)
         return;
 
@@ -361,7 +367,7 @@ void ProjectTestbed::registerInputHandler(){
     m_inputRegistered = true;
 }
 
-void ProjectTestbed::unregisterInputHandler(){
+void Project::unregisterInputHandler(){
     if(!m_inputRegistered)
         return;
 
@@ -369,7 +375,7 @@ void ProjectTestbed::unregisterInputHandler(){
     m_inputRegistered = false;
 }
 
-void ProjectTestbed::clearInputState(){
+void Project::clearInputState(){
     m_keyPressed.fill(false);
     m_pendingMouseDeltaX = 0.0f;
     m_pendingMouseDeltaY = 0.0f;
@@ -379,7 +385,7 @@ void ProjectTestbed::clearInputState(){
     m_mousePositionValid = false;
 }
 
-void ProjectTestbed::setKeyState(const i32 key, const bool pressed){
+void Project::setKeyState(const i32 key, const bool pressed){
     usize keyIndex = 0;
     if(!__hidden_runtime::ResolveKeyIndex(key, keyIndex))
         return;
@@ -387,7 +393,7 @@ void ProjectTestbed::setKeyState(const i32 key, const bool pressed){
     m_keyPressed[keyIndex] = pressed;
 }
 
-bool ProjectTestbed::keyPressed(const i32 key)const{
+bool Project::keyPressed(const i32 key)const{
     usize keyIndex = 0;
     if(!__hidden_runtime::ResolveKeyIndex(key, keyIndex))
         return false;
@@ -395,7 +401,7 @@ bool ProjectTestbed::keyPressed(const i32 key)const{
     return m_keyPressed[keyIndex];
 }
 
-void ProjectTestbed::updateMainCamera(const f32 delta){
+void Project::updateMainCamera(const f32 delta){
     const bool pointerCaptured = __hidden_runtime::UiWantsMouseCapture(*m_world);
     // Pending deltas were admitted by scene ownership; later UI hover cannot erase a completed drag.
     const f32 mouseDeltaX = m_pendingMouseDeltaX;
@@ -435,12 +441,12 @@ void ProjectTestbed::updateMainCamera(const f32 delta){
     );
 }
 
-void ProjectTestbed::windowFocusUpdate(const bool focused){
+void Project::windowFocusUpdate(const bool focused){
     if(!focused)
         clearInputState();
 }
 
-void ProjectTestbed::pointerCaptureLost(){
+void Project::pointerCaptureLost(){
     // Ordinary button-up already completed the gesture; keep its accumulated camera motion.
     if(!m_mouseLookActive)
         return;
@@ -450,7 +456,7 @@ void ProjectTestbed::pointerCaptureLost(){
     m_pendingMouseDeltaY = 0.0f;
 }
 
-bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
+bool Project::keyboardUpdate(const i32 key, const i32 scancode, const i32 action, const i32 mods){
     static_cast<void>(scancode);
     static_cast<void>(mods);
 
@@ -466,7 +472,7 @@ bool ProjectTestbed::keyboardUpdate(const i32 key, const i32 scancode, const i32
     return false;
 }
 
-bool ProjectTestbed::mousePosUpdate(const f64 xpos, const f64 ypos){
+bool Project::mousePosUpdate(const f64 xpos, const f64 ypos){
     if(!IsFinite(xpos) || !IsFinite(ypos)){
         m_mousePositionValid = false;
         return false;
@@ -507,7 +513,7 @@ bool ProjectTestbed::mousePosUpdate(const f64 xpos, const f64 ypos){
     return false;
 }
 
-bool ProjectTestbed::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
+bool Project::mouseButtonUpdate(const i32 button, const i32 action, const i32 mods){
     static_cast<void>(mods);
 
     if(__hidden_runtime::UiWantsMouseCapture(*m_world)){
@@ -531,6 +537,9 @@ bool ProjectTestbed::mouseButtonUpdate(const i32 button, const i32 action, const
     }
     return false;
 }
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

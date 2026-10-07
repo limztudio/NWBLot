@@ -433,7 +433,7 @@ void CommandList::executePipelineBarrier(
     const Span<VkMemoryBarrier2> memoryBarriers,
     const Span<VkImageMemoryBarrier2> imageBarriers,
     const Span<VkBufferMemoryBarrier2> bufferBarriers){
-    if(!validateCommandRecordingScope(GLB_TEXT("pipeline barrier")))
+    if(!validateCommandRecordingScope(NWB_TEXT("pipeline barrier")))
         return;
 
     auto depInfo = VulkanDetail::MakeVkStruct<VkDependencyInfo>(VK_STRUCTURE_TYPE_DEPENDENCY_INFO);
@@ -514,14 +514,14 @@ void CommandList::executePipelineBarrier(
         }
         else
             rejectCommandRecording(
-                GLB_TEXT("pipeline barrier"),
-                GLB_TEXT("dynamic rendering could not resume after the barrier")
+                NWB_TEXT("pipeline barrier"),
+                NWB_TEXT("dynamic rendering could not resume after the barrier")
             );
     }
 }
 
 void CommandList::commitBarriers(){
-    if(!validateCommandRecordingScope(GLB_TEXT("commit barriers")))
+    if(!validateCommandRecordingScope(NWB_TEXT("commit barriers")))
         return;
 
     if(m_pendingImageBarriers.empty() && m_pendingBufferBarriers.empty())
@@ -545,7 +545,7 @@ void CommandList::setTextureState(
 ){
     if(!textureResource)
         return;
-    constexpr TStringView s_OperationName = GLB_TEXT("set texture state");
+    constexpr TStringView s_OperationName = NWB_TEXT("set texture state");
     if(!validateCommandRecordingScope(s_OperationName))
         return;
     if(!validateTextureForGpuState(textureResource, stateBits, s_OperationName))
@@ -557,7 +557,7 @@ void CommandList::setTextureState(
         TextureSubresourceMipResolve::Range
     );
     if(!VulkanDetail::IsTextureSubresourceRangeValid(resolvedSubresources)){
-        rejectCommandRecording(s_OperationName, GLB_TEXT("subresource range is empty or outside the texture"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("subresource range is empty or outside the texture"));
         return;
     }
 
@@ -581,8 +581,8 @@ void CommandList::setTextureState(
                 && !m_stateTracker.getResolvedTransientTextureState(texture, arraySlice, mipLevel, subresourceOldState)
             ){
                 rejectCommandRecording(
-                    GLB_TEXT("set texture state"),
-                    GLB_TEXT("tracked texture subresource state could not be resolved")
+                    NWB_TEXT("set texture state"),
+                    NWB_TEXT("tracked texture subresource state could not be resolved")
                 );
                 return;
             }

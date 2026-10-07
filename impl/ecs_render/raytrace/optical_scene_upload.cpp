@@ -22,9 +22,9 @@ RayTracingOpticalSceneUpload::RayTracingOpticalSceneUpload(Core::Alloc::GlobalAr
 {
     const usize instanceBytes = gather.instances.size() * sizeof(RayTracingOpticalInstanceGpu);
     bytes.resize(sizeof(gather.header) + instanceBytes);
-    GLB_MEMCPY(bytes.data(), bytes.size(), &gather.header, sizeof(gather.header));
+    NWB_MEMCPY(bytes.data(), bytes.size(), &gather.header, sizeof(gather.header));
     if(instanceBytes != 0u)
-        GLB_MEMCPY(bytes.data() + sizeof(gather.header), instanceBytes, gather.instances.data(), instanceBytes);
+        NWB_MEMCPY(bytes.data() + sizeof(gather.header), instanceBytes, gather.instances.data(), instanceBytes);
 }
 
 

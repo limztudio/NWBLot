@@ -167,11 +167,11 @@ TEST(AllocationOwnerTelemetry, ResetsOutputForMalformedMemoryPayloads){
     Telemetry::TelemetryBytes bytes(testArena.arena);
     ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, owner, "Payload Validation Owner", snapshot, delta, bytes));
     Telemetry::EncodedPerfMemoryPayloadHeader validHeader;
-    GLB_MEMCPY(&validHeader, sizeof(validHeader), bytes.data(), sizeof(validHeader));
+    NWB_MEMCPY(&validHeader, sizeof(validHeader), bytes.data(), sizeof(validHeader));
     Telemetry::PerfMemoryPayload parsed(testArena.arena);
     ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size(), parsed));
     for(u32 invalidCase = 0u; invalidCase < 9u; ++invalidCase){
-        GLB_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
+        NWB_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
         ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size(), parsed));
         Telemetry::EncodedPerfMemoryPayloadHeader malformed = validHeader;
         switch(invalidCase){
@@ -185,12 +185,12 @@ TEST(AllocationOwnerTelemetry, ResetsOutputForMalformedMemoryPayloads){
         case 7u: malformed.scopeHash = {}; break;
         case 8u: ++malformed.scopeNameBytes; break;
         }
-        GLB_MEMCPY(bytes.data(), bytes.size(), &malformed, sizeof(malformed));
+        NWB_MEMCPY(bytes.data(), bytes.size(), &malformed, sizeof(malformed));
         EXPECT_FALSE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size(), parsed));
         ExpectEmptyPayload(parsed);
     }
     for(const usize truncatedSize : { sizeof(validHeader) - 1u, bytes.size() - 1u }){
-        GLB_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
+        NWB_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
         ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size(), parsed));
         EXPECT_FALSE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), truncatedSize, parsed));
         ExpectEmptyPayload(parsed);

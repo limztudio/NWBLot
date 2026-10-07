@@ -8,10 +8,10 @@
 
 #include <gtest/gtest.h>
 
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
 #endif
-#if defined(GLB_PLATFORM_LINUX)
+#if defined(NWB_PLATFORM_LINUX)
 #include <sched.h>
 #endif
 
@@ -25,7 +25,7 @@ TEST(CpuTopologyTests, InvalidPlacementFailsWithoutMutatingTheCallingThread){
 }
 
 
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
 TEST(CpuTopologyTests, DiscoveryHonorsAProcessAffinityRestriction){
     ASSERT_EXIT({
         InteropVector<CpuWorkerPlacement> placements;
@@ -95,7 +95,7 @@ TEST(CpuTopologyTests, DiscoveryHonorsProcessDefaultCpuSets){
 #endif
 
 
-#if defined(GLB_PLATFORM_LINUX)
+#if defined(NWB_PLATFORM_LINUX)
 TEST(CpuTopologyTests, DiscoveryHonorsInheritedLinuxAffinityIncludingHighProcessorIndices){
     InteropVector<CpuWorkerPlacement> placements;
     ASSERT_TRUE(QueryCpuWorkerPlacements(placements));

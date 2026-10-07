@@ -282,19 +282,19 @@ bool StartDesktopHandler(const ::Path<ArenaT>& handlerExecutablePath){
 
     TString<ArenaT> commandLine(handlerExecutablePath.arena());
     commandLine.reserve(handlerExecutablePath.size() + __hidden_crash_win32::s_HandlerCommandLineReserveSlack);
-    commandLine += GLB_TEXT("\"");
+    commandLine += NWB_TEXT("\"");
     commandLine += handlerExecutablePath.native();
-    commandLine += GLB_TEXT("\" ");
+    commandLine += NWB_TEXT("\" ");
     commandLine += s_RequestHandleArgument;
-    commandLine += GLB_TEXT(" ");
+    commandLine += NWB_TEXT(" ");
     commandLine += StringConvert(handlerExecutablePath.arena(), AStringView(requestHandleText));
-    commandLine += GLB_TEXT(" ");
+    commandLine += NWB_TEXT(" ");
     commandLine += s_AckHandleArgument;
-    commandLine += GLB_TEXT(" ");
+    commandLine += NWB_TEXT(" ");
     commandLine += StringConvert(handlerExecutablePath.arena(), AStringView(ackHandleText));
-    commandLine += GLB_TEXT(" ");
+    commandLine += NWB_TEXT(" ");
     commandLine += s_AckEventArgument;
-    commandLine += GLB_TEXT(" ");
+    commandLine += NWB_TEXT(" ");
     commandLine += StringConvert(handlerExecutablePath.arena(), AStringView(ackEventText));
 
     SIZE_T attributeListBytes = 0u;

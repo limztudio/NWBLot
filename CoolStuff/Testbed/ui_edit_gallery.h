@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "namespace.h"
+
 #include <impl/ecs_ui/components.h>
 #include <impl/ecs_ui/toolkit/widgets/edit_box_state.h>
 
@@ -12,9 +14,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiEditGallery final : NoCopy{
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiEditGallery final : NoCopy{
 public:
-    explicit TestbedUiEditGallery(NWB::Core::Alloc::GlobalArena& arena);
+    explicit UiEditGallery(NWB::Core::Alloc::GlobalArena& arena);
 
 
 public:
@@ -27,6 +35,9 @@ private:
     NWB::Impl::Ui::EditBoxState m_textState;
     NWB::Impl::Ui::EditBoxState m_readOnlyState;
 };
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

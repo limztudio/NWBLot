@@ -77,18 +77,18 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
     ){
         rejectCommandRecording(
             s_DispatchRaysOperation,
-            GLB_TEXT("ray-tracing dispatch is unavailable on this device generation")
+            NWB_TEXT("ray-tracing dispatch is unavailable on this device generation")
         );
         return;
     }
 
     ShaderTable* const shaderTable = m_currentRayTracingState.shaderTable;
     if(!shaderTable){
-        rejectCommandRecording(s_DispatchRaysOperation, GLB_TEXT("no shader table is bound"));
+        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("no shader table is bound"));
         return;
     }
     if(&shaderTable->m_context != &m_context || &shaderTable->m_device != &m_device){
-        rejectCommandRecording(s_DispatchRaysOperation, GLB_TEXT("shader table belongs to another device generation"));
+        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table belongs to another device generation"));
         return;
     }
 
@@ -104,7 +104,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         || pipeline->m_pipeline == VK_NULL_HANDLE
         || pipeline->m_pipelineLayout == VK_NULL_HANDLE
     ){
-        rejectCommandRecording(s_DispatchRaysOperation, GLB_TEXT("shader table pipeline is foreign or not ready"));
+        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table pipeline is foreign or not ready"));
         return;
     }
 
@@ -115,7 +115,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         dispatchLimits.maxAxisSizes[axis] = m_context.physicalDeviceProperties.limits.maxComputeWorkGroupSize[axis];
     }
     if(!VulkanDetail::ValidateRayDispatchDimensions(args, dispatchLimits)){
-        rejectCommandRecording(s_DispatchRaysOperation, GLB_TEXT("dispatch dimensions exceed device limits"));
+        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("dispatch dimensions exceed device limits"));
         return;
     }
 
@@ -129,7 +129,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         baseAlignment,
         s_DispatchRaysOperation
     )){
-        rejectCommandRecording(s_DispatchRaysOperation, GLB_TEXT("shader group handle layout is invalid"));
+        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader group handle layout is invalid"));
         return;
     }
     const u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
@@ -142,7 +142,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         || maxShaderGroupStride == 0u
         || handleSizeAligned > maxShaderGroupStride
     ){
-        rejectCommandRecording(s_DispatchRaysOperation, GLB_TEXT("shader table stride is invalid"));
+        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table stride is invalid"));
         return;
     }
 
@@ -218,7 +218,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         || !buildRegion(snapshot.hit, false, hitRegion)
         || !buildRegion(snapshot.callable, false, callableRegion)
     ){
-        rejectCommandRecording(s_DispatchRaysOperation, GLB_TEXT("shader table regions are incoherent or not ready"));
+        rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table regions are incoherent or not ready"));
         return;
     }
 

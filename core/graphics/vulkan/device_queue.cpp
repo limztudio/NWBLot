@@ -103,18 +103,18 @@ bool Device::registerPhysicalQueue(
         || (desc.timestampValidBits != 0u && (desc.timestampValidBits < s_MinTimestampValidBits || desc.timestampValidBits > s_MaxTimestampValidBits))
         || m_physicalQueueInfos.size() >= static_cast<usize>(Limit<u16>::s_Max)
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Refusing invalid physical queue registry entry."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing invalid physical queue registry entry."));
         return false;
     }
 
     for(const GpuPhysicalQueueInfo& existing : m_physicalQueueInfos){
         if(existing.familyIndex == nativeQueue.familyIndex && existing.queueIndex == nativeQueue.queueIndex){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Refusing duplicate physical queue family/index registry entry."));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing duplicate physical queue family/index registry entry."));
             return false;
         }
     }
     if(desc.primaryForClass && m_explicitPrimaryQueues[queueClassIndex]){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Refusing duplicate primary physical queue class entry."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Refusing duplicate primary physical queue class entry."));
         return false;
     }
 
@@ -269,7 +269,7 @@ bool Device::waitForSubmissionTokenInternal(
     if(result == VK_ERROR_DEVICE_LOST && deviceLossDiagnosticPolicy == DeviceLossDiagnosticPolicy::Capture)
         captureDeviceLoss("submission token wait");
     if(result != VK_SUCCESS && deviceLossDiagnosticPolicy == DeviceLossDiagnosticPolicy::Capture)
-        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: Failed to wait for submission token: {}"), ResultToString(result));
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to wait for submission token: {}"), ResultToString(result));
     return result == VK_SUCCESS;
 }
 
@@ -285,7 +285,7 @@ CommandListHandle Device::createCommandList(const CommandListParameters& params)
     if(resolvedParams.physicalQueue.valid()){
         queue = getQueue(resolvedParams.physicalQueue);
         if(!queue){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create command list: requested physical queue is not available"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create command list: requested physical queue is not available"));
             return nullptr;
         }
         resolvedParams.queueType = queue->m_queueID;
@@ -293,7 +293,7 @@ CommandListHandle Device::createCommandList(const CommandListParameters& params)
     else{
         queue = getQueue(resolvedParams.queueType);
         if(!queue){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create command list: requested queue is not available"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create command list: requested queue is not available"));
             return nullptr;
         }
         resolvedParams.physicalQueue = queue->m_physicalQueue;
@@ -332,7 +332,7 @@ u64 Device::executeCommandLists(
 
     Queue* queue = getQueue(executionQueue);
     if(!queue){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to execute command lists: requested queue is not available"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: requested queue is not available"));
         return 0;
     }
 
@@ -431,7 +431,7 @@ bool Device::prepareSubmissionCommandListWorkspaceLocked(
                     || !commandList->matchesSubmissionLease(executionQueue, queue.m_queueID, graphSubmissionAuthorized)
                 )
             ){
-                NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to execute command lists: command-list submission capability is invalid"));
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command-list submission capability is invalid"));
                 return false;
             }
 
@@ -552,46 +552,46 @@ QueueSubmissionToken Device::executeCommandListsInternal(
 
     Queue* const queue = getQueue(executionQueue);
     if(!queue){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to execute command lists: requested queue is not available"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: requested queue is not available"));
         return {};
     }
 
     if(numCommandLists > 0u && !pCommandLists){
-        NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to execute command lists: command list array is null"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list array is null"));
         return {};
     }
     if(numCommandLists > static_cast<usize>(Limit<u32>::s_Max)){
-        NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to execute command lists: command list count exceeds Vulkan limit"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list count exceeds Vulkan limit"));
         return {};
     }
     for(usize i = 0u; i < numCommandLists; ++i){
         CommandList* const commandList = pCommandLists[i];
         for(usize previous = 0u; previous < i; ++previous){
             if(pCommandLists[previous] == commandList){
-                NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to execute command lists: command list {} is duplicated"), i);
+                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} is duplicated"), i);
                 return {};
             }
         }
         if(!commandList || &commandList->m_device != this){
-            NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to execute command lists: command list {} is null or foreign"), i);
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} is null or foreign"), i);
             return {};
         }
         if(!commandList->matchesSubmissionLease(executionQueue, queue->m_queueID, graphSubmissionAuthorized)){
-            NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Command list {} lease provenance does not match execution queue")
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command list {} lease provenance does not match execution queue")
                 , i
             );
             return {};
         }
         if(!commandList->hasCommandBufferUnchecked()){
-            NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to execute command lists: command list {} has no native command buffer"), i);
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} has no native command buffer"), i);
             return {};
         }
         if(commandList->m_commandRecordingFailed){
-            NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to execute command lists: command list {} has a sticky native recording failure"), i);
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} has a sticky native recording failure"), i);
             return {};
         }
         if(commandList->m_isRecording){
-            NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Vulkan: Failed to execute command lists: command list {} is still recording"), i);
+            NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} is still recording"), i);
             return {};
         }
     }
@@ -601,7 +601,7 @@ QueueSubmissionToken Device::executeCommandListsInternal(
     }
 
     if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to execute command lists: submission wait token array is null"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: submission wait token array is null"));
         return {};
     }
 
@@ -615,12 +615,12 @@ QueueSubmissionToken Device::executeCommandListsInternal(
         for(usize i = 0u; i < submitDesc.waitTokenCount; ++i){
             const QueueSubmissionToken& token = submitDesc.waitTokens[i];
             if(!validateSubmissionWaitToken(token)){
-                NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to execute command lists: dependency token is invalid, unavailable, or unsignalled"));
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: dependency token is invalid, unavailable, or unsignalled"));
                 return {};
             }
 
             Queue* const producerQueue = m_physicalQueues[token.physicalQueueIndex];
-            GLB_ASSERT(producerQueue);
+            NWB_ASSERT(producerQueue);
 
             // Queue order already covers same-queue dependencies.
             if(token.matchesPhysicalQueue(executionQueue.index, executionQueue.deviceGeneration))
@@ -666,14 +666,14 @@ QueueSubmissionToken Device::executeCommandListsInternal(
         if(hookPrepared)
             hookResolution.arm();
         if(!hookPrepared || !nativeSignal.valid()){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to prepare exact queue submission hook"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to prepare exact queue submission hook"));
             return {};
         }
 
         hookSignal.semaphore = __hidden_vulkan_device_queue::DecodeSubmissionNativeSemaphore(nativeSignal.semaphore);
         hookSignal.value = nativeSignal.value;
         if(hookSignal.semaphore == VK_NULL_HANDLE){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Exact queue submission hook returned an invalid native semaphore"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exact queue submission hook returned an invalid native semaphore"));
             return {};
         }
         localSignals = &hookSignal;

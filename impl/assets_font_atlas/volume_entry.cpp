@@ -30,7 +30,7 @@ namespace __hidden_font_atlas_volume_entry{
 
 static bool RegisterFontAtlasCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<FontAtlasCookEntry, FontAtlas, FontAtlasAssetCodec>(
-        registry, GLB_TEXT("font atlas"),
+        registry, NWB_TEXT("font atlas"),
         [](const Path& root, AStringView virtualRoot, const Path& path, const Core::Metascript::Document& doc,
             FontAtlasCookEntry& entry, Core::Assets::CookEntryParseContext& context){
             return ParseFontAtlasCookMetadata(root, virtualRoot, path, doc, entry, context.scratchArena);

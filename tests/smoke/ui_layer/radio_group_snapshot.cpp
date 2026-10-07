@@ -32,19 +32,19 @@ namespace __hidden_ui_radio_group_snapshot{
 
 
 static constexpr Array<TStringView, 41u> s_RectNames{
-    GLB_TEXT("before"), GLB_TEXT("group"), GLB_TEXT("after"), GLB_TEXT("open"),
-    GLB_TEXT("disabled_group"), GLB_TEXT("parent"), GLB_TEXT("popup_group"), GLB_TEXT("popup_close"),
-    GLB_TEXT("row10"), GLB_TEXT("indicator10"), GLB_TEXT("mark10"),
-    GLB_TEXT("row20"), GLB_TEXT("indicator20"), GLB_TEXT("mark20"),
-    GLB_TEXT("row30"), GLB_TEXT("indicator30"), GLB_TEXT("mark30"),
-    GLB_TEXT("row40"), GLB_TEXT("indicator40"), GLB_TEXT("mark40"),
-    GLB_TEXT("row50"), GLB_TEXT("indicator50"), GLB_TEXT("mark50"),
-    GLB_TEXT("disabled_row30"), GLB_TEXT("disabled_indicator30"), GLB_TEXT("disabled_mark30"),
-    GLB_TEXT("popup_row10"), GLB_TEXT("popup_indicator10"), GLB_TEXT("popup_mark10"),
-    GLB_TEXT("popup_row20"), GLB_TEXT("popup_indicator20"), GLB_TEXT("popup_mark20"),
-    GLB_TEXT("popup_row30"), GLB_TEXT("popup_indicator30"), GLB_TEXT("popup_mark30"),
-    GLB_TEXT("popup_row40"), GLB_TEXT("popup_indicator40"), GLB_TEXT("popup_mark40"),
-    GLB_TEXT("popup_row50"), GLB_TEXT("popup_indicator50"), GLB_TEXT("popup_mark50")
+    NWB_TEXT("before"), NWB_TEXT("group"), NWB_TEXT("after"), NWB_TEXT("open"),
+    NWB_TEXT("disabled_group"), NWB_TEXT("parent"), NWB_TEXT("popup_group"), NWB_TEXT("popup_close"),
+    NWB_TEXT("row10"), NWB_TEXT("indicator10"), NWB_TEXT("mark10"),
+    NWB_TEXT("row20"), NWB_TEXT("indicator20"), NWB_TEXT("mark20"),
+    NWB_TEXT("row30"), NWB_TEXT("indicator30"), NWB_TEXT("mark30"),
+    NWB_TEXT("row40"), NWB_TEXT("indicator40"), NWB_TEXT("mark40"),
+    NWB_TEXT("row50"), NWB_TEXT("indicator50"), NWB_TEXT("mark50"),
+    NWB_TEXT("disabled_row30"), NWB_TEXT("disabled_indicator30"), NWB_TEXT("disabled_mark30"),
+    NWB_TEXT("popup_row10"), NWB_TEXT("popup_indicator10"), NWB_TEXT("popup_mark10"),
+    NWB_TEXT("popup_row20"), NWB_TEXT("popup_indicator20"), NWB_TEXT("popup_mark20"),
+    NWB_TEXT("popup_row30"), NWB_TEXT("popup_indicator30"), NWB_TEXT("popup_mark30"),
+    NWB_TEXT("popup_row40"), NWB_TEXT("popup_indicator40"), NWB_TEXT("popup_mark40"),
+    NWB_TEXT("popup_row50"), NWB_TEXT("popup_indicator50"), NWB_TEXT("popup_mark50")
 };
 
 
@@ -140,20 +140,20 @@ void UiRadioGroupSmokeScene::observeState(Impl::UiPaintContext& context){
     current.sequence = m_snapshot.sequence + 1u;
     m_snapshot = current;
     if(displayChanged){
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiRadioGroupSmoke: display logical={}x{} scale={}x{}")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiRadioGroupSmoke: display logical={}x{} scale={}x{}")
             , current.display.logicalWidth, current.display.logicalHeight
             , current.display.pixelScaleX, current.display.pixelScaleY
         );
     }
     const auto& value = current.values;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiRadioGroupSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},"
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiRadioGroupSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},"
         "{},{},{},{},{},{},{},{},{},{},{}")
         , current.sequence, value[0], value[1], value[2], value[3], value[4], value[5], value[6], value[7]
         , value[8], value[9], value[10], value[11], value[12], value[13], value[14], value[15], value[16]
         , value[17], value[18], value[19], value[20], value[21]
     );
     for(usize index = 0u; index < current.rectangles.size(); ++index)
-        LogSmokeRect(GLB_TEXT("UiRadioGroupSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
+        LogSmokeRect(NWB_TEXT("UiRadioGroupSmoke"), current.sequence, s_RectNames[index], current.rectangles[index]);
 }
 
 void UiRadioGroupSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{

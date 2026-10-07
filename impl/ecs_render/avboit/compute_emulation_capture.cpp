@@ -61,10 +61,10 @@ NWB_IMPL_BEGIN
             outResult.sharedPlan.drawCount
         )
     ;
-    GLB_ASSERT(
+    NWB_ASSERT(
         !(outResult.regularCaptured && outResult.csgCaptured)
     );
-    GLB_ASSERT(
+    NWB_ASSERT(
         !outResult.sharedCaptured
         || (!outResult.regularCaptured
             && !outResult.csgCaptured)

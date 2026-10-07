@@ -26,7 +26,7 @@ namespace __hidden_model_cook_metadata_tests{
 static constexpr AStringView s_SKELETON = "skeleton";
 static constexpr AStringView s_SKINNED_MESHES = "skinned_meshes";
 static constexpr AStringView s_MeshVirtualPath = "tests/model_cook_metadata/mesh";
-static constexpr TStringView s_TARGETS_A_MISSING_SKELETON_OBJECT = GLB_TEXT("targets a missing skeleton object");
+static constexpr TStringView s_TARGETS_A_MISSING_SKELETON_OBJECT = NWB_TEXT("targets a missing skeleton object");
 static constexpr AStringView s_RIG_A = "rig_a";
 static constexpr AStringView s_RIG_B = "rig_b";
 static constexpr AStringView s_RIG = "rig";
@@ -196,7 +196,7 @@ TEST(ModelCookMetadata, CanonicalDuplicateObjectNamesRemainValidatorErrors){
     EXPECT_FALSE(metadata.parse());
     metadata.verifyObjectReferences();
     EXPECT_EQ(logger.errorCount(), 1u);
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("name is duplicated in the model")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("name is duplicated in the model")));
 }
 
 TEST(ModelCookMetadata, HandlesStaticOnlyAndMissingSkeletonCollections){
@@ -227,7 +227,7 @@ TEST(ModelCookMetadata, RedundantSkinnedMeshReferenceIsRejectedAndSkinOnlyRefere
     object.field("mesh").setString(s_MeshVirtualPath);
     EXPECT_FALSE(metadata.parse());
     EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("unsupported asset field 'mesh'")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'mesh'")));
 
     ASSERT_EQ(object.asMap().erase(AStringView("mesh")), 1u);
     ASSERT_TRUE(metadata.parse());
@@ -262,7 +262,7 @@ TEST(ModelCookMetadata, FourRowTransformFailsWithoutRetainingPreviousOutputAndTh
     transform.append(Move(homogeneousRow));
     EXPECT_FALSE(metadata.parse());
     EXPECT_TRUE(metadata.entry.staticMeshObjects.empty());
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("must be a 3x4 affine matrix")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("must be a 3x4 affine matrix")));
 
     transform.asList().pop_back();
     ASSERT_TRUE(metadata.parse());

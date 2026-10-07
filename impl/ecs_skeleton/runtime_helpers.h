@@ -31,11 +31,11 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE bool HasSkeletonPose(const SkeletonPoseComponent* pose)noexcept{
+[[nodiscard]] NWB_INLINE bool HasSkeletonPose(const SkeletonPoseComponent* pose)noexcept{
     return pose && (!pose->localJoints.empty() || !pose->parentJoints.empty());
 }
 
-[[nodiscard]] GLB_INLINE bool ResolveSkinningJointMatrix(
+[[nodiscard]] NWB_INLINE bool ResolveSkinningJointMatrix(
     const SIMDMatrix& poseJoint,
     const bool hasInverseBind,
     const SIMDMatrix& inverseBind,
@@ -53,7 +53,7 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     return MatrixIsInvertibleAffine(outMatrix, s_AffineEpsilon, s_JointDeterminantEpsilon);
 }
 
-[[nodiscard]] GLB_INLINE bool ResolveSkeletonPoseJointMatrix(
+[[nodiscard]] NWB_INLINE bool ResolveSkeletonPoseJointMatrix(
     const SIMDMatrix& localJoint,
     const SIMDMatrix* parentJoint,
     SIMDMatrix& outMatrix

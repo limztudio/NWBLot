@@ -11,20 +11,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorNegate(SIMDVector value)noexcept{
-#if defined(GLB_HAS_SCALAR)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorNegate(SIMDVector value)noexcept{
+#if defined(NWB_HAS_SCALAR)
     return VectorSet(-VectorGetX(value), -VectorGetY(value), -VectorGetZ(value), -VectorGetW(value));
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
     return vnegq_f32(value);
 #else
     return _mm_xor_ps(value, s_SIMDNegativeZero);
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorAdd(SIMDVector v0, SIMDVector v1)noexcept{
-#if defined(GLB_HAS_SCALAR)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorAdd(SIMDVector v0, SIMDVector v1)noexcept{
+#if defined(NWB_HAS_SCALAR)
     return VectorSet(VectorGetX(v0) + VectorGetX(v1), VectorGetY(v0) + VectorGetY(v1), VectorGetZ(v0) + VectorGetZ(v1), VectorGetW(v0) + VectorGetW(v1));
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
     return vaddq_f32(v0, v1);
 #else
     return _mm_add_ps(v0, v1);
@@ -32,45 +32,45 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorAdd(SIMDVector v0, SIMDVector v1)noexc
 }
 
 // Adds raw unsigned 32-bit lane representations with modulo arithmetic.
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorAddInt(SIMDVector v0, SIMDVector v1)noexcept{
-#if defined(GLB_HAS_SCALAR)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorAddInt(SIMDVector v0, SIMDVector v1)noexcept{
+#if defined(NWB_HAS_SCALAR)
     return VectorSetInt(
         VectorGetIntX(v0) + VectorGetIntX(v1),
         VectorGetIntY(v0) + VectorGetIntY(v1),
         VectorGetIntZ(v0) + VectorGetIntZ(v1),
         VectorGetIntW(v0) + VectorGetIntW(v1)
     );
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
     return vreinterpretq_f32_u32(vaddq_u32(vreinterpretq_u32_f32(v0), vreinterpretq_u32_f32(v1)));
 #else
     return _mm_castsi128_ps(_mm_add_epi32(_mm_castps_si128(v0), _mm_castps_si128(v1)));
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorSubtract(SIMDVector v0, SIMDVector v1)noexcept{
-#if defined(GLB_HAS_SCALAR)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSubtract(SIMDVector v0, SIMDVector v1)noexcept{
+#if defined(NWB_HAS_SCALAR)
     return VectorSet(VectorGetX(v0) - VectorGetX(v1), VectorGetY(v0) - VectorGetY(v1), VectorGetZ(v0) - VectorGetZ(v1), VectorGetW(v0) - VectorGetW(v1));
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
     return vsubq_f32(v0, v1);
 #else
     return _mm_sub_ps(v0, v1);
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorMultiply(SIMDVector v0, SIMDVector v1)noexcept{
-#if defined(GLB_HAS_SCALAR)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorMultiply(SIMDVector v0, SIMDVector v1)noexcept{
+#if defined(NWB_HAS_SCALAR)
     return VectorSet(VectorGetX(v0) * VectorGetX(v1), VectorGetY(v0) * VectorGetY(v1), VectorGetZ(v0) * VectorGetZ(v1), VectorGetW(v0) * VectorGetW(v1));
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
     return vmulq_f32(v0, v1);
 #else
     return _mm_mul_ps(v0, v1);
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorDivide(SIMDVector v0, SIMDVector v1)noexcept{
-#if defined(GLB_HAS_SCALAR)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorDivide(SIMDVector v0, SIMDVector v1)noexcept{
+#if defined(NWB_HAS_SCALAR)
     return VectorSet(VectorGetX(v0) / VectorGetX(v1), VectorGetY(v0) / VectorGetY(v1), VectorGetZ(v0) / VectorGetZ(v1), VectorGetW(v0) / VectorGetW(v1));
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
 #if defined(__aarch64__) || defined(_M_ARM64)
     return vdivq_f32(v0, v1);
 #else
@@ -86,73 +86,73 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorDivide(SIMDVector v0, SIMDVector v1)no
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorMultiplyAdd(SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorMultiplyAdd(SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept{
 #if defined(__FMA__) || defined(_M_FMA)
     return _mm_fmadd_ps(v0, v1, v2);
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
     return vmlaq_f32(v2, v0, v1);
 #else
     return VectorAdd(VectorMultiply(v0, v1), v2);
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorNegativeMultiplySubtract(SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorNegativeMultiplySubtract(SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept{
 #if defined(__FMA__) || defined(_M_FMA)
     return _mm_fnmadd_ps(v0, v1, v2);
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
     return vmlsq_f32(v2, v0, v1);
 #else
     return VectorSubtract(v2, VectorMultiply(v0, v1));
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorScale(SIMDVector value, f32 scale)noexcept{
-#if defined(GLB_HAS_SCALAR)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorScale(SIMDVector value, f32 scale)noexcept{
+#if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(value.f[0] * scale, value.f[1] * scale, value.f[2] * scale, value.f[3] * scale);
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
     return vmulq_n_f32(value, scale);
 #else
     return _mm_mul_ps(_mm_set1_ps(scale), value);
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorMin(SIMDVector v0, SIMDVector v1)noexcept{
-#if defined(GLB_HAS_SCALAR)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorMin(SIMDVector v0, SIMDVector v1)noexcept{
+#if defined(NWB_HAS_SCALAR)
     return VectorSet(VectorGetX(v0) < VectorGetX(v1) ? VectorGetX(v0) : VectorGetX(v1), VectorGetY(v0) < VectorGetY(v1) ? VectorGetY(v0) : VectorGetY(v1), VectorGetZ(v0) < VectorGetZ(v1) ? VectorGetZ(v0) : VectorGetZ(v1), VectorGetW(v0) < VectorGetW(v1) ? VectorGetW(v0) : VectorGetW(v1));
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
     return vminq_f32(v0, v1);
 #else
     return _mm_min_ps(v0, v1);
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorMax(SIMDVector v0, SIMDVector v1)noexcept{
-#if defined(GLB_HAS_SCALAR)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorMax(SIMDVector v0, SIMDVector v1)noexcept{
+#if defined(NWB_HAS_SCALAR)
     return VectorSet(VectorGetX(v0) > VectorGetX(v1) ? VectorGetX(v0) : VectorGetX(v1), VectorGetY(v0) > VectorGetY(v1) ? VectorGetY(v0) : VectorGetY(v1), VectorGetZ(v0) > VectorGetZ(v1) ? VectorGetZ(v0) : VectorGetZ(v1), VectorGetW(v0) > VectorGetW(v1) ? VectorGetW(v0) : VectorGetW(v1));
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
     return vmaxq_f32(v0, v1);
 #else
     return _mm_max_ps(v0, v1);
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorClamp(SIMDVector value, SIMDVector minValue, SIMDVector maxValue)noexcept{
-    GLB_ASSERT((VectorMoveMask(VectorLessOrEqual(minValue, maxValue)) & VectorComponentMask::s_XYZW) == VectorComponentMask::s_XYZW);
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorClamp(SIMDVector value, SIMDVector minValue, SIMDVector maxValue)noexcept{
+    NWB_ASSERT((VectorMoveMask(VectorLessOrEqual(minValue, maxValue)) & VectorComponentMask::s_XYZW) == VectorComponentMask::s_XYZW);
     return VectorMin(maxValue, VectorMax(minValue, value));
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorSaturate(SIMDVector value)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSaturate(SIMDVector value)noexcept{
     return VectorMin(VectorSplatOne(), VectorMax(VectorZero(), value));
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorAbs(SIMDVector value)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorAbs(SIMDVector value)noexcept{
     return VectorAndInt(value, s_SIMDAbsMask);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorSum(SIMDVector value)noexcept{
-#if defined(GLB_HAS_SCALAR)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSum(SIMDVector value)noexcept{
+#if defined(NWB_HAS_SCALAR)
     return VectorReplicate(VectorGetX(value) + VectorGetY(value) + VectorGetZ(value) + VectorGetW(value));
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
 #if defined(__aarch64__) || defined(_M_ARM64)
     SIMDVector temp = vpaddq_f32(value, value);
     return vpaddq_f32(temp, temp);
@@ -169,34 +169,34 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorSum(SIMDVector value)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorMergeX(SIMDVector x, SIMDVector y, SIMDVector z, SIMDVector w)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorMergeX(SIMDVector x, SIMDVector y, SIMDVector z, SIMDVector w)noexcept{
     const SIMDVector xy = VectorPermute<0, 4, 1, 5>(x, y);
     const SIMDVector zw = VectorPermute<0, 4, 1, 5>(z, w);
     return VectorPermute<0, 1, 4, 5>(xy, zw);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector4MinComponent(SIMDVector value)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector4MinComponent(SIMDVector value)noexcept{
     SIMDVector result = VectorMin(value, VectorSwizzle<2, 3, 0, 1>(value));
     result = VectorMin(result, VectorSwizzle<1, 0, 3, 2>(result));
     return result;
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector4MaxComponent(SIMDVector value)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector4MaxComponent(SIMDVector value)noexcept{
     SIMDVector result = VectorMax(value, VectorSwizzle<2, 3, 0, 1>(value));
     result = VectorMax(result, VectorSwizzle<1, 0, 3, 2>(result));
     return result;
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector3MinComponent(SIMDVector value)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector3MinComponent(SIMDVector value)noexcept{
     return Vector4MinComponent(VectorSwizzle<0, 1, 2, 0>(value));
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector3MaxComponent(SIMDVector value)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector3MaxComponent(SIMDVector value)noexcept{
     return Vector4MaxComponent(VectorSwizzle<0, 1, 2, 0>(value));
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorReciprocal(SIMDVector value)noexcept{
-#if defined(GLB_HAS_NEON)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorReciprocal(SIMDVector value)noexcept{
+#if defined(NWB_HAS_NEON)
 #if defined(__aarch64__) || defined(_M_ARM64)
     return vdivq_f32(vdupq_n_f32(1.0f), value);
 #else
@@ -206,27 +206,27 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorReciprocal(SIMDVector value)noexcept{
     scale = vrecpsq_f32(reciprocal, value);
     return vmulq_f32(scale, reciprocal);
 #endif
-#elif defined(GLB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE4)
     return _mm_div_ps(s_SIMDOne, value);
 #else
     return VectorDivide(VectorSplatOne(), value);
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorReciprocalEst(SIMDVector value)noexcept{
-#if defined(GLB_HAS_SCALAR)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorReciprocalEst(SIMDVector value)noexcept{
+#if defined(NWB_HAS_SCALAR)
     return VectorReciprocal(value);
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
     return vrecpeq_f32(value);
 #else
     return _mm_rcp_ps(value);
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorSqrt(SIMDVector value)noexcept{
-#if defined(GLB_HAS_SCALAR)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSqrt(SIMDVector value)noexcept{
+#if defined(NWB_HAS_SCALAR)
     return VectorSet(Sqrt(VectorGetX(value)), Sqrt(VectorGetY(value)), Sqrt(VectorGetZ(value)), Sqrt(VectorGetW(value)));
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
     float32x4_t s0 = vrsqrteq_f32(value);
     float32x4_t p0 = vmulq_f32(value, s0);
     float32x4_t r0 = vrsqrtsq_f32(p0, s0);
@@ -244,8 +244,8 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorSqrt(SIMDVector value)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorSqrtEst(SIMDVector value)noexcept{
-#if defined(GLB_HAS_NEON)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSqrtEst(SIMDVector value)noexcept{
+#if defined(NWB_HAS_NEON)
     float32x4_t s0 = vrsqrteq_f32(value);
     float32x4_t p0 = vmulq_f32(value, s0);
     float32x4_t r0 = vrsqrtsq_f32(p0, s0);
@@ -257,8 +257,8 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorSqrtEst(SIMDVector value)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorReciprocalSqrt(SIMDVector value)noexcept{
-#if defined(GLB_HAS_NEON)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorReciprocalSqrt(SIMDVector value)noexcept{
+#if defined(NWB_HAS_NEON)
     float32x4_t s0 = vrsqrteq_f32(value);
     float32x4_t p0 = vmulq_f32(value, s0);
     float32x4_t r0 = vrsqrtsq_f32(p0, s0);
@@ -266,27 +266,27 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorReciprocalSqrt(SIMDVector value)noexce
     float32x4_t p1 = vmulq_f32(value, s1);
     float32x4_t r1 = vrsqrtsq_f32(p1, s1);
     return vmulq_f32(s1, r1);
-#elif defined(GLB_HAS_SSE4)
+#elif defined(NWB_HAS_SSE4)
     return _mm_div_ps(s_SIMDOne, _mm_sqrt_ps(value));
 #else
     return VectorReciprocal(VectorSqrt(value));
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorReciprocalSqrtEst(SIMDVector value)noexcept{
-#if defined(GLB_HAS_SCALAR)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorReciprocalSqrtEst(SIMDVector value)noexcept{
+#if defined(NWB_HAS_SCALAR)
     return VectorReciprocalSqrt(value);
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
     return vrsqrteq_f32(value);
 #else
     return _mm_rsqrt_ps(value);
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorRound(SIMDVector value)noexcept{
-#if defined(GLB_HAS_SSE4)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorRound(SIMDVector value)noexcept{
+#if defined(NWB_HAS_SSE4)
     return _mm_round_ps(value, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
 #if defined(__aarch64__) || defined(_M_ARM64)
     return vrndnq_f32(value);
 #else
@@ -307,10 +307,10 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorRound(SIMDVector value)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorTruncate(SIMDVector value)noexcept{
-#if defined(GLB_HAS_SSE4)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorTruncate(SIMDVector value)noexcept{
+#if defined(NWB_HAS_SSE4)
     return _mm_round_ps(value, _MM_FROUND_TO_ZERO | _MM_FROUND_NO_EXC);
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
 #if defined(__aarch64__) || defined(_M_ARM64)
     return vrndq_f32(value);
 #else
@@ -329,10 +329,10 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorTruncate(SIMDVector value)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorFloor(SIMDVector value)noexcept{
-#if defined(GLB_HAS_SSE4)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorFloor(SIMDVector value)noexcept{
+#if defined(NWB_HAS_SSE4)
     return _mm_floor_ps(value);
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
 #if defined(__aarch64__) || defined(_M_ARM64)
     return vrndmq_f32(value);
 #else
@@ -349,10 +349,10 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorFloor(SIMDVector value)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorCeiling(SIMDVector value)noexcept{
-#if defined(GLB_HAS_SSE4)
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorCeiling(SIMDVector value)noexcept{
+#if defined(NWB_HAS_SSE4)
     return _mm_ceil_ps(value);
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
 #if defined(__aarch64__) || defined(_M_ARM64)
     return vrndpq_f32(value);
 #else
@@ -369,18 +369,18 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorCeiling(SIMDVector value)noexcept{
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorMod(SIMDVector v0, SIMDVector v1)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorMod(SIMDVector v0, SIMDVector v1)noexcept{
     const SIMDVector quotient = VectorFloor(VectorDivide(v0, v1));
     return VectorNegativeMultiplySubtract(v1, quotient, v0);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorModAngles(SIMDVector angles)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorModAngles(SIMDVector angles)noexcept{
     SIMDVector quotient = VectorMultiply(angles, s_SIMDReciprocalTwoPi);
     quotient = VectorRound(quotient);
     return VectorNegativeMultiplySubtract(s_SIMDTwoPi, quotient, angles);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorAddAngles(SIMDVector v0, SIMDVector v1)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorAddAngles(SIMDVector v0, SIMDVector v1)noexcept{
     SIMDVector result = VectorAdd(v0, v1);
     SIMDVector mask = VectorLess(result, s_SIMDNegativePi);
     SIMDVector offset = VectorSelect(VectorZero(), s_SIMDTwoPi, mask);
@@ -389,7 +389,7 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorAddAngles(SIMDVector v0, SIMDVector v1
     return VectorAdd(result, offset);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorSubtractAngles(SIMDVector v0, SIMDVector v1)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSubtractAngles(SIMDVector v0, SIMDVector v1)noexcept{
     SIMDVector result = VectorSubtract(v0, v1);
     SIMDVector mask = VectorLess(result, s_SIMDNegativePi);
     SIMDVector offset = VectorSelect(VectorZero(), s_SIMDTwoPi, mask);

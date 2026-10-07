@@ -38,7 +38,7 @@ inline T checked_cast(U u){
     if(!u)
         return nullptr;
     T t = static_cast<T>(u);
-    GLB_ASSERT(t);
+    NWB_ASSERT(t);
     return t;
 }
 

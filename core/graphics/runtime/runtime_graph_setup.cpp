@@ -385,7 +385,7 @@ CommandQueue::Enum ResolveSetupUploadConsumerQueue(
     case CommandQueue::Graphics:
         return CommandQueue::Graphics;
     default:
-        GLB_ASSERT_MSG(false, GLB_TEXT("GraphicsRuntime: setup upload requested an invalid command queue"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("GraphicsRuntime: setup upload requested an invalid command queue"));
         return CommandQueue::Graphics;
     }
 }
@@ -477,7 +477,7 @@ bool SubmitGraphOwnedStandaloneTask(
     )){
         const auto& analysisDiagnostic = analysis.diagnostic();
         const auto& queueDiagnostic = assignments.diagnostic();
-        NWB_LOGGER_WARNING(GLB_TEXT("GraphicsRuntime: standalone graph scheduling failed: analysis={} task={} resource={} version={} queue={} queueTask={}")
+        NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: standalone graph scheduling failed: analysis={} task={} resource={} version={} queue={} queueTask={}")
             , static_cast<u32>(analysisDiagnostic.status), analysisDiagnostic.task.index, analysisDiagnostic.resource.index
             , analysisDiagnostic.resourceVersion.index, static_cast<u32>(queueDiagnostic.status), queueDiagnostic.task.index
         );
@@ -580,7 +580,7 @@ bool SubmitGraphOwnedStandaloneTask(
             timingRecovered = frameTimingTransaction->confirmEndSubmission(recoveryToken, false) && timingRecovered;
         }
         if(!timingRecovered){
-            NWB_LOGGER_WARNING(GLB_TEXT("GraphicsRuntime: standalone frame timing could not be retired after graph rejection"));
+            NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: standalone frame timing could not be retired after graph rejection"));
             frameTimingTransaction->discard();
         }
         const bool discarded = transaction.discardUnaccepted(
@@ -603,7 +603,7 @@ bool SubmitGraphOwnedStandaloneTask(
         || frameTimingTransaction->confirmEndSubmission(terminalToken, discarded && terminalToken.valid())
     ;
     if(!timingConfirmed){
-        NWB_LOGGER_WARNING(GLB_TEXT("GraphicsRuntime: standalone frame timing confirmation failed"));
+        NWB_LOGGER_WARNING(NWB_TEXT("GraphicsRuntime: standalone frame timing confirmation failed"));
         frameTimingTransaction->discard();
     }
     if(!discarded || !terminalToken.valid()){

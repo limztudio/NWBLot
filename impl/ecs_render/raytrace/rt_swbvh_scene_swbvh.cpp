@@ -75,7 +75,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: software scene BVH requires the initialized global descriptor heap"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software scene BVH requires the initialized global descriptor heap"));
         return false;
     }
     BeginMeshHeapHandleGather(m_rayTracingState.m_swMeshHeapHandleCache);
@@ -151,7 +151,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
                 || !AcquireMeshHeapHandle(heap, m_rayTracingState.m_swMeshHeapHandleCache, mesh.attributeBuffer, attributeHandle)
             ){
                 SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_swMeshHeapHandleCache);
-                NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap"));
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap"));
                 return false;
             }
 
@@ -329,7 +329,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
 
     if(m_rayTracingState.m_swShadowMeshCount > m_rayTracingState.m_swShadowMeshHeapHighWater){
         m_rayTracingState.m_swShadowMeshHeapHighWater = m_rayTracingState.m_swShadowMeshCount;
-        NWB_LOGGER_INFO(GLB_TEXT("RendererSystem: SW-shadow heap registration high-water: {} distinct meshes -> {} handles")
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: SW-shadow heap registration high-water: {} distinct meshes -> {} handles")
             , static_cast<u64>(m_rayTracingState.m_swShadowMeshCount)
             , static_cast<u64>(m_rayTracingState.m_swShadowMeshCount) * s_SoftwareRayTracingMeshBufferCount
         );
@@ -376,7 +376,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     ;
     const usize requiredNodeCount = static_cast<usize>(instanceCount) * 2u - 1u;
     if(requiredNodeCount > static_cast<usize>(BvhNodeIndex::ChildIndexMask) + 1u){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: software scene BVH requires {} nodes, exceeding the tagged child-index limit")
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software scene BVH requires {} nodes, exceeding the tagged child-index limit")
             , static_cast<u64>(requiredNodeCount)
         );
         return false;
@@ -419,7 +419,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             buildNodes,
             NotNull<const u32*>(instanceLeafCost.data())
         );
-        GLB_ASSERT(buildNodes.size() == requiredNodeCount);
+        NWB_ASSERT(buildNodes.size() == requiredNodeCount);
 
         Vector<NwbBvhNodeGpu, Core::Alloc::ScratchArena> nodes{ scratchArena };
         nodes.reserve(buildNodes.size());
@@ -535,7 +535,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             preparedMeshes.size(),
             instanceCount
         )){
-            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not freeze software scene traversal"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze software scene traversal"));
             clearPreparedSceneBvh();
             clearPreparedShadowMaterialContext();
             return false;

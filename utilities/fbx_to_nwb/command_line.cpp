@@ -69,20 +69,20 @@ inline constexpr u32 s_CliOptionPresentCount = 0u;
 int ExitValidation(const CLI::App& app, const AStringView option, const AStringView message){
     return app.exit(
         CLI::ValidationError(AInteropString(option.data(), option.size()), AInteropString(message.data(), message.size())),
-        GLB_COUT,
-        GLB_CERR
+        NWB_COUT,
+        NWB_CERR
     );
 }
 
 bool PromptString(const AStringView label, const AStringView defaultValue, AString& outValue, bool& prompted){
     prompted = true;
-    GLB_COUT << label;
+    NWB_COUT << label;
     if(!defaultValue.empty())
-        GLB_COUT << " [" << defaultValue << "]";
-    GLB_COUT << ": ";
+        NWB_COUT << " [" << defaultValue << "]";
+    NWB_COUT << ": ";
 
     AString line;
-    if(!ReadTextLine(GLB_CIN, line)){
+    if(!ReadTextLine(NWB_CIN, line)){
         outValue = defaultValue;
         return !outValue.empty();
     }
@@ -98,10 +98,10 @@ bool PromptString(const AStringView label, const AStringView defaultValue, AStri
 bool PromptBool(const AStringView label, const bool defaultValue, bool& outValue, bool& prompted){
     prompted = true;
     for(;;){
-        GLB_COUT << label << (defaultValue ? " [Y/n]: " : " [y/N]: ");
+        NWB_COUT << label << (defaultValue ? " [Y/n]: " : " [y/N]: ");
 
         AString line;
-        if(!ReadTextLine(GLB_CIN, line)){
+        if(!ReadTextLine(NWB_CIN, line)){
             outValue = defaultValue;
             return true;
         }
@@ -114,17 +114,17 @@ bool PromptBool(const AStringView label, const bool defaultValue, bool& outValue
         if(ParseConfirmText(AStringView(line.data(), line.size()), outValue))
             return true;
 
-        GLB_COUT << "Please answer y or n.\n";
+        NWB_COUT << "Please answer y or n.\n";
     }
 }
 
 bool PromptDouble(const AStringView label, const f64 defaultValue, f64& outValue, bool& prompted){
     prompted = true;
     for(;;){
-        GLB_COUT << label << " [" << defaultValue << "]: ";
+        NWB_COUT << label << " [" << defaultValue << "]: ";
 
         AString line;
-        if(!ReadTextLine(GLB_CIN, line)){
+        if(!ReadTextLine(NWB_CIN, line)){
             outValue = defaultValue;
             return true;
         }
@@ -141,7 +141,7 @@ bool PromptDouble(const AStringView label, const f64 defaultValue, f64& outValue
             return true;
         }
 
-        GLB_COUT << "Please enter a positive finite number.\n";
+        NWB_COUT << "Please enter a positive finite number.\n";
     }
 }
 
@@ -149,7 +149,7 @@ bool ValidateOutputOverwrite(const Path& outputPath, const ImportOptions& option
     ErrorCode errorCode;
     const bool exists = FileExists(outputPath, errorCode);
     if(errorCode){
-        NWB_LOGGER_WARNING(GLB_TEXT("Failed to query output path: {}"), StringConvert(errorCode.message()));
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to query output path: {}"), StringConvert(errorCode.message()));
         return false;
     }
     if(!exists)
@@ -157,7 +157,7 @@ bool ValidateOutputOverwrite(const Path& outputPath, const ImportOptions& option
     if(options.forceOverwrite)
         return true;
     if(options.acceptDefaults){
-        NWB_LOGGER_WARNING(GLB_TEXT("Output already exists. Pass --force to overwrite: {}"), PathToString<tchar>(outputPath));
+        NWB_LOGGER_WARNING(NWB_TEXT("Output already exists. Pass --force to overwrite: {}"), PathToString<tchar>(outputPath));
         return false;
     }
 
@@ -170,13 +170,13 @@ bool ValidateOutputOverwrite(const Path& outputPath, const ImportOptions& option
 bool ConfigurePromptsBeforeLoad(ImportOptions& options, const OptionPresence& presence, bool& prompted){
     if(options.inputPath.empty()){
         if(options.acceptDefaults){
-            NWB_LOGGER_WARNING(GLB_TEXT("Input FBX or NWB path is required."));
+            NWB_LOGGER_WARNING(NWB_TEXT("Input FBX or NWB path is required."));
             return false;
         }
 
         AString input;
         if(!PromptString("Input FBX or NWB path", {}, input, prompted)){
-            NWB_LOGGER_WARNING(GLB_TEXT("Input FBX or NWB path is required."));
+            NWB_LOGGER_WARNING(NWB_TEXT("Input FBX or NWB path is required."));
             return false;
         }
         options.inputPath = input;
@@ -264,7 +264,7 @@ bool SelectedMeshesUseSkinning(
     bool sawSkinned = false;
     for(const usize instanceIndex : selection){
         if(instanceIndex >= instances.size()){
-            NWB_LOGGER_WARNING(GLB_TEXT("Selected mesh index is out of range"));
+            NWB_LOGGER_WARNING(NWB_TEXT("Selected mesh index is out of range"));
             return false;
         }
 
@@ -275,7 +275,7 @@ bool SelectedMeshesUseSkinning(
     }
 
     if(sawStatic && sawSkinned){
-        NWB_LOGGER_WARNING(GLB_TEXT("Model export does not support mixed static and skinned source meshes yet"));
+        NWB_LOGGER_WARNING(NWB_TEXT("Model export does not support mixed static and skinned source meshes yet"));
         return false;
     }
 
@@ -463,7 +463,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         ErrorCode errorCode;
         const bool inputIsRegularFile = IsRegularFile(Path(UtilityDetail::Arena(), options.inputPath), errorCode);
         if(errorCode && !IsMissingPathError(errorCode)){
-            NWB_LOGGER_WARNING(GLB_TEXT("Failed to query input FBX path: {}"), StringConvert(errorCode.message()));
+            NWB_LOGGER_WARNING(NWB_TEXT("Failed to query input FBX path: {}"), StringConvert(errorCode.message()));
             return __hidden_command_line::s_FbxToNwbExitFailure;
         }
         if(!inputIsRegularFile)
@@ -490,9 +490,9 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         }
         if(instances.empty()){
             if(options.includeHidden)
-                NWB_LOGGER_WARNING(GLB_TEXT("No mesh instances found in FBX."));
+                NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX."));
             else
-                NWB_LOGGER_WARNING(GLB_TEXT("No mesh instances found in FBX (use --include-hidden to include hidden nodes)."));
+                NWB_LOGGER_WARNING(NWB_TEXT("No mesh instances found in FBX (use --include-hidden to include hidden nodes)."));
             return __hidden_command_line::s_FbxToNwbExitFailure;
         }
 
@@ -625,7 +625,7 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
 
         return __hidden_command_line::s_FbxToNwbExitSuccess;
-    }, [&](const CLI::ParseError& error){ return app.exit(error, GLB_COUT, GLB_CERR); }, [](){ return -1; });
+    }, [&](const CLI::ParseError& error){ return app.exit(error, NWB_COUT, NWB_CERR); }, [](){ return -1; });
 }
 
 

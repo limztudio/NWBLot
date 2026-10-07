@@ -40,7 +40,7 @@ TEST(Telemetry, CaptureScopeRestoresLoggerAndStopsDiagnosticsAfterDestruction){
         {
             Telemetry::CaptureSessionCaptureScope captureScope(session);
 
-            NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("scope text"));
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("scope text"));
             CaptureDiagnosticEvent(DiagnosticEventRecord{
                 .event = DiagnosticEventName::s_Error.data(),
                 .category = "scope_diagnostic",
@@ -50,7 +50,7 @@ TEST(Telemetry, CaptureScopeRestoresLoggerAndStopsDiagnosticsAfterDestruction){
             });
         }
 
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("after scope"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("after scope"));
     }
 
     CaptureDiagnosticEvent(DiagnosticEventRecord{
@@ -60,8 +60,8 @@ TEST(Telemetry, CaptureScopeRestoresLoggerAndStopsDiagnosticsAfterDestruction){
     });
 
     EXPECT_EQ(previousLogger.messageCount(), s_ExpectedDualCount);
-    EXPECT_TRUE(previousLogger.sawMessageContaining(GLB_TEXT("scope text")));
-    EXPECT_TRUE(previousLogger.sawMessageContaining(GLB_TEXT("after scope")));
+    EXPECT_TRUE(previousLogger.sawMessageContaining(NWB_TEXT("scope text")));
+    EXPECT_TRUE(previousLogger.sawMessageContaining(NWB_TEXT("after scope")));
     EXPECT_EQ(session.eventCount(), s_ExpectedDualCount);
 }
 
@@ -72,7 +72,7 @@ TEST(Telemetry, TextLogPayloadRejectsCorruptedHeaderAfterValidParse){
     ASSERT_TRUE(Telemetry::BuildTextLogPayload(
         testArena.arena,
         NWB::Core::Common::LogType::Warning,
-        GLB_TEXT("telemetry text log"),
+        NWB_TEXT("telemetry text log"),
         payload
     ));
 

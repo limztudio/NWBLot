@@ -37,7 +37,7 @@ namespace __hidden_material_instance{
 ){
     const u32 fieldByteSize = MaterialLayoutFieldByteSize(field.fieldType);
     if(fieldByteSize == 0u){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: material instance override '{}' for entity {} has invalid field size")
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} has invalid field size")
             , StringConvert(parameter.parameterName.resolvedText())
             , entity.id
         );
@@ -47,7 +47,7 @@ namespace __hidden_material_instance{
         byteOffset > inOutMutableTypedBytes.size()
         || static_cast<usize>(fieldByteSize) > inOutMutableTypedBytes.size() - static_cast<usize>(byteOffset)
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: material instance override '{}' for entity {} exceeds mutable storage for material '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} exceeds mutable storage for material '{}'")
             , StringConvert(parameter.parameterName.resolvedText())
             , entity.id
             , StringConvert(materialName.resolvedText())
@@ -56,7 +56,7 @@ namespace __hidden_material_instance{
     }
 
     const u8* valueBytes = reinterpret_cast<const u8*>(parameter.value.raw);
-    GLB_MEMCPY(inOutMutableTypedBytes.data() + byteOffset, fieldByteSize, valueBytes, fieldByteSize);
+    NWB_MEMCPY(inOutMutableTypedBytes.data() + byteOffset, fieldByteSize, valueBytes, fieldByteSize);
     return true;
 }
 
@@ -97,13 +97,13 @@ bool RendererMaterialSystem::FindMaterialInstanceOverrideField(
     u32 mutableBlockByteBegin = 0u;
     for(const MaterialTypedLayoutBlock& block : materialInfo.typedLayoutBlocks){
         // MaterialSurfaceInfo copies the already-validated cooked layout; keep a debug-only invariant here.
-        GLB_ASSERT(IsValidMaterialBlockClass(block.blockClass));
+        NWB_ASSERT(IsValidMaterialBlockClass(block.blockClass));
 
         const bool mutableBlock = block.blockClass == MaterialBlockClass::MaterialMutable;
         const u32 blockByteBegin = mutableBlock ? mutableBlockByteBegin : constantBlockByteBegin;
         u32& blockByteEnd = mutableBlock ? mutableBlockByteBegin : constantBlockByteBegin;
         // MaterialSurfaceInfo copies the already-validated cooked byte sizes; keep a debug-only invariant here.
-        GLB_ASSERT(block.byteSize <= Limit<u32>::s_Max - blockByteEnd);
+        NWB_ASSERT(block.byteSize <= Limit<u32>::s_Max - blockByteEnd);
         blockByteEnd += block.byteSize;
 
         if(block.blockName != parameter.blockName)
@@ -112,7 +112,7 @@ bool RendererMaterialSystem::FindMaterialInstanceOverrideField(
         const usize fieldBegin = static_cast<usize>(block.fieldBegin);
         const usize fieldCount = static_cast<usize>(block.fieldCount);
         // MaterialSurfaceInfo copies the already-validated cooked field ranges; keep a debug-only invariant here.
-        GLB_ASSERT(fieldBegin <= materialInfo.typedLayoutFields.size() && fieldCount <= materialInfo.typedLayoutFields.size() - fieldBegin);
+        NWB_ASSERT(fieldBegin <= materialInfo.typedLayoutFields.size() && fieldCount <= materialInfo.typedLayoutFields.size() - fieldBegin);
 
         for(usize fieldIndex = fieldBegin; fieldIndex < fieldBegin + fieldCount; ++fieldIndex){
             const MaterialTypedLayoutField& field = materialInfo.typedLayoutFields[fieldIndex];
@@ -127,7 +127,7 @@ bool RendererMaterialSystem::FindMaterialInstanceOverrideField(
         break;
     }
 
-    NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: material instance override '{}' for entity {} is not declared by material '{}'")
+    NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} is not declared by material '{}'")
         , StringConvert(parameter.parameterName.resolvedText())
         , entity.id
         , StringConvert(materialInfo.materialName.resolvedText())
@@ -142,13 +142,13 @@ bool RendererMaterialSystem::ApplyMaterialInstanceOverrides(
     MaterialTypedByteDataVector& inOutMutableTypedBytes
 ){
     if(!materialInstance.materialInterface){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: material instance overrides for entity {} require a material interface")
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance overrides for entity {} require a material interface")
             , entity.id
         );
         return false;
     }
     if(materialInstance.materialInterface != materialInfo.materialInterface){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: material instance overrides for entity {} target interface '{}' but material '{}' uses '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance overrides for entity {} target interface '{}' but material '{}' uses '{}'")
             , entity.id
             , StringConvert(materialInstance.materialInterface.resolvedText())
             , StringConvert(materialInfo.materialName.resolvedText())
@@ -159,7 +159,7 @@ bool RendererMaterialSystem::ApplyMaterialInstanceOverrides(
 
     for(const MaterialInstanceParameter& parameter : materialInstance.overrides){
         if(!parameter.blockName || !parameter.fieldName){
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: material instance override for entity {} has an invalid parameter name")
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override for entity {} has an invalid parameter name")
                 , entity.id
             );
             return false;
@@ -171,14 +171,14 @@ bool RendererMaterialSystem::ApplyMaterialInstanceOverrides(
 
         const MaterialTypedLayoutField& field = *resolvedField.field;
         if(!resolvedField.mutableBlock){
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: material instance override '{}' for entity {} targets material-constant storage")
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} targets material-constant storage")
                 , StringConvert(parameter.parameterName.resolvedText())
                 , entity.id
             );
             return false;
         }
         if(field.fieldType != parameter.fieldType){
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: material instance override '{}' for entity {} type does not match material '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} type does not match material '{}'")
                 , StringConvert(parameter.parameterName.resolvedText())
                 , entity.id
                 , StringConvert(materialInfo.materialName.resolvedText())
@@ -187,7 +187,7 @@ bool RendererMaterialSystem::ApplyMaterialInstanceOverrides(
         }
 
         if(field.offset > Limit<u32>::s_Max - resolvedField.blockByteBegin){
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: material instance override '{}' for entity {} byte offset exceeds u32")
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material instance override '{}' for entity {} byte offset exceeds u32")
                 , StringConvert(parameter.parameterName.resolvedText())
                 , entity.id
             );

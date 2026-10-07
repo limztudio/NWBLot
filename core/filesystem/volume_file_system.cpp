@@ -31,7 +31,7 @@ VolumeFileSystem::VolumeFileSystem(Alloc::GlobalArena& arena)
 
 VolumeFileSystem::~VolumeFileSystem(){
     if(!unmount())
-        NWB_LOGGER_ERROR(GLB_TEXT("Filesystem: failed to flush volume during destruction"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Filesystem: failed to flush volume during destruction"));
 }
 
 
@@ -123,7 +123,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
             unmountLocked();
             return false;
         }
-        if(GLB_MEMCMP(discoveredHeader.magic, FilesystemVolumeDetail::s_VolumeMagic, sizeof(discoveredHeader.magic)) != 0){
+        if(NWB_MEMCMP(discoveredHeader.magic, FilesystemVolumeDetail::s_VolumeMagic, sizeof(discoveredHeader.magic)) != 0){
             FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMount, "magic mismatch");
             unmountLocked();
             return false;
@@ -150,7 +150,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
 
             const bool isLastSegment = segmentIndex + 1u == segmentPathCount;
             if(!isLastSegment && segmentFileSize != m_segmentSize){
-                NWB_LOGGER_WARNING(GLB_TEXT("Filesystem('{}'): mount failed: segment '{}' has size {}, expected {}")
+                NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: segment '{}' has size {}, expected {}")
                     , StringConvert(m_volumeName)
                     , StringConvert(segmentPath.native())
                     , segmentFileSize
@@ -160,7 +160,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
                 return false;
             }
             if(isLastSegment && segmentFileSize > m_segmentSize){
-                NWB_LOGGER_WARNING(GLB_TEXT("Filesystem('{}'): mount failed: final segment '{}' has size {}, exceeding logical segment size {}")
+                NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: final segment '{}' has size {}, exceeding logical segment size {}")
                     , StringConvert(m_volumeName)
                     , StringConvert(segmentPath.native())
                     , segmentFileSize
@@ -182,7 +182,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         }
 
         if(desc.segmentSize != 0 && desc.segmentSize != m_segmentSize){
-            NWB_LOGGER_WARNING(GLB_TEXT("Filesystem('{}'): mount failed: requested segment size {} does not match volume size {}")
+            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: requested segment size {} does not match volume size {}")
                 , StringConvert(m_volumeName)
                 , desc.segmentSize
                 , m_segmentSize
@@ -198,7 +198,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
         }
 
         if(desc.metadataSize != 0 && desc.metadataSize != m_metadataBytes){
-            NWB_LOGGER_WARNING(GLB_TEXT("Filesystem('{}'): mount failed: requested metadata size {} does not match volume metadata size {}")
+            NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: requested metadata size {} does not match volume metadata size {}")
                 , StringConvert(m_volumeName)
                 , desc.metadataSize
                 , m_metadataBytes
@@ -209,7 +209,7 @@ bool VolumeFileSystem::mount(const VolumeMountDesc& desc){
     }
 
     if(m_maxSegments != 0 && m_segmentPaths.size() > m_maxSegments){
-        NWB_LOGGER_WARNING(GLB_TEXT("Filesystem('{}'): mount failed: discovered {} segments, maxSegments is {}")
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): mount failed: discovered {} segments, maxSegments is {}")
             , StringConvert(m_volumeName)
             , m_segmentPaths.size()
             , m_maxSegments
@@ -577,7 +577,7 @@ bool VolumeFileSystem::writeFileLocked(
         ++fileCountAfterWrite;
     }
     if(!canFitMetadataForFileCountLocked(fileCountAfterWrite)){
-        NWB_LOGGER_WARNING(GLB_TEXT("Filesystem('{}'): writeFile failed: metadata area is full for file count {}")
+        NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): writeFile failed: metadata area is full for file count {}")
             , StringConvert(m_volumeName)
             , fileCountAfterWrite
         );

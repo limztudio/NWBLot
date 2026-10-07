@@ -85,7 +85,7 @@ void GpuTimingAccumulator::collect(
                 record.retirementSubscriptionIdentityLimit = 0u;
                 record.retirementNotificationPending = false;
             }
-            NWB_LOGGER_ERROR(GLB_TEXT("GPU timing query quarantined after its accepted submission lost exact queue identity"));
+            NWB_LOGGER_ERROR(NWB_TEXT("GPU timing query quarantined after its accepted submission lost exact queue identity"));
             continue;
         }
         if(!recorder.submissionCompleted(device, record.acceptedSubmission))
@@ -223,7 +223,7 @@ void GpuTimingAccumulator::confirmFrameReset(const QueueSubmissionToken& token){
             record.deviceReady = true;
         }
         else if(!matchesResetQueue)
-            NWB_LOGGER_ERROR(GLB_TEXT("GPU timing frame reset rejected an accepted token from a different physical queue"));
+            NWB_LOGGER_ERROR(NWB_TEXT("GPU timing frame reset rejected an accepted token from a different physical queue"));
     }
 }
 
@@ -335,7 +335,7 @@ GpuTimingAccumulator::QueryEndResult GpuTimingAccumulator::endQuery(
     if(!commandList.endTimerQuery(*record.query, scope.timerQueryRecording)){
         record.state = QueryState::EndFailedUnaccepted;
         record.publishSample = false;
-        NWB_LOGGER_ERROR(GLB_TEXT("GPU timing end timestamp failed; retaining ownership until submission resolution"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GPU timing end timestamp failed; retaining ownership until submission resolution"));
         return QueryEndResult::RetirementRequired;
     }
     record.state = QueryState::EndedUnaccepted;
@@ -469,7 +469,7 @@ bool GpuTimingAccumulator::discardQuery(
 
     if(record.state == QueryState::PendingAccepted || record.state == QueryState::PendingRetirementAccepted){
         const bool retirementPending = quarantineQuery(scope, subscriptionIdentityLimit);
-        NWB_LOGGER_ERROR(GLB_TEXT("GPU timing query quarantined because accepted work attempted rollback release"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GPU timing query quarantined because accepted work attempted rollback release"));
         return retirementPending;
     }
     if(record.state == QueryState::Quarantined)
@@ -477,7 +477,7 @@ bool GpuTimingAccumulator::discardQuery(
 
     if(!record.query || !record.query->discardUnacceptedRecording(scope.timerQueryRecording)){
         const bool retirementPending = quarantineQuery(scope, subscriptionIdentityLimit);
-        NWB_LOGGER_ERROR(GLB_TEXT("GPU timing query quarantined because its unaccepted native recording could not be revoked"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GPU timing query quarantined because its unaccepted native recording could not be revoked"));
         return retirementPending;
     }
 
@@ -616,7 +616,7 @@ void GpuTimingAccumulator::releaseQuery(QueryRecord& record)noexcept{
     // An unsubscribe may mark an unaccepted scope and stream its notification after releasing the recorder lock.
     // Preserve that payload in the now-available pool, and keep findAvailableQuery() from reusing it until drained.
     if(retirementNotificationPending){
-        GLB_ASSERT(retirementAttribution != s_NoGpuTimingSampleAttribution);
+        NWB_ASSERT(retirementAttribution != s_NoGpuTimingSampleAttribution);
         record.physicalQueue = retirementPhysicalQueue;
         record.frameIndex = retirementFrameIndex;
         record.attribution = retirementAttribution;

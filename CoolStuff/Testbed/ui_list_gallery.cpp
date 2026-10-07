@@ -11,14 +11,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TestbedUiListSource::indexOf(const u64 keyValue, u64& index)const noexcept{
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool UiListSource::indexOf(const u64 keyValue, u64& index)const noexcept{
     if(keyValue == 0u || keyValue > rowCount())
         return false;
     index = keyValue - 1u;
     return true;
 }
 
-bool TestbedUiListSource::findEnabled(const u64 start, const bool reverse, u64& index)const noexcept{
+bool UiListSource::findEnabled(const u64 start, const bool reverse, u64& index)const noexcept{
     static_cast<void>(reverse);
     if(start >= rowCount())
         return false;
@@ -26,7 +32,7 @@ bool TestbedUiListSource::findEnabled(const u64 start, const bool reverse, u64& 
     return true;
 }
 
-StringView TestbedUiListSource::text(const u64 index)const noexcept{
+StringView UiListSource::text(const u64 index)const noexcept{
     u64 remaining = key(index);
     if(remaining == 0u)
         return {};
@@ -50,7 +56,7 @@ StringView TestbedUiListSource::text(const u64 index)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void TestbedUiListGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
+void UiListGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
     if(!ui.beginPanel("list_gallery", { x, y, 280.0f, 258.0f }))
@@ -64,15 +70,18 @@ void TestbedUiListGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x
     options.rowHeight = 24.0f;
     const ListResult result = ui.virtualList("rows", m_source, m_state, options);
     if(result.activated)
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Testbed: custom list selected key={}"), m_state.selectedKey());
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom list selected key={}"), m_state.selectedKey());
     NWB::Core::Alloc::ScratchArena scratchArena(Name("testbed/ui/list_caption"));
     const auto text = StringFormat(scratchArena, "Selected: {}", m_state.selectedKey());
     valid = ui.label("selected", { text.data(), text.size() }, caption) && result.valid && valid;
     valid = ui.endPanel() && valid;
     ui.style().fontSize = previousFontSize;
     if(!valid)
-        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: custom virtual list declaration failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom virtual list declaration failed"));
 }
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

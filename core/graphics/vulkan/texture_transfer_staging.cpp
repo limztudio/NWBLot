@@ -100,7 +100,7 @@ void CommandList::copyTexture(
     Texture& src,
     const TextureSlice& srcSlice
 ){
-    constexpr TStringView s_OperationName = GLB_TEXT("copy texture to staging texture");
+    constexpr TStringView s_OperationName = NWB_TEXT("copy texture to staging texture");
     if(!validateStagingTextureCopyResources(
         dest,
         src,
@@ -125,7 +125,7 @@ void CommandList::copyTexture(
         srcSlice,
         region
     )){
-        rejectCommandRecording(s_OperationName, GLB_TEXT("source and destination slices violate the copy contract"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination slices violate the copy contract"));
         return;
     }
     const bool depthStencilCopy =
@@ -174,7 +174,7 @@ void CommandList::copyTexture(
     StagingTexture& src,
     const TextureSlice& srcSlice
 ){
-    constexpr TStringView s_OperationName = GLB_TEXT("copy staging texture to texture");
+    constexpr TStringView s_OperationName = NWB_TEXT("copy staging texture to texture");
     if(!validateStagingTextureCopyResources(
         src,
         dest,
@@ -199,7 +199,7 @@ void CommandList::copyTexture(
         destSlice,
         region
     )){
-        rejectCommandRecording(s_OperationName, GLB_TEXT("source and destination slices violate the copy contract"));
+        rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination slices violate the copy contract"));
         return;
     }
     const bool depthStencilCopy =
@@ -268,11 +268,11 @@ bool CommandList::validateStagingTextureCopyResources(
         || &activeCommandBuffer->m_queue != expectedQueue
         || m_recordingLeaseSerial == 0u
     ){
-        rejectCommandRecording(operationName, GLB_TEXT("command list has no exact active command-buffer lease"));
+        rejectCommandRecording(operationName, NWB_TEXT("command list has no exact active command-buffer lease"));
         return false;
     }
     if(&stagingTexture.m_context != &m_context || &texture.m_context != &m_context){
-        rejectCommandRecording(operationName, GLB_TEXT("staging texture and texture must belong to this device"));
+        rejectCommandRecording(operationName, NWB_TEXT("staging texture and texture must belong to this device"));
         return false;
     }
     if(
@@ -280,15 +280,15 @@ bool CommandList::validateStagingTextureCopyResources(
         || !stagingTexture.m_allocation
         || texture.m_image == VK_NULL_HANDLE
     ){
-        rejectCommandRecording(operationName, GLB_TEXT("staging buffer and image handles must be non-null"));
+        rejectCommandRecording(operationName, NWB_TEXT("staging buffer and image handles must be non-null"));
         return false;
     }
     if(stagingTexture.m_cpuAccess != requiredCpuAccess){
-        rejectCommandRecording(operationName, GLB_TEXT("staging texture CPU-access direction is incompatible"));
+        rejectCommandRecording(operationName, NWB_TEXT("staging texture CPU-access direction is incompatible"));
         return false;
     }
     if((texture.m_imageInfo.usage & requiredImageUsage) != requiredImageUsage){
-        rejectCommandRecording(operationName, GLB_TEXT("image lacks the required transfer usage"));
+        rejectCommandRecording(operationName, NWB_TEXT("image lacks the required transfer usage"));
         return false;
     }
 
@@ -305,13 +305,13 @@ bool CommandList::validateStagingTextureCopyResources(
         )
         || expectedTotalByteSize != stagingTexture.m_totalByteSize
     ){
-        rejectCommandRecording(operationName, GLB_TEXT("staging texture has invalid immutable layout provenance"));
+        rejectCommandRecording(operationName, NWB_TEXT("staging texture has invalid immutable layout provenance"));
         return false;
     }
 
     const GpuPhysicalQueueInfo* const exactQueue = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
     if(!exactQueue || exactQueue->id != m_creationDesc.physicalQueue){
-        rejectCommandRecording(operationName, GLB_TEXT("command list has no valid exact physical queue"));
+        rejectCommandRecording(operationName, NWB_TEXT("command list has no valid exact physical queue"));
         return false;
     }
     if(
@@ -330,7 +330,7 @@ bool CommandList::validateStagingTextureCopyResources(
             && stagingTexture.m_admittedQueueFamilies.size() < 2u
         )
     ){
-        rejectCommandRecording(operationName, GLB_TEXT("staging texture has invalid immutable sharing provenance"));
+        rejectCommandRecording(operationName, NWB_TEXT("staging texture has invalid immutable sharing provenance"));
         return false;
     }
 
@@ -342,7 +342,7 @@ bool CommandList::validateStagingTextureCopyResources(
         }
     }
     if(!familyAdmitted){
-        rejectCommandRecording(operationName, GLB_TEXT("exact command queue family was not admitted at creation"));
+        rejectCommandRecording(operationName, NWB_TEXT("exact command queue family was not admitted at creation"));
         return false;
     }
     if(
@@ -352,7 +352,7 @@ bool CommandList::validateStagingTextureCopyResources(
             exactQueue->queueClass
         )
     ){
-        rejectCommandRecording(operationName, GLB_TEXT("exact command queue class was not admitted at creation"));
+        rejectCommandRecording(operationName, NWB_TEXT("exact command queue class was not admitted at creation"));
         return false;
     }
     return true;

@@ -230,7 +230,7 @@ TEST(SkinningPayload, PayloadScopeDestructionReclaimsScratchUsageAcrossMeshes){
     EXPECT_EQ(finalMemory.usedBytes, initialMemory.usedBytes);
 }
 
-#if defined(GLB_FINAL)
+#if defined(NWB_FINAL)
 void ExpectEmptyRuntimePayload(const NWB::Impl::RuntimeSkinPayloadScratch& payload){
     EXPECT_FALSE(payload.hasActiveSkin());
     EXPECT_EQ(payload.skinInfluenceCount, 0u);

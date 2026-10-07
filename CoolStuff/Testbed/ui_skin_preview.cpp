@@ -13,6 +13,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_ui_skin_preview{
 
 
@@ -73,7 +79,7 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TestbedUiSkinPreview::TestbedUiSkinPreview(
+UiSkinPreview::UiSkinPreview(
     NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets)
     : m_normal(arena)
     , m_hover(arena)
@@ -94,18 +100,18 @@ TestbedUiSkinPreview::TestbedUiSkinPreview(
             .scriptTag = NWB::Impl::Ui::TextScriptTag('H', 'a', 'n', 'g'),
             .language = "ko"
         }) == NWB::Impl::Ui::TextLayoutStatus::Success;
-    GLB_FATAL_ASSERT_MSG(configured, GLB_TEXT("Testbed UI labels must have valid constant text"));
+    NWB_FATAL_ASSERT_MSG(configured, NWB_TEXT("Testbed UI labels must have valid constant text"));
 }
 
-void TestbedUiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
+void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
     const f32 x = Max(__hidden_ui_skin_preview::s_Margin, context.display.logicalWidth - __hidden_ui_skin_preview::s_PanelWidth - __hidden_ui_skin_preview::s_Margin);
     const f32 y = __hidden_ui_skin_preview::s_Margin;
     m_widgets.paint(context);
-    const auto gallery = TestbedUiWidgetGallery::LayoutBounds(context.display);
+    const auto gallery = UiWidgetGallery::LayoutBounds(context.display);
     if(gallery.y < y + __hidden_ui_skin_preview::s_PanelHeight + 12.0f || x < 390.0f)
         return;
     if(!__hidden_ui_skin_preview::DrawSkinGallery(context.paint, x, y)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: default UI skin is missing a gallery region"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: default UI skin is missing a gallery region"));
         return;
     }
 
@@ -115,9 +121,9 @@ void TestbedUiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
     const bool captionPainted = m_caption.paint(context.text, context.paint, { x + 18.0f, y + 160.0f })
         && m_korean.paint(context.text, context.paint, { x + 18.0f, y + 181.0f });
     const bool clipRestored = context.paint.popClip();
-    GLB_FATAL_ASSERT(clipRestored);
+    NWB_FATAL_ASSERT(clipRestored);
     if(!captionPainted){
-        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: custom UI caption shaping or rasterization failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI caption shaping or rasterization failed"));
         return;
     }
     const NWB::Impl::Ui::Color textColor{ 0.92f, 0.96f, 1.0f, 1.0f };
@@ -128,16 +134,19 @@ void TestbedUiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
         || !m_disabled.paint(context.text, context.paint, { x + 154.0f, y + 55.0f }, { 0.38f, 0.42f, 0.48f, 1.0f })
         || !m_edit.paint(context.text, context.paint, { x + 20.0f, y + 94.0f }, textColor)
     )
-        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: custom UI label shaping or rasterization failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI label shaping or rasterization failed"));
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void ProjectTestbed::drawCustomUiControls(NWB::Impl::UiPaintContext& context){
+void Project::drawCustomUiControls(NWB::Impl::UiPaintContext& context){
     m_uiPreview.paint(context);
 }
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

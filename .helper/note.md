@@ -57,7 +57,7 @@
 53. Vulkan ray tracing shader tables own GPU SBT buffers and must retain their parent pipeline; command buffers must retain the shader table while ray dispatch commands are in flight.
 54. Generic integer alignment helpers belong in `global/algorithm.h`; Vulkan code should use `AlignUp`, `AlignUpChecked`, or the typed wrappers instead of keeping local duplicate align-up helpers.
 55. Vulkan ray tracing arbitrary procedural primitives are represented by AABB build geometry plus an intersection shader. Native spheres/LSS are a separate `VK_NV_ray_tracing_linear_swept_spheres` path and must stay feature-gated through the device feature struct and pipeline create flag.
-56. Generic build-configuration helpers belong in `global/compile.h`; do not keep local module copies of simple `GLB_DEBUG` / optimization-mode checks.
+56. Generic build-configuration helpers belong in `global/compile.h`; do not keep local module copies of simple `NWB_DEBUG` / optimization-mode checks.
 57. `GraphicsRuntime` owns a required backend for its full object lifetime through `NotNullUniquePtr`; lifecycle `destroy()` tears down backend runtime state, not the backend object itself.
 58. ECS infrastructure that owns persistent containers must be constructed with an explicit caller-owned arena. Do not add module-local default arenas or default constructors that hide allocator ownership.
 59. `utilities/fbx_to_nwb` owns a standalone logger at entry, links `nwb_logclient`, routes non-interactive status/error/list output through `NWB_LOGGER_*`, and keeps prompts/help/pause/logger-init fallback on direct console streams. Its validation/build/write helpers should log failures in-place instead of propagating diagnostic-only `AString& outError` parameters.
@@ -87,6 +87,8 @@
 82. First-party contracts support only the current API/schema/protocol/layout. Remove old readers, migration paths, compatibility aliases/overloads, guessed artifact or older API fallbacks, and pre-graph adapters; migrate current callers and reject retired inputs at the existing boundary. Preserve active backend/platform interoperability, hardware/software paths, and required alias/lifetime rules.
 
 83. Mark every C++ function that cannot throw `noexcept`, following `.helper/standard.md` section 8. Verify its complete implementation, callees, callbacks, and construction/destruction; keep declarations and definitions consistent. Use conditional `noexcept(...)` when the guarantee depends on template types or callables, and preserve existing exception and intentional termination contracts.
+
+84. NWBLot-owned utility, configuration, diagnostic, namespace, and shader feature macro APIs use `NWB_`, including global utilities. Application-owned macro APIs use the application prefix, such as `TESTBED_`. Preserve external/compiler interoperability spellings and existing `g_*` shader resource-view aliases under the shader symbol contract in standard section 15. Root `engine_namespace.h` alone owns the engine namespace wrappers; applications use their own namespace header and receive engine wrappers only transitively through the engine APIs they consume. Testbed classes and helpers live in `Testbed`; only the required loader adapter functions remain in `NWB`. Global utility symbols retain their existing scopes, and public `NWB::Impl` feature contracts remain valid while private/detail and graphics-provider boundaries stay enforced.
 
 ## Scheduler Architecture
 

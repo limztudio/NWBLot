@@ -10,14 +10,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void TestbedUiPopupGallery::trigger(NWB::Impl::Ui::Builder& ui){
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void UiPopupGallery::trigger(NWB::Impl::Ui::Builder& ui){
     using namespace NWB::Impl::Ui;
     const WidgetOptions options{ { LayoutSizePolicy::Fixed, 60.0f }, {} };
     if(ui.button("menu", "Menu", options))
         m_popup.open();
 }
 
-void TestbedUiPopupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
+void UiPopupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
     PopupOptions options;
@@ -42,12 +48,15 @@ void TestbedUiPopupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 
             m_popup.close();
     }
     if(ui.checkbox("keep_open", "Keep open on selection", m_keepOpen, row))
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Testbed: popup keep open={}"), m_keepOpen);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: popup keep open={}"), m_keepOpen);
     valid = ui.endPopup() && valid;
     ui.style().fontSize = previousFontSize;
     if(!valid)
-        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: custom popup declaration failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom popup declaration failed"));
 }
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

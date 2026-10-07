@@ -79,13 +79,13 @@ void PaintBuilder::begin(
     const u64 skinGeneration,
     const Core::Assets::AssetRef<UiSkin>& skinRef,
     const UiSkin& skin){
-    GLB_ASSERT(skinRef.valid() && skinRef.name() == skin.virtualPath());
-    GLB_ASSERT(skin.atlasWidth() > 0u && skin.atlasHeight() > 0u && skin.referenceDensity() > 0.0f);
-    GLB_ASSERT(IsFinite(skin.referenceDensity()));
-    GLB_ASSERT(IsFinite(metrics.logicalWidth) && metrics.logicalWidth >= 0.0f);
-    GLB_ASSERT(IsFinite(metrics.logicalHeight) && metrics.logicalHeight >= 0.0f);
-    GLB_ASSERT(IsFinite(metrics.pixelScaleX) && metrics.pixelScaleX > 0.0f);
-    GLB_ASSERT(IsFinite(metrics.pixelScaleY) && metrics.pixelScaleY > 0.0f);
+    NWB_ASSERT(skinRef.valid() && skinRef.name() == skin.virtualPath());
+    NWB_ASSERT(skin.atlasWidth() > 0u && skin.atlasHeight() > 0u && skin.referenceDensity() > 0.0f);
+    NWB_ASSERT(IsFinite(skin.referenceDensity()));
+    NWB_ASSERT(IsFinite(metrics.logicalWidth) && metrics.logicalWidth >= 0.0f);
+    NWB_ASSERT(IsFinite(metrics.logicalHeight) && metrics.logicalHeight >= 0.0f);
+    NWB_ASSERT(IsFinite(metrics.pixelScaleX) && metrics.pixelScaleX > 0.0f);
+    NWB_ASSERT(IsFinite(metrics.pixelScaleY) && metrics.pixelScaleY > 0.0f);
     m_snapshot.m_generation = generation;
     m_snapshot.m_displayMetrics = metrics;
     m_snapshot.m_skinBinding = {
@@ -112,7 +112,7 @@ void PaintBuilder::begin(
 
 void PaintBuilder::reserve(const usize quadCount, const usize clipDepth){
     if(quadCount > Limit<u32>::s_Max / 6u || clipDepth == Limit<usize>::s_Max){
-        GLB_ASSERT(false);
+        NWB_ASSERT(false);
         return;
     }
     m_snapshot.m_vertices.reserve(quadCount * 4u);
@@ -122,12 +122,12 @@ void PaintBuilder::reserve(const usize quadCount, const usize clipDepth){
 }
 
 void PaintBuilder::pushClip(const Rect& clip){
-    GLB_ASSERT(m_recording);
+    NWB_ASSERT(m_recording);
     m_clips.push_back(__hidden_ui_paint::Intersect(m_clips.back(), clip));
 }
 
 bool PaintBuilder::popClip(){
-    GLB_ASSERT(m_recording);
+    NWB_ASSERT(m_recording);
     if(m_clips.size() <= 1u || (m_overlayDepth != 0u && m_clips.size() <= m_overlays[m_overlayDepth - 1u].clipDepth + 1u))
         return false;
     m_clips.pop_back();
@@ -139,7 +139,7 @@ void PaintBuilder::fillRect(const Rect& rectangle, const Color& color){
 }
 
 bool PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, const Color& tint){
-    GLB_ASSERT(m_recording);
+    NWB_ASSERT(m_recording);
     const auto region = FindIf(m_regions.begin(), m_regions.end(), [&regionName](const UiSkinRegion& value)noexcept{
         return value.name == regionName;
     });
@@ -159,7 +159,7 @@ bool PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, con
 }
 
 DrawSnapshot PaintBuilder::freeze(){
-    GLB_ASSERT(m_recording && m_clips.size() == 1u && m_overlayDepth == 0u);
+    NWB_ASSERT(m_recording && m_clips.size() == 1u && m_overlayDepth == 0u);
     Sort(m_snapshot.m_commands.begin(), m_snapshot.m_commands.end(), [](const DrawCommand& lhs, const DrawCommand& rhs)noexcept{
         return lhs.layer != rhs.layer ? lhs.layer < rhs.layer : lhs.firstIndex < rhs.firstIndex;
     });
@@ -169,7 +169,7 @@ DrawSnapshot PaintBuilder::freeze(){
 }
 
 Rect PaintBuilder::currentClip()const{
-    GLB_ASSERT(m_recording);
+    NWB_ASSERT(m_recording);
     return m_clips.back();
 }
 
@@ -182,15 +182,15 @@ void PaintBuilder::emitQuad(
     const u32 sdfPageIndex,
     const u32 sdfChannel,
     const u32 textureImageIndex){
-    GLB_ASSERT(m_recording);
-    GLB_ASSERT(IsFinite(color.r) && IsFinite(color.g) && IsFinite(color.b) && IsFinite(color.a));
-    GLB_ASSERT(color.a >= 0.0f && color.a <= 1.0f);
+    NWB_ASSERT(m_recording);
+    NWB_ASSERT(IsFinite(color.r) && IsFinite(color.g) && IsFinite(color.b) && IsFinite(color.a));
+    NWB_ASSERT(color.a >= 0.0f && color.a <= 1.0f);
     const Rect clip = m_clips.back();
     const Rect visible = __hidden_ui_paint::Intersect(rectangle, clip);
     if(!__hidden_ui_paint::HasArea(visible) || color.a <= 0.0f)
         return;
     if(m_snapshot.m_vertices.size() > Limit<u32>::s_Max - 4u || m_snapshot.m_indices.size() > Limit<u32>::s_Max - 6u){
-        GLB_ASSERT(false);
+        NWB_ASSERT(false);
         return;
     }
     const f32 left = uv.x + (visible.x - rectangle.x) / rectangle.width * uv.width;

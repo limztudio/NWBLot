@@ -227,7 +227,7 @@ TEST(AssetsGraphics, SpirvEntryPointViewsRebindCopiedWordsAndClearMalformedMatch
 }
 
 TEST(AssetsGraphics, ShaderMetadataRejectsDefaultVariantAlias){
-#if defined(GLB_FINAL)
+#if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -251,7 +251,7 @@ TEST(AssetsGraphics, ShaderMetadataRejectsDefaultVariantAlias){
     NWB::Impl::ShaderCook::IncludeEntry includeEntry(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
     EXPECT_FALSE(shaderCook.parseIncludeMeta(includeMetaPath, includeEntry, scratchArena));
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT(
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
         "unsupported asset field 'default_variant'"
     )));
 
@@ -346,7 +346,7 @@ TEST(AssetsGraphics, ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithR
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, obsoleteShaderMetadata));
         EXPECT_FALSE(shaderCook.parseShaderMeta(shaderPath, shaderEntry, scratchArena));
         EXPECT_TRUE(shaderEntry.defineValues.empty());
-        EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("define 'NWB_BINDLESS_TLAS' is an engine transport feature")));
+        EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("define 'NWB_BINDLESS_TLAS' is an engine transport feature")));
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, validShaderMetadata));
         ASSERT_TRUE(shaderCook.parseShaderMeta(shaderPath, shaderEntry, scratchArena));
         EXPECT_TRUE(shaderCook.validateVariantSignature("project/shader", "PROJECT_QUALITY=0", shaderEntry.defineValues, scratchArena));
@@ -427,7 +427,7 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
     ));
     EXPECT_NE(firstChecksum, changedChecksum);
 
-#if defined(GLB_FINAL)
+#if defined(NWB_FINAL)
     const Path unaliasedDependency = root / "outside" / "unaliased.slangi";
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(unaliasedDependency, "outside alias root\n"));
     NWB::Impl::ShaderCook::CookVector<Path> unaliasedDependencies(testArena.arena);
@@ -444,7 +444,7 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
         rejectedChecksum,
         scratchArena
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT(
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
         "outside the declared dependency root aliases"
     )));
 #endif
@@ -689,7 +689,7 @@ TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
             AStringView resolvedEntryPoint;
             NWB::Core::GraphicsVector<u32> words(testArena.arena);
             words.resize(shader.bytecode().size() / sizeof(u32));
-            GLB_MEMCPY(words.data(), shader.bytecode().size(), shader.bytecode().data(), shader.bytecode().size());
+            NWB_MEMCPY(words.data(), shader.bytecode().size(), shader.bytecode().data(), shader.bytecode().size());
             EXPECT_EQ(NWB::Core::ResolveSpirvEntryPointName(
                     words.data(),
                     words.size(),

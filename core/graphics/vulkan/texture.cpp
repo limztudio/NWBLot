@@ -40,12 +40,12 @@ bool IsSupportedSampleCount(u32 sampleCount)noexcept{
 
 bool ValidateTextureShape(const TextureDesc& desc, TStringView operationName){
     if(desc.width == 0 || desc.height == 0 || desc.depth == 0 || desc.mipLevels == 0 || desc.arraySize == 0){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: dimensions, mip count, and array size must be nonzero"), operationName);
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: dimensions, mip count, and array size must be nonzero"), operationName);
         return false;
     }
     switch(desc.dimension){
     case TextureDimension::Unknown:
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: texture dimension is unknown"), operationName);
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: texture dimension is unknown"), operationName);
         return false;
     case TextureDimension::Texture1D:
     case TextureDimension::Texture1DArray:
@@ -58,7 +58,7 @@ bool ValidateTextureShape(const TextureDesc& desc, TStringView operationName){
     case TextureDimension::Texture3D:
         break;
     default:
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: texture dimension is invalid"), operationName);
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: texture dimension is invalid"), operationName);
         return false;
     }
     if(
@@ -69,25 +69,25 @@ bool ValidateTextureShape(const TextureDesc& desc, TStringView operationName){
         )
         && desc.arraySize != 1u
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: non-array texture array size must be 1"), operationName);
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: non-array texture array size must be 1"), operationName);
         return false;
     }
     if((desc.dimension == TextureDimension::Texture1D || desc.dimension == TextureDimension::Texture1DArray) && (desc.height != 1 || desc.depth != 1)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: 1D texture height and depth must be 1"), operationName);
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: 1D texture height and depth must be 1"), operationName);
         return false;
     }
     if(desc.dimension != TextureDimension::Texture3D && desc.depth != 1){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: non-3D texture depth must be 1"), operationName);
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: non-3D texture depth must be 1"), operationName);
         return false;
     }
     if(desc.dimension == TextureDimension::Texture3D && desc.arraySize != 1){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: 3D texture array size must be 1"), operationName);
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: 3D texture array size must be 1"), operationName);
         return false;
     }
 
     const u32 maxMipLevels = VulkanTextureDetail::GetMaxMipLevels(desc);
     if(desc.mipLevels > maxMipLevels){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: mip levels {} exceed maximum {} for texture dimensions {}x{}x{}")
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: mip levels {} exceed maximum {} for texture dimensions {}x{}x{}")
             , operationName
             , desc.mipLevels
             , maxMipLevels
@@ -100,15 +100,15 @@ bool ValidateTextureShape(const TextureDesc& desc, TStringView operationName){
 
     if(desc.dimension == TextureDimension::TextureCube || desc.dimension == TextureDimension::TextureCubeArray){
         if(desc.width != desc.height){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: cube textures must have equal width and height"), operationName);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: cube textures must have equal width and height"), operationName);
             return false;
         }
         if(desc.dimension == TextureDimension::TextureCube && desc.arraySize != VulkanTextureDetail::s_TextureCubeLayerCount){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: cube textures must have exactly 6 array layers"), operationName);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: cube textures must have exactly 6 array layers"), operationName);
             return false;
         }
         if(desc.dimension == TextureDimension::TextureCubeArray && (desc.arraySize < VulkanTextureDetail::s_TextureCubeLayerCount || (desc.arraySize % VulkanTextureDetail::s_TextureCubeLayerCount) != 0)){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: cube texture arrays must have a positive multiple of 6 array layers"), operationName);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: cube texture arrays must have a positive multiple of 6 array layers"), operationName);
             return false;
         }
     }
@@ -209,7 +209,7 @@ bool BuildBufferImageCopyLayout(
     outLayout = {};
     if(formatLayout.blockWidth == 0 || formatLayout.blockHeight == 0 || formatLayout.bytesPerBlock == 0){
         if(!operationName.empty())
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: invalid texture format"), operationName);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: invalid texture format"), operationName);
         return false;
     }
 
@@ -217,7 +217,7 @@ bool BuildBufferImageCopyLayout(
     const u64 blockCountY = Max<u64>(DivideUp(static_cast<u64>(extent.height), static_cast<u64>(formatLayout.blockHeight)), 1ull);
     if(blockCountX > Limit<u64>::s_Max / formatLayout.bytesPerBlock){
         if(!operationName.empty())
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: natural row pitch overflows"), operationName);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: natural row pitch overflows"), operationName);
         return false;
     }
 
@@ -225,12 +225,12 @@ bool BuildBufferImageCopyLayout(
     const u64 effectiveRowPitch = rowPitch != 0 ? rowPitch : naturalRowPitch;
     if(effectiveRowPitch == 0 || blockCountY > UINT64_MAX / effectiveRowPitch){
         if(!operationName.empty())
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: texture pitch size overflows"), operationName);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: texture pitch size overflows"), operationName);
         return false;
     }
     if(effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % formatLayout.bytesPerBlock) != 0){
         if(!operationName.empty())
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: invalid row pitch"), operationName);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: invalid row pitch"), operationName);
         return false;
     }
 
@@ -238,7 +238,7 @@ bool BuildBufferImageCopyLayout(
     const u64 effectiveDepthPitch = depthPitch != 0 ? depthPitch : packedSlicePitch;
     if(effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0){
         if(!operationName.empty())
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: invalid depth pitch"), operationName);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: invalid depth pitch"), operationName);
         return false;
     }
 
@@ -246,7 +246,7 @@ bool BuildBufferImageCopyLayout(
     const u64 bufferImageBlocks = effectiveDepthPitch / effectiveRowPitch;
     if(bufferRowBlocks > UINT64_MAX / formatLayout.blockWidth || bufferImageBlocks > UINT64_MAX / formatLayout.blockHeight){
         if(!operationName.empty())
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: row pitch or depth pitch exceeds Vulkan buffer image copy limits")
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: row pitch or depth pitch exceeds Vulkan buffer image copy limits")
                 , operationName
             );
         return false;
@@ -256,7 +256,7 @@ bool BuildBufferImageCopyLayout(
     const u64 bufferImageHeight = bufferImageBlocks * formatLayout.blockHeight;
     if(bufferRowLength > UINT32_MAX || bufferImageHeight > UINT32_MAX){
         if(!operationName.empty())
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: row pitch or depth pitch exceeds Vulkan buffer image copy limits")
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: row pitch or depth pitch exceeds Vulkan buffer image copy limits")
                 , operationName
             );
         return false;
@@ -265,7 +265,7 @@ bool BuildBufferImageCopyLayout(
     if(requiredSizeMode == BufferImageCopyRequiredSize::PaddedSlices){
         if(extent.depth > 1 && static_cast<u64>(extent.depth - 1) > (UINT64_MAX - packedSlicePitch) / effectiveDepthPitch){
             if(!operationName.empty())
-                NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
             return false;
         }
         outLayout.requiredSize = extent.depth > 1 ? static_cast<u64>(effectiveDepthPitch) * (extent.depth - 1) + packedSlicePitch : packedSlicePitch;
@@ -274,14 +274,14 @@ bool BuildBufferImageCopyLayout(
         const u64 depthOffset = static_cast<u64>(extent.depth - 1);
         if(depthOffset > UINT64_MAX / effectiveDepthPitch){
             if(!operationName.empty())
-                NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
             return false;
         }
         const u64 depthBytes = depthOffset * effectiveDepthPitch;
         const u64 rowBytes = static_cast<u64>(blockCountY - 1) * effectiveRowPitch;
         if(depthBytes > UINT64_MAX - rowBytes || depthBytes + rowBytes > UINT64_MAX - naturalRowPitch){
             if(!operationName.empty())
-                NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
+                NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
             return false;
         }
         outLayout.requiredSize = depthBytes + rowBytes + naturalRowPitch;
@@ -328,15 +328,15 @@ bool BuildTextureImageViewCreateInfo(
     const bool usesTextureFormat = format == texture.m_creationDesc.format;
     const VkFormat vkFormat = usesTextureFormat ? texture.m_imageInfo.format : ConvertFormat(format);
     if(vkFormat == VK_FORMAT_UNDEFINED){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create {}: format is unsupported"), operationName);
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: format is unsupported"), operationName);
         if(assertFailure)
-            GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create {}: format is unsupported"), operationName);
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create {}: format is unsupported"), operationName);
         return false;
     }
 
     if(!VulkanTextureDetail::ValidateTextureViewShape(dimension, resolvedSubresources)){
         if(assertFailure)
-            GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create {}: invalid view shape"), operationName);
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create {}: invalid view shape"), operationName);
         return false;
     }
 
@@ -382,7 +382,7 @@ using ImageQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
     if(imageInfo.queueFamilyIndexCount == 0u)
         return result;
 
-    GLB_ASSERT(imageInfo.pQueueFamilyIndices != nullptr);
+    NWB_ASSERT(imageInfo.pQueueFamilyIndices != nullptr);
     if(!imageInfo.pQueueFamilyIndices)
         return result;
     result.assign(
@@ -396,7 +396,7 @@ using ImageQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
     const VkImageCreateInfo& imageInfo,
     const ImageQueueFamilyVector& queueFamilyIndices
 ){
-    GLB_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
+    NWB_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
     VkImageCreateInfo result = imageInfo;
     result.pNext = nullptr;
     result.queueFamilyIndexCount = static_cast<u32>(queueFamilyIndices.size());
@@ -542,8 +542,8 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
 
     TextureSubresourceSet resolvedSubresources = subresources.resolve(m_creationDesc, TextureSubresourceMipResolve::Range);
     if(resolvedSubresources.numMipLevels == 0 || resolvedSubresources.numArraySlices == 0){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create image view: invalid subresource range"));
-        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create image view: invalid subresource range"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: invalid subresource range"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image view: invalid subresource range"));
         return VK_NULL_HANDLE;
     }
 
@@ -566,7 +566,7 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
         resolvedSubresources,
         dimension,
         format,
-        GLB_TEXT("image view"),
+        NWB_TEXT("image view"),
         true,
         viewInfo
     ))
@@ -575,8 +575,8 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
     VkImageView view = VK_NULL_HANDLE;
     const VkResult res = m_context.deviceDispatch.vkCreateImageView(m_context.device, &viewInfo, m_context.allocationCallbacks, &view);
     if(res != VK_SUCCESS){
-        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create image view"));
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create image view: {}"), ResultToString(res));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image view"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: {}"), ResultToString(res));
         return VK_NULL_HANDLE;
     }
 
@@ -638,7 +638,7 @@ void Texture::releasePreparedRevokeUnmanagedNativeImageIdentity(const VkImage ex
         && m_image == VK_NULL_HANDLE
         && m_preparedRevokedNativeImage == expectedNativeImage
     ;
-    GLB_FATAL_ASSERT_MSG(identityMatches, "prepared swapchain Texture identity must outlive its native VkImage");
+    NWB_FATAL_ASSERT_MSG(identityMatches, "prepared swapchain Texture identity must outlive its native VkImage");
     if(!identityMatches)
         TerminateInvariant();
 
@@ -658,7 +658,7 @@ bool Texture::isRetainedSubresourceStateKnown(const ArraySlice arraySlice, const
         + static_cast<usize>(mipLevel)
     ;
     NothrowScopedLock lock(m_retainedSubresourceStatesMutex);
-    GLB_ASSERT(index < m_retainedSubresourceStates.size());
+    NWB_ASSERT(index < m_retainedSubresourceStates.size());
     return index < m_retainedSubresourceStates.size() && m_retainedSubresourceStates[index] != 0u;
 }
 
@@ -674,7 +674,7 @@ void Texture::setRetainedSubresourceStateKnown(const ArraySlice arraySlice, cons
         + static_cast<usize>(mipLevel)
     ;
     NothrowScopedLock lock(m_retainedSubresourceStatesMutex);
-    GLB_ASSERT(index < m_retainedSubresourceStates.size());
+    NWB_ASSERT(index < m_retainedSubresourceStates.size());
     if(index >= m_retainedSubresourceStates.size())
         return;
 

@@ -95,14 +95,14 @@ protected:
 TEST_F(BuildInputSelection, EmptyBuildDomainIsRejectedBeforeInputDiscovery){
     m_options.assetType.clear();
     EXPECT_FALSE(Builder::BuildAssets(m_options));
-    EXPECT_TRUE(m_logger.sawErrorContaining(GLB_TEXT("unsupported --asset-type ''")));
+    EXPECT_TRUE(m_logger.sawErrorContaining(NWB_TEXT("unsupported --asset-type ''")));
     EXPECT_EQ(m_logger.errorCount(), 1u);
     EXPECT_TRUE(m_options.assetRoots.empty());
     EXPECT_TRUE(m_options.outputDirectory.empty());
 
     ASSERT_TRUE(m_options.assetType.assign(Builder::s_GraphicsAssetBuildType));
     EXPECT_FALSE(Builder::BuildAssets(m_options));
-    EXPECT_TRUE(m_logger.sawErrorContaining(GLB_TEXT("no asset roots specified")));
+    EXPECT_TRUE(m_logger.sawErrorContaining(NWB_TEXT("no asset roots specified")));
     EXPECT_EQ(m_logger.errorCount(), 2u);
 }
 
@@ -156,7 +156,7 @@ TEST_F(BuildInputSelection, DirectoryCaseFollowsHostFilesystemContract){
     addFile("assets/case/b.nwb");
     addInput("assets/Case");
     ASSERT_TRUE(select());
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
     EXPECT_EQ(m_files.size(), s_ExpectedDualCount);
 #else
     ASSERT_EQ(m_files.size(), 1u);

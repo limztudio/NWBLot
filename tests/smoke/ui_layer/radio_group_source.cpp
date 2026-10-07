@@ -81,7 +81,7 @@ StringView UiRadioGroupSmokeSource::text(const u64 index)const{
     if(choice == 0u)
         return {};
     const StringView label = s_Labels[choice / 10u - 1u];
-    GLB_MEMCPY(m_label.data(), m_label.size(), label.data(), label.size());
+    NWB_MEMCPY(m_label.data(), m_label.size(), label.data(), label.size());
     return { m_label.data(), label.size() };
 }
 

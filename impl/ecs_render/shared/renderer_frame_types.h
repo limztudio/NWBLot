@@ -68,7 +68,7 @@ struct AvboitFrameTargets{
     Core::BufferHandle extinctionBuffer;
     Core::BufferHandle extinctionOverflowBuffer;
     [[nodiscard]] bool valid()const noexcept{
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
         return
             fullWidth > 0
             && fullHeight > 0
@@ -544,7 +544,7 @@ struct DeferredFrameTargets{
     }
 
     [[nodiscard]] bool valid()const noexcept{
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
         return
             width > 0
             && height > 0

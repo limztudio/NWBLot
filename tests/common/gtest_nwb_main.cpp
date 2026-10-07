@@ -45,7 +45,7 @@ inline constexpr AStringView s_ThreadsafeDeathTestStyle = "threadsafe";
 static int GoogleTestEntryPoint(const isize argc, tchar** argv, void*){
     Core::Common::InitializerGuard commonInitializerGuard;
     if(!commonInitializerGuard.initialize()){
-        GLB_CERR << "test common initialization failed\n";
+        NWB_CERR << "test common initialization failed\n";
         return -1;
     }
 

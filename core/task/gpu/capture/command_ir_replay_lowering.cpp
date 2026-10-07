@@ -304,7 +304,7 @@ static void LowerOperation(
             );
             return;
         default:
-            GLB_ASSERT_MSG(false, GLB_TEXT("Validated command IR clear type lost its lowerer"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Validated command IR clear type lost its lowerer"));
             return;
         }
     case GpuCommandIrOpcode::ClearTextureRectUInt:
@@ -316,7 +316,7 @@ static void LowerOperation(
         );
         return;
     default:
-        GLB_ASSERT_MSG(false, GLB_TEXT("Validated command IR opcode lost its lowerer"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Validated command IR opcode lost its lowerer"));
         return;
     }
 }

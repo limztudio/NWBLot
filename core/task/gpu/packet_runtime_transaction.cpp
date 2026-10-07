@@ -57,7 +57,7 @@ public:
 public:
     void complete()noexcept{
         if(!m_active){
-            GLB_FATAL_ASSERT_MSG(false, "accepted packet publication guard may complete exactly once");
+            NWB_FATAL_ASSERT_MSG(false, "accepted packet publication guard may complete exactly once");
             TerminateInvariant();
         }
         publish();
@@ -89,13 +89,13 @@ private:
 GpuGraphSubmissionTransaction::~GpuGraphSubmissionTransaction()noexcept{
     SubmissionOperation submissionOperation(*this, SubmissionOperationMode::WaitExclusiveBarrier);
     if(!submissionOperation.valid()){
-        GLB_FATAL_ASSERT_MSG(false, "GpuGraphSubmissionTransaction destruction requires active operations to finish first");
+        NWB_FATAL_ASSERT_MSG(false, "GpuGraphSubmissionTransaction destruction requires active operations to finish first");
         TerminateInvariant();
     }
 
     NothrowScopedLock lock(m_mutex);
     if(m_activeSubmissionBinding.valid() && (!m_submissionBindingResolved || !allPacketsTerminalLocked())){
-        GLB_FATAL_ASSERT_MSG(false, "GpuGraphSubmissionTransaction destruction requires its active graph attempt to resolve first");
+        NWB_FATAL_ASSERT_MSG(false, "GpuGraphSubmissionTransaction destruction requires its active graph attempt to resolve first");
         TerminateInvariant();
     }
 }
@@ -138,7 +138,7 @@ void GpuGraphSubmissionTransaction::reset(const GpuCompiledGraph& compiledGraph)
     if(tryReset(compiledGraph))
         return;
 
-    GLB_FATAL_ASSERT_MSG(false, "GpuGraphSubmissionTransaction::reset requires every owned packet to resolve first");
+    NWB_FATAL_ASSERT_MSG(false, "GpuGraphSubmissionTransaction::reset requires every owned packet to resolve first");
     TerminateInvariant();
 }
 
@@ -245,7 +245,7 @@ void GpuGraphSubmissionTransaction::resolveSubmissionBindingIfTerminalLocked(con
         m_activeSubmissionBinding
     );
     if(!m_submissionBindingResolved){
-        GLB_FATAL_ASSERT_MSG(false, "terminal transaction packets must resolve their exact graph binding");
+        NWB_FATAL_ASSERT_MSG(false, "terminal transaction packets must resolve their exact graph binding");
         TerminateInvariant();
     }
 }
@@ -337,7 +337,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
         )
     ;
     if(!submissionValid){
-        GLB_FATAL_ASSERT_MSG(false, "native-accepted packet must retain its transaction submission lease");
+        NWB_FATAL_ASSERT_MSG(false, "native-accepted packet must retain its transaction submission lease");
         TerminateInvariant();
     }
 
@@ -349,22 +349,22 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
         && token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration)
     ;
     if(!tokenValid){
-        GLB_FATAL_ASSERT_MSG(false, "native-accepted packet token must match its exact compiled physical queue");
+        NWB_FATAL_ASSERT_MSG(false, "native-accepted packet token must match its exact compiled physical queue");
         TerminateInvariant();
     }
     if(timingTicketCount != 0u && !timingTickets){
-        GLB_FATAL_ASSERT_MSG(false, "native-accepted packet observer arrays must remain valid through publication");
+        NWB_FATAL_ASSERT_MSG(false, "native-accepted packet observer arrays must remain valid through publication");
         TerminateInvariant();
     }
     for(usize timingTicketIndex = 0u; timingTicketIndex < timingTicketCount; ++timingTicketIndex){
         if(!timingTickets[timingTicketIndex]){
-            GLB_FATAL_ASSERT_MSG(false, "native-accepted packet timing tickets must remain valid through publication");
+            NWB_FATAL_ASSERT_MSG(false, "native-accepted packet timing tickets must remain valid through publication");
             TerminateInvariant();
         }
     }
     const GpuTaskId* const tasks = packetView.tasks;
     if(packet.taskCount != 0u && !tasks){
-        GLB_FATAL_ASSERT_MSG(false, "native-accepted packet tasks must remain available through observer publication");
+        NWB_FATAL_ASSERT_MSG(false, "native-accepted packet tasks must remain available through observer publication");
         TerminateInvariant();
     }
 
@@ -395,7 +395,7 @@ bool GpuGraphSubmissionTransaction::acceptSubmittingPacket(
             timingResolved = false;
     }
     if(!timingResolved)
-        NWB_LOGGER_ERROR(GLB_TEXT("GPU task graph: Accepted packet quarantined invalid timing query ownership"));
+        NWB_LOGGER_ERROR(NWB_TEXT("GPU task graph: Accepted packet quarantined invalid timing query ownership"));
 
     // Native acceptance remains hidden while synchronous task and semantic observers publish.
     // If an observer throws, the publication guard commits that irreversible acceptance while the exception unwinds.
@@ -421,20 +421,20 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
     NothrowScopedLock lock(m_mutex);
     if(!validForLocked(planAccess) || !packetView.valid() || packetID.index >= m_packets.size()){
-        GLB_FATAL_ASSERT_MSG(false, "accepted packet commit must retain its exact transaction and compiled packet");
+        NWB_FATAL_ASSERT_MSG(false, "accepted packet commit must retain its exact transaction and compiled packet");
         TerminateInvariant();
     }
     const GpuSubmissionPacket& packet = *packetView.plan;
     const GpuPhysicalQueueInfo* const queueInfo = planAccess.queueInfo(packet.queue);
     if(!queueInfo || queueInfo->queueClass >= CommandQueue::kCount){
-        GLB_FATAL_ASSERT_MSG(false, "accepted packet commit must retain its compiled physical queue");
+        NWB_FATAL_ASSERT_MSG(false, "accepted packet commit must retain its compiled physical queue");
         TerminateInvariant();
     }
     // reset() and cancellation cannot cross a graph-owned submission lease.
     // Once the graph publishes accepted callbacks, this transaction resolution is therefore an invariant rather than a second failure point.
     PacketRuntime& runtime = m_packets[packetID.index];
     if(runtime.state != PacketRuntimeState::Submitting){
-        GLB_FATAL_ASSERT_MSG(false, "accepted packet commit requires the exact submitting transaction packet");
+        NWB_FATAL_ASSERT_MSG(false, "accepted packet commit requires the exact submitting transaction packet");
         TerminateInvariant();
     }
     runtime.state = PacketRuntimeState::Accepted;
@@ -448,7 +448,7 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(
     runtime.submissionSeconds = nativeSubmissionInfo.submissionSeconds;
 
     if(m_acceptedSubmissionCount >= m_packets.size()){
-        GLB_FATAL_ASSERT_MSG(false, "accepted packet count cannot exceed the transaction packet count");
+        NWB_FATAL_ASSERT_MSG(false, "accepted packet count cannot exceed the transaction packet count");
         TerminateInvariant();
     }
     ++m_acceptedSubmissionCount;
@@ -471,7 +471,7 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(
 
     const usize queueClassIndex = static_cast<usize>(queueInfo->queueClass);
     if(queueClassIndex >= GpuTaskGraphSubmissionStatistics::s_QueueClassCount){
-        GLB_FATAL_ASSERT_MSG(false, "accepted packet queue class must fit transaction statistics storage");
+        NWB_FATAL_ASSERT_MSG(false, "accepted packet queue class must fit transaction statistics storage");
         TerminateInvariant();
     }
     ++m_submissionStatistics.nativeSubmissionCountByQueueClass[queueClassIndex];
@@ -486,7 +486,7 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(
                 && latest.token.matchesPhysicalQueue(packet.queue.index, packet.queue.deviceGeneration)
             ;
             if(!latestMatchesQueue){
-                GLB_FATAL_ASSERT_MSG(false, "accepted queue frontier token must preserve its exact physical queue identity");
+                NWB_FATAL_ASSERT_MSG(false, "accepted queue frontier token must preserve its exact physical queue identity");
                 TerminateInvariant();
             }
             if(token.value > latest.token.value)
@@ -497,7 +497,7 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(
     }
     if(!foundLatestQueue){
         if(m_latestAcceptedQueueTokens.size() >= m_latestAcceptedQueueTokens.capacity()){
-            GLB_FATAL_ASSERT_MSG(false, "accepted queue frontier storage must be reserved before native submission");
+            NWB_FATAL_ASSERT_MSG(false, "accepted queue frontier storage must be reserved before native submission");
             TerminateInvariant();
         }
         static_assert(IsNothrowMoveConstructible_V<LatestAcceptedQueueToken>);
@@ -511,12 +511,12 @@ void GpuGraphSubmissionTransaction::commitAcceptedPacket(
 
 void GpuGraphSubmissionTransaction::abandonTimingTicketsWithoutCallbacks(GpuTimingSubmissionTicket* const* const timingTickets, const usize timingTicketCount)noexcept{
     if(timingTicketCount != 0u && !timingTickets){
-        GLB_FATAL_ASSERT_MSG(false, "accepted packet cleanup requires its timing ticket array");
+        NWB_FATAL_ASSERT_MSG(false, "accepted packet cleanup requires its timing ticket array");
         TerminateInvariant();
     }
     for(usize timingTicketIndex = 0u; timingTicketIndex < timingTicketCount; ++timingTicketIndex){
         if(!timingTickets[timingTicketIndex]){
-            GLB_FATAL_ASSERT_MSG(false, "accepted packet cleanup requires every timing ticket");
+            NWB_FATAL_ASSERT_MSG(false, "accepted packet cleanup requires every timing ticket");
             TerminateInvariant();
         }
         timingTickets[timingTicketIndex]->abandonWithoutCallbacks();

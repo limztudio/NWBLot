@@ -20,59 +20,46 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace __hidden_testbed_entry{
-static constexpr TStringView s_WindowTitle = GLB_TEXT("NWB Testbed");
-static constexpr TStringView s_WorldAllocFailed = GLB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
-static constexpr TStringView s_ResolverNull = GLB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
-static constexpr TStringView s_DestroyRequiresIdleOrLoss = GLB_TEXT("Project-world destruction requires either a completed device join or terminal device loss");
+static constexpr TStringView s_WindowTitle = NWB_TEXT("NWB Testbed");
+static constexpr TStringView s_WorldAllocFailed = NWB_TEXT("CreateInitialProjectWorld failed: ECS world allocation failed");
+static constexpr TStringView s_ResolverNull = NWB_TEXT("CreateInitialProjectWorld failed: shader path resolver callback is null");
+static constexpr TStringView s_DestroyRequiresIdleOrLoss = NWB_TEXT("Project-world destruction requires either a completed device join or terminal device loss");
 static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::UiSkin> s_DefaultUiSkin{"engine/ui/skins/default/atlas"};
 static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::Font> s_DefaultLatin{"engine/ui/fonts/default/latin/face"};
 static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::Font> s_DefaultKorean{"engine/ui/fonts/default/korean/face"};
 static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::FontAtlas> s_DefaultLatinAtlas{"engine/ui/fonts/default/latin/atlas"};
 static constexpr NWB::Core::Assets::AssetRef<NWB::Impl::FontAtlas> s_DefaultKoreanAtlas{"engine/ui/fonts/default/korean/atlas"};
-};
 
 
-NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
-    return { s_DefaultProjectFrameClientWidth, s_DefaultProjectFrameClientHeight };
-}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TStringView NWB::QueryProjectWindowTitle(){
-    return __hidden_testbed_entry::s_WindowTitle;
-}
-
-bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context){
-    Core::GraphicsRuntime& graphics = context.graphics;
+static bool ConfigureRuntime(NWB::ProjectStartupContext& context){
+    NWB::Core::GraphicsRuntime& graphics = context.graphics;
     return
-        graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
+        graphics.setBindlessHeapAbi(NWB::Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi())
         && graphics.setHDR10OutputEnabled(true)
     ;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
-    return MakeUnique<ProjectTestbed>(context);
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& outWorld){
+static bool CreateInitialWorld(NWB::ProjectRuntimeContext& context, UniquePtr<NWB::Core::ECS::World>& outWorld){
     outWorld.reset();
 
-    auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
+    auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.cpuTasks);
     if(!world){
-        NWB_LOGGER_FATAL(__hidden_testbed_entry::s_WorldAllocFailed);
+        NWB_LOGGER_FATAL(s_WorldAllocFailed);
         return false;
     }
 
     if(!context.shaderPathResolver){
-        NWB_LOGGER_FATAL(__hidden_testbed_entry::s_ResolverNull);
+        NWB_LOGGER_FATAL(s_ResolverNull);
         return false;
     }
 
@@ -95,9 +82,9 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         meshSystem,
         context.shaderPathResolver
     );
-    const Impl::UiLayerSystem::FontReferences fonts{
-        { { __hidden_testbed_entry::s_DefaultLatin, __hidden_testbed_entry::s_DefaultLatinAtlas },
-            { __hidden_testbed_entry::s_DefaultKorean, __hidden_testbed_entry::s_DefaultKoreanAtlas } }, context.objectArena
+    const NWB::Impl::UiLayerSystem::FontReferences fonts{
+        { { s_DefaultLatin, s_DefaultLatinAtlas },
+            { s_DefaultKorean, s_DefaultKoreanAtlas } }, context.objectArena
     };
     auto& uiLayerSystem = world->addSystem<NWB::Impl::UiLayerSystem>(
         *world,
@@ -107,7 +94,7 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
         context.textInput,
         context.assetManager,
         context.shaderPathResolver,
-        __hidden_testbed_entry::s_DefaultUiSkin,
+        s_DefaultUiSkin,
         fonts,
         NWB::Impl::UiLayerPresentation::Scene
     );
@@ -121,20 +108,19 @@ bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Co
     return true;
 }
 
-
-void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& world){
-    GLB_ASSERT(world);
+static void DestroyInitialWorld(NWB::ProjectRuntimeContext& context, UniquePtr<NWB::Core::ECS::World>& world){
+    NWB_ASSERT(world);
 
     auto* meshSkinningSystemPtr = world->getSystem<NWB::Impl::MeshSkinningSystem>();
-    GLB_ASSERT(meshSkinningSystemPtr);
+    NWB_ASSERT(meshSkinningSystemPtr);
     NWB::Impl::MeshSkinningSystem& meshSkinningSystem = *meshSkinningSystemPtr;
 
     auto* rendererSystemPtr = world->getSystem<NWB::Impl::RendererSystem>();
-    GLB_ASSERT(rendererSystemPtr);
+    NWB_ASSERT(rendererSystemPtr);
     NWB::Impl::RendererSystem& rendererSystem = *rendererSystemPtr;
 
     auto* uiLayerSystemPtr = world->getSystem<NWB::Impl::UiLayerSystem>();
-    GLB_ASSERT(uiLayerSystemPtr);
+    NWB_ASSERT(uiLayerSystemPtr);
     NWB::Impl::UiLayerSystem& uiLayerSystem = *uiLayerSystemPtr;
 
     context.frameGraphRegistry.unregisterContributor(rendererSystem);
@@ -143,13 +129,53 @@ void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<C
     context.graphics.removeRenderPass(uiLayerSystem);
 
     const bool deviceIdle = context.graphics.waitForIdle();
-    GLB_FATAL_ASSERT_MSG(
+    NWB_FATAL_ASSERT_MSG(
         deviceIdle || context.graphics.isDeviceLost(),
-        __hidden_testbed_entry::s_DestroyRequiresIdleOrLoss
+        s_DestroyRequiresIdleOrLoss
     );
 
     world->clear();
     world.reset();
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+TESTBED_END
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
+    return { s_DefaultProjectFrameClientWidth, s_DefaultProjectFrameClientHeight };
+}
+
+TStringView NWB::QueryProjectWindowTitle(){
+    return Testbed::__hidden_testbed_entry::s_WindowTitle;
+}
+
+bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context){
+    return Testbed::__hidden_testbed_entry::ConfigureRuntime(context);
+}
+
+UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::ProjectRuntimeContext& context){
+    return MakeUnique<Testbed::Project>(context);
+}
+
+bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& outWorld){
+    return Testbed::__hidden_testbed_entry::CreateInitialWorld(context, outWorld);
+}
+
+void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& world){
+    Testbed::__hidden_testbed_entry::DestroyInitialWorld(context, world);
 }
 
 

@@ -47,14 +47,14 @@ inline constexpr f32 s_LightTypePointMax = static_cast<f32>(NWB_SCENE_LIGHT_TYPE
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE f32 ResolveExtentAspectRatio(const u32 width, const u32 height)noexcept{
+NWB_INLINE f32 ResolveExtentAspectRatio(const u32 width, const u32 height)noexcept{
     if(width != 0u && height != 0u)
         return static_cast<f32>(width) / static_cast<f32>(height);
 
     return NWB::Impl::Scene::CameraDefaults::s_FallbackAspectRatio;
 }
 
-GLB_INLINE f32 ResolveFramebufferAspectRatio(const Core::FramebufferInfoEx& framebufferInfo)noexcept{
+NWB_INLINE f32 ResolveFramebufferAspectRatio(const Core::FramebufferInfoEx& framebufferInfo)noexcept{
     return ResolveExtentAspectRatio(framebufferInfo.width, framebufferInfo.height);
 }
 

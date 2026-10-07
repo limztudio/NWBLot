@@ -42,7 +42,7 @@ namespace __hidden_gpu_task_graph_builtin_clears{
         commands.alternativeCapabilities = GpuQueueCapability::Compute | GpuQueueCapability::Graphics;
         break;
     default:
-        GLB_ASSERT(false);
+        NWB_ASSERT(false);
         break;
     }
     return commands;

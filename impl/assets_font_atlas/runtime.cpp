@@ -35,7 +35,7 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_FontAtlasAssetCodecAutoRegistrar, FontAtlasAs
 
 
 bool FontAtlas::loadBinary(const Core::Assets::AssetBytes& binary){
-    if(!checkVirtualPath(GLB_TEXT("FontAtlas::loadBinary")))
+    if(!checkVirtualPath(NWB_TEXT("FontAtlas::loadBinary")))
         return false;
     FontAtlas candidate(m_payload.glyphs.get_allocator().arena(), virtualPath());
     if(!DeserializeFontAtlasPayload(binary, candidate.m_payload))
@@ -45,7 +45,7 @@ bool FontAtlas::loadBinary(const Core::Assets::AssetBytes& binary){
 }
 
 bool FontAtlas::validatePayload()const{
-    return checkVirtualPath(GLB_TEXT("FontAtlas::validatePayload")) && ValidateFontAtlasPayload(m_payload);
+    return checkVirtualPath(NWB_TEXT("FontAtlas::validatePayload")) && ValidateFontAtlasPayload(m_payload);
 }
 
 const FontAtlasGlyph* FontAtlas::glyph(const u32 glyphId)const noexcept{

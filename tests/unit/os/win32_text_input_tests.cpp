@@ -196,8 +196,8 @@ TEST_F(Win32TextInputFixture, IsolatedLowSurrogateCancelsWithExplicitFailure){
     EXPECT_EQ(event.kind, TextInputEventKind::Cancelled);
     EXPECT_EQ(event.cancelReason, TextInputCancelReason::NativeFailure);
     EXPECT_TRUE(event.text.empty());
-#if GLB_OCCUR_WARNING
-    EXPECT_TRUE(m_logger.sawMessageContaining(GLB_TEXT("Text input: native delivery rejected")));
+#if NWB_OCCUR_WARNING
+    EXPECT_TRUE(m_logger.sawMessageContaining(NWB_TEXT("Text input: native delivery rejected")));
     EXPECT_EQ(m_logger.lastType(), Common::LogType::Warning);
 #endif
 }

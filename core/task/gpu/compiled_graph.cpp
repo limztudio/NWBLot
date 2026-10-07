@@ -37,7 +37,7 @@ namespace __hidden_gpu_compiled_graph{
         ))
             return identity;
     }
-    GLB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph object identity space is exhausted");
+    NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph object identity space is exhausted");
     TerminateInvariant();
 }
 
@@ -79,7 +79,7 @@ GpuCompiledGraph::CompilationScope::~CompilationScope()noexcept{
         return;
 
     if(m_graph->m_planAccessState.load(MemoryOrder::relaxed) != GpuCompiledGraph::s_PlanAccessWriterBit){
-        GLB_FATAL_ASSERT_MSG(false, "Compiled-plan construction must retain its exact writer claim");
+        NWB_FATAL_ASSERT_MSG(false, "Compiled-plan construction must retain its exact writer claim");
         TerminateInvariant();
     }
     if(!m_published)
@@ -92,7 +92,7 @@ void GpuCompiledGraph::CompilationScope::publish()noexcept{
     const bool publicationValid = m_graph
         && m_graph->m_planAccessState.load(MemoryOrder::relaxed) == GpuCompiledGraph::s_PlanAccessWriterBit
     ;
-    GLB_FATAL_ASSERT_MSG(publicationValid, "Compiled-plan publication requires exact compile-writer ownership");
+    NWB_FATAL_ASSERT_MSG(publicationValid, "Compiled-plan publication requires exact compile-writer ownership");
     if(!publicationValid)
         TerminateInvariant();
 
@@ -186,7 +186,7 @@ GpuCompiledGraph::~GpuCompiledGraph(){
         MemoryOrder::acq_rel,
         MemoryOrder::acquire
     )){
-        GLB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph destruction requires all plan readers to resolve first");
+        NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph destruction requires all plan readers to resolve first");
         TerminateInvariant();
     }
 
@@ -195,7 +195,7 @@ GpuCompiledGraph::~GpuCompiledGraph(){
         m_attemptBindingState == AttemptBindingState::Recording
         || m_attemptBindingState == AttemptBindingState::Submitting
     ){
-        GLB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph destruction requires plan readers and its active graph attempt to resolve first");
+        NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph destruction requires plan readers and its active graph attempt to resolve first");
         TerminateInvariant();
     }
 }
@@ -230,7 +230,7 @@ void GpuCompiledGraph::reset(){
     if(tryReset())
         return;
 
-    GLB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph::reset requires its active submission owner to resolve first");
+    NWB_FATAL_ASSERT_MSG(false, "GpuCompiledGraph::reset requires its active submission owner to resolve first");
     TerminateInvariant();
 }
 
@@ -354,8 +354,8 @@ bool GpuCompiledGraph::taskPrecedesInSamePacket(
     // Packetization appends compiled tasks and packet task IDs together in execution order.
     const u32 firstTaskIndex = m_compiledTaskIndexByTask[first.index];
     const u32 secondTaskIndex = m_compiledTaskIndexByTask[second.index];
-    GLB_ASSERT(m_packetTasks[firstTaskIndex] == first);
-    GLB_ASSERT(m_packetTasks[secondTaskIndex] == second);
+    NWB_ASSERT(m_packetTasks[firstTaskIndex] == first);
+    NWB_ASSERT(m_packetTasks[secondTaskIndex] == second);
     return firstTaskIndex < secondTaskIndex;
 }
 

@@ -266,7 +266,7 @@ inline bool BuildTextureClearUploadLayout(
 }
 
 inline void WriteClearPatternValue(u8* outBytes, const usize outByteCount, const void* value, const usize valueByteCount)noexcept{
-    GLB_MEMCPY(outBytes, outByteCount, value, valueByteCount);
+    NWB_MEMCPY(outBytes, outByteCount, value, valueByteCount);
 }
 
 inline VkClearColorValue BuildTextureClearColorValue(const Color& clearColor)noexcept{
@@ -771,7 +771,7 @@ inline bool BuildTextureStencilClearPattern(const Format::Enum format, const u8 
 inline void FillTextureClearBytes(void* bytes, const usize byteCount, const u8* pattern, const u32 patternSize)noexcept{
     u8* outBytes = static_cast<u8*>(bytes);
     for(usize offset = 0u; offset < byteCount; offset += patternSize)
-        GLB_MEMCPY(outBytes + offset, byteCount - offset, pattern, patternSize);
+        NWB_MEMCPY(outBytes + offset, byteCount - offset, pattern, patternSize);
 }
 
 

@@ -306,7 +306,7 @@ GpuTaskTimingHistoryStore::GpuTaskTimingHistoryStore(
     , m_assignments(arena)
     , m_maximumSamplesPerHistory(maximumSamplesPerHistory == 0u ? 1u : maximumSamplesPerHistory)
 {
-    GLB_ASSERT(maximumSamplesPerHistory != 0u);
+    NWB_ASSERT(maximumSamplesPerHistory != 0u);
 }
 
 
@@ -557,7 +557,7 @@ const GpuTaskTimingAssignmentState* GpuTaskTimingHistoryStore::findAssignmentSta
 
 
 void GpuTaskTimingHistoryStore::rebuildHistory(HistoryRecord& record)noexcept{
-    GLB_ASSERT(!record.samples.empty());
+    NWB_ASSERT(!record.samples.empty());
     if(record.samples.empty()){
         record.entry.history = {};
         return;
@@ -586,7 +586,7 @@ void GpuTaskTimingHistoryStore::promoteHistoryIndex(){
     using namespace __hidden_gpu_task_timing_feedback;
     using namespace GpuTaskTimingHistoryDetail;
 
-    GLB_ASSERT(!m_historyIndex && m_histories.size() == s_LinearHistoryCount);
+    NWB_ASSERT(!m_historyIndex && m_histories.size() == s_LinearHistoryCount);
     RouteIndex index(s_LinearHistoryCount * 4u, m_arena);
     for(usize recordIndex = 0u; recordIndex < m_histories.size(); ++recordIndex){
         const GpuTaskTimingHistoryEntry& entry = m_histories[recordIndex].entry;
@@ -600,7 +600,7 @@ void GpuTaskTimingHistoryStore::promoteAssignmentIndex(){
     using namespace __hidden_gpu_task_timing_feedback;
     using namespace GpuTaskTimingHistoryDetail;
 
-    GLB_ASSERT(!m_assignmentIndex && m_assignments.size() == s_LinearHistoryCount);
+    NWB_ASSERT(!m_assignmentIndex && m_assignments.size() == s_LinearHistoryCount);
     AssignmentIndex index(s_LinearHistoryCount * 4u, m_arena);
     for(usize assignmentIndex = 0u; assignmentIndex < m_assignments.size(); ++assignmentIndex)
         index.emplace(StoredAssignmentKey(m_assignments[assignmentIndex].key), assignmentIndex);

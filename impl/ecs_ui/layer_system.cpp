@@ -101,7 +101,7 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
         }
         UniquePtr<Core::Assets::IAsset> candidateAsset;
         const UiSkin* skin = m_assetManager.loadTypedSync<UiSkin>(
-            ref.name(), candidateAsset, GLB_TEXT("UiLayerSystem"), "UI skin"
+            ref.name(), candidateAsset, NWB_TEXT("UiLayerSystem"), "UI skin"
         );
         if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(ref, *skin, m_skinSelection.generation()))
             return false;
@@ -111,7 +111,7 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
     if(selection == UiSkinSelectionResult::Failed)
         return false;
     if(selection == UiSkinSelectionResult::DefaultFallback){
-        NWB_LOGGER_WARNING(GLB_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default")
+        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: custom UI skin '{}' is unavailable; using engine default")
             , StringConvert(m_skinSelection.requested().name().resolvedText())
         );
     }
@@ -152,13 +152,13 @@ void UiLayerSystem::render(Core::Framebuffer* framebuffer){
         return;
     if(!m_renderer.renderStandalone(m_graphics.acquiredPresentationFrame())){
         // The void render-pass API cannot abort presentation; recreation prevents presenting an unwritten acquired image.
-        NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSystem: standalone UI presentation failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: standalone UI presentation failed"));
         m_graphics.requestDeviceRecreation();
     }
 }
 
 void UiLayerSystem::displayScaleChanged(const f32 scaleX, const f32 scaleY){
-    GLB_ASSERT(IsFinite(scaleX) && scaleX > 0.0f && IsFinite(scaleY) && scaleY > 0.0f);
+    NWB_ASSERT(IsFinite(scaleX) && scaleX > 0.0f && IsFinite(scaleY) && scaleY > 0.0f);
     m_blockCommandChars = false;
     m_frameDelta.clear();
     m_context.abandonFrame();

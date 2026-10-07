@@ -187,7 +187,7 @@ struct GpuFrameSlot{
 
 
 // Resolve material descriptors in place; non-SDF draws preserve the previous SDF push fields.
-[[nodiscard]] GLB_INLINE bool ResolvePaintPushConstants(
+[[nodiscard]] NWB_INLINE bool ResolvePaintPushConstants(
     const GpuFrameData& frame,
     const DrawCommand& draw,
     GpuPaintPushConstants& push)noexcept{

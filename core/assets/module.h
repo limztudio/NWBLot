@@ -77,7 +77,7 @@ public:
         if(virtualPath())
             return true;
 
-        NWB_LOGGER_ERROR(GLB_TEXT("{} failed: virtual path is empty"), failureContext);
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: virtual path is empty"), failureContext);
         return false;
     }
 
@@ -91,7 +91,7 @@ template<typename ArenaT>
 [[nodiscard]] inline TString<ArenaT> AssetVirtualPathText(ArenaT& arena, const IAsset& asset){
     return asset.virtualPath()
         ? StringConvert(arena, asset.virtualPath().resolvedText())
-        : TString<ArenaT>(GLB_TEXT("<unnamed>"), arena)
+        : TString<ArenaT>(NWB_TEXT("<unnamed>"), arena)
     ;
 }
 
@@ -144,7 +144,7 @@ public:
         if(asset.assetType() == assetType())
             return true;
 
-        NWB_LOGGER_ERROR(GLB_TEXT("{} failed: invalid asset type '{}', expected '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid asset type '{}', expected '{}'")
             , failureContext
             , StringConvert(asset.assetType().resolvedText())
             , StringConvert(assetType().resolvedText())

@@ -78,7 +78,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
     }){
         binary = validBinary;
         const u32 reductionValue = static_cast<u32>(reduction);
-        GLB_MEMCPY(
+        NWB_MEMCPY(
             binary.data() + offsetof(NWB::Impl::SamplerBinaryPayload::HeaderBinary, reductionType),
             sizeof(reductionValue),
             &reductionValue,
@@ -101,7 +101,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
     }){
         binary = validBinary;
         const f32 nonblack = 1.0f;
-        GLB_MEMCPY(binary.data() + borderOffset, sizeof(nonblack), &nonblack, sizeof(nonblack));
+        NWB_MEMCPY(binary.data() + borderOffset, sizeof(nonblack), &nonblack, sizeof(nonblack));
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         EXPECT_FALSE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary, loadedAsset));
         EXPECT_EQ(loadedAsset.get(), nullptr);
@@ -119,7 +119,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
     UniquePtr<NWB::Core::Assets::IAsset> recoveredAsset;
     ASSERT_TRUE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary, recoveredAsset));
     ASSERT_NE(recoveredAsset.get(), nullptr);
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("sampler description is invalid")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("sampler description is invalid")));
 }
 
 
@@ -161,15 +161,15 @@ TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReduction
             scratchArena
         )) << assignment;
         const TStringView expectedDiagnostic = assignment.starts_with("asset.reduction")
-            ? GLB_TEXT("unsupported reduction type")
-            : GLB_TEXT("unsupported asset field 'border_color'")
+            ? NWB_TEXT("unsupported reduction type")
+            : NWB_TEXT("unsupported asset field 'border_color'")
         ;
         EXPECT_TRUE(logger.sawErrorContaining(expectedDiagnostic)) << assignment;
     }
 }
 
 TEST(AssetsGraphics, SamplerCookerRejectsDeprecatedVersionMetadata){
-#if defined(GLB_FINAL)
+#if defined(NWB_FINAL)
     CapturingLogger logger;
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
@@ -194,7 +194,7 @@ TEST(AssetsGraphics, SamplerCookerRejectsDeprecatedVersionMetadata){
         entry,
         scratchArena
     ));
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("unsupported asset field 'version'")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'version'")));
 #else
 #endif
 }

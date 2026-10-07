@@ -104,7 +104,7 @@ bool PackGlyphs(const BakeOptions& options, const RasterGlyphs& glyphs, Impl::Fo
             break;
         }
         if(!placed){
-            NWB_LOGGER_ERROR(GLB_TEXT("font_builder: capacity exhausted at glyph {} footprint {}x{} in {}x{} / {} groups; increase extent or lower ppem")
+            NWB_LOGGER_ERROR(NWB_TEXT("font_builder: capacity exhausted at glyph {} footprint {}x{} in {}x{} / {} groups; increase extent or lower ppem")
                 , glyph.record.glyphId
                 , width
                 , height
@@ -118,7 +118,7 @@ bool PackGlyphs(const BakeOptions& options, const RasterGlyphs& glyphs, Impl::Fo
     CompactAtlasGroups(outPayload);
     for(auto& group : outPayload.groups)
         group.sha256 = ComputeSha256(BinaryByteView{ .bytes = group.pixels.data(), .byteCount = group.pixels.size() });
-    NWB_LOGGER_INFO(GLB_TEXT("font_builder: packed {} glyphs into {} logical pages / {} compact groups")
+    NWB_LOGGER_INFO(NWB_TEXT("font_builder: packed {} glyphs into {} logical pages / {} compact groups")
         , glyphs.size()
         , order.empty() ? 0u : lastPage + 1u
         , outPayload.groups.size()

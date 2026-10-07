@@ -11,15 +11,21 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TestbedUiNumericEditGallery::TestbedUiNumericEditGallery(NWB::Core::Alloc::GlobalArena& arena)
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UiNumericEditGallery::UiNumericEditGallery(NWB::Core::Alloc::GlobalArena& arena)
     : m_integer(arena)
     , m_float(arena)
 {
     const bool initialized = m_integer.setValue(9007199254740993ll) && m_float.setValue(1.25);
-    GLB_FATAL_ASSERT(initialized);
+    NWB_FATAL_ASSERT(initialized);
 }
 
-void TestbedUiNumericEditGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
+void UiNumericEditGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
     if(!ui.beginPanel("numeric_edit_gallery", { x, y, 280.0f, 200.0f }))
@@ -42,8 +48,11 @@ void TestbedUiNumericEditGallery::paint(NWB::Impl::UiPaintContext& context, cons
     valid = ui.endPanel() && valid;
     ui.style().fontSize = previousFontSize;
     if(!valid)
-        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: custom numeric editor declaration failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom numeric editor declaration failed"));
 }
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

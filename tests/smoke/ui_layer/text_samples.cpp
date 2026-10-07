@@ -110,9 +110,9 @@ UiTextSmokeSamples::UiTextSmokeSamples(Core::Alloc::GlobalArena& arena)
             .scriptTag = Impl::Ui::TextScriptTag('H', 'a', 'n', 'g'),
             .language = "ko"
         }) == Impl::Ui::TextLayoutStatus::Success;
-    GLB_FATAL_ASSERT_MSG(configured && m_coverage, GLB_TEXT("UI smoke text and coverage fixture must be valid"));
+    NWB_FATAL_ASSERT_MSG(configured && m_coverage, NWB_TEXT("UI smoke text and coverage fixture must be valid"));
     for(const Impl::Ui::SharedSdfAtlasPage& page : m_sdf)
-        GLB_FATAL_ASSERT_MSG(page, GLB_TEXT("UI smoke compact SDF fixtures must be valid"));
+        NWB_FATAL_ASSERT_MSG(page, NWB_TEXT("UI smoke compact SDF fixtures must be valid"));
 }
 
 bool UiTextSmokeSamples::paint(Impl::UiPaintContext& context){

@@ -9,7 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,7 +65,7 @@ static bool EnableProcessDpiAwareness(){
         return true;
 
     if(!SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)){
-        NWB_LOGGER_FATAL(GLB_TEXT("Frame Win32 per-monitor DPI awareness setup failed: {}"), GetLastError());
+        NWB_LOGGER_FATAL(NWB_TEXT("Frame Win32 per-monitor DPI awareness setup failed: {}"), GetLastError());
         return false;
     }
     return true;
@@ -269,7 +269,7 @@ static void DispatchKeyEvent(Frame& frame, WPARAM wParam, LPARAM lParam, i32 act
 }
 
 static void DispatchCharInput(Frame& frame, WPARAM wParam, LPARAM lParam){
-#if defined(GLB_UNICODE)
+#if defined(NWB_UNICODE)
     if(auto* textInput = frame.tryTextInput()){
         u32 unicode = 0u;
         if(DecodeWin32FallbackCharInput(*textInput, static_cast<u32>(wParam), unicode)){
@@ -286,9 +286,9 @@ static void DispatchCharInput(Frame& frame, WPARAM wParam, LPARAM lParam){
 static void DispatchTextInputFocus(Frame& frame, const bool focused){
     if(auto* textInput = frame.tryTextInput()){
         if(!ResetWin32FallbackCharInput(*textInput))
-            NWB_LOGGER_ERROR(GLB_TEXT("Frame Win32 text-input character reset failed"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 text-input character reset failed"));
         if(!textInput->setFocused(focused))
-            NWB_LOGGER_ERROR(GLB_TEXT("Frame Win32 text-input focus update failed"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 text-input focus update failed"));
     }
 }
 
@@ -323,7 +323,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         if(ordinaryText && textScancode != 0 && frame->input().keyboardTextBlocked(textScancode)){
             if(auto* textInput = frame->tryTextInput()){
                 if(!ResetWin32FallbackCharInput(*textInput))
-                    NWB_LOGGER_ERROR(GLB_TEXT("Frame Win32 suppressed text-input character reset failed"));
+                    NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 suppressed text-input character reset failed"));
             }
             return 0;
         }
@@ -395,7 +395,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 return 0;
             if(auto* textInput = frame->tryTextInput()){
                 if(!ResetWin32FallbackCharInput(*textInput))
-                    NWB_LOGGER_ERROR(GLB_TEXT("Frame Win32 text-input character reset failed"));
+                    NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 text-input character reset failed"));
             }
             for(u32 index = 0u; index < Win32MessageRepeatCount(lParam); ++index)
                 DispatchUnicodeInput(*frame, static_cast<u32>(wParam));
@@ -405,7 +405,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_MOUSEMOVE: {
             TRACKMOUSEEVENT tracking = { sizeof(TRACKMOUSEEVENT), TME_LEAVE, hwnd, 0u };
             if(!TrackMouseEvent(&tracking))
-                NWB_LOGGER_ERROR(GLB_TEXT("Frame Win32 mouse-leave tracking failed"));
+                NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 mouse-leave tracking failed"));
             DispatchMousePosition(*frame, lParam);
         }
         return 0;
@@ -422,7 +422,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         case WM_CANCELMODE:
             frame->input().pointerCaptureLost();
             if(GetCapture() == hwnd && !ReleaseCapture())
-                NWB_LOGGER_ERROR(GLB_TEXT("Frame Win32 pointer capture release failed"));
+                NWB_LOGGER_ERROR(NWB_TEXT("Frame Win32 pointer capture release failed"));
             return 0;
 
         case WM_LBUTTONDOWN:
@@ -479,11 +479,11 @@ bool Frame::init(){
 
     const UINT initialDpi = GetDpiForSystem();
     if(initialDpi == 0u){
-        NWB_LOGGER_FATAL(GLB_TEXT("Frame Win32 system DPI query failed"));
+        NWB_LOGGER_FATAL(NWB_TEXT("Frame Win32 system DPI query failed"));
         return false;
     }
 
-    constexpr TStringView s_ClassName = GLB_TEXT("NWB_FRAME");
+    constexpr TStringView s_ClassName = NWB_TEXT("NWB_FRAME");
     const TStringView windowTitle = windowTitleOrDefault();
     constexpr DWORD s_WindowExtendedStyle = 0;
     constexpr DWORD s_WindowStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
@@ -501,7 +501,7 @@ bool Frame::init(){
         wc.lpszClassName = s_ClassName.data();
     }
     if(!RegisterClassEx(&wc)){
-        NWB_LOGGER_FATAL(GLB_TEXT("Frame window registration failed"));
+        NWB_LOGGER_FATAL(NWB_TEXT("Frame window registration failed"));
         return false;
     }
 
@@ -517,7 +517,7 @@ bool Frame::init(){
 
     RECT decorationRect = { 0, 0, 0, 0 };
     if(!AdjustWindowRectExForDpi(&decorationRect, s_WindowStyle, FALSE, s_WindowExtendedStyle, initialDpi)){
-        NWB_LOGGER_FATAL(GLB_TEXT("Frame window adjustment failed"));
+        NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed"));
         return false;
     }
 
@@ -532,12 +532,12 @@ bool Frame::init(){
     const u16 windowWidth = FrameDetail::ClampInitialWindowDimension(requestedWidth, maxClientWidth);
     const u16 windowHeight = FrameDetail::ClampInitialWindowDimension(requestedHeight, maxClientHeight);
     if(windowWidth == 0u || windowHeight == 0u){
-        NWB_LOGGER_FATAL(GLB_TEXT("Frame Win32 work area dimensions are invalid: {}x{}"), workAreaWidth, workAreaHeight);
+        NWB_LOGGER_FATAL(NWB_TEXT("Frame Win32 work area dimensions are invalid: {}x{}"), workAreaWidth, workAreaHeight);
         return false;
     }
     if(windowWidth != requestedWidth || windowHeight != requestedHeight){
         NWB_LOGGER_ESSENTIAL_INFO(
-            GLB_TEXT("Frame Win32 client size clamped from {}x{} to {}x{} for work area {}x{}"),
+            NWB_TEXT("Frame Win32 client size clamped from {}x{} to {}x{} for work area {}x{}"),
             requestedWidth,
             requestedHeight,
             windowWidth,
@@ -551,7 +551,7 @@ bool Frame::init(){
 
     RECT rc = { 0, 0, static_cast<i32>(windowWidth), static_cast<i32>(windowHeight) };
     if(!AdjustWindowRectExForDpi(&rc, s_WindowStyle, FALSE, s_WindowExtendedStyle, initialDpi)){
-        NWB_LOGGER_FATAL(GLB_TEXT("Frame window adjustment failed"));
+        NWB_LOGGER_FATAL(NWB_TEXT("Frame window adjustment failed"));
         return false;
     }
 
@@ -576,14 +576,14 @@ bool Frame::init(){
     );
     frameData.setHwnd(hwnd);
     if(!frameData.hwnd()){
-        NWB_LOGGER_FATAL(GLB_TEXT("Frame window creation failed"));
+        NWB_LOGGER_FATAL(NWB_TEXT("Frame window creation failed"));
         return false;
     }
 
     if(!startup())
         return false;
 
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Frame: Using Windows backend."));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Frame: Using Windows backend."));
     return true;
 }
 bool Frame::showFrame(){
@@ -605,7 +605,7 @@ bool Frame::mainLoop(){
             const u32 height = windowVisible ? static_cast<u32>(rect.bottom - rect.top) : 0;
             const bool windowIsInFocus = GetForegroundWindow() == data<Common::WinFrame>().hwnd();
             if(const Optional<TStringView> title = syncGraphicsWindowState(width, height, windowVisible, windowIsInFocus)){
-#ifdef GLB_UNICODE
+#ifdef NWB_UNICODE
                 SetWindowTextW(data<Common::WinFrame>().hwnd(), title->data());
 #else
                 SetWindowTextA(data<Common::WinFrame>().hwnd(), title->data());

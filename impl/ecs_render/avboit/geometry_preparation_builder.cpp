@@ -104,7 +104,7 @@ struct PhaseIdentities{
         outResult.materialGeometrySet
     );
     if(!outResult.geometryOwned){
-        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare prepared AVBOIT material geometry states"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT material geometry states"));
         return false;
     }
     outResult.sampledTexturesCollected =
@@ -121,7 +121,7 @@ struct PhaseIdentities{
         )
     ;
     if(!outResult.sampledTexturesCollected){
-        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare prepared AVBOIT material sampled textures"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT material sampled textures"));
         return false;
     }
     return true;

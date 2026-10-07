@@ -89,7 +89,7 @@ namespace NWB::Tests::Smoke{
     }
     if(!renderer.setSoftwareShadowSettings(settings))
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("SoftwareShadowSmoke: requested backend={} directional_resolution={} point_resolution={} budget_bytes={} coverage={} blocker_search={} capture_cadence={}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("SoftwareShadowSmoke: requested backend={} directional_resolution={} point_resolution={} budget_bytes={} coverage={} blocker_search={} capture_cadence={}")
         , static_cast<u32>(settings.backend)
         , settings.directionalResolution
         , settings.pointResolution

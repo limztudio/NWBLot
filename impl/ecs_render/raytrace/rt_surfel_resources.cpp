@@ -37,7 +37,7 @@ bool RendererRayTracingSystem::createSurfelTargets(DeferredFrameTargets& targets
     ;
     targets.surfelIrradiance = m_graphics.createTexture(surfelIrradianceDesc);
     if(!targets.surfelIrradiance){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create surfel irradiance target"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel irradiance target"));
         return false;
     }
 
@@ -53,7 +53,7 @@ bool RendererRayTracingSystem::createSurfelTargets(DeferredFrameTargets& targets
     ;
     targets.surfelIrradianceHalf = m_graphics.createTexture(surfelIrradianceHalfDesc);
     if(!targets.surfelIrradianceHalf){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create surfel reduced-resolution irradiance target"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel reduced-resolution irradiance target"));
         return false;
     }
 
@@ -133,7 +133,7 @@ bool RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targ
         )
     )
     {
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: surfel GI trace heap context is incomplete"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel GI trace heap context is incomplete"));
         return false;
     }
 
@@ -149,7 +149,7 @@ bool RendererRayTracingSystem::retainPreparedSurfelFrameConstantsUpload(
     if(!hasSurfelWork())
         return true;
     if(!m_rayTracingState.m_surfelConstants){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: active surfel GI has no preflighted constant buffer"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: active surfel GI has no preflighted constant buffer"));
         return false;
     }
 

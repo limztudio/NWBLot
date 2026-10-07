@@ -30,7 +30,7 @@ EntityID EntityManager::create(){
     }
     else{
         if(m_generations.size() >= static_cast<usize>(ECSDetail::s_EntityInvalidIndex)){
-            GLB_ASSERT_MSG(false, GLB_TEXT("EntityManager exceeded maximum entity count"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("EntityManager exceeded maximum entity count"));
             return s_InvalidEntityId;
         }
         index = static_cast<u32>(m_generations.size());
@@ -51,7 +51,7 @@ void EntityManager::destroy(EntityID entityId){
 
 
 void EntityManager::destroyAlive(EntityID entityId){
-    GLB_ASSERT(alive(entityId));
+    NWB_ASSERT(alive(entityId));
 
     const u32 index = entityId.index();
     m_generations[index] = static_cast<u16>((m_generations[index] + 1u) & ECSDetail::s_EntityGenerationMask);

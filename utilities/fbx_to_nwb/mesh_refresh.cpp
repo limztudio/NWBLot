@@ -52,7 +52,7 @@ struct StreamSortEntry{
 }
 
 [[nodiscard]] bool SameF32Bits(const f32 lhs, const f32 rhs){
-    return GLB_MEMCMP(&lhs, &rhs, sizeof(lhs)) == 0;
+    return NWB_MEMCMP(&lhs, &rhs, sizeof(lhs)) == 0;
 }
 
 [[nodiscard]] bool LessValue(const Vec2& lhs, const Vec2& rhs){
@@ -156,7 +156,7 @@ template<typename Value>
     }
 
     if(uniqueCount >= static_cast<usize>(s_MissingSourceStreamIndex)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Failed to canonicalize mesh: {} stream has too many unique values"), StringConvert(streamName));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize mesh: {} stream has too many unique values"), StringConvert(streamName));
         return false;
     }
 
@@ -167,7 +167,7 @@ template<typename Value>
     for(usize sortedIndex = 0u; sortedIndex < sortedEntries.size(); ++sortedIndex){
         if(sortedIndex == 0u || !SameValue(sortedEntries[sortedIndex].value, sortedEntries[sortedIndex - 1u].value)){
             if(compact.size() >= static_cast<usize>(s_MissingSourceStreamIndex)){
-                NWB_LOGGER_ERROR(GLB_TEXT("Failed to canonicalize mesh: {} stream has too many unique values"), StringConvert(streamName));
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize mesh: {} stream has too many unique values"), StringConvert(streamName));
                 return false;
             }
 
@@ -188,7 +188,7 @@ template<typename Value>
         return true;
     }
 
-    NWB_LOGGER_ERROR(GLB_TEXT("Failed to canonicalize mesh: vertex_ref {} index is out of range"), StringConvert(streamName));
+    NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize mesh: vertex_ref {} index is out of range"), StringConvert(streamName));
     return false;
 }
 
@@ -231,7 +231,7 @@ template<typename Value>
     SourceMeshCanonicalizeReport* const outReport
 ){
     if(mesh.positions.size() != skinInfluences.size()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Failed to canonicalize skinned mesh: position and skin influence counts must match"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize skinned mesh: position and skin influence counts must match"));
         return false;
     }
 
@@ -275,7 +275,7 @@ template<typename Value>
 [[nodiscard]] bool ReadMetascriptSource(const Path& nwbFilePath, AString& outText){
     outText.clear();
     if(!ReadTextFile(nwbFilePath, outText)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Failed to refresh NWB mesh: failed to read '{}'"), PathToString<tchar>(nwbFilePath));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: failed to read '{}'"), PathToString<tchar>(nwbFilePath));
         return false;
     }
 
@@ -292,7 +292,7 @@ template<typename Value>
         return true;
 
     for(const Core::Metascript::ParseError& error : outDoc.errors()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Failed to refresh NWB mesh: '{}' parse error at {}:{}: {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: '{}' parse error at {}:{}: {}")
             , PathToString<tchar>(nwbFilePath)
             , error.line
             , error.column
@@ -404,7 +404,7 @@ bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Cp
         const AStringView meshVariableName = meshVariableView;
         const Core::Metascript::Value* meshValue = doc.findVariable(meshVariableView);
         if(!meshValue){
-            NWB_LOGGER_ERROR(GLB_TEXT("Failed to refresh NWB mesh: missing mesh variable '{}'"), StringConvert(meshVariableName));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing mesh variable '{}'"), StringConvert(meshVariableName));
             return false;
         }
 
@@ -446,12 +446,12 @@ bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Cp
     }
 
     if(!sawMesh){
-        NWB_LOGGER_ERROR(GLB_TEXT("Failed to refresh NWB mesh: '{}' contains no mesh declarations"), PathToString<tchar>(inputPath));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: '{}' contains no mesh declarations"), PathToString<tchar>(inputPath));
         return false;
     }
 
     if(!MeshRefreshTextDetail::ApplyTextReplacements(source, replacements)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Failed to refresh NWB mesh: failed to apply text replacements for '{}'"), PathToString<tchar>(inputPath));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: failed to apply text replacements for '{}'"), PathToString<tchar>(inputPath));
         return false;
     }
     NormalizeLineEndingsInPlace(source, useCrlf);

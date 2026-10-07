@@ -46,7 +46,7 @@ static constexpr AStringView s_ColorField = "color";
     f32& outValue
 ){
     if(!value.isNumeric()){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' must contain only numeric values")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only numeric values")
             , StringConvert(s_MeshMetaKind)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
@@ -56,7 +56,7 @@ static constexpr AStringView s_ColorField = "color";
 
     const f64 numericValue = value.toDouble();
     if(!IsFinite(numericValue) || numericValue < static_cast<f64>(s_MinF32) || numericValue > static_cast<f64>(s_MaxF32)){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' contains a non-finite or out-of-range f32 value")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-finite or out-of-range f32 value")
             , StringConvert(s_MeshMetaKind)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
@@ -75,7 +75,7 @@ static constexpr AStringView s_ColorField = "color";
     u32& outValue
 ){
     if(!value.isNumeric()){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' must contain only integer values")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only integer values")
             , StringConvert(s_MeshMetaKind)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
@@ -85,7 +85,7 @@ static constexpr AStringView s_ColorField = "color";
 
     const f64 numericValue = value.toDouble();
     if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != Floor(numericValue) || numericValue > static_cast<f64>(s_MaxU32)){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' contains a non-integer, negative, or out-of-range u32 value")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-integer, negative, or out-of-range u32 value")
             , StringConvert(s_MeshMetaKind)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
@@ -110,7 +110,7 @@ static constexpr AStringView s_ColorField = "color";
 ){
     const Core::Metascript::Value* field = Core::Metascript::FindField(asset, fieldName);
     if(!field){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': missing required '{}' field")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': missing required '{}' field")
             , StringConvert(s_MeshMetaKind)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -118,7 +118,7 @@ static constexpr AStringView s_ColorField = "color";
         return nullptr;
     }
     if(!field->isList()){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' must be a list")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a list")
             , StringConvert(s_MeshMetaKind)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -146,7 +146,7 @@ template<typename ElementT, usize ComponentCount>
     for(usize i = 0u; i < list.size(); ++i){
         const Core::Metascript::Value& value = list[i];
         if(!value.isList() || value.asList().size() != ComponentCount){
-            NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' must be a {}-component list")
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list")
                 , StringConvert(s_MeshMetaKind)
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(MakeIndexedLabel(fieldName, i))
@@ -175,7 +175,7 @@ template<typename ElementT, usize ComponentCount>
     }
 
     if(outValues.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' must not be empty")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must not be empty")
             , StringConvert(s_MeshMetaKind)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -201,7 +201,7 @@ template<typename ElementT, usize ComponentCount>
     for(usize i = 0u; i < list.size(); ++i){
         const Core::Metascript::Value& value = list[i];
         if(!value.isList() || value.asList().size() != s_AuthoredVertexRefComponentCount){
-            NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': 'vertex_refs[{}]' must contain {} integer stream indices")
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'vertex_refs[{}]' must contain {} integer stream indices")
                 , StringConvert(s_MeshMetaKind)
                 , PathToString<tchar>(nwbFilePath)
                 , i
@@ -230,7 +230,7 @@ template<typename ElementT, usize ComponentCount>
     }
 
     if(outVertexRefs.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': 'vertex_refs' must not be empty")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'vertex_refs' must not be empty")
             , StringConvert(s_MeshMetaKind)
             , PathToString<tchar>(nwbFilePath)
         );
@@ -256,7 +256,7 @@ template<typename ElementT, usize ComponentCount>
     for(usize i = 0u; i < list.size(); ++i){
         const Core::Metascript::Value& influenceValue = list[i];
         if(!influenceValue.isMap()){
-            NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}.influences[{}]' must be a map")
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}]' must be a map")
                 , StringConvert(s_MeshMetaKind)
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(skinVariableName)
@@ -268,7 +268,7 @@ template<typename ElementT, usize ComponentCount>
         const Core::Metascript::Value* jointsValue = Core::Metascript::FindField(influenceValue, "joints");
         const Core::Metascript::Value* weightsValue = Core::Metascript::FindField(influenceValue, "weights");
         if(!jointsValue || !jointsValue->isList() || jointsValue->asList().size() != s_MeshSkinInfluenceCount){
-            NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}.influences[{}].joints' must contain {} integers")
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}].joints' must contain {} integers")
                 , StringConvert(s_MeshMetaKind)
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(skinVariableName)
@@ -278,7 +278,7 @@ template<typename ElementT, usize ComponentCount>
             return false;
         }
         if(!weightsValue || !weightsValue->isList() || weightsValue->asList().size() != s_MeshSkinInfluenceCount){
-            NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}.influences[{}].weights' must contain {} numeric values")
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}].weights' must contain {} numeric values")
                 , StringConvert(s_MeshMetaKind)
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(skinVariableName)
@@ -296,7 +296,7 @@ template<typename ElementT, usize ComponentCount>
             if(!ParseU32(nwbFilePath, jointsValue->asList()[componentIndex], jointLabel.str(), jointIndex))
                 return false;
             if(jointIndex > static_cast<u32>(Limit<u16>::s_Max)){
-                NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' contains an out-of-range joint index")
+                NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains an out-of-range joint index")
                     , StringConvert(s_MeshMetaKind)
                     , PathToString<tchar>(nwbFilePath)
                     , StringConvert(jointLabel.str())
@@ -315,7 +315,7 @@ template<typename ElementT, usize ComponentCount>
     }
 
     if(outInfluences.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}.influences' must not be empty")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences' must not be empty")
             , StringConvert(s_MeshMetaKind)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(skinVariableName)
@@ -362,7 +362,7 @@ template<typename ElementT, usize ComponentCount>
     if(!FillIndicesRecursive(nwbFilePath, *field, s_IndicesField, outIndices))
         return false;
     if(outIndices.empty() || (outIndices.size() % s_TriangleIndexCount) != 0u){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': 'indices' must contain whole triangles")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles")
             , StringConvert(s_MeshMetaKind)
             , PathToString<tchar>(nwbFilePath)
         );
@@ -380,7 +380,7 @@ template<typename ElementT, usize ComponentCount>
     if(index < count)
         return true;
 
-    NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': vertex_ref {} index is out of range")
+    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': vertex_ref {} index is out of range")
         , StringConvert(s_MeshMetaKind)
         , PathToString<tchar>(nwbFilePath)
         , StringConvert(streamName)
@@ -401,7 +401,7 @@ template<typename ElementT, usize ComponentCount>
         if(!ValidateStreamIndex(nwbFilePath, s_ColorField, ref.color, mesh.colors.size()))
             return false;
         if(ref.skin != s_MissingSourceStreamIndex){
-            NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': plain mesh vertex_ref cannot contain a skin index")
+            NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': plain mesh vertex_ref cannot contain a skin index")
                 , StringConvert(s_MeshMetaKind)
                 , PathToString<tchar>(nwbFilePath)
             );
@@ -413,7 +413,7 @@ template<typename ElementT, usize ComponentCount>
         if(index < mesh.vertexRefs.size())
             continue;
 
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': 'indices' references an out-of-range vertex_ref")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' references an out-of-range vertex_ref")
             , StringConvert(s_MeshMetaKind)
             , PathToString<tchar>(nwbFilePath)
         );
@@ -439,7 +439,7 @@ template<typename ElementT, usize ComponentCount>
     const Core::Metascript::Value& asset
 ){
     if(!asset.isMap()){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' is not a map")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' is not a map")
             , StringConvert(s_MeshMetaKind)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(meshVariableName)
@@ -452,7 +452,7 @@ template<typename ElementT, usize ComponentCount>
         if(IsAllowedMeshAssetField(fieldName))
             continue;
 
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': unsupported field '{}.{}' would be dropped by refresh")
             , StringConvert(s_MeshMetaKind)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(meshVariableName)

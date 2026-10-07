@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "namespace.h"
 #include "ui_nested_popup_source.h"
 
 #include <impl/ecs_ui/components.h>
@@ -14,9 +15,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiNestedPopupGallery final : NoCopy{
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiNestedPopupGallery final : NoCopy{
 public:
-    explicit TestbedUiNestedPopupGallery(NWB::Core::Alloc::GlobalArena& arena);
+    explicit UiNestedPopupGallery(NWB::Core::Alloc::GlobalArena& arena);
 
 
 public:
@@ -29,7 +36,7 @@ private:
 
 
 private:
-    TestbedUiNestedPopupSource m_source;
+    UiNestedPopupSource m_source;
     NWB::Impl::Ui::PopupState m_parent;
     NWB::Impl::Ui::PopupState m_child;
     NWB::Impl::Ui::ListState m_beforeList;
@@ -48,6 +55,9 @@ private:
     u32 m_childClicks = 0u;
     u64 m_command = 0u;
 };
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -172,7 +172,7 @@ private:
 
 
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
-        auto world = CreateSmokeWorldOrDie(context, GLB_TEXT("GiTestSmokeProject"));
+        auto world = CreateSmokeWorldOrDie(context, NWB_TEXT("GiTestSmokeProject"));
 
         AddSmokeRenderSystems(*world, context);
         return world;
@@ -205,7 +205,7 @@ public:
                 f32 requestedSettleSeconds = 0.0f;
                 if(!ParseF32FromChars(AStringView(settleValue.data(), settleValue.size()), requestedSettleSeconds)
                     || !IsFinite(requestedSettleSeconds) || requestedSettleSeconds < 0.0f){
-                    NWB_LOGGER_ERROR(GLB_TEXT("GiTestSmokeProject: invalid NWB_GI_SMOKE_MIN_SETTLE_SECONDS"));
+                    NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: invalid NWB_GI_SMOKE_MIN_SETTLE_SECONDS"));
                     return false;
                 }
                 m_complexMinSettleSeconds = requestedSettleSeconds;
@@ -216,7 +216,7 @@ public:
             if(!renderer)
                 return false;
             renderer->setFrameLaggedAsyncLightingEnabled(true);
-            NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("GiTestSmokeProject: surfel GI resolve switch probe enabled (lagged_lighting=1)"));
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: surfel GI resolve switch probe enabled (lagged_lighting=1)"));
         }
 
         // Emit per-pass GPU timings (render.surfel_*) for A/B capture via NWB_GPU_TIMING_FILE.
@@ -278,35 +278,35 @@ public:
         if(m_complexSceneEnabled && !createComplexScene())
             return false;
 
-        GLB_FATAL_ASSERT_MSG(
+        NWB_FATAL_ASSERT_MSG(
             activeCamera.valid()
             && directionalLight.valid()
             && m_floorEntity.valid()
             && m_redWallEntity.valid()
             && m_blueWallNegX.valid()
             && m_whiteWallPosZ.valid(),
-            GLB_TEXT("GiTestSmokeProject failed to create all scene entities")
+            NWB_TEXT("GiTestSmokeProject failed to create all scene entities")
         );
 
         if(m_complexSceneEnabled){
             NWB_LOGGER_ESSENTIAL_INFO(
-                GLB_TEXT("GiTestSmokeProject: closed black enclosure around camera and maze, small skylight, one vertical sun, red/blue bounce patches")
+                NWB_TEXT("GiTestSmokeProject: closed black enclosure around camera and maze, small skylight, one vertical sun, red/blue bounce patches")
             );
         }else{
             NWB_LOGGER_ESSENTIAL_INFO(
-                GLB_TEXT("GiTestSmokeProject: open-top box + red/blue opposite walls, directional light -> indirect red+blue bleed on shadowed floor")
+                NWB_TEXT("GiTestSmokeProject: open-top box + red/blue opposite walls, directional light -> indirect red+blue bleed on shadowed floor")
             );
         }
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("GiTestSmokeProject: complex_scene={}"), m_complexSceneEnabled ? 1u : 0u);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: complex_scene={}"), m_complexSceneEnabled ? 1u : 0u);
         if(m_complexSceneEnabled)
-            NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("GiTestSmokeProject: min_elapsed_settle_seconds={}"), m_complexMinSettleSeconds);
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: min_elapsed_settle_seconds={}"), m_complexMinSettleSeconds);
         return true;
     }
 
     virtual void onShutdown()override{
         m_context.graphics.setFrameSubmissionSuspended(false);
         destroyWorld();
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("GiTestSmokeProject: shutdown"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: shutdown"));
     }
 
     virtual bool onUpdate(const f32 delta)override{
@@ -330,13 +330,13 @@ public:
                 m_rendererBaselineCapturePaused = true;
                 if(m_complexSceneEnabled){
                     NWB_LOGGER_ESSENTIAL_INFO(
-                        GLB_TEXT("GiTestSmokeProject: renderer baseline capture ready after {} successful presentations and {} elapsed seconds; render submission suspended"),
+                        NWB_TEXT("GiTestSmokeProject: renderer baseline capture ready after {} successful presentations and {} elapsed seconds; render submission suspended"),
                         successfulPresentations,
                         elapsedSeconds
                     );
                 }else{
                     NWB_LOGGER_ESSENTIAL_INFO(
-                        GLB_TEXT("GiTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"),
+                        NWB_TEXT("GiTestSmokeProject: renderer baseline capture ready after {} rendered frames; render submission suspended"),
                         m_rendererBaselineRenderedFrameCount
                     );
                 }
@@ -356,7 +356,7 @@ public:
             ;
             if(!renderer || !renderer->setSurfelGiQualitySettings(settings))
                 return false;
-            NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("GiTestSmokeProject: requested surfel GI resolve switch factor={}")
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: requested surfel GI resolve switch factor={}")
                 , static_cast<u32>(settings.resolveResolution)
             );
         }
@@ -370,7 +370,7 @@ public:
             ;
             if(!renderer || !renderer->setShadowQualitySettings(settings))
                 return false;
-            NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("GiTestSmokeProject: requested shadow receiver switch factor={}")
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: requested shadow receiver switch factor={}")
                 , static_cast<u32>(settings.receiverResolution)
             );
         }
@@ -389,14 +389,14 @@ private:
         const u64 successfulPresentations = m_context.graphics.getSuccessfulPresentationCount();
         const auto status = m_presentationFpsProbe.observe(successfulPresentations, TimerNow());
         if(status == NWB::Tests::Smoke::PresentationFpsStatus::Invalid){
-            NWB_LOGGER_ERROR(GLB_TEXT("GiTestSmokeProject: presentation measurement invalid counter or clock"));
+            NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: presentation measurement invalid counter or clock"));
             return false;
         }
         if(status == NWB::Tests::Smoke::PresentationFpsStatus::Waiting)
             return true;
 
         const auto& interval = m_presentationFpsProbe.interval();
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("GiTestSmokeProject: presentation fps avg={} presentations={} seconds={} first={} last={}")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: presentation fps avg={} presentations={} seconds={} first={} last={}")
             , interval.averageFps()
             , interval.presentations()
             , interval.wallSeconds
@@ -512,12 +512,12 @@ private:
             placedBodies[placedBodyCount++] = body;
         }
         if(placedBodyCount != s_ComplexRandomBodyCount){
-            NWB_LOGGER_ERROR(GLB_TEXT("GiTestSmokeProject: could place only {} of {} seeded bodies"), placedBodyCount, s_ComplexRandomBodyCount);
+            NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: could place only {} of {} seeded bodies"), placedBodyCount, s_ComplexRandomBodyCount);
             return false;
         }
 
         NWB_LOGGER_ESSENTIAL_INFO(
-            GLB_TEXT("GiTestSmokeProject: complex scene {} maze solids, {} colored floor patches, {} closed-front shell solids, and {} seeded bodies (seed={}) created"),
+            NWB_TEXT("GiTestSmokeProject: complex scene {} maze solids, {} colored floor patches, {} closed-front shell solids, and {} seeded bodies (seed={}) created"),
             LengthOf(s_ComplexSceneBoxes), LengthOf(s_ComplexBouncePatches), LengthOf(s_ComplexFrontEnclosureBoxes),
             placedBodyCount, s_ComplexRandomBodySeed
         );
@@ -532,7 +532,7 @@ private:
             );
             if(!probe.valid())
                 return false;
-            NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("GiTestSmokeProject: coverage probe with perpendicular same-cell faces created"));
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: coverage probe with perpendicular same-cell faces created"));
         }
         return true;
     }
@@ -576,7 +576,7 @@ private:
     NWB::Core::ECS::EntityID m_blueWallNegX = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_whiteWallPosZ = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Tests::Smoke::PresentationFpsProbe m_presentationFpsProbe;
-    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ GLB_TEXT("GiTestSmokeProject") };
+    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("GiTestSmokeProject") };
     u32 m_rendererBaselineRenderedFrameCount = 0u;
     bool m_rendererBaselineCapturePaused = false;
     bool m_resolveSwitchEnabled = false;
@@ -603,7 +603,7 @@ NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
 
 
 TStringView NWB::QueryProjectWindowTitle(){
-    return GLB_TEXT("NWB GI Test");
+    return NWB_TEXT("NWB GI Test");
 }
 
 

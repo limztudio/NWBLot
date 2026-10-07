@@ -52,14 +52,14 @@ HardwareCausticsResolveChainBuilder::HardwareCausticsResolveChainBuilder(
     sharedInputs.timingTicket = inputs.timingTicket;
     sharedInputs.resolveTiming = inputs.resolveTiming;
     const CausticsResolveChainNaming naming{
-        {Name("render.hardware_caustics.resolve_prepare"), "Hardware Caustics Resolve Prepare", GLB_TEXT("RendererSystem: could not declare hardware-caustics resolve-prepare graph task")},
-        {Name("render.hardware_caustics.resolve_wavelet"), "Hardware Caustics Resolve Wavelet", GLB_TEXT("RendererSystem: could not declare hardware-caustics first-wavelet graph task")},
-        {Name("render.hardware_caustics.resolve_second_wavelet"), "Hardware Caustics Resolve Second Wavelet", GLB_TEXT("RendererSystem: could not declare hardware-caustics second-wavelet graph task")},
-        {Name("render.hardware_caustics.resolve_third_wavelet"), "Hardware Caustics Resolve Third Wavelet", GLB_TEXT("RendererSystem: could not declare hardware-caustics third-wavelet graph task")},
-        {Name("render.hardware_caustics.resolve_fourth_wavelet"), "Hardware Caustics Resolve Fourth Wavelet", GLB_TEXT("RendererSystem: could not declare hardware-caustics fourth-wavelet graph task")},
-        {Name("render.hardware_caustics.resolve_fifth_wavelet"), "Hardware Caustics Resolve Fifth Wavelet", GLB_TEXT("RendererSystem: could not declare hardware-caustics fifth-wavelet graph task")},
-        {Name("render.hardware_caustics.resolve_upsample"), "Hardware Caustics Resolve Upsample", GLB_TEXT("RendererSystem: could not declare hardware-caustics resolve-upsample graph task")},
-        {Name("render.hardware_caustics.resolve_timing_close"), "Hardware Caustics Resolve Timing Close", GLB_TEXT("RendererSystem: could not declare hardware-caustics resolve graph task")},
+        {Name("render.hardware_caustics.resolve_prepare"), "Hardware Caustics Resolve Prepare", NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve-prepare graph task")},
+        {Name("render.hardware_caustics.resolve_wavelet"), "Hardware Caustics Resolve Wavelet", NWB_TEXT("RendererSystem: could not declare hardware-caustics first-wavelet graph task")},
+        {Name("render.hardware_caustics.resolve_second_wavelet"), "Hardware Caustics Resolve Second Wavelet", NWB_TEXT("RendererSystem: could not declare hardware-caustics second-wavelet graph task")},
+        {Name("render.hardware_caustics.resolve_third_wavelet"), "Hardware Caustics Resolve Third Wavelet", NWB_TEXT("RendererSystem: could not declare hardware-caustics third-wavelet graph task")},
+        {Name("render.hardware_caustics.resolve_fourth_wavelet"), "Hardware Caustics Resolve Fourth Wavelet", NWB_TEXT("RendererSystem: could not declare hardware-caustics fourth-wavelet graph task")},
+        {Name("render.hardware_caustics.resolve_fifth_wavelet"), "Hardware Caustics Resolve Fifth Wavelet", NWB_TEXT("RendererSystem: could not declare hardware-caustics fifth-wavelet graph task")},
+        {Name("render.hardware_caustics.resolve_upsample"), "Hardware Caustics Resolve Upsample", NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve-upsample graph task")},
+        {Name("render.hardware_caustics.resolve_timing_close"), "Hardware Caustics Resolve Timing Close", NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve graph task")},
     };
     CausticsResolveChainBuilder sharedBuilder(m_graph, m_raytracingSystem);
     CausticsResolveChainResult sharedResult;

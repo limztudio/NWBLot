@@ -467,7 +467,7 @@ TEST(EcsGraphics, MaterialTypedByteRangeUploadAliasSurvivesGrowthAndMutation){
     ASSERT_GT(uploadBytes.capacity(), initialCapacity);
     ASSERT_EQ(appendedRange.byteCount, expectedBytes.size());
     ASSERT_EQ(uploadBytes.size(), expectedBytes.size() * 2u);
-    EXPECT_EQ(GLB_MEMCMP(uploadBytes.data() + appendedRange.byteOffset, expectedBytes.data(), expectedBytes.size()), 0);
+    EXPECT_EQ(NWB_MEMCMP(uploadBytes.data() + appendedRange.byteOffset, expectedBytes.data(), expectedBytes.size()), 0);
 
     // Mutating the original upload bytes cannot change the retained dedup key.
     for(usize index = 0u; index < expectedBytes.size(); ++index)
@@ -500,7 +500,7 @@ static void BenchmarkMaterialTypedRanges(
         for(usize byteIndex = 0u; byteIndex < byteCount; ++byteIndex)
             sourceBytes[offset + byteIndex] = static_cast<u8>((byteIndex * 31u + valueIndex) & 255u);
         const u64 identity = valueIndex;
-        GLB_MEMCPY(sourceBytes.data() + offset, byteCount, &identity, sizeof(identity));
+        NWB_MEMCPY(sourceBytes.data() + offset, byteCount, &identity, sizeof(identity));
     }
 
     u64 elapsed = 0u;
@@ -619,7 +619,7 @@ static NWB::Impl::SkeletonJointMatrix MakeNonUniformScaleJointMatrix(){
     return joint;
 }
 
-#if defined(GLB_FINAL)
+#if defined(NWB_FINAL)
 static NWB::Impl::SkinInfluence4 MakeSingleJointSkin(const u16 joint){
     NWB::Impl::SkinInfluence4 skin{};
     skin.joint[0] = joint;
@@ -686,7 +686,7 @@ static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(){
         true,
         [](const usize, const TStringView){ return false; }
     );
-    GLB_FATAL_ASSERT(meshletRefsEncoded);
+    NWB_FATAL_ASSERT(meshletRefsEncoded);
     instance.meshletPositionRefCount = static_cast<u32>(meshletPositionStreamRefs.size());
     instance.meshletAttributeRefCount = static_cast<u32>(meshletAttributeStreamRefs.size());
 
@@ -736,7 +736,7 @@ TEST(EcsGraphics, InvalidSkeletonParentsAndJointCountsAreRejected){
     pose.parentJoints.pop_back();
     EXPECT_FALSE(NWB::Impl::SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(pose, resolvedJoints, skinningMode));
 }
-#if defined(GLB_FINAL)
+#if defined(NWB_FINAL)
 TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     constexpr u32 s_ExpectedDualCount = 2u;
 
@@ -775,9 +775,9 @@ TEST(EcsGraphics, MeshSkinningPayloadValidatesSkeletonAndPalette){
     ));
 
     EXPECT_EQ(runtimeValidationLogger.errorCount(), 3u);
-    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(GLB_TEXT("joint palette count")));
-    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(GLB_TEXT("joint palette entry 0 is not a finite invertible affine matrix")));
-    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(GLB_TEXT("failed dual-quaternion payload build")));
+    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(NWB_TEXT("joint palette count")));
+    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(NWB_TEXT("joint palette entry 0 is not a finite invertible affine matrix")));
+    EXPECT_TRUE(runtimeValidationLogger.sawErrorContaining(NWB_TEXT("failed dual-quaternion payload build")));
 }
 #endif
 

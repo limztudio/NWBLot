@@ -33,7 +33,7 @@ paint.pushClip({ 20.0f, 20.0f, 300.0f, 180.0f });
 if(!paint.drawRegion(Name("panel.normal"), { 20.0f, 20.0f, 300.0f, 180.0f }))
     paint.fillRect({ 20.0f, 20.0f, 300.0f, 180.0f }, { 0.1f, 0.1f, 0.1f, 1.0f });
 if(!paint.popClip())
-    GLB_FATAL_ASSERT_MSG(false, GLB_TEXT("The panel clip must be present"));
+    NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("The panel clip must be present"));
 Ui::DrawSnapshot snapshot = paint.freeze();
 // Keep uiArena alive while snapshot or any submitted consumer remains alive.
 ```

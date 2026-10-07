@@ -12,19 +12,19 @@
 
 
 #if defined(WIN32) || defined(_WIN32)
-#define GLB_PLATFORM_WINDOWS
+#define NWB_PLATFORM_WINDOWS
 #endif
 #if defined(__linux__)
-#define GLB_PLATFORM_LINUX
+#define NWB_PLATFORM_LINUX
 #endif
 #if defined(__unix__)
-#define GLB_PLATFORM_UNIX
+#define NWB_PLATFORM_UNIX
 #endif
 #if defined(__ANDROID__)
-#define GLB_PLATFORM_ANDROID
+#define NWB_PLATFORM_ANDROID
 #endif
 #if defined(__APPLE__)
-#define GLB_PLATFORM_APPLE
+#define NWB_PLATFORM_APPLE
 #endif
 
 

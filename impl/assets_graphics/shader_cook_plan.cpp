@@ -55,7 +55,7 @@ static bool AppendIncludeDirectory(
     ErrorCode errorCode;
     const bool isDirectory = IsDirectory(includeDirectory, errorCode);
     if(errorCode){
-        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to query include root '{}' for entry '{}': {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to query include root '{}' for entry '{}': {}")
             , PathToString<tchar>(includeDirectory)
             , StringConvert(entry.name)
             , StringConvert(errorCode.message())
@@ -63,7 +63,7 @@ static bool AppendIncludeDirectory(
         return false;
     }
     if(!isDirectory){
-        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: include root is not a directory for entry '{}': '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: include root is not a directory for entry '{}': '{}'")
             , StringConvert(entry.name)
             , PathToString<tchar>(includeDirectory)
         );
@@ -97,7 +97,7 @@ static bool BuildIncludeDirectories(
 
     outIncludeDirectories.clear();
     if(entry.includeRoots.size() > Limit<usize>::s_Max - implicitIncludeRoots.size()){
-        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: include root count overflow for entry '{}'"), StringConvert(entry.name));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: include root count overflow for entry '{}'"), StringConvert(entry.name));
         return false;
     }
 
@@ -113,7 +113,7 @@ static bool BuildIncludeDirectories(
         Path includeDirectory(outIncludeDirectories.get_allocator().arena());
         if(!Core::Assets::ResolveVirtualAssetPath(assetRoots, includeRoot, includeDirectory, scratchArena)){
             if(Core::Assets::HasReservedAssetVirtualRoot(includeRoot, scratchArena)){
-                NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to resolve virtual include root '{}' for entry '{}'")
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve virtual include root '{}' for entry '{}'")
                     , StringConvert(includeRoot)
                     , StringConvert(entry.name)
                 );
@@ -123,14 +123,14 @@ static bool BuildIncludeDirectories(
             errorCode.clear();
             if(!ResolveAbsolutePath(repoRoot, includeRoot, includeDirectory, errorCode)){
                 if(errorCode){
-                    NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to resolve include root '{}' for entry '{}': {}")
+                    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve include root '{}' for entry '{}': {}")
                         , StringConvert(includeRoot)
                         , StringConvert(entry.name)
                         , StringConvert(errorCode.message())
                     );
                 }
                 else{
-                    NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: include root '{}' is empty or invalid for entry '{}'")
+                    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: include root '{}' is empty or invalid for entry '{}'")
                         , StringConvert(includeRoot)
                         , StringConvert(entry.name)
                     );
@@ -156,7 +156,7 @@ static bool ValidateShaderDoesNotUseImplicitDefine(ShaderCook::ShaderEntry& entr
     if(entry.defineValues.find(defineNameKey) == entry.defineValues.end())
         return true;
 
-    NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: shader '{}' uses reserved implicit define '{}' as a variant define")
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: shader '{}' uses reserved implicit define '{}' as a variant define")
         , StringConvert(entry.name)
         , StringConvert(defineName)
     );
@@ -197,14 +197,14 @@ static bool CountShaderVariants(const ShaderCook::ShaderEntry& entry, u64& outVa
     for(const auto& [defineName, defineEntry] : entry.defineValues){
         const u64 valueCount = static_cast<u64>(defineEntry.values.size());
         if(valueCount == 0){
-            NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: entry '{}' has define '{}' with no values")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: entry '{}' has define '{}' with no values")
                 , StringConvert(entry.name)
                 , StringConvert(defineName)
             );
             return false;
         }
         if(outVariantCount > Limit<u64>::s_Max / valueCount){
-            NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: variant count overflow for entry '{}'"), StringConvert(entry.name));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: variant count overflow for entry '{}'"), StringConvert(entry.name));
             return false;
         }
         outVariantCount *= valueCount;
@@ -234,7 +234,7 @@ static bool ResolveProjectEvaluatorModuleIncludePath(
             return true;
         }
         if(errorCode && !IsMissingPathError(errorCode)){
-            NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to query CSG evaluator module include '{}': {}")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to query CSG evaluator module include '{}': {}")
                 , PathToString<tchar>(includePath)
                 , StringConvert(errorCode.message())
             );
@@ -250,7 +250,7 @@ static bool ResolveProjectEvaluatorModuleIncludePath(
             return true;
         }
         if(errorCode && !IsMissingPathError(errorCode)){
-            NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to query CSG evaluator module include '{}': {}")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to query CSG evaluator module include '{}': {}")
                 , PathToString<tchar>(candidate)
                 , StringConvert(errorCode.message())
             );
@@ -258,7 +258,7 @@ static bool ResolveProjectEvaluatorModuleIncludePath(
         }
     }
 
-    NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to resolve CSG evaluator module include '{}'"), StringConvert(includeName));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve CSG evaluator module include '{}'"), StringConvert(includeName));
     return false;
 }
 
@@ -271,7 +271,7 @@ static bool AppendUniqueDependency(
     ErrorCode errorCode;
     Path absoluteDependency = AbsolutePath(dependency, errorCode).lexicallyNormal();
     if(errorCode){
-        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to resolve CSG evaluator module dependency '{}': {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve CSG evaluator module dependency '{}': {}")
             , PathToString<tchar>(dependency)
             , StringConvert(errorCode.message())
         );
@@ -311,7 +311,7 @@ static bool AppendCsgProjectEvaluatorModuleDependencies(
     for(const ShaderCook::CookString& defineValue : foundDefine.value().values){
         const AStringView includeName = UnquoteProjectEvaluatorModuleInclude(AStringView(defineValue));
         if(includeName.empty()){
-            NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: CSG evaluator module define value '{}' must be a quoted include path")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: CSG evaluator module define value '{}' must be a quoted include path")
                 , StringConvert(defineValue)
             );
             return false;
@@ -367,7 +367,7 @@ bool PrepareShaderEntriesForCook(
 
     outPreparedPlan.preparedEntries.clear();
     if(inOutShaderEntries.size() > Limit<usize>::s_Max / 3u){
-        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: prepared shader entry reserve count overflows"));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: prepared shader entry reserve count overflows"));
         return false;
     }
     outPreparedPlan.preparedEntries.reserve(inOutShaderEntries.size() * 3u);
@@ -399,7 +399,7 @@ bool PrepareShaderEntriesForCook(
     if(!csgShapeIncludeRoot.empty()){
         ++implicitIncludeRootCount;
         if(implicitIncludeRootCount > Limit<usize>::s_Max - resolvedPaths.assetRoots.size()){
-            NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: implicit shader include root count overflows"));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: implicit shader include root count overflows"));
             return false;
         }
         implicitIncludeRootCount += resolvedPaths.assetRoots.size();
@@ -424,14 +424,14 @@ bool PrepareShaderEntriesForCook(
         errorCode.clear();
         if(!ResolveAbsolutePath(resolvedPaths.repoRoot, preparedEntry.entry.source, preparedEntry.sourcePath, errorCode)){
             if(errorCode){
-                NWB_LOGGER_ERROR(GLB_TEXT("Failed to resolve source path '{}' for entry '{}': {}")
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve source path '{}' for entry '{}': {}")
                     , StringConvert(preparedEntry.entry.source)
                     , StringConvert(preparedEntry.entry.name)
                     , StringConvert(errorCode.message())
                 );
             }
             else{
-                NWB_LOGGER_ERROR(GLB_TEXT("Failed to resolve source path '{}' for entry '{}': path is empty or invalid")
+                NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve source path '{}' for entry '{}': path is empty or invalid")
                     , StringConvert(preparedEntry.entry.source)
                     , StringConvert(preparedEntry.entry.name)
                 );
@@ -442,7 +442,7 @@ bool PrepareShaderEntriesForCook(
         errorCode.clear();
         const bool sourceExists = FileExists(preparedEntry.sourcePath, errorCode);
         if(errorCode){
-            NWB_LOGGER_ERROR(GLB_TEXT("Failed to query source path '{}' for entry '{}': {}")
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to query source path '{}' for entry '{}': {}")
                 , PathToString<tchar>(preparedEntry.sourcePath)
                 , StringConvert(preparedEntry.entry.name)
                 , StringConvert(errorCode.message())
@@ -450,7 +450,7 @@ bool PrepareShaderEntriesForCook(
             return false;
         }
         if(!sourceExists){
-            NWB_LOGGER_ERROR(GLB_TEXT("Shader source does not exist for entry '{}': '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader source does not exist for entry '{}': '{}'")
                 , StringConvert(preparedEntry.entry.name)
                 , PathToString<tchar>(preparedEntry.sourcePath)
             );
@@ -460,7 +460,7 @@ bool PrepareShaderEntriesForCook(
         errorCode.clear();
         const bool isRegularSourceFile = IsRegularFile(preparedEntry.sourcePath, errorCode);
         if(errorCode){
-            NWB_LOGGER_ERROR(GLB_TEXT("Failed to inspect source path '{}' for entry '{}': {}")
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to inspect source path '{}' for entry '{}': {}")
                 , PathToString<tchar>(preparedEntry.sourcePath)
                 , StringConvert(preparedEntry.entry.name)
                 , StringConvert(errorCode.message())
@@ -468,7 +468,7 @@ bool PrepareShaderEntriesForCook(
             return false;
         }
         if(!isRegularSourceFile){
-            NWB_LOGGER_ERROR(GLB_TEXT("Shader source is not a regular file for entry '{}': '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader source is not a regular file for entry '{}': '{}'")
                 , StringConvert(preparedEntry.entry.name)
                 , PathToString<tchar>(preparedEntry.sourcePath)
             );
@@ -583,7 +583,7 @@ bool PrepareShaderEntriesForCook(
         const PreparedShaderEntry& meshShaderEntry = outPreparedPlan.preparedEntries[meshEntryIndex];
         PreparedShaderEntry meshComputeShadowEntry(cookArena);
         if(!__hidden_shader_cook_plan::BuildMeshComputeShadowEntry(meshShaderEntry.entry, meshComputeShadowEntry.entry)){
-            NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to build mesh-compute shadow entry for '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to build mesh-compute shadow entry for '{}'")
                 , StringConvert(meshShaderEntry.entry.name)
             );
             return false;

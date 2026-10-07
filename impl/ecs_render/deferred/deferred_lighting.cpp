@@ -89,7 +89,7 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: deferred lighting requires the global descriptor heap"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred lighting requires the global descriptor heap"));
         return false;
     }
 
@@ -104,7 +104,7 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         ;
         m_deferredState.m_sceneShadingBuffer = m_graphics.createBuffer(sceneShadingBufferDesc);
         if(!m_deferredState.m_sceneShadingBuffer){
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create scene shading buffer"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene shading buffer"));
             return false;
         }
     }
@@ -120,7 +120,7 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
         ;
         m_deferredState.m_lightBuffer = m_graphics.createBuffer(lightBufferDesc);
         if(!m_deferredState.m_lightBuffer){
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create scene light buffer"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create scene light buffer"));
             return false;
         }
     }
@@ -135,13 +135,13 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
 
         m_deferredState.m_lightingBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_deferredState.m_lightingBindingLayout){
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred lighting binding layout"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting binding layout"));
             return false;
         }
     }
 
     if(!ECSRenderDetail::CreateClampSampler(device, m_deferredState.m_sampler, false)){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred lighting sampler"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting sampler"));
         return false;
     }
 
@@ -177,7 +177,7 @@ bool RendererDeferredSystem::createDeferredLightingPipeline(){
 
     m_deferredState.m_lightingPipeline = device.createComputePipeline(pipelineDesc);
     if(!m_deferredState.m_lightingPipeline){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred lighting pipeline"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred lighting pipeline"));
         return false;
     }
 
@@ -213,8 +213,8 @@ bool RendererDeferredSystem::prepareSceneShadingBufferUploads(
     ECSRenderDetail::SceneShadingGpuData& outSceneShadingState,
     bool& outSceneShadingUploadRequired
 ){
-    GLB_ASSERT(m_deferredState.m_sceneShadingBuffer);
-    GLB_ASSERT(m_deferredState.m_lightBuffer);
+    NWB_ASSERT(m_deferredState.m_sceneShadingBuffer);
+    NWB_ASSERT(m_deferredState.m_lightBuffer);
     outLightCount = 0u;
     outRayTracingClassification = {};
     outLightUploadRequired = false;
@@ -251,11 +251,11 @@ bool RendererDeferredSystem::prepareSceneShadingBufferUploads(
     outRayTracingClassification.softShadowSlotMask = softShadowSlotMask;
 
     const usize lightByteCount = static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData);
-    GLB_ASSERT(lightByteCount <= sizeof(m_deferredState.m_lightGpuData));
+    NWB_ASSERT(lightByteCount <= sizeof(m_deferredState.m_lightGpuData));
     const bool lightDataUnchanged =
         m_deferredState.m_lightGpuDataValid
         && m_deferredState.m_lightGpuDataCount == lightCount
-        && GLB_MEMCMP(m_deferredState.m_lightGpuData, outLightData, lightByteCount) == 0
+        && NWB_MEMCMP(m_deferredState.m_lightGpuData, outLightData, lightByteCount) == 0
     ;
     // A zero-light scene has nothing to copy; still record the empty mirror.
     outLightUploadRequired = !lightDataUnchanged && lightByteCount != 0u;
@@ -264,7 +264,7 @@ bool RendererDeferredSystem::prepareSceneShadingBufferUploads(
     outSceneShadingState = ECSRenderDetail::ResolveSceneShadingState(m_world, fallbackAspectRatio, lightCount);
     outSceneShadingUploadRequired = !(
         m_deferredState.m_sceneShadingGpuDataValid
-        && GLB_MEMCMP(
+        && NWB_MEMCMP(
             m_deferredState.m_sceneShadingGpuData,
             &outSceneShadingState,
             sizeof(outSceneShadingState)
@@ -283,9 +283,9 @@ void RendererDeferredSystem::confirmSceneShadingBufferUploads(
     const usize lightByteCount = static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData);
     // Commit the empty mirror on accept so later diffs stay correct.
     if(lightUploadRequired || lightCount == 0u){
-        GLB_ASSERT(lightData || lightByteCount == 0u);
+        NWB_ASSERT(lightData || lightByteCount == 0u);
         if(lightByteCount != 0u){
-            GLB_MEMCPY(
+            NWB_MEMCPY(
                 m_deferredState.m_lightGpuData,
                 sizeof(m_deferredState.m_lightGpuData),
                 lightData,
@@ -296,7 +296,7 @@ void RendererDeferredSystem::confirmSceneShadingBufferUploads(
         m_deferredState.m_lightGpuDataValid = true;
     }
     if(sceneShadingUploadRequired){
-        GLB_MEMCPY(
+        NWB_MEMCPY(
             m_deferredState.m_sceneShadingGpuData,
             sizeof(m_deferredState.m_sceneShadingGpuData),
             &sceneShadingState,
@@ -311,7 +311,7 @@ bool RendererDeferredSystem::renderDeferredLighting(
     DeferredFrameTargets& targets,
     const bool useLaggedLightingHistory
 ){
-    GLB_ASSERT(m_deferredState.m_lightingPipeline);
+    NWB_ASSERT(m_deferredState.m_lightingPipeline);
 
     const DeferredLaggedLightingHistoryResources* const laggedHistory = useLaggedLightingHistory
         ? &targets.laggedLightingHistory

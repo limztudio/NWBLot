@@ -131,7 +131,7 @@ public:
         const usize firstCutter = static_cast<usize>(drawState.firstCutter);
         const usize cutterCount = static_cast<usize>(drawState.cutterCount);
         if(firstCutter > m_cutterRefs.size() || cutterCount > m_cutterRefs.size() - firstCutter){
-            GLB_ASSERT(false);
+            NWB_ASSERT(false);
             return;
         }
 
@@ -139,7 +139,7 @@ public:
         for(usize cutterIndex = firstCutter; cutterIndex < cutterEnd; ++cutterIndex){
             const CsgFrameCutterRef& cutterRef = m_cutterRefs[cutterIndex];
             if(!cutterRef.cutter){
-                GLB_ASSERT(false);
+                NWB_ASSERT(false);
                 continue;
             }
             const CsgCutterComponent& cutter = *cutterRef.cutter;

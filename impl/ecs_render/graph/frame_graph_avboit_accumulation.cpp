@@ -78,7 +78,7 @@ bool FrameGraphAvboitAccumulationUploadChain::declare(
         MaterialPassDrawItemPartitions accumulationDrawItems{ accumulationUploadScratch };
         InstanceGpuDataVector accumulationInstanceData{ accumulationUploadScratch };
         CsgFrameGpuData accumulationCsgFrameData{ accumulationUploadScratch };
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
         ECSRenderDetail::MaterialTypedInstanceRangeVector accumulationMaterialTypedRanges{ accumulationUploadScratch };
 #endif
         MaterialTypedByteDataVector accumulationMaterialTypedBytes{ accumulationUploadScratch };
@@ -102,19 +102,19 @@ bool FrameGraphAvboitAccumulationUploadChain::declare(
             accumulationDrawItems,
             accumulationInstanceData,
             accumulationCsgFrameData,
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
             accumulationMaterialTypedRanges,
 #endif
             accumulationMaterialTypedBytes,
             accumulationUploadResult
         )){
-            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: prepared AVBOIT accumulation resources were unavailable during graph declaration"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT accumulation resources were unavailable during graph declaration"));
             return false;
         }
 
         const bool accumulationHasCsgDrawItems = accumulationUploadResult.hasCsgDrawItems;
         if(accumulationHasCsgDrawItems && !intervalOutputsGraphOwned){
-            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: clipped AVBOIT accumulation draws require prepared interval outputs"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: clipped AVBOIT accumulation draws require prepared interval outputs"));
             return false;
         }
         if(accumulationUploadResult.hasDrawItems){
@@ -144,16 +144,16 @@ bool FrameGraphAvboitAccumulationUploadChain::declare(
             accumulationMaterialSampledTexturesCollected = accumulationGeometryPreparationResult.sampledTexturesCollected;
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(accumulationInstanceData, csgResources);
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
             if(
                 accumulationInstanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
                 || accumulationCsgFrameData.receiverRanges.size() > Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData)
                 || accumulationCsgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
             ){
-                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: AVBOIT accumulation upload size overflows graph blob capacity"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: AVBOIT accumulation upload size overflows graph blob capacity"));
                 return false;
             }
-            GLB_ASSERT(accumulationInstanceData.size() == accumulationMaterialTypedRanges.size());
+            NWB_ASSERT(accumulationInstanceData.size() == accumulationMaterialTypedRanges.size());
             ECSRenderDetail::AssertMaterialTypedUploadRanges(
                 accumulationMaterialTypedRanges,
                 accumulationMaterialTypedBytes
@@ -184,7 +184,7 @@ bool FrameGraphAvboitAccumulationUploadChain::declare(
                 accumulationUploadTask,
                 accumulationCsgStreamsUploaded
             )){
-                NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare AVBOIT accumulation material upload"));
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT accumulation material upload"));
                 return false;
             }
 

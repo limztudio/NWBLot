@@ -106,7 +106,7 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: deferred compositing requires the global descriptor heap"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: deferred compositing requires the global descriptor heap"));
         return false;
     }
 
@@ -119,7 +119,7 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
 
         m_deferredState.m_compositeComputeBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_deferredState.m_compositeComputeBindingLayout){
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred composite-compute binding layout"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite-compute binding layout"));
             return false;
         }
     }
@@ -133,13 +133,13 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
 
         m_deferredState.m_presentBindingLayout = device.createBindingLayout(bindingLayoutDesc);
         if(!m_deferredState.m_presentBindingLayout){
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred presentation binding layout"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred presentation binding layout"));
             return false;
         }
     }
 
     if(!ECSRenderDetail::CreateClampSampler(device, m_deferredState.m_sampler, false)){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred composite sampler"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite sampler"));
         return false;
     }
 
@@ -186,7 +186,7 @@ bool RendererDeferredSystem::createDeferredCompositePipeline(){
 
     m_deferredState.m_compositeComputePipeline = device.createComputePipeline(pipelineDesc);
     if(!m_deferredState.m_compositeComputePipeline){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred composite-compute pipeline"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred composite-compute pipeline"));
         return false;
     }
 
@@ -218,7 +218,7 @@ bool RendererDeferredSystem::createDeferredPresentPipeline(Core::Framebuffer* pr
 
     m_deferredState.m_presentPipeline = device.createGraphicsPipeline(pipelineDesc, framebufferInfo);
     if(!m_deferredState.m_presentPipeline){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create deferred presentation pipeline"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create deferred presentation pipeline"));
         return false;
     }
 
@@ -249,7 +249,7 @@ bool RendererDeferredSystem::renderDeferredComposite(
     DeferredFrameTargets& targets,
     const ReflectionCompositeInputs& reflectionInputs
 ){
-    GLB_ASSERT(m_deferredState.m_compositeComputePipeline);
+    NWB_ASSERT(m_deferredState.m_compositeComputePipeline);
 
     // Boundary states are graph-owned; this thunk holds only composite commands.
 
@@ -279,13 +279,13 @@ bool RendererDeferredSystem::renderDeferredPresent(
     const Core::AcquiredPresentationFrame& presentationFrame,
     const Core::GpuDescriptorHandle outputLayerImage
 ){
-    GLB_ASSERT(presentationFrame.valid());
-    GLB_ASSERT(m_deferredState.m_presentPipeline);
+    NWB_ASSERT(presentationFrame.valid());
+    NWB_ASSERT(m_deferredState.m_presentPipeline);
     if(!presentationFrame.valid() || !m_deferredState.m_presentPipeline)
         return false;
     Core::Framebuffer& presentationFramebuffer = *presentationFrame.framebuffer;
     const Core::FramebufferDesc& presentationFramebufferDesc = presentationFramebuffer.getDescription();
-    GLB_ASSERT(
+    NWB_ASSERT(
         presentationFramebufferDesc.colorAttachments.size() == 1u
         && presentationFramebufferDesc.colorAttachments[0].texture == presentationFrame.backBuffer.texture.get()
         && m_deferredState.m_presentPipeline->getFramebufferInfo() == presentationFramebuffer.getFramebufferInfo()

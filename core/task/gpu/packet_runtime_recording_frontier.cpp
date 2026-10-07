@@ -50,12 +50,12 @@ public:
             const GpuSubmissionPacketId packet = m_planAccess.packetIdAt(m_packetIndices[parallelIndex]);
             m_recordedGraph.abandonPacketTimingTicketWithoutCallbacks(packet, m_artifactOperation);
             if(!m_graph.abandonPacketRecordingAbortWithoutCallbacks(m_compiledGraph, m_planAccess, abort)){
-                GLB_FATAL_ASSERT_MSG(false, "joined packet unwind must consume every deferred recording abort");
+                NWB_FATAL_ASSERT_MSG(false, "joined packet unwind must consume every deferred recording abort");
                 TerminateInvariant();
             }
         }
         if(!m_graph.resolveRecordingAttemptIfTerminal(m_compiledGraph, m_recordingAttemptGeneration)){
-            GLB_FATAL_ASSERT_MSG(false, "joined packet unwind must preserve or resolve its exact recording-plan lease");
+            NWB_FATAL_ASSERT_MSG(false, "joined packet unwind must preserve or resolve its exact recording-plan lease");
             TerminateInvariant();
         }
     }
@@ -535,12 +535,12 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
                 const GpuSubmissionPacketId packet = planAccess.packetIdAt(parallelPacketIndices[parallelIndex]);
                 outRecordedGraph.discardPacketTimingTicket(packet, artifactOperation);
                 if(!graph.completePacketRecordingAbort(compiledGraph, planAccess, abort)){
-                    GLB_FATAL_ASSERT_MSG(false, "joined packet drain must consume every deferred recording abort");
+                    NWB_FATAL_ASSERT_MSG(false, "joined packet drain must consume every deferred recording abort");
                     TerminateInvariant();
                 }
             }
             if(!graph.resolveRecordingAttemptIfTerminal(compiledGraph, recordingAttemptGeneration)){
-                GLB_FATAL_ASSERT_MSG(false, "joined packet drain must preserve or resolve its exact recording-plan lease");
+                NWB_FATAL_ASSERT_MSG(false, "joined packet drain must preserve or resolve its exact recording-plan lease");
                 TerminateInvariant();
             }
             recordingUnwind.release();

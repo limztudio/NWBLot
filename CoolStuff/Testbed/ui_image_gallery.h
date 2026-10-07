@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "namespace.h"
+
 #include <impl/ecs_ui/components.h>
 
 #include <core/assets/manager.h>
@@ -13,9 +15,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiImageGallery final : NoCopy{
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiImageGallery final : NoCopy{
 public:
-    TestbedUiImageGallery(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets);
+    UiImageGallery(NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets);
 
 
 public:
@@ -25,6 +33,9 @@ public:
 private:
     NWB::Impl::Ui::SharedImageSource m_source;
 };
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

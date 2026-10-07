@@ -24,7 +24,7 @@
 
 
 #if defined(UNICODE) || defined(_UNICODE)
-#define GLB_UNICODE
+#define NWB_UNICODE
 #endif
 
 
@@ -50,7 +50,7 @@ typedef float f32;
 typedef double f64;
 
 typedef wchar_t wchar;
-#if defined(GLB_UNICODE)
+#if defined(NWB_UNICODE)
 typedef wchar tchar;
 #else
 typedef char tchar;
@@ -81,36 +81,36 @@ using InitializerList = std::initializer_list<T>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLB_UNICODE)
-#define GLB_DETAIL_TEXT(x) L ## x
+#if defined(NWB_UNICODE)
+#define NWB_DETAIL_TEXT(x) L ## x
 #else
-#define GLB_DETAIL_TEXT(x) x
+#define NWB_DETAIL_TEXT(x) x
 #endif
-#define GLB_TEXT(x) GLB_DETAIL_TEXT(x)
+#define NWB_TEXT(x) NWB_DETAIL_TEXT(x)
 
-#if defined(GLB_PLATFORM_WINDOWS)
-#if GLB_COMPILER_FRONTEND_MSVC || __has_declspec_attribute(dllexport)
-#define GLB_DLL_EXPORT __declspec(dllexport)
-#define GLB_DLL_IMPORT __declspec(dllimport)
+#if defined(NWB_PLATFORM_WINDOWS)
+#if NWB_COMPILER_FRONTEND_MSVC || __has_declspec_attribute(dllexport)
+#define NWB_DLL_EXPORT __declspec(dllexport)
+#define NWB_DLL_IMPORT __declspec(dllimport)
 #elif __has_attribute(dllexport)
-#define GLB_DLL_EXPORT __attribute__((dllexport))
-#define GLB_DLL_IMPORT __attribute__((dllimport))
+#define NWB_DLL_EXPORT __attribute__((dllexport))
+#define NWB_DLL_IMPORT __attribute__((dllimport))
 #else
-#define GLB_DLL_EXPORT
-#define GLB_DLL_IMPORT
+#define NWB_DLL_EXPORT
+#define NWB_DLL_IMPORT
 #endif
-#elif (defined(GLB_PLATFORM_UNIX) || defined(GLB_PLATFORM_APPLE))
-#define GLB_DLL_EXPORT __attribute__((visibility("default")))
-#define GLB_DLL_IMPORT
+#elif (defined(NWB_PLATFORM_UNIX) || defined(NWB_PLATFORM_APPLE))
+#define NWB_DLL_EXPORT __attribute__((visibility("default")))
+#define NWB_DLL_IMPORT
 #else
-#define GLB_DLL_EXPORT
-#define GLB_DLL_IMPORT
+#define NWB_DLL_EXPORT
+#define NWB_DLL_IMPORT
 #endif
 
-#if defined(GLB_EXPORT_DLL)
-#define GLB_DLL_API GLB_DLL_EXPORT
+#if defined(NWB_EXPORT_DLL)
+#define NWB_DLL_API NWB_DLL_EXPORT
 #else
-#define GLB_DLL_API GLB_DLL_IMPORT
+#define NWB_DLL_API NWB_DLL_IMPORT
 #endif
 
 

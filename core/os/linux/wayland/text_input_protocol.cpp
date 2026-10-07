@@ -77,7 +77,7 @@ void WaylandTextInputService::receiveDone(const u32 serial){
             // Refuse stale or unsent surrounding ranges before applying later native batch edits.
             clearPending();
             if(!cancelSession(token, TextInputCancelReason::NativeCancelled))
-                NWB_LOGGER_WARNING(GLB_TEXT("Wayland text input: stale surrounding batch could not cancel current session"));
+                NWB_LOGGER_WARNING(NWB_TEXT("Wayland text input: stale surrounding batch could not cancel current session"));
             return;
         }
     }
@@ -144,7 +144,7 @@ void WaylandTextInputService::OnRegistryRemove(void* const data, wl_registry*, c
         return;
     const TextInputSessionToken token = service.activeSession();
     if(token.valid() && !service.cancelSession(token, TextInputCancelReason::NativeCancelled))
-        NWB_LOGGER_WARNING(GLB_TEXT("Wayland text input: manager removal could not cancel current session"));
+        NWB_LOGGER_WARNING(NWB_TEXT("Wayland text input: manager removal could not cancel current session"));
     service.releaseDevice();
     zwp_text_input_manager_v3_destroy(service.m_manager);
     service.m_manager = nullptr;
@@ -168,7 +168,7 @@ void WaylandTextInputService::OnLeave(void* const data, zwp_text_input_v3* const
     service.clearPending();
     const TextInputSessionToken token = service.activeSession();
     if(token.valid() && !service.cancelSession(token, TextInputCancelReason::FocusLost))
-        NWB_LOGGER_WARNING(GLB_TEXT("Wayland text input: protocol focus loss could not cancel current session"));
+        NWB_LOGGER_WARNING(NWB_TEXT("Wayland text input: protocol focus loss could not cancel current session"));
 }
 
 void WaylandTextInputService::OnPreedit(

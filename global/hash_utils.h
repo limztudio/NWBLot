@@ -103,7 +103,7 @@ inline void HashCombine(usize& seed, const T& value)noexcept(noexcept(HashCombin
         value = 0.0f;
 
     u32 bits = 0u;
-    GLB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
+    NWB_MEMCPY(&bits, sizeof(bits), &value, sizeof(value));
     return bits;
 }
 

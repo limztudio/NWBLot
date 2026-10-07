@@ -71,7 +71,7 @@ public:
 
 void SetParameters(CsgCutterComponent& cutter, const Float4& parameter){
     cutter.parameterBytes.resize(sizeof(parameter));
-    GLB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameter, sizeof(parameter));
+    NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameter, sizeof(parameter));
 }
 
 [[nodiscard]] bool CustomBounds(

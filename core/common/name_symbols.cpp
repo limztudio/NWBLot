@@ -223,7 +223,7 @@ private:
             const NameHash hash = ComputeNameHash(text);
             // Verify stored text first; insert after the census releases its lock.
             if(snapshot.ownerName == Name(hash))
-                GLB_FATAL_ASSERT(insert(hash, text));
+                NWB_FATAL_ASSERT(insert(hash, text));
         }
 #endif
     }

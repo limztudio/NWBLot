@@ -44,7 +44,7 @@ public:
         , m_size(0)
     {
         if(!assign(text)){
-            GLB_ASSERT_MSG(false, GLB_TEXT("BasicCompactString initialization exceeded capacity"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString initialization exceeded capacity"));
             clear();
         }
     }
@@ -53,7 +53,7 @@ public:
         , m_size(0)
     {
         if(!assign(text)){
-            GLB_ASSERT_MSG(false, GLB_TEXT("BasicCompactString initialization exceeded capacity"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString initialization exceeded capacity"));
             clear();
         }
     }
@@ -63,7 +63,7 @@ public:
         , m_size(0)
     {
         if(!assign(text)){
-            GLB_ASSERT_MSG(false, GLB_TEXT("BasicCompactString initialization exceeded capacity"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString initialization exceeded capacity"));
             clear();
         }
     }
@@ -211,7 +211,7 @@ public:
             : count
         ;
 
-        GLB_MEMCPY(result.m_storage, copiedCount * sizeof(value_type), m_storage + pos, copiedCount * sizeof(value_type));
+        NWB_MEMCPY(result.m_storage, copiedCount * sizeof(value_type), m_storage + pos, copiedCount * sizeof(value_type));
         result.m_size = static_cast<u8>(copiedCount);
         result.m_storage[result.m_size] = value_type{};
         return result;
@@ -219,14 +219,14 @@ public:
 
     BasicCompactString& operator+=(const value_type* text){
         if(!append(text)){
-            GLB_ASSERT_MSG(false, GLB_TEXT("BasicCompactString append exceeded capacity"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
         }
         return *this;
     }
 
     BasicCompactString& operator+=(const view_type text){
         if(!append(text)){
-            GLB_ASSERT_MSG(false, GLB_TEXT("BasicCompactString append exceeded capacity"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
         }
         return *this;
     }
@@ -234,21 +234,21 @@ public:
     template<typename ArenaT>
     BasicCompactString& operator+=(const BasicString<value_type, ArenaT>& text){
         if(!append(text)){
-            GLB_ASSERT_MSG(false, GLB_TEXT("BasicCompactString append exceeded capacity"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
         }
         return *this;
     }
 
     BasicCompactString& operator+=(const BasicCompactString& text){
         if(!append(text)){
-            GLB_ASSERT_MSG(false, GLB_TEXT("BasicCompactString append exceeded capacity"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
         }
         return *this;
     }
 
     BasicCompactString& operator+=(const value_type ch){
         if(!pushBack(ch)){
-            GLB_ASSERT_MSG(false, GLB_TEXT("BasicCompactString append exceeded capacity"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("BasicCompactString append exceeded capacity"));
         }
         return *this;
     }

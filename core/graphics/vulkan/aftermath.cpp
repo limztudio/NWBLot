@@ -94,7 +94,7 @@ static void GFSDK_AFTERMATH_CALL OnGpuCrashDump(const void* pGpuCrashDump, const
     State& state = GetState();
     ScopedLock lock(state.dumpMutex);
     state.dumpBytes.resize(gpuCrashDumpSize);
-    GLB_MEMCPY(state.dumpBytes.data(), gpuCrashDumpSize, pGpuCrashDump, gpuCrashDumpSize);
+    NWB_MEMCPY(state.dumpBytes.data(), gpuCrashDumpSize, pGpuCrashDump, gpuCrashDumpSize);
     state.dumpReady = true;
 }
 
@@ -132,7 +132,7 @@ bool Initialize(){
 
     Alloc::GlobalArena& arena = DumpArena();
     if(!state.library.open(arena, Common::s_AftermathRuntimeName)){
-        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: NVIDIA Aftermath runtime is not present next to the executable; GPU crash dumps disabled."));
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath runtime is not present next to the executable; GPU crash dumps disabled."));
         return false;
     }
 
@@ -141,7 +141,7 @@ bool Initialize(){
         || !state.library.resolve(arena, "GFSDK_Aftermath_DisableGpuCrashDumps", state.disable)
         || !state.library.resolve(arena, "GFSDK_Aftermath_GetCrashDumpStatus", state.getStatus)
     ){
-        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: NVIDIA Aftermath entry points could not be resolved; GPU crash dumps disabled."));
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath entry points could not be resolved; GPU crash dumps disabled."));
         state.library.close();
         return false;
     }
@@ -157,13 +157,13 @@ bool Initialize(){
         nullptr
     );
     if(!GFSDK_Aftermath_SUCCEED(result)){
-        NWB_LOGGER_WARNING(GLB_TEXT("Vulkan: GFSDK_Aftermath_EnableGpuCrashDumps failed (0x{:x}); GPU crash dumps disabled."), static_cast<u32>(result));
+        NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: GFSDK_Aftermath_EnableGpuCrashDumps failed (0x{:x}); GPU crash dumps disabled."), static_cast<u32>(result));
         state.library.close();
         return false;
     }
 
     state.active = true;
-    NWB_LOGGER_INFO(GLB_TEXT("Vulkan: NVIDIA Aftermath GPU crash dumps enabled."));
+    NWB_LOGGER_INFO(NWB_TEXT("Vulkan: NVIDIA Aftermath GPU crash dumps enabled."));
     return true;
 #endif
 }

@@ -11,29 +11,29 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE bool GLB_SIMD_CALL Vector2Equal(SIMDVector v0, SIMDVector v1)noexcept{ return (VectorMoveMask(VectorEqual(v0, v1)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY; }
-GLB_INLINE bool GLB_SIMD_CALL Vector2EqualInt(SIMDVector v0, SIMDVector v1)noexcept{ return (VectorMoveMask(VectorEqualInt(v0, v1)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY; }
-GLB_INLINE bool GLB_SIMD_CALL Vector2NearEqual(SIMDVector v0, SIMDVector v1, SIMDVector epsilon)noexcept{ return (VectorMoveMask(VectorNearEqual(v0, v1, epsilon)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY; }
-GLB_INLINE bool GLB_SIMD_CALL Vector2NotEqual(SIMDVector v0, SIMDVector v1)noexcept{ return !Vector2Equal(v0, v1); }
-GLB_INLINE bool GLB_SIMD_CALL Vector2NotEqualInt(SIMDVector v0, SIMDVector v1)noexcept{ return !Vector2EqualInt(v0, v1); }
-GLB_INLINE bool GLB_SIMD_CALL Vector2Greater(SIMDVector v0, SIMDVector v1)noexcept{ return (VectorMoveMask(VectorGreater(v0, v1)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY; }
-GLB_INLINE bool GLB_SIMD_CALL Vector2GreaterOrEqual(SIMDVector v0, SIMDVector v1)noexcept{ return (VectorMoveMask(VectorGreaterOrEqual(v0, v1)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY; }
-GLB_INLINE bool GLB_SIMD_CALL Vector2Less(SIMDVector v0, SIMDVector v1)noexcept{ return Vector2Greater(v1, v0); }
-GLB_INLINE bool GLB_SIMD_CALL Vector2LessOrEqual(SIMDVector v0, SIMDVector v1)noexcept{ return Vector2GreaterOrEqual(v1, v0); }
-GLB_INLINE bool GLB_SIMD_CALL Vector2InBounds(SIMDVector value, SIMDVector bounds)noexcept{ return (VectorMoveMask(VectorInBounds(value, bounds)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY; }
-GLB_INLINE bool GLB_SIMD_CALL Vector2IsNaN(SIMDVector value)noexcept{ return (VectorMoveMask(VectorIsNaN(value)) & VectorComponentMask::s_XY) != 0; }
-GLB_INLINE bool GLB_SIMD_CALL Vector2IsInfinite(SIMDVector value)noexcept{ return (VectorMoveMask(VectorIsInfinite(value)) & VectorComponentMask::s_XY) != 0; }
+NWB_INLINE bool NWB_SIMD_CALL Vector2Equal(SIMDVector v0, SIMDVector v1)noexcept{ return (VectorMoveMask(VectorEqual(v0, v1)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY; }
+NWB_INLINE bool NWB_SIMD_CALL Vector2EqualInt(SIMDVector v0, SIMDVector v1)noexcept{ return (VectorMoveMask(VectorEqualInt(v0, v1)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY; }
+NWB_INLINE bool NWB_SIMD_CALL Vector2NearEqual(SIMDVector v0, SIMDVector v1, SIMDVector epsilon)noexcept{ return (VectorMoveMask(VectorNearEqual(v0, v1, epsilon)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY; }
+NWB_INLINE bool NWB_SIMD_CALL Vector2NotEqual(SIMDVector v0, SIMDVector v1)noexcept{ return !Vector2Equal(v0, v1); }
+NWB_INLINE bool NWB_SIMD_CALL Vector2NotEqualInt(SIMDVector v0, SIMDVector v1)noexcept{ return !Vector2EqualInt(v0, v1); }
+NWB_INLINE bool NWB_SIMD_CALL Vector2Greater(SIMDVector v0, SIMDVector v1)noexcept{ return (VectorMoveMask(VectorGreater(v0, v1)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY; }
+NWB_INLINE bool NWB_SIMD_CALL Vector2GreaterOrEqual(SIMDVector v0, SIMDVector v1)noexcept{ return (VectorMoveMask(VectorGreaterOrEqual(v0, v1)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY; }
+NWB_INLINE bool NWB_SIMD_CALL Vector2Less(SIMDVector v0, SIMDVector v1)noexcept{ return Vector2Greater(v1, v0); }
+NWB_INLINE bool NWB_SIMD_CALL Vector2LessOrEqual(SIMDVector v0, SIMDVector v1)noexcept{ return Vector2GreaterOrEqual(v1, v0); }
+NWB_INLINE bool NWB_SIMD_CALL Vector2InBounds(SIMDVector value, SIMDVector bounds)noexcept{ return (VectorMoveMask(VectorInBounds(value, bounds)) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY; }
+NWB_INLINE bool NWB_SIMD_CALL Vector2IsNaN(SIMDVector value)noexcept{ return (VectorMoveMask(VectorIsNaN(value)) & VectorComponentMask::s_XY) != 0; }
+NWB_INLINE bool NWB_SIMD_CALL Vector2IsInfinite(SIMDVector value)noexcept{ return (VectorMoveMask(VectorIsInfinite(value)) & VectorComponentMask::s_XY) != 0; }
 
-GLB_INLINE u32 GLB_SIMD_CALL Vector2EqualR(SIMDVector v0, SIMDVector v1)noexcept{ return SIMDVectorDetail::ComparisonMaskR(VectorMoveMask(VectorEqual(v0, v1)), VectorComponentMask::s_XY); }
-GLB_INLINE u32 GLB_SIMD_CALL Vector2EqualIntR(SIMDVector v0, SIMDVector v1)noexcept{ return SIMDVectorDetail::ComparisonMaskR(VectorMoveMask(VectorEqualInt(v0, v1)), VectorComponentMask::s_XY); }
-GLB_INLINE u32 GLB_SIMD_CALL Vector2GreaterR(SIMDVector v0, SIMDVector v1)noexcept{ return SIMDVectorDetail::ComparisonMaskR(VectorMoveMask(VectorGreater(v0, v1)), VectorComponentMask::s_XY); }
-GLB_INLINE u32 GLB_SIMD_CALL Vector2GreaterOrEqualR(SIMDVector v0, SIMDVector v1)noexcept{ return SIMDVectorDetail::ComparisonMaskR(VectorMoveMask(VectorGreaterOrEqual(v0, v1)), VectorComponentMask::s_XY); }
-GLB_INLINE u32 GLB_SIMD_CALL Vector2InBoundsR(SIMDVector value, SIMDVector bounds)noexcept{ return SIMDVectorDetail::BoundsMaskR(VectorMoveMask(VectorInBounds(value, bounds)), VectorComponentMask::s_XY); }
+NWB_INLINE u32 NWB_SIMD_CALL Vector2EqualR(SIMDVector v0, SIMDVector v1)noexcept{ return SIMDVectorDetail::ComparisonMaskR(VectorMoveMask(VectorEqual(v0, v1)), VectorComponentMask::s_XY); }
+NWB_INLINE u32 NWB_SIMD_CALL Vector2EqualIntR(SIMDVector v0, SIMDVector v1)noexcept{ return SIMDVectorDetail::ComparisonMaskR(VectorMoveMask(VectorEqualInt(v0, v1)), VectorComponentMask::s_XY); }
+NWB_INLINE u32 NWB_SIMD_CALL Vector2GreaterR(SIMDVector v0, SIMDVector v1)noexcept{ return SIMDVectorDetail::ComparisonMaskR(VectorMoveMask(VectorGreater(v0, v1)), VectorComponentMask::s_XY); }
+NWB_INLINE u32 NWB_SIMD_CALL Vector2GreaterOrEqualR(SIMDVector v0, SIMDVector v1)noexcept{ return SIMDVectorDetail::ComparisonMaskR(VectorMoveMask(VectorGreaterOrEqual(v0, v1)), VectorComponentMask::s_XY); }
+NWB_INLINE u32 NWB_SIMD_CALL Vector2InBoundsR(SIMDVector value, SIMDVector bounds)noexcept{ return SIMDVectorDetail::BoundsMaskR(VectorMoveMask(VectorInBounds(value, bounds)), VectorComponentMask::s_XY); }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2Dot(SIMDVector v0, SIMDVector v1)noexcept{
-#if defined(GLB_HAS_SCALAR)
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2Dot(SIMDVector v0, SIMDVector v1)noexcept{
+#if defined(NWB_HAS_SCALAR)
     return VectorReplicate(VectorGetX(v0) * VectorGetX(v1) + VectorGetY(v0) * VectorGetY(v1));
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
     const float32x2_t product = vmul_f32(vget_low_f32(v0), vget_low_f32(v1));
     const float32x2_t result = vpadd_f32(product, product);
     return vcombine_f32(result, result);
@@ -42,10 +42,10 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2Dot(SIMDVector v0, SIMDVector v1)noex
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2Cross(SIMDVector v0, SIMDVector v1)noexcept{
-#if defined(GLB_HAS_SCALAR)
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2Cross(SIMDVector v0, SIMDVector v1)noexcept{
+#if defined(NWB_HAS_SCALAR)
     return VectorReplicate(v0.f[0] * v1.f[1] - v0.f[1] * v1.f[0]);
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
     const float32x2_t negate = vcreate_f32(0xBF8000003F800000ull);
     float32x2_t result = vmul_f32(vget_low_f32(v0), vrev64_f32(vget_low_f32(v1)));
     result = vmul_f32(result, negate);
@@ -60,16 +60,16 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2Cross(SIMDVector v0, SIMDVector v1)no
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2LengthSq(SIMDVector value)noexcept{
-#if defined(GLB_HAS_SSE4)
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2LengthSq(SIMDVector value)noexcept{
+#if defined(NWB_HAS_SSE4)
     return _mm_dp_ps(value, value, 0x3F);
 #else
     return Vector2Dot(value, value);
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2ReciprocalLength(SIMDVector value)noexcept{
-#if defined(GLB_HAS_SSE4)
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2ReciprocalLength(SIMDVector value)noexcept{
+#if defined(NWB_HAS_SSE4)
     const SIMDVector lengthSq = _mm_dp_ps(value, value, 0x3F);
     const SIMDVector length = _mm_sqrt_ps(lengthSq);
     return _mm_div_ps(s_SIMDOne, length);
@@ -78,32 +78,32 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2ReciprocalLength(SIMDVector value)noe
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2ReciprocalLengthEst(SIMDVector value)noexcept{
-#if defined(GLB_HAS_SSE4)
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2ReciprocalLengthEst(SIMDVector value)noexcept{
+#if defined(NWB_HAS_SSE4)
     return _mm_rsqrt_ps(_mm_dp_ps(value, value, 0x3F));
 #else
     return VectorReciprocalSqrtEst(Vector2LengthSq(value));
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2Length(SIMDVector value)noexcept{
-#if defined(GLB_HAS_SSE4)
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2Length(SIMDVector value)noexcept{
+#if defined(NWB_HAS_SSE4)
     return _mm_sqrt_ps(_mm_dp_ps(value, value, 0x3F));
 #else
     return VectorSqrt(Vector2LengthSq(value));
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2LengthEst(SIMDVector value)noexcept{
-#if defined(GLB_HAS_SSE4)
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2LengthEst(SIMDVector value)noexcept{
+#if defined(NWB_HAS_SSE4)
     return _mm_sqrt_ps(_mm_dp_ps(value, value, 0x3F));
 #else
     return VectorSqrtEst(Vector2LengthSq(value));
 #endif
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2Normalize(SIMDVector value)noexcept{
-#if defined(GLB_HAS_SSE4)
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2Normalize(SIMDVector value)noexcept{
+#if defined(NWB_HAS_SSE4)
     SIMDVector lengthSq = _mm_dp_ps(value, value, 0x3F);
     const SIMDVector length = _mm_sqrt_ps(lengthSq);
     const SIMDVector zeroMask = _mm_cmpneq_ps(_mm_setzero_ps(), length);
@@ -130,7 +130,7 @@ namespace SIMDVectorDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL NormalizeOrV(
+NWB_INLINE SIMDVector NWB_SIMD_CALL NormalizeOrV(
     SIMDVector value,
     SIMDVector fallback,
     SIMDVector lengthSquared,
@@ -160,13 +160,13 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL NormalizeOrV(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2NormalizeOr(SIMDVector value, SIMDVector fallback, const f32 minLengthSquared)noexcept{
+[[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2NormalizeOr(SIMDVector value, SIMDVector fallback, const f32 minLengthSquared)noexcept{
     const SIMDVector lengthSquared = Vector2LengthSq(value);
     return SIMDVectorDetail::NormalizeOrV(value, fallback, lengthSquared, minLengthSquared, s_SIMDMaskXY);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2NormalizeEst(SIMDVector value)noexcept{
-#if defined(GLB_HAS_SSE4)
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2NormalizeEst(SIMDVector value)noexcept{
+#if defined(NWB_HAS_SSE4)
     const SIMDVector lengthSq = _mm_dp_ps(value, value, 0x3F);
     return _mm_and_ps(_mm_mul_ps(value, _mm_rsqrt_ps(lengthSq)), s_SIMDMaskXY);
 #else
@@ -184,7 +184,7 @@ namespace SIMDVectorDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL ClampLengthV(SIMDVector value, SIMDVector lengthSq, SIMDVector lengthMin, SIMDVector lengthMax)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL ClampLengthV(SIMDVector value, SIMDVector lengthSq, SIMDVector lengthMin, SIMDVector lengthMax)noexcept{
     const SIMDVector reciprocalLength = VectorReciprocalSqrt(lengthSq);
     const SIMDVector infiniteLength = VectorEqualInt(lengthSq, s_SIMDInfinity);
     const SIMDVector zeroLength = VectorEqual(lengthSq, s_SIMDZero);
@@ -201,7 +201,7 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL ClampLengthV(SIMDVector value, SIMDVector le
     return VectorSelect(result, value, VectorEqualInt(controlMax, controlMin));
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL RefractV(
+NWB_INLINE SIMDVector NWB_SIMD_CALL RefractV(
     SIMDVector incident,
     SIMDVector normal,
     SIMDVector refractionIndex,
@@ -227,45 +227,45 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL RefractV(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2ClampLengthV(SIMDVector value, SIMDVector lengthMin, SIMDVector lengthMax)noexcept{
-    GLB_ASSERT(VectorGetY(lengthMin) == VectorGetX(lengthMin));
-    GLB_ASSERT(VectorGetY(lengthMax) == VectorGetX(lengthMax));
-    GLB_ASSERT(Vector2GreaterOrEqual(lengthMin, s_SIMDZero));
-    GLB_ASSERT(Vector2GreaterOrEqual(lengthMax, s_SIMDZero));
-    GLB_ASSERT(Vector2GreaterOrEqual(lengthMax, lengthMin));
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2ClampLengthV(SIMDVector value, SIMDVector lengthMin, SIMDVector lengthMax)noexcept{
+    NWB_ASSERT(VectorGetY(lengthMin) == VectorGetX(lengthMin));
+    NWB_ASSERT(VectorGetY(lengthMax) == VectorGetX(lengthMax));
+    NWB_ASSERT(Vector2GreaterOrEqual(lengthMin, s_SIMDZero));
+    NWB_ASSERT(Vector2GreaterOrEqual(lengthMax, s_SIMDZero));
+    NWB_ASSERT(Vector2GreaterOrEqual(lengthMax, lengthMin));
 
     const SIMDVector lengthSq = Vector2LengthSq(value);
     return VectorAndInt(SIMDVectorDetail::ClampLengthV(value, lengthSq, lengthMin, lengthMax), s_SIMDMaskXY);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2ClampLength(SIMDVector value, f32 lengthMin, f32 lengthMax)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2ClampLength(SIMDVector value, f32 lengthMin, f32 lengthMax)noexcept{
     return Vector2ClampLengthV(value, VectorReplicate(lengthMin), VectorReplicate(lengthMax));
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2Reflect(SIMDVector incident, SIMDVector normal)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2Reflect(SIMDVector incident, SIMDVector normal)noexcept{
     SIMDVector result = Vector2Dot(incident, normal);
     result = VectorAdd(result, result);
     return VectorNegativeMultiplySubtract(result, normal, incident);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2RefractV(SIMDVector incident, SIMDVector normal, SIMDVector refractionIndex)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2RefractV(SIMDVector incident, SIMDVector normal, SIMDVector refractionIndex)noexcept{
     return SIMDVectorDetail::RefractV(incident, normal, refractionIndex, Vector2Dot(incident, normal));
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2Refract(SIMDVector incident, SIMDVector normal, f32 refractionIndex)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2Refract(SIMDVector incident, SIMDVector normal, f32 refractionIndex)noexcept{
     return Vector2RefractV(incident, normal, VectorReplicate(refractionIndex));
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2Orthogonal(SIMDVector value)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2Orthogonal(SIMDVector value)noexcept{
     return VectorMultiply(VectorSwizzle<1, 0, 2, 3>(value), VectorSet(-1.0f, 1.0f, 0.0f, 0.0f));
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2AngleBetweenNormals(SIMDVector n0, SIMDVector n1)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2AngleBetweenNormals(SIMDVector n0, SIMDVector n1)noexcept{
     return VectorACos(VectorClamp(Vector2Dot(n0, n1), s_SIMDNegativeOne, s_SIMDOne));
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2AngleBetweenNormalsEst(SIMDVector n0, SIMDVector n1)noexcept{ return VectorACosEst(VectorClamp(Vector2Dot(n0, n1), s_SIMDNegativeOne, s_SIMDOne)); }
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2AngleBetweenVectors(SIMDVector v0, SIMDVector v1)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2AngleBetweenNormalsEst(SIMDVector n0, SIMDVector n1)noexcept{ return VectorACosEst(VectorClamp(Vector2Dot(n0, n1), s_SIMDNegativeOne, s_SIMDOne)); }
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2AngleBetweenVectors(SIMDVector v0, SIMDVector v1)noexcept{
     const SIMDVector reciprocalLength0 = Vector2ReciprocalLength(v0);
     const SIMDVector reciprocalLength1 = Vector2ReciprocalLength(v1);
     SIMDVector cosAngle = VectorMultiply(Vector2Dot(v0, v1), VectorMultiply(reciprocalLength0, reciprocalLength1));
@@ -273,14 +273,14 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2AngleBetweenVectors(SIMDVector v0, SI
     return VectorACos(cosAngle);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2LinePointDistance(SIMDVector linePoint0, SIMDVector linePoint1, SIMDVector point)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2LinePointDistance(SIMDVector linePoint0, SIMDVector linePoint1, SIMDVector point)noexcept{
     const SIMDVector line = VectorSubtract(linePoint1, linePoint0);
     const SIMDVector pointVector = VectorSubtract(point, linePoint0);
     const SIMDVector projectionScale = VectorDivide(Vector2Dot(pointVector, line), Vector2LengthSq(line));
     return Vector2Length(VectorSubtract(pointVector, VectorMultiply(line, projectionScale)));
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2IntersectLine(SIMDVector line1Point1, SIMDVector line1Point2, SIMDVector line2Point1, SIMDVector line2Point2)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2IntersectLine(SIMDVector line1Point1, SIMDVector line1Point2, SIMDVector line2Point1, SIMDVector line2Point2)noexcept{
     const SIMDVector v1 = VectorSubtract(line1Point2, line1Point1);
     const SIMDVector v2 = VectorSubtract(line2Point2, line2Point1);
     const SIMDVector v3 = VectorSubtract(line1Point1, line2Point1);
@@ -294,9 +294,9 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2IntersectLine(SIMDVector line1Point1,
     return VectorSelect(fail, intersection, resultMask);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2Transform(SIMDVector value, const SIMDMatrix& matrix)noexcept;
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2TransformCoord(SIMDVector value, const SIMDMatrix& matrix)noexcept;
-GLB_INLINE SIMDVector GLB_SIMD_CALL Vector2TransformNormal(SIMDVector value, const SIMDMatrix& matrix)noexcept;
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2Transform(SIMDVector value, const SIMDMatrix& matrix)noexcept;
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2TransformCoord(SIMDVector value, const SIMDMatrix& matrix)noexcept;
+NWB_INLINE SIMDVector NWB_SIMD_CALL Vector2TransformNormal(SIMDVector value, const SIMDMatrix& matrix)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

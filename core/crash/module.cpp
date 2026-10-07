@@ -129,7 +129,7 @@ static bool ReserveDiagnosticCapture(const DiagnosticEventRecord& record, const 
     return true;
 }
 
-GLB_NOINLINE static CrashDumpResult CaptureCrashDumpForReason(const Detail::CrashReasonKind::Enum reasonKind, const AStringView category, const AStringView message, Detail::CrashDumpRequestOptions& options){
+NWB_NOINLINE static CrashDumpResult CaptureCrashDumpForReason(const Detail::CrashReasonKind::Enum reasonKind, const AStringView category, const AStringView message, Detail::CrashDumpRequestOptions& options){
     const AStringView breadcrumbCategory = category.empty() ? AStringView(Detail::s_ManualDumpCategory) : category;
 
     {
@@ -154,7 +154,7 @@ GLB_NOINLINE static CrashDumpResult CaptureCrashDumpForReason(const Detail::Cras
     return Detail::RequestCrashDump(reasonKind, 0u, options);
 }
 
-GLB_NOINLINE static void CaptureDiagnosticCrash(const DiagnosticEventRecord& record)noexcept{
+NWB_NOINLINE static void CaptureDiagnosticCrash(const DiagnosticEventRecord& record)noexcept{
     Detail::CrashDumpRequestOptions options;
     options.event = DiagnosticEventNameFromRecord(record);
     options.triggerCategory = record.category;
@@ -230,7 +230,7 @@ bool InstallCrashHandler(ArenaT& arena, const CrashConfigT<ArenaT>& config){
     if(!Detail::EnsureCrashSpoolDirectories(spoolDirectory))
         return false;
 
-#if !defined(GLB_PLATFORM_ANDROID)
+#if !defined(NWB_PLATFORM_ANDROID)
     if(!Detail::StartDesktopHandler(handlerExecutablePath))
         return false;
 #endif

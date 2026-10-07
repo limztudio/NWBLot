@@ -80,7 +80,7 @@ bool RendererReflectionPostprocess::prepareResources(const u32 width, const u32 
     if(!m_control)
         m_control = CreateReflectionHistoryControl(m_arena, device.getDeviceGeneration());
     if(!m_control){
-        NWB_LOGGER_ERROR(GLB_TEXT("Reflection history: failed to allocate acceptance control"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Reflection history: failed to allocate acceptance control"));
         return false;
     }
     const bool active = settings.traceMode != ReflectionTraceMode::Disabled;

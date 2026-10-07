@@ -68,7 +68,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
 
     Core::GpuTaskGraphOutputLayer outputLayer;
     if(m_outputLayerContributor && !m_outputLayerContributor->declareTaskGraphOutputLayer(m_graph, outputLayer)){
-        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: output layer did not declare its graph work"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: output layer did not declare its graph work"));
         return false;
     }
     {
@@ -119,7 +119,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         !compositeColor.valid()
         || !compositeBindlessSlots.valid()
     ){
-        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import deferred-composite graph resources"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-composite graph resources"));
         return false;
     }
 
@@ -167,7 +167,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         compositeInputs
     );
     if(!outResult.compositeTask.valid()){
-        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred-composite graph task"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-composite graph task"));
         return false;
     }
 
@@ -182,7 +182,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         )
     ;
     if(!backBufferAvailability.valid()){
-        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import presentation back-buffer availability"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import presentation back-buffer availability"));
         return false;
     }
 
@@ -200,7 +200,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         backBufferDesc
     );
     if(!backbuffer.valid()){
-        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import deferred-present graph resources"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-present graph resources"));
         return false;
     }
 
@@ -257,7 +257,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         }
     );
     if(!outResult.presentTask.valid()){
-        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred-present graph task"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-present graph task"));
         return false;
     }
 
@@ -274,7 +274,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
             outResult.presentTask
         );
         if(!outResult.overlayTask.valid()){
-            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: presentation contributor did not declare its final graph task"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: presentation contributor did not declare its final graph task"));
             return false;
         }
     }
@@ -301,14 +301,14 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         }
     );
     if(!outResult.frameTimingEndTask.valid()){
-        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred frame-timing endpoint graph task"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred frame-timing endpoint graph task"));
         return false;
     }
     if(!m_graph.declarePresentEndpoint(Core::GpuPresentEndpoint{
         .producer = outResult.frameTimingEndTask,
         .backBuffer = backbuffer,
     })){
-        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred graph presentation endpoint"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred graph presentation endpoint"));
         return false;
     }
 

@@ -24,7 +24,7 @@ bool MeshCookMetadata::BuildDiscoveredNwbFile(
     outFile.virtualRoot.clear();
     outFile.filePath = nwbFilePath;
     if(!outFile.virtualRoot.assign(virtualRoot)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Mesh meta '{}': virtual root exceeds ACompactString capacity")
+        NWB_LOGGER_ERROR(NWB_TEXT("Mesh meta '{}': virtual root exceeds ACompactString capacity")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -63,7 +63,7 @@ ScratchString MeshCookMetadata::MakeIndexedLabel(
 ){
     char indexBuffer[TextDetail::s_DecimalTextBufferBytes] = {};
     const AStringView indexText = FormatDecimal(index, indexBuffer);
-    GLB_ASSERT(!indexText.empty());
+    NWB_ASSERT(!indexText.empty());
 
     ScratchString label{arena};
     label.reserve(baseLabel.size() + indexText.size() + s_IndexedLabelBracketReserve);
@@ -84,7 +84,7 @@ const Core::Metascript::Value* MeshCookMetadata::FindRequiredMetadataListField(
     if(field && field->isList())
         return field;
 
-    NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': field '{}' must be a list")
+    NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': field '{}' must be a list")
         , metaKind
         , PathToString<tchar>(nwbFilePath)
         , StringConvert(fieldName)
@@ -119,7 +119,7 @@ void MeshCookMetadata::LogMetadataFiniteF32ValueFailure(
 ){
     switch(failure){
     case MetadataF32ValueFailure::NotNumeric:
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' must contain only numeric values")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only numeric values")
             , metaKind
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
@@ -127,7 +127,7 @@ void MeshCookMetadata::LogMetadataFiniteF32ValueFailure(
         return;
 
     case MetadataF32ValueFailure::NonFinite:
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' must contain only finite numeric values")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only finite numeric values")
             , metaKind
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
@@ -135,7 +135,7 @@ void MeshCookMetadata::LogMetadataFiniteF32ValueFailure(
         return;
 
     case MetadataF32ValueFailure::OutOfRange:
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' contains a value outside the f32 range")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value outside the f32 range")
             , metaKind
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
@@ -171,7 +171,7 @@ void MeshCookMetadata::LogMetadataU32ValueFailure(
 ){
     switch(failure){
     case MetadataU32ValueFailure::NotNumeric:
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' must contain only integer values")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only integer values")
             , metaKind
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
@@ -179,7 +179,7 @@ void MeshCookMetadata::LogMetadataU32ValueFailure(
         return;
 
     case MetadataU32ValueFailure::NonIntegerOrNegative:
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' contains a non-integer or negative value")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a non-integer or negative value")
             , metaKind
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
@@ -187,7 +187,7 @@ void MeshCookMetadata::LogMetadataU32ValueFailure(
         return;
 
     case MetadataU32ValueFailure::OutOfRange:
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' contains a value that exceeds u32")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains a value that exceeds u32")
             , metaKind
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)

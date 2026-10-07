@@ -148,7 +148,7 @@ struct RegularSharedComputeEmulationGraphPlan{
     }
 
     void materialize(const usize drawIndex, MaterialPassDrawItems& outDrawItems)const{
-        GLB_ASSERT(captured && drawIndex < drawCount);
+        NWB_ASSERT(captured && drawIndex < drawCount);
         outDrawItems.computeDrawItems.push_back(drawItems[drawIndex]);
     }
 };

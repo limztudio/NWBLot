@@ -40,7 +40,7 @@
 #include <core/alloc/scratch.h>
 #include <core/common/name_symbols.h>
 
-#if defined(GLB_PLATFORM_LINUX)
+#if defined(NWB_PLATFORM_LINUX)
 #include <unistd.h>
 #endif
 
@@ -61,15 +61,15 @@ static constexpr AStringView s_CORE_ALLOC_HEAP_BACKING = "core/alloc/heap_backin
 static constexpr AStringView s_BETA = "beta";
 static constexpr AStringView s_UNCHANGED = "unchanged";
 static constexpr AStringView s_UNIT = "unit";
-#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 static constexpr AStringView s_BIN_SH = "/bin/sh";
 static constexpr AStringView s_C = "-c";
 #endif
-static constexpr TStringView s_PARALLEL_LOGGER_MESSAGE = GLB_TEXT("parallel logger message");
-#if defined(GLB_PLATFORM_WINDOWS)
+static constexpr TStringView s_PARALLEL_LOGGER_MESSAGE = NWB_TEXT("parallel logger message");
+#if defined(NWB_PLATFORM_WINDOWS)
 static constexpr AStringView s_TRAILING_SUFFIX = ".trailing";
 #endif
-#if !defined(GLB_DEBUG)
+#if !defined(NWB_DEBUG)
 static constexpr AStringView s_RUNTIME_GENERATED = "runtime/generated";
 #endif
 static constexpr AStringView s_VALUE_42 = "value 42";
@@ -439,7 +439,7 @@ TEST(Global, ProcessArgumentValidationPreservesExistingOutput){
     EXPECT_TRUE(RemoveAllIfExists(root, error));
 }
 
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
 TEST(Global, WindowsProcessInputsSupportBoundedViews){
     NWB::Tests::TestArena<> testArena;
     ::AString<NWB::Core::Alloc::GlobalArena> executableText(testArena.arena);
@@ -489,7 +489,7 @@ TEST(Global, WindowsProcessInputsSupportBoundedViews){
 TEST(Global, SharedLibraryAcceptsBoundedNamesAndResetsFailedSymbols){
     NWB::Tests::TestArena<> testArena;
     SharedLibrary library;
-    constexpr TStringView s_LibraryName = GLB_TEXT("kernel32.dll.trailing");
+    constexpr TStringView s_LibraryName = NWB_TEXT("kernel32.dll.trailing");
     ASSERT_TRUE(library.open(testArena.arena, s_LibraryName.substr(0u, 12u)));
     using CurrentProcessIdFn = DWORD(WINAPI*)();
     CurrentProcessIdFn currentProcessId = nullptr;
@@ -539,7 +539,7 @@ TEST(Global, BinaryIdentityLanesDoNotRecordNameSymbols){
     }
     EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 0u);
 
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
     EXPECT_EQ(s_First.hash(), ComputeNameHash(s_IDENTITY_FIRST));
     EXPECT_EQ(NWB::Core::Common::NameSymbols::EntryCount(), 1u);
 #endif
@@ -561,7 +561,7 @@ TEST(Global, NameBinaryIdentityNeverInvokesInstalledSymbolCallbacks){
     EXPECT_FALSE(NameDetail::ResolveNameSymbolText(recorded.identityHash(), resolved, LengthOf(resolved)));
     EXPECT_EQ(probe.recordCount, 1u);
     EXPECT_EQ(probe.resolveCount, 1u);
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
     EXPECT_EQ(s_Literal.hash(), s_Literal.identityHash());
     EXPECT_EQ(probe.recordCount, s_ExpectedDualCount);
 #endif
@@ -577,7 +577,7 @@ TEST(Global, NameResolvedTextPreservesSymbolLookupAndHashFallback){
     const AStringView hashView(hashText, NameDetail::s_DebugHashTextLength);
     const Name binaryName{runtimeName.identityHash()};
     const DiagnosticEventText formattedName = MakeDiagnosticEventText("{}", binaryName);
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
     EXPECT_EQ(binaryName.resolvedText(), hashView);
     EXPECT_EQ(formattedName.view(), hashView);
 #else
@@ -598,7 +598,7 @@ TEST(Global, NameResolvedTextIsBoundedByStoredAndResolverBuffers){
     for(char& character : source)
         character = 'x';
     const Name name{AStringView(source, sizeof(source))};
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
     EXPECT_EQ(name.resolvedText().size(), NameDetail::s_DebugNameCapacity - 1u);
 #else
     SetNameSymbolResolveCallback([](const NameHash&, char* outText, const usize outTextSize, void*){
@@ -644,7 +644,7 @@ TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
 
     ::AString<NWB::Core::Alloc::GlobalArena> namesymText(liveOwner);
     NameSymbols::Serialize(namesymText);
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
     EXPECT_TRUE(NameSymbols::Resolve(s_LiveHash, resolvedText, sizeof(resolvedText)));
     EXPECT_STREQ(resolvedText, s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data());
     EXPECT_TRUE(NameSymbols::Resolve(s_RetiredHash, resolvedText, sizeof(resolvedText)));
@@ -666,14 +666,14 @@ TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
     NameSymbolTestPath executableName(liveOwner);
     ASSERT_TRUE(GetExecutableName(executableName));
     NameSymbolTestPath namesymPath = executableDirectory / executableName;
-    namesymPath.replaceExtension(GLB_TEXT(".namesym"));
+    namesymPath.replaceExtension(NWB_TEXT(".namesym"));
     // The application exception path exports after its scoped runtime callbacks have already detached.
     NameSymbols::UninstallRuntimeRegistry();
     ASSERT_TRUE(NameSymbols::WriteDefaultFile());
     NameSymbols::InstallRuntimeRegistry();
     namesymText.clear();
     ASSERT_TRUE(ReadTextFile(namesymPath, namesymText));
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
     EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE.data()), decltype(namesymText)::npos);
     EXPECT_NE(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data()), decltype(namesymText)::npos);
     EXPECT_NE(namesymText.find(s_CORE_ALLOC_HEAP_BACKING.data()), decltype(namesymText)::npos);
@@ -730,12 +730,12 @@ TEST(Global, OversizedWideCompactStringAssignmentClearsPreviousValue){
 
 TEST(Global, PathNativeComponentsMatchOwningIterationAndRemainValidAfterAdvance){
     NWB::Tests::TestArena<> testArena;
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
     const Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "C:\\Root//./í•œê¸€/File.TXT/");
-    constexpr TStringView s_Expected[]{ GLB_TEXT("C:\\"), GLB_TEXT("Root"), GLB_TEXT("."), GLB_TEXT("í•œê¸€"), GLB_TEXT("File.TXT") };
+    constexpr TStringView s_Expected[]{ NWB_TEXT("C:\\"), NWB_TEXT("Root"), NWB_TEXT("."), NWB_TEXT("í•œê¸€"), NWB_TEXT("File.TXT") };
 #else
     const Path<NWB::Core::Alloc::GlobalArena> path(testArena.arena, "/Root//./í•œê¸€/File.TXT/");
-    constexpr TStringView s_Expected[]{ GLB_TEXT("/"), GLB_TEXT("Root"), GLB_TEXT("."), GLB_TEXT("í•œê¸€"), GLB_TEXT("File.TXT") };
+    constexpr TStringView s_Expected[]{ NWB_TEXT("/"), NWB_TEXT("Root"), NWB_TEXT("."), NWB_TEXT("í•œê¸€"), NWB_TEXT("File.TXT") };
 #endif
     auto componentIt = path.begin();
     const TStringView first = componentIt.nativeComponent();
@@ -788,7 +788,7 @@ TEST(Global, PathNativeComponentViewsBorrowSourceStorageWithoutAllocating){
         ++componentIt;
         EXPECT_NE(componentIt.nativeComponent().data(), retained.data());
     }
-    EXPECT_EQ(retained, TStringView(GLB_TEXT("First_component_long_enough_to_require_owning_storage")));
+    EXPECT_EQ(retained, TStringView(NWB_TEXT("First_component_long_enough_to_require_owning_storage")));
     const ArenaMemoryStats after = arena.memoryStats();
     EXPECT_EQ(after.allocationCount, before.allocationCount);
     EXPECT_EQ(after.reallocationCount, before.reallocationCount);
@@ -823,7 +823,7 @@ TEST(Global, TextUtilitiesRejectNullShortAndOverflowingInput){
     EXPECT_FALSE(FindLineKeyValue(s_KeyValueText, "missing", textValue));
 }
 
-#if defined(GLB_PLATFORM_LINUX) && !defined(GLB_PLATFORM_ANDROID)
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 TEST(Global, CaptureProcessOutputReapsTruncatedChild){
     const AStringView argv[] = {
         s_BIN_SH,
@@ -921,7 +921,7 @@ TEST(Global, FilesystemMovePathToDirectory){
     EXPECT_TRUE(RemoveAllIfExists(root, error));
 }
 
-#if defined(GLB_PLATFORM_LINUX)
+#if defined(NWB_PLATFORM_LINUX)
 TEST(Global, RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks){
     NWB::Tests::TestArena<> testArena;
     const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/recursive_directory_iterator_links");
@@ -1087,11 +1087,11 @@ TEST(Global, TriviallyCopyableVectorPreservesOverlappingSourceRanges){
 #if !defined(_MSC_VER)
 TEST(Global, BoundedRuntimeWrappersTerminateTruncatedText){
     char truncatedText[4] = {};
-    EXPECT_NE(GLB_STRCPY(truncatedText, sizeof(truncatedText), "abcdef"), 0);
+    EXPECT_NE(NWB_STRCPY(truncatedText, sizeof(truncatedText), "abcdef"), 0);
     EXPECT_STREQ(truncatedText, "abc");
 
     char nullTerminatedText[4] = { 'a', 'b', 'c', 'd' };
-    EXPECT_NE(GLB_STRCAT(nullTerminatedText, sizeof(nullTerminatedText), "e"), 0);
+    EXPECT_NE(NWB_STRCAT(nullTerminatedText, sizeof(nullTerminatedText), "e"), 0);
     EXPECT_EQ(nullTerminatedText[sizeof(nullTerminatedText) - 1u], '\0');
 }
 #endif
@@ -1102,7 +1102,7 @@ TEST(Global, LoggerMacrosBehaveAsSingleStatements){
 
     bool elseBranchRan = false;
     if(false)
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("unreachable"));
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("unreachable"));
     else
         elseBranchRan = true;
 

@@ -59,7 +59,7 @@ static void AppendU32(Core::Assets::AssetBytes& bytes, const u32 value){
 }
 
 [[nodiscard]] static bool ReadFailure(const Path& path, const AStringView reason){
-    NWB_LOGGER_ERROR(GLB_TEXT("Prepared font '{}': {}"), PathToString<tchar>(path), StringConvert(reason));
+    NWB_LOGGER_ERROR(NWB_TEXT("Prepared font '{}': {}"), PathToString<tchar>(path), StringConvert(reason));
     return false;
 }
 
@@ -84,7 +84,7 @@ bool SerializePreparedFontSource(
         !sfnt.data() || sfnt.empty() || sfnt.size() > s_FontMaxSourceBytes || faceIndex != 0u
         || !groups || groupCount == 0u || groupCount > s_MaxGroupCount
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("Prepared font serialization: invalid font bytes, face index, or image group count"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Prepared font serialization: invalid font bytes, face index, or image group count"));
         return false;
     }
 
@@ -97,7 +97,7 @@ bool SerializePreparedFontSource(
             || !group.pixels.data() || group.pixels.size() != expectedBytes
             || expectedBytes > s_MaxPixelBytes - pixelByteCount
         ){
-            NWB_LOGGER_ERROR(GLB_TEXT("Prepared font serialization: image group {} has invalid dimensions, channels, or pixel bytes"), index);
+            NWB_LOGGER_ERROR(NWB_TEXT("Prepared font serialization: image group {} has invalid dimensions, channels, or pixel bytes"), index);
             return false;
         }
         pixelByteCount += expectedBytes;
@@ -160,7 +160,7 @@ bool ReadPreparedFontSource(const Path& path, PreparedFontSource& outSource, con
 
     PreparedFontSource candidate(outSource.fontBytes.get_allocator().arena());
     candidate.faceIndex = ReadU32(header + 8u);
-    GLB_MEMCPY(candidate.fontSha256.bytes, sizeof(candidate.fontSha256.bytes), header + 24u, sizeof(candidate.fontSha256.bytes));
+    NWB_MEMCPY(candidate.fontSha256.bytes, sizeof(candidate.fontSha256.bytes), header + 24u, sizeof(candidate.fontSha256.bytes));
     candidate.groups.reserve(groupCount);
     u32 groupByteCounts[s_MaxGroupCount] = {};
     u64 pixelByteCount = 0u;
@@ -181,7 +181,7 @@ bool ReadPreparedFontSource(const Path& path, PreparedFontSource& outSource, con
             return ReadFailure(path, "image dimensions, channels, or byte count are invalid");
         pixelByteCount += expectedBytes;
         groupByteCounts[index] = expectedBytes;
-        GLB_MEMCPY(group.sha256.bytes, sizeof(group.sha256.bytes), groupHeader + 16u, sizeof(group.sha256.bytes));
+        NWB_MEMCPY(group.sha256.bytes, sizeof(group.sha256.bytes), groupHeader + 16u, sizeof(group.sha256.bytes));
         candidate.groups.push_back(Move(group));
     }
 

@@ -38,20 +38,20 @@ bool ComputeRayTracingHandleLayout(const VulkanContext& context, u32& outHandleS
     const u32 baseAlignment = context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
 
     if(handleAlignment == 0 || (handleAlignment & (handleAlignment - 1u)) != 0u){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: shader group handle alignment is invalid"), operation);
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group handle alignment is invalid"), operation);
         return false;
     }
     if(baseAlignment == 0 || (baseAlignment & (baseAlignment - 1u)) != 0u){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: shader group base alignment is invalid"), operation);
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group base alignment is invalid"), operation);
         return false;
     }
     u32 handleSizeAligned = 0;
     if(!AlignUpU32Checked(handleSize, handleAlignment, handleSizeAligned)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: shader group handle size alignment overflows"), operation);
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group handle size alignment overflows"), operation);
         return false;
     }
     if(handleSizeAligned == 0){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to {}: shader group handle size is invalid"), operation);
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group handle size is invalid"), operation);
         return false;
     }
 
@@ -96,30 +96,30 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     VkResult res = VK_SUCCESS;
 
     if(!queryFeatureSupport(Feature::RayTracingPipeline)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: ray tracing pipeline support is unavailable"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: ray tracing pipeline support is unavailable"));
         return nullptr;
     }
     if(desc.allowOpacityMicromaps && !queryFeatureSupport(Feature::RayTracingOpacityMicromap)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: opacity micromap support is unavailable"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: opacity micromap support is unavailable"));
         return nullptr;
     }
     if(desc.allowClusterAccelerationStructures && !queryFeatureSupport(Feature::RayTracingClusters)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: cluster acceleration structures are unavailable"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: cluster acceleration structures are unavailable"));
         return nullptr;
     }
     if(desc.maxRecursionDepth > m_context.rayTracingPipelineProperties.maxRayRecursionDepth){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: max recursion depth {} exceeds device limit {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: max recursion depth {} exceeds device limit {}")
             , desc.maxRecursionDepth
             , m_context.rayTracingPipelineProperties.maxRayRecursionDepth
         );
         return nullptr;
     }
     if(desc.allowSpheres && !queryFeatureSupport(Feature::Spheres)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: sphere geometry pipeline support is unavailable"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: sphere geometry pipeline support is unavailable"));
         return nullptr;
     }
     if(desc.allowLinearSweptSpheres && !queryFeatureSupport(Feature::LinearSweptSpheres)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: linear swept sphere geometry pipeline support is unavailable"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: linear swept sphere geometry pipeline support is unavailable"));
         return nullptr;
     }
 
@@ -132,46 +132,46 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         const TStringView stageName
     ){
         if(!shader){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: {} shader is null"), stageName);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: {} shader is null"), stageName);
             return false;
         }
         if(&shader->m_context != &m_context){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: {} shader belongs to another device"), stageName);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: {} shader belongs to another device"), stageName);
             return false;
         }
         if(
             shader->m_shaderModule == VK_NULL_HANDLE
             || !VulkanDetail::IsRayTracingShaderTypeAllowed(shader->m_desc.shaderType, allowedShaderTypes)
         ){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: {} shader has an invalid module or stage"), stageName);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: {} shader has an invalid module or stage"), stageName);
             return false;
         }
         return true;
     };
     for(const auto& shaderDesc : desc.shaders){
-        if(!validateShader(shaderDesc.shader.get(), s_GeneralShaderTypes, GLB_TEXT("general")))
+        if(!validateShader(shaderDesc.shader.get(), s_GeneralShaderTypes, NWB_TEXT("general")))
             return nullptr;
     }
     for(const auto& hitGroup : desc.hitGroups){
         if(hitGroup.isProceduralPrimitive != static_cast<bool>(hitGroup.intersectionShader)){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: hit-group topology does not match its intersection shader"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: hit-group topology does not match its intersection shader"));
             return nullptr;
         }
         if(
-            (hitGroup.closestHitShader && !validateShader(hitGroup.closestHitShader.get(), ShaderType::ClosestHit, GLB_TEXT("closest-hit")))
-            || (hitGroup.anyHitShader && !validateShader(hitGroup.anyHitShader.get(), ShaderType::AnyHit, GLB_TEXT("any-hit")))
-            || (hitGroup.intersectionShader && !validateShader(hitGroup.intersectionShader.get(), ShaderType::Intersection, GLB_TEXT("intersection")))
+            (hitGroup.closestHitShader && !validateShader(hitGroup.closestHitShader.get(), ShaderType::ClosestHit, NWB_TEXT("closest-hit")))
+            || (hitGroup.anyHitShader && !validateShader(hitGroup.anyHitShader.get(), ShaderType::AnyHit, NWB_TEXT("any-hit")))
+            || (hitGroup.intersectionShader && !validateShader(hitGroup.intersectionShader.get(), ShaderType::Intersection, NWB_TEXT("intersection")))
         )
             return nullptr;
     }
 
     if(desc.hitGroups.size() > (static_cast<usize>(-1) - desc.shaders.size()) / s_RayTracingHitGroupShaderStageCount){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader stage count overflows"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader stage count overflows"));
         return nullptr;
     }
     const usize maxShaderStages = desc.shaders.size() + desc.hitGroups.size() * s_RayTracingHitGroupShaderStageCount;
     if(maxShaderStages > static_cast<usize>(UINT32_MAX)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader stage count exceeds Vulkan limit"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader stage count exceeds Vulkan limit"));
         return nullptr;
     }
 
@@ -182,7 +182,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         desc.allowClusterAccelerationStructures
     );
     if(!pso){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: object allocation failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: object allocation failed"));
         return nullptr;
     }
     pso->m_desc = desc;
@@ -298,12 +298,12 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     }
 
     if(stages.empty() || groups.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: no shader stages or groups were provided"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: no shader stages or groups were provided"));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
     if(pso->m_shaderGroups.size() != groups.size()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group metadata count mismatch"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group metadata count mismatch"));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
@@ -311,7 +311,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         if(pso->m_shaderGroups[groupIndex].groupIndex == groupIndex)
             continue;
 
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group metadata order mismatch"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group metadata order mismatch"));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
@@ -329,7 +329,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
     if(!configurePipelineBindingsOrDestroy(
         desc.globalBindingLayouts,
-        GLB_TEXT("ray tracing pipeline"),
+        NWB_TEXT("ray tracing pipeline"),
         *pso,
         scratchArena
     ))
@@ -367,7 +367,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
 
     res = m_context.deviceDispatch.vkCreateRayTracingPipelinesKHR(m_context.device, VK_NULL_HANDLE, m_context.pipelineCache, 1, &createInfo, m_context.allocationCallbacks, &pso->m_pipeline);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
@@ -375,14 +375,14 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
     u32 handleSize = 0;
     u32 handleSizeAligned = 0;
     u32 baseAlignment = 0;
-    if(!VulkanDetail::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, GLB_TEXT("create ray tracing pipeline"))){
+    if(!VulkanDetail::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("create ray tracing pipeline"))){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
 
     u32 groupCount = static_cast<u32>(groups.size());
     if(handleSize == 0 || static_cast<usize>(groupCount) > Limit<usize>::s_Max / static_cast<usize>(handleSize)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group handle table size overflows"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create ray tracing pipeline: shader group handle table size overflows"));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
@@ -398,7 +398,7 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         pso->m_shaderGroupHandles.data()
     );
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to retrieve ray tracing shader group handles: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to retrieve ray tracing shader group handles: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }

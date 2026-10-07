@@ -32,21 +32,21 @@ bool ValidateOptions(const BakeOptions& options){
         || options.source.empty()
         || options.output.empty()
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("font_builder: invalid options; ppem16..256, spread2..32, extent32..2048, groups1..8, total capacity<=128MiB"));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: invalid options; ppem16..256, spread2..32, extent32..2048, groups1..8, total capacity<=128MiB"));
         return false;
     }
     if(PathToGenericString<AString>(options.output.extension()) != ".nwb"){
-        NWB_LOGGER_ERROR(GLB_TEXT("font_builder: --output must name a .nwb font asset bunch"));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --output must name a .nwb font asset bunch"));
         return false;
     }
     const AString stem = PathToGenericString<AString>(options.output.stem());
     if(stem.empty() || stem == "." || stem == ".."){
-        NWB_LOGGER_ERROR(GLB_TEXT("font_builder: output must have a nonempty asset stem"));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output must have a nonempty asset stem"));
         return false;
     }
     const AString sourceExtension = LowerPathExtension<AString>(options.source);
     if(sourceExtension != ".ttf" && sourceExtension != ".otf" && sourceExtension != ".font"){
-        NWB_LOGGER_ERROR(GLB_TEXT("font_builder: --font must name a .ttf, .otf, or prepared .font source"));
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: --font must name a .ttf, .otf, or prepared .font source"));
         return false;
     }
     return true;

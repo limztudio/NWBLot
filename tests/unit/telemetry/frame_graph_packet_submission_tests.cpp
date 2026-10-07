@@ -100,9 +100,9 @@ TEST(Telemetry, InheritedWaitStatisticsRejectMalformedCountsAndMismatchedTotals)
         + sizeof(Telemetry::EncodedFrameGraphPacketSubmissionStatistics)
     ;
     Telemetry::EncodedFrameGraphPacketSubmissionStatistics encoded;
-    GLB_MEMCPY(&encoded, sizeof(encoded), payload.data() + computePacketOffset, sizeof(encoded));
+    NWB_MEMCPY(&encoded, sizeof(encoded), payload.data() + computePacketOffset, sizeof(encoded));
     encoded.inheritedTimelineWaitElisionCount = Limit<u64>::s_Max;
-    GLB_MEMCPY(payload.data() + computePacketOffset, payload.size() - computePacketOffset, &encoded, sizeof(encoded));
+    NWB_MEMCPY(payload.data() + computePacketOffset, payload.size() - computePacketOffset, &encoded, sizeof(encoded));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     nodes[0u].runtimeStatistics.submission.inheritedTimelineWaitElisionCount = 0u;
@@ -180,7 +180,7 @@ TEST(Telemetry, PacketSubmissionEncodingIsIndependentOfInputOrder){
         reorderedPayload
     ));
     ASSERT_EQ(payload.size(), reorderedPayload.size());
-    EXPECT_EQ(GLB_MEMCMP(payload.data(), reorderedPayload.data(), payload.size()), 0);
+    EXPECT_EQ(NWB_MEMCMP(payload.data(), reorderedPayload.data(), payload.size()), 0);
 }
 
 TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPreservesExactEmptyAndAbsent){
@@ -355,14 +355,14 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecor
         + sizeof(Telemetry::EncodedFrameGraphPhysicalQueueRuntimeStatistics) * s_ExpectedDualCount
     ;
     Telemetry::EncodedFrameGraphPacketSubmissionStatistics encodedStatistics;
-    GLB_MEMCPY(
+    NWB_MEMCPY(
         &encodedStatistics,
         sizeof(encodedStatistics),
         payload.data() + packetSubmissionStatisticsOffset,
         sizeof(encodedStatistics)
     );
     encodedStatistics.reserved = 1u;
-    GLB_MEMCPY(
+    NWB_MEMCPY(
         payload.data() + packetSubmissionStatisticsOffset,
         payload.size() - packetSubmissionStatisticsOffset,
         &encodedStatistics,
@@ -380,14 +380,14 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecor
         packetSubmissionStatistics,
         payload
     ));
-    GLB_MEMCPY(
+    NWB_MEMCPY(
         &encodedStatistics,
         sizeof(encodedStatistics),
         payload.data() + packetSubmissionStatisticsOffset,
         sizeof(encodedStatistics)
     );
     encodedStatistics.submissionSeconds += 0.01;
-    GLB_MEMCPY(
+    NWB_MEMCPY(
         payload.data() + packetSubmissionStatisticsOffset,
         payload.size() - packetSubmissionStatisticsOffset,
         &encodedStatistics,
@@ -407,14 +407,14 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecor
     const usize secondPacketSubmissionStatisticsOffset = packetSubmissionStatisticsOffset
         + sizeof(Telemetry::EncodedFrameGraphPacketSubmissionStatistics)
     ;
-    GLB_MEMCPY(
+    NWB_MEMCPY(
         &encodedStatistics,
         sizeof(encodedStatistics),
         payload.data() + secondPacketSubmissionStatisticsOffset,
         sizeof(encodedStatistics)
     );
     encodedStatistics.packetIndex = 0u;
-    GLB_MEMCPY(
+    NWB_MEMCPY(
         payload.data() + secondPacketSubmissionStatisticsOffset,
         payload.size() - secondPacketSubmissionStatisticsOffset,
         &encodedStatistics,
@@ -432,9 +432,9 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecor
         payload
     ));
     Telemetry::EncodedFrameGraphPayloadHeader header;
-    GLB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     ++header.packetSubmissionStatisticsCount;
-    GLB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+    NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
@@ -446,9 +446,9 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecor
         packetSubmissionStatistics,
         payload
     ));
-    GLB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     header.packetSubmissionStatisticsPresent = 0u;
-    GLB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+    NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
@@ -460,9 +460,9 @@ TEST(Telemetry, FrameGraphPacketSubmissionStatisticsPayloadRejectsMalformedRecor
         packetSubmissionStatistics,
         payload
     ));
-    GLB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
+    NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     header.reservedTail[1u] = 1u;
-    GLB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
+    NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
     EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
 
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(

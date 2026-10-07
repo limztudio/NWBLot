@@ -9,9 +9,9 @@
 #include "platform.h"
 #include "type.h"
 
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(GLB_PLATFORM_LINUX) || defined(GLB_PLATFORM_ANDROID) || defined(GLB_PLATFORM_APPLE) || defined(GLB_PLATFORM_UNIX)
+#elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID) || defined(NWB_PLATFORM_APPLE) || defined(NWB_PLATFORM_UNIX)
 #include <errno.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -21,7 +21,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLB_PLATFORM_LINUX) || defined(GLB_PLATFORM_ANDROID) || defined(GLB_PLATFORM_APPLE) || defined(GLB_PLATFORM_UNIX)
+#if defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID) || defined(NWB_PLATFORM_APPLE) || defined(NWB_PLATFORM_UNIX)
 template<typename PointerT, typename OperationT>
 [[nodiscard]] inline bool TransferAllPosix(PointerT cursor, const usize byteCount, OperationT operation)noexcept{
     usize remaining = byteCount;
@@ -66,7 +66,7 @@ template<typename PointerT, typename OperationT>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
 [[nodiscard]] inline bool ReadAllWin32Handle(const HANDLE handle, void* const data, const usize byteCount)noexcept{
     u8* cursor = static_cast<u8*>(data);
     usize remaining = byteCount;

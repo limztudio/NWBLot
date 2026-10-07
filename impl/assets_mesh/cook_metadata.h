@@ -64,7 +64,7 @@ namespace MetadataU32ValueFailure{
 };
 
 
-static constexpr TStringView s_MeshMetaKind = GLB_TEXT("Mesh");
+static constexpr TStringView s_MeshMetaKind = NWB_TEXT("Mesh");
 static constexpr AStringView s_MeshMetaText = "Mesh meta";
 
 
@@ -184,7 +184,7 @@ bool MeshCookMetadata::ParseMetadataF32TupleWithLabel(
     Core::Alloc::ScratchArena& scratchArena
 ){
     if(!value.isList() || value.asList().size() != ComponentCount){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' must be a {}-component list")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a {}-component list")
             , metaKind
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
@@ -257,7 +257,7 @@ bool MeshCookMetadata::ParseMetadataFloatListField(
     }
 
     if(outValues.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': '{}' must not be empty")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must not be empty")
             , metaKind
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
@@ -314,7 +314,7 @@ bool MeshCookMetadata::ParseMetadataIndexField(
 
     usize indexCount = 0u;
     if(!CountFlattenedValueLeaves(*field, indexCount)){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} meta '{}': 'indices' scalar count overflows")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' scalar count overflows")
             , metaKind
             , PathToString<tchar>(nwbFilePath)
         );
@@ -326,10 +326,10 @@ bool MeshCookMetadata::ParseMetadataIndexField(
         outIndices.clear();
         return false;
     }
-    GLB_ASSERT(outIndices.size() == indexCount);
+    NWB_ASSERT(outIndices.size() == indexCount);
     if(outIndices.empty()){
         NWB_LOGGER_ERROR(
-            GLB_TEXT("{} meta '{}': 'indices' must not be empty"),
+            NWB_TEXT("{} meta '{}': 'indices' must not be empty"),
             metaKind,
             PathToString<tchar>(nwbFilePath)
         );

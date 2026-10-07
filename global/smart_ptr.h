@@ -142,7 +142,7 @@ template<typename Owner>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define GLB_SMART_PTR_COMPARISON_OPERATORS(OwnerType) \
+#define NWB_SMART_PTR_COMPARISON_OPERATORS(OwnerType) \
 template<typename T1, typename D1, typename T2, typename D2> \
 inline bool operator==(const OwnerType<T1, D1>& a, const OwnerType<T2, D2>& b)noexcept(noexcept(SmartPtrDetail::OwnerPointerEqual(a, b))){ return SmartPtrDetail::OwnerPointerEqual(a, b); } \
 template<typename T1, typename D1, typename T2, typename D2> \

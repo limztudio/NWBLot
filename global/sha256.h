@@ -16,7 +16,7 @@ struct Sha256Digest{
 };
 
 [[nodiscard]] inline bool operator==(const Sha256Digest& lhs, const Sha256Digest& rhs)noexcept{
-    return GLB_MEMCMP(lhs.bytes, rhs.bytes, sizeof(lhs.bytes)) == 0;
+    return NWB_MEMCMP(lhs.bytes, rhs.bytes, sizeof(lhs.bytes)) == 0;
 }
 
 [[nodiscard]] inline bool operator!=(const Sha256Digest& lhs, const Sha256Digest& rhs)noexcept{
@@ -92,18 +92,18 @@ inline void Compress(u32 (&state)[8u], const u8 (&block)[64u])noexcept{
     u8 block[64u] = {};
     usize offset = 0u;
     while(input.size() - offset >= sizeof(block)){
-        GLB_MEMCPY(block, sizeof(block), input.data() + offset, sizeof(block));
+        NWB_MEMCPY(block, sizeof(block), input.data() + offset, sizeof(block));
         Sha256Detail::Compress(state, block);
         offset += sizeof(block);
     }
     const usize remainder = input.size() - offset;
-    GLB_MEMSET(block, 0, sizeof(block));
+    NWB_MEMSET(block, 0, sizeof(block));
     if(remainder > 0u)
-        GLB_MEMCPY(block, sizeof(block), input.data() + offset, remainder);
+        NWB_MEMCPY(block, sizeof(block), input.data() + offset, remainder);
     block[remainder] = 0x80u;
     if(remainder >= 56u){
         Sha256Detail::Compress(state, block);
-        GLB_MEMSET(block, 0, sizeof(block));
+        NWB_MEMSET(block, 0, sizeof(block));
     }
     const u64 bitCount = static_cast<u64>(input.size()) * 8u;
     for(u32 index = 0u; index < 8u; ++index)

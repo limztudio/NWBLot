@@ -30,7 +30,9 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Do not commit LF-only or mixed line endings in those files.
 
 ## 2. Namespace style
-- Use namespace wrapper macros (`NWB_BEGIN`, `NWB_CORE_BEGIN`, `NWB_VULKAN_BEGIN`, etc.) instead of raw namespace blocks in module public files.
+- Engine module public files use namespace wrapper macros (`NWB_BEGIN`, `NWB_CORE_BEGIN`, `NWB_VULKAN_BEGIN`, etc.) instead of raw namespace blocks. Application files use their own project wrapper macros, such as `TESTBED_BEGIN`/`TESTBED_END`.
+- Root `engine_namespace.h` is the sole owner of `NWB_BEGIN`/`NWB_END` for `namespace NWB`. Engine domains include it through their own umbrella headers; applications must not include it directly to declare their own symbols. Transitive inclusion through the engine APIs used by an application is expected.
+- Each application owns a local namespace header independent of `engine_namespace.h`, such as `CoolStuff/Testbed/namespace.h` for `namespace Testbed`. Put application classes, state, and helpers in that namespace. Keep only the functions required by `loader/project_entry.h` in the engine integration namespace, delegating to the application implementation. Do not expose ordinary application types through engine aliases.
 - End wrapped namespaces with corresponding `*_END` macros.
 - When a raw namespace block is used, terminate the namespace closing brace with `;`:
   - Correct: `namespace foobar{ ... };`
@@ -61,7 +63,9 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - C++ free functions at global or namespace scope use `UpperCamelCase`, starting with an uppercase letter. This includes templates, namespace helpers, and translation-unit-local `static` functions and callbacks.
 - Exception: keep `checked_cast` in `snake_case` to align with the C++ cast names.
 - Global and class static variables start with `s_Uppercase`; function-local static variables retain the `s_` prefix.
-- Macros owned by `global/` use the `GLB_` prefix. Keep `NWB_` for project-owned namespace, graphics configuration, logger, and shader macros.
+- NWBLot-owned utility, configuration, diagnostic, namespace, and shader feature macro APIs use the `NWB_` prefix, including those under `global/`. The prefix identifies ownership; the defining header and directory identify the domain.
+- Application-owned macro APIs use that application's prefix, such as `TESTBED_`; preserve required external API, compiler interoperability, toolchain, and third-party macro spellings. Consuming an engine-owned shader or runtime contract from a project does not change that contract's prefix.
+- Existing shader resource-view aliases follow the shader symbol contract in section 15, including `g_*` resource aliases. Preserve those resource names; a utility/configuration macro-prefix migration does not rename shader resources or rewrite their authored contracts.
 - Preserve project scalar aliases, template parameter conventions, required standard-library customization/iterator names, and external API/entry-point spellings. Project-owned methods that merely resemble standard APIs follow the project method convention.
 - Python uses `snake_case` functions, parameters, and variables, `PascalCase` classes, and `UPPER_SNAKE_CASE` module constants. Project CMake helpers use the `nwb_` prefix.
 - For virtual overrides, explicitly write both `virtual` and `override`.
@@ -112,7 +116,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Prefer single-line brace initializers when the initializer is a short allocator/helper expression, e.g. `Vector<u8, Core::Alloc::ScratchAllocator<u8>> visitedVertices{ Core::Alloc::ScratchAllocator<u8>(scratchArena) };`. The same applies to short nested struct literals such as `.queue = { .index = ..., .deviceGeneration = ... }`; keep them on one line instead of expanding each field across lines.
 - Prefer single-line logger macro calls when they contain a single message and a small number of short formatting arguments.
 - For longer logger macro calls with formatting arguments, keep the message argument on the opener line and put subsequent formatting arguments on continuation lines with leading commas:
-  - `NWB_LOGGER_WARNING(GLB_TEXT("message {}")`
+  - `NWB_LOGGER_WARNING(NWB_TEXT("message {}")`
   - `    , arg0`
   - `    , arg1`
   - `);`
@@ -272,8 +276,8 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - The return value carries the answer (e.g., "does the file exist?"), the `ErrorCode&` carries the failure reason (e.g., permission denied). These are two different pieces of information — "file does not exist" is a valid `false` result, not an error.
   - Correct: `[[nodiscard]] inline bool FileExists(const Path& path, ErrorCode& errorCode)noexcept{ return std::filesystem::exists(path, errorCode); }`
   - Wrong: `inline ErrorCode FileExists(const Path& path)noexcept{ ... }` — discards the bool result; callers cannot distinguish "file not found" from "no error".
-- Prefer project C-runtime wrapper macros from `global/compile.h` for memory/string operations (`GLB_MEMCPY`, `GLB_MEMSET`, `GLB_MEMCMP`, `GLB_STRCPY`, etc.) instead of direct `std::`/CRT calls when equivalent wrappers exist.
-- For console I/O, prefer project stream macros from `global/compile.h` (`GLB_COUT`, `GLB_CERR`, `GLB_TCOUT`, `GLB_TCERR`) instead of direct `std::cout`/`std::cerr` or `fprintf(stdout/stderr, ...)`.
+- Prefer project C-runtime wrapper macros from `global/compile.h` for memory/string operations (`NWB_MEMCPY`, `NWB_MEMSET`, `NWB_MEMCMP`, `NWB_STRCPY`, etc.) instead of direct `std::`/CRT calls when equivalent wrappers exist.
+- For console I/O, prefer project stream macros from `global/compile.h` (`NWB_COUT`, `NWB_CERR`, `NWB_TCOUT`, `NWB_TCERR`) instead of direct `std::cout`/`std::cerr` or `fprintf(stdout/stderr, ...)`.
 - For standalone command-line utilities that own logger setup, initialize `NWB::Log::ClientStandalone` in the entry point and route non-interactive status, validation, failure, and listing output through `NWB_LOGGER_*` macros. Keep direct stream output only for interactive prompts, CLI help/error routing, terminal pause prompts, and logger-initialization fallback messages.
 - Do not use raw/fixed-buffer environment-variable probes for production, runtime, or cooker feature/configuration control.
   - Test suites and smoke-test diagnostics may use test-local environment helpers under `tests/`.
@@ -347,8 +351,8 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Do not hide a function return with `static_cast<void>(call())`, a C-style void cast, `std::ignore`, or a `[[maybe_unused]]` local initialized from the call — handle it. This includes templated calls and locals wrapped only to convert or test the return before discarding it, regardless of assignment, brace, or direct initialization. Check and act: `if(!call(...)){ log / propagate / early-return }`, or fold the discarded `bool` into the matching out-error check (`static_cast<void>(f(p, error)); if(error) ...` → `if(!f(p, error)) ...`).
   - If a result genuinely conveys no actionable information to any caller, make that operation a `void` command instead of suppressing its return at individual call sites. Keep `[[maybe_unused]]` for non-call values such as unused callback parameters or compile-time expressions only.
   - `static_cast<void>(param)` to silence an unused parameter is unrelated to this rule and remains fine.
-- Use assertions (`GLB_ASSERT`, `GLB_ASSERT_MSG`) for invariant checking.
-- Handle container-insertion failures with an explicit branch (`if(!insert...){ GLB_ASSERT(false); continue/return; }`); do not leave a bare `GLB_ASSERT(added)` after the insert with no failure path.
+- Use assertions (`NWB_ASSERT`, `NWB_ASSERT_MSG`) for invariant checking.
+- Handle container-insertion failures with an explicit branch (`if(!insert...){ NWB_ASSERT(false); continue/return; }`); do not leave a bare `NWB_ASSERT(added)` after the insert with no failure path.
 - For caches of derived/runtime-created objects, the cache key must include every input that affects the created result.
   - Example: graphics pipeline caches must include framebuffer/render-target compatibility when pipeline creation depends on framebuffer info.
 
@@ -367,7 +371,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Data captured by asynchronous tasks/callbacks submitted to `CpuTaskScheduler`/`CpuTaskScope` can outlive the submitting scope; do not back escaping captures with `ScratchArena`. Synchronous task batches may reference local scratch storage only when their complete task subtree joins before that storage is released.
 - Do not repeat structural validation in hot paths that run every frame or for many draw/dispatch items.
   - Move asset/payload/layout validation to cook, load, resource creation, or cache insertion time whenever possible.
-  - In realtime paths, keep opt/fin code on the already-validated fast path. Use `#if defined(GLB_DEBUG)` / `GLB_ASSERT` for invariant checks that are useful while debugging.
+  - In realtime paths, keep opt/fin code on the already-validated fast path. Use `#if defined(NWB_DEBUG)` / `NWB_ASSERT` for invariant checks that are useful while debugging.
   - Keep external API failure handling and resource creation failures in all configurations; those are not redundant validation.
 - For parallel containers (`ParallelQueue`, `ParallelVector`, `ParallelHashMap`, etc.), use a cache-aligned allocator that matches the owning arena instead of default allocators when arena ownership exists.
 - SIMD math helpers should accept and return SIMD-domain values such as `SIMDVector` or `SIMDMatrix`.
@@ -502,7 +506,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - Shader functions and locals use `lowerCamelCase`.
 - Domain helper functions use the subsystem prefix (`nwbMesh...`, `nwbAvboit...`, `nwbProject...`, `nwbDeformer...`).
 - Shader types and interface blocks use `PascalCase` with the `Nwb` prefix.
-- Global shader resources/uniform instances use `g_...`.
+- Global shader resources/uniform instances and their existing resource-view aliases use `g_...`. Preserve current resource alias names such as `g_Control`; these aliases implement the shader symbol contract and are not utility/configuration macro APIs.
 - Compile-time constants, layout constants, material parameter keys, and shader feature constants use uppercase `NWB_...`.
 - Keep Vulkan binding attributes explicit and grouped; preserve binding, set, and location qualifiers rather than relying on implicit locations.
 - Prefer explicit Slang scalar/vector types and existing layout qualifiers where the shader data path uses them.
@@ -536,7 +540,8 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - A `.cpp` that mixes unrelated concern owners or grows past roughly 800 lines is a review smell. Split by concrete owner and concern instead of adding another section to the same file.
 - Private state for a feature should live with that feature. Cross-feature data flow should use explicit public contracts or shared ABI headers, not friend access to a shared all-features state object.
 - For file moves, prefer a content-free `git mv` commit followed by a separate content edit. Do not move and rewrite a source file in one commit unless the history cost is intentionally accepted.
-- `global/` is the neutral global-unit domain (global scope, shared layouts, process-wide contracts), not the owner of the `NWB` namespace wrapper. `namespace.h` at the repository root is the sole owner of the `NWB_BEGIN`/`NWB_END` macro definitions; every domain reaches them through its own umbrella (`core/global.h`, `impl/global.h`, `logger/global.h`, `pipeline/asset_builder/global.h`, `pipeline/asset_gatherer/global.h`, `utilities/fbx_to_nwb/global.h`, `utilities/font_builder/global.h`, `utilities/tex_conv/global.h`), each of which includes `<namespace.h>` in its own first include group; keep those macros defined (not namespace-wrapped) in that one root header and do not scatter duplicate definitions.
+- `global/` is the neutral global-unit domain (global scope, shared layouts, process-wide contracts). Its types and functions retain their existing scopes when macro names change; it does not own the `NWB` namespace wrapper or depend on engine namespace headers. Root `engine_namespace.h` alone defines `NWB_BEGIN`/`NWB_END`. Engine domains reach them through their own umbrellas (`core/global.h`, `impl/global.h`, `logger/global.h`, `pipeline/asset_builder/global.h`, `pipeline/asset_gatherer/global.h`, `utilities/fbx_to_nwb/global.h`, `utilities/font_builder/global.h`, `utilities/tex_conv/global.h`), which include `<engine_namespace.h>` in the first include group and define their own domain wrappers. Keep these macro definitions outside namespace blocks and do not scatter duplicate definitions.
+- Project code owns its own namespace and project-specific state, includes the engine contracts it uses, and implements only the required loader entry adapter in `NWB`. Existing application-facing `NWB::Impl` features remain valid engine contracts; do not classify the whole `impl/` tree as private or create forwarding aliases solely for a namespace migration. Respect existing private/detail ownership and the graphics provider-selection boundary.
 - Texture payload layouts (`global/texture_payload.h`) stay in `global/` even though textures feed graphics: both `impl/assets_texture/` (cooker, runtime codec, loader) and `utilities/tex_conv` consume the same payload contract, so the single source of truth lives in the neutral `global/` domain instead of a graphics-owned header.
 
 ## 19. Graphics Backend Selection
@@ -558,6 +563,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - A test's size or a complex fixture does not make it an edge-case test. Identify the failure scenario in its name or a short comment and assert the externally observable consequence; do not merely mirror implementation details or search source text for routine wiring.
 - Keep successful setup and control assertions when they establish the boundary, prove failure recovery, or distinguish an edge case from normal operation. For mixed tests, retain the edge-case checks and trim unrelated basic assertions instead of deleting useful coverage.
 - Broader workflow coverage belongs in integration/smoke tests under `tests/`; explicit opt-in performance benchmarks also stay under `tests/` as performance workloads, separate from unit correctness coverage.
+- Native-input harnesses must observe the fixture GUI thread's capture admission and release before relocating a pointer used by an asynchronous press/release sequence when capture is part of that gesture's contract. Use bounded waits within the run deadline; retain exact model/geometry/pixel assertions and keep orchestration fixes under `tests/`, without production test hooks.
 - After pruning tests, build the affected targets, run the remaining suites, and check that deleted files or fixtures leave no stale CMake references. Never delete a failing test merely to obtain a passing run.
 
 ## 21. Current Contracts Only

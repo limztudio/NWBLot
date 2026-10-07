@@ -10,7 +10,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(GLB_PLATFORM_WINDOWS)
+#if defined(NWB_PLATFORM_WINDOWS)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -170,7 +170,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         {
             if(s_Font){
                 if(!DeleteObject(s_Font))
-                    GLB_TCERR << GLB_TEXT("Log server: failed to delete its font.\n");
+                    NWB_TCERR << NWB_TEXT("Log server: failed to delete its font.\n");
                 s_Font = nullptr;
             }
             {
@@ -184,7 +184,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
 
         case WM_CLOSE:
             if(!DestroyWindow(hwnd))
-                GLB_TCERR << GLB_TEXT("Log server: failed to destroy its window.\n");
+                NWB_TCERR << NWB_TEXT("Log server: failed to destroy its window.\n");
             return 0;
 
         case WM_CREATE:
@@ -202,12 +202,12 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                 CLIP_DEFAULT_PRECIS,
                 DEFAULT_QUALITY,
                 DEFAULT_PITCH | FF_SWISS,
-                GLB_TEXT("Terminal")
+                NWB_TEXT("Terminal")
             );
 
             s_ListHwnd = CreateWindowEx(
                 0,
-                GLB_TEXT("LISTBOX"),
+                NWB_TEXT("LISTBOX"),
                 nullptr,
                 WS_CHILD | WS_VISIBLE | LBS_OWNERDRAWVARIABLE | WS_VSCROLL | LBS_NOTIFY,
                 0,
@@ -302,7 +302,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                     combined.reserve(combinedSize);
                     for(const auto& msg : s_Store->messages){
                         combined += msg.first();
-                        combined += GLB_TEXT("\r\n");
+                        combined += NWB_TEXT("\r\n");
                     }
                     if(combined.size() > (Limit<usize>::s_Max / sizeof(tchar)) - 1u)
                         return 0;
@@ -314,7 +314,7 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
                         if(hMem){
                             void* lockedMemory = GlobalLock(hMem);
                             if(lockedMemory){
-                                GLB_MEMCPY(lockedMemory, byteSize, combined.data(), byteSize);
+                                NWB_MEMCPY(lockedMemory, byteSize, combined.data(), byteSize);
                                 GlobalUnlock(hMem);
 #if defined(UNICODE) || defined(_UNICODE)
                                 if(!SetClipboardData(CF_UNICODETEXT, hMem))
@@ -381,7 +381,7 @@ Frame::Frame(void* inst){
 Frame::~Frame(){
     const HWND hwnd = data<FrameDetail::WinFrame>().hwnd();
     if(hwnd && !DestroyWindow(hwnd))
-        GLB_TCERR << GLB_TEXT("Log server: failed to destroy its window during shutdown.\n");
+        NWB_TCERR << NWB_TEXT("Log server: failed to destroy its window during shutdown.\n");
 
     ScopedLock lock(FrameDetail::s_ListMutex);
     FrameDetail::s_Frame = nullptr;
@@ -390,8 +390,8 @@ Frame::~Frame(){
 }
 
 bool Frame::init(){
-    static constexpr TStringView s_WindowClassName = GLB_TEXT("NWB_LOGGER");
-    static constexpr TStringView s_WindowTitle = GLB_TEXT("NWBLogger");
+    static constexpr TStringView s_WindowClassName = NWB_TEXT("NWB_LOGGER");
+    static constexpr TStringView s_WindowTitle = NWB_TEXT("NWBLogger");
     constexpr DWORD s_WindowExtendedStyle = 0;
     constexpr DWORD s_WindowStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SIZEBOX;
 
@@ -483,7 +483,7 @@ NWB_LOG_END
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#endif //GLB_PLATFORM_WINDOWS
+#endif //NWB_PLATFORM_WINDOWS
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

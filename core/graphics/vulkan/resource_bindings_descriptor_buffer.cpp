@@ -33,7 +33,7 @@ bool DescriptorBufferManager::shutdownForLifecycleOperation(VkResult& outIdleRes
     {
         ScopedLock lifecycleLock(m_lifecycleMutex);
         if(m_lifecycleTransitioning){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor-buffer shutdown rejected during another lifecycle transition."));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer shutdown rejected during another lifecycle transition."));
             return false;
         }
         if(
@@ -61,7 +61,7 @@ bool DescriptorBufferManager::shutdownForLifecycleOperation(VkResult& outIdleRes
 
             m_lifecycleTransitioning = false;
         }
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor-buffer shutdown is refusing to destroy storage after device-idle wait failed."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer shutdown is refusing to destroy storage after device-idle wait failed."));
         return false;
     }
 
@@ -89,7 +89,7 @@ bool DescriptorBufferManager::initialize(){
 
     ScopedLock lifecycleLock(m_lifecycleMutex);
     if(m_lifecycleTransitioning){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor-buffer initialization rejected during another lifecycle transition."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer initialization rejected during another lifecycle transition."));
         return false;
     }
     m_lifecycleTransitioning = true;
@@ -105,15 +105,15 @@ bool DescriptorBufferManager::initialize(){
     if(!VulkanDetail::HasDescriptorBufferStartupPrerequisites(
         VulkanDetail::QueryDescriptorBufferStartupPrerequisites(m_context)
     )){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor-buffer startup prerequisites are unavailable."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer startup prerequisites are unavailable."));
         return failInitialization();
     }
     if(m_resourceSegment.storageIdentity == 0u || m_samplerSegment.storageIdentity == 0u){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor-buffer storage identity space is exhausted."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer storage identity space is exhausted."));
         return failInitialization();
     }
     if(m_nextBindingGeneration == 0u){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor-buffer binding generation space is exhausted."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor-buffer binding generation space is exhausted."));
         return failInitialization();
     }
 
@@ -124,7 +124,7 @@ bool DescriptorBufferManager::initialize(){
     constexpr u32 s_TargetSamplerSegmentBytes = 2u * 1024u * 1024u;
 
     if(props.descriptorBufferOffsetAlignment == 0 || props.descriptorBufferOffsetAlignment > UINT32_MAX){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer offset alignment is outside the supported 32-bit range."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer offset alignment is outside the supported 32-bit range."));
         return failInitialization();
     }
 
@@ -134,7 +134,7 @@ bool DescriptorBufferManager::initialize(){
         || props.maxResourceDescriptorBufferBindings == 0u
         || props.maxSamplerDescriptorBufferBindings == 0u
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer limits cannot bind the required resource and sampler segments."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer limits cannot bind the required resource and sampler segments."));
         return failInitialization();
     }
 
@@ -156,13 +156,13 @@ bool DescriptorBufferManager::initialize(){
         !makeCapacity(resourceMaxBytes, s_TargetResourceSegmentBytes, resourceCapacityBytes)
         || !makeCapacity(samplerMaxBytes, s_TargetSamplerSegmentBytes, samplerCapacityBytes)
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer properties do not allow aligned global segments."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer properties do not allow aligned global segments."));
         return failInitialization();
     }
 
     const VkDeviceSize totalCapacityBytes = static_cast<VkDeviceSize>(resourceCapacityBytes) + samplerCapacityBytes;
     if(totalCapacityBytes > props.descriptorBufferAddressSpaceSize){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer global address space {} cannot hold the requested {} bytes of resource and sampler segments.")
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer global address space {} cannot hold the requested {} bytes of resource and sampler segments.")
             , props.descriptorBufferAddressSpaceSize
             , totalCapacityBytes
         );
@@ -256,13 +256,13 @@ DescriptorBufferSegment DescriptorBufferManager::allocateForBindingGeneration(
     if(!m_enabled || sizeBytes == 0)
         return result;
     if(kind != DescriptorBufferSegmentKind::Resource && kind != DescriptorBufferSegmentKind::Sampler){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer allocation rejected: invalid segment kind {}."), static_cast<u32>(kind));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer allocation rejected: invalid segment kind {}."), static_cast<u32>(kind));
         return result;
     }
 
     const u32 requiredAlignmentBytes = getOffsetAlignmentBytes();
     if(alignmentBytes == 0u || (alignmentBytes % requiredAlignmentBytes) != 0u){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer allocation rejected: alignment {} is not a non-zero multiple of required alignment {}.")
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer allocation rejected: alignment {} is not a non-zero multiple of required alignment {}.")
             , alignmentBytes
             , requiredAlignmentBytes
         );
@@ -272,7 +272,7 @@ DescriptorBufferSegment DescriptorBufferManager::allocateForBindingGeneration(
     SegmentStorage& segment = kind == DescriptorBufferSegmentKind::Sampler ? m_samplerSegment : m_resourceSegment;
     auto clearAllocation = [&](const DescriptorBufferSegment& allocation){
         if(allocation.valid() && segment.mappedMemory)
-            GLB_MEMSET(static_cast<u8*>(segment.mappedMemory) + allocation.offsetBytes, 0, allocation.sizeBytes);
+            NWB_MEMSET(static_cast<u8*>(segment.mappedMemory) + allocation.offsetBytes, 0, allocation.sizeBytes);
     };
     auto finishAllocation = [&](const u32 offsetBytes) -> DescriptorBufferSegment{
         result.kind = kind;
@@ -295,7 +295,7 @@ DescriptorBufferSegment DescriptorBufferManager::allocateForBindingGeneration(
     ScopedLock lock(segment.mutex);
 
     if(segment.nextAllocationSerial == 0u){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer allocation rejected: allocation serial space is exhausted."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer allocation rejected: allocation serial space is exhausted."));
         return result;
     }
 
@@ -337,12 +337,12 @@ DescriptorBufferSegment DescriptorBufferManager::allocateForBindingGeneration(
 
     u32 alignedOffset = 0;
     if(!AlignUpU32Checked(segment.writableOffsetBytes, alignmentBytes, alignedOffset)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer alignment overflows 32-bit offsets."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer alignment overflows 32-bit offsets."));
         return result;
     }
     if(alignedOffset > segment.capacityBytes || sizeBytes > segment.capacityBytes - alignedOffset){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer is out of space (kind={}, requested={} bytes).")
-            , kind == DescriptorBufferSegmentKind::Sampler ? GLB_TEXT("sampler") : GLB_TEXT("resource")
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer is out of space (kind={}, requested={} bytes).")
+            , kind == DescriptorBufferSegmentKind::Sampler ? NWB_TEXT("sampler") : NWB_TEXT("resource")
             , sizeBytes
         );
         return result;
@@ -367,11 +367,11 @@ void DescriptorBufferManager::freeForBindingGeneration(
     if(!m_enabled || segment.sizeBytes == 0u)
         return;
     if(segment.kind != DescriptorBufferSegmentKind::Resource && segment.kind != DescriptorBufferSegmentKind::Sampler){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer free rejected: invalid segment kind {}."), static_cast<u32>(segment.kind));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: invalid segment kind {}."), static_cast<u32>(segment.kind));
         return;
     }
     if(segment.storageIdentity == 0u || segment.allocationSerial == 0u){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer free rejected: allocation identity is invalid."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: allocation identity is invalid."));
         return;
     }
 
@@ -380,7 +380,7 @@ void DescriptorBufferManager::freeForBindingGeneration(
     ScopedLock lock(storage.mutex);
 
     if(segment.storageIdentity != storage.storageIdentity){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer free rejected: allocation belongs to another storage."));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: allocation belongs to another storage."));
         return;
     }
 
@@ -390,7 +390,7 @@ void DescriptorBufferManager::freeForBindingGeneration(
         || segment.offsetBytes > storage.writableOffsetBytes
         || segment.sizeBytes > storage.writableOffsetBytes - segment.offsetBytes
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer free rejected: range {} + {} is outside the live segment."), segment.offsetBytes, segment.sizeBytes);
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: range {} + {} is outside the live segment."), segment.offsetBytes, segment.sizeBytes);
         return;
     }
 
@@ -408,7 +408,7 @@ void DescriptorBufferManager::freeForBindingGeneration(
         || storage.liveAllocations[allocationIndex].storageIdentity != segment.storageIdentity
         || storage.liveAllocations[allocationIndex].allocationSerial != segment.allocationSerial
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer free rejected: range {} + {} is not a live allocation."), segment.offsetBytes, segment.sizeBytes);
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: range {} + {} is not a live allocation."), segment.offsetBytes, segment.sizeBytes);
         return;
     }
 
@@ -429,7 +429,7 @@ void DescriptorBufferManager::freeForBindingGeneration(
                 && range.offsetBytes < freedRange.offsetBytes + freedRange.sizeBytes
             )
         ){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Descriptor buffer free rejected: range {} + {} overlaps a free range."), segment.offsetBytes, segment.sizeBytes);
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer free rejected: range {} + {} overlaps a free range."), segment.offsetBytes, segment.sizeBytes);
             return;
         }
     }
@@ -564,14 +564,14 @@ bool DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const A
         bufferInfo
     );
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create descriptor buffer '{}': {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor buffer '{}': {}")
             , StringConvert(debugName.view())
             , ResultToString(res)
         );
         return false;
     }
     if(!segment.mappedMemory){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to map descriptor buffer memory '{}'"), StringConvert(debugName.view()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map descriptor buffer memory '{}'"), StringConvert(debugName.view()));
         shutdownSegment(segment);
         return false;
     }
@@ -581,7 +581,7 @@ bool DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const A
     addressInfo.buffer = segment.buffer;
     segment.deviceAddress = m_context.deviceDispatch.vkGetBufferDeviceAddress(m_context.device, &addressInfo);
     if(segment.deviceAddress == 0){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to query descriptor buffer device address '{}'.")
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to query descriptor buffer device address '{}'.")
             , StringConvert(debugName.view())
         );
         shutdownSegment(segment);
@@ -595,7 +595,7 @@ bool DescriptorBufferManager::initializeSegment(SegmentStorage& segment, const A
         (&segment == &m_resourceSegment ? VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT : VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT);
     segment.writableOffsetBytes = 0u;
 
-    GLB_MEMSET(segment.mappedMemory, 0, capacityBytes);
+    NWB_MEMSET(segment.mappedMemory, 0, capacityBytes);
     return true;
 }
 

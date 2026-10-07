@@ -229,7 +229,7 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, bool* consumed, bool
     const Ui::WidgetId previousCapture = m_context.input().capture();
     Ui::InputEvent normalized;
     if(!m_context.input().queue(event, &normalized)){
-        NWB_LOGGER_ERROR(GLB_TEXT("UiLayerSystem: invalid or overflowing normalized input"));
+        NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: invalid or overflowing normalized input"));
         m_context.resetInput();
         m_editHost.reset();
         m_blockCommandChars = false;
@@ -246,9 +246,9 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, bool* consumed, bool
             && !normalized.allowText;
     }
     if(result.activationOverflow)
-        NWB_LOGGER_WARNING(GLB_TEXT("UiLayerSystem: bounded activation queue is full"));
+        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded activation queue is full"));
     if(result.gestureOverflow)
-        NWB_LOGGER_WARNING(GLB_TEXT("UiLayerSystem: bounded pointer gesture queue is full"));
+        NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded pointer gesture queue is full"));
 }
 
 void UiLayerSystem::synchronizeNativeInput(){

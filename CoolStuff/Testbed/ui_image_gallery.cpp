@@ -12,14 +12,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TestbedUiImageGallery::TestbedUiImageGallery(
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+UiImageGallery::UiImageGallery(
     NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets)
     : m_source(NWB::Impl::Ui::LoadImageSource(
         arena, assets, NWB::Core::Assets::AssetRef<NWB::Impl::Texture>{"engine/ui/skins/default/texture"}
     ))
 {}
 
-void TestbedUiImageGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
+void UiImageGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
     if(!ui.beginPanel("image_gallery", { x, y, 280.0f, 220.0f }))
@@ -43,8 +49,11 @@ void TestbedUiImageGallery::paint(NWB::Impl::UiPaintContext& context, const f32 
     valid = ui.label("hint", "Texture, sprite and nine-slice") && valid;
     valid = ui.endPanel() && valid;
     if(!valid)
-        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: custom image declaration failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom image declaration failed"));
 }
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -51,7 +51,7 @@ using TextureFormat::ComputeMipSliceCount;
 
     u32 mipCount = 0u;
     if(!ComputeCompleteMipCount(dimension, width, height, depth, mipCount)){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': texture dimensions cannot form a complete mip chain")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': texture dimensions cannot form a complete mip chain")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
         );
@@ -67,7 +67,7 @@ using TextureFormat::ComputeMipSliceCount;
         u32 blockCountY = 0u;
         u64 sliceSizeBytes = 0u;
         if(!ComputeMipPlaneBlockLayout(payloadFormat, mipWidth, mipHeight, blockCountX, blockCountY, sliceSizeBytes)){
-            NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': mip {} block grid exceeds runtime limits")
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': mip {} block grid exceeds runtime limits")
                 , StringConvert(s_DiagnosticPrefix)
                 , PathToString<tchar>(nwbFilePath)
                 , mipIndex
@@ -76,7 +76,7 @@ using TextureFormat::ComputeMipSliceCount;
         }
         u32 sliceCount = 0u;
         if(!ComputeMipSliceCount(dimension, mipDepth, sliceCount)){
-            NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': mip {} has an invalid slice count")
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': mip {} has an invalid slice count")
                 , StringConvert(s_DiagnosticPrefix)
                 , PathToString<tchar>(nwbFilePath)
                 , mipIndex
@@ -84,7 +84,7 @@ using TextureFormat::ComputeMipSliceCount;
             return false;
         }
         if(sliceSizeBytes > Limit<u64>::s_Max / sliceCount){
-            NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': mip {} byte size overflows")
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': mip {} byte size overflows")
                 , StringConvert(s_DiagnosticPrefix)
                 , PathToString<tchar>(nwbFilePath)
                 , mipIndex
@@ -93,7 +93,7 @@ using TextureFormat::ComputeMipSliceCount;
         }
         const u64 sizeBytes = sliceSizeBytes * sliceCount;
         if(sizeBytes > Limit<u64>::s_Max - offsetBytes){
-            NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': mip payload offsets overflow")
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': mip payload offsets overflow")
                 , StringConvert(s_DiagnosticPrefix)
                 , PathToString<tchar>(nwbFilePath)
             );

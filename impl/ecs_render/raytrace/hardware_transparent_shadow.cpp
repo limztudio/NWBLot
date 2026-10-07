@@ -70,7 +70,7 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
         layoutDesc.addItem(Core::BindingLayoutItem::PushConstants(0u, sizeof(__hidden_hardware_transparent_shadow::PushConstants)));
         state.m_bindingLayout = device.createBindingLayout(layoutDesc);
         if(!state.m_bindingLayout){
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create hardware transparent-shadow binding layout"));
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware transparent-shadow binding layout"));
             state.m_pipelineFailed = true;
             return false;
         }
@@ -100,7 +100,7 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
         ;
         state.m_pipelines[i] = device.createComputePipeline(pipelineDesc);
         if(!state.m_pipelines[i]){
-            NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create hardware transparent-shadow pipeline {}"), i);
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware transparent-shadow pipeline {}"), i);
             state.m_pipelineFailed = true;
             return false;
         }
@@ -110,7 +110,7 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
     const u64 halfHeight = DivideUp(static_cast<u64>(targets.height), static_cast<u64>(targets.shadowReceiverFactor));
     const u64 pixels = halfWidth * halfHeight;
     if(pixels == 0u || pixels > Limit<u32>::s_Max / NWB_HW_TRANSPARENT_WORDS_PER_RAY){
-        NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: hardware transparent-shadow scratch extent is invalid"));
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: hardware transparent-shadow scratch extent is invalid"));
         return false;
     }
     if(pixels > state.m_pixelsCapacity){
@@ -142,7 +142,7 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
             if(!buffers[i] || !RayTracingDetail::RegisterHeapBuffer(
                 heap, *buffers[i], Core::GpuDescriptorClass::StorageBuffer, true, descriptors[i]
             )){
-                NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to create hardware transparent-shadow scratch {}"), i);
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware transparent-shadow scratch {}"), i);
                 return false;
             }
         }
@@ -183,7 +183,7 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(
     DeferredFrameTargets& targets,
     const u32 frameIndex){
     auto& state = m_rayTracingState.m_hardwareTransparentShadow;
-    GLB_ASSERT(state.m_ready);
+    NWB_ASSERT(state.m_ready);
     auto& device = m_graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
     const u32 halfWidth = DivideUp(targets.width, static_cast<u32>(targets.shadowReceiverFactor));
@@ -205,7 +205,7 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(
             push.sampleIndex = sample;
             const u32 emptyArgs[NWB_HW_TRANSPARENT_OVERFLOW_ARGS_WORDS] = { 0u, 1u, 1u, 0u };
             if(!commandList.tryWriteBuffer(*state.m_overflowArgsBuffer, emptyArgs, sizeof(emptyArgs))){
-                NWB_LOGGER_ERROR(GLB_TEXT("RendererSystem: failed to reset hardware transparent-shadow continuation arguments"));
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reset hardware transparent-shadow continuation arguments"));
                 return;
             }
             commandList.setBufferState(state.m_crossingsBuffer.get(), Core::ResourceStates::UnorderedAccess, true);
@@ -257,7 +257,7 @@ void RendererRayTracingSystem::dispatchHardwareTransparentShadow(
     commandList.setBufferState(state.m_overflowArgsBuffer.get(), Core::ResourceStates::UnorderedAccess);
     commandList.commitBarriers();
     if(!state.m_dispatchLogged){
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("RendererSystem: dispatched hardware transparent shadow traversal ({}x{}, {} instances)")
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched hardware transparent shadow traversal ({}x{}, {} instances)")
             , static_cast<u64>(targets.width)
             , static_cast<u64>(targets.height)
             , static_cast<u64>(m_rayTracingState.m_tlasInstanceCount)

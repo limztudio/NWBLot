@@ -153,7 +153,7 @@ void UiComboSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display){
         return;
     m_lastDisplay = display;
     m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiComboSmoke: display logical={}x{} scale={}x{}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiComboSmoke: display logical={}x{} scale={}x{}")
         , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
     );
 }
@@ -201,18 +201,18 @@ void UiComboSmokeScene::observeState(){
     m_lastPopup = popup;
     m_lastBounds = bounds;
     m_displayChanged = false;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiComboSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiComboSmoke: state sequence={} values={},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}")
         , m_sequence, current[0], current[1], current[2], current[3], current[4], current[5], current[6], current[7]
         , current[8], current[9], current[10], current[11], current[12], current[13], current[14], current[15]
     );
-    LogSmokeRect(GLB_TEXT("UiComboSmoke"), m_sequence, GLB_TEXT("trigger"), bounds);
-    LogSmokeRect(GLB_TEXT("UiComboSmoke"), m_sequence, GLB_TEXT("popup"), popup.bounds);
-    LogSmokeRect(GLB_TEXT("UiComboSmoke"), m_sequence, GLB_TEXT("list"), placement.bounds);
-    LogSmokeRect(GLB_TEXT("UiComboSmoke"), m_sequence, GLB_TEXT("viewport"), placement.viewport);
-    LogSmokeRect(GLB_TEXT("UiComboSmoke"), m_sequence, GLB_TEXT("track"), placement.track);
-    LogSmokeRect(GLB_TEXT("UiComboSmoke"), m_sequence, GLB_TEXT("thumb"), placement.thumb);
-    LogSmokeRect(GLB_TEXT("UiComboSmoke"), m_sequence, GLB_TEXT("cursor_row"), cursorRow());
-    LogSmokeRect(GLB_TEXT("UiComboSmoke"), m_sequence, GLB_TEXT("counter"), __hidden_ui_combo_smoke::s_Counter);
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("trigger"), bounds);
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("popup"), popup.bounds);
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("list"), placement.bounds);
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("viewport"), placement.viewport);
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("track"), placement.track);
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("thumb"), placement.thumb);
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("cursor_row"), cursorRow());
+    LogSmokeRect(NWB_TEXT("UiComboSmoke"), m_sequence, NWB_TEXT("counter"), __hidden_ui_combo_smoke::s_Counter);
 }
 
 void UiComboSmokeScene::paintMarkers(Impl::UiPaintContext& context)const{

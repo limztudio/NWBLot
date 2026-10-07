@@ -128,7 +128,7 @@ static bool SetOptionalAvboitPixelShader(
 
     const Name shaderName = ToName(shaderNameText);
     if(!shaderName){
-        NWB_LOGGER_ERROR(GLB_TEXT("Material cook: material '{}' has an invalid AVBOIT {} pixel shader name")
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has an invalid AVBOIT {} pixel shader name")
             , StringConvert(AStringView(materialEntry.virtualPath))
             , StringConvert(passLabel)
         );
@@ -148,19 +148,19 @@ static bool SetOptionalAvboitPixelShader(
 bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMaterial){
     Core::Assets::AssetArena& arena = materialEntry.shaderVariant.get_allocator().arena();
     if(materialEntry.materialInterface.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Material cook: material '{}' is missing required material interface")
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' is missing required material interface")
             , StringConvert(AStringView(materialEntry.virtualPath))
         );
         return false;
     }
     if(materialEntry.typedLayoutHash == 0u){
-        NWB_LOGGER_ERROR(GLB_TEXT("Material cook: interface material '{}' is missing typed layout data")
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: interface material '{}' is missing typed layout data")
             , StringConvert(AStringView(materialEntry.virtualPath))
         );
         return false;
     }
     if(materialEntry.shaderVariant.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Material cook: material '{}' has empty shader variant")
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' has empty shader variant")
             , StringConvert(AStringView(materialEntry.virtualPath))
         );
         return false;
@@ -204,7 +204,7 @@ bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMat
         outMaterial.avboitOccupancyPixelShader(),
         outMaterial.avboitExtinctionPixelShader()
     )){
-        NWB_LOGGER_ERROR(GLB_TEXT("Material cook: material '{}' AVBOIT pixel shaders must be present if and only if it is transparent")
+        NWB_LOGGER_ERROR(NWB_TEXT("Material cook: material '{}' AVBOIT pixel shaders must be present if and only if it is transparent")
             , StringConvert(AStringView(materialEntry.virtualPath))
         );
         return false;
@@ -220,7 +220,7 @@ bool BuildMaterialAsset(const MaterialCookEntry& materialEntry, Material& outMat
     for(const auto& [shaderType, shaderAsset] : materialEntry.stageShaders){
         if(!outMaterial.setShaderForStage(shaderType, shaderAsset)){
             const Name& stageName = Core::ShaderStageNames::ArchiveStageNameFromShaderType(shaderType);
-            NWB_LOGGER_ERROR(GLB_TEXT("Material cook: invalid shader stage '{}' for '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("Material cook: invalid shader stage '{}' for '{}'")
                 , StringConvert(stageName.resolvedText())
                 , StringConvert(AStringView(materialEntry.virtualPath))
             );
@@ -379,22 +379,22 @@ bool EmitMaterialAvboitExtinctionPixelShaders(
 
 
 bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, GLB_TEXT("MaterialAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, NWB_TEXT("MaterialAssetCodec::serialize")))
         return false;
 
     const Material& material = static_cast<const Material&>(asset);
-    if(!material.checkVirtualPath(GLB_TEXT("MaterialAssetCodec::serialize")))
+    if(!material.checkVirtualPath(NWB_TEXT("MaterialAssetCodec::serialize")))
         return false;
     if(material.stageShaderCount() == 0){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialAssetCodec::serialize failed: material has no shader stages"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material has no shader stages"));
         return false;
     }
     if(!material.materialInterface()){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialAssetCodec::serialize failed: material interface is required"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material interface is required"));
         return false;
     }
     if(material.shaderVariant().empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialAssetCodec::serialize failed: shader variant is empty"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader variant is empty"));
         return false;
     }
     if(!HasValidMaterialAvboitPixelShaderContract(
@@ -403,30 +403,30 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         material.avboitOccupancyPixelShader(),
         material.avboitExtinctionPixelShader()
     )){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialAssetCodec::serialize failed: AVBOIT pixel shaders must be present if and only if the material is transparent"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: AVBOIT pixel shaders must be present if and only if the material is transparent"));
         return false;
     }
     if(material.typedLayoutHash() == 0u){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialAssetCodec::serialize failed: interface material is missing typed layout data"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: interface material is missing typed layout data"));
         return false;
     }
     if(material.typedLayoutBlocks().size() > Limit<u32>::s_Max || material.typedLayoutFields().size() > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialAssetCodec::serialize failed: typed layout count exceeds u32 range"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: typed layout count exceeds u32 range"));
         return false;
     }
     if(material.typedBlockBytes().size() > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialAssetCodec::serialize failed: typed block byte count exceeds u32 range"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: typed block byte count exceeds u32 range"));
         return false;
     }
     if(material.resourceReferences().size() > Limit<u32>::s_Max){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialAssetCodec::serialize failed: material resource reference count exceeds u32 range"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material resource reference count exceeds u32 range"));
         return false;
     }
     if(MaterialBinaryPayload::ComputeMaterialTypedLayoutHash(
         material.typedLayoutBlocks(),
         material.typedLayoutFields()
     ) != material.typedLayoutHash()){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialAssetCodec::serialize failed: typed layout hash mismatch"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: typed layout hash mismatch"));
         return false;
     }
     usize expectedTypedBlockByteSize = 0u;
@@ -434,11 +434,11 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         material.typedLayoutBlocks(),
         expectedTypedBlockByteSize
     )){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialAssetCodec::serialize failed: typed block bytes do not match typed layout"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: typed block bytes do not match typed layout"));
         return false;
     }
     if(expectedTypedBlockByteSize != material.typedBlockBytes().size()){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialAssetCodec::serialize failed: typed block bytes do not match typed layout"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: typed block bytes do not match typed layout"));
         return false;
     }
     if(!MaterialBinaryPayload::ValidateMaterialResourceReferences(
@@ -446,7 +446,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
         material.typedLayoutFields(),
         material.resourceReferences()
     )){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialAssetCodec::serialize failed: material resource references do not match typed layout"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: material resource references do not match typed layout"));
         return false;
     }
     usize reserveBytes = sizeof(u32); // magic
@@ -492,7 +492,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
 
     AppendPOD(outBinary, MaterialBinaryPayload::s_MaterialMagic);
     if(!AppendString(outBinary, AStringView(material.shaderVariant()))){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialAssetCodec::serialize failed: shader variant is too long"));
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader variant is too long"));
         return false;
     }
     AppendPOD(outBinary, material.materialInterface().hash());
@@ -549,7 +549,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
 
         const Core::ShaderType::Enum shaderType = static_cast<Core::ShaderType::Enum>(shaderIndex);
         if(!Core::ShaderType::IsValid(shaderType)){
-            NWB_LOGGER_ERROR(GLB_TEXT("MaterialAssetCodec::serialize failed: shader stage index {} is invalid"), shaderIndex);
+            NWB_LOGGER_ERROR(NWB_TEXT("MaterialAssetCodec::serialize failed: shader stage index {} is invalid"), shaderIndex);
             return false;
         }
 

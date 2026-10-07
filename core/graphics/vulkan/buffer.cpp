@@ -65,7 +65,7 @@ using BufferQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
     if(bufferInfo.queueFamilyIndexCount == 0u)
         return result;
 
-    GLB_ASSERT(bufferInfo.pQueueFamilyIndices != nullptr);
+    NWB_ASSERT(bufferInfo.pQueueFamilyIndices != nullptr);
     if(!bufferInfo.pQueueFamilyIndices)
         return result;
     result.assign(
@@ -79,7 +79,7 @@ using BufferQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
     const VkBufferCreateInfo& bufferInfo,
     const BufferQueueFamilyVector& queueFamilyIndices
 ){
-    GLB_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
+    NWB_ASSERT(queueFamilyIndices.size() <= Limit<u32>::s_Max);
     VkBufferCreateInfo result = bufferInfo;
     result.pNext = nullptr;
     result.queueFamilyIndexCount = static_cast<u32>(queueFamilyIndices.size());
@@ -244,7 +244,7 @@ VkBufferView Buffer::getView(Format::Enum format, u64 byteOffset, u64 byteSize){
     VkBufferView view = VK_NULL_HANDLE;
     res = m_context.deviceDispatch.vkCreateBufferView(m_context.device, &viewInfo, m_context.allocationCallbacks, &view);
     if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create buffer view: {}"), ResultToString(res));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer view: {}"), ResultToString(res));
         return VK_NULL_HANDLE;
     }
 
@@ -266,53 +266,53 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     VkResult res = VK_SUCCESS;
 
     if(!ResourceQueueSharing::IsValid(d.queueSharing)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create buffer: queue sharing contains unknown bits"));
-        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create buffer: queue sharing contains unknown bits"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: queue sharing contains unknown bits"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: queue sharing contains unknown bits"));
         return nullptr;
     }
     if(d.byteSize == 0){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create buffer: byte size is zero"));
-        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create buffer: byte size is zero"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: byte size is zero"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: byte size is zero"));
         return nullptr;
     }
     if(d.isVolatile && d.maxVersions == 0){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create volatile buffer: maxVersions is zero"));
-        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create volatile buffer: maxVersions is zero"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: maxVersions is zero"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create volatile buffer: maxVersions is zero"));
         return nullptr;
     }
     if(!VulkanBufferDetail::IsBufferCreationStateMaskValid(d.initialState)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create buffer: initial state is invalid for a buffer"));
-        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create buffer: invalid initial state"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: initial state is invalid for a buffer"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: invalid initial state"));
         return nullptr;
     }
     CpuAccessMode::Enum effectiveCpuAccess = CpuAccessMode::None;
     if(!VulkanDetail::TryResolveBufferCpuAccess(d.cpuAccess, d.isVolatile, effectiveCpuAccess)){
         if(d.isVolatile && d.cpuAccess == CpuAccessMode::Read){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create buffer: a volatile buffer cannot request CPU read access"));
-            GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Volatile buffer CPU access contradicts its write-only contract"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: a volatile buffer cannot request CPU read access"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Volatile buffer CPU access contradicts its write-only contract"));
         }
         else{
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create buffer: invalid CPU access mode"));
-            GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create buffer: invalid CPU access mode"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: invalid CPU access mode"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: invalid CPU access mode"));
         }
         return nullptr;
     }
 
     const VkBufferUsageFlags usageFlags = VulkanBufferDetail::PickManagedBufferUsage(m_context, d);
     if(!VulkanBufferDetail::IsBufferUsageCompatibleWithResourceStates(d, usageFlags, d.initialState)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create buffer: initial state requires an undeclared buffer usage"));
-        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create buffer: initial state is incompatible with its description"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: initial state requires an undeclared buffer usage"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: initial state is incompatible with its description"));
         return nullptr;
     }
     if(!VulkanBufferDetail::IsBufferUsageSupportedByDevice(m_context, usageFlags)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create buffer: required usage is unsupported by the device"));
-        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create buffer: required usage is unsupported by the device"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: required usage is unsupported by the device"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: required usage is unsupported by the device"));
         return nullptr;
     }
     if(d.isShaderBindingTable){
         if(!m_context.extensions.khrRayTracingPipeline || !m_context.extensions.bufferDeviceAddress){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
-            GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
+            NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create shader binding table buffer: ray tracing pipeline and buffer device address support are required"));
             return nullptr;
         }
 
@@ -324,11 +324,11 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         const u64 alignment = Max<u64>(m_context.physicalDeviceProperties.limits.minUniformBufferOffsetAlignment, 1u);
         u64 alignedSize = 0;
         if(!AlignUpU64Checked(size, alignment, alignedSize)){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create volatile buffer: aligned size overflows"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: aligned size overflows"));
             return nullptr;
         }
         if(alignedSize > Limit<u64>::s_Max / d.maxVersions){
-            NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create volatile buffer: versioned size overflows"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: versioned size overflows"));
             return nullptr;
         }
         size = alignedSize * d.maxVersions;
@@ -352,14 +352,14 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     else
         res = m_allocator.createBuffer(*buffer, bufferInfo);
     if(res != VK_SUCCESS){
-        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to create buffer"));
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create buffer: {}"), ResultToString(res));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: {}"), ResultToString(res));
         DestroyArenaObject(m_context.objectArena, buffer);
         return nullptr;
     }
     if(!m_allocator.tryRegisterBufferNativeIdentity(*buffer)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to create buffer: native buffer identity is already registered"));
-        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: A newly created buffer duplicated a live native buffer identity"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: native buffer identity is already registered"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: A newly created buffer duplicated a live native buffer identity"));
         DestroyArenaObject(m_context.objectArena, buffer);
         return nullptr;
     }
@@ -402,8 +402,8 @@ bool CommandList::prepareUploadStaging(
         completedUploadVersion,
         alignment
     )){
-        NWB_LOGGER_ERROR(GLB_TEXT("Vulkan: Failed to suballocate staging buffer for {}"), operationName);
-        GLB_ASSERT_MSG(false, GLB_TEXT("Vulkan: Failed to suballocate staging buffer"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to suballocate staging buffer for {}"), operationName);
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to suballocate staging buffer"));
         return false;
     }
 
@@ -433,17 +433,17 @@ bool CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSiz
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, VulkanArenaScope::s_WriteBufferCommandLabel))
         return false;
     if(!data){
-        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, GLB_TEXT("data is null"));
+        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, NWB_TEXT("data is null"));
         return false;
     }
 
     const BufferDesc& desc = buffer.m_creationDesc;
     if(!VulkanDetail::IsBufferRangeInBounds(desc, destOffsetBytes, static_cast<u64>(dataSize))){
-        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, GLB_TEXT("destination range is outside the buffer"));
+        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, NWB_TEXT("destination range is outside the buffer"));
         return false;
     }
     if((destOffsetBytes & s_BufferAlignmentMask) != 0u || (dataSize & s_BufferAlignmentMask) != 0u){
-        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, GLB_TEXT("copy offset and size must be 4-byte aligned"));
+        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, NWB_TEXT("copy offset and size must be 4-byte aligned"));
         return false;
     }
     if(!validateBufferForGpuState(
@@ -456,8 +456,8 @@ bool CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSiz
 
     Buffer* stagingBuffer = nullptr;
     u64 stagingOffset = 0;
-    if(!prepareUploadStaging(data, dataSize, GLB_TEXT("writeBuffer"), stagingBuffer, stagingOffset)){
-        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, GLB_TEXT("staging allocation failed"));
+    if(!prepareUploadStaging(data, dataSize, NWB_TEXT("writeBuffer"), stagingBuffer, stagingOffset)){
+        rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, NWB_TEXT("staging allocation failed"));
         return false;
     }
 
@@ -484,16 +484,16 @@ void CommandList::writeBuffer(Buffer& buffer, const void* data, usize dataSize, 
 }
 
 void CommandList::clearBufferUInt(Buffer& buffer, u32 clearValue){
-    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, GLB_TEXT("clear buffer")))
+    if(!recordAndValidateCommandCapability(GpuQueueCapability::Transfer, NWB_TEXT("clear buffer")))
         return;
     if((buffer.m_creationDesc.byteSize & s_BufferAlignmentMask) != 0u){
-        rejectCommandRecording(GLB_TEXT("clear buffer"), GLB_TEXT("buffer size is not 4-byte aligned"));
+        rejectCommandRecording(NWB_TEXT("clear buffer"), NWB_TEXT("buffer size is not 4-byte aligned"));
         return;
     }
     if(!validateBufferForGpuState(
         &buffer,
         ResourceStates::CopyDest,
-        GLB_TEXT("clear buffer"),
+        NWB_TEXT("clear buffer"),
         VK_BUFFER_USAGE_TRANSFER_DST_BIT
     ))
         return;
@@ -517,17 +517,17 @@ void CommandList::copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64
     const BufferDesc& srcDesc = src.m_creationDesc;
 
     if(!VulkanDetail::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)){
-        rejectCommandRecording(s_CopyBufferOperation, GLB_TEXT("destination range is outside the buffer"));
+        rejectCommandRecording(s_CopyBufferOperation, NWB_TEXT("destination range is outside the buffer"));
         return;
     }
 
     if(!VulkanDetail::IsBufferRangeInBounds(srcDesc, srcOffsetBytes, dataSizeBytes)){
-        rejectCommandRecording(s_CopyBufferOperation, GLB_TEXT("source range is outside the buffer"));
+        rejectCommandRecording(s_CopyBufferOperation, NWB_TEXT("source range is outside the buffer"));
         return;
     }
 
     if(dest.m_buffer == src.m_buffer && VulkanDetail::BufferRangesOverlap(destOffsetBytes, dataSizeBytes, srcOffsetBytes, dataSizeBytes)){
-        rejectCommandRecording(s_CopyBufferOperation, GLB_TEXT("source and destination ranges overlap in the same buffer"));
+        rejectCommandRecording(s_CopyBufferOperation, NWB_TEXT("source and destination ranges overlap in the same buffer"));
         return;
     }
     if(
@@ -537,7 +537,7 @@ void CommandList::copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64
     ){
         rejectCommandRecording(
             s_CopyBufferOperation,
-            GLB_TEXT("distinct buffer objects alias the same native buffer")
+            NWB_TEXT("distinct buffer objects alias the same native buffer")
         );
         return;
     }
@@ -603,11 +603,11 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
     const BufferDesc& destDesc = dest.m_creationDesc;
     const BufferDesc& srcDesc = src.m_creationDesc;
     if(!VulkanDetail::IsBufferRangeInBounds(destDesc, destOffsetBytes, dataSizeBytes)){
-        rejectCommandRecording(s_DirectCommandIrCopyBufferOperation, GLB_TEXT("destination range is outside the buffer"));
+        rejectCommandRecording(s_DirectCommandIrCopyBufferOperation, NWB_TEXT("destination range is outside the buffer"));
         return false;
     }
     if(!VulkanDetail::IsBufferRangeInBounds(srcDesc, srcOffsetBytes, dataSizeBytes)){
-        rejectCommandRecording(s_DirectCommandIrCopyBufferOperation, GLB_TEXT("source range is outside the buffer"));
+        rejectCommandRecording(s_DirectCommandIrCopyBufferOperation, NWB_TEXT("source range is outside the buffer"));
         return false;
     }
     if(
@@ -616,7 +616,7 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
     ){
         rejectCommandRecording(
             s_DirectCommandIrCopyBufferOperation,
-            GLB_TEXT("source and destination ranges overlap in the same buffer")
+            NWB_TEXT("source and destination ranges overlap in the same buffer")
         );
         return false;
     }
@@ -627,7 +627,7 @@ bool CommandList::recordPreflightedCopyBufferDirectVulkan(
     ){
         rejectCommandRecording(
             s_DirectCommandIrCopyBufferOperation,
-            GLB_TEXT("distinct buffer objects alias the same native buffer")
+            NWB_TEXT("distinct buffer objects alias the same native buffer")
         );
         return false;
     }

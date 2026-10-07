@@ -51,7 +51,7 @@ bool ParseTextureCookMetadata(
     else if(format == s_UastcHdr4x4Format)
         outEntry.payloadFormat = TexturePayloadFormat::UastcHdr4x4;
     else{
-        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' must be '{}' or '{}'")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be '{}' or '{}'")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(s_FormatField)
@@ -73,7 +73,7 @@ bool ParseTextureCookMetadata(
         else if(alphaModeText == s_AlphaUastcLdr4x4Mode)
             outEntry.alphaMode = TextureAlphaMode::SeparateUastcLdr4x4;
         else{
-            NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' has an unsupported HDR alpha mode")
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' has an unsupported HDR alpha mode")
                 , StringConvert(s_DiagnosticPrefix)
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(s_AlphaModeField)
@@ -111,7 +111,7 @@ bool ParseTextureCookMetadata(
             return false;
     }
     if(outEntry.dimension == TextureDimension::TextureCube && outEntry.width != outEntry.height){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': cubemap faces must be square")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': cubemap faces must be square")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
         );
@@ -137,7 +137,7 @@ bool ParseTextureCookMetadata(
         else if(colorSpace == s_SrgbColorSpace)
             outEntry.colorSpace = TextureColorSpace::Srgb;
         else{
-            NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': field '{}' must be '{}' or '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be '{}' or '{}'")
                 , StringConvert(s_DiagnosticPrefix)
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(s_ColorSpaceField)
@@ -171,7 +171,7 @@ bool ParseTextureCookMetadata(
     u64 expectedTotalPayloadBytes = expectedPayloadBytes;
     if(outEntry.alphaMode == TextureAlphaMode::SeparateUastcLdr4x4){
         if(expectedPayloadBytes > Limit<u64>::s_Max - expectedTotalPayloadBytes){
-            NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': separate HDR alpha payload size overflows")
+            NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': separate HDR alpha payload size overflows")
                 , StringConvert(s_DiagnosticPrefix)
                 , PathToString<tchar>(nwbFilePath)
             );
@@ -190,7 +190,7 @@ bool ParseTextureCookMetadata(
     dataPath /= dataFileName;
     ErrorCode errorCode;
     if(!ReadBinaryFile(dataPath, outEntry.payloadBytes, errorCode)){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': failed to read texture sidecar '{}': {}")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': failed to read texture sidecar '{}': {}")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , PathToString<tchar>(dataPath)
@@ -199,7 +199,7 @@ bool ParseTextureCookMetadata(
         return false;
     }
     if(expectedTotalPayloadBytes != static_cast<u64>(outEntry.payloadBytes.size())){
-        NWB_LOGGER_ERROR(GLB_TEXT("{} '{}': texture sidecar size does not match the derived mip and alpha layout")
+        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': texture sidecar size does not match the derived mip and alpha layout")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
         );

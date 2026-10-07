@@ -31,7 +31,7 @@ static bool ValidateRecordIdentity(const Core::ShaderArchive::Record& record){
     if(expectedPath && expectedPath.hash() == record.virtualPathHash)
         return true;
 
-    NWB_LOGGER_ERROR(GLB_TEXT("AssetGatherer: shader index record has an invalid runtime identity"));
+    NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: shader index record has an invalid runtime identity"));
     return false;
 }
 
@@ -67,7 +67,7 @@ bool MergeGatheredGraphicsAsset(
         || !Core::ShaderArchive::DeserializeIndex(incomingBytes, incomingRecords))
         return false;
     if(AddOverflows<usize>(records.size(), incomingRecords.size())){
-        NWB_LOGGER_ERROR(GLB_TEXT("AssetGatherer: merged shader index size overflows"));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: merged shader index size overflows"));
         return false;
     }
 
@@ -78,7 +78,7 @@ bool MergeGatheredGraphicsAsset(
         if(!__hidden_graphics_gather::ValidateRecordIdentity(records[i]))
             return false;
         if(!recordIndices.emplace(records[i].virtualPathHash, i).second){
-            NWB_LOGGER_ERROR(GLB_TEXT("AssetGatherer: duplicate shader index identity"));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: duplicate shader index identity"));
             return false;
         }
     }
@@ -98,7 +98,7 @@ bool MergeGatheredGraphicsAsset(
         if(previous.shaderName != record.shaderName || previous.stage != record.stage
             || previous.variantName != record.variantName || previous.sourceChecksum != record.sourceChecksum
             || previous.bytecodeChecksum != record.bytecodeChecksum){
-            NWB_LOGGER_ERROR(GLB_TEXT("AssetGatherer: conflicting shader index record '{}' variant '{}' stage '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: conflicting shader index record '{}' variant '{}' stage '{}'")
                 , StringConvert(record.shaderName.resolvedText())
                 , StringConvert(record.variantName)
                 , StringConvert(record.stage.resolvedText())

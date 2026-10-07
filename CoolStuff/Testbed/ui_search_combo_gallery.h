@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "namespace.h"
 #include "ui_search_combo_source.h"
 
 #include <impl/ecs_ui/components.h>
@@ -13,9 +14,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiSearchComboGallery final : NoCopy{
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiSearchComboGallery final : NoCopy{
 public:
-    explicit TestbedUiSearchComboGallery(NWB::Core::Alloc::GlobalArena& arena);
+    explicit UiSearchComboGallery(NWB::Core::Alloc::GlobalArena& arena);
 
 
 public:
@@ -23,9 +30,12 @@ public:
 
 
 private:
-    TestbedUiSearchComboSource m_source;
+    UiSearchComboSource m_source;
     NWB::Impl::Ui::SearchComboState m_state;
 };
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

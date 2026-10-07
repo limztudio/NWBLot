@@ -150,7 +150,7 @@ public:
         case s_MeshletLocalVertexRefBindingSlot: return mesh.meshletLocalVertexRefBuffer;
         case s_MeshletPrimitiveIndexBindingSlot: return mesh.meshletPrimitiveIndexBuffer;
         default:
-            GLB_ASSERT(false);
+            NWB_ASSERT(false);
             return mesh.positionBuffer;
         }
     }

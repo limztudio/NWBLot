@@ -31,7 +31,7 @@ NWB_IMPL_BEGIN
 
 
 bool SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, GLB_TEXT("SkinAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, NWB_TEXT("SkinAssetCodec::serialize")))
         return false;
 
     const Skin& skin = static_cast<const Skin&>(asset);
@@ -58,14 +58,14 @@ bool SkinAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::
     return Core::Assets::AppendVectorPayload(
         outBinary,
         skin.influences(),
-        GLB_TEXT("SkinAssetCodec::serialize"),
-        GLB_TEXT("influences")
+        NWB_TEXT("SkinAssetCodec::serialize"),
+        NWB_TEXT("influences")
     )
         && Core::Assets::AppendVectorPayload(
             outBinary,
             skin.inverseBindMatrices(),
-            GLB_TEXT("SkinAssetCodec::serialize"),
-            GLB_TEXT("inverse bind matrices")
+            NWB_TEXT("SkinAssetCodec::serialize"),
+            NWB_TEXT("inverse bind matrices")
         )
     ;
 }
@@ -122,7 +122,7 @@ template<usize ComponentCount>
     f64 (&outValues)[ComponentCount]
 ){
     if(!value.isList() || value.asList().size() != ComponentCount){
-        NWB_LOGGER_ERROR(GLB_TEXT("Skin meta '{}': '{}' must be a {}-component {} list")
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must be a {}-component {} list")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
             , ComponentCount
@@ -135,7 +135,7 @@ template<usize ComponentCount>
     for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
         const Value& component = list[componentIndex];
         if(!component.isNumeric()){
-            NWB_LOGGER_ERROR(GLB_TEXT("Skin meta '{}': '{}[{}]' must be numeric")
+            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' must be numeric")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(label)
                 , componentIndex
@@ -162,7 +162,7 @@ template<usize ComponentCount>
     for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
         const f64 numericValue = numericValues[componentIndex];
         if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != Floor(numericValue) || numericValue > static_cast<f64>(Limit<u16>::s_Max)){
-            NWB_LOGGER_ERROR(GLB_TEXT("Skin meta '{}': '{}[{}]' must be a u16 integer")
+            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' must be a u16 integer")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(label)
                 , componentIndex
@@ -189,7 +189,7 @@ template<usize ComponentCount>
     for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
         const f64 numericValue = numericValues[componentIndex];
         if(!IsFinite(numericValue) || numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max)){
-            NWB_LOGGER_ERROR(GLB_TEXT("Skin meta '{}': '{}[{}]' is non-finite or outside f32 range")
+            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}[{}]' is non-finite or outside f32 range")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(label)
                 , componentIndex
@@ -210,7 +210,7 @@ template<usize ComponentCount>
 ){
     outNormalizedWeights = VectorZero();
     if(!VectorIsFinite(weights, VectorComponentMask::s_XYZW) || !Vector4GreaterOrEqual(weights, VectorZero())){
-        NWB_LOGGER_ERROR(GLB_TEXT("Skin meta '{}': influences[{}].weights must be finite and non-negative")
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must be finite and non-negative")
             , PathToString<tchar>(nwbFilePath)
             , influenceIndex
         );
@@ -219,7 +219,7 @@ template<usize ComponentCount>
 
     const SIMDVector weightSum = Vector4Dot(weights, s_SIMDOne);
     if(!VectorIsFinite(weightSum, VectorComponentMask::s_XYZW) || !Vector4Greater(weightSum, VectorReplicate(SkinValidation::s_Epsilon))){
-        NWB_LOGGER_ERROR(GLB_TEXT("Skin meta '{}': influences[{}].weights must contain a positive total")
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].weights must contain a positive total")
             , PathToString<tchar>(nwbFilePath)
             , influenceIndex
         );
@@ -244,7 +244,7 @@ template<usize ComponentCount>
     const Value* joints = FindField(influenceValue, s_JointsField);
     const Value* weights = FindField(influenceValue, s_WeightsField);
     if(!joints || !weights){
-        NWB_LOGGER_ERROR(GLB_TEXT("Skin meta '{}': influences[{}] requires 'joints' and 'weights'")
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}] requires 'joints' and 'weights'")
             , PathToString<tchar>(nwbFilePath)
             , influenceIndex
         );
@@ -282,7 +282,7 @@ template<usize ComponentCount>
     for(usize influenceIndex = 0u; influenceIndex < influenceList.size(); ++influenceIndex){
         const Value& influenceValue = influenceList[influenceIndex];
         if(!influenceValue.isMap()){
-            NWB_LOGGER_ERROR(GLB_TEXT("Skin meta '{}': influences[{}] must be a map")
+            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}] must be a map")
                 , PathToString<tchar>(nwbFilePath)
                 , influenceIndex
             );
@@ -296,7 +296,7 @@ template<usize ComponentCount>
     }
 
     if(outInfluences.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Skin meta '{}': '{}' must not be empty")
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must not be empty")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(s_InfluencesField)
         );
@@ -330,7 +330,7 @@ template<usize ComponentCount>
             return false;
 
         if(!MatrixIsInvertibleAffine(LoadFloat(matrix), SkinValidation::s_Epsilon, SkinValidation::s_Epsilon)){
-            NWB_LOGGER_ERROR(GLB_TEXT("Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix")
+            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': inverse_bind_matrices[{}] is not a finite invertible affine matrix")
                 , PathToString<tchar>(nwbFilePath)
                 , matrixIndex
             );
@@ -340,7 +340,7 @@ template<usize ComponentCount>
     }
 
     if(outMatrices.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Skin meta '{}': '{}' must not be empty")
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': '{}' must not be empty")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(s_InverseBindMatricesField)
         );
@@ -351,7 +351,7 @@ template<usize ComponentCount>
 
 [[nodiscard]] bool ValidateSkinInfluenceJointIndices(const Path& nwbFilePath, const SkinCookEntry& entry){
     if(entry.inverseBindMatrices.size() > static_cast<usize>(Limit<u16>::s_Max) + 1u){
-        NWB_LOGGER_ERROR(GLB_TEXT("Skin meta '{}': inverse_bind_matrices count exceeds u16 joint index range")
+        NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': inverse_bind_matrices count exceeds u16 joint index range")
             , PathToString<tchar>(nwbFilePath)
         );
         return false;
@@ -364,7 +364,7 @@ template<usize ComponentCount>
             if(static_cast<u32>(influence.joint[componentIndex]) < jointCount)
                 continue;
 
-            NWB_LOGGER_ERROR(GLB_TEXT("Skin meta '{}': influences[{}].joints[{}] is out of inverse_bind_matrices range")
+            NWB_LOGGER_ERROR(NWB_TEXT("Skin meta '{}': influences[{}].joints[{}] is out of inverse_bind_matrices range")
                 , PathToString<tchar>(nwbFilePath)
                 , influenceIndex
                 , componentIndex

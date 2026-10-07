@@ -52,7 +52,7 @@ bool BuildMesh(
 
     NormalMode::Enum normalMode = NormalMode::Imported;
     if(!ParseNormalModeText(options.normalMode, normalMode)){
-        NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: {}"), StringConvert(NormalModeErrorText()));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {}"), StringConvert(NormalModeErrorText()));
         return false;
     }
 
@@ -64,7 +64,7 @@ bool BuildMesh(
     UtilityVector<u32> triangleIndices;
     FbxSkinDetail::ExportContext skinContext;
     for(const usize instanceIndex : selection){
-        GLB_ASSERT(instanceIndex < instances.size());
+        NWB_ASSERT(instanceIndex < instances.size());
         if(
             !FbxMeshBuild::AppendInstanceMesh(
                 instances[instanceIndex],
@@ -85,7 +85,7 @@ bool BuildMesh(
     }
 
     if(outMesh.indices.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: selected meshes produced no triangles"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes produced no triangles"));
         return false;
     }
     if(normalMode != NormalMode::Imported || !FbxSourceMeshStreams::SourceMeshHasCompleteTangents(outMesh)){
@@ -95,7 +95,7 @@ bool BuildMesh(
     }
     if(wantsSkinning){
         if(skinContext.joints.empty()){
-            NWB_LOGGER_ERROR(GLB_TEXT("Failed to build mesh: skinned mesh did not produce any skeleton joints"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh did not produce any skeleton joints"));
             return false;
         }
         outSkeletonJoints = Move(skinContext.joints);

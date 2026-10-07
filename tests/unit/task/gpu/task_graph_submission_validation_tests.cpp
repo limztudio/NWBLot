@@ -111,7 +111,7 @@ TEST(GpuTaskGraphSubmissionValidation, CountsDistinctPhysicalQueueGenerationsWit
     ExpectWaitStatistics(queue, tokens.data(), tokens.size());
     Sort(tokens.begin(), tokens.end(), [](const auto& first, const auto& second){ return first.value < second.value; });
     ASSERT_EQ(tokens.size(), original.size());
-    EXPECT_EQ(GLB_MEMCMP(tokens.data(), original.data(), tokens.size() * sizeof(tokens[0u])), 0);
+    EXPECT_EQ(NWB_MEMCMP(tokens.data(), original.data(), tokens.size() * sizeof(tokens[0u])), 0);
 }
 
 

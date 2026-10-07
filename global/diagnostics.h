@@ -453,7 +453,7 @@ inline void ClearDiagnosticEventCallback(const DiagnosticEventCallback callback)
         return;
 }
 
-GLB_NOINLINE inline void CaptureDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{
+NWB_NOINLINE inline void CaptureDiagnosticEvent(const DiagnosticEventRecord& record)noexcept{
     if(DiagnosticDetail::g_EventActive.testAndSet(MemoryOrder::acquire))
         return;
 

@@ -191,7 +191,7 @@ TEST(Telemetry, RecorderBuilderCanClearAndReenterWhileItsPayloadIsLeased){
     EXPECT_NE(nested->payload.data(), outer->payload.data());
     ASSERT_EQ(nested->payload.size(), 128u);
     ASSERT_EQ(outer->payload.size(), 128u);
-    EXPECT_EQ(GLB_MEMCMP(nested->payload.data(), outer->payload.data(), 128u), 0);
+    EXPECT_EQ(NWB_MEMCMP(nested->payload.data(), outer->payload.data(), 128u), 0);
 }
 
 TEST(Telemetry, RecorderDisableDuringBuildRejectsPublicationAndReleasesLease){
@@ -319,7 +319,7 @@ TEST(Telemetry, RecorderActiveEventAliasesRemainStableAcrossStorageGrowth){
         const auto* event = recorder.view().eventAt(index);
         ASSERT_NE(event, nullptr);
         ASSERT_EQ(event->payload.size(), sizeof(bytes));
-        EXPECT_EQ(GLB_MEMCMP(event->payload.data(), bytes, sizeof(bytes)), 0);
+        EXPECT_EQ(NWB_MEMCMP(event->payload.data(), bytes, sizeof(bytes)), 0);
     }
 }
 

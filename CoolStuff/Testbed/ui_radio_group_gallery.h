@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "namespace.h"
+
 #include <impl/ecs_ui/components.h>
 #include <impl/ecs_ui/toolkit/widgets/radio_group.h>
 
@@ -12,7 +14,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiRadioGroupSource final : public NWB::Impl::Ui::IListDataSource{
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiRadioGroupSource final : public NWB::Impl::Ui::IListDataSource{
 public:
     [[nodiscard]] virtual u64 instanceGeneration()const noexcept override;
     [[nodiscard]] virtual u64 revision()const noexcept override;
@@ -24,15 +32,18 @@ public:
     [[nodiscard]] virtual bool enabled(u64 index)const noexcept override;
 };
 
-class TestbedUiRadioGroupGallery final : NoCopy{
+class UiRadioGroupGallery final : NoCopy{
 public:
     void paint(NWB::Impl::UiPaintContext& context, f32 x, f32 y);
 
 
 private:
-    TestbedUiRadioGroupSource m_source;
+    UiRadioGroupSource m_source;
     NWB::Impl::Ui::RadioGroupState m_state;
 };
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

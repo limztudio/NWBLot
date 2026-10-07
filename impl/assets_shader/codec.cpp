@@ -24,7 +24,7 @@ NWB_IMPL_BEGIN
 
 
 bool ShaderAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, GLB_TEXT("ShaderAssetCodec::serialize")))
+    if(!checkSerializeAssetType(asset, NWB_TEXT("ShaderAssetCodec::serialize")))
         return false;
 
     const Shader& shader = static_cast<const Shader&>(asset);
@@ -33,19 +33,19 @@ bool ShaderAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets
     case ShaderBinaryPayload::AssetPayloadFailure::None:
         break;
     case ShaderBinaryPayload::AssetPayloadFailure::InvalidHeader:
-        NWB_LOGGER_ERROR(GLB_TEXT("ShaderAssetCodec::serialize failed: invalid shader payload header"));
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: invalid shader payload header"));
         return false;
     case ShaderBinaryPayload::AssetPayloadFailure::UnsupportedVersion:
-        NWB_LOGGER_ERROR(GLB_TEXT("ShaderAssetCodec::serialize failed: unsupported shader payload version"));
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: unsupported shader payload version"));
         return false;
     case ShaderBinaryPayload::AssetPayloadFailure::InvalidEntryPoint:
-        NWB_LOGGER_ERROR(GLB_TEXT("ShaderAssetCodec::serialize failed: shader entry point is empty or too long"));
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: shader entry point is empty or too long"));
         return false;
     case ShaderBinaryPayload::AssetPayloadFailure::InvalidBytecode:
-        NWB_LOGGER_ERROR(GLB_TEXT("ShaderAssetCodec::serialize failed: invalid SPIR-V bytecode"));
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: invalid SPIR-V bytecode"));
         return false;
     case ShaderBinaryPayload::AssetPayloadFailure::OutputSizeOverflow:
-        NWB_LOGGER_ERROR(GLB_TEXT("ShaderAssetCodec::serialize failed: shader payload size overflow"));
+        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: shader payload size overflow"));
         return false;
     }
 

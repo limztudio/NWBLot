@@ -95,7 +95,7 @@ void CopyCommandIrBytes(
 ){
     outBytes.resize(source.size());
     if(!source.empty())
-        GLB_MEMCPY(outBytes.data(), outBytes.size(), source.data(), source.size());
+        NWB_MEMCPY(outBytes.data(), outBytes.size(), source.data(), source.size());
 }
 
 

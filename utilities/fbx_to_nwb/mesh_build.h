@@ -135,7 +135,7 @@ template<typename VisitTriangle>
                 Swap(cornerIndices[1], cornerIndices[2]);
 
             for([[maybe_unused]] const u32 cornerIndex : cornerIndices){
-                GLB_ASSERT(cornerIndex < mesh.vertex_indices.count);
+                NWB_ASSERT(cornerIndex < mesh.vertex_indices.count);
             }
 
             if(!visitTriangle(cornerIndices))

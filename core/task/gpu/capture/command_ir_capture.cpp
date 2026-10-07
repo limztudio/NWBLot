@@ -112,7 +112,7 @@ namespace __hidden_gpu_command_ir_capture{
         if(s_NextIdentity.compare_exchange_weak(identity, identity + 1u, MemoryOrder::relaxed, MemoryOrder::relaxed))
             return identity;
     }
-    GLB_FATAL_ASSERT_MSG(false, "Command IR capture identity space is exhausted");
+    NWB_FATAL_ASSERT_MSG(false, "Command IR capture identity space is exhausted");
     TerminateInvariant();
 }
 
@@ -205,7 +205,7 @@ template<typename RecordT>
 template<typename RecordT>
 static void InitializeRecord(RecordT& record, const GpuCommandIrWireOpcode::Enum opcode)noexcept{
     static_assert(IsTriviallyCopyable_V<RecordT>, "Command IR records must be trivially copyable");
-    GLB_MEMSET(&record, 0, sizeof(record));
+    NWB_MEMSET(&record, 0, sizeof(record));
     record.header.opcode = opcode;
     record.header.byteSize = static_cast<u16>(sizeof(record));
 }
@@ -248,14 +248,14 @@ BinaryByteView GpuCommandIrCapture::commandBytes()const{
         return BinaryByteView{ m_commandBytes.data(), m_commandBytes.size() };
 
     if(m_packedDirty){
-        GLB_FATAL_ASSERT_MSG(
+        NWB_FATAL_ASSERT_MSG(
             m_commandBytes.size() <= Limit<usize>::s_Max - m_blobBytes.size(),
             "Command IR stream size exceeded addressable storage"
         );
         const usize totalSize = m_commandBytes.size() + m_blobBytes.size();
         m_packedBytes.resize(totalSize);
-        GLB_MEMCPY(m_packedBytes.data(), totalSize, m_commandBytes.data(), m_commandBytes.size());
-        GLB_MEMCPY(
+        NWB_MEMCPY(m_packedBytes.data(), totalSize, m_commandBytes.data(), m_commandBytes.size());
+        NWB_MEMCPY(
             m_packedBytes.data() + m_commandBytes.size(),
             m_blobBytes.size(),
             m_blobBytes.data(),
@@ -272,9 +272,9 @@ bool GpuCommandIrCapture::exportOwned(GpuCommandIrOwnedStream& outStream)const{
     const usize totalSize = m_commandBytes.size() + m_blobBytes.size();
     GraphicsBytes candidate(outStream.m_arena);
     candidate.resize(totalSize);
-    GLB_MEMCPY(candidate.data(), totalSize, m_commandBytes.data(), m_commandBytes.size());
+    NWB_MEMCPY(candidate.data(), totalSize, m_commandBytes.data(), m_commandBytes.size());
     if(!m_blobBytes.empty()){
-        GLB_MEMCPY(
+        NWB_MEMCPY(
             candidate.data() + m_commandBytes.size(),
             m_blobBytes.size(),
             m_blobBytes.data(),
@@ -363,7 +363,7 @@ bool GpuCommandIrCapture::rollback(const GpuCommandIrCaptureCheckpoint& target)n
 void GpuCommandIrCapture::reset()noexcept{
     static_assert(noexcept(m_recordEndOffsets.clear()));
     static_assert(IsNothrowDestructible_V<GraphicsBytes::value_type>);
-    GLB_FATAL_ASSERT_MSG(
+    NWB_FATAL_ASSERT_MSG(
         m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader),
         "Command IR capture reset requires its reserved stream header storage"
     );
@@ -382,7 +382,7 @@ void GpuCommandIrCapture::reset()noexcept{
     }
     m_packedDirty = true;
     if(m_resetEpoch == Limit<u64>::s_Max){
-        GLB_FATAL_ASSERT_MSG(false, "Command IR capture reset epoch exhausted");
+        NWB_FATAL_ASSERT_MSG(false, "Command IR capture reset epoch exhausted");
         TerminateInvariant();
     }
     ++m_resetEpoch;
@@ -440,7 +440,7 @@ void GpuCommandIrCapture::rollbackPrefix(
     m_recordingAttemptGeneration = attemptGeneration;
     if(recordCount == 0u){
         if(m_resetEpoch == Limit<u64>::s_Max){
-            GLB_FATAL_ASSERT_MSG(false, "Command IR capture rollback epoch exhausted");
+            NWB_FATAL_ASSERT_MSG(false, "Command IR capture rollback epoch exhausted");
             TerminateInvariant();
         }
         ++m_resetEpoch;
@@ -692,14 +692,14 @@ bool GpuCommandIrCapture::appendCommandBytes(const GpuCommandIrBuiltinTaskRecord
 }
 
 void GpuCommandIrCapture::writeStreamHeader()noexcept{
-    GLB_ASSERT(m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader));
+    NWB_ASSERT(m_commandBytes.size() >= sizeof(GpuCommandIrStreamHeader));
     GpuCommandIrStreamHeader header;
     header.graphGeneration = m_graphGeneration;
     header.planGeneration = m_planGeneration;
     header.recordCount = static_cast<u64>(m_recordEndOffsets.size());
     header.commandBytes = static_cast<u64>(m_commandBytes.size() - sizeof(GpuCommandIrStreamHeader));
     header.blobBytes = static_cast<u64>(m_blobBytes.size());
-    GLB_MEMCPY(m_commandBytes.data(), sizeof(header), &header, sizeof(header));
+    NWB_MEMCPY(m_commandBytes.data(), sizeof(header), &header, sizeof(header));
     m_packedDirty = true;
 }
 

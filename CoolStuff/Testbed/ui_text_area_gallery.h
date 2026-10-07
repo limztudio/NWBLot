@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "namespace.h"
+
 #include <impl/ecs_ui/components.h>
 #include <impl/ecs_ui/toolkit/widgets/text_area.h>
 
@@ -12,9 +14,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiTextAreaGallery final : NoCopy{
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiTextAreaGallery final : NoCopy{
 public:
-    explicit TestbedUiTextAreaGallery(NWB::Core::Alloc::GlobalArena& arena);
+    explicit UiTextAreaGallery(NWB::Core::Alloc::GlobalArena& arena);
 
 
 public:
@@ -26,6 +34,9 @@ private:
     NWB::Impl::Ui::TextAreaState m_state;
     bool m_readOnly = false;
 };
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

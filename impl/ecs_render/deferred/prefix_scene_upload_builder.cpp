@@ -246,7 +246,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
         .ready = *inputs.sceneShadingSetupReady,
         .sceneShadingState = sceneShadingState,
     };
-    GLB_MEMCPY(
+    NWB_MEMCPY(
         sceneShadingSetupPayload.lightData,
         sizeof(sceneShadingSetupPayload.lightData),
         sceneLightData,
@@ -263,7 +263,7 @@ PrefixSceneUploadBuilder::PrefixSceneUploadBuilder(
         return false;
     outResult.tailTask = outResult.sceneShadingSetupTask;
     outResult.lightingClassification = rayTracingLightingClassification;
-    GLB_MEMCPY(
+    NWB_MEMCPY(
         outResult.lightData,
         sizeof(outResult.lightData),
         sceneLightData,

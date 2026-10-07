@@ -172,7 +172,7 @@ inline QueueFamilySharingInfo ResolveQueueFamilySharing(
             if(result.familyIndices[index] == static_cast<u32>(familyIndex))
                 return;
         }
-        GLB_ASSERT(result.familyIndexCount < result.familyIndices.size());
+        NWB_ASSERT(result.familyIndexCount < result.familyIndices.size());
         result.familyIndices[result.familyIndexCount] = static_cast<u32>(familyIndex);
         ++result.familyIndexCount;
     };

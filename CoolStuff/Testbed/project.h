@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "namespace.h"
 #include "ui_skin_preview.h"
 
 #include <loader/project_entry.h>
@@ -18,7 +19,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ProjectTestbed final : public NWB::IProjectEntryCallbacks, public NWB::Core::IInputEventHandler{
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class Project final : public NWB::IProjectEntryCallbacks, public NWB::Core::IInputEventHandler{
 private:
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateInitialWorldOrDie(NWB::ProjectRuntimeContext& context);
     static constexpr usize s_KeyStateCount = static_cast<usize>(NWB::Core::Key::Menu) + 1u;
@@ -38,8 +45,8 @@ private:
 
 
 public:
-    explicit ProjectTestbed(NWB::ProjectRuntimeContext& context);
-    virtual ~ProjectTestbed()override;
+    explicit Project(NWB::ProjectRuntimeContext& context);
+    virtual ~Project()override;
 
 
 public:
@@ -60,7 +67,7 @@ public:
 private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
-    TestbedUiSkinPreview m_uiPreview;
+    UiSkinPreview m_uiPreview;
     NWB::Impl::Ui::WindowState m_uiWindow;
     f64 m_lastMouseX = 0.0;
     f64 m_lastMouseY = 0.0;
@@ -71,6 +78,9 @@ private:
     bool m_mousePositionValid = false;
     Array<bool, s_KeyStateCount> m_keyPressed = {};
 };
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

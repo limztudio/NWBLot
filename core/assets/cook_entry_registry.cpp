@@ -56,8 +56,8 @@ bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry){
         __hidden_cook_entry_registry::QueryAutoRegistrationQueue(),
         registry,
         functions,
-        [](){ NWB_LOGGER_ERROR(GLB_TEXT("AssetCook: collected null cook entry registration function")); },
-        [](){ NWB_LOGGER_ERROR(GLB_TEXT("AssetCook: failed to register auto-collected cook entry type")); }
+        [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: collected null cook entry registration function")); },
+        [](){ NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to register auto-collected cook entry type")); }
     );
 }
 

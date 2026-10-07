@@ -135,9 +135,9 @@ TEST(Telemetry, EventStreamCodecRejectsInvalidInput){
 
     corrupted = encoded;
     Telemetry::EncodedStreamHeader streamHeader;
-    GLB_MEMCPY(&streamHeader, sizeof(streamHeader), corrupted.data(), sizeof(streamHeader));
+    NWB_MEMCPY(&streamHeader, sizeof(streamHeader), corrupted.data(), sizeof(streamHeader));
     streamHeader.eventCount = 0u;
-    GLB_MEMCPY(corrupted.data(), corrupted.size(), &streamHeader, sizeof(streamHeader));
+    NWB_MEMCPY(corrupted.data(), corrupted.size(), &streamHeader, sizeof(streamHeader));
     result = Telemetry::DecodeEventStream(testArena.arena, corrupted.data(), corrupted.size(), decoded);
     EXPECT_EQ(result.status, Telemetry::DecodeStatus::InvalidHeader);
 }
@@ -171,7 +171,7 @@ TEST(Telemetry, EventCodecRejectsNonCurrentVersionsAndRecovers){
         usize cursor = 0u;
         ASSERT_TRUE(ReadPOD(current, cursor, encodedHeader));
         encodedHeader.version = version;
-        GLB_MEMCPY(encoded.data(), encoded.size(), &encodedHeader, sizeof(encodedHeader));
+        NWB_MEMCPY(encoded.data(), encoded.size(), &encodedHeader, sizeof(encodedHeader));
         EXPECT_EQ(
             Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size(), decoded).status,
             Telemetry::DecodeStatus::InvalidHeader
@@ -209,7 +209,7 @@ TEST(Telemetry, EventStreamRejectsNonCurrentStreamAndNestedEventVersionsAndRecov
         usize cursor = 0u;
         ASSERT_TRUE(ReadPOD(current, cursor, streamHeader));
         streamHeader.version = version;
-        GLB_MEMCPY(encoded.data(), encoded.size(), &streamHeader, sizeof(streamHeader));
+        NWB_MEMCPY(encoded.data(), encoded.size(), &streamHeader, sizeof(streamHeader));
         EXPECT_EQ(
             Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size(), decoded).status,
             Telemetry::DecodeStatus::InvalidHeader
@@ -220,7 +220,7 @@ TEST(Telemetry, EventStreamRejectsNonCurrentStreamAndNestedEventVersionsAndRecov
         Telemetry::EncodedEventHeader eventHeader;
         ASSERT_TRUE(ReadPOD(current, cursor, eventHeader));
         eventHeader.version = version;
-        GLB_MEMCPY(
+        NWB_MEMCPY(
             encoded.data() + sizeof(streamHeader), encoded.size() - sizeof(streamHeader), &eventHeader, sizeof(eventHeader)
         );
         EXPECT_EQ(
@@ -258,7 +258,7 @@ TEST(Telemetry, DiagnosticPayloadRejectsNonCurrentVersionsAndRecovers){
         usize cursor = 0u;
         ASSERT_TRUE(ReadPOD(current, cursor, header));
         header.version = version;
-        GLB_MEMCPY(encoded.data(), encoded.size(), &header, sizeof(header));
+        NWB_MEMCPY(encoded.data(), encoded.size(), &header, sizeof(header));
         EXPECT_FALSE(Telemetry::ParseDiagnosticPayload(testArena.arena, encoded.data(), encoded.size(), parsed));
         EXPECT_TRUE(parsed.message.empty());
         ASSERT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, current.data(), current.size(), parsed));
@@ -280,7 +280,7 @@ TEST(Telemetry, RecorderAcceptsConcurrentRecords){
                 if(!Telemetry::RecordTextLog(
                     recorder,
                     NWB::Core::Common::LogType::Info,
-                    GLB_TEXT("concurrent telemetry record"),
+                    NWB_TEXT("concurrent telemetry record"),
                     eventIndex,
                     threadIndex
                 ))

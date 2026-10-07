@@ -412,7 +412,7 @@ bool GpuTaskGraphCompiler::analyze(
         return pair.value();
     };
     const auto appendInferredEdge = [&](const GpuTaskDependencyEdge& edge){
-        GLB_ASSERT(edge.hazard != GpuTaskHazardType::Explicit);
+        NWB_ASSERT(edge.hazard != GpuTaskHazardType::Explicit);
 
         DependencyPairIndices& pair = appendRawEdge(edge);
         bool indexed = pair.firstInferredEdge == s_IndexedInferredEdges;
@@ -429,7 +429,7 @@ bool GpuTaskGraphCompiler::analyze(
                     inferredEdgeIndices.reserve(expectedEdgeCount / 2u + 1u);
                 for(usize index = pair.firstInferredEdge; index != Limit<usize>::s_Max; index = nextInferredEdges[index]){
                     if(!inferredEdgeIndices.insert(index).second){
-                        GLB_FATAL_ASSERT_MSG(false, "Inferred dependency promotion requires unique existing reasons");
+                        NWB_FATAL_ASSERT_MSG(false, "Inferred dependency promotion requires unique existing reasons");
                         TerminateInvariant();
                     }
                 }

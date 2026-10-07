@@ -40,7 +40,7 @@ inline constexpr Name s_ProjectUpdateCpuTimingScope("frame.project_update");
 
 void Frame::ApplyPointerScale(void* userData, f32 scaleX, f32 scaleY){
     auto* frame = static_cast<Frame*>(userData);
-    GLB_ASSERT(frame);
+    NWB_ASSERT(frame);
     frame->m_input.setMousePositionScale(scaleX, scaleY);
 }
 
@@ -103,16 +103,16 @@ Frame::~Frame()noexcept(false){
 bool Frame::startup(){
     m_clipboard = createPlatformClipboardService();
     if(!m_clipboard){
-        NWB_LOGGER_ERROR(GLB_TEXT("Frame: native clipboard initialization failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: native clipboard initialization failed"));
         return false;
     }
     m_textInput = createPlatformTextInputService();
     if(!m_textInput){
-        NWB_LOGGER_ERROR(GLB_TEXT("Frame: native text-input initialization failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: native text-input initialization failed"));
         return false;
     }
     if(!m_graphics.init(data<Common::FrameData>())){
-        NWB_LOGGER_CRITICAL_WARNING(GLB_TEXT("Frame: graphics initialization failed"));
+        NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Frame: graphics initialization failed"));
         return false;
     }
 
@@ -121,11 +121,11 @@ bool Frame::startup(){
 void Frame::cleanup(){
     if(m_telemetryUploadCallback){
         if(!flushTelemetryUpload(true))
-            NWB_LOGGER_WARNING(GLB_TEXT("Frame: telemetry upload flush failed during cleanup"));
+            NWB_LOGGER_WARNING(NWB_TEXT("Frame: telemetry upload flush failed during cleanup"));
     }
-    GLB_FATAL_ASSERT_MSG(
+    NWB_FATAL_ASSERT_MSG(
         m_graphics.destroy(),
-        GLB_TEXT("Frame cleanup requires either a completed graphics join or terminal device loss")
+        NWB_TEXT("Frame cleanup requires either a completed graphics join or terminal device loss")
     );
 }
 void Frame::requestQuit()noexcept{
@@ -181,7 +181,7 @@ bool Frame::updateFrame(f32 delta){
     ScopeExit discardUnpublishedProfile([this]()noexcept{ m_cpuTasks.setProfiling(false, m_perfSession.frameIndex()); });
 
     if(!clipboard().pump()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Frame: clipboard service could not pump on the event thread"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: clipboard service could not pump on the event thread"));
         return false;
     }
     m_cpuTasks.pumpMainThread();
@@ -198,7 +198,7 @@ bool Frame::updateFrame(f32 delta){
         }
 
         if(!m_projectUpdateCallback(m_projectUpdateUserData, delta)){
-            NWB_LOGGER_ERROR(GLB_TEXT("Frame: project update callback returned false"));
+            NWB_LOGGER_ERROR(NWB_TEXT("Frame: project update callback returned false"));
             return false;
         }
         if(recordProjectUpdateTiming)
@@ -209,7 +209,7 @@ bool Frame::updateFrame(f32 delta){
         return true;
 
     if(!m_graphics.runFrame()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Frame: graphics frame update failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Frame: graphics frame update failed"));
         return false;
     }
 
@@ -219,7 +219,7 @@ bool Frame::updateFrame(f32 delta){
 
     if(m_telemetrySession.captureOptions().frameGraphEnabled()){
         if(!m_frameGraphRegistry.record(m_telemetrySession))
-            NWB_LOGGER_WARNING(GLB_TEXT("Frame: frame graph telemetry record failed"));
+            NWB_LOGGER_WARNING(NWB_TEXT("Frame: frame graph telemetry record failed"));
     }
 
     if(cpuTiming.enabled())
@@ -230,7 +230,7 @@ bool Frame::updateFrame(f32 delta){
         const Telemetry::PerfSessionRecordResult perfRecordResult =
             m_telemetrySession.recordPerfReport(m_perfSession.report());
         if(!perfRecordResult.ok())
-            NWB_LOGGER_WARNING(GLB_TEXT("Frame: one or more perf telemetry records failed"));
+            NWB_LOGGER_WARNING(NWB_TEXT("Frame: one or more perf telemetry records failed"));
     }
     return true;
 }
@@ -239,23 +239,23 @@ bool Frame::render()noexcept{
 }
 
 IClipboardService& Frame::clipboard(){
-    GLB_FATAL_ASSERT_MSG(m_clipboard, GLB_TEXT("Frame clipboard service requires completed startup"));
+    NWB_FATAL_ASSERT_MSG(m_clipboard, NWB_TEXT("Frame clipboard service requires completed startup"));
     return *m_clipboard;
 }
 
 ITextInputService& Frame::textInput(){
-    GLB_FATAL_ASSERT_MSG(m_textInput, GLB_TEXT("Frame text-input service requires completed startup"));
+    NWB_FATAL_ASSERT_MSG(m_textInput, NWB_TEXT("Frame text-input service requires completed startup"));
     return *m_textInput;
 }
 
 TStringView Frame::windowTitleOrDefault()const noexcept{
     const TStringView title = m_graphics.getWindowTitle();
-    return !title.empty() ? title : TStringView(GLB_TEXT("NWB"));
+    return !title.empty() ? title : TStringView(NWB_TEXT("NWB"));
 }
 
 Optional<TStringView> Frame::syncGraphicsWindowState(u32 width, u32 height, bool windowVisible, bool windowIsInFocus){
     if(!m_graphics.updateWindowState(width, height, windowVisible, windowIsInFocus))
-        NWB_LOGGER_WARNING(GLB_TEXT("Frame: graphics window-state update requires device recreation"));
+        NWB_LOGGER_WARNING(NWB_TEXT("Frame: graphics window-state update requires device recreation"));
 
     const TStringView title = m_graphics.getWindowTitle();
     if(TStringView(m_appliedWindowTitle) == title)

@@ -94,10 +94,10 @@ bool UiWindowSmokeScene::paint(Impl::UiPaintContext& context){
             { LayoutSizePolicy::Fixed, __hidden_ui_window_smoke::s_ControlHeight } };
         if(ui.button("increase", "Increase", control)){
             ++m_count;
-            logAction(GLB_TEXT("increase"));
+            logAction(NWB_TEXT("increase"));
         }
         if(ui.checkbox("locked", "Lock", m_locked, control))
-            logAction(GLB_TEXT("locked"));
+            logAction(NWB_TEXT("locked"));
         if(!ui.endContainer())
             return false;
     }
@@ -116,7 +116,7 @@ void UiWindowSmokeScene::observeDisplay(const Impl::Ui::DisplayMetrics& display)
         return;
     m_lastDisplay = display;
     m_displayChanged = true;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiWindowSmoke: display logical={}x{} scale={}x{}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: display logical={}x{} scale={}x{}")
         , display.logicalWidth, display.logicalHeight, display.pixelScaleX, display.pixelScaleY
     );
 }
@@ -136,7 +136,7 @@ void UiWindowSmokeScene::observeState(const Impl::Ui::WindowMetrics& metrics){
     m_lastCount = m_count;
     m_lastLocked = m_locked;
     m_displayChanged = false;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiWindowSmoke: state sequence={} bounds={},{},{},{} collapsed={} locked={} count={}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: state sequence={} bounds={},{},{},{} collapsed={} locked={} count={}")
         , m_sequence, bounds.x, bounds.y, bounds.width, bounds.height
         , static_cast<u32>(m_window.collapsed), static_cast<u32>(m_locked), m_count
     );
@@ -145,12 +145,12 @@ void UiWindowSmokeScene::observeState(const Impl::Ui::WindowMetrics& metrics){
     const Rect resize = WindowLayout::Resize(m_window, metrics);
     const Rect button = __hidden_ui_window_smoke::Button(m_window, metrics);
     const Rect content = WindowLayout::Content(m_window, metrics);
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiWindowSmoke: geometry sequence={} title={},{},{},{} collapse={},{},{},{} resize={},{},{},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: geometry sequence={} title={},{},{},{} collapse={},{},{},{} resize={},{},{},{}")
         , m_sequence, title.x, title.y, title.width, title.height
         , collapse.x, collapse.y, collapse.width, collapse.height
         , resize.x, resize.y, resize.width, resize.height
     );
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiWindowSmoke: controls sequence={} button={},{},{},{} lock={},{},{},{} content={},{},{},{} minimum={},{}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: controls sequence={} button={},{},{},{} lock={},{},{},{} content={},{},{},{} minimum={},{}")
         , m_sequence, button.x, button.y, button.width, button.height
         , button.x + button.width + __hidden_ui_window_smoke::s_Gap, button.y, button.width, button.height
         , content.x, content.y, content.width, content.height, metrics.minimumSize.x, metrics.minimumSize.y
@@ -159,7 +159,7 @@ void UiWindowSmokeScene::observeState(const Impl::Ui::WindowMetrics& metrics){
 
 void UiWindowSmokeScene::logAction(const TStringView action){
     ++m_actions;
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiWindowSmoke: action={} count={} locked={} actions={}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiWindowSmoke: action={} count={} locked={} actions={}")
         , action, m_count, static_cast<u32>(m_locked), m_actions
     );
 }
@@ -180,7 +180,7 @@ void UiWindowSmokeScene::paintMarkers(Impl::UiPaintContext& context, const Impl:
         context.paint.fillRect({ bounds.x + bounds.width - 14.0f, bounds.y + metrics.titleHeight + 4.0f, 10.0f, 10.0f },
             __hidden_ui_window_smoke::s_ContentAnchor);
     const bool popped = context.paint.popClip();
-    GLB_FATAL_ASSERT(popped);
+    NWB_FATAL_ASSERT(popped);
 }
 
 

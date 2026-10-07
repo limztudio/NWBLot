@@ -385,7 +385,7 @@ inline void HashToDebugString(const NameHash& hash, CharT* dst, const usize dstS
     *writeCursor = CharT{};
 }
 
-#if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
 template<typename CharT>
 inline constexpr void CopyDebugName(const BasicStringView<CharT> text, char* dst, const usize dstSize)noexcept(IsArithmetic_V<CharT>){
     if(dstSize == 0)
@@ -407,7 +407,7 @@ inline constexpr void CopyDebugName(const BasicStringView<CharT> text, char* dst
 }
 #endif
 
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
 inline void RecordStoredNameSymbolText(
     const NameHash& hash,
     const AStringView text,
@@ -464,71 +464,71 @@ class Name{
 public:
     constexpr Name()noexcept
         : m_hash{}
-#if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
         , m_hasSymbolText(false)
 #endif
     {}
     constexpr Name(std::nullptr_t)noexcept
         : m_hash{}
-#if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
         , m_hasSymbolText(false)
 #endif
     {}
     constexpr Name(const char* str)noexcept
         : m_hash(ComputeNameHash(str))
-#if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
         , m_hasSymbolText(str != nullptr)
 #endif
     {
-#if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         CopyCanonical(m_debugName, NameDetail::s_DebugNameCapacity, str);
 #endif
     }
     constexpr Name(const wchar* str)noexcept
         : m_hash(ComputeNameHash(str))
-#if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
         , m_hasSymbolText(str != nullptr)
 #endif
     {
-#if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         CopyCanonical(m_debugName, NameDetail::s_DebugNameCapacity, str);
 #endif
     }
     explicit Name(const NameHash& hash)noexcept
         : m_hash(hash)
-#if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
         , m_hasSymbolText(false)
 #endif
     {
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
         NameDetail::HashToDebugString(m_hash, m_debugName, NameDetail::s_DebugNameCapacity);
 #endif
     }
     explicit constexpr Name(const AStringView text)
         : m_hash(ComputeNameHash(text))
-#if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
         , m_hasSymbolText(true)
 #endif
     {
-#if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         NameDetail::CopyDebugName(text, m_debugName, NameDetail::s_DebugNameCapacity);
 #endif
         if(!IsConstantEvaluated())
@@ -536,14 +536,14 @@ public:
     }
     explicit constexpr Name(const WStringView text)
         : m_hash(ComputeNameHash(text))
-#if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         , m_debugName{}
 #endif
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
         , m_hasSymbolText(true)
 #endif
     {
-#if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         NameDetail::CopyDebugName(text, m_debugName, NameDetail::s_DebugNameCapacity);
 #endif
         if(!IsConstantEvaluated())
@@ -559,7 +559,7 @@ public:
     [[nodiscard]] constexpr const NameHash& identityHash()const noexcept{ return m_hash; }
 
     [[nodiscard]] constexpr const NameHash& hash()const{
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
         recordStoredSymbolText();
 #endif
         return m_hash;
@@ -567,10 +567,10 @@ public:
 
     // In opt/fin, the view remains valid until its rotating thread-local symbol buffer is reused.
     [[nodiscard]] AStringView resolvedText()const{
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
         recordStoredSymbolText();
 #endif
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
         const AStringView text(m_debugName, sizeof(m_debugName));
         return text.substr(0u, text.find('\0'));
 #else
@@ -587,10 +587,10 @@ public:
     }
 
     [[nodiscard]] const char* c_str()const{
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
         recordStoredSymbolText();
 #endif
-#if defined(GLB_DEBUG)
+#if defined(NWB_DEBUG)
         return m_debugName;
 #else
         char* const buf = NameDetail::NextSymbolTextBuffer();
@@ -606,7 +606,7 @@ public:
 
     // Non-resolving text for labels/breadcrumbs: readable name in dbg, else hash hex.
     [[nodiscard]] AStringView logText()const noexcept{
-#if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
         return AStringView(m_debugName);
 #else
         char* const buf = NameDetail::NextSymbolTextBuffer();
@@ -617,7 +617,7 @@ public:
 
 
 private:
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
     constexpr void recordStoredSymbolText()const{
         if(!IsConstantEvaluated())
             NameDetail::RecordStoredNameSymbolText(m_hash, AStringView(m_debugName, sizeof(m_debugName)), m_hasSymbolText);
@@ -627,10 +627,10 @@ private:
 
 private:
     NameHash m_hash;
-#if defined(GLB_DEBUG) || defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_DEBUG) || defined(NWB_BUILD_SYMBOLS)
     char m_debugName[NameDetail::s_DebugNameCapacity];
 #endif
-#if defined(GLB_BUILD_SYMBOLS)
+#if defined(NWB_BUILD_SYMBOLS)
     bool m_hasSymbolText;
 #endif
 };

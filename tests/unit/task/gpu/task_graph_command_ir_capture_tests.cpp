@@ -69,7 +69,7 @@ TEST(GpuCommandIrCapture, RejectsForeignGraphAndPlanGenerationsWithoutChangingCa
     const BinaryByteView bytesBeforeRejectedRecord = capture.commandBytes();
     Graphics::GraphicsBytes streamBeforeRejectedRecord(testArena.arena);
     streamBeforeRejectedRecord.resize(bytesBeforeRejectedRecord.size());
-    GLB_MEMCPY(
+    NWB_MEMCPY(
         streamBeforeRejectedRecord.data(),
         streamBeforeRejectedRecord.size(),
         bytesBeforeRejectedRecord.data(),
@@ -95,7 +95,7 @@ TEST(GpuCommandIrCapture, RejectsForeignGraphAndPlanGenerationsWithoutChangingCa
     const BinaryByteView bytesAfterRejectedRecord = capture.commandBytes();
     EXPECT_EQ(bytesAfterRejectedRecord.size(), streamBeforeRejectedRecord.size());
     EXPECT_EQ(
-        GLB_MEMCMP(
+        NWB_MEMCMP(
             bytesAfterRejectedRecord.data(),
             streamBeforeRejectedRecord.data(),
             streamBeforeRejectedRecord.size()
@@ -225,7 +225,7 @@ TEST(GpuCommandIrCapture, RollbackPreservesExactMixedRecordPrefixAtRecordBoundar
 
     Graphics::GraphicsBytes expectedPrefix(testArena.arena);
     expectedPrefix.resize(copyTextureEnd);
-    GLB_MEMCPY(expectedPrefix.data(), expectedPrefix.size(), bytes.data(), expectedPrefix.size());
+    NWB_MEMCPY(expectedPrefix.data(), expectedPrefix.size(), bytes.data(), expectedPrefix.size());
     capture.rollback(s_ExpectedDualCount);
     const BinaryByteView rolledBackBytes = capture.commandBytes();
     EXPECT_EQ(capture.recordCount(), s_ExpectedDualCount);
@@ -234,7 +234,7 @@ TEST(GpuCommandIrCapture, RollbackPreservesExactMixedRecordPrefixAtRecordBoundar
     // Rollback rewrites the stream header's count/payload fields, while the surviving two POD records remain an
     // exact byte prefix of the original capture.
     EXPECT_EQ(
-        GLB_MEMCMP(
+        NWB_MEMCMP(
             rolledBackBytes.data() + sizeof(Graphics::GpuCommandIrStreamHeader),
             expectedPrefix.data() + sizeof(Graphics::GpuCommandIrStreamHeader),
             expectedPrefix.size() - sizeof(Graphics::GpuCommandIrStreamHeader)

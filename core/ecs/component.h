@@ -93,11 +93,11 @@ private:
 
     [[nodiscard]] inline u32 requireDenseIndex(EntityID entityId)const{
         const u32 index = entityId.index();
-        GLB_ASSERT(index < static_cast<u32>(m_sparse.size()));
+        NWB_ASSERT(index < static_cast<u32>(m_sparse.size()));
 
         const u32 denseIndex = m_sparse[index];
-        GLB_ASSERT(denseIndex < static_cast<u32>(m_dense.size()));
-        GLB_ASSERT(m_dense[denseIndex] == entityId);
+        NWB_ASSERT(denseIndex < static_cast<u32>(m_dense.size()));
+        NWB_ASSERT(m_dense[denseIndex] == entityId);
         return denseIndex;
     }
 

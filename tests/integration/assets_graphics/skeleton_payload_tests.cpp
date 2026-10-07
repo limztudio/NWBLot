@@ -96,7 +96,7 @@ TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndClearsPreviousOutput){
         EXPECT_EQ(inputs.skeleton.jointCount(), 4u);
     }
     EXPECT_EQ(logger.errorCount(), 4u);
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("references missing or later parent")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("references missing or later parent")));
 }
 
 TEST(SkeletonPayload, RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent){
@@ -114,7 +114,7 @@ TEST(SkeletonPayload, RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent){
         EXPECT_TRUE(inputs.skeleton.jointChildIndices().empty());
     }
     EXPECT_EQ(logger.errorCount(), s_ExpectedDualCount);
-    EXPECT_TRUE(logger.sawErrorContaining(GLB_TEXT("duplicate joint name")));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate joint name")));
 }
 
 TEST(SkeletonPayload, RebuildChangedHierarchyClearsPreviousChildren){

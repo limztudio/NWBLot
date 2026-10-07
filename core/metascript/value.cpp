@@ -85,7 +85,7 @@ Value& Value::operator=(Value&& other)noexcept{
 Value Value::operator+(const Value& rhs)const{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(AddOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            GLB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
             return Value(m_arena);
         }
         return Value(m_data.m_integer + rhs.m_data.m_integer, m_arena);
@@ -98,7 +98,7 @@ Value Value::operator+(const Value& rhs)const{
         const auto lsv = asString();
         const auto rsv = rhs.asString();
         if(lsv.size() > Limit<usize>::s_Max - rsv.size()){
-            GLB_ASSERT_MSG(false, MetascriptArenaScope::s_StringConcatenationSizeOverflowMessage);
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_StringConcatenationSizeOverflowMessage);
             return Value(m_arena);
         }
 
@@ -118,7 +118,7 @@ Value Value::operator+(const Value& rhs)const{
         v.makeList();
         auto& dst = *v.m_data.m_list;
         if(m_data.m_list->size() > Limit<usize>::s_Max - rhs.m_data.m_list->size()){
-            GLB_ASSERT_MSG(false, MetascriptArenaScope::s_ListConcatenationSizeOverflowMessage);
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_ListConcatenationSizeOverflowMessage);
             return Value(m_arena);
         }
         dst.reserve(m_data.m_list->size() + rhs.m_data.m_list->size());
@@ -127,14 +127,14 @@ Value Value::operator+(const Value& rhs)const{
         return v;
     }
 
-    GLB_ASSERT_MSG(false, GLB_TEXT("invalid operand types for operator+"));
+    NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator+"));
     return Value(m_arena);
 }
 
 Value Value::operator-(const Value& rhs)const{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(SubtractOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            GLB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
             return Value(m_arena);
         }
         return Value(m_data.m_integer - rhs.m_data.m_integer, m_arena);
@@ -143,14 +143,14 @@ Value Value::operator-(const Value& rhs)const{
     if(isNumeric() && rhs.isNumeric())
         return Value(toDouble() - rhs.toDouble(), m_arena);
 
-    GLB_ASSERT_MSG(false, GLB_TEXT("invalid operand types for operator-"));
+    NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator-"));
     return Value(m_arena);
 }
 
 Value Value::operator*(const Value& rhs)const{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(MultiplyOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            GLB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
             return Value(m_arena);
         }
         return Value(m_data.m_integer * rhs.m_data.m_integer, m_arena);
@@ -159,18 +159,18 @@ Value Value::operator*(const Value& rhs)const{
     if(isNumeric() && rhs.isNumeric())
         return Value(toDouble() * rhs.toDouble(), m_arena);
 
-    GLB_ASSERT_MSG(false, GLB_TEXT("invalid operand types for operator*"));
+    NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator*"));
     return Value(m_arena);
 }
 
 Value Value::operator/(const Value& rhs)const{
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(rhs.m_data.m_integer == 0){
-            GLB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
             return Value(m_arena);
         }
         if(DivideOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            GLB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
             return Value(m_arena);
         }
         return Value(m_data.m_integer / rhs.m_data.m_integer, m_arena);
@@ -178,20 +178,20 @@ Value Value::operator/(const Value& rhs)const{
 
     if(isNumeric() && rhs.isNumeric()){
         if(rhs.toDouble() == 0.0){
-            GLB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
             return Value(m_arena);
         }
         return Value(toDouble() / rhs.toDouble(), m_arena);
     }
 
-    GLB_ASSERT_MSG(false, GLB_TEXT("invalid operand types for operator/"));
+    NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator/"));
     return Value(m_arena);
 }
 
 Value& Value::operator+=(const Value& rhs){
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(AddOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            GLB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
             return *this;
         }
         m_data.m_integer += rhs.m_data.m_integer;
@@ -205,7 +205,7 @@ Value& Value::operator+=(const Value& rhs){
 
     if(m_type == ValueType::String && rhs.m_type == ValueType::String){
         if(m_data.m_string->size() > Limit<usize>::s_Max - rhs.m_data.m_string->size()){
-            GLB_ASSERT_MSG(false, MetascriptArenaScope::s_StringAppendSizeOverflowMessage);
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_StringAppendSizeOverflowMessage);
             return *this;
         }
         const usize requiredStringCapacity = m_data.m_string->size() + rhs.m_data.m_string->size();
@@ -219,7 +219,7 @@ Value& Value::operator+=(const Value& rhs){
             // The separately owned list survives relocation when rhs is an element of this list.
             const ListType& sourceList = *rhs.m_data.m_list;
             if(m_data.m_list->size() > Limit<usize>::s_Max - sourceList.size()){
-                GLB_ASSERT_MSG(false, MetascriptArenaScope::s_ListAppendSizeOverflowMessage);
+                NWB_ASSERT_MSG(false, MetascriptArenaScope::s_ListAppendSizeOverflowMessage);
                 return *this;
             }
             const usize appendCount = sourceList.size();
@@ -229,7 +229,7 @@ Value& Value::operator+=(const Value& rhs){
         }
         else{
             if(m_data.m_list->size() == Limit<usize>::s_Max){
-                GLB_ASSERT_MSG(false, MetascriptArenaScope::s_ListAppendSizeOverflowMessage);
+                NWB_ASSERT_MSG(false, MetascriptArenaScope::s_ListAppendSizeOverflowMessage);
                 return *this;
             }
             const usize listSize = m_data.m_list->size();
@@ -242,14 +242,14 @@ Value& Value::operator+=(const Value& rhs){
         return *this;
     }
 
-    GLB_ASSERT_MSG(false, GLB_TEXT("invalid operand types for operator+="));
+    NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator+="));
     return *this;
 }
 
 Value& Value::operator-=(const Value& rhs){
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(SubtractOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            GLB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
             return *this;
         }
         m_data.m_integer -= rhs.m_data.m_integer;
@@ -261,14 +261,14 @@ Value& Value::operator-=(const Value& rhs){
         return *this;
     }
 
-    GLB_ASSERT_MSG(false, GLB_TEXT("invalid operand types for operator-="));
+    NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator-="));
     return *this;
 }
 
 Value& Value::operator*=(const Value& rhs){
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(MultiplyOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            GLB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
             return *this;
         }
         m_data.m_integer *= rhs.m_data.m_integer;
@@ -280,18 +280,18 @@ Value& Value::operator*=(const Value& rhs){
         return *this;
     }
 
-    GLB_ASSERT_MSG(false, GLB_TEXT("invalid operand types for operator*="));
+    NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator*="));
     return *this;
 }
 
 Value& Value::operator/=(const Value& rhs){
     if(m_type == ValueType::Integer && rhs.m_type == ValueType::Integer){
         if(rhs.m_data.m_integer == 0){
-            GLB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
             return *this;
         }
         if(DivideOverflows<i64>(m_data.m_integer, rhs.m_data.m_integer)){
-            GLB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_IntegerOverflowMessage);
             return *this;
         }
         m_data.m_integer /= rhs.m_data.m_integer;
@@ -300,14 +300,14 @@ Value& Value::operator/=(const Value& rhs){
 
     if(isNumeric() && rhs.isNumeric()){
         if(rhs.toDouble() == 0.0){
-            GLB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
+            NWB_ASSERT_MSG(false, MetascriptArenaScope::s_DivisionByZeroMessage);
             return *this;
         }
         setDouble(toDouble() / rhs.toDouble());
         return *this;
     }
 
-    GLB_ASSERT_MSG(false, GLB_TEXT("invalid operand types for operator/="));
+    NWB_ASSERT_MSG(false, NWB_TEXT("invalid operand types for operator/="));
     return *this;
 }
 
@@ -316,29 +316,29 @@ Value& Value::operator/=(const Value& rhs){
 
 
 i64 Value::asInteger()const{
-    GLB_ASSERT(m_type == ValueType::Integer);
+    NWB_ASSERT(m_type == ValueType::Integer);
     return m_data.m_integer;
 }
 
 f64 Value::asDouble()const{
-    GLB_ASSERT(m_type == ValueType::Double);
+    NWB_ASSERT(m_type == ValueType::Double);
     return m_data.m_double;
 }
 
 f64 Value::toDouble()const{
     if(m_type == ValueType::Integer)
         return static_cast<f64>(m_data.m_integer);
-    GLB_ASSERT(m_type == ValueType::Double);
+    NWB_ASSERT(m_type == ValueType::Double);
     return m_data.m_double;
 }
 
 MStringView Value::asString()const{
-    GLB_ASSERT(m_type == ValueType::String);
+    NWB_ASSERT(m_type == ValueType::String);
     return MStringView(m_data.m_string->data(), m_data.m_string->size());
 }
 
 MStringView Value::asReference()const{
-    GLB_ASSERT(m_type == ValueType::Reference);
+    NWB_ASSERT(m_type == ValueType::Reference);
     return MStringView(m_data.m_string->data(), m_data.m_string->size());
 }
 
@@ -350,22 +350,22 @@ MString Value::copyString()const{
 }
 
 const Value::ListType& Value::asList()const{
-    GLB_ASSERT(m_type == ValueType::List);
+    NWB_ASSERT(m_type == ValueType::List);
     return *m_data.m_list;
 }
 
 Value::ListType& Value::asList(){
-    GLB_ASSERT(m_type == ValueType::List);
+    NWB_ASSERT(m_type == ValueType::List);
     return *m_data.m_list;
 }
 
 const Value::MapType& Value::asMap()const{
-    GLB_ASSERT(m_type == ValueType::Map);
+    NWB_ASSERT(m_type == ValueType::Map);
     return *m_data.m_map;
 }
 
 Value::MapType& Value::asMap(){
-    GLB_ASSERT(m_type == ValueType::Map);
+    NWB_ASSERT(m_type == ValueType::Map);
     return *m_data.m_map;
 }
 
@@ -409,7 +409,7 @@ void Value::makeMap(){
 Value& Value::field(MStringView name){
     if(m_type == ValueType::Null)
         makeMap();
-    GLB_ASSERT(m_type == ValueType::Map);
+    NWB_ASSERT(m_type == ValueType::Map);
 
     auto it = m_data.m_map->find(name);
     if(it != m_data.m_map->end())
@@ -421,7 +421,7 @@ Value& Value::field(MStringView name){
 }
 
 const Value* Value::findField(MStringView name)const{
-    GLB_ASSERT(m_type == ValueType::Map);
+    NWB_ASSERT(m_type == ValueType::Map);
 
     auto it = m_data.m_map->find(name);
     if(it == m_data.m_map->end())
@@ -437,11 +437,11 @@ void Value::append(Value&& val){
 
     if(m_type == ValueType::Null)
         makeList();
-    GLB_ASSERT(m_type == ValueType::List);
+    NWB_ASSERT(m_type == ValueType::List);
 
     const usize listSize = m_data.m_list->size();
     if(listSize == Limit<usize>::s_Max){
-        GLB_ASSERT_MSG(false, MetascriptArenaScope::s_ListAppendSizeOverflowMessage);
+        NWB_ASSERT_MSG(false, MetascriptArenaScope::s_ListAppendSizeOverflowMessage);
         return;
     }
 
@@ -546,7 +546,7 @@ void Value::moveFrom(Value&& other)noexcept{
 }
 
 Value& Value::appendListCopy(const Value& val){
-    GLB_ASSERT(m_type == ValueType::List);
+    NWB_ASSERT(m_type == ValueType::List);
     m_data.m_list->emplace_back(m_arena);
     Value& dst = m_data.m_list->back();
     dst.copyFrom(val);
@@ -554,7 +554,7 @@ Value& Value::appendListCopy(const Value& val){
 }
 
 void Value::appendListCopies(const ListType& values, const usize count){
-    GLB_ASSERT(count <= values.size());
+    NWB_ASSERT(count <= values.size());
     for(usize i = 0u; i < count; ++i)
         appendListCopy(values[i]);
 }

@@ -47,9 +47,9 @@ static bool WriteIfChanged(const Path& path, const AssetBytes& bytes, AssetBytes
     const Path temporary = path.parentPath() / temporaryName;
     if(!WriteBinaryFile(temporary, bytes) || !ReadBinaryFile(temporary, existing, error)
         || existing != bytes || !RenamePath(temporary, path, error)){
-        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: failed to publish built asset '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to publish built asset '{}'"), PathToString<tchar>(path));
         if(!RemoveFile(temporary, error) && error)
-            NWB_LOGGER_WARNING(GLB_TEXT("AssetBuilder: failed to remove temporary output '{}'"), PathToString<tchar>(temporary));
+            NWB_LOGGER_WARNING(NWB_TEXT("AssetBuilder: failed to remove temporary output '{}'"), PathToString<tchar>(temporary));
         return false;
     }
     return true;
@@ -75,7 +75,7 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
     AssetArena& arena = outputDirectory.arena();
     ErrorCode error;
     if(manifest.entries.size() != manifest.plannedFileCount || !EnsureDirectories(outputDirectory, error)){
-        NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: invalid build manifest or output directory '{}'"), PathToString<tchar>(outputDirectory));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid build manifest or output directory '{}'"), PathToString<tchar>(outputDirectory));
         return false;
     }
 
@@ -94,11 +94,11 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
             payloadSize = payload.size;
         }
         if(entry.identity.payloadSize != payloadSize || entry.identity.payloadHash != ComputeFnv64Bytes(payloadData, payloadSize)){
-            NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: invalid payload identity '{}'"), StringConvert(entry.virtualPath.resolvedText()));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid payload identity '{}'"), StringConvert(entry.virtualPath.resolvedText()));
             return false;
         }
         if(payloadSize > Limit<usize>::s_Max - __hidden_built_asset::s_HeaderSize){
-            NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: built asset payload is too large"));
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: built asset payload is too large"));
             return false;
         }
 
@@ -151,7 +151,7 @@ bool ReadBuiltAsset(const Path& path, AssetBytes& bytes, Name& outVirtualPath, u
         || payloadSize != bytes.size() - cursor
         || payloadHash != ComputeFnv64Bytes(bytes.data() + cursor, bytes.size() - cursor)
         || !Name(virtualPathHash)){
-        NWB_LOGGER_ERROR(GLB_TEXT("AssetGatherer: invalid built asset '{}'"), PathToString<tchar>(path));
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: invalid built asset '{}'"), PathToString<tchar>(path));
         return false;
     }
 

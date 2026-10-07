@@ -10,14 +10,20 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void TestbedUiSliderGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void UiSliderGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
     if(!ui.beginPanel("slider_gallery", { x, y, 280.0f, 180.0f }))
         return;
     bool valid = ui.label("title", "Continuous slider");
     if(ui.checkbox("enabled", "Enable slider", m_enabled))
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Testbed: custom slider enabled={}"), m_enabled);
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom slider enabled={}"), m_enabled);
     SliderOptions options;
     options.enabled = m_enabled;
     options.keyStep = 0.05;
@@ -26,10 +32,13 @@ void TestbedUiSliderGallery::paint(NWB::Impl::UiPaintContext& context, const f32
     valid = ui.endPanel() && valid;
     const SliderResult result = m_state.result();
     if(valid && result.valid && result.valueChanged)
-        NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("Testbed: custom slider value={}"), m_state.value());
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: custom slider value={}"), m_state.value());
     if(!valid)
-        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: custom slider declaration failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom slider declaration failed"));
 }
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

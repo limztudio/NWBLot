@@ -5,15 +5,22 @@
 #pragma once
 
 
+#include "namespace.h"
 #include "ui_immutable_list_source.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiSearchComboSource final : public TestbedUiFilteredListSource<TestbedUiSearchComboSource, 12u, 5u>{
-    friend class TestbedUiImmutableListSource<TestbedUiSearchComboSource, 12u, 5u, NWB::Impl::Ui::ISearchableListDataSource>;
-    friend class TestbedUiFilteredListSource<TestbedUiSearchComboSource, 12u, 5u>;
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiSearchComboSource final : public UiFilteredListSource<UiSearchComboSource, 12u, 5u>{
+    friend class UiImmutableListSource<UiSearchComboSource, 12u, 5u, NWB::Impl::Ui::ISearchableListDataSource>;
+    friend class UiFilteredListSource<UiSearchComboSource, 12u, 5u>;
 
 
 private:
@@ -22,8 +29,11 @@ private:
 
 
 public:
-    using TestbedUiFilteredListSource<TestbedUiSearchComboSource, 12u, 5u>::TestbedUiFilteredListSource;
+    using UiFilteredListSource<UiSearchComboSource, 12u, 5u>::UiFilteredListSource;
 };
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

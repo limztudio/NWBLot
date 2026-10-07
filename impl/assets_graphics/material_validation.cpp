@@ -43,7 +43,7 @@ static bool ValidateMaterialVariant(
     ScratchArena& scratchArena
 ){
     if(materialEntry.shaderVariant.empty()){
-        NWB_LOGGER_ERROR(GLB_TEXT("Material '{}' has empty shader_variant")
+        NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' has empty shader_variant")
             , StringConvert(AStringView(materialEntry.virtualPath))
         );
         return false;
@@ -90,7 +90,7 @@ bool ValidateMaterials(
             ToName(preparedEntry.entry.archiveStage.view())
         };
         if(!preparedShaderLookup.emplace(shaderKey, &preparedEntry).second){
-            NWB_LOGGER_ERROR(GLB_TEXT("AssetBuilder: duplicate prepared shader key '{}' stage '{}'")
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: duplicate prepared shader key '{}' stage '{}'")
                 , StringConvert(preparedEntry.entry.name)
                 , StringConvert(preparedEntry.entry.archiveStage.view())
             );
@@ -108,7 +108,7 @@ bool ValidateMaterials(
             const ShaderStageKey shaderLookupKey{ shaderAsset.name(), stageName };
             const auto foundShader = preparedShaderLookup.find(shaderLookupKey);
             if(foundShader == preparedShaderLookup.end()){
-                NWB_LOGGER_ERROR(GLB_TEXT("Material '{}' references unknown shader '{}' for stage '{}'")
+                NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' references unknown shader '{}' for stage '{}'")
                     , StringConvert(AStringView(materialEntry.virtualPath))
                     , StringConvert(shaderAsset.name().resolvedText())
                     , StringConvert(stageName.resolvedText())
@@ -125,7 +125,7 @@ bool ValidateMaterials(
                 const Name shaderMaterialInterface = foundShader.value()->materialTypedBindingInterface;
                 const CookString& shaderMaterialInterfacePath = foundShader.value()->materialTypedBindingInterfacePath;
                 if(!shaderMaterialInterface){
-                    NWB_LOGGER_ERROR(GLB_TEXT("Material '{}' declares interface '{}' but pixel shader '{}' "
+                    NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but pixel shader '{}' "
                         "does not include a generated material bind")
                         , StringConvert(AStringView(materialEntry.virtualPath))
                         , StringConvert(AStringView(materialEntry.materialInterface))
@@ -134,7 +134,7 @@ bool ValidateMaterials(
                     return false;
                 }
                 if(shaderMaterialInterface != Name(AStringView(materialEntry.materialInterface))){
-                    NWB_LOGGER_ERROR(GLB_TEXT("Material '{}' declares interface '{}' but pixel shader '{}' "
+                    NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but pixel shader '{}' "
                         "includes generated material bind interface '{}'")
                         , StringConvert(AStringView(materialEntry.virtualPath))
                         , StringConvert(AStringView(materialEntry.materialInterface))
@@ -147,14 +147,14 @@ bool ValidateMaterials(
         }
 
         if(!hasShaderStage){
-            NWB_LOGGER_ERROR(GLB_TEXT("Material '{}' has no shader stages")
+            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' has no shader stages")
                 , StringConvert(AStringView(materialEntry.virtualPath))
             );
             return false;
         }
 
         if(!hasInterfaceStage){
-            NWB_LOGGER_ERROR(GLB_TEXT("Material '{}' declares interface '{}' but has no pixel shader stage")
+            NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' declares interface '{}' but has no pixel shader stage")
                 , StringConvert(AStringView(materialEntry.virtualPath))
                 , StringConvert(AStringView(materialEntry.materialInterface))
             );

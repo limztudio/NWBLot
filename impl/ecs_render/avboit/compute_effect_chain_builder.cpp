@@ -100,7 +100,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
             }
         );
         if(!m_avboitSystem.taskGraphStage().m_depthWarpTask.valid()){
-            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
             return false;
         }
         completionTask = m_avboitSystem.taskGraphStage().m_depthWarpTask;
@@ -177,7 +177,7 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
         }
     );
     if(!m_avboitSystem.taskGraphStage().m_integrationTask.valid()){
-        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
         return false;
     }
 

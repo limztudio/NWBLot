@@ -135,12 +135,12 @@ void GpuTaskGraph::beginPacketSubmissionAcceptance(
             && lease.m_packet == packet
             && lease.m_planGeneration == planAccess.planGeneration()
     ;
-    GLB_FATAL_ASSERT_MSG(inputValid, "native-accepted packet must retain its exact graph submission lease");
+    NWB_FATAL_ASSERT_MSG(inputValid, "native-accepted packet must retain its exact graph submission lease");
     if(!inputValid)
         TerminateInvariant();
     const GpuCompiledPacketView packetView = planAccess.packet(packet);
     const bool packetValid = packetView.valid() && packetView.plan->taskCount != 0u;
-    GLB_FATAL_ASSERT_MSG(packetValid, "native-accepted packet must retain its compiled task range");
+    NWB_FATAL_ASSERT_MSG(packetValid, "native-accepted packet must retain its compiled task range");
     if(!packetValid)
         TerminateInvariant();
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
@@ -153,7 +153,7 @@ void GpuTaskGraph::beginPacketSubmissionAcceptance(
         && m_activeRecordingAttemptGeneration == lease.m_recordingAttemptGeneration
         && m_activeSubmissionBinding == lease.m_submissionBinding
     ;
-    GLB_FATAL_ASSERT_MSG(bindingValid, "native-accepted packet must retain its graph submission binding");
+    NWB_FATAL_ASSERT_MSG(bindingValid, "native-accepted packet must retain its graph submission binding");
     if(!bindingValid)
         TerminateInvariant();
 
@@ -166,7 +166,7 @@ void GpuTaskGraph::beginPacketSubmissionAcceptance(
             && task.lifecycleAttemptGeneration == lease.m_recordingAttemptGeneration
             && task.submissionClaimGeneration == lease.m_claimGeneration
         ;
-        GLB_FATAL_ASSERT_MSG(taskValid, "native-accepted task must retain its exact submission claim");
+        NWB_FATAL_ASSERT_MSG(taskValid, "native-accepted task must retain its exact submission claim");
         if(!taskValid)
             TerminateInvariant();
     }
@@ -189,12 +189,12 @@ void GpuTaskGraph::notifyPacketSubmissionAccepted(
         ? false
         : true
     ;
-    GLB_FATAL_ASSERT_MSG(inputValid, "native-accepted callback publication must retain its exact graph submission lease");
+    NWB_FATAL_ASSERT_MSG(inputValid, "native-accepted callback publication must retain its exact graph submission lease");
     if(!inputValid)
         TerminateInvariant();
 
     const GpuCompiledPacketView packetView = planAccess.packet(packet);
-    GLB_FATAL_ASSERT_MSG(packetView.valid(), "native-accepted callback publication must retain its compiled task range");
+    NWB_FATAL_ASSERT_MSG(packetView.valid(), "native-accepted callback publication must retain its compiled task range");
     if(!packetView.valid())
         TerminateInvariant();
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
@@ -217,12 +217,12 @@ void GpuTaskGraph::completePacketSubmissionAcceptance(
     PacketSubmissionLease& lease
 )const noexcept{
     const bool inputValid = planAccess.validFor(compiledGraph) && planAccess.validPacket(packet) && lease.valid();
-    GLB_FATAL_ASSERT_MSG(inputValid, "native-accepted completion must retain its exact graph submission lease");
+    NWB_FATAL_ASSERT_MSG(inputValid, "native-accepted completion must retain its exact graph submission lease");
     if(!inputValid)
         TerminateInvariant();
 
     const GpuCompiledPacketView packetView = planAccess.packet(packet);
-    GLB_FATAL_ASSERT_MSG(packetView.valid(), "native-accepted completion must retain its compiled task range");
+    NWB_FATAL_ASSERT_MSG(packetView.valid(), "native-accepted completion must retain its compiled task range");
     if(!packetView.valid())
         TerminateInvariant();
     const GpuSubmissionPacket& packetPlan = *packetView.plan;
@@ -235,7 +235,7 @@ void GpuTaskGraph::completePacketSubmissionAcceptance(
         && m_activeRecordingAttemptGeneration == lease.m_recordingAttemptGeneration
         && m_activeSubmissionBinding == lease.m_submissionBinding
     ;
-    GLB_FATAL_ASSERT_MSG(bindingValid, "native-accepted completion must retain its graph submission binding");
+    NWB_FATAL_ASSERT_MSG(bindingValid, "native-accepted completion must retain its graph submission binding");
     if(!bindingValid)
         TerminateInvariant();
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
@@ -247,7 +247,7 @@ void GpuTaskGraph::completePacketSubmissionAcceptance(
             && task.lifecycleAttemptGeneration == lease.m_recordingAttemptGeneration
             && task.submissionClaimGeneration == lease.m_claimGeneration
         ;
-        GLB_FATAL_ASSERT_MSG(taskValid, "native-accepted task must retain its exact accepting claim");
+        NWB_FATAL_ASSERT_MSG(taskValid, "native-accepted task must retain its exact accepting claim");
         if(!taskValid)
             TerminateInvariant();
     }

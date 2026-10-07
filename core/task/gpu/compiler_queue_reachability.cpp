@@ -113,7 +113,7 @@ static void SymmetrizeCompactTaskRelations(
         if(bits == 0u)
             return;
         const auto& range = ranges[task];
-        GLB_ASSERT(word >= range.m_begin && word < range.m_end);
+        NWB_ASSERT(word >= range.m_begin && word < range.m_end);
         words[offsets[task] + word - range.m_begin] |= bits;
     };
     for(usize rowBlock = 0u; rowBlock < wordsPerRow; ++rowBlock){

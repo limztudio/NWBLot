@@ -8,7 +8,7 @@
 
 #include <microhttpd.h>
 
-#if defined(GLB_PLATFORM_LINUX)
+#if defined(NWB_PLATFORM_LINUX)
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #endif
@@ -79,7 +79,7 @@ MHD_Result ShutdownCaptureServer::RequestCallback(
 
     if(!serverContext || !connection || !method || !uploadDataSize || !connectionContext)
         return MHD_NO;
-    if(GLB_STRCMP(method, "POST") != 0)
+    if(NWB_STRCMP(method, "POST") != 0)
         return MHD_NO;
 
     if(!*connectionContext){
@@ -177,7 +177,7 @@ TEST(LogClientShutdown, DrainsEveryQueuedMessageAfterStopBegins){
         for(u32 messageIndex = 0u; messageIndex < s_ShutdownMessageCount; ++messageIndex){
             client.enqueue(StringFormat(
                 client.arena(),
-                GLB_TEXT("Log client shutdown payload {}"),
+                NWB_TEXT("Log client shutdown payload {}"),
                 messageIndex
             ));
         }

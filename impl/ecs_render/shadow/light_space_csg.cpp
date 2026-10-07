@@ -27,9 +27,9 @@ u64 BuildLightSpaceCsgCaptureIdentity(
     const NwbRtInstanceMaterialGpu* const materials, const InstanceGpuData* const instances, const usize instanceCount,
     const u8* const materialBytes, const usize materialByteCount,
     const Core::TextureHandle* const textures, const usize textureCount){
-    GLB_ASSERT(instanceCount == 0u || (materials && instances));
-    GLB_ASSERT(materialByteCount == 0u || materialBytes);
-    GLB_ASSERT(textureCount == 0u || textures);
+    NWB_ASSERT(instanceCount == 0u || (materials && instances));
+    NWB_ASSERT(materialByteCount == 0u || materialBytes);
+    NWB_ASSERT(textureCount == 0u || textures);
     u64 identity = state.captureGeometryIdentity;
     Fnv64AppendValue(identity, state.snapshot.contentIdentity);
     Fnv64AppendValue(identity, instanceCount);
@@ -149,18 +149,18 @@ bool FinishLightSpaceCsgGather(
         static_cast<u32>(s_HeaderBytes + rangeBytes + cutterBytes), 0u, 0u, 0u,
     };
     static_assert(sizeof(header) == s_HeaderBytes);
-    GLB_MEMCPY(state.bytes.data(), state.bytes.size(), header, sizeof(header));
-    GLB_MEMCPY(state.bytes.data() + s_HeaderBytes, rangeBytes, state.snapshot.receiverRanges.data(), rangeBytes);
+    NWB_MEMCPY(state.bytes.data(), state.bytes.size(), header, sizeof(header));
+    NWB_MEMCPY(state.bytes.data() + s_HeaderBytes, rangeBytes, state.snapshot.receiverRanges.data(), rangeBytes);
     if(cutterBytes != 0u)
-        GLB_MEMCPY(state.bytes.data() + s_HeaderBytes + rangeBytes, cutterBytes, state.snapshot.cutters.data(), cutterBytes);
-    GLB_MEMCPY(state.bytes.data() + s_HeaderBytes + rangeBytes + cutterBytes, instanceBytes, state.instances.data(), instanceBytes);
+        NWB_MEMCPY(state.bytes.data() + s_HeaderBytes + rangeBytes, cutterBytes, state.snapshot.cutters.data(), cutterBytes);
+    NWB_MEMCPY(state.bytes.data() + s_HeaderBytes + rangeBytes + cutterBytes, instanceBytes, state.instances.data(), instanceBytes);
     Fnv64AppendBuffer(state.snapshot.identity, reinterpret_cast<const u8*>(state.instances.data()), instanceBytes);
     if(!state.limitationLogged){
         for(const auto& range : state.snapshot.receiverRanges){
             if((range.flags & NWB_CSG_SHADOW_RECEIVER_UNSUPPORTED) == 0u)
                 continue;
             state.limitationLogged = true;
-            NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: unsupported or over-budget CSG shadow cutters retain conservative receiver shadows"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: unsupported or over-budget CSG shadow cutters retain conservative receiver shadows"));
             break;
         }
     }

@@ -47,7 +47,7 @@ void RendererFramePipeline::declareDeferredSurfelCountReadbackTask(
         BufferResourceDesc(Name("render.surfel_gi.counter_readback"), "Surfel Counter Readback")
     );
     if(!counter.valid() || !readback.valid()){
-        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not import surfel counter-readback graph resources"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import surfel counter-readback graph resources"));
         return;
     }
 
@@ -82,7 +82,7 @@ void RendererFramePipeline::declareDeferredSurfelCountReadbackTask(
         }
     );
     if(!m_deferredSurfelGiCounterReadbackTask.valid()){
-        NWB_LOGGER_WARNING(GLB_TEXT("RendererSystem: could not declare deferred surfel counter-readback task"));
+        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel counter-readback task"));
         return;
     }
     // The token stays invalid until native submission accepts; this timestamp is only read when it publishes.

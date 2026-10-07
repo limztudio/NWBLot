@@ -238,7 +238,7 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
 bool CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AStringView outputPath, const u64 completedFrames){
     const u64 graphicsFrame = context.graphics.getFrameIndex();
     if(outputPath.empty() || completedFrames == 0u || graphicsFrame == 0u){
-        NWB_LOGGER_ERROR(GLB_TEXT("StressFrameGraphSnapshot: no completed frame or output path"));
+        NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: no completed frame or output path"));
         return false;
     }
     // runFrame increments its index after render/present; the contributor retains the preceding completed frame.
@@ -248,7 +248,7 @@ bool CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AStri
     session.setCaptureOptions(Core::Telemetry::CaptureOptions::FrameGraphOnly());
     session.setFrameIndex(sourceFrame);
     if(!context.frameGraphRegistry.record(session) || session.eventCount() != 1u){
-        NWB_LOGGER_ERROR(GLB_TEXT("StressFrameGraphSnapshot: public frame graph capture failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: public frame graph capture failed"));
         return false;
     }
     const auto* const event = session.view().eventAt(0u);
@@ -258,7 +258,7 @@ bool CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AStri
         || !Core::Telemetry::ParseFrameGraphPayload(arena, event->payload.data(), event->payload.size(), payload)
         || !__hidden_stress_frame_graph_snapshot::ValidateSnapshot(payload, sourceFrame)
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("StressFrameGraphSnapshot: missing runtime data or inconsistent completed-frame identity"));
+        NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: missing runtime data or inconsistent completed-frame identity"));
         return false;
     }
     Core::Telemetry::TelemetryBytes encoded(arena);
@@ -266,7 +266,7 @@ bool CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AStri
         !Core::Telemetry::EncodeEventStream(session.view(), encoded)
         || encoded.size() > static_cast<usize>(Limit<StreamSize>::s_Max)
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("StressFrameGraphSnapshot: event stream encoding failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: event stream encoding failed"));
         return false;
     }
     AString<Core::Telemetry::TelemetryArena> binaryPath(arena);
@@ -274,23 +274,23 @@ bool CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AStri
     binaryPath.append(".nwbs");
     OutputFileStream binary(binaryPath.c_str(), s_FileOpenBinary | s_FileOpenTruncate);
     if(!binary.is_open()){
-        NWB_LOGGER_ERROR(GLB_TEXT("StressFrameGraphSnapshot: encoded stream output could not be opened"));
+        NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: encoded stream output could not be opened"));
         return false;
     }
     binary.write(reinterpret_cast<const char*>(encoded.data()), static_cast<StreamSize>(encoded.size()));
     binary.flush();
     if(!binary.good()){
-        NWB_LOGGER_ERROR(GLB_TEXT("StressFrameGraphSnapshot: encoded stream output failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: encoded stream output failed"));
         return false;
     }
     AString<Core::Telemetry::TelemetryArena> jsonPath(arena);
     jsonPath.assign(outputPath);
     OutputFileStream output(jsonPath.c_str(), s_FileOpenTruncate);
     if(!output.is_open() || !__hidden_stress_frame_graph_snapshot::WriteSnapshot(output, payload, graphicsFrame, completedFrames)){
-        NWB_LOGGER_ERROR(GLB_TEXT("StressFrameGraphSnapshot: readable snapshot output failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: readable snapshot output failed"));
         return false;
     }
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("StressFrameGraphSnapshot: complete source_frame={} completed_frames={} nodes={} edges={} packets={}")
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressFrameGraphSnapshot: complete source_frame={} completed_frames={} nodes={} edges={} packets={}")
         , sourceFrame
         , completedFrames
         , payload.nodes.size()

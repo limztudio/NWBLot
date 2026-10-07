@@ -17,7 +17,7 @@ namespace SIMDVectorDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorTrigCanonicalAngle(SIMDVector value, SIMDVector& outCosSignSelect)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorTrigCanonicalAngle(SIMDVector value, SIMDVector& outCosSignSelect)noexcept{
     SIMDVector x = VectorModAngles(value);
 
     const SIMDVector sign = VectorAndInt(x, s_SIMDNegativeZero);
@@ -28,11 +28,11 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorTrigCanonicalAngle(SIMDVector value, S
     return VectorSelect(rflX, x, outCosSignSelect);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorTrigCosSign(SIMDVector cosSignSelect)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorTrigCosSign(SIMDVector cosSignSelect)noexcept{
     return VectorSelect(s_SIMDNegativeOne, s_SIMDOne, cosSignSelect);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorSinPolynomial(SIMDVector x2)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSinPolynomial(SIMDVector x2)noexcept{
     SIMDVector result = VectorMultiplyAdd(VectorSplatX(s_SIMDSinCoefficients1), x2, VectorSplatW(s_SIMDSinCoefficients0));
     result = VectorMultiplyAdd(result, x2, VectorSplatZ(s_SIMDSinCoefficients0));
     result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDSinCoefficients0));
@@ -40,7 +40,7 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorSinPolynomial(SIMDVector x2)noexcept{
     return VectorMultiplyAdd(result, x2, s_SIMDOne);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorCosPolynomial(SIMDVector x2)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorCosPolynomial(SIMDVector x2)noexcept{
     SIMDVector result = VectorMultiplyAdd(VectorSplatX(s_SIMDCosCoefficients1), x2, VectorSplatW(s_SIMDCosCoefficients0));
     result = VectorMultiplyAdd(result, x2, VectorSplatZ(s_SIMDCosCoefficients0));
     result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDCosCoefficients0));
@@ -48,19 +48,19 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorCosPolynomial(SIMDVector x2)noexcept{
     return VectorMultiplyAdd(result, x2, s_SIMDOne);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorSinEstPolynomial(SIMDVector x2)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSinEstPolynomial(SIMDVector x2)noexcept{
     SIMDVector result = VectorMultiplyAdd(VectorSplatW(s_SIMDSinCoefficients1), x2, VectorSplatZ(s_SIMDSinCoefficients1));
     result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDSinCoefficients1));
     return VectorMultiplyAdd(result, x2, s_SIMDOne);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorCosEstPolynomial(SIMDVector x2)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorCosEstPolynomial(SIMDVector x2)noexcept{
     SIMDVector result = VectorMultiplyAdd(VectorSplatW(s_SIMDCosCoefficients1), x2, VectorSplatZ(s_SIMDCosCoefficients1));
     result = VectorMultiplyAdd(result, x2, VectorSplatY(s_SIMDCosCoefficients1));
     return VectorMultiplyAdd(result, x2, s_SIMDOne);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorArcEstPolynomial(SIMDVector x, SIMDVector root)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorArcEstPolynomial(SIMDVector x, SIMDVector root)noexcept{
     SIMDVector result = VectorMultiplyAdd(VectorSplatW(s_SIMDArcEstCoefficients), x, VectorSplatZ(s_SIMDArcEstCoefficients));
     result = VectorMultiplyAdd(result, x, VectorSplatY(s_SIMDArcEstCoefficients));
     result = VectorMultiplyAdd(result, x, VectorSplatX(s_SIMDArcEstCoefficients));
@@ -77,7 +77,7 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorArcEstPolynomial(SIMDVector x, SIMDVec
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorSin(SIMDVector value)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSin(SIMDVector value)noexcept{
     SIMDVector cosSignSelect;
     SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
 
@@ -85,7 +85,7 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorSin(SIMDVector value)noexcept{
     return VectorMultiply(SIMDVectorDetail::VectorSinPolynomial(x2), x);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorCos(SIMDVector value)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorCos(SIMDVector value)noexcept{
     SIMDVector cosSignSelect;
     SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
     const SIMDVector sign = SIMDVectorDetail::VectorTrigCosSign(cosSignSelect);
@@ -94,7 +94,7 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorCos(SIMDVector value)noexcept{
     return VectorMultiply(SIMDVectorDetail::VectorCosPolynomial(x2), sign);
 }
 
-GLB_INLINE void GLB_SIMD_CALL VectorSinCos(SIMDVector& outSin, SIMDVector& outCos, SIMDVector value)noexcept{
+NWB_INLINE void NWB_SIMD_CALL VectorSinCos(SIMDVector& outSin, SIMDVector& outCos, SIMDVector value)noexcept{
     SIMDVector cosSignSelect;
     SIMDVector x = SIMDVectorDetail::VectorTrigCanonicalAngle(value, cosSignSelect);
     const SIMDVector sign = SIMDVectorDetail::VectorTrigCosSign(cosSignSelect);
@@ -105,7 +105,7 @@ GLB_INLINE void GLB_SIMD_CALL VectorSinCos(SIMDVector& outSin, SIMDVector& outCo
     outCos = VectorMultiply(SIMDVectorDetail::VectorCosPolynomial(x2), sign);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorTan(SIMDVector value)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorTan(SIMDVector value)noexcept{
     static const SIMDVectorConstF tanCoefficients0 = { { { 1.0f, -4.667168334e-1f, 2.566383229e-2f, -3.118153191e-4f } } };
     static const SIMDVectorConstF tanCoefficients1 = { { { 4.981943399e-7f, -1.333835001e-1f, 3.424887824e-3f, -1.786170734e-5f } } };
     static const SIMDVectorConstF tanConstants = { { { 1.570796371f, 6.077100628e-11f, 0.000244140625f, 0.63661977228f } } };
@@ -125,9 +125,9 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorTan(SIMDVector value)noexcept{
     SIMDVector vb = VectorAbs(va);
     vc = VectorNegativeMultiplySubtract(va, c1, vc);
 
-#if defined(GLB_HAS_SSE4)
+#if defined(NWB_HAS_SSE4)
     vb = _mm_castsi128_ps(_mm_cvttps_epi32(vb));
-#elif defined(GLB_HAS_NEON)
+#elif defined(NWB_HAS_NEON)
     vb = vreinterpretq_f32_u32(vcvtq_u32_f32(vb));
 #else
     vb = VectorSetInt(
@@ -174,19 +174,19 @@ GLB_INLINE SIMDVector GLB_SIMD_CALL VectorTan(SIMDVector value)noexcept{
     return VectorSelect(result, zero, valueIsZero);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorSinH(SIMDVector value)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorSinH(SIMDVector value)noexcept{
     const SIMDVector e1 = VectorExp(value);
     const SIMDVector e2 = VectorExp(VectorNegate(value));
     return VectorMultiply(VectorSubtract(e1, e2), s_SIMDOneHalf);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorCosH(SIMDVector value)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorCosH(SIMDVector value)noexcept{
     const SIMDVector e1 = VectorExp(value);
     const SIMDVector e2 = VectorExp(VectorNegate(value));
     return VectorMultiply(VectorAdd(e1, e2), s_SIMDOneHalf);
 }
 
-GLB_INLINE SIMDVector GLB_SIMD_CALL VectorTanH(SIMDVector value)noexcept{
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorTanH(SIMDVector value)noexcept{
     const SIMDVector sign = VectorAndInt(value, s_SIMDNegativeZero);
     const SIMDVector absValue = VectorAbs(value);
     const SIMDVector e = VectorExp(VectorNegate(VectorAdd(absValue, absValue)));

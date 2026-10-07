@@ -33,13 +33,13 @@ NWB_IMPL_BEGIN
 
     const usize dotIndex = parameterName.find('.');
     if(parameterName.empty() || dotIndex == AStringView::npos || dotIndex == 0u || dotIndex + 1u >= parameterName.size()){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialInstanceComponent: parameter '{}' must use block.field form")
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use block.field form")
             , StringConvert(parameterName)
         );
         return false;
     }
     if(parameterName.find('.', dotIndex + 1u) != AStringView::npos){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialInstanceComponent: parameter '{}' must not contain more than one block separator")
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must not contain more than one block separator")
             , StringConvert(parameterName)
         );
         return false;
@@ -53,8 +53,8 @@ NWB_IMPL_BEGIN
 
 [[nodiscard]] inline UInt4U PackMaterialInstanceBytes(const void* bytes, const usize byteCount){
     UInt4U packed = {};
-    GLB_ASSERT(byteCount <= sizeof(packed.raw));
-    GLB_MEMCPY(packed.raw, sizeof(packed.raw), bytes, byteCount);
+    NWB_ASSERT(byteCount <= sizeof(packed.raw));
+    NWB_MEMCPY(packed.raw, sizeof(packed.raw), bytes, byteCount);
     return packed;
 }
 
@@ -94,13 +94,13 @@ struct MaterialInstanceValueTraits<Half4U>{
     const AStringView parameterNameText
 ){
     if(!materialInterface){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialInstanceComponent: parameter '{}' requires a material interface")
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' requires a material interface")
             , StringConvert(parameterNameText)
         );
         return false;
     }
     if(!component.materialInterface){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialInstanceComponent: parameter '{}' requires a component material interface")
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' requires a component material interface")
             , StringConvert(parameterNameText)
         );
         return false;
@@ -108,7 +108,7 @@ struct MaterialInstanceValueTraits<Half4U>{
     if(component.materialInterface == materialInterface)
         return true;
 
-    NWB_LOGGER_ERROR(GLB_TEXT("MaterialInstanceComponent: parameter '{}' targets interface '{}' but component expects '{}'")
+    NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' targets interface '{}' but component expects '{}'")
         , StringConvert(parameterNameText)
         , StringConvert(materialInterface.resolvedText())
         , StringConvert(component.materialInterface.resolvedText())
@@ -126,7 +126,7 @@ struct MaterialInstanceValueTraits<Half4U>{
             continue;
 
         if(existingParameter.fieldType != parameter.fieldType){
-            NWB_LOGGER_ERROR(GLB_TEXT("MaterialInstanceComponent: parameter '{}' was already set with a different type")
+            NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' was already set with a different type")
                 , StringConvert(parameterNameText)
             );
             return false;
@@ -150,7 +150,7 @@ struct MaterialInstanceValueTraits<Half4U>{
     const UInt4U value
 ){
     if(!IsMaterialLayoutNumericFieldType(fieldType)){
-        NWB_LOGGER_ERROR(GLB_TEXT("MaterialInstanceComponent: parameter '{}' must use a numeric mutable field type")
+        NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use a numeric mutable field type")
             , StringConvert(parameterNameText)
         );
         return false;
@@ -180,7 +180,7 @@ struct MaterialInstanceValueTraits<Half4U>{
     if(component)
         return component;
 
-    NWB_LOGGER_ERROR(GLB_TEXT("MaterialInstanceComponent: entity {} has no material instance component"), entity.id);
+    NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: entity {} has no material instance component"), entity.id);
     return nullptr;
 }
 
@@ -261,14 +261,14 @@ template<typename TValue>
             continue;
         if(parameter.fieldType == MaterialLayoutFieldType::Half4){
             Half4U packedValue;
-            GLB_MEMCPY(&packedValue, sizeof(packedValue), parameter.value.raw, sizeof(packedValue));
+            NWB_MEMCPY(&packedValue, sizeof(packedValue), parameter.value.raw, sizeof(packedValue));
             const Float4U unpackedValue = LoadHalf4U(packedValue);
             outValue = Float4(unpackedValue.x, unpackedValue.y, unpackedValue.z, unpackedValue.w);
             return true;
         }
         if(parameter.fieldType == MaterialLayoutFieldType::Float4){
             Float4 components;
-            GLB_MEMCPY(&components, sizeof(components), parameter.value.raw, sizeof(components));
+            NWB_MEMCPY(&components, sizeof(components), parameter.value.raw, sizeof(components));
             outValue = components;
             return true;
         }

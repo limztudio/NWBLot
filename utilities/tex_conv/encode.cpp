@@ -60,7 +60,7 @@ public:
         if(m_initialized)
             return true;
 
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to initialize the Basis Universal encoder."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to initialize the Basis Universal encoder."));
         return false;
     }
 
@@ -87,7 +87,7 @@ private:
     const u32 height = inOutPlanes.front().get_height();
     for(const basisu::image& plane : inOutPlanes){
         if(plane.get_width() != width || plane.get_height() != height){
-            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: texture inputs have inconsistent resolutions."));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: texture inputs have inconsistent resolutions."));
             return false;
         }
     }
@@ -96,12 +96,12 @@ private:
     if(!EncodeBackendDetail::LoadAlphaMask(alphaSource, width, height, alphaMask))
         return false;
     if(alphaSource.mode == AlphaSourceMode::Constant && !IsFinite(alphaSource.constant)){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: alpha constant must be finite."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha constant must be finite."));
         return false;
     }
 
     if(alphaSource.mode != AlphaSourceMode::Constant && alphaSource.mode != AlphaSourceMode::Image){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: unsupported alpha source."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported alpha source."));
         return false;
     }
     const SIMDVector saturatedConstantAlpha = VectorSaturate(VectorReplicate(alphaSource.constant));
@@ -169,12 +169,12 @@ private:
 
     basisu::basis_compressor compressor;
     if(!compressor.init(parameters)){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: Basis Universal failed to initialize the texture encoder."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal failed to initialize the texture encoder."));
         return false;
     }
     const basisu::basis_compressor::error_code encodeResult = compressor.process();
     if(encodeResult != basisu::basis_compressor::cECSuccess){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: UASTC encoding failed (Basis Universal error {}).")
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: UASTC encoding failed (Basis Universal error {}).")
             , static_cast<u32>(encodeResult)
         );
         return false;
@@ -186,22 +186,22 @@ private:
 
     const basisu::basisu_backend_slice_desc& firstDescriptor = backendOutput.m_slice_desc.front();
     if(firstDescriptor.m_orig_width == 0u || firstDescriptor.m_orig_height == 0u){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: Basis Universal produced an invalid base resolution."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal produced an invalid base resolution."));
         return false;
     }
     if(dimension == TextureDimension::TextureCube && firstDescriptor.m_orig_width != firstDescriptor.m_orig_height){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: cubemap faces must be square."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: cubemap faces must be square."));
         return false;
     }
 
     u32 mipCount = 0u;
     if(!TextureFormat::ComputeCompleteMipCount(dimension, firstDescriptor.m_orig_width, firstDescriptor.m_orig_height, 1u, mipCount)){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: Basis Universal produced an invalid mip chain."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal produced an invalid mip chain."));
         return false;
     }
     const u64 expectedBackendSliceCount = static_cast<u64>(mipCount) * planeCount;
     if(backendOutput.m_slice_desc.size() != expectedBackendSliceCount){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC mip chain."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC mip chain."));
         return false;
     }
 
@@ -244,7 +244,7 @@ private:
 }
 
 [[nodiscard]] static SIMDVector AverageLinearVolumeTexels(const SIMDVector channelSums, const u32 count){
-    GLB_ASSERT(count != 0u);
+    NWB_ASSERT(count != 0u);
     const SIMDVector bias = VectorReplicate(static_cast<f32>(count) * 0.5f);
     const SIMDVector averaged = VectorDivide(VectorAdd(channelSums, bias), VectorReplicate(static_cast<f32>(count)));
     return VectorTruncate(averaged);
@@ -255,7 +255,7 @@ private:
     const SIMDVector alphaSum,
     const u32 count
 ){
-    GLB_ASSERT(count != 0u);
+    NWB_ASSERT(count != 0u);
     const SIMDVector averagedLinear = VectorDivide(linearRgbSum, VectorReplicate(static_cast<f32>(count)));
     const SIMDVector encodedRgb = ConvertLinearVolumeRgbToSrgb(averagedLinear);
     const SIMDVector scaledRgb = VectorMultiply(encodedRgb, VectorReplicate(s_BasisColorChannelMax));
@@ -290,7 +290,7 @@ private:
             basisu::image& filteredPlane = filteredPlanes[sourceZ - sourceFirst];
             filteredPlane.resize(targetWidth, targetHeight);
             if(!basisu::image_resample(sourcePlanes[sourceZ], filteredPlane, srgb, s_BasisResampleBoxFilter.data(), s_BasisResampleFilterScale, false, s_BasisResampleFilterChannelStart, s_HdrChannelCount)){
-                NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: failed to generate a volume mip level."));
+                NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to generate a volume mip level."));
                 return false;
             }
         }
@@ -347,7 +347,7 @@ private:
     const u32 height = planes.front().get_height();
     for(const basisu::image& plane : planes){
         if(plane.get_width() != width || plane.get_height() != height){
-            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: generated volume mip planes have inconsistent dimensions."));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: generated volume mip planes have inconsistent dimensions."));
             return false;
         }
     }
@@ -362,12 +362,12 @@ private:
 
     basisu::basis_compressor compressor;
     if(!compressor.init(parameters)){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: Basis Universal failed to initialize a volume mip encoder."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal failed to initialize a volume mip encoder."));
         return false;
     }
     const basisu::basis_compressor::error_code encodeResult = compressor.process();
     if(encodeResult != basisu::basis_compressor::cECSuccess){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: UASTC volume mip encoding failed (Basis Universal error {}).")
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: UASTC volume mip encoding failed (Basis Universal error {}).")
             , static_cast<u32>(encodeResult)
         );
         return false;
@@ -378,7 +378,7 @@ private:
         !EncodeBackendDetail::ValidateBackendOutput(backendOutput, basist::basis_tex_format::cUASTC_LDR_4x4)
         || backendOutput.m_slice_desc.size() != planes.size()
     ){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC volume mip."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC volume mip."));
         return false;
     }
     if(!EncodeBackendDetail::AppendCanonicalMip(backendOutput, 0u, static_cast<u32>(planes.size()), width, height, inOutPayload))
@@ -403,7 +403,7 @@ private:
     const u32 depth = static_cast<u32>(sourcePlanes.size());
     u32 mipCount = 0u;
     if(!TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture3D, width, height, depth, mipCount)){
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: volume dimensions cannot form a complete mip chain."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: volume dimensions cannot form a complete mip chain."));
         return false;
     }
 
@@ -457,7 +457,7 @@ bool EncodeTexture(
     const bool hdrInput = IsHdrInputPath(inputPaths.front());
     for(const Path& inputPath : inputPaths){
         if(IsHdrInputPath(inputPath) != hdrInput){
-            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: an individual texture conversion cannot mix HDR and LDR source images."));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: an individual texture conversion cannot mix HDR and LDR source images."));
             return false;
         }
     }
@@ -469,7 +469,7 @@ bool EncodeTexture(
     switch(dimension){
     case TextureDimension::Texture2D:
         if(inputPaths.size() != 1u){
-            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: a 2D texture requires exactly one input image."));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: a 2D texture requires exactly one input image."));
             return false;
         }
         return hdrInput
@@ -478,7 +478,7 @@ bool EncodeTexture(
         ;
     case TextureDimension::TextureCube:
         if(inputPaths.size() != TextureFormat::s_TextureCubeFaceCount){
-            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: a cubemap requires exactly six ordered face images."));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: a cubemap requires exactly six ordered face images."));
             return false;
         }
         return hdrInput
@@ -487,7 +487,7 @@ bool EncodeTexture(
         ;
     case TextureDimension::Texture3D:
         if(inputPaths.empty()){
-            NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: a volume texture requires one or more ordered Z slices."));
+            NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: a volume texture requires one or more ordered Z slices."));
             return false;
         }
         return hdrInput
@@ -495,7 +495,7 @@ bool EncodeTexture(
             : __hidden_encode::EncodeVolume(inputPaths, srgb, alphaSource, outPayload)
         ;
     default:
-        NWB_LOGGER_ERROR(GLB_TEXT("tex_conv: unsupported texture dimension."));
+        NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported texture dimension."));
         return false;
     }
 }

@@ -10,7 +10,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void TestbedUiProgressGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void UiProgressGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, const f32 y){
     NWB::Impl::Ui::Builder& ui = context.ui;
     if(!ui.beginPanel("progress_gallery", { x, y, 280.0f, 180.0f }))
         return;
@@ -23,8 +29,11 @@ void TestbedUiProgressGallery::paint(NWB::Impl::UiPaintContext& context, const f
     valid = ui.label("value", { caption.data(), caption.size() }) && valid;
     valid = ui.endPanel() && valid;
     if(!valid)
-        NWB_LOGGER_ERROR(GLB_TEXT("Testbed: custom progress declaration failed"));
+        NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom progress declaration failed"));
 }
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

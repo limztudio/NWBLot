@@ -19,27 +19,27 @@ namespace SdfTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] SIMDVector GLB_SIMD_CALL Plane(SIMDVector position, SIMDVector normalDistance)noexcept;
-[[nodiscard]] SIMDVector GLB_SIMD_CALL Box(SIMDVector position, SIMDVector halfExtents)noexcept;
-[[nodiscard]] SIMDVector GLB_SIMD_CALL Sphere(SIMDVector position, SIMDVector radius)noexcept;
-[[nodiscard]] SIMDVector GLB_SIMD_CALL CapsuleY(SIMDVector position, SIMDVector radiusHalfHeight)noexcept;
-[[nodiscard]] SIMDVector GLB_SIMD_CALL PlaneNormal(
+[[nodiscard]] SIMDVector NWB_SIMD_CALL Plane(SIMDVector position, SIMDVector normalDistance)noexcept;
+[[nodiscard]] SIMDVector NWB_SIMD_CALL Box(SIMDVector position, SIMDVector halfExtents)noexcept;
+[[nodiscard]] SIMDVector NWB_SIMD_CALL Sphere(SIMDVector position, SIMDVector radius)noexcept;
+[[nodiscard]] SIMDVector NWB_SIMD_CALL CapsuleY(SIMDVector position, SIMDVector radiusHalfHeight)noexcept;
+[[nodiscard]] SIMDVector NWB_SIMD_CALL PlaneNormal(
     SIMDVector normalDistance,
     SIMDVector fallback,
     f32 minLengthSquared
 )noexcept;
-[[nodiscard]] SIMDVector GLB_SIMD_CALL BoxNormal(
+[[nodiscard]] SIMDVector NWB_SIMD_CALL BoxNormal(
     SIMDVector position,
     SIMDVector halfExtents,
     SIMDVector fallback,
     f32 minLengthSquared
 )noexcept;
-[[nodiscard]] SIMDVector GLB_SIMD_CALL SphereNormal(
+[[nodiscard]] SIMDVector NWB_SIMD_CALL SphereNormal(
     SIMDVector position,
     SIMDVector fallback,
     f32 minLengthSquared
 )noexcept;
-[[nodiscard]] SIMDVector GLB_SIMD_CALL CapsuleYNormal(
+[[nodiscard]] SIMDVector NWB_SIMD_CALL CapsuleYNormal(
     SIMDVector position,
     SIMDVector radiusHalfHeight,
     f32 minLengthSquared
@@ -55,7 +55,7 @@ namespace SdfTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE SIMDVector GLB_SIMD_CALL SdfTests::Plane(
+[[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL SdfTests::Plane(
     const SIMDVector position,
     const SIMDVector normalDistance
 )noexcept{
@@ -66,7 +66,7 @@ namespace SdfTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE SIMDVector GLB_SIMD_CALL SdfTests::Box(
+[[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL SdfTests::Box(
     const SIMDVector position,
     const SIMDVector halfExtents
 )noexcept{
@@ -80,7 +80,7 @@ namespace SdfTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE SIMDVector GLB_SIMD_CALL SdfTests::Sphere(
+[[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL SdfTests::Sphere(
     const SIMDVector position,
     const SIMDVector radius
 )noexcept{
@@ -91,7 +91,7 @@ namespace SdfTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE SIMDVector GLB_SIMD_CALL SdfTests::CapsuleY(
+[[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL SdfTests::CapsuleY(
     const SIMDVector position,
     const SIMDVector radiusHalfHeight
 )noexcept{
@@ -103,7 +103,7 @@ namespace SdfTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE SIMDVector GLB_SIMD_CALL SdfTests::PlaneNormal(
+[[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL SdfTests::PlaneNormal(
     const SIMDVector normalDistance,
     const SIMDVector fallback,
     const f32 minLengthSquared
@@ -115,7 +115,7 @@ namespace SdfTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline SIMDVector GLB_SIMD_CALL SdfTests::BoxNormal(
+[[nodiscard]] inline SIMDVector NWB_SIMD_CALL SdfTests::BoxNormal(
     const SIMDVector position,
     const SIMDVector halfExtents,
     const SIMDVector fallback,
@@ -144,7 +144,7 @@ namespace SdfTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE SIMDVector GLB_SIMD_CALL SdfTests::SphereNormal(
+[[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL SdfTests::SphereNormal(
     const SIMDVector position,
     const SIMDVector fallback,
     const f32 minLengthSquared
@@ -156,7 +156,7 @@ namespace SdfTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] GLB_INLINE SIMDVector GLB_SIMD_CALL SdfTests::CapsuleYNormal(
+[[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL SdfTests::CapsuleYNormal(
     const SIMDVector position,
     const SIMDVector radiusHalfHeight,
     const f32 minLengthSquared

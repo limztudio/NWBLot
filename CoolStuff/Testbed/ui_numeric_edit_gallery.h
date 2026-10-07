@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "namespace.h"
+
 #include <impl/ecs_ui/components.h>
 #include <impl/ecs_ui/toolkit/widgets/numeric_edit.h>
 
@@ -12,9 +14,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class TestbedUiNumericEditGallery final : NoCopy{
+TESTBED_BEGIN
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+class UiNumericEditGallery final : NoCopy{
 public:
-    explicit TestbedUiNumericEditGallery(NWB::Core::Alloc::GlobalArena& arena);
+    explicit UiNumericEditGallery(NWB::Core::Alloc::GlobalArena& arena);
 
 
 public:
@@ -27,6 +35,9 @@ private:
     NWB::Impl::Ui::EditBoxState m_integerState;
     NWB::Impl::Ui::EditBoxState m_floatState;
 };
+
+
+TESTBED_END
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

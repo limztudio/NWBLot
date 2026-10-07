@@ -122,7 +122,7 @@ namespace __hidden_gpu_command_ir_upload_preflight{
         || record.blobSizeBytes > static_cast<u64>(sourceSize)
     )
         return false;
-    return GLB_MEMCMP(
+    return NWB_MEMCMP(
         source,
         blobBytes.data() + static_cast<usize>(record.blobOffsetBytes),
         static_cast<usize>(record.blobSizeBytes)

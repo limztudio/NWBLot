@@ -114,6 +114,12 @@ The Vulkan backend validates required device capabilities at startup. `VK_EXT_de
 
 Texture cooking and runtime format selection account for device format support, including BC and ASTC-capable GPUs. See [Renderer Feature Paths](https://github.com/limztudio/NWBLot/wiki/Renderer-Feature-Paths) and [Texture Conversion](https://github.com/limztudio/NWBLot/wiki/Texture-Conversion) for the current contracts.
 
+## Macro and namespace ownership
+
+NWBLot-owned utility, configuration, diagnostic, namespace, and shader feature macro APIs use `NWB_`, including the shared utilities in `global/`. Application-owned macro APIs use an application prefix, such as `TESTBED_`. External/compiler interoperability spellings and existing `g_*` shader resource aliases retain their current contracts. Utility types and functions retain their existing scopes.
+
+Root `engine_namespace.h` owns the engine namespace wrappers. Engine domains reach them through their own umbrella headers. Testbed owns `CoolStuff/Testbed/namespace.h` for `namespace Testbed`; its classes and helpers belong there, while the required loader entry adapter functions remain in `NWB`. Projects include the engine APIs they use and receive engine namespace definitions transitively. See [Architecture](https://github.com/limztudio/NWBLot/wiki/Architecture#namespace-ownership) and [Project API](https://github.com/limztudio/NWBLot/wiki/Project-API#namespace-ownership) for the ownership boundaries.
+
 ## Source and dependency registration
 
 `CMakePresets.json` defines supported build variants. Each target's nearest `CMakeLists.txt` owns its source list through `target_sources`; add new C/C++ files there and use `python -m launcher build <target> --configure always` to refresh the build.

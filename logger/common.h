@@ -38,23 +38,23 @@ inline constexpr i32 s_LocalTimeMonthBase = 1;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr TStringView s_UnknownLogLevelName = GLB_TEXT("UNKNOWN");
+inline constexpr TStringView s_UnknownLogLevelName = NWB_TEXT("UNKNOWN");
 [[nodiscard]] inline TStringView MessageTypeToString(Type::Enum type)noexcept{
     switch(type){
     case Type::Info:
-        return GLB_TEXT("INFO");
+        return NWB_TEXT("INFO");
     case Type::EssentialInfo:
-        return GLB_TEXT("ESSENTIAL INFO");
+        return NWB_TEXT("ESSENTIAL INFO");
     case Type::Warning:
-        return GLB_TEXT("WARNING");
+        return NWB_TEXT("WARNING");
     case Type::CriticalWarning:
-        return GLB_TEXT("CRITICAL WARNING");
+        return NWB_TEXT("CRITICAL WARNING");
     case Type::Assert:
-        return GLB_TEXT("ASSERT");
+        return NWB_TEXT("ASSERT");
     case Type::Error:
-        return GLB_TEXT("ERROR");
+        return NWB_TEXT("ERROR");
     case Type::Fatal:
-        return GLB_TEXT("FATAL");
+        return NWB_TEXT("FATAL");
     }
     return s_UnknownLogLevelName;
 }
@@ -87,7 +87,7 @@ inline constexpr TStringView s_UnknownLogLevelName = GLB_TEXT("UNKNOWN");
 
 [[nodiscard]] inline LogString FormatMessageForProcessing(LogArena& arena, const MessageType& msg){
     const auto& [time, type, str] = msg;
-    return StringFormat(arena, GLB_TEXT("{} [{}]:\n{}"), DurationInTimeDelta(time), MessageTypeToString(type), str);
+    return StringFormat(arena, NWB_TEXT("{} [{}]:\n{}"), DurationInTimeDelta(time), MessageTypeToString(type), str);
 }
 
 template<typename PayloadContainer>
@@ -117,7 +117,7 @@ template<typename PayloadContainer>
     constexpr tchar s_NullTerminator = 0;
     AppendPOD(outPayload, s_NullTerminator);
 
-    GLB_ASSERT(outPayload.size() == payloadBytes);
+    NWB_ASSERT(outPayload.size() == payloadBytes);
     return outPayload.size() == payloadBytes;
 }
 
@@ -132,11 +132,11 @@ template<typename PayloadContainer>
     outError = {};
 
     if(totalSize < sizeof(Timer) + sizeof(Type::Enum) + sizeof(tchar)){
-        outError = GLB_TEXT("Received a truncated message");
+        outError = NWB_TEXT("Received a truncated message");
         return false;
     }
     if(!contents){
-        outError = GLB_TEXT("Received a malformed message payload");
+        outError = NWB_TEXT("Received a malformed message payload");
         return false;
     }
 
@@ -146,25 +146,25 @@ template<typename PayloadContainer>
     Timer time{};
     Type::Enum type{};
     if(!ReadPOD(payload, cursor, time) || !ReadPOD(payload, cursor, type)){
-        outError = GLB_TEXT("Received a truncated message");
+        outError = NWB_TEXT("Received a truncated message");
         return false;
     }
 
     if(!IsValidMessageType(type)){
-        outError = GLB_TEXT("Received a message with an invalid type");
+        outError = NWB_TEXT("Received a message with an invalid type");
         return false;
     }
 
     const usize textBytes = totalSize - cursor;
     if(textBytes < sizeof(tchar) || (textBytes % sizeof(tchar)) != 0u){
-        outError = GLB_TEXT("Received a malformed message payload");
+        outError = NWB_TEXT("Received a malformed message payload");
         return false;
     }
 
     tchar terminator = 0;
     usize terminatorCursor = totalSize - sizeof(tchar);
     if(!ReadPOD(payload, terminatorCursor, terminator) || terminator != 0){
-        outError = GLB_TEXT("Received a non-null-terminated message");
+        outError = NWB_TEXT("Received a non-null-terminated message");
         return false;
     }
 
@@ -173,7 +173,7 @@ template<typename PayloadContainer>
     const usize messageBytes = textBytes - sizeof(tchar);
     message.resize(messageBytes / sizeof(tchar));
     if(messageBytes != 0u)
-        GLB_MEMCPY(message.data(), messageBytes, payload.data() + cursor, messageBytes);
+        NWB_MEMCPY(message.data(), messageBytes, payload.data() + cursor, messageBytes);
     outMessage = MakeTuple(Move(time), type, Move(message));
     return true;
 }
@@ -208,7 +208,7 @@ public:
 
         const LogString fileName = StringFormat(
             m_arena,
-            GLB_TEXT("{}_{:04}{:02}{:02}_{:02}{:02}{:02}.log"),
+            NWB_TEXT("{}_{:04}{:02}{:02}_{:02}{:02}{:02}.log"),
             fileNameBase,
             localTime.tm_year + s_LocalTimeYearBase,
             localTime.tm_mon + s_LocalTimeMonthBase,
@@ -290,7 +290,7 @@ public:
         if constexpr(requires{ T::GlobalInit(); }){
             if(!T::s_GlobalInit){
                 if(!T::GlobalInit()){
-                    static_cast<T*>(this)->T::enqueue(StringFormat(m_arena, GLB_TEXT("Failed to initialize {} globally"), loggerName), Type::Fatal);
+                    static_cast<T*>(this)->T::enqueue(StringFormat(m_arena, NWB_TEXT("Failed to initialize {} globally"), loggerName), Type::Fatal);
                     return false;
                 }
                 T::s_GlobalInit = true;

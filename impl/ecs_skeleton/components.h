@@ -28,7 +28,7 @@ namespace SkeletonSkinningMode{
     };
 };
 
-[[nodiscard]] GLB_INLINE bool ValidSkeletonSkinningMode(const u32 mode)noexcept{
+[[nodiscard]] NWB_INLINE bool ValidSkeletonSkinningMode(const u32 mode)noexcept{
     return mode == SkeletonSkinningMode::LinearBlend || mode == SkeletonSkinningMode::DualQuaternion;
 }
 

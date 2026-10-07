@@ -41,16 +41,16 @@ bool UiLayerSmokeProject::onStartup(){
         captureOptions.requiredWidth = 800u;
         captureOptions.requiredHeight = 600u;
     }
-    if(!ConfigureSmokeFramebufferCapture(m_context, GLB_TEXT("UiLayerSmokeProject"), 60u, m_framebufferCapture, captureOptions))
+    if(!ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("UiLayerSmokeProject"), 60u, m_framebufferCapture, captureOptions))
         return false;
 
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiLayerSmokeProject: standalone layer ready; default atlas; SDR; empty startup frames=2"));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: standalone layer ready; default atlas; SDR; empty startup frames=2"));
     return true;
 }
 
 void UiLayerSmokeProject::onShutdown(){
     destroyRuntime();
-    NWB_LOGGER_ESSENTIAL_INFO(GLB_TEXT("UiLayerSmokeProject: shutdown"));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: shutdown"));
 }
 
 bool UiLayerSmokeProject::onUpdate(const f32 delta){

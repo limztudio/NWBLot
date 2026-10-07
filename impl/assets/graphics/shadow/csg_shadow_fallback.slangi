@@ -40,10 +40,7 @@ half3 nwbCsgShadowBoundsVisibility(const float3 worldOrigin, const float3 worldD
         const NwbBvhNode root = nwbCsgShadowRoot(index);
         const float3 origin = nwbSwBvhTransformPoint(instance, worldOrigin);
         const float3 direction = nwbSwBvhTransformVector(instance, worldDirection);
-        if(
-            !all(isfinite(origin)) || !all(isfinite(direction)) || !all(isfinite(root.aabbMin))
-            || !all(isfinite(root.aabbMax)) || any(root.aabbMin > root.aabbMax)
-        )
+        if(!all(isfinite(origin)) || !all(isfinite(direction)) || !all(isfinite(root.aabbMin)) || !all(isfinite(root.aabbMax)) || any(root.aabbMin > root.aabbMax))
             return half3(0.0h);
         float lower = minimum;
         float upper = maximum;

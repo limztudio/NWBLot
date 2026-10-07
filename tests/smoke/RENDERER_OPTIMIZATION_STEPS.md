@@ -315,3 +315,44 @@ Partition parity SHA256: `96c5169ab0e07251325059b4e769429801e285e595a4dc003534ca
 Clear timing SHA256: `2bf913e70763a32b7c3c214ae1b594f8445674964702588d59d790c546d11c33`.
 
 Inside timing SHA256: `8d54bd16fc3b045e3550cf875178669a80a25e731c47436ce84fe79f8341e3d5`.
+
+## AVBOIT review after pull: 2026-10-07
+
+`git pull --ff-only origin main` reported up to date at `f6d61aaf0efb23515f8e93887e523462b88c9240`. This baseline includes the blocking Windows logger and the normal Slang optimization policy for generated AVBOIT accumulation shaders. Earlier freezes must not be reused as its performance baseline. Both experiments below used fresh source, executable, dependency and authored-runtime snapshots on Windows ARM64 with the Qualcomm Adreno X2-90 GPU. Builds, cooks, native qualification and acquisitions ran sequentially. Every planned timing trial was retained; thresholds were declared before acquisition, without exclusions or selective repeats.
+
+### Descriptor-heap resource-reference scans: measured CPU gain, qualification rejected
+
+The five-file candidate cached completed retained Buffer/Texture reference scans in the existing command-buffer heap use. Successful first resource publication and final removal advanced a heap revision; the checkpoint was published after both scans completed under the heap mutex. Revision overflow disabled caching for that initialized generation. All bind admission checks, heap-use admission, readiness/generation/layout validation, close/submission checks and native descriptor binds remained. Storage increased by one eight-byte heap scalar and eight bytes per existing heap-use entry. No production test hook or per-resource storage was introduced.
+
+The existing `unique` gathering workload resolved 64 distinct transparent meshes and one backdrop. Eight balanced blocks supplied 16 trials and 4,096 measured successful CPU frames. Identical authored volumes and one frozen current logger were required across arms; diagnostic and memory observers, captures and GPU validation were disabled for timing.
+
+| Scope | Baseline / candidate mean ms | Candidate-minus-baseline mean ms [paired 95% interval] |
+| --- | ---: | --- |
+| CPU `graphics.render` | 13.897437 / 12.311805 | -1.585632 [-1.710817, -1.427590] |
+| CPU `graphics.frame` | 14.794481 / 13.216676 | -1.577805 [-1.714387, -1.404320] |
+| GPU `render.frame` | 6.998707 / 6.814922 | -0.183786 [-0.322043, -0.025320] |
+
+The observed CPU render reduction is 11.41%, exceeding its predeclared 0.416923 ms practical threshold. However, GPU frame and shadow equivalence were uncertain: the frame interval exceeded its +/-0.209961 ms tolerance and shadow exceeded its +/-0.043559 ms tolerance on the negative side. The runner reported `gpu_control_uncertain`. The cause of the GPU changes was not established; the strong CPU observation does not satisfy the complete declared qualification gate. The candidate was rejected and all five production files restored exactly. Conditional remaining-workload, memory and public mutation/lifetime probe campaigns were not run. Both frozen arms separately passed 384 successful frames with GPU validation; affected CPU test suites passed. Source reviews establish revision/lifetime invariants, not direct observation of private reference-ledger membership.
+
+Local evidence: `__artifacts/avboit_heap_references_20261007/`, including `retention_protocol.json`, `timing_unique/report.json`, all raw trials, both native qualifications, source and independent reviews, decision and exact restoration records. Reproduce acquisition with `tests/smoke/renderer_gather_benchmark.py`, the two explicit frozen arm paths/manifests, the shared logger, `--workload unique --mode timing --blocks 8`.
+
+### Full-resolution selected-refractor texel fetch: rejected for no measured gain
+
+The two-shader candidate replaced only accumulation's selected-instance UV/nearest-sampler lookup with an integer-clamped mip-zero texel load. It preserved the enabled guard, literal ID decoder, discard position, capture branch, material/CSG derivative ordering and existing low-resolution UV callers. Integer clamping was necessary for helper invocations outside odd framebuffer edges. The equivalence review applies to positive, matching target and push dimensions; it does not establish behavior for malformed dimensions.
+
+The optical-clear scene places glass behind the camera, so it was rejected as the optimization primary before timing. The existing inside-glass scene has visible transparent fragments: fresh baseline and candidate hardware captures reported 34,128 glass receiver pixels and passed actual GPU-validation markers and the optical oracle. Their 960x720 decoded RGB output matched exactly in all 2,073,600 channels. This scene qualification does not prove arbitrary pixel/helper coordinates; a dedicated native edge probe remained conditional on a practical timing win.
+
+The retained test fixture now reserves 32 complete in-flight ranges for all six AVBOIT scopes in the reflection timing project. The new `avboit-refraction-accumulation` workload preserves the inside-glass reflection policy and existing controls, adds the six AVBOIT scopes, and requires one completed range per frame for each. Missing scopes, sample-count boundaries and sparse publications are covered by the existing analysis regressions. Identical instrumented executables were frozen before either shader changed.
+
+Eight balanced blocks supplied 16 trials and 1,706 completed GPU frames, with two warm-up intervals, six measured intervals and at least 100 completed frames per trial. Hardware was required; timing disabled validation, capture and diagnostics.
+
+| Scope | Baseline / candidate mean | Candidate-minus-baseline mean [paired 95% interval] |
+| --- | ---: | --- |
+| `render.avboit_accumulate` | 29.990815 / 36.429814 microseconds | +6.438998 [-3.333941, +17.469409] microseconds |
+| `render.frame` | 61.060467 / 61.013904 ms | -0.046563 [-0.440945, +0.301263] ms |
+
+All opaque/shadow/lighting controls were equivalent and the whole-frame non-regression guard passed. The accumulation result fails the predeclared 20 microsecond practical reduction gate; its interval crosses zero, so it establishes neither a gain nor a causal slowdown. Both production shaders were restored exactly and recooked. Conditional ordinary-scene timing and native pixel/decoder edge probes were not run. The useful benchmark coverage and its analysis regressions remain; they do not claim a production speedup.
+
+Local evidence: `__artifacts/avboit_refraction_pixel_20261007/`, including frozen arm identities, `retention_protocol.json`, both hardware qualifications, `initial_parity.json`, source review, `timing_inside/report.json`, every raw trial, decision and restoration records. Reproduce acquisition with `tests/smoke/renderer_ab_benchmark.py`, the two explicit frozen arm paths/manifests and shared logger, `--workload avboit-refraction-accumulation --require-hardware --blocks 8`. The accumulation measurement is `comparison.secondary`; the runner's full-frame result remains separate.
+
+A further unmeasured lead is the zero-only groupshared raster-flag barrier in non-CSG geometry variants. It requires a substantial meshlet workload and qualification of both native mesh and compute-emulation routes before any performance or retention claim.

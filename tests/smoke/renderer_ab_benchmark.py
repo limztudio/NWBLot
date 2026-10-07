@@ -8,7 +8,7 @@ Correctness qualification is separate; this runner never captures framebuffers.
 """
 
 import argparse
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import json
 import math
 from pathlib import Path
@@ -333,6 +333,11 @@ def workloads():
     for definition in definitions:
         workload = reflection_workload(*definition)
         result[workload.name] = workload
+    refraction_accumulation = result["reflection-optical-inside"]
+    result["avboit-refraction-accumulation"] = replace(refraction_accumulation,
+        name="avboit-refraction-accumulation",
+        scope_multipliers=refraction_accumulation.scope_multipliers + tuple((scope, 1) for scope in AVBOIT),
+        secondary_scope="render.avboit_accumulate")
     caustic_scopes = (FRAME, *CONTROLS, *OBSERVATIONS, *AVBOIT, caustic.PHOTONS, caustic.RESOLVE)
     for preset in caustic.PRESETS:
         name = "caustic-" + preset

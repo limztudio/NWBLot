@@ -42,6 +42,7 @@ LIT_RUNTIME = "runtime"
 LIT_RES = "res"
 LIT_AUTHORED_VOL = "authored.vol"
 LIT_TRANSPARENT_MULTI = "transparent-multi"
+LIT_AVBOIT_REFRACTION_ACCUMULATION = "avboit-refraction-accumulation"
 LIT_BASELINE = "baseline"
 LIT_CANDIDATE = "candidate"
 LIT_ARM = "arm"
@@ -222,33 +223,38 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(len(benchmark.parse_intervals(text)), 1)
 
     def test_all_avboit_and_control_ranges_are_required(self):
-        workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
-        complete = scopes(workload)
-        benchmark.validate_coverage(complete, workload, 6, 100)
-        for name in workload.scopes:
-            with self.subTest(scope=name):
-                missing = copy.deepcopy(complete)
-                del missing[name]
-                with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_MISSING_COMPLETED_GPU_SCOPES):
-                    benchmark.validate_coverage(missing, workload, 6, 100)
+        for workload_name in (LIT_TRANSPARENT_MULTI, LIT_AVBOIT_REFRACTION_ACCUMULATION):
+            workload = benchmark.workloads()[workload_name]
+            complete = scopes(workload)
+            benchmark.validate_coverage(complete, workload, 6, 100)
+            for name in workload.scopes:
+                with self.subTest(workload=workload_name, scope=name):
+                    missing = copy.deepcopy(complete)
+                    del missing[name]
+                    with self.assertRaisesRegex(benchmark.SmokeFailure, "missing .*GPU scopes"):
+                        benchmark.validate_coverage(missing, workload, 6, 100)
 
     def test_ratio_boundary_and_sparse_reports_are_rejected(self):
-        workload = benchmark.workloads()[LIT_TRANSPARENT_MULTI]
-        for frames, tolerance in ((100, 2), (1000, 20)):
-            for scope in (benchmark.OCCUPANCY, benchmark.CONTROLS[0]):
-                for sign in (-1, 1):
-                    value = scopes(workload, frames)
-                    value[scope][LIT_GPU_SAMPLES] += sign * tolerance
-                    benchmark.validate_coverage(value, workload, 6, 100)
-                    value[scope][LIT_GPU_SAMPLES] += sign
-                    with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_SAMPLE_RATIO):
-                        benchmark.validate_coverage(value, workload, 6, 100)
-        value = scopes(workload)
-        value[benchmark.OCCUPANCY][LIT_REPORTS] = 3
-        with self.assertRaisesRegex(benchmark.SmokeFailure, "publications"):
+        for workload_name in (LIT_TRANSPARENT_MULTI, LIT_AVBOIT_REFRACTION_ACCUMULATION):
+            workload = benchmark.workloads()[workload_name]
+            for frames, tolerance in ((100, 2), (1000, 20)):
+                for scope in (workload.secondary_scope, benchmark.CONTROLS[0]):
+                    for sign in (-1, 1):
+                        with self.subTest(workload=workload_name, scope=scope, frames=frames, sign=sign):
+                            value = scopes(workload, frames)
+                            value[scope][LIT_GPU_SAMPLES] += sign * tolerance
+                            benchmark.validate_coverage(value, workload, 6, 100)
+                            value[scope][LIT_GPU_SAMPLES] += sign
+                            with self.assertRaisesRegex(benchmark.SmokeFailure, LIT_SAMPLE_RATIO):
+                                benchmark.validate_coverage(value, workload, 6, 100)
+            value = scopes(workload)
+            value[workload.secondary_scope][LIT_REPORTS] = 5
             benchmark.validate_coverage(value, workload, 6, 100)
-        with self.assertRaisesRegex(benchmark.SmokeFailure, "insufficient"):
-            benchmark.validate_coverage(scopes(workload, 99), workload, 6, 100)
+            value[workload.secondary_scope][LIT_REPORTS] = 4
+            with self.subTest(workload=workload_name), self.assertRaisesRegex(benchmark.SmokeFailure, "publications"):
+                benchmark.validate_coverage(value, workload, 6, 100)
+            with self.subTest(workload=workload_name), self.assertRaises(benchmark.SmokeFailure):
+                benchmark.validate_coverage(scopes(workload, 99), workload, 6, 100)
 
 
 class WorkloadPolicyTests(unittest.TestCase):

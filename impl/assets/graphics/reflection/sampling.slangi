@@ -15,8 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A fixed pixel/dimension digital scramble preserves the progressive Sobol elementary intervals. The accepted
-// sample index remains separate from this seed and the bounded history length. No texture or subgroup is needed.
+// A fixed pixel/dimension digital scramble preserves the progressive Sobol elementary intervals. The accepted sample index remains separate from this seed and the bounded history length. No texture or subgroup is needed.
 // Reference: https://pbr-book.org/4ed/Sampling_and_Reconstruction/Sobol_Samplers
 uint nwbReflectionSamplingHash(uint value){
     value = (value ^ (value >> 16u)) * 0x7feb352du;
@@ -26,8 +25,7 @@ uint nwbReflectionSamplingHash(uint value){
 
 float2 nwbReflectionSample2D(const uint2 pixel, const uint2 sampleBase, const uint seed){
     const uint pixelSeed = nwbReflectionSamplingHash(pixel.x ^ nwbReflectionSamplingHash(pixel.y ^ seed));
-    // Reflection preparation computes this sample-index-only Sobol pair once on the CPU. Classify and hardware
-    // consume the same immutable pair; no queue-order dependence or per-invocation generator loop remains.
+    // Reflection preparation computes this sample-index-only Sobol pair once on the CPU. Classify and hardware consume the same immutable pair; no queue-order dependence or per-invocation generator loop remains.
     const uint first = sampleBase.x ^ nwbReflectionSamplingHash(pixelSeed);
     const uint second = sampleBase.y ^ nwbReflectionSamplingHash(pixelSeed ^ 0x9e3779b9u);
     // A 23-bit midpoint is exactly representable in float and strictly inside (0, 1), including the final bin.
@@ -46,9 +44,7 @@ half3 nwbReflectionSchlick(const half3 f0, const half viewHalfCosine){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Isotropic visible-GGX sampling and the correlated Smith single-scattering estimator. Sampling H from the VNDF
-// cancels D and the reflection Jacobian: throughput = F(V,H) * G2(V,L) / G1(V). This factor is bounded by one;
-// bright incident radiance can still have variance, so no arbitrary radiance clamp is applied.
+// Isotropic visible-GGX sampling and the correlated Smith single-scattering estimator. Sampling H from the VNDF cancels D and the reflection Jacobian: throughput = F(V,H) * G2(V,L) / G1(V). This factor is bounded by one; bright incident radiance can still have variance, so no arbitrary radiance clamp is applied.
 // Reference: https://jcgt.org/published/0007/04/01/paper.pdf (Appendices A and B).
 void nwbReflectionSampleGgx(
     const float3 normal,
@@ -57,7 +53,8 @@ void nwbReflectionSampleGgx(
     const float roughness,
     const float2 random,
     out float3 direction,
-    out half3 throughput){
+    out half3 throughput
+){
     direction = reflect(-viewDirection, normal);
     const half viewCosine = half(saturate(dot(normal, viewDirection)));
     throughput = nwbReflectionSchlick(f0, viewCosine);
@@ -75,7 +72,8 @@ void nwbReflectionSampleGgx(
     const float tangentLength = dot(stretchedView.xy, stretchedView.xy);
     const float3 diskTangent = tangentLength > 0.0
         ? float3(-stretchedView.y, stretchedView.x, 0.0) * rsqrt(tangentLength)
-        : float3(1.0, 0.0, 0.0);
+        : float3(1.0, 0.0, 0.0)
+    ;
     const float3 diskBitangent = cross(stretchedView, diskTangent);
     const float radius = sqrt(random.x);
     const float azimuth = 6.283185307179586 * random.y;
@@ -93,8 +91,7 @@ void nwbReflectionSampleGgx(
     direction = reflect(-viewDirection, halfVector);
     const float lightCosine = dot(normal, direction);
     if(lightCosine <= 0.0){
-        // This is a valid zero Monte Carlo sample, not a missing sample. Resampling until above the horizon biases
-        // the BRDF integral, and tracing this direction would intersect the receiver's interior.
+        // This is a valid zero Monte Carlo sample, not a missing sample. Resampling until above the horizon biases the BRDF integral, and tracing this direction would intersect the receiver's interior.
         throughput = half3(0.0h);
         return;
     }
@@ -102,9 +99,7 @@ void nwbReflectionSampleGgx(
     const float alphaSquared = alpha * alpha;
     const float viewRoot = sqrt(alphaSquared + (1.0 - alphaSquared) * float(viewCosine) * float(viewCosine));
     const float lightRoot = sqrt(alphaSquared + (1.0 - alphaSquared) * lightCosine * lightCosine);
-    const half smithRatio = half(saturate(
-        lightCosine * (float(viewCosine) + viewRoot) / (lightCosine * viewRoot + float(viewCosine) * lightRoot)
-    ));
+    const half smithRatio = half(saturate(lightCosine * (float(viewCosine) + viewRoot) / (lightCosine * viewRoot + float(viewCosine) * lightRoot)));
     throughput = nwbReflectionSchlick(f0, viewHalfCosine) * smithRatio;
 }
 

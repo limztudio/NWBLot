@@ -48,8 +48,7 @@ half3 nwbRefractionShadeHit(const NwbRayTraceSurfaceHit hit, const float3 direct
         nwbSceneResolveLight(g_NwbSceneLights[lightIndex], hit.position, lightVector, lightRadiance);
         radiance += lightRadiance * half(max(dot(normal, lightVector), 0.0));
     }
-    // Offscreen hits have no camera lighting cache. This deliberately bounded diffuse approximation shares the
-    // authored surface contract with GI; full camera BRDF, shadows, and GI are not implicitly available at a ray hit.
+    // Offscreen hits have no camera lighting cache. This deliberately bounded diffuse approximation shares the authored surface contract with GI; full camera BRDF, shadows, and GI are not implicitly available at a ray hit.
     return radiance * hit.surface.baseColor;
 }
 
@@ -64,18 +63,15 @@ bool nwbRefractionCachedHit(const NwbRayTraceSurfaceHit hit, const NwbRefraction
         return false;
     const float3 opaqueWorld = nwbHeapSampledImage2D(g_NwbRefractionResources.gbufferSlots.z).Load(int3(pixel, 0)).xyz;
     const float cameraDistance = length(hit.position - g_NwbRefractionView.cameraPosition.xyz);
-    // Require both projected depth and world distance. A depth-only comparison becomes permissive in the far field
-    // and incorrectly returns an opaque foreground object's lighting for a hidden RT hit.
+    // Require both projected depth and world distance. A depth-only comparison becomes permissive in the far field and incorrectly returns an opaque foreground object's lighting for a hidden RT hit.
     if(abs(projectedDepth - opaqueDepth) > 0.0002 || length(opaqueWorld - hit.position) > max(0.01, cameraDistance * 0.002))
         return false;
-    radiance = includeTransparency ? half3(nwbRefractionBackgroundForEntry(pixel, entry))
-        : half3(nwbRefractionOpaqueBackground(pixel));
+    radiance = includeTransparency ? half3(nwbRefractionBackgroundForEntry(pixel, entry)) : half3(nwbRefractionOpaqueBackground(pixel));
     return true;
 }
 
 float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry entry){
-    // Raster capture respects CSG cuts, but the shared triangle TLAS contains the original uncut mesh. Its exit
-    // would produce the wrong optical thickness, so CSG primaries use the bounded screen-space approximation.
+    // Raster capture respects CSG cuts, but the shared triangle TLAS contains the original uncut mesh. Its exit would produce the wrong optical thickness, so CSG primaries use the bounded screen-space approximation.
     if(entry.csgPrimary)
         return nwbRefractionResolveScreen(pixel, entry);
     const float3 camera = g_NwbRefractionView.cameraPosition.xyz;
@@ -85,8 +81,7 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
         g_NwbRefractionMaterialContext.sceneSlots.z, camera, entry.incident,
         max(entryDistance - associationTolerance, entry.bias), entryDistance + associationTolerance
     );
-    if(!entryHit.hit || float(entryHit.surface.refractionIor) <= 1.001
-        || abs(float(entryHit.surface.refractionIor) - float(entry.ior)) > 0.02)
+    if(!entryHit.hit || float(entryHit.surface.refractionIor) <= 1.001 || abs(float(entryHit.surface.refractionIor) - float(entry.ior)) > 0.02)
         return nwbRefractionResolveScreen(pixel, entry);
 
     float3 internalDirection = refract(entry.incident, entry.normal, 1.0 / float(entry.ior));
@@ -98,15 +93,13 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
     // Exit cosine is a saturate-bounded (0, 1) factor feeding the bounded Fresnel attenuation below.
     half exitCosine = half(0.0h);
     float pathLength = 0.0;
-    // At most two total-internal-reflection continuations, staying inside the same primary instance. Their Fresnel
-    // reflectance is one, so only the accumulated Beer-Lambert distance changes until the ray finally transmits.
+    // At most two total-internal-reflection continuations, staying inside the same primary instance. Their Fresnel reflectance is one, so only the accumulated Beer-Lambert distance changes until the ray finally transmits.
     for(uint internalBounce = 0u; internalBounce <= 2u; ++internalBounce){
         exitHit = nwbRefractionClosestExitInterface(
             g_NwbRefractionMaterialContext.sceneSlots.z, internalOrigin + internalDirection * entry.bias,
             internalDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE, entryHit.instance
         );
-        // A different closest instance may be a nested volume or geometry inside the primary. Do not ignore it and
-        // pretend the next same-instance intersection was the nearest interface. Open meshes take the sheet fallback.
+        // A different closest instance may be a nested volume or geometry inside the primary. Do not ignore it and pretend the next same-instance intersection was the nearest interface. Open meshes take the sheet fallback.
         if(!exitHit.hit)
             return nwbRefractionResolveScreen(pixel, entry);
         pathLength += length(exitHit.position - internalOrigin);
@@ -120,12 +113,10 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
         internalDirection = reflect(internalDirection, exitNormal);
         internalOrigin = exitHit.position;
     }
-    // Residual internally reflected energy at the fixed cap is discarded. Returning a straight-through leak here
-    // would violate the optical boundary; a future reflected-radiance pass can supply the missing contribution.
+    // Residual internally reflected energy at the fixed cap is discarded. Returning a straight-through leak here would violate the optical boundary; a future reflected-radiance pass can supply the missing contribution.
     if(dot(outgoingDirection, outgoingDirection) < 0.5)
         return float4(0.0, 0.0, 0.0, 1.0);
-    const half3 attenuation = nwbRefractionAttenuation(entry.tint,
-        pathLength, entry.ior, entry.cosine, exitCosine);
+    const half3 attenuation = nwbRefractionAttenuation(entry.tint, pathLength, entry.ior, entry.cosine, exitCosine);
 
     float3 origin = exitHit.position + outgoingDirection * entry.bias;
     half3 accumulated = half3(0.0h);
@@ -134,9 +125,7 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
     // Normally one background query. Up to two flat transparent hits may be evaluated before a final opaque query.
     // Further glass or an incomplete continuation uses the exit-based approximation below without tracing a new volume.
     for(uint layer = 0u; layer < 3u; ++layer){
-        const NwbRayTraceSurfaceHit background = nwbRayTraceClosestSurfaceHit(
-            g_NwbRefractionMaterialContext.sceneSlots.z, origin, outgoingDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE
-        );
+        const NwbRayTraceSurfaceHit background = nwbRayTraceClosestSurfaceHit(g_NwbRefractionMaterialContext.sceneSlots.z, origin, outgoingDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE);
         if(!background.hit)
             break;
         if(float(background.surface.refractionIor) > 1.001)
@@ -176,8 +165,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         g_NwbRefractionOutput[pixel] = float4(0.0);
         return;
     }
-    g_NwbRefractionOutput[pixel] = g_NwbRefractionPush.refractionEnabled != 0u
-        ? nwbRefractionResolveHardware(pixel, entry) : float4(nwbRefractionStraightFallback(pixel, entry), 1.0);
+    g_NwbRefractionOutput[pixel] = g_NwbRefractionPush.refractionEnabled != 0u ? nwbRefractionResolveHardware(pixel, entry) : float4(nwbRefractionStraightFallback(pixel, entry), 1.0);
 }
 
 

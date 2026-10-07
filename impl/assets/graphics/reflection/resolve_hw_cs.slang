@@ -69,10 +69,7 @@ void nwbReflectionRecordOpticalDiagnostics(const NwbOpticalTraceResult result){
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_MEDIUM_OVERFLOW_PATHS, 1u);
     else if(result.termination == NWB_OPTICAL_TERMINATION_AMBIGUOUS)
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_AMBIGUOUS_PATHS, 1u);
-    else if(
-        result.termination == NWB_OPTICAL_TERMINATION_QUERY_LIMIT || result.termination == NWB_OPTICAL_TERMINATION_EVENT_LIMIT
-        || result.termination == NWB_OPTICAL_TERMINATION_RANGE
-    )
+    else if(result.termination == NWB_OPTICAL_TERMINATION_QUERY_LIMIT || result.termination == NWB_OPTICAL_TERMINATION_EVENT_LIMIT || result.termination == NWB_OPTICAL_TERMINATION_RANGE)
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_LIMITED_PATHS, 1u);
 }
 
@@ -100,10 +97,7 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
     const uint linearPixel = glass ? packedPixel - pixelCount : packedPixel;
     const uint2 pixel = uint2(linearPixel % g_NwbReflectionParameters.dimensionsAndRoute.x, linearPixel / g_NwbReflectionParameters.dimensionsAndRoute.x);
     NwbReflectionSurface surface;
-    if(
-        !nwbReflectionLoadSurface(pixel, glass, surface) || !any(surface.weight > half3(0.0h))
-        || surface.bias >= g_NwbReflectionParameters.maxRayDistance
-    )
+    if(!nwbReflectionLoadSurface(pixel, glass, surface) || !any(surface.weight > half3(0.0h)) || surface.bias >= g_NwbReflectionParameters.maxRayDistance)
         return;
     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_HARDWARE_RAYS, 1u);
 #if NWB_REFLECTION_OPTICAL_TRANSPORT
@@ -122,27 +116,21 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
         );
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_EXTERIOR_ELIGIBLE_RAYS, exterior ? 1u : 0u);
     }
-    const NwbOpticalTraceResult result = nwbOpticalTrace(
-        config, surface.position + surface.normal * surface.bias, surface.direction
-    );
+    const NwbOpticalTraceResult result = nwbOpticalTrace(config, surface.position + surface.normal * surface.bias, surface.direction);
     nwbReflectionRecordOpticalDiagnostics(result);
     half3 radiance = result.radiance;
     if(!result.transparentPath && result.termination == NWB_OPTICAL_TERMINATION_OPAQUE){
-        const half rangeWeight = half(1.0h) - half(smoothstep(
-            g_NwbReflectionParameters.distanceFadeStart, g_NwbReflectionParameters.maxRayDistance, result.distance
-        ));
+        const half rangeWeight = half(1.0h) - half(smoothstep(g_NwbReflectionParameters.distanceFadeStart, g_NwbReflectionParameters.maxRayDistance, result.distance));
         radiance = lerp(nwbReflectionEnvironment(surface.direction), radiance, rangeWeight);
     }
-    // Optical continuation supplies its accumulated radiance, including ordinary exterior misses. A capped or
-    // ambiguous in-medium path discards unresolved energy; blending sky here would leak light through glass.
+    // Optical continuation supplies its accumulated radiance, including ordinary exterior misses. A capped or ambiguous in-medium path discards unresolved energy; blending sky here would leak light through glass.
     nwbReflectionStore(pixel, glass, radiance * surface.weight, result.surfaceHit ? 3.0 : 1.0);
     if(result.surfaceHit){
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_HARDWARE_HITS, 1u);
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_FALLBACK_PIXELS, 0xffffffffu);
     }
 #else
-    // A complete scene with no transparent instances uses this separately compiled kernel. Its private storage
-    // contains no media or candidate-event arrays, so opaque-only reflection retains the simple query path.
+    // A complete scene with no transparent instances uses this separately compiled kernel. Its private storage contains no media or candidate-event arrays, so opaque-only reflection retains the simple query path.
     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_HARDWARE_QUERIES, 1u);
     const NwbRayTraceSurfaceHit hit = nwbRayTraceClosestSurfaceHit(
         g_NwbReflectionMaterialContext.sceneSlots.z, surface.position + surface.normal * surface.bias,
@@ -150,9 +138,7 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
     );
     half3 radiance = nwbReflectionEnvironment(surface.direction);
     if(hit.hit){
-        const half rangeWeight = half(1.0h) - half(smoothstep(
-            g_NwbReflectionParameters.distanceFadeStart, g_NwbReflectionParameters.maxRayDistance, hit.distance
-        ));
+        const half rangeWeight = half(1.0h) - half(smoothstep(g_NwbReflectionParameters.distanceFadeStart, g_NwbReflectionParameters.maxRayDistance, hit.distance));
         radiance = lerp(radiance, nwbRayTraceSurfaceRadiance(hit, -surface.direction), rangeWeight);
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_HARDWARE_HITS, 1u);
         nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_FALLBACK_PIXELS, 0xffffffffu);

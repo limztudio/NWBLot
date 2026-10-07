@@ -71,7 +71,7 @@ combining cluster, UTF-8 sequence, or CRLF separator are rejected.
 
 These APIs expose shaped cluster edges. They do not implement UAX #29 grapheme-based
 editing, intra-ligature caret positions, or complete visual selection/navigation.
-Those policies require a separate editing increment.
+`EditModel` supplies UAX #29 grapheme selections and navigation. Widget caret geometry adds interpolated stops within LTR ligatures and hard-line pointer/vertical navigation; it does not provide RTL editing or paragraph bidi. See [the edit contract](../edit/README.md) and [text-area geometry](../README.md#shared-multiline-edit-geometry).
 
 ## Glyph image selection and painting
 
@@ -106,9 +106,10 @@ SDF is selected when physical font size is within 0.75..1.5 times its bake ppem.
 shipped 32-ppem atlases therefore serve 24..48 physical pixels per em. Outside the
 interval, native coverage uses the already selected shaping face. Zoom and DPI can
 change the image source without changing logical layout. Below the interval, native
-coverage also preserves the antialiased bottom row of small descenders. Current atlas
-quality tests compare Latin A/o/e and Korean Hangul against supersampled native
-coverage across zoom and DPI; other fonts require their own visual qualification.
+coverage also preserves the antialiased bottom row of small descenders. Recorded atlas
+qualification compared Latin A/o/e/g/q and Korean Hangul against supersampled native
+coverage across zoom and DPI. Its former quality unit target was retired; current
+smoke captures exercise the shipped fonts, and other fonts require their own visual qualification.
 Scalar SDF does not guarantee arbitrary magnification or recover details missing from its bake.
 
 Layouts retain their exact source font and baked image versions. Paint snapshots pin

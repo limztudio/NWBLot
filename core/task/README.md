@@ -19,4 +19,4 @@ nwb_graphics (runtime) -> nwb_gpu_task -> nwb_graphics_backend -> nwb_cpu_task -
 
 Backend code cannot include GPU graph/runtime headers, GPU tasks cannot include the graphics runtime, and CPU tasks cannot include graphics. GPU task code uses neutral RHI contracts and selected headers under `core/graphics/backend_selection/` for concrete device and command-list operations; native Vulkan headers and SDK types stay inside the provider. Compile-time selection adds no runtime dispatch, per-resource storage, or allocation overhead. Vulkan is the default and only implemented provider; selecting Metal is rejected until its provider exists.
 
-Task-domain unit tests mirror the layout under `tests/unit/task/cpu` and `tests/unit/task/gpu`; backend resource and presentation contract tests live under `tests/unit/graphics`.
+Task-domain unit tests mirror the layout under `tests/unit/task/cpu` and `tests/unit/task/gpu`; selected-backend resource and presentation contract tests live under `tests/unit/graphics`. Test code and fixtures stay under `tests/`; new unit coverage targets edge cases through the selected public contracts rather than a provider-specific test backend.

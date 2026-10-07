@@ -32,7 +32,7 @@ const Ui::InputKeyBinding profile[] = {
     { .key = Core::Key::S, .command = Ui::InputCommand::Down },
     { .key = Core::Key::F8, .command = Ui::InputCommand::FocusNext },
 };
-const bool accepted = uiLayer.setInputBindings(profile, sizeof(profile) / sizeof(profile[0u]));
+const bool accepted = uiLayer.setInputBindings(profile, LengthOf(profile));
 ```
 
 External input uses `UiLayerSystem::commandInput(source, command, phase, extend)`. For example, a gamepad adapter sends `FocusNext`, `Down`, `Accept`, or `Cancel` using `Core::InputAction::Press`, `Repeat`, and `Release`. Supply stable, nonzero device and control identities; device zero is reserved for native keyboard events. The adapter determines repeat timing and serializes delivery on the UI thread. `extend` requests selection extension independently of keyboard modifiers. `commandInput()` returns whether the UI consumed the event, allowing the adapter to retain scene/UI ownership through release.

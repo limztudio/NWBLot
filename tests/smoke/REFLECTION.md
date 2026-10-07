@@ -1,3 +1,5 @@
+# Reflection smoke and validation
+
 Reflection stages one through seven are implemented and passed their final
 validation gates. The renderer combines hierarchical screen-space tracing with
 bounded hardware continuation and composites reflection on opaque surfaces and
@@ -22,7 +24,9 @@ Screen-miss feedback remains disabled by default.
 The September 12 [optical appearance experiment](REFLECTION_OPTICAL_EXPERIMENT.md)
 passed its scoped correctness checks but did not establish a reliable speedup,
 so the speculative shader changes were reverted. That report also records the
-upstream renderer repairs and the remaining full-suite test limitations.
+upstream renderer repairs and the full-suite failures present at experiment completion. The subsequent
+[renderer error cleanup](../RENDERER_VALIDATION.md) repaired those failures; each report retains its separate
+qualification results.
 
 The refraction fixture explicitly disables reflection to isolate its transmission
 comparisons. The 33-capture exact-duplicate gallery passed at the stage-two gate;

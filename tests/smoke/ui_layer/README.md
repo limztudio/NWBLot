@@ -17,6 +17,28 @@ All standalone tests hold the shared `nwb_display` lock. Their CTest commands re
 and explicitly disable the request in `fin`. The Python wrappers default validation on for manual captures; pass
 `--no-gpu-validation` with a `fin` executable, which rejects the native `--gpudbg` option.
 
+## Additional registered workflows
+
+The current [CMake registration](CMakeLists.txt) also includes the following workflows. Every widget row has default
+and alternate-skin tests named `nwb_ui_layer_<fixture>_smoke` and `nwb_ui_layer_<fixture>_skin_smoke`, using the same
+`nwb_ui_layer_smoke` executable and cooked runtime. The build and CTest commands above include these registrations.
+Qualification totals elsewhere on this page describe their original increments, not the current suite size.
+
+| Fixture | Observable coverage |
+| --- | --- |
+| `popup_tools` | Delayed tooltips, context-menu keyboard/pointer commands, disabled entries, consumed outside dismissal, source replacement, focus loss, and resize. |
+| `numeric_edit` | Incomplete and invalid drafts, exact signed 64-bit values, floating-point edits, clipboard transfer, commit/cancel, external replacement, focus loss, scrolling, and resize. |
+| `radio_group` | Keyed selection, disabled-choice navigation, one focus owner, held-submit suppression, release activation, source reorder/removal/replacement, popup ancestry, and resize. |
+| `slider` | Exact values and bounds, key repeats, absolute track seeking, thumb grab offsets, drag cancellation, external-value and range/step fences, popup ancestry, focus loss, and resize. |
+| `progress` | Clamped passive fill geometry, tiny caps, clipping, retained declaration values, keyboard/pointer passivity, resize, and nested-popup lifetime. |
+| `image` | Named atlas regions, natural/fixed/stretch layout, tint/transparency/clipping, retained declaration data, passivity, resize, and nested-popup lifetime. |
+| `texture_image` | Concrete texture/atlas ownership, UV/tint/clipping, same-identity payload replacement, retained older source pixels, copied declarations, resize, and popup retirement. |
+
+`nwb_ui_layer_raster_ir_parity_smoke` compares direct recording with retained command-IR replay for empty startup,
+paint, concrete texture images, and resized paint. It requires the real replay marker and checks complete framebuffer
+pairs through the selected backend. It stores images, logs, and `raster_ir_parity.json` under `ui_layer_raster_ir_parity`.
+These are rendered workflow checks; they add no production test hook or provider-specific fixture.
+
 The standalone workflows are:
 
 - `nwb_ui_layer_framebuffer_smoke` uses the existing `FramebufferCapture` observer to copy a completed 960x540 acquired backbuffer after 60 presentation frames. It stores `ui_layer.bmp`, the collected launch log, and `pixels.json` under `Testing/smoke/<configuration>/ui_layer_framebuffer`.
@@ -73,7 +95,7 @@ The 43 displayed-state gates per skin exercise query typing, retained queries, f
 
 Fixture-only F4 selects key 100000, F5 reverses rows, F6 removes the committed key, F7 clears the query and F9 toggles enabled state. The harness uses posted Win32 key/character/pointer input and native clipboard services, or X11 synthetic input on a Linux runtime. It does not seed a model preedit or claim live IME/native Wayland qualification; synthetic queued OS-contract tests cover composition and delayed transfer ownership. Results are stage BMPs, `search_combo.log` and `search_combo.json` under `ui_layer_search_combo_default`/`alternate`.
 
-Searchable-combo qualification on Windows ARM64 / Clang 22.1.4, `dbg`: both skins pass all 43 displayed/native/pixel gates, with at most 10 row/field labels per frame for 100,000 rows. All 15 current UI/Testbed GPU smoke tests pass with graphics validation. All 745 native UI/ECS-UI/OS/input/presentation tests pass, including 71 new regressions; the main merge also passes 483 executed ECS graphics tests (61 existing disabled tests). Linux x86_64 parsing/type checks pass for 147 translation units, with all 9,873 hashed inputs and 1,148 actual dependencies unchanged. These checks do not establish native Linux linking/compositor execution, physical pointer grabs or live IME behavior.
+Searchable-combo qualification on Windows ARM64 / Clang 22.1.4, `dbg`: both skins pass all 43 displayed/native/pixel gates, with at most 10 row/field labels per frame for 100,000 rows. All 15 UI/Testbed GPU smoke tests registered for that increment passed with graphics validation. All 745 native UI/ECS-UI/OS/input/presentation tests pass, including 71 new regressions; the main merge also passes 483 executed ECS graphics tests (61 existing disabled tests). Linux x86_64 parsing/type checks pass for 147 translation units, with all 9,873 hashed inputs and 1,148 actual dependencies unchanged. These checks do not establish native Linux linking/compositor execution, physical pointer grabs or live IME behavior.
 
 ## Nested popup fixtures
 
@@ -99,7 +121,7 @@ The fixture qualifies LF/submit commands, preferred-column navigation, Page heig
 
 The initial text-area increment passed all 42 displayed/native/pixel gates for both skins on Windows ARM64 / Clang `dbg`, with graphics validation. The same increment passes 959 toolkit and 160 ECS UI tests plus genuine Linux syntax/type checks for 235 translation units. Native Linux linking/compositor execution and live IME remain unqualified.
 
-The scrollbar extension adds copied horizontal/vertical tracks, thumbs, a reserved corner and scroll limits to the same observation. Its 65 gates per skin include real wheel messages, both thumb drags, viewport paging, manual-scroll persistence, read-only and disabled behavior, and caret reveal after navigation. Scroll-only stages retain exact model/selection epochs and undo/redo capability. Only explicit manual-scroll stages allow an offscreen caret; editing/reveal stages still require it in the content viewport. Each gate carries 57 displayed marker quads.
+The scrollbar extension adds copied horizontal/vertical tracks, thumbs, a reserved corner and scroll limits to the same observation. Its 65 gates per skin include real wheel messages, both thumb drags, viewport paging, manual-scroll persistence, read-only and disabled behavior, and caret reveal after navigation. Scroll-only stages retain exact model/selection epochs and undo/redo capability. Only explicit manual-scroll stages allow an offscreen caret; editing/reveal stages still require it in the content viewport. Each gate carries 57 displayed marker quads. On Windows, focus clicks retain the physical caret pointer until the fixture GUI thread acknowledges idle, press capture, and release retirement. Those waits share a two-second bound within the run deadline, and button release is posted even when press acknowledgment fails. Slider uses the same capture-owner query; X11 keeps its existing ordered synthetic event path.
 
 The scrollbar extension passes all 65 gates per skin on Windows ARM64 / Clang `dbg`, with graphics validation, alongside five existing edit/list/search/numeric GPU regressions. Toolkit/ECS UI unit counts are 1,028/164, and genuine Linux syntax/type checking passes for 245 translation units. Native Linux linking/compositor execution, physical pointer grabs and live IME remain unqualified.
 

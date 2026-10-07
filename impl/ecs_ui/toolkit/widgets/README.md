@@ -1,6 +1,6 @@
 # UI widgets
 
-`Ui::Builder` declares panels and windows, scoped row/column containers, labels, buttons, checkboxes, separators, edit boxes, selectable rows, virtualized lists and ordinary/searchable combos. Tooltips and context menus attach to preceding content items. It shapes text and arranges the content before emitting paint and hit targets in the same order. Application values remain in the host model; the GPU snapshot owns copied geometry and image references.
+`Ui::Builder` declares panels and windows, scoped row/column containers, labels, buttons, checkboxes, separators, edit boxes, text areas, numeric editors, selectable rows, virtualized lists, ordinary/searchable combos, radio groups, sliders, progress bars and atlas/engine images. Tooltips and context menus attach to preceding content items. It shapes text and arranges the content before emitting paint and hit targets in the same order. Application values remain in the host model; the GPU snapshot owns copied geometry and image references.
 
 Widget, list, combo, popup, editor, tooltip and scrollbar styles are copied at each declaration. Changing a style between sibling declarations affects only later controls; deferred painting uses the style that measured each control. Panel, window and user-popup chrome retain their style from the matching begin call.
 
@@ -101,7 +101,7 @@ Builder draws surviving popup families only at the outermost end. Closing or reo
 
 ## Multiline text area
 
-`Builder::textArea(key, model, state, options)` requires an immutable Multiline `EditModel` and an immovable `TextAreaState`. The default viewport height is 160 logical pixels and uses the ordinary edit skin. Models and viewport state remain lent through the enclosing scope or outermost popup end. Mutating a lent model or invoking `scrollTo()`/`reset()` invalidates that candidate, even if the values return to their previous positions. The same live model or state cannot serve two text-area declarations in one family.
+`Builder::textArea(key, model, state, options)` requires an `EditModel` constructed with the immutable `EditTextMode::Multiline` policy and an immovable `TextAreaState`. The default viewport height is 160 logical pixels and uses the ordinary edit skin. Models and viewport state remain lent through the enclosing scope or outermost popup end. Mutating a lent model or invoking `scrollTo()`/`reset()` invalidates that candidate, even if the values return to their previous positions. The same live model or state cannot serve two text-area declarations in one family.
 
 The state exposes the latest prepared placement, two-axis scroll, focus and const navigation snapshots; input continues using the host's accepted geometry until frame publication. `scrollTo(Point)` accepts finite nonnegative offsets atomically and advances its public epoch on every accepted intent. Explicit scrolling survives first binding, idle frames and resize, subject to content clamping. A later observed text, selection, composition or focus intent reveals the caret; rebinding a previously bound state resets the viewport. Internal placement/clamping does not advance the public epoch. `reset()` followed by `scrollTo()` seeds a new initial viewport.
 
@@ -143,7 +143,7 @@ The track seeks on pointer down. A thumb press retains the exact accepted `f64` 
 
 `Builder::image(key, regionName, options)` copies an authored skin region name, dimensions and linear tint at declaration. The default Content dimensions use atlas pixels divided by reference density and respect logical and slice minimums. Region padding does not inset an image. Fixed and Stretch width/height policies use the arranged rectangle; Sprite and NineSlice retain their authored drawing modes. Images are passive, with optional tooltip/context-menu annotations following the label target policy. Unknown regions, invalid dimensions and nonfinite tints reject the candidate. Empty or fully transparent images remain valid.
 
-Frozen paint retains the skin binding and copied UV/geometry through the existing GPU skin-version path. General texture sources require the separate owned image-source and GPU binding increment.
+Frozen paint retains the skin binding and copied UV/geometry through the existing GPU skin-version path. General engine textures use the implemented immutable image-source and GPU binding path described below.
 
 ## Owned engine images
 

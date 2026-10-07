@@ -85,11 +85,13 @@ Use `--with-profile` to start the log server with a launched application. Use `-
 
 ## Build configurations and outputs
 
-| Configuration | Clang optimization | Frame pointer |
-| --- | --- | --- |
-| `dbg` | `-O0` | Kept |
-| `opt` | `-O2` | Kept |
-| `fin` | `-O3` | Omitted |
+| Configuration | Configuration macro | Clang optimization | Frame pointer |
+| --- | --- | --- | --- |
+| `dbg` | `NWB_DEBUG` | `-O0` | Kept |
+| `opt` | `NWB_OPTIMIZE` | `-O2` | Kept |
+| `fin` | `NWB_FINAL` | `-O3` | Omitted |
+
+CMake defines the corresponding configuration macro directly. Use `defined(NWB_DEBUG)`, `defined(NWB_OPTIMIZE)`, or `defined(NWB_FINAL)` for configuration-specific code.
 
 Configure trees are written below `__cmake/build/<configure-preset>/`. Runtime artifacts use these roots:
 
@@ -110,7 +112,7 @@ Graphics providers are selected at compile time. The `NWB_GRAPHICS_BACKEND` CMak
 
 Graphics consumers and tests use neutral contracts from `core/graphics/rhi/` and the narrow headers under `core/graphics/backend_selection/`. `backend_selection.h` selects the full context; `backend_selection/backend.h` selects public device and resource definitions. Native Vulkan headers stay behind the provider and selection boundary. Graphics tests live under `tests/` and exercise public contracts after normal backend selection; provider-specific tests, private provider fixtures, and production test hooks are prohibited. Selection preserves concrete calls and resource layouts without adding runtime dispatch, per-resource storage, or allocations. See [Architecture](https://github.com/limztudio/NWBLot/wiki/Architecture) for ownership and include boundaries.
 
-The Vulkan backend validates required device capabilities at startup. `VK_EXT_descriptor_buffer` is required by the renderer. Windows ARM64 uses the compute-emulation mesh path by default; a qualified adapter can opt into native mesh shaders before graphics instance creation.
+The Vulkan backend validates required device capabilities at startup. `VK_EXT_descriptor_buffer` is required by the renderer. Windows ARM64 disables native mesh shaders by default; eligible engine meshes use persistent indexed raster, while geometry paths without a compatible indexed archive stage use compute emulation. A qualified adapter can opt into native mesh shaders before graphics instance creation.
 
 Texture cooking and runtime format selection account for device format support, including BC and ASTC-capable GPUs. See [Renderer Feature Paths](https://github.com/limztudio/NWBLot/wiki/Renderer-Feature-Paths) and [Texture Conversion](https://github.com/limztudio/NWBLot/wiki/Texture-Conversion) for the current contracts.
 
@@ -119,6 +121,8 @@ Texture cooking and runtime format selection account for device format support, 
 NWBLot-owned utility, configuration, diagnostic, namespace, and shader feature macro APIs use `NWB_`, including the shared utilities in `global/`. Application-owned macro APIs use an application prefix, such as `TESTBED_`. External/compiler interoperability spellings and existing `g_*` shader resource aliases retain their current contracts. Utility types and functions retain their existing scopes.
 
 Root `engine_namespace.h` owns the engine namespace wrappers. Engine domains reach them through their own umbrella headers. Testbed owns `CoolStuff/Testbed/namespace.h` for `namespace Testbed`; its classes and helpers belong there, while the required loader entry adapter functions remain in `NWB`. Projects include the engine APIs they use and receive engine namespace definitions transitively. See [Architecture](https://github.com/limztudio/NWBLot/wiki/Architecture#namespace-ownership) and [Project API](https://github.com/limztudio/NWBLot/wiki/Project-API#namespace-ownership) for the ownership boundaries.
+
+Project-owned interface declarations use plain C++ `struct`. Their virtual methods retain the declared ownership, lifetime, and exception contracts.
 
 ## Source and dependency registration
 

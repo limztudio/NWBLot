@@ -1,9 +1,9 @@
 # Allocation ownership in perf telemetry
 
-Enable the existing perf capture on `Core::Frame`:
+Enable the existing perf capture on `NWB::Core::Frame`:
 
 ```cpp
-frame.setTelemetryCapture(Core::Telemetry::CaptureOptions::PerfOnly());
+frame.setTelemetryCapture(NWB::Core::Telemetry::CaptureOptions::PerfOnly());
 ```
 
 `Frame` publishes named allocation owners automatically at the end of each successful frame. The existing telemetry upload flow stores the binary stream and the logger creates its JSON report under the configured telemetry report directory. Memory data is in `perf.memoryRecords`; timing CSV output remains timing data.
@@ -24,11 +24,11 @@ GlobalArena and heap backing byte counters use the allocator's usable allocation
 
 `heapBacking` is the inclusive CoreAlloc backing total, including arena pool/chunk allocations and global new/delete. Its counters are collected per thread and combined when sampled. `peakBasis: sampledHeap` is the largest aggregate usage observed by those samples; transient peaks between samples can be higher. Heap backing must not be added to arena usage. `explicitScope` preserves manually recorded snapshots, which may alias an automatically collected arena. The JSON `perf.memorySources` summaries keep all three domains separate; memory summaries are reported only within their source domain.
 
-For in-process inspection, enable `Perf::CaptureOptions::memory`, publish the frame, and use the source-aware view:
+For in-process inspection, enable `NWB::Core::Perf::CaptureOptions::memory`, publish the frame, and use the source-aware view:
 
 ```cpp
-const auto& snapshot = session.memoryView().snapshot(ownerName, Core::Perf::MemorySource::Arena);
-const auto& delta = session.memoryView().delta(ownerName, Core::Perf::MemorySource::Arena);
+const auto& snapshot = session.memoryView().snapshot(ownerName, NWB::Core::Perf::MemorySource::Arena);
+const auto& delta = session.memoryView().delta(ownerName, NWB::Core::Perf::MemorySource::Arena);
 ```
 
 The registry stores owner identities once. Allocations update the arena's own counters and a heap counter shard owned by the current thread. Capture-time aggregation and arena registration/retirement handle owner totals; allocation operations do not contend on shared owner totals. There is no text formatting, stack walking, telemetry encoding, or registry lookup per allocation after thread-shard initialization. Counters continue while capture is disabled so later frees and capture re-enablement remain accurate. Disabled memory capture skips owner aggregation and snapshot publication. Concurrent snapshots are samples of atomic counters, not a stop-the-world transaction; exact totals settle after producers finish.

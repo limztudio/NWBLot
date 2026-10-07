@@ -17,7 +17,10 @@ python -m launcher renderer-baseline stress
 Each run builds only its selected smoke target and writes `baseline.bmp`, `runtime.log`, and `manifest.json` under
 `.cozter/out/ab-results/renderer-baseline/<profile>/<timestamp>/`. The manifest records the source revision,
 executable checksum, frozen environment, capture settings, and image checksum. Baseline creation refuses a dirty
-source worktree, and an existing artifact directory is never overwritten.
+source worktree, and an existing artifact directory is never overwritten. The launcher requests GPU validation by
+default; use `dbg` or `opt` for validated captures. A `fin` capture requires `--no-gpu-validation` because its loader
+rejects `--gpudbg`. Validation mode is part of reference identity: a Final capture cannot compare against the formal
+corpus below, which requires validation enabled.
 
 Compare a later build against an existing reference:
 

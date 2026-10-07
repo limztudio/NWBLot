@@ -2,6 +2,8 @@
 
 The September 27, 2026 pass extends the earlier graphics audit to project-owned engine foundations, ECS/content, assets and pipeline tools, diagnostics, platform/runtime code, build configuration and tests. Baseline `9c0c9279b`; final qualification commit `59793fc15`. Changes follow `.helper/standard.md` and retain owning-module boundaries.
 
+Qualification counts, native-feature checks, timings, and artifacts below describe their dated source snapshots. Current software-route qualification observes the selected policy and actual traversal through public contracts, as described in [software ray tracing qualification](../tests/smoke/software_raytracing.md); the historical native-feature assertions are not current test-writing guidance.
+
 ## Accepted steps
 
 | Commit | Scope | Result |

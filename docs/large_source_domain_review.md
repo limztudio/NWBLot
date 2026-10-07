@@ -1,8 +1,10 @@
 # Whole-Source Domain Review — All 72 First-Party Files >= 30KB
 
+This is the September 26, 2026 source snapshot published in `f4548dc7c`. File sizes, line counts, helper counts, and the 72-file inventory below belong to that review; they are not a current repository census. Current ownership and test rules are defined in [.helper/standard.md](../.helper/standard.md), including selected-backend coverage through existing public contracts and test code confined to `tests/`.
+
 Scope definition: first-party production sources (`core/`, `global/`, `impl/`, `launcher/`, `loader/`, `logger/`, `pipeline/`, `utilities/`, `CoolStuff/`), extensions `.h/.hpp/.cpp/.c/.cc/.inl`, size >= 30000 bytes (30KB decimal), `tests/`, `3rd_parties/`, `__exec/` excluded. This yields exactly **72 files**. (At 30720-byte KiB threshold the same filter yields 68; the 4 extra files in the 30000-byte set are `task_graph_imports.cpp`, `gpu_descriptor_heap_descriptor_buffer.cpp`, `task_graph_stage_validation.cpp`, `backend_device.h` — all covered below as #69–72.)
 
-## Project standard followed (`.helper/standard.md` — 18 sections + 4 subsections, 249 bullets, 525 lines)
+## Project standard snapshot (`.helper/standard.md` — 18 sections + 4 subsections, 249 bullets, 525 lines)
 
 1. File and module structure
 2. Namespace style
@@ -27,7 +29,7 @@ Scope definition: first-party production sources (`core/`, `global/`, `impl/`, `
 17. Third-Party Packages
 18. Source Architecture Hygiene (governing rule for this review: keep render-feature code physically sliced by ownership; do not pile behavior into shared god files; do not add declarations to mega-header umbrellas; a `.cpp` past ~800 lines mixing unrelated owners is a review smell — split by concrete owner/concern, never by hacky `.inl` header fragments; private feature state lives with that feature; `global/` stays neutral; `core/` stays top-level sibling of `global/`)
 
-## Project notes followed (`.helper/note.md` — 148 lines)
+## Project notes snapshot (`.helper/note.md` — 148 lines)
 
 - Important Rules (rules 1–20+: Device& invariant, AssetRef<T> bindings, pipeline-cache framebuffer key, `.nwb` built-in mesh payloads, codec-layer validation, descriptor-heap GPU lifetime, strict shader config tokens, case-sensitive entry points, BOM strip, shader-text identity rules, shader-driven ECS material contract, mesh/compute path separation)
 - Scheduler Architecture
@@ -131,7 +133,7 @@ Result: **72/72 reviewed, 0 splits required** — the tree is already sliced by 
 - Tracked files >= 30000B total: 380 (30000B threshold) / 368 (30720B threshold).
 - `3rd_parties/` vendored: ~226 — out of scope (upstream code, §17).
 - Test sources (`tests/**/*.h/.hpp/.cpp/.c/.cc` >= 30000B): 49 — out of scope for the production split review (per-contract test files, each bound to one contract under test).
-- Other large non-source artifacts: 28 (`.nwb` binary payloads, `.py` harnesses, `.md` docs, `CMakeLists.txt`, `.helper/standard.md`, `.helper/note.md`, `launcher/__init__.py`) — not splittable C++ sources.
+- Other large non-source artifacts: 28 (authored `.nwb` metadata, `.py` harnesses, `.md` docs, `CMakeLists.txt`, `.helper/standard.md`, `.helper/note.md`, `launcher/__init__.py`) — not splittable C++ sources.
 - Leftover production sources below threshold: every other first-party source is < 30000B — no uncovered large production source remains.
 - `__exec/` outputs: build/verification artifacts, untracked/ignored — not sources.
 

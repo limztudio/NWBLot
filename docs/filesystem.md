@@ -9,25 +9,44 @@ wrapper is removed.
 
 ## Project selection
 
-Projects configure graphics and storage before device initialization in `ConfigureProjectRuntime`:
+Projects configure graphics and storage before device initialization through the loader's `NWB::ConfigureProjectRuntime` entry point. Keep the policy and filesystem implementation in the application namespace; the loader entry only delegates. This Testbed-shaped example assumes `Testbed::ProjectPatchFilesystem` is declared in the project-owned `project_patch_filesystem.h`:
 
 ```cpp
-bool NWB::ConfigureProjectRuntime(ProjectStartupContext& context){
-    if(!context.graphics.setBindlessHeapAbi(Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()))
+#include "namespace.h"
+#include "project_patch_filesystem.h"
+
+#include <loader/project_entry.h>
+#include <core/graphics/runtime/runtime.h>
+#include <core/filesystem/volume_file_system.h>
+#include <impl/assets/graphics/bindless/runtime_abi.h>
+
+TESTBED_BEGIN
+
+namespace __hidden_testbed_startup{
+static bool ConfigureRuntime(NWB::ProjectStartupContext& context){
+    if(!context.graphics.setBindlessHeapAbi(NWB::Impl::AssetsGraphicsBindless::MakeGpuDescriptorHeapAbi()))
         return false;
 
-    context.filesystemFactory = [](Core::Alloc::GlobalArena& arena, const Core::Filesystem::VolumeMountDesc& desc)
-        -> UniquePtr<Core::Filesystem::IFilesystem>{
+    context.filesystemFactory = [](NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Filesystem::VolumeMountDesc& desc)
+        -> UniquePtr<NWB::Core::Filesystem::IFilesystem>{
         if(desc.volumeName.view() == AStringView("graphics"))
             return MakeUnique<ProjectPatchFilesystem>(arena);
-        return MakeUnique<Core::Filesystem::VolumeFileSystem>(arena);
+        return MakeUnique<NWB::Core::Filesystem::VolumeFileSystem>(arena);
     };
     return true;
 }
+};
+
+TESTBED_END
+
+bool NWB::ConfigureProjectRuntime(NWB::ProjectStartupContext& context){
+    return Testbed::__hidden_testbed_startup::ConfigureRuntime(context);
+}
 ```
 
-`ProjectPatchFilesystem` is a project-owned implementation of `IFilesystem`; include its declaration and
-`core/filesystem/volume_file_system.h` in the project's startup translation unit. Leaving `filesystemFactory`
+`Testbed::ProjectPatchFilesystem` implements `NWB::Core::Filesystem::IFilesystem`. The local `namespace.h`
+defines `TESTBED_BEGIN`/`TESTBED_END` independently of root `engine_namespace.h`; engine APIs supply their
+namespaces transitively. Other applications use their own namespace and wrappers. Leaving `filesystemFactory`
 empty selects `VolumeFileSystem` for every mount. A factory may capture an owning reference to the project's
 patch or download service. The engine copies that factory into its graphics device configuration, so captured
 services must remain valid until graphics shutdown. Do not capture startup-local references.

@@ -66,7 +66,7 @@ storage until GPU completion.
 
 The CPU toolkit also provides scoped stable IDs, retained declaration lifetimes (`state/`),
 row/column/overlay measure and arrange (`layout/`), committed-layout input routing (`input/`),
-font shaping (`text/`), owned Unicode edit state and commands (`edit/`), and skinned windows, panels, popups/modals, labels, separators, buttons, checkboxes and single-line edit boxes (`Builder`).
+font shaping (`text/`), owned Unicode edit state and commands (`edit/`), and the skinned controls declared by `Builder`, including windows, panels, popups/modals, labels, separators, buttons, checkboxes, edit boxes, text areas, keyed lists, combos, numeric editors, radio groups, sliders, progress bars and images.
 `nwb_ui_gpu` owns GPU uploads, resource retention,
 and offscreen rendering in `impl/ecs_ui/toolkit/gpu/`. `impl/ecs_ui/` connects the CPU UI to ECS and borrowed OS services,
 `core/os/` owns clipboard/native selection and text-input/IME services, `impl/assets_ui_skin/` owns skin validation/cooking,
@@ -80,7 +80,7 @@ text service and loaded skin; neither CPU type knows ECS, native windows or ImGu
 `nwb_ui_widgets` contains the builder and control painting, while `nwb_ui` owns ID/state/layout/input.
 The same UI arena outlives these objects, text/font pages and every frozen draw snapshot.
 
-`Builder::setSkin()` applies the current skin's 17 linear RGBA palette roles and default logical font size. The asset cooker and runtime accept only schema/binary version 3, with mandatory palette and typography sections. Programmatic skins carry complete engine defaults from construction. The builder adopts a new skin default when its current font size is still the previous skin default, while an application-set `Builder::style().fontSize` value that differs from that default remains in effect. Spacing, region names, and other style metrics are unchanged. The ECS host binds its selected skin before calling the application each frame, so style overrides made inside that callback take precedence for its widget declarations.
+`Builder::setSkin()` applies the current skin's 17 linear RGBA palette roles and default logical font size. Authoring metadata has no version or revision field and requires complete palette and typography sections. The runtime codec accepts only internal binary payload version 3. Programmatic skins carry complete engine defaults from construction. The builder adopts a new skin default when its current font size is still the previous skin default, while an application-set `Builder::style().fontSize` value that differs from that default remains in effect. Spacing, region names, and other style metrics are unchanged. The ECS host binds its selected skin before calling the application each frame, so style overrides made inside that callback take precedence for its widget declarations.
 
 `Builder::setTextShaping(scriptTag, language)` selects an explicit left-to-right ISO 15924 script and ASCII language for stock widget text, including labels, edit boxes, text areas, list and combo rows, radio labels, window titles, tooltips, and text-area vertical navigation. It copies the language bytes, preserves the last valid policy across `reset()`, and defaults to `Latn/en`. Call it while the builder is balanced, before opening a panel, window, or popup; a policy change during a declaration scope is rejected so deferred text uses the same policy. The API does not infer mixed scripts or paragraph direction. Standalone `Label::setText(ShapeRequest)` retains its own explicit shaping policy.
 
@@ -93,11 +93,11 @@ if(ui.beginPanel("settings", { 18.0f, 18.0f, 320.0f, 220.0f })){
     if(!ui.label("caption", "Settings"))
         context.fail();
     if(ui.checkbox("enabled", "Enabled", enabled))
-        saveEnabledValue(enabled);
+        SaveEnabledValue(enabled);
     Ui::WidgetOptions options;
     options.enabled = enabled;
     if(ui.button("apply", "Apply", options))
-        applySettings();
+        ApplySettings();
     if(!ui.endPanel())
         context.fail();
 }
@@ -119,7 +119,7 @@ Panel and control dimensions are logical units. Container dimensions use fixed, 
 stretch policies; intrinsic dimensions come from shaped text and skin metadata. Button metrics take
 maximum padding/minimum sizes across normal, hover, pressed and disabled regions to avoid state-dependent
 layout movement. Checkbox metrics include the square and its label gap. State artwork falls back to the
-normal region; the normal panel/button/checkbox parts are required. Optional mark/focus regions add overlays.
+normal region; the normal panel/button/checkbox parts are required. The stock widget skin contract requires the checkbox mark and focus overlay; custom low-level painters may choose their own region requirements.
 
 A panel blocks pointer input through its empty area. The layout's ancestor clip intersects both painting
 and hit testing. Enabled buttons and checkboxes participate in Tab/Shift+Tab navigation and initial
@@ -136,7 +136,7 @@ when declaring the corresponding live/enabled control. These queues are bounded,
 
 Resize, scale changes and device invalidation reset input publication. The ECS adapter additionally validates
 host-root lifetime before native input and frame builds. It connects edit-box declarations to borrowed OS
-text-input and clipboard/selection services. Lists and compound controls remain subsequent work.
+text-input and clipboard/selection services. Keyed lists and compound controls use these same accepted-layout and snapshot lifetimes.
 
 ## Windows and separators
 
@@ -194,20 +194,20 @@ const Ui::EditBoxResult result = ui.editBox("name", nameModel, nameState, option
 if(!result.valid)
     context.fail();
 if(result.submitted)
-    saveName(nameModel.text());
+    SaveName(nameModel.text());
 ```
 
 `EditModel` stores UTF8 bytes and grapheme selections. Each instance has a stable lifetime generation; accepted external `setText()` calls also advance an external revision, even when the bytes are unchanged. This fences queued input after replacement or an explicit reset. `EditBoxState` stores scroll, blink state and the newly prepared placement. Its `placement` becomes available after the matching container end; the ECS adapter keeps a separate displayed copy and admits it for pointer/IME geometry only after the exact matching presentation is accepted.
 
 The widget domain separates model/display snapshot preparation (`edit_box_snapshot.cpp`), owned caret/line geometry (`edit_caret_geometry.cpp`), arrangement (`edit_box_layout.cpp`), paint (`edit_box_paint.cpp`), builder declarations (`builder_edit_box.cpp`), and the `IEditBoxHost` contract (`edit_box_state.h`). `EditBoxView` owns copied display bytes, shaped text and retained font versions. It replaces the selected committed range with transient preedit for display, paints selection/caret/preedit underline, interpolates grapheme caret stops inside LTR ligatures, and scrolls horizontally to keep the caret visible. Ancestor, frame and content clips apply to paint and hit geometry. The default caret is one physical pixel wide; text, control dimensions and scroll remain logical units.
 
-`Builder::editStyle()` supplies semantic edit background names, padding and text/selection/caret/preedit colors. Padding and minimum size take the maximum across normal, hover, focused and disabled regions and combine with style padding, keeping text and layout stable when state changes. The default skin provides `edit.normal`, `edit.focused`, `edit.disabled` and `focus.overlay`; absent hover artwork falls back to the normal region. A 40-pixel field accommodates the default 16-pixel font and eight-pixel vertical skin padding. Fixed smaller fields deliberately clip their content.
+`Builder::editStyle()` supplies semantic edit background names, padding and text/selection/caret/preedit colors. Padding and minimum size take the maximum across normal, hover, focused and disabled regions and combine with style padding, keeping text and layout stable when state changes. The default skin provides `edit.normal`, `edit.focused`, `edit.disabled` and `focus.overlay`; absent hover artwork falls back to the normal region. A 40-logical-unit field accommodates the default 16-unit font and eight-unit vertical skin padding. Fixed smaller fields deliberately clip their content.
 
 `impl/ecs_ui/` installs `UiEditBoxHost` and borrows Frame-owned OS services. A toolkit-only caller may install its own `IEditBoxHost`; the CPU widget itself has no native API or ECS dependency. The adapter preserves native commit/key/selection event order, applies events only while the corresponding live model is lent, and retains copied events and snapshots rather than model pointers. Focus, declaration/model generations and external revisions fence late native/cut/paste mutation. Copy publication owns immutable selected bytes and may complete after later edits, focus transfer or widget removal. Frozen paint and GPU tasks own their data and never access edit models.
 
 The editor supports click/drag selection, Shift extension, Tab/Shift+Tab focus, grapheme arrows and deletion, Home/End, Ctrl word navigation/deletion, Ctrl+A/C/X/V, Ctrl+Z/Y and Ctrl+Shift+Z. Read-only controls remain focusable/selectable and permit copy; disabled controls do not edit or take focus. Native preedit owns its editing keys and Enter until the IME completes or cancels it. Clipboard paste normalizes line breaks and tabs to spaces and validates the resulting byte limit before mutation; cut deletes only after a successful OS write. Native primary-selection publication and middle-button paste use backend capabilities. Middle-button paste targets only the already focused control and replaces its current selection; it does not move focus or reposition the caret to the pointer.
 
-This increment provides one line with LTR cluster geometry. Paragraph bidi, RTL editing and wrapping remain separate work. Numeric Builder controls and multiline content/geometry are described below; the visual text-area Builder/host seam follows the geometry increment. Native preedit rendering and service borrowing are implemented; synthetic character/event tests do not establish live Korean IME or native Linux compositor qualification.
+The single-line control uses LTR cluster geometry. `Builder::textArea()` supplies the implemented multiline editor through the shared model, geometry and ordered navigation host. Paragraph bidi, RTL editing and wrapping remain separate work. Numeric controls and multiline content/geometry are described below; the complete [text-area contract](widgets/README.md#multiline-text-area) documents viewport and scrollbar behavior. Native preedit rendering and service borrowing are implemented; synthetic character/event tests do not establish live Korean IME or native Linux compositor qualification.
 
 ## Fixed-height virtualized lists
 

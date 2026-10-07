@@ -1,6 +1,6 @@
 # Font atlas assets
 
-`FontAtlas` is the CPU asset for a complete static font face baked into independent scalar SDF pages. Each image group owns exact linear R8, RG8, RGB8, or RGBA8 bytes, with one distance page per stored channel. Alpha, when present, is the fourth distance plane; no channel is opacity. Images have one base mip, a one-texel exterior guard, and FreeType scalar SDF encoding v1 (zero at byte 128, positive inside).
+`FontAtlas` is the CPU asset for a complete static font face baked into independent scalar SDF pages. Each image group owns exact linear R8, RG8, RGB8, or RGBA8 bytes, with one distance page per stored channel. Alpha, when present, is the fourth distance plane; no channel is opacity. Images have one base mip, a one-texel exterior guard, and a fixed internal FreeType scalar SDF encoding (zero at byte 128, positive inside).
 
 The offline generator lives in `utilities/font_builder`. Runtime users link `nwb_assets_font_atlas` and include `asset.h`; source cooking uses the ordinary `font_atlas` importer.
 

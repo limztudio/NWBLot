@@ -35,12 +35,14 @@ Common build controls:
 - `--config dbg`, `opt`, or `fin` selects the build configuration.
 - `--arch arm64` or `x64` selects the target architecture; Windows defaults to the native host architecture.
 - `--platform windows` or `linux` selects the build platform; the default is the host platform.
-- `--domain engine`, `testbed`, or `full` selects a build variant.
+- `--domain engine`, `testbed`, `full`, or `namesym` selects a build variant; `full` is the default. The `namesym` variant enables the name-symbol build mode.
 - `--configure-preset <name>` selects an explicit preset from `CMakePresets.json`.
 - `--jobs 8` controls parallel build work.
 - `--configure always` refreshes configuration; `--configure never` fails if configuration is required.
 - `-D KEY=VALUE` supplies a configuration setting and triggers configuration.
 - `--dry-run` prints the planned commands without configuring, building, or launching anything.
+
+The selected configuration defines `NWB_DEBUG` for `dbg`, `NWB_OPTIMIZE` for `opt`, or `NWB_FINAL` for `fin` directly through CMake.
 
 Windows hosts require Windows 10 version 1709 or newer, the documented minimum for
 [IsWow64Process2](https://learn.microsoft.com/en-us/windows/win32/api/wow64apiset/nf-wow64apiset-iswow64process2). Native host detection requires that API. An unavailable API, a failed query, or an

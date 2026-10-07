@@ -14,7 +14,7 @@ The harness excludes a five-second warmup and measures approximately thirty seco
 
 The problem was repeated high-detail geometry and optical work across many rays and views, rather than one isolated GI switch. GI remains enabled. The changes reduce repeated work while keeping unsupported and unresolved cases on explicit fallback paths.
 
-Eligible engine-owned shared mesh programs cache decoded object-space geometry and use an internal indexed vertex stage. Accepted source revisions and resource identities govern reuse; world transforms and projection remain current during rasterization. Generic authored programs and CSG retain supported compute emulation. Native mesh shaders are not enabled globally. Current GPU mesh roots also drive software scene-BVH leaf refit and internal-bound unions, preserving posed geometry coverage.
+Eligible engine-owned shared mesh programs cache decoded object-space geometry and use an internal indexed vertex stage. Accepted source revisions and resource identities govern reuse; world transforms and projection remain current during rasterization. Current material selection requires a compatible indexed archive stage and either no CSG or the shared engine mesh program. Other supported geometry paths use compute emulation. Native mesh shaders are not enabled globally. Current GPU mesh roots also drive software scene-BVH leaf refit and internal-bound unions, preserving posed geometry coverage.
 
 On the software route, eligible directional lights use one light-space view and point lights use six. Indexed rasterization captures opaque D32 depth and transparent crossings; compute shades and sorts transparent records once, then resolves receivers. Crossings retain instance and primitive identity, and per-instance integration preserves thickness and overlapping optical boundaries. The budget is sixteen events per texel, twenty bytes per event. Receiver-plane correction handles discrete map self-shadowing.
 
@@ -22,7 +22,7 @@ Invalid views, missing point faces, invalid events, unstable receivers, overflow
 
 `ReuseOneFrame` retains depth, counts, shaded events, and GPU-fitted views together for one subsequent accepted frame. It skips upload/clear/fit/capture/shade while still shading current receivers and declaring current BVH/material fallback inputs. The following accepted frame refreshes. Only world transforms may lag; changed geometry revisions, material bytes, light data, instance/boundary ordering, layout, resources, and invalid history force capture. Runtime geometry without an accepted content revision and CSG cannot reuse. Bind-pose world rotation preserves the accepted object-space revision, making this stress scene eligible after initialization.
 
-The shadow feature owns pending and accepted capture tickets and pins their geometry/texture identities. Refresh invalidates old in-place contents before recording; complete recording and successful shadow packet/resource-state acceptance publish the replacement. Rejection, skipped frames, resize, and graph retries cannot extend stale history. Reuse omits the untouched draw-argument import instead of promising an unowned final-state export. Metadata graph tests reproduce that former compile failure and verify accepted depth-state ownership.
+The shadow feature owns pending and accepted capture tickets and pins their geometry/texture identities. Refresh invalidates old in-place contents before recording; complete recording and successful shadow packet/resource-state acceptance publish the replacement. Rejection, skipped frames, resize, and graph retries cannot extend stale history. Reuse omits the untouched draw-argument import instead of promising an unowned final-state export. At qualification, metadata graph tests reproduced that former compile failure and verified accepted depth-state ownership. Current regression coverage uses the selected backend and existing public contracts; the dated test counts below do not describe the present suite size.
 
 One-frame capture reuse can delay moving shadows. Finite map resolution, fitted coverage and five-tap blocker estimation can alter contact detail, penumbrae and edge leakage. Temporal-one transparent sampling uses one sample only after accepted filtered history; bootstrap/reset uses three. These are explicit quality estimates, not image-equivalence claims.
 
@@ -104,7 +104,7 @@ Fresh final optical-toggle captures passed with GPU validation, actual frame-360
 Use the configured Windows ARM64 Clang/Vulkan environment. Keep each executable and its matching cooked runtime together. Choose a fresh `$perfOutput` directory and run the following acquisitions serially without GPU validation or profiling enabled:
 
 ```powershell
-$perfPython = 'C:/Users/ltw94/AppData/Local/Programs/Python/Python311-arm64/python.exe'
+$perfPython = 'python'
 $perfBuild = '__cmake/build/windows-clang-arm64'
 $perfRuntime = "$perfBuild/Testing/skinning_culling_benchmark_runtime/opt"
 $perfExe = '__exec/windows/arm64/full/opt/stress_test_smoke.exe'

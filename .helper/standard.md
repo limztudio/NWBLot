@@ -264,6 +264,8 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - `auto` is allowed, but always spell out qualifiers and reference/pointer intent (`const`, `&`, `*`, `&&`) explicitly when applicable.
 - Example style: `for(const auto& i : table){ ... }`.
 - Prefer project wrapper/alias types over raw `std::` names (e.g., `Vector` instead of `std::vector`, traits aliases like `IsSame`). This applies equally to project-owned tests and smoke fixtures: do not use direct `std::` names there.
+- For borrowed text inputs, prefer `StringView` or the matching `BasicStringView<CharT>` over raw character pointers when the API can consume a pointer and length. Carry a known length through callers to avoid repeated terminator scans, and preserve null-termination requirements at external C-string boundaries.
+- Choose stored text by lifetime and access cost. A view or pointer member may borrow static or otherwise guaranteed storage; use an owning project string when the owner must retain independent bytes. Do not convert every string member to an owning string or retain a view whose backing storage can expire or change address before use.
 - Before introducing a new direct `std::` usage, check `global/global.h` and related global headers for an existing wrapper/alias.
 - If missing, add a focused project-level feature under `global/` and use it rather than repeating direct `std::` usage across modules or tests. Do not add a test-local standard-library alias to bypass this rule.
 - For function-local containers that are only temporary working storage and do not escape the function, prefer `Core::Alloc::ScratchArena` with `Core::Alloc::ScratchAllocator` over the default heap allocator.
@@ -315,7 +317,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
     - Use references (`T&`, `const T&`) for required, non-null inputs by default.
     - Do not downgrade a required reference parameter to a pointer merely to accommodate a caller or simplify plumbing; it obscures the required-input contract. When an input is mandatory, change the function interface/callers to pass a reference instead.
     - Use `NotNull<T*>` only when pointer semantics are required (e.g., nullable interop boundaries, pointer identity APIs, or reseating semantics) but null is still invalid.
-    - For required C-string style inputs (`const char*`, `const tchar*`), prefer `NotNull<const char*>` / `NotNull<const tchar*>` instead of raw pointers.
+    - When an interop boundary requires a non-null, terminated C string (`const char*`, `const tchar*`), prefer `NotNull<const char*>` / `NotNull<const tchar*>` instead of raw pointers. Use the borrowed-view rule above for APIs that consume text with an explicit length.
     - Use raw pointers (`T*`) only when null is a valid and meaningful state.
   - Returns:
     - Return `T&`/`const T&` for always-present objects with externally guaranteed lifetime.

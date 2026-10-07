@@ -12,6 +12,8 @@ This pass starts at `296e8f485` after the completed ten-step evaluation in `REND
 | 16 | Compile reflection spatial variants for supported radii | Reflection filtering/resources | Retained for bounded shared storage and pipeline reuse |
 | 17 | Reuse existing caustic tile geometry for center/spacing reads | Caustic resolve | Not retained; no demonstrated useful timing benefit |
 
+This is a historical experiment record. The native headless shader fixtures and source-wiring-only unit checks mentioned below were later retired; their measurements and failures remain evidence for the recorded decisions, not current CTest entries or instructions to create provider-specific tests. Current graphics tests use the selected backend and existing public contracts under `tests/`, following [Test layout](../README.md).
+
 ## Evaluation contract
 
 Root owns all tracked-source application, builds, asset cooking, native/GPU tests, timing acquisitions, and git operations. Independent proposal preparation and source review may run concurrently; builds/cooks and GPU acquisitions run sequentially. Candidate snapshots and raw diagnostics are retained under `__artifacts/reflection_optimization_followup/`.
@@ -353,6 +355,6 @@ The populated resolve scope changed from 1.062217 to 1.076839 ms, paired change 
 
 ### Decision and restoration
 
-Do not retain the shader candidate: correctness passed, but the experiment did not establish useful measured benefit. Unlike Step 16, it reduces no shared allocation and has no separate predeclared memory-retention basis. The original shader was restored, both Opt and Dbg asset cooks/builds passed, and the full renderer dependency and authored-runtime inventories match the final frozen baselines exactly. The common native99 fixture, measurement support and launcher regression fix remain. There is no claim of a demonstrated performance regression or improvement from this candidate.
+Do not retain the shader candidate: correctness passed, but the experiment did not establish useful measured benefit. Unlike Step 16, it reduces no shared allocation and has no separate predeclared memory-retention basis. The original shader was restored, both Opt and Dbg asset cooks/builds passed, and the full renderer dependency and authored-runtime inventories match the final frozen baselines exactly. At experiment completion, the common native99 fixture, measurement support and launcher regression fix remained. The native headless fixture was subsequently retired; its recorded results remain historical evidence. There is no claim of a demonstrated performance regression or improvement from this candidate.
 
 Evidence remains under `__artifacts/reflection_optimization_followup/step17/`: `baseline_*_v2`/`candidate_*_v2`, `corrected_freeze_lineage_v2.json`, `baseline_footprint_v2`/`candidate_footprint_v2`, original `*_combined_v1`, `candidate_correctness_v1`, `emitted_native_review_v1`, `whole_volume_compare_v1`, `capture_independent_review_v1`, `corrected_qualification_review_v2`, all raw `timing_execution_v2` trials, `timing_summary_v2.json`, the independent `timing_review_v2` reconstruction, and `restoration_v1/complete.json`. The source proposal, failed auxiliary baseline test, failed preflight and all earlier captures/freezes remain intact.

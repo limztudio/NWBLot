@@ -1,6 +1,6 @@
 # Shared CPU task scheduling
 
-NWB's runtime owns one `Core::CpuTaskScheduler`, constructed before GraphicsRuntime and project initialization. Systems own task scopes and data; they borrow the execution service. Asset-builder and FBX-converter processes each construct their own scheduler once at their entry point.
+NWB's runtime owns one `NWB::Core::CpuTaskScheduler`, constructed before GraphicsRuntime and project initialization. Systems own task scopes and data; they borrow the execution service. Asset-builder and FBX-converter processes each construct their own scheduler once at their entry point.
 
 The CPU execution service belongs to the `core/task` domain: include `<core/task/cpu/scheduler.h>` and link `nwb_cpu_task` for `Core::CpuTaskScheduler`, `Core::CpuTaskScope`, and the associated task types. Allocator primitives remain in `core/alloc`. Scheduler coverage lives in `tests/unit/task/cpu` under `nwb_cpu_task_tests`; processor topology coverage remains in `tests/unit/global`.
 
@@ -69,7 +69,7 @@ ECS preparation remains a serial caller phase because existing preparation can c
 ## Verification and delivery steps
 
 1. CPU runtime and topology: dependency/capture/descendant lifetimes, cancellation, nested joins, main-thread targets, cost/priority policy, actual Windows processor restrictions.
-2. Runtime migration: ECS, Frame, Graphics/Vulkan recording, loader/project scopes, tools and cook APIs; targeted ECS/graphics tests and native Vulkan smoke.
+2. Runtime migration: ECS, Frame, selected-backend graphics recording, loader/project scopes, tools and cook APIs; targeted ECS/graphics tests and native graphics smoke through the selected public contracts.
 3. Final integration: supported local build configurations, policy checks, repeated concurrency regressions, and a measured CPU workload comparison. Record actual host coverage and any unavailable platform validation.
 
 Each completed step is committed and pushed to `main` after its checks pass. The legacy allocator pool/job implementations, scheduler facades, arena names, and 64-bit affinity-mask APIs have been removed. Large distinct and repeated dependency fan-in regressions now exercise the shared CPU task service. Topology tests cover actual allowed processor identities and restrictions.
@@ -185,7 +185,7 @@ Final validation: the Linux Debug build passed for CPU/GPU tasks, perf/telemetry
 
 ### Post-integration cleanup
 
-Graphics resources now expose their shared scheduler directly to Vulkan callers; the redundant parallel-range forwarding methods are removed. The resource base needs only a scheduler forward declaration, and upload declaration files include the task graph instead of the compiler. Nested dependency checks reuse the scheduler's pre-sized search vectors and generation stamps, removing the temporary dependency arena. Profiling metadata preparation no longer reads a timestamp that execution immediately overwrites; each measured interval establishes its own start time.
+At that increment, graphics resources exposed their shared scheduler directly to the then-selected Vulkan provider; the redundant parallel-range forwarding methods are removed. The resource base needs only a scheduler forward declaration, and upload declaration files include the task graph instead of the compiler. Nested dependency checks reuse the scheduler's pre-sized search vectors and generation stamps, removing the temporary dependency arena. Profiling metadata preparation no longer reads a timestamp that execution immediately overwrites; each measured interval establishes its own start time.
 
 The Linux Debug build, eight selected CPU/GPU/graphics/telemetry/native test targets, the Optimize CPU suite, and all 52 policy checks passed. Capability-dependent tests retained their existing skips.
 

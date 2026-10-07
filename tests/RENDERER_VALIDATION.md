@@ -9,7 +9,7 @@ Commit `d6cd6e4f9` repairs renderer ownership and the extracted source contracts
 - `DeferredFrameTailBuilder` takes the task graph and explicit frame inputs. It no longer depends on or accesses private state in `RendererFramePipeline`. The pipeline owns graph compilation, surfel readback, timing publication, and feedback; the builder owns deferred tail task declaration.
 - `PrefixSceneUploadBuilder` receives a lighting-classification snapshot. The pipeline publishes ray-tracing classification after successful scene-upload declaration instead of exposing the ray-tracing system to the upload builder.
 - Mesh frame-heap release is private to its owner.
-- Source-contract tests read the extracted implementation files and check the relevant caller/callee wiring, ordering, and ownership. They do not concatenate files into a synthetic old implementation or drop the original behavioral assertions.
+- At this cleanup, source-contract tests read the extracted implementation files and checked the relevant caller/callee wiring, ordering, and ownership. They did not concatenate files into a synthetic old implementation or drop the original behavioral assertions. Source-wiring-only unit checks were subsequently retired; current unit coverage follows the behavioral edge-case scope in [Test layout](README.md).
 
 The smoke-test repair follows those changes:
 

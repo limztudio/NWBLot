@@ -15,7 +15,7 @@ From the repository root, use the one-command launcher:
 python -m launcher async-shadow-m4
 ```
 
-It configures the required test targets, builds both benchmarks and their cooked runtime assets, enables GPU validation, and writes a timestamped directory under `.cozter/out/ab-results/async-shadow-m4/`. The command returns `77` when the adapter has no distinct dedicated compute-only queue. To adjust a `run.py` setting, pass it after `--`, for example:
+It configures the required test targets, builds both benchmarks and their cooked runtime assets, enables GPU validation by default, and writes a timestamped directory under `.cozter/out/ab-results/async-shadow-m4/`. Validation is available in `dbg` and `opt`. For a Final run, use `python -m launcher async-shadow-m4 --config fin --no-gpu-validation`; the `fin` loader rejects `--gpudbg`. The command returns `77` when the adapter has no distinct dedicated compute-only queue. To adjust a `run.py` setting, pass it after `--`, for example:
 
 ```powershell
 python -m launcher async-shadow-m4 -- --measure-seconds 30

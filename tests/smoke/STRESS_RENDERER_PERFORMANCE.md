@@ -2,6 +2,8 @@
 
 This work starts from `8326717e5` on the Qualcomm Adreno X2-90, Windows ARM64, Opt, at 1280 x 900. The user requested progress toward 60 FPS and a commit and push to `main` after each completed step. Source changes follow `.helper/standard.md`; unnamed namespaces are prohibited.
 
+This page preserves the original step-18 campaign and its proposal statuses. It is not the current optimization backlog or a claim about current suite counts. The later accepted profiles, target results, and current reproduction commands are recorded in [Stress rendering performance](../../docs/stress_rendering_performance.md).
+
 ## Baseline correction
 
 The initial screenshot's 10.7 FPS label was incorrect. `render.frame` timing queries can run out of reserved slots while rendering continues. In the corresponding 48 focused reporting intervals, the application recorded 402 updates over 25.247864 seconds (15.9221 FPS), but only 268 GPU timing samples. Those samples average 60.361 ms for the GPU frame. Neither the sample publication rate nor the reciprocal of a GPU scope is a presentation counter.

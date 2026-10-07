@@ -7,6 +7,8 @@ Date: 2026-10-08. Source base: `b5181049e735e800cd2d845ea12d5b7f007df8a1`, pulle
 | Domain | Current contract |
 | --- | --- |
 | Shared utilities | NWBLot-owned macro APIs use `NWB_`, including compiler/platform, memory/string, stream, assertion, math, and global utility macros. Definitions remain in their owning headers; utility types and functions retain their existing scopes. |
+| Build configuration | CMake defines `NWB_DEBUG`, `NWB_OPTIMIZE`, and `NWB_FINAL` directly for `dbg`, `opt`, and `fin`, without intermediate configuration aliases. |
+| Interface declarations | Project C++ interfaces use plain `struct`; no project-owned lowercase annotation or wrapper macro is defined. External SDK spellings remain externally owned. |
 | Engine namespace | Root `engine_namespace.h` alone defines `NWB_BEGIN` and `NWB_END`, opening and closing `namespace NWB`. It contains no engine type or service dependency. Engine-domain umbrellas include it and define their own domain wrappers. |
 | Application namespace | `CoolStuff/Testbed/namespace.h` independently defines `TESTBED_BEGIN`/`TESTBED_END` for `namespace Testbed`, without including engine headers. Testbed headers use that local header; the owning CMake source list registers it. |
 | Application types | The callback object is `Testbed::Project`; UI classes and sources live in `Testbed`, including `Testbed::UiSkinPreview` and the `Testbed::Ui*` galleries. Existing translation-unit helpers remain in their named `__hidden_*` groups inside the application namespace. |
@@ -69,3 +71,31 @@ Independent combined review checked 802 changed/new C++ sources and headers: UTF
 The engine namespace header move preserves its contents byte for byte and its canonical two CRLF terminators. The application header is independent of engine includes. The six loader adapter signatures remain unchanged; project policy and lifecycle were reviewed against the original implementation after explicit engine qualification. No compatibility aliases, extra application state, allocations, or runtime dispatch were introduced. Existing shader resource aliases and stable diagnostic markers retain their current contracts. `combined_source_policy_review.json`, `macro_migration_checks.json`, and the independent Testbed review record these checks.
 
 Repository and wiki diff checks passed after final documentation updates. Historical cleanup/optimization audits and their evidence were not rewritten. These checks establish the naming/ownership migration and recorded runtime behavior; they do not establish a CPU, memory, or frame-time gain.
+
+## Configuration and interface follow-up: October 8, 2026
+
+Published source `99845979361d56477e768d4eb4d110fa7533418d` removes the remaining configuration indirection and
+project-owned keyword-like annotation. `configuration/CodeGen.cmake` emits `NWB_DEBUG`, `NWB_OPTIMIZE`, and
+`NWB_FINAL` directly for `dbg`, `opt`, and `fin`. `global/compile.h` retains the required external compiler configuration
+fallbacks and no longer translates intermediate mode names. Twenty interface declarations in sixteen headers use
+plain `struct`, matching their former macro expansion. The lowercase annotation and its three Linux-only Wayland
+push/undef/pop workarounds were removed, without a new alias. External SDK macros and authored material `interface`
+metadata retain their ownership and spelling.
+
+Compiler preprocessing in all three configurations confirms only the intended macro-definition changes. All 135
+C++ mode consumers test definition presence. The 126 uses outside `global/compile.h` reach it through unconditional
+include paths before their first check; no shared shader/C++ guard or shader consumer changes selection. Plain
+`struct` preserves inheritance, access, callback signatures, vtables, and layout. This simplification introduces no
+runtime operation, allocation, storage, or dispatch, and claims no measured performance improvement.
+
+This follow-up has separate qualification evidence under `__cmake/verification_macro_followup_20261008/`.
+Full `opt`, `dbg`, and `fin` builds passed. Its 103 selected CTest executions passed without failures or skips,
+including 2,707 native cases in each of Optimize and Debug and 2,712 in Final; the launcher suite passed 40 cases.
+The optimized Testbed validation capture and UI raster direct/replay workflow passed, with all four framebuffer
+pairs pixel-identical and maximum channel error zero. These results apply to the recorded Windows ARM64 host.
+
+The normal Final Testbed capture and shutdown passed through CTest. A separate manual Final invocation incorrectly
+requested `--gpudbg`, which Final does not support; that failed diagnostic attempt is retained and excluded from
+qualification. It is not Final GPU-validation evidence. Manual capture wrappers must use `--no-gpu-validation` with
+a `fin` executable; validated runtime checks use `dbg` or `opt`. `qualification_summary.json`, `ctest_results.json`,
+`preprocessor_comparison.json`, and `canonical_mode_visibility_review.json` retain the exact results and limits.

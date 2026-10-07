@@ -8,7 +8,7 @@ From the repository root, use the build-aware launcher:
 python -m launcher frame-lagged-async-lighting
 ```
 
-The launcher configures the required test targets, builds the smoke executable and cooked runtime assets, and starts GPU validation by default. Use `--no-gpu-validation` when necessary. To pass a lifecycle-runner option, place it after `--`, for example `python -m launcher frame-lagged-async-lighting -- --transition-timeout 30`.
+The launcher configures the required test targets, builds the smoke executable and cooked runtime assets, and starts GPU validation by default in `dbg` or `opt`. For a Final run, use `python -m launcher frame-lagged-async-lighting --config fin --no-gpu-validation`; the `fin` loader rejects `--gpudbg`. To pass a lifecycle-runner option, place it after `--`, for example `python -m launcher frame-lagged-async-lighting -- --transition-timeout 30`.
 
 The application starts with lagged lighting enabled. The runner accepts only GPU-submission transitions in this order: bootstrap, active history use, normal current-frame path after F1, then a second bootstrap and active-history use after F1 re-enables the option. It also rejects GPU validation, renderer recovery, and history-capture errors.
 

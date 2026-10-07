@@ -1,3 +1,5 @@
+# Refraction smoke and validation
+
 The refraction smoke renders a clear IOR 1.5 sphere with zero AVBOIT color coverage in
 front of an opaque stripe wall. A red transparent panel sits in front of the glass;
 a blue transparent panel sits behind it. The fixed camera and unlit authored BXDF
@@ -13,7 +15,7 @@ For interactive inspection, use `python -m launcher smoke refraction --config db
 
 Run `nwb_refraction_capture_smoke` through CTest after building
 `nwb_refraction_smoke`. `nwb_refraction_gpudbg_capture_smoke` runs the same sequence
-with Vulkan validation enabled in `dbg`. Each test captures three swapchain images
+with selected-backend GPU validation enabled in `dbg`. Each test captures three swapchain images
 after the same graphics frame count: refraction disabled, automatic tracing, and
 explicit screen-space tracing. The latter uses the renderer's normal hardware
 tracing preference, leaving device capability reporting intact.
@@ -66,7 +68,7 @@ configuration. `--cases nested,torus,prism` limits the scenes;
 `--variants geometry,automatic,screen,disabled` selects the captures. Both options
 accept comma-separated values. Each child run captures after sixteen graphics frames by
 default and has a sixty-second capture timeout. `--application-arg=--gpudbg` enables
-GPU validation. The runner clears inherited case, geometry, capture, and freeze
+GPU validation for `dbg` or `opt`; omit it for `fin`, whose loader rejects that option. The runner clears inherited case, geometry, capture, and freeze
 settings so a previous interactive launch does not alter its cases.
 
 Open `gallery.html` from the output directory to switch cases, compare variants

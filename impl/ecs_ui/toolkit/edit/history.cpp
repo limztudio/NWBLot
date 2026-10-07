@@ -56,7 +56,8 @@ bool EditModel::redo(){
 }
 
 void EditModel::recordHistory(const AStringView before, const usize beforeAnchor, const usize beforeCaret,
-    const AStringView after, const usize afterAnchor, const usize afterCaret){
+    const AStringView after, const usize afterAnchor, const usize afterCaret
+){
     const usize cost = before.size() + after.size();
     if(m_limits.maxHistoryRecords == 0u || cost > m_limits.maxHistoryBytes){
         clearHistory();

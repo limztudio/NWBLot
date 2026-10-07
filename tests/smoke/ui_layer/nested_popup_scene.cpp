@@ -326,7 +326,8 @@ Array<u64, 29u> UiNestedPopupSmokeScene::values()const{
 }
 
 Impl::Ui::Rect UiNestedPopupSmokeScene::rowBounds(const Impl::Ui::ListState& state,
-    const Impl::Ui::IListDataSource& source, const u64 key, const f32 rowHeight)const{
+    const Impl::Ui::IListDataSource& source, const u64 key, const f32 rowHeight
+)const{
     Impl::Ui::Rect result;
     u64 index = 0u;
     const auto& placement = state.placement();

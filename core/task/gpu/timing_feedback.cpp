@@ -132,7 +132,8 @@ bool GpuTaskTimingFeedbackPolicy::valid()const noexcept{
 GpuTaskDiagnosticTimingQueueOverrideStatus::Enum ValidateGpuTaskDiagnosticTimingQueueOverrides(
     const GpuTaskDiagnosticTimingQueueOverride* const overrides,
     const usize overrideCount,
-    const u16 deviceGeneration)noexcept{
+    const u16 deviceGeneration
+)noexcept{
     if(overrideCount == 0u)
         return GpuTaskDiagnosticTimingQueueOverrideStatus::Success;
     if(!overrides)
@@ -161,7 +162,8 @@ GpuTaskDiagnosticTimingQueueOverrideStatus::Enum ValidateGpuTaskDiagnosticTiming
 const GpuTaskDiagnosticTimingQueueOverride* FindGpuTaskDiagnosticTimingQueueOverride(
     const GpuTaskDiagnosticTimingQueueOverride* const overrides,
     const usize overrideCount,
-    const GpuTaskTimingKey& key)noexcept{
+    const GpuTaskTimingKey& key
+)noexcept{
     if(!overrides || !key.valid())
         return nullptr;
 

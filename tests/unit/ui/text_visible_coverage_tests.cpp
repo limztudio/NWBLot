@@ -64,7 +64,8 @@ protected:
     }
 
     [[nodiscard]] bool rasterRectangle(const PlacedGlyph& glyph, const f32 fontSize,
-        const DisplayMetrics& display, const Point origin, Rect& rectangle){
+        const DisplayMetrics& display, const Point origin, Rect& rectangle
+    ){
         const f32 physicalSize = Ceil(fontSize * Max(display.pixelScaleX, display.pixelScaleY));
         if(!glyph.face->rasterize(glyph.glyphId, static_cast<u32>(physicalSize), m_bitmap))
             return false;

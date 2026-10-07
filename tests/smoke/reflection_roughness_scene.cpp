@@ -54,7 +54,8 @@ namespace Tests::Smoke{
 
 
 ReflectionRoughnessScene::ReflectionRoughnessScene(ProjectRuntimeContext& context, NWB::Core::ECS::World& world,
-    const NWB::Core::ECS::EntityID camera, const NWB::Core::ECS::EntityID light, const f32 roughness)
+    const NWB::Core::ECS::EntityID camera, const NWB::Core::ECS::EntityID light, const f32 roughness
+)
     : m_context(context)
     , m_world(world)
     , m_bindJoints(context.objectArena)
@@ -151,7 +152,8 @@ bool ReflectionRoughnessScene::applyMutation(){
 }
 
 NWB::Core::ECS::EntityID ReflectionRoughnessScene::createPanel(const SmokeMaterialRef& material, const Float4& color,
-    const Float4& position, const Float4& scale, const f32 f0, const f32 roughness){
+    const Float4& position, const Float4& scale, const f32 f0, const f32 roughness
+){
     using namespace __hidden_reflection_roughness_scene;
     const auto entity = CreateTintedStaticMeshEntity(m_world, m_context.objectArena, s_Plane, material, s_Interface, color, position, scale);
     if(!entity.valid())

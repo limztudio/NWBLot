@@ -88,7 +88,8 @@ void ReflectionHistoryState::reset(const u16 deviceGeneration)noexcept{
 ReflectionHistoryPlan ReflectionHistoryState::plan(
     const ReflectionSceneContentStamp& stamp,
     const ReflectionSettings& settings,
-    const u64 graphicsFrameIndex)noexcept{
+    const u64 graphicsFrameIndex
+)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     ReflectionHistoryPlan result;
@@ -149,7 +150,8 @@ void ReflectionHistoryState::discard(const ReflectionHistoryPlan& plan)noexcept{
 void ReflectionHistoryState::accept(
     const ReflectionHistoryPlan& plan,
     const Core::QueueSubmissionToken& token,
-    const bool hardwareReady)noexcept{
+    const bool hardwareReady
+)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     if(plan.generation != m_generation || plan.sequence != m_reservedSequence)

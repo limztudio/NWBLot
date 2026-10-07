@@ -32,7 +32,8 @@ namespace __hidden_task_graph_light_space_shadow{
 [[nodiscard]] bool GatherCaptureReads(
     const Core::GpuTaskGraph& graph,
     const LightSpaceShadowGraphInputs& inputs,
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outUses){
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outUses
+){
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
     if(!declarations.valid())
         return false;

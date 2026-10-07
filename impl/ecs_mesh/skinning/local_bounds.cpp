@@ -95,7 +95,8 @@ bool CreateMeshSkinningLocalBoundsBuffers(Core::GraphicsRuntime& graphics, MeshS
 MeshSkinningLocalBoundsTask::Payload::Payload(
     Core::Alloc::GlobalArena& arena,
     Core::GraphicsRuntime& graphics,
-    Core::GpuTimingSubmissionTicket& timingTicket)
+    Core::GpuTimingSubmissionTicket& timingTicket
+)
     : graphics(graphics)
     , timingTicket(timingTicket)
     , dispatches(arena)
@@ -108,7 +109,8 @@ MeshSkinningLocalBoundsTask::Payload::Payload(
 bool MeshSkinningLocalBoundsTask::Record(
     const Payload& payload,
     Core::CommandList& commandList,
-    const Core::GpuTaskRecordContext& context){
+    const Core::GpuTaskRecordContext& context
+){
     if(payload.dispatches.empty())
         return false;
     auto& device = payload.graphics.getDevice();

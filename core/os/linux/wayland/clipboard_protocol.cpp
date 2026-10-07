@@ -76,7 +76,8 @@ void WaylandClipboardService::OnRegistryGlobal(
     wl_registry* const registry,
     const u32 name,
     const char* const interfaceName,
-    const u32 version){
+    const u32 version
+){
     auto& service = *static_cast<WaylandClipboardService*>(data);
     if(AStringView(interfaceName) == wl_data_device_manager_interface.name && !service.m_manager){
         service.m_manager = static_cast<wl_data_device_manager*>(wl_registry_bind(registry, name, &wl_data_device_manager_interface, Min(version, 3u)));

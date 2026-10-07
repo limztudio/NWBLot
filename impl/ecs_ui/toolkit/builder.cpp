@@ -152,7 +152,8 @@ void Builder::reset(){
 }
 
 bool Builder::beginContainer(
-    const AStringView stableKey, const LayoutDirection::Enum direction, const ContainerOptions& options){
+    const AStringView stableKey, const LayoutDirection::Enum direction, const ContainerOptions& options
+){
     if(
         declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_scope->m_stack.size() >= 64u
         || !m_context.declare(stableKey, WidgetKind::Container)
@@ -176,7 +177,8 @@ bool Builder::beginContainer(
 }
 
 Builder::Item* Builder::addItem(
-    const AStringView stableKey, const StringView text, const WidgetKind::Enum kind, const WidgetOptions& options){
+    const AStringView stableKey, const StringView text, const WidgetKind::Enum kind, const WidgetOptions& options
+){
     if(
         declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed)
         || m_context.failed() || m_scope->m_items.size() >= s_LayoutMaxNodes

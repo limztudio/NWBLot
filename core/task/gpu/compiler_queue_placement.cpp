@@ -37,7 +37,8 @@ using namespace GpuTaskGraphCompilerDetail;
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphResourceView& resource,
     const GpuTaskResourceRange& range,
-    GpuPhysicalQueueId& inOutQueue)noexcept{
+    GpuPhysicalQueueId& inOutQueue
+)noexcept{
     if(resource.initialOwnerHandoffSourceCount == 0u)
         return AccumulateExactQueueConstraint(resource.initialOwnerQueue, inOutQueue);
 
@@ -62,7 +63,8 @@ using namespace GpuTaskGraphCompilerDetail;
     const GpuTaskGraphAnalysis& analysis,
     Vector<GpuPhysicalQueueId, Alloc::ScratchArena>& outQueues,
     GpuTaskId& outFailedTask,
-    Alloc::ScratchArena& scratchArena){
+    Alloc::ScratchArena& scratchArena
+){
     usize taskUseCapacity = 0u;
     usize ownedResourceUseCount = 0u;
     for(const GpuTaskId taskID : analysis.topologicalOrder()){
@@ -155,7 +157,8 @@ using namespace GpuTaskGraphCompilerDetail;
 
 [[nodiscard]] bool RequestsCompatiblePrecedingMerge(
     const GpuTaskGraphTaskView& preceding,
-    const GpuTaskGraphTaskView& task)noexcept{
+    const GpuTaskGraphTaskView& task
+)noexcept{
     if(!task.scheduling.mergeWithPrevious || !TaskAllowsMerge(preceding) || !TaskAllowsMerge(task))
         return false;
     if(!task.scheduling.allowMergeAcrossConsumerFrontier)
@@ -201,7 +204,8 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraphAnalysis& analysis,
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskQueuePlacementGroup& group,
-    const CommandQueue::Enum requiredClass)noexcept{
+    const CommandQueue::Enum requiredClass
+)noexcept{
     const GpuPhysicalQueueInfo* result = nullptr;
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& candidate = topology.queues[queueIndex];
@@ -232,7 +236,8 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraphQueueAssignmentOptions& options,
     Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena>& outGroups,
     GpuTaskQueueAssignmentDiagnostic& outDiagnostic,
-    Alloc::ScratchArena& scratchArena){
+    Alloc::ScratchArena& scratchArena
+){
     using namespace __hidden_gpu_task_graph_compiler_queue_placement;
 
     const auto fail = [&](const GpuTaskGraphQueueAssignmentStatus::Enum status, const GpuTaskId task){
@@ -337,7 +342,8 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskSchedulingReachability& schedulingReachability,
     const GpuTaskQueueScoringData& scoringData,
     const GpuTaskQueuePlacementGroup& group,
-    const GpuPhysicalQueueInfo& candidate)noexcept{
+    const GpuPhysicalQueueInfo& candidate
+)noexcept{
     GpuTaskQueueScoreExclusions exclusions{
         .assignmentOffset = group.assignmentOffset,
         .assignmentCount = group.assignmentCount,

@@ -26,7 +26,8 @@ namespace GpuPacketRuntimeDetail{
     const GpuCompiledBarrier& barrier,
     const GpuPhysicalQueueInfo& sourceQueue,
     const QueueSubmissionToken& token,
-    const u16 deviceGeneration)noexcept{
+    const u16 deviceGeneration
+)noexcept{
     return
         source.sourceQueue == barrier.sourceQueue
         && source.destinationQueue == barrier.destinationQueue
@@ -44,7 +45,8 @@ namespace GpuPacketRuntimeDetail{
 [[nodiscard]] bool ValidateInitialOwnershipCompletions(
     const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph::ReadView& planAccess,
-    const GpuSubmissionPacketId& packetID){
+    const GpuSubmissionPacketId& packetID
+){
     const GpuCompiledPacketView packetView = planAccess.packet(packetID);
     if(!packetView.valid())
         return false;
@@ -91,7 +93,8 @@ namespace GpuPacketRuntimeDetail{
     const GpuPhysicalQueueId queue,
     const QueueSubmissionToken* const waitTokens,
     const usize waitTokenCount,
-    Alloc::ScratchArena& scratchArena){
+    Alloc::ScratchArena& scratchArena
+){
     constexpr usize s_InlineQueueCount = 8u;
     Array<GpuPhysicalQueueId, s_InlineQueueCount> inlineQueues;
     usize inlineQueueCount = 0u;

@@ -20,7 +20,8 @@ CpuTaskScheduler::ProfileMeasure::ProfileMeasure(
     CpuTaskScheduler& scheduler,
     const CpuTaskProfileKind::Enum kind,
     const TaskHandle task,
-    const CpuTaskProfileLabel label)
+    const CpuTaskProfileLabel label
+)
     : m_scheduler(scheduler)
 {
     if(!m_scheduler.m_profileEnabled.load(MemoryOrder::relaxed))
@@ -128,7 +129,8 @@ CpuTaskScheduler::ProfileSample CpuTaskScheduler::prepareProfileLocked(
     const TaskHandle task,
     CpuTaskProfileLabel label,
     const usize workerIndex,
-    const CpuAffinity::Enum affinity)const noexcept{
+    const CpuAffinity::Enum affinity
+)const noexcept{
     TaskHandle ancestor = task;
     while(!label.valid()){
         const TaskNode* const node = resolveLocked(ancestor);

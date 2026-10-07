@@ -30,7 +30,8 @@ bool PaintBuilder::prepareImages(
     const SharedSdfAtlasPage* const sdfPages,
     const usize sdfCount,
     const SharedImageSource* const textureImages,
-    const usize textureCount){
+    const usize textureCount
+){
     NWB_ASSERT(m_recording);
     if(
         glyphCount > s_PaintMaxImages || sdfCount > s_PaintMaxImages || textureCount > s_PaintMaxImages

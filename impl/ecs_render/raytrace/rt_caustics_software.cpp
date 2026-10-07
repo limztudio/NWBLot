@@ -22,7 +22,8 @@ NWB_IMPL_BEGIN
 void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const u32 passIndex){
+    const u32 passIndex
+){
     NWB_ASSERT(passIndex < static_cast<u32>(NWB_CAUSTIC_RESOLVE_PASS_COUNT));
     NWB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
@@ -78,7 +79,8 @@ void RendererRayTracingSystem::dispatchCausticResolveWaveletPass(
 
 void RendererRayTracingSystem::dispatchCausticResolveUpsample(
     Core::CommandList& commandList,
-    DeferredFrameTargets& targets){
+    DeferredFrameTargets& targets
+){
     NWB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     NWB_ASSERT(heap.isInitialized());
@@ -127,7 +129,8 @@ void RendererRayTracingSystem::dispatchCausticResolveUpsample(
 bool RendererRayTracingSystem::dispatchCausticAccumulatorDecay(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const f32 decayFactor){
+    const f32 decayFactor
+){
     if(
         !targets.causticAccumulator
         || !targets.bindless.causticAccumulatorStorage.valid()

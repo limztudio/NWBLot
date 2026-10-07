@@ -28,7 +28,8 @@ using namespace NWB::UiMultilineTests;
     EditModel& model,
     const AStringView text,
     const usize anchor,
-    const usize caret){
+    const usize caret
+){
     if(text.empty())
         return false;
     return

@@ -80,7 +80,8 @@ bool X11ClipboardService::convertTarget(
     const XSelectionRequestEvent& event,
     const Atom target,
     const Atom property,
-    OwnedSelection& selection){
+    OwnedSelection& selection
+){
     if(target == m_utf8Atom || target == m_utf8MimeAtom || target == m_textAtom)
         return sendText(event.requestor, property, target == m_textAtom ? m_utf8Atom : target, selection.utf8);
     if(target == XA_STRING)

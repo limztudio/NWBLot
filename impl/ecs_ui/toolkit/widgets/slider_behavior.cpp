@@ -184,7 +184,8 @@ bool SliderBehavior::Apply(
     SliderState& state,
     const SliderOptions& options,
     const ControlAction& action,
-    SliderResult& result)noexcept{
+    SliderResult& result
+)noexcept{
     using namespace __hidden_ui_slider_behavior;
     if(
         !Validate(options) || !state.m_admitted || !action.id.valid() || action.control != state.controlToken()
@@ -239,7 +240,8 @@ bool SliderBehavior::Seek(
     SliderState& state,
     const SliderOptions& options,
     const PointerGesture& gesture,
-    SliderResult& result)noexcept{
+    SliderResult& result
+)noexcept{
     using namespace __hidden_ui_slider_behavior;
     if(
         !Validate(options) || !state.m_admitted || !ValidGesture(gesture) || gesture.control != state.controlToken()
@@ -275,7 +277,8 @@ bool SliderBehavior::Drag(
     SliderState& state,
     const SliderOptions& options,
     const PointerGesture& gesture,
-    SliderResult& result)noexcept{
+    SliderResult& result
+)noexcept{
     using namespace __hidden_ui_slider_behavior;
     const f64 baseline = BitCast<f64>(gesture.value);
     if(

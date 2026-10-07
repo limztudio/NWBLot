@@ -656,7 +656,8 @@ RendererRayTracingSystem::preparedShadowTraceMaterialSampledTextures()const noex
 
 bool RendererRayTracingSystem::appendPreparedShadowTraceMaterialSampledTextures(
     const MaterialSurfaceInfo& materialInfo,
-    ShadowMaterialSampledTextureCollector& collector){
+    ShadowMaterialSampledTextureCollector& collector
+){
     return collector.collect(
         materialInfo,
         [this](const MaterialSurfaceInfo& material, MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& pending){

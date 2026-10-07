@@ -35,7 +35,8 @@ bool PrepareCompiledTimingQueries(
     const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph::ReadView& planAccess,
     GpuTimingRecorder* const timingRecorder,
-    Alloc::ScratchArena& scratchArena){
+    Alloc::ScratchArena& scratchArena
+){
     bool recordsTiming = false;
     for(usize packetIndex = 0u; packetIndex < planAccess.packetCount(); ++packetIndex){
         const GpuCompiledPacketView packetView = planAccess.packet(planAccess.packetIdAt(packetIndex));

@@ -62,7 +62,8 @@ bool ParseFontCookMetadata(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     FontCookEntry& outEntry,
-    Core::Alloc::ScratchArena& scratchArena){
+    Core::Alloc::ScratchArena& scratchArena
+){
     Name virtualPath = s_NameNone;
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, virtualPath, scratchArena))
         return false;
@@ -73,7 +74,8 @@ bool ParseFontCookMetadataValue(
     const Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    FontCookEntry& outEntry){
+    FontCookEntry& outEntry
+){
     using namespace __hidden_font_cook_metadata;
     if(!virtualPath)
         return false;

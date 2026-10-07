@@ -78,7 +78,8 @@ void AddTelemetryMemorySummary(TelemetryReportSummary& summary, const Core::Tele
 
 void AppendTelemetryMemorySourcesJson(
     AString<Core::Telemetry::TelemetryArena>& out,
-    const TelemetryReportSummary& summary){
+    const TelemetryReportSummary& summary
+){
     out += TelemetryMemoryReportDetail::s_MemorySourcesSectionHeader;
     for(usize sourceIndex = 0u; sourceIndex < s_TelemetryMemorySourceCount; ++sourceIndex){
         const auto memorySource = static_cast<Core::Perf::MemorySource::Enum>(sourceIndex);
@@ -105,7 +106,8 @@ void AppendTelemetryMemorySourcesJson(
 void AppendTelemetryMemoryRecordJson(
     AString<Core::Telemetry::TelemetryArena>& out,
     const Core::Telemetry::PerfMemoryPayload& payload,
-    const u32 streamId){
+    const u32 streamId
+){
     if(!out.empty())
         out += TelemetryMemoryReportDetail::s_MemoryRecordSeparator;
     out += TelemetryMemoryReportDetail::s_MemoryRecordOpen;

@@ -18,7 +18,8 @@ float3 nwbLightSpacePositionQuantization(const float3 position){
 // Reconstruct the captured texel-center ray, then intersect the receiver's local plane along that ray.
 // Both projection types use the actual stored view basis; framebuffer Y increases opposite projected Y.
 bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel,
-    const float3 origin, const float3 receiverNormal, out float projectedDepth, out float linearDepth){
+    const float3 origin, const float3 receiverNormal, out float projectedDepth, out float linearDepth
+){
     projectedDepth = 0.0;
     linearDepth = 0.0;
     if(!all(isfinite(origin)) || !all(isfinite(receiverNormal)) || any(view.map.xy == 0u))
@@ -109,7 +110,8 @@ bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel,
 // Compact penumbra estimates need only an approximate receiver distance, never a visibility threshold.
 // Omit invalid or grazing neighbors without the center/visibility path's quantization and footprint proof.
 bool nwbLightSpaceReceiverEstimateDepth(const NwbLightSpaceView view, const uint2 pixel,
-    const float3 origin, const float3 receiverNormal, out float linearDepth){
+    const float3 origin, const float3 receiverNormal, out float linearDepth
+){
     linearDepth = 0.0;
     if(!all(isfinite(origin)) || !all(isfinite(receiverNormal)) || any(view.map.xy == 0u))
         return false;

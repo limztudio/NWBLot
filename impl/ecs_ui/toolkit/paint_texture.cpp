@@ -24,7 +24,8 @@ bool PaintBuilder::drawImage(
     const SharedImageSource& source,
     const Rect& rectangle,
     const Rect& uv,
-    const Color& tint){
+    const Color& tint
+){
     NWB_ASSERT(m_recording);
     if(
         !source || !IsFinite(rectangle.x) || !IsFinite(rectangle.y)

@@ -69,7 +69,8 @@ bool nwbCsgShadowCapEvent(
     const bool entering,
     const float3 rayOrigin,
     const float3 rayDirection,
-    out NwbLightSpaceEvent event){
+    out NwbLightSpaceEvent event
+){
     event = (NwbLightSpaceEvent)0;
     const float3 world = rayOrigin + rayDirection * depth;
     float3 normal;
@@ -108,7 +109,8 @@ bool nwbCsgShadowEmitSpan(
     const float3 rayOrigin,
     const float3 rayDirection,
     inout uint outputCount,
-    inout float opaqueDepth){
+    inout float opaqueDepth
+){
     if(farEvent.depth <= nearEvent.depth)
         return true;
     if(!transparent){
@@ -140,7 +142,8 @@ bool nwbCsgShadowSubtractSpan(
     const float3 rayOrigin,
     const float3 rayDirection,
     inout uint outputCount,
-    inout float opaqueDepth){
+    inout float opaqueDepth
+){
     NwbLightSpaceEvent cursor = farEvent;
     uint cursorCutter = 0xffffffffu;
     for(uint index = 0u; index < intervalCount; ++index){

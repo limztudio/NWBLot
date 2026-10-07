@@ -34,7 +34,8 @@ UiEditClipboardController::~UiEditClipboardController(){
 
 UiEditClipboardResult UiEditClipboardController::request(
     const UiTextEditOwner& owner, const Ui::EditModel& model, const Ui::EditClipboardAction::Enum action,
-    const Core::ClipboardChannel::Enum channel, const bool readOnly){
+    const Core::ClipboardChannel::Enum channel, const bool readOnly
+){
     if(!m_service.isOwnerThread())
         return { UiEditClipboardStatus::WrongThread };
     if(!owner.valid())

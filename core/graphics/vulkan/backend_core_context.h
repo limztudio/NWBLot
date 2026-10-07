@@ -136,7 +136,8 @@ struct VulkanContext{
         const VolkInstanceTable& instanceDispatchTable,
         const VolkDeviceTable& deviceDispatchTable,
         VkAllocationCallbacks* allocCb,
-        u16 generation = 0u)noexcept
+        u16 generation = 0u
+    )noexcept
         : instance(inst)
         , physicalDevice(physDev)
         , device(dev)

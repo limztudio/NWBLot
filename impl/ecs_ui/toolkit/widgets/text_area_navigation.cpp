@@ -71,7 +71,8 @@ private:
 }
 
 [[nodiscard]] static bool PageTarget(const EditCaretGeometry& geometry, const usize activeCaret, const Rect& caret,
-    const bool down, const f32 preferredX, const f32 viewportHeight, usize& committedByte){
+    const bool down, const f32 preferredX, const f32 viewportHeight, usize& committedByte
+){
     const auto& lines = geometry.lines();
     const EditBoxCaretStop* current = FindStop(geometry, activeCaret);
     if(lines.empty() || !current || current->lineIndex >= lines.size())
@@ -108,7 +109,8 @@ private:
 
 
 TextAreaNavigationResolver::TextAreaNavigationResolver(Core::Alloc::GlobalArena& arena, TextService& text, const Context& context,
-    const TextAreaState& state, const f32 fontSize, const u32 scriptTag, const StringView language)
+    const TextAreaState& state, const f32 fontSize, const u32 scriptTag, const StringView language
+)
     : m_arena(arena)
     , m_text(text)
     , m_context(context)
@@ -121,7 +123,8 @@ TextAreaNavigationResolver::TextAreaNavigationResolver(Core::Alloc::GlobalArena&
 {}
 
 EditNavigationResult TextAreaNavigationResolver::resolve(const EditModel& model, const EditNavigationDirection::Enum direction,
-    const EditNavigationSnapshot& preferred, const f32 viewportHeight){
+    const EditNavigationSnapshot& preferred, const f32 viewportHeight
+){
     const bool page = direction == EditNavigationDirection::PageUp || direction == EditNavigationDirection::PageDown;
     if(
         !current() || model.textMode() != EditTextMode::Multiline || model.composition().active

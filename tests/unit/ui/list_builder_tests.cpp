@@ -140,7 +140,8 @@ protected:
     }
 
     [[nodiscard]] bool prepareSource(const u64 generation, const IListDataSource& source, ListState& state,
-        const ListOptions& options = Options()){
+        const ListOptions& options = Options()
+    ){
         if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }))
             return false;
         m_result = m_builder.virtualList("list", source, state, options);
@@ -152,7 +153,8 @@ protected:
     }
 
     [[nodiscard]] bool preparePopups(const u64 generation, PopupState& lowerPopup, ListState& lowerState,
-        PopupState* upperPopup = nullptr, ListState* upperState = nullptr){
+        PopupState* upperPopup = nullptr, ListState* upperState = nullptr
+    ){
         if(!begin(generation) || !m_builder.beginPanel("panel", { 10.0f, 10.0f, 320.0f, 260.0f }))
             return false;
         if(!m_builder.virtualList("list", m_source, m_state, Options()).valid || !m_builder.endPanel())

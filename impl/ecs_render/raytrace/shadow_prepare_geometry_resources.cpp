@@ -16,7 +16,8 @@ NWB_IMPL_BEGIN
 
 ShadowPrepareGeometryResources::ShadowPrepareGeometryResources(
     const ShadowPrepareGeometryInputs& inputs,
-    Core::Alloc::ScratchArena& scratchArena)
+    Core::Alloc::ScratchArena& scratchArena
+)
     : m_blasBuildInputs(scratchArena)
     , m_remainingTraceGeometry(scratchArena)
     , m_inputs(inputs)
@@ -174,7 +175,8 @@ bool ShadowPrepareGeometryResources::resolveRequests(const Core::GpuTaskGraph& g
 }
 
 ShadowPrepareGeometryResources::BufferRequest* ShadowPrepareGeometryResources::findResolvedRequest(
-    const Core::GpuGraphResourceId resource){
+    const Core::GpuGraphResourceId resource
+){
     if(!resource.valid() || resource.generation != m_graphGeneration)
         return nullptr;
     if(m_resources){

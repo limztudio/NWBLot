@@ -126,7 +126,8 @@ void BuildTaskDependencyAdjacency(
     const GraphicsVector<GpuTaskDependencyEdge>& edges,
     const usize taskCount,
     TaskDependencyAdjacency& outAdjacency,
-    Alloc::ScratchArena& scratchArena){
+    Alloc::ScratchArena& scratchArena
+){
     outAdjacency.offsets.clear();
     outAdjacency.offsets.resize(taskCount + 1u, 0u);
     for(const GpuTaskDependencyEdge& edge : edges)
@@ -153,7 +154,8 @@ bool BuildTopologicalOrder(
     GraphicsVector<GpuTaskId>& outOrder,
     GraphicsVector<GpuTaskId>& outCyclePath,
     GraphicsVector<GpuTaskDependencyEdge>& outCycleEdges,
-    Alloc::ScratchArena& scratchArena){
+    Alloc::ScratchArena& scratchArena
+){
     using namespace __hidden_gpu_task_graph_compiler_analysis_topology;
 
     const usize taskCount = graph.taskCount();
@@ -293,7 +295,8 @@ void BuildSchedulingEdges(
     const TaskDependencyAdjacency& adjacency,
     const GraphicsVector<GpuTaskId>& topologicalOrder,
     GraphicsVector<GpuTaskDependencyEdge>& outSchedulingEdges,
-    Alloc::ScratchArena& scratchArena){
+    Alloc::ScratchArena& scratchArena
+){
     const usize taskCount = topologicalOrder.size();
     Vector<u32, Alloc::ScratchArena> reached(taskCount, Limit<u32>::s_Max, scratchArena);
     Vector<usize, Alloc::ScratchArena> topologicalIndices(taskCount, scratchArena);
@@ -391,7 +394,8 @@ void BuildSchedulingEdges(
     GraphicsVector<u32>& outOutgoingConsumers,
     GraphicsVector<usize>& outIncomingOffsets,
     GraphicsVector<u32>& outIncomingProducers,
-    Alloc::ScratchArena& scratchArena){
+    Alloc::ScratchArena& scratchArena
+){
     outOutgoingOffsets.clear();
     outOutgoingConsumers.clear();
     outIncomingOffsets.clear();

@@ -28,7 +28,8 @@ NwbDielectricInterface nwbDielectricTransmit(
     const float3 direction,
     const float3 opposingNormal,
     const float etaIncident,
-    const float etaTransmitted){
+    const float etaTransmitted
+){
     NwbDielectricInterface result = (NwbDielectricInterface)0;
     if(etaIncident == etaTransmitted){
         result.direction = direction;

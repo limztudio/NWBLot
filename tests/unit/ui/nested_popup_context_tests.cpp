@@ -43,7 +43,8 @@ protected:
     }
 
     [[nodiscard]] PopupDeclaration reserve(const AStringView key,
-        const Rect& bounds = { 60.0f, 40.0f, 120.0f, 80.0f }){
+        const Rect& bounds = { 60.0f, 40.0f, 120.0f, 80.0f }
+    ){
         PopupDeclaration result;
         const WidgetState* owner = m_context.declare(key, WidgetKind::Popup);
         EXPECT_NE(owner, nullptr);

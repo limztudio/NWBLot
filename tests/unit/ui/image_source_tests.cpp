@@ -39,7 +39,8 @@ class UiImageSourceTests : public testing::Test{
 protected:
     static void Install(
         Texture& texture, const TextureDescription& description,
-        Texture::MipLevelVector&& mips, Core::Assets::AssetBytes&& bytes){
+        Texture::MipLevelVector&& mips, Core::Assets::AssetBytes&& bytes
+    ){
         texture.setPayload(
             description.colorSpace, description.hasAlpha, description.width, description.height,
             Move(mips), Move(bytes), description.dimension, description.depth, description.format,
@@ -48,7 +49,8 @@ protected:
     }
 
     [[nodiscard]] static bool Prepare(
-        Core::Alloc::GlobalArena& arena, Texture& texture, const TextureDescription& description = {}){
+        Core::Alloc::GlobalArena& arena, Texture& texture, const TextureDescription& description = {}
+    ){
         u32 count = 0u;
         if(!TextureFormat::ComputeCompleteMipCount(
             description.dimension, description.width, description.height, description.depth, count

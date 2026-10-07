@@ -19,7 +19,8 @@ class ArenaBase : NoCopy{
 protected:
     explicit ArenaBase(
         const Name& allocationLog,
-        const ArenaMemoryReservation::Enum reservation = ArenaMemoryReservation::Separate)
+        const ArenaMemoryReservation::Enum reservation = ArenaMemoryReservation::Separate
+    )
         : m_memoryStats(allocationLog, reservation)
     {
         NWB_ASSERT_MSG(static_cast<bool>(allocationLog), NWB_TEXT("ArenaBase allocationLog must be a valid name"));
@@ -41,7 +42,8 @@ class ArenaBaseT : public ArenaBase{
 protected:
     explicit ArenaBaseT(
         const Name& allocationLog,
-        const ArenaMemoryReservation::Enum reservation = ArenaMemoryReservation::Separate)
+        const ArenaMemoryReservation::Enum reservation = ArenaMemoryReservation::Separate
+    )
         : ArenaBase(allocationLog, reservation)
     {}
     ~ArenaBaseT() = default;

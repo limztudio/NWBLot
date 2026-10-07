@@ -48,7 +48,8 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     const bool useLaggedLightingHistory,
     const Core::GpuExternalCompletionId surfelCounterReadbackCompletion,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    Optional<Core::GpuTimingMeasure>& asyncTiming){
+    Optional<Core::GpuTimingMeasure>& asyncTiming
+){
     using namespace RendererTaskGraphDetail;
 
     m_deferredSurfelGiPreparationTask = {};

@@ -78,7 +78,8 @@ private:
 
 
 RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDataSource& source,
-    RadioGroupState& state, const RadioGroupOptions& options){
+    RadioGroupState& state, const RadioGroupOptions& options
+){
     RadioGroupResult result;
     if(
         declarationBlocked() || !m_scope->m_panelActive || !m_skin || m_context.failed()

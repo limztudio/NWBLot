@@ -75,7 +75,8 @@ private:
     }
 
     NWB::Core::ECS::EntityID createPanel(const SmokeMaterialRef& material, const Float4& tint,
-        const Float4& position, const Float4& scale){
+        const Float4& position, const Float4& scale
+    ){
         const auto entity = CreateTintedStaticMeshEntity(
             *m_world, m_context.objectArena, s_PlaneMesh, material, s_MaterialInterface, tint, position, scale
         );

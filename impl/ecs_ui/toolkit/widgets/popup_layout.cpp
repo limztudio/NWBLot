@@ -48,7 +48,8 @@ namespace __hidden_ui_popup_layout{
 }
 
 [[nodiscard]] static f64 Available(const PopupOptions& options, const DisplayMetrics& display,
-    const PopupPlacementSide::Enum side)noexcept{
+    const PopupPlacementSide::Enum side
+)noexcept{
     const f64 gap = options.gap;
     switch(side){
     case PopupPlacementSide::Below:

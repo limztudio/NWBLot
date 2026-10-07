@@ -22,7 +22,8 @@ void CpuTaskScheduler::parallelRange(
     const usize grainSize,
     const CpuTaskOptions options,
     const void* const context,
-    const RangeFunction invoke){
+    const RangeFunction invoke
+){
     CpuTaskScope chunks(*this);
     chunks.m_allowCallerWork = true;
     const usize count = end - begin;

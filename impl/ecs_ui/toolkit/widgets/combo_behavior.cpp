@@ -32,7 +32,8 @@ namespace __hidden_ui_combo_behavior{
 }
 
 [[nodiscard]] static bool SourceMatches(const IListDataSource& source, const u64 generation,
-    const u64 revision, const u64 count){
+    const u64 revision, const u64 count
+){
     return
         generation != 0u && revision != 0u && source.instanceGeneration() == generation
         && source.revision() == revision && source.rowCount() == count

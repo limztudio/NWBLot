@@ -107,7 +107,8 @@ RayTracingOpticalSceneGraphBuffer DeclareRayTracingOpticalBoundsFinalize(
     Core::GpuTaskGraph& graph,
     const RayTracingOpticalSceneSnapshot& resources,
     const Core::GpuGraphResourceId source,
-    Core::Alloc::ScratchArena& scratchArena){
+    Core::Alloc::ScratchArena& scratchArena
+){
     if(!resources.finalize || !resources.uploadBuffer || !source.valid())
         return {};
     const auto& finalize = *resources.finalize;

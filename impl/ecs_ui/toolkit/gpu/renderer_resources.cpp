@@ -37,7 +37,8 @@ struct TargetReadyTask{
     [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commands,
-        const Core::GpuTaskRecordContext& context){
+        const Core::GpuTaskRecordContext& context
+    ){
         return context.declarations.textureForResource(payload.color) == payload.target->m_color.get() && !commands.commandRecordingFailed();
     }
 };
@@ -90,7 +91,8 @@ struct TargetReadyTask{
     GpuRendererState& state,
     Core::ShaderHandle& shader,
     const Name& identity,
-    const Core::ShaderType::Mask stage){
+    const Core::ShaderType::Mask stage
+){
     return ShaderAssetLoader::Load(
         shader, identity, Core::ShaderArchive::s_DefaultVariant, stage, identity,
         state.m_graphics, state.m_assets, state.m_resolver, NWB_TEXT("GpuRenderer")
@@ -109,7 +111,8 @@ struct TargetReadyTask{
 
 bool GpuRendererState::MatchesAcquired(
     const Core::AcquiredPresentationFrame& first,
-    const Core::AcquiredPresentationFrame& second){
+    const Core::AcquiredPresentationFrame& second
+){
     const Core::QueueSubmissionToken& a = first.backBuffer.availabilityCompletion;
     const Core::QueueSubmissionToken& b = second.backBuffer.availabilityCompletion;
     return

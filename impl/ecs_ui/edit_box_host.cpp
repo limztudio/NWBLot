@@ -18,7 +18,8 @@ NWB_IMPL_BEGIN
 
 
 UiEditBoxHost::UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& context,
-    Core::ITextInputService& textInput, Core::IClipboardService& clipboard)
+    Core::ITextInputService& textInput, Core::IClipboardService& clipboard
+)
     : m_arena(arena)
     , m_context(context)
     , m_textInput(textInput)
@@ -38,7 +39,8 @@ UiEditBoxHost::UiEditBoxHost(Core::Alloc::GlobalArena& arena, Ui::Context& conte
 UiEditBoxHost::~UiEditBoxHost(){ cancelTransfers(); }
 
 bool UiEditBoxHost::publish(const Ui::WidgetState& widget, const Ui::EditBoxView& view,
-    const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options){
+    const Ui::EditBoxPlacement& placement, const Ui::EditBoxOptions& options
+){
     if(rejectBorrowedMutation())
         return false;
     Entry* entry = find(widget.id);

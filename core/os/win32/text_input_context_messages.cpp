@@ -19,7 +19,8 @@ NWB_CORE_BEGIN
 
 
 bool Win32TextInputService::resolveContextMessage(
-    const u32 message, const usize wParam, const isize lParam, isize& forwardedLParam){
+    const u32 message, const usize wParam, const isize lParam, isize& forwardedLParam
+){
     if(!isOwnerThread() || message != WM_IME_SETCONTEXT)
         return false;
     // Keep the native flags, not the filtered result: ending a custom edit restores the ordinary IME UI.
@@ -57,7 +58,8 @@ bool ResolveWin32TextInputContextMessage(
     const u32 message,
     const usize wParam,
     const isize lParam,
-    isize& forwardedLParam){
+    isize& forwardedLParam
+){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Win32Imm32)
         return false;
     return checked_cast<Win32TextInputService*>(&service)->resolveContextMessage(

@@ -90,7 +90,8 @@ bool RadioGroupLayout::Measure(
     const Point& maximumLabel,
     const RadioGroupOptions& options,
     const RadioGroupStyle& style,
-    RadioGroupMetrics& out)noexcept{
+    RadioGroupMetrics& out
+)noexcept{
     using namespace __hidden_ui_radio_group_layout;
     if(
         count > s_RadioGroupMaxChoices || !IsValidUiExtent(maximumLabel) || !IsValidUiPadding(style.padding)
@@ -129,7 +130,8 @@ bool RadioGroupLayout::Place(
     const Rect& clip,
     const RadioGroupChoices& choices,
     const RadioGroupMetrics& metrics,
-    RadioGroupPlacement& out)noexcept{
+    RadioGroupPlacement& out
+)noexcept{
     using namespace __hidden_ui_radio_group_layout;
     if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !ValidMetrics(metrics) || choices.count != metrics.count)
         return false;

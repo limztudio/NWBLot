@@ -28,7 +28,8 @@ bool nwbOpticalCheckBoundary(
     const float3 origin,
     const float3 direction,
     const NwbRayTraceSurfaceHit hit,
-    inout NwbOpticalTraceResult result){
+    inout NwbOpticalTraceResult result
+){
     if(!nwbOpticalConsumeQuery(config, result))
         return false;
     const float tolerance = 4.0 * max(nwbOpticalPositionUncertainty(origin), nwbOpticalPositionUncertainty(hit.position));
@@ -86,7 +87,8 @@ bool nwbOpticalCheckBoundary(
 NwbOpticalTraceResult nwbOpticalTrace(
     const NwbOpticalTraceConfig config,
     const float3 initialOrigin,
-    const float3 initialDirection){
+    const float3 initialDirection
+){
     NwbOpticalTraceResult result = (NwbOpticalTraceResult)0;
     result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
     if(

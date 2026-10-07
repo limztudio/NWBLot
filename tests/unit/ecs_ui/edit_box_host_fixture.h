@@ -42,7 +42,8 @@ public:
         return emitPreedit(activeSession(), text, anchor, caret, visible);
     }
     [[nodiscard]] TextInputAdmission::Enum erase(
-        usize before, usize after, u64 revision, TextInputDeletionBasis::Enum basis){
+        usize before, usize after, u64 revision, TextInputDeletionBasis::Enum basis
+    ){
         return emitDeleteSurrounding(activeSession(), before, after, revision, basis);
     }
     [[nodiscard]] TextInputRect nativeCaret()const{ return caretRect(); }
@@ -75,7 +76,8 @@ public:
 protected:
     virtual void startNativeRequest(
         const ClipboardRequestToken token, const ClipboardOperation::Enum operation,
-        const ClipboardChannel::Enum, const AStringView text)override{
+        const ClipboardChannel::Enum, const AStringView text
+    )override{
         startedToken = token;
         startedOperation = operation;
         startedText.assign(text.data(), text.size());
@@ -139,7 +141,8 @@ protected:
     virtual void SetUp()override{ ASSERT_TRUE(m_textInput.setFocused(true)); }
 
     [[nodiscard]] bool prepare(Ui::EditModel& model, const Ui::EditBoxOptions& options = {},
-        const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 30.0f }, Ui::IEditActionSink* actions = nullptr){
+        const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 30.0f }, Ui::IEditActionSink* actions = nullptr
+    ){
         ++m_generation;
         if(!m_context.beginFrame(m_generation))
             return false;

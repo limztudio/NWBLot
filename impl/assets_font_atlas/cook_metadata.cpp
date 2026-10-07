@@ -44,7 +44,8 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
     const AStringView field,
     const u32 minimum,
     const u32 maximum,
-    u32& outValue){
+    u32& outValue
+){
     const Value* value = asset.findField(field);
     if(value && value->isInteger() && value->asInteger() >= minimum && static_cast<u64>(value->asInteger()) <= maximum){
         outValue = static_cast<u32>(value->asInteger());
@@ -140,7 +141,8 @@ bool ParseFontAtlasCookMetadata(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     FontAtlasCookEntry& outEntry,
-    Core::Alloc::ScratchArena& scratchArena){
+    Core::Alloc::ScratchArena& scratchArena
+){
     Name virtualPath = s_NameNone;
     if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, virtualPath, scratchArena))
         return false;
@@ -152,7 +154,8 @@ bool ParseFontAtlasCookMetadataValue(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     FontAtlasCookEntry& outEntry,
-    Core::Alloc::ScratchArena& scratchArena){
+    Core::Alloc::ScratchArena& scratchArena
+){
     using namespace __hidden_font_atlas_cook_metadata;
     static_cast<void>(scratchArena);
     if(

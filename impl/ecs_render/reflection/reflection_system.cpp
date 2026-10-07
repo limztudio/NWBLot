@@ -78,7 +78,8 @@ bool RendererReflectionSystem::prepareResources(
     const u32 width,
     const u32 height,
     const bool prepareHardware,
-    const ReflectionSettings& settings){
+    const ReflectionSettings& settings
+){
     using namespace __hidden_reflection_resources;
     const u64 pixelCount = static_cast<u64>(width) * height;
     // Packed pixels cover both families; queue addresses need byte offsets.
@@ -204,7 +205,8 @@ bool RendererReflectionSystem::prepareResources(
     const auto registerDescriptor = [&](
         Core::GpuDescriptorHandle& descriptor,
         const Core::GpuDescriptorClass::Enum descriptorClass,
-        const Core::DescriptorWriteItem& item){
+        const Core::DescriptorWriteItem& item
+    ){
         descriptor = heap.allocate(descriptorClass);
         return descriptor.valid() && heap.write(descriptor, item);
     };
@@ -304,7 +306,8 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
     const RayTracingSceneGraphResources& scene,
     const ReflectionSettings& settings,
     const u32 frameIndex,
-    const ReflectionSceneContentStamp& stamp)const{
+    const ReflectionSceneContentStamp& stamp
+)const{
     if(
         !m_resources.valid() || !view.bindingValid() || !ValidateReflectionSettings(settings)
         || targets.width != m_resources.parameters.width || targets.height != m_resources.parameters.height
@@ -495,7 +498,8 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware){
         const Name debugName,
         const bool hardware,
         const Core::BindingLayoutHandle& bindingLayout,
-        const AStringView variant = Core::ShaderArchive::s_DefaultVariant){
+        const AStringView variant = Core::ShaderArchive::s_DefaultVariant
+    ){
         if(pipeline)
             return true;
         if(!m_shaders.loadShader(

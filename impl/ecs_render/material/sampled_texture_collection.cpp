@@ -20,7 +20,8 @@ bool AppendPreparedMaterialSurfaceSampledTextures(
     const MaterialSurfaceInfo& materialInfo,
     const RendererMaterialResourceState& resources,
     const RendererMaterialResourceFixtureState& fixtures,
-    MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector){
+    MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector
+){
     if(!materialInfo.resourceReferencesResolved)
         return false;
     for(const MaterialResourceReference& resourceReference : materialInfo.resourceReferences){
@@ -72,7 +73,8 @@ bool GatherPreparedMaterialPassSampledTextures(
     const MaterialPassDrawItems* const* const drawItemSets,
     const usize drawItemSetCount,
     Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& outTextures,
-    Core::Alloc::ScratchArena& scratchArena){
+    Core::Alloc::ScratchArena& scratchArena
+){
     outTextures.clear();
     if(drawItemSetCount != 0u && !drawItemSets)
         return false;
@@ -107,7 +109,8 @@ bool GatherPreparedMaterialPassSampledTextures(
 
 bool MergePreparedShadowMaterialSampledTextures(
     const Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& sampledTextures,
-    MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector){
+    MaterialSampledTextureCollector<Core::Alloc::GlobalArena>& collector
+){
     for(const Core::TextureHandle& texture : sampledTextures){
         if(!texture || !texture->getCreationDescription().name)
             return false;

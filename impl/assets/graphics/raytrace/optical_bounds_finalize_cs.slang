@@ -34,7 +34,8 @@ groupshared uint g_NwbOpticalInvalid[NWB_OPTICAL_BOUNDS_FINALIZE_GROUP_SIZE];
 bool nwbOpticalTransformRuntimeBounds(
     const uint inputOffset,
     out float3 boundsMin,
-    out float3 boundsMax){
+    out float3 boundsMax
+){
     boundsMin = float3(0.0);
     boundsMax = float3(0.0);
     const ByteAddressBuffer inputs = nwbHeapRawBuffer(g_NwbOpticalBoundsFinalize.runtimeInputsSlot);

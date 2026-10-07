@@ -205,7 +205,8 @@ const ArenaMemoryOwnerRecord* FirstArenaMemoryOwnerRecord()noexcept{
 
 const ArenaMemoryOwnerRecord* ReadArenaMemoryOwnerIdentity(
     const ArenaMemoryOwnerRecord& record,
-    ArenaMemoryOwnerIdentity& outIdentity)noexcept{
+    ArenaMemoryOwnerIdentity& outIdentity
+)noexcept{
     outIdentity.ownerName = record.ownerName;
     outIdentity.source = record.source;
     return record.next;

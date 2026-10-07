@@ -93,7 +93,8 @@ static Atomic<u64> s_NextCompiledPlanGeneration{ 1u };
 // A single requested family remains exclusive and may use ordinary ownership handoffs.
 [[nodiscard]] static bool LogicalSharingUsesConcurrentQueueSharing(
     const ResourceQueueSharing::Mask sharing,
-    const GpuPhysicalQueueTopology& topology)noexcept{
+    const GpuPhysicalQueueTopology& topology
+)noexcept{
     if(sharing == ResourceQueueSharing::Exclusive)
         return false;
 

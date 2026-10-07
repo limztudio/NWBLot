@@ -41,7 +41,8 @@ static constexpr Float4 s_Clear(1.f, 1.f, 1.f, 0.f);
 static constexpr Float4 s_Tinted(0.55f, 0.8f, 1.f, 0.f);
 
 static Core::ECS::EntityID CreatePanel(ProjectRuntimeContext& context, Core::ECS::World& world,
-    const Float4& color, const Float4& position, const Float4& scale, const f32 f0 = 0.f){
+    const Float4& color, const Float4& position, const Float4& scale, const f32 f0 = 0.f
+){
     const auto entity = CreateTintedStaticMeshEntity(world, context.objectArena, s_Plane, s_Opaque, s_SurfaceInterface, color, position, scale);
     if(!entity.valid())
         return entity;
@@ -65,7 +66,8 @@ static Core::ECS::EntityID CreatePanel(ProjectRuntimeContext& context, Core::ECS
 static Core::ECS::EntityID CreateBoundary(ProjectRuntimeContext& context, Core::ECS::World& world,
     const SmokeMeshRef& mesh, const Float4& position, const Float4& scale, const f32 ior, const Float4& transmission,
     const Impl::OpticalBoundaryMode::Enum mode = Impl::OpticalBoundaryMode::ClosedNested,
-    const i32 priority = 0, const f32 coverage = 0.f, const bool pane = false){
+    const i32 priority = 0, const f32 coverage = 0.f, const bool pane = false
+){
     const auto entity = CreateTintedStaticMeshEntity(
         world, context.objectArena, mesh, pane ? s_Pane : s_Volume, s_OpticalInterface,
         Float4(0.9f, 0.6f, 0.f, coverage), position, scale
@@ -93,7 +95,8 @@ static Core::ECS::EntityID CreateBoundary(ProjectRuntimeContext& context, Core::
 static Core::ECS::EntityID CreateBox(ProjectRuntimeContext& context, Core::ECS::World& world,
     const f32 centerZ, const f32 thickness, const f32 ior, const Float4& transmission,
     const Impl::OpticalBoundaryMode::Enum mode = Impl::OpticalBoundaryMode::ClosedNested, const i32 priority = 0,
-    const f32 xyScale = 1.f){
+    const f32 xyScale = 1.f
+){
     return CreateBoundary(
         context, world, s_Box, Float4(0.f, 1.4f, centerZ, 0.f), Float4(24.f * xyScale, 18.f * xyScale, thickness, 0.f),
         ior, transmission, mode, priority

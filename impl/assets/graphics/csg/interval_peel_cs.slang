@@ -187,7 +187,8 @@ bool nwbCsgTryAnalyticCutterInterval(
     const float3 rayOrigin,
     const float3 rayDirection,
     const NwbCsgCutter cutter,
-    out float2 interval){
+    out float2 interval
+){
     interval = float2(1.0, 0.0);
     const float3 origin = nwbCsgTransformWorldToShape(rayOrigin, cutter);
     const float3 direction = float3(dot(cutter.worldToShapeRow0.xyz, rayDirection),
@@ -223,7 +224,8 @@ bool nwbCsgBuildIntervalPeelEntry(
     const float backT,
     const NwbCsgCutter cutter,
     const uint receiverIndex,
-    out NwbCsgIntervalPeelEntry outEntry){
+    out NwbCsgIntervalPeelEntry outEntry
+){
     const float3 frontWorldPosition = rayBegin + rayVector * frontT;
     const float3 backWorldPosition = rayBegin + rayVector * backT;
     const float frontDepth = saturate(nwbCsgWorldToDepth(frontWorldPosition));
@@ -248,7 +250,8 @@ bool nwbCsgFindCutterIntervalOnRay(
     const NwbCsgReceiverRange receiverRange,
     const uint receiverIndex,
     const uint cutterIndex,
-    out NwbCsgIntervalPeelEntry outEntry){
+    out NwbCsgIntervalPeelEntry outEntry
+){
     outEntry = nwbCsgInvalidIntervalPeelEntry();
     const NwbCsgCutter cutter = g_NwbCsgCutters[cutterIndex];
 

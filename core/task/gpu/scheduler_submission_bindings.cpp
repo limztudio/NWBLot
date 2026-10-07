@@ -55,7 +55,8 @@ TaskSubmissionBindings::TaskSubmissionBindings(Alloc::ScratchArena& scratchArena
     const GpuTaskGraphTaskTimingTicket* const taskTimingTickets,
     const usize taskTimingTicketCount,
     const GpuTaskGraphTaskSubmissionHook* const taskSubmissionHooks,
-    const usize taskSubmissionHookCount){
+    const usize taskSubmissionHookCount
+){
     if((taskTimingTicketCount != 0u && !taskTimingTickets) || (taskSubmissionHookCount != 0u && !taskSubmissionHooks))
         return false;
     timingTickets.clear();
@@ -170,7 +171,8 @@ TaskSubmissionBindings::TaskSubmissionBindings(Alloc::ScratchArena& scratchArena
 
 [[nodiscard]] bool TaskSubmissionBindings::validateOwnedTimingTicket(
     const GpuSubmissionPacketId packet,
-    GpuTimingSubmissionTicket* const timingTicket)const noexcept{
+    GpuTimingSubmissionTicket* const timingTicket
+)const noexcept{
     if(!timingTicket)
         return true;
     if(timingTicketIndices){
@@ -187,7 +189,8 @@ TaskSubmissionBindings::TaskSubmissionBindings(Alloc::ScratchArena& scratchArena
 void TaskSubmissionBindings::collectPacket(
     const GpuSubmissionPacketId packet,
     Vector<GpuTimingSubmissionTicket*, Alloc::ScratchArena>& outTimingTickets,
-    const QueueSubmissionPreSubmitHook*& outPreSubmitHook)const{
+    const QueueSubmissionPreSubmitHook*& outPreSubmitHook
+)const{
     outTimingTickets.clear();
     outPreSubmitHook = nullptr;
     if(timingTickets.empty() && submissionHooks.empty())

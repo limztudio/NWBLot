@@ -92,7 +92,8 @@ inline void PaintSmokeValueMarkers(Impl::UiPaintContext& context, const ValuesT&
 }
 
 inline void LogSmokeEditGeometry(const TStringView tag, const u32 sequence, const TStringView field,
-    const Impl::Ui::EditBoxPlacement& placement, const Impl::Ui::Rect& selection){
+    const Impl::Ui::EditBoxPlacement& placement, const Impl::Ui::Rect& selection
+){
     const auto& bounds = placement.bounds;
     const auto& content = placement.content;
     const auto& caret = placement.caret;

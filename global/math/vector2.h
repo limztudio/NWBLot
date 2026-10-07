@@ -205,8 +205,8 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL RefractV(
     SIMDVector incident,
     SIMDVector normal,
     SIMDVector refractionIndex,
-    SIMDVector dot)noexcept
-{
+    SIMDVector dot
+)noexcept{
     SIMDVector r = VectorNegativeMultiplySubtract(dot, dot, s_SIMDOne);
     const SIMDVector refractionIndexSq = VectorMultiply(refractionIndex, refractionIndex);
     r = VectorNegativeMultiplySubtract(r, refractionIndexSq, s_SIMDOne);

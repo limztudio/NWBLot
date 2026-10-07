@@ -45,7 +45,8 @@ public:
 protected:
     [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(
         const TextInputSessionToken token,
-        const TextInputSessionDesc& desc)override{
+        const TextInputSessionDesc& desc
+    )override{
         m_nativeToken = token;
         m_nativeSurrounding.assign(desc.surrounding.data(), desc.surrounding.size());
         if(m_onStart)
@@ -68,7 +69,8 @@ protected:
     }
 
     virtual void updateNativeSurrounding(
-        const AStringView text, usize, usize, u64, const TextInputChangeCause::Enum cause)override{
+        const AStringView text, usize, usize, u64, const TextInputChangeCause::Enum cause
+    )override{
         m_nativeSurrounding.assign(text.data(), text.size());
         m_nativeCause = cause;
         if(m_onSurrounding)

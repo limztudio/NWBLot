@@ -17,7 +17,8 @@ NWB_IMPL_UI_BEGIN
 SharedImageSource LoadImageSource(
     Core::Alloc::GlobalArena& arena,
     const Core::Assets::AssetManager& assets,
-    const Core::Assets::AssetRef<Texture>& identity){
+    const Core::Assets::AssetRef<Texture>& identity
+){
     if(!identity.valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("LoadImageSource: texture asset reference is empty"));
         return {};

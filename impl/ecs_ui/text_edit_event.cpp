@@ -18,7 +18,8 @@ NWB_IMPL_BEGIN
 
 
 UiTextEditStatus::Enum ApplyUiTextEditEvent(
-    Ui::EditModel& model, const Core::TextInputEvent& event, const u64 expectedSurroundingRevision, const bool matchesPublishedModel){
+    Ui::EditModel& model, const Core::TextInputEvent& event, const u64 expectedSurroundingRevision, const bool matchesPublishedModel
+){
     switch(event.kind){
     case Core::TextInputEventKind::Commit: {
         if(Core::ValidateTextInputUtf8(event.text, Core::s_TextInputMaxEventTextBytes) != Core::TextInputAdmission::Accepted)

@@ -20,7 +20,8 @@ NWB_IMPL_BEGIN
 RayTracingOpticalSceneResources::RayTracingOpticalSceneResources(
     Core::Alloc::GlobalArena& arena,
     Core::GraphicsRuntime& graphics,
-    const Name identity)
+    const Name identity
+)
     : m_arena(arena)
     , m_graphics(graphics)
     , m_identity(identity)
@@ -127,7 +128,8 @@ bool RayTracingOpticalSceneResources::prepare(const RayTracingOpticalSceneGather
 
 bool RayTracingOpticalSceneResources::prepareRuntimeBounds(
     const RayTracingOpticalSceneGather& gather,
-    RendererShaderSystem& shaderSystem){
+    RendererShaderSystem& shaderSystem
+){
     if(!m_prepared)
         return false;
     m_runtimeBoundsSnapshot.reset();

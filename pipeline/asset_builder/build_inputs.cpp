@@ -40,7 +40,8 @@ struct PathSelectionIndex{
     PathSelectionIndex(
         const Assets::DiscoveredNwbFileVector& files,
         Assets::ScratchArena& scratchArena,
-        const bool preserveCase)
+        const bool preserveCase
+    )
         : m_entries(scratchArena){
         m_entries.reserve(files.size());
         if(preserveCase){
@@ -63,7 +64,8 @@ struct PathSelectionIndex{
     const PathSelectionIndex& index,
     const AStringView path,
     const bool prefix,
-    Vector<u8, Assets::ScratchArena>& selected){
+    Vector<u8, Assets::ScratchArena>& selected
+){
     auto entry = LowerBound(
         index.m_entries.begin(), index.m_entries.end(), path,
         [](const IndexedPath& candidate, const AStringView value){ return candidate.text < value; }
@@ -92,7 +94,8 @@ bool SelectBuildInputs(
     const AssetBuildOptions& options,
     const Assets::ResolvedCookPaths& paths,
     Assets::DiscoveredNwbFileVector& files,
-    Assets::ScratchArena& scratchArena){
+    Assets::ScratchArena& scratchArena
+){
     if(options.inputs.empty()){
         files.clear();
         return true;

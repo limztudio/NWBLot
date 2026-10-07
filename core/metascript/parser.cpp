@@ -941,7 +941,8 @@ private:
         const u32 line,
         const u32 column,
         const AStringView operandError,
-        const bool rejectZeroDivisor = false){
+        const bool rejectZeroDivisor = false
+    ){
         if(!(lhs.isNumeric() && rhs.isNumeric())){
             if(!operandError.empty())
                 error(line, column, operandError);

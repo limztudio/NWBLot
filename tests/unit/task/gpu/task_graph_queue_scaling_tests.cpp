@@ -47,7 +47,8 @@ void CheckAutomaticPlacement(
     const usize taskCount,
     const Scenario::Enum scenario,
     const AStringView durationProperty,
-    const AStringView scratchProperty){
+    const AStringView scratchProperty
+){
     SCOPED_TRACE(scenario);
     SCOPED_TRACE(taskCount);
     TestArena testArena;

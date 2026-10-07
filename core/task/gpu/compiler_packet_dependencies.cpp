@@ -22,7 +22,8 @@ namespace GpuTaskGraphCompilerDetail{
 
 [[nodiscard]] static const GpuPacketStateSeed* TaskPrologueStateSeeds(
     const GpuTaskGraphCompiledPlanStorage& compiledPlan,
-    const GpuCompiledTask& task)noexcept{
+    const GpuCompiledTask& task
+)noexcept{
     if(
         task.prologueStateSeedCount == 0u
         || task.prologueStateSeedOffset > compiledPlan.prologueStateSeeds.size()
@@ -39,7 +40,8 @@ namespace GpuTaskGraphCompilerDetail{
     const Vector<GpuTaskExternalDependencyEdge, Alloc::ScratchArena>& initialAvailabilityDependencies,
     Vector<GpuPacketDependency, Alloc::ScratchArena>& resourceStateDependencies,
     GpuTaskGraphCompiledPlanStorage& compiledPlan,
-    Alloc::ScratchArena& scratchArena){
+    Alloc::ScratchArena& scratchArena
+){
     const usize packetCount = compiledPlan.packets.size();
     const bool plansResourceStateDependencies = !resourceStateDependencies.empty();
     if(

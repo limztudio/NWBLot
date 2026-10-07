@@ -23,7 +23,8 @@ bool ValidateCausticQualitySettings(const CausticQualitySettings& settings)noexc
 CausticPhotonBudget MakeCausticPhotonBudget(
     const CausticQualitySettings& settings,
     const u32 baseGridSide,
-    const u32 temporalPhaseCount){
+    const u32 temporalPhaseCount
+){
     NWB_ASSERT(ValidateCausticQualitySettings(settings));
     NWB_ASSERT(baseGridSide == 128u || baseGridSide == 512u);
     NWB_ASSERT(temporalPhaseCount == 1u || temporalPhaseCount == 2u || temporalPhaseCount == 4u);

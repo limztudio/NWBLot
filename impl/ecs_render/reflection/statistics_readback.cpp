@@ -68,7 +68,8 @@ void ReflectionStatisticsState::accept(
     const Core::QueueSubmissionToken& token,
     const bool hardwareReady,
     const ReflectionHistoryOutcome* history,
-    const ReflectionFeedbackOutcome* feedback)noexcept{
+    const ReflectionFeedbackOutcome* feedback
+)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     Slot* slot = matchingSlot(key);
@@ -104,7 +105,8 @@ void ReflectionStatisticsState::accept(
 bool ReflectionStatisticsState::pending(
     const u32 index,
     ReflectionStatisticsReservationKey& outKey,
-    Core::QueueSubmissionToken& outToken)const noexcept{
+    Core::QueueSubmissionToken& outToken
+)const noexcept{
     NothrowScopedLock lock(m_mutex);
 
     outKey = {};
@@ -123,7 +125,8 @@ bool ReflectionStatisticsState::pending(
 void ReflectionStatisticsState::complete(
     const ReflectionStatisticsReservationKey& key,
     const Core::QueueSubmissionToken& token,
-    const u32* counters)noexcept{
+    const u32* counters
+)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     Slot* slot = matchingSlot(key);
@@ -202,7 +205,8 @@ ReflectionStatisticsControlHandle CreateReflectionStatisticsControl(Core::Alloc:
 
 ReflectionStatisticsReservation::ReflectionStatisticsReservation(
     ReflectionStatisticsControlHandle control,
-    const ReflectionStatistics& metadata)
+    const ReflectionStatistics& metadata
+)
     : m_control(Move(control))
 {
     if(m_control)
@@ -234,7 +238,8 @@ void ReflectionStatisticsReservation::accept(
     const Core::QueueSubmissionToken& token,
     const bool hardwareReady,
     const ReflectionHistoryOutcome* history,
-    const ReflectionFeedbackOutcome* feedback)noexcept{
+    const ReflectionFeedbackOutcome* feedback
+)noexcept{
     if(m_control && m_key.valid())
         m_control->accept(m_key, token, hardwareReady, history, feedback);
     m_key = {};

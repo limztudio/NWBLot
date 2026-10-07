@@ -49,7 +49,8 @@ struct TrackedResourceAccessList{
     void append(
         Vector<TrackedResourceAccess, Alloc::ScratchArena>& accesses,
         const GpuTaskId task,
-        const GpuTaskResourceRange& range){
+        const GpuTaskResourceRange& range
+    ){
         const usize index = accesses.size();
         accesses.push_back(TrackedResourceAccess{ .task = task, .range = range });
         if(last == s_InvalidAccess)
@@ -62,7 +63,8 @@ struct TrackedResourceAccessList{
     void retireCovered(
         Vector<TrackedResourceAccess, Alloc::ScratchArena>& accesses,
         const GpuTaskGraphResourceView& resource,
-        const GpuTaskResourceRange& range){
+        const GpuTaskResourceRange& range
+    ){
         usize previous = s_InvalidAccess;
         for(usize index = first; index != s_InvalidAccess; ){
             const usize next = accesses[index].next;

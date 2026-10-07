@@ -74,7 +74,8 @@ struct RefitTask{
 
 SoftwareSceneRefitGraphTasks DeclareSoftwareSceneRefit(
     Core::GpuTaskGraph& graph, const SoftwareSceneRefitHandle& snapshot,
-    const Core::GpuGraphResourceId sceneNodes, const Core::GpuTaskId dependency, Core::Alloc::ScratchArena& scratchArena){
+    const Core::GpuGraphResourceId sceneNodes, const Core::GpuTaskId dependency, Core::Alloc::ScratchArena& scratchArena
+){
     if(!snapshot || !sceneNodes.valid() || !dependency.valid() || snapshot->inputs.empty())
         return {};
     {

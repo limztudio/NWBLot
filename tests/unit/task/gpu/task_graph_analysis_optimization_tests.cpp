@@ -46,7 +46,8 @@ static void BuildVersionChain(
     const Graphics::GpuGraphResourceVersionOrigin::Enum origin,
     const usize taskCount,
     const bool disjointClobber,
-    const bool overlappingClobber = false){
+    const bool overlappingClobber = false
+){
     ASSERT_GE(taskCount, overlappingClobber ? 3u : 2u);
     const Graphics::GpuGraphResourceId buffer = AddBufferMetadata(
         graph,
@@ -149,7 +150,8 @@ static void BuildDistinctVersions(Graphics::GpuTaskGraph& graph, const usize ver
 static void MeasureAnalysis(
     const Graphics::GpuTaskGraph& graph,
     Graphics::GpuTaskGraphAnalysis& analysis,
-    Core::Alloc::ScratchArena& scratchArena){
+    Core::Alloc::ScratchArena& scratchArena
+){
     ASSERT_TRUE(Analyze(graph, analysis));
     const Timer begin = TimerNow();
     for(usize iteration = 0u; iteration < s_BenchmarkRepetitions; ++iteration)
@@ -170,7 +172,8 @@ static void MeasureAnalysis(
 
 static void BenchmarkVersionChain(
     const Graphics::GpuGraphResourceVersionOrigin::Enum origin,
-    const bool overlappingClobber = false){
+    const bool overlappingClobber = false
+){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     BuildVersionChain(graph, origin, s_BenchmarkTaskCount, false, overlappingClobber);

@@ -19,7 +19,8 @@ NWB_IMPL_BEGIN
 
 bool BuildLightSpacePlan(
     const SoftwareShadowSettings& settings, const LightSpaceLightRequest* const requests, const usize requestCount,
-    const u64 maxStorageBufferRange, const u32 drawCount, LightSpacePlan& outPlan, const bool csgIntervalDepth){
+    const u64 maxStorageBufferRange, const u32 drawCount, LightSpacePlan& outPlan, const bool csgIntervalDepth
+){
     if(maxStorageBufferRange == 0u || !ValidateSoftwareShadowSettings(settings) || requestCount > NWB_SCENE_SHADOW_SLOT_COUNT || (requestCount != 0u && !requests))
         return false;
     u32 seenSlots = 0u;

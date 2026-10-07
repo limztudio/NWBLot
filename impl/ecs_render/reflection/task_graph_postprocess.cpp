@@ -177,7 +177,8 @@ Core::GpuTaskId DeclareReflectionPostprocessTasks(
     const ReflectionFrameSnapshot& resources,
     const ReflectionGraphInputs& inputs,
     ReflectionGraphResult& result,
-    Core::GpuTaskId dependency){
+    Core::GpuTaskId dependency
+){
     using namespace __hidden_reflection_postprocess_tasks;
     const ReflectionPostprocessSnapshot& snapshot = resources.postprocess;
     ReflectionHistoryReservation reservation(snapshot.control, snapshot.history);

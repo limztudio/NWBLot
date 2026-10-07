@@ -53,7 +53,8 @@ bool StressCsgScene::initialize(
     Core::Alloc::GlobalArena& arena,
     const Core::ECS::EntityID* const owners,
     const usize ownerCount,
-    const bool opaqueOnly){
+    const bool opaqueOnly
+){
     SmokeEnvironmentString value(arena);
     if(!ReadSmokeEnvironmentText("NWB_STRESS_CSG_PROFILE", value) || AStringView(value.data(), value.size()) == "none")
         return true;

@@ -44,7 +44,8 @@ bool SelectablePainter::Paint(
 }
 
 bool Builder::selectable(
-    const AStringView stableKey, const StringView text, const bool selected, const WidgetOptions& options){
+    const AStringView stableKey, const StringView text, const bool selected, const WidgetOptions& options
+){
     Item* item = addItem(stableKey, text, WidgetKind::Selectable, options);
     if(!item)
         return false;

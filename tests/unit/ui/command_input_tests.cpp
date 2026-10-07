@@ -40,7 +40,8 @@ HitTarget Control(const u64 id = 1u){
 }
 
 InputEvent Command(
-    const InputEventType::Enum type, const InputSource source, const InputCommand::Enum command, const bool repeat = false){
+    const InputEventType::Enum type, const InputSource source, const InputCommand::Enum command, const bool repeat = false
+){
     InputEvent event;
     event.type = type;
     event.source = source;

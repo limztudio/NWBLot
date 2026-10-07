@@ -66,7 +66,8 @@ void nwbHwShadowStoreCrossing(
     const uint pixel,
     const uint rayCount,
     const uint slot,
-    const NwbHardwareTransparentCrossing crossing){
+    const NwbHardwareTransparentCrossing crossing
+){
     const uint base = nwbHwShadowCrossingAddress(pixel, rayCount, slot, 0u);
     g_NwbHardwareTransparentCrossings[base] = asuint(crossing.distance);
     g_NwbHardwareTransparentCrossings[base + rayCount] = crossing.instance;

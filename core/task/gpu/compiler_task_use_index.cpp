@@ -25,7 +25,8 @@ TaskResourceUseIndex::TaskResourceUseIndex(
     const usize resourceCount,
     const u64 graphGeneration,
     const usize useCapacity,
-    Alloc::ScratchArena& scratchArena)
+    Alloc::ScratchArena& scratchArena
+)
     : m_firstUses(resourceCount, Limit<usize>::s_Max, scratchArena)
     , m_nextUses(scratchArena)
     , m_touchedResources(scratchArena)

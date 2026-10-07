@@ -124,7 +124,8 @@ void WriteQueue(OutputFileStream& output, const Core::Telemetry::FrameGraphPhysi
     OutputFileStream& output,
     const Core::Telemetry::FrameGraphPayload& payload,
     const u64 graphicsFrame,
-    const u64 completedFrames){
+    const u64 completedFrames
+){
     output.precision(17);
     output << "{\n\"type\":\"stress_frame_graph_snapshot\",\"source_frame\":" << payload.frameIndex
         << ",\"graphics_frame_at_capture\":" << graphicsFrame << ",\"completed_frames\":" << completedFrames

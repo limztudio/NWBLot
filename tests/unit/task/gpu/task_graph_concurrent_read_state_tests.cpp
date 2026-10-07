@@ -38,7 +38,8 @@ using TaskGraphTestUtils::TestArena;
     const Graphics::GpuTaskId* const dependencies = nullptr,
     const usize dependencyCount = 0u,
     const bool mergeWithPrevious = false,
-    const bool allowPacketMerge = false){
+    const bool allowPacketMerge = false
+){
     Graphics::GpuTaskSchedulingHint scheduling;
     scheduling.forceSubmissionBoundary = !allowPacketMerge;
     scheduling.allowPacketMerge = allowPacketMerge;
@@ -57,7 +58,8 @@ using TaskGraphTestUtils::TestArena;
 [[nodiscard]] bool HasPacketDependency(
     const Graphics::GpuCompiledGraph::ReadView& plan,
     const Graphics::GpuTaskId& consumer,
-    const Graphics::GpuTaskId& producer)noexcept{
+    const Graphics::GpuTaskId& producer
+)noexcept{
     const Graphics::GpuSubmissionPacketId producerPacket = plan.packetForTask(producer);
     const Graphics::GpuCompiledPacketView consumerPacket = plan.packet(plan.packetForTask(consumer));
     if(!producerPacket.valid() || !consumerPacket.valid())
@@ -72,7 +74,8 @@ using TaskGraphTestUtils::TestArena;
 [[nodiscard]] bool HasStateSeed(
     const Graphics::GpuCompiledGraph::ReadView& plan,
     const Graphics::GpuTaskId& consumer,
-    const Graphics::GpuTaskId& producer)noexcept{
+    const Graphics::GpuTaskId& producer
+)noexcept{
     const Graphics::GpuSubmissionPacketId producerPacket = plan.packetForTask(producer);
     const Graphics::GpuCompiledTaskView consumerTask = plan.findTask(consumer);
     if(!producerPacket.valid() || !consumerTask.valid())

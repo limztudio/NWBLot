@@ -33,7 +33,8 @@ namespace __hidden_gpu_task_graph_external_completion_imports{
 
 [[nodiscard]] static bool SameSubmissionToken(
     const QueueSubmissionToken& lhs,
-    const QueueSubmissionToken& rhs)noexcept{
+    const QueueSubmissionToken& rhs
+)noexcept{
     return lhs.queue == rhs.queue
         && lhs.value == rhs.value
         && lhs.physicalQueueIndex == rhs.physicalQueueIndex

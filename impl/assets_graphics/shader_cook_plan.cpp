@@ -220,7 +220,8 @@ static AStringView UnquoteProjectEvaluatorModuleInclude(const AStringView define
 static bool ResolveProjectEvaluatorModuleIncludePath(
     const AStringView includeName,
     const ShaderCook::CookVector<Path>& includeDirectories,
-    Path& outPath){
+    Path& outPath
+){
     outPath.clear();
     if(includeName.empty())
         return false;

@@ -63,7 +63,8 @@ bool MeshSystem::resolveRenderableMesh(
 
 RenderableMeshResolution::Enum MeshSystem::resolveRenderableMeshStatus(
     const Core::ECS::EntityID entity,
-    RenderableMeshDesc& outMesh)const{
+    RenderableMeshDesc& outMesh
+)const{
     outMesh = RenderableMeshDesc{};
 
     for(IRuntimeMeshProvider* provider : m_runtimeMeshProviders){

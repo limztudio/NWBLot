@@ -131,7 +131,8 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     GpuTimingSubmissionTicket* const* const timingTickets,
     const usize timingTicketCount,
     const QueueSubmissionPreSubmitHook* const preSubmitHook,
-    const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks)const{
+    const GpuTaskSubmissionDetail::TaskCallbackBindings<GpuTaskGraphTaskAcceptedCallback>& taskAcceptedCallbacks
+)const{
     if(
         !planAccess.validFor(compiledGraph)
         || !artifactAccess.validFor(recordedGraph)

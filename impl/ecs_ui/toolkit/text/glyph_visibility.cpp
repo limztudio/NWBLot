@@ -56,7 +56,8 @@ namespace __hidden_ui_glyph_visibility{
     const f64 top,
     const f64 right,
     const f64 bottom,
-    const Rect& clip){
+    const Rect& clip
+){
     if(
         !IsFinite(left) || left < -Limit<f32>::s_Max || left > Limit<f32>::s_Max
         || !IsFinite(top) || top < -Limit<f32>::s_Max || top > Limit<f32>::s_Max
@@ -103,7 +104,8 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(
     const f32 physicalSize,
     const Point& topLeft,
     const Rect& clip,
-    const Point pixelScale){
+    const Point pixelScale
+){
     using namespace __hidden_ui_glyph_visibility;
     if(
         !ValidLocation(glyph, topLeft) || !ValidFontSize(fontSize) || !IsFinite(physicalSize)
@@ -154,7 +156,8 @@ bool TextGlyphVisibility::AtlasRectangle(
     const BakedFontAtlas& atlas,
     const f32 fontSize,
     const Point& topLeft,
-    Rect& out){
+    Rect& out
+){
     using namespace __hidden_ui_glyph_visibility;
     if(!ValidLocation(glyph, topLeft) || !ValidFontSize(fontSize) || !atlas.valid() || atlas.unitsPerEm() == 0u)
         return false;
@@ -185,7 +188,8 @@ bool TextGlyphVisibility::CoverageRectangle(
     const f32 rasterScale,
     const Point& topLeft,
     Rect& out,
-    const Point pixelScale){
+    const Point pixelScale
+){
     using namespace __hidden_ui_glyph_visibility;
     if(
         !ValidLocation(glyph, topLeft) || !IsFinite(rasterScale) || rasterScale <= 0.0f || !IsValidUiRect(record.pixels)

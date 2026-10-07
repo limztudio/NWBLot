@@ -232,7 +232,8 @@ bool MeshSkinningSystem::ensureRuntimeResources(
     const RuntimeSkinPayloadScratch& payload,
     Core::Alloc::ScratchArena& scratchArena,
     RuntimeResources*& outResources,
-    bool& outResourcesRebuilt){
+    bool& outResourcesRebuilt
+){
     outResources = nullptr;
     outResourcesRebuilt = false;
     NWB_ASSERT((payload.skinInfluenceCount == 0u) == payload.jointMatrices.empty());

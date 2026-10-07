@@ -81,7 +81,8 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::Count, "UI skin p
 [[nodiscard]] static Core::Assets::AssetBytes MakeBinary(
     SkinTestArena& testArena,
     const UiSkinBinaryPayload::HeaderBinary& header,
-    const UiSkinBinaryPayload::RegionBinary& region){
+    const UiSkinBinaryPayload::RegionBinary& region
+){
     Core::Assets::AssetBytes binary(testArena.arena);
     binary.reserve(sizeof(header) + sizeof(region)
         + UiSkinColorRole::Count * sizeof(UiSkinBinaryPayload::ColorBinary) + sizeof(UiSkinBinaryPayload::TypographyBinary));
@@ -156,7 +157,8 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::Count, "UI skin p
 [[nodiscard]] static Core::Assets::AssetBytes MakeTypographyBinary(
     SkinTestArena& testArena,
     const UiSkinBinaryPayload::ColorBinary& color,
-    const f32 defaultFontSize){
+    const f32 defaultFontSize
+){
     UiSkinBinaryPayload::HeaderBinary header = ValidHeader();
     Core::Assets::AssetBytes binary = MakeBinary(testArena, header, ValidRegion());
     binary.resize(sizeof(header) + sizeof(UiSkinBinaryPayload::RegionBinary));

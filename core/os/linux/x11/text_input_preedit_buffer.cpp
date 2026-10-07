@@ -77,7 +77,8 @@ bool X11PreeditBuffer::replace(
     const usize firstCharacter,
     const usize characterCount,
     const AStringView insertion,
-    const usize caretCharacter){
+    const usize caretCharacter
+){
     using namespace __hidden_x11_preedit;
     usize firstByte = 0u;
     usize lastByte = 0u;

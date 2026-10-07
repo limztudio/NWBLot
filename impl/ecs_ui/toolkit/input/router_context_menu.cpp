@@ -57,7 +57,8 @@ void InputRouter::reconcileContextMenus(){
 }
 
 void InputRouter::appendContextMenu(
-    const HitTarget& target, const Point& position, const bool keyboard, InputRoutingResult& result){
+    const HitTarget& target, const Point& position, const bool keyboard, InputRoutingResult& result
+){
     if(m_contextMenuActions.size() == s_InputMaxContextMenuActions || m_nextActionSequence == 0u){
         result.activationOverflow = true;
         return;
@@ -70,7 +71,8 @@ void InputRouter::appendContextMenu(
 }
 
 bool InputRouter::routeContextMenuKey(
-    const InputEvent& event, const HitTarget* focused, CommandSource& source, const bool alreadyPressed, InputRoutingResult& result){
+    const InputEvent& event, const HitTarget* focused, CommandSource& source, const bool alreadyPressed, InputRoutingResult& result
+){
     const bool trigger = event.command == InputCommand::ContextMenu;
     if(!trigger || focused == nullptr || !focused->contextMenu || !m_windowFocused || !isInteractive(*focused))
         return false;

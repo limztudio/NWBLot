@@ -92,7 +92,8 @@ protected:
     }
 
     [[nodiscard]] bool prepareOverflow(const u64 generation = 1u, const TextAreaOptions& options = SmallOptions(),
-        const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }){
+        const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }
+    ){
         return
             seedModel() && frameArea(generation, options, bounds)
             && m_state.scrollbars().horizontal.visible && m_state.scrollbars().vertical.visible

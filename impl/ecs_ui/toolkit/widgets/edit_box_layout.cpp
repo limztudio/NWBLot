@@ -49,7 +49,8 @@ namespace __hidden_ui_edit_box_layout{
 
 
 bool EditBoxView::arrange(const Rect& bounds, const Insets& padding, const Rect& clip,
-    const Point previousScroll, EditBoxPlacement& output, const f32 caretWidth, const bool revealCaret)const noexcept{
+    const Point previousScroll, EditBoxPlacement& output, const f32 caretWidth, const bool revealCaret
+)const noexcept{
     if(
         !m_ready || !__hidden_ui_edit_box_layout::ValidRect(bounds) || !__hidden_ui_edit_box_layout::ValidRect(clip)
         || !IsFinite(padding.left) || !IsFinite(padding.top) || !IsFinite(padding.right) || !IsFinite(padding.bottom)
@@ -66,7 +67,8 @@ bool EditBoxView::arrange(const Rect& bounds, const Insets& padding, const Rect&
 }
 
 bool EditBoxView::arrangeViewport(const Rect& bounds, const Rect& viewport, const Rect& clip,
-    const Point previousScroll, EditBoxPlacement& output, const f32 caretWidth, const bool revealCaret)const noexcept{
+    const Point previousScroll, EditBoxPlacement& output, const f32 caretWidth, const bool revealCaret
+)const noexcept{
     if(
         !m_ready || !__hidden_ui_edit_box_layout::ValidRect(bounds) || !__hidden_ui_edit_box_layout::ValidRect(viewport)
         || !__hidden_ui_edit_box_layout::ValidRect(clip) || viewport.x < bounds.x || viewport.y < bounds.y

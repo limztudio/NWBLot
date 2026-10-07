@@ -20,7 +20,8 @@ bool nwbCsgShadowCutterInterval(
     const NwbCsgShadowCutter cutter,
     const float3 rayOrigin,
     const float3 rayDirection,
-    out float2 interval){
+    out float2 interval
+){
     interval = float2(1.0, 0.0);
     const float4 point = float4(rayOrigin, 1.0);
     const float3 origin = float3(dot(cutter.worldToShapeRow0, point), dot(cutter.worldToShapeRow1, point),

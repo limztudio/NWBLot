@@ -45,7 +45,8 @@ using namespace NWB::ModelTests;
     const Core::ECS::EntityID owner,
     const usize jointCount,
     const f32 jointTranslation = 1.0f,
-    const f32 objectTranslation = 0.0f){
+    const f32 objectTranslation = 0.0f
+){
     auto& world = context.testWorld.world;
     const auto skeleton = context.makeObject(owner);
     auto& object = world.entity(skeleton).getComponent<ModelObjectComponent>();
@@ -66,7 +67,8 @@ using namespace NWB::ModelTests;
     const Core::ECS::EntityID owner,
     const Core::ECS::EntityID parent,
     const u32 jointIndex,
-    const f32 localTranslation = 0.0f){
+    const f32 localTranslation = 0.0f
+){
     const auto entity = context.makeObject(owner);
     auto& attachment = context.testWorld.world.entity(entity).addComponent<ModelStaticMeshAttachmentComponent>();
     attachment.parentEntity = parent;

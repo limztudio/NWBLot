@@ -266,7 +266,8 @@ template<typename Callback>
     const Graphics::GpuTaskGraph::DeclarationReadView& declarations,
     const Graphics::GpuCompiledGraph::ReadView& plan,
     const Graphics::GpuSubmissionPacketRange& range,
-    const Vector<Callback, Graphics::Alloc::ScratchArena>& callbacks){
+    const Vector<Callback, Graphics::Alloc::ScratchArena>& callbacks
+){
     const usize rangeEnd = static_cast<usize>(range.first.index) + range.packetCount;
     for(usize index = 0u; index < callbacks.size(); ++index){
         const Callback& callback = callbacks[index];

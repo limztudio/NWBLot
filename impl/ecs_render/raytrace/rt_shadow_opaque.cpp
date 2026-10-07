@@ -31,7 +31,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueTask(
     bool& opaqueProduced,
     u32& opaqueFrameIndex,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
-    const LightSpaceShadowSnapshot* const lightSpace){
+    const LightSpaceShadowSnapshot* const lightSpace
+){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueGraphTask::Payload{
@@ -66,7 +67,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWave
     const bool hardwareShadowSupported,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
     const bool deferUpsample,
-    const bool deferWavelet){
+    const bool deferWavelet
+){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueFirstWaveletGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueFirstWaveletGraphTask::Payload{
@@ -94,7 +96,8 @@ bool RendererRayTracingSystem::renderShadowVisibilityOpaque(
     const DeferredLightingGraphResources& deferredLightingResources,
     u32& outFrameIndex,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
-    const LightSpaceShadowSnapshot* const lightSpace){
+    const LightSpaceShadowSnapshot* const lightSpace
+){
     outFrameIndex = 0u;
     if(
         !m_rayTracingState.m_softShadowReady
@@ -125,7 +128,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueResolveTa
     Optional<Core::GpuTimingMeasure>& opaqueResolveTiming,
     bool& opaqueProduced,
     const u32& opaqueFrameIndex,
-    const bool hardwareShadowSupported){
+    const bool hardwareShadowSupported
+){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueResolveTailGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowVisibilityOpaqueResolveTailGraphTask::Payload{
@@ -150,7 +154,8 @@ bool RendererRayTracingSystem::renderSoftOpaqueShadowResolvePhase(
     const u32 frameIndex,
     const bool hardwareShadowSupported,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
-    const SoftShadowOpaqueResolvePhase::Enum phase){
+    const SoftShadowOpaqueResolvePhase::Enum phase
+){
     if(
         !m_rayTracingState.m_softShadowReady
         || !m_rayTracingState.m_softTransparentReady
@@ -197,7 +202,8 @@ bool RendererRayTracingSystem::renderSoftOpaqueShadowResolveTail(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const u32 frameIndex,
-    const bool hardwareShadowSupported){
+    const bool hardwareShadowSupported
+){
     if(
         !m_rayTracingState.m_softShadowReady
         || !m_rayTracingState.m_softTransparentReady

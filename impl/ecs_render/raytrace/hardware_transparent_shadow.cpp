@@ -181,7 +181,8 @@ bool RendererRayTracingSystem::hardwareTransparentShadowReady()const noexcept{
 void RendererRayTracingSystem::dispatchHardwareTransparentShadow(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const u32 frameIndex){
+    const u32 frameIndex
+){
     auto& state = m_rayTracingState.m_hardwareTransparentShadow;
     NWB_ASSERT(state.m_ready);
     auto& device = m_graphics.getDevice();

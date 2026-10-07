@@ -46,7 +46,8 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         const Graphics::GpuGraphResourceId resource,
         const Name& identity,
         const AStringView label,
-        const Graphics::GpuTaskCommandRequirements& commands){
+        const Graphics::GpuTaskCommandRequirements& commands
+    ){
         const Graphics::GpuTaskResourceUse use{
             .resource = resource,
             .range = {},
@@ -66,7 +67,8 @@ TEST(GpuTaskGraph, ValidatesInitialExclusiveOwnerBeforeFirstUse){
         const Name& identity,
         const AStringView label,
         const Graphics::GpuPhysicalQueueId owner,
-        const Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Exclusive){
+        const Graphics::ResourceQueueSharing::Mask queueSharing = Graphics::ResourceQueueSharing::Exclusive
+    ){
         Graphics::GpuGraphResourceDesc desc;
         desc
             .setIdentity(identity)

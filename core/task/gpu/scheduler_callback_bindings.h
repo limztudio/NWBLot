@@ -45,7 +45,8 @@ public:
         const GpuCompiledGraph::ReadView& plan,
         const GpuSubmissionPacketRange& range,
         const TaskCallback* const callbacks,
-        const usize callbackCount){
+        const usize callbackCount
+    ){
         m_callbacks = nullptr;
         m_callbackCount = 0u;
         m_generation = 0u;

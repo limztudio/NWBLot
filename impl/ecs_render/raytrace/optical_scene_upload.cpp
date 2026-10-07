@@ -137,7 +137,8 @@ bool RayTracingOpticalUploadState::matchesBuffer(const RayTracingOpticalUploadPl
 RayTracingOpticalUploadControlHandle CreateRayTracingOpticalUploadControl(
     Core::Alloc::GlobalArena& arena,
     const Core::BufferHandle& buffer,
-    const Core::GpuPhysicalQueueId primaryQueue){
+    const Core::GpuPhysicalQueueId primaryQueue
+){
     if(!buffer || !primaryQueue.valid() || primaryQueue.deviceGeneration != buffer->getDeviceGeneration())
         return {};
     return RayTracingOpticalUploadControlHandle(
@@ -153,7 +154,8 @@ RayTracingOpticalUploadControlHandle CreateRayTracingOpticalUploadControl(
 
 RayTracingOpticalUploadReservation::RayTracingOpticalUploadReservation(
     RayTracingOpticalUploadControlHandle control,
-    const RayTracingOpticalUploadPlan& plan)
+    const RayTracingOpticalUploadPlan& plan
+)
     : m_control(Move(control))
     , m_plan(plan)
 {

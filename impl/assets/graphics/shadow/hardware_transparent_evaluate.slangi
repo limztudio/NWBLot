@@ -98,7 +98,8 @@ uint nwbHwShadowCrossingFacing(const RayDesc ray, const NwbHardwareTransparentCr
 
 NwbHardwareTransparentCrossingOptics nwbHwShadowShadeCrossing(
     const RayDesc ray,
-    const NwbHardwareTransparentCrossing crossing){
+    const NwbHardwareTransparentCrossing crossing
+){
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbHardwareTransparentContext.sceneSlots.z)[crossing.instance];
     const NwbMeshInstanceData instance = g_NwbMeshInstances[material.meshInstanceIndex];
     const uint corner = crossing.primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
@@ -201,7 +202,8 @@ void nwbHwShadowFinishInstance(inout NwbHardwareTransparentStream stream, const 
 void nwbHwShadowConsumeCrossing(
     inout NwbHardwareTransparentStream stream,
     const RayDesc ray,
-    const NwbHardwareTransparentCrossing crossing){
+    const NwbHardwareTransparentCrossing crossing
+){
     if(stream.hasCluster && stream.instance == crossing.instance && nwbShadowCrossingMatchesEndpoint(crossing.distance, stream.clusterDistance)){
         stream.clusterOptics.facing |= nwbHwShadowCrossingFacing(ray, crossing);
         return;

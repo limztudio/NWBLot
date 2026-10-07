@@ -65,7 +65,8 @@ static constexpr usize s_JsonReportPacketSubmissionStatisticsBytes = 512u;
 
 void AppendFrameGraphPhysicalQueueJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphPhysicalQueueId& queue){
+    const Telemetry::FrameGraphPhysicalQueueId& queue
+){
     if(!queue.valid()){
         out += s_JsonNullText;
         return;
@@ -76,7 +77,8 @@ void AppendFrameGraphPhysicalQueueJson(
 
 void AppendFrameGraphQueueAssignmentJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphQueueAssignment& assignment){
+    const Telemetry::FrameGraphQueueAssignment& assignment
+){
     if(!assignment.present){
         out += s_JsonNullText;
         return;
@@ -113,7 +115,8 @@ void AppendFrameGraphQueueAssignmentJson(
 
 void AppendFrameGraphCompiledTaskJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphCompiledTask& compiledTask){
+    const Telemetry::FrameGraphCompiledTask& compiledTask
+){
     if(!compiledTask.present){
         out += s_JsonNullText;
         return;
@@ -134,7 +137,8 @@ void AppendFrameGraphCompiledTaskJson(
 
 void AppendFrameGraphCompileRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphCompileRuntimeStatistics& statistics){
+    const Telemetry::FrameGraphCompileRuntimeStatistics& statistics
+){
     StringAppendFormat(
         out,
         "{{\"taskCount\": {}, \"resourceCount\": {}, \"resourceVersionCount\": ",
@@ -224,7 +228,8 @@ void AppendFrameGraphCompileRuntimeStatisticsJson(
 
 void AppendFrameGraphRecordingRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphRecordingRuntimeStatistics& statistics){
+    const Telemetry::FrameGraphRecordingRuntimeStatistics& statistics
+){
     StringAppendFormat(
         out,
         "{{\"packetCount\": {}, \"taskCount\": {}, \"commandListCount\": {}, \"barrierCount\": {}, "
@@ -256,7 +261,8 @@ void AppendFrameGraphRecordingRuntimeStatisticsJson(
 template<typename Statistics>
 void AppendSubmissionRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Statistics& statistics){
+    const Statistics& statistics
+){
     StringAppendFormat(
         out,
         "{{\"acceptedPacketCount\": {}, \"acceptedTaskCount\": {}, \"rejectedPacketCount\": {}, "
@@ -282,13 +288,15 @@ void AppendSubmissionRuntimeStatisticsJson(
 
 void AppendFrameGraphSubmissionRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphSubmissionRuntimeStatistics& statistics){
+    const Telemetry::FrameGraphSubmissionRuntimeStatistics& statistics
+){
     AppendSubmissionRuntimeStatisticsJson(out, statistics);
 }
 
 void AppendFrameGraphPhysicalQueueCompileRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphPhysicalQueueCompileRuntimeStatistics& statistics){
+    const Telemetry::FrameGraphPhysicalQueueCompileRuntimeStatistics& statistics
+){
     StringAppendFormat(
         out,
         "{{\"taskCount\": {}, \"packetCount\": {}, \"mergedTaskCount\": {}, "
@@ -322,7 +330,8 @@ void AppendFrameGraphPhysicalQueueCompileRuntimeStatisticsJson(
 
 void AppendFrameGraphPhysicalQueueRecordingRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics& statistics){
+    const Telemetry::FrameGraphPhysicalQueueRecordingRuntimeStatistics& statistics
+){
     StringAppendFormat(
         out,
         "{{\"packetCount\": {}, \"taskCount\": {}, \"commandListCount\": {}, \"barrierCount\": {}, "
@@ -344,13 +353,15 @@ void AppendFrameGraphPhysicalQueueRecordingRuntimeStatisticsJson(
 
 void AppendFrameGraphPhysicalQueueSubmissionRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics& statistics){
+    const Telemetry::FrameGraphPhysicalQueueSubmissionRuntimeStatistics& statistics
+){
     AppendSubmissionRuntimeStatisticsJson(out, statistics);
 }
 
 void AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& statistics){
+    const Telemetry::FrameGraphPhysicalQueueRuntimeStatistics& statistics
+){
     out += "{\"queue\": ";
     AppendFrameGraphPhysicalQueueJson(out, statistics.queue);
     out += s_JsonQueueClassKey;
@@ -366,7 +377,8 @@ void AppendFrameGraphPhysicalQueueRuntimeStatisticsJson(
 
 void AppendFrameGraphPacketSubmissionStatisticsJson(
     AString<TelemetryArena>& out,
-    const Telemetry::FrameGraphPacketSubmissionStatisticsRecord& statistics){
+    const Telemetry::FrameGraphPacketSubmissionStatisticsRecord& statistics
+){
     StringAppendFormat(
         out,
         "{{\"packet\": {{\"index\": {}, \"generation\": {}}}, \"queue\": ",
@@ -403,7 +415,8 @@ void AppendFrameGraphRuntimeStatisticsJson(
     const Telemetry::FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
     const FrameGraphOwnerStatisticsRange& ownerRange,
     const bool physicalQueueRuntimeStatisticsPresent,
-    const bool packetSubmissionStatisticsPresent){
+    const bool packetSubmissionStatisticsPresent
+){
     if(!statistics.present){
         out += s_JsonNullText;
         return;
@@ -457,7 +470,8 @@ void AppendFrameGraphJson(
     const FrameGraphReportRecord& record,
     const usize graphIndex,
     const bool finalGraph,
-    AString<TelemetryArena>& out){
+    AString<TelemetryArena>& out
+){
     const Telemetry::FrameGraphPayload& graph = record.payload;
     out += "      {\n";
     StringAppendFormat(out, "        \"captureIndex\": {},\n", graphIndex);
@@ -520,7 +534,8 @@ void BuildJson(
     const TelemetryReportSummary& summary,
     const FrameGraphReportRecords& graphs,
     const AStringView memoryRecords,
-    AString<TelemetryArena>& out){
+    AString<TelemetryArena>& out
+){
     out.clear();
     out.reserve(EstimateJsonReportReserve(graphs));
     out += "{\n";

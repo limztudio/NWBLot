@@ -21,49 +21,56 @@ NWB_IMPL_BEGIN
 bool RendererRayTracingSystem::renderSurfelGiAgeFree(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources){
+    const DeferredLightingGraphResources& deferredLightingResources
+){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, true, false, false, false, false, false, false);
 }
 
 bool RendererRayTracingSystem::renderSurfelGiUpsample(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources){
+    const DeferredLightingGraphResources& deferredLightingResources
+){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, false, false, false, false, false, true);
 }
 
 bool RendererRayTracingSystem::renderSurfelGiHashBuild(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources){
+    const DeferredLightingGraphResources& deferredLightingResources
+){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, true, false, false, false, false, false);
 }
 
 bool RendererRayTracingSystem::renderSurfelGiSpawn(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources){
+    const DeferredLightingGraphResources& deferredLightingResources
+){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, false, true, false, false, false, false);
 }
 
 bool RendererRayTracingSystem::renderSurfelGiTraceBuildArgs(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources){
+    const DeferredLightingGraphResources& deferredLightingResources
+){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, false, false, true, false, false, false);
 }
 
 bool RendererRayTracingSystem::renderSurfelGiTrace(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources){
+    const DeferredLightingGraphResources& deferredLightingResources
+){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, false, false, false, true, false, false);
 }
 
 bool RendererRayTracingSystem::renderSurfelGiResolve(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    const DeferredLightingGraphResources& deferredLightingResources){
+    const DeferredLightingGraphResources& deferredLightingResources
+){
     return renderSurfelGiPhases(commandList, targets, deferredLightingResources, false, false, false, false, false, true, false);
 }
 
@@ -77,7 +84,8 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
     const bool dispatchTraceBuildArgs,
     const bool dispatchTrace,
     const bool dispatchResolve,
-    const bool dispatchRemaining){
+    const bool dispatchRemaining
+){
     if(!hasSurfelWork())
         return true;
 

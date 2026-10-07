@@ -77,7 +77,8 @@ void RendererRayTracingSystem::dispatchSoftShadowDenoiseAndTransparentFold(
     const bool dispatchTransparentResolveTail,
     const bool splitTransparentResolve,
     const bool dispatchTransparentTemporalMerge,
-    const SoftShadowOpaqueResolvePhase::Enum opaquePhase){
+    const SoftShadowOpaqueResolvePhase::Enum opaquePhase
+){
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(deferredLightingResources.valid());
 

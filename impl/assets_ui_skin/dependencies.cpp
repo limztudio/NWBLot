@@ -27,7 +27,8 @@ bool ExtractUiSkinTextureDependency(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     Core::Assets::AssetRef<Texture>& out,
-    Core::Alloc::ScratchArena& scratchArena){
+    Core::Alloc::ScratchArena& scratchArena
+){
     if(doc.declarations().size() != 1u)
         return false;
     Core::Assets::AssetArena assetArena(Name("impl/assets_ui_skin/dependencies"));

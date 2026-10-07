@@ -29,7 +29,8 @@ NWB_IMPL_BEGIN
 bool RendererMaterialSystem::createObjectGeometryPipelineResources(
     const Name& meshShaderName,
     const AStringView variantName,
-    MaterialPipelineResources& resources){
+    MaterialPipelineResources& resources
+){
     if(!prepareMeshComputeBindingLayout())
         return false;
     auto& device = m_graphics.getDevice();
@@ -99,7 +100,8 @@ bool RendererMaterialSystem::createObjectGeometryPipelineResources(
 
 bool RendererMaterialSystem::recordObjectGeometryDecode(
     const MaterialPassDrawContext& context,
-    const MaterialPassDrawItem& drawItem){
+    const MaterialPassDrawItem& drawItem
+){
     const MaterialPassMeshResourceSnapshot& mesh = drawItem.meshResources;
     const auto& cache = mesh.objectGeometryCache;
     const Core::ComputePipelineHandle& pipeline = drawItem.pipelineResources.objectGeometryDecodePipeline;
@@ -157,13 +159,15 @@ bool RendererMaterialSystem::prepareIndexedMaterialPassResourceBindings(const Ma
 
 bool RendererMaterialSystem::indexedMaterialPassDrawResourcesReady(
     const MaterialPassDrawItemVector& drawItems,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings){
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
+){
     return (drawItems.empty() || frameBindings.bindingValid()) && prepareIndexedMaterialPassResourceBindings(drawItems);
 }
 
 void RendererMaterialSystem::renderIndexedMaterialPassDrawItems(
     const MaterialPassDrawContext& context,
-    const MaterialPassDrawItemVector& drawItems){
+    const MaterialPassDrawItemVector& drawItems
+){
     if(drawItems.empty())
         return;
     NWB_ASSERT(context.materialGeometryStatesGraphOwned);

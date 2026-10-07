@@ -27,7 +27,8 @@ inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
 
 
 static void AddRoot(const NWB::Path& path, Assets::CookVector<Assets::ResolvedAssetRoot>& roots,
-    Assets::ScratchArena& scratchArena){
+    Assets::ScratchArena& scratchArena
+){
     Assets::ScratchString pathText = PathToString(scratchArena, path.lexicallyNormal());
 #if defined(NWB_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(pathText);
@@ -48,7 +49,8 @@ static void AddRoot(const NWB::Path& path, Assets::CookVector<Assets::ResolvedAs
 }
 
 [[nodiscard]] static bool ResolveRoots(const PipelineOptions& options, const NWB::Path& repoRoot,
-    Assets::CookVector<Assets::ResolvedAssetRoot>& roots, Assets::ScratchArena& scratchArena){
+    Assets::CookVector<Assets::ResolvedAssetRoot>& roots, Assets::ScratchArena& scratchArena
+){
     const auto& sources = options.assetRoots.empty() ? options.inputs : options.assetRoots;
     roots.reserve(sources.size());
     for(const auto& source : sources){
@@ -92,7 +94,8 @@ static void AddRoot(const NWB::Path& path, Assets::CookVector<Assets::ResolvedAs
 [[nodiscard]] static bool SelectInput(const NWB::Path& path, const bool directory,
     const Assets::DiscoveredNwbFileVector& files, Vector<u8, Assets::ScratchArena>& selected,
     Vector<usize, Assets::ScratchArena>& order,
-    Assets::ScratchArena& scratchArena){
+    Assets::ScratchArena& scratchArena
+){
     Assets::ScratchString input = PathToString(scratchArena, path);
 #if defined(NWB_PLATFORM_WINDOWS)
     CanonicalizeTextInPlace(input);
@@ -174,7 +177,8 @@ bool DependencyProviderCatalog::discover(const PipelineOptions& options, NWB::Co
 bool DependencyProviderCatalog::selectInputs(const PipelineOptions& options,
     Vector<u8, NWB::Core::Alloc::ScratchArena>& outSelected,
     Vector<usize, NWB::Core::Alloc::ScratchArena>& outOrder,
-    NWB::Core::Alloc::ScratchArena& scratchArena)const{
+    NWB::Core::Alloc::ScratchArena& scratchArena
+)const{
     using namespace __hidden_dependency_provider_catalog;
     Vector<u8, Assets::ScratchArena> selected(m_files.size(), u8(0), outSelected.get_allocator().arena());
     Vector<usize, Assets::ScratchArena> order(outOrder.get_allocator().arena());
@@ -221,7 +225,8 @@ bool DependencyProviderCatalog::selectInputs(const PipelineOptions& options,
 }
 
 bool DependencyProviderCatalog::read(const usize index, NWB::Core::Metascript::Document& outDocument,
-    NWB::Core::Alloc::ScratchArena& scratchArena)const{
+    NWB::Core::Alloc::ScratchArena& scratchArena
+)const{
     using namespace __hidden_dependency_provider_catalog;
     if(index >= m_files.size())
         return false;
@@ -236,7 +241,8 @@ bool DependencyProviderCatalog::read(const usize index, NWB::Core::Metascript::D
 }
 
 bool DependencyProviderCatalog::resolve(const Name& virtualPath, const Name& assetType, usize& outIndex,
-    NWB::Core::Alloc::ScratchArena& scratchArena)const{
+    NWB::Core::Alloc::ScratchArena& scratchArena
+)const{
     using namespace __hidden_dependency_provider_catalog;
     if(!virtualPath || !assetType)
         return false;

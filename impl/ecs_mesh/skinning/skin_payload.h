@@ -109,7 +109,8 @@ template<typename SourceJointVector, typename JointPaletteVector>
     const MeshSkinningRuntimeInstance& instance,
     const SourceJointVector& sourceJoints,
     const u32 skinningMode,
-    JointPaletteVector& outJointPalette){
+    JointPaletteVector& outJointPalette
+){
     outJointPalette.clear();
 
     if(instance.skin.empty() || sourceJoints.empty())
@@ -218,7 +219,8 @@ template<typename SourceJointVector, typename JointPaletteVector>
     const MeshSkinningRuntimeInstance& instance,
     const SkeletonJointPaletteComponent* jointPalette,
     const SkeletonPoseComponent* skeletonPose,
-    RuntimeSkinPayloadScratch& payload){
+    RuntimeSkinPayloadScratch& payload
+){
     payload.skinInfluenceCount = 0u;
     payload.jointMatrices.clear();
     payload.poseJoints.clear();

@@ -81,7 +81,8 @@ bool RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report,
 }
 
 bool RendererGatherBenchmarkProbe::write(const AStringView path, const AStringView workload, const bool memoryEnabled, const u32 renderers,
-    const u32 runtimeRenderers, const u32 transparentRenderers, const u32 runtimeOwners)const{
+    const u32 runtimeRenderers, const u32 transparentRenderers, const u32 runtimeOwners
+)const{
     const bool complete = finished() && m_cpu.size() == s_SampleFrames;
     const AString<Core::Alloc::GlobalArena> outputPath(path, m_cpu.get_allocator());
     OutputFileStream output(outputPath.c_str(), s_FileOpenTruncate);

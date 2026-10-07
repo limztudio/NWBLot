@@ -50,7 +50,8 @@ public:
 
 protected:
     [[nodiscard]] virtual TextInputAdmission::Enum startNativeSession(
-        const TextInputSessionToken, const TextInputSessionDesc&)override{
+        const TextInputSessionToken, const TextInputSessionDesc&
+    )override{
         ++starts;
         return TextInputAdmission::Accepted;
     }
@@ -82,7 +83,8 @@ public:
 
 protected:
     virtual void startNativeRequest(const ClipboardRequestToken token, const ClipboardOperation::Enum,
-        const ClipboardChannel::Enum, const AStringView)override{
+        const ClipboardChannel::Enum, const AStringView
+    )override{
         startedToken = token;
     }
 
@@ -145,7 +147,8 @@ protected:
     }
 
     [[nodiscard]] bool declareEdit(const AStringView key, Ui::EditModel& model, const Ui::Rect& bounds,
-        Ui::WidgetState& retained, Ui::EditBoxResult& result){
+        Ui::WidgetState& retained, Ui::EditBoxResult& result
+    ){
         const Ui::WidgetState* widget = m_context.declare(key, Ui::WidgetKind::EditBox);
         if(!widget)
             return false;

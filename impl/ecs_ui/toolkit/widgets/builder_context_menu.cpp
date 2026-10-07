@@ -18,7 +18,8 @@ NWB_IMPL_UI_BEGIN
 
 
 ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStringView anchorKey,
-    const IListDataSource& source, ContextMenuState& state, const ContextMenuOptions& options){
+    const IListDataSource& source, ContextMenuState& state, const ContextMenuOptions& options
+){
     ContextMenuResult result;
     Item* anchor = annotationAnchor(anchorKey);
     if(

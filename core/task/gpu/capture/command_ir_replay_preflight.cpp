@@ -168,7 +168,8 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     const GpuCompiledPacketView& packetView,
     const GpuPhysicalQueueInfo& queue,
     u32& inOutPreviousTaskOrder,
-    bool& inOutHasPreviousTask)noexcept{
+    bool& inOutHasPreviousTask
+)noexcept{
     if(record.packet != packet)
         return GpuCommandIrReplayError::RecordPacketMismatch;
     if(record.queue != queue.id)

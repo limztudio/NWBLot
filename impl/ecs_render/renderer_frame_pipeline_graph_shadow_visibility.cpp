@@ -58,7 +58,8 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     Optional<Core::GpuTimingMeasure>& transparentResolveTiming,
     bool& opaqueProduced,
     bool& transparentTraceProduced,
-    u32& opaqueFrameIndex){
+    u32& opaqueFrameIndex
+){
     using namespace RendererTaskGraphDetail;
 
     const bool hardwareTransparentTrace = rayTracingPlan.hardwareTransparentTrace;

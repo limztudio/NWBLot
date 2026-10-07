@@ -29,7 +29,8 @@ namespace __hidden_gpu_task_graph_builtin_clears{
 
 
 [[nodiscard]] static GpuTaskCommandRequirements TextureClearCommandRequirements(
-    const GraphicsBackend::TextureClearQueueRequirement::Enum requirement)noexcept{
+    const GraphicsBackend::TextureClearQueueRequirement::Enum requirement
+)noexcept{
     GpuTaskCommandRequirements commands;
     switch(requirement){
     case GraphicsBackend::TextureClearQueueRequirement::Transfer:
@@ -50,7 +51,8 @@ namespace __hidden_gpu_task_graph_builtin_clears{
 
 [[nodiscard]] static bool IncludeHookCommandRequirements(
     GpuTaskCommandRequirements& commands,
-    const GpuTaskCommandRequirements& hookCommands)noexcept{
+    const GpuTaskCommandRequirements& hookCommands
+)noexcept{
     // A hook declares one alternative clause; the additional clause belongs to the composed built-in contract.
     if(hookCommands.additionalAlternativeCapabilities != GpuQueueCapability::None)
         return false;

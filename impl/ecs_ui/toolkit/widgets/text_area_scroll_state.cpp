@@ -48,7 +48,8 @@ namespace __hidden_text_area_scroll_state{
 ControlToken TextAreaScrollState::prepare(const WidgetState& widget, const PopupToken& popup,
     const u64 stateGeneration, const u64 stateRevision, const EditModel& model, const bool enabled, const bool readOnly,
     const ScrollViewportPlacement& placement,
-    const Point step)noexcept{
+    const Point step
+)noexcept{
     const Snapshot next{ widget.id, popup, widget.declarationGeneration, stateRevision, model.instanceGeneration(),
         model.revision(), model.externalRevision(), model.selectionGeneration(), model.compositionGeneration(),
         model.anchor(), model.caret(), enabled, readOnly };

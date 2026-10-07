@@ -146,7 +146,8 @@ bool BuildMeshSkinningGraphResourceUses(
     const MeshSkinningGraphDispatchPlan* const plans,
     const usize planCount,
     Core::Alloc::ScratchArena& scratchArena,
-    MeshSkinningGraphResourceUses& outUses){
+    MeshSkinningGraphResourceUses& outUses
+){
     using namespace __hidden_skinning_graph_resource_uses;
 
     outUses.deformation.clear();

@@ -59,7 +59,8 @@ bool RecordLightSpaceCapture(
     Core::GpuDescriptorHeap& heap,
     const LightSpaceShadowSnapshot& snapshot,
     const u32 viewIndex,
-    const bool transparent){
+    const bool transparent
+){
     static_assert(sizeof(Core::DrawIndexedIndirectArguments) == NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES);
     if(!snapshot.ready || !snapshot.drawArguments || viewIndex >= snapshot.plan.viewCount || (snapshot.casterCount != 0u && !snapshot.casters))
         return false;
@@ -134,7 +135,8 @@ bool RecordLightSpaceShade(Core::CommandList& commandList, Core::GpuDescriptorHe
 bool RecordLightSpaceResolve(
     Core::CommandList& commandList, Core::GpuDescriptorHeap& heap, Core::GpuTimingRecorder& timing,
     const LightSpaceShadowSnapshot& snapshot,
-    Core::Texture& outputTexture, const u32 frameIndex, const u32 sampleCount, const u32 outputSlot, const bool transparent){
+    Core::Texture& outputTexture, const u32 frameIndex, const u32 sampleCount, const u32 outputSlot, const bool transparent
+){
     const bool csg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u;
     const auto& pipeline = csg ? (transparent ? snapshot.csgTransparentResolve : snapshot.csgOpaqueResolve)
         : (transparent ? snapshot.transparentResolve : snapshot.opaqueResolve);

@@ -19,7 +19,8 @@ NWB_IMPL_UI_BEGIN
 bool WindowLayout::Measure(
     const UiSkinRegion& frame, const UiSkinRegion& title, const UiSkinRegion* collapse,
     const UiSkinRegion* resize, const WidgetStyle& style, const WindowOptions& options,
-    const Point& titleSize, const f32 density, WindowMetrics& metrics)noexcept{
+    const Point& titleSize, const f32 density, WindowMetrics& metrics
+)noexcept{
     if(
         !IsFinite(style.windowCollapseExtent) || style.windowCollapseExtent <= 0.0f
         || !IsFinite(style.windowResizeExtent) || style.windowResizeExtent <= 0.0f

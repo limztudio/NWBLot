@@ -22,7 +22,8 @@ SampledTextureImportResult::Enum ImportMaterialSampledTextureResources(
     const Core::TextureHandle* const textures,
     const usize textureCount,
     const AStringView markerLabel,
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& outResources){
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& outResources
+){
     for(usize textureIndex = 0u; textureIndex < textureCount; ++textureIndex){
         const Core::TextureHandle& texture = textures[textureIndex];
         Core::GpuGraphResourceId resource;

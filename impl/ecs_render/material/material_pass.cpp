@@ -206,7 +206,8 @@ void RendererMaterialSystem::renderPreparedMaterialPass(
     const bool emulationOutputEntryStateGraphOwned,
     Optional<Core::GpuTimingMeasure>* const emulationOutputTiming,
     const bool csgEmulationOutputEntryStateGraphOwned,
-    const bool emulationOutputReused){
+    const bool emulationOutputReused
+){
     const auto discardEmulationOutputTiming = [emulationOutputTiming](){
         if(!emulationOutputTiming || !emulationOutputTiming->has_value())
             return;

@@ -113,7 +113,8 @@ bool SliderLayout::Place(
     const Rect& clip,
     const SliderMetrics& metrics,
     const f64 normalized,
-    SliderPlacement& out)noexcept{
+    SliderPlacement& out
+)noexcept{
     using namespace __hidden_ui_slider_layout;
     if(
         !IsPreciseUiRect(bounds) || !IsPreciseUiRect(clip) || !ValidMetrics(metrics)

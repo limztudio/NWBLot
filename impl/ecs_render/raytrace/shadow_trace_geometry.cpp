@@ -123,7 +123,8 @@ bool FreezePreparedShadowTraceGeometryBuffers(
     const ShadowTraceGeometrySelection& selection,
     Core::Alloc::ScratchArena& scratchArena,
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& acceptedBuffers,
-    PreparedShadowTraceGeometryBufferVector& outPrepared){
+    PreparedShadowTraceGeometryBufferVector& outPrepared
+){
     outPrepared.clear();
     using namespace __hidden_shadow_trace_geometry;
     constexpr usize s_BucketsPerMesh = LengthOf(s_BufferMembers) * 2u;

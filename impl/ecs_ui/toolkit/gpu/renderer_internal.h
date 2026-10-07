@@ -190,7 +190,8 @@ struct GpuFrameSlot{
 [[nodiscard]] NWB_INLINE bool ResolvePaintPushConstants(
     const GpuFrameData& frame,
     const DrawCommand& draw,
-    GpuPaintPushConstants& push)noexcept{
+    GpuPaintPushConstants& push
+)noexcept{
     push.material = static_cast<u32>(draw.material);
     push.textureSlot = NWB_UI_INVALID_HEAP_SLOT;
     if(draw.material == PaintMaterial::Skin)

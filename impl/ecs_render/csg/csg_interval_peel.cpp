@@ -216,7 +216,8 @@ void RendererCsgSystem::renderCsgIntervalCaps(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
-    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources){
+    const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
+){
     NWB_ASSERT(m_csgState.m_intervalCapFillPipeline);
     NWB_ASSERT(csgResources.frameReady(csgFrameData));
     NWB_ASSERT(targets.framebuffer);

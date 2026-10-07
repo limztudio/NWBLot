@@ -77,7 +77,8 @@ float3 nwbRayTraceNormalizeGeometryVector(const float3 value){
 float3 nwbRayTraceTriangleGeometricNormal(
     const NwbRtInstanceMaterial material,
     const uint primitive,
-    const float3x4 worldToObject){
+    const float3x4 worldToObject
+){
     const uint triangleBase = primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
     const uint3 triangle = nwbHeapRawBuffer(material.indexSlot).Load3(triangleBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
     const float3 v0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(triangle.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
@@ -102,7 +103,8 @@ bool nwbRayTraceCoplanarSeam(
     const uint instanceMaterialHeapSlot,
     const uint instance,
     const uint firstPrimitive,
-    const uint secondPrimitive){
+    const uint secondPrimitive
+){
     if(firstPrimitive == secondPrimitive)
         return true;
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[instance];
@@ -143,7 +145,8 @@ NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(
     const uint instance,
     const uint primitive,
     const float2 bary,
-    const float3x4 worldToObject){
+    const float3x4 worldToObject
+){
     NwbRayTraceSurfaceHit hit = (NwbRayTraceSurfaceHit)0;
     hit.hit = true;
     hit.instance = instance;
@@ -179,7 +182,8 @@ NwbRayTraceGeometryHit nwbRayTraceClosestGeometryHit(
     const float3 origin,
     const float3 direction,
     const float minDistance,
-    const float maxDistance){
+    const float maxDistance
+){
     RayDesc ray;
     ray.Origin = origin;
     ray.Direction = direction;
@@ -208,7 +212,8 @@ NwbRayTraceSurfaceHit nwbRayTraceReconstructSurfaceHit(
     const uint instanceMaterialHeapSlot,
     const float3 origin,
     const float3 direction,
-    const NwbRayTraceGeometryHit geometry){
+    const NwbRayTraceGeometryHit geometry
+){
     if(!geometry.hit)
         return (NwbRayTraceSurfaceHit)0;
     return nwbRayTraceReconstructSurfaceHit(
@@ -222,7 +227,8 @@ NwbRayTraceSurfaceHit nwbRayTraceClosestSurfaceHit(
     const float3 origin,
     const float3 direction,
     const float minDistance,
-    const float maxDistance){
+    const float maxDistance
+){
     const NwbRayTraceGeometryHit geometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
     return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
 }

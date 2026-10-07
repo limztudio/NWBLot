@@ -65,7 +65,8 @@ StringView SliderCallbackSource::text(const u64 index)const{
 }
 
 void SliderCallbackSource::arm(const SliderCallbackMutation::Enum mutation, SliderState* state,
-    Builder* builder, PopupState* popup){
+    Builder* builder, PopupState* popup
+){
     m_mutation = mutation;
     m_state = state;
     m_builder = builder;

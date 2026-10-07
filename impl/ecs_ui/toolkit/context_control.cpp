@@ -31,7 +31,8 @@ bool Context::addPartTarget(const WidgetState& owner, const WidgetId part, HitTa
 }
 
 bool Context::takeControlAction(
-    const WidgetState& state, const bool enabled, const ControlToken& token, ControlAction& action){
+    const WidgetState& state, const bool enabled, const ControlToken& token, ControlAction& action
+){
     if(m_failed || !currentDeclaration(state))
         return false;
     if(!enabled){
@@ -45,7 +46,8 @@ bool Context::takeControlAction(
 }
 
 bool Context::takePartPointerGesture(
-    const WidgetState& owner, const WidgetId part, const bool enabled, PointerGesture& gesture){
+    const WidgetState& owner, const WidgetId part, const bool enabled, PointerGesture& gesture
+){
     if(m_failed || !currentDeclaration(owner))
         return false;
     if(!enabled){

@@ -19,7 +19,8 @@ TESTBED_BEGIN
 
 
 UiImageGallery::UiImageGallery(
-    NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets)
+    NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets
+)
     : m_source(NWB::Impl::Ui::LoadImageSource(
         arena, assets, NWB::Core::Assets::AssetRef<NWB::Impl::Texture>{"engine/ui/skins/default/texture"}
     ))

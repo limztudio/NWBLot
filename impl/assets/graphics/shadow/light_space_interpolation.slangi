@@ -17,7 +17,8 @@ bool nwbLightSpaceInterpolateBarycentrics(
     const float4 clip0,
     const float4 clip1,
     const float4 clip2,
-    out float3 weights){
+    out float3 weights
+){
     weights = float3(0.0);
     if(any(extent == 0u) || any(pixel >= extent) || !all(isfinite(clip0)) || !all(isfinite(clip1)) || !all(isfinite(clip2)))
         return false;

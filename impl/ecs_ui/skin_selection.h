@@ -75,7 +75,8 @@ public:
         const bool resourcesReady,
         const bool gpuFramePending,
         const bool layoutPending,
-        TTryBind&& tryBind)noexcept(noexcept(static_cast<bool>(!tryBind(s_DefaultUiSkinRef, DeclVal<const u64&>())))){
+        TTryBind&& tryBind
+    )noexcept(noexcept(static_cast<bool>(!tryBind(s_DefaultUiSkinRef, DeclVal<const u64&>())))){
         if(!m_changePending || !resourcesReady || gpuFramePending || layoutPending)
             return UiSkinChangeResult::Deferred;
         m_changePending = false;

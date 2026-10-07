@@ -25,7 +25,8 @@ namespace ECSRenderDetail{
 bool ResolveComputeEmulationLayout(
     const u64 localVertexRefByteSize,
     const u32 primitiveIndexCount,
-    ComputeEmulationLayout& layout)noexcept{
+    ComputeEmulationLayout& layout
+)noexcept{
     layout = {};
     if(localVertexRefByteSize == 0u || localVertexRefByteSize % sizeof(MeshletLocalVertexRef) != 0u || primitiveIndexCount == 0u)
         return false;

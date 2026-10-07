@@ -45,7 +45,8 @@ public:
 public:
     [[nodiscard]] virtual Ui::EditNavigationResult resolve(const Ui::EditModel& model,
         const Ui::EditNavigationDirection::Enum direction, const Ui::EditNavigationSnapshot& navigation,
-        const f32 viewportHeight)override{
+        const f32 viewportHeight
+    )override{
         records.emplace_back(m_arena);
         NavigationCall& record = records.back();
         record.text.assign(model.text().data(), model.text().size());
@@ -152,13 +153,15 @@ public:
 
 protected:
     [[nodiscard]] bool prepareNavigation(const Ui::EditBoxOptions& options = {},
-        const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, const Ui::Point previousScroll = {}){
+        const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, const Ui::Point previousScroll = {}
+    ){
         return prepareNavigationModel(m_navigationModel, m_navigation, options, bounds, previousScroll);
     }
 
     [[nodiscard]] bool prepareNavigationModel(Ui::EditModel& model, Ui::EditNavigationState& navigation,
         const Ui::EditBoxOptions& options = {}, const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f },
-        const Ui::Point previousScroll = {}){
+        const Ui::Point previousScroll = {}
+    ){
         ++m_generation;
         if(!m_context.beginFrame(m_generation))
             return false;
@@ -205,12 +208,14 @@ protected:
     }
 
     [[nodiscard]] bool navigationFrame(const Ui::EditBoxOptions& options = {},
-        const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, const Ui::Point previousScroll = {}){
+        const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }, const Ui::Point previousScroll = {}
+    ){
         return prepareNavigation(options, bounds, previousScroll) && commit();
     }
 
     [[nodiscard]] bool activateNavigation(const Ui::EditBoxOptions& options = {},
-        const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }){
+        const Ui::Rect& bounds = { 10.0f, 20.0f, 180.0f, 48.0f }
+    ){
         return navigationFrame(options, bounds) && key(Core::Key::Tab) && navigationFrame(options, bounds)
             && m_context.input().focus() == m_widget.id;
     }

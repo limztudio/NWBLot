@@ -40,7 +40,8 @@ using namespace NWB::Impl::Ui;
 }
 
 [[nodiscard]] static InputEvent Key(const Core::Key::Enum key, const bool shift = false,
-    const bool control = false, const bool alt = false, const bool repeat = false){
+    const bool control = false, const bool alt = false, const bool repeat = false
+){
     InputEvent event;
     event.type = InputEventType::KeyDown;
     event.key = key;

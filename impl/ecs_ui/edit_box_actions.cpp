@@ -18,7 +18,8 @@ NWB_IMPL_BEGIN
 
 
 bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options,
-    Event& event, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation){
+    Event& event, Ui::EditBoxResult& result, Ui::IEditActionSink* actions, NavigationBorrow* navigation
+){
     const u64 revision = model.revision();
     const u64 externalRevision = model.externalRevision();
     const u64 selectionGeneration = model.selectionGeneration();
@@ -175,7 +176,8 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
 }
 
 bool UiEditBoxHost::applyAction(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options,
-    const Ui::EditAction::Enum action, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation){
+    const Ui::EditAction::Enum action, Ui::EditBoxResult& result, Ui::IEditActionSink& actions, NavigationBorrow* navigation
+){
     const u64 revision = model.revision();
     const u64 selectionGeneration = model.selectionGeneration();
     const u64 compositionGeneration = model.compositionGeneration();

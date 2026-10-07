@@ -78,7 +78,8 @@ bool SerializePreparedFontSource(
     const u32 faceIndex,
     const PreparedFontImageView* groups,
     const usize groupCount,
-    Core::Assets::AssetBytes& outBinary){
+    Core::Assets::AssetBytes& outBinary
+){
     using namespace __hidden_prepared_source;
     if(
         !sfnt.data() || sfnt.empty() || sfnt.size() > s_FontMaxSourceBytes || faceIndex != 0u

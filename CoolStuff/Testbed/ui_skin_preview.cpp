@@ -80,7 +80,8 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
 
 
 UiSkinPreview::UiSkinPreview(
-    NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets)
+    NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets
+)
     : m_normal(arena)
     , m_hover(arena)
     , m_pressed(arena)

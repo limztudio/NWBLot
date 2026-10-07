@@ -328,7 +328,8 @@ bool VolumeFileSystem::readFile(
     const u64 offset,
     void* data,
     const usize bytes,
-    usize& outBytesRead)const{
+    usize& outBytesRead
+)const{
     ScopedLock lock(m_mutex);
     outBytesRead = 0;
     FileRecord record;

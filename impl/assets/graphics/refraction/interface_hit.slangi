@@ -21,7 +21,8 @@ NwbRayTraceSurfaceHit nwbRefractionClosestEntryInterface(
     const float3 origin,
     const float3 direction,
     const float minDistance,
-    const float maxDistance){
+    const float maxDistance
+){
     const NwbRayTraceGeometryHit geometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
     if(!geometry.hit || !geometry.frontFace)
         return (NwbRayTraceSurfaceHit)0;
@@ -34,7 +35,8 @@ NwbRayTraceSurfaceHit nwbRefractionClosestExitInterface(
     const float3 direction,
     const float minDistance,
     const float maxDistance,
-    const uint primaryInstance){
+    const uint primaryInstance
+){
     const NwbRayTraceGeometryHit geometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
     if(!geometry.hit || geometry.instance != primaryInstance || geometry.frontFace)
         return (NwbRayTraceSurfaceHit)0;

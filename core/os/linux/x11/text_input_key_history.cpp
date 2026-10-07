@@ -44,7 +44,8 @@ void X11FilteredKeyHistory::synchronizeSession(const TextInputSessionToken sessi
 }
 
 void X11FilteredKeyHistory::recordFiltered(
-    const u32 keycode, const bool released, const u32 timestamp, const u32 serial, const u64 receivedAtMs)noexcept{
+    const u32 keycode, const bool released, const u32 timestamp, const u32 serial, const u64 receivedAtMs
+)noexcept{
     if(keycode == 0u || keycode >= s_KeyCount)
         return;
     Stamp& stamp = m_history[keycode][(released ? 1u : 0u) + (timestamp == 0u ? 2u : 0u)];
@@ -53,7 +54,8 @@ void X11FilteredKeyHistory::recordFiltered(
 }
 
 bool X11FilteredKeyHistory::isForwardedDuplicate(
-    const u32 keycode, const bool released, const u32 timestamp, const u32 serial, const bool sent, const u64 receivedAtMs)const noexcept{
+    const u32 keycode, const bool released, const u32 timestamp, const u32 serial, const bool sent, const u64 receivedAtMs
+)const noexcept{
     if(keycode == 0u || keycode >= s_KeyCount || sent)
         return false;
     const Stamp& stamp = m_history[keycode][(released ? 1u : 0u) + (timestamp == 0u ? 2u : 0u)];
@@ -61,7 +63,8 @@ bool X11FilteredKeyHistory::isForwardedDuplicate(
 }
 
 bool X11FilteredKeyHistory::isRetiredDuplicate(
-    const u32 keycode, const bool released, const u32 timestamp, const u32 serial, const bool sent, const u64 receivedAtMs)const noexcept{
+    const u32 keycode, const bool released, const u32 timestamp, const u32 serial, const bool sent, const u64 receivedAtMs
+)const noexcept{
     if(keycode == 0u || keycode >= s_KeyCount || sent)
         return false;
     const Stamp& stamp = m_retiredHistory[keycode][(released ? 1u : 0u) + (timestamp == 0u ? 2u : 0u)];

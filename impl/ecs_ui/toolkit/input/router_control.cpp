@@ -105,7 +105,8 @@ bool InputRouter::currentControlAction(const ControlAction& action)const{
 }
 
 bool InputRouter::consumeControlAction(
-    const WidgetId host, const u64 declarationGeneration, const ControlToken& token, ControlAction& action){
+    const WidgetId host, const u64 declarationGeneration, const ControlToken& token, ControlAction& action
+){
     const HitTarget* target = findTarget(host, declarationGeneration);
     if(
         declarationGeneration == 0u || !token.valid() || target == nullptr || !isInteractive(*target)
@@ -171,7 +172,8 @@ void InputRouter::reconcileControlActions(){
 
 void InputRouter::appendControlAction(
     const HitTarget& host, const HitTarget& source, const ControlActionKind::Enum kind, const f64 delta,
-    InputRoutingResult& result, const f64 deltaX){
+    InputRoutingResult& result, const f64 deltaX
+){
     if(m_controlActions.size() == s_InputMaxControlActions || m_nextActionSequence == 0u){
         result.activationOverflow = true;
         return;
@@ -214,7 +216,8 @@ void InputRouter::routeWheel(const InputEvent& event, InputRoutingResult& result
 
 bool InputRouter::routeControlKey(
     const InputEvent& event, const HitTarget& host, const HitTarget& source, ControlKeyOwner& owner, const bool alreadyPressed,
-    InputRoutingResult& result){
+    InputRoutingResult& result
+){
     ControlActionKind::Enum kind;
     switch(event.command){
     case InputCommand::Left:

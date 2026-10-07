@@ -90,7 +90,8 @@ void nwbCsgIntervalCombineInsertEntry(
     const NwbCsgRemovedIntervalCandidate candidate,
     const uint removedIntervalLayerCount,
     inout uint inOutRemovedIntervalCount,
-    inout uint inOutFlags){
+    inout uint inOutFlags
+){
     const uint entryIndex = inOutRemovedIntervalCount;
     ++inOutRemovedIntervalCount;
     if(entryIndex >= removedIntervalLayerCount){
@@ -123,7 +124,8 @@ void nwbCsgIntervalCombineAppendCandidate(
     const uint intervalIndex,
     const uint removedIntervalLayerCount,
     inout uint inOutRemovedIntervalCount,
-    inout uint inOutFlags){
+    inout uint inOutFlags
+){
     const uint receiverIndex = spanData.x;
     const float2 spanDepth = float2(asfloat(spanData.y), asfloat(spanData.z));
 
@@ -164,7 +166,8 @@ void nwbCsgIntervalCombineWriteEntries(
     const NwbCsgRemovedIntervalCandidate entries[NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT],
     const uint removedIntervalLayerCount,
     const uint removedIntervalCount,
-    const uint flags){
+    const uint flags
+){
     const uint storedIntervalCount = min(removedIntervalCount, removedIntervalLayerCount);
     [loop]
     for(uint layerIndex = 0u; layerIndex < storedIntervalCount; ++layerIndex){

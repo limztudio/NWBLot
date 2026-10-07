@@ -18,7 +18,8 @@ NWB_IMPL_UI_BEGIN
 
 
 bool Builder::beginWindow(
-    const AStringView stableKey, const StringView title, WindowState& state, const WindowOptions& options){
+    const AStringView stableKey, const StringView title, WindowState& state, const WindowOptions& options
+){
     if(declarationBlocked() || m_scope->m_panelActive || m_scope->m_windowActive || !m_skin || m_context.failed()){
         m_context.fail();
         return false;

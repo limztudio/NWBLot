@@ -55,7 +55,8 @@ inline constexpr Name s_CompileArena("tests/task/gpu/range_planning_compile");
     const u64 offset,
     const u64 size,
     const Core::ResourceStates::Mask state,
-    const Core::GpuTaskResourceAccess::Enum access = Core::GpuTaskResourceAccess::Write)noexcept{
+    const Core::GpuTaskResourceAccess::Enum access = Core::GpuTaskResourceAccess::Write
+)noexcept{
     return Core::GpuTaskResourceUse{
         .resource = resource,
         .range = { .bufferRange = Core::BufferRange(offset, size) },

@@ -22,24 +22,28 @@ Ui::EditBoxResult UiEditBoxHost::edit(const Ui::WidgetState& widget, Ui::EditMod
 }
 
 Ui::EditBoxResult UiEditBoxHost::editInPopup(const Ui::WidgetState& widget, Ui::EditModel& model,
-    const Ui::EditBoxOptions& options, const Ui::PopupToken& popup){
+    const Ui::EditBoxOptions& options, const Ui::PopupToken& popup
+){
     return editBorrowed(widget, model, options, popup, nullptr);
 }
 
 Ui::EditBoxResult UiEditBoxHost::editActions(const Ui::WidgetState& widget, Ui::EditModel& model,
-    const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink& actions){
+    const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink& actions
+){
     return editBorrowed(widget, model, options, popup, &actions);
 }
 
 Ui::EditBoxResult UiEditBoxHost::editNavigated(const Ui::WidgetState& widget, Ui::EditModel& model,
     const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::EditNavigationState& navigation,
-    Ui::IEditNavigationResolver& resolver, Ui::IEditActionSink& actions){
+    Ui::IEditNavigationResolver& resolver, Ui::IEditActionSink& actions
+){
     NavigationBorrow borrowed{ navigation, resolver };
     return editBorrowed(widget, model, options, popup, &actions, &borrowed);
 }
 
 Ui::EditBoxResult UiEditBoxHost::editBorrowed(const Ui::WidgetState& widget, Ui::EditModel& model,
-    const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink* actions, NavigationBorrow* navigation){
+    const Ui::EditBoxOptions& options, const Ui::PopupToken& popup, Ui::IEditActionSink* actions, NavigationBorrow* navigation
+){
     if(rejectBorrowedMutation())
         return {};
     if(navigation && model.textMode() != Ui::EditTextMode::Multiline)

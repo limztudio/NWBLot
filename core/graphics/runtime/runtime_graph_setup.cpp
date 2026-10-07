@@ -145,7 +145,8 @@ struct StandaloneTaskGraphTimingRetirementTask{
     GraphicsBackend::Device& device,
     const ResourceQueueSharing::Mask queueSharing,
     const CommandQueue::Enum directConsumerQueue,
-    const GpuTaskId uploadTask){
+    const GpuTaskId uploadTask
+){
     if(!uploadTask.valid())
         return {};
 
@@ -300,7 +301,8 @@ namespace GraphicsModuleDetail{
 SetupUploadSameClassRouting ResolveSetupUploadSameClassRouting(
     GraphicsBackend::Device& device,
     const CommandQueue::Enum consumerQueue,
-    const usize uploadBytes)noexcept{
+    const usize uploadBytes
+)noexcept{
     SetupUploadSameClassRouting result;
     if(uploadBytes < s_SetupUploadLargeMinimumBytes)
         return result;
@@ -335,7 +337,8 @@ SetupUploadSameClassRouting ResolveSetupUploadSameClassRouting(
 ResourceQueueSharing::Mask ResolveSetupUploadConsumerSharing(
     const ResourceQueueSharing::Mask requestedSharing,
     const CommandQueue::Enum consumerQueue,
-    const bool crossFamilySameClassRouting)noexcept{
+    const bool crossFamilySameClassRouting
+)noexcept{
     if(crossFamilySameClassRouting){
         const ResourceQueueSharing::Mask baseSharing = requestedSharing == ResourceQueueSharing::Exclusive
             ? ResourceQueueSharing::ForQueueClass(consumerQueue)
@@ -363,7 +366,8 @@ CommandQueue::Enum ResolveSetupUploadConsumerQueue(
     const CommandQueue::Enum requestedConsumerQueue,
     const usize uploadBytes,
     const bool hasKnownFinalState,
-    const bool requiresGraphicsConsumerQueue)noexcept{
+    const bool requiresGraphicsConsumerQueue
+)noexcept{
     if(requiresGraphicsConsumerQueue)
         return CommandQueue::Graphics;
 
@@ -393,7 +397,8 @@ CommandQueue::Enum ResolveSetupUploadConsumerQueue(
 GpuTaskSchedulingHint SetupUploadGraphScheduling(
     const usize byteCount,
     const bool sameClassRouting,
-    const bool crossFamilySameClassRouting)noexcept{
+    const bool crossFamilySameClassRouting
+)noexcept{
     GpuTaskSchedulingHint scheduling;
     scheduling.cost = byteCount >= s_SetupUploadLargeMinimumBytes
         ? GpuTaskCostHint::Large
@@ -623,7 +628,8 @@ bool SubmitGraphOwnedSetupUpload(
     void* const userData,
     const GraphTaskDeclaration declareTask,
     QueueSubmissionToken& outUploadToken,
-    const GpuPhysicalQueueId requiredTerminalQueue){
+    const GpuPhysicalQueueId requiredTerminalQueue
+){
     outUploadToken = {};
     if(!declareTask)
         return false;

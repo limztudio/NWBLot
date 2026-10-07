@@ -18,7 +18,8 @@ NWB_IMPL_BEGIN
 
 
 bool UiEditBoxHost::applyNavigation(Ui::EditModel& model, const Event& event, NavigationBorrow& navigation,
-    const Ui::EditNavigationDirection::Enum direction){
+    const Ui::EditNavigationDirection::Enum direction
+){
     if(m_borrowRejected || m_context.failed())
         return false;
     if(model.textMode() != Ui::EditTextMode::Multiline || model.composition().active)

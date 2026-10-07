@@ -99,7 +99,8 @@ template<usize Count>
     const Value& object,
     const AStringView fieldName,
     const bool required,
-    u32 (&outValues)[Count]){
+    u32 (&outValues)[Count]
+){
     const Value* field = FindField(object, fieldName);
     if(!field && !required)
         return true;
@@ -298,7 +299,8 @@ bool ParseUiSkinCookMetadata(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     UiSkinCookEntry& outEntry,
-    Core::Alloc::ScratchArena& scratchArena){
+    Core::Alloc::ScratchArena& scratchArena
+){
     using namespace __hidden_ui_skin_cook_metadata;
 
     UiSkinCookEntry parsed(outEntry.arena);

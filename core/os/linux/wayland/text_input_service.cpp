@@ -21,7 +21,8 @@ NWB_CORE_BEGIN
 WaylandTextInputService::WaylandTextInputService(
     Alloc::GlobalArena& arena,
     wl_display& display,
-    wl_surface& surface)
+    wl_surface& surface
+)
     : QueuedTextInputService(arena)
     , m_display(display)
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
@@ -136,7 +137,8 @@ TextInputCapabilities WaylandTextInputService::capabilities()const noexcept{
 
 TextInputAdmission::Enum WaylandTextInputService::startNativeSession(
     const TextInputSessionToken token,
-    const TextInputSessionDesc& desc){
+    const TextInputSessionDesc& desc
+){
     if(!m_keyboardFocused || !m_seat)
         return TextInputAdmission::Unavailable;
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
@@ -210,7 +212,8 @@ void WaylandTextInputService::updateNativeSurrounding(
     const usize anchorByte,
     const usize caretByte,
     const u64 revision,
-    const TextInputChangeCause::Enum cause){
+    const TextInputChangeCause::Enum cause
+){
 #if defined(NWB_OS_WITH_TEXT_INPUT_V3)
     if(m_enabled && m_input && m_entered){
         if(m_waitingForCurrentSerial){
@@ -282,7 +285,8 @@ bool WaylandTextInputService::flush(){
 GlobalUniquePtr<ITextInputService> CreateWaylandTextInputService(
     Alloc::GlobalArena& arena,
     wl_display& display,
-    wl_surface& surface){
+    wl_surface& surface
+){
     auto service = MakeGlobalUnique<WaylandTextInputService>(arena, arena, display, surface);
     if(!service->initialize())
         return nullptr;

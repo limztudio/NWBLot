@@ -121,7 +121,8 @@ template<typename PlaneVector>
 [[nodiscard]] bool PrepareVolumeMipTargets(
     const PlaneVector& sourcePlanes,
     PlaneVector& outPlanes,
-    VolumeMipDims& outDims){
+    VolumeMipDims& outDims
+){
     if(sourcePlanes.empty() || sourcePlanes.size() > Limit<u32>::s_Max)
         return false;
     if(!ComputeVolumeMipDims(sourcePlanes.front().get_width(), sourcePlanes.front().get_height(), static_cast<u32>(sourcePlanes.size()), outDims))

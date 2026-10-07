@@ -309,7 +309,8 @@ bool CsgClipWorkBounds::resolveCutter(
     const SIMDMatrix& shapeToWorld,
     const u8* parameterBytes,
     const usize parameterByteSize,
-    const CsgClipWorkBounds& receiverBounds){
+    const CsgClipWorkBounds& receiverBounds
+){
     *this = CsgClipWorkBounds{};
     if(!receiverBounds.valid){
         const Name& shapeName = shapeType.desc.name;
@@ -363,7 +364,8 @@ void CsgFrameWorkRegion::expandWorldBounds(
     const SIMDVector minBounds,
     const SIMDVector maxBounds,
     const u32 frameWidth,
-    const u32 frameHeight){
+    const u32 frameHeight
+){
     static constexpr f32 s_MinClipWForWorkRegion = static_cast<f32>(NWB_CSG_HOMOGENEOUS_W_EPSILON);
     static constexpr i32 s_WorkRegionPixelPadding = 2;
     static constexpr u32 s_BoxCornerCount = 8u;

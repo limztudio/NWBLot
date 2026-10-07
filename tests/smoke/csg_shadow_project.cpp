@@ -224,7 +224,8 @@ private:
         const u32 groupIndex,
         const Name shapeType,
         const ParameterT& parameters,
-        const SIMDMatrix& shapeToWorld){
+        const SIMDMatrix& shapeToWorld
+    ){
         auto cutterEntity = m_world->createEntity();
         auto& cutter = cutterEntity.addComponent<NWB::Impl::CsgCutterComponent>(m_context.objectArena);
         cutter.receiverGroup = s_AnalyticGroups[groupIndex];

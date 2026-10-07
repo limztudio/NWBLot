@@ -106,7 +106,8 @@ bool ReflectionFeedbackScene::applyMutation(){
 }
 
 Core::ECS::EntityID ReflectionFeedbackScene::createPanel(const Float4& color, const Float4& position, const Float4& scale,
-    const f32 f0, const bool horizontal){
+    const f32 f0, const bool horizontal
+){
     using namespace __hidden_reflection_feedback_scene;
     const auto entity = CreateTintedStaticMeshEntity(m_world, m_context.objectArena, s_Plane, s_Opaque, s_Interface, color, position, scale);
     if(!entity.valid())

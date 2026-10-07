@@ -47,7 +47,8 @@ static void CheckTerminalDependencies(
     const usize readerCount,
     const TerminalDependencyScenario::Enum scenario,
     const bool lateFallback,
-    const bool benchmark){
+    const bool benchmark
+){
     ASSERT_GT(readerCount, 0u);
     if(lateFallback){
         ASSERT_EQ(scenario, TerminalDependencyScenario::ReadPairs);

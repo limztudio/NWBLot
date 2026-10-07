@@ -208,7 +208,8 @@ bool GpuRendererState::declareGlyphPages(
     Core::GpuTaskGraph& graph,
     const GpuFrame& frame,
     GpuGlyphGraphResources& resources,
-    GpuRasterResourceUses& uses){
+    GpuRasterResourceUses& uses
+){
     if(frame->m_glyphPages.size() != frame->m_snapshot.glyphPages().size()){
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared glyph page count does not match the immutable snapshot"));
         return false;

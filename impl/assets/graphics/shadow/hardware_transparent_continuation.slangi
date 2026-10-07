@@ -19,7 +19,8 @@ bool nwbHwShadowFindNextCrossing(
     const RayDesc ray,
     const bool hasPrevious,
     const NwbHardwareTransparentCrossing previous,
-    out NwbHardwareTransparentCrossing next){
+    out NwbHardwareTransparentCrossing next
+){
     next = (NwbHardwareTransparentCrossing)0;
     bool found = false;
     RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;

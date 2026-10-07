@@ -70,7 +70,8 @@ TextInputAdmission::Enum Win32TextInputService::compositionCursor(const NotNull<
 TextInputAdmission::Enum Win32TextInputService::acceptComposition(
     const TextInputSessionToken token,
     const usize wParam,
-    const isize flags){
+    const isize flags
+){
     if((flags & CS_INSERTCHAR) != 0 && (flags & (GCS_RESULTSTR | GCS_COMPSTR)) == 0){
         if(wParam > 0xffffu)
             return TextInputAdmission::InvalidText;

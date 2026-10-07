@@ -27,7 +27,8 @@ bool nwbOpticalReadInstance(
     const NwbOpticalTraceConfig config,
     const uint instance,
     out NwbOpticalInstance optical,
-    inout NwbOpticalTraceResult result){
+    inout NwbOpticalTraceResult result
+){
     optical = (NwbOpticalInstance)0;
     if(instance >= config.opticalInstanceCount){
         result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
@@ -52,7 +53,8 @@ bool nwbOpticalReadInstance(
 bool nwbOpticalSetMediumProperties(
     const NwbMeshSurface surface,
     inout NwbOpticalMedium medium,
-    inout NwbOpticalTraceResult result){
+    inout NwbOpticalTraceResult result
+){
     medium.ior = float(surface.refractionIor);
     if(!isfinite(medium.ior) || medium.ior < 1.0 || !all(isfinite(float3(surface.shadowAbsorptionTint)))){
         result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
@@ -69,7 +71,8 @@ bool nwbOpticalLoadHomogeneousMedium(
     const float3 origin,
     const float3 direction,
     inout NwbOpticalMedium medium,
-    inout NwbOpticalTraceResult result){
+    inout NwbOpticalTraceResult result
+){
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[medium.instance];
     NwbShadowHit input = (NwbShadowHit)0;
     input.meshInstanceIndex = material.meshInstanceIndex;

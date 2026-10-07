@@ -41,7 +41,8 @@ using SmokeModelRef = Core::Assets::AssetRef<Impl::Model>;
 inline void AddSmokeSkinnedRenderSystems(
     Core::ECS::World& world,
     ProjectRuntimeContext& context,
-    const SmokeRenderQualitySettings& baseSettings = {}){
+    const SmokeRenderQualitySettings& baseSettings = {}
+){
     const SmokeRenderSystems systems = CreateSmokeRenderSystems(world, context, baseSettings);
     world.addSystem<Impl::ModelSystem>(
         world,

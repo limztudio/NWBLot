@@ -37,7 +37,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
     const bool splitOpaqueSoftResolve,
     const GraphOwnedAdaptiveShadowPlan* const graphOwnedAdaptivePlan,
-    const LightSpaceShadowSnapshot* const lightSpace){
+    const LightSpaceShadowSnapshot* const lightSpace
+){
     NWB_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
     if(!targets.shadowVisibility)
         return false;
@@ -346,7 +347,8 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
     const DeferredLightingGraphResources& deferredLightingResources,
     u32& outFrameIndex,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
-    const LightSpaceShadowSnapshot* const lightSpace){
+    const LightSpaceShadowSnapshot* const lightSpace
+){
     outFrameIndex = 0u;
     if(
         !m_rayTracingState.m_softShadowReady

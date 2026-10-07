@@ -33,7 +33,8 @@ static void BuildRecordIndex(
     const States& states,
     Vector<usize, Alloc::ScratchArena>& index,
     const ResourceGetter resourceGetter,
-    const RecordLess recordLess){
+    const RecordLess recordLess
+){
     index.clear();
     index.reserve(states.size());
     for(usize stateIndex = 0u; stateIndex < states.size(); ++stateIndex){
@@ -47,7 +48,8 @@ template<typename States, typename ResourceGetter>
 [[nodiscard]] static bool DeduplicatePermanentIndex(
     const States& states,
     Vector<usize, Alloc::ScratchArena>& index,
-    const ResourceGetter resourceGetter)noexcept{
+    const ResourceGetter resourceGetter
+)noexcept{
     usize uniqueCount = 0u;
     for(const usize stateIndex : index){
         const auto& state = states[stateIndex];
@@ -74,7 +76,8 @@ static void FindPermanentState(
     const Vector<usize, Alloc::ScratchArena>& index,
     Resource* const resource,
     const ResourceGetter resourceGetter,
-    ResourceStates::Mask& outState)noexcept{
+    ResourceStates::Mask& outState
+)noexcept{
     usize begin = 0u;
     usize end = index.size();
     while(begin < end){

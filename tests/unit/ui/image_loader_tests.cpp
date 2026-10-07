@@ -114,7 +114,8 @@ public:
         AssetArena& arena,
         const Name& virtualPath,
         const AssetBytes& binary,
-        UniquePtr<IAsset>& outAsset)const override{
+        UniquePtr<IAsset>& outAsset
+    )const override{
         if(m_wrongType){
             outAsset = MakeUnique<UiSkin>(arena, virtualPath);
             return true;

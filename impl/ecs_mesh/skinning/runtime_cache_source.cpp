@@ -328,7 +328,8 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
 
 bool MeshSkinningRuntimeCache::ensureSourceLoaded(
     const Core::Assets::AssetRef<Skin>& skinAsset,
-    MeshSkinningSource*& outSource){
+    MeshSkinningSource*& outSource
+){
     outSource = nullptr;
     if(!skinAsset.valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning binding source assets are incomplete"));

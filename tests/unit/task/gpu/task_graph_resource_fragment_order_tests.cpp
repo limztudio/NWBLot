@@ -60,7 +60,8 @@ constexpr usize s_InitialState = Limit<usize>::s_Max;
 
 [[nodiscard]] Graphics::GpuTaskGraphResourceView ResourceView(
     const Graphics::GpuGraphResourceId id,
-    const Graphics::GpuGraphResourceType::Enum type){
+    const Graphics::GpuGraphResourceType::Enum type
+){
     Graphics::GpuTaskGraphResourceView view{};
     view.id = id;
     view.type = type;
@@ -76,7 +77,8 @@ void AppendBufferState(
     TrackedResourceStateHistory& history,
     const Graphics::GpuGraphResourceId resource,
     const u64 offset,
-    const u64 size){
+    const u64 size
+){
     ASSERT_TRUE(history.append(TrackedCompiledResourceState{
         .resource = resource,
         .range = BufferRange(offset, size),
@@ -91,7 +93,8 @@ template<usize Count>
 void ExpectBufferFragments(
     const StateFragments& fragments,
     const TrackedStates& states,
-    const ExpectedBufferFragment (&expected)[Count]){
+    const ExpectedBufferFragment (&expected)[Count]
+){
     ASSERT_EQ(fragments.size(), Count);
     for(usize index = 0u; index < Count; ++index){
         SCOPED_TRACE(index);

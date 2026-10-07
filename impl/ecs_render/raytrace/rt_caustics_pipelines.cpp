@@ -467,7 +467,8 @@ bool RendererRayTracingSystem::renderHwCaustics(
     Core::CommandList& commandList,
     const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
     DeferredFrameTargets& targets,
-    Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
+    Optional<Core::GpuTimingMeasure>* const causticPhotonTiming
+){
     // Hardware photons share the accumulator and resolve with the software reference.
     if(!hasHwCausticWork(meshView))
         return false;

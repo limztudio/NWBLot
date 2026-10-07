@@ -176,7 +176,8 @@ public:
     }
 
     [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState& widget, EditModel& model,
-        const EditBoxOptions& options, const PopupToken& popup)override{
+        const EditBoxOptions& options, const PopupToken& popup
+    )override{
         ++loans;
         lastPopup = popup;
         loanContextPopup = m_context.popupToken();
@@ -200,12 +201,15 @@ public:
     }
 
     [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&,
-        const PopupToken&, IEditActionSink&)override{ return {}; }
+        const PopupToken&, IEditActionSink&
+    )override{ return {}; }
     [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState&, EditModel&, const EditBoxOptions&,
-        const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&)override{ return {}; }
+        const PopupToken&, EditNavigationState&, IEditNavigationResolver&, IEditActionSink&
+    )override{ return {}; }
 
     [[nodiscard]] virtual bool publish(const WidgetState&, const EditBoxView& view,
-        const EditBoxPlacement&, const EditBoxOptions&)override{
+        const EditBoxPlacement&, const EditBoxOptions&
+    )override{
         ++publications;
         publishContextPopup = m_context.popupToken();
         publishedComposing = view.composing();

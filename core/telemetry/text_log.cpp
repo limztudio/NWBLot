@@ -65,7 +65,8 @@ bool BuildTextLogPayload(
     TelemetryArena& arena,
     const Common::LogType::Enum type,
     TStringView message,
-    TelemetryBytes& outPayload){
+    TelemetryBytes& outPayload
+){
     if(!IsValidTextLogType(type)){
         outPayload.clear();
         return false;

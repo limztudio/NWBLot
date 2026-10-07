@@ -17,7 +17,8 @@ NWB_IMPL_UI_BEGIN
 
 
 bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, const StringView text,
-    TooltipState& state, const TooltipOptions& options){
+    TooltipState& state, const TooltipOptions& options
+){
     Item* anchor = annotationAnchor(anchorKey);
     if(
         declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()

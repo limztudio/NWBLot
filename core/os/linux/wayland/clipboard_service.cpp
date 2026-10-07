@@ -134,7 +134,8 @@ void WaylandClipboardService::startNativeRequest(
     const ClipboardRequestToken token,
     const ClipboardOperation::Enum operation,
     const ClipboardChannel::Enum channel,
-    const AStringView text){
+    const AStringView text
+){
     if(operation == ClipboardOperation::WriteText){
         const ClipboardStatus::Enum status = writeSelection(channel, text);
         if(!completeNativeRequest(token, status))
@@ -250,7 +251,8 @@ void WaylandClipboardService::sendSource(Source& source, const int fd){
 
 GlobalUniquePtr<IClipboardService> CreateWaylandClipboardService(
     Alloc::GlobalArena& arena,
-    wl_display& display){
+    wl_display& display
+){
     auto service = MakeGlobalUnique<WaylandClipboardService>(arena, arena, display);
     if(!service->initialize()){
         NWB_LOGGER_ERROR(NWB_TEXT("Wayland clipboard initialization failed"));

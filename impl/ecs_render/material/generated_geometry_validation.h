@@ -29,7 +29,8 @@ namespace ECSRenderDetail{
     const Vector<MaterialPassDrawItem, Core::Alloc::GlobalArena>& drawItems,
     const Vector<Core::BufferHandle, Core::Alloc::GlobalArena>& outputBuffers,
     const Vector<GeneratedGeometryOutputLayout, Core::Alloc::GlobalArena>& outputLayouts,
-    const Vector<u32, Core::Alloc::GlobalArena>& outputHeapSlots){
+    const Vector<u32, Core::Alloc::GlobalArena>& outputHeapSlots
+){
     if(
         !captured
         || outputBuffers.size() != drawItems.size()

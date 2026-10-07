@@ -110,17 +110,20 @@ public:
     }
 
     [[nodiscard]] virtual EditBoxResult editInPopup(const WidgetState&, EditModel&,
-        const EditBoxOptions&, const PopupToken&)override{ return {}; }
+        const EditBoxOptions&, const PopupToken&
+    )override{ return {}; }
 
     [[nodiscard]] virtual EditBoxResult editActions(const WidgetState&, EditModel&, const EditBoxOptions&,
-        const PopupToken&, IEditActionSink&)override{
+        const PopupToken&, IEditActionSink&
+    )override{
         ++actionLoans;
         return {};
     }
 
     [[nodiscard]] virtual EditBoxResult editNavigated(const WidgetState& widget, EditModel& model,
         const EditBoxOptions& options, const PopupToken& popup, EditNavigationState& navigation,
-        IEditNavigationResolver& resolver, IEditActionSink& sink)override{
+        IEditNavigationResolver& resolver, IEditActionSink& sink
+    )override{
         ++loans;
         lastPopup = popup;
         EditBoxResult result;
@@ -189,7 +192,8 @@ public:
     }
 
     [[nodiscard]] virtual bool publish(const WidgetState& widget, const EditBoxView& view,
-        const EditBoxPlacement& placement, const EditBoxOptions&)override{
+        const EditBoxPlacement& placement, const EditBoxOptions&
+    )override{
         ++publishes;
         publications.emplace_back(m_arena);
         AreaPublication& record = publications.back();
@@ -208,7 +212,8 @@ public:
 
 private:
     [[nodiscard]] bool applyAction(EditModel& model, EditNavigationState& navigation, IEditActionSink& sink,
-        const EditAction::Enum action, const bool readOnly, EditBoxResult& result){
+        const EditAction::Enum action, const bool readOnly, EditBoxResult& result
+    ){
         actionTexts.emplace_back(m_arena);
         actionTexts.back().assign(model.text().data(), model.text().size());
         if(!sink.apply(model, action, readOnly))
@@ -272,7 +277,8 @@ protected:
     [[nodiscard]] bool acceptArea(){ return finishPanel() && m_context.commitFrame(m_context.readyGeneration()); }
 
     [[nodiscard]] bool frameArea(const u64 generation, const TextAreaOptions& options = {},
-        const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }){
+        const Rect& bounds = { 20.0f, 20.0f, 740.0f, 520.0f }
+    ){
         if(!beginArea(generation, bounds))
             return false;
         m_result = m_builder.textArea("area", m_model, m_state, options);

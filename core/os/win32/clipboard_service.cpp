@@ -92,7 +92,8 @@ void Win32ClipboardService::startNativeRequest(
     const ClipboardRequestToken token,
     const ClipboardOperation::Enum operation,
     const ClipboardChannel::Enum,
-    const AStringView text){
+    const AStringView text
+){
     m_nativeToken = token;
     m_utf8Text.clear();
     const ClipboardStatus::Enum status = operation == ClipboardOperation::ReadText

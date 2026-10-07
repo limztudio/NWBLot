@@ -123,7 +123,21 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - `);`
 - Split function arguments only when the line would exceed the long separator width (`////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////`) or when argument count is too high.
 - Prefer single-line function signatures/definitions when the parameter list is still readable. For signatures, treat the long-separator width as a soft readability cue, not a hard split point; do not split a short signature just because it is modestly long.
-- For multiline function definitions with a body, put the final parameter on its own line and attach `){` directly after it instead of placing `{` on a separate line.
+- For a function definition whose parameter list spans multiple lines, put the closing `)` on its own line, aligned with the function opener. Keep the opening body brace on that closing line, after any existing qualifiers, exception specification, or trailing return type. If the exception specification or trailing return type itself spans multiple lines, preserve its continuation lines and attach the body brace to its final line. Never attach the parameter-list closing `)` to the final parameter. Apply this to free/member/static functions, operators, constructors, lambdas, and shader functions. Keep constructor initializer lists on their existing continuation lines; do not move the body brace ahead of an initializer list. Preserve readable single-line signatures.
+  - Correct:
+  - `void Foo(`
+  - `    int a,`
+  - `    int b`
+  - `){`
+  - Correct with qualifiers:
+  - `bool Foo::bar(`
+  - `    int a,`
+  - `    int b`
+  - `)const noexcept{`
+  - Wrong:
+  - `void Foo(`
+  - `    int a,`
+  - `    int b){`
 - When splitting calls, place the closing `)` on a new line:
   - `foobar(`
   - `    a,`

@@ -190,7 +190,8 @@ static void DispatchTextInput(InputDispatcher& input, XKeyEvent keyEvent, i32 mo
 }
 
 static void DispatchKeyEvent(
-    Frame& frame, const XKeyEvent& keyEvent, i32 action, const bool dispatchText, const bool dispatchPhysical = true){
+    Frame& frame, const XKeyEvent& keyEvent, i32 action, const bool dispatchText, const bool dispatchPhysical = true
+){
     XKeyEvent translatedEvent = keyEvent;
     const KeySym keySym = keyEvent.keycode ? XLookupKeysym(&translatedEvent, 0) : NoSymbol;
     const i32 key = TranslateKey(keySym);

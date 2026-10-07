@@ -217,7 +217,8 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         const Name identity,
         const Core::GpuGraphResourceId destination,
         const bool isDepth,
-        const Core::Color color = Core::Color(0.f, 0.f, 0.f, 0.f)){
+        const Core::Color color = Core::Color(0.f, 0.f, 0.f, 0.f)
+    ){
         Core::GpuTaskDesc desc = TaskDesc(identity, "Refraction Capture Clear", dependency);
         Core::GpuClearTextureTaskDesc clear;
         clear.destination = destination;
@@ -300,7 +301,8 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         return {};
 
     const auto appendUpload = [&](const Name identity, const Core::GpuGraphResourceId destination,
-                                  const void* bytes, const usize byteSize, const usize alignment){
+                                  const void* bytes, const usize byteSize, const usize alignment
+    ){
         if(!destination.valid() || !bytes || byteSize == 0u)
             return false;
         const Core::GpuUploadBlobId blob = graph.copyUploadData(bytes, byteSize, alignment);
@@ -372,7 +374,8 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
 
     usize drawTaskIndex = 0u;
     const auto appendDraw = [&](const MaterialPassDrawItem* items, const usize count, const bool csg,
-                                const RenderPath::Enum renderPath, const bool generate, const Core::GpuGraphResourceId output){
+                                const RenderPath::Enum renderPath, const bool generate, const Core::GpuGraphResourceId output
+    ){
         if(count == 0u)
             return true;
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratch};

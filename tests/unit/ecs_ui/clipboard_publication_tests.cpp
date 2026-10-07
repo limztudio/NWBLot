@@ -44,7 +44,8 @@ public:
 protected:
     virtual void startNativeRequest(
         const ClipboardRequestToken token, const ClipboardOperation::Enum operation,
-        ClipboardChannel::Enum channel, const AStringView text)override{
+        ClipboardChannel::Enum channel, const AStringView text
+    )override{
         static_cast<void>(channel);
         startedToken = token;
         startedOperation = operation;

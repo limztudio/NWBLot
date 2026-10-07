@@ -30,7 +30,8 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
     const GpuTaskGraphTaskAcceptedCallback* const taskAcceptedCallbacks,
     const usize taskAcceptedCallbackCount,
     const GpuTaskGraphTaskSubmissionHook* const taskSubmissionHooks,
-    const usize taskSubmissionHookCount)const{
+    const usize taskSubmissionHookCount
+)const{
     if(outFailedPacket)
         *outFailedPacket = {};
     SubmissionAttemptExceptionFinalizer exceptionFinalizer(graph, compiledGraph, recordedGraph, transaction);

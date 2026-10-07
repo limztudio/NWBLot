@@ -45,7 +45,8 @@ inline constexpr Name s_AnalysisScratchArena("tests/task/gpu/analysis_scratch");
     const Graphics::GpuTaskId* const dependencies = nullptr,
     const usize dependencyCount = 0u,
     const Graphics::GpuTaskResourceUse* const resourceUses = nullptr,
-    const usize resourceUseCount = 0u){
+    const usize resourceUseCount = 0u
+){
     char taskIndexBuffer[32u] = {};
     Graphics::GpuTaskDesc desc;
     desc
@@ -69,7 +70,8 @@ static void ExpectDagAnalysis(
     const Graphics::GpuTaskGraph& graph,
     Graphics::GpuTaskGraphAnalysis& analysis,
     const Vector<Graphics::GpuTaskDependencyEdge, Core::Alloc::ScratchArena>& expectedEdges,
-    Core::Alloc::ScratchArena& scratchArena){
+    Core::Alloc::ScratchArena& scratchArena
+){
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
     ASSERT_TRUE(declarations.valid());
     const Graphics::GpuTaskGraphCompiler compiler;
@@ -200,7 +202,8 @@ static void DeclareShortcutChain(Graphics::GpuTaskGraph& graph, const usize task
 static void ExpectReducedShortcutChain(
     const Graphics::GpuTaskGraphAnalysis& analysis,
     const usize taskCount,
-    const bool reversed){
+    const bool reversed
+){
     ASSERT_EQ(analysis.edges().size(), taskCount * 2u - 3u);
     ASSERT_EQ(analysis.schedulingEdges().size(), taskCount - 1u);
     for(usize edgeIndex = 0u; edgeIndex + 1u < taskCount; ++edgeIndex){
@@ -253,7 +256,8 @@ namespace ReadyOrderShape{
 static void DeclareReadyOrderGraph(
     Graphics::GpuTaskGraph& graph,
     const usize taskCount,
-    const ReadyOrderShape::Enum shape){
+    const ReadyOrderShape::Enum shape
+){
     u64 generation = 0u;
     {
         const Graphics::GpuTaskGraph::DeclarationReadView view(graph);
@@ -273,7 +277,8 @@ static void DeclareReadyOrderGraph(
 static void ExpectReadyOrder(
     const Graphics::GpuTaskGraphAnalysis& analysis,
     const usize taskCount,
-    const ReadyOrderShape::Enum shape){
+    const ReadyOrderShape::Enum shape
+){
     ASSERT_EQ(analysis.topologicalOrder().size(), taskCount);
     for(usize index = 0u; index < taskCount; ++index){
         const usize expected = shape == ReadyOrderShape::ReverseChain ? taskCount - index - 1u

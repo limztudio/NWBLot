@@ -120,7 +120,8 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
     const GpuTaskDiscardedThunk discardPayload,
     const GpuTaskPayloadDestroyThunk destroyPayload,
     const usize payloadObjectSize,
-    const DeclarationMutationScope& mutationAccess){
+    const DeclarationMutationScope& mutationAccess
+){
     if(!mutationAccess.validFor(*this))
         return {};
 

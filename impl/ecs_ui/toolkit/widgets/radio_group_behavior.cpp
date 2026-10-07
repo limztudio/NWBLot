@@ -68,7 +68,8 @@ namespace __hidden_ui_radio_group_behavior{
     const RadioGroupState& state,
     const RadioGroupSnapshot& snapshot,
     const bool& reentryObserved,
-    const IRadioGroupReconcileGuard* const guard){
+    const IRadioGroupReconcileGuard* const guard
+){
     if(reentryObserved || !state.matches(snapshot) || (guard && !guard->current()))
         return false;
     return !reentryObserved && state.matches(snapshot);
@@ -80,7 +81,8 @@ namespace __hidden_ui_radio_group_behavior{
     const RadioGroupSnapshot& snapshot,
     const bool& reentryObserved,
     const RadioGroupChoices& choices,
-    const IRadioGroupReconcileGuard* const guard){
+    const IRadioGroupReconcileGuard* const guard
+){
     if(!StateCurrent(state, snapshot, reentryObserved, guard))
         return false;
     const u64 generation = source.instanceGeneration();
@@ -102,7 +104,8 @@ namespace __hidden_ui_radio_group_behavior{
 }
 
 [[nodiscard]] static u64 NavigationTarget(
-    const RadioGroupChoices& choices, const u64 cursor, const ControlActionKind::Enum kind)noexcept{
+    const RadioGroupChoices& choices, const u64 cursor, const ControlActionKind::Enum kind
+)noexcept{
     if(choices.count == 0u)
         return 0u;
     if(kind == ControlActionKind::Home)
@@ -133,7 +136,8 @@ bool RadioGroupBehavior::Reconcile(
     const IListDataSource& source,
     RadioGroupChoices& choices,
     RadioGroupResult& result,
-    const IRadioGroupReconcileGuard* const guard){
+    const IRadioGroupReconcileGuard* const guard
+){
     using namespace __hidden_ui_radio_group_behavior;
     if(state.m_reconciling){
         state.m_reentryObserved = true;
@@ -212,7 +216,8 @@ bool RadioGroupBehavior::Apply(
     const RadioGroupChoices& choices,
     const RadioGroupOptions& options,
     const ControlAction& action,
-    RadioGroupResult& result){
+    RadioGroupResult& result
+){
     using namespace __hidden_ui_radio_group_behavior;
     if(state.m_reconciling){
         state.m_reentryObserved = true;

@@ -23,7 +23,8 @@ namespace __hidden_ui_list_behavior{
 
 
 [[nodiscard]] static bool ResolveKey(const IListDataSource& source, const u64 count, const u64 key,
-    u64& index, bool& present){
+    u64& index, bool& present
+){
     present = false;
     index = 0u;
     if(key == 0u || count == 0u || !source.indexOf(key, index))
@@ -50,7 +51,8 @@ namespace __hidden_ui_list_behavior{
 }
 
 [[nodiscard]] static bool FindCursor(const IListDataSource& source, const u64 count, const u64 cursor,
-    const ControlAction& action, u64& candidate){
+    const ControlAction& action, u64& candidate
+){
     candidate = 0u;
     if(count == 0u)
         return true;
@@ -144,7 +146,8 @@ bool ListBehavior::Reconcile(ListState& state, const IListDataSource& source){
 }
 
 bool ListBehavior::Apply(ListState& state, const IListDataSource& source, const ListOptions& options,
-    const ControlAction& action, ListResult& result){
+    const ControlAction& action, ListResult& result
+){
     using namespace __hidden_ui_list_behavior;
     const u64 inputGeneration = state.m_inputGeneration;
     const ControlToken token{ state.m_inputGeneration, state.m_sourceGeneration, state.m_sourceRevision };
@@ -199,7 +202,8 @@ bool ListBehavior::Apply(ListState& state, const IListDataSource& source, const 
 }
 
 bool ListBehavior::EnsureCursor(ListState& state, const IListDataSource& source, const f32 rowHeight,
-    const f64 viewportHeight){
+    const f64 viewportHeight
+){
     using namespace __hidden_ui_list_behavior;
     const u64 inputGeneration = state.m_inputGeneration;
     if(

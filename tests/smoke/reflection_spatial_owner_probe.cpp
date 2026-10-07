@@ -69,7 +69,8 @@ bool ReflectionSpatialOwnerProbe::configure(const AStringView selection, Impl::R
 bool ReflectionSpatialOwnerProbe::update(
     const Impl::ReflectionStatistics& statistics,
     const Core::Perf::TimingView& timing,
-    Impl::ReflectionSettings& settings){
+    Impl::ReflectionSettings& settings
+){
     if(!observeTiming(timing))
         return false;
     if(m_finalReset || statistics.sequence == 0u || !statistics.hardwareReady || !statistics.historyEligible)

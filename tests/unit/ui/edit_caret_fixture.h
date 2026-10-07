@@ -116,7 +116,8 @@ public:
 
 protected:
     [[nodiscard]] bool layout(const StringView text, TextLayout& output,
-        const TextDirection::Enum direction = TextDirection::LeftToRight){
+        const TextDirection::Enum direction = TextDirection::LeftToRight
+    ){
         return m_builder.layout({ text, 16.0f, direction }, output) == TextLayoutStatus::Success;
     }
 
@@ -131,7 +132,8 @@ protected:
     }
 
     [[nodiscard]] bool adopt(const StringView text, const usize committedBytes,
-        const EditTextMode::Enum mode = EditTextMode::Multiline){
+        const EditTextMode::Enum mode = EditTextMode::Multiline
+    ){
         TextLayout candidate(m_arena);
         return layout(text, candidate) && m_geometry.adoptLayout(Move(candidate), text, m_mapping, committedBytes, mode);
     }

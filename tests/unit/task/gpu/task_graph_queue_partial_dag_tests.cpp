@@ -55,7 +55,8 @@ void DeclareGraph(
     Graphics::GpuTaskGraph& graph,
     const usize taskCount,
     const Shape::Enum shape,
-    Graphics::Alloc::ScratchArena& scratch){
+    Graphics::Alloc::ScratchArena& scratch
+){
     constexpr usize s_LayerSize = 16u;
     constexpr usize s_ChainSize = 32u;
     const bool interleaved = shape == Shape::InterleavedChains32;

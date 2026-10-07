@@ -150,7 +150,8 @@ void QueuedClipboardService::pumpNativeRequests(){}
 bool QueuedClipboardService::completeNativeRequest(
     const ClipboardRequestToken token,
     ClipboardStatus::Enum status,
-    const AStringView text){
+    const AStringView text
+){
     if(!isOwnerThread())
         return false;
     Request* const request = findRequest(token);
@@ -174,7 +175,8 @@ bool QueuedClipboardService::completeNativeRequest(
 ClipboardRequestResult QueuedClipboardService::enqueue(
     const ClipboardChannel::Enum channel,
     const ClipboardOperation::Enum operation,
-    const AStringView text){
+    const AStringView text
+){
     if(!isOwnerThread())
         return { .token = {}, .admission = ClipboardAdmission::WrongThread };
 

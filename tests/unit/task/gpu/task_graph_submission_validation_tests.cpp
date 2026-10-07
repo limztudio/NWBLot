@@ -35,7 +35,8 @@ using TaskGraphTestUtils::TestArena;
 void ExpectWaitStatistics(
     const Graphics::GpuPhysicalQueueId queue,
     const Graphics::QueueSubmissionToken* const tokens,
-    const usize count){
+    const usize count
+){
     Graphics::Alloc::ScratchArena scratch(s_TaskGraphScratchArena);
     const Graphics::GpuPacketRuntimeDetail::PacketWaitStatistics actual = Graphics::GpuPacketRuntimeDetail::CountPacketWaitStatistics(
         queue, tokens, count, scratch

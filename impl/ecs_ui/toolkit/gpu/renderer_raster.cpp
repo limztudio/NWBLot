@@ -22,7 +22,8 @@ NWB_IMPL_UI_BEGIN
 bool GpuRasterTask::Record(
     const Payload& payload,
     Core::CommandList& commands,
-    const Core::GpuTaskRecordContext& context){
+    const Core::GpuTaskRecordContext& context
+){
     const GpuFrame& frame = payload.frame;
     if(
         !frame || !frame->m_prepared || !frame->m_target || !frame->m_resources
@@ -117,7 +118,8 @@ void GpuRasterTask::Accepted(Payload& payload, const Core::QueueSubmissionToken&
 bool GpuOutputTask::Record(
     const Payload& payload,
     Core::CommandList& commands,
-    const Core::GpuTaskRecordContext& context){
+    const Core::GpuTaskRecordContext& context
+){
     const GpuFrame& frame = payload.frame;
     if(
         !frame || !payload.pipeline || !payload.acquired.valid()

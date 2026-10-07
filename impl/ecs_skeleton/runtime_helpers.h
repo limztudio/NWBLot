@@ -40,7 +40,8 @@ static constexpr f32 s_RigidJointEpsilon = 0.001f;
     const bool hasInverseBind,
     const SIMDMatrix& inverseBind,
     const f32 inverseBindDeterminantEpsilon,
-    SIMDMatrix& outMatrix)noexcept{
+    SIMDMatrix& outMatrix
+)noexcept{
     outMatrix = poseJoint;
     if(!MatrixIsInvertibleAffine(outMatrix, s_AffineEpsilon, s_JointDeterminantEpsilon))
         return false;
@@ -74,7 +75,8 @@ template<typename JointMatrixVector>
 [[nodiscard]] inline bool BuildStoredJointPaletteFromSkeletonPose(
     const SkeletonPoseComponent& pose,
     JointMatrixVector& outJointPalette,
-    u32& outSkinningMode){
+    u32& outSkinningMode
+){
     outJointPalette.clear();
     outSkinningMode = SkeletonSkinningMode::LinearBlend;
 

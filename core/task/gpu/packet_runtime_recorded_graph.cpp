@@ -29,7 +29,8 @@ namespace GpuPacketRuntimeDetail{
 [[nodiscard]] bool ValidateExternalDependencyTokens(
     const GpuTaskGraph::DeclarationReadView& declarationAccess,
     const GpuCompiledGraph::ReadView& planAccess,
-    const GpuSubmissionPacketRange& range)noexcept{
+    const GpuSubmissionPacketRange& range
+)noexcept{
     if(!planAccess.validFor(declarationAccess) || !planAccess.validPacketRange(range))
         return false;
 
@@ -48,7 +49,8 @@ namespace GpuPacketRuntimeDetail{
 
 [[nodiscard]] const GpuTaskGraphInitialOwnerHandoffSourceView* FindInitialOwnerHandoffSource(
     const GpuTaskGraphResourceView& resource,
-    const GpuCompiledBarrier& barrier)noexcept{
+    const GpuCompiledBarrier& barrier
+)noexcept{
     if(
         resource.initialOwnerHandoffSourceCount == 0u
         || !resource.initialOwnerHandoffSources
@@ -943,7 +945,8 @@ void GpuRecordedGraph::cachePacketRecordingOverlaps(
     const GpuCompiledGraph::ReadView& planAccess,
     const Vector<u32, Alloc::ScratchArena>& packetIndices,
     Alloc::ScratchArena& scratchArena,
-    const ArtifactOperation& artifactAccess){
+    const ArtifactOperation& artifactAccess
+){
     using IntervalEntry = __hidden_gpu_packet_runtime_recorded_graph::PacketRecordingIntervalEntry;
     const bool artifactAccessValid = planAccess.validFor(compiledGraph)
         && artifactAccess.exclusiveFor(*this)

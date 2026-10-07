@@ -53,7 +53,8 @@ bool RendererReflectionFeedback::prepareResources(
     const u32 width,
     const u32 height,
     const ReflectionSettings& settings,
-    const bool enabled){
+    const bool enabled
+){
     const ReflectionFeedbackExtent extent = ComputeReflectionFeedbackExtent(width, height);
     if(!extent.valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("Reflection feedback: invalid extent or feedback address range ({}x{})"), width, height);
@@ -99,7 +100,8 @@ ReflectionFeedbackSnapshot RendererReflectionFeedback::snapshot(
     const ReflectionSceneContentStamp& stamp,
     const ReflectionSettings& settings,
     const bool enabled,
-    const u64 graphicsFrameIndex)const{
+    const u64 graphicsFrameIndex
+)const{
     ReflectionFeedbackSnapshot result;
     if(!m_control)
         return result;

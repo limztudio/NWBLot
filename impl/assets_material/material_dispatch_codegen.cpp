@@ -113,7 +113,8 @@ bool AssignMaterialShadingModelIdsImpl(
 
 static Path BuildDeferredBxdfIncludeRoot(
     const Path& cacheDirectory,
-    const AStringView configurationSafeName){
+    const AStringView configurationSafeName
+){
     return cacheDirectory / configurationSafeName / "deferred_modules";
 }
 
@@ -242,7 +243,8 @@ static constexpr AStringView s_ShadowSurfaceModuleSubPath = "shadow/generated/su
 
 static Path BuildShadowSurfaceIncludeRoot(
     const Path& cacheDirectory,
-    const AStringView configurationSafeName){
+    const AStringView configurationSafeName
+){
     return cacheDirectory / configurationSafeName / "shadow_modules";
 }
 

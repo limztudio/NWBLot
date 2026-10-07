@@ -327,7 +327,8 @@ bool GpuRecordedGraph::buildPacketInitialStateSeed(
     const auto buildSeedSubset = [&](
         const GpuPacketStateSeed& seed,
         const CommandListResourceStateHandoff& sourceStates,
-        CommandListResourceStateHandoff& subset){
+        CommandListResourceStateHandoff& subset
+    ){
         subset.reset();
         if(Texture* const texture = declarationAccess.textureForResource(seed.resource)){
             if(!subset.buildTextureRangeSubset(sourceStates, texture, seed.range.textureSubresources))

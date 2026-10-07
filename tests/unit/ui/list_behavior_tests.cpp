@@ -109,7 +109,8 @@ public:
 
 
 [[nodiscard]] static ControlAction Action(const ListState& state, const RangeSource& source,
-    const ControlActionKind::Enum kind){
+    const ControlActionKind::Enum kind
+){
     ControlAction action;
     action.control = { state.inputGeneration(), source.instanceGeneration(), source.revision() };
     action.kind = kind;

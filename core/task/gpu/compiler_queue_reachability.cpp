@@ -53,7 +53,8 @@ static void TransposeTaskRelationTile(Array<u64, s_BitsPerWord>& tile)noexcept{
 static void SymmetrizeTaskRelations(
     Vector<u64, Alloc::ScratchArena>& words,
     const usize taskCount,
-    const usize wordsPerRow){
+    const usize wordsPerRow
+){
     for(usize rowBlock = 0u; rowBlock < wordsPerRow; ++rowBlock){
         const usize rowBase = rowBlock * s_BitsPerWord;
         const usize rowCount = Min(s_BitsPerWord, taskCount - rowBase);
@@ -101,7 +102,8 @@ static void SymmetrizeCompactTaskRelations(
     const Vector<usize, Alloc::ScratchArena>& offsets,
     const RowRanges& ranges,
     const usize taskCount,
-    const usize wordsPerRow){
+    const usize wordsPerRow
+){
     const auto readWord = [&](const usize task, const usize word){
         const auto& range = ranges[task];
         return word < range.m_begin || word >= range.m_end
@@ -178,7 +180,8 @@ GpuTaskSchedulingReachability::GpuTaskSchedulingReachability(Alloc::ScratchArena
 
 bool GpuTaskSchedulingReachability::reaches(
     const GpuTaskId& source,
-    const GpuTaskId& destination)const noexcept{
+    const GpuTaskId& destination
+)const noexcept{
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
 
     if(
@@ -209,7 +212,8 @@ bool GpuTaskSchedulingReachability::reaches(
 
 bool GpuTaskSchedulingReachability::transitivelyIndependent(
     const GpuTaskId& lhs,
-    const GpuTaskId& rhs)const noexcept{
+    const GpuTaskId& rhs
+)const noexcept{
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
 
     if(
@@ -245,7 +249,8 @@ bool GpuTaskSchedulingReachability::transitivelyIndependent(
 bool BuildGpuTaskSchedulingReachability(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
-    GpuTaskSchedulingReachability& outReachability){
+    GpuTaskSchedulingReachability& outReachability
+){
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
 
     outReachability.m_words.clear();

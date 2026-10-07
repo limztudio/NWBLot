@@ -105,7 +105,8 @@ void RendererRayTracingSystem::invalidateLightSpaceShadowCapture()noexcept{
 }
 
 bool RendererRayTracingSystem::buildLightSpaceShadowPlan(
-    const ECSRenderDetail::SceneLightGpuData* const lights, const u32 lightCount, LightSpacePlan& plan)const{
+    const ECSRenderDetail::SceneLightGpuData* const lights, const u32 lightCount, LightSpacePlan& plan
+)const{
     const auto& state = m_lightSpaceShadow;
     if(
         (!state.m_csg.snapshot.hasCsg && (m_shadowVisibilityHardwareSupported || state.m_settings.backend == SoftwareShadowBackend::SoftwareTrace))

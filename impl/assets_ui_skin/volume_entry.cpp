@@ -34,7 +34,8 @@ static bool ParseUiSkinDocument(
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
     UiSkinCookEntry& outEntry,
-    Core::Assets::CookEntryParseContext& context){
+    Core::Assets::CookEntryParseContext& context
+){
     return ParseUiSkinCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, outEntry, context.scratchArena);
 }
 

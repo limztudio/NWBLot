@@ -83,7 +83,8 @@ bool Win32TextInputService::handleMessage(const u32 message, const usize wParam,
 TextInputAdmission::Enum Win32TextInputService::acceptCodePoint(
     const TextInputSessionToken token,
     const u32 codePoint,
-    const u32 repeatCount){
+    const u32 repeatCount
+){
     // Editing/navigation control keys are delivered through the ordinary key path, never committed as document text.
     if(codePoint < 0x20u || codePoint == 0x7fu)
         return TextInputAdmission::Accepted;
@@ -113,7 +114,8 @@ TextInputAdmission::Enum Win32TextInputService::acceptCodePoint(
 TextInputAdmission::Enum Win32TextInputService::acceptUtf16Unit(
     const TextInputSessionToken token,
     const u32 unit,
-    const u32 repeatCount){
+    const u32 repeatCount
+){
     if(unit > 0xffffu){
         m_pendingHighSurrogate = 0u;
         return TextInputAdmission::InvalidText;

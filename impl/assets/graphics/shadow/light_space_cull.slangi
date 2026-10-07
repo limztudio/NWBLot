@@ -15,7 +15,8 @@ bool nwbLightSpaceBoundsOutside(
     const NwbLightSpaceView view,
     const uint instanceIndex,
     const float3 minimum,
-    const float3 maximum){
+    const float3 maximum
+){
     if(view.depthRange.w == 0.0)
         return false;
     const NwbRtInstanceMaterial material = nwbLightSpaceMaterial(instanceIndex);

@@ -143,7 +143,8 @@ AString BuildMetadata(const TexturePayload& payload, const Path& dataPath){
     const usize count,
     const void* const tail,
     const usize tailCount,
-    bool& outOwned)noexcept{
+    bool& outOwned
+)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     const HANDLE handle = CreateFile(path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
     if(handle == INVALID_HANDLE_VALUE)

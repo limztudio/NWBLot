@@ -26,7 +26,8 @@ namespace __hidden_softshadow_pipelines{
     Core::GraphicsBackend::Device& device,
     const Core::BindingLayoutHandle& bindingLayout,
     const Name& shaderName,
-    SoftShadowResolveChannelState& channel){
+    SoftShadowResolveChannelState& channel
+){
     struct StageRequest{
         AStringView m_variant;
         SoftShadowResolveStageState& m_state;

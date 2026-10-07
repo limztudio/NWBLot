@@ -36,7 +36,8 @@ using namespace GpuTaskGraphCompilerDetail;
 [[nodiscard]] bool NativeClosePreservesState(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphResourceView& resource,
-    const ResourceStates::Mask state)noexcept{
+    const ResourceStates::Mask state
+)noexcept{
     if(const Texture* const texture = graph.textureForResource(resource.id)){
         const TextureDesc& description = texture->getCreationDescription();
         return !description.keepInitialState || description.initialState == state;

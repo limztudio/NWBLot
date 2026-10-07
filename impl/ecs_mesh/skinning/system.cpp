@@ -265,7 +265,8 @@ MeshSkinningSystem::MeshSkinningSystem(
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
     IRuntimeMeshRegistry& runtimeMeshRegistry,
-    ShaderPathResolveCallback shaderPathResolver)
+    ShaderPathResolveCallback shaderPathResolver
+)
     : Core::ECS::ISystem(arena)
     , Core::IRenderPass(graphics)
     , m_arena(arena)

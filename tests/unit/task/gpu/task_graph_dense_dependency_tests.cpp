@@ -49,7 +49,8 @@ static void DeclareDenseDependencies(
     Graphics::GpuTaskGraph& graph,
     const usize taskCount,
     const Scenario::Enum scenario,
-    Graphics::Alloc::ScratchArena& scratch){
+    Graphics::Alloc::ScratchArena& scratch
+){
     Vector<Graphics::GpuGraphResourceId, Graphics::Alloc::ScratchArena> resources(scratch);
     Vector<Graphics::GpuTaskId, Graphics::Alloc::ScratchArena> tasks(scratch);
     Vector<Graphics::GpuTaskResourceUse, Graphics::Alloc::ScratchArena> uses(scratch);

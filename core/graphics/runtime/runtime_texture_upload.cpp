@@ -122,7 +122,8 @@ inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_textur
     GraphicsBackend::Device& device,
     const CommandQueue::Enum requestedConsumerQueue,
     const usize uploadBytes,
-    const TextureDesc& textureDesc)noexcept{
+    const TextureDesc& textureDesc
+)noexcept{
     if(TextureUploadRequiresGraphicsConsumerQueue(textureDesc))
         return CommandQueue::Graphics;
 

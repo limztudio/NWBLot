@@ -13,7 +13,8 @@ NwbMeshGeneratedVertex nwbMeshTransformObjectVertex(
     const float4 tangent,
     const float2 uv0,
     const half4 color,
-    const NwbMeshInstanceData instance){
+    const NwbMeshInstanceData instance
+){
     if(position.w == 0.0){
         return nwbMeshBuildGeneratedVertexWithRasterFlags(
             float4(2.0, 2.0, 0.0, 1.0),

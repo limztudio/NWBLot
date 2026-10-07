@@ -15,7 +15,8 @@
 
 bool ComputeSkinDependencies(const PipelineOptions& options,
     NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>& outInputs,
-    NWB::Core::Alloc::ScratchArena& scratchArena){
+    NWB::Core::Alloc::ScratchArena& scratchArena
+){
     using namespace NWB;
     namespace Assets = Core::Assets;
     Assets::AssetArena& arena = outInputs.get_allocator().arena();

@@ -78,7 +78,8 @@ void PaintBuilder::begin(
     const u64 generation,
     const u64 skinGeneration,
     const Core::Assets::AssetRef<UiSkin>& skinRef,
-    const UiSkin& skin){
+    const UiSkin& skin
+){
     NWB_ASSERT(skinRef.valid() && skinRef.name() == skin.virtualPath());
     NWB_ASSERT(skin.atlasWidth() > 0u && skin.atlasHeight() > 0u && skin.referenceDensity() > 0.0f);
     NWB_ASSERT(IsFinite(skin.referenceDensity()));
@@ -181,7 +182,8 @@ void PaintBuilder::emitQuad(
     const u32 glyphPageIndex,
     const u32 sdfPageIndex,
     const u32 sdfChannel,
-    const u32 textureImageIndex){
+    const u32 textureImageIndex
+){
     NWB_ASSERT(m_recording);
     NWB_ASSERT(IsFinite(color.r) && IsFinite(color.g) && IsFinite(color.b) && IsFinite(color.a));
     NWB_ASSERT(color.a >= 0.0f && color.a <= 1.0f);

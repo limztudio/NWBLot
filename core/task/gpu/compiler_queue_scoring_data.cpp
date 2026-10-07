@@ -27,7 +27,8 @@ GpuTaskQueueScoringData::GpuTaskQueueScoringData(
     const GpuTaskGraphAnalysis& analysis,
     const GpuTaskSchedulingReachability& reachability,
     const GpuTaskGraphQueueAssignmentOptions& options,
-    Alloc::ScratchArena& scratchArena)
+    Alloc::ScratchArena& scratchArena
+)
     : m_taskCosts(graph.taskCount(), scratchArena)
     , m_taskCostGroups(reachability.m_words.empty() ? 0u : graph.taskCount(), scratchArena)
     , m_ownershipEdgeOffsets(graph.taskCount() + 1u, 0u, scratchArena)
@@ -112,7 +113,8 @@ u64 GpuTaskQueueScoringData::externalQueueLoad(const GpuPhysicalQueueId& queue)c
 
 void GpuTaskQueueScoringData::rebuildAssignmentLoads(
     const GraphicsVector<GpuTaskQueueAssignment>& assignments,
-    const GpuPhysicalQueueTopology& topology){
+    const GpuPhysicalQueueTopology& topology
+){
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
 
     m_assignedQueueLoads.resize(topology.queueCount);
@@ -175,7 +177,8 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(
 void GpuTaskQueueScoringData::updateAssignmentLoads(
     const GpuTaskId& task,
     const GpuPhysicalQueueId& previousQueue,
-    const GpuPhysicalQueueId& selectedQueue)noexcept{
+    const GpuPhysicalQueueId& selectedQueue
+)noexcept{
     constexpr usize s_BitsPerWord = sizeof(u64) * 8u;
 
     if(previousQueue == selectedQueue)
@@ -225,7 +228,8 @@ u64 GpuTaskQueueScoringData::independentQueueCost(
     const GpuTaskSchedulingReachability& reachability,
     const GpuPhysicalQueueId& queue,
     const NotNull<const GpuTaskQueueAssignment*> members,
-    const usize memberCount)const noexcept{
+    const usize memberCount
+)const noexcept{
     if(!reachability.m_valid || reachability.m_totalOrder || memberCount == 0u)
         return 0u;
 #if defined(NWB_DEBUG)

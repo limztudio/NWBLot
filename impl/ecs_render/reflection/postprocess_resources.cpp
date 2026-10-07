@@ -49,7 +49,8 @@ static_assert(LengthOf(s_SpatialVariants) == NWB_REFLECTION_SPATIAL_MAX_RADIUS);
 RendererReflectionPostprocess::RendererReflectionPostprocess(
     Core::Alloc::GlobalArena& arena,
     Core::GraphicsRuntime& graphics,
-    RendererShaderSystem& shaders)
+    RendererShaderSystem& shaders
+)
     : m_arena(arena)
     , m_graphics(graphics)
     , m_shaders(shaders)
@@ -113,7 +114,8 @@ ReflectionPostprocessSnapshot RendererReflectionPostprocess::snapshot(
     const ReflectionRadianceBinding& base,
     const ReflectionSceneContentStamp& stamp,
     const ReflectionSettings& settings,
-    const u64 graphicsFrameIndex)const{
+    const u64 graphicsFrameIndex
+)const{
     ReflectionPostprocessSnapshot result;
     if(!m_control)
         return result;
@@ -146,7 +148,8 @@ void RendererReflectionPostprocess::releaseTargets(){
 }
 
 bool RendererReflectionPostprocess::preparePipeline(
-    Core::ComputePipelineHandle& pipeline, Core::ShaderHandle& shader, const Name name, const AStringView variant){
+    Core::ComputePipelineHandle& pipeline, Core::ShaderHandle& shader, const Name name, const AStringView variant
+){
     if(pipeline)
         return true;
     auto& device = m_graphics.getDevice();

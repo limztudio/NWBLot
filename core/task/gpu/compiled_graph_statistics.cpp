@@ -81,7 +81,8 @@ struct OwnershipResourceStatistics{
 
 void GpuCompiledGraph::buildPlanStatistics(
     const GpuTaskGraphDeclarationReadView& graph,
-    Alloc::ScratchArena& scratchArena){
+    Alloc::ScratchArena& scratchArena
+){
     using namespace __hidden_gpu_compiled_graph_statistics;
 
     GpuTaskGraphCompileStatistics& statistics = m_compileStatistics;
@@ -99,7 +100,8 @@ void GpuCompiledGraph::buildPlanStatistics(
         GpuTaskGraphPhysicalQueueCompileStatistics& physical,
         const GraphicsVector<GpuCompiledBarrier>& barriers,
         const u32 barrierOffset,
-        const u32 barrierCount){
+        const u32 barrierCount
+    ){
         if(barrierCount == 0u || barrierOffset > barriers.size() || barrierCount > barriers.size() - barrierOffset)
             return;
 

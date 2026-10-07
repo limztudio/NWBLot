@@ -89,7 +89,8 @@ bool nwbOpticalApplyBoundary(
     inout NwbOpticalMedia media,
     const NwbOpticalMedium medium,
     const bool entering,
-    inout NwbOpticalTraceResult result){
+    inout NwbOpticalTraceResult result
+){
     uint existing = NWB_OPTICAL_MAX_MEDIA;
     [unroll]
     for(uint index = 0u; index < NWB_OPTICAL_MAX_MEDIA; ++index){

@@ -29,7 +29,8 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& baseQueue,
     const bool allowCrossFamilyRouting,
-    const bool preferNonPrimaryQueue)noexcept{
+    const bool preferNonPrimaryQueue
+)noexcept{
     const GpuPhysicalQueueInfo* result = nullptr;
     u64 resultLoad = Limit<u64>::s_Max;
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
@@ -201,7 +202,8 @@ namespace GpuTaskGraphCompilerDetail{
     const GpuTaskTimingAssignmentKey& key,
     const GpuTaskTimingHistorySnapshot& historySnapshot,
     const GpuTaskTimingFeedbackPolicy& policy,
-    const u64 frameIndex)noexcept{
+    const u64 frameIndex
+)noexcept{
     const GpuTaskTimingHistory* const incumbentHistory = historySnapshot.find(
         TimingHistoryKeyForQueue(key, incumbent.queueClass),
         incumbent.id

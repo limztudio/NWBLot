@@ -24,7 +24,8 @@ RayTracingSceneGraphReads ImportRayTracingSceneGraphReads(
     Core::GpuTaskGraph& graph,
     const RayTracingSceneGraphResources& resources,
     const Core::ResourceStates::Mask tlasInitialState,
-    Core::Alloc::ScratchArena& scratchArena){
+    Core::Alloc::ScratchArena& scratchArena
+){
     if(!resources.valid())
         return {};
 

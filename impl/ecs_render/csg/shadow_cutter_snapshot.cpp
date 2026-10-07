@@ -39,7 +39,8 @@ namespace __hidden_shadow_cutter_snapshot{
 
 [[nodiscard]] bool ResolveParameters(
     const CsgShapeTypeInfo& shapeType, const CsgCutterComponent& cutter,
-    const u8*& parameterBytes, usize& parameterByteCount){
+    const u8*& parameterBytes, usize& parameterByteCount
+){
     if(cutter.parameterBytes.empty()){
         parameterBytes = shapeType.desc.defaultParameterBytes.data();
         parameterByteCount = shapeType.desc.defaultParameterBytes.size();
@@ -54,7 +55,8 @@ namespace __hidden_shadow_cutter_snapshot{
 void AppendReceiverCutters(
     const CsgShadowReceiverInput& receiver, const CsgReceiverDrawState& drawState,
     const CsgFrameReceiverLookup& receiverLookup, const CsgShapeRegistry& shapeRegistry,
-    CsgShadowSnapshot& snapshot, CsgShadowReceiverRangeGpu& range){
+    CsgShadowSnapshot& snapshot, CsgShadowReceiverRangeGpu& range
+){
     const SIMDVector receiverMin = LoadFloat(receiver.worldMin);
     const SIMDVector receiverMax = LoadFloat(receiver.worldMax);
     const bool boundsCanCull = receiver.boundsValid && AabbTests::Valid(receiverMin, receiverMax);
@@ -129,7 +131,8 @@ void AppendReceiverCutters(
 bool BuildCsgShadowSnapshot(
     Core::ECS::World& world, const CsgShapeRegistry& shapeRegistry,
     const CsgShadowReceiverInput* const receivers, const usize receiverCount,
-    Core::Alloc::ScratchArena& scratchArena, CsgShadowSnapshot& outSnapshot){
+    Core::Alloc::ScratchArena& scratchArena, CsgShadowSnapshot& outSnapshot
+){
     outSnapshot.receiverRanges.clear();
     outSnapshot.cutters.clear();
     outSnapshot.identity = 0u;

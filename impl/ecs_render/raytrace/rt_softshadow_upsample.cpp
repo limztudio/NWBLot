@@ -51,7 +51,8 @@ bool RendererRayTracingSystem::renderSoftShadowTerminalUpsample(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    const bool transparentReady){
+    const bool transparentReady
+){
     const auto& resolve = m_rayTracingState.m_softShadowResolve;
     const Core::ComputePipelineHandle& pipeline = transparentReady
         ? resolve.m_combinedUpsample.m_pipeline : resolve.m_scalar.m_upsample.m_pipeline;

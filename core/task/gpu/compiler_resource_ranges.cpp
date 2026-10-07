@@ -271,7 +271,8 @@ static void AppendResourceRangeRemainder(
     const GpuTaskGraphResourceView& resource,
     const GpuTaskResourceRange& range,
     Alloc::ScratchArena& scratchArena,
-    Vector<GpuTaskResourceRange, Alloc::ScratchArena>& outRanges){
+    Vector<GpuTaskResourceRange, Alloc::ScratchArena>& outRanges
+){
     outRanges.clear();
     if(
         !useHistory.validFor(task)
@@ -344,7 +345,8 @@ static void AppendResourceRangeRemainder(
 // Reverse the runs, retaining forward discovery order within each run and the initial-state suffix.
 static void AppendResourceStateFragmentsInStateOrder(
     const Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& discovered,
-    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments){
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments
+){
     outFragments.clear();
     outFragments.reserve(discovered.size());
 
@@ -378,7 +380,8 @@ static void AppendResourceStateFragmentsInStateOrder(
     const GpuTaskGraphResourceView& resource,
     const Vector<GpuTaskResourceRange, Alloc::ScratchArena>& requestedRanges,
     Alloc::ScratchArena& scratchArena,
-    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments){
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments
+){
     if(!history.validFor(trackedStates) || !history.validResource(resource.id))
         return false;
 
@@ -474,7 +477,8 @@ static void AppendResourceStateFragmentsInStateOrder(
     const TrackedResourceStateHistory& history,
     const GpuTaskGraphResourceView& resource,
     Alloc::ScratchArena& scratchArena,
-    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments){
+    Vector<TrackedResourceStateFragment, Alloc::ScratchArena>& outFragments
+){
     if(!history.validFor(trackedStates) || !history.validResource(resource.id))
         return false;
 

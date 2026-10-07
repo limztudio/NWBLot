@@ -28,7 +28,8 @@ TextInputAdmission::Enum QueuedTextInputService::emitPreedit(
     const AStringView text,
     const usize anchorByte,
     const usize caretByte,
-    const bool caretVisible){
+    const bool caretVisible
+){
     return admitEvent(token, TextInputEventKind::Preedit, text, anchorByte, caretByte, 0u, 0u, caretVisible);
 }
 
@@ -37,7 +38,8 @@ TextInputAdmission::Enum QueuedTextInputService::emitDeleteSurrounding(
     const usize beforeBytes,
     const usize afterBytes,
     const u64 revision,
-    const TextInputDeletionBasis::Enum basis){
+    const TextInputDeletionBasis::Enum basis
+){
     if(!isOwnerThread())
         return TextInputAdmission::WrongThread;
     if(!token.valid() || token != m_activeToken)
@@ -94,7 +96,8 @@ TextInputAdmission::Enum QueuedTextInputService::admitEvent(
     const usize beforeBytes,
     const usize afterBytes,
     const bool caretVisible,
-    const TextInputDeletionBasis::Enum basis){
+    const TextInputDeletionBasis::Enum basis
+){
     if(!isOwnerThread())
         return TextInputAdmission::WrongThread;
     if(!token.valid() || token != m_activeToken)

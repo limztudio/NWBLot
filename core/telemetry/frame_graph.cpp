@@ -114,7 +114,8 @@ inline constexpr Name s_PacketStatisticsValidationScratch("Telemetry/PacketStati
 
 [[nodiscard]] static EncodedFrameGraphCompiledTask EncodeCompiledTask(
     const u32 nodeIndex,
-    const FrameGraphCompiledTask& compiledTask)noexcept{
+    const FrameGraphCompiledTask& compiledTask
+)noexcept{
     EncodedFrameGraphCompiledTask encoded;
     encoded.nodeIndex = nodeIndex;
     encoded.packetIndex = compiledTask.packetIndex;
@@ -125,7 +126,8 @@ inline constexpr Name s_PacketStatisticsValidationScratch("Telemetry/PacketStati
 
 [[nodiscard]] static bool DecodeCompiledTask(
     const EncodedFrameGraphCompiledTask& encoded,
-    FrameGraphCompiledTask& outCompiledTask)noexcept{
+    FrameGraphCompiledTask& outCompiledTask
+)noexcept{
     if(encoded.reserved[0u] != 0u || encoded.reserved[1u] != 0u || encoded.reserved[2u] != 0u)
         return false;
 
@@ -231,7 +233,8 @@ template<typename OutputT, typename InputT>
 
 [[nodiscard]] static EncodedFrameGraphRuntimeStatistics EncodeRuntimeStatistics(
     const u32 nodeIndex,
-    const FrameGraphRuntimeStatistics& statistics)noexcept{
+    const FrameGraphRuntimeStatistics& statistics
+)noexcept{
     EncodedFrameGraphRuntimeStatistics encoded;
     encoded.nodeIndex = nodeIndex;
     encoded.deviceGeneration = statistics.deviceGeneration;
@@ -248,7 +251,8 @@ template<typename OutputT, typename InputT>
 
 [[nodiscard]] static bool DecodeRuntimeStatistics(
     const EncodedFrameGraphRuntimeStatistics& encoded,
-    FrameGraphRuntimeStatistics& outStatistics)noexcept{
+    FrameGraphRuntimeStatistics& outStatistics
+)noexcept{
     if(encoded.reserved != 0u)
         return false;
 
@@ -267,7 +271,8 @@ template<typename OutputT, typename InputT>
 
 [[nodiscard]] static bool PhysicalQueueRuntimeStatisticsRecordLess(
     const FrameGraphPhysicalQueueRuntimeStatisticsRecord& lhs,
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecord& rhs)noexcept{
+    const FrameGraphPhysicalQueueRuntimeStatisticsRecord& rhs
+)noexcept{
     if(lhs.ownerNodeIndex != rhs.ownerNodeIndex)
         return lhs.ownerNodeIndex < rhs.ownerNodeIndex;
     if(lhs.statistics.queue.index != rhs.statistics.queue.index)
@@ -291,7 +296,8 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
 [[nodiscard]] static bool AccumulatePhysicalQueueRuntimeStatistics(
     const FrameGraphPhysicalQueueRuntimeStatistics& statistics,
     const FrameGraphRuntimeStatistics& ownerStatistics,
-    FrameGraphPhysicalQueueRuntimeStatisticsAccumulator& total)noexcept{
+    FrameGraphPhysicalQueueRuntimeStatisticsAccumulator& total
+)noexcept{
     u64 ownerBarrierCount = 0u;
     if(!FrameGraphStatisticsDetail::FrameGraphCompileBarrierCount(ownerStatistics.compile, ownerBarrierCount))
         return false;
@@ -476,7 +482,8 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
     const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record,
     const usize nodeCount,
     const FrameGraphNodeKind::Enum ownerKind,
-    const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
+    const FrameGraphRuntimeStatistics& ownerStatistics
+)noexcept{
     return static_cast<usize>(record.ownerNodeIndex) < nodeCount
         && ownerKind == FrameGraphNodeKind::Pass
         && IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(record.statistics, ownerStatistics)
@@ -520,7 +527,8 @@ template<typename OutputT, typename InputT>
 }
 
 [[nodiscard]] static EncodedFrameGraphPhysicalQueueRuntimeStatistics EncodePhysicalQueueRuntimeStatistics(
-    const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record)noexcept{
+    const FrameGraphPhysicalQueueRuntimeStatisticsRecord& record
+)noexcept{
     const FrameGraphPhysicalQueueRuntimeStatistics& statistics = record.statistics;
     EncodedFrameGraphPhysicalQueueRuntimeStatistics encoded;
     encoded.ownerNodeIndex = record.ownerNodeIndex;
@@ -541,7 +549,8 @@ template<typename OutputT, typename InputT>
 [[nodiscard]] static bool DecodePhysicalQueueRuntimeStatistics(
     const EncodedFrameGraphPhysicalQueueRuntimeStatistics& encoded,
     const FrameGraphRuntimeStatistics& ownerStatistics,
-    FrameGraphPhysicalQueueRuntimeStatisticsRecord& outRecord)noexcept{
+    FrameGraphPhysicalQueueRuntimeStatisticsRecord& outRecord
+)noexcept{
     if(
         encoded.reserved[0u] != 0u
         || encoded.reserved[1u] != 0u
@@ -572,14 +581,16 @@ template<typename OutputT, typename InputT>
 
 [[nodiscard]] static bool PacketSubmissionStatisticsRecordLess(
     const FrameGraphPacketSubmissionStatisticsRecord& lhs,
-    const FrameGraphPacketSubmissionStatisticsRecord& rhs)noexcept{
+    const FrameGraphPacketSubmissionStatisticsRecord& rhs
+)noexcept{
     if(lhs.ownerNodeIndex != rhs.ownerNodeIndex)
         return lhs.ownerNodeIndex < rhs.ownerNodeIndex;
     return lhs.packetIndex < rhs.packetIndex;
 }
 
 [[nodiscard]] static EncodedFrameGraphPacketSubmissionStatistics EncodePacketSubmissionStatistics(
-    const FrameGraphPacketSubmissionStatisticsRecord& statistics)noexcept{
+    const FrameGraphPacketSubmissionStatisticsRecord& statistics
+)noexcept{
     return EncodedFrameGraphPacketSubmissionStatistics{
         .ownerNodeIndex = statistics.ownerNodeIndex,
         .packetIndex = statistics.packetIndex,
@@ -601,7 +612,8 @@ template<typename OutputT, typename InputT>
 
 [[nodiscard]] static bool DecodePacketSubmissionStatistics(
     const EncodedFrameGraphPacketSubmissionStatistics& encoded,
-    FrameGraphPacketSubmissionStatisticsRecord& outStatistics)noexcept{
+    FrameGraphPacketSubmissionStatisticsRecord& outStatistics
+)noexcept{
     if(
         encoded.joinsAcceptedQueueFrontier > 1u
         || encoded.recoverySubmission > 1u
@@ -645,7 +657,8 @@ struct FrameGraphPacketSubmissionStatisticsAccumulator{
 
 [[nodiscard]] static bool ValidatePacketSubmissionStatisticsOwner(
     const FrameGraphPacketSubmissionStatisticsRecord& statistics,
-    const FrameGraphRuntimeStatistics& ownerStatistics)noexcept{
+    const FrameGraphRuntimeStatistics& ownerStatistics
+)noexcept{
     return IsValidFrameGraphRuntimeStatistics(ownerStatistics)
         && statistics.packetGeneration == ownerStatistics.planGeneration
         && static_cast<u64>(statistics.packetIndex) < ownerStatistics.compile.packetCount
@@ -658,7 +671,8 @@ struct FrameGraphPacketSubmissionStatisticsAccumulator{
 [[nodiscard]] static bool AccumulatePacketSubmissionStatistics(
     const FrameGraphPacketSubmissionStatisticsRecord& statistics,
     const FrameGraphSubmissionRuntimeStatistics& ownerStatistics,
-    FrameGraphPacketSubmissionStatisticsAccumulator& total)noexcept{
+    FrameGraphPacketSubmissionStatisticsAccumulator& total
+)noexcept{
     if(!(
         AccumulateBoundedCount(1u, ownerStatistics.nativeSubmissionCount, total.nativeSubmissionCount)
         && AccumulateBoundedCount(statistics.taskCount, ownerStatistics.acceptedTaskCount, total.taskCount)
@@ -712,7 +726,8 @@ struct FrameGraphPacketSubmissionStatisticsAccumulator{
 [[nodiscard]] static bool PacketSubmissionDurationSumsMatch(
     const f64 lhs,
     const f64 rhs,
-    const u64 submissionCount)noexcept{
+    const u64 submissionCount
+)noexcept{
     if(lhs == rhs)
         return true;
     if(submissionCount == 0u)
@@ -729,7 +744,8 @@ struct FrameGraphPacketSubmissionStatisticsAccumulator{
 template<typename SubmissionStatistics>
 [[nodiscard]] static bool PacketSubmissionStatisticsAccumulatorMatches(
     const FrameGraphPacketSubmissionStatisticsAccumulator& total,
-    const SubmissionStatistics& statistics)noexcept{
+    const SubmissionStatistics& statistics
+)noexcept{
     if(
         total.nativeSubmissionCount != statistics.nativeSubmissionCount
         || total.commandListCount != statistics.nativeCommandListCount
@@ -758,7 +774,8 @@ template<typename NodeContainer>
     Alloc::ScratchArena& scratchArena,
     const NodeContainer& nodes,
     const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics){
+    const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics
+){
     for(usize statisticsIndex = 0u; statisticsIndex < packetSubmissionStatistics.size(); ++statisticsIndex){
         const FrameGraphPacketSubmissionStatisticsRecord& statistics = packetSubmissionStatistics[statisticsIndex];
         if(
@@ -861,7 +878,8 @@ bool BuildFrameGraphPayload(
     const u64 frameIndex,
     const FrameGraphNodeDescs& nodes,
     const FrameGraphEdgeDescs& edges,
-    TelemetryBytes& outPayload){
+    TelemetryBytes& outPayload
+){
     FrameGraphPhysicalQueueRuntimeStatisticsRecords physicalQueueRuntimeStatistics(arena);
     return BuildFrameGraphPayload(arena, frameIndex, nodes, edges, physicalQueueRuntimeStatistics, outPayload);
 }
@@ -872,7 +890,8 @@ bool BuildFrameGraphPayload(
     const FrameGraphNodeDescs& nodes,
     const FrameGraphEdgeDescs& edges,
     const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
-    TelemetryBytes& outPayload){
+    TelemetryBytes& outPayload
+){
     return __hidden_telemetry_frame_graph::BuildFrameGraphPayloadImpl(
         arena,
         frameIndex,
@@ -891,7 +910,8 @@ bool BuildFrameGraphPayload(
     const FrameGraphEdgeDescs& edges,
     const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
     const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
-    TelemetryBytes& outPayload){
+    TelemetryBytes& outPayload
+){
     return __hidden_telemetry_frame_graph::BuildFrameGraphPayloadImpl(
         arena,
         frameIndex,
@@ -920,7 +940,8 @@ bool BuildFrameGraphPayloadImpl(
     const FrameGraphEdgeDescs& edges,
     const FrameGraphPhysicalQueueRuntimeStatisticsRecords& physicalQueueRuntimeStatistics,
     const FrameGraphPacketSubmissionStatisticsRecords* const packetSubmissionStatistics,
-    TelemetryBytes& outPayload){
+    TelemetryBytes& outPayload
+){
     outPayload.clear();
 
     if(
@@ -1154,7 +1175,8 @@ bool ParseFrameGraphPayload(
     TelemetryArena& arena,
     const void* const payload,
     const usize payloadBytes,
-    FrameGraphPayload& outPayload){
+    FrameGraphPayload& outPayload
+){
     outPayload = FrameGraphPayload(arena);
 
     if(payloadBytes < sizeof(EncodedFrameGraphPayloadHeader) || !payload)

@@ -62,7 +62,8 @@ using FontTestArena = TestArena<FontTestArenaTag>;
 [[nodiscard]] static Core::Assets::AssetBytes MakeBinary(
     FontTestArena& testArena,
     const FontBinaryPayload::HeaderBinary& header,
-    const Core::Assets::AssetBytes& source){
+    const Core::Assets::AssetBytes& source
+){
     Core::Assets::AssetBytes binary(testArena.arena);
     binary.reserve(sizeof(header) + source.size());
     AppendPOD(binary, header);

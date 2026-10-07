@@ -47,7 +47,8 @@ bool ImageLayout::Measure(
     const ImageOptions& options,
     const UiSkinRegion& region,
     const f32 density,
-    ImageMetrics& out)noexcept{
+    ImageMetrics& out
+)noexcept{
     using namespace __hidden_ui_image_layout;
     if(
         !ValidSize(options.width) || !ValidSize(options.height) || !IsValidUiColor(options.tint)

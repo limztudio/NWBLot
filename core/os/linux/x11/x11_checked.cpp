@@ -69,7 +69,8 @@ bool ReadX11Property(
     const Atom property,
     const bool remove,
     const usize maxBytes,
-    X11Property& result){
+    X11Property& result
+){
     X11CheckedOperation operation(display);
     const int status = XGetWindowProperty(
         &display, window, property, 0, static_cast<long>((maxBytes + 3u) / 4u), remove ? True : False,

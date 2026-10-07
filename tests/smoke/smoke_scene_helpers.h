@@ -130,7 +130,8 @@ struct SmokeRenderSystems{
 [[nodiscard]] inline SmokeRenderSystems CreateSmokeRenderSystems(
     Core::ECS::World& world,
     ProjectRuntimeContext& context,
-    const SmokeRenderQualitySettings& baseSettings = {}){
+    const SmokeRenderQualitySettings& baseSettings = {}
+){
     auto& meshSystem = world.addSystem<Impl::MeshSystem>(world);
     auto& rendererSystem = world.addSystem<Impl::RendererSystem>(
         world,

@@ -121,7 +121,8 @@ bool ProgressLayout::Measure(
     const UiSkinRegion& track,
     const UiSkinRegion& fill,
     const f32 density,
-    ProgressMetrics& out)noexcept{
+    ProgressMetrics& out
+)noexcept{
     using namespace __hidden_ui_progress_layout;
     if(
         options.width.policy > LayoutSizePolicy::Stretch || !IsFinite(options.width.value) || options.width.value < 0.0f
@@ -160,7 +161,8 @@ bool ProgressLayout::Place(
     const Rect& clip,
     const ProgressMetrics& metrics,
     const f64 fraction,
-    ProgressPlacement& out)noexcept{
+    ProgressPlacement& out
+)noexcept{
     using namespace __hidden_ui_progress_layout;
     if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip) || !ValidMetrics(metrics) || !IsFinite(fraction))
         return false;

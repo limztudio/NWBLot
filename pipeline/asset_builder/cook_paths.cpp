@@ -31,7 +31,8 @@ namespace Assets = Core::Assets;
 bool ResolveCookPaths(
     const AssetBuildOptions& options,
     Assets::ResolvedCookPaths& outPaths,
-    Assets::ScratchArena& scratchArena){
+    Assets::ScratchArena& scratchArena
+){
     ErrorCode errorCode;
 
     outPaths.repoRoot.clear();

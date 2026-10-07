@@ -91,7 +91,8 @@ static void WriteLittleU32(Core::Assets::AssetBytes& bytes, const usize offset, 
     SourceTestArena& testArena,
     const AStringView filename,
     const Core::Assets::AssetBytes& binary,
-    Path& outPath){
+    Path& outPath
+){
     Path candidate = Path(testArena.arena, NWB_REPO_ROOT) / "__artifacts" / "font_source_tests" / filename;
     ErrorCode error;
     if(!EnsureDirectories(candidate.parentPath(), error) || error || !WriteBinaryFile(candidate, binary))

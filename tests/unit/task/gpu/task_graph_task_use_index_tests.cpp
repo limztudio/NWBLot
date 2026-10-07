@@ -53,7 +53,8 @@ constexpr Graphics::GpuGraphResourceId s_B{ .generation = 1u, .index = 1u };
     const Graphics::GpuGraphResourceId resource,
     const u64 offset,
     const u64 size,
-    const Graphics::ResourceStates::Mask state = Graphics::ResourceStates::CopyDest){
+    const Graphics::ResourceStates::Mask state = Graphics::ResourceStates::CopyDest
+){
     return Graphics::GpuTaskResourceUse{
         .resource = resource,
         .range = { .bufferRange = Graphics::BufferRange(offset, size) },
@@ -66,7 +67,8 @@ template<usize Count>
 [[nodiscard]] Graphics::GpuTaskGraphTaskView TaskView(
     const Graphics::GpuTaskResourceUse (&uses)[Count],
     const u64 generation = 1u,
-    const u32 taskIndex = 0u){
+    const u32 taskIndex = 0u
+){
     Graphics::GpuTaskGraphTaskView view{};
     view.id = { .generation = generation, .index = taskIndex };
     view.resourceUses = uses;

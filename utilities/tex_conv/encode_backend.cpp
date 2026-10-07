@@ -28,7 +28,8 @@ void ConfigureCompressor(
     basisu::basis_compressor_params& parameters,
     basisu::job_pool& jobPool,
     const basist::basis_tex_format format,
-    const bool srgb){
+    const bool srgb
+){
     parameters.set_format_mode(format);
     parameters.set_srgb_options(srgb);
     parameters.m_status_output = false;

@@ -106,7 +106,8 @@ static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initializ
 static void ResolveFlyCameraAnglesFromRotation(
     const SIMDVector rotation,
     f32& outYawRadians,
-    f32& outPitchRadians){
+    f32& outPitchRadians
+){
     const SIMDVector localForward = VectorSet(0.0f, 0.0f, 1.0f, 0.0f);
     const SIMDVector forwardVector = Vector3NormalizeOr(
         Vector3Rotate(localForward, rotation),

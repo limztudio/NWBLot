@@ -93,7 +93,8 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
     Core::GpuTimingSubmissionTicket** const timingTickets,
     const bool* const asyncPrefixTimingSpansOnePacket,
-    u64& outSceneLightingContentHash){
+    u64& outSceneLightingContentHash
+){
     using namespace RendererTaskGraphDetail;
     namespace PrefixTimingSlotNs = ECSRenderDetail::DeferredGraphicsPrefixTimingSlot;
     using PrefixTimingSlot = PrefixTimingSlotNs::Enum;

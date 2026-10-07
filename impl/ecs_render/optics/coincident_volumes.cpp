@@ -122,7 +122,8 @@ RendererOpticalVolumeSelection::RendererOpticalVolumeSelection(Core::Alloc::Glob
 void RendererOpticalVolumeSelection::prepare(
     Core::ECS::World& world,
     RendererMaterialSystem& materials,
-    Core::Alloc::ScratchArena& scratchArena){
+    Core::Alloc::ScratchArena& scratchArena
+){
     auto rendererView = world.view<RendererComponent>();
     const MeshSystem* meshSystemPtr = world.getSystem<MeshSystem>();
     if(!meshSystemPtr || rendererView.candidateCount() < 2u){
@@ -197,7 +198,8 @@ void RendererOpticalVolumeSelection::prepare(
 void RendererOpticalVolumeSelection::select(
     const CoincidentOpticalVolumeCandidate* candidates,
     const usize candidateCount,
-    Core::Alloc::ScratchArena& scratchArena){
+    Core::Alloc::ScratchArena& scratchArena
+){
     reset();
     if(!candidates || candidateCount < 2u)
         return;

@@ -255,7 +255,8 @@ TEST(UiScrollLayoutTests, InvalidLayoutInputsLeaveThePreviousPlacementUntouched)
     ASSERT_TRUE(ScrollLayout::Calculate(validBounds, validBounds, validPadding, 12.0f, 16.0f, 20u, 20.0f,
         40.0, previous));
     const auto reject = [&previous](const Rect& bounds, const Rect& clip, const Insets& padding,
-        const f32 width, const f32 minimum, const f32 height, const f64 offset){
+        const f32 width, const f32 minimum, const f32 height, const f64 offset
+    ){
         ScrollPlacement result = previous;
         EXPECT_FALSE(ScrollLayout::Calculate(bounds, clip, padding, width, minimum, 20u, height, offset, result));
         ExpectPlacement(result, previous);

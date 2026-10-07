@@ -108,7 +108,8 @@ namespace __hidden_ui_scrollbar{
     const f32 minThumb,
     const f64 offset,
     const ScrollAxis::Enum axis,
-    ScrollbarPlacement& out)noexcept{
+    ScrollbarPlacement& out
+)noexcept{
     ScrollbarPlacement candidate;
     candidate.contentExtent = contentExtent;
     candidate.viewportExtent = viewportExtent;
@@ -154,7 +155,8 @@ bool ScrollbarLayout::Calculate(
     const Point& previousScroll,
     const f32 thickness,
     const f32 minThumb,
-    ScrollViewportPlacement& out)noexcept{
+    ScrollViewportPlacement& out
+)noexcept{
     using namespace __hidden_ui_scrollbar;
     if(
         !IsValidUiRect(bounds) || !IsValidUiRect(clip) || !IsValidUiPadding(padding)

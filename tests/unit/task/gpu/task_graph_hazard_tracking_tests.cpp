@@ -54,7 +54,8 @@ inline constexpr Name s_HazardScratchOwner("tests/hazard_tracking/analysis_scrat
     const Graphics::GpuGraphResourceId resource,
     const u64 offset,
     const u64 size,
-    const Graphics::GpuTaskResourceAccess::Enum access){
+    const Graphics::GpuTaskResourceAccess::Enum access
+){
     return Graphics::GpuTaskResourceUse{
         .resource = resource,
         .range = Graphics::GpuTaskResourceRange{ .bufferRange = Graphics::BufferRange(offset, size) },
@@ -69,7 +70,8 @@ void BenchmarkHazards(
     const usize resourceCount,
     const usize taskCount,
     const usize repetitions,
-    const usize importedResourceCount = 0u){
+    const usize importedResourceCount = 0u
+){
     TestArena testArena;
     Graphics::GpuTaskGraph graph(testArena.arena);
     Core::Alloc::ScratchArena inputArena(s_TaskGraphScratchArena);

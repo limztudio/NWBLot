@@ -36,7 +36,8 @@ public:
 
 protected:
     virtual void startNativeRequest(
-        const ClipboardRequestToken token, const ClipboardOperation::Enum, const ClipboardChannel::Enum, const AStringView)override{
+        const ClipboardRequestToken token, const ClipboardOperation::Enum, const ClipboardChannel::Enum, const AStringView
+    )override{
         if(!completeNativeRequest(token, ClipboardStatus::Unsupported))
             NWB_FATAL_ASSERT(false);
     }

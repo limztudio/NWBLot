@@ -148,7 +148,8 @@ uint nwbLightSpaceBoundaryMode(const uint instance){
 }
 
 bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const float receiverDepth,
-    const float projectedDepth, out half3 visibility){
+    const float projectedDepth, out half3 visibility
+){
     visibility = half3(1.0h);
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
     float depth = 1.0;
@@ -245,7 +246,8 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
 
 // A finite blocker search estimates the footprint of the real light source.
 bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, const float3 receiverNormal, const NwbSceneLight light,
-    const NwbLightSpaceView centerView, out float distance){
+    const NwbLightSpaceView centerView, out float distance
+){
     distance = 0.0;
     const float receiverDepth = nwbLightSpaceLinearDepth(centerView, origin);
     const bool point = (centerView.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u;
@@ -345,7 +347,8 @@ bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, co
 }
 
 bool nwbLightSpaceEvaluate(const uint lightIndex, const float3 origin, const float3 receiverNormal, const float3 direction,
-    const float blockerDistance, out half3 visibility){
+    const float blockerDistance, out half3 visibility
+){
     visibility = half3(1.0h);
     const float3 samplePosition = origin + direction * blockerDistance;
     NwbLightSpaceView view;

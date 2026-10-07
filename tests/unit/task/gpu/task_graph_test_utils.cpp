@@ -55,7 +55,8 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const Name& identity,
     const AStringView label,
     const Graphics::ResourceStates::Mask initialState,
-    const Graphics::ResourceQueueSharing::Mask queueSharing){
+    const Graphics::ResourceQueueSharing::Mask queueSharing
+){
     Graphics::GpuGraphResourceDesc desc;
     desc
         .setIdentity(identity)
@@ -73,7 +74,8 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const Name& identity,
     const AStringView label,
     const Graphics::ResourceStates::Mask initialState,
-    const Graphics::ResourceQueueSharing::Mask queueSharing){
+    const Graphics::ResourceQueueSharing::Mask queueSharing
+){
     Graphics::GpuGraphResourceDesc desc;
     desc
         .setIdentity(identity)
@@ -90,7 +92,8 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const Name& identity,
     const AStringView label,
     const Graphics::ResourceStates::Mask initialState,
-    const Graphics::ResourceQueueSharing::Mask queueSharing){
+    const Graphics::ResourceQueueSharing::Mask queueSharing
+){
     Graphics::GpuGraphResourceDesc desc;
     desc
         .setIdentity(identity)
@@ -126,7 +129,8 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const Graphics::GpuTaskResourceUse* const resourceUses,
     const usize resourceUseCount,
     const Graphics::GpuTaskResourceSetUse* const resourceSetUses,
-    const usize resourceSetUseCount){
+    const usize resourceSetUseCount
+){
     Graphics::GpuTaskDesc desc;
     desc
         .setIdentity(identity)
@@ -146,7 +150,8 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const Graphics::GpuTaskSchedulingHint& scheduling,
     const Graphics::GpuTaskTimingMetadata& timing,
     const Graphics::GpuTaskId* const dependencies,
-    const usize dependencyCount){
+    const usize dependencyCount
+){
     Graphics::GpuTaskDesc desc;
     desc
         .setIdentity(identity)
@@ -173,7 +178,8 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const Graphics::GpuTaskGraphAnalysis& analysis,
     const Graphics::GpuPhysicalQueueTopology& topology,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
-    const Graphics::GpuTaskGraphQueueAssignmentOptions& options){
+    const Graphics::GpuTaskGraphQueueAssignmentOptions& options
+){
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     const Graphics::GpuTaskGraphCompiler compiler;
     const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
@@ -186,7 +192,8 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const Graphics::GpuPhysicalQueueTopology& topology,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Graphics::GpuCompiledGraph& compiledGraph,
-    const Graphics::GpuTaskGraphCompileOptions& options){
+    const Graphics::GpuTaskGraphCompileOptions& options
+){
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     const Graphics::GpuTaskGraphCompiler compiler;
     Graphics::GpuTaskGraphCompileOptions metadataOptions = options;
@@ -203,7 +210,8 @@ void ExpectMemoryStatsEqual(const ArenaMemoryStats& expected, const ArenaMemoryS
     const Graphics::GpuPhysicalQueueTopology& topology,
     Graphics::GpuTaskGraphQueueAssignments& assignments,
     Graphics::GpuCompiledGraph& compiledGraph,
-    const Graphics::GpuTaskGraphCompileOptions& options){
+    const Graphics::GpuTaskGraphCompileOptions& options
+){
     Core::Alloc::ScratchArena scratchArena(s_TaskGraphScratchArena);
     Vector<Graphics::GpuTaskDiagnosticQueueOverride, Core::Alloc::ScratchArena> overrides{ scratchArena };
     {
@@ -291,7 +299,8 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
 
 [[nodiscard]] Graphics::GpuPhysicalQueueInfo GraphicsQueue(
     const u16 index,
-    const Graphics::GpuQueueCapability::Mask capabilities){
+    const Graphics::GpuQueueCapability::Mask capabilities
+){
     return Graphics::GpuPhysicalQueueInfo{
         .familyIndex = 0u,
         .queueIndex = 0u,
@@ -329,7 +338,8 @@ ThreeQueueCompile::ThreeQueueCompile(TestArena& testArena)
 
 [[nodiscard]] TransferOwnershipPair AddTransferOwnershipPair(
     Graphics::GpuTaskGraph& graph,
-    const Graphics::ResourceQueueSharing::Mask queueSharing){
+    const Graphics::ResourceQueueSharing::Mask queueSharing
+){
     const Graphics::GpuGraphResourceId texture = AddTextureMetadata(
         graph,
         Name("tests/task_graph/transfer_ownership_texture"),

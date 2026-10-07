@@ -80,7 +80,8 @@ class CallbackShutdownGuard : NoCopy{
 public:
     explicit CallbackShutdownGuard(
         NWB::IProjectEntryCallbacks& callbacks,
-        NWB::Core::CpuTaskScope& tasks)
+        NWB::Core::CpuTaskScope& tasks
+    )
         : m_callbacks(callbacks)
         , m_tasks(tasks)
     {}

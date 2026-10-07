@@ -94,6 +94,8 @@
 
 86. Borrow text through `StringView` or the matching `BasicStringView<CharT>` when the API can use a known length; preserve external C-string termination requirements. For stored text, choose borrowed or owning storage from its lifetime and CPU/memory cost. Static literals can use `constexpr` views, and a member with guaranteed backing storage need not become an owning string. Never retain a view into temporary or asynchronously released bytes.
 
+87. For multiline function-definition parameter lists, put the closing `)` on its own line at the function opener's indentation, with the body brace after any existing qualifiers, exception specification, or trailing return type. Preserve multiline exception specifications and trailing return types, attaching the body brace to their final line. Never attach the parameter-list closing `)` to the final parameter. Apply this to constructors, operators, lambdas, and shader functions as well as ordinary functions; preserve constructor initializer continuation lines and readable single-line signatures. Follow `.helper/standard.md` section 4 for examples.
+
 ## Scheduler Architecture
 
 1. `Frame` owns one `Core::CpuTaskScheduler`, initialized with the configured worker budget before graphics and project work starts. Standalone tools own one scheduler for their process work and pass it to consumers.

@@ -39,7 +39,8 @@ static void ResolveAttachmentJointQueries(
     Vector<SkeletonJointMatrix, Core::Alloc::GlobalArena>& jointPalette,
     AttachmentJointQuery* const queries,
     const usize queryCount,
-    const usize* const parentOrder){
+    const usize* const parentOrder
+){
     const auto queryAt = [&](const usize index) -> AttachmentJointQuery&{
         return queries[parentOrder ? parentOrder[index] : index];
     };
@@ -153,7 +154,8 @@ ModelSystem::ModelSystem(
     Core::Alloc::GlobalArena& arena,
     Core::ECS::World& world,
     Core::Assets::AssetManager& assetManager,
-    ModelObjectRendererHooks rendererHooks)
+    ModelObjectRendererHooks rendererHooks
+)
     : Core::ECS::ISystem(arena)
     , m_arena(arena)
     , m_world(world)
@@ -261,7 +263,8 @@ void ModelSystem::clearInactiveModelRuntimes(Core::Alloc::ScratchArena& scratchA
 void ModelSystem::ensureModelRuntime(
     const Core::ECS::EntityID entity,
     const ModelComponent& component,
-    Core::Alloc::ScratchArena& scratchArena){
+    Core::Alloc::ScratchArena& scratchArena
+){
     if(!component.model.valid()){
         clearModelRuntime(entity, scratchArena);
         m_world.entity(entity).removeComponent<ModelRuntimeComponent>();
@@ -504,7 +507,8 @@ void ModelSystem::updateStaticMeshAttachments(){
     if(attachments.candidateCount() > 1u){
         attachments.each(
             [&](const Core::ECS::EntityID entity, const ModelObjectComponent& object,
-                const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform){
+                const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform
+            ){
                 static_cast<void>(entity);
                 static_cast<void>(object);
                 static_cast<void>(transform);
@@ -523,7 +527,8 @@ void ModelSystem::updateStaticMeshAttachments(){
         bool sharedParent = true;
         attachments.each(
             [&](const Core::ECS::EntityID entity, const ModelObjectComponent& object,
-                const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform){
+                const ModelStaticMeshAttachmentComponent& attachment, const Scene::TransformComponent& transform
+            ){
                 static_cast<void>(entity);
                 static_cast<void>(object);
                 static_cast<void>(transform);

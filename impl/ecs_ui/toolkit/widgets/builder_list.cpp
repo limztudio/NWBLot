@@ -18,7 +18,8 @@ NWB_IMPL_UI_BEGIN
 
 
 ListResult Builder::virtualList(
-    const AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options){
+    const AStringView stableKey, const IListDataSource& source, ListState& state, const ListOptions& options
+){
     ListResult result;
     if(
         declarationBlocked() || !m_scope->m_panelActive || (m_scope->m_windowActive && m_scope->m_window.state->collapsed) || m_context.failed()

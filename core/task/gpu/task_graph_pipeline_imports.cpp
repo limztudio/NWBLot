@@ -29,7 +29,8 @@ namespace __hidden_gpu_task_graph_pipeline_imports{
 
 [[nodiscard]] static bool CompatiblePipelineMetadata(
     const GpuTaskGraphPipelineView& pipeline,
-    const GpuGraphPipelineDesc& desc)noexcept{
+    const GpuGraphPipelineDesc& desc
+)noexcept{
     // Identity and concrete pipeline kind define the graph-side table key.  Marker text is observational metadata,
     // matching resource imports where a later compatible import reuses the original graph-owned label.
     return pipeline.identity == desc.identity && pipeline.type == desc.type;
@@ -86,7 +87,8 @@ GpuGraphPipelineId GpuTaskGraph::importPipeline(const GpuGraphPipelineDesc& desc
 
 GpuGraphPipelineId GpuTaskGraph::importGraphicsPipeline(
     const GraphicsPipelineHandle& pipeline,
-    const GpuGraphPipelineDesc& desc){
+    const GpuGraphPipelineDesc& desc
+){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
         return {};
@@ -109,7 +111,8 @@ GpuGraphPipelineId GpuTaskGraph::importGraphicsPipeline(
 
 GpuGraphPipelineId GpuTaskGraph::importComputePipeline(
     const ComputePipelineHandle& pipeline,
-    const GpuGraphPipelineDesc& desc){
+    const GpuGraphPipelineDesc& desc
+){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
         return {};
@@ -132,7 +135,8 @@ GpuGraphPipelineId GpuTaskGraph::importComputePipeline(
 
 GpuGraphPipelineId GpuTaskGraph::importMeshletPipeline(
     const MeshletPipelineHandle& pipeline,
-    const GpuGraphPipelineDesc& desc){
+    const GpuGraphPipelineDesc& desc
+){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
         return {};
@@ -155,7 +159,8 @@ GpuGraphPipelineId GpuTaskGraph::importMeshletPipeline(
 
 GpuGraphPipelineId GpuTaskGraph::importRayTracingPipeline(
     const RayTracingPipelineHandle& pipeline,
-    const GpuGraphPipelineDesc& desc){
+    const GpuGraphPipelineDesc& desc
+){
     DeclarationMutationScope mutation(*this);
     if(!mutation.valid())
         return {};
@@ -195,7 +200,8 @@ u32 GpuTaskGraph::findPipelineIdentity(const Name& identity)const noexcept{
 
 GpuTaskGraph::PipelineImportMatch GpuTaskGraph::findPipelineImportMatch(
     const Name& identity,
-    const PipelinePointerKey& pointer)const noexcept{
+    const PipelinePointerKey& pointer
+)const noexcept{
     if(!pointer.pointer)
         return {};
     if(m_pipelineIdentityIndex){

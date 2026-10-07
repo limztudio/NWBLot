@@ -51,7 +51,8 @@ static constexpr Name s_ScratchArena("tests/integration/assets_ui_skin/toolkit_c
     const Path& atlasPath,
     const AStringView virtualRoot,
     UiSkin& outSkin,
-    bool& outComplete){
+    bool& outComplete
+){
     Core::Assets::AssetString metadata(testArena.arena);
     if(!ReadTextFile(atlasPath, metadata))
         return false;

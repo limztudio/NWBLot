@@ -707,7 +707,8 @@ TEST(GpuTaskGraph, AllowsIndependentConcurrentReadStateSources){
         const AStringView label,
         const Graphics::GpuGraphResourceId resource,
         const Graphics::GpuTaskCommandRequirements& commands,
-        const bool hasIndependentStateSource){
+        const bool hasIndependentStateSource
+    ){
         const Graphics::GpuTaskResourceUse uses[] = {
             Graphics::GpuTaskResourceUse{
                 .resource = resource,

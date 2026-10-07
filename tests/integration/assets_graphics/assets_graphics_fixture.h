@@ -1036,7 +1036,8 @@ public:
         TestArena& testArena,
         const CodecT& codec,
         const Name& virtualPath,
-        const NWB::Core::Assets::AssetBytes& binary){
+        const NWB::Core::Assets::AssetBytes& binary
+    ){
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
         EXPECT_FALSE(codec.deserialize(testArena.arena, virtualPath, binary, loadedAsset));
         EXPECT_FALSE(loadedAsset);

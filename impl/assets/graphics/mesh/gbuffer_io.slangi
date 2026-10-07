@@ -133,7 +133,8 @@ float3 nwbMeshCameraToSurfaceDirection(const float3 worldPosition){
 // G-buffer write: first three targets smuggle shading-model id + two material BXDF params in their alphas
 // (lighting unpacks them); fourth target carries sanitized F0 + roughness.
 void nwbWriteMeshGBufferParams(
-    half3 baseColor, float3 normal, float3 worldPosition, half param0, half param1, half4 specularRoughness){
+    half3 baseColor, float3 normal, float3 worldPosition, half param0, half param1, half4 specularRoughness
+){
     outGBufferBaseColor = half4(clamp(baseColor, half3(0.0h), half3(1.0h)), half(float(nwbMeshShadingModelId())));
     outGBufferNormal = half4(nwbGBufferEncodeNormal(normal), half(param0));
     outGBufferWorldPosition = half4(half3(worldPosition), param1);

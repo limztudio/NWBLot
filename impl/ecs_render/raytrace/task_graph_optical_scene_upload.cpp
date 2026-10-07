@@ -75,7 +75,8 @@ struct OpticalUploadTask{
 
 RayTracingOpticalSceneGraphBuffer ImportOpticalSceneUpload(
     Core::GpuTaskGraph& graph,
-    const RayTracingOpticalSceneSnapshot& resources){
+    const RayTracingOpticalSceneSnapshot& resources
+){
     if(!resources.valid())
         return {};
     const Core::BufferHandle& uploadBuffer = resources.uploadBuffer ? resources.uploadBuffer : resources.buffer;
@@ -168,7 +169,8 @@ RayTracingOpticalSceneGraphBuffer ImportOpticalSceneUpload(
 RayTracingOpticalSceneGraphBuffer ImportRayTracingOpticalSceneBuffer(
     Core::GpuTaskGraph& graph,
     const RayTracingOpticalSceneSnapshot& resources,
-    Core::Alloc::ScratchArena& scratchArena){
+    Core::Alloc::ScratchArena& scratchArena
+){
     const RayTracingOpticalSceneGraphBuffer uploaded = __hidden_task_graph_optical_scene_upload::ImportOpticalSceneUpload(graph, resources);
     if(!uploaded.valid() || !resources.finalize)
         return uploaded;

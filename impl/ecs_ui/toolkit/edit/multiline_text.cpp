@@ -81,7 +81,8 @@ bool ValidateMultilineText(const AStringView text){
 }
 
 EditTextStatus::Enum NormalizeMultilineText(
-    const AStringView source, AString<Core::Alloc::GlobalArena>& output, const usize maxBytes){
+    const AStringView source, AString<Core::Alloc::GlobalArena>& output, const usize maxBytes
+){
     if(!GraphemeSegmentation::Validate(source))
         return EditTextStatus::InvalidText;
     usize normalizedBytes = 0u;

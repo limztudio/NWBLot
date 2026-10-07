@@ -37,7 +37,8 @@ bool CanApplyWaylandTextInputDeletion(
     const usize anchorByte,
     const usize caretByte,
     const usize beforeBytes,
-    const usize afterBytes)noexcept{
+    const usize afterBytes
+)noexcept{
     if(
         !provenance.token.valid() || !provenance.revisionKnown || currentRevision == 0u
         || provenance.revision != currentRevision || wire.m_revision != currentRevision
@@ -55,7 +56,8 @@ bool CanApplyWaylandTextInputDeletion(
 WaylandTextInputSurrounding SliceWaylandTextInputSurrounding(
     const AStringView text,
     const usize anchorByte,
-    const usize caretByte)noexcept{
+    const usize caretByte
+)noexcept{
     using namespace __hidden_wayland_text_input_state;
     if(anchorByte > text.size() || caretByte > text.size())
         return {};
@@ -95,7 +97,8 @@ WaylandTextInputSurrounding WaylandTextInputSurroundingState::update(
     const AStringView text,
     const usize anchorByte,
     const usize caretByte,
-    const u64 revision)noexcept{
+    const u64 revision
+)noexcept{
     const WaylandTextInputSurrounding slice = SliceWaylandTextInputSurrounding(text, anchorByte, caretByte);
     if(slice.available){
         m_offsetByte = slice.offsetByte;
@@ -142,7 +145,8 @@ void WaylandTextInputSerialTracker::reset()noexcept{
 void WaylandTextInputSerialTracker::record(
     const u32 serial,
     const TextInputSessionToken token,
-    const u64 revision)noexcept{
+    const u64 revision
+)noexcept{
     if(!token.valid()){
         reset();
         return;
@@ -160,7 +164,8 @@ void WaylandTextInputSerialTracker::record(
 
 WaylandTextInputProvenance WaylandTextInputSerialTracker::resolve(
     const u32 serial,
-    const TextInputSessionToken current)const noexcept{
+    const TextInputSessionToken current
+)const noexcept{
     using namespace __hidden_wayland_text_input_state;
     if(!current.valid() || m_token != current)
         return {};

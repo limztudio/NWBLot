@@ -43,7 +43,8 @@ bool ObjectGeometryCacheSnapshot::valid()const noexcept{
 bool ResolveObjectGeometryCacheLayout(
     const u64 localVertexRefByteSize,
     const u32 primitiveIndexCount,
-    ObjectGeometryCacheLayout& outLayout)noexcept{
+    ObjectGeometryCacheLayout& outLayout
+)noexcept{
     outLayout = {};
     if(localVertexRefByteSize == 0u || localVertexRefByteSize % sizeof(MeshletLocalVertexRef) != 0u || primitiveIndexCount == 0u)
         return false;
@@ -68,7 +69,8 @@ bool AcceptObjectGeometryCacheWrite(
     MeshResources& mesh,
     const RuntimeMeshBuffers& sourceBuffers,
     const ObjectGeometryCacheSnapshot& expected,
-    const bool runtimeMesh)noexcept{
+    const bool runtimeMesh
+)noexcept{
     ObjectGeometryCacheState& cache = mesh.objectGeometryCache;
     if(!expected.valid() || cache.buffer != expected.buffer)
         return false;

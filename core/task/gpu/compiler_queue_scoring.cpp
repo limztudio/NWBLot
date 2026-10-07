@@ -131,7 +131,8 @@ GpuQueueAssignmentScore BuildQueueAssignmentScore(
     const GpuTaskQueueScoringData& scoringData,
     const GpuTaskGraphTaskView& task,
     const GpuPhysicalQueueInfo& candidate,
-    const GpuTaskQueueScoreExclusions& exclusions)noexcept{
+    const GpuTaskQueueScoreExclusions& exclusions
+)noexcept{
     GpuQueueAssignmentScore score;
     const usize ignoredAssignmentOffset = exclusions.assignmentOffset;
     const usize ignoredAssignmentCount = exclusions.assignmentCount;
@@ -281,7 +282,8 @@ bool IsBetterAutomaticQueueAssignmentCandidate(
     const GpuPhysicalQueueInfo& candidate,
     const GpuQueueAssignmentScore& currentScore,
     const GpuPhysicalQueueInfo* const current,
-    const bool compareTotalScore)noexcept{
+    const bool compareTotalScore
+)noexcept{
     if(!current)
         return true;
 

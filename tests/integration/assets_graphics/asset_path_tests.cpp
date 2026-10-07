@@ -65,7 +65,8 @@ static void PrepareWorkload(
     PathFixture& fixture,
     const usize directoryCount,
     const AStringView directoryToken,
-    const usize tokenRepeats){
+    const usize tokenRepeats
+){
     const usize directoryBytes = directoryToken.size() * tokenRepeats;
     fixture.relativeText.reserve(directoryCount * (directoryBytes + 1u) + 32u);
     for(usize directory = 0u; directory < directoryCount; ++directory){
@@ -92,7 +93,8 @@ static void PrepareWorkload(
 static void BenchmarkDerivedPath(
     const usize directoryCount,
     const AStringView directoryToken,
-    const usize tokenRepeats){
+    const usize tokenRepeats
+){
     PathFixture fixture;
     PrepareWorkload(fixture, directoryCount, directoryToken, tokenRepeats);
     Alloc::ScratchArena scratchArena(Name("tests/asset_path/benchmark_scratch"), 65536u);

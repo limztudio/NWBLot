@@ -72,7 +72,8 @@ NWB::Impl::Ui::Rect UiWidgetGallery::LayoutBounds(const NWB::Impl::Ui::DisplayMe
 
 
 UiWidgetGallery::UiWidgetGallery(
-    NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets)
+    NWB::Core::Alloc::GlobalArena& arena, const NWB::Core::Assets::AssetManager& assets
+)
     : m_edits(arena)
     , m_searchCombos(arena)
     , m_nestedPopups(arena)

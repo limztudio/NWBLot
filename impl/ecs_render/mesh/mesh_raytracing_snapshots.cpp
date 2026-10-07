@@ -48,7 +48,8 @@ namespace __hidden_mesh_raytracing_snapshots{
 
 [[nodiscard]] bool RuntimeMeshletSnapshotMatches(
     const MeshResources& mesh,
-    const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot){
+    const ECSRenderDetail::MeshRayTracingResourceSnapshot& snapshot
+){
     if(!RuntimeMeshletBoundsReady(mesh)){
         return
             snapshot.meshletCount == 0u && !snapshot.meshletDescBuffer && !snapshot.meshletLocalBoundsBuffer

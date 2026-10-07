@@ -17,7 +17,8 @@ NWB_IMPL_BEGIN
 bool ResolvePreparedSoftwareBvhGraphResources(
     const Core::GpuTaskGraph& graph,
     const PreparedMeshSwBvhBuildVector& builds,
-    PreparedMeshSwBvhGraphResourceVector& outResources){
+    PreparedMeshSwBvhGraphResourceVector& outResources
+){
     outResources.clear();
     if(builds.empty())
         return true;

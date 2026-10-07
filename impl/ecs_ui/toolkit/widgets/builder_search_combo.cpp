@@ -17,7 +17,8 @@ NWB_IMPL_UI_BEGIN
 
 
 SearchComboResult Builder::searchComboBox(AStringView stableKey, ISearchableListDataSource& source,
-    SearchComboState& state, const SearchComboOptions& options){
+    SearchComboState& state, const SearchComboOptions& options
+){
     if(declarationBlocked() || !IsFinite(options.queryHeight) || options.queryHeight <= 0.0f || !IsFinite(options.queryGap) || options.queryGap < 0.0f){
         m_context.fail();
         return {};

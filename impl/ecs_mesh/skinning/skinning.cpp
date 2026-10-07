@@ -31,7 +31,8 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
     MeshSkinningRuntimeInstance& instance,
     const SkeletonJointPaletteComponent* jointPalette,
     const SkeletonPoseComponent* skeletonPose,
-    Core::Alloc::ScratchArena& scratchArena){
+    Core::Alloc::ScratchArena& scratchArena
+){
     instance.deformationState.invalidateCurrent();
     RuntimeSkinPayloadScratch payload{ scratchArena };
     if(!MeshSkinningPayload::BuildRuntimeSkinPayload(instance, jointPalette, skeletonPose, payload))

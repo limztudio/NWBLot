@@ -281,7 +281,8 @@ bool FontFace::shape(
     const ShapeRequest& request,
     u32 byteBegin,
     u32 byteEnd,
-    PaintVector<RawShapedGlyph>& output)const{
+    PaintVector<RawShapedGlyph>& output
+)const{
     if(
         !valid() || byteBegin > byteEnd || byteEnd > request.text.size() || request.text.size() > s_TextMaxBytes
         || !IsFinite(request.fontSize) || request.fontSize < 1.0f / 64.0f || request.fontSize > 2048.0f

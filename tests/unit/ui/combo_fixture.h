@@ -134,12 +134,14 @@ public:
 class ComboFixture : public WidgetFixture{
 protected:
     [[nodiscard]] bool declareCombo(const u64 generation, const ComboOptions& options = Options(),
-        const Rect& bounds = { 10.0f, 10.0f, 320.0f, 240.0f }){
+        const Rect& bounds = { 10.0f, 10.0f, 320.0f, 240.0f }
+    ){
         return declareSource(generation, m_source, m_state, options, bounds);
     }
 
     [[nodiscard]] bool declareSource(const u64 generation, const IListDataSource& source, ComboState& state,
-        const ComboOptions& options = Options(), const Rect& bounds = { 10.0f, 10.0f, 320.0f, 240.0f }){
+        const ComboOptions& options = Options(), const Rect& bounds = { 10.0f, 10.0f, 320.0f, 240.0f }
+    ){
         if(!begin(generation) || !m_builder.beginPanel("panel", bounds))
             return false;
         m_result = m_builder.comboBox("combo", source, state, options);
@@ -147,12 +149,14 @@ protected:
     }
 
     [[nodiscard]] bool prepare(const u64 generation, const ComboOptions& options = Options(),
-        const Rect& bounds = { 10.0f, 10.0f, 320.0f, 240.0f }){
+        const Rect& bounds = { 10.0f, 10.0f, 320.0f, 240.0f }
+    ){
         return declareCombo(generation, options, bounds) && finishPanel();
     }
 
     [[nodiscard]] bool accept(const u64 generation, const ComboOptions& options = Options(),
-        const Rect& bounds = { 10.0f, 10.0f, 320.0f, 240.0f }){
+        const Rect& bounds = { 10.0f, 10.0f, 320.0f, 240.0f }
+    ){
         return prepare(generation, options, bounds) && m_context.commitFrame(generation);
     }
 

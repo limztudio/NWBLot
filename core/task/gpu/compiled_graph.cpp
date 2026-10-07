@@ -441,7 +441,8 @@ const GpuCompiledExternalResourceExportSource* GpuCompiledGraph::externalResourc
 }
 
 GpuTaskGraphPhysicalQueueCompileStatistics GpuCompiledGraph::physicalQueueCompileStatistics(
-    const GpuPhysicalQueueId& queue)const noexcept{
+    const GpuPhysicalQueueId& queue
+)const noexcept{
     if(!valid() || !queue.valid() || queue.deviceGeneration != m_deviceGeneration)
         return {};
 

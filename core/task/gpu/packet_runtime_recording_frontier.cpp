@@ -253,7 +253,8 @@ bool GpuNativePacketRecorder::recordPacketRangeInReadyFrontiers(
     GpuRecordedGraph& outRecordedGraph,
     CpuTaskScheduler& cpuScheduler,
     GpuSubmissionPacketId* const outFailedPacket,
-    GpuCommandIrCapture* const commandIrCapture)const{
+    GpuCommandIrCapture* const commandIrCapture
+)const{
     using RecordingEntry = __hidden_gpu_packet_runtime_recording_frontier::PacketRecordingFrontierEntry;
 
     if(outFailedPacket)

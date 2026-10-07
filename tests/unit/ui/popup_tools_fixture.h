@@ -124,7 +124,8 @@ protected:
     }
 
     [[nodiscard]] bool declareTools(const u64 generation, const bool tooltip = true, const bool menu = true,
-        const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
+        const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }
+    ){
         if(!begin(generation) || !m_builder.beginPanel("panel", bounds))
             return false;
         m_builder.setDeltaSeconds(m_deltaSeconds);
@@ -141,12 +142,14 @@ protected:
     }
 
     [[nodiscard]] bool prepareTools(const u64 generation, const bool tooltip = true, const bool menu = true,
-        const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
+        const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }
+    ){
         return declareTools(generation, tooltip, menu, bounds) && finishPanel();
     }
 
     [[nodiscard]] bool acceptTools(const u64 generation, const bool tooltip = true, const bool menu = true,
-        const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }){
+        const Rect& bounds = { 10.0f, 10.0f, 360.0f, 280.0f }
+    ){
         return prepareTools(generation, tooltip, menu, bounds) && m_context.commitFrame(generation);
     }
 

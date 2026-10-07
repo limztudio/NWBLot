@@ -62,7 +62,8 @@ bool ScrollLayout::Calculate(
     const u64 rowCount,
     const f32 rowHeight,
     const f64 offset,
-    ScrollPlacement& placement)noexcept{
+    ScrollPlacement& placement
+)noexcept{
     using namespace __hidden_ui_scroll_layout;
     if(
         !IsValidUiRect(bounds) || !IsValidUiRect(inheritedClip) || !IsValidUiPadding(padding)

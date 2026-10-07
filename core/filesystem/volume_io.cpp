@@ -132,7 +132,8 @@ static bool ForEachSegmentChunk(
     const u64 segmentSize,
     const u64 offset,
     const u64 byteCount,
-    ChunkFunc&& chunkFunc){
+    ChunkFunc&& chunkFunc
+){
     if(segmentSize == 0){
         LogFailure(volumeName, operation, FilesystemVolumeDetail::s_VolumeDetailSegmentSizeZero);
         return false;
@@ -197,7 +198,8 @@ static bool TransferSegmentChunk(
     const AStringView seekOperation,
     Stream& stream,
     SeekStream&& seekStream,
-    TransferStream&& transferStream){
+    TransferStream&& transferStream
+){
     if(!stream.is_open()){
         LogFailureWithPath(volumeName, openOperation, segmentPaths[segmentIndex], LastErrnoMessage());
         return false;
@@ -257,7 +259,8 @@ static bool ReadSegmentBytes(
     const GlobalFilesystemDetail::StreamOffset streamOffset,
     const GlobalFilesystemDetail::StreamSize streamChunkSize,
     const u64 chunkBytes,
-    u8*& outputBytes){
+    u8*& outputBytes
+){
     GlobalFilesystemDetail::InputFileStream stream(
         segmentPaths[segmentIndex],
         GlobalFilesystemDetail::InputFileStream::binary
@@ -298,7 +301,8 @@ static bool WriteSegmentBytes(
     const GlobalFilesystemDetail::StreamOffset streamOffset,
     const GlobalFilesystemDetail::StreamSize streamChunkSize,
     const u64 chunkBytes,
-    const u8*& inputBytes){
+    const u8*& inputBytes
+){
     GlobalFilesystemDetail::FileStream stream(
         segmentPaths[segmentIndex],
         GlobalFilesystemDetail::FileStream::binary

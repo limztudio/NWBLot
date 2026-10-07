@@ -23,7 +23,8 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
     Core::CommandList& commandList,
     const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
     DeferredFrameTargets& targets,
-    Optional<Core::GpuTimingMeasure>* const causticPhotonTiming){
+    Optional<Core::GpuTimingMeasure>* const causticPhotonTiming
+){
     // Software photon producer runs before deferred lighting.
 
     if(!hasCausticWork(meshView))

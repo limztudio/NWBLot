@@ -42,7 +42,8 @@ SdfAtlasPage::SdfAtlasPage(Core::Alloc::GlobalArena& arena, const SdfAtlasPageBi
 SharedSdfAtlasPage CreateSdfAtlasPage(
     Core::Alloc::GlobalArena& arena,
     const SdfAtlasPageBinding& binding,
-    SdfAtlasPage::Pixels&& pixels){
+    SdfAtlasPage::Pixels&& pixels
+){
     if(
         !binding.font.valid() || binding.fontGeneration == 0u || binding.atlasIdentity == 0u || binding.generation == 0u
         || binding.index >= s_FontAtlasMaxGroupCount || binding.width == 0u || binding.height == 0u
@@ -69,7 +70,8 @@ SharedSdfAtlasPage CreateSdfAtlasPage(
     const FontAtlas& atlas,
     const u64 fontGeneration,
     const u64 atlasIdentity,
-    const u32 groupIndex){
+    const u32 groupIndex
+){
     // The asset codec/font installation validates the whole payload once before publishing matching glyph metadata.
     const FontAtlasPayload& payload = atlas.payload();
     if(groupIndex >= payload.groups.size())

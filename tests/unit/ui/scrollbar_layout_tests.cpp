@@ -346,7 +346,8 @@ TEST(UiScrollbarLayoutTests, InvalidCalculationInputsPreserveCompletePreviousPla
         { 40.0f, 50.0f }, 12.0f, 16.0f, previous
     ));
     const auto reject = [&previous](const Rect& valueBounds, const Rect& clip, const Insets& valuePadding,
-        const Point& measure, const f32 caret, const Point& scroll, const f32 thickness, const f32 minimum){
+        const Point& measure, const f32 caret, const Point& scroll, const f32 thickness, const f32 minimum
+    ){
         ScrollViewportPlacement placement = previous;
         EXPECT_FALSE(ScrollbarLayout::Calculate(valueBounds, clip, valuePadding, measure, caret, scroll, thickness, minimum, placement));
         ExpectPlacement(placement, previous);

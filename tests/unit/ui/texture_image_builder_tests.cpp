@@ -37,7 +37,8 @@ struct TextureImagePaintSample{
 
 [[nodiscard]] static SharedImageSource MakeImage(
     Core::Alloc::GlobalArena& arena, const StringView path = "tests/ui/builder_image",
-    const u8 seed = 37u, const u32 width = 20u, const u32 height = 12u){
+    const u8 seed = 37u, const u32 width = 20u, const u32 height = 12u
+){
     u32 mipCount = 0u;
     if(!TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture2D, width, height, 1u, mipCount))
         return {};

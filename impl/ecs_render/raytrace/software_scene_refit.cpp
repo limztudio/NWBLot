@@ -54,7 +54,8 @@ void SoftwareSceneRefitResources::invalidate(){
 SoftwareSceneRefitHandle SoftwareSceneRefitResources::prepare(
     const SoftwareSceneRefitInstanceGpu* const inputs, const Core::BufferHandle* const meshNodes, const usize instanceCount,
     const Core::BufferHandle& sceneNodes, const Core::GpuDescriptorHandle sceneDescriptor, const u32 nodeCount,
-    RendererShaderSystem& shaderSystem){
+    RendererShaderSystem& shaderSystem
+){
     if(
         !inputs || !meshNodes || instanceCount == 0u || instanceCount > Limit<u32>::s_Max / sizeof(SoftwareSceneRefitInstanceGpu)
         || !sceneNodes || !sceneDescriptor.valid() || sceneDescriptor.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer

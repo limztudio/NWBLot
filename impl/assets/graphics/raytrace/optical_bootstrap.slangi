@@ -30,7 +30,8 @@ bool nwbOpticalBootstrap(
     const float3 origin,
     const float3 direction,
     out NwbOpticalMedia media,
-    inout NwbOpticalTraceResult result){
+    inout NwbOpticalTraceResult result
+){
     media = (NwbOpticalMedia)0;
     const uint headerFlags = nwbHeapRawBuffer(config.opticalSceneHeapSlot).Load(NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET);
     if((headerFlags & NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID) == 0u){

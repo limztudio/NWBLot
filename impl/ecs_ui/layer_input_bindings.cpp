@@ -25,7 +25,8 @@ void UiLayerSystem::restoreDefaultInputBindings(){
 }
 
 bool UiLayerSystem::commandInput(const Ui::InputSource source, const Ui::InputCommand::Enum command,
-    const i32 phase, const bool extend){
+    const i32 phase, const bool extend
+){
     if(source.device == 0u || source.control == 0u || command > Ui::InputCommand::ContextMenu
         || (command == Ui::InputCommand::None && phase != Core::InputAction::Release)
         || phase < Core::InputAction::Release || phase > Core::InputAction::Repeat)

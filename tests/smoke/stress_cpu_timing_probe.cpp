@@ -47,7 +47,8 @@ bool StressCpuTimingProbe::observe(
     const Core::Perf::Session& session,
     const PresentationFpsProbe& presentation,
     const u64 successfulPresentations,
-    const bool complete){
+    const bool complete
+){
     if(!m_enabled || m_complete || !presentation.measurementStarted())
         return true;
     const Core::Perf::CaptureOptions options = session.captureOptions();
@@ -84,7 +85,8 @@ bool StressCpuTimingProbe::capture(
     const Core::Perf::TimingView& timing,
     const bool gpu,
     const u64 frame,
-    const u64 presentations){
+    const u64 presentations
+){
     if(!timing.valid() || timing.scopeCount() > s_MaxScopesPerDomain){
         NWB_LOGGER_ERROR(NWB_TEXT("StressCpuTimingProbe: timing view invalid or scope capacity exceeded"));
         return false;

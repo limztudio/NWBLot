@@ -83,7 +83,8 @@ struct RelativeAssetPathLayout{
 inline void WriteRelativeAssetPathText(
     const Path& relativePath,
     const RelativeAssetPathLayout& layout,
-    const NotNull<char*> output){
+    const NotNull<char*> output
+){
     char* cursor = output.get();
     bool hasComponent = false;
     for(auto componentIt = relativePath.begin(); componentIt != layout.acceptedEnd; ++componentIt){

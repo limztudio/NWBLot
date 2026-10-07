@@ -30,7 +30,8 @@ void RendererRayTracingSystem::confirmCausticAccumulatorBootstrapClear()noexcept
 
 void RendererRayTracingSystem::dispatchCausticGeometryDownsample(
     Core::CommandList& commandList,
-    DeferredFrameTargets& targets){
+    DeferredFrameTargets& targets
+){
     NWB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     NWB_ASSERT(heap.isInitialized());
@@ -63,7 +64,8 @@ void RendererRayTracingSystem::dispatchCausticGeometryDownsample(
 
 void RendererRayTracingSystem::dispatchCausticResolvePrepare(
     Core::CommandList& commandList,
-    DeferredFrameTargets& targets){
+    DeferredFrameTargets& targets
+){
     NWB_ASSERT(targets.bindless.valid());
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     NWB_ASSERT(heap.isInitialized());

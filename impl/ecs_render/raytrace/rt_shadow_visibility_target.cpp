@@ -257,7 +257,8 @@ bool RendererRayTracingSystem::renderShadowVisibility(
     u32* const opaqueFrameIndex,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
     const bool splitOpaqueSoftResolve,
-    const LightSpaceShadowSnapshot* const lightSpace){
+    const LightSpaceShadowSnapshot* const lightSpace
+){
     NWB_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
     NWB_ASSERT(deferredLightingResources.valid());
     if(!targets.shadowVisibility)

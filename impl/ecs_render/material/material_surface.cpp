@@ -601,7 +601,8 @@ bool RendererMaterialSystem::findMaterialSurfaceInfo(const Core::Assets::AssetRe
 
 bool RendererMaterialSystem::appendPreparedMaterialSurfaceSampledTextures(
     const MaterialSurfaceInfo& materialInfo,
-    MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector){
+    MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector
+){
     return AppendPreparedMaterialSurfaceSampledTextures(materialInfo, m_materialState.m_resourceState, m_materialState.m_resourceFixtures, collector);
 }
 
@@ -609,7 +610,8 @@ bool RendererMaterialSystem::gatherPreparedMaterialPassSampledTextures(
     const MaterialPassDrawItems* const* const drawItemSets,
     const usize drawItemSetCount,
     Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& outTextures,
-    Core::Alloc::ScratchArena& scratchArena){
+    Core::Alloc::ScratchArena& scratchArena
+){
     return GatherPreparedMaterialPassSampledTextures(m_materialState.m_surfaceInfos, m_materialState.m_resourceState, m_materialState.m_resourceFixtures, drawItemSets, drawItemSetCount, outTextures, scratchArena);
 }
 

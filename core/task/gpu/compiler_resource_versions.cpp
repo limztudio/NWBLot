@@ -220,7 +220,8 @@ public:
     [[nodiscard]] bool build(
         const Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& edges,
         const usize taskCount,
-        const usize maximumRowCount){
+        const usize maximumRowCount
+    ){
         m_wordsPerRow = taskCount == 0u ? 0u : (taskCount - 1u) / s_BitsPerWord + 1u;
         if(m_wordsPerRow != 0u && taskCount > Limit<usize>::s_Max / m_wordsPerRow)
             return false;
@@ -312,7 +313,8 @@ bool BuildResourceVersionDependencyEdges(
     const GpuTaskGraph::DeclarationReadView& graph,
     Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& outEdges,
     GpuTaskGraphAnalysisDiagnostic& outDiagnostic,
-    Alloc::ScratchArena& scratchArena){
+    Alloc::ScratchArena& scratchArena
+){
     using namespace __hidden_gpu_task_resource_versions;
 
     outEdges.clear();

@@ -38,7 +38,8 @@ void RayTracingOpticalSceneGather::append(
     const bool transparent,
     const Float3U& boundsMin,
     const Float3U& boundsMax,
-    const bool boundsValid){
+    const bool boundsValid
+){
     RayTracingOpticalInstanceGpu instance;
     instance.entityId = entity.id;
     instance.mediumPriority = renderer.opticalMediumPriority;
@@ -79,7 +80,8 @@ void RayTracingOpticalSceneGather::appendRuntime(
     const RendererComponent& renderer,
     const Core::BufferHandle& boundsBuffer,
     const Core::GpuDescriptorHandle boundsDescriptor,
-    const Float34U& objectToWorld){
+    const Float34U& objectToWorld
+){
     const bool staticComplete = boundsCompleteExceptRuntime;
     const u32 instanceIndex = static_cast<u32>(instances.size());
     append(entity, renderer, true, {}, {}, false);
@@ -115,7 +117,8 @@ bool ComputeOpticalWorldBounds(
     const Float3U& localMin,
     const Float3U& localMax,
     Float3U& outMin,
-    Float3U& outMax)noexcept{
+    Float3U& outMax
+)noexcept{
     // SIMD lanes own the affine corner math: all eight AABB corners are transformed as one
     // lane batch, and the enclosure margin is reduced from lane magnitudes on vector lanes.
     // A float affine coordinate uses three products and three additions. Gamma(8) additionally covers the final

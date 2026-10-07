@@ -57,7 +57,8 @@ TextInputCapabilities Win32TextInputService::capabilities()const noexcept{
 
 TextInputAdmission::Enum Win32TextInputService::startNativeSession(
     const TextInputSessionToken token,
-    const TextInputSessionDesc& desc){
+    const TextInputSessionDesc& desc
+){
     static_cast<void>(token);
     if(!IsWindow(static_cast<HWND>(m_nativeWindowHandle.get())))
         return TextInputAdmission::Unavailable;
@@ -125,7 +126,8 @@ bool DispatchWin32TextInputMessage(
     ITextInputService& service,
     const u32 message,
     const usize wParam,
-    const isize lParam){
+    const isize lParam
+){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Win32Imm32)
         return false;
     return checked_cast<Win32TextInputService*>(&service)->handleMessage(message, wParam, lParam);

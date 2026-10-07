@@ -249,7 +249,8 @@ template<typename PayloadT, typename PayloadVector>
     const bool canHaveRawViews = false,
     const bool accelStructBuildInput = false,
     const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
-    const bool isIndexBuffer = false){
+    const bool isIndexBuffer = false
+){
     const Name bufferName = DeriveRuntimeResourceName(
         instance.sourceName,
         instance.entity.id,
@@ -303,7 +304,8 @@ template<typename PayloadT, typename PayloadVector>
     const bool canHaveRawViews = false,
     const bool accelStructBuildInput = false,
     const Core::ResourceQueueSharing::Mask queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute,
-    const bool isIndexBuffer = false){
+    const bool isIndexBuffer = false
+){
     outBuffer = SetupRuntimeBuffer<PayloadT>(
         graphics,
         instance,

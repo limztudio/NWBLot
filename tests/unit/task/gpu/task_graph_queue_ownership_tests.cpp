@@ -364,7 +364,8 @@ TEST(GpuTaskGraph, AdvisesConcurrentSharingForRepeatedExclusiveOwnershipMoves){
         const Name& identity,
         const AStringView label,
         const Graphics::GpuTaskCommandRequirements& commands,
-        const Graphics::GpuTaskResourceAccess::Enum access){
+        const Graphics::GpuTaskResourceAccess::Enum access
+    ){
         const Graphics::GpuTaskResourceUse use{
             .resource = texture,
             .range = {},

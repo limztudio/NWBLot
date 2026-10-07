@@ -59,7 +59,8 @@ bool UiSelectionDeletionTests::mutate(const DeletionMutation::Enum mutation){
 }
 
 void UiSelectionDeletionTests::expectBaseline(
-    const u64 revision, const u64 externalRevision, const u64 selectionGeneration)const{
+    const u64 revision, const u64 externalRevision, const u64 selectionGeneration
+)const{
     EXPECT_EQ(m_model.text(), "abcDEFghi");
     EXPECT_EQ(m_model.anchor(), 3u);
     EXPECT_EQ(m_model.caret(), 6u);

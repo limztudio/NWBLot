@@ -62,7 +62,8 @@ public:
     virtual void recordSample(
         const Core::Perf::TimingScopeId scope,
         const f64 seconds,
-        const u64 sampleFrameIndex)override{
+        const u64 sampleFrameIndex
+    )override{
         m_timing.recordSample(scope, seconds, sampleFrameIndex);
     }
     virtual void publishFrame(const u64 publishFrameIndex)override{ m_timing.publishFrame(publishFrameIndex); }

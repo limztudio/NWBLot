@@ -17,7 +17,8 @@ NWB_IMPL_BEGIN
 
 bool PreparedShadowVisibilityTasksSharePacket(
     const Core::GpuCompiledGraph::ReadView& compiledPlan,
-    const PreparedShadowVisibilityTasks& tasks){
+    const PreparedShadowVisibilityTasks& tasks
+){
     if(tasks.combinedTemporal && (!tasks.combinedWavelet || tasks.opaqueFirstWavelet.valid()))
         return false;
     if(tasks.combinedWavelet && (!tasks.combinedUpsample || !tasks.transparentTemporalMerge.valid()))

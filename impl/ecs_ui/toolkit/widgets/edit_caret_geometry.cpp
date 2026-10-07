@@ -128,7 +128,8 @@ namespace __hidden_ui_edit_caret_geometry{
 }
 
 [[nodiscard]] static bool CaretRect(const TextLayout& layout, const EditBoundaryVector& boundaries,
-    const usize byte, Rect& output)noexcept{
+    const usize byte, Rect& output
+)noexcept{
     if(layout.lines().empty() || !GraphemeSegmentation::IsScalarBoundary(layout.utf8(), byte))
         return false;
     const TextLine& line = layout.lines()[LineForByte(layout, byte)];
@@ -171,7 +172,8 @@ namespace __hidden_ui_edit_caret_geometry{
 }
 
 [[nodiscard]] static bool NearestStop(const PaintVector<EditCaretLine>& lines, const PaintVector<EditBoxCaretStop>& stops,
-    const u32 lineIndex, const Point point, usize& committedByte)noexcept{
+    const u32 lineIndex, const Point point, usize& committedByte
+)noexcept{
     if(stops.empty() || lineIndex >= lines.size() || !IsFinite(point.x) || !IsFinite(point.y))
         return false;
     const EditCaretLine& line = lines[lineIndex];
@@ -229,7 +231,8 @@ namespace __hidden_ui_edit_caret_geometry{
 
 
 bool HitEditCaretGeometry(const PaintVector<EditCaretLine>& lines, const PaintVector<EditBoxCaretStop>& stops,
-    const Point localPoint, usize& committedByte)noexcept{
+    const Point localPoint, usize& committedByte
+)noexcept{
     if(lines.empty() || lines.size() > Limit<u32>::s_Max || stops.empty() || !IsFinite(localPoint.x) || !IsFinite(localPoint.y))
         return false;
     u32 lineIndex = static_cast<u32>(lines.size() - 1u);
@@ -258,7 +261,8 @@ EditCaretGeometry::EditCaretGeometry(Core::Alloc::GlobalArena& arena)noexcept
 {}
 
 bool EditCaretGeometry::adoptLayout(TextLayout&& layout, const StringView expectedText,
-    const PaintVector<EditCaretMapping>& mapping, const usize committedBytes, const EditTextMode::Enum mode){
+    const PaintVector<EditCaretMapping>& mapping, const usize committedBytes, const EditTextMode::Enum mode
+){
     if(
         layout.utf8() != expectedText || (mode != EditTextMode::SingleLine && mode != EditTextMode::Multiline)
         || expectedText.size() > s_TextMaxBytes || committedBytes > s_TextMaxBytes
@@ -324,7 +328,8 @@ bool EditCaretGeometry::hitTest(const Point localPoint, usize& committedByte)con
 }
 
 bool EditCaretGeometry::verticalTarget(const usize displayCaret, const bool down,
-    const f32 preferredX, usize& committedByte)const noexcept{
+    const f32 preferredX, usize& committedByte
+)const noexcept{
     Rect caret;
     if(!m_ready || !IsFinite(preferredX) || !caretRect(displayCaret, caret))
         return false;
@@ -344,7 +349,8 @@ bool EditCaretGeometry::verticalTarget(const usize displayCaret, const bool down
 }
 
 bool EditCaretGeometry::rangeOnLine(const EditBoxRange range, const u32 lineIndex,
-    const f32 breakWidth, Rect& output)const noexcept{
+    const f32 breakWidth, Rect& output
+)const noexcept{
     if(
         !m_ready || lineIndex >= m_lines.size() || range.begin > range.end || range.end > m_layout.utf8().size()
         || !IsFinite(breakWidth) || breakWidth < 0.0f

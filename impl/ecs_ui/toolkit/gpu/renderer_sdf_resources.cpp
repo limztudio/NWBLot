@@ -200,7 +200,8 @@ bool GpuRendererState::declareSdfPages(
     Core::GpuTaskGraph& graph,
     const GpuFrame& frame,
     GpuSdfGraphResources& resources,
-    GpuRasterResourceUses& uses){
+    GpuRasterResourceUses& uses
+){
     if(frame->m_sdfPages.size() != frame->m_snapshot.sdfPages().size()){
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared SDF page count does not match the immutable snapshot"));
         return false;

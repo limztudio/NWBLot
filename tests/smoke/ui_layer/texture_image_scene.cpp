@@ -55,7 +55,8 @@ static constexpr Impl::Ui::Color s_Backdrop{ 0.07f, 0.13f, 0.2f, 1.0f };
 UiTextureImageSmokeScene::UiTextureImageSmokeScene(
     Core::Alloc::GlobalArena& arena,
     Core::InputDispatcher& input,
-    const Core::Assets::AssetManager& assets)
+    const Core::Assets::AssetManager& assets
+)
     : m_arena(arena)
     , m_input(input)
 {
@@ -173,7 +174,8 @@ bool UiTextureImageSmokeScene::paintImages(
     Impl::UiPaintContext& context,
     const f32 width,
     const f32 right,
-    const f32 otherWidth){
+    const f32 otherWidth
+){
     using namespace Impl::Ui;
     using namespace __hidden_ui_texture_image_scene;
     auto& paint = context.paint;
@@ -309,7 +311,8 @@ SharedUiTextureImageSmokeScene CreateUiTextureImageSmokeScene(
     Core::Alloc::GlobalArena& arena,
     Core::InputDispatcher& input,
     const Core::Assets::AssetManager& assets,
-    Core::GraphicsRuntime& graphics){
+    Core::GraphicsRuntime& graphics
+){
     static_cast<void>(graphics);
     return SharedUiTextureImageSmokeScene(
         NewArenaObject<RefCounter<UiTextureImageSmokeScene>>(arena, arena, input, assets),

@@ -26,7 +26,8 @@ u64 BuildLightSpaceCsgCaptureIdentity(
     const LightSpaceCsgState& state,
     const NwbRtInstanceMaterialGpu* const materials, const InstanceGpuData* const instances, const usize instanceCount,
     const u8* const materialBytes, const usize materialByteCount,
-    const Core::TextureHandle* const textures, const usize textureCount){
+    const Core::TextureHandle* const textures, const usize textureCount
+){
     NWB_ASSERT(instanceCount == 0u || (materials && instances));
     NWB_ASSERT(materialByteCount == 0u || materialBytes);
     NWB_ASSERT(textureCount == 0u || textures);
@@ -68,7 +69,8 @@ void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world
 
 void AppendLightSpaceCsgReceiver(
     LightSpaceCsgState& state, const Core::ECS::EntityID entity, const bool transparent,
-    const SIMDMatrix& objectToWorld, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh){
+    const SIMDMatrix& objectToWorld, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
+){
     if(!state.gathering)
         return;
     Fnv64AppendValue(state.captureGeometryIdentity, entity.id);
@@ -124,7 +126,8 @@ void AppendLightSpaceCsgReceiver(
 }
 
 bool FinishLightSpaceCsgGather(
-    LightSpaceCsgState& state, Core::ECS::World& world, const CsgShapeRegistry& registry, Core::Alloc::ScratchArena& scratchArena){
+    LightSpaceCsgState& state, Core::ECS::World& world, const CsgShapeRegistry& registry, Core::Alloc::ScratchArena& scratchArena
+){
     if(!state.gathering)
         return true;
     if(state.receivers.size() != state.instances.size())

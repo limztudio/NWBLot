@@ -17,7 +17,8 @@ NWB_IMPL_UI_BEGIN
 
 
 bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlacement& placement,
-    const Rect& clip, const ControlToken& token){
+    const Rect& clip, const ControlToken& token
+){
     const bool enabled = item.editOptions.enabled;
     m_paint.pushClip(clip);
     bool painted = true;

@@ -178,7 +178,8 @@ template<typename DestinationVector, typename SourceValue>
     const DestinationVector& destination,
     const SourceValue* sourceData,
     const usize sourceSize,
-    usize& outSourceOffset){
+    usize& outSourceOffset
+){
     outSourceOffset = 0u;
     if(destination.empty() || sourceSize == 0u)
         return false;

@@ -73,7 +73,8 @@ void ProfileRanges(
     const usize count,
     const usize grain,
     const u32 repetitions,
-    const u32 rounds){
+    const u32 rounds
+){
     Vector<u64, Alloc::ScratchArena> output(count, 0u, scratch);
     Vector<u64, Alloc::ScratchArena> expected(count, 0u, scratch);
     for(usize index = 0u; index < count; ++index){

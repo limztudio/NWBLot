@@ -30,7 +30,8 @@ namespace __hidden_ui_gpu{
     Core::Alloc::GlobalArena& arena,
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assets,
-    GpuRenderer::ShaderPathResolveCallback resolver){
+    GpuRenderer::ShaderPathResolveCallback resolver
+){
     Core::GlobalUniquePtr<GpuRendererState> state = Core::MakeGlobalUnique<GpuRendererState>(arena, arena, graphics, assets, Move(resolver));
     if(!state)
         TerminateInvariant();
@@ -139,7 +140,8 @@ GpuRendererState::GpuRendererState(
     Core::Alloc::GlobalArena& arena,
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assets,
-    GpuRenderer::ShaderPathResolveCallback resolver)
+    GpuRenderer::ShaderPathResolveCallback resolver
+)
     : m_arena(arena)
     , m_graphics(graphics)
     , m_assets(assets)
@@ -161,7 +163,8 @@ GpuRenderer::GpuRenderer(
     Core::Alloc::GlobalArena& arena,
     Core::GraphicsRuntime& graphics,
     Core::Assets::AssetManager& assetManager,
-    ShaderPathResolveCallback shaderPathResolver)
+    ShaderPathResolveCallback shaderPathResolver
+)
     : m_state(MakeNotNullUnique(__hidden_ui_gpu::CreateState(arena, graphics, assetManager, Move(shaderPathResolver))))
 {}
 
@@ -223,7 +226,8 @@ void GpuRenderer::invalidateResources(){
 bool GpuRenderer::setSkin(
     const Core::Assets::AssetRef<UiSkin>& identity,
     const UiSkin& skin,
-    const u64 skinGeneration){
+    const u64 skinGeneration
+){
     if(!identity.valid() || skinGeneration == 0u || !m_state->m_resources || !skin.validatePayload())
         return false;
     const SkinBinding binding{ identity, skin.texture(), skinGeneration, skin.atlasWidth(), skin.atlasHeight(), skin.referenceDensity() };

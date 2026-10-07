@@ -90,7 +90,8 @@ ReflectionFeedbackPlan ReflectionFeedbackState::plan(
     const ReflectionSceneContentStamp& stamp,
     const ReflectionSettings& settings,
     const bool enabled,
-    const u64 graphicsFrameIndex)noexcept{
+    const u64 graphicsFrameIndex
+)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     ReflectionFeedbackPlan result;
@@ -157,7 +158,8 @@ void ReflectionFeedbackState::discard(const ReflectionFeedbackPlan& plan)noexcep
 bool ReflectionFeedbackState::accept(
     const ReflectionFeedbackPlan& plan,
     const Core::QueueSubmissionToken& token,
-    const bool hardwareReady)noexcept{
+    const bool hardwareReady
+)noexcept{
     NothrowScopedLock lock(m_mutex);
 
     if(plan.generation != m_generation || plan.sequence != m_reservedSequence)

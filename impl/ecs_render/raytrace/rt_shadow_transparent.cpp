@@ -24,7 +24,8 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTrace(
     const DeferredLightingGraphResources& deferredLightingResources,
     const u32 frameIndex,
     const bool graphOwnsOpaqueToTransparentBoundary,
-    const LightSpaceShadowSnapshot* const lightSpace){
+    const LightSpaceShadowSnapshot* const lightSpace
+){
     if(
         !m_rayTracingState.m_softShadowReady
         || !m_rayTracingState.m_softTransparentReady
@@ -104,7 +105,8 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowTemporalMerge(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const u32 frameIndex,
-    const bool graphOwnsTransparentTemporalMergeEntryStates){
+    const bool graphOwnsTransparentTemporalMergeEntryStates
+){
     if(
         !m_rayTracingState.m_softShadowReady
         || !m_rayTracingState.m_softTransparentReady
@@ -146,7 +148,8 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFirstWavelet(
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const u32 frameIndex,
-    const bool graphOwnsTransparentWaveletInputBoundary){
+    const bool graphOwnsTransparentWaveletInputBoundary
+){
     if(
         !m_rayTracingState.m_softShadowReady
         || !m_rayTracingState.m_softTransparentReady
@@ -186,7 +189,8 @@ bool RendererRayTracingSystem::renderSoftTransparentShadowFold(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    const u32 frameIndex){
+    const u32 frameIndex
+){
     if(
         !m_rayTracingState.m_softShadowReady
         || !m_rayTracingState.m_softTransparentReady
@@ -232,7 +236,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTemporalMe
     const u32& opaqueFrameIndex,
     const bool graphOwnsTransparentTemporalMergeEntryStates,
     const bool combinedTemporal,
-    const bool hardwareShadowSupported){
+    const bool hardwareShadowSupported
+){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTemporalMergeGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTemporalMergeGraphTask::Payload{
@@ -264,7 +269,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFirstWavel
     const u32& opaqueFrameIndex,
     const bool graphOwnsTransparentWaveletInputBoundary,
     const bool startsTransparentResolveTiming,
-    const bool combinedWavelet){
+    const bool combinedWavelet
+){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFirstWaveletGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFirstWaveletGraphTask::Payload{
@@ -296,7 +302,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftFoldTask(
     const bool& opaqueProduced,
     bool& transparentTraceProduced,
     const u32& opaqueFrameIndex,
-    const bool combinedUpsample){
+    const bool combinedUpsample
+){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFoldGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftFoldGraphTask::Payload{
@@ -324,7 +331,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowTransparentSoftTraceTask(
     const bool& opaqueProduced,
     const u32& opaqueFrameIndex,
     bool& transparentTraceProduced,
-    const LightSpaceShadowSnapshot* const lightSpace){
+    const LightSpaceShadowSnapshot* const lightSpace
+){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTraceGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowTransparentSoftTraceGraphTask::Payload{
@@ -348,7 +356,8 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityTask(
     const bool& prepared,
     const bool hardwareShadowSupported,
     Core::GpuTimingSubmissionTicket& timingTicket,
-    const GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan){
+    const GraphOwnedAdaptiveShadowPlan graphOwnedAdaptivePlan
+){
     return graph.addTask<RayTracingShadowVisibilityTaskDetail::ShadowVisibilityGraphTask>(
         desc,
         RayTracingShadowVisibilityTaskDetail::ShadowVisibilityGraphTask::Payload{

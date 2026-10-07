@@ -17,7 +17,8 @@ NWB_IMPL_BEGIN
 
 
 UiEditClickKind::Enum UiEditClickTracker::press(const UiTextEditOwner& owner, const Ui::PopupToken& popup,
-    const u64 revision, const u64 externalRevision, const Ui::Point position, const u64 timestampMs, const bool shift)noexcept{
+    const u64 revision, const u64 externalRevision, const Ui::Point position, const u64 timestampMs, const bool shift
+)noexcept{
     if(!owner.valid() || timestampMs == 0u || shift || !IsFinite(position.x) || !IsFinite(position.y)){
         cancel();
         return UiEditClickKind::Caret;

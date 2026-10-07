@@ -66,7 +66,8 @@ NWB_INLINE QueueSubmissionToken GpuTimingSubmissionTicket::submitToQueue(
     CommandList* const* commandLists,
     const usize commandListCount,
     const ExecutionQueue& executionQueue,
-    const QueueSubmissionDesc& submitDesc){
+    const QueueSubmissionDesc& submitDesc
+){
     Alloc::ScratchArena scratchArena(__hidden_gpu_timing_submission::s_SubmissionScratchArena);
     Vector<QueueSubmissionToken, Alloc::ScratchArena> waitTokens(scratchArena);
     if(!prepareSubmission(commandLists, commandListCount, waitTokens))

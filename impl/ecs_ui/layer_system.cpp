@@ -32,7 +32,8 @@ UiLayerSystem::UiLayerSystem(
     ShaderPathResolveCallback shaderPathResolver,
     const Core::Assets::AssetRef<UiSkin>& skin,
     const FontReferences& fonts,
-    const UiLayerPresentation::Enum presentation)
+    const UiLayerPresentation::Enum presentation
+)
     : Core::ECS::ISystem(arena)
     , Core::IRenderPass(graphics)
     , m_world(world)

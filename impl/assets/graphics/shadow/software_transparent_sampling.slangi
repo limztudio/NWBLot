@@ -27,7 +27,8 @@
 
 bool nwbSwTransparentSamplingReproject(
     const uint2 pixel, const uint2 fullExtent, const uint receiverFactor, const float3 world, const float4x4 previousWorldToClip,
-    const bool historyValid, out int2 previousPixel){
+    const bool historyValid, out int2 previousPixel
+){
     previousPixel = int2(0);
     if(!historyValid || any(fullExtent == uint2(0u)) || !all(isfinite(world)))
         return false;

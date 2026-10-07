@@ -76,7 +76,8 @@ void SetParameters(CsgCutterComponent& cutter, const Float4& parameter){
 
 [[nodiscard]] bool CustomBounds(
     const SIMDMatrix& shapeToWorld, const u8* parameterBytes, const usize parameterByteSize,
-    SIMDVector& outMin, SIMDVector& outMax, bool& outFinite){
+    SIMDVector& outMin, SIMDVector& outMax, bool& outFinite
+){
     static_cast<void>(parameterBytes);
     if(parameterByteSize != 0u)
         return false;

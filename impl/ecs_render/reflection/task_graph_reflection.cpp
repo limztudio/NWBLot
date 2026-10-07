@@ -270,7 +270,8 @@ struct StatisticsReadbackTask{
     [[nodiscard]] static bool Record(
         const Payload& payload,
         Core::CommandList& commandList,
-        const Core::GpuTaskRecordContext& context){
+        const Core::GpuTaskRecordContext& context
+    ){
         if(!payload.source || !payload.destination || !payload.reservation.valid())
             return false;
         if(
@@ -328,7 +329,8 @@ ReflectionGraphResult DeclareReflectionTasks(
     Core::Alloc::ScratchArena& scratchArena,
     const ReflectionFrameSnapshot& resources,
     const ReflectionGraphInputs& inputs,
-    Core::GpuTaskId dependency){
+    Core::GpuTaskId dependency
+){
     using namespace __hidden_reflection_tasks;
     if(
         !resources.valid() || !inputs.surfaceReads || inputs.surfaceReadCount == 0u

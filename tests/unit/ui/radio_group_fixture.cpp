@@ -97,7 +97,8 @@ void RadioSource::resetCounters()const{
 }
 
 void RadioSource::armSelection(RadioGroupState& state, const RadioCallbackSite::Enum site,
-    const u64 keyValue, const bool awayAndBack){
+    const u64 keyValue, const bool awayAndBack
+){
     m_state = &state;
     m_selected = keyValue;
     m_site = site;
@@ -227,7 +228,8 @@ bool RadioGroupFixture::declare(const u64 generation, const RadioGroupOptions& o
 }
 
 bool RadioGroupFixture::declareSource(const u64 generation, const IListDataSource& source, RadioGroupState& state,
-    const RadioGroupOptions& options, const Rect& bounds){
+    const RadioGroupOptions& options, const Rect& bounds
+){
     if(!begin(generation) || !m_builder.beginPanel("panel", bounds))
         return false;
     m_result = m_builder.radioGroup("radio", source, state, options);

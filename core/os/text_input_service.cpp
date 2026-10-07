@@ -157,7 +157,8 @@ TextInputAdmission::Enum QueuedTextInputService::updateSurrounding(
     const AStringView text,
     const usize anchorByte,
     const usize caretByte,
-    const TextInputChangeCause::Enum cause){
+    const TextInputChangeCause::Enum cause
+){
     if(!isOwnerThread())
         return TextInputAdmission::WrongThread;
     if(m_transitioning || !token.valid() || token != m_activeToken)

@@ -136,7 +136,8 @@ void X11ClipboardService::startNativeRequest(
     const ClipboardRequestToken token,
     const ClipboardOperation::Enum operation,
     const ClipboardChannel::Enum channel,
-    const AStringView text){
+    const AStringView text
+){
     m_operationToken = token;
     m_operation = operation;
     m_operationSelection = selectionAtom(channel);

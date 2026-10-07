@@ -65,7 +65,8 @@ public:
         const f32 pitch = 0.0f,
         const Name opticalGroup = s_NameNone,
         const i32 opticalPriority = 0,
-        const Impl::OpticalVolumeCoincidence::Enum opticalCoincidence = Impl::OpticalVolumeCoincidence::Independent){
+        const Impl::OpticalVolumeCoincidence::Enum opticalCoincidence = Impl::OpticalVolumeCoincidence::Independent
+    ){
         const Float4 firstTint = m_preview ? Float4(0.12f, 0.72f, 1.0f, 0.48f) : Float4(0.90f, 0.98f, 1.0f, coverage);
         const Float4 secondTint = m_preview ? Float4(1.0f, 0.33f, 0.13f, 0.48f) : Float4(1.0f, 0.94f, 0.88f, coverage);
         const Float4 tint = second ? secondTint : firstTint;
@@ -92,7 +93,8 @@ public:
         const f32 coverage = 0.0f,
         const Name opticalGroup = s_NameNone,
         const i32 opticalPriority = 0,
-        const Impl::OpticalVolumeCoincidence::Enum opticalCoincidence = Impl::OpticalVolumeCoincidence::Independent){
+        const Impl::OpticalVolumeCoincidence::Enum opticalCoincidence = Impl::OpticalVolumeCoincidence::Independent
+    ){
         object(
             s_Sphere, Float4(x, 1.4f, z, 0.0f), Float4(radius, radius, radius, 0.0f), second, coverage,
             0.0f, 0.0f, 0.0f, opticalGroup, opticalPriority, opticalCoincidence
@@ -106,7 +108,8 @@ public:
         const f32 y,
         const f32 z,
         const f32 halfWidth,
-        const f32 halfHeight){
+        const f32 halfHeight
+    ){
         const auto entity = CreateTintedStaticMeshEntity(
             m_world, m_context.objectArena, s_Plane, material, s_Interface, tint,
             Float4(x, y, z, 0.0f), Float4(halfWidth, 1.0f, halfHeight, 0.0f)
@@ -160,7 +163,8 @@ bool CreateRefractionGalleryScene(
     ProjectRuntimeContext& context,
     Core::ECS::World& world,
     const AStringView caseName,
-    const bool geometryPreview){
+    const bool geometryPreview
+){
     const auto camera = CreateSmokeCamera(world, 1.4f, 6.0f, 0.0f);
     const auto light = Impl::Scene::CreateDirectionalLightEntity(
         world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f

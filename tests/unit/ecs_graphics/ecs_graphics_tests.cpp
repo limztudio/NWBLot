@@ -487,7 +487,8 @@ static void BenchmarkMaterialTypedRanges(
     const usize valueCount,
     const usize lookupCount,
     const usize iterations,
-    const bool repeatedHits){
+    const bool repeatedHits
+){
     using ByteVector = ::Vector<u8, NWB::Core::Alloc::ScratchArena>;
     using RangeMap = NWB::Impl::ECSRenderDetail::MaterialTypedByteContentRangeMap;
     using ByteRange = NWB::Impl::ECSRenderDetail::MaterialTypedByteRange;
@@ -712,7 +713,8 @@ TEST(EcsGraphics, NonUniformScaleCannotBecomeRigidJointRotation){
 
 static NWB::Impl::SkeletonPoseComponent MakeTwoJointSkeletonPose(
     const NWB::Impl::SkeletonJointMatrix& rootJoint,
-    const NWB::Impl::SkeletonJointMatrix& childJoint){
+    const NWB::Impl::SkeletonJointMatrix& childJoint
+){
     NWB::Impl::SkeletonPoseComponent pose(NWB::Tests::TestDetail::Arena());
     pose.parentJoints.push_back(NWB::Impl::s_SkeletonRootParent);
     pose.parentJoints.push_back(0u);

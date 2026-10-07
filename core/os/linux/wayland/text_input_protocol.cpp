@@ -37,7 +37,8 @@ void WaylandTextInputService::sendSurrounding(
     const AStringView text,
     const usize anchorByte,
     const usize caretByte,
-    const u64 revision){
+    const u64 revision
+){
     const WaylandTextInputSurrounding slice = m_wireState.update(text, anchorByte, caretByte, revision);
     if(!slice.available)
         return;
@@ -117,7 +118,8 @@ void WaylandTextInputService::OnRegistryGlobal(
     wl_registry* const registry,
     const u32 name,
     const char* const interfaceName,
-    const u32 version){
+    const u32 version
+){
     auto& service = *static_cast<WaylandTextInputService*>(data);
     if(AStringView(interfaceName) != zwp_text_input_manager_v3_interface.name || service.m_manager || version == 0u)
         return;
@@ -176,7 +178,8 @@ void WaylandTextInputService::OnPreedit(
     zwp_text_input_v3* const input,
     const char* const text,
     const i32 begin,
-    const i32 end){
+    const i32 end
+){
     auto& service = *static_cast<WaylandTextInputService*>(data);
     if(input != service.m_input || !service.m_enabled)
         return;
@@ -210,7 +213,8 @@ void WaylandTextInputService::OnDelete(
     void* const data,
     zwp_text_input_v3* const input,
     const u32 before,
-    const u32 after){
+    const u32 after
+){
     auto& service = *static_cast<WaylandTextInputService*>(data);
     if(input != service.m_input || !service.m_enabled)
         return;

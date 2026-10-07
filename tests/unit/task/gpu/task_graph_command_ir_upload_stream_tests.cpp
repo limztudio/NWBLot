@@ -41,7 +41,8 @@ inline constexpr usize s_TextureByteCount = 96u;
 
 
 [[nodiscard]] bool CaptureTwoUploads(Graphics::GpuCommandIrCapture& capture,
-    const BinaryByteView bufferBytes, const BinaryByteView textureBytes){
+    const BinaryByteView bufferBytes, const BinaryByteView textureBytes
+){
     Graphics::TextureSlice slice;
     slice
         .setOrigin(0u, 0u, 0u)

@@ -26,7 +26,8 @@ NWB_IMPL_BEGIN
 
 RayTracingOpticalBoundsFinalizeSnapshot::RayTracingOpticalBoundsFinalizeSnapshot(
     Core::Alloc::GlobalArena& arena,
-    Core::GraphicsRuntime& graphics)
+    Core::GraphicsRuntime& graphics
+)
     : inputs(arena)
     , boundsBuffers(arena)
     , graphics(graphics)
@@ -38,7 +39,8 @@ RayTracingOpticalBoundsFinalizeSnapshot::RayTracingOpticalBoundsFinalizeSnapshot
 
 RayTracingOpticalBoundsFinalizeResources::RayTracingOpticalBoundsFinalizeResources(
     Core::Alloc::GlobalArena& arena,
-    Core::GraphicsRuntime& graphics)
+    Core::GraphicsRuntime& graphics
+)
     : m_arena(arena)
     , m_graphics(graphics)
 {}
@@ -64,7 +66,8 @@ void RayTracingOpticalBoundsFinalizeResources::invalidate(){
 RayTracingOpticalBoundsFinalizeHandle RayTracingOpticalBoundsFinalizeResources::prepare(
     const RayTracingOpticalSceneGather& gather,
     const Core::GpuDescriptorHandle sourceDescriptor,
-    RendererShaderSystem& shaderSystem){
+    RendererShaderSystem& shaderSystem
+){
     if(
         gather.runtimeBounds.empty() || !sourceDescriptor.valid()
         || gather.runtimeBounds.size() > Limit<u32>::s_Max / sizeof(RayTracingOpticalRuntimeInputGpu)
@@ -79,7 +82,8 @@ RayTracingOpticalBoundsFinalizeHandle RayTracingOpticalBoundsFinalizeResources::
         Core::GpuDescriptorHandle& descriptor,
         const usize byteSize,
         const Name identity,
-        const bool output){
+        const bool output
+    ){
         if(buffer && buffer->getDeviceGeneration() != device.getDeviceGeneration())
             return false;
         if(buffer && buffer->getCreationDescription().byteSize >= byteSize && descriptor.valid())

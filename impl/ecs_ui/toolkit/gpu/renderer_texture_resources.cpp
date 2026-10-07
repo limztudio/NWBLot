@@ -171,7 +171,8 @@ bool GpuRendererState::declareTextureImages(
     Core::GpuTaskGraph& graph,
     const GpuFrame& frame,
     GpuTextureGraphResources& resources,
-    GpuRasterResourceUses& uses){
+    GpuRasterResourceUses& uses
+){
     if(frame->m_textureImages.size() != frame->m_snapshot.textureImages().size()){
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared texture image count does not match the immutable snapshot"));
         return false;

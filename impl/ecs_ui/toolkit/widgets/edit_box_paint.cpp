@@ -30,7 +30,8 @@ namespace __hidden_ui_edit_box_paint{
 }
 
 [[nodiscard]] static const UiSkinRegion* Background(const UiSkin& skin, const EditBoxStyle& style,
-    const EditBoxPaintFlags& flags)noexcept{
+    const EditBoxPaintFlags& flags
+)noexcept{
     const Name& preferred = !flags.enabled ? style.disabled : flags.focused ? style.focused
         : flags.hovered ? style.hover : style.normal;
     const UiSkinRegion* region = skin.findRegion(preferred);
@@ -52,7 +53,8 @@ namespace __hidden_ui_edit_box_paint{
 
 
 bool EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& skin,
-    const EditBoxPlacement& placement, const EditBoxStyle& style, const EditBoxPaintFlags& flags)const{
+    const EditBoxPlacement& placement, const EditBoxStyle& style, const EditBoxPaintFlags& flags
+)const{
     if(
         !m_ready || !__hidden_ui_edit_box_paint::ValidColor(style.background)
         || !__hidden_ui_edit_box_paint::ValidColor(style.text) || !__hidden_ui_edit_box_paint::ValidColor(style.disabledText)

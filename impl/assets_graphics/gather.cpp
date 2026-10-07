@@ -49,7 +49,8 @@ bool MergeGatheredGraphicsAsset(
     const Name& virtualPath,
     Core::Assets::AssetBytes& existingPayload,
     const void* incomingPayload,
-    const usize incomingSize){
+    const usize incomingSize
+){
     if(virtualPath != Core::ShaderArchive::IndexVirtualPathName())
         return false;
     if(incomingSize > 0u && incomingPayload == nullptr)

@@ -19,7 +19,8 @@ NWB_CORE_BEGIN
 TextInputAdmission::Enum Win32TextInputService::acceptInsertedPreedit(
     const TextInputSessionToken token,
     const u32 unit,
-    const bool moveCaret){
+    const bool moveCaret
+){
     if(unit >= 0xd800u && unit <= 0xdbffu){
         if(m_pendingPreeditHighSurrogate != 0u)
             return TextInputAdmission::InvalidText;
@@ -57,7 +58,8 @@ TextInputAdmission::Enum Win32TextInputService::publishCompositionPreedit(
     const TextInputSessionToken token,
     const AStringView text,
     const usize anchorByte,
-    const usize caretByte){
+    const usize caretByte
+){
     const TextInputAdmission::Enum admitted = emitPreedit(token, text, anchorByte, caretByte);
     if(admitted == TextInputAdmission::Accepted){
         m_preeditText.assign(text.data(), text.size());

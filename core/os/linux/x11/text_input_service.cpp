@@ -155,7 +155,8 @@ TextInputCapabilities X11TextInputService::capabilities()const noexcept{
 
 TextInputAdmission::Enum X11TextInputService::startNativeSession(
     const TextInputSessionToken token,
-    const TextInputSessionDesc& desc){
+    const TextInputSessionDesc& desc
+){
     if(m_shuttingDown)
         return TextInputAdmission::Unavailable;
     if(m_reopenPending){
@@ -322,7 +323,8 @@ void X11TextInputService::releaseContext()noexcept{
 GlobalUniquePtr<ITextInputService> CreateX11TextInputService(
     Alloc::GlobalArena& arena,
     Display& display,
-    const u64 window){
+    const u64 window
+){
     auto service = MakeGlobalUnique<X11TextInputService>(arena, arena, display, static_cast<Window>(window));
     if(!service->initialize())
         return nullptr;

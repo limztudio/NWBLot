@@ -544,7 +544,8 @@ private:
     }
 
     NWB::Core::ECS::EntityID createMesh(const SmokeMeshRef& mesh, const SmokeMaterialRef& material,
-        const Float4& color, const Float4& position, const Float4& scale, const f32 specularF0 = 0.0f){
+        const Float4& color, const Float4& position, const Float4& scale, const f32 specularF0 = 0.0f
+    ){
         const auto entity = CreateTintedStaticMeshEntity(
             *m_world, m_context.objectArena, mesh, material, s_MaterialInterface, color, position, scale
         );
@@ -564,7 +565,8 @@ private:
     }
 
     void createPanel(const SmokeMaterialRef& material, const Float4& color, const Float4& position,
-        const Float4& scale, const f32 specularF0 = 0.0f){
+        const Float4& scale, const f32 specularF0 = 0.0f
+    ){
         const auto entity = createMesh(s_PlaneMesh, material, color, position, scale, specularF0);
         auto& transform = m_world->entity(entity).getComponent<NWB::Impl::Scene::TransformComponent>();
         StoreFloat(QuaternionRotationRollPitchYaw(-s_PIDIV2, 0.0f, 0.0f), transform.rotation);

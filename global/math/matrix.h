@@ -77,8 +77,8 @@ NWB_INLINE void NWB_SIMD_CALL MatrixMultiplyPackedRowsFMA(
     const SIMDMatrix& m0,
     const SIMDMatrix& m1,
     __m256& outRows01,
-    __m256& outRows23)noexcept
-{
+    __m256& outRows23
+)noexcept{
     __m256 t0 = _mm256_castps128_ps256(m0.v[0]);
     t0 = _mm256_insertf128_ps(t0, m0.v[1], 1);
     __m256 t1 = _mm256_castps128_ps256(m0.v[2]);
@@ -1019,8 +1019,8 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveImpl(
     const f32 farZ,
     const f32 rangeDenominator,
     const f32 rangeNearScale,
-    const f32 forwardZ)noexcept
-{
+    const f32 forwardZ
+)noexcept{
     NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0f, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0f, s_MatrixProjectionNearEqualEpsilon));
@@ -1075,8 +1075,8 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveFovImpl(
     const f32 farZ,
     const f32 rangeDenominator,
     const f32 rangeNearScale,
-    const f32 forwardZ)noexcept
-{
+    const f32 forwardZ
+)noexcept{
     NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(fovAngleY, 0.0f, s_MatrixPerspectiveFovNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(aspectRatio, 0.0f, s_MatrixProjectionNearEqualEpsilon));
@@ -1112,8 +1112,8 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveOffCenterImpl(
     const f32 rangeDenominator,
     const f32 centerScale,
     const f32 rangeNearScale,
-    const f32 forwardZ)noexcept
-{
+    const f32 forwardZ
+)noexcept{
     NWB_ASSERT(nearZ > 0.0f && farZ > 0.0f);
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, s_MatrixProjectionNearEqualEpsilon));
@@ -1146,8 +1146,8 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicImpl(
     const f32 viewHeight,
     const f32 nearZ,
     const f32 rangeDenominator,
-    const f32 rangeNearScale)noexcept
-{
+    const f32 rangeNearScale
+)noexcept{
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewWidth, 0.0f, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewHeight, 0.0f, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0f, s_MatrixProjectionNearEqualEpsilon));
@@ -1172,8 +1172,8 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixOrthographicOffCenterImpl(
     const f32 viewTop,
     const f32 nearZ,
     const f32 rangeDenominator,
-    const f32 rangeNearScale)noexcept
-{
+    const f32 rangeNearScale
+)noexcept{
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewRight, viewLeft, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(viewTop, viewBottom, s_MatrixProjectionNearEqualEpsilon));
     NWB_ASSERT(!SIMDMatrixDetail::ScalarNearEqual(rangeDenominator, 0.0f, s_MatrixProjectionNearEqualEpsilon));

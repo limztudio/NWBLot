@@ -17,7 +17,8 @@ namespace TelemetryTestDetail{
 Telemetry::EncodedFrameGraphRuntimeStatistics EncodeTestFrameGraphRuntimeStatistics(
     const Telemetry::FrameGraphRuntimeStatistics& statistics,
     const u32 nodeIndex,
-    const u16 reserved){
+    const u16 reserved
+){
     return Telemetry::EncodedFrameGraphRuntimeStatistics{
         .nodeIndex = nodeIndex,
         .deviceGeneration = statistics.deviceGeneration,

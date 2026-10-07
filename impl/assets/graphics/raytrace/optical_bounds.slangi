@@ -24,7 +24,8 @@ bool nwbOpticalSegmentOutsideBounds(
     const float3 normalizedDirection,
     const float maxDistance,
     const float3 boundsMin,
-    const float3 boundsMax){
+    const float3 boundsMax
+){
     if(
         !all(isfinite(origin)) || !all(isfinite(normalizedDirection))
         || !isfinite(maxDistance) || maxDistance <= 0.0
@@ -64,7 +65,8 @@ bool nwbOpticalSegmentProvenExterior(
     const float3 initialDirection,
     const float minDistance,
     const float maxDistance,
-    const uint maxQueries){
+    const uint maxQueries
+){
     if(
         opticalSceneHeapSlot == 0xffffffffu || maxQueries == 0u
         || !all(isfinite(origin)) || !all(isfinite(initialDirection))

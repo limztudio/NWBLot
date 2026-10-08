@@ -172,9 +172,7 @@ void nwbOrthonormalizeFrame(
     tangent.w = nwbTangentHandedness(tangent.w, fallbackTangent.w);
 }
 
-// Octahedral normal encoding (Meyer et al. 2010 / Cigolle et al. 2014): a unit vector -> a [-1,1]^2 pair, decoded
-// back to (near-)unit. Two floats losslessly enough for an edge-stop, so a normal fits two channels of a geometry
-// cache alongside a depth + validity in one RGBA16F texel. encode assumes a normalized input; decode re-normalizes.
+// Octahedral normal encoding (Meyer et al. 2010 / Cigolle et al. 2014): a unit vector -> a [-1,1]^2 pair, decoded back to (near-)unit. Two floats losslessly enough for an edge-stop, so a normal fits two channels of a geometry cache alongside a depth + validity in one RGBA16F texel. encode assumes a normalized input; decode re-normalizes.
 float2 nwbOctEncodeNormal(const float3 normal){
     const float3 n = normal / (abs(normal.x) + abs(normal.y) + abs(normal.z));
     float2 encoded = n.xy;

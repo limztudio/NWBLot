@@ -32,8 +32,7 @@ ConstantBuffer<NwbDeferredCompositePushConstants> g_NwbDeferredCompositePushCons
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Composite stays in linear RGBA16F on Compute. The following Graphics present pass alone handles the swapchain
-// framebuffer/sRGB boundary, so this dispatch never requires storage-capable surface images.
+// Composite stays in linear RGBA16F on Compute. The following Graphics present pass alone handles the swapchain framebuffer/sRGB boundary, so this dispatch never requires storage-capable surface images.
 [numthreads(NWB_DEFERRED_COMPOSITE_GROUP_SIZE, NWB_DEFERRED_COMPOSITE_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     uint width;
@@ -44,13 +43,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(pixel.x >= width || pixel.y >= height)
         return;
 
-    // Every composite input is a full-resolution point-sampled target. Use direct mip-0 loads so this Compute shader
-    // stays free of implicit derivatives and therefore needs no compute-derivative Vulkan extension or feature.
+    // Every composite input is a full-resolution point-sampled target. Use direct mip-0 loads so this Compute shader stays free of implicit derivatives and therefore needs no compute-derivative Vulkan extension or feature.
     const int3 texel = int3(pixel, 0);
     const half4 opaqueReflection = g_NwbDeferredCompositePushConstants.opaqueReflectionSlot != 0xffffffffu
-        ? half4(nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.opaqueReflectionSlot).Load(texel)) : half4(0.0h);
+        ? half4(nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.opaqueReflectionSlot).Load(texel)) : half4(0.0h)
+    ;
     const half4 glassReflection = g_NwbDeferredCompositePushConstants.glassReflectionSlot != 0xffffffffu
-        ? half4(nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.glassReflectionSlot).Load(texel)) : half4(0.0h);
+        ? half4(nwbHeapSampledImage2D(g_NwbDeferredCompositePushConstants.glassReflectionSlot).Load(texel)) : half4(0.0h)
+    ;
     const half3 opaqueColor = half3(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.x).Load(texel).rgb) + opaqueReflection.rgb;
     half reflectionSource = opaqueReflection.a;
     const half4 transparentColorAccum = half4(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.compositeSlots.y).Load(texel));
@@ -65,7 +65,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const half4 transmitted = half4(nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.refractionSlots1.x).Load(texel));
         const half3 transmittedColor = transmitted.a > half(0.0h)
             ? frontColor + frontTransmittance * (transmitted.rgb + glassReflection.rgb)
-            : frontColor + transparentColorAccum.rgb + opaqueColor * frontTransmittance * totalTransmittance;
+            : frontColor + transparentColorAccum.rgb + opaqueColor * frontTransmittance * totalTransmittance
+        ;
         compositeColor = transmittedColor;
     }
     if(glassReflection.a > half(0.0h))
@@ -73,7 +74,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(g_NwbDeferredCompositePushConstants.reflectionDebugView == 1u){
         compositeColor = reflectionSource >= half(3.0h) ? half3(0.15h, 0.3h, 1.0h)
             : reflectionSource >= half(2.0h) ? half3(0.15h, 1.0h, 0.2h)
-            : reflectionSource > half(0.0h) ? half3(1.0h, 0.25h, 0.1h) : half3(0.0h);
+            : reflectionSource > half(0.0h) ? half3(1.0h, 0.25h, 0.1h) : half3(0.0h)
+        ;
     }
     else if(g_NwbDeferredCompositePushConstants.reflectionDebugView == 2u)
         compositeColor = half3(reflectionSource >= half(3.0h) ? half(1.0h) : saturate((reflectionSource - half(2.0h)) * half(2.0h)));

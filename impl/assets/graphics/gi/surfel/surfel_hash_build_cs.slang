@@ -2,8 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Hash build: live surfels InterlockedExchange into per-cell lists (one integer atomic). Heads CPU-cleared to
-// INVALID before this pass, so linking starts empty.
+// Hash build: live surfels InterlockedExchange into per-cell lists (one integer atomic). Heads CPU-cleared to INVALID before this pass, so linking starts empty.
 
 
 #include "surfel_runtime.slangi"
@@ -34,8 +33,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint cellCount = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.x);
     const uint bucket = nwbSurfelHashCell(nwbSurfelCellCoord(surfel.position, cellSize), cellCount);
 
-    // Push onto the cell's linked list: this surfel becomes the new head; its next is the previous head. Each slot is
-    // written by exactly one thread (surfelIndex), so the single-field nextInCell store is race-free.
+    // Push onto the cell's linked list: this surfel becomes the new head; its next is the previous head. Each slot is written by exactly one thread (surfelIndex), so the single-field nextInCell store is race-free.
     uint previousHead = NWB_SURFEL_CELL_INVALID;
     InterlockedExchange(g_NwbSurfelCellHead[bucket], surfelIndex, previousHead);
     g_NwbSurfelPool[surfelIndex].nextInCell = previousHead;

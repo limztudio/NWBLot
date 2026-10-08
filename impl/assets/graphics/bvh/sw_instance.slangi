@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared software-BVH scene-instance ABI. The three affine rows and trailing four words match the C++
-// SceneSwBvhInstanceGpu record (64 bytes) used by the shadow, surfel-GI, and caustic software trace paths.
+// Shared software-BVH scene-instance ABI. The three affine rows and trailing four words match the C++ SceneSwBvhInstanceGpu record (64 bytes) used by the shadow, surfel-GI, and caustic software trace paths.
 struct NwbSwBvhInstance{
     float4 worldToObjectRow0;
     float4 worldToObjectRow1;
@@ -38,8 +37,7 @@ float3 nwbSwBvhTransformVector(const NwbSwBvhInstance instance, const float3 vec
     );
 }
 
-// This is the inverse-transpose of object->world, expressed as the transpose of the stored world->object 3x3. Callers
-// choose their own normalization/fallback policy because their surface contracts differ.
+// This is the inverse-transpose of object->world, expressed as the transpose of the stored world->object 3x3. Callers choose their own normalization/fallback policy because their surface contracts differ.
 float3 nwbSwBvhTransformNormal(const NwbSwBvhInstance instance, const float3 objectNormal){
     return float3(
         dot(float3(instance.worldToObjectRow0.x, instance.worldToObjectRow1.x, instance.worldToObjectRow2.x), objectNormal),

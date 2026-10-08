@@ -69,8 +69,7 @@ ConstantBuffer<NwbCausticResolvePushConstants> g_NwbCausticResolvePushConstants;
 #if NWB_CAUSTIC_RESOLVE_COMPILED_STAGE != NWB_CAUSTIC_RESOLVE_COMPILED_STAGE_WAVELET_DIRECT
 // Groupshared tile for small-dilation wavelet passes.
 groupshared half3  g_NwbCausticResolveTileColor[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
-// The geometry cache is RGBA16F. Keep its sampled world positions compact in LDS and widen only for the edge-stop
-// arithmetic below; storing them as float3 here would double the shared-memory footprint without adding precision.
+// The geometry cache is RGBA16F. Keep its sampled world positions compact in LDS and widen only for the edge-stop arithmetic below; storing them as float3 here would double the shared-memory footprint without adding precision.
 groupshared half3  g_NwbCausticResolveTileWorld[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   g_NwbCausticResolveTileValid[NWB_CAUSTIC_RESOLVE_TILE_TEXELS];
 groupshared uint   g_NwbCausticResolveTileActive;
@@ -120,10 +119,7 @@ groupshared uint g_NwbCausticResolveOutputActivity;
 bool nwbCausticResolveInputInactive(const uint2 group, const uint threadIndex){
     const uint step = NWB_CAUSTIC_RESOLVE_STEP_WIDTH;
     const bool smallStep = step <= NWB_CAUSTIC_RESOLVE_LDS_MAX_STEP;
-    if(
-        g_NwbCausticResolvePushConstants.activityInputSlot == NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT
-        || (!smallStep && step % NWB_CAUSTIC_RESOLVE_GROUP_SIZE != 0u)
-    )
+    if(g_NwbCausticResolvePushConstants.activityInputSlot == NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT || (!smallStep && step % NWB_CAUSTIC_RESOLVE_GROUP_SIZE != 0u))
         return false;
     if(threadIndex == 0u)
         g_NwbCausticResolveInputActivity = 0u;
@@ -131,10 +127,8 @@ bool nwbCausticResolveInputInactive(const uint2 group, const uint threadIndex){
     // Small-step halos span at most the adjacent tile in each direction; large steps preserve tile residues.
     const uint side = smallStep ? 3u : 5u;
     if(threadIndex < side * side){
-        const uint2 tiles = (uint2(g_NwbCausticResolvePushConstants.halfWidth, g_NwbCausticResolvePushConstants.halfHeight)
-            + NWB_CAUSTIC_RESOLVE_GROUP_SIZE - 1u) / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
-        const int2 offset = (int2(threadIndex % side, threadIndex / side) - int2(side / 2u))
-            * (smallStep ? 1 : (int)(step / NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
+        const uint2 tiles = (uint2(g_NwbCausticResolvePushConstants.halfWidth, g_NwbCausticResolvePushConstants.halfHeight) + NWB_CAUSTIC_RESOLVE_GROUP_SIZE - 1u) / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
+        const int2 offset = (int2(threadIndex % side, threadIndex / side) - int2(side / 2u)) * (smallStep ? 1 : (int)(step / NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
         const int2 tile = int2(group) + offset;
         if(all(tile >= int2(0, 0)) && all(tile < int2(tiles))){
             const uint index = (uint)tile.y * tiles.x + (uint)tile.x;
@@ -152,8 +146,7 @@ bool nwbCausticResolveUpsampleInactive(const int2 baseTexel){
     const int2 maximum = int2(g_NwbCausticResolvePushConstants.halfWidth, g_NwbCausticResolvePushConstants.halfHeight) - 1;
     const uint2 firstTile = uint2(clamp(baseTexel, int2(0), maximum)) / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
     const uint2 lastTile = uint2(clamp(baseTexel + 1, int2(0), maximum)) / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
-    const uint tilesX = (g_NwbCausticResolvePushConstants.halfWidth + NWB_CAUSTIC_RESOLVE_GROUP_SIZE - 1u)
-        / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
+    const uint tilesX = (g_NwbCausticResolvePushConstants.halfWidth + NWB_CAUSTIC_RESOLVE_GROUP_SIZE - 1u) / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
     // The four clamped bilinear taps occupy one, two or four activity tiles.
     for(uint y = firstTile.y; y <= lastTile.y; ++y){
         for(uint x = firstTile.x; x <= lastTile.x; ++x){
@@ -175,11 +168,8 @@ void nwbCausticResolvePublishActivity(const float3 color, const bool inBounds, c
         InterlockedOr(g_NwbCausticResolveOutputActivity, 1u);
     GroupMemoryBarrierWithGroupSync();
     if(threadIndex == 0u){
-        const uint tilesX = (g_NwbCausticResolvePushConstants.halfWidth + NWB_CAUSTIC_RESOLVE_GROUP_SIZE - 1u)
-            / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
-        g_NwbHeapStorageBuffers[g_NwbCausticResolvePushConstants.activityOutputSlot].Store(
-            (group.y * tilesX + group.x) * 4u, g_NwbCausticResolveOutputActivity
-        );
+        const uint tilesX = (g_NwbCausticResolvePushConstants.halfWidth + NWB_CAUSTIC_RESOLVE_GROUP_SIZE - 1u) / NWB_CAUSTIC_RESOLVE_GROUP_SIZE;
+        g_NwbHeapStorageBuffers[g_NwbCausticResolvePushConstants.activityOutputSlot].Store((group.y * tilesX + group.x) * 4u, g_NwbCausticResolveOutputActivity);
     }
 }
 
@@ -241,8 +231,10 @@ float4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, co
         // Kernel and edge-stop weights are (0, 1) bounded factors with an HDR color accumulator, matching the half tile cache.
         half3 sum = half3(0.0h, 0.0h, 0.0h);
         half weightSum = half(0.0h);
-        [unroll] for(int ky = -2; ky <= 2; ++ky){
-            [unroll] for(int kx = -2; kx <= 2; ++kx){
+        [unroll]
+        for(int ky = -2; ky <= 2; ++ky){
+            [unroll]
+            for(int kx = -2; kx <= 2; ++kx){
                 const uint idx = (uint)((int(groupThreadID.y) + (ky + 2) * step) * tileW + (int(groupThreadID.x) + (kx + 2) * step));
                 if(g_NwbCausticResolveTileValid[idx] == 0u)
                     continue;
@@ -271,8 +263,10 @@ float4 nwbCausticResolveWavelet(const uint2 pixel, const uint3 groupThreadID, co
     // Kernel and edge-stop weights are (0, 1) bounded factors with an HDR color accumulator, matching the half tile cache.
     half3 sum = half3(0.0h, 0.0h, 0.0h);
     half weightSum = half(0.0h);
-    [unroll] for(int ky = -2; ky <= 2; ++ky){
-        [unroll] for(int kx = -2; kx <= 2; ++kx){
+    [unroll]
+    for(int ky = -2; ky <= 2; ++ky){
+        [unroll]
+        for(int kx = -2; kx <= 2; ++kx){
             const int2 tap = int2(texel.x + kx * step, texel.y + ky * step);
             if(tap.x < 0 || tap.y < 0 || tap.x >= hw || tap.y >= hh)
                 continue;
@@ -325,8 +319,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
             return;
         }
 
-        // The full-resolution world-position G-buffer is RGBA16F. Retain its transport precision and promote only
-        // for the distance-based edge stop, matching the half-resolution geometry cache below.
+        // The full-resolution world-position G-buffer is RGBA16F. Retain its transport precision and promote only for the distance-based edge stop, matching the half-resolution geometry cache below.
         const float3 centerWorld = float3(nwbCausticResolveWorldAtFull(fullTexel));
         const int2 rightFull = int2(min(fullTexel.x + 1, fw - 1), fullTexel.y);
         const int2 downFull = int2(fullTexel.x, min(fullTexel.y + 1, fh - 1));
@@ -339,8 +332,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         // Bilinear and edge-stop weights are (0, 1) bounded factors with an HDR color accumulator, matching the half tile cache.
         half3 sum = half3(0.0h, 0.0h, 0.0h);
         half weightSum = half(0.0h);
-        [unroll] for(int j = 0; j < 2; ++j){
-            [unroll] for(int i = 0; i < 2; ++i){
+        [unroll]
+        for(int j = 0; j < 2; ++j){
+            [unroll]
+            for(int i = 0; i < 2; ++i){
                 const int2 tap = int2(clamp(baseTexel.x + i, 0, hw - 1), clamp(baseTexel.y + j, 0, hh - 1));
                 if(!nwbCausticResolveValidAtHalf(tap))
                     continue;
@@ -370,11 +365,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const int fw = (int)g_NwbCausticResolvePushConstants.width;
                 const int fh = (int)g_NwbCausticResolvePushConstants.height;
                 const int2 base = int2(texel.x * 2, texel.y * 2);
-                // The uint32 accumulator holds fixed-point photon counts; keep its sum at full precision and
-                // convert to half only for the final irradiance divide, preserving small-flux accuracy.
+                // The uint32 accumulator holds fixed-point photon counts; keep its sum at full precision and convert to half only for the final irradiance divide, preserving small-flux accuracy.
                 float3 flux = float3(0.0, 0.0, 0.0);
-                [unroll] for(int oy = 0; oy < 2; ++oy){
-                    [unroll] for(int ox = 0; ox < 2; ++ox){
+                [unroll]
+                for(int oy = 0; oy < 2; ++oy){
+                    [unroll]
+                    for(int ox = 0; ox < 2; ++ox){
                         const int2 fpx = int2(min(base.x + ox, fw - 1), min(base.y + oy, fh - 1));
                         flux += float3(
                             (float)nwbHeapSampledImage2DArrayUint(g_NwbCausticResolvePushConstants.accumulatorSlot).Load(int4(fpx, NWB_CAUSTIC_ACCUMULATOR_CHANNEL_RED, 0)).r,

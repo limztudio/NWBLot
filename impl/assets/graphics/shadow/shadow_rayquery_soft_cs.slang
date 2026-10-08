@@ -7,6 +7,7 @@
 #endif
 #define NWB_BINDLESS_TLAS 1
 
+
 // Hardware and software traces share the receiver grid and cone-jittered sample conventions.
 
 
@@ -57,9 +58,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
 
-    // Background: fully LIT (white) for every slot -- the multiplicative identity the resolve carries and the value the
-    // upsample writes for a background full-res pixel, so the two agree at the geometry/background edge. Same depth
-    // threshold as the SW trace (NWB_SW_SHADOW_BACKGROUND_DEPTH aliases the HW full-res threshold).
+    // Background: fully LIT (white) for every slot -- the multiplicative identity the resolve carries and the value the upsample writes for a background full-res pixel, so the two agree at the geometry/background edge. Same depth threshold as the SW trace (NWB_SW_SHADOW_BACKGROUND_DEPTH aliases the HW full-res threshold).
     if(nwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.depthSlot).Load(texel).r >= NWB_SW_SHADOW_BACKGROUND_DEPTH){
         for(uint i = 0u; i < lightCount; ++i){
             const float slot = g_NwbSceneLights[i].params.z;
@@ -70,8 +69,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    // The deferred vector attachments are RGBA16F. Keep the half payload through the fetch and expand only for
-    // the ray origin/normal calculations, which must remain FP32 for stable soft-shadow tracing.
+    // The deferred vector attachments are RGBA16F. Keep the half payload through the fetch and expand only for the ray origin/normal calculations, which must remain FP32 for stable soft-shadow tracing.
     const half3 worldPositionSample = half3(nwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.worldPositionSlot).Load(texel).xyz);
     const half3 normalSample = half3(nwbHeapSampledImage2D(g_NwbShadowRqSoftPushConstants.normalSlot).Load(texel).xyz);
     const float3 worldPosition = float3(worldPositionSample);
@@ -80,8 +78,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float slot = g_NwbSceneLights[i].params.z;
         if(slot < 0.0)
             continue;
-        // Opaque-only jittered samples (per pixel/frame/sample decorrelated); averaging the runtime budget yields the
-        // 0..1 coverage the value-aware resolve needs. Temporal accumulation carries sampling across frames.
+        // Opaque-only jittered samples (per pixel/frame/sample decorrelated); averaging the runtime budget yields the 0..1 coverage the value-aware resolve needs. Temporal accumulation carries sampling across frames.
         half3 accum = half3(0.0h, 0.0h, 0.0h);
         [loop] for(uint s = 0u; s < sampleCount; ++s){
             const float2 sampleJitter = nwbShadowLowDiscrepancy2D(halfPixel, g_NwbShadowRqSoftPushConstants.frameIndex * NWB_SW_SHADOW_SOFT_SPP + s);

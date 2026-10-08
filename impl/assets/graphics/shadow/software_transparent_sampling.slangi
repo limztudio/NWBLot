@@ -25,10 +25,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool nwbSwTransparentSamplingReproject(
-    const uint2 pixel, const uint2 fullExtent, const uint receiverFactor, const float3 world, const float4x4 previousWorldToClip,
-    const bool historyValid, out int2 previousPixel
-){
+bool nwbSwTransparentSamplingReproject(const uint2 pixel, const uint2 fullExtent, const uint receiverFactor, const float3 world, const float4x4 previousWorldToClip, const bool historyValid, out int2 previousPixel){
     previousPixel = int2(0);
     if(!historyValid || any(fullExtent == uint2(0u)) || !all(isfinite(world)))
         return false;
@@ -55,19 +52,20 @@ bool nwbSwTransparentSamplingGeometryMatches(const half4 current, const half4 pr
     const float spacing = max(float(current.z) * NWB_SHADOW_TEMPORAL_WORLD_SPACING_SCALE, NWB_SHADOW_TEMPORAL_WORLD_SPACING_MIN);
     return current.z >= 0.0h && previous.z >= 0.0h
         && abs(float(current.z) - float(previous.z)) < NWB_SHADOW_TEMPORAL_PLANE_K * spacing
-        && dot(nwbOctDecodeNormal(float2(current.xy)), nwbOctDecodeNormal(float2(previous.xy))) > NWB_SHADOW_TEMPORAL_NORMAL_MIN;
+        && dot(nwbOctDecodeNormal(float2(current.xy)), nwbOctDecodeNormal(float2(previous.xy))) > NWB_SHADOW_TEMPORAL_NORMAL_MIN
+    ;
 }
 
 uint nwbSwTransparentSamplingBudget(const bool geometryAccepted, const half3 previousMoments, const uint maximumSamples){
-    // Moments are (0, 1) visibility statistics and the history count caps at 32; the variance gate only compares
-    // against small bounded thresholds, so half math is sufficient here.
+    // Moments are (0, 1) visibility statistics and the history count caps at 32; the variance gate only compares against small bounded thresholds, so half math is sufficient here.
     const half variance = previousMoments.y - previousMoments.x * previousMoments.x;
     // Half moments may round a small nonnegative variance slightly below zero.
     const bool settled = geometryAccepted && all(isfinite(previousMoments))
         && previousMoments.x >= half(0.0h) && previousMoments.x <= half(1.0h)
         && previousMoments.y >= half(0.0h) && previousMoments.y <= half(1.0h)
         && float(previousMoments.z) >= NWB_SW_TRANSPARENT_STABLE_HISTORY && float(previousMoments.z) <= NWB_SHADOW_TEMPORAL_MAX_HISTORY
-        && variance >= half(-0.002h) && variance <= half(NWB_SW_TRANSPARENT_STABLE_VARIANCE);
+        && variance >= half(-0.002h) && variance <= half(NWB_SW_TRANSPARENT_STABLE_VARIANCE)
+    ;
     return settled ? 1u : maximumSamples;
 }
 

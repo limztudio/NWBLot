@@ -23,8 +23,7 @@ void main(NwbLightSpaceCaptureVertex input, uint primitive : SV_PrimitiveID){
     const float depth = nwbLightSpaceLinearDepth(view, input.worldPosition);
     // Raw record: captured linear depth, two reserved zeros, instance, canonical primitive.
     const uint address = (pixelIndex * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + record) * NWB_LIGHT_SPACE_EVENT_BYTES;
-    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address,
-        uint4(asuint(depth), 0u, 0u, g_NwbLightSpacePush.instanceIndex));
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address, uint4(asuint(depth), 0u, 0u, g_NwbLightSpacePush.instanceIndex));
     g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + 16u, input.primitiveBase + primitive);
 }
 

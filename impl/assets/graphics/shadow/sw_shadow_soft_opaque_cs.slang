@@ -2,9 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Soft opaque half-res trace: one thread per half texel averages NWB_SW_SHADOW_SOFT_SPP cone-jittered occlusion rays
-// per shadow-slot light into the half-res buffer for the resolve to denoise + upsample. Seeded per pixel/frame so
-// neighbours stay decorrelated; light-type handling lives in nwbSwShadowLightVisible.
+// Soft opaque half-res trace: one thread per half texel averages NWB_SW_SHADOW_SOFT_SPP cone-jittered occlusion rays per shadow-slot light into the half-res buffer for the resolve to denoise + upsample. Seeded per pixel/frame so neighbours stay decorrelated; light-type handling lives in nwbSwShadowLightVisible.
 
 
 #include "sw_binding_slots.h"
@@ -17,8 +15,7 @@
 // sw_shadow_ray.slangi pulls shadow_sampling.slangi (nwbShadowLowDiscrepancy2D + the cone jitter) transitively.
 #include "sw_shadow_ray.slangi"
 
-// The half-res soft opaque visibility buffer (one layer per shadow slot) this pass writes the cone-jittered sample
-// into; the separate shadow_resolve pipeline denoises + upsamples it into the full-res visibility.
+// The half-res soft opaque visibility buffer (one layer per shadow slot) this pass writes the cone-jittered sample into; the separate shadow_resolve pipeline denoises + upsamples it into the full-res visibility.
 #define g_NwbSwShadowSoftHalf nwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.softHalfStorageSlot)
 
 #define NWB_SW_SHADOW_SOFT_TRACE_OUTPUT g_NwbSwShadowSoftHalf

@@ -18,8 +18,7 @@
 #ifndef NWB_SHADOW_RESOLVE_COMPILED_STAGE
 #error NWB_SHADOW_RESOLVE_COMPILED_STAGE must select a resolve stage.
 #endif
-#if NWB_SHADOW_RESOLVE_COMPILED_STAGE != NWB_SHADOW_RESOLVE_STAGE_WAVELET \
-    && NWB_SHADOW_RESOLVE_COMPILED_STAGE != NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE
+#if NWB_SHADOW_RESOLVE_COMPILED_STAGE != NWB_SHADOW_RESOLVE_STAGE_WAVELET && NWB_SHADOW_RESOLVE_COMPILED_STAGE != NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE
 #error NWB_SHADOW_RESOLVE_COMPILED_STAGE must select the wavelet or upsample stage.
 #endif
 
@@ -29,9 +28,9 @@
 #endif
 
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_COMBINED
-    #if NWB_SHADOW_RESOLVE_COMPILED_STAGE != NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE
-        #error Combined visibility is an upsample-only stage.
-    #endif
+#if NWB_SHADOW_RESOLVE_COMPILED_STAGE != NWB_SHADOW_RESOLVE_STAGE_UPSAMPLE
+    #error Combined visibility is an upsample-only stage.
+#endif
     typedef half4 NwbShadowResolveVisVec;
     typedef float4 NwbShadowResolveVisFVec;
 #elif NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
@@ -95,8 +94,7 @@ ConstantBuffer<NwbShadowResolvePushConstants> g_NwbShadowResolvePushConstants;
 // Groupshared tile for small-dilation wavelet passes.
 groupshared NwbShadowResolveVisVec g_NwbShadowResolveTileVis[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 groupshared half2  g_NwbShadowResolveTileNormal[NWB_SHADOW_RESOLVE_TILE_TEXELS];
-// The half-resolution geometry cache is RGBA16F. Retain its scalar camera distance as half in LDS, then widen only
-// for the Gaussian distance term so this tile does not spend twice the shared memory on already-quantized data.
+// The half-resolution geometry cache is RGBA16F. Retain its scalar camera distance as half in LDS, then widen only for the Gaussian distance term so this tile does not spend twice the shared memory on already-quantized data.
 groupshared half   g_NwbShadowResolveTileDist[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 groupshared uint   g_NwbShadowResolveTileValid[NWB_SHADOW_RESOLVE_TILE_TEXELS];
 #endif
@@ -135,9 +133,9 @@ half nwbShadowResolveNormalWeightVec(const float3 centerNormal, const half2 tapO
 
 // Use temporal variance only after enough history samples.
 #if NWB_SHADOW_RESOLVE_CHANNELS == NWB_SHADOW_RESOLVE_CHANNELS_RGB
-    #define NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE NWB_SHADOW_RESOLVE_RGB_SIGMA_SCALE
+#define NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE NWB_SHADOW_RESOLVE_RGB_SIGMA_SCALE
 #else
-    #define NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE NWB_SHADOW_RESOLVE_SCALAR_SIGMA_SCALE
+#define NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE NWB_SHADOW_RESOLVE_SCALAR_SIGMA_SCALE
 #endif
 #define NWB_SHADOW_RESOLVE_SIGMA_LUM (NWB_SHADOW_RESOLVE_SIGMA_BASE * NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE)
 #define NWB_SHADOW_RESOLVE_SIGMA_LUM_EPS (NWB_SHADOW_RESOLVE_SIGMA_EPS_BASE * NWB_SHADOW_RESOLVE_SIGMA_LUM_SCALE)
@@ -201,8 +199,10 @@ float nwbShadowResolveCenterSigmaLum(const int2 texel, const uint slot, const in
     half mean = half(0.0h);
     half mean2 = half(0.0h);
     int cnt = 0;
-    [unroll] for(int dy = -1; dy <= 1; ++dy){
-        [unroll] for(int dx = -1; dx <= 1; ++dx){
+    [unroll]
+    for(int dy = -1; dy <= 1; ++dy){
+        [unroll]
+        for(int dx = -1; dx <= 1; ++dx){
             const int2 t = int2(clamp(texel.x + dx, 0, hw - 1), clamp(texel.y + dy, 0, hh - 1));
             if(nwbShadowResolveGeomAtHalf(t).w <= half(0.5h))
                 continue;
@@ -273,8 +273,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float guidedEps = NWB_SHADOW_RESOLVE_GUIDED_EPS_FRAC * centerDist;
         const float guidedEpsSq = guidedEps * guidedEps;
 
-        // Geometry and regression guidance are identical for every light layer at this pixel. Build the compact 3x3
-        // classification once, then retain the original tap order while each layer loads only its own visibility values.
+        // Geometry and regression guidance are identical for every light layer at this pixel. Build the compact 3x3 classification once, then retain the original tap order while each layer loads only its own visibility values.
         uint validTapMask = 0u;
         uint guidedTapMask = 0u;
         float tapCoefficients[NWB_SHADOW_RESOLVE_GUIDED_TAP_COUNT];
@@ -282,8 +281,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         float sumG2 = 0.0;
         float guidedWeightSum = 0.0;
         float validWeightSum = 0.0;
-        [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
-            [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
+        [unroll]
+        for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
+            [unroll]
+            for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
                 const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
                 const uint tapBit = 1u << tapIndex;
                 // Widen the (0, 1) bounded half product at the float regression-accumulator boundary.
@@ -316,8 +317,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         const float regressionScale = hasGuidedTaps ? guidedMeanG / (guidedVarG + guidedEpsSq) : 0.0;
         // mean(P) - mean(G) * cov(G,P) / (var(G) + epsilon) is linear in each visibility tap.
         // Fold its scalar coefficients once, preserving the geometry gates and support for every light layer.
-        [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
-            [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
+        [unroll]
+        for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
+            [unroll]
+            for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
                 const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
                 if((tapMask & (1u << tapIndex)) == 0u)
                     continue;
@@ -338,8 +341,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 const NwbShadowResolveVisFVec anchor = (NwbShadowResolveVisFVec)nwbShadowResolveLoadInput(anchorTexel, slot);
                 // The coefficient sum is one analytically. Anchor the affine sum so constant visibility stays exact.
                 result = anchor;
-                [unroll] for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
-                    [unroll] for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
+                [unroll]
+                for(int dy = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dy <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dy){
+                    [unroll]
+                    for(int dx = -NWB_SHADOW_RESOLVE_GUIDED_RADIUS; dx <= NWB_SHADOW_RESOLVE_GUIDED_RADIUS; ++dx){
                         const uint tapIndex = (uint)((dy + NWB_SHADOW_RESOLVE_GUIDED_RADIUS) * NWB_SHADOW_RESOLVE_GUIDED_TAP_SIDE + dx + NWB_SHADOW_RESOLVE_GUIDED_RADIUS);
                         if(tapIndex == anchorTap || (tapMask & (1u << tapIndex)) == 0u)
                             continue;
@@ -425,8 +430,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                     NwbShadowResolveVisFVec sum = (NwbShadowResolveVisFVec)0.0;
                     // The bilateral weight sum is a bounded filter factor, so half arithmetic is sufficient here.
                     half weightSum = half(0.0h);
-                    [unroll] for(int ky = -2; ky <= 2; ++ky){
-                        [unroll] for(int kx = -2; kx <= 2; ++kx){
+                    [unroll]
+                    for(int ky = -2; ky <= 2; ++ky){
+                        [unroll]
+                        for(int kx = -2; kx <= 2; ++kx){
                             const uint idx = (uint)((int(groupThreadID.y) + (ky + 2) * step) * tileW + (int(groupThreadID.x) + (kx + 2) * step));
                             if(g_NwbShadowResolveTileValid[idx] == 0u)
                                 continue;
@@ -463,8 +470,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
         NwbShadowResolveVisFVec sum = (NwbShadowResolveVisFVec)0.0;
         // The bilateral weight sum is a bounded filter factor, so half arithmetic is sufficient here.
         half weightSum = half(0.0h);
-        [unroll] for(int ky = -2; ky <= 2; ++ky){
-            [unroll] for(int kx = -2; kx <= 2; ++kx){
+        [unroll]
+        for(int ky = -2; ky <= 2; ++ky){
+            [unroll]
+            for(int kx = -2; kx <= 2; ++kx){
                 const int2 tap = int2(texel.x + kx * step, texel.y + ky * step);
                 if(tap.x < 0 || tap.y < 0 || tap.x >= hw || tap.y >= hh)
                     continue;

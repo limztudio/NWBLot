@@ -60,7 +60,8 @@ bool nwbLightSpaceFindView(const uint lightIndex, const float3 world, out NwbLig
             const float3 magnitude = abs(direction);
             const uint face = magnitude.x >= max(magnitude.y, magnitude.z)
                 ? (direction.x >= 0.0 ? 0u : 1u)
-                : (magnitude.y >= magnitude.z ? (direction.y >= 0.0 ? 2u : 3u) : (direction.z >= 0.0 ? 4u : 5u));
+                : (magnitude.y >= magnitude.z ? (direction.y >= 0.0 ? 2u : 3u) : (direction.z >= 0.0 ? 4u : 5u))
+            ;
             if(candidateLight.z != face)
                 continue;
         }
@@ -147,9 +148,7 @@ uint nwbLightSpaceBoundaryMode(const uint instance){
         NWB_RT_OPTICAL_SCENE_HEADER_BYTES + instance * NWB_RT_OPTICAL_INSTANCE_BYTES + NWB_RT_OPTICAL_INSTANCE_BOUNDARY_OFFSET);
 }
 
-bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const float receiverDepth,
-    const float projectedDepth, out half3 visibility
-){
+bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const float receiverDepth, const float projectedDepth, out half3 visibility){
     visibility = half3(1.0h);
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
     float depth = 1.0;
@@ -187,8 +186,7 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
         }
         const uint instance = firstEvent.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
         const uint mode = nwbLightSpaceBoundaryMode(instance);
-        const bool closed = mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED || mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY
-            || nwbCsgShadowReceiver(instance);
+        const bool closed = mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_NESTED || mode == NWB_RT_OPTICAL_BOUNDARY_CLOSED_PRIORITY || nwbCsgShadowReceiver(instance);
         half3 absorption = half3(0.0h);
         half transmission = half(1.0h);
         float chord = 0.0;
@@ -206,10 +204,7 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
             uint facing = (event.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_ENTERING) != 0u ? 1u : 2u;
             while(index < count){
                 const NwbLightSpaceEvent next = nwbLightSpaceLoadEvent(pixelIndex, index);
-                if(
-                    (next.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK) != instance
-                    || !nwbShadowCrossingMatchesEndpoint(distance, receiverDepth - next.depth)
-                )
+                if((next.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK) != instance || !nwbShadowCrossingMatchesEndpoint(distance, receiverDepth - next.depth))
                     break;
                 facing |= (next.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_ENTERING) != 0u ? 1u : 2u;
                 ++index;
@@ -217,8 +212,7 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
             if(closed && facing == 3u)
                 continue;
             if(crossings == 0u){
-                absorption = half3(half(f16tof32(event.absorptionRG & 0xffffu)), half(f16tof32(event.absorptionRG >> 16u)),
-                    half(f16tof32(event.absorptionBInterface & 0xffffu)));
+                absorption = half3(half(f16tof32(event.absorptionRG & 0xffffu)), half(f16tof32(event.absorptionRG >> 16u)), half(f16tof32(event.absorptionBInterface & 0xffffu)));
                 first = distance;
                 if(closed && facing == 2u)
                     inside = true;
@@ -245,9 +239,7 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
 }
 
 // A finite blocker search estimates the footprint of the real light source.
-bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, const float3 receiverNormal, const NwbSceneLight light,
-    const NwbLightSpaceView centerView, out float distance
-){
+bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, const float3 receiverNormal, const NwbSceneLight light, const NwbLightSpaceView centerView, out float distance){
     distance = 0.0;
     const float receiverDepth = nwbLightSpaceLinearDepth(centerView, origin);
     const bool point = (centerView.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u;
@@ -278,9 +270,7 @@ bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, co
         }
         return isfinite(distance);
     }
-    const float radius = point
-        ? light.params2.y * max(receiverDepth - centerView.depthRange.z, 0.0) / max(centerView.depthRange.z, centerView.depthRange.x)
-        : tan(light.params2.x) * receiverDepth;
+    const float radius = point ? light.params2.y * max(receiverDepth - centerView.depthRange.z, 0.0) / max(centerView.depthRange.z, centerView.depthRange.x) : tan(light.params2.x) * receiverDepth;
     const float3 axis = point ? normalize(light.position.xyz - origin) : centerView.originOrDirection.xyz;
     float3 tangent;
     float3 bitangent;
@@ -346,9 +336,7 @@ bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, co
     return isfinite(distance);
 }
 
-bool nwbLightSpaceEvaluate(const uint lightIndex, const float3 origin, const float3 receiverNormal, const float3 direction,
-    const float blockerDistance, out half3 visibility
-){
+bool nwbLightSpaceEvaluate(const uint lightIndex, const float3 origin, const float3 receiverNormal, const float3 direction, const float blockerDistance, out half3 visibility){
     visibility = half3(1.0h);
     const float3 samplePosition = origin + direction * blockerDistance;
     NwbLightSpaceView view;

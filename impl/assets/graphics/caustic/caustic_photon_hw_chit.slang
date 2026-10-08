@@ -13,9 +13,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// HW caustic closest-hit: world hit + distance, REFRACTIVE flag, and for refractive crossings the interpolated shading
-// normal (smooth caustic; vertex normals only) + optical params from the shared surface dispatch. Un-oriented here;
-// nwbCausticOrientNormal orients it. Same a0*w+a1*u+a2*v interpolation as the SW trace (~ULP intersector difference).
+// HW caustic closest-hit: world hit + distance, REFRACTIVE flag, and for refractive crossings the interpolated shading normal (smooth caustic; vertex normals only) + optical params from the shared surface dispatch.
+// Un-oriented here; nwbCausticOrientNormal orients it. Same a0*w+a1*u+a2*v interpolation as the SW trace (~ULP intersector difference).
 [shader("closesthit")]
 void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttributes attributes){
     const NwbRtInstanceMaterial material = nwbCausticHwInstanceMaterials()[InstanceID()];
@@ -29,8 +28,7 @@ void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttri
     payload.transmission = float3(1.0, 1.0, 1.0);
 
     if(payload.isRefractive != 0u){
-        // Hit barycentrics: BuiltInTriangleIntersectionAttributes carries (u, v) = weights of v1, v2; v0's weight is
-        // w = 1 - u - v, so an attribute interpolates as a0*w + a1*u + a2*v -- matching the SW trace exactly.
+        // Hit barycentrics: BuiltInTriangleIntersectionAttributes carries (u, v) = weights of v1, v2; v0's weight is w = 1 - u - v, so an attribute interpolates as a0*w + a1*u + a2*v -- matching the SW trace exactly.
         const float2 bary = attributes.barycentrics;
         const float3 weights = float3(1.0 - bary.x - bary.y, bary.x, bary.y);
 
@@ -42,9 +40,7 @@ void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttri
         const NwbRayTraceVertexAttrib a2 = nwbCausticHwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
         const float3 objectShadingNormal = float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z;
 
-        // The interpolated SHADING normal in world space (inverse-transpose of object->world == mul(n,
-        // (float3x3)WorldToObject3x4()) == the SW nwbSwBvhTransformNormal). The bend normal AND the surface
-        // dispatch normal.
+        // The interpolated SHADING normal in world space (inverse-transpose of object->world == mul(n, (float3x3)WorldToObject3x4()) == the SW nwbSwBvhTransformNormal). The bend normal AND the surface dispatch normal.
         const float3 worldShadingNormal = nwbSafeNormalize(mul(objectShadingNormal, (float3x3)WorldToObject3x4()), float3(0.0, 0.0, 1.0));
         payload.shadingNormal = worldShadingNormal;
 

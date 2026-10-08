@@ -37,11 +37,7 @@ bool nwbHwShadowBuildRay(const uint2 halfPixel, out RayDesc ray){
     const half3 normalSample = half3(nwbHeapSampledImage2D(NWB_HW_TRANSPARENT_DEFERRED_RESOURCES.gbufferSlots.y).Load(texel).xyz);
     const float3 worldPosition = float3(positionSample);
     const float3 normal = normalize(float3(normalSample) * 2.0 - 1.0);
-    const float2 jitter = nwbShadowLowDiscrepancy2D(
-        halfPixel,
-        g_NwbHardwareTransparentPush.frameIndex * NWB_SW_SHADOW_TRANSPARENT_SPP
-            + g_NwbHardwareTransparentPush.sampleIndex + NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT
-    );
+    const float2 jitter = nwbShadowLowDiscrepancy2D(halfPixel, g_NwbHardwareTransparentPush.frameIndex * NWB_SW_SHADOW_TRANSPARENT_SPP + g_NwbHardwareTransparentPush.sampleIndex + NWB_SW_SHADOW_TRANSPARENT_JITTER_SALT);
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     for(uint i = 0u; i < lightCount; ++i){
         const NwbSceneLight light = g_NwbSceneLights[i];

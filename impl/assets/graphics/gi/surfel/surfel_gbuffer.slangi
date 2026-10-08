@@ -10,8 +10,7 @@
 
 
 half3 nwbSurfelDecodeGbufferNormal(const half3 packedNormal){
-    // G-buffer normals are RGBA16F-native; the [0,1] packed decode is a bounded unit direction, so half math
-    // suffices here. Float callers widen at the call site; half callers (spawn/resolve/upsample) stay narrow.
+    // G-buffer normals are RGBA16F-native; the [0,1] packed decode is a bounded unit direction, so half math suffices here. Float callers widen at the call site; half callers (spawn/resolve/upsample) stay narrow.
     return normalize(packedNormal * half(2.0h) - half(1.0h));
 }
 

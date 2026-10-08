@@ -109,13 +109,11 @@ void main(uint3 groupThreadId : SV_GroupThreadID){
             invalid = 1u;
             continue;
         }
-        const uint flagOffset = NWB_RT_OPTICAL_SCENE_HEADER_BYTES + instanceIndex * NWB_RT_OPTICAL_INSTANCE_BYTES
-            + NWB_RT_OPTICAL_INSTANCE_FLAGS_OFFSET;
+        const uint flagOffset = NWB_RT_OPTICAL_SCENE_HEADER_BYTES + instanceIndex * NWB_RT_OPTICAL_INSTANCE_BYTES + NWB_RT_OPTICAL_INSTANCE_FLAGS_OFFSET;
         uint flags = source.Load(flagOffset) & ~NWB_RT_OPTICAL_INSTANCE_FLAG_BOUNDS_VALID;
         float3 boundsMin = float3(0.0);
         float3 boundsMax = float3(0.0);
-        const bool valid = (flags & NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT) != 0u
-            && nwbOpticalTransformRuntimeBounds(inputOffset, boundsMin, boundsMax);
+        const bool valid = (flags & NWB_RT_OPTICAL_INSTANCE_FLAG_TRANSPARENT) != 0u && nwbOpticalTransformRuntimeBounds(inputOffset, boundsMin, boundsMax);
         if(valid){
             minimum = min(minimum, boundsMin);
             maximum = max(maximum, boundsMax);
@@ -141,8 +139,7 @@ void main(uint3 groupThreadId : SV_GroupThreadID){
         const bool complete = g_NwbOpticalInvalid[0] == 0u;
         const float3 finalMin = complete && transparentCount != 0u ? g_NwbOpticalMinimum[0] : float3(0.0);
         const float3 finalMax = complete && transparentCount != 0u ? g_NwbOpticalMaximum[0] : float3(0.0);
-        const uint flags = (source.Load(NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET) & ~NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID)
-            | (complete ? NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID : 0u);
+        const uint flags = (source.Load(NWB_RT_OPTICAL_SCENE_FLAGS_OFFSET) & ~NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID) | (complete ? NWB_RT_OPTICAL_SCENE_FLAG_BOUNDS_VALID : 0u);
         destination.Store4(0u, uint4(asuint(finalMin), transparentCount));
         destination.Store4(16u, uint4(asuint(finalMax), flags));
     }

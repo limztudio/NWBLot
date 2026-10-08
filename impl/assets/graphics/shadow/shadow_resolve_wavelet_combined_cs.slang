@@ -100,8 +100,10 @@ float2 nwbCombinedShadowWaveletSigma(const int2 texel, const uint slot){
     half2 mean2 = half2(0.0h);
     int count = 0;
     const int2 maximum = int2(g_NwbCombinedShadowWaveletPush.halfWidth, g_NwbCombinedShadowWaveletPush.halfHeight) - int2(1, 1);
-    [unroll] for(int dy = -1; dy <= 1; ++dy){
-        [unroll] for(int dx = -1; dx <= 1; ++dx){
+    [unroll]
+    for(int dy = -1; dy <= 1; ++dy){
+        [unroll]
+        for(int dx = -1; dx <= 1; ++dx){
             const int2 tap = clamp(texel + int2(dx, dy), int2(0, 0), maximum);
             if(nwbCombinedShadowWaveletGeometry(tap).w <= half(0.5h))
                 continue;
@@ -190,8 +192,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupThreadID : SV
                 float3 rgbSum = float3(0.0);
                 half opaqueWeightSum = half(0.0h);
                 half rgbWeightSum = half(0.0h);
-                [unroll] for(int ky = -2; ky <= 2; ++ky){
-                    [unroll] for(int kx = -2; kx <= 2; ++kx){
+                [unroll]
+                for(int ky = -2; ky <= 2; ++ky){
+                    [unroll]
+                    for(int kx = -2; kx <= 2; ++kx){
                         const uint index = (uint)((int(groupThreadID.y) + (ky + 2) * step) * tileWidth + (int(groupThreadID.x) + (kx + 2) * step));
                         if(g_NwbCombinedShadowWaveletValid[index] == 0u)
                             continue;

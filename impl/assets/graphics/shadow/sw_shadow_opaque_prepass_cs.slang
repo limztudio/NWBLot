@@ -2,9 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Software-shadow OPAQUE pre-pass (full resolution). One thread per full-res pixel: trace one OPAQUE-only occlusion ray
-// per shadowed light and OVERWRITE the visibility with the binary blocker mask -- the software analog of the HW RayQuery
-// opaque pass, run before the transparent multiply. No coarse buffer; the whole grid is traced full-res.
+// Software-shadow OPAQUE pre-pass (full resolution). One thread per full-res pixel: trace one OPAQUE-only occlusion ray per shadowed light and OVERWRITE the visibility with the binary blocker mask -- the software analog of the HW RayQuery opaque pass, run before the transparent multiply. No coarse buffer; the whole grid is traced full-res.
 
 
 #include "sw_binding_slots.h"
@@ -16,8 +14,7 @@
 
 #include "sw_shadow_ray.slangi"
 
-// The full-res visibility array the deferred lighting samples: this pass writes the binary opaque mask (later
-// multiplied by the transparent pass), one layer per shadow slot.
+// The full-res visibility array the deferred lighting samples: this pass writes the binary opaque mask (later multiplied by the transparent pass), one layer per shadow slot.
 #define g_NwbSwShadowVisibility nwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.visibilityStorageSlot)
 
 
@@ -41,8 +38,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 worldPosition = nwbSwShadowLoadWorldPosition(texel);
     const float3 normal = nwbSwShadowLoadNormal(texel);
 
-    // Trace only the lights that hold a shadow slot (params.z >= 0); write each light's visibility into its own slot
-    // layer. Lights without a slot are left at the cleared "all lit" white default.
+    // Trace only the lights that hold a shadow slot (params.z >= 0); write each light's visibility into its own slot layer. Lights without a slot are left at the cleared "all lit" white default.
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     for(uint i = 0u; i < lightCount; ++i){
         const float slot = g_NwbSceneLights[i].params.z;

@@ -73,8 +73,7 @@ bool nwbCsgShadowReceiver(const uint instance){
 }
 
 NwbCsgShadowCutter nwbCsgShadowLoadCutter(const uint index){
-    const uint offset = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(8u)
-        + index * NWB_CSG_SHADOW_CUTTER_BYTES;
+    const uint offset = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(8u) + index * NWB_CSG_SHADOW_CUTTER_BYTES;
     const uint4 header = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset);
     NwbCsgShadowCutter cutter;
     cutter.shapeType = header.x;

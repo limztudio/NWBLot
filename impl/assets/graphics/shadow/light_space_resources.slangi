@@ -82,14 +82,11 @@ NwbLightSpaceView nwbLightSpaceLoadView(const uint index){
 
 float4 nwbLightSpaceProject(const NwbLightSpaceView view, const float3 world){
     const float4 position = float4(world, 1.0);
-    return float4(dot(view.worldToClipRows[0], position), dot(view.worldToClipRows[1], position),
-        dot(view.worldToClipRows[2], position), dot(view.worldToClipRows[3], position));
+    return float4(dot(view.worldToClipRows[0], position), dot(view.worldToClipRows[1], position), dot(view.worldToClipRows[2], position), dot(view.worldToClipRows[3], position));
 }
 
 float nwbLightSpaceLinearDepth(const NwbLightSpaceView view, const float3 world){
-    return (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u
-        ? length(world - view.originOrDirection.xyz)
-        : dot(world, -view.originOrDirection.xyz) - view.depthRange.z;
+    return (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u ? length(world - view.originOrDirection.xyz) : dot(world, -view.originOrDirection.xyz) - view.depthRange.z;
 }
 
 uint nwbLightSpacePixelIndex(const NwbLightSpaceView view, const uint2 pixel){

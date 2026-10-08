@@ -50,15 +50,9 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
     const uint vertexCount = nwbMeshletVertexCount(meshlet);
     for(uint vertexIndex = groupThreadID.x; vertexIndex < vertexCount; vertexIndex += NWB_MESH_SHADER_GROUP_SIZE_X){
         const NwbMeshletLocalVertexRef localRef = nwbMeshLoadMeshletLocalVertexRef(meshlet, vertexIndex);
-        const NwbMeshletPositionStreamRef positionRef = nwbMeshLoadMeshletPositionRef(
-            meshlet, decodeInfo, nwbMeshletLocalDeformedPosition(localRef)
-        );
-        const float3 objectPosition = nwbMeshLoadPosition(
-            nwbHeapMeshPositions(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_POSITION))[positionRef.position]
-        );
-        const NwbMeshSourceVertex source = nwbMeshLoadSourceVertex(
-            meshlet, decodeInfo, vertexIndex, objectPosition, float3(0.0), float4(0.0)
-        );
+        const NwbMeshletPositionStreamRef positionRef = nwbMeshLoadMeshletPositionRef(meshlet, decodeInfo, nwbMeshletLocalDeformedPosition(localRef));
+        const float3 objectPosition = nwbMeshLoadPosition(nwbHeapMeshPositions(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_POSITION))[positionRef.position]);
+        const NwbMeshSourceVertex source = nwbMeshLoadSourceVertex(meshlet, decodeInfo, vertexIndex, objectPosition, float3(0.0), float4(0.0));
         NwbMeshObjectVertex output;
         output.position = float4(objectPosition, 1.0);
         output.normal = nwbMeshPackGeneratedHalf4(half4(half3(source.normal), half(0.0)));

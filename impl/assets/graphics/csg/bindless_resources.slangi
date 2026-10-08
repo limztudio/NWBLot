@@ -16,14 +16,12 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Interval/peel resources are all target-generation StorageImage heap entries.  The CSG context UniformBuffer
-// selects the already heap-backed deferred-slot payload; no standalone CSG descriptor set remains.
+// Interval/peel resources are all target-generation StorageImage heap entries.  The CSG context UniformBuffer selects the already heap-backed deferred-slot payload; no standalone CSG descriptor set remains.
 #ifndef NWB_GRAPHICS_CSG_RUNTIME_SLANGI
 #error "CSG bindless resources require the CSG runtime context selector"
 #endif
 
-#define g_NwbCsgBindlessResources \
-    nwbHeapDeferredBindlessResources(g_NwbCsgClipContextSlots.deferredBindlessResources)
+#define g_NwbCsgBindlessResources nwbHeapDeferredBindlessResources(g_NwbCsgClipContextSlots.deferredBindlessResources)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

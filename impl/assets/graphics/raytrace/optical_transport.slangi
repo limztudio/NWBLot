@@ -15,14 +15,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The consuming effect supplies terminal illumination. This walker owns neither project BXDF selection nor
-// environment assets, reflection outputs, screen-space caches, or feature statistics buffers.
+// The consuming effect supplies terminal illumination. This walker owns neither project BXDF selection nor environment assets, reflection outputs, screen-space caches, or feature statistics buffers.
 half3 nwbOpticalSurfaceRadiance(const NwbRayTraceSurfaceHit hit, const float3 observerDirection);
 half3 nwbOpticalEnvironmentRadiance(const float3 direction);
 
-// Resolve numerical ties around the true nearest transparent boundary before changing membership. A second
-// bounded candidate query is necessary because a committed nearest hit alone cannot reveal coincident independent
-// volumes. The authored coincidence selector has already removed explicitly shared boundaries from the scene.
+// Resolve numerical ties around the true nearest transparent boundary before changing membership. A second bounded candidate query is necessary because a committed nearest hit alone cannot reveal coincident independent volumes. The authored coincidence selector has already removed explicitly shared boundaries from the scene.
 bool nwbOpticalCheckBoundary(
     const NwbOpticalTraceConfig config,
     const float3 origin,
@@ -63,10 +60,7 @@ bool nwbOpticalCheckBoundary(
             material, query.CandidatePrimitiveIndex(), query.CandidateWorldToObject3x4()
         );
         const float facing = dot(direction, normal);
-        if(
-            !isfinite(facing) || abs(facing) <= 1e-6 || facing * dot(direction, hit.geometricNormal) <= 0.0
-            || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, hit.instance, hit.primitive, query.CandidatePrimitiveIndex())
-        ){
+        if(!isfinite(facing) || abs(facing) <= 1e-6 || facing * dot(direction, hit.geometricNormal) <= 0.0 || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, hit.instance, hit.primitive, query.CandidatePrimitiveIndex())){
             query.Abort();
             result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
             return false;
@@ -82,8 +76,7 @@ bool nwbOpticalCheckBoundary(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// One dominant transmitted path; radiance preserved on every termination. Secondary Fresnel is an omitted branch
-// (not an env approximation); TIR keeps membership. No path tree escapes the query budget; in-medium miss adds no env.
+// One dominant transmitted path; radiance preserved on every termination. Secondary Fresnel is an omitted branch (not an env approximation); TIR keeps membership. No path tree escapes the query budget; in-medium miss adds no env.
 NwbOpticalTraceResult nwbOpticalTrace(
     const NwbOpticalTraceConfig config,
     const float3 initialOrigin,
@@ -91,11 +84,7 @@ NwbOpticalTraceResult nwbOpticalTrace(
 ){
     NwbOpticalTraceResult result = (NwbOpticalTraceResult)0;
     result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
-    if(
-        !all(isfinite(initialOrigin)) || !all(isfinite(initialDirection)) || dot(initialDirection, initialDirection) <= 0.0
-        || !isfinite(config.minDistance) || !isfinite(config.maxDistance) || config.minDistance < 0.0
-        || config.maxDistance <= config.minDistance || config.opticalSceneHeapSlot == 0xffffffffu
-    )
+    if(!all(isfinite(initialOrigin)) || !all(isfinite(initialDirection)) || dot(initialDirection, initialDirection) <= 0.0 || !isfinite(config.minDistance) || !isfinite(config.maxDistance) || config.minDistance < 0.0 || config.maxDistance <= config.minDistance || config.opticalSceneHeapSlot == 0xffffffffu)
         return result;
     float3 direction = normalize(initialDirection);
     float3 origin = initialOrigin;
@@ -128,11 +117,7 @@ NwbOpticalTraceResult nwbOpticalTrace(
             return result;
         }
         result.surfaceHit = true;
-        if(
-            !isfinite(hit.distance) || !all(isfinite(hit.position)) || !all(isfinite(hit.geometricNormal))
-            || dot(hit.geometricNormal, hit.geometricNormal) == 0.0
-            || hit.distance <= continuationUncertainty
-        ){
+        if(!isfinite(hit.distance) || !all(isfinite(hit.position)) || !all(isfinite(hit.geometricNormal)) || dot(hit.geometricNormal, hit.geometricNormal) == 0.0 || hit.distance <= continuationUncertainty){
             result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
             return result;
         }
@@ -211,9 +196,8 @@ NwbOpticalTraceResult nwbOpticalTrace(
             return result;
 #endif
         }
-        // Reconstructed hits have FP32 world-position uncertainty, independent of the receiver's FP16 G-buffer
-        // bias. Offset to the next geometric half-space and require progress on the next query. Near-coincident
-        // crossings within the same uncertainty band were checked before changing direction; no instance is ignored.
+        // Reconstructed hits have FP32 world-position uncertainty, independent of the receiver's FP16 G-buffer bias.
+        // Offset to the next geometric half-space and require progress on the next query. Near-coincident crossings within the same uncertainty band were checked before changing direction; no instance is ignored.
         continuationUncertainty = nwbOpticalPositionUncertainty(hit.position);
         const float3 offsetNormal = dot(direction, hit.geometricNormal) >= 0.0 ? hit.geometricNormal : -hit.geometricNormal;
         origin = hit.position + offsetNormal * continuationUncertainty;

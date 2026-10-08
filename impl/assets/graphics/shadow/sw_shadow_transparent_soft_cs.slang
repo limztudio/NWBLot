@@ -68,9 +68,7 @@ uint nwbSwTransparentSampleCount(const uint2 pixel, const uint lightSlot, const 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The half-res soft TRANSPARENT transmittance buffer (one layer per shadow slot) this pass writes the cone-jittered
-// colored sample into; the separate RGB shadow_resolve pipeline denoises + fold-multiplies it onto the full-res
-// visibility (which already holds the soft OPAQUE result).
+// The half-res soft TRANSPARENT transmittance buffer (one layer per shadow slot) this pass writes the cone-jittered colored sample into; the separate RGB shadow_resolve pipeline denoises + fold-multiplies it onto the full-res visibility (which already holds the soft OPAQUE result).
 #define g_NwbSwShadowTransparentSoftHalf nwbHeapStorageImage2DArrayFloat4(g_NwbSwShadowPush.transparentSoftHalfStorageSlot)
 
 #define NWB_SW_SHADOW_SOFT_TRACE_OUTPUT g_NwbSwShadowTransparentSoftHalf

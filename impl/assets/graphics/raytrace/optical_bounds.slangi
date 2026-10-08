@@ -16,8 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// A separated coordinate interval proves the entire segment misses the transparent union. Overlapping intervals
-// are inconclusive: this deliberately accepts fewer rays than a slab test and needs neither division nor reciprocals.
+// A separated coordinate interval proves the entire segment misses the transparent union. Overlapping intervals are inconclusive: this deliberately accepts fewer rays than a slab test and needs neither division nor reciprocals.
 // Including t=0 also proves the origin is exterior; the trace's positive TMin must never hide an initial medium.
 bool nwbOpticalSegmentOutsideBounds(
     const float3 origin,
@@ -26,11 +25,7 @@ bool nwbOpticalSegmentOutsideBounds(
     const float3 boundsMin,
     const float3 boundsMax
 ){
-    if(
-        !all(isfinite(origin)) || !all(isfinite(normalizedDirection))
-        || !isfinite(maxDistance) || maxDistance <= 0.0
-        || !all(isfinite(boundsMin)) || !all(isfinite(boundsMax)) || any(boundsMin > boundsMax)
-    )
+    if(!all(isfinite(origin)) || !all(isfinite(normalizedDirection)) || !isfinite(maxDistance) || maxDistance <= 0.0 || !all(isfinite(boundsMin)) || !all(isfinite(boundsMax)) || any(boundsMin > boundsMax))
         return false;
     const float directionLengthSquared = dot(normalizedDirection, normalizedDirection);
     if(!isfinite(directionLengthSquared) || directionLengthSquared <= 0.0)
@@ -41,8 +36,7 @@ bool nwbOpticalSegmentOutsideBounds(
         + max(abs(boundsMin), abs(boundsMax)) + float3(1.0);
     if(!all(isfinite(endpoint)) || !all(isfinite(magnitude)))
         return false;
-    // Eight binary32 epsilons conservatively cover the endpoint product/add, magnitude rounding and outward
-    // interval arithmetic, with or without contraction. The unit floor also covers flushed subnormal operations.
+    // Eight binary32 epsilons conservatively cover the endpoint product/add, magnitude rounding and outward interval arithmetic, with or without contraction. The unit floor also covers flushed subnormal operations.
     // Include operand magnitudes so cancellation at an endpoint cannot erase its arithmetic uncertainty.
     const float3 margin = magnitude * (8.0 * 1.1920928955078125e-7);
     const float3 segmentMin = min(origin, endpoint) - margin;
@@ -67,11 +61,7 @@ bool nwbOpticalSegmentProvenExterior(
     const float maxDistance,
     const uint maxQueries
 ){
-    if(
-        opticalSceneHeapSlot == 0xffffffffu || maxQueries == 0u
-        || !all(isfinite(origin)) || !all(isfinite(initialDirection))
-        || !isfinite(minDistance) || !isfinite(maxDistance) || minDistance < 0.0 || maxDistance <= minDistance
-    )
+    if(opticalSceneHeapSlot == 0xffffffffu || maxQueries == 0u || !all(isfinite(origin)) || !all(isfinite(initialDirection)) || !isfinite(minDistance) || !isfinite(maxDistance) || minDistance < 0.0 || maxDistance <= minDistance)
         return false;
     const float directionLengthSquared = dot(initialDirection, initialDirection);
     if(!isfinite(directionLengthSquared) || directionLengthSquared <= 0.0)

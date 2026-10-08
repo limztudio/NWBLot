@@ -9,9 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Heap-only surfel GI resource ABI. The descriptor class owns only the Vulkan descriptor type; these aliases supply
-// the pass-specific structured element types and access modes. All selector slots are dispatch-uniform push constants,
-// so they intentionally use direct descriptor-table indices rather than NonUniformResourceIndex().
+// Heap-only surfel GI resource ABI. The descriptor class owns only the Vulkan descriptor type; these aliases supply the pass-specific structured element types and access modes. All selector slots are dispatch-uniform push constants, so they intentionally use direct descriptor-table indices rather than NonUniformResourceIndex().
 
 
 #include "surfel_record.slangi"

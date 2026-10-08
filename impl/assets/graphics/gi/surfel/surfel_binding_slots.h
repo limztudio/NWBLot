@@ -86,10 +86,10 @@
 #define NWB_SURFEL_GUIDE_UNOBSERVED_DECAY 0.125f
 #define NWB_SURFEL_GUIDE_LUMINANCE_CLAMP 64.0f
 #define NWB_SURFEL_GUIDE_MATURE_UPDATE_INTERVAL 4u // Retrain each mature guide once per four surfel visits.
-#define NWB_SURFEL_UPDATE_DIVISOR 4u           // steady-state: trace 1/Nth per frame
+#define NWB_SURFEL_UPDATE_DIVISOR 4u               // steady-state: trace 1/Nth per frame
 // Bounded running mean.
 #define NWB_SURFEL_MAX_ACCUM 64u
-#define NWB_SURFEL_MAX_AGE 60u                 // recycle unseen surfels
+#define NWB_SURFEL_MAX_AGE 60u                  // recycle unseen surfels
 #define NWB_SURFEL_GROUP_SIZE 8                 // spawn/hash-build tile threads (8x8 = 64)
 // Per-channel bounce-energy ceiling.
 #define NWB_SURFEL_BOUNCE_CLAMP 4.0f

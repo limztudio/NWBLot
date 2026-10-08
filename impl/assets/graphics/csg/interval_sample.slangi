@@ -30,8 +30,7 @@ struct NwbCsgIntervalSampleState{
     uint4 resourceSlots;
 };
 
-// The sample-state payload is another typed view of the global UniformBuffer heap.  runtime.slangi supplies the
-// CSG context selector before this header is included, and that context supplies this payload's descriptor slot.
+// The sample-state payload is another typed view of the global UniformBuffer heap.  runtime.slangi supplies the CSG context selector before this header is included, and that context supplies this payload's descriptor slot.
 #ifndef NWB_GRAPHICS_CSG_RUNTIME_SLANGI
 #error "CSG interval sampling requires runtime.slangi before interval_sample.slangi"
 #endif
@@ -45,26 +44,22 @@ ConstantBuffer<NwbCsgIntervalSampleState, Std140DataLayout> nwbHeapCsgIntervalSa
     return g_NwbHeapCsgIntervalSampleStates[slot];
 }
 
-#define g_NwbCsgIntervalSampleState \
-    nwbHeapCsgIntervalSampleState(g_NwbCsgClipContextSlots.intervalSampleState)
+#define g_NwbCsgIntervalSampleState nwbHeapCsgIntervalSampleState(g_NwbCsgClipContextSlots.intervalSampleState)
 
-// Receiver-surface, CSG material, AVBOIT, and cap-fill sampling all carry the ordinary mesh-view input in their
-// existing b18 state payload. This leaves direct b13 as a deliberate ABI gap.
+// Receiver-surface, CSG material, AVBOIT, and cap-fill sampling all carry the ordinary mesh-view input in their existing b18 state payload. This leaves direct b13 as a deliberate ABI gap.
 #define NWB_MESH_VIEW_BUFFER_HEAP_SLOT (g_NwbCsgIntervalSampleState.resourceSlots.x)
 #include "../bindless/bindless_heap_mesh.slangi"
 
 #include "bindless_resources.slangi"
 
 #if NWB_CSG_RECEIVER_EVENTS_WRITABLE
-// Event data layout: .x = receiverIndex, .y = faceSign, .z = asuint(linear depth), .w = unused. Bindings 5/6 are
-// heap-selected through the shared cbuffer at binding 17.
+// Event data layout: .x = receiverIndex, .y = faceSign, .z = asuint(linear depth), .w = unused. Bindings 5/6 are heap-selected through the shared cbuffer at binding 17.
 #define g_NwbCsgReceiverEventData (nwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgPeelSlots.w))
 #define g_NwbCsgReceiverEventCount (nwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgSpanSlots.x))
 #endif
 
 #if NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
-// The cap-fill/sample reads use the same StorageImage entries as the combine producer. Bindings 12/14/15/16 remain
-// gaps; reads through a storage-image alias preserve the typed Load/GetDimensions contract.
+// The cap-fill/sample reads use the same StorageImage entries as the combine producer. Bindings 12/14/15/16 remain gaps; reads through a storage-image alias preserve the typed Load/GetDimensions contract.
 #define g_NwbCsgRemovedIntervalDepth (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgSpanSlots.w))
 #define g_NwbCsgRemovedIntervalCapNormal (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgRemovedSlots.x))
 #define g_NwbCsgRemovedIntervalData (nwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgRemovedSlots.y))
@@ -126,8 +121,7 @@ void nwbCsgMarkReceiverSurfaceEvent(
 
     uint eventIndex;
     InterlockedAdd(g_NwbCsgReceiverEventCount[uint3(pixel, 0u)], 1u, eventIndex);
-    // Overflow is derived downstream from (count > layerCount); the running count keeps
-    // incrementing past the storable layer budget, so no separate overflow flag is needed.
+    // Overflow is derived downstream from (count > layerCount); the running count keeps incrementing past the storable layer budget, so no separate overflow flag is needed.
     if(eventIndex >= layerCount)
         return;
 
@@ -255,8 +249,7 @@ NwbCsgIntervalCapPixel nwbCsgSampleNearestRemovedIntervalCapAtPixel(const uint2 
         const float3 capWorldPosition = nwbCsgIntervalSamplePixelDepthToWorldPosition(outputPixel, capDepth);
         result.visible = true;
         result.depth = capDepth;
-        // The removed-cap normal attachment is RGBA16F. Its normalization and facing test remain FP32, but the
-        // fetch itself should retain the attachment's native half payload.
+        // The removed-cap normal attachment is RGBA16F. Its normalization and facing test remain FP32, but the fetch itself should retain the attachment's native half payload.
         const half3 capNormalSample = half3(g_NwbCsgRemovedIntervalCapNormal.Load(texel).xyz);
         result.normal = nwbCsgIntervalSampleVisibleCapNormal(float3(capNormalSample), capWorldPosition);
         result.worldPosition = capWorldPosition;
@@ -335,8 +328,7 @@ bool nwbCsgReceiverIntervalPixelDiscard(
 
     const uint2 pixel = uint2(pixelInt);
     const float receiverLinearDepth = length(worldPosition - g_NwbMeshCameraPosition.xyz);
-    // Use only the stable world-scaled tolerance. A screen-space fwidth() term becomes unstable at cut rims and
-    // grazing angles, pulsing the accept band frame-to-frame as the skinned mesh animates.
+    // Use only the stable world-scaled tolerance. A screen-space fwidth() term becomes unstable at cut rims and grazing angles, pulsing the accept band frame-to-frame as the skinned mesh animates.
     const float linearDepthTolerance = abs(worldDistanceTolerance) * NWB_CSG_RECEIVER_INTERVAL_LINEAR_DEPTH_TOLERANCE_SCALE;
     if(nwbCsgReceiverRemovedIntervalPixelDiscardAtPixel(pixel, receiverIndex, receiverLinearDepth, linearDepthTolerance))
         return true;
@@ -389,10 +381,7 @@ bool nwbCsgReceiverIntervalPixelDiscard(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void nwbCsgSampleNearestRemovedIntervalCapNeighborhood(
-    inout NwbCsgIntervalCapPixel result,
-    const uint2 outputPixel
-){
+void nwbCsgSampleNearestRemovedIntervalCapNeighborhood(inout NwbCsgIntervalCapPixel result, const uint2 outputPixel){
     [unroll]
     for(
         int offsetY = -NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS;

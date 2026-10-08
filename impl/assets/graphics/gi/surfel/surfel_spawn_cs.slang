@@ -17,8 +17,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// This frame's hash, allocation counters, and free-list are all StorageBuffer heap entries selected by the common
-// dispatch push block. The aliases below keep the allocation logic uncluttered.
+// This frame's hash, allocation counters, and free-list are all StorageBuffer heap entries selected by the common dispatch push block. The aliases below keep the allocation logic uncluttered.
 #define g_NwbSurfelCellHead g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.cellHeadHeapSlot]
 #define g_NwbSurfelCounter g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.counterHeapSlot]
 #define g_NwbSurfelFreeList g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.freeListHeapSlot]
@@ -40,7 +39,8 @@ uint nwbSurfelFindSpawnCoverage(
     out uint walk
 ){
     walk = 0u;
-    [loop] while(id < poolCapacity && walk < NWB_SURFEL_MAX_WALK){
+    [loop]
+    while(id < poolCapacity && walk < NWB_SURFEL_MAX_WALK){
         ++walk;
         const float3 position = g_NwbSurfelPool[id].position;
         const float3 normal = g_NwbSurfelPool[id].normal;
@@ -86,7 +86,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const half3 rawNormalSample = half3(nwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.normalSlot).Load(loadCoord).xyz);
     const float3 rawNormal = float3(rawNormalSample);
     if(dot(rawNormal, rawNormal) < NWB_SURFEL_GBUFFER_NORMAL_LENGTH_SQUARED_MIN)
-        return;   // no geometry at this tile (background)
+        return; // no geometry at this tile (background)
 
     const half3 worldPositionSample = half3(nwbHeapSampledImage2D(g_NwbSurfelHeapPushConstants.worldPositionSlot).Load(loadCoord).xyz);
     const float3 worldPosition = float3(worldPositionSample);
@@ -104,7 +104,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     uint oldHead;
     InterlockedOr(g_NwbSurfelCellHead[bucket], 0u, oldHead);
     if(oldHead >= poolCapacity && oldHead != NWB_SURFEL_CELL_INVALID)
-        return;   // PENDING belongs to another insertion; never acquire PENDING -> PENDING.
+        return; // PENDING belongs to another insertion; never acquire PENDING -> PENDING.
 
     // Pair the atomic head observation with the publisher's barrier before reading its immutable record fields.
     // Covered candidates stop contending, allowing other faces in the same bucket to acquire a later frame's claim.
@@ -129,17 +129,17 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
     if(walk >= NWB_SURFEL_MAX_WALK){
-        nwbSurfelPublishSpawnHead(bucket, oldHead);   // Keep every admitted node reachable by the bounded gather.
+        nwbSurfelPublishSpawnHead(bucket, oldHead); // Keep every admitted node reachable by the bounded gather.
         return;
     }
 
-    // Pop a recycled id first (pushes quiescent this pass, so no underflow); else capped bump-alloc (BUMP_TOP never
-    // overshoots: undoing an over-bump could alias a live slot). On exhaustion release the claim for a later retry.
+    // Pop a recycled id first (pushes quiescent this pass, so no underflow); else capped bump-alloc (BUMP_TOP never overshoots: undoing an over-bump could alias a live slot). On exhaustion release the claim for a later retry.
     uint slot = 0u;
     bool allocated = false;
     {
         uint freeTop = g_NwbSurfelCounter[NWB_SURFEL_COUNTER_FREE_TOP];
-        [loop] while(freeTop != 0u){
+        [loop]
+        while(freeTop != 0u){
             uint prev;
             InterlockedCompareExchange(g_NwbSurfelCounter[NWB_SURFEL_COUNTER_FREE_TOP], freeTop, freeTop - 1u, prev);
             if(prev == freeTop){
@@ -152,7 +152,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     }
     if(!allocated){
         uint bumpTop = g_NwbSurfelCounter[NWB_SURFEL_COUNTER_BUMP_TOP];
-        [loop] while(bumpTop < poolCapacity){
+        [loop]
+        while(bumpTop < poolCapacity){
             uint prev;
             InterlockedCompareExchange(g_NwbSurfelCounter[NWB_SURFEL_COUNTER_BUMP_TOP], bumpTop, bumpTop + 1u, prev);
             if(prev == bumpTop){
@@ -164,12 +165,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         }
     }
     if(!allocated){
-        nwbSurfelPublishSpawnHead(bucket, oldHead);   // Pool full: preserve all existing surfaces in the bucket.
+        nwbSurfelPublishSpawnHead(bucket, oldHead); // Pool full: preserve all existing surfaces in the bucket.
         return;
     }
 
-    // Seed only from the immutable frame-start snapshot. Live neighbours may be locked or newly published by other
-    // spawn groups; the snapshot also prevents seed-from-seed feedback. Exclude records expiring in this frame.
+    // Seed only from the immutable frame-start snapshot. Live neighbours may be locked or newly published by other spawn groups; the snapshot also prevents seed-from-seed feedback. Exclude records expiring in this frame.
     half4 seedShR = half4(0.0h, 0.0h, 0.0h, 0.0h);
     half4 seedShG = half4(0.0h, 0.0h, 0.0h, 0.0h);
     half4 seedShB = half4(0.0h, 0.0h, 0.0h, 0.0h);
@@ -180,10 +180,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const uint seedBucket = nwbSurfelHashCell(myCell + int3(dx, dy, dz), cellCount);
         uint seedId = g_NwbSurfelSeedCellHead[seedBucket];
         uint seedWalk = 0u;
-        [loop] while(seedId < poolCapacity && seedWalk < NWB_SURFEL_MAX_WALK){
+        [loop]
+        while(seedId < poolCapacity && seedWalk < NWB_SURFEL_MAX_WALK){
             const NwbSurfel neighbour = g_NwbSurfelSeedPool[seedId];
-            if(neighbour.alive != 0u && neighbour.sampleCount >= NWB_SURFEL_SEED_NEIGHBOR_MIN_SAMPLE_COUNT
-                && frameIndex - neighbour.lastSeenFrame <= uint(g_NwbSurfelConstants.ageRaysTileScreen.x)){
+            if(neighbour.alive != 0u && neighbour.sampleCount >= NWB_SURFEL_SEED_NEIGHBOR_MIN_SAMPLE_COUNT && frameIndex - neighbour.lastSeenFrame <= uint(g_NwbSurfelConstants.ageRaysTileScreen.x)){
                 const float dist = length(worldPosition - neighbour.position);
                 // Seed weights are (0, 1) bounded factors, so half arithmetic is sufficient here.
                 const half normalWeight = half(saturate(dot(worldNormal, neighbour.normal)));

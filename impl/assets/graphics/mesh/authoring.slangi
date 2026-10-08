@@ -31,8 +31,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Mesh/compute-emulation stages share the global heap for frame data. The generic mesh shader reads no typed
-// material data (no .bind); the typed-binding contract gates the pixel shader's surface hook.
+// Mesh/compute-emulation stages share the global heap for frame data. The generic mesh shader reads no typed material data (no .bind); the typed-binding contract gates the pixel shader's surface hook.
 
 #include "runtime.slangi"
 #include "encoding.slangi"

@@ -32,8 +32,7 @@ struct NwbMeshSourceVertex{
 struct NwbMeshGeneratedVertex{
     float4 position;
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
-    // Halves packed in uint words: avoids UniformAndStorageBuffer16BitAccess (Uniform-storage lowering) while the
-    // fetch still reads RGBA16_FLOAT. 64-byte FP16 transport, full device support.
+    // Halves packed in uint words: avoids UniformAndStorageBuffer16BitAccess (Uniform-storage lowering) while the fetch still reads RGBA16_FLOAT. 64-byte FP16 transport, full device support.
     uint2 normal;
     uint2 tangent;
 #else
@@ -51,9 +50,8 @@ struct NwbMeshGeneratedVertex{
 };
 
 #if NWB_MESH_SHADER_EMULATION_COMPUTE
-// The compute-emulation target is a per-mesh writable StorageBuffer heap entry.  This typed alias shares the
-// canonical StorageBuffer table with the raw and read-only mesh-stream aliases; the push-constant lane below selects
-// the current mesh's entry without recreating a local descriptor set.
+// The compute-emulation target is a per-mesh writable StorageBuffer heap entry.
+// This typed alias shares the canonical StorageBuffer table with the raw and read-only mesh-stream aliases; the push-constant lane below selects the current mesh's entry without recreating a local descriptor set.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate writable typed view of the StorageBuffer descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
@@ -126,9 +124,7 @@ half4 nwbMeshGeneratedVertexColor(const NwbMeshGeneratedVertex generatedVertex){
 }
 
 groupshared uint g_NwbMeshletRasterFlags;
-// Every invocation in a meshlet group renders one draw item, so all source-stream slots are identical. Load them
-// once from the local per-draw instance record before any heap access instead of rereading that record at every
-// vertex/attribute fetch.
+// Every invocation in a meshlet group renders one draw item, so all source-stream slots are identical. Load them once from the local per-draw instance record before any heap access instead of rereading that record at every vertex/attribute fetch.
 groupshared uint g_NwbMeshGeometryHeapSlots[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
 
 void nwbMeshSetMeshletRasterFlags(const uint rasterFlags, const uint groupThreadIndex){
@@ -266,16 +262,12 @@ float3 nwbMeshTransformDirection(float3 direction, const NwbMeshInstanceData ins
 
 uint nwbMeshLoadMeshletPrimitiveIndex(const uint primitiveIndex){
     const uint byteOffset = primitiveIndex;
-    const uint word = nwbHeapRawBuffer(
-        nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES)
-    ).Load(byteOffset & ~NWB_MESHLET_PACKED_WORD_BYTE_MASK);
+    const uint word = nwbHeapRawBuffer(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_PRIMITIVE_INDICES)).Load(byteOffset & ~NWB_MESHLET_PACKED_WORD_BYTE_MASK);
     return (word >> ((byteOffset & NWB_MESHLET_PACKED_WORD_BYTE_MASK) * NWB_MESHLET_PACKED_BYTE_BITS)) & NWB_MESHLET_PACKED_BYTE_MASK;
 }
 
 NwbMeshletLocalVertexRef nwbMeshLoadMeshletLocalVertexRef(const NwbMeshletDesc meshlet, const uint localVertexIndex){
-    return nwbHeapMeshletLocalVertexRefs(
-        nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS)
-    )[meshlet.localVertexOffset + localVertexIndex];
+    return nwbHeapMeshletLocalVertexRefs(nwbMeshGeometryHeapSlot(NWB_MESH_BINDING_MESHLET_LOCAL_VERTEX_REFS))[meshlet.localVertexOffset + localVertexIndex];
 }
 
 NwbMeshletPositionStreamRef nwbMeshLoadMeshletPositionRef(

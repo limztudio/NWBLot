@@ -24,17 +24,14 @@ struct NwbRtInstanceMaterial{
     uint shadingModelId;
     uint materialConstantByteOffset;
     uint meshInstanceIndex;
-    // Per-buffer descriptor-heap slots for this occluder's mesh geometry. The host registers each backing buffer and
-    // stores the returned slot here; shaders read through nwbHeapRawBuffer(<x>Slot). indexSlot, attributeSlot, and
-    // positionSlot are set by both shadow builders; nodeSlot is SW-only and stays invalid on hardware-built records.
+    // Per-buffer descriptor-heap slots for this occluder's mesh geometry. The host registers each backing buffer and stores the returned slot here; shaders read through nwbHeapRawBuffer(<x>Slot). indexSlot, attributeSlot, and positionSlot are set by both shadow builders; nodeSlot is SW-only and stays invalid on hardware-built records.
     uint indexSlot;
     uint attributeSlot;
     uint positionSlot;
     uint nodeSlot;
 };
 
-// flags bit1 = isRefractive for the caustic producer (shadow trace ignores it: the surface hook supplies optical
-// params; visibility integrates the true volume path).
+// flags bit1 = isRefractive for the caustic producer (shadow trace ignores it: the surface hook supplies optical params; visibility integrates the true volume path).
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

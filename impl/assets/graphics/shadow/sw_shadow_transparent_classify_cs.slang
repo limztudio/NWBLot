@@ -2,8 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stage-3 classify + fill: edge texels append to the compacted list and keep the pristine opaque mask for the
-// indirect pass to fold once (no double-multiply). Overflow degrades to the interpolated fallback. No tracing here.
+// Stage-3 classify + fill: edge texels append to the compacted list and keep the pristine opaque mask for the indirect pass to fold once (no double-multiply). Overflow degrades to the interpolated fallback. No tracing here.
 
 
 #include "sw_binding_slots.h"
@@ -38,10 +37,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(nwbSwShadowIsBackground(texel))
         return;
 
-    const NwbSwShadowCoarseLocation coarseLocation = nwbSwShadowLocateCoarseSample(
-        pixel,
-        uint2(g_NwbSwShadowPush.coarseWidth, g_NwbSwShadowPush.coarseHeight)
-    );
+    const NwbSwShadowCoarseLocation coarseLocation = nwbSwShadowLocateCoarseSample(pixel, uint2(g_NwbSwShadowPush.coarseWidth, g_NwbSwShadowPush.coarseHeight));
     const half edgeThreshold = half(g_NwbSwShadowPush.edgeThreshold);
     const uint edgeCapacity = g_NwbSwShadowPush.edgeCapacity;
 
@@ -53,9 +49,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const uint slot = coarseLight.slot;
 
         if(coarseLight.isEdge){
-            // EDGE: append (pixel, lightIndex) to the compacted list; DO NOT trace and DO NOT write the texel -- leave
-            // the pristine opaque mask for the indirect trace's single overwrite. Always increment the counter (so the
-            // true edge total is measured) but guard the indexed write to the allocated capacity.
+            // EDGE: append (pixel, lightIndex) to the compacted list; DO NOT trace and DO NOT write the texel -- leave the pristine opaque mask for the indirect trace's single overwrite. Always increment the counter (so the true edge total is measured) but guard the indexed write to the allocated capacity.
             uint appendIndex;
             InterlockedAdd(g_NwbSwShadowEdgeCounter[NWB_SW_SHADOW_EDGE_COUNTER_APPEND], 1u, appendIndex);
             if(appendIndex < edgeCapacity){
@@ -64,8 +58,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
                 g_NwbSwShadowEdgeList[base + 1u] = i;
             }
             else{
-                // OVERFLOW: this edge will not be traced, so degrade it to the interpolated fallback rather than leaving
-                // the un-tinted opaque mask. Near-impossible at the allocated capacity.
+                // OVERFLOW: this edge will not be traced, so degrade it to the interpolated fallback rather than leaving the un-tinted opaque mask. Near-impossible at the allocated capacity.
                 const half3 interp = nwbSwShadowInterpolateCoarse(coarseLight.samples, coarseLocation.weights);
                 const half3 opaqueMask = half3(g_NwbSwShadowVisibility[uint3(pixel, slot)].rgb);
                 g_NwbSwShadowVisibility[uint3(pixel, slot)] = float4(opaqueMask * interp, 1.0);

@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Bindings shared by every pass that reads or updates the live surfel field. Spawn seeding and trace bounce gathering
-// select their immutable previous-frame snapshot explicitly at their use sites.
+// Bindings shared by every pass that reads or updates the live surfel field. Spawn seeding and trace bounce gathering select their immutable previous-frame snapshot explicitly at their use sites.
 
 
 #include "surfel_heap_resources.slangi"
@@ -19,8 +18,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The live field is selected by the common push block rather than a pass-local descriptor set. These aliases keep the
-// maintenance and trace kernels readable while expanding to global heap accesses.
+// The live field is selected by the common push block rather than a pass-local descriptor set. These aliases keep the maintenance and trace kernels readable while expanding to global heap accesses.
 #define g_NwbSurfelConstants g_NwbHeapSurfelConstantBuffers[g_NwbSurfelHeapPushConstants.constantsHeapSlot]
 #define g_NwbSurfelPool g_NwbHeapSurfelWritablePools[g_NwbSurfelHeapPushConstants.poolHeapSlot]
 #define g_NwbSurfelGuidePool g_NwbHeapSurfelWritableGuidePools[g_NwbSurfelHeapPushConstants.guidePoolHeapSlot]

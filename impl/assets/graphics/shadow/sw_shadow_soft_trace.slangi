@@ -9,11 +9,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Common half-resolution cone-jittered trace. The opaque and transparent producers provide only their independent
-// output, sample budget, and low-discrepancy salt; traversal class is selected before sw_shadow_ray.slangi is included.
-#if !defined(NWB_SW_SHADOW_SOFT_TRACE_OUTPUT) \
-    || !defined(NWB_SW_SHADOW_SOFT_TRACE_SPP) \
-    || !defined(NWB_SW_SHADOW_SOFT_TRACE_JITTER_SALT)
+// Common half-resolution cone-jittered trace. The opaque and transparent producers provide only their independent output, sample budget, and low-discrepancy salt; traversal class is selected before sw_shadow_ray.slangi is included.
+#if !defined(NWB_SW_SHADOW_SOFT_TRACE_OUTPUT) || !defined(NWB_SW_SHADOW_SOFT_TRACE_SPP) || !defined(NWB_SW_SHADOW_SOFT_TRACE_JITTER_SALT)
 #error "sw_shadow_soft_trace.slangi requires output, sample count, and jitter-salt macros"
 #endif
 

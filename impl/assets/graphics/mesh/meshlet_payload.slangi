@@ -215,10 +215,7 @@ uint nwbMeshPackConeOct16(float3 axis){
         axis.y = foldedY;
     }
 
-    return
-        (nwbMeshPackUnorm8(half(axis.x * 0.5 + 0.5)) << NWB_MESHLET_CONE_AXIS_X_SHIFT)
-        | (nwbMeshPackUnorm8(half(axis.y * 0.5 + 0.5)) << NWB_MESHLET_CONE_AXIS_Y_SHIFT)
-    ;
+    return (nwbMeshPackUnorm8(half(axis.x * 0.5 + 0.5)) << NWB_MESHLET_CONE_AXIS_X_SHIFT) | (nwbMeshPackUnorm8(half(axis.y * 0.5 + 0.5)) << NWB_MESHLET_CONE_AXIS_Y_SHIFT);
 }
 
 float3 nwbMeshUnpackConeOct16Axis(const uint conePacked){
@@ -256,8 +253,7 @@ uint nwbMeshPackCone(const float3 axis, const float cutoff){
     if(packedCutoff == 0u)
         return 0u;
 
-    return
-        packedAxis
+    return packedAxis
         | (packedCutoff << NWB_MESHLET_CONE_CUTOFF_SHIFT)
         | (NWB_MESHLET_CONE_FLAG_ENABLED << NWB_MESHLET_CONE_FLAG_SHIFT)
     ;

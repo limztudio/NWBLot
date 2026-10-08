@@ -20,13 +20,11 @@ struct NwbCsgIntervalPeelEntry{
     uint id;
 };
 
-// The standalone peel dispatch has no mesh draw constants. Its view UniformBuffer slot therefore rides in its own
-// push payload, while b13 remains an intentional local-layout gap.
+// The standalone peel dispatch has no mesh draw constants. Its view UniformBuffer slot therefore rides in its own push payload, while b13 remains an intentional local-layout gap.
 #define NWB_MESH_VIEW_BUFFER_HEAP_SLOT (g_NwbCsgIntervalDispatchPushConstants.resourceSlots[NWB_CSG_INTERVAL_DISPATCH_PUSH_RESOURCE_SLOT_VIEW])
 #include "../bindless/bindless_heap_mesh.slangi"
 
-// Local bindings 0..2 are ABI gaps. The CSG context selects target-generation Texture2DArray UAVs
-// from the StorageImage heap; the device's required formatless-storage-image support permits the two float formats.
+// Local bindings 0..2 are ABI gaps. The CSG context selects target-generation Texture2DArray UAVs from the StorageImage heap; the device's required formatless-storage-image support permits the two float formats.
 #define g_NwbCsgBackCapNormal (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.x))
 #define g_NwbCsgIntervalDepth (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.y))
 #define g_NwbCsgIntervalId (nwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgPeelSlots.z))
@@ -175,9 +173,8 @@ float nwbCsgRefineCutterIntersection(
         const bool midInside = midDistance <= 0.0;
         if(midInside == entering)
             highT = midT;
-        else{
+        else
             lowT = midT;
-        }
     }
 
     return (lowT + highT) * 0.5;
@@ -191,12 +188,8 @@ bool nwbCsgTryAnalyticCutterInterval(
 ){
     interval = float2(1.0, 0.0);
     const float3 origin = nwbCsgTransformWorldToShape(rayOrigin, cutter);
-    const float3 direction = float3(dot(cutter.worldToShapeRow0.xyz, rayDirection),
-        dot(cutter.worldToShapeRow1.xyz, rayDirection), dot(cutter.worldToShapeRow2.xyz, rayDirection));
-    if(
-        !all(isfinite(origin)) || !all(isfinite(direction)) || dot(direction, direction) <= 0.0
-        || !all(isfinite(cutter.parameter0))
-    )
+    const float3 direction = float3(dot(cutter.worldToShapeRow0.xyz, rayDirection), dot(cutter.worldToShapeRow1.xyz, rayDirection), dot(cutter.worldToShapeRow2.xyz, rayDirection));
+    if(!all(isfinite(origin)) || !all(isfinite(direction)) || dot(direction, direction) <= 0.0 || !all(isfinite(cutter.parameter0)))
         return false;
 #if defined(NWB_CSG_HAS_SHAPE_ID_PLANE)
     if(cutter.shapeType == NWB_CSG_PLANE_SHAPE_ID)
@@ -286,7 +279,8 @@ bool nwbCsgFindCutterIntervalOnRay(
             if(entering){
                 frontT = hitT;
                 hasFront = true;
-            }else if(hasFront){
+            }
+            else if(hasFront){
                 const float backT = hitT;
                 const float3 midWorldPosition = rayBegin + rayVector * ((frontT + backT) * 0.5);
                 if(!nwbCsgReceiverLocalBoundsContains(receiverRange, midWorldPosition)){

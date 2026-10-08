@@ -64,8 +64,7 @@ bool nwbOpticalSetMediumProperties(
     return true;
 }
 
-// Closed volumes promise UV/normal/position/direction-independent IOR + absorption; neutral hook inputs avoid
-// retaining transforms/attributes per event. Appearance still evaluates at the real surface.
+// Closed volumes promise UV/normal/position/direction-independent IOR + absorption; neutral hook inputs avoid retaining transforms/attributes per event. Appearance still evaluates at the real surface.
 bool nwbOpticalLoadHomogeneousMedium(
     const NwbOpticalTraceConfig config,
     const float3 origin,

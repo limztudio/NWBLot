@@ -33,8 +33,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint frameIndex = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.z);
     const uint maxAge = uint(g_NwbSurfelConstants.ageRaysTileScreen.x);
 
-    // Unsigned age is exact (lastSeen <= frame). Unseen past maxAge: mark dead, push once (alive early-out stops
-    // re-push); free-list stays duplicate-free.
+    // Unsigned age is exact (lastSeen <= frame). Unseen past maxAge: mark dead, push once (alive early-out stops re-push); free-list stays duplicate-free.
     if(frameIndex - surfel.lastSeenFrame > maxAge){
         g_NwbSurfelPool[surfelIndex].alive = 0u;
         uint destination = 0u;

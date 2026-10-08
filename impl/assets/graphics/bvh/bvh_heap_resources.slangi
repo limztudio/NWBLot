@@ -2,8 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Writable typed views over the shared StorageBuffer binding for SW-BVH build kernels. Dispatch-uniform slots:
-// no NonUniformResourceIndex needed.
+// Writable typed views over the shared StorageBuffer binding for SW-BVH build kernels. Dispatch-uniform slots: no NonUniformResourceIndex needed.
 
 
 #ifndef NWB_GRAPHICS_BVH_HEAP_RESOURCES_SLANGI

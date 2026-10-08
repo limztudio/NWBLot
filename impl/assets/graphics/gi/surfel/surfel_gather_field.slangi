@@ -76,8 +76,7 @@ bool nwbSurfelGatherField(
                 if(NWB_SURFEL_GATHER_FIELD_POOL[id].alive != 0u && sampleCount != 0u){
                     const half normalWeight = half(saturate(dot(normal, NWB_SURFEL_GATHER_FIELD_POOL[id].normal)));
                     half weight = half(0.0h);
-                    // Perpendicular and opposite-facing records have zero weight regardless of distance. Reject them
-                    // before fetching position/radius or evaluating the distance falloff; retain rounded half weights.
+                    // Perpendicular and opposite-facing records have zero weight regardless of distance. Reject them before fetching position/radius or evaluating the distance falloff; retain rounded half weights.
                     if(normalWeight > half(0.0h)){
                         const float dist = length(biasedPosition - NWB_SURFEL_GATHER_FIELD_POOL[id].position);
                         const half distanceWeight = half(saturate(1.0 - dist / max(NWB_SURFEL_GATHER_FIELD_POOL[id].radius, NWB_SURFEL_RADIUS_MIN)));

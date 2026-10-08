@@ -16,11 +16,11 @@
 
 
 // Neutral optical, reflection, and AVBOIT coverage defaults.
-#define NWB_SURFACE_IOR_VACUUM        half(1.0)              // no refraction / no Fresnel
-#define NWB_SURFACE_IOR_GLASS         half(1.5)              // typical glass Fresnel -- a convenience preset a material MAY author
+#define NWB_SURFACE_IOR_VACUUM        half(1.0)               // no refraction / no Fresnel
+#define NWB_SURFACE_IOR_GLASS         half(1.5)               // typical glass Fresnel -- a convenience preset a material MAY author
 #define NWB_SURFACE_ABSORPTION_NONE   half3(1.0h, 1.0h, 1.0h) // per-unit survival = perfectly clear -> casts no shadow
 #define NWB_SURFACE_ABSORPTION_TRANSMISSION_MIN 1e-4
-#define NWB_SURFACE_COVERAGE_OPAQUE   half(1.0)              // render coverage = fully opaque
+#define NWB_SURFACE_COVERAGE_OPAQUE   half(1.0)               // render coverage = fully opaque
 #define NWB_SURFACE_SPECULAR_F0_NONE half3(0.0h, 0.0h, 0.0h)
 #define NWB_SURFACE_ROUGHNESS_MAX    half(1.0)
 
@@ -62,8 +62,7 @@ NwbMeshSurface nwbMakeMeshSurface(half3 baseColor, float3 normal){
 // Reject nonfinite inputs to the neutral defaults before clamping, so later filtering never spreads NaNs.
 half4 nwbPackMeshSurfaceReflection(half3 specularF0, half perceptualRoughness){
     const half3 validSpecularF0 = all(isfinite(float3(specularF0))) ? saturate(specularF0) : NWB_SURFACE_SPECULAR_F0_NONE;
-    const half validRoughness = isfinite(float(perceptualRoughness))
-        ? saturate(perceptualRoughness) : NWB_SURFACE_ROUGHNESS_MAX;
+    const half validRoughness = isfinite(float(perceptualRoughness)) ? saturate(perceptualRoughness) : NWB_SURFACE_ROUGHNESS_MAX;
     return half4(validSpecularF0, validRoughness);
 }
 

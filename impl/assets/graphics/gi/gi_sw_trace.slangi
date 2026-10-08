@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// SW backend of the GI trace seam: walks the shared SW BVH; HW twin is gi_hw_trace.slangi (same hit + Lambert via
-// gi_trace_common, so both bounce identically). Heap-selected context picks scene/material buffers; producer owns outputs.
+// SW backend of the GI trace seam: walks the shared SW BVH; HW twin is gi_hw_trace.slangi (same hit + Lambert via gi_trace_common, so both bounce identically). Heap-selected context picks scene/material buffers; producer owns outputs.
 
 
 #include "constants.h"
@@ -63,9 +62,7 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "../bvh/sw_instance.slangi"
 #include "../bvh/ray_vertex_attrib.slangi"
 
-// Global descriptor-heap accessors for per-mesh and scene BVH geometry. The material record carries per-mesh slots;
-// the heap-selected trace context carries the scene-node slot. This include provides nwbHeapBvhNodes() and
-// nwbHeapRawBuffer().
+// Global descriptor-heap accessors for per-mesh and scene BVH geometry. The material record carries per-mesh slots; the heap-selected trace context carries the scene-node slot. This include provides nwbHeapBvhNodes() and nwbHeapRawBuffer().
 #include "../bindless/bindless_heap_bvh.slangi"
 
 
@@ -113,28 +110,22 @@ void nwbGiSwInstanceClosest(const uint instanceIndex, const float3 worldOrigin, 
     stack[0u] = 0u;
     uint stackPointer = 1u;
 
-    [loop] while(stackPointer > 0u){
+    [loop]
+    while(stackPointer > 0u){
         --stackPointer;
         NwbBvhNode node = nwbHeapBvhNodes(material.nodeSlot)[stack[stackPointer]];
         if(!nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0))
             continue;
 
-        [loop] while(true){
+        [loop]
+        while(true){
             if(nwbBvhNodeIsLeaf(node)){
                 const uint triangle = nwbBvhLeafPrimitive(node);
                 const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-                const uint3 triIndices = nwbHeapRawBuffer(material.indexSlot).Load3(
-                    indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES
-                );
-                const float3 v0 = asfloat(
-                    nwbHeapRawBuffer(material.positionSlot).Load3(triIndices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
-                );
-                const float3 v1 = asfloat(
-                    nwbHeapRawBuffer(material.positionSlot).Load3(triIndices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
-                );
-                const float3 v2 = asfloat(
-                    nwbHeapRawBuffer(material.positionSlot).Load3(triIndices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
-                );
+                const uint3 triIndices = nwbHeapRawBuffer(material.indexSlot).Load3(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+                const float3 v0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(triIndices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+                const float3 v1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(triIndices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+                const float3 v2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(triIndices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
                 const NwbRayTriangleHit triHit = nwbRayTriangleMollerTrumbore(origin, direction, tMin, closest.t, v0, v1, v2);
                 if(triHit.hit){
                     const uint attributeBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
@@ -213,13 +204,15 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
     stack[0u] = 0u;
     uint stackPointer = 1u;
 
-    [loop] while(stackPointer > 0u){
+    [loop]
+    while(stackPointer > 0u){
         --stackPointer;
         NwbBvhNode node = nwbHeapBvhNodes(g_NwbGiSwMaterialContextSlots.sceneSlots.x)[stack[stackPointer]];
         if(!nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0))
             continue;
 
-        [loop] while(true){
+        [loop]
+        while(true){
             if(nwbBvhNodeIsLeaf(node)){
                 nwbGiSwInstanceClosest(nwbBvhLeafPrimitive(node), origin, direction, tMin, closest);
                 break;
@@ -260,28 +253,22 @@ bool nwbGiSwInstanceOccluded(const uint instanceIndex, const float3 worldOrigin,
     stack[0u] = 0u;
     uint stackPointer = 1u;
 
-    [loop] while(stackPointer > 0u){
+    [loop]
+    while(stackPointer > 0u){
         --stackPointer;
         NwbBvhNode node = nwbHeapBvhNodes(material.nodeSlot)[stack[stackPointer]];
         if(!nwbBvhRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax, 0.0))
             continue;
 
-        [loop] while(true){
+        [loop]
+        while(true){
             if(nwbBvhNodeIsLeaf(node)){
                 const uint triangle = nwbBvhLeafPrimitive(node);
                 const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-                const uint3 triIndices = nwbHeapRawBuffer(material.indexSlot).Load3(
-                    indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES
-                );
-                const float3 v0 = asfloat(
-                    nwbHeapRawBuffer(material.positionSlot).Load3(triIndices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
-                );
-                const float3 v1 = asfloat(
-                    nwbHeapRawBuffer(material.positionSlot).Load3(triIndices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
-                );
-                const float3 v2 = asfloat(
-                    nwbHeapRawBuffer(material.positionSlot).Load3(triIndices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES)
-                );
+                const uint3 triIndices = nwbHeapRawBuffer(material.indexSlot).Load3(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+                const float3 v0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(triIndices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+                const float3 v1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(triIndices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+                const float3 v2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(triIndices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
                 const NwbRayTriangleHit triHit = nwbRayTriangleMollerTrumbore(origin, direction, tMin, tMax, v0, v1, v2);
                 if(triHit.hit)
                     return true;
@@ -317,13 +304,15 @@ bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax)
     stack[0u] = 0u;
     uint stackPointer = 1u;
 
-    [loop] while(stackPointer > 0u){
+    [loop]
+    while(stackPointer > 0u){
         --stackPointer;
         NwbBvhNode node = nwbHeapBvhNodes(g_NwbGiSwMaterialContextSlots.sceneSlots.x)[stack[stackPointer]];
         if(!nwbBvhRayAabb(origin, invDir, tMin, tMax, node.aabbMin, node.aabbMax, 0.0))
             continue;
 
-        [loop] while(true){
+        [loop]
+        while(true){
             if(nwbBvhNodeIsLeaf(node)){
                 if(nwbGiSwInstanceOccluded(nwbBvhLeafPrimitive(node), origin, direction, tMin, tMax))
                     return true;

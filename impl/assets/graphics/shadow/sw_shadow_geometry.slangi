@@ -18,8 +18,7 @@
 #include "../common/math.slangi"
 #include "instance_material.slangi"
 
-// Global descriptor-heap accessors for per-mesh geometry. The material record carries the slots; this include provides
-// nwbHeapBvhNodes() for nodes and nwbHeapRawBuffer() for positions, indices, and attributes.
+// Global descriptor-heap accessors for per-mesh geometry. The material record carries the slots; this include provides nwbHeapBvhNodes() for nodes and nwbHeapRawBuffer() for positions, indices, and attributes.
 #include "../bindless/bindless_heap_bvh.slangi"
 #include "../bindless/bindless_heap_rt.slangi"
 
@@ -27,11 +26,9 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// SW shadow scene geometry: BVH nodes, instance records, world->object helpers, attribute unpack via material-record
-// heap slots. Uniform slots come from g_NwbSwShadowMaterialContextSlots; no local SRV remains.
+// SW shadow scene geometry: BVH nodes, instance records, world->object helpers, attribute unpack via material-record heap slots. Uniform slots come from g_NwbSwShadowMaterialContextSlots; no local SRV remains.
 
-// The scene-instance table has a distinct 64-byte record stride but shares the global StorageBuffer descriptor class
-// with the BVH and material buffers. This view supplies its shader-side stride without a new descriptor class.
+// The scene-instance table has a distinct 64-byte record stride but shares the global StorageBuffer descriptor class with the BVH and material buffers. This view supplies its shader-side stride without a new descriptor class.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed view of the StorageBuffer descriptor table in bindless_heap.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
@@ -46,15 +43,13 @@ StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> nwbHeapSwShadowSceneInstanc
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Inverse-transpose normal to world space (dot with world->object columns); matches the rasterizer under uniform scale.
-// nwbSafeNormalize guards singular transforms.
+// Inverse-transpose normal to world space (dot with world->object columns); matches the rasterizer under uniform scale. nwbSafeNormalize guards singular transforms.
 float3 nwbSwShadowTransformNormal(const NwbSwBvhInstance instance, const float3 objectNormal){
     const float3 worldNormal = nwbSwBvhTransformNormal(instance, objectNormal);
     return nwbSafeNormalize(worldNormal, float3(0.0, 0.0, 1.0));
 }
 
-// Unpacks a per-triangle-corner shadow-trace attribute (AttribGpu) from a per-mesh attribute byte buffer: Half4U
-// normal (two packed-half uints) at +0, Float2U uv0 (two floats) at +8. Returns object-space normal in .xyz, uv0.
+// Unpacks a per-triangle-corner shadow-trace attribute (AttribGpu) from a per-mesh attribute byte buffer: Half4U normal (two packed-half uints) at +0, Float2U uv0 (two floats) at +8. Returns object-space normal in .xyz, uv0.
 NwbRayTraceVertexAttrib nwbSwShadowLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
     // attributeSlot is a non-uniform global heap slot; nwbHeapRawBuffer() applies the required decoration per load.
     const uint base = attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES;

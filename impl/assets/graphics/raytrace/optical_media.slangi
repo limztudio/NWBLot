@@ -83,8 +83,7 @@ NwbOpticalMedium nwbOpticalDominantMedium(const NwbOpticalMedia media){
 }
 
 #if NWB_OPTICAL_CLOSED_MEDIA
-// Nested boundaries are an authored stack: highest priority wins (lowest EntityID breaks ties); same-instance
-// shells union via positive winding. Mixed policies/unmatched exits are ambiguous: never guess from tie order.
+// Nested boundaries are an authored stack: highest priority wins (lowest EntityID breaks ties); same-instance shells union via positive winding. Mixed policies/unmatched exits are ambiguous: never guess from tie order.
 bool nwbOpticalApplyBoundary(
     inout NwbOpticalMedia media,
     const NwbOpticalMedium medium,

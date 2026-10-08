@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Piecewise-constant directional guide in the surfel's local frame. Equal z and azimuth intervals give every cell
-// the same solid angle. The mixed PDF is evaluated for BOTH uniform and guided rays when projecting radiance to SH.
+// Piecewise-constant directional guide in the surfel's local frame. Equal z and azimuth intervals give every cell the same solid angle. The mixed PDF is evaluated for BOTH uniform and guided rays when projecting radiance to SH.
 
 
 #include "../constants.h"
@@ -68,10 +67,8 @@ uint nwbSurfelGuideSelectBin(const NwbSurfelGuide guide, const float target){
 }
 
 float3 nwbSurfelGuideDirection(const uint bin, const float2 withinBin){
-    const float azimuth = (float(bin % NWB_SURFEL_GUIDE_AZIMUTH_BINS) + withinBin.x)
-        * (NWB_GI_FULL_TURN_RADIANS / float(NWB_SURFEL_GUIDE_AZIMUTH_BINS));
-    const float z = (float(bin / NWB_SURFEL_GUIDE_AZIMUTH_BINS) + withinBin.y)
-        / float(NWB_SURFEL_GUIDE_HEIGHT_BINS);
+    const float azimuth = (float(bin % NWB_SURFEL_GUIDE_AZIMUTH_BINS) + withinBin.x) * (NWB_GI_FULL_TURN_RADIANS / float(NWB_SURFEL_GUIDE_AZIMUTH_BINS));
+    const float z = (float(bin / NWB_SURFEL_GUIDE_AZIMUTH_BINS) + withinBin.y) / float(NWB_SURFEL_GUIDE_HEIGHT_BINS);
     const float radius = sqrt(max(1.0 - z * z, 0.0));
     return float3(cos(azimuth) * radius, sin(azimuth) * radius, z);
 }
@@ -81,11 +78,9 @@ float nwbSurfelGuideInversePdf(const NwbSurfelGuide guide, const uint bin, const
     if(guidedRayCount == 0u)
         return NWB_GI_FULL_TURN_RADIANS;
 
-    // Both ray classes use the same mixture PDF. Multiply its numerator and denominator by
-    // rayCount * binCount * guideTotal to avoid the three intermediate divisions.
+    // Both ray classes use the same mixture PDF. Multiply its numerator and denominator by rayCount * binCount * guideTotal to avoid the three intermediate divisions.
     const float binWeight = nwbSurfelGuideWeight(guide, bin);
-    const float denominator = float(uniformRayCount) * guideTotal
-        + float(guidedRayCount * NWB_SURFEL_GUIDE_BIN_COUNT) * binWeight;
+    const float denominator = float(uniformRayCount) * guideTotal + float(guidedRayCount * NWB_SURFEL_GUIDE_BIN_COUNT) * binWeight;
     return NWB_GI_FULL_TURN_RADIANS * float(rayCount) * guideTotal / denominator;
 }
 

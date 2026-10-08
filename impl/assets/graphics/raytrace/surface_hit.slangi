@@ -20,9 +20,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The caller supplies mesh-frame material accessors for its frozen ray material context. The explicit instance
-// material heap slot must select the same context; no camera-effect globals, lighting policy, or optical path
-// decisions belong in this geometric hit reconstruction helper.
+// The caller supplies mesh-frame material accessors for its frozen ray material context. The explicit instance material heap slot must select the same context; no camera-effect globals, lighting policy, or optical path decisions belong in this geometric hit reconstruction helper.
 // Closest geometric identity is independent of material reconstruction and caller admission policy.
 struct NwbRayTraceGeometryHit{
     bool hit;
@@ -54,8 +52,7 @@ float3 nwbRayTraceTransformSurfaceNormal(const float3x4 worldToObject, const flo
     ), float3(0.0, 0.0, 1.0));
 }
 
-// A triangle's cross product carries area and instance scale, unlike an authored unit shading normal. Normalize
-// relative to its own magnitude so valid small triangles and large instances never acquire a fixed fallback axis.
+// A triangle's cross product carries area and instance scale, unlike an authored unit shading normal. Normalize relative to its own magnitude so valid small triangles and large instances never acquire a fixed fallback axis.
 // Degenerate or nonfinite geometry returns zero, which the optical membership/progress checks reject.
 float3 nwbRayTraceScaleGeometryVector(const float3 value){
     if(!all(isfinite(value)))
@@ -97,8 +94,7 @@ float3 nwbRayTraceTriangleGeometricNormal(
     return nwbRayTraceNormalizeGeometryVector(worldNormal);
 }
 
-// Only real triangulation seams merge: indexed adjacency + opposite orientation filter shells/duplicates;
-// object-space coplanarity via triple-product error bound (no crease-angle smoothing).
+// Only real triangulation seams merge: indexed adjacency + opposite orientation filter shells/duplicates; object-space coplanarity via triple-product error bound (no crease-angle smoothing).
 bool nwbRayTraceCoplanarSeam(
     const uint instanceMaterialHeapSlot,
     const uint instance,
@@ -189,8 +185,7 @@ NwbRayTraceGeometryHit nwbRayTraceClosestGeometryHit(
     ray.Direction = direction;
     ray.TMin = minDistance;
     ray.TMax = maxDistance;
-    // Complete the nearest geometric query before fetching attributes. Accept-first traversal or instance filtering
-    // can skip a closer boundary; the caller applies its policy to the unchanged closest geometric identity.
+    // Complete the nearest geometric query before fetching attributes. Accept-first traversal or instance filtering can skip a closer boundary; the caller applies its policy to the unchanged closest geometric identity.
     RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
     query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray);
     while(query.Proceed()){}

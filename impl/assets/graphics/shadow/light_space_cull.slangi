@@ -21,39 +21,28 @@ bool nwbLightSpaceBoundsOutside(
         return false;
     const NwbRtInstanceMaterial material = nwbLightSpaceMaterial(instanceIndex);
     const NwbMeshInstanceData transform = nwbHeapMeshInstances(nwbMeshFrameInstanceHeapSlot())[material.meshInstanceIndex];
-    if(
-        !all(isfinite(minimum)) || !all(isfinite(maximum)) || any(minimum > maximum)
-        || !all(isfinite(transform.scale.xyz)) || !all(isfinite(transform.rotation)) || !all(isfinite(transform.translation))
-    )
+    if(!all(isfinite(minimum)) || !all(isfinite(maximum)) || any(minimum > maximum) || !all(isfinite(transform.scale.xyz)) || !all(isfinite(transform.rotation)) || !all(isfinite(transform.translation)))
         return false;
     // A flushed subnormal endpoint need not preserve its order relative to an interior source position.
     const uint3 minimumBits = asuint(minimum) & 0x7fffffffu;
     const uint3 maximumBits = asuint(maximum) & 0x7fffffffu;
-    if(
-        any((minimumBits != 0u) & (minimumBits < 0x00800000u))
-        || any((maximumBits != 0u) & (maximumBits < 0x00800000u))
-    )
+    if(any((minimumBits != 0u) & (minimumBits < 0x00800000u)) || any((maximumBits != 0u) & (maximumBits < 0x00800000u)))
         return false;
     uint outside = 0x3fu;
     const float roundoff = 32.0 * 1.1920928955078125e-7;
     for(uint corner = 0u; corner < 8u; ++corner){
-        const float3 local = float3((corner & 1u) != 0u ? maximum.x : minimum.x,
-            (corner & 2u) != 0u ? maximum.y : minimum.y,
-            (corner & 4u) != 0u ? maximum.z : minimum.z);
+        const float3 local = float3((corner & 1u) != 0u ? maximum.x : minimum.x, (corner & 2u) != 0u ? maximum.y : minimum.y, (corner & 4u) != 0u ? maximum.z : minimum.z);
         const float3 scaled = local * transform.scale.xyz;
         const float3 world = nwbRotateVectorByQuaternion(scaled, transform.rotation) + transform.translation;
         const float3 q = abs(transform.rotation.xyz);
         const float3 magnitude = abs(scaled);
         const float3 twiceCross = 2.0 * (q.yzx * magnitude.zxy + q.zxy * magnitude.yzx);
         // Bound the actual quaternion/TRS operation terms before the projection's own dot-product rounding.
-        const float3 worldError = roundoff * (magnitude + abs(transform.rotation.w) * twiceCross
-            + q.yzx * twiceCross.zxy + q.zxy * twiceCross.yzx + abs(transform.translation)) + float3(1.1754943508222875e-38);
+        const float3 worldError = roundoff * (magnitude + abs(transform.rotation.w) * twiceCross + q.yzx * twiceCross.zxy + q.zxy * twiceCross.yzx + abs(transform.translation)) + float3(1.1754943508222875e-38);
         const float4 clip = nwbLightSpaceProject(view, world);
         float4 error;
-        for(uint row = 0u; row < 4u; ++row){
-            error[row] = dot(abs(view.worldToClipRows[row].xyz), worldError)
-                + roundoff * dot(abs(view.worldToClipRows[row]), abs(float4(world, 1.0)));
-        }
+        for(uint row = 0u; row < 4u; ++row)
+            error[row] = dot(abs(view.worldToClipRows[row].xyz), worldError) + roundoff * dot(abs(view.worldToClipRows[row]), abs(float4(world, 1.0)));
         if(!all(isfinite(clip)) || !all(isfinite(error)))
             return false;
         uint mask = 0u;

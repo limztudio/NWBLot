@@ -61,12 +61,10 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    // Both G-buffer vector attachments are RGBA16F. Preserve their native precision until the full-precision
-    // normalization/distance calculations that actually need it.
+    // Both G-buffer vector attachments are RGBA16F. Preserve their native precision until the full-precision normalization/distance calculations that actually need it.
     const half3 worldSample = half3(nwbHeapSampledImage2D(g_NwbShadowGeometryDownsamplePushConstants.worldPositionSlot).Load(int3(full, 0)).xyz);
     const float3 world = float3(worldSample);
-    // The G-buffer normal is stored [0,1]-encoded (matching the SW/HW traces' `n*2-1` decode); normalize the decode so
-    // the octahedral pack sees a unit vector.
+    // The G-buffer normal is stored [0,1]-encoded (matching the SW/HW traces' `n*2-1` decode); normalize the decode so the octahedral pack sees a unit vector.
     const half3 normalSample = half3(nwbHeapSampledImage2D(g_NwbShadowGeometryDownsamplePushConstants.normalSlot).Load(int3(full, 0)).xyz);
     const float3 normal = normalize(float3(normalSample) * 2.0 - 1.0);
     const half2 octNormal = half2(nwbOctEncodeNormal(normal));

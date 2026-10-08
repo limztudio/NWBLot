@@ -3,8 +3,7 @@
 
 
 // RGB transparent transmittance uses the same resolve source as scalar opaque visibility.
-// Both authored assets compile separate wavelet and upsample stages; the channel variant selects visibility types
-// and luminance guidance, while the upsample fold remains a runtime push flag.
+// Both authored assets compile separate wavelet and upsample stages; the channel variant selects visibility types and luminance guidance, while the upsample fold remains a runtime push flag.
 
 
 #define NWB_SHADOW_RESOLVE_CHANNELS NWB_SHADOW_RESOLVE_CHANNELS_RGB

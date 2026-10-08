@@ -15,8 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The default 80-byte push ABI serves opaque and coarse software-shadow kernels. The soft transparent entry
-// supplies its dedicated history-aware push before including these shared traversal resources.
+// The default 80-byte push ABI serves opaque and coarse software-shadow kernels. The soft transparent entry supplies its dedicated history-aware push before including these shared traversal resources.
 #ifndef NWB_SW_SHADOW_PUSH_DECLARED
 struct NwbSwShadowHeapPushConstants{
     uint width;

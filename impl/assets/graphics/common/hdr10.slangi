@@ -9,15 +9,13 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// HDR10 carries Rec.2020 primaries with a ST.2084 (PQ) transfer function. The renderer's scene and UI authoring
-// colors are Rec.709/sRGB, so conversion happens immediately before the UNORM10 swap-chain store.
+// HDR10 carries Rec.2020 primaries with a ST.2084 (PQ) transfer function. The renderer's scene and UI authoring colors are Rec.709/sRGB, so conversion happens immediately before the UNORM10 swap-chain store.
 #define NWB_HDR10_MASTERING_PEAK_NITS 1000.0
 #define NWB_HDR10_SCENE_REFERENCE_WHITE_NITS 203.0
 #define NWB_HDR10_UI_PAPER_WHITE_NITS 203.0
 #define NWB_HDR10_PQ_ABSOLUTE_PEAK_NITS 10000.0
 
-// Rec.709 -> Rec.2020 linear-primary conversion matrix. Keep the rows as individual macro-only values so this
-// header remains consumable by both generated shader variants without introducing a shared global variable.
+// Rec.709 -> Rec.2020 linear-primary conversion matrix. Keep the rows as individual macro-only values so this header remains consumable by both generated shader variants without introducing a shared global variable.
 #define NWB_HDR10_REC709_TO_REC2020_ROW0_R 0.6274040
 #define NWB_HDR10_REC709_TO_REC2020_ROW0_G 0.3292820
 #define NWB_HDR10_REC709_TO_REC2020_ROW0_B 0.0433136
@@ -67,8 +65,7 @@ float3 nwbHdr10Rec709ToRec2020(float3 value){
 }
 
 float3 nwbHdr10PqEncodeNits(float3 luminanceNits){
-    // SMPTE ST.2084 constants. PQ is defined against an absolute 10,000-nit range, independent of the
-    // mastering display's peak value.
+    // SMPTE ST.2084 constants. PQ is defined against an absolute 10,000-nit range, independent of the mastering display's peak value.
     const float3 normalized = saturate(max(luminanceNits, float3(0.0)) / NWB_HDR10_PQ_ABSOLUTE_PEAK_NITS);
     const float3 raised = pow(normalized, NWB_HDR10_PQ_M1);
     return pow(
@@ -90,13 +87,10 @@ float3 nwbHdr10SrgbToLinear(float3 value){
 }
 
 float3 nwbHdr10SceneToNits(float3 linearRec709){
-    // The linear renderer may contain highlights above one. Map its reference white to 203 nits and use a smooth
-    // shoulder toward the declared 1,000-nit mastering peak, preserving highlight ordering until presentation.
+    // The linear renderer may contain highlights above one. Map its reference white to 203 nits and use a smooth shoulder toward the declared 1,000-nit mastering peak, preserving highlight ordering until presentation.
     const float3 linearRec2020 = max(nwbHdr10Rec709ToRec2020(max(linearRec709, float3(0.0))), float3(0.0));
     const float3 referenceWhiteNits = linearRec2020 * NWB_HDR10_SCENE_REFERENCE_WHITE_NITS;
-    const float3 compressedNits = NWB_HDR10_MASTERING_PEAK_NITS * referenceWhiteNits / (
-        referenceWhiteNits + (NWB_HDR10_MASTERING_PEAK_NITS - NWB_HDR10_SCENE_REFERENCE_WHITE_NITS)
-    );
+    const float3 compressedNits = NWB_HDR10_MASTERING_PEAK_NITS * referenceWhiteNits / (referenceWhiteNits + (NWB_HDR10_MASTERING_PEAK_NITS - NWB_HDR10_SCENE_REFERENCE_WHITE_NITS));
     return compressedNits;
 }
 

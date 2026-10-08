@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-runtime skinned-mesh StorageBuffer-heap selectors. The C++ RuntimeBindlessResourceSlots mirror is five std140
-// uint4 lanes, so every skinning, bounds, and repack dispatch sees the same persistent stream generation.
+// Per-runtime skinned-mesh StorageBuffer-heap selectors. The C++ RuntimeBindlessResourceSlots mirror is five std140 uint4 lanes, so every skinning, bounds, and repack dispatch sees the same persistent stream generation.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,9 +41,7 @@ struct NwbSkinnedMeshBindlessResources{
     uint4 streamSlots4; // per-meshlet local AABB partials, complete local AABB, reserved, reserved
 };
 
-// Each runtime mesh owns one small stream-slot payload. It is registered as a global UniformBuffer descriptor and
-// selected by a dispatch-uniform push-constant slot, so skinning, bounds, and repack do not create local selector
-// descriptor sets.
+// Each runtime mesh owns one small stream-slot payload. It is registered as a global UniformBuffer descriptor and selected by a dispatch-uniform push-constant slot, so skinning, bounds, and repack do not create local selector descriptor sets.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed view of the UniformBuffer descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
@@ -55,9 +52,7 @@ ConstantBuffer<NwbSkinnedMeshBindlessResources, Std140DataLayout> g_NwbHeapSkinn
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// These aliases intentionally view the one global StorageBuffer descriptor table with the strides the skinned compute
-// passes require. Read-only and writable views share a Vulkan STORAGE_BUFFER descriptor; the resource access qualifier
-// remains shader-local, so each pass can fetch exactly the persistent stream it needs.
+// These aliases intentionally view the one global StorageBuffer descriptor table with the strides the skinned compute passes require. Read-only and writable views share a Vulkan STORAGE_BUFFER descriptor; the resource access qualifier remains shader-local, so each pass can fetch exactly the persistent stream it needs.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed aliases of the global StorageBuffer descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]

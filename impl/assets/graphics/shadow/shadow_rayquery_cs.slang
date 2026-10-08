@@ -7,8 +7,7 @@
 #endif
 #define NWB_BINDLESS_TLAS 1
 
-// Full-res HW opaque trace: per-pixel binary any-hit mask via nwbShadowRqLightVisible. Transparent color comes from
-// the software traversal (hybrid split: HW/SW disagree at grazing chords).
+// Full-res HW opaque trace: per-pixel binary any-hit mask via nwbShadowRqLightVisible. Transparent color comes from the software traversal (hybrid split: HW/SW disagree at grazing chords).
 
 
 #include "binding_slots.h"
@@ -20,9 +19,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Frame counter for soft-light cone jitter. It seeds the per-pixel low-discrepancy sample so the single jittered opaque
-// ray walks the light's source disk/sphere across frames. A zero-radius light jitters to the axis exactly and keeps the
-// hard-shadow result.
+// Frame counter for soft-light cone jitter. It seeds the per-pixel low-discrepancy sample so the single jittered opaque ray walks the light's source disk/sphere across frames. A zero-radius light jitters to the axis exactly and keeps the hard-shadow result.
 struct NwbShadowRqPushConstants{
     uint frameIndex;
     uint worldPositionSlot;
@@ -45,9 +42,7 @@ ConstantBuffer<NwbShadowRqPushConstants> g_NwbShadowRqPushConstants;
 
 [numthreads(NWB_SHADOW_RT_GROUP_SIZE, NWB_SHADOW_RT_GROUP_SIZE, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
-    // FULL-RESOLUTION: one inline-RayQuery occlusion ray per output pixel, written straight into the full-res
-    // visibility array the deferred lighting samples. The software transparent stage folds colored transmittance
-    // onto this opaque result.
+    // FULL-RESOLUTION: one inline-RayQuery occlusion ray per output pixel, written straight into the full-res visibility array the deferred lighting samples. The software transparent stage folds colored transmittance onto this opaque result.
     uint width;
     uint height;
     uint slotElems;
@@ -66,15 +61,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
     }
 
-    // The deferred vector attachments are RGBA16F. Preserve their fetch payload as half before promoting to the
-    // FP32 ray origin and normalized direction required by RayQuery.
+    // The deferred vector attachments are RGBA16F. Preserve their fetch payload as half before promoting to the FP32 ray origin and normalized direction required by RayQuery.
     const half3 worldPositionSample = half3(nwbHeapSampledImage2D(g_NwbShadowRqPushConstants.worldPositionSlot).Load(texel).xyz);
     const half3 normalSample = half3(nwbHeapSampledImage2D(g_NwbShadowRqPushConstants.normalSlot).Load(texel).xyz);
     const float3 worldPosition = float3(worldPositionSample);
     const float3 normal = normalize(float3(normalSample) * 2.0 - 1.0);
 
-    // Trace only the lights that hold a shadow slot (params.z >= 0); write each light's visibility into its own slot
-    // layer. Lights without a slot are left at the cleared "all lit" white default.
+    // Trace only the lights that hold a shadow slot (params.z >= 0); write each light's visibility into its own slot layer. Lights without a slot are left at the cleared "all lit" white default.
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
     for(uint i = 0u; i < lightCount; ++i){
         const float slot = g_NwbSceneLights[i].params.z;

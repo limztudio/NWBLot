@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared build-kernel triangle input. Morton generation and bottom-up fitting both consume the exact same sorted
-// triangle stream, so keep the binding declarations and byte-address decoding together.
+// Shared build-kernel triangle input. Morton generation and bottom-up fitting both consume the exact same sorted triangle stream, so keep the binding declarations and byte-address decoding together.
 
 
 #include "binding_slots.h"

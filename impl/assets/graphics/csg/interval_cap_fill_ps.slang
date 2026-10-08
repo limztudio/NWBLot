@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The cap-fill fullscreen draw reuses the ordinary 64-byte mesh push ABI.  Its fourth frame-slot word is unused by
-// this path, so it selects the global CSG context UniformBuffer without growing any push range.
+// The cap-fill fullscreen draw reuses the ordinary 64-byte mesh push ABI.  Its fourth frame-slot word is unused by this path, so it selects the global CSG context UniformBuffer without growing any push range.
 struct NwbCsgCapFillPushConstants{
     uint4 dispatch;
     float4 viewportRect;
@@ -32,16 +31,14 @@ ConstantBuffer<NwbCsgCapFillPushConstants> g_NwbCsgCapFillPushConstants;
 #undef NWB_CSG_CONTEXT_HEAP_SLOT
 
 // CSG caps have no source triangle, but they still evaluate the receiver's COMPLETE cook-generated surface hook.
-// The heap-selected clip context selects typed words and mutable mesh-instance storage; cap-material positions b6/b12
-// remain intentional ABI gaps.
+// The heap-selected clip context selects typed words and mutable mesh-instance storage; cap-material positions b6/b12 remain intentional ABI gaps.
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbCsgClipContextSlots.materialTyped;
 }
 uint nwbMeshFrameInstanceHeapSlot(){
     return g_NwbCsgClipContextSlots.meshInstances;
 }
-// interval_sample.slangi already included bindless_heap_mesh.slangi with its b18-selected mesh-view alias. Its include
-// guard keeps this include focused on the cap-fill material/instance accessors above.
+// interval_sample.slangi already included bindless_heap_mesh.slangi with its b18-selected mesh-view alias. Its include guard keeps this include focused on the cap-fill material/instance accessors above.
 #include "../bindless/bindless_heap_mesh.slangi"
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/surface_dispatch.slangi"
@@ -90,8 +87,7 @@ NwbCsgIntervalCapFillPixelOutput main(const NwbCsgIntervalCapFillPixelInput inpu
     hit.meshInstanceIndex = receiver.materialContext.z;
     hit.surfaceDispatchId = receiver.materialContext.x;
     hit.materialConstantByteOffset = receiver.materialContext.y;
-    // A cap has no receiver-triangle UV/color/tangent. Match the documented non-rasterized surface inputs used by
-    // the generated dispatcher, while preserving every declared typed material field and both BXDF parameters.
+    // A cap has no receiver-triangle UV/color/tangent. Match the documented non-rasterized surface inputs used by the generated dispatcher, while preserving every declared typed material field and both BXDF parameters.
     hit.uv0 = float2(0.0);
     hit.worldNormal = cap.normal;
     hit.worldPosition = cap.worldPosition;

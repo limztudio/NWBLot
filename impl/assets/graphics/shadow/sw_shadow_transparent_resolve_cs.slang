@@ -2,8 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Stage-2 adaptive transparent resolve: interpolate where the coarse neighbourhood agrees, re-trace where it
-// disagrees, fold onto the full-res opaque mask. Fallback when edge compaction is off.
+// Stage-2 adaptive transparent resolve: interpolate where the coarse neighbourhood agrees, re-trace where it disagrees, fold onto the full-res opaque mask. Fallback when edge compaction is off.
 
 
 #include "sw_binding_slots.h"
@@ -43,10 +42,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 worldPosition = nwbSwShadowLoadWorldPosition(texel);
     const float3 normal = nwbSwShadowLoadNormal(texel);
 
-    const NwbSwShadowCoarseLocation coarseLocation = nwbSwShadowLocateCoarseSample(
-        pixel,
-        uint2(g_NwbSwShadowPush.coarseWidth, g_NwbSwShadowPush.coarseHeight)
-    );
+    const NwbSwShadowCoarseLocation coarseLocation = nwbSwShadowLocateCoarseSample(pixel, uint2(g_NwbSwShadowPush.coarseWidth, g_NwbSwShadowPush.coarseHeight));
     const half edgeThreshold = half(g_NwbSwShadowPush.edgeThreshold);
 
     const uint lightCount = min(nwbSceneLightCount(), NWB_SCENE_MAX_LIGHTS);
@@ -54,6 +50,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         NwbSwShadowCoarseLight coarseLight;
         if(!nwbSwShadowLoadCoarseLight(coarseLocation, i, edgeThreshold, coarseLight))
             continue;
+
         const uint slot = coarseLight.slot;
 
         half3 transmittance;

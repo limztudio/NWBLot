@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The adaptive transparent resolve and compacted classify pass use the same 2x2 coarse neighbourhood. Keep loading,
-// edge classification, and interpolation together so the two paths cannot diverge at an edge threshold.
+// The adaptive transparent resolve and compacted classify pass use the same 2x2 coarse neighbourhood. Keep loading, edge classification, and interpolation together so the two paths cannot diverge at an edge threshold.
 struct NwbSwShadowCoarseSamples{
     half3 t00;
     half3 t10;
@@ -30,9 +29,7 @@ struct NwbSwShadowCoarseLight{
     bool isEdge;
 };
 
-// Coarse sample k maps to full-resolution k*FACTOR. floor + frac select its 2x2 reconstruction neighbourhood;
-// clamping c1 handles the final partial block at the right or bottom edge. The fixed 4x factor means the
-// fractional weights are exactly {0, 0.25, 0.5, 0.75}, so retain the interpolation-only values as half.
+// Coarse sample k maps to full-resolution k*FACTOR. floor + frac select its 2x2 reconstruction neighbourhood; clamping c1 handles the final partial block at the right or bottom edge. The fixed 4x factor means the fractional weights are exactly {0, 0.25, 0.5, 0.75}, so retain the interpolation-only values as half.
 NwbSwShadowCoarseLocation nwbSwShadowLocateCoarseSample(const uint2 pixel, const uint2 coarseSize){
     const float2 coarseCoord = float2(pixel) * (1.0 / float(NWB_SW_SHADOW_COARSE_FACTOR));
     NwbSwShadowCoarseLocation location;
@@ -63,8 +60,7 @@ half3 nwbSwShadowInterpolateCoarse(const NwbSwShadowCoarseSamples samples, const
     return lerp(tx0, tx1, weights.y);
 }
 
-// Both adaptive paths classify the same coarse data for one scene-light entry. The caller owns the different edge
-// action (full-resolution trace versus compact-list append), while this helper owns slot filtering and threshold math.
+// Both adaptive paths classify the same coarse data for one scene-light entry. The caller owns the different edge action (full-resolution trace versus compact-list append), while this helper owns slot filtering and threshold math.
 bool nwbSwShadowLoadCoarseLight(
     const NwbSwShadowCoarseLocation location,
     const uint lightIndex,

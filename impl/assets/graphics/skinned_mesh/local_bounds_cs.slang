@@ -40,8 +40,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID){
         const uint flags = nwbHeapRawBuffer(boundsSlots.x).Load(byteOffset + NWB_RUNTIME_MESH_BOUNDS_FLAGS_OFFSET);
         const float3 partialMin = asfloat(nwbHeapRawBuffer(boundsSlots.x).Load3(byteOffset + NWB_RUNTIME_MESH_BOUNDS_MIN_OFFSET));
         const float3 partialMax = asfloat(nwbHeapRawBuffer(boundsSlots.x).Load3(byteOffset + NWB_RUNTIME_MESH_BOUNDS_MAX_OFFSET));
-        const bool valid = (flags & NWB_RUNTIME_MESH_BOUNDS_FLAG_VALID) != 0u
-            && all(isfinite(partialMin)) && all(isfinite(partialMax)) && all(partialMin <= partialMax);
+        const bool valid = (flags & NWB_RUNTIME_MESH_BOUNDS_FLAG_VALID) != 0u && all(isfinite(partialMin)) && all(isfinite(partialMax)) && all(partialMin <= partialMax);
         invalid |= valid ? 0u : 1u;
         if(valid){
             minimum = min(minimum, partialMin);
@@ -69,8 +68,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID){
     const float3 margin = max(max(abs(lower), abs(upper)) * 4.76837158203125e-7, float3(asfloat(0x00800000u)));
     lower -= margin;
     upper += margin;
-    const bool valid = meshletCount != 0u && g_NwbSkinnedMeshLocalBoundsInvalid[0u] == 0u
-        && all(isfinite(lower)) && all(isfinite(upper)) && all(lower <= upper);
+    const bool valid = meshletCount != 0u && g_NwbSkinnedMeshLocalBoundsInvalid[0u] == 0u && all(isfinite(lower)) && all(isfinite(upper)) && all(lower <= upper);
     RWByteAddressBuffer output = nwbSkinnedMeshHeapWritableRawBuffer(boundsSlots.y);
     output.Store3(NWB_RUNTIME_MESH_BOUNDS_MIN_OFFSET, asuint(valid ? lower : float3(0.0)));
     output.Store(NWB_RUNTIME_MESH_BOUNDS_FLAGS_OFFSET, valid ? NWB_RUNTIME_MESH_BOUNDS_FLAG_VALID : 0u);

@@ -22,8 +22,7 @@ bool nwbLightSpaceInterpolateBarycentrics(
     weights = float3(0.0);
     if(any(extent == 0u) || any(pixel >= extent) || !all(isfinite(clip0)) || !all(isfinite(clip1)) || !all(isfinite(clip2)))
         return false;
-    const float2 ndc = float2((float(pixel.x) + 0.5) * 2.0 / float(extent.x) - 1.0,
-        1.0 - (float(pixel.y) + 0.5) * 2.0 / float(extent.y));
+    const float2 ndc = float2((float(pixel.x) + 0.5) * 2.0 / float(extent.x) - 1.0, 1.0 - (float(pixel.y) + 0.5) * 2.0 / float(extent.y));
     const float2 q0 = clip0.xy - ndc * clip0.w;
     const float2 q1 = clip1.xy - ndc * clip1.w;
     const float2 q2 = clip2.xy - ndc * clip2.w;

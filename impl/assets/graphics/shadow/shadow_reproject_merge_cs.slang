@@ -151,13 +151,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         float lumaM2 = 0.0;
         int cnt = 0;
         uint temporalChangeSupport = 0u;
-        [unroll] for(int dy = -1; dy <= 1; ++dy){
-            [unroll] for(int dx = -1; dx <= 1; ++dx){
+        [unroll]
+        for(int dy = -1; dy <= 1; ++dy){
+            [unroll]
+            for(int dx = -1; dx <= 1; ++dx){
                 const int2 unclampedTap = texel + int2(dx, dy);
                 // Keep clamped taps for the original moments, but count each supporting pixel only once at image edges.
-                const bool supportTapInBounds =
-                    unclampedTap.x >= 0 && unclampedTap.y >= 0 && unclampedTap.x < hw && unclampedTap.y < hh
-                ;
+                const bool supportTapInBounds = unclampedTap.x >= 0 && unclampedTap.y >= 0 && unclampedTap.x < hw && unclampedTap.y < hh;
                 const int2 t = int2(clamp(unclampedTap.x, 0, hw - 1), clamp(unclampedTap.y, 0, hh - 1));
                 if(nwbShadowMergeGeomCurr(t).w <= half(0.5h))
                     continue;
@@ -196,8 +196,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         // Reduce history at temporal edges after removing local noise. Visibility luma stays in (0, 1), so half math is sufficient here.
         const half lumaHist = half(nwbLuminance(histClamped));
         const bool temporalChangeCoherent = temporalChangeSupport >= NWB_SHADOW_TEMPORAL_ANTILAG_MIN_SUPPORT;
-        // Edge signal, gradient, and effective history count feed only the (0, 1) saturate below; variance
-        // accumulators above and the float4 moments-store count below stay on float. Widen only at those uses.
+        // Edge signal, gradient, and effective history count feed only the (0, 1) saturate below; variance accumulators above and the float4 moments-store count below stay on float. Widen only at those uses.
         const half edgeSignal = temporalChangeCoherent
             ? max(half(0.0h), abs(lumaCur - lumaHist) - half(NWB_SHADOW_TEMPORAL_NOISE_SLACK) * half(sigmaLuma))
             : half(0.0h)
@@ -205,8 +204,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const half tempGrad = edgeSignal / max(max(lumaCur, lumaHist), half(0.001h));
         const half nEff = half(n) * saturate(half(1.0h) - half(NWB_SHADOW_TEMPORAL_ANTILAG) * tempGrad);
 
-        // Bound the current-sample blend weight. The merge alpha and luminance moments are (0, 1) bounded
-        // factors, so half arithmetic is sufficient here.
+        // Bound the current-sample blend weight. The merge alpha and luminance moments are (0, 1) bounded factors, so half arithmetic is sufficient here.
         const half alpha = half(max(1.0 / (float(nEff) + 1.0), NWB_SHADOW_TEMPORAL_ALPHA_MIN));
         const half3 outVis = half3(lerp(histClamped, cur, float(alpha)));
         const float nNext = min(float(nEff) + 1.0, NWB_SHADOW_TEMPORAL_MAX_HISTORY);

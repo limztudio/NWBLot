@@ -19,9 +19,7 @@ struct NwbSkinnedMeshPushConstants{
 ConstantBuffer<NwbSkinnedMeshPushConstants> g_NwbSkinnedMeshPushConstants;
 
 // All persistent mesh streams, including this per-runtime selector payload, are global heap entries. The selector slot occupies payload1.y (word 5) and is uniform for the entire dispatch.
-#define g_NwbSkinnedMeshBindlessResources nwbSkinnedMeshHeapBindlessResources(\
-    g_NwbSkinnedMeshPushConstants.payload1[NWB_SKINNED_MESH_PUSH_BINDLESS_RESOURCES_SLOT - 4u]\
-)
+#define g_NwbSkinnedMeshBindlessResources nwbSkinnedMeshHeapBindlessResources(g_NwbSkinnedMeshPushConstants.payload1[NWB_SKINNED_MESH_PUSH_BINDLESS_RESOURCES_SLOT - 4u])
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

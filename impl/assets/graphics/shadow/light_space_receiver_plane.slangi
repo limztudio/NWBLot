@@ -17,22 +17,18 @@ float3 nwbLightSpacePositionQuantization(const float3 position){
 
 // Reconstruct the captured texel-center ray, then intersect the receiver's local plane along that ray.
 // Both projection types use the actual stored view basis; framebuffer Y increases opposite projected Y.
-bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel,
-    const float3 origin, const float3 receiverNormal, out float projectedDepth, out float linearDepth
-){
+bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel, const float3 origin, const float3 receiverNormal, out float projectedDepth, out float linearDepth){
     projectedDepth = 0.0;
     linearDepth = 0.0;
     if(!all(isfinite(origin)) || !all(isfinite(receiverNormal)) || any(view.map.xy == 0u))
         return false;
-    const float2 ndc = float2((float(pixel.x) + 0.5) * 2.0 / float(view.map.x) - 1.0,
-        1.0 - (float(pixel.y) + 0.5) * 2.0 / float(view.map.y));
+    const float2 ndc = float2((float(pixel.x) + 0.5) * 2.0 / float(view.map.x) - 1.0, 1.0 - (float(pixel.y) + 0.5) * 2.0 / float(view.map.y));
     const bool point = (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u;
     float3 direction;
     float3 relativeAnchor;
     float footprint;
     if(point){
-        direction = normalize(view.worldToClipRows[3].xyz
-            + view.worldToClipRows[0].xyz * ndc.x + view.worldToClipRows[1].xyz * ndc.y);
+        direction = normalize(view.worldToClipRows[3].xyz + view.worldToClipRows[0].xyz * ndc.x + view.worldToClipRows[1].xyz * ndc.y);
         relativeAnchor = view.originOrDirection.xyz - origin;
         footprint = 0.0;
     }
@@ -43,8 +39,7 @@ bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel,
         const float yScale = dot(yRow, yRow);
         if(xScale <= 0.0 || yScale <= 0.0 || !isfinite(xScale) || !isfinite(yScale))
             return false;
-        relativeAnchor = xRow * ((ndc.x - dot(view.worldToClipRows[0], float4(origin, 1.0))) / xScale)
-            + yRow * ((ndc.y - dot(view.worldToClipRows[1], float4(origin, 1.0))) / yScale);
+        relativeAnchor = xRow * ((ndc.x - dot(view.worldToClipRows[0], float4(origin, 1.0))) / xScale) + yRow * ((ndc.y - dot(view.worldToClipRows[1], float4(origin, 1.0))) / yScale);
         direction = -view.originOrDirection.xyz;
         footprint = min(2.0 / (sqrt(xScale) * float(view.map.x)), 2.0 / (sqrt(yScale) * float(view.map.y)));
     }
@@ -64,10 +59,8 @@ bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel,
     if(point)
         footprint = 2.0 * distance / float(max(view.map.x, view.map.y));
     const float3 storedPosition = origin - receiverNormal * NWB_SHADOW_RAY_MIN_DISTANCE;
-    const float3 positionError = nwbLightSpacePositionQuantization(storedPosition)
-        + abs(origin) * roundoff + normalError * NWB_SHADOW_RAY_MIN_DISTANCE;
-    const float planeError = dot(abs(receiverNormal), positionError) + normalError * length(relativeHit)
-        + roundoff * (length(relativeAnchor) + abs(distance));
+    const float3 positionError = nwbLightSpacePositionQuantization(storedPosition) + abs(origin) * roundoff + normalError * NWB_SHADOW_RAY_MIN_DISTANCE;
+    const float planeError = dot(abs(receiverNormal), positionError) + normalError * length(relativeHit) + roundoff * (length(relativeAnchor) + abs(distance));
     const float depthError = planeError / (abs(denominator) - denominatorError);
     // Never convert an unstable plane into an unbounded depth bias. A sub-texel uncertainty is the map's limit.
     if(!isfinite(depthError) || !isfinite(footprint) || footprint <= 0.0 || depthError > footprint)
@@ -109,9 +102,7 @@ bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel,
 
 // Compact penumbra estimates need only an approximate receiver distance, never a visibility threshold.
 // Omit invalid or grazing neighbors without the center/visibility path's quantization and footprint proof.
-bool nwbLightSpaceReceiverEstimateDepth(const NwbLightSpaceView view, const uint2 pixel,
-    const float3 origin, const float3 receiverNormal, out float linearDepth
-){
+bool nwbLightSpaceReceiverEstimateDepth(const NwbLightSpaceView view, const uint2 pixel, const float3 origin, const float3 receiverNormal, out float linearDepth){
     linearDepth = 0.0;
     if(!all(isfinite(origin)) || !all(isfinite(receiverNormal)) || any(view.map.xy == 0u))
         return false;
@@ -121,8 +112,7 @@ bool nwbLightSpaceReceiverEstimateDepth(const NwbLightSpaceView view, const uint
     float3 direction;
     float3 relativeAnchor;
     if(point){
-        direction = normalize(view.worldToClipRows[3].xyz
-            + view.worldToClipRows[0].xyz * ndc.x + view.worldToClipRows[1].xyz * ndc.y);
+        direction = normalize(view.worldToClipRows[3].xyz + view.worldToClipRows[0].xyz * ndc.x + view.worldToClipRows[1].xyz * ndc.y);
         relativeAnchor = view.originOrDirection.xyz - origin;
     }
     else{
@@ -132,8 +122,7 @@ bool nwbLightSpaceReceiverEstimateDepth(const NwbLightSpaceView view, const uint
         const float yScale = dot(yRow, yRow);
         if(xScale <= 0.0 || yScale <= 0.0 || !isfinite(xScale) || !isfinite(yScale))
             return false;
-        relativeAnchor = xRow * ((ndc.x - dot(view.worldToClipRows[0], float4(origin, 1.0))) / xScale)
-            + yRow * ((ndc.y - dot(view.worldToClipRows[1], float4(origin, 1.0))) / yScale);
+        relativeAnchor = xRow * ((ndc.x - dot(view.worldToClipRows[0], float4(origin, 1.0))) / xScale) + yRow * ((ndc.y - dot(view.worldToClipRows[1], float4(origin, 1.0))) / yScale);
         direction = -view.originOrDirection.xyz;
     }
     const float rawNormalError = sqrt(3.0) / 1024.0;
@@ -144,8 +133,7 @@ bool nwbLightSpaceReceiverEstimateDepth(const NwbLightSpaceView view, const uint
     const float distance = -dot(receiverNormal, relativeAnchor) / denominator;
     if(!isfinite(distance) || (point && distance <= 0.0))
         return false;
-    linearDepth = point ? distance : nwbLightSpaceLinearDepth(view, origin)
-        + dot(relativeAnchor + direction * distance, direction);
+    linearDepth = point ? distance : nwbLightSpaceLinearDepth(view, origin) + dot(relativeAnchor + direction * distance, direction);
     if(!isfinite(linearDepth) || linearDepth < 0.0)
         return false;
     const float viewDepth = point ? distance * dot(direction, view.worldToClipRows[3].xyz) : linearDepth;

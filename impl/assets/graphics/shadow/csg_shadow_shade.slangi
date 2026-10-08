@@ -29,12 +29,10 @@ bool nwbCsgShadowPixelRay(const NwbLightSpaceView view, const uint2 pixel, out f
     direction = float3(0.0);
     if(any(view.map.xy == 0u))
         return false;
-    const float2 ndc = float2((float(pixel.x) + 0.5) * 2.0 / float(view.map.x) - 1.0,
-        1.0 - (float(pixel.y) + 0.5) * 2.0 / float(view.map.y));
+    const float2 ndc = float2((float(pixel.x) + 0.5) * 2.0 / float(view.map.x) - 1.0, 1.0 - (float(pixel.y) + 0.5) * 2.0 / float(view.map.y));
     if((view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u){
         origin = view.originOrDirection.xyz;
-        direction = normalize(view.worldToClipRows[0].xyz * ndc.x + view.worldToClipRows[1].xyz * ndc.y
-            + view.worldToClipRows[3].xyz);
+        direction = normalize(view.worldToClipRows[0].xyz * ndc.x + view.worldToClipRows[1].xyz * ndc.y + view.worldToClipRows[3].xyz);
     }
     else{
         direction = -view.originOrDirection.xyz;
@@ -44,16 +42,14 @@ bool nwbCsgShadowPixelRay(const NwbLightSpaceView view, const uint2 pixel, out f
         const float upLength = dot(up, up);
         if(rightLength <= 0.0 || upLength <= 0.0)
             return false;
-        origin = right * ((ndc.x - view.worldToClipRows[0].w) / rightLength)
-            + up * ((ndc.y - view.worldToClipRows[1].w) / upLength) + direction * view.depthRange.z;
+        origin = right * ((ndc.x - view.worldToClipRows[0].w) / rightLength) + up * ((ndc.y - view.worldToClipRows[1].w) / upLength) + direction * view.depthRange.z;
     }
     return all(isfinite(origin)) && all(isfinite(direction));
 }
 
 void nwbCsgShadowStoreEvent(const uint pixel, const uint index, const NwbLightSpaceEvent event){
     const uint address = (pixel * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + index) * NWB_LIGHT_SPACE_EVENT_BYTES;
-    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address,
-        uint4(asuint(event.depth), event.instanceAndFacing, event.primitive, event.absorptionRG));
+    g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address, uint4(asuint(event.depth), event.instanceAndFacing, event.primitive, event.absorptionRG));
     g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + 16u, event.absorptionBInterface);
 }
 
@@ -153,10 +149,7 @@ bool nwbCsgShadowSubtractSpan(
         if(cut.depth.y < cursor.depth){
             NwbLightSpaceEvent boundary = nearEvent;
             boundary.depth = cut.depth.y;
-            if(!nwbCsgShadowEmitSpan(
-                pixel, transparent, instance, cursor, boundary, cursorCutter, cut.cutter,
-                rayOrigin, rayDirection, outputCount, opaqueDepth
-            ))
+            if(!nwbCsgShadowEmitSpan(pixel, transparent, instance, cursor, boundary, cursorCutter, cut.cutter, rayOrigin, rayDirection, outputCount, opaqueDepth))
                 return false;
         }
         if(cut.depth.x < cursor.depth){
@@ -213,8 +206,7 @@ bool nwbCsgShadowConvertEvents(const uint pixel, const NwbLightSpaceView view, c
             intervals[index] = (NwbCsgShadowInterval)0;
         uint intervalCount = 0u;
         const uint cutterCount = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(12u);
-        const bool bounded = range.x <= cutterCount && range.y <= cutterCount - range.x
-            && range.y <= NWB_CSG_SHADOW_MAX_CUTTERS;
+        const bool bounded = range.x <= cutterCount && range.y <= cutterCount - range.x && range.y <= NWB_CSG_SHADOW_MAX_CUTTERS;
         bool supported = bounded && (range.z & NWB_CSG_SHADOW_RECEIVER_UNSUPPORTED) == 0u;
         if(supported){
             for(uint index = 0u; index < range.y; ++index){

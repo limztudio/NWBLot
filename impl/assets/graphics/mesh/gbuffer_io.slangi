@@ -12,8 +12,7 @@
 #include "pixel_input.slangi"
 #include "../common/math.slangi"
 
-// Every raster material pixel shader uses the same heap-backed frame buffers as its mesh/compute producer. The
-// trace and cap-fill paths establish their own material-context route before including shared surface code.
+// Every raster material pixel shader uses the same heap-backed frame buffers as its mesh/compute producer. The trace and cap-fill paths establish their own material-context route before including shared surface code.
 #include "../bindless/bindless_heap_mesh.slangi"
 
 
@@ -101,9 +100,7 @@ ConstantBuffer<NwbMeshGBufferDrawConstants> g_NwbMeshGBufferDrawConstants;
 uint nwbMeshShadingModelId(){
     return (g_NwbMeshGBufferDrawConstants.dispatch[NWB_MESH_PUSH_DISPATCH_FLAGS] >> NWB_MESH_DISPATCH_SHADING_MODEL_SHIFT) & NWB_MESH_DISPATCH_SHADING_MODEL_MASK;
 }
-// The pixel stage reads the same per-draw push constant the mesh stage saw (it is visible to amplification,
-// mesh, and pixel), so a material's surface hook can load its typed .bind constants per-pixel via the instance
-// index + material-constant byte offset, exactly as the mesh runtime does.
+// The pixel stage reads the same per-draw push constant the mesh stage saw (it is visible to amplification, mesh, and pixel), so a material's surface hook can load its typed .bind constants per-pixel via the instance index + material-constant byte offset, exactly as the mesh runtime does.
 uint nwbMeshInstanceIndex(){
     return g_NwbMeshGBufferDrawConstants.dispatch[NWB_MESH_PUSH_DISPATCH_INSTANCE_INDEX];
 }
@@ -124,17 +121,13 @@ uint nwbMeshFrameViewHeapSlot(){
 }
 #endif
 
-// Raster material hooks receive the camera-to-surface ray through the same mesh-frame view buffer in every
-// generated pass. Keep its orientation explicit: BXDF view vectors are surface-to-camera, while this is incident.
+// Raster material hooks receive the camera-to-surface ray through the same mesh-frame view buffer in every generated pass. Keep its orientation explicit: BXDF view vectors are surface-to-camera, while this is incident.
 float3 nwbMeshCameraToSurfaceDirection(const float3 worldPosition){
     return nwbSafeNormalize(worldPosition - g_NwbMeshCameraPosition.xyz, float3(0.0, 0.0, 1.0));
 }
 
-// G-buffer write: first three targets smuggle shading-model id + two material BXDF params in their alphas
-// (lighting unpacks them); fourth target carries sanitized F0 + roughness.
-void nwbWriteMeshGBufferParams(
-    half3 baseColor, float3 normal, float3 worldPosition, half param0, half param1, half4 specularRoughness
-){
+// G-buffer write: first three targets smuggle shading-model id + two material BXDF params in their alphas (lighting unpacks them); fourth target carries sanitized F0 + roughness.
+void nwbWriteMeshGBufferParams(half3 baseColor, float3 normal, float3 worldPosition, half param0, half param1, half4 specularRoughness){
     outGBufferBaseColor = half4(clamp(baseColor, half3(0.0h), half3(1.0h)), half(float(nwbMeshShadingModelId())));
     outGBufferNormal = half4(nwbGBufferEncodeNormal(normal), half(param0));
     outGBufferWorldPosition = half4(half3(worldPosition), param1);

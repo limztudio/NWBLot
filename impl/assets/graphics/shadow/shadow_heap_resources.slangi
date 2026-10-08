@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Heap-only resource aliases shared by every shadow producer, denoise pass, and temporal merge.  The descriptor
-// class is global; these deliberately typed aliases only describe how an individual shader views that class.
+// Heap-only resource aliases shared by every shadow producer, denoise pass, and temporal merge.  The descriptor class is global; these deliberately typed aliases only describe how an individual shader views that class.
 
 
 #include "../bindless/bindless_heap.slangi"

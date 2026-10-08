@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Scalar coverage math shared by the surfel resolve, edge-aware upsample, and native tests. Irradiance remains
-// normalized; alpha separately controls the blend with ambient at the end of deferred lighting.
+// Scalar coverage math shared by the surfel resolve, edge-aware upsample, and native tests. Irradiance remains normalized; alpha separately controls the blend with ambient at the end of deferred lighting.
 
 
 #include "surfel_binding_slots.h"

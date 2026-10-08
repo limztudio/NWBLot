@@ -12,9 +12,7 @@
 #include "sw_binding_slots.h"
 
 #include "sw_shadow_traverse.slangi"
-// The per-pixel/per-frame low-discrepancy 2D sample + the cone jitter the soft opaque trace applies to the occlusion
-// ray so a physical source (a sun disk for directional, a source sphere for point/spot) casts a penumbra
-// (nwbShadowJitterCone; the soft pass also uses nwbShadowLowDiscrepancy2D directly).
+// The per-pixel/per-frame low-discrepancy 2D sample + the cone jitter the soft opaque trace applies to the occlusion ray so a physical source (a sun disk for directional, a source sphere for point/spot) casts a penumbra (nwbShadowJitterCone; the soft pass also uses nwbShadowLowDiscrepancy2D directly).
 #include "shadow_sampling.slangi"
 #include "shadow_ray_setup.slangi"
 
@@ -22,9 +20,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per light: one occlusion ray toward the light (mirrors the HW RayQuery setup). Returns per-channel transmittance.
-// `jitter` in [0,1)^2 cone-jitters inside the source cone (float2(0,0) = hard path); directional uses angular radius
-// params2.x, point/spot use asin(params2.y/dist). Zero radius collapses to the axis: the hard path is the soft path at zero width.
+// Per light: one occlusion ray toward the light (mirrors the HW RayQuery setup). Returns per-channel transmittance. `jitter` in [0,1)^2 cone-jitters inside the source cone (float2(0,0) = hard path); directional uses angular radius params2.x, point/spot use asin(params2.y/dist). Zero radius collapses to the axis: the hard path is the soft path at zero width.
 half3 nwbSwShadowLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light, const float2 jitter){
     float3 toLight;
     float tMin;

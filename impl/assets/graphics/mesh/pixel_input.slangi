@@ -54,21 +54,18 @@ static float3 inWorldPosition;
 static float3 inIncidentDirection;
 static float inPixelDepth;
 
-// Rasterizer-independent hook inputs (not SV_-decorated, so the trace can build them from hit attributes as the
-// rasterizer does from interpolated pixels). Exactly the consultable attributes, no more.
+// Rasterizer-independent hook inputs (not SV_-decorated, so the trace can build them from hit attributes as the rasterizer does from interpolated pixels). Exactly the consultable attributes, no more.
 struct NwbMeshSurfaceInputs{
     half4 color;
     float3 normal;
     float4 tangent;
     float2 uv0;
     float3 worldPosition;
-    // World-space direction of the ray arriving at this surface. Raster paths supply the normalized camera-to-surface
-    // direction from their mesh-frame view; the shadow trace supplies the occlusion ray (NwbShadowHit.rayDirection).
+    // World-space direction of the ray arriving at this surface. Raster paths supply the normalized camera-to-surface direction from their mesh-frame view; the shadow trace supplies the occlusion ray (NwbShadowHit.rayDirection).
     float3 incidentDirection;
 };
 
-// Loads the surface-input statics a hook reads. Raster and trace paths both route through here so the hook sees
-// the same inputs regardless of stage.
+// Loads the surface-input statics a hook reads. Raster and trace paths both route through here so the hook sees the same inputs regardless of stage.
 void nwbLoadMeshSurfaceInputs(NwbMeshSurfaceInputs inputs){
     inColor = inputs.color;
     inNormal = inputs.normal;
@@ -80,8 +77,7 @@ void nwbLoadMeshSurfaceInputs(NwbMeshSurfaceInputs inputs){
 
 void nwbLoadMeshPixelInput(NwbMeshPixelInput input, const float3 incidentDirection){
     NwbMeshSurfaceInputs inputs;
-    // Raster interfaces use float for Vulkan portability. Narrow color back to the material's FP16 representation;
-    // normals and tangents remain float for material and geometry math.
+    // Raster interfaces use float for Vulkan portability. Narrow color back to the material's FP16 representation; normals and tangents remain float for material and geometry math.
     inputs.color = half4(input.color);
     inputs.normal = float3(input.normal);
     inputs.tangent = float4(input.tangent);

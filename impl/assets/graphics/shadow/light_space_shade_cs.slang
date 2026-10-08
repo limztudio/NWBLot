@@ -27,8 +27,7 @@ void nwbLightSpaceInvalidateCrossing(const uint address, const uint instance, co
 // Capture and shading use the same bounded records. The graph orders raw crossing writes before this in-place optical conversion.
 [numthreads(NWB_LIGHT_SPACE_SHADE_GROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
-    const uint pixelIndex = dispatchThreadID.x
-        + dispatchThreadID.y * (NWB_LIGHT_SPACE_SHADE_MAX_GROUPS_X * NWB_LIGHT_SPACE_SHADE_GROUP_SIZE);
+    const uint pixelIndex = dispatchThreadID.x + dispatchThreadID.y * (NWB_LIGHT_SPACE_SHADE_MAX_GROUPS_X * NWB_LIGHT_SPACE_SHADE_GROUP_SIZE);
     if(pixelIndex >= g_NwbLightSpacePush.width)
         return;
     const uint count = nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * 4u);
@@ -74,16 +73,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float3 geometric = cross(p1 - p0, p2 - p0);
 #if NWB_LIGHT_SPACE_CSG_SHADE
         if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) == 0u){
-            const float3 towardLight = (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u
-                ? view.originOrDirection.xyz - nwbLightSpaceWorldPosition(p0, instanceIndex) : view.originOrDirection.xyz;
+            const float3 towardLight = (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u ? view.originOrDirection.xyz - nwbLightSpaceWorldPosition(p0, instanceIndex) : view.originOrDirection.xyz;
             const float3 objectDirection = nwbSwBvhTransformVector(instance, towardLight);
             if(!all(isfinite(geometric)) || !all(isfinite(objectDirection))){
                 nwbLightSpaceInvalidateCrossing(address, instanceIndex, primitive);
                 continue;
             }
             const uint facing = dot(geometric, objectDirection) < 0.0 ? NWB_LIGHT_SPACE_EVENT_ENTERING : 0u;
-            g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address,
-                uint4(raw.x, instanceIndex | facing, primitive, 0u));
+            g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address, uint4(raw.x, instanceIndex | facing, primitive, 0u));
             g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + 16u, 0u);
             continue;
         }
@@ -106,8 +103,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const float3 n2 = float3(a2.normal);
         const float3 normal = n0 * weights.x + n1 * weights.y + n2 * weights.z;
         const float spread = max(max(dot(n0 - n1, n0 - n1), dot(n1 - n2, n1 - n2)), dot(n2 - n0, n2 - n0));
-        const float3 towardLight = (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u
-            ? normalize(view.originOrDirection.xyz - world) : view.originOrDirection.xyz;
+        const float3 towardLight = (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u ? normalize(view.originOrDirection.xyz - world) : view.originOrDirection.xyz;
         const float3 objectDirection = nwbSwBvhTransformVector(instance, towardLight);
         NwbShadowHit hit;
         hit.meshInstanceIndex = material.meshInstanceIndex;
@@ -122,14 +118,11 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const half smoothCosI = nwbShadowCosineToRay(hit.worldNormal, towardLight);
         const half fresnel = nwbShadowFresnelTransmittedFraction(surface.refractionIor, lerp(cosI, smoothCosI, half(smoothstep(1e-5, 2e-3, spread))));
         const half3 absorption = nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint);
-        const bool valid = all(isfinite(world)) && isfinite(depth)
-            && all(isfinite(float3(absorption))) && isfinite(float(fresnel));
+        const bool valid = all(isfinite(world)) && isfinite(depth) && all(isfinite(float3(absorption))) && isfinite(float(fresnel));
         // A nonfinite depth invalidates this texel at resolve, with the same software fallback as capture overflow.
         const uint facing = dot(geometric, objectDirection) < 0.0 ? NWB_LIGHT_SPACE_EVENT_ENTERING : 0u;
-        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address, uint4(valid ? asuint(depth) : 0x7fc00000u,
-            instanceIndex | facing, primitive, f32tof16(float(absorption.x)) | (f32tof16(float(absorption.y)) << 16u)));
-        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + 16u,
-            f32tof16(float(absorption.z)) | (f32tof16(float(fresnel)) << 16u));
+        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address, uint4(valid ? asuint(depth) : 0x7fc00000u, instanceIndex | facing, primitive, f32tof16(float(absorption.x)) | (f32tof16(float(absorption.y)) << 16u)));
+        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + 16u, f32tof16(float(absorption.z)) | (f32tof16(float(fresnel)) << 16u));
     }
     // Order each retained texel once. Receiver threads stream these records without private arrays or repeated sorting.
     for(uint index = 1u; index < count; ++index){

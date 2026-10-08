@@ -13,8 +13,7 @@ struct NwbCsgRemovedIntervalCandidate{
     uint source;
 };
 
-// Every input/output texture is a CSG StorageImage heap entry. The local binding numbers remain intentional gaps;
-// the heap-selected CSG context resolves the typed array aliases for this dispatch.
+// Every input/output texture is a CSG StorageImage heap entry. The local binding numbers remain intentional gaps; the heap-selected CSG context resolves the typed array aliases for this dispatch.
 #define g_NwbCsgBackCapNormal (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.x))
 #define g_NwbCsgIntervalDepth (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.y))
 #define g_NwbCsgIntervalId (nwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgPeelSlots.z))
@@ -189,10 +188,7 @@ void nwbCsgIntervalCombineWriteEntries(
         const float2 cutterLinearDepth = cutterDepth.zw;
         const float removedEnterLinearDepth = max(spanDepth.x, cutterLinearDepth.x);
         const float removedExitLinearDepth = min(spanDepth.y, cutterLinearDepth.y);
-        const bool backCapVisible =
-            cutterLinearDepth.y + NWB_CSG_INTERVAL_OVERLAP_EPSILON >= spanDepth.x
-            && cutterLinearDepth.y <= spanDepth.y + NWB_CSG_INTERVAL_OVERLAP_EPSILON
-        ;
+        const bool backCapVisible = cutterLinearDepth.y + NWB_CSG_INTERVAL_OVERLAP_EPSILON >= spanDepth.x && cutterLinearDepth.y <= spanDepth.y + NWB_CSG_INTERVAL_OVERLAP_EPSILON;
         const uint entryFlags = backCapVisible ? NWB_CSG_REMOVED_INTERVAL_BACK_CAP_VISIBLE_FLAG : 0u;
         const half4 capNormal = half4(g_NwbCsgBackCapNormal.Load(intervalTexel));
         g_NwbCsgRemovedIntervalDepth[texel] = float4(cutterDepth.xy, removedEnterLinearDepth, removedExitLinearDepth);

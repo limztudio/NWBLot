@@ -22,8 +22,7 @@ struct NwbDielectricInterface{
     bool totalInternalReflection;
 };
 
-// Exact unpolarized dielectric Fresnel + Snell (unit direction, normal faces incident medium; explicit eta ratio;
-// radiance (etaI/etaT)^2 cancels over air/glass/air; photon flux differs). Ref: pbr-book Dielectric_BSDF.
+// Exact unpolarized dielectric Fresnel + Snell (unit direction, normal faces incident medium; explicit eta ratio; radiance (etaI/etaT)^2 cancels over air/glass/air; photon flux differs). Ref: pbr-book Dielectric_BSDF.
 NwbDielectricInterface nwbDielectricTransmit(
     const float3 direction,
     const float3 opposingNormal,
@@ -36,8 +35,7 @@ NwbDielectricInterface nwbDielectricTransmit(
         result.radianceTransmission = half(1.0h);
         return result;
     }
-    // Cosine/sine factors are saturate/sqrt-bounded (0, 1); eta ratios for authored IORs (1..4) stay below 4.
-    // Half math is sufficient here; widen only at the float refract direction below.
+    // Cosine/sine factors are saturate/sqrt-bounded (0, 1); eta ratios for authored IORs (1..4) stay below 4. Half math is sufficient here; widen only at the float refract direction below.
     const half cosineIncident = half(saturate(-dot(direction, opposingNormal)));
     const half eta = half(etaIncident) / half(etaTransmitted);
     const half sineTransmittedSquared = eta * eta * max(half(0.0h), half(1.0h) - cosineIncident * cosineIncident);
@@ -48,21 +46,15 @@ NwbDielectricInterface nwbDielectricTransmit(
         return result;
     }
     const half cosineTransmitted = half(sqrt(max(0.0, 1.0 - float(sineTransmittedSquared))));
-    const half perpendicular = (half(etaIncident) * cosineIncident - half(etaTransmitted) * cosineTransmitted)
-        / (half(etaIncident) * cosineIncident + half(etaTransmitted) * cosineTransmitted);
-    const half parallel = (half(etaTransmitted) * cosineIncident - half(etaIncident) * cosineTransmitted)
-        / (half(etaTransmitted) * cosineIncident + half(etaIncident) * cosineTransmitted);
+    const half perpendicular = (half(etaIncident) * cosineIncident - half(etaTransmitted) * cosineTransmitted) / (half(etaIncident) * cosineIncident + half(etaTransmitted) * cosineTransmitted);
+    const half parallel = (half(etaTransmitted) * cosineIncident - half(etaIncident) * cosineTransmitted) / (half(etaTransmitted) * cosineIncident + half(etaIncident) * cosineTransmitted);
     result.reflectedFraction = half(saturate(half(0.5h) * (perpendicular * perpendicular + parallel * parallel)));
-    result.direction = nwbSafeNormalize(
-        float(eta) * direction + (float(eta) * float(cosineIncident) - float(cosineTransmitted)) * opposingNormal,
-        direction
-    );
+    result.direction = nwbSafeNormalize(float(eta) * direction + (float(eta) * float(cosineIncident) - float(cosineTransmitted)) * opposingNormal, direction);
     result.radianceTransmission = (half(1.0h) - result.reflectedFraction) * (eta * eta);
     return result;
 }
 
-// The authored RGB tint specifies survival over one world unit, matching the existing transparent-material
-// contract. Homogeneous closed volumes retain this coefficient from their entry boundary.
+// The authored RGB tint specifies survival over one world unit, matching the existing transparent-material contract. Homogeneous closed volumes retain this coefficient from their entry boundary.
 half3 nwbDielectricAbsorptionCoefficient(const half3 unitSurvival){
     return -log(clamp(unitSurvival, half3(half(1e-4h)), half3(1.0h)));
 }

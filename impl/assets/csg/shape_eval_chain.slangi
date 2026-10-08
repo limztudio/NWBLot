@@ -3,8 +3,7 @@
 
 
 // Intentionally no include guard: every shape evaluator includes this once to append itself to the evaluator chain.
-// The including file must provide the two stable function identifiers below, then update
-// NWB_CSG_SHAPE_EVAL_CHAIN to its concrete try-function after this body is emitted.
+// The including file must provide the two stable function identifiers below, then update NWB_CSG_SHAPE_EVAL_CHAIN to its concrete try-function after this body is emitted.
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

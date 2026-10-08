@@ -122,8 +122,7 @@ NwbCausticSplat nwbCausticTracePhoton(NwbCausticPhoton photon){
 
         ++refractiveCrossings;
 
-        // Schlick requires the air-side cosine on both entry and exit. The Fresnel cosine is a (0, 1)
-        // bounded factor input, so half arithmetic is sufficient here.
+        // Schlick requires the air-side cosine on both entry and exit. The Fresnel cosine is a (0, 1) bounded factor input, so half arithmetic is sufficient here.
         const half fresnelCosI = inside ? half(abs(dot(nwbSafeNormalize(refracted, direction), normal))) : half(cosI);
         flux *= nwbShadowFresnelTransmittedFraction(hit.ior, fresnelCosI);
 
@@ -179,9 +178,7 @@ float2 nwbCausticEmissionJitter(uint photonIndex){
     return float2((float)(h0 >> 8) * (1.0 / 16777216.0), (float)(h1 >> 8) * (1.0 / 16777216.0));
 }
 
-// Interleaved temporal phases cover every full-grid cell while retaining jitter keyed to its physical cell. The
-// bootstrap path preserves the original two-phase checkerboard; the converged path uses four spatially regular 2x2
-// phases. phaseCount = 1 is the non-temporal full-grid fallback.
+// Interleaved temporal phases cover every full-grid cell while retaining jitter keyed to its physical cell. The bootstrap path preserves the original two-phase checkerboard; the converged path uses four spatially regular 2x2 phases. phaseCount = 1 is the non-temporal full-grid fallback.
 float2 nwbCausticJitteredTemporalCell(const uint photonIndex, const uint gridSide, const uint frameIndex, const uint temporalPhaseCount){
     const uint fullGridSide = max(gridSide, 1u);
     const uint phaseCount = temporalPhaseCount == NWB_CAUSTIC_TEMPORAL_CONVERGED_PHASE_COUNT

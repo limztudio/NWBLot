@@ -27,10 +27,7 @@ NwbUiOutputPixelOutput main(NwbUiOutputPixelInput input){
     const SamplerState sampler = nwbHeapSampler(g_NwbUiOutputPushConstants.samplerSlot);
     // The sampled RGB already includes UI coverage over black. SDR encoding is supplied by the sRGB attachment.
     const float3 linearUi = texture.SampleLevel(sampler, input.uv, 0.0).rgb;
-    const float3 presentationColor = g_NwbUiOutputPushConstants.presentationMode == NWB_UI_PRESENTATION_HDR10
-        ? nwbHdr10EncodeUiLinear(linearUi)
-        : linearUi
-    ;
+    const float3 presentationColor = g_NwbUiOutputPushConstants.presentationMode == NWB_UI_PRESENTATION_HDR10 ? nwbHdr10EncodeUiLinear(linearUi) : linearUi;
 
     NwbUiOutputPixelOutput output;
     output.color = float4(presentationColor, 1.0);

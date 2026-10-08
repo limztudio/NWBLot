@@ -14,8 +14,7 @@ struct NwbCsgReceiverSurfaceEvent{
     uint faceSign;
 };
 
-// The event read and span write images share the global StorageImage table. Bindings 5/6/9/10 remain ABI gaps; the
-// heap-selected CSG context resolves the correct typed array views.
+// The event read and span write images share the global StorageImage table. Bindings 5/6/9/10 remain ABI gaps; the heap-selected CSG context resolves the correct typed array views.
 #define g_NwbCsgReceiverEventData (nwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgPeelSlots.w))
 #define g_NwbCsgReceiverEventCount (nwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgSpanSlots.x))
 #define g_NwbCsgReceiverSpanData (nwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgSpanSlots.y))
@@ -59,8 +58,7 @@ uint2 nwbCsgReceiverSpanBuildWorkExtent(){
 
 uint nwbCsgReceiverSpanBuildLoadEventCount(const uint2 pixel, const uint eventLayerCount, inout uint inOutFlags){
     const uint eventCount = g_NwbCsgReceiverEventCount.Load(int3(int2(pixel), 0));
-    // The event emit pass keeps counting past the storable layer budget, so a raw count above the
-    // budget is exactly the overflow condition; no separate event-flags texture is required.
+    // The event emit pass keeps counting past the storable layer budget, so a raw count above the budget is exactly the overflow condition; no separate event-flags texture is required.
     if(eventCount > eventLayerCount)
         inOutFlags |= NWB_CSG_RECEIVER_SPAN_EVENT_OVERFLOW_FLAG;
 
@@ -145,9 +143,8 @@ void nwbCsgReceiverSpanBuildPairEvents(
                 spanReceiverIndex = surfaceEvent.receiverIndex;
                 winding = 1u;
             }
-            else{
+            else
                 inOutFlags |= NWB_CSG_RECEIVER_SPAN_AMBIGUOUS_FLAG;
-            }
             continue;
         }
 

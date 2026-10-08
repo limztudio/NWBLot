@@ -48,8 +48,7 @@ half3 nwbHwShadowEvaluateContinuation(const RayDesc ray){
     NwbHardwareTransparentCrossing previous = (NwbHardwareTransparentCrossing)0;
     bool hasPrevious = false;
     NwbHardwareTransparentCrossing next;
-    // A complete scan selects each next event. The original segment never advances, retaining coincident instances
-    // and every face in a distance cluster. Material dispatch happens only after the query has completed.
+    // A complete scan selects each next event. The original segment never advances, retaining coincident instances and every face in a distance cluster. Material dispatch happens only after the query has completed.
     while(nwbHwShadowFindNextCrossing(ray, hasPrevious, previous, next)){
         nwbHwShadowConsumeCrossing(stream, ray, next);
         previous = next;

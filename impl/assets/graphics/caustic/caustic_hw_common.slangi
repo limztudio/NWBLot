@@ -25,8 +25,7 @@
 [[vk::push_constant]]
 ConstantBuffer<NwbCausticPhotonPushConstants> g_NwbCausticHwPushConstants;
 
-// The shared scene-shading CB + light list are selected by the frame selector payload in the UniformBuffer heap. The
-// per-hit surface dispatch reads the same shadow-owned material buffers as the SW path through the heap selector below.
+// The shared scene-shading CB + light list are selected by the frame selector payload in the UniformBuffer heap. The per-hit surface dispatch reads the same shadow-owned material buffers as the SW path through the heap selector below.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed alias of the global UniformBuffer descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
@@ -37,8 +36,7 @@ ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapCaust
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbCausticHwBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbCausticHwBindlessResources.avboitSlots.w
 
-// Route the per-hit surface dispatch through the heap-selected typed-word and mesh-instance buffers. The caustic
-// push block selects its own mesh-view heap slot.
+// Route the per-hit surface dispatch through the heap-selected typed-word and mesh-instance buffers. The caustic push block selects its own mesh-view heap slot.
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbCausticHwMaterialContextSlots.sceneSlots.w;
 }
@@ -78,9 +76,7 @@ struct NwbCausticHwPayload{
     uint isRefractive;
 };
 
-// The caustic-specific producer inputs share the global heap's StorageBuffer / UniformBuffer tables with the trace
-// material context and mesh-frame view. Their slots are uniform for one ray dispatch and ride the photon push block,
-// so no NonUniformResourceIndex decoration is needed here.
+// The caustic-specific producer inputs share the global heap's StorageBuffer / UniformBuffer tables with the trace material context and mesh-frame view. Their slots are uniform for one ray dispatch and ride the photon push block, so no NonUniformResourceIndex decoration is needed here.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed aliases of the global heap descriptor tables.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
@@ -93,15 +89,12 @@ ConstantBuffer<NwbCausticPhotonView, Std140DataLayout> g_NwbHeapCausticHwViews[]
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The fixed-function intersector supplies triangle/barycentric data; its InstanceID selects the heap-backed material
-// record through the UniformBuffer heap payload. Per-corner attributes remain separately addressed by that record's
-// heap slot.
+// The fixed-function intersector supplies triangle/barycentric data; its InstanceID selects the heap-backed material record through the UniformBuffer heap payload. Per-corner attributes remain separately addressed by that record's heap slot.
 StructuredBuffer<NwbRtInstanceMaterial, Std430DataLayout> nwbCausticHwInstanceMaterials(){
     return nwbHeapRtInstanceMaterials(g_NwbCausticHwMaterialContextSlots.sceneSlots.z);
 }
 
-// The closest-hit reads corner attributes through the material record's global heap slot. The shared backing buffers
-// remain transitioned for those heap reads; the world hit point comes from WorldRayOrigin()+RayTCurrent()*WorldRayDirection().
+// The closest-hit reads corner attributes through the material record's global heap slot. The shared backing buffers remain transitioned for those heap reads; the world hit point comes from WorldRayOrigin()+RayTCurrent()*WorldRayDirection().
 
 Texture2D<float4> nwbCausticHwGbufferDepth(){
     return nwbHeapSampledImage2D(g_NwbCausticHwPushConstants.depthSlot);

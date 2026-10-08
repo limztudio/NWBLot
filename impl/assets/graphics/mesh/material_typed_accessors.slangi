@@ -10,8 +10,7 @@
 
 
 #include "material_typed_constants.h"
-// The typed-load families below unpack half-precision values (nwbUnpackHalf2x16); pull in the math helpers
-// directly so this header is self-sufficient.
+// The typed-load families below unpack half-precision values (nwbUnpackHalf2x16); pull in the math helpers directly so this header is self-sufficient.
 #include <common/math.slangi>
 
 

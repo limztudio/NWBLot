@@ -37,8 +37,7 @@ bool nwbSceneRefitAxis(const float4 row, const float3 localMin, const float3 loc
     const float margin = magnitude * relativeError + flushError;
     minimum = ((row.w + low.x) + low.y) + low.z - margin;
     maximum = ((row.w + high.x) + high.y) + high.z + margin;
-    return all(isfinite(row)) && all(isfinite(first)) && all(isfinite(second))
-        && isfinite(minimum) && isfinite(maximum) && minimum <= maximum;
+    return all(isfinite(row)) && all(isfinite(first)) && all(isfinite(second)) && isfinite(minimum) && isfinite(maximum) && minimum <= maximum;
 }
 
 [shader("compute")]

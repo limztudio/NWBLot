@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared BXDF input: deferred unpacks from G-buffer, AVBOIT builds from the surface hook; both feed nwbDeferredDispatchBxdf.
-// param0/1 are the material-packed alpha channels; shadingModel selects the BXDF. Linear radiance when required.
+// Shared BXDF input: deferred unpacks from G-buffer, AVBOIT builds from the surface hook; both feed nwbDeferredDispatchBxdf. param0/1 are the material-packed alpha channels; shadingModel selects the BXDF. Linear radiance when required.
 struct NwbBxdfSurface{
     half3  baseColor;
     float3 normal;          // world space, normalized
@@ -20,9 +19,7 @@ struct NwbBxdfSurface{
     half   param0;
     half   param1;
     bool   isBackground;    // no geometry at this pixel (sky); lighting shaders pass the base color through
-    // Indirect diffuse irradiance for this surface. The deferred path fills it from the resolved surfel-GI
-    // irradiance texture, while disabled/transparent paths receive the hemiAmbient fallback. Materials decide how
-    // to consume it (lambert adds albedo*irradiance; toon may quantize).
+    // Indirect diffuse irradiance for this surface. The deferred path fills it from the resolved surfel-GI irradiance texture, while disabled/transparent paths receive the hemiAmbient fallback. Materials decide how to consume it (lambert adds albedo*irradiance; toon may quantize).
     half3  indirectIrradiance;
 };
 

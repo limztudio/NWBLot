@@ -26,9 +26,7 @@ struct NwbSkinnedMeshBoundsPushConstants{
 ConstantBuffer<NwbSkinnedMeshBoundsPushConstants> g_NwbSkinnedMeshBoundsPushConstants;
 
 // The persistent stream-slot payload is selected from the global UniformBuffer heap by payload0.y.
-#define g_NwbSkinnedMeshBoundsBindlessResources nwbSkinnedMeshHeapBindlessResources(\
-    g_NwbSkinnedMeshBoundsPushConstants.payload0[NWB_SKINNED_MESH_BOUNDS_PUSH_BINDLESS_RESOURCES_SLOT]\
-)
+#define g_NwbSkinnedMeshBoundsBindlessResources nwbSkinnedMeshHeapBindlessResources(g_NwbSkinnedMeshBoundsPushConstants.payload0[NWB_SKINNED_MESH_BOUNDS_PUSH_BINDLESS_RESOURCES_SLOT])
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -103,8 +101,7 @@ bool nwbSkinnedMeshBoundsFaceNormal(
     float3 p0 = float3(0.0);
     float3 p1 = float3(0.0);
     float3 p2 = float3(0.0);
-    if(
-        !nwbSkinnedMeshBoundsLoadLocalVertexPosition(meshlet, decodeInfo, localVertices.x, p0)
+    if(!nwbSkinnedMeshBoundsLoadLocalVertexPosition(meshlet, decodeInfo, localVertices.x, p0)
         || !nwbSkinnedMeshBoundsLoadLocalVertexPosition(meshlet, decodeInfo, localVertices.y, p1)
         || !nwbSkinnedMeshBoundsLoadLocalVertexPosition(meshlet, decodeInfo, localVertices.z, p2)
     ){
@@ -134,8 +131,7 @@ void nwbSkinnedMeshBoundsStore(const uint meshletIndex, const float4 sphere, con
 
 void nwbSkinnedMeshBoundsReduceMinMax(const uint groupThreadIndex){
 #if NWB_SKINNED_MESH_BOUNDS_USE_WAVE_REDUCE
-    // Two-stage fold: intra-wave via WaveActiveMin/Max with no barrier (per-lane slots), then a log2 tree over
-    // per-wave results (8 barriers -> 2 for a 128-thread group).
+    // Two-stage fold: intra-wave via WaveActiveMin/Max with no barrier (per-lane slots), then a log2 tree over per-wave results (8 barriers -> 2 for a 128-thread group).
     const uint waveLaneCount = WaveGetLaneCount();
     const uint laneIndex = WaveGetLaneIndex();
     const uint waveIndex = groupThreadIndex / waveLaneCount;
@@ -148,14 +144,8 @@ void nwbSkinnedMeshBoundsReduceMinMax(const uint groupThreadIndex){
     GroupMemoryBarrierWithGroupSync();
     for(uint stride = (NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X / waveLaneCount) >> 1u; stride > 0u; stride >>= 1u){
         if(groupThreadIndex < stride){
-            g_NwbSkinnedMeshBoundsMin[groupThreadIndex] = min(
-                g_NwbSkinnedMeshBoundsMin[groupThreadIndex],
-                g_NwbSkinnedMeshBoundsMin[groupThreadIndex + stride]
-            );
-            g_NwbSkinnedMeshBoundsMax[groupThreadIndex] = max(
-                g_NwbSkinnedMeshBoundsMax[groupThreadIndex],
-                g_NwbSkinnedMeshBoundsMax[groupThreadIndex + stride]
-            );
+            g_NwbSkinnedMeshBoundsMin[groupThreadIndex] = min(g_NwbSkinnedMeshBoundsMin[groupThreadIndex], g_NwbSkinnedMeshBoundsMin[groupThreadIndex + stride]);
+            g_NwbSkinnedMeshBoundsMax[groupThreadIndex] = max(g_NwbSkinnedMeshBoundsMax[groupThreadIndex], g_NwbSkinnedMeshBoundsMax[groupThreadIndex + stride]);
         }
         GroupMemoryBarrierWithGroupSync();
     }
@@ -163,14 +153,8 @@ void nwbSkinnedMeshBoundsReduceMinMax(const uint groupThreadIndex){
     GroupMemoryBarrierWithGroupSync();
     for(uint stride = NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X >> 1u; stride > 0u; stride >>= 1u){
         if(groupThreadIndex < stride){
-            g_NwbSkinnedMeshBoundsMin[groupThreadIndex] = min(
-                g_NwbSkinnedMeshBoundsMin[groupThreadIndex],
-                g_NwbSkinnedMeshBoundsMin[groupThreadIndex + stride]
-            );
-            g_NwbSkinnedMeshBoundsMax[groupThreadIndex] = max(
-                g_NwbSkinnedMeshBoundsMax[groupThreadIndex],
-                g_NwbSkinnedMeshBoundsMax[groupThreadIndex + stride]
-            );
+            g_NwbSkinnedMeshBoundsMin[groupThreadIndex] = min(g_NwbSkinnedMeshBoundsMin[groupThreadIndex], g_NwbSkinnedMeshBoundsMin[groupThreadIndex + stride]);
+            g_NwbSkinnedMeshBoundsMax[groupThreadIndex] = max(g_NwbSkinnedMeshBoundsMax[groupThreadIndex], g_NwbSkinnedMeshBoundsMax[groupThreadIndex + stride]);
         }
         GroupMemoryBarrierWithGroupSync();
     }
@@ -212,20 +196,14 @@ void nwbSkinnedMeshBoundsReduceRadius(const uint groupThreadIndex){
     GroupMemoryBarrierWithGroupSync();
     for(uint stride = (NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X / waveLaneCount) >> 1u; stride > 0u; stride >>= 1u){
         if(groupThreadIndex < stride)
-            g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex] = max(
-                g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex],
-                g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex + stride]
-            );
+            g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex] = max(g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex], g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex + stride]);
         GroupMemoryBarrierWithGroupSync();
     }
 #else
     GroupMemoryBarrierWithGroupSync();
     for(uint stride = NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X >> 1u; stride > 0u; stride >>= 1u){
         if(groupThreadIndex < stride)
-            g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex] = max(
-                g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex],
-                g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex + stride]
-            );
+            g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex] = max(g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex], g_NwbSkinnedMeshBoundsRadiusSq[groupThreadIndex + stride]);
         GroupMemoryBarrierWithGroupSync();
     }
 #endif
@@ -290,20 +268,14 @@ void nwbSkinnedMeshBoundsReduceConeCutoff(const uint groupThreadIndex){
     GroupMemoryBarrierWithGroupSync();
     for(uint stride = (NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X / waveLaneCount) >> 1u; stride > 0u; stride >>= 1u){
         if(groupThreadIndex < stride)
-            g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex] = min(
-                g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex],
-                g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex + stride]
-            );
+            g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex] = min(g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex], g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex + stride]);
         GroupMemoryBarrierWithGroupSync();
     }
 #else
     GroupMemoryBarrierWithGroupSync();
     for(uint stride = NWB_SKINNED_MESH_BOUNDS_GROUP_SIZE_X >> 1u; stride > 0u; stride >>= 1u){
         if(groupThreadIndex < stride)
-            g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex] = min(
-                g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex],
-                g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex + stride]
-            );
+            g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex] = min(g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex], g_NwbSkinnedMeshBoundsConeCutoff[groupThreadIndex + stride]);
         GroupMemoryBarrierWithGroupSync();
     }
 #endif
@@ -349,10 +321,7 @@ void main(uint3 groupThreadID : SV_GroupThreadID, uint3 groupID : SV_GroupID){
 
     // Bounds proof cannot discard a nonfinite position even though sphere/cone reconstruction keeps its existing policy.
     if(groupThreadIndex == 0u){
-        nwbSkinnedMeshBoundsStoreLocalPartial(
-            meshletIndex, g_NwbSkinnedMeshBoundsMin[0u], g_NwbSkinnedMeshBoundsMax[0u],
-            g_NwbSkinnedMeshBoundsValidPositionCount[0u] == positionCount
-        );
+        nwbSkinnedMeshBoundsStoreLocalPartial(meshletIndex, g_NwbSkinnedMeshBoundsMin[0u], g_NwbSkinnedMeshBoundsMax[0u], g_NwbSkinnedMeshBoundsValidPositionCount[0u] == positionCount);
     }
 
     if(g_NwbSkinnedMeshBoundsValidPositionCount[0u] == 0u){

@@ -24,12 +24,13 @@ int3 nwbSurfelCellCoord(const float3 worldPosition, const float cellSize){
 }
 
 
-// Fold a 3D cell coordinate to a bucket index in [0, cellCount). cellCount MUST be a power of two so the mask works.
+// Fold a 3D cell coordinate to a bucket index in [0, cellCount]. cellCount MUST be a power of two so the mask works.
 uint nwbSurfelHashCell(const int3 cell, const uint cellCount){
     const uint hash =
         (uint(cell.x) * 73856093u)
         ^ (uint(cell.y) * 19349663u)
-        ^ (uint(cell.z) * 83492791u);
+        ^ (uint(cell.z) * 83492791u)
+    ;
     return hash & (cellCount - 1u);
 }
 

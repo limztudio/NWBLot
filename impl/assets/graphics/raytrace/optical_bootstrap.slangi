@@ -22,9 +22,8 @@ struct NwbOpticalBootstrapEvent{
     uint entering;
 };
 
-// The transparent union is conservative, including unspecified transparent materials. Outside it, air is
-// proven without a ray. Inside it, replay one complete exterior-to-origin crossing list; neither opaque scene
-// occluders nor arbitrary traversal order can establish containment. Candidate collection never commits hits.
+// The transparent union is conservative, including unspecified transparent materials. Outside it, air is proven without a ray.
+// Inside it, replay one complete exterior-to-origin crossing list; neither opaque scene occluders nor arbitrary traversal order can establish containment. Candidate collection never commits hits.
 bool nwbOpticalBootstrap(
     const NwbOpticalTraceConfig config,
     const float3 origin,
@@ -57,10 +56,7 @@ bool nwbOpticalBootstrap(
     ray.Direction = bootstrapDirection;
     ray.TMin = 0.0;
     ray.TMax = bootstrapDistance;
-    if(
-        !isfinite(bootstrapDistance) || bootstrapDistance <= 0.0 || !all(isfinite(ray.Origin))
-        || !(any(ray.Origin < boundsMin) || any(ray.Origin > boundsMax))
-    ){
+    if(!isfinite(bootstrapDistance) || bootstrapDistance <= 0.0 || !all(isfinite(ray.Origin)) || !(any(ray.Origin < boundsMin) || any(ray.Origin > boundsMax))){
         result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
         return false;
     }
@@ -96,8 +92,7 @@ bool nwbOpticalBootstrap(
                 config.instanceMaterialHeapSlot, ray.Origin, ray.Direction, query.CandidateTriangleRayT(), instance,
                 query.CandidatePrimitiveIndex(), query.CandidateTriangleBarycentrics(), query.CandidateWorldToObject3x4()
             );
-            // A flat alpha surface cannot contain a medium. An unspecified refractor may be open or displaced;
-            // without an authored volume contract it cannot prove that the initial origin is in air.
+            // A flat alpha surface cannot contain a medium. An unspecified refractor may be open or displaced; without an authored volume contract it cannot prove that the initial origin is in air.
             if(!isfinite(float(hit.surface.refractionIor)) || hit.surface.refractionIor != half(1.0)){
                 query.Abort();
                 result.termination = NWB_OPTICAL_TERMINATION_UNSUPPORTED;
@@ -112,9 +107,7 @@ bool nwbOpticalBootstrap(
             return false;
         }
         const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(config.instanceMaterialHeapSlot)[instance];
-        const float3 normal = nwbRayTraceTriangleGeometricNormal(
-            material, query.CandidatePrimitiveIndex(), query.CandidateWorldToObject3x4()
-        );
+        const float3 normal = nwbRayTraceTriangleGeometricNormal(material, query.CandidatePrimitiveIndex(), query.CandidateWorldToObject3x4());
         const float facing = dot(bootstrapDirection, normal);
         const float distance = query.CandidateTriangleRayT();
         if(!isfinite(facing) || abs(facing) <= 1e-6 || bootstrapDistance - distance <= tolerance){
@@ -137,16 +130,14 @@ bool nwbOpticalBootstrap(
 #endif
     }
     if(!complete){
-        // Once all candidate slots are consumed, stopping is conservative even if this happened to be the final
-        // candidate. A further Proceed call could expose an unbudgeted event, so unresolved containment is rejected.
+        // Once all candidate slots are consumed, stopping is conservative even if this happened to be the final candidate. A further Proceed call could expose an unbudgeted event, so unresolved containment is rejected.
         query.Abort();
         result.termination = NWB_OPTICAL_TERMINATION_EVENT_LIMIT;
         return false;
     }
 
 #if NWB_OPTICAL_CLOSED_MEDIA
-    // Candidate records stay immutable. Sort scalar indices instead of retaining an array-backed struct while
-    // shifting that same array; every crossing keeps its original distance, primitive and orientation together.
+    // Candidate records stay immutable. Sort scalar indices instead of retaining an array-backed struct while shifting that same array; every crossing keeps its original distance, primitive and orientation together.
     uint eventOrder[NWB_OPTICAL_MAX_CANDIDATE_EVENTS] = {
         0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 10u, 11u, 12u, 13u, 14u, 15u,
         16u, 17u, 18u, 19u, 20u, 21u, 22u, 23u, 24u, 25u, 26u, 27u, 28u, 29u, 30u, 31u,
@@ -169,12 +160,8 @@ bool nwbOpticalBootstrap(
         const NwbOpticalBootstrapEvent event = events[eventOrder[index]];
         const NwbOpticalBootstrapEvent previous = events[eventOrder[index - 1u]];
         if(event.distance - previous.distance <= tolerance){
-            // Only a coplanar indexed seam may collapse duplicate edge candidates. A same-facing sharp edge
-            // still has multiple refraction normals, and an unshared triangle belongs to another shell.
-            if(
-                event.instance != previous.instance || event.entering != previous.entering
-                || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, event.instance, event.primitive, previous.primitive)
-            ){
+            // Only a coplanar indexed seam may collapse duplicate edge candidates. A same-facing sharp edge still has multiple refraction normals, and an unshared triangle belongs to another shell.
+            if(event.instance != previous.instance || event.entering != previous.entering || !nwbRayTraceCoplanarSeam(config.instanceMaterialHeapSlot, event.instance, event.primitive, previous.primitive)){
                 result.termination = NWB_OPTICAL_TERMINATION_AMBIGUOUS;
                 return false;
             }
@@ -182,8 +169,7 @@ bool nwbOpticalBootstrap(
         }
     }
 
-    // Signed per-instance winding first: origin-exited volumes must not consume the medium cap. Entries-minus-exits
-    // for exterior crossings; same-instance shells union until winding hits zero.
+    // Signed per-instance winding first: origin-exited volumes must not consume the medium cap. Entries-minus-exits for exterior crossings; same-instance shells union until winding hits zero.
     uint activeEventIndices[NWB_OPTICAL_MAX_MEDIA] = { 0u, 0u, 0u, 0u };
     uint activeEntryIndices[NWB_OPTICAL_MAX_MEDIA] = { 0u, 0u, 0u, 0u };
     uint activeWindings[NWB_OPTICAL_MAX_MEDIA] = { 0u, 0u, 0u, 0u };
@@ -251,8 +237,7 @@ bool nwbOpticalBootstrap(
         activeWindings[insertion] = uint(winding);
         ++media.count;
     }
-    // Assemble each ordered medium once, after all scalar-index insertion is finished. No medium struct is moved
-    // through its own backing array, and at most four homogeneous material evaluations remain necessary.
+    // Assemble each ordered medium once, after all scalar-index insertion is finished. No medium struct is moved through its own backing array, and at most four homogeneous material evaluations remain necessary.
     [unroll]
     for(uint index = 0u; index < NWB_OPTICAL_MAX_MEDIA; ++index){
         if(index < media.count){

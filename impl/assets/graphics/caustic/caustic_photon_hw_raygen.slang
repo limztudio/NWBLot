@@ -16,8 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// HW closest-hit hook per bounce segment: one TraceRay commits nearest (FORCE_OPAQUE); refractive/opaque is a
-// material flag, not a traversal decision (as in the SW min-t trace). Loop-driven bounces, recursion stays 1.
+// HW closest-hit hook per bounce segment: one TraceRay commits nearest (FORCE_OPAQUE); refractive/opaque is a material flag, not a traversal decision (as in the SW min-t trace). Loop-driven bounces, recursion stays 1.
 NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin, float tMax){
     RayDesc ray;
     ray.Origin = origin;

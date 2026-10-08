@@ -28,10 +28,7 @@ bool nwbCsgShadowCutterInterval(
         dot(cutter.worldToShapeRow2, point));
     const float3 direction = float3(dot(cutter.worldToShapeRow0.xyz, rayDirection),
         dot(cutter.worldToShapeRow1.xyz, rayDirection), dot(cutter.worldToShapeRow2.xyz, rayDirection));
-    if(
-        !all(isfinite(origin)) || !all(isfinite(direction)) || dot(direction, direction) <= 0.0
-        || !all(isfinite(cutter.parameter0))
-    )
+    if(!all(isfinite(origin)) || !all(isfinite(direction)) || dot(direction, direction) <= 0.0 || !all(isfinite(cutter.parameter0)))
         return false;
     if(cutter.shapeType == NWB_CSG_SHADOW_SHAPE_PLANE)
         return nwbCsgAnalyticPlaneInterval(origin, direction, cutter.parameter0, interval);

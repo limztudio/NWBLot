@@ -117,10 +117,7 @@ bool nwbCsgAnalyticCapsuleInterval(
         return false;
     float2 lower;
     float2 upper;
-    if(
-        !nwbCsgAnalyticSphereInterval(origin + float3(0.0, halfHeight, 0.0), direction, radius, lower)
-        || !nwbCsgAnalyticSphereInterval(origin - float3(0.0, halfHeight, 0.0), direction, radius, upper)
-    )
+    if(!nwbCsgAnalyticSphereInterval(origin + float3(0.0, halfHeight, 0.0), direction, radius, lower) || !nwbCsgAnalyticSphereInterval(origin - float3(0.0, halfHeight, 0.0), direction, radius, upper))
         return false;
     nwbCsgAnalyticUnionConvexPart(lower, interval);
     nwbCsgAnalyticUnionConvexPart(upper, interval);

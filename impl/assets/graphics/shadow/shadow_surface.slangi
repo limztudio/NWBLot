@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shadow trace serves the material-constants accessors from the ray hit's NwbShadowHit via per-invocation globals,
-// so the same authored surface hook evaluates identically here and in the rasterizer (NWB_MESH_MATERIAL_CONTEXT_PROVIDED).
+// Shadow trace serves the material-constants accessors from the ray hit's NwbShadowHit via per-invocation globals, so the same authored surface hook evaluates identically here and in the rasterizer (NWB_MESH_MATERIAL_CONTEXT_PROVIDED).
 #define NWB_MESH_MATERIAL_CONTEXT_PROVIDED
 #include "../mesh/material_typed_bindings.slangi"
 
@@ -34,9 +33,7 @@ struct NwbShadowHit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-invocation material context, set from the hit being shaded. A ray hit is shaded by a single dispatch call,
-// so static globals per invocation are sufficient: the dispatch sets the context, then evaluates the hook, which
-// reads it back through the accessors below (the same names the rasterizer defines from its push constant).
+// Per-invocation material context, set from the hit being shaded. A ray hit is shaded by a single dispatch call, so static globals per invocation are sufficient: the dispatch sets the context, then evaluates the hook, which reads it back through the accessors below (the same names the rasterizer defines from its push constant).
 static uint g_NwbShadowMaterialConstantByteOffset = 0u;
 static uint g_NwbShadowMeshInstanceIndex = 0u;
 static uint g_NwbShadowSurfaceDispatchId = 0u;
@@ -67,8 +64,7 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Typed-word loads for generated .bind accessors (after context accessors). NWB_MESH_MATERIAL_CONTEXT_PROVIDED
-// suppresses the single-material nwbMaterialSurfaceAt; the trace stitches per-id hooks instead.
+// Typed-word loads for generated .bind accessors (after context accessors). NWB_MESH_MATERIAL_CONTEXT_PROVIDED suppresses the single-material nwbMaterialSurfaceAt; the trace stitches per-id hooks instead.
 #include "../mesh/material_typed_accessors.slangi"
 #include "../mesh/surface.slangi"
 
@@ -76,9 +72,7 @@ NwbMeshInstanceData nwbMeshLoadInstance(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Builds the surface-input bundle a hook reads from a ray hit. The trace supplies uv0 / normal / worldPosition;
-// color + tangent are neutral defaults. normal is world space (the contract the rasterizer also satisfies),
-// supplied already-transformed by the trace backend that filled the hit.
+// Builds the surface-input bundle a hook reads from a ray hit. The trace supplies uv0 / normal / worldPosition; color + tangent are neutral defaults. normal is world space (the contract the rasterizer also satisfies), supplied already-transformed by the trace backend that filled the hit.
 NwbMeshSurfaceInputs nwbShadowBuildSurfaceInputs(NwbShadowHit hit){
     NwbMeshSurfaceInputs inputs;
     inputs.color = half4(1.0h, 1.0h, 1.0h, 1.0h);
@@ -86,8 +80,7 @@ NwbMeshSurfaceInputs nwbShadowBuildSurfaceInputs(NwbShadowHit hit){
     inputs.tangent = float4(1.0, 0.0, 0.0, 1.0);
     inputs.uv0 = hit.uv0;
     inputs.worldPosition = hit.worldPosition;
-    // The shadow ray's world-space direction. Carried on the hit by both trace backends; a hook may read it (via
-    // the inIncidentDirection static), and the engine uses it directly for the per-crossing Fresnel cosI/faceSign.
+    // The shadow ray's world-space direction. Carried on the hit by both trace backends; a hook may read it (via the inIncidentDirection static), and the engine uses it directly for the per-crossing Fresnel cosI/faceSign.
     inputs.incidentDirection = hit.rayDirection;
     return inputs;
 }

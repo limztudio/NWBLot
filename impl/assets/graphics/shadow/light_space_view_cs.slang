@@ -69,14 +69,10 @@ bool nwbLightSpaceBuildView(inout NwbLightSpaceView view){
             const NwbSwBvhInstance instance = nwbLightSpaceInstance(instanceIndex);
             const NwbBvhNode meshRoot = nwbLightSpaceMeshRoot(instanceIndex);
             const float3 origin = nwbSwBvhTransformPoint(instance, light.position.xyz);
-            const float inverseNorm = sqrt(dot(instance.worldToObjectRow0.xyz, instance.worldToObjectRow0.xyz)
-                + dot(instance.worldToObjectRow1.xyz, instance.worldToObjectRow1.xyz)
-                + dot(instance.worldToObjectRow2.xyz, instance.worldToObjectRow2.xyz));
+            const float inverseNorm = sqrt(dot(instance.worldToObjectRow0.xyz, instance.worldToObjectRow0.xyz) + dot(instance.worldToObjectRow1.xyz, instance.worldToObjectRow1.xyz) + dot(instance.worldToObjectRow2.xyz, instance.worldToObjectRow2.xyz));
             const float3 outside = max(max(meshRoot.aabbMin - origin, origin - meshRoot.aabbMax), 0.0);
             const float conservativeDistance = length(outside) / inverseNorm;
-            if(!all(isfinite(origin)) || !all(isfinite(meshRoot.aabbMin)) || !all(isfinite(meshRoot.aabbMax))
-                || any(meshRoot.aabbMin > meshRoot.aabbMax) || !isfinite(conservativeDistance)
-                || conservativeDistance <= minimumNearPlane)
+            if(!all(isfinite(origin)) || !all(isfinite(meshRoot.aabbMin)) || !all(isfinite(meshRoot.aabbMax)) || any(meshRoot.aabbMin > meshRoot.aabbMax) || !isfinite(conservativeDistance) || conservativeDistance <= minimumNearPlane)
                 return false;
             minimumCasterDistance = min(minimumCasterDistance, conservativeDistance);
         }

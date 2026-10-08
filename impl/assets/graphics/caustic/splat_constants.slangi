@@ -23,8 +23,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The 2^20 fixed-point scale exceeds half's finite range. Widen before scaling and clamping
-// so small opt/fin photon deposits survive; half multiplication can overflow or erase them.
+// The 2^20 fixed-point scale exceeds half's finite range. Widen before scaling and clamping so small opt/fin photon deposits survive; half multiplication can overflow or erase them.
 uint nwbCausticFluxToFixedPoint(float fluxChannel){
     if(!nwbFiniteFloat(fluxChannel) || fluxChannel <= 0.0)
         return 0u;

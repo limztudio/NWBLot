@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// HW opaque-only occlusion (binary any-hit test; order-independent, no chord). Transparent Beer-Lambert shadows come
-// from the software traversal and multiply onto this mask (HW/SW intersectors disagree at grazing chords).
+// HW opaque-only occlusion (binary any-hit test; order-independent, no chord). Transparent Beer-Lambert shadows come from the software traversal and multiply onto this mask (HW/SW intersectors disagree at grazing chords).
 
 
 #include "binding_slots.h"
@@ -22,8 +21,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// The deferred selector itself is a global UniformBuffer heap entry supplied by the dispatch push block.  The opaque
-// trace therefore has no local cbuffer even though scene/buffer.slangi still exposes its familiar light helpers.
+// The deferred selector itself is a global UniformBuffer heap entry supplied by the dispatch push block.  The opaque trace therefore has no local cbuffer even though scene/buffer.slangi still exposes its familiar light helpers.
 #ifndef NWB_SHADOW_RQ_DEFERRED_RESOURCES_HEAP_SLOT
 #error "shadow RayQuery sources must provide the deferred-resource heap slot expression"
 #endif
@@ -40,8 +38,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per light: one HW inline-RayQuery occlusion ray; 0 on first opaque hit else 1 (software tints transparents onto this mask).
-// `jitter` cone-jitters inside the source cone (float2(0,0) = hard); zero radius collapses to the axis.
+// Per light: one HW inline-RayQuery occlusion ray; 0 on first opaque hit else 1 (software tints transparents onto this mask). `jitter` cone-jitters inside the source cone (float2(0,0) = hard); zero radius collapses to the axis.
 half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, const NwbSceneLight light, const float2 jitter){
     float3 toLight;
     float tMin;
@@ -55,14 +52,11 @@ half3 nwbShadowRqLightVisible(const float3 worldPosition, const float3 normal, c
     ray.TMin = tMin;
     ray.TMax = tEnd;
 
-    // Opaque fast path: non-transparent occluders are FORCE_OPAQUE, so first-hit commit ends traversal with no
-    // callbacks/material loads. Transparent candidates are skipped (software tints them); a commit means opaque block.
+    // Opaque fast path: non-transparent occluders are FORCE_OPAQUE, so first-hit commit ends traversal with no callbacks/material loads. Transparent candidates are skipped (software tints them); a commit means opaque block.
     RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
     query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, NWB_RT_SHADOW_BASE_INSTANCE_MASK, ray);
-    // Drain the non-opaque (transparent) candidates without committing any of them; opaque occluders never reach
-    // this loop (the intersector commits them and ends the search). The body is intentionally empty.
-    while(query.Proceed()){
-    }
+    // Drain the non-opaque (transparent) candidates without committing any of them; opaque occluders never reach this loop (the intersector commits them and ends the search). The body is intentionally empty.
+    while(query.Proceed());
 
     return (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) ? half3(0.0h, 0.0h, 0.0h) : half3(1.0h, 1.0h, 1.0h);
 }

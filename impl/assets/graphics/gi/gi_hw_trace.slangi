@@ -9,8 +9,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// HW backend of the GI trace seam: inline RayQuery reconstructing NwbGiTraceHit identically to SW (sub-ULP; same
-// edge order/cross sign, same InstanceID-indexed material context). Shares hit + Lambert via gi_trace_common.slangi.
+// HW backend of the GI trace seam: inline RayQuery reconstructing NwbGiTraceHit identically to SW (sub-ULP; same edge order/cross sign, same InstanceID-indexed material context). Shares hit + Lambert via gi_trace_common.slangi.
 
 
 #include "constants.h"
@@ -109,7 +108,7 @@ NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, flo
 
     RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
     query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray);
-    query.Proceed();   // FORCE_OPAQUE + triangle-only -> commits the nearest at once, returns false
+    query.Proceed(); // FORCE_OPAQUE + triangle-only -> commits the nearest at once, returns false
     if(query.CommittedStatus() != COMMITTED_TRIANGLE_HIT)
         return closest;
 

@@ -127,13 +127,15 @@ void nwbCausticSwInstanceClosest(const uint instanceIndex, const float3 worldOri
     stack[0u] = 0u;
     uint stackPointer = 1u;
 
-    [loop] while(stackPointer > 0u){
+    [loop]
+    while(stackPointer > 0u){
         --stackPointer;
         NwbBvhNode node = nwbHeapBvhNodes(material.nodeSlot)[stack[stackPointer]];
         if(!nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0))
             continue;
 
-        [loop] while(true){
+        [loop]
+        while(true){
             if(nwbBvhNodeIsLeaf(node)){
                 const uint triangle = nwbBvhLeafPrimitive(node);
                 const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
@@ -253,13 +255,15 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     stack[0u] = 0u;
     uint stackPointer = 1u;
 
-    [loop] while(stackPointer > 0u){
+    [loop]
+    while(stackPointer > 0u){
         --stackPointer;
         NwbBvhNode node = nwbHeapBvhNodes(g_NwbCausticSwMaterialContextSlots.sceneSlots.x)[stack[stackPointer]];
         if(!nwbBvhRayAabb(origin, invDir, tMin, closest.t, node.aabbMin, node.aabbMax, 0.0))
             continue;
 
-        [loop] while(true){
+        [loop]
+        while(true){
             if(nwbBvhNodeIsLeaf(node)){
                 nwbCausticSwInstanceClosest(nwbBvhLeafPrimitive(node), origin, direction, tMin, closest);
                 break;

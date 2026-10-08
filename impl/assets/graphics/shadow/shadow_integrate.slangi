@@ -15,8 +15,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Software occlusion rays finish each instance before visiting the next scene leaf. Only the summed optical depth,
-// interface product, and opaque gate remain live across instances; temporary crossing lists never mix objects.
+// Software occlusion rays finish each instance before visiting the next scene leaf. Only the summed optical depth, interface product, and opaque gate remain live across instances; temporary crossing lists never mix objects.
 // Include after shadow_surface.slangi for the shared Fresnel and Beer-Lambert helpers.
 
 

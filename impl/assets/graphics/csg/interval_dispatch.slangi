@@ -16,8 +16,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// All standalone CSG interval passes use the same push-only dispatch ABI. Its resource slot selects the persistent CSG
-// context UniformBuffer, which in turn selects the target-generation resources from the global descriptor heap.
+// All standalone CSG interval passes use the same push-only dispatch ABI. Its resource slot selects the persistent CSG context UniformBuffer, which in turn selects the target-generation resources from the global descriptor heap.
 struct NwbCsgIntervalDispatchPushConstants{
     uint4 frame;
     uint4 workRegion;

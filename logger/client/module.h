@@ -17,7 +17,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class IClient : public ILogger{
+class IClient : public Core::Common::ILogger{
 public:
     virtual ~IClient()override = default;
 };
@@ -41,8 +41,8 @@ protected:
 public:
     using BaseType::enqueue;
     virtual LogArena& arena()override{ return BaseType::arena(); }
-    virtual void enqueue(LogString&& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(Move(str), type); }
-    virtual void enqueue(const LogString& str, Type::Enum type = Type::Info)override{ BaseType::enqueue(str, type); }
+    virtual void enqueue(LogString&& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info)override{ BaseType::enqueue(Move(str), type); }
+    virtual void enqueue(const LogString& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info)override{ BaseType::enqueue(str, type); }
 };
 
 

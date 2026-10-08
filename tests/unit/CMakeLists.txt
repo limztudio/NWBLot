@@ -16,6 +16,14 @@ add_subdirectory(task)
 add_subdirectory(telemetry)
 add_subdirectory(ui)
 
+add_test(
+    NAME nwb_build_configuration_contract_unit
+    COMMAND "${CMAKE_COMMAND}"
+        "-DNWB_TEST_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
+        -P "${CMAKE_CURRENT_LIST_DIR}/build_configuration_tests.cmake"
+)
+set_tests_properties(nwb_build_configuration_contract_unit PROPERTIES TIMEOUT 30)
+
 if(NWB_OBFUSCATE_STRING_LITERALS)
     set(_nwb_literal_test_target_arguments)
     if(CMAKE_CXX_COMPILER_TARGET)

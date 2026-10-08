@@ -46,7 +46,7 @@ static constexpr AStringView s_ReductionField = "reduction";
 static constexpr AStringView s_MaxAnisotropyField = "max_anisotropy";
 static constexpr AStringView s_MipBiasField = "mip_bias";
 
-static constexpr Core::Assets::NamedEnumCase<bool> s_FilterCases[] = {
+static constexpr ::NamedEnumCase<bool> s_FilterCases[] = {
     { "nearest", false },
     { "linear", true },
 };
@@ -69,7 +69,7 @@ static constexpr Core::Assets::NamedEnumCase<bool> s_FilterCases[] = {
     );
 }
 
-static constexpr Core::Assets::NamedEnumCase<Core::SamplerAddressMode::Enum> s_AddressModeCases[] = {
+static constexpr ::NamedEnumCase<Core::SamplerAddressMode::Enum> s_AddressModeCases[] = {
     { "clamp", Core::SamplerAddressMode::Clamp },
     { "wrap", Core::SamplerAddressMode::Wrap },
     { "border", Core::SamplerAddressMode::Border },
@@ -77,7 +77,7 @@ static constexpr Core::Assets::NamedEnumCase<Core::SamplerAddressMode::Enum> s_A
     { "mirror_once", Core::SamplerAddressMode::MirrorOnce },
 };
 
-static constexpr Core::Assets::NamedEnumCase<Core::SamplerReductionType::Enum> s_ReductionTypeCases[] = {
+static constexpr ::NamedEnumCase<Core::SamplerReductionType::Enum> s_ReductionTypeCases[] = {
     { "standard", Core::SamplerReductionType::Standard },
     { "comparison", Core::SamplerReductionType::Comparison },
 };

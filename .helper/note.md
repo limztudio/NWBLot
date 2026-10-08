@@ -104,6 +104,8 @@
 
 91. Whole-file reads use the opened stream/handle for size and report explicit failure/error state. Writers reject unrepresentable lengths before truncating and check the explicit close result. Process launch prepares allocating arguments before handle acquisition and requires successful wait completion plus an exit-code query before reporting a child result. Name-symbol capture must remove stale sidecars successfully before workloads or publication; cleanup failure preserves existing destination sidecars.
 
+92. Use canonical type owners: global `::NamedEnumCase` from `global/text_utils.h` and `Core::Common::{ILogger, LoggerRegistrationGuard, LogType}` from `core/common/log.h`; do not restore the retired assets/logger namespace adapters. Keep current logger `LogArena`, `LogString`, and `BreakPolicy` policy aliases. First-party compilers are Clang-based; preserve GNU-style Clang/AppleClang, clang-cl, and required Windows/MSVC ABI/SDK support without native-MSVC compiler branches or `NWB_COMPILER_IS_MSVC`. Build configuration names are exactly `dbg`, `opt`, and `fin`: omitted/empty single-config `CMAKE_BUILD_TYPE` defaults to `dbg`, and every other nonempty value, including `Debug`, `Release`, `OFF`, `0`, and case variants, fails. Imported third-party configuration mappings remain current dependency integration. Follow `.helper/standard.md` section 21.
+
 ## Scheduler Architecture
 
 1. `Frame` owns one `Core::CpuTaskScheduler`, initialized with the configured worker budget before graphics and project work starts. Standalone tools own one scheduler for their process work and pass it to consumers.

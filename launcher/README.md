@@ -44,6 +44,8 @@ Common build controls:
 
 The selected configuration defines `NWB_DEBUG` for `dbg`, `NWB_OPTIMIZE` for `opt`, or `NWB_FINAL` for `fin` directly through CMake.
 
+Configuration names are exactly lowercase `dbg`, `opt`, and `fin`. For a single-config tree, omitted or empty `CMAKE_BUILD_TYPE` defaults to `dbg`; all other nonempty values fail configuration, including `Debug`, `Release`, `OFF`, `0`, and case variants. Multi-config presets expose the same three names. Vendor imported-library configuration mappings remain internal dependency integration. The compiler must be Clang-based; GNU-style Clang/AppleClang and clang-cl frontend paths remain supported, with the Windows/MSVC ABI and SDK required for Windows targets.
+
 Windows hosts require Windows 10 version 1709 or newer, the documented minimum for
 [IsWow64Process2](https://learn.microsoft.com/en-us/windows/win32/api/wow64apiset/nf-wow64apiset-iswow64process2). Native host detection requires that API. An unavailable API, a failed query, or an
 unsupported native machine type produces an error; architecture is not guessed from the Python process or environment.

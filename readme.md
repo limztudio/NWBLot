@@ -25,7 +25,7 @@ Common tools:
 
 Windows hosts require Windows 10 version 1709 or newer. The launcher requires [IsWow64Process2](https://learn.microsoft.com/en-us/windows/win32/api/wow64apiset/nf-wow64apiset-iswow64process2) for native architecture discovery; frame creation uses current Per-Monitor v2 DPI APIs, including [SetProcessDpiAwarenessContext](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setprocessdpiawarenesscontext).
 
-Windows builds also need Visual Studio 2022 Build Tools or Visual Studio 2022 with the C++ workload and a Windows SDK. Install the ARM64 C++ tools when building the ARM64 presets. CMake, Ninja, and LLVM may come from Visual Studio or standalone installations.
+Windows builds also need Visual Studio 2022 Build Tools or Visual Studio 2022 with the C++ workload and a Windows SDK. Install the ARM64 C++ tools when building the ARM64 presets. CMake, Ninja, and LLVM may come from Visual Studio or standalone installations. Compilation requires Clang; the Microsoft tools provide the target ABI, runtime, headers, and libraries. Compiler frontend support retains GNU-style Clang/AppleClang and clang-cl; native `cl.exe` compilation is unsupported.
 
 The Vulkan SDK is optional. The repository vendors Vulkan headers and Volk; the SDK is a convenient source for `slangc`, validation layers, and Vulkan diagnostics.
 
@@ -92,6 +92,8 @@ Use `--with-profile` to start the log server with a launched application. Use `-
 | `fin` | `NWB_FINAL` | `-O3` | Omitted |
 
 CMake defines the corresponding configuration macro directly. Use `defined(NWB_DEBUG)`, `defined(NWB_OPTIMIZE)`, or `defined(NWB_FINAL)` for configuration-specific code.
+
+Use the exact lowercase configuration names `dbg`, `opt`, and `fin`. A single-config build tree defaults an omitted or empty `CMAKE_BUILD_TYPE` to `dbg` and rejects every other nonempty name, including `Debug`, `Release`, `OFF`, `0`, and case variants. Multi-config presets expose the same canonical names. Imported third-party libraries may map those names to their vendor `Debug`/`Release` artifacts; the project configuration names remain unchanged.
 
 Configure trees are written below `__cmake/build/<configure-preset>/`. Runtime artifacts use these roots:
 

@@ -43,7 +43,7 @@ struct CrashIngestConfig{
 
 struct CrashIngestResult{
     LogString message;
-    Type::Enum type = Type::EssentialInfo;
+    Core::Common::LogType::Enum type = Core::Common::LogType::EssentialInfo;
     bool accepted = false;
 
     explicit CrashIngestResult(LogArena& arena)

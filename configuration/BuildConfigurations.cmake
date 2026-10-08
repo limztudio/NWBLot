@@ -7,10 +7,14 @@ macro(nwb_configure_build_configs)
     if(CMAKE_CONFIGURATION_TYPES)
         set(CMAKE_CONFIGURATION_TYPES "${NWB_BUILD_CONFIGURATIONS}" CACHE STRING "" FORCE)
     else()
-        set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS ${NWB_BUILD_CONFIGURATIONS})
-        if(NOT CMAKE_BUILD_TYPE)
+        if("${CMAKE_BUILD_TYPE}" STREQUAL "")
             set(CMAKE_BUILD_TYPE "dbg" CACHE STRING "" FORCE)
+        elseif(NOT CMAKE_BUILD_TYPE IN_LIST NWB_BUILD_CONFIGURATIONS)
+            message(FATAL_ERROR
+                "Unsupported CMAKE_BUILD_TYPE '${CMAKE_BUILD_TYPE}'. Expected exactly dbg, opt, or fin."
+            )
         endif()
+        set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS ${NWB_BUILD_CONFIGURATIONS})
     endif()
 
     set(CMAKE_MAP_IMPORTED_CONFIG_DBG "DBG;Debug;RelWithDebInfo;Release;")

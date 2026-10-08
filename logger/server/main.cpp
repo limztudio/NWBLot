@@ -62,20 +62,20 @@ static int MainLogic(
     return ::InvokeTerminalEntry<GeneralException>([&](){
         NWB::Log::Frame frame(inst);
         if(!frame.init()){
-            logger.enqueue(BasicStringView<tchar>(NWB_TEXT("Log server frame initialization failed")), NWB::Log::Type::Fatal);
+            logger.enqueue(BasicStringView<tchar>(NWB_TEXT("Log server frame initialization failed")), NWB::Core::Common::LogType::Fatal);
             return __hidden_logger_server_main::s_LoggerServerExitFailure;
         }
 
-        logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Log server: listening on port {}"), logPort), NWB::Log::Type::EssentialInfo);
+        logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Log server: listening on port {}"), logPort), NWB::Core::Common::LogType::EssentialInfo);
         frame.showFrame();
 
         if(!frame.mainLoop()){
-            logger.enqueue(BasicStringView<tchar>(NWB_TEXT("Log server main loop failed")), NWB::Log::Type::Error);
+            logger.enqueue(BasicStringView<tchar>(NWB_TEXT("Log server main loop failed")), NWB::Core::Common::LogType::Error);
             return __hidden_logger_server_main::s_LoggerServerExitFailure;
         }
         return __hidden_logger_server_main::s_LoggerServerExitSuccess;
     }, [&](const GeneralException& error){
-        logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Exception: {}"), StringConvert(logger.arena(), error.what())), NWB::Log::Type::Fatal);
+        logger.enqueue(StringFormat(logger.arena(), NWB_TEXT("Exception: {}"), StringConvert(logger.arena(), error.what())), NWB::Core::Common::LogType::Fatal);
         return __hidden_logger_server_main::s_LoggerServerExitFailure;
     }, [](){ return __hidden_logger_server_main::s_LoggerServerExitFailure; });
 }

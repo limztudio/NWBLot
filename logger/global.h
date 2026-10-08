@@ -27,11 +27,8 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using ILogger = ::NWB::Core::Common::ILogger;
 using LogArena = ::NWB::Core::Common::LogArena;
 using LogString = ::NWB::Core::Common::LogString;
-using LoggerRegistrationGuard = ::NWB::Core::Common::LoggerRegistrationGuard;
-namespace Type = ::NWB::Core::Common::LogType;
 namespace BreakPolicy = ::NWB::Core::Common::LoggerBreakPolicy;
 
 

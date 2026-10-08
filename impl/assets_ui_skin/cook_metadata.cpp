@@ -33,7 +33,7 @@ using namespace Core::Metascript;
 
 static constexpr AStringView s_DiagnosticPrefix = "UI skin meta";
 
-static constexpr Core::Assets::NamedEnumCase<UiSkinDrawMode::Enum> s_DrawModeCases[] = {
+static constexpr ::NamedEnumCase<UiSkinDrawMode::Enum> s_DrawModeCases[] = {
     { "sprite", UiSkinDrawMode::Sprite },
     { "nine_slice", UiSkinDrawMode::NineSlice },
 };

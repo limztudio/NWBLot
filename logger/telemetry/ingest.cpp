@@ -55,7 +55,7 @@ static Atomic<u64> s_TelemetryUploadCounter{ 1u };
     return Path(arena, fileName);
 }
 
-void SetResultMessage(TelemetryIngestResult& result, AStringView message, const Type::Enum type){
+void SetResultMessage(TelemetryIngestResult& result, AStringView message, const Core::Common::LogType::Enum type){
     result.message = StringConvert(result.message.get_allocator().arena(), message);
     result.type = type;
 }
@@ -111,14 +111,14 @@ TelemetryIngestResult ProcessTelemetryUpload(
 ){
     TelemetryIngestResult result(arena);
     if(!bytes || byteCount == 0u){
-        __hidden_telemetry_ingest::SetResultMessage(result, "Telemetry upload is empty", Type::Error);
+        __hidden_telemetry_ingest::SetResultMessage(result, "Telemetry upload is empty", Core::Common::LogType::Error);
         return result;
     }
 
     const Path rawDirectory = __hidden_telemetry_ingest::RawDirectory(arena, config.storageDirectory);
     const Path reportDirectory = __hidden_telemetry_ingest::ReportDirectory(arena, config.storageDirectory);
     if(!__hidden_telemetry_ingest::EnsureDirectory(rawDirectory) || !__hidden_telemetry_ingest::EnsureDirectory(reportDirectory)){
-        __hidden_telemetry_ingest::SetResultMessage(result, "Telemetry upload could not create storage directories", Type::Error);
+        __hidden_telemetry_ingest::SetResultMessage(result, "Telemetry upload could not create storage directories", Core::Common::LogType::Error);
         return result;
     }
 
@@ -134,7 +134,7 @@ TelemetryIngestResult ProcessTelemetryUpload(
 
     result.storedRaw = __hidden_telemetry_ingest::StoreRawTelemetry(result.rawPath, bytes, byteCount);
     if(!result.storedRaw){
-        __hidden_telemetry_ingest::SetResultMessage(result, "Telemetry upload could not store raw stream", Type::Error);
+        __hidden_telemetry_ingest::SetResultMessage(result, "Telemetry upload could not store raw stream", Core::Common::LogType::Error);
         return result;
     }
 
@@ -148,14 +148,14 @@ TelemetryIngestResult ProcessTelemetryUpload(
             result.decode.bytesRead,
             static_cast<u32>(result.decode.status)
         );
-        result.type = Type::Error;
+        result.type = Core::Common::LogType::Error;
         return result;
     }
 
     TelemetryReport report(arena);
     if(!BuildTelemetryReport(arena, recorder.view(), report)){
         result.message = StringFormat(arena, NWB_TEXT("Telemetry upload stored but report build failed: raw='{}'"), PathToString<tchar>(result.rawPath));
-        result.type = Type::Error;
+        result.type = Core::Common::LogType::Error;
         return result;
     }
 
@@ -172,7 +172,7 @@ TelemetryIngestResult ProcessTelemetryUpload(
             PathToString<tchar>(result.jsonPath),
             PathToString<tchar>(result.perfCsvPath)
         );
-        result.type = Type::Error;
+        result.type = Core::Common::LogType::Error;
         return result;
     }
 
@@ -185,7 +185,7 @@ TelemetryIngestResult ProcessTelemetryUpload(
         PathToString<tchar>(result.jsonPath),
         PathToString<tchar>(result.perfCsvPath)
     );
-    result.type = result.summary.parseFailureCount == 0u ? Type::EssentialInfo : Type::Warning;
+    result.type = result.summary.parseFailureCount == 0u ? Core::Common::LogType::EssentialInfo : Core::Common::LogType::Warning;
     return result;
 }
 

@@ -55,15 +55,15 @@ static void ApplyRetention(LogArena& arena, const CrashIngestConfig& config){
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to apply retention to invalid crash archives"));
 }
 
-[[nodiscard]] static Type::Enum AcceptedCrashLogType(const CrashPackageSummary& summary){
+[[nodiscard]] static Core::Common::LogType::Enum AcceptedCrashLogType(const CrashPackageSummary& summary){
     if(summary.event == DiagnosticEventName::s_Assert)
-        return Type::Assert;
+        return Core::Common::LogType::Assert;
     if(summary.event == DiagnosticEventName::s_Error)
-        return Type::Error;
+        return Core::Common::LogType::Error;
     if(summary.event == DiagnosticEventName::s_Fatal)
-        return Type::Fatal;
+        return Core::Common::LogType::Fatal;
 
-    return Type::EssentialInfo;
+    return Core::Common::LogType::EssentialInfo;
 }
 
 static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, const Path& rawPath, const bool rawArchived){
@@ -383,7 +383,7 @@ static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, c
     ApplyRetention(arena, config);
 
     CrashIngestResult result(arena);
-    result.type = Type::Error;
+    result.type = Core::Common::LogType::Error;
     result.message = StringFormat(
         arena,
         NWB_TEXT("Crash upload rejected: {}; raw='{}'"),
@@ -436,7 +436,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
     result.accepted = true;
     result.type = rawArchived
         ? Ingest::AcceptedCrashLogType(summary)
-        : Type::Warning
+        : Core::Common::LogType::Warning
     ;
     Ingest::AppendAcceptedIngestDetails(arena, symbolicationReport, rawArchived ? rawPath : archivePath, rawArchived);
     result.message = StringConvert(arena, AStringView(symbolicationReport.data(), symbolicationReport.size()));

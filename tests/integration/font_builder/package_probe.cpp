@@ -117,7 +117,7 @@ int Run(const int argc, char** argv){
         NWB_TCERR << s_LoggerInitFailureText << NWB_TEXT("\n");
         return s_EntryFailure;
     }
-    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Core::Common::LoggerBreakPolicy::BreakOnFatal);
     if(argc != 3){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder_package_probe: expected source .nwb and decoded output directory"));
         return s_EntryFailure;

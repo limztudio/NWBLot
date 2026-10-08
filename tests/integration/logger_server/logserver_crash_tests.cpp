@@ -311,7 +311,7 @@ TEST_F(LoggerServerCrash, LinuxAssertCrashProducesObservableLoggerReport){
     EXPECT_TRUE(BuildArchiveFromPackageDirectory(arena, assertPackageDirectory, archive));
     const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(arena, s_Group, s_Stem, archive);
     EXPECT_TRUE(result.accepted);
-    EXPECT_EQ(result.type, NWB::Log::Type::Assert);
+    EXPECT_EQ(result.type, NWB::Core::Common::LogType::Assert);
 
     CrashTestText report(arena);
     EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
@@ -381,7 +381,7 @@ TEST_F(LoggerServerCrash, RecoverableErrorDiagnosticProducesObservableLoggerRepo
     EXPECT_TRUE(BuildArchiveFromPackageDirectory(arena, errorPackageDirectory, archive));
     const NWB::Log::CrashIngestResult result = ProcessCrashArchiveBytes(arena, s_Group, s_Stem, archive);
     EXPECT_TRUE(result.accepted);
-    EXPECT_EQ(result.type, NWB::Log::Type::Error);
+    EXPECT_EQ(result.type, NWB::Core::Common::LogType::Error);
 
     CrashTestText report(arena);
     EXPECT_TRUE(ReadServerSymbolication(arena, s_Group, s_Stem, report));
@@ -552,7 +552,7 @@ TEST_F(LoggerServerCrash, InvalidCrashPackageIsRejected){
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
     EXPECT_FALSE(result.accepted);
-    EXPECT_EQ(result.type, NWB::Log::Type::Error);
+    EXPECT_EQ(result.type, NWB::Core::Common::LogType::Error);
     EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("Crash upload rejected")));
     EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("invalid crash archive header")));
 
@@ -582,7 +582,7 @@ TEST_F(LoggerServerCrash, CrashManifestWithoutEventIsRejected){
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive);
 
     EXPECT_FALSE(result.accepted);
-    EXPECT_EQ(result.type, NWB::Log::Type::Error);
+    EXPECT_EQ(result.type, NWB::Core::Common::LogType::Error);
     EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("manifest.json is missing required fields")));
     EXPECT_TRUE(PathIsRegularFile(InvalidArchivePath(arena, s_Group, s_Stem)));
 
@@ -650,7 +650,7 @@ TEST_F(LoggerServerCrash, AcceptedCrashWarnsWhenRawArchiveCannotBeRetained){
     const NWB::Log::CrashIngestResult result = ProcessCrashArchive(arena, s_Group, s_Stem, archive, config);
 
     EXPECT_TRUE(result.accepted);
-    EXPECT_EQ(result.type, NWB::Log::Type::Warning);
+    EXPECT_EQ(result.type, NWB::Core::Common::LogType::Warning);
     EXPECT_TRUE(ContainsMessage(result.message, NWB_TEXT("raw upload archive could not be retained")));
     EXPECT_TRUE(PathIsDirectory(ExtractedPackageDirectory(arena, s_Group, s_Stem)));
     EXPECT_TRUE(PathIsMissing(ArchivePath(arena, s_Group, s_Stem)));
@@ -694,7 +694,7 @@ TEST_F(LoggerServerCrash, MessagePayloadReadsUnalignedBytesAndPreservesEmbeddedN
     TestArena testArena;
     constexpr tchar s_Message[] = { static_cast<tchar>('A'), 0, static_cast<tchar>('Z') };
     const TStringView message(s_Message, LengthOf(s_Message));
-    const NWB::Log::MessageType source = MakeTuple(Timer{}, NWB::Log::Type::Warning, NWB::Log::LogString(message, testArena.arena));
+    const NWB::Log::MessageType source = MakeTuple(Timer{}, NWB::Core::Common::LogType::Warning, NWB::Log::LogString(message, testArena.arena));
     NWB::Log::LogBytes payload(testArena.arena);
     ASSERT_TRUE(NWB::Log::BuildMessagePayload(source, payload));
 

@@ -22,7 +22,7 @@ NWB_LOG_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using MessageType = Tuple<Timer, Type::Enum, LogString>;
+using MessageType = Tuple<Timer, Core::Common::LogType::Enum, LogString>;
 using MessageQueue = ParallelQueue<MessageType, LogArena>;
 using LogBytes = Vector<u8, LogArena>;
 
@@ -31,7 +31,7 @@ inline constexpr i32 s_LocalTimeYearBase = 1900;
 inline constexpr i32 s_LocalTimeMonthBase = 1;
 
 [[nodiscard]] inline MessageType MakeMessageType(LogArena& arena){
-    return MakeTuple(Timer{}, Type::Info, LogString(arena));
+    return MakeTuple(Timer{}, Core::Common::LogType::Info, LogString(arena));
 }
 
 
@@ -39,47 +39,47 @@ inline constexpr i32 s_LocalTimeMonthBase = 1;
 
 
 inline constexpr TStringView s_UnknownLogLevelName = NWB_TEXT("UNKNOWN");
-[[nodiscard]] inline TStringView MessageTypeToString(Type::Enum type)noexcept{
+[[nodiscard]] inline TStringView MessageTypeToString(Core::Common::LogType::Enum type)noexcept{
     switch(type){
-    case Type::Info:
+    case Core::Common::LogType::Info:
         return NWB_TEXT("INFO");
-    case Type::EssentialInfo:
+    case Core::Common::LogType::EssentialInfo:
         return NWB_TEXT("ESSENTIAL INFO");
-    case Type::Warning:
+    case Core::Common::LogType::Warning:
         return NWB_TEXT("WARNING");
-    case Type::CriticalWarning:
+    case Core::Common::LogType::CriticalWarning:
         return NWB_TEXT("CRITICAL WARNING");
-    case Type::Assert:
+    case Core::Common::LogType::Assert:
         return NWB_TEXT("ASSERT");
-    case Type::Error:
+    case Core::Common::LogType::Error:
         return NWB_TEXT("ERROR");
-    case Type::Fatal:
+    case Core::Common::LogType::Fatal:
         return NWB_TEXT("FATAL");
     }
     return s_UnknownLogLevelName;
 }
 
-[[nodiscard]] inline bool MessageTypeWritesToErrorStream(Type::Enum type)noexcept{
+[[nodiscard]] inline bool MessageTypeWritesToErrorStream(Core::Common::LogType::Enum type)noexcept{
     switch(type){
-    case Type::CriticalWarning:
-    case Type::Assert:
-    case Type::Error:
-    case Type::Fatal:
+    case Core::Common::LogType::CriticalWarning:
+    case Core::Common::LogType::Assert:
+    case Core::Common::LogType::Error:
+    case Core::Common::LogType::Fatal:
         return true;
     default:
         return false;
     }
 }
 
-[[nodiscard]] inline bool IsValidMessageType(Type::Enum type)noexcept{
+[[nodiscard]] inline bool IsValidMessageType(Core::Common::LogType::Enum type)noexcept{
     switch(type){
-    case Type::Info:
-    case Type::EssentialInfo:
-    case Type::Warning:
-    case Type::CriticalWarning:
-    case Type::Assert:
-    case Type::Error:
-    case Type::Fatal:
+    case Core::Common::LogType::Info:
+    case Core::Common::LogType::EssentialInfo:
+    case Core::Common::LogType::Warning:
+    case Core::Common::LogType::CriticalWarning:
+    case Core::Common::LogType::Assert:
+    case Core::Common::LogType::Error:
+    case Core::Common::LogType::Fatal:
         return true;
     }
     return false;
@@ -131,7 +131,7 @@ template<typename PayloadContainer>
     outMessage = MakeMessageType(arena);
     outError = {};
 
-    if(totalSize < sizeof(Timer) + sizeof(Type::Enum) + sizeof(tchar)){
+    if(totalSize < sizeof(Timer) + sizeof(Core::Common::LogType::Enum) + sizeof(tchar)){
         outError = NWB_TEXT("Received a truncated message");
         return false;
     }
@@ -144,7 +144,7 @@ template<typename PayloadContainer>
     usize cursor = 0u;
 
     Timer time{};
-    Type::Enum type{};
+    Core::Common::LogType::Enum type{};
     if(!ReadPOD(payload, cursor, time) || !ReadPOD(payload, cursor, type)){
         outError = NWB_TEXT("Received a truncated message");
         return false;
@@ -290,7 +290,7 @@ public:
         if constexpr(requires{ T::GlobalInit(); }){
             if(!T::s_GlobalInit){
                 if(!T::GlobalInit()){
-                    static_cast<T*>(this)->T::enqueue(StringFormat(m_arena, NWB_TEXT("Failed to initialize {} globally"), loggerName), Type::Fatal);
+                    static_cast<T*>(this)->T::enqueue(StringFormat(m_arena, NWB_TEXT("Failed to initialize {} globally"), loggerName), Core::Common::LogType::Fatal);
                     return false;
                 }
                 T::s_GlobalInit = true;
@@ -307,15 +307,15 @@ public:
     }
 
 public:
-    inline void enqueue(LogString&& str, Type::Enum type = Type::Info){
+    inline void enqueue(LogString&& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
         LogString message(Move(str), m_arena);
         return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
     }
-    inline void enqueue(const LogString& str, Type::Enum type = Type::Info){
+    inline void enqueue(const LogString& str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
         LogString message(str, m_arena);
         return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
     }
-    inline void enqueue(BasicStringView<tchar> str, Type::Enum type = Type::Info){
+    inline void enqueue(BasicStringView<tchar> str, Core::Common::LogType::Enum type = Core::Common::LogType::Info){
         LogString message(str, m_arena);
         return static_cast<T*>(this)->T::enqueue(MakeTuple(TimerNow(), type, Move(message)));
     }

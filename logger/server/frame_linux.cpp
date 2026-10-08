@@ -48,7 +48,7 @@ static void SignalHandler(i32)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void Frame::Print(BasicStringView<tchar> str, Log::Type::Enum type){
+void Frame::Print(BasicStringView<tchar> str, Core::Common::LogType::Enum type){
     ScopedLock lock(FrameDetail::s_PrintMutex);
 
     auto& stream = Log::MessageTypeWritesToErrorStream(type) ? NWB_TCERR : NWB_TCOUT;

@@ -36,7 +36,7 @@ int Run(const int argc, char** argv){
         NWB_TCERR << s_LoggerInitFailureText << NWB_TEXT("\n");
         return s_FbxToNwbEntryFailure;
     }
-    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     const u32 coreCount = ::QueryCpuCoreCount(CpuAffinity::Any);
     const u32 workerCount = coreCount > s_MinParallelCoreCount ? coreCount - s_MinParallelCoreCount : s_NoWorkerThreads;

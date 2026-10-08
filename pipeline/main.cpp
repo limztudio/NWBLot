@@ -18,7 +18,7 @@ static int RunTool(const int argc, char** argv){
         NWB_CERR << "[" NWB_PIPELINE_TOOL_NAME "] logger.init() failed\n";
         return s_PipelineExitFatal;
     }
-    NWB::Log::LoggerRegistrationGuard guard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
+    NWB::Core::Common::LoggerRegistrationGuard guard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
     return RunPipelineTool(argc, argv);
 }
 

@@ -773,16 +773,13 @@ template<typename MetadataDocument, typename MetadataValue>
     return asset;
 }
 
-template<typename NamedEnumT>
-using NamedEnumCase = ::NamedEnumCase<NamedEnumT>;
-
 template<typename NamedEnumT, typename MetadataValue>
 [[nodiscard]] inline bool ParseNamedMetadataEnumField(
     const Path& nwbFilePath,
     const MetadataValue& object,
     const AStringView diagnosticPrefix,
     const AStringView fieldName,
-    const NamedEnumCase<NamedEnumT>* cases,
+    const ::NamedEnumCase<NamedEnumT>* cases,
     const usize caseCount,
     NamedEnumT& outValue,
     const AStringView errorDetailText

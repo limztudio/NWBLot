@@ -42,7 +42,7 @@ struct TelemetryIngestResult{
     Path jsonPath;
     Path perfCsvPath;
     Path graphPath;
-    Type::Enum type = Type::Info;
+    Core::Common::LogType::Enum type = Core::Common::LogType::Info;
     bool storedRaw = false;
     bool wroteJson = false;
     bool wrotePerfCsv = false;

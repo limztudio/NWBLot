@@ -99,7 +99,7 @@ function(nwb_apply_codegen target)
     nwb_apply_latest_cxx(${target})
     nwb_apply_debug_symbols(${target})
 
-    if(WIN32 AND (NWB_COMPILER_IS_CLANG OR NWB_COMPILER_IS_MSVC))
+    if(WIN32 AND NWB_COMPILER_IS_CLANG)
         set_property(TARGET ${target} PROPERTY
             MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:dbg>:Debug>DLL"
         )
@@ -134,12 +134,6 @@ function(nwb_apply_codegen target)
             $<$<CONFIG:fin>:/Ob2>
             $<$<CONFIG:fin>:/Oy>
         )
-        if(NWB_COMPILER_IS_MSVC)
-            target_compile_options(${target} PRIVATE
-                /MP
-                /sdl
-            )
-        endif()
         target_link_options(${target} PRIVATE
             $<$<CONFIG:dbg>:/DEBUG>
             $<$<CONFIG:opt>:/DEBUG>

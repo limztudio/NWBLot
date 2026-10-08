@@ -70,7 +70,7 @@ inline constexpr LogRowColors s_FatalOddLogRowColors{ RGB(255, 255, 0), RGB(250,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using MessageItem = Pair<LogString, Log::Type::Enum>;
+using MessageItem = Pair<LogString, Core::Common::LogType::Enum>;
 using MessageDeque = Deque<MessageItem, LogArena>;
 
 
@@ -115,36 +115,36 @@ static LogRowColors SelectLogRowColors(const bool alternate, const LogRowColors&
     return alternate ? odd : even;
 }
 
-static LogRowColors ResolveLogRowColors(const Log::Type::Enum type, const bool alternate)noexcept{
+static LogRowColors ResolveLogRowColors(const Core::Common::LogType::Enum type, const bool alternate)noexcept{
     switch(type){
-    case Log::Type::EssentialInfo:
-    case Log::Type::Info:
+    case Core::Common::LogType::EssentialInfo:
+    case Core::Common::LogType::Info:
         return SelectLogRowColors(alternate, s_DefaultEvenLogRowColors, s_InfoOddLogRowColors);
-    case Log::Type::Warning:
+    case Core::Common::LogType::Warning:
         return SelectLogRowColors(
             alternate,
             s_WarningEvenLogRowColors,
             s_WarningOddLogRowColors
         );
-    case Log::Type::CriticalWarning:
+    case Core::Common::LogType::CriticalWarning:
         return SelectLogRowColors(
             alternate,
             s_CriticalWarningEvenLogRowColors,
             s_CriticalWarningOddLogRowColors
         );
-    case Log::Type::Assert:
+    case Core::Common::LogType::Assert:
         return SelectLogRowColors(
             alternate,
             s_AssertEvenLogRowColors,
             s_AssertOddLogRowColors
         );
-    case Log::Type::Error:
+    case Core::Common::LogType::Error:
         return SelectLogRowColors(
             alternate,
             s_ErrorEvenLogRowColors,
             s_ErrorOddLogRowColors
         );
-    case Log::Type::Fatal:
+    case Core::Common::LogType::Fatal:
         return SelectLogRowColors(
             alternate,
             s_FatalEvenLogRowColors,
@@ -446,7 +446,7 @@ bool Frame::mainLoop(){
     }
 }
 
-void Frame::Print(BasicStringView<tchar> str, Log::Type::Enum type){
+void Frame::Print(BasicStringView<tchar> str, Core::Common::LogType::Enum type){
     HWND listHwnd = nullptr;
     TStringView itemText;
     {

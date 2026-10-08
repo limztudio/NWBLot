@@ -29,7 +29,7 @@ int Run(const int argc, char** argv){
         NWB_TCERR << s_LoggerInitFailureText << NWB_TEXT("\n");
         return s_TexConvEntryFailure;
     }
-    NWB::Log::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
+    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger, NWB::Log::BreakPolicy::BreakOnFatal);
 
     return NWB::TexConv::Run(argc, argv);
 }

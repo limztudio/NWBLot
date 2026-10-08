@@ -288,6 +288,7 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
     instance.meshletBounds = mesh->meshletBounds();
     instance.meshletLocalVertexRefs = mesh->meshletLocalVertexRefs();
     instance.meshletPrimitiveIndices = mesh->meshletPrimitiveIndices();
+    instance.solidTriangleWords = mesh->solidTriangleWords();
     instance.dirtyFlags = RuntimeMeshDirtyFlag::All;
     if(!__hidden_runtime_cache_source::BuildRuntimeZippedPayload(*mesh, skin->influences(), instance)){
         eraseUnusedSource(sourceName);

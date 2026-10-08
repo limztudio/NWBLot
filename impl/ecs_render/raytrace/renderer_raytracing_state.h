@@ -81,6 +81,10 @@ struct RtSceneBvhState{
     Core::BufferHandle m_sceneBvhNodeBuffer;  // CPU-built binned-SAH scene/instance BVH (TLAS-analog), uploaded when inputs change
     Core::BufferHandle m_sceneInstanceBuffer; // per-instance world->object transform + reserved ABI word + BVH leaf cost
     Core::BufferHandle m_rayTraceMaterialContextSlotsBuffer;
+    // Current CSG ray geometry is independent of retained light-space capture generations.
+    Core::BufferHandle m_csgTraceContextBuffer;
+    Core::GpuDescriptorHandle m_csgTraceContextHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    Core::QueueSubmissionToken m_csgTraceContextReadSubmissionToken;
     // Software caustics are push-only and reuse the SW trace geometry.
     Core::BindingLayoutHandle m_swCausticBindingLayout;
     Core::ShaderHandle m_swCausticShader;
@@ -323,6 +327,8 @@ struct RtSurfelGiState{
     Core::ComputePipelineHandle m_surfelHashBuildPipeline;
     Core::ShaderHandle m_surfelTraceShader;
     Core::ComputePipelineHandle m_surfelTracePipeline;
+    Core::ShaderHandle m_surfelTraceCsgShader;
+    Core::ComputePipelineHandle m_surfelTraceCsgPipeline;
     // Compute gather avoids frames-in-flight pool races with deferred lighting.
     Core::BindingLayoutHandle m_surfelResolveBindingLayout;
     Core::ShaderHandle m_surfelResolveShader;
@@ -338,6 +344,8 @@ struct RtSurfelGiState{
     Core::BindingLayoutHandle m_surfelTraceHwBindingLayout;
     Core::ShaderHandle m_surfelTraceHwShader;
     Core::ComputePipelineHandle m_surfelTraceHwPipeline;
+    Core::ShaderHandle m_surfelTraceCsgHwShader;
+    Core::ComputePipelineHandle m_surfelTraceCsgHwPipeline;
     // Device-lifetime pool, hash heads, and counters; initialized once.
     Core::BufferHandle m_surfelPoolBuffer;
     Core::BufferHandle m_surfelGuidePoolBuffer;
@@ -367,6 +375,7 @@ struct RtSurfelGiState{
 
     Core::QueueSubmissionToken m_surfelCountReadbackSubmissionToken;
     u32 m_surfelCountReadbackFrame = 0u;
+    u32 m_surfelTraceGeometryFailureFlags = 0u;
     u32 m_surfelPoolCapacity = NWB_SURFEL_POOL_CAPACITY;
     u32 m_surfelHashCellCount = NWB_SURFEL_HASH_CELL_COUNT;
     // Ray-rotation and age counter.
@@ -374,6 +383,9 @@ struct RtSurfelGiState{
 
     bool m_surfelTraceHwPipelineFailed = false;
     bool m_surfelUseHwTrace = false;
+    bool m_surfelUseCsgTrace = false;
+    bool m_surfelTraceCsgPipelineFailed = false;
+    bool m_surfelTraceCsgHwPipelineFailed = false;
     bool m_surfelTraceBuildArgsPipelineFailed = false;
     bool m_surfelUpsamplePipelineFailed = false;
     bool m_surfelResolvePipelineFailed = false;

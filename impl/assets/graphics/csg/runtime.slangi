@@ -164,22 +164,6 @@ bool nwbCsgBoundsFinite(const NwbCsgBounds bounds){
     return (bounds.minFlags & NWB_CSG_BOUNDS_FINITE_FLAG) != 0;
 }
 
-bool nwbCsgBoundsContains(const NwbCsgBounds bounds, const float3 position, const float epsilon){
-    if(!nwbCsgBoundsValid(bounds))
-        return false;
-    if(!nwbCsgBoundsFinite(bounds))
-        return true;
-
-    const float3 paddedMinBounds = bounds.minBounds - float3(epsilon);
-    const float3 paddedMaxBounds = bounds.maxBounds + float3(epsilon);
-    return all(position >= paddedMinBounds) && all(position <= paddedMaxBounds);
-}
-
-bool nwbCsgReceiverLocalBoundsContains(const NwbCsgReceiverRange receiverRange, const float3 worldPosition){
-    const float3 receiverLocalPosition = nwbCsgTransformWorldToReceiverLocal(worldPosition, receiverRange);
-    return nwbCsgBoundsContains(receiverRange.localBounds, receiverLocalPosition, NWB_CSG_BOUNDS_EPSILON);
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

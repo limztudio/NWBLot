@@ -1,0 +1,168 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_GI_GEOMETRY_SLANGI
+#define NWB_GRAPHICS_GI_GEOMETRY_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "gi_trace_common.slangi"
+#include "../bvh/ray_vertex_attrib.slangi"
+#if NWB_GI_CSG_ENABLED
+#include "../csg/ray_geometry.slangi"
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbGiGeometryHit{
+    bool hit;
+    uint instance;
+    uint primitive;
+    uint cutter;
+    uint failure;
+    float distance;
+    float2 barycentrics;
+    float3 normal;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+NwbGiGeometryHit nwbGiEmptyGeometryHit(const float maximum){
+    NwbGiGeometryHit hit = (NwbGiGeometryHit)0;
+    hit.distance = maximum;
+    return hit;
+}
+
+float3 nwbGiTransformNormal(const float3x4 worldToObject, const float3 objectNormal){
+    return float3(
+        dot(float3(worldToObject[0].x, worldToObject[1].x, worldToObject[2].x), objectNormal),
+        dot(float3(worldToObject[0].y, worldToObject[1].y, worldToObject[2].y), objectNormal),
+        dot(float3(worldToObject[0].z, worldToObject[1].z, worldToObject[2].z), objectNormal)
+    );
+}
+
+#if NWB_GI_CSG_ENABLED
+void nwbGiReportGeometryFailure(const uint failure){
+    uint previous;
+    InterlockedOr(
+        g_NwbHeapSurfelWritableUintBuffers[g_NwbSurfelHeapPushConstants.counterHeapSlot][NWB_SURFEL_COUNTER_TRACE_GEOMETRY_FAILURE],
+        failure, previous
+    );
+}
+
+NwbGiGeometryHit nwbGiCsgGeometryHit(
+    const uint contextSlot,
+    const uint materialSlot,
+    const uint instanceIndex,
+    const float3 origin,
+    const float3 direction,
+    const float minimum,
+    const float maximum
+){
+    const NwbCsgRayBoundary boundary = nwbCsgRayResolveBoundary(contextSlot, materialSlot, instanceIndex, origin, direction, minimum, maximum);
+    NwbGiGeometryHit geometry = nwbGiEmptyGeometryHit(maximum);
+    if(boundary.failure != 0u){
+        nwbGiReportGeometryFailure(boundary.failure);
+        geometry.hit = true;
+        geometry.failure = boundary.failure;
+        geometry.distance = minimum;
+        return geometry;
+    }
+    if(!boundary.hit)
+        return geometry;
+    geometry.hit = true;
+    geometry.instance = instanceIndex;
+    geometry.primitive = boundary.primitive;
+    geometry.cutter = boundary.cutter;
+    geometry.distance = boundary.distance;
+    geometry.barycentrics = boundary.barycentrics;
+    if(boundary.cutter != NWB_CSG_RAY_INVALID_INDEX){
+        if(!nwbCsgRayBoundaryNormal(contextSlot, boundary, origin + direction * boundary.distance, geometry.normal)){
+            nwbGiReportGeometryFailure(NWB_CSG_RAY_FAILURE_TOPOLOGY);
+            geometry.failure = NWB_CSG_RAY_FAILURE_TOPOLOGY;
+            geometry.distance = minimum;
+        }
+    }
+    else{
+        const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
+        const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
+        geometry.normal = nwbRayTraceTriangleGeometricNormal(material, boundary.primitive, nwbCsgRayWorldToObject(instance));
+    }
+    return geometry;
+}
+#endif
+
+NwbGiTraceHit nwbGiReconstructHit(
+    const NwbGiGeometryHit geometry,
+    const uint materialSlot,
+    const float3x4 worldToObject,
+    const float3 origin,
+    const float3 direction
+){
+    NwbGiTraceHit closest;
+    closest.hit = geometry.hit;
+    closest.t = geometry.distance;
+    closest.worldPos = float3(0.0);
+    closest.normal = float3(0.0, 0.0, 1.0);
+    closest.albedo = half3(NWB_GI_SW_TRACE_DEFAULT_ALBEDO);
+    if(!geometry.hit)
+        return closest;
+#if NWB_GI_CSG_ENABLED
+    if(geometry.failure != 0u){
+        closest.albedo = half3(0.0h);
+        return closest;
+    }
+#endif
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[geometry.instance];
+    NwbShadowHit surfaceHit;
+    surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
+    surfaceHit.surfaceDispatchId = material.surfaceDispatchId;
+    surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
+    surfaceHit.worldPosition = origin + direction * geometry.distance;
+    surfaceHit.rayDirection = direction;
+#if NWB_GI_CSG_ENABLED
+    if(geometry.primitive == NWB_CSG_RAY_INVALID_INDEX){
+        surfaceHit.uv0 = float2(0.0);
+        surfaceHit.worldNormal = geometry.normal;
+    }
+    else
+#endif
+    {
+        const uint triangleBase = geometry.primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+        const NwbRayTraceVertexAttrib a0 = nwbRayTraceDecodeVertexAttrib(
+            nwbHeapRawBuffer(material.attributeSlot).Load4(triangleBase * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES)
+        );
+        const NwbRayTraceVertexAttrib a1 = nwbRayTraceDecodeVertexAttrib(
+            nwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 1u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES)
+        );
+        const NwbRayTraceVertexAttrib a2 = nwbRayTraceDecodeVertexAttrib(
+            nwbHeapRawBuffer(material.attributeSlot).Load4((triangleBase + 2u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES)
+        );
+        const float3 weights = float3(1.0 - geometry.barycentrics.x - geometry.barycentrics.y, geometry.barycentrics.x, geometry.barycentrics.y);
+        const float3 objectNormal = float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z;
+        surfaceHit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
+        surfaceHit.worldNormal = nwbSafeNormalize(nwbGiTransformNormal(worldToObject, objectNormal), float3(0.0, 0.0, 1.0));
+    }
+    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, surfaceHit);
+    closest.worldPos = surfaceHit.worldPosition;
+    closest.normal = geometry.normal;
+    closest.albedo = surface.baseColor;
+    return closest;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

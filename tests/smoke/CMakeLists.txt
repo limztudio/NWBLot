@@ -1389,14 +1389,20 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         # The default surfel-GI smoke preserves the open-top box used by the pinned renderer baseline. A closed,
         # 20-body skylight scene is available to opt-in A/B captures through NWB_GI_SMOKE_COMPLEX_SCENE.
         nwb_declare_executable(nwb_gi_test_smoke)
+        target_compile_definitions(nwb_gi_test_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         target_sources(nwb_gi_test_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/gi_test_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/csg_gi_scene.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/csg_gi_scene.h"
+            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.h"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
         )
         nwb_configure_runtime_smoke_target(
             nwb_gi_test_smoke
             "${_nwb_skinning_culling_runtime_root}"
+            nwb_ecs_csg
         )
         add_dependencies(nwb_gi_test_smoke nwb_skinning_culling_benchmark_assets)
 
@@ -1429,6 +1435,35 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             ENVIRONMENT "NWB_GI_SMOKE_COVERAGE_VIEW=1"
             TIMEOUT 90
         )
+
+        foreach(_nwb_csg_gi_route IN ITEMS natural software)
+            foreach(_nwb_csg_gi_lighting IN ITEMS current lagged)
+                set(_nwb_csg_gi_lighting_suffix "")
+                set(_nwb_csg_gi_lighting_args --no-lagged-lighting)
+                if(_nwb_csg_gi_lighting STREQUAL "lagged")
+                    set(_nwb_csg_gi_lighting_suffix "_lagged")
+                    set(_nwb_csg_gi_lighting_args --lagged-lighting)
+                endif()
+                add_test(
+                    NAME "nwb_csg_gi_${_nwb_csg_gi_route}${_nwb_csg_gi_lighting_suffix}_smoke"
+                    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_gi_smoke.py"
+                        --executable "$<TARGET_FILE:nwb_gi_test_smoke>"
+                        --working-directory "${_nwb_skinning_culling_runtime_root}"
+                        --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_gi_${_nwb_csg_gi_route}${_nwb_csg_gi_lighting_suffix}"
+                        --route "${_nwb_csg_gi_route}"
+                        ${_nwb_csg_gi_lighting_args}
+                        ${_nwb_skinning_culling_logserver_args}
+                        "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>"
+                )
+                set_tests_properties("nwb_csg_gi_${_nwb_csg_gi_route}${_nwb_csg_gi_lighting_suffix}_smoke" PROPERTIES
+                    RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 900 LABELS "csg_gi"
+                )
+            endforeach()
+        endforeach()
+        unset(_nwb_csg_gi_route)
+        unset(_nwb_csg_gi_lighting)
+        unset(_nwb_csg_gi_lighting_suffix)
+        unset(_nwb_csg_gi_lighting_args)
 
         unset(_nwb_skinning_culling_asset_stamp)
         unset(_nwb_skinning_culling_model_nwb)

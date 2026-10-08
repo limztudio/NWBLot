@@ -53,6 +53,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     m_deferredShadowPrepareAccelStructFinalizeTask = {};
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
+    m_csgTraceContextUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};
     m_surfelFrameConstantsUploadTask = {};
     m_shadowInstanceMaterialUploadTask = {};
@@ -185,6 +186,53 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     }
 
     Core::GpuTaskId shadowPrepareDependency = m_rayTraceMaterialContextSlotsUploadTask;
+    Core::GpuGraphResourceId csgTraceContext;
+    if(rayTracingResources.csgTraceContextBuffer){
+        Core::GpuGraphResourceDesc contextDesc = BufferResourceDesc(Name("render.raytrace.csg_context"), "Current CSG Ray Context");
+        if(rayTracingResources.csgTraceContextReadSubmissionToken.valid()){
+            Core::GpuExternalCompletionDesc readCompleteDesc;
+            readCompleteDesc
+                .setIdentity(Name("render.raytrace.csg_context_read_complete"))
+                .setMarkerLabel("Prior CSG GI Read Complete")
+                .setToken(rayTracingResources.csgTraceContextReadSubmissionToken)
+            ;
+            const Core::GpuExternalCompletionId readComplete = m_deferredLightingTaskGraph.importExternalCompletion(readCompleteDesc);
+            if(!readComplete.valid())
+                return false;
+            contextDesc.setInitialAvailabilityCompletion(readComplete);
+        }
+        csgTraceContext = m_deferredLightingTaskGraph.importBuffer(rayTracingResources.csgTraceContextBuffer, contextDesc);
+    }
+    const auto csgTraceContextBlob = m_raytracingSystem.retainPreparedCsgTraceContextUpload(m_deferredLightingTaskGraph);
+    if(!csgTraceContextBlob || (rayTracingResources.csgTraceContextBuffer && !csgTraceContext.valid())){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: could not retain current CSG ray context"));
+        return false;
+    }
+    if(csgTraceContextBlob->valid()){
+        if(!csgTraceContext.valid())
+            return false;
+        Core::GpuTaskSchedulingHint csgUploadScheduling = materialContextUploadScheduling;
+        csgUploadScheduling.cost = Core::GpuTaskCostHint::Medium;
+        csgUploadScheduling.mergeWithPrevious = true;
+        Core::GpuTaskDesc csgUploadDesc;
+        csgUploadDesc
+            .setIdentity(Name("render.raytrace.csg_context_upload"))
+            .setMarkerLabel("Current CSG Ray Context Upload")
+            .setScheduling(csgUploadScheduling)
+            .setDependencies(&shadowPrepareDependency, 1u)
+        ;
+        m_csgTraceContextUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
+            csgUploadDesc,
+            Core::GpuUploadBufferTaskDesc{
+                .source = *csgTraceContextBlob,
+                .destination = csgTraceContext,
+                .finalState = Core::ResourceStates::Common,
+            }
+        );
+        if(!m_csgTraceContextUploadTask.valid())
+            return false;
+        shadowPrepareDependency = m_csgTraceContextUploadTask;
+    }
     if(causticEmissionTargetsBlob->valid()){
         if(!causticEmissionTargets.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: caustic emission-target upload has no imported destination"));
@@ -201,7 +249,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
             .setIdentity(Name("render.raytrace.caustic_emission_targets_upload"))
             .setMarkerLabel("Caustic Emission Targets Upload")
             .setScheduling(causticEmissionTargetsUploadScheduling)
-            .setDependencies(&m_rayTraceMaterialContextSlotsUploadTask, 1u)
+            .setDependencies(&shadowPrepareDependency, 1u)
         ;
         m_causticEmissionTargetsUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
             causticEmissionTargetsUploadDesc,
@@ -545,6 +593,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     constexpr usize s_ShadowPrepareResourceUseCapacity = 19u;
     resourceUses.reserve(
         s_ShadowPrepareResourceUseCapacity
+        + (csgTraceContext.valid() ? 1u : 0u)
         + shadowTraceGeometryResourceCount
         + softwareBvhBuildStateResourceCount
         + liveMeshBlasGraphStates.size()
@@ -560,6 +609,8 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     resourceUses.push_back(ReadWriteUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     // Retain Shadow Preparation as producer; WAW handoff retires the immutable upload.
     resourceUses.push_back(WriteUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
+    if(csgTraceContext.valid())
+        resourceUses.push_back(WriteUse(csgTraceContext, Core::ResourceStates::ShaderResource));
     if(causticEmissionTargets.valid())
         resourceUses.push_back(WriteUse(causticEmissionTargets, Core::ResourceStates::ShaderResource));
     if(surfelFrameConstants.valid())

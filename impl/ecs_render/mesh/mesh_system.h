@@ -64,6 +64,7 @@ namespace ECSRenderDetail{
         Core::BufferHandle positionBuffer;
         Core::BufferHandle triangleIndexBuffer;
         Core::BufferHandle attributeBuffer;
+        Span<const u32> solidTriangleWords;
         Core::BufferHandle runtimeLocalBoundsBuffer;
         // Complete accepted runtime tuple, or zero meshlets for the whole-caster path.
         Core::BufferHandle meshletDescBuffer;

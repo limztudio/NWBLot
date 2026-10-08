@@ -160,7 +160,7 @@ struct RayTraceMaterialContextSlots{
     u32 meshInstances = 0u;
     u32 opticalScene = 0u;
     u32 opticalInstanceCount = 0u;
-    u32 _reserved2 = 0u;
+    u32 csgContext = 0xffffffffu;
 };
 static_assert(sizeof(RayTraceMaterialContextSlots) == sizeof(u32) * 8u, "Ray-trace material-context slots must stay two uint4 lanes");
 

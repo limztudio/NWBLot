@@ -11,6 +11,7 @@
 #include <core/ecs/entity.h>
 
 #include <tests/common/ecs_test_world.h>
+#include <tests/common/capturing_logger.h>
 #include <gtest/gtest.h>
 
 
@@ -29,6 +30,7 @@ using namespace NWB::Impl;
 inline constexpr Name s_ReceiverGroup("tests/csg_shadow/group");
 inline constexpr Name s_OtherGroup("tests/csg_shadow/other");
 inline constexpr Name s_CustomShape("tests/csg_shadow/custom");
+inline constexpr u32 s_OpenTriangleWords[] = {0u};
 
 struct SnapshotContext{
     Tests::EcsTestWorld testWorld;
@@ -152,7 +154,7 @@ TEST(CsgShadowSnapshot, ResolvesGroupsAndMaterialPassesInShadowInstanceOrder){
     ASSERT_EQ(context.snapshot.receiverRanges.size(), LengthOf(inputs));
     EXPECT_EQ(context.snapshot.receiverRanges[0].flags, 0u);
     EXPECT_EQ(context.snapshot.receiverRanges[1].flags, 0u);
-    EXPECT_EQ(context.snapshot.receiverRanges[2].flags, NWB_CSG_SHADOW_RECEIVER_ACTIVE);
+    EXPECT_EQ(context.snapshot.receiverRanges[2].flags, NWB_CSG_RAY_RECEIVER_ACTIVE);
     EXPECT_EQ(context.snapshot.receiverRanges[2].cutterCount, 1u);
     ASSERT_EQ(context.snapshot.cutters.size(), 1u);
 }
@@ -175,7 +177,7 @@ TEST(CsgShadowSnapshot, CullsOnlyFiniteOutsideCuttersWithTrustedReceiverBounds){
     ASSERT_EQ(context.snapshot.receiverRanges.size(), LengthOf(inputs));
     EXPECT_EQ(context.snapshot.receiverRanges[0].cutterCount, 1u);
     EXPECT_EQ(context.snapshot.receiverRanges[1].cutterCount, 2u);
-    EXPECT_EQ(context.snapshot.cutters[0].shapeType, NWB_CSG_SHADOW_SHAPE_PLANE);
+    EXPECT_EQ(context.snapshot.cutters[0].shapeType, NWB_CSG_RAY_SHAPE_PLANE);
     EXPECT_EQ(context.snapshot.cutters.size(), 3u);
 
     inputs[0].worldMin = Float3U(2.f, 2.f, 2.f);
@@ -197,7 +199,7 @@ TEST(CsgShadowSnapshot, CustomEvaluatorUsesConservativeUncutFallbackOnlyWhenItCa
     ASSERT_EQ(context.snapshot.receiverRanges.size(), 1u);
     EXPECT_EQ(
         context.snapshot.receiverRanges[0].flags,
-        NWB_CSG_SHADOW_RECEIVER_ACTIVE | NWB_CSG_SHADOW_RECEIVER_UNSUPPORTED
+        NWB_CSG_RAY_RECEIVER_ACTIVE | NWB_CSG_RAY_RECEIVER_UNSUPPORTED
     );
     EXPECT_EQ(context.snapshot.receiverRanges[0].cutterCount, 0u);
     EXPECT_TRUE(context.snapshot.cutters.empty());
@@ -207,7 +209,7 @@ TEST(CsgShadowSnapshot, CustomEvaluatorUsesConservativeUncutFallbackOnlyWhenItCa
     StoreFloat(MatrixTranslation(10.f, 0.f, 0.f), custom->shapeToWorld);
     StoreFloat(MatrixTranslation(-10.f, 0.f, 0.f), custom->worldToShape);
     ASSERT_TRUE(context.build(&input, 1u));
-    EXPECT_EQ(context.snapshot.receiverRanges[0].flags, NWB_CSG_SHADOW_RECEIVER_ACTIVE);
+    EXPECT_EQ(context.snapshot.receiverRanges[0].flags, NWB_CSG_RAY_RECEIVER_ACTIVE);
     EXPECT_EQ(context.snapshot.receiverRanges[0].cutterCount, 1u);
 }
 
@@ -215,19 +217,19 @@ TEST(CsgShadowSnapshot, CutterLimitFallsBackForTheWholeReceiverWithoutPartialSub
     SnapshotContext context;
     ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
     const CsgShadowReceiverInput input = ReceiverInput(context.addReceiver());
-    for(u32 index = 0u; index < NWB_CSG_SHADOW_MAX_CUTTERS; ++index){
+    for(u32 index = 0u; index < NWB_CSG_RAY_MAX_CUTTERS; ++index){
         const Core::ECS::EntityID cutterEntity = context.addCutter(s_CsgPlaneShapeName);
         ASSERT_TRUE(cutterEntity.valid());
     }
     ASSERT_TRUE(context.build(&input, 1u));
-    ASSERT_EQ(context.snapshot.cutters.size(), NWB_CSG_SHADOW_MAX_CUTTERS);
-    EXPECT_EQ(context.snapshot.receiverRanges[0].flags, NWB_CSG_SHADOW_RECEIVER_ACTIVE);
+    ASSERT_EQ(context.snapshot.cutters.size(), NWB_CSG_RAY_MAX_CUTTERS);
+    EXPECT_EQ(context.snapshot.receiverRanges[0].flags, NWB_CSG_RAY_RECEIVER_ACTIVE);
     const Core::ECS::EntityID overflowCutter = context.addCutter(s_CsgPlaneShapeName);
     ASSERT_TRUE(overflowCutter.valid());
     ASSERT_TRUE(context.build(&input, 1u));
     EXPECT_EQ(
         context.snapshot.receiverRanges[0].flags,
-        NWB_CSG_SHADOW_RECEIVER_ACTIVE | NWB_CSG_SHADOW_RECEIVER_UNSUPPORTED
+        NWB_CSG_RAY_RECEIVER_ACTIVE | NWB_CSG_RAY_RECEIVER_UNSUPPORTED
     );
     EXPECT_EQ(context.snapshot.receiverRanges[0].cutterCount, 0u);
     EXPECT_TRUE(context.snapshot.cutters.empty());
@@ -247,8 +249,8 @@ TEST(CsgShadowSnapshot, MalformedAndUnregisteredCuttersFollowRasterSkipSemantics
     malformed->parameterBytes.push_back(0u);
     ASSERT_TRUE(context.build(&input, 1u));
     ASSERT_EQ(context.snapshot.cutters.size(), 1u);
-    EXPECT_EQ(context.snapshot.cutters[0].shapeType, NWB_CSG_SHADOW_SHAPE_PLANE);
-    EXPECT_EQ(context.snapshot.receiverRanges[0].flags, NWB_CSG_SHADOW_RECEIVER_ACTIVE);
+    EXPECT_EQ(context.snapshot.cutters[0].shapeType, NWB_CSG_RAY_SHAPE_PLANE);
+    EXPECT_EQ(context.snapshot.receiverRanges[0].flags, NWB_CSG_RAY_RECEIVER_ACTIVE);
 }
 
 TEST(CsgShadowSnapshot, RepeatedSameSizeBuildsClearDisabledAndUnsupportedReceiverRanges){
@@ -280,11 +282,11 @@ TEST(CsgShadowSnapshot, RepeatedSameSizeBuildsClearDisabledAndUnsupportedReceive
     ASSERT_NE(cutter, nullptr);
     cutter->shapeType = s_CustomShape;
     ASSERT_TRUE(context.build(inputs, LengthOf(inputs)));
-    EXPECT_NE(context.snapshot.receiverRanges[0].flags & NWB_CSG_SHADOW_RECEIVER_UNSUPPORTED, 0u);
+    EXPECT_NE(context.snapshot.receiverRanges[0].flags & NWB_CSG_RAY_RECEIVER_UNSUPPORTED, 0u);
     EXPECT_EQ(context.snapshot.receiverRanges[0].cutterCount, 0u);
     cutter->shapeType = s_CsgBoxShapeName;
     ASSERT_TRUE(context.build(inputs, LengthOf(inputs)));
-    EXPECT_EQ(context.snapshot.receiverRanges[0].flags, NWB_CSG_SHADOW_RECEIVER_ACTIVE);
+    EXPECT_EQ(context.snapshot.receiverRanges[0].flags, NWB_CSG_RAY_RECEIVER_ACTIVE);
     EXPECT_EQ(context.snapshot.receiverRanges[0].cutterCount, 1u);
     EXPECT_EQ(context.snapshot.receiverRanges[1].firstCutter, 1u);
     EXPECT_EQ(context.snapshot.cutters.size(), 2u);
@@ -299,12 +301,21 @@ TEST(CsgShadowSnapshot, HardwareRootExclusionAndDisabledReceiversClearCapturedSt
     LightSpaceCsgState state(context.testWorld.arena);
     ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
     mesh.meshletPrimitiveIndexCount = 3u;
+    mesh.solidTriangleWords = s_OpenTriangleWords;
     mesh.csgLocalBounds.minBounds = Float3Int(-2.f, -2.f, -2.f, s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag);
     mesh.csgLocalBounds.maxBounds = Float3Int(2.f, 2.f, 2.f, 0);
     BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
     AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), mesh);
     ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
     ASSERT_TRUE(state.snapshot.hasCsg);
+    const usize rangeMembershipOffset = NWB_CSG_RAY_CONTEXT_BYTES + offsetof(CsgShadowReceiverRangeGpu, solidTriangleWordOffset);
+    u32 membershipOffset = 0u;
+    NWB_MEMCPY(&membershipOffset, sizeof(membershipOffset), state.bytes.data() + rangeMembershipOffset, sizeof(membershipOffset));
+    EXPECT_NE(membershipOffset, 0u);
+    EXPECT_EQ(membershipOffset, state.bytes.size() - sizeof(u32));
+    u32 membershipWord = Limit<u32>::s_Max;
+    NWB_MEMCPY(&membershipWord, sizeof(membershipWord), state.bytes.data() + membershipOffset, sizeof(membershipWord));
+    EXPECT_EQ(membershipWord, s_OpenTriangleWords[0]);
     constexpr u32 s_SoftwareRootSlot = 17u;
     mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, s_SoftwareRootSlot);
     BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, true);
@@ -325,6 +336,28 @@ TEST(CsgShadowSnapshot, HardwareRootExclusionAndDisabledReceiversClearCapturedSt
     EXPECT_FALSE(state.snapshot.hasCsg);
     EXPECT_EQ(state.snapshot.identity, 0u);
     EXPECT_TRUE(state.bytes.empty());
+}
+
+TEST(CsgShadowSnapshot, MissingSolidMembershipCannotPublishAnActiveRayContext){
+    Tests::CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
+    SnapshotContext context;
+    ASSERT_TRUE(RegisterBuiltInCsgShapeTypes(context.registry));
+    const Core::ECS::EntityID receiver = context.addReceiver();
+    ASSERT_TRUE(context.addCutter(s_CsgBoxShapeName).valid());
+    LightSpaceCsgState state(context.testWorld.arena);
+    ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
+    mesh.meshletPrimitiveIndexCount = 3u;
+    const u32 extraWords[] = {0u, 0u};
+    for(const Span<const u32> words : {Span<const u32>{}, Span<const u32>(extraWords)}){
+        mesh.solidTriangleWords = words;
+        BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
+        AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), mesh);
+        EXPECT_FALSE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
+        EXPECT_TRUE(state.bytes.empty());
+    }
+    EXPECT_EQ(logger.errorCount(), 2u);
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("CSG receiver has no valid cooked solid topology")));
 }
 
 TEST(CsgShadowSnapshot, BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWithinItsCadence){
@@ -350,6 +383,7 @@ TEST(CsgShadowSnapshot, BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWit
         mesh.runtimeMeshVersion = 3u;
         mesh.runtimeGeometryContentRevision = 7u;
         mesh.meshletPrimitiveIndexCount = 3u;
+        mesh.solidTriangleWords = s_OpenTriangleWords;
         NwbRtInstanceMaterialGpu material;
         InstanceGpuData instance;
         LightSpaceCaptureHistory history;
@@ -397,6 +431,7 @@ TEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBind
     mesh.runtimeMeshVersion = 3u;
     mesh.runtimeGeometryContentRevision = 7u;
     mesh.meshletPrimitiveIndexCount = 3u;
+    mesh.solidTriangleWords = s_OpenTriangleWords;
     NwbRtInstanceMaterialGpu materials[LengthOf(receivers)];
     InstanceGpuData instances[LengthOf(receivers)];
     u8 materialBytes[] = { 1u, 2u, 3u, 4u };
@@ -464,6 +499,7 @@ TEST(CsgShadowSnapshot, UnknownOrPendingRuntimePoseCannotReuseAnAcceptedCapture)
         ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
         mesh.runtimeMesh = true;
         mesh.meshletPrimitiveIndexCount = 3u;
+        mesh.solidTriangleWords = s_OpenTriangleWords;
         NwbRtInstanceMaterialGpu material;
         InstanceGpuData instance;
         LightSpaceCaptureHistory history;

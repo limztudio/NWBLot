@@ -16,7 +16,7 @@ struct NwbCsgIntervalPeelEntry{
     float backDepth;
     float frontLinearDepth;
     float backLinearDepth;
-    half3 backCapNormal;
+    half4 backCapNormal;
     uint id;
 };
 
@@ -92,7 +92,7 @@ NwbCsgIntervalPeelEntry nwbCsgInvalidIntervalPeelEntry(){
     entry.backDepth = NWB_CSG_INVALID_DISTANCE;
     entry.frontLinearDepth = NWB_CSG_INVALID_DISTANCE;
     entry.backLinearDepth = NWB_CSG_INVALID_DISTANCE;
-    entry.backCapNormal = half3(0.0h, 0.0h, 0.0h);
+    entry.backCapNormal = half4(0.0h);
     entry.id = 0u;
     return entry;
 }
@@ -215,6 +215,7 @@ bool nwbCsgBuildIntervalPeelEntry(
     const float3 rayVector,
     const float frontT,
     const float backT,
+    const bool hasBackCap,
     const NwbCsgCutter cutter,
     const uint receiverIndex,
     out NwbCsgIntervalPeelEntry outEntry
@@ -230,7 +231,11 @@ bool nwbCsgBuildIntervalPeelEntry(
     outEntry.frontLinearDepth = min(frontLinearDepth, backLinearDepth);
     outEntry.backLinearDepth = max(frontLinearDepth, backLinearDepth);
     const float3 viewFacingFallback = normalize(-rayVector);
-    outEntry.backCapNormal = half3(nwbCsgFlippedCutterWorldNormal(backWorldPosition, cutter, viewFacingFallback));
+    // Alpha distinguishes a genuine cutter exit from the clipped receiver bound used only for removal.
+    outEntry.backCapNormal = hasBackCap
+        ? half4(half3(nwbCsgFlippedCutterWorldNormal(backWorldPosition, cutter, viewFacingFallback)), 1.0h)
+        : half4(0.0h)
+    ;
     outEntry.id = nwbCsgPackIntervalId(receiverIndex);
     return outEntry.backLinearDepth >= outEntry.frontLinearDepth && outEntry.id != 0u;
 }
@@ -240,7 +245,6 @@ bool nwbCsgFindCutterIntervalOnRay(
     const float3 rayVector,
     const float beginT,
     const float endT,
-    const NwbCsgReceiverRange receiverRange,
     const uint receiverIndex,
     const uint cutterIndex,
     out NwbCsgIntervalPeelEntry outEntry
@@ -252,14 +256,13 @@ bool nwbCsgFindCutterIntervalOnRay(
     float2 analyticInterval;
     if(nwbCsgTryAnalyticCutterInterval(rayBegin + rayVector * beginT, rayVector, cutter, analyticInterval)){
         const float frontT = max(beginT, beginT + analyticInterval.x);
-        const float backT = beginT + analyticInterval.y;
-        // The peeled cap must be a cutter exit, not an artificial exit at the receiver's far bound.
-        if(backT <= frontT || backT >= endT)
+        const float cutterBackT = beginT + analyticInterval.y;
+        const float backT = min(endT, cutterBackT);
+        if(backT <= frontT)
             return false;
-        const float3 midWorldPosition = rayBegin + rayVector * ((frontT + backT) * 0.5);
-        if(!nwbCsgReceiverLocalBoundsContains(receiverRange, midWorldPosition))
-            return false;
-        return nwbCsgBuildIntervalPeelEntry(rayBegin, rayVector, frontT, backT, cutter, receiverIndex, outEntry);
+        return nwbCsgBuildIntervalPeelEntry(
+            rayBegin, rayVector, frontT, backT, cutterBackT < endT, cutter, receiverIndex, outEntry
+        );
     }
 
     const float step = (endT - beginT) / float(NWB_CSG_INTERVAL_PEEL_STEP_COUNT);
@@ -282,15 +285,9 @@ bool nwbCsgFindCutterIntervalOnRay(
             }
             else if(hasFront){
                 const float backT = hitT;
-                const float3 midWorldPosition = rayBegin + rayVector * ((frontT + backT) * 0.5);
-                if(!nwbCsgReceiverLocalBoundsContains(receiverRange, midWorldPosition)){
-                    hasFront = false;
-                    inside = nextInside;
-                    previousT = t;
-                    continue;
-                }
-
-                return nwbCsgBuildIntervalPeelEntry(rayBegin, rayVector, frontT, backT, cutter, receiverIndex, outEntry);
+                return nwbCsgBuildIntervalPeelEntry(
+                    rayBegin, rayVector, frontT, backT, true, cutter, receiverIndex, outEntry
+                );
             }
         }
 
@@ -298,6 +295,10 @@ bool nwbCsgFindCutterIntervalOnRay(
         previousT = t;
     }
 
+    if(inside && hasFront && endT > frontT)
+        return nwbCsgBuildIntervalPeelEntry(
+            rayBegin, rayVector, frontT, endT, false, cutter, receiverIndex, outEntry
+        );
     return false;
 }
 
@@ -340,7 +341,7 @@ void nwbCsgWriteIntervalPeelEntries(
         if(entry.id == 0u)
             continue;
 
-        g_NwbCsgBackCapNormal[texel] = float4(float3(entry.backCapNormal), 1.0);
+        g_NwbCsgBackCapNormal[texel] = float4(entry.backCapNormal);
         g_NwbCsgIntervalDepth[texel] = float4(entry.frontDepth, entry.backDepth, entry.frontLinearDepth, entry.backLinearDepth);
         g_NwbCsgIntervalId[texel] = entry.id;
     }
@@ -388,7 +389,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         for(uint localCutterIndex = 0u; localCutterIndex < receiverRange.rangeInfo.y; ++localCutterIndex){
             const uint cutterIndex = receiverRange.rangeInfo.x + localCutterIndex;
             NwbCsgIntervalPeelEntry entry;
-            if(nwbCsgFindCutterIntervalOnRay(rayBegin, rayVector, beginT, endT, receiverRange, receiverIndex, cutterIndex, entry))
+            if(nwbCsgFindCutterIntervalOnRay(rayBegin, rayVector, beginT, endT, receiverIndex, cutterIndex, entry))
                 nwbCsgInsertIntervalPeelEntry(entries, entry);
         }
     }

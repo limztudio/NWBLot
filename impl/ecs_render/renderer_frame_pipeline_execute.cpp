@@ -906,7 +906,7 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     Vector<Core::BufferHandle, Core::Alloc::ScratchArena> shadowPrepareLiveStateBuffers{ shadowPrepareStateScratchArena };
     shadowPrepareLiveStateBuffers.reserve(AddSize(
         AddSize(acceptedTraceGeometry.size(), preparedTraceGeometry.size()),
-        AddSize(meshAccelerationStateBuffers.size(), 4u)
+        AddSize(meshAccelerationStateBuffers.size(), rayTracingGraphResources.csgTraceContextBuffer ? 5u : 4u)
     ));
     const auto appendShadowPrepareStateBuffer = [&](const Core::BufferHandle& buffer){
         if(buffer)
@@ -935,6 +935,10 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
     appendShadowPrepareStateBuffer(rayTracingShadowResources.bvhSortKeysBuffer);
     appendShadowPrepareStateBuffer(rayTracingShadowResources.bvhSortPayloadBuffer);
     appendShadowPrepareStateBuffer(rayTracingShadowResources.bvhVisitCounterBuffer);
+    if(rayTracingGraphResources.csgTraceContextBuffer){
+        appendShadowPrepareStateBuffer(rayTracingGraphResources.csgTraceContextBuffer);
+        shadowPrepareStateCandidateRequired = true;
+    }
 
     // Build the sparse candidate after recording; commit on Shadow Preparation accept.
     Core::GpuPersistentResourceStateCache::Candidate shadowPrepareAcceptedStateCandidate(m_shadowPreparePersistentState);

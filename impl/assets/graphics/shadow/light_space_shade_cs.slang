@@ -24,6 +24,33 @@ void nwbLightSpaceInvalidateCrossing(const uint address, const uint instance, co
     g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + 16u, 0u);
 }
 
+// Receiver threads consume instance ASC, depth DESC, primitive ASC records after both shading and cap conversion.
+void nwbLightSpaceSortEvents(const uint pixelIndex, const uint count){
+    for(uint index = 1u; index < count; ++index){
+        const uint address = (pixelIndex * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + index) * NWB_LIGHT_SPACE_EVENT_BYTES;
+        const uint4 value = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load4(address);
+        const uint optical = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load(address + 16u);
+        const uint instance = value.y & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
+        uint destination = index;
+        while(destination > 0u){
+            const uint previousAddress = (pixelIndex * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + destination - 1u) * NWB_LIGHT_SPACE_EVENT_BYTES;
+            const uint4 previous = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load4(previousAddress);
+            const uint previousInstance = previous.y & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
+            const bool before = instance < previousInstance || (instance == previousInstance &&
+                (asfloat(value.x) > asfloat(previous.x) || (asfloat(value.x) == asfloat(previous.x) && value.z < previous.z)));
+            if(!before)
+                break;
+            const uint previousOptical = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load(previousAddress + 16u);
+            g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(previousAddress + NWB_LIGHT_SPACE_EVENT_BYTES, previous);
+            g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(previousAddress + NWB_LIGHT_SPACE_EVENT_BYTES + 16u, previousOptical);
+            --destination;
+        }
+        const uint destinationAddress = (pixelIndex * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + destination) * NWB_LIGHT_SPACE_EVENT_BYTES;
+        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(destinationAddress, value);
+        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(destinationAddress + 16u, optical);
+    }
+}
+
 // Capture and shading use the same bounded records. The graph orders raw crossing writes before this in-place optical conversion.
 [numthreads(NWB_LIGHT_SPACE_SHADE_GROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
@@ -124,34 +151,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(address, uint4(valid ? asuint(depth) : 0x7fc00000u, instanceIndex | facing, primitive, f32tof16(float(absorption.x)) | (f32tof16(float(absorption.y)) << 16u)));
         g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(address + 16u, f32tof16(float(absorption.z)) | (f32tof16(float(fresnel)) << 16u));
     }
-    // Order each retained texel once. Receiver threads stream these records without private arrays or repeated sorting.
-    for(uint index = 1u; index < count; ++index){
-        const uint address = (pixelIndex * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + index) * NWB_LIGHT_SPACE_EVENT_BYTES;
-        const uint4 value = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load4(address);
-        const uint optical = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load(address + 16u);
-        const uint instance = value.y & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
-        uint destination = index;
-        while(destination > 0u){
-            const uint previousAddress = (pixelIndex * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + destination - 1u) * NWB_LIGHT_SPACE_EVENT_BYTES;
-            const uint4 previous = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load4(previousAddress);
-            const uint previousInstance = previous.y & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK;
-            const bool before = instance < previousInstance || (instance == previousInstance &&
-                (asfloat(value.x) > asfloat(previous.x) || (asfloat(value.x) == asfloat(previous.x) && value.z < previous.z)));
-            if(!before)
-                break;
-            const uint previousOptical = g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Load(previousAddress + 16u);
-            g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(previousAddress + NWB_LIGHT_SPACE_EVENT_BYTES, previous);
-            g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(previousAddress + NWB_LIGHT_SPACE_EVENT_BYTES + 16u, previousOptical);
-            --destination;
-        }
-        const uint destinationAddress = (pixelIndex * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL + destination) * NWB_LIGHT_SPACE_EVENT_BYTES;
-        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store4(destinationAddress, value);
-        g_NwbHeapStorageBuffers[g_NwbLightSpacePush.eventsSlot].Store(destinationAddress + 16u, optical);
-    }
+    nwbLightSpaceSortEvents(pixelIndex, count);
 #if NWB_LIGHT_SPACE_CSG_SHADE
     if(nwbCsgShadowEnabled()){
-        if(!nwbCsgShadowConvertEvents(pixelIndex, view, pixel, count))
+        bool converted;
+        if(!nwbCsgShadowConvertEvents(pixelIndex, view, pixel, count, converted))
             nwbCsgShadowConservativeTexel(pixelIndex);
+        else if(converted)
+            nwbLightSpaceSortEvents(pixelIndex, nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * 4u));
     }
 #endif
 }

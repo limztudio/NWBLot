@@ -51,6 +51,8 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/cook_ref_encoding.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook_meshlets.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook_meshlets.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_topology.h"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_topology.cpp"
     )
     target_link_libraries(nwb_assets_mesh_cook PUBLIC nwb_assets nwb_assets_skeleton_cook nwb_mesh nwb_metascript nwb_assets_skeleton_types nwb_cpu_task)
     target_compile_definitions(nwb_assets_mesh_cook PRIVATE NWB_COOK=1)

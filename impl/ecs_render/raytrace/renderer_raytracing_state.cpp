@@ -133,6 +133,9 @@ void RendererRayTracingState::invalidateResources(){
     m_sceneInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_rayTraceMaterialContextSlotsBuffer.reset();
     m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_csgTraceContextBuffer.reset();
+    m_csgTraceContextHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_csgTraceContextReadSubmissionToken = {};
     m_sceneBvhNodeCapacity = 0u;
     m_sceneInstanceCapacity = 0u;
     m_sceneBvhInstanceCount = 0u;
@@ -234,6 +237,8 @@ void RendererRayTracingState::invalidateResources(){
     m_surfelHashBuildPipeline.reset();
     m_surfelTraceShader.reset();
     m_surfelTracePipeline.reset();
+    m_surfelTraceCsgShader.reset();
+    m_surfelTraceCsgPipeline.reset();
     m_surfelResolveBindingLayout.reset();
     m_surfelResolveShader.reset();
     m_surfelResolvePipeline.reset();
@@ -246,7 +251,10 @@ void RendererRayTracingState::invalidateResources(){
     m_surfelTraceHwBindingLayout.reset();
     m_surfelTraceHwShader.reset();
     m_surfelTraceHwPipeline.reset();
+    m_surfelTraceCsgHwShader.reset();
+    m_surfelTraceCsgHwPipeline.reset();
     m_surfelUseHwTrace = false;
+    m_surfelUseCsgTrace = false;
     m_surfelPoolBuffer.reset();
     m_surfelGuidePoolBuffer.reset();
     m_surfelCellHeadBuffer.reset();
@@ -267,6 +275,7 @@ void RendererRayTracingState::invalidateResources(){
     m_surfelPoolSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_surfelCellHeadSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_surfelMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_surfelTraceGeometryFailureFlags = 0u;
     m_surfelPoolCapacity = NWB_SURFEL_POOL_CAPACITY;
     m_surfelHashCellCount = NWB_SURFEL_HASH_CELL_COUNT;
     m_surfelFrameIndex = 0u;
@@ -281,6 +290,8 @@ void RendererRayTracingState::invalidateResources(){
     m_surfelHashBuildPipelineFailed = false;
     m_surfelTracePipelineFailed = false;
     m_surfelTraceHwPipelineFailed = false;
+    m_surfelTraceCsgPipelineFailed = false;
+    m_surfelTraceCsgHwPipelineFailed = false;
     m_surfelResolvePipelineFailed = false;
     m_surfelResolveDispatchLogged = false;
     m_surfelUpsamplePipelineFailed = false;

@@ -110,6 +110,10 @@ struct RayTracingShadowPreparationResourceSnapshot{
 // Keeping this read-only snapshot separate from CPU rollback state prevents the coordinator from mutating caches.
 struct RayTracingDeferredGraphResourceSnapshot{
     Core::BufferHandle materialContextSlotsBuffer;
+    Core::BufferHandle csgTraceContextBuffer;
+    Core::QueueSubmissionToken csgTraceContextReadSubmissionToken;
+    const Core::BufferHandle* csgTraceBoundsBuffers = nullptr;
+    usize csgTraceBoundsBufferCount = 0u;
     Core::BufferHandle shadowInstanceMaterialBuffer;
     Core::BufferHandle shadowMaterialTypedBuffer;
     Core::BufferHandle shadowInstanceBuffer;

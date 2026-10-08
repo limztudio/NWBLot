@@ -113,8 +113,13 @@ RayTracingShadowPreparationResourceSnapshot RendererRayTracingSystem::snapshotSh
 
 RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferredGraphResources()const noexcept{
     const auto& state = m_rayTracingState;
+    const bool hasCsgTrace = hasSurfelWork() && state.m_surfelUseCsgTrace;
     return RayTracingDeferredGraphResourceSnapshot{
         .materialContextSlotsBuffer = state.m_rayTraceMaterialContextSlotsBuffer,
+        .csgTraceContextBuffer = hasCsgTrace ? state.m_csgTraceContextBuffer : nullptr,
+        .csgTraceContextReadSubmissionToken = hasCsgTrace ? state.m_csgTraceContextReadSubmissionToken : Core::QueueSubmissionToken{},
+        .csgTraceBoundsBuffers = hasCsgTrace ? m_lightSpaceShadow.m_csg.dynamicBounds.data() : nullptr,
+        .csgTraceBoundsBufferCount = hasCsgTrace ? m_lightSpaceShadow.m_csg.dynamicBounds.size() : 0u,
         .shadowInstanceMaterialBuffer = state.m_shadowInstanceMaterialBuffer,
         .shadowMaterialTypedBuffer = state.m_shadowMaterialTypedBuffer,
         .shadowInstanceBuffer = state.m_shadowInstanceBuffer,
@@ -133,7 +138,9 @@ RayTracingDeferredGraphResourceSnapshot RendererRayTracingSystem::snapshotDeferr
             state.m_surfelAgeFreePipeline
             && state.m_surfelHashBuildPipeline
             && state.m_surfelSpawnPipeline
-            && (state.m_surfelUseHwTrace ? state.m_surfelTraceHwPipeline : state.m_surfelTracePipeline)
+            && (state.m_surfelUseHwTrace
+                ? (state.m_surfelUseCsgTrace ? state.m_surfelTraceCsgHwPipeline : state.m_surfelTraceHwPipeline)
+                : (state.m_surfelUseCsgTrace ? state.m_surfelTraceCsgPipeline : state.m_surfelTracePipeline))
             && state.m_surfelResolvePipeline
             && state.m_surfelUpsamplePipeline
             && state.m_surfelTraceBuildArgsPipeline,

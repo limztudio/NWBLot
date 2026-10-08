@@ -305,7 +305,6 @@ NWB_IMPL_BEGIN
     void* const rawContext,
     const Core::QueueSubmissionToken& token
 ){
-    static_cast<void>(token);
     FrameExecuteLifecycle::SurfelGiStateLifecycleContext* const context = static_cast<SurfelGiStateLifecycleContext*>(rawContext);
     if(
         !context
@@ -322,6 +321,8 @@ NWB_IMPL_BEGIN
     const bool counterStateReady = renderer.m_surfelGiCounterPersistentState.commit(*context->counterStateCandidate);
     const bool computeStateReady = renderer.m_surfelGiComputePersistentState.commit(*context->computeStateCandidate);
     context->stateReady = returnStateReady && counterStateReady && computeStateReady;
+    if(context->stateReady)
+        renderer.m_raytracingSystem.confirmCsgTraceContextReadSubmission(token);
     return context->stateReady;
 }
 

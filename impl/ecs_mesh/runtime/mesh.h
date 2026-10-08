@@ -11,6 +11,7 @@
 #include <core/assets/ref.h>
 #include <core/ecs/entity_id.h>
 #include <core/graphics/api.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -124,6 +125,7 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
     Name meshKey = s_NameNone;
     Core::BufferHandle triangleIndexBuffer;   // RT-only; null when ray tracing is unsupported
     Core::BufferHandle attributeBuffer;       // RT-only flat per-triangle-corner trace attributes; null when ray tracing is unsupported
+    Span<const u32> solidTriangleWords;
     bool dynamicMeshletBoundsFresh = false;
     bool dynamicMeshletConesFresh = false;
 
@@ -134,6 +136,7 @@ struct RuntimeMeshDesc : public RuntimeMeshBuffers{
             && buffersValid()
             && meshletCount > 0u
             && meshletPrimitiveIndexCount > 0u
+            && solidTriangleWords.size() == (static_cast<usize>(meshletPrimitiveIndexCount) / 3u + 31u) / 32u
             && localBounds.valid()
         ;
     }

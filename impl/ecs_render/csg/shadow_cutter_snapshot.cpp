@@ -24,17 +24,17 @@ namespace __hidden_shadow_cutter_snapshot{
 
 [[nodiscard]] u32 ResolveShapeKind(const CsgShapeTypeInfo& shapeType)noexcept{
     if(shapeType.desc.shaderModule)
-        return NWB_CSG_SHADOW_SHAPE_UNSUPPORTED;
+        return NWB_CSG_RAY_SHAPE_UNSUPPORTED;
     const Name shapeName = shapeType.desc.name;
     if(shapeName == s_CsgPlaneShapeName)
-        return NWB_CSG_SHADOW_SHAPE_PLANE;
+        return NWB_CSG_RAY_SHAPE_PLANE;
     if(shapeName == s_CsgBoxShapeName)
-        return NWB_CSG_SHADOW_SHAPE_BOX;
+        return NWB_CSG_RAY_SHAPE_BOX;
     if(shapeName == s_CsgSphereShapeName)
-        return NWB_CSG_SHADOW_SHAPE_SPHERE;
+        return NWB_CSG_RAY_SHAPE_SPHERE;
     if(shapeName == s_CsgCapsuleShapeName)
-        return NWB_CSG_SHADOW_SHAPE_CAPSULE;
-    return NWB_CSG_SHADOW_SHAPE_UNSUPPORTED;
+        return NWB_CSG_RAY_SHAPE_CAPSULE;
+    return NWB_CSG_RAY_SHAPE_UNSUPPORTED;
 }
 
 [[nodiscard]] Expected<BinaryByteView> ResolveParameters(
@@ -89,20 +89,20 @@ void AppendReceiverCutters(
         Fnv64AppendValue(snapshot.identity, cutter.worldToShape);
         Fnv64AppendValue(snapshot.identity, cutter.shapeToWorld);
         Fnv64AppendBuffer(snapshot.identity, parameterBytes, parameterByteCount);
-        range.flags |= NWB_CSG_SHADOW_RECEIVER_ACTIVE;
+        range.flags |= NWB_CSG_RAY_RECEIVER_ACTIVE;
         const u32 shapeKind = ResolveShapeKind(*shapeType);
         const SIMDMatrix worldToShape = LoadFloat(cutter.worldToShape);
         if(
-            shapeKind == NWB_CSG_SHADOW_SHAPE_UNSUPPORTED
+            shapeKind == NWB_CSG_RAY_SHAPE_UNSUPPORTED
             || parameterByteCount != sizeof(Float4)
             || MatrixIsNaN(worldToShape) || MatrixIsInfinite(worldToShape)
             || MatrixIsNaN(shapeToWorld) || MatrixIsInfinite(shapeToWorld)
-            || range.cutterCount == NWB_CSG_SHADOW_MAX_CUTTERS
+            || range.cutterCount == NWB_CSG_RAY_MAX_CUTTERS
         ){
-            range.flags |= NWB_CSG_SHADOW_RECEIVER_UNSUPPORTED;
+            range.flags |= NWB_CSG_RAY_RECEIVER_UNSUPPORTED;
             return;
         }
-        if((range.flags & NWB_CSG_SHADOW_RECEIVER_UNSUPPORTED) != 0u)
+        if((range.flags & NWB_CSG_RAY_RECEIVER_UNSUPPORTED) != 0u)
             return;
 
         CsgCutterGpuData gpuCutter;
@@ -112,7 +112,7 @@ void AppendReceiverCutters(
         snapshot.cutters.push_back(gpuCutter);
         ++range.cutterCount;
     });
-    if((range.flags & NWB_CSG_SHADOW_RECEIVER_UNSUPPORTED) != 0u){
+    if((range.flags & NWB_CSG_RAY_RECEIVER_UNSUPPORTED) != 0u){
         snapshot.cutters.resize(range.firstCutter);
         range.cutterCount = 0u;
     }
@@ -156,7 +156,7 @@ bool BuildCsgShadowSnapshot(
             continue;
         drawStates[index] = *drawState;
         hasReceiver = true;
-        cutterCapacity = AddSaturating<usize>(cutterCapacity, Min<usize>(drawStates[index].cutterCount, NWB_CSG_SHADOW_MAX_CUTTERS));
+        cutterCapacity = AddSaturating<usize>(cutterCapacity, Min<usize>(drawStates[index].cutterCount, NWB_CSG_RAY_MAX_CUTTERS));
     }
     if(!hasReceiver)
         return true;
@@ -188,7 +188,7 @@ bool BuildCsgShadowSnapshot(
             __hidden_shadow_cutter_snapshot::AppendReceiverCutters(
                 receiver, drawStates[index], receiverLookup, shapeRegistry, outSnapshot, range
             );
-            outSnapshot.hasCsg = outSnapshot.hasCsg || (range.flags & NWB_CSG_SHADOW_RECEIVER_ACTIVE) != 0u;
+            outSnapshot.hasCsg = outSnapshot.hasCsg || (range.flags & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u;
         }
         Fnv64AppendValue(outSnapshot.identity, range);
         Fnv64AppendValue(outSnapshot.contentIdentity, range);

@@ -157,12 +157,20 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resolveResourceUses{ scratchArena };
     constexpr usize s_SurfelResourceUseCapacity = 29u;
     constexpr usize s_SurfelTraceResourceUseCapacity = 17u;
-    resourceUses.reserve(s_SurfelResourceUseCapacity + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
+    const bool hasCsgTraceContext = rayTracingResources.csgTraceContextBuffer.get() != nullptr;
+    resourceUses.reserve(
+        s_SurfelResourceUseCapacity + (hasCsgTraceContext ? 1u : 0u)
+        + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount)
+    );
     ageFreeResourceUses.reserve(4u);
     hashBuildResourceUses.reserve(3u);
     spawnResourceUses.reserve(10u);
     traceBuildArgsResourceUses.reserve(3u);
-    traceResourceUses.reserve(s_SurfelTraceResourceUseCapacity + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount));
+    traceResourceUses.reserve(
+        s_SurfelTraceResourceUseCapacity + (hasCsgTraceContext ? 2u : 0u)
+        + rayTracingResources.csgTraceBoundsBufferCount
+        + (traceGeometryStatesGraphOwned ? 0u : traceGeometryResourceCount)
+    );
     resolveResourceUses.reserve(6u);
     resourceUses.push_back(ReadUse(worldPosition));
     resourceUses.push_back(ReadUse(normal));
@@ -213,6 +221,7 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     Core::GpuGraphResourceId shadowInstanceMaterials;
     Core::GpuGraphResourceId shadowMaterialTyped;
     Core::GpuGraphResourceId shadowInstances;
+    Core::GpuGraphResourceId csgTraceContext;
     Core::GpuGraphResourceId surfelConstants;
     Core::GpuGraphResourceId surfelPool;
     Core::GpuGraphResourceId surfelGuidePool;
@@ -304,6 +313,15 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
             &surfelCellHeadSnapshot
         )
     ;
+    if(optionalResourcesImported && rayTracingResources.csgTraceContextBuffer){
+        {
+            const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
+            csgTraceContext = declarations.findImportedBuffer(rayTracingResources.csgTraceContextBuffer);
+        }
+        optionalResourcesImported = csgTraceContext.valid();
+        if(optionalResourcesImported)
+            resourceUses.push_back(ReadUse(csgTraceContext, Core::ResourceStates::ShaderResource));
+    }
     if(optionalResourcesImported && rayTracingSurfelResources.traceIndirectArgsBuffer){
         surfelTraceIndirectArgs = importBuffer(
             rayTracingSurfelResources.traceIndirectArgsBuffer,
@@ -395,6 +413,27 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         traceResourceUses.push_back(ReadUse(shadowInstanceMaterials, Core::ResourceStates::ShaderResource));
         traceResourceUses.push_back(ReadUse(shadowMaterialTyped, Core::ResourceStates::ShaderResource));
         traceResourceUses.push_back(ReadUse(shadowInstances, Core::ResourceStates::ShaderResource));
+        if(csgTraceContext.valid()){
+            traceResourceUses.push_back(ReadUse(csgTraceContext, Core::ResourceStates::ShaderResource));
+            traceResourceUses.push_back(ReadWriteUse(surfelCounter, Core::ResourceStates::UnorderedAccess));
+            if(rayTracingResources.csgTraceBoundsBufferCount != 0u && !rayTracingResources.csgTraceBoundsBuffers)
+                return false;
+            for(usize index = 0u; index < rayTracingResources.csgTraceBoundsBufferCount; ++index){
+                const auto& buffer = rayTracingResources.csgTraceBoundsBuffers[index];
+                if(!buffer)
+                    return false;
+                Core::GpuGraphResourceId resource;
+                {
+                    const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
+                    resource = declarations.findImportedBuffer(buffer);
+                }
+                if(!resource.valid())
+                    resource = importBuffer(buffer, buffer->getCreationDescription().debugName, "Current CSG Receiver Bounds");
+                if(!resource.valid())
+                    return false;
+                traceResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
+            }
+        }
         traceResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
         traceResourceUses.push_back(ReadWriteUse(surfelPool, Core::ResourceStates::UnorderedAccess));
         traceResourceUses.push_back(ReadWriteUse(surfelGuidePool, Core::ResourceStates::UnorderedAccess));
@@ -642,14 +681,15 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         }
 
         Core::GpuTaskDesc traceDesc;
+        const SurfelGiTaskStateSourceSet traceStateSources = makeSurfelGiTaskStateSources(true, csgTraceContext.valid(), false);
         traceDesc
             .setIdentity(Name("render.surfel_gi.trace"))
             .setMarkerLabel("Surfel GI Trace")
             .setScheduling(surfelGiScheduling)
             .setDependencies(&m_deferredSurfelGiTraceBuildArgsTask, 1u)
             .setExternalStateSources(
-                surfelGiComputeStateSource.states ? &surfelGiComputeStateSource : nullptr,
-                surfelGiComputeStateSource.states ? 1u : 0u
+                traceStateSources.count != 0u ? traceStateSources.values : nullptr,
+                traceStateSources.count
             )
             .setResourceUses(traceResourceUses.data(), traceResourceUses.size())
             .setResourceSetUses(

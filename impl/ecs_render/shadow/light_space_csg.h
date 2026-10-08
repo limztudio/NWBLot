@@ -9,6 +9,7 @@
 #include <impl/assets/graphics/shadow/csg_shadow_constants.h>
 
 #include <core/graphics/rhi/resource.h>
+#include <global/span.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -36,7 +37,7 @@ struct LightSpaceCsgInstanceGpu{
     Float4 localMin{};
     Float4 localMax{};
 };
-static_assert(sizeof(LightSpaceCsgInstanceGpu) == NWB_CSG_SHADOW_INSTANCE_BYTES);
+static_assert(sizeof(LightSpaceCsgInstanceGpu) == NWB_CSG_RAY_INSTANCE_BYTES);
 static_assert(offsetof(LightSpaceCsgInstanceGpu, runtimeBoundsSlot) == sizeof(Float34));
 static_assert(offsetof(LightSpaceCsgInstanceGpu, localMin) == sizeof(Float34) + sizeof(u32) * 4u);
 static_assert(IsStandardLayout_V<LightSpaceCsgInstanceGpu>);
@@ -47,7 +48,9 @@ struct LightSpaceCsgState{
     Vector<CsgShadowReceiverInput, Core::Alloc::GlobalArena> receivers;
     Vector<LightSpaceCsgInstanceGpu, Core::Alloc::GlobalArena> instances;
     Vector<Core::BufferHandle, Core::Alloc::GlobalArena> dynamicBounds;
+    // Current CPU context uploads into independently retained shadow and GI buffers.
     Vector<u8, Core::Alloc::GlobalArena> bytes;
+    Vector<Span<const u32>, Core::Alloc::GlobalArena> solidTriangleMasks;
     u64 captureGeometryIdentity = 0u;
     bool captureGeometryTrusted = false;
     bool gathering = false;
@@ -62,6 +65,7 @@ public:
         , instances(arena)
         , dynamicBounds(arena)
         , bytes(arena)
+        , solidTriangleMasks(arena)
     {}
 };
 

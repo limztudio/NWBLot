@@ -1,0 +1,89 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CSG_ANALYTIC_RAY_SLANGI
+#define NWB_GRAPHICS_CSG_ANALYTIC_RAY_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "ray_constants.h"
+#include "../../csg/analytic_intervals.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool nwbCsgAnalyticCutterInterval(
+    const uint shapeType,
+    const float4 worldToShapeRow0,
+    const float4 worldToShapeRow1,
+    const float4 worldToShapeRow2,
+    const float4 parameter0,
+    const float3 rayOrigin,
+    const float3 rayDirection,
+    out float2 interval
+){
+    interval = float2(1.0, 0.0);
+    const float4 point = float4(rayOrigin, 1.0);
+    const float3 origin = float3(dot(worldToShapeRow0, point), dot(worldToShapeRow1, point), dot(worldToShapeRow2, point));
+    const float3 direction = float3(dot(worldToShapeRow0.xyz, rayDirection), dot(worldToShapeRow1.xyz, rayDirection), dot(worldToShapeRow2.xyz, rayDirection));
+    if(!all(isfinite(origin)) || !all(isfinite(direction)) || dot(direction, direction) <= 0.0 || !all(isfinite(parameter0)))
+        return false;
+    if(shapeType == NWB_CSG_RAY_SHAPE_PLANE)
+        return nwbCsgAnalyticPlaneInterval(origin, direction, parameter0, interval);
+    if(shapeType == NWB_CSG_RAY_SHAPE_BOX)
+        return nwbCsgAnalyticBoxInterval(origin, direction, parameter0.xyz, interval);
+    if(shapeType == NWB_CSG_RAY_SHAPE_SPHERE)
+        return nwbCsgAnalyticSphereInterval(origin, direction, parameter0.x, interval);
+    if(shapeType == NWB_CSG_RAY_SHAPE_CAPSULE)
+        return nwbCsgAnalyticCapsuleInterval(origin, direction, parameter0.x, parameter0.y, interval);
+    return false;
+}
+
+bool nwbCsgAnalyticCutterNormal(
+    const uint shapeType,
+    const float4 worldToShapeRow0,
+    const float4 worldToShapeRow1,
+    const float4 worldToShapeRow2,
+    const float4 parameter0,
+    const float3 worldPosition,
+    out float3 normal
+){
+    normal = float3(0.0, 0.0, 1.0);
+    const float4 point = float4(worldPosition, 1.0);
+    const float3 local = float3(dot(worldToShapeRow0, point), dot(worldToShapeRow1, point), dot(worldToShapeRow2, point));
+    float3 shapeNormal;
+    if(shapeType == NWB_CSG_RAY_SHAPE_PLANE)
+        shapeNormal = parameter0.xyz;
+    else if(shapeType == NWB_CSG_RAY_SHAPE_SPHERE)
+        shapeNormal = local;
+    else if(shapeType == NWB_CSG_RAY_SHAPE_CAPSULE)
+        shapeNormal = local - float3(0.0, clamp(local.y, -parameter0.y, parameter0.y), 0.0);
+    else if(shapeType == NWB_CSG_RAY_SHAPE_BOX){
+        const float3 q = abs(local) - parameter0.xyz;
+        const uint axis = q.x >= max(q.y, q.z) ? 0u : (q.y >= q.z ? 1u : 2u);
+        shapeNormal = float3(0.0);
+        shapeNormal[axis] = local[axis] < 0.0 ? -1.0 : 1.0;
+    }
+    else
+        return false;
+    const float3 worldNormal = -(worldToShapeRow0.xyz * shapeNormal.x + worldToShapeRow1.xyz * shapeNormal.y + worldToShapeRow2.xyz * shapeNormal.z);
+    const float lengthSquared = dot(worldNormal, worldNormal);
+    if(!all(isfinite(worldNormal)) || !isfinite(lengthSquared) || lengthSquared <= 0.0)
+        return false;
+    normal = worldNormal * rsqrt(lengthSquared);
+    return true;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

@@ -11,6 +11,7 @@
 
 // The hardware ray-tracing instance mask is eight bits; this full mask selects every TLAS instance.
 #define NWB_RAY_TRACING_ALL_INSTANCE_MASK 0xFFu
+#define NWB_RT_CSG_INSTANCE_MASK 0x10u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -10,7 +10,7 @@
 
 
 #include "csg_shadow_resources.slangi"
-#include "../../csg/analytic_intervals.slangi"
+#include "../csg/analytic_ray.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -22,52 +22,17 @@ bool nwbCsgShadowCutterInterval(
     const float3 rayDirection,
     out float2 interval
 ){
-    interval = float2(1.0, 0.0);
-    const float4 point = float4(rayOrigin, 1.0);
-    const float3 origin = float3(dot(cutter.worldToShapeRow0, point), dot(cutter.worldToShapeRow1, point),
-        dot(cutter.worldToShapeRow2, point));
-    const float3 direction = float3(dot(cutter.worldToShapeRow0.xyz, rayDirection),
-        dot(cutter.worldToShapeRow1.xyz, rayDirection), dot(cutter.worldToShapeRow2.xyz, rayDirection));
-    if(!all(isfinite(origin)) || !all(isfinite(direction)) || dot(direction, direction) <= 0.0 || !all(isfinite(cutter.parameter0)))
-        return false;
-    if(cutter.shapeType == NWB_CSG_SHADOW_SHAPE_PLANE)
-        return nwbCsgAnalyticPlaneInterval(origin, direction, cutter.parameter0, interval);
-    if(cutter.shapeType == NWB_CSG_SHADOW_SHAPE_BOX)
-        return nwbCsgAnalyticBoxInterval(origin, direction, cutter.parameter0.xyz, interval);
-    if(cutter.shapeType == NWB_CSG_SHADOW_SHAPE_SPHERE)
-        return nwbCsgAnalyticSphereInterval(origin, direction, cutter.parameter0.x, interval);
-    if(cutter.shapeType == NWB_CSG_SHADOW_SHAPE_CAPSULE)
-        return nwbCsgAnalyticCapsuleInterval(origin, direction, cutter.parameter0.x, cutter.parameter0.y, interval);
-    return false;
+    return nwbCsgAnalyticCutterInterval(
+        cutter.shapeType, cutter.worldToShapeRow0, cutter.worldToShapeRow1, cutter.worldToShapeRow2,
+        cutter.parameter0, rayOrigin, rayDirection, interval
+    );
 }
 
 bool nwbCsgShadowCapNormal(const NwbCsgShadowCutter cutter, const float3 world, out float3 normal){
-    normal = float3(0.0, 0.0, 1.0);
-    const float4 point = float4(world, 1.0);
-    const float3 local = float3(dot(cutter.worldToShapeRow0, point), dot(cutter.worldToShapeRow1, point),
-        dot(cutter.worldToShapeRow2, point));
-    float3 shapeNormal;
-    if(cutter.shapeType == NWB_CSG_SHADOW_SHAPE_PLANE)
-        shapeNormal = cutter.parameter0.xyz;
-    else if(cutter.shapeType == NWB_CSG_SHADOW_SHAPE_SPHERE)
-        shapeNormal = local;
-    else if(cutter.shapeType == NWB_CSG_SHADOW_SHAPE_CAPSULE)
-        shapeNormal = local - float3(0.0, clamp(local.y, -cutter.parameter0.y, cutter.parameter0.y), 0.0);
-    else if(cutter.shapeType == NWB_CSG_SHADOW_SHAPE_BOX){
-        const float3 q = abs(local) - cutter.parameter0.xyz;
-        const uint axis = q.x >= max(q.y, q.z) ? 0u : (q.y >= q.z ? 1u : 2u);
-        shapeNormal = float3(0.0);
-        shapeNormal[axis] = local[axis] < 0.0 ? -1.0 : 1.0;
-    }
-    else
-        return false;
-    const float3 worldNormal = -(cutter.worldToShapeRow0.xyz * shapeNormal.x
-        + cutter.worldToShapeRow1.xyz * shapeNormal.y + cutter.worldToShapeRow2.xyz * shapeNormal.z);
-    const float lengthSquared = dot(worldNormal, worldNormal);
-    if(!all(isfinite(worldNormal)) || !isfinite(lengthSquared) || lengthSquared <= 0.0)
-        return false;
-    normal = worldNormal * rsqrt(lengthSquared);
-    return true;
+    return nwbCsgAnalyticCutterNormal(
+        cutter.shapeType, cutter.worldToShapeRow0, cutter.worldToShapeRow1, cutter.worldToShapeRow2,
+        cutter.parameter0, world, normal
+    );
 }
 
 

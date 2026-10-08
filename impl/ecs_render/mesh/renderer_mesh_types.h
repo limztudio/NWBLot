@@ -64,6 +64,8 @@ struct MeshResources : public RuntimeMeshBuffers{
     Core::BufferHandle emulationVertexBuffer;
     ECSRenderDetail::ObjectGeometryCacheState objectGeometryCache;
     Core::BufferHandle triangleIndexBuffer;
+    // CPU topology is copied once at admission; its primitive order matches triangleIndexBuffer.
+    Core::GlobalUniquePtr<u32[]> solidTriangleWords;
     Core::BufferHandle runtimeLocalBoundsBuffer;
     Core::GpuDescriptorHandle runtimeLocalBoundsHeapHandle = Core::GpuDescriptorHandle::Invalid();
     Core::BufferHandle runtimeMeshletLocalBoundsBuffer;
@@ -109,6 +111,7 @@ struct MeshResources : public RuntimeMeshBuffers{
             && buffersValid()
             && meshletCount > 0
             && meshletPrimitiveIndexCount > 0
+            && solidTriangleWords != nullptr
         ;
     }
 };

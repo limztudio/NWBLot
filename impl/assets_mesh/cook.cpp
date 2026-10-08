@@ -20,6 +20,8 @@
 #include "binary_payload.h"
 #include "meshlet_ref_codec.h"
 #include "meshlet_payload_packing.h"
+#include "meshlet_triangle_indices.h"
+#include "cook_topology.h"
 
 #include <core/alloc/scratch.h>
 #include <core/task/cpu/scheduler.h>
@@ -140,6 +142,17 @@ static Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::Ass
     if(!MeshCookRefEncoding::EncodeMeshletRefs(meshEntry, false, s_MeshMetaKind))
         return MakeUnexpected(Failure{});
 
+    const auto triangleIndices = BuildMeshletTriangleIndices(
+        scratchArena, meshEntry.meshlets, meshEntry.meshletLocalVertexRefs, meshEntry.meshletPositionRefDeltas,
+        meshEntry.meshletPrimitiveIndices, meshEntry.positions.size()
+    );
+    if(!triangleIndices)
+        return MakeUnexpected(Failure{});
+    auto solidTriangleWords = BuildSolidTriangleWords(meshEntry.positions, *triangleIndices, scratchArena);
+    if(!solidTriangleWords)
+        return MakeUnexpected(Failure{});
+    Core::Assets::AssetVector<u32> solidWords(solidTriangleWords->begin(), solidTriangleWords->end(), arena);
+
     Mesh mesh(arena, meshEntry.virtualPath);
     mesh.setPayload(
         Move(meshEntry.positions),
@@ -152,7 +165,8 @@ static Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::Ass
         Move(meshEntry.meshletPositionRefDeltas),
         Move(meshEntry.meshletAttributeRefDeltas),
         Move(meshEntry.meshletLocalVertexRefs),
-        Move(meshEntry.meshletPrimitiveIndices)
+        Move(meshEntry.meshletPrimitiveIndices),
+        Move(solidWords)
     );
     if(!mesh.validatePayload())
         return MakeUnexpected(Failure{});

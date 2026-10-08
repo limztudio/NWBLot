@@ -177,16 +177,21 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
 }
 
 bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
-    if(m_rayTracingState.m_surfelTracePipeline)
+    const bool csg = m_rayTracingState.m_surfelUseCsgTrace;
+    auto& pipeline = csg ? m_rayTracingState.m_surfelTraceCsgPipeline : m_rayTracingState.m_surfelTracePipeline;
+    auto& shader = csg ? m_rayTracingState.m_surfelTraceCsgShader : m_rayTracingState.m_surfelTraceShader;
+    auto& failed = csg ? m_rayTracingState.m_surfelTraceCsgPipelineFailed : m_rayTracingState.m_surfelTracePipelineFailed;
+
+    if(pipeline)
         return true;
-    if(m_rayTracingState.m_surfelTracePipelineFailed)
+    if(failed)
         return false;
 
     auto& device = m_graphics.getDevice();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel trace requires the initialized global descriptor heap"));
-        m_rayTracingState.m_surfelTracePipelineFailed = true;
+        failed = true;
         return false;
     }
 
@@ -197,32 +202,32 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
         m_rayTracingState.m_surfelTraceBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelTraceBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace binding layout"));
-            m_rayTracingState.m_surfelTracePipelineFailed = true;
+            failed = true;
             return false;
         }
     }
 
     if(!m_shaderSystem.loadShader<ComputeShader>(
-        m_rayTracingState.m_surfelTraceShader,
+        shader,
         AssetsGraphicsGi::s_SurfelTraceShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
+        csg ? AStringView("NWB_GI_CSG_ENABLED=1") : AStringView("NWB_GI_CSG_ENABLED=0"),
         "ECSRender_SurfelTrace"
     )){
-        m_rayTracingState.m_surfelTracePipelineFailed = true;
+        failed = true;
         return false;
     }
 
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc
-        .setComputeShader(m_rayTracingState.m_surfelTraceShader)
+        .setComputeShader(shader)
         .addBindingLayout(m_rayTracingState.m_surfelTraceBindingLayout)
         .addBindingLayout(heap.getResourceLayout())
         .addBindingLayout(heap.getSamplerLayout())
     ;
-    m_rayTracingState.m_surfelTracePipeline = device.createComputePipeline(pipelineDesc);
-    if(!m_rayTracingState.m_surfelTracePipeline){
+    pipeline = device.createComputePipeline(pipelineDesc);
+    if(!pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel trace compute pipeline"));
-        m_rayTracingState.m_surfelTracePipelineFailed = true;
+        failed = true;
         return false;
     }
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: created surfel trace compute pipeline"));
@@ -456,13 +461,18 @@ bool RendererRayTracingSystem::ensureSurfelResources(){
 
 // Hardware trace twin; other surfel passes are shared.
 bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
-    if(m_rayTracingState.m_surfelTraceHwPipeline)
+    const bool csg = m_rayTracingState.m_surfelUseCsgTrace;
+    auto& pipeline = csg ? m_rayTracingState.m_surfelTraceCsgHwPipeline : m_rayTracingState.m_surfelTraceHwPipeline;
+    auto& shader = csg ? m_rayTracingState.m_surfelTraceCsgHwShader : m_rayTracingState.m_surfelTraceHwShader;
+    auto& failed = csg ? m_rayTracingState.m_surfelTraceCsgHwPipelineFailed : m_rayTracingState.m_surfelTraceHwPipelineFailed;
+
+    if(pipeline)
         return true;
-    if(m_rayTracingState.m_surfelTraceHwPipelineFailed)
+    if(failed)
         return false;
 
     if(!m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct) || !m_graphics.queryFeatureSupport(Core::Feature::RayQuery)){
-        m_rayTracingState.m_surfelTraceHwPipelineFailed = true;
+        failed = true;
         return false;
     }
 
@@ -470,7 +480,7 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized() || !heap.hasAccelStructLayout()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel HW trace requires the descriptor-buffer TLAS heap layout"));
-        m_rayTracingState.m_surfelTraceHwPipelineFailed = true;
+        failed = true;
         return false;
     }
 
@@ -481,24 +491,24 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
         m_rayTracingState.m_surfelTraceHwBindingLayout = device.createBindingLayout(layoutDesc);
         if(!m_rayTracingState.m_surfelTraceHwBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel HW trace binding layout"));
-            m_rayTracingState.m_surfelTraceHwPipelineFailed = true;
+            failed = true;
             return false;
         }
     }
 
     if(!m_shaderSystem.loadShader<ComputeShader>(
-        m_rayTracingState.m_surfelTraceHwShader,
+        shader,
         AssetsGraphicsGi::s_SurfelTraceHwShaderName,
-        Core::ShaderArchive::s_DefaultVariant,
+        csg ? AStringView("NWB_GI_CSG_ENABLED=1") : AStringView("NWB_GI_CSG_ENABLED=0"),
         "ECSRender_SurfelTraceHw"
     )){
-        m_rayTracingState.m_surfelTraceHwPipelineFailed = true;
+        failed = true;
         return false;
     }
 
     Core::ComputePipelineDesc pipelineDesc;
     pipelineDesc
-        .setComputeShader(m_rayTracingState.m_surfelTraceHwShader)
+        .setComputeShader(shader)
         .addBindingLayout(m_rayTracingState.m_surfelTraceHwBindingLayout)
     ;
     // Preserve resource, sampler, and TLAS heap sets for hardware trace.
@@ -507,10 +517,10 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
         .addBindingLayout(heap.getSamplerLayout())
         .addBindingLayout(heap.getAccelStructLayout())
     ;
-    m_rayTracingState.m_surfelTraceHwPipeline = device.createComputePipeline(pipelineDesc);
-    if(!m_rayTracingState.m_surfelTraceHwPipeline){
+    pipeline = device.createComputePipeline(pipelineDesc);
+    if(!pipeline){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create surfel HW trace compute pipeline"));
-        m_rayTracingState.m_surfelTraceHwPipelineFailed = true;
+        failed = true;
         return false;
     }
     NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created surfel HW trace compute pipeline"));

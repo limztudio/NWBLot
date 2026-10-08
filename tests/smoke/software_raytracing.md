@@ -77,6 +77,56 @@ layout, identity, shadow quality and history edge cases. Native metadata-only
 fixtures and their resource-dependent cases have been removed. A visually
 nonempty capture alone is not an exact optical equivalence test.
 
+## CSG indirect-light regression
+
+Build `nwb_gi_test_smoke` through the launcher, then run:
+
+```text
+ctest --test-dir <build-directory> -C opt -L csg_gi --output-on-failure
+```
+
+The natural and disabled hardware ray tracing policies use the same static scene
+and image oracle after normal backend selection. Each compares ordinary carved
+mesh geometry, equivalent CSG with two overlapping box cutters, and an uncut
+control. One region measures blue indirect light passing through an opening;
+another measures green light bounced from a generated wall into the removed
+cavity. An unobstructed panel must receive GI in every arm, and the ordinary
+reference must differ from the uncut control before CSG equivalence is admitted.
+Projected grids also require at least 95% coverage of the through opening and
+back wall in both the ordinary reference and CSG images, with at most 5% in the
+uncut image. These gates detect partial openings and internal overlap walls that
+a small regional GI average can miss.
+
+A third assembly places a closed box and an open quad in one mesh. The same
+cutter removes a stripe from both. Its reference uses matching carved geometry
+and retained open side quads; an uncut green stripe supplies the false-positive
+control. The oracle checks passage coverage and GI, red floor light from retained
+open triangles, visible retained-surface brightness, and RGB agreement that rejects
+light from removed green triangles.
+
+Captures wait for 360 successful presentations and retain the three images,
+runtime logs, and regional color metrics under
+`Testing/smoke/<configuration>/csg_gi_<route>`. The harness rejects runtime and
+validation warnings through the existing capture workflow. Natural policy
+selection qualifies whichever traversal the actual adapter selects. The same
+scene also runs with frame-lagged async lighting enabled and requires accepted
+bootstrap and active-history submissions before applying the image gates.
+Adapters without a dedicated compute queue skip this async qualification through
+the existing capability diagnostic. Lagged artifacts use the _lagged suffix.
+
+GI uses current CSG geometry independently of retained light-space shadow maps.
+Both traversal implementations subtract the cutter union from closed-component
+spans and shade the selected surviving triangle or generated wall with the receiver
+material. Cooked membership bits identify closed components in the final ray-triangle
+order. Zero-volume components remain surfaces, with volume measured relative to a
+stable component origin. Open components in the same mesh remain clipped surface
+hits and do not generate walls. Light-space shadows consume the same membership
+without interpreting open events as unmatched volume exits. Nonzero oriented
+winding preserves reversed closed shells and nested cavity cancellation. Shared
+built-in shape and bounded cutter support follow the current CSG snapshot contract;
+unsupported
+or over-budget geometry reports a diagnostic and uses conservative occlusion.
+
 ## Animated scene bounds
 
 Runtime software scenes refit the scene BVH from the current GPU mesh roots

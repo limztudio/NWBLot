@@ -20,6 +20,7 @@
 #include <impl/ecs_mesh/skinning/module.h>
 
 #include "gpu_pass_timing_probe.h"
+#include "csg_gi_scene.h"
 #include "presentation_fps_probe.h"
 #include "smoke_environment.h"
 #include "smoke_project_helpers.h"
@@ -179,6 +180,7 @@ private:
     }
 
     void destroyWorld(){
+        m_csgGiScene.stop();
         DestroySmokeRenderWorld(m_context, m_world);
     }
 
@@ -187,6 +189,7 @@ public:
     explicit GiTestSmokeProject(NWB::ProjectRuntimeContext& context)
         : m_context(context)
         , m_world(CreateWorldOrDie(context))
+        , m_csgGiScene(context, *m_world)
     {}
 
     virtual ~GiTestSmokeProject()override{
@@ -196,6 +199,11 @@ public:
 
 public:
     virtual bool onStartup()override{
+        const auto csgGi = m_csgGiScene.start();
+        if(!csgGi)
+            return false;
+        if(*csgGi)
+            return true;
         m_resolveSwitchEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_GI_SMOKE_RESOLVE_SWITCH");
         m_coverageViewEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_GI_SMOKE_COVERAGE_VIEW");
         m_complexSceneEnabled = m_coverageViewEnabled || NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_GI_SMOKE_COMPLEX_SCENE");
@@ -309,6 +317,11 @@ public:
     }
 
     virtual bool onUpdate(const f32 delta)override{
+        if(m_csgGiScene.active()){
+            m_csgGiScene.update();
+            m_world->tick(1.0f / 60.0f);
+            return true;
+        }
         f64 elapsedSeconds = 0.0;
         if(m_complexSceneEnabled){
             const Timer now = TimerNow();
@@ -570,6 +583,7 @@ private:
 private:
     NWB::ProjectRuntimeContext& m_context;
     NotNullUniquePtr<NWB::Core::ECS::World> m_world;
+    NWB::Tests::Smoke::CsgGiScene m_csgGiScene;
     NWB::Core::ECS::EntityID m_floorEntity = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_redWallEntity = NWB::Core::ECS::s_InvalidEntityId;
     NWB::Core::ECS::EntityID m_blueWallNegX = NWB::Core::ECS::s_InvalidEntityId;

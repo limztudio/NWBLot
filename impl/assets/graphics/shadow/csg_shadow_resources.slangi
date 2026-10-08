@@ -18,6 +18,7 @@
 #endif
 
 #include "light_space_resources.slangi"
+#include "../csg/ray_topology.slangi"
 #include "../bvh/sw_instance.slangi"
 #include "../bvh/bvh_common.slangi"
 #include "../bindless/bindless_heap_bvh.slangi"
@@ -65,15 +66,21 @@ uint4 nwbCsgShadowRange(const uint instance){
     const uint4 header = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(0u);
     if(instance >= header.x)
         return uint4(0u);
-    return nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(header.y + instance * NWB_CSG_SHADOW_RANGE_BYTES);
+    return nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(header.y + instance * NWB_CSG_RAY_RANGE_BYTES);
 }
 
 bool nwbCsgShadowReceiver(const uint instance){
-    return (nwbCsgShadowRange(instance).z & NWB_CSG_SHADOW_RECEIVER_ACTIVE) != 0u;
+    return (nwbCsgShadowRange(instance).z & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u;
+}
+
+bool nwbCsgShadowEventClosed(const uint4 range, const uint primitive){
+    if(primitive == NWB_CSG_SHADOW_CAP_PRIMITIVE)
+        return true;
+    return nwbCsgRayPrimitiveClosed(g_NwbLightSpacePush.csgContextSlot, range.w, primitive);
 }
 
 NwbCsgShadowCutter nwbCsgShadowLoadCutter(const uint index){
-    const uint offset = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(8u) + index * NWB_CSG_SHADOW_CUTTER_BYTES;
+    const uint offset = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(8u) + index * NWB_CSG_RAY_CUTTER_BYTES;
     const uint4 header = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load4(offset);
     NwbCsgShadowCutter cutter;
     cutter.shapeType = header.x;
@@ -89,7 +96,7 @@ NwbCsgShadowCutter nwbCsgShadowLoadCutter(const uint index){
 }
 
 uint nwbCsgShadowInstanceOffset(const uint index){
-    return nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(16u) + index * NWB_CSG_SHADOW_INSTANCE_BYTES;
+    return nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(16u) + index * NWB_CSG_RAY_INSTANCE_BYTES;
 }
 
 NwbSwBvhInstance nwbCsgShadowInstance(const uint index){

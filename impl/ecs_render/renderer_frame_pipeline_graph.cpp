@@ -148,6 +148,7 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
 
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
+    m_csgTraceContextUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};
     m_surfelFrameConstantsUploadTask = {};
     m_shadowInstanceMaterialUploadTask = {};

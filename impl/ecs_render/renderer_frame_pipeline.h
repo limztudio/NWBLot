@@ -439,6 +439,7 @@ private:
     // Immutable ray-trace descriptor-slot snapshot. It must merge into the same first Graphics packet
     // later Compute trace consumers inherit Shadow Preparation's ConstantBuffer handoff rather than an upload frontier.
     Core::GpuTaskId m_rayTraceMaterialContextSlotsUploadTask;
+    Core::GpuTaskId m_csgTraceContextUploadTask;
     // Optional immutable refractive-AABB stream. It must merge into that same first Graphics packet
     // caustic Compute consumers inherit Shadow Preparation's ShaderResource handoff rather than an upload frontier.
     Core::GpuTaskId m_causticEmissionTargetsUploadTask;

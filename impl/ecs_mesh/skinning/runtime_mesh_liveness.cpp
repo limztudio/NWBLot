@@ -72,6 +72,7 @@ Expected<RuntimeMeshDesc> BuildSkinnedRuntimeMeshDesc(
     mesh.meshletPrimitiveIndexBuffer = instance->meshletPrimitiveIndexBuffer;
     mesh.triangleIndexBuffer = instance->triangleIndexBuffer;
     mesh.attributeBuffer = instance->attributeBuffer;
+    mesh.solidTriangleWords = instance->solidTriangleWords;
     mesh.localBounds = instance->localBounds;
     mesh.meshletCount = static_cast<u32>(instance->meshlets.size());
     mesh.meshletPrimitiveIndexCount = static_cast<u32>(instance->meshletPrimitiveIndices.size());

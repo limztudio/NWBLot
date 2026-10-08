@@ -130,6 +130,15 @@ Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTrac
         slots.opticalInstanceCount = opticalScene.upload->instanceCount;
     }
 
+    if(hasSurfelWork() && m_lightSpaceShadow.m_csg.snapshot.hasCsg){
+        const auto csgContext = resolveStorageSlot(m_rayTracingState.m_csgTraceContextBuffer.get(), m_rayTracingState.m_csgTraceContextHeapHandle);
+        if(!csgContext || !m_rayTracingState.m_csgTraceContextBuffer){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: current CSG ray context is unavailable"));
+            return MakeUnexpected(Failure{});
+        }
+        slots.csgContext = *csgContext;
+    }
+
     return slots;
 }
 
@@ -143,6 +152,7 @@ void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
         heap.free(m_rayTracingState.m_shadowMaterialTypedHeapHandle);
         heap.free(m_rayTracingState.m_shadowInstanceHeapHandle);
         heap.free(m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle);
+        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_csgTraceContextHeapHandle);
         heap.free(m_rayTracingState.m_swShadowEdgeCounterHeapHandle);
         heap.free(m_rayTracingState.m_swShadowEdgeListHeapHandle);
         heap.free(m_rayTracingState.m_swShadowIndirectArgsHeapHandle);
@@ -153,6 +163,7 @@ void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){
     m_rayTracingState.m_shadowMaterialTypedHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_rayTracingState.m_shadowInstanceHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
+    m_rayTracingState.m_csgTraceContextHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_rayTracingState.m_swShadowEdgeCounterHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_rayTracingState.m_swShadowEdgeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_rayTracingState.m_swShadowIndirectArgsHeapHandle = Core::GpuDescriptorHandle::Invalid();

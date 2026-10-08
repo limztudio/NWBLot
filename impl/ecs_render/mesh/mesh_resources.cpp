@@ -303,6 +303,11 @@ Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Ass
     createdMesh.meshName = meshPath;
     createdMesh.meshletCount = static_cast<u32>(mesh.meshlets().size());
     createdMesh.meshletPrimitiveIndexCount = static_cast<u32>(mesh.meshletPrimitiveIndices().size());
+    createdMesh.solidTriangleWords = Core::MakeGlobalUnique<u32[]>(m_arena, mesh.solidTriangleWords().size());
+    if(!createdMesh.solidTriangleWords)
+        return MakeUnexpected(Failure{});
+    const usize solidByteCount = mesh.solidTriangleWords().size() * sizeof(u32);
+    NWB_MEMCPY(createdMesh.solidTriangleWords.get(), solidByteCount, mesh.solidTriangleWords().data(), solidByteCount);
     const auto positionBounds = __hidden_mesh::BuildPositionStreamBounds(mesh.positionStream());
     if(!positionBounds){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has invalid CSG receiver bounds")
@@ -548,6 +553,8 @@ Expected<MeshResources*> RendererMeshSystem::findMeshResources(const Name& meshK
 Expected<MeshResources*> RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc){
 
     NWB_ASSERT(desc.valid());
+    if(!desc.valid())
+        return MakeUnexpected(Failure{});
 
     const auto foundMesh = m_meshState.m_meshes.find(desc.meshKey);
     if(foundMesh != m_meshState.m_meshes.end()){
@@ -574,6 +581,11 @@ Expected<MeshResources*> RendererMeshSystem::createRuntimeMeshResources(const Ru
 
     MeshResources createdMesh;
     createdMesh.meshName = desc.meshKey;
+    createdMesh.solidTriangleWords = Core::MakeGlobalUnique<u32[]>(m_arena, desc.solidTriangleWords.size());
+    if(!createdMesh.solidTriangleWords)
+        return MakeUnexpected(Failure{});
+    const usize solidByteCount = desc.solidTriangleWords.size_bytes();
+    NWB_MEMCPY(createdMesh.solidTriangleWords.get(), solidByteCount, desc.solidTriangleWords.data(), solidByteCount);
     createdMesh.positionBuffer = desc.positionBuffer;
     createdMesh.normalBuffer = desc.normalBuffer;
     createdMesh.tangentBuffer = desc.tangentBuffer;

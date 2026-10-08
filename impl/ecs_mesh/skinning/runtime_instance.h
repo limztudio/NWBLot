@@ -55,6 +55,8 @@ struct MeshSkinningRuntimeInstance{
     MeshletLocalVertexRefVector meshletLocalVertexRefs;
     MeshletPrimitiveIndexVector meshletPrimitiveIndices;
     AttributeSkinVector attributeSkins;
+    // The source mesh stays owned by the runtime cache until this instance is released.
+    Span<const u32> solidTriangleWords;
     SkinVector skin;
     JointVector inverseBindMatrices;
     MeshSkinningDeformationState deformationState;
@@ -119,6 +121,7 @@ struct MeshSkinningRuntimeInstance{
             && !meshletAttributeRefDeltas.empty()
             && !meshletLocalVertexRefs.empty()
             && !meshletPrimitiveIndices.empty()
+            && solidTriangleWords.size() == (meshletPrimitiveIndices.size() / 3u + 31u) / 32u
             && meshletPositionRefCount > 0u
             && meshletAttributeRefCount > 0u
             && attributeSkins.size() == meshletAttributeRefCount

@@ -275,6 +275,8 @@ public:
     // Resolve the frozen shared material-context heap slots after preflight has settled all backing-buffer capacities.
     // The shared graph retains this POD as an immutable upload blob before recording begins.
     [[nodiscard]] Expected<RayTraceMaterialContextSlots> snapshotRayTraceMaterialContextSlots();
+    [[nodiscard]] Expected<Core::GpuUploadBlobId> retainPreparedCsgTraceContextUpload(Core::GpuTaskGraph& graph)const;
+    void confirmCsgTraceContextReadSubmission(const Core::QueueSubmissionToken& token)noexcept;
     // Retain the exact preflight-gathered caustic AABB stream as an immutable graph blob. A valid empty result authoritatively represents a frame without refractive emission targets.
     [[nodiscard]] Expected<Core::GpuUploadBlobId> retainPreparedCausticEmissionTargetUpload(
         Core::GpuTaskGraph& graph
@@ -972,6 +974,7 @@ private:
     void releaseLightSpaceShadowResources();
     [[nodiscard]] bool ensureSceneBvhBuffers(u32 instanceCount);
     [[nodiscard]] bool ensureRayTraceMaterialContextSlotsBuffer();
+    [[nodiscard]] bool ensureCsgTraceContextResources();
     [[nodiscard]] bool ensureRayTraceMaterialContextSlotsHeapHandle();
     [[nodiscard]] bool ensureRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);
     [[nodiscard]] bool replaceRayTraceMaterialContextHeapHandle(Core::Buffer& buffer, Core::GpuDescriptorHandle& handle);

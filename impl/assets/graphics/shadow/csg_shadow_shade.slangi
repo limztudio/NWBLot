@@ -10,6 +10,7 @@
 
 
 #include "csg_shadow_math.slangi"
+#include "../bvh/triangle_geometry.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -117,6 +118,9 @@ bool nwbCsgShadowEmitSpan(
         return false;
     NwbLightSpaceEvent outputFar = farEvent;
     NwbLightSpaceEvent outputNear = nearEvent;
+    // The output describes retained-volume boundaries independently of the source shell's orientation.
+    outputFar.instanceAndFacing = instance | NWB_LIGHT_SPACE_EVENT_ENTERING;
+    outputNear.instanceAndFacing = instance;
     if(farCutter != 0xffffffffu && !nwbCsgShadowCapEvent(instance, farCutter, farEvent.depth, true, rayOrigin, rayDirection, outputFar))
         return false;
     if(nearCutter != 0xffffffffu && !nwbCsgShadowCapEvent(instance, nearCutter, nearEvent.depth, false, rayOrigin, rayDirection, outputNear))
@@ -133,7 +137,7 @@ bool nwbCsgShadowSubtractSpan(
     const uint instance,
     const NwbLightSpaceEvent farEvent,
     const NwbLightSpaceEvent nearEvent,
-    const NwbCsgShadowInterval intervals[NWB_CSG_SHADOW_MAX_CUTTERS],
+    const NwbCsgShadowInterval intervals[NWB_CSG_RAY_MAX_CUTTERS],
     const uint intervalCount,
     const float3 rayOrigin,
     const float3 rayDirection,
@@ -164,7 +168,14 @@ bool nwbCsgShadowSubtractSpan(
 }
 
 // Input records stay local while expanded cap records overwrite the same bounded global stream.
-bool nwbCsgShadowConvertEvents(const uint pixel, const NwbLightSpaceView view, const uint2 viewPixel, const uint count){
+bool nwbCsgShadowConvertEvents(
+    const uint pixel,
+    const NwbLightSpaceView view,
+    const uint2 viewPixel,
+    const uint count,
+    out bool converted
+){
+    converted = false;
     NwbLightSpaceEvent input[NWB_LIGHT_SPACE_EVENTS_PER_TEXEL];
     bool hasCsg = false;
     for(uint index = 0u; index < count; ++index){
@@ -189,7 +200,7 @@ bool nwbCsgShadowConvertEvents(const uint pixel, const NwbLightSpaceView view, c
         while(end < count && (input[end].instanceAndFacing & NWB_LIGHT_SPACE_EVENT_INSTANCE_MASK) == instance)
             ++end;
         const uint4 range = nwbCsgShadowRange(instance);
-        if((range.z & NWB_CSG_SHADOW_RECEIVER_ACTIVE) == 0u){
+        if((range.z & NWB_CSG_RAY_RECEIVER_ACTIVE) == 0u){
             for(uint index = first; index < end; ++index){
                 if(outputCount == NWB_LIGHT_SPACE_EVENTS_PER_TEXEL)
                     return false;
@@ -201,13 +212,13 @@ bool nwbCsgShadowConvertEvents(const uint pixel, const NwbLightSpaceView view, c
         }
         const NwbRtInstanceMaterial material = nwbLightSpaceMaterial(instance);
         const bool transparent = (material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_TRANSPARENT) != 0u;
-        NwbCsgShadowInterval intervals[NWB_CSG_SHADOW_MAX_CUTTERS];
-        for(uint index = 0u; index < NWB_CSG_SHADOW_MAX_CUTTERS; ++index)
+        NwbCsgShadowInterval intervals[NWB_CSG_RAY_MAX_CUTTERS];
+        for(uint index = 0u; index < NWB_CSG_RAY_MAX_CUTTERS; ++index)
             intervals[index] = (NwbCsgShadowInterval)0;
         uint intervalCount = 0u;
         const uint cutterCount = nwbHeapRawBuffer(g_NwbLightSpacePush.csgContextSlot).Load(12u);
-        const bool bounded = range.x <= cutterCount && range.y <= cutterCount - range.x && range.y <= NWB_CSG_SHADOW_MAX_CUTTERS;
-        bool supported = bounded && (range.z & NWB_CSG_SHADOW_RECEIVER_UNSUPPORTED) == 0u;
+        const bool bounded = range.x <= cutterCount && range.y <= cutterCount - range.x && range.y <= NWB_CSG_RAY_MAX_CUTTERS;
+        bool supported = bounded && (range.z & NWB_CSG_RAY_RECEIVER_UNSUPPORTED) == 0u;
         if(supported){
             for(uint index = 0u; index < range.y; ++index){
                 NwbCsgShadowInterval interval;
@@ -227,43 +238,84 @@ bool nwbCsgShadowConvertEvents(const uint pixel, const NwbLightSpaceView view, c
                 }
             }
         }
-        if(!supported)
-            intervalCount = 0u;
+        if(!supported || range.w == 0u)
+            return false;
         uint index = first;
-        uint winding = 0u;
+        int winding = 0;
         NwbLightSpaceEvent farEvent = (NwbLightSpaceEvent)0;
         while(index < end){
-            const NwbLightSpaceEvent event = input[index];
-            uint facing = (event.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_ENTERING) != 0u ? 1u : 2u;
-            ++index;
-            while(index < end && nwbShadowCrossingMatchesEndpoint(event.depth, input[index].depth)){
-                facing |= (input[index].instanceAndFacing & NWB_LIGHT_SPACE_EVENT_ENTERING) != 0u ? 1u : 2u;
+            const uint groupBegin = index;
+            const float endpoint = input[index].depth;
+            int windingDelta = 0;
+            NwbLightSpaceEvent enteringEvent = (NwbLightSpaceEvent)0;
+            NwbLightSpaceEvent exitingEvent = (NwbLightSpaceEvent)0;
+            do{
+                const uint eventIndex = index;
+                const NwbLightSpaceEvent event = input[index];
                 ++index;
-            }
-            if(facing == 3u)
+                if(!nwbCsgShadowEventClosed(range, event.primitive)){
+                    bool removed = false;
+                    for(uint cutIndex = 0u; cutIndex < intervalCount; ++cutIndex){
+                        if(event.depth >= intervals[cutIndex].depth.x && event.depth <= intervals[cutIndex].depth.y){
+                            removed = true;
+                            break;
+                        }
+                    }
+                    if(removed)
+                        continue;
+                    if(!transparent)
+                        opaqueDepth = min(opaqueDepth, event.depth);
+                    else{
+                        if(outputCount == NWB_LIGHT_SPACE_EVENTS_PER_TEXEL)
+                            return false;
+                        nwbCsgShadowStoreEvent(pixel, outputCount, event);
+                        ++outputCount;
+                    }
+                    continue;
+                }
+                const bool entering = (event.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_ENTERING) != 0u;
+                bool duplicate = false;
+                for(uint previousIndex = groupBegin; previousIndex < eventIndex; ++previousIndex){
+                    const NwbLightSpaceEvent previous = input[previousIndex];
+                    if(((previous.instanceAndFacing & NWB_LIGHT_SPACE_EVENT_ENTERING) != 0u) != entering)
+                        continue;
+                    if(!nwbCsgShadowEventClosed(range, previous.primitive))
+                        continue;
+                    if(nwbRayTraceCoplanarSeam(g_NwbSwShadowMaterialContextSlots.sceneSlots.z, instance, previous.primitive, event.primitive)){
+                        duplicate = true;
+                        break;
+                    }
+                }
+                if(duplicate)
+                    continue;
+                windingDelta += entering ? 1 : -1;
+                if(entering)
+                    enteringEvent = event;
+                else
+                    exitingEvent = event;
+            }while(index < end && nwbShadowCrossingMatchesEndpoint(endpoint, input[index].depth));
+            const int previousWinding = winding;
+            const bool inside = previousWinding != 0;
+            winding += windingDelta;
+            if(inside == (winding != 0))
                 continue;
-            if(facing == 1u){
-                if(winding == 0u)
-                    farEvent = event;
-                ++winding;
-            }
-            else{
-                if(winding == 0u)
-                    return false;
-                --winding;
-                if(
-                    winding == 0u && !nwbCsgShadowSubtractSpan(pixel, transparent, instance, farEvent, event,
-                    intervals, intervalCount, rayOrigin, rayDirection, outputCount, opaqueDepth)
-                )
-                    return false;
-            }
+            const int boundaryDelta = inside ? (previousWinding > 0 ? -1 : 1) : (winding > 0 ? 1 : -1);
+            const NwbLightSpaceEvent closedEvent = boundaryDelta > 0 ? enteringEvent : exitingEvent;
+            if(!inside)
+                farEvent = closedEvent;
+            else if(!nwbCsgShadowSubtractSpan(
+                pixel, transparent, instance, farEvent, closedEvent, intervals, intervalCount,
+                rayOrigin, rayDirection, outputCount, opaqueDepth
+            ))
+                return false;
         }
-        if(winding != 0u)
+        if(winding != 0)
             return false;
         first = end;
     }
     g_NwbHeapStorageBuffers[g_NwbLightSpacePush.countsSlot].Store(pixel * 4u, outputCount);
     g_NwbHeapStorageBuffers[g_NwbLightSpacePush.csgOpaqueDepthSlot].Store(pixel * 4u, asuint(opaqueDepth));
+    converted = true;
     return true;
 }
 

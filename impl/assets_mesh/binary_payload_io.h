@@ -90,7 +90,8 @@ template<
     typename MeshletPositionRefDeltaContainer,
     typename MeshletAttributeRefDeltaContainer,
     typename MeshletLocalVertexRefContainer,
-    typename MeshletPrimitiveIndexContainer
+    typename MeshletPrimitiveIndexContainer,
+    typename SolidTriangleWordContainer
 >
 [[nodiscard]] bool ReadMeshletStreams(
     const Core::Assets::AssetBytes& binary,
@@ -102,6 +103,7 @@ template<
     MeshletAttributeRefDeltaContainer& outMeshletAttributeRefDeltas,
     MeshletLocalVertexRefContainer& outMeshletLocalVertexRefs,
     MeshletPrimitiveIndexContainer& outMeshletPrimitiveIndices,
+    SolidTriangleWordContainer& outSolidTriangleWords,
     const TStringView failureContext
 ){
     if(!Core::Assets::ReadVectorPayload(binary, inOutCursor, header.meshletCount, outMeshlets, failureContext, NWB_TEXT("meshlets")))
@@ -142,13 +144,22 @@ template<
         NWB_TEXT("meshlet local vertex refs")
     ))
         return false;
-    return Core::Assets::ReadVectorPayload(
+    if(!Core::Assets::ReadVectorPayload(
         binary,
         inOutCursor,
         header.meshletPrimitiveIndexCount,
         outMeshletPrimitiveIndices,
         failureContext,
         NWB_TEXT("meshlet primitive indices")
+    ))
+        return false;
+    return Core::Assets::ReadVectorPayload(
+        binary,
+        inOutCursor,
+        (header.meshletPrimitiveIndexCount / 3u + 31u) / 32u,
+        outSolidTriangleWords,
+        failureContext,
+        NWB_TEXT("solid triangle words")
     );
 }
 
@@ -175,6 +186,7 @@ template<typename MeshT>
         && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletAttributeRefDeltas())
         && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletLocalVertexRefs())
         && AddBinaryVectorReserveBytes(reserveBytes, mesh.meshletPrimitiveIndices())
+        && AddBinaryVectorReserveBytes(reserveBytes, mesh.solidTriangleWords())
     ;
 }
 
@@ -220,6 +232,7 @@ template<typename MeshT>
         && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletAttributeRefDeltas(), failureContext, NWB_TEXT("meshlet attribute ref deltas"))
         && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletLocalVertexRefs(), failureContext, NWB_TEXT("meshlet local vertex refs"))
         && Core::Assets::AppendVectorPayload(outBinary, mesh.meshletPrimitiveIndices(), failureContext, NWB_TEXT("meshlet primitive indices"))
+        && Core::Assets::AppendVectorPayload(outBinary, mesh.solidTriangleWords(), failureContext, NWB_TEXT("solid triangle words"))
     ;
 }
 

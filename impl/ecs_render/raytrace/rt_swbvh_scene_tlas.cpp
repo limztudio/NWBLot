@@ -283,10 +283,10 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         if(csg.receiverRanges.size() != instances.size())
             return false;
         for(u32 index = 0u; index < static_cast<u32>(instances.size()); ++index){
-            if((csg.receiverRanges[index].flags & NWB_CSG_SHADOW_RECEIVER_ACTIVE) == 0u)
+            if((csg.receiverRanges[index].flags & NWB_CSG_RAY_RECEIVER_ACTIVE) == 0u)
                 continue;
             const bool transparent = (instanceMaterials[index].flags & RtInstanceMaterialFlag::Transparent) != 0u;
-            instances[index].setInstanceMask(NWB_RT_OPTICAL_BASE_INSTANCE_MASK
+            instances[index].setInstanceMask(NWB_RT_OPTICAL_BASE_INSTANCE_MASK | NWB_RT_CSG_INSTANCE_MASK
                 | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK : 0u));
             instanceMaterials[index].flags |= NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW;
             m_lightSpaceShadow.m_casters[index].csg = true;

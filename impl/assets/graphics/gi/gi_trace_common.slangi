@@ -92,12 +92,19 @@ half3 nwbGiShadeHit(const NwbGiTraceHit hit, const float3 rayDir){
             }
         }
         if(dominantLightIndex != NWB_GI_INVALID_LIGHT_INDEX && bestNdotl > half(0.0h)){
-            // Boolean occlusion only: the shadow ray needs blocker existence, not reconstructed attributes.
-            const bool occluded = nwbGiTraceOccluded(
-                hit.worldPos + facingNormal * NWB_GI_TRACE_RAY_MIN_DISTANCE,
-                dominantLightDir,
-                NWB_GI_TRACE_RAY_MIN_DISTANCE,
-                NWB_GI_TRACE_RAY_MAX_DISTANCE
+            const float3 shadowOrigin = hit.worldPos + facingNormal * NWB_GI_TRACE_RAY_MIN_DISTANCE;
+            float shadowMaximum = NWB_GI_TRACE_RAY_MAX_DISTANCE;
+            const NwbSceneLight dominantLight = g_NwbSceneLights[dominantLightIndex];
+            if(dominantLight.params.y >= NWB_SCENE_LIGHT_TYPE_DIRECTIONAL_MAX){
+                const float3 toLight = dominantLight.position.xyz - shadowOrigin;
+                const float distance = length(toLight);
+                shadowMaximum = min(shadowMaximum, distance - NWB_GI_TRACE_RAY_MIN_DISTANCE);
+                if(distance > 0.0)
+                    dominantLightDir = toLight / distance;
+            }
+            // Local-light occlusion ends before the source; geometry behind it cannot shadow the bounce surface.
+            const bool occluded = shadowMaximum > NWB_GI_TRACE_RAY_MIN_DISTANCE && nwbGiTraceOccluded(
+                shadowOrigin, dominantLightDir, NWB_GI_TRACE_RAY_MIN_DISTANCE, shadowMaximum
             );
             if(occluded)
                 irradiance *= 0.0h; // fully shadowed by the dominant-light occlusion ray

@@ -321,6 +321,7 @@ target_sources(nwb_ecs_render PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_swbvh_bvh_infra.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_shadow_tasks.h"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_shadow_material_context.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_csg_context.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_shadow_visibility_target.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_shadow_opaque.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/raytrace/rt_shadow_transparent.cpp"

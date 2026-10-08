@@ -55,7 +55,7 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/surface_dispatch.slangi"
 
-#include "gi_trace_common.slangi"
+#include "gi_geometry.slangi"
 
 // bindless_heap_rt.slangi above also brings the raw geometry accessor.
 // HW GI uses it for positions, indices, and attributes carried by the heap-selected instance-material record; inline RayQuery itself walks the TLAS.
@@ -64,112 +64,194 @@ uint nwbMeshFrameViewHeapSlot(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Per-mesh positions, indices, and attributes are read through descriptor-heap slots carried by the material record. The shared backing buffers remain transitioned for those heap reads.
-
-
-// Per-triangle-corner normal + uv0 use the canonical shared ray-trace attribute decoder.
-// GI needs these inputs to evaluate the material surface hook exactly through its declared contract rather than inferring an interface field.
-NwbRayTraceVertexAttrib nwbGiHwLoadVertexAttrib(const uint attributeSlot, const uint attributeIndex){
-    // attributeSlot is a non-uniform global heap slot; nwbHeapRawBuffer() applies the required decoration per load.
-    return nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(attributeSlot).Load4(attributeIndex * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+#if NWB_GI_CSG_ENABLED
+uint nwbCsgRayCollectCrossings(
+    const uint contextSlot,
+    const uint materialSlot,
+    const uint instanceIndex,
+    const uint membershipOffset,
+    const float3 worldOrigin,
+    const float3 worldDirection,
+    const float minimum,
+    const float maximum,
+    const NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS],
+    const uint cutCount,
+    inout NwbCsgRayCrossing crossings[NWB_CSG_RAY_CROSSING_CAPACITY],
+    inout uint crossingCount,
+    out NwbCsgRayBoundary openBoundary
+){
+    openBoundary = (NwbCsgRayBoundary)0;
+    openBoundary.distance = maximum;
+    openBoundary.primitive = NWB_CSG_RAY_INVALID_INDEX;
+    openBoundary.cutter = NWB_CSG_RAY_INVALID_INDEX;
+    const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
+    const float3x4 worldToObject = nwbCsgRayWorldToObject(instance);
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
+    RayDesc ray;
+    ray.Origin = worldOrigin;
+    ray.Direction = worldDirection;
+    ray.TMin = 0.0;
+    ray.TMax = asfloat(0x7f7fffffu);
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
+    query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_CSG_INSTANCE_MASK, ray);
+    while(query.Proceed()){
+        if(query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE || query.CandidateInstanceID() != instanceIndex)
+            continue;
+        if(query.CandidateTriangleRayT() == 0.0)
+            continue;
+        const uint primitive = query.CandidatePrimitiveIndex();
+        if(!nwbCsgRayPrimitiveClosed(contextSlot, membershipOffset, primitive)){
+            nwbCsgRaySelectOpenBoundary(
+                primitive, query.CandidateTriangleRayT(), query.CandidateTriangleBarycentrics(),
+                minimum, cuts, cutCount, openBoundary
+            );
+            continue;
+        }
+        // Physical inverse-transpose normals preserve oriented volume membership under reflected instance transforms.
+        const float3 normal = nwbRayTraceTriangleGeometricNormal(material, primitive, worldToObject);
+        const float facing = dot(normal, worldDirection);
+        if(!isfinite(facing) || facing == 0.0)
+            return NWB_CSG_RAY_FAILURE_TOPOLOGY;
+        NwbCsgRayCrossing crossing;
+        crossing.distance = query.CandidateTriangleRayT();
+        crossing.primitive = primitive;
+        crossing.barycentrics = query.CandidateTriangleBarycentrics();
+        crossing.windingDelta = facing < 0.0 ? 1 : -1;
+        const uint failure = nwbCsgRayInsertCrossing(materialSlot, instanceIndex, crossing, crossings, crossingCount);
+        if(failure != 0u)
+            return failure;
+    }
+    return 0u;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// worldToObject^T * objectNormal -- byte-matches nwbSwBvhTransformNormal (bvh/sw_instance.slangi), but fed the driver's TLAS-baked world->object rows instead of the CPU-uploaded instance record (both derive from the same world matrix).
-float3 nwbGiHwTransformNormal(const float3x4 worldToObject, const float3 objectNormal){
-    return float3(
-        dot(float3(worldToObject[0].x, worldToObject[1].x, worldToObject[2].x), objectNormal),
-        dot(float3(worldToObject[0].y, worldToObject[1].y, worldToObject[2].y), objectNormal),
-        dot(float3(worldToObject[0].z, worldToObject[1].z, worldToObject[2].z), objectNormal)
-    );
+void nwbGiHwCsgClosest(
+    const float3 origin,
+    const float3 direction,
+    const float minimum,
+    inout NwbGiGeometryHit closest
+){
+    const uint contextSlot = g_NwbGiHwMaterialContextSlots.materialSlots.w;
+    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(20u);
+    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(24u);
+    // Only active CSG receivers participate. Current-pose bounds discover caps even when their raw receiver exit is beyond the nearest ordinary hit.
+    for(uint index = 0u; index < activeCount; ++index){
+        const uint instanceIndex = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * 4u);
+        const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
+        const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instanceIndex, instance);
+        if(!nwbCsgRayBoundsIntersect(instance, root, origin, direction, minimum, closest.distance))
+            continue;
+        const NwbGiGeometryHit geometry = nwbGiCsgGeometryHit(
+            contextSlot, g_NwbGiHwMaterialContextSlots.sceneSlots.z, instanceIndex, origin, direction, minimum, closest.distance
+        );
+        if(geometry.hit)
+            closest = geometry;
+        if(closest.failure != 0u)
+            return;
+    }
 }
 
+bool nwbGiHwCsgOccluded(const float3 origin, const float3 direction, const float minimum, const float maximum){
+    const uint contextSlot = g_NwbGiHwMaterialContextSlots.materialSlots.w;
+    const uint activeOffset = nwbHeapRawBuffer(contextSlot).Load(20u);
+    const uint activeCount = nwbHeapRawBuffer(contextSlot).Load(24u);
+    for(uint index = 0u; index < activeCount; ++index){
+        const uint instanceIndex = nwbHeapRawBuffer(contextSlot).Load(activeOffset + index * 4u);
+        const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
+        const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instanceIndex, instance);
+        if(!nwbCsgRayBoundsIntersect(instance, root, origin, direction, minimum, maximum))
+            continue;
+        const NwbGiGeometryHit geometry = nwbGiCsgGeometryHit(
+            contextSlot, g_NwbGiHwMaterialContextSlots.sceneSlots.z, instanceIndex, origin, direction, minimum, maximum
+        );
+        if(geometry.hit)
+            return true;
+    }
+    return false;
+}
+#endif
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// The seam definition: closest hit via inline RayQuery. RAY_FLAG_FORCE_OPAQUE makes Proceed() commit the geometric nearest triangle at once, then reconstruct the hit fields to match the SW path field-for-field.
 NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, float tMax){
-    NwbGiTraceHit closest;
-    closest.hit = false;
-    closest.t = tMax;
-    closest.worldPos = float3(0.0, 0.0, 0.0);
-    closest.normal = float3(0.0, 0.0, 1.0);
-    closest.albedo = half3(NWB_GI_SW_TRACE_DEFAULT_ALBEDO);
-
+    NwbGiGeometryHit geometry = nwbGiEmptyGeometryHit(tMax);
     RayDesc ray;
     ray.Origin = origin;
     ray.Direction = direction;
     ray.TMin = tMin;
     ray.TMax = tMax;
-
     RayQuery<RAY_FLAG_FORCE_OPAQUE> query;
+#if NWB_GI_CSG_ENABLED
+    // CSG receivers omit this ordinary shadow bit. Their analytic boundaries are compared separately without narrowing the containment query.
+    query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RT_SHADOW_BASE_INSTANCE_MASK, ray);
+#else
     query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray);
-    query.Proceed(); // FORCE_OPAQUE + triangle-only -> commits the nearest at once, returns false
-    if(query.CommittedStatus() != COMMITTED_TRIANGLE_HIT)
-        return closest;
-
-    const uint instanceIndex = query.CommittedInstanceID();
-    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbGiHwMaterialContextSlots.sceneSlots.z)[instanceIndex];
-    const uint triangle = query.CommittedPrimitiveIndex();
-
-    // This mesh's index / position / attribute geometry is fetched from the global descriptor heap by the per-buffer slots the material record carries (populated with each mesh by the ray-tracing material context).
-    // Each slot is NON-UNIFORM across the wave
-    const uint indexBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-    const uint3 tri = nwbHeapRawBuffer(material.indexSlot).Load3(indexBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
-    const float3 v0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(tri.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-    const float3 v1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(tri.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-    const float3 v2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(tri.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
-    const float3 objNormal = normalize(cross(v1 - v0, v2 - v0));   // same edges/order/sign as nwbGiSwRayTriangle
-    const float2 bary = query.CommittedTriangleBarycentrics();
-    const float3 weights = float3(1.0 - bary.x - bary.y, bary.x, bary.y);
-    const uint attributeBase = triangle * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
-    const NwbRayTraceVertexAttrib a0 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase);
-    const NwbRayTraceVertexAttrib a1 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase + 1u);
-    const NwbRayTraceVertexAttrib a2 = nwbGiHwLoadVertexAttrib(material.attributeSlot, attributeBase + 2u);
-    const float3 objectShadingNormal = float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z;
-
-    NwbShadowHit surfaceHit;
-    surfaceHit.meshInstanceIndex = material.meshInstanceIndex;
-    surfaceHit.surfaceDispatchId = material.surfaceDispatchId;
-    surfaceHit.materialConstantByteOffset = material.materialConstantByteOffset;
-    surfaceHit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
-    surfaceHit.worldNormal = nwbSafeNormalize(nwbGiHwTransformNormal(query.CommittedWorldToObject3x4(), objectShadingNormal), float3(0.0, 0.0, 1.0));
-    surfaceHit.worldPosition = ray.Origin + ray.Direction * query.CommittedRayT();
-    surfaceHit.rayDirection = ray.Direction;
-
-    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, surfaceHit);
-
-    closest.hit = true;
-    closest.t = query.CommittedRayT();
-    closest.worldPos = surfaceHit.worldPosition;
-    closest.normal = nwbSafeNormalize(nwbGiHwTransformNormal(query.CommittedWorldToObject3x4(), objNormal), float3(0.0, 0.0, 1.0));
-    closest.albedo = surface.baseColor;
-    return closest;
+#endif
+    while(query.Proceed()){}
+    float3x4 worldToObject = float3x4(0.0);
+    if(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT){
+        geometry.hit = true;
+        geometry.instance = query.CommittedInstanceID();
+        geometry.primitive = query.CommittedPrimitiveIndex();
+        geometry.distance = query.CommittedRayT();
+        geometry.barycentrics = query.CommittedTriangleBarycentrics();
+        worldToObject = query.CommittedWorldToObject3x4();
+#if NWB_GI_CSG_ENABLED
+        geometry.cutter = NWB_CSG_RAY_INVALID_INDEX;
+#endif
+    }
+#if NWB_GI_CSG_ENABLED
+    nwbGiHwCsgClosest(origin, direction, tMin, geometry);
+    if(geometry.hit && geometry.failure == 0u){
+        const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbGiHwMaterialContextSlots.sceneSlots.z)[geometry.instance];
+        if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW) != 0u)
+            worldToObject = nwbCsgRayWorldToObject(nwbCsgRayLoadInstance(g_NwbGiHwMaterialContextSlots.materialSlots.w, geometry.instance));
+    }
+#endif
+    if(
+        geometry.hit && geometry.failure == 0u
+#if NWB_GI_CSG_ENABLED
+        && geometry.cutter == NWB_CSG_RAY_INVALID_INDEX
+#endif
+    ){
+        const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(g_NwbGiHwMaterialContextSlots.sceneSlots.z)[geometry.instance];
+#if NWB_GI_CSG_ENABLED
+        if((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW) == 0u)
+#endif
+        {
+            const uint3 indices = nwbHeapRawBuffer(material.indexSlot).Load3(geometry.primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+            const float3 v0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const float3 v1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const float3 v2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const float3 objectNormal = normalize(cross(v1 - v0, v2 - v0));
+            geometry.normal = nwbSafeNormalize(nwbGiTransformNormal(worldToObject, objectNormal), float3(0.0, 0.0, 1.0));
+        }
+    }
+    return nwbGiReconstructHit(geometry, g_NwbGiHwMaterialContextSlots.sceneSlots.z, worldToObject, origin, direction);
 }
 
-// Boolean GI occlusion: ANY triangle blocks. No attribute loads, no material evaluation, no barycentric reconstruction.
 bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax){
     RayDesc ray;
     ray.Origin = origin;
     ray.Direction = direction;
     ray.TMin = tMin;
     ray.TMax = tMax;
-
     RayQuery<RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> query;
+#if NWB_GI_CSG_ENABLED
     query.TraceRayInline(
-        nwbHeapAccelStruct(),
-        RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,
-        NWB_RAY_TRACING_ALL_INSTANCE_MASK,
-        ray
+        nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, NWB_RT_SHADOW_BASE_INSTANCE_MASK, ray
     );
-    query.Proceed();
-    return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
+#else
+    query.TraceRayInline(
+        nwbHeapAccelStruct(), RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH, NWB_RAY_TRACING_ALL_INSTANCE_MASK, ray
+    );
+#endif
+    while(query.Proceed()){}
+    if(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+        return true;
+#if NWB_GI_CSG_ENABLED
+    return nwbGiHwCsgOccluded(origin, direction, tMin, tMax);
+#else
+    return false;
+#endif
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

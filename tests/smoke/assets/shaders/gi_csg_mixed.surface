@@ -1,0 +1,14 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// A removed green stripe exposes false GI hits; retained red open triangles must still reflect and block rays.
+NwbMeshSurface nwbMaterialSurface(){
+    const bool openSurface = abs(inWorldPosition.z + 1.0) < 0.015 && abs(inNormal.z) > 0.9;
+    const half3 color = abs(inWorldPosition.x) < 0.24 ? half3(0.02h, 1.0h, 0.02h) : half3(1.0h, 0.02h, 0.02h);
+    return nwbMakeMeshSurface(openSurface ? color : half3(0.0h), inNormal);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

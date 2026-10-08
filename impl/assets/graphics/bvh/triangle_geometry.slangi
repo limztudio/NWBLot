@@ -1,0 +1,142 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_BVH_TRIANGLE_GEOMETRY_SLANGI
+#define NWB_GRAPHICS_BVH_TRIANGLE_GEOMETRY_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "constants.h"
+#include "../bindless/bindless_heap_rt.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// A triangle's cross product carries area and instance scale, unlike an authored unit shading normal. Normalize relative to its own magnitude so valid small triangles and large instances never acquire a fixed fallback axis.
+// Degenerate or nonfinite geometry returns zero, which the optical membership/progress checks reject.
+float3 nwbRayTraceScaleGeometryVector(const float3 value){
+    if(!all(isfinite(value)))
+        return float3(0.0);
+    const float scale = max(abs(value.x), max(abs(value.y), abs(value.z)));
+    if(scale == 0.0)
+        return float3(0.0);
+    return value / scale;
+}
+
+float3 nwbRayTraceNormalizeGeometryVector(const float3 value){
+    const float3 scaled = nwbRayTraceScaleGeometryVector(value);
+    const float lengthSquared = dot(scaled, scaled);
+    if(lengthSquared == 0.0)
+        return float3(0.0);
+    return scaled * rsqrt(lengthSquared);
+}
+
+float3 nwbRayTraceTriangleGeometricNormal(
+    const NwbRtInstanceMaterial material,
+    const uint primitive,
+    const float3x4 worldToObject
+){
+    const uint triangleBase = primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+    const uint3 triangle = nwbHeapRawBuffer(material.indexSlot).Load3(triangleBase * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    const float3 v0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(triangle.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 v1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(triangle.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 v2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(triangle.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    // Inverse-transpose preserves physical outwardness (even under negative determinant; no det-sign multiply).
+    // Optical membership uses this normal.
+    const float3 edge0 = nwbRayTraceScaleGeometryVector(v1 - v0);
+    const float3 edge1 = nwbRayTraceScaleGeometryVector(v2 - v0);
+    const float3 normal = nwbRayTraceScaleGeometryVector(cross(edge0, edge1));
+    const float3 worldNormal = float3(
+        dot(float3(worldToObject[0].x, worldToObject[1].x, worldToObject[2].x), normal),
+        dot(float3(worldToObject[0].y, worldToObject[1].y, worldToObject[2].y), normal),
+        dot(float3(worldToObject[0].z, worldToObject[1].z, worldToObject[2].z), normal)
+    );
+    return nwbRayTraceNormalizeGeometryVector(worldNormal);
+}
+
+// Only real triangulation seams merge: indexed adjacency + opposite orientation filter shells/duplicates; object-space coplanarity via triple-product error bound (no crease-angle smoothing).
+bool nwbRayTraceCoplanarSeam(
+    const uint instanceMaterialHeapSlot,
+    const uint instance,
+    const uint firstPrimitive,
+    const uint secondPrimitive
+){
+    if(firstPrimitive == secondPrimitive)
+        return true;
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(instanceMaterialHeapSlot)[instance];
+    const uint3 first = nwbHeapRawBuffer(material.indexSlot).Load3(firstPrimitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    const uint3 second = nwbHeapRawBuffer(material.indexSlot).Load3(secondPrimitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    uint opposite = 3u;
+    [unroll]
+    for(uint firstEdge = 0u; firstEdge < 3u; ++firstEdge){
+        [unroll]
+        for(uint secondEdge = 0u; secondEdge < 3u; ++secondEdge){
+            if(first[firstEdge] == second[(secondEdge + 1u) % 3u] && first[(firstEdge + 1u) % 3u] == second[secondEdge])
+                opposite = (secondEdge + 2u) % 3u;
+        }
+    }
+    if(opposite == 3u)
+        return false;
+    if(any(second[opposite] == first))
+        return false;
+    const float3 v0 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(first.x * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 v1 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(first.y * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 v2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(first.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 v3 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(second[opposite] * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+    const float3 a = nwbRayTraceScaleGeometryVector(v1 - v0);
+    const float3 b = nwbRayTraceScaleGeometryVector(v2 - v0);
+    const float3 c = nwbRayTraceScaleGeometryVector(v3 - v0);
+    const float3 normal = cross(a, b);
+    const float determinant = dot(normal, c);
+    const float magnitude = dot(abs(a), abs(b.yzx * c.zxy) + abs(b.zxy * c.yzx));
+    const float error = 24.0 * 1.1920928955078125e-7 * magnitude;
+    return isfinite(determinant) && isfinite(error) && dot(normal, normal) > 0.0 && abs(determinant) <= error;
+}
+
+// A closed solid's crease or vertex is one crossing even when hard normal/UV seams duplicate its position indices.
+bool nwbRayTraceIncidentBoundary(
+    const NwbRtInstanceMaterial material,
+    const uint firstPrimitive,
+    const float2 firstBarycentrics,
+    const uint secondPrimitive,
+    const float2 secondBarycentrics
+){
+    const uint3 first = nwbHeapRawBuffer(material.indexSlot).Load3(firstPrimitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    const uint3 second = nwbHeapRawBuffer(material.indexSlot).Load3(secondPrimitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT * NWB_RAYTRACE_INDEX_STRIDE_BYTES);
+    const float3 firstWeights = float3(1.0 - firstBarycentrics.x - firstBarycentrics.y, firstBarycentrics);
+    const float3 secondWeights = float3(1.0 - secondBarycentrics.x - secondBarycentrics.y, secondBarycentrics);
+    const float supportEpsilon = 8.0 * 1.1920928955078125e-7;
+    [unroll]
+    for(uint firstCorner = 0u; firstCorner < 3u; ++firstCorner){
+        const float3 firstPosition = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(first[firstCorner] * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+        [unroll]
+        for(uint secondCorner = 0u; secondCorner < 3u; ++secondCorner){
+            const float3 secondPosition = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(second[secondCorner] * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            if(any(firstPosition != secondPosition))
+                continue;
+            if(firstWeights[firstCorner] >= 1.0 - supportEpsilon && secondWeights[secondCorner] >= 1.0 - supportEpsilon)
+                return true;
+            if(abs(firstWeights[(firstCorner + 2u) % 3u]) > supportEpsilon || abs(secondWeights[(secondCorner + 1u) % 3u]) > supportEpsilon)
+                continue;
+            const float3 firstNext = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(first[(firstCorner + 1u) % 3u] * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            const float3 secondPrevious = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(second[(secondCorner + 2u) % 3u] * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
+            if(all(firstNext == secondPrevious))
+                return true;
+        }
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

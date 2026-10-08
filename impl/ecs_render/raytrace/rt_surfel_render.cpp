@@ -96,7 +96,11 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
 
     // Only the trace pass is backend-specific.
     const bool useHwTrace = m_rayTracingState.m_surfelUseHwTrace;
-    Core::ComputePipeline* const tracePipeline = useHwTrace ? m_rayTracingState.m_surfelTraceHwPipeline.get() : m_rayTracingState.m_surfelTracePipeline.get();
+    const bool useCsgTrace = m_rayTracingState.m_surfelUseCsgTrace;
+    Core::ComputePipeline* const tracePipeline = useHwTrace
+        ? (useCsgTrace ? m_rayTracingState.m_surfelTraceCsgHwPipeline.get() : m_rayTracingState.m_surfelTraceHwPipeline.get())
+        : (useCsgTrace ? m_rayTracingState.m_surfelTraceCsgPipeline.get() : m_rayTracingState.m_surfelTracePipeline.get())
+    ;
 
     if(
         !m_rayTracingState.m_surfelSpawnPipeline
@@ -331,7 +335,14 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
             if(counts){
                 const u32 bumpTop = counts[NWB_SURFEL_COUNTER_BUMP_TOP];
                 const u32 freeTop = counts[NWB_SURFEL_COUNTER_FREE_TOP];
+                const u32 geometryFailures = counts[NWB_SURFEL_COUNTER_TRACE_GEOMETRY_FAILURE];
                 m_graphics.getDevice().unmapBuffer(*readback);
+                if((geometryFailures & ~m_rayTracingState.m_surfelTraceGeometryFailureFlags) != 0u){
+                    m_rayTracingState.m_surfelTraceGeometryFailureFlags |= geometryFailures;
+                    NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG GI traversal rejected incomplete geometry or exceeded crossing capacity (flags={}); conservative occlusion and zero bounce radiance retained")
+                        , geometryFailures
+                    );
+                }
                 NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: surfel live count = {} (bump {} - free {}) of {} pool capacity")
                     , static_cast<u64>(bumpTop - freeTop)
                     , static_cast<u64>(bumpTop)

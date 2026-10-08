@@ -77,6 +77,7 @@ ECSRenderDetail::MeshRayTracingResourceSnapshot CaptureRayTracingResourceSnapsho
         .positionBuffer = mesh.positionBuffer,
         .triangleIndexBuffer = mesh.triangleIndexBuffer,
         .attributeBuffer = mesh.attributeBuffer,
+        .solidTriangleWords = Span<const u32>(mesh.solidTriangleWords.get(), (static_cast<usize>(mesh.meshletPrimitiveIndexCount) / 3u + 31u) / 32u),
         .runtimeLocalBoundsBuffer = mesh.runtimeLocalBoundsBuffer,
         .meshletDescBuffer = {},
         .meshletLocalBoundsBuffer = {},
@@ -122,6 +123,7 @@ ECSRenderDetail::MeshRayTracingResourceSnapshot CaptureRayTracingResourceSnapsho
         && mesh.positionBuffer.get() == snapshot.positionBuffer.get()
         && mesh.triangleIndexBuffer.get() == snapshot.triangleIndexBuffer.get()
         && mesh.attributeBuffer.get() == snapshot.attributeBuffer.get()
+        && mesh.solidTriangleWords.get() == snapshot.solidTriangleWords.data()
         && mesh.runtimeLocalBoundsBuffer == snapshot.runtimeLocalBoundsBuffer
         && mesh.runtimeLocalBoundsHeapHandle == snapshot.runtimeLocalBoundsHeapHandle
         && RuntimeMeshletSnapshotMatches(mesh, snapshot)
@@ -160,6 +162,8 @@ ECSRenderDetail::MeshRayTracingResourceSnapshot CaptureRayTracingResourceSnapsho
         && lhs.positionBuffer.get() == rhs.positionBuffer.get()
         && lhs.triangleIndexBuffer.get() == rhs.triangleIndexBuffer.get()
         && lhs.attributeBuffer.get() == rhs.attributeBuffer.get()
+        && lhs.solidTriangleWords.data() == rhs.solidTriangleWords.data()
+        && lhs.solidTriangleWords.size() == rhs.solidTriangleWords.size()
         && lhs.runtimeLocalBoundsBuffer == rhs.runtimeLocalBoundsBuffer
         && lhs.runtimeLocalBoundsHeapHandle == rhs.runtimeLocalBoundsHeapHandle
         && lhs.meshletCount == rhs.meshletCount

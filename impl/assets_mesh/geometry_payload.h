@@ -40,6 +40,7 @@ public:
         return m_meshletLocalVertexRefs;
     }
     [[nodiscard]] const Core::Assets::AssetVector<u8>& meshletPrimitiveIndices()const noexcept{ return m_meshletPrimitiveIndices; }
+    [[nodiscard]] const Core::Assets::AssetVector<u32>& solidTriangleWords()const noexcept{ return m_solidTriangleWords; }
 
 
 protected:
@@ -55,6 +56,7 @@ protected:
         , m_meshletAttributeRefDeltas(arena)
         , m_meshletLocalVertexRefs(arena)
         , m_meshletPrimitiveIndices(arena)
+        , m_solidTriangleWords(arena)
     {}
 
     void setGeometryPayload(
@@ -68,7 +70,8 @@ protected:
         Core::Assets::AssetVector<u8>&& meshletPositionRefDeltas,
         Core::Assets::AssetVector<u8>&& meshletAttributeRefDeltas,
         Core::Assets::AssetVector<MeshletLocalVertexRef>&& meshletLocalVertexRefs,
-        Core::Assets::AssetVector<u8>&& meshletPrimitiveIndices
+        Core::Assets::AssetVector<u8>&& meshletPrimitiveIndices,
+        Core::Assets::AssetVector<u32>&& solidTriangleWords
     )noexcept{
         m_positionStream = Move(positions);
         m_normalStream = Move(normals);
@@ -81,6 +84,7 @@ protected:
         m_meshletAttributeRefDeltas = Move(meshletAttributeRefDeltas);
         m_meshletLocalVertexRefs = Move(meshletLocalVertexRefs);
         m_meshletPrimitiveIndices = Move(meshletPrimitiveIndices);
+        m_solidTriangleWords = Move(solidTriangleWords);
     }
 
     [[nodiscard]] bool hasIncompleteGeometryPayload()const noexcept{
@@ -95,6 +99,7 @@ protected:
             || m_meshletAttributeRefDeltas.empty()
             || m_meshletLocalVertexRefs.empty()
             || m_meshletPrimitiveIndices.empty()
+            || m_solidTriangleWords.size() != (m_meshletPrimitiveIndices.size() / s_MeshletTriangleIndexCount + 31u) / 32u
         ;
     }
 
@@ -135,6 +140,7 @@ protected:
             m_meshletAttributeRefDeltas,
             m_meshletLocalVertexRefs,
             m_meshletPrimitiveIndices,
+            m_solidTriangleWords,
             failureContext
         );
     }
@@ -151,6 +157,7 @@ protected:
         m_meshletAttributeRefDeltas.clear();
         m_meshletLocalVertexRefs.clear();
         m_meshletPrimitiveIndices.clear();
+        m_solidTriangleWords.clear();
     }
 
 
@@ -166,6 +173,7 @@ protected:
     Core::Assets::AssetVector<u8> m_meshletAttributeRefDeltas;
     Core::Assets::AssetVector<MeshletLocalVertexRef> m_meshletLocalVertexRefs;
     Core::Assets::AssetVector<u8> m_meshletPrimitiveIndices;
+    Core::Assets::AssetVector<u32> m_solidTriangleWords;
 };
 
 

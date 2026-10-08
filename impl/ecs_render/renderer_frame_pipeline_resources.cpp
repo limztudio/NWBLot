@@ -141,6 +141,7 @@ void RendererFramePipeline::invalidateResources(){
     m_shadowPreparationOutcome.ready = false;
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
+    m_csgTraceContextUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};
     m_surfelFrameConstantsUploadTask = {};
     m_shadowInstanceMaterialUploadTask = {};
@@ -416,6 +417,7 @@ void RendererFramePipeline::resetSharedDeferredFrameTaskState(){
 void RendererFramePipeline::resetFrameTaskState(){
     m_deferredBindlessSlotsUploadTask = {};
     m_rayTraceMaterialContextSlotsUploadTask = {};
+    m_csgTraceContextUploadTask = {};
     m_causticEmissionTargetsUploadTask = {};
     m_surfelFrameConstantsUploadTask = {};
     m_shadowInstanceMaterialUploadTask = {};

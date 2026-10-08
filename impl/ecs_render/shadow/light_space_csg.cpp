@@ -60,11 +60,13 @@ void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world
     state.instances.clear();
     state.dynamicBounds.clear();
     state.bytes.clear();
+    state.solidTriangleMasks.clear();
     if(!state.gathering)
         return;
     state.receivers.reserve(capacity);
     state.instances.reserve(capacity);
     state.dynamicBounds.reserve(capacity);
+    state.solidTriangleMasks.reserve(capacity);
 }
 
 void AppendLightSpaceCsgReceiver(
@@ -128,6 +130,7 @@ void AppendLightSpaceCsgReceiver(
     StoreFloat(localMin, instance.localMin);
     StoreFloat(localMax, instance.localMax);
     state.instances.push_back(instance);
+    state.solidTriangleMasks.push_back(mesh.solidTriangleWords);
 }
 
 bool FinishLightSpaceCsgGather(
@@ -143,18 +146,40 @@ bool FinishLightSpaceCsgGather(
         return true;
     if(state.snapshot.receiverRanges.size() != state.instances.size())
         return false;
+    if(state.solidTriangleMasks.size() != state.instances.size())
+        return false;
     const usize rangeBytes = state.snapshot.receiverRanges.size() * sizeof(CsgShadowReceiverRangeGpu);
     const usize cutterBytes = state.snapshot.cutters.size() * sizeof(CsgCutterGpuData);
     const usize instanceBytes = state.instances.size() * sizeof(LightSpaceCsgInstanceGpu);
-    constexpr usize s_HeaderBytes = NWB_CSG_SHADOW_CONTEXT_BYTES;
-    const usize totalBytes = s_HeaderBytes + rangeBytes + cutterBytes + instanceBytes;
+    u32 activeReceiverCount = 0u;
+    for(const auto& range : state.snapshot.receiverRanges){
+        if((range.flags & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u)
+            ++activeReceiverCount;
+    }
+    const usize activeReceiverBytes = static_cast<usize>(activeReceiverCount) * sizeof(u32);
+    constexpr usize s_HeaderBytes = NWB_CSG_RAY_CONTEXT_BYTES;
+    const usize activeReceiverOffset = s_HeaderBytes + rangeBytes + cutterBytes + instanceBytes;
+    usize totalBytes = activeReceiverOffset + activeReceiverBytes;
     if(totalBytes > Limit<u32>::s_Max)
         return false;
+    const usize membershipOffset = totalBytes;
+    static_assert(sizeof(u32) == NWB_CSG_RAY_MEMBERSHIP_WORD_BYTES);
+    for(usize index = 0u; index < state.instances.size(); ++index){
+        if((state.snapshot.receiverRanges[index].flags & NWB_CSG_RAY_RECEIVER_ACTIVE) == 0u)
+            continue;
+        const Span<const u32> words = state.solidTriangleMasks[index];
+        const usize requiredWords = (static_cast<usize>(state.instances[index].primitiveCount) + NWB_CSG_RAY_MEMBERSHIP_WORD_BITS - 1u) / NWB_CSG_RAY_MEMBERSHIP_WORD_BITS;
+        if(words.size() != requiredWords || words.empty() || words.size_bytes() > Limit<u32>::s_Max - totalBytes){
+            NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: CSG receiver has no valid cooked solid topology or exceeds ray context capacity"));
+            return false;
+        }
+        totalBytes += words.size_bytes();
+    }
     state.bytes.resize(totalBytes);
     const u32 header[] = {
         static_cast<u32>(state.instances.size()), static_cast<u32>(s_HeaderBytes),
         static_cast<u32>(s_HeaderBytes + rangeBytes), static_cast<u32>(state.snapshot.cutters.size()),
-        static_cast<u32>(s_HeaderBytes + rangeBytes + cutterBytes), 0u, 0u, 0u,
+        static_cast<u32>(s_HeaderBytes + rangeBytes + cutterBytes), static_cast<u32>(activeReceiverOffset), activeReceiverCount, 0u,
     };
     static_assert(sizeof(header) == s_HeaderBytes);
     NWB_MEMCPY(state.bytes.data(), state.bytes.size(), header, sizeof(header));
@@ -162,13 +187,27 @@ bool FinishLightSpaceCsgGather(
     if(cutterBytes != 0u)
         NWB_MEMCPY(state.bytes.data() + s_HeaderBytes + rangeBytes, cutterBytes, state.snapshot.cutters.data(), cutterBytes);
     NWB_MEMCPY(state.bytes.data() + s_HeaderBytes + rangeBytes + cutterBytes, instanceBytes, state.instances.data(), instanceBytes);
+    usize activeOffset = activeReceiverOffset;
+    usize maskOffset = membershipOffset;
+    for(u32 index = 0u; index < static_cast<u32>(state.snapshot.receiverRanges.size()); ++index){
+        if((state.snapshot.receiverRanges[index].flags & NWB_CSG_RAY_RECEIVER_ACTIVE) == 0u)
+            continue;
+        NWB_MEMCPY(state.bytes.data() + activeOffset, sizeof(index), &index, sizeof(index));
+        activeOffset += sizeof(index);
+        const Span<const u32> words = state.solidTriangleMasks[index];
+        const u32 offset = static_cast<u32>(maskOffset);
+        const usize rangeOffset = s_HeaderBytes + index * sizeof(CsgShadowReceiverRangeGpu) + offsetof(CsgShadowReceiverRangeGpu, solidTriangleWordOffset);
+        NWB_MEMCPY(state.bytes.data() + rangeOffset, sizeof(offset), &offset, sizeof(offset));
+        NWB_MEMCPY(state.bytes.data() + maskOffset, words.size_bytes(), words.data(), words.size_bytes());
+        maskOffset += words.size_bytes();
+    }
     Fnv64AppendBuffer(state.snapshot.identity, reinterpret_cast<const u8*>(state.instances.data()), instanceBytes);
     if(!state.limitationLogged){
         for(const auto& range : state.snapshot.receiverRanges){
-            if((range.flags & NWB_CSG_SHADOW_RECEIVER_UNSUPPORTED) == 0u)
+            if((range.flags & NWB_CSG_RAY_RECEIVER_UNSUPPORTED) == 0u)
                 continue;
             state.limitationLogged = true;
-            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: unsupported or over-budget CSG shadow cutters retain conservative receiver shadows"));
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: unsupported or over-budget CSG cutters retain conservative shadows and suppress GI bounce radiance"));
             break;
         }
     }

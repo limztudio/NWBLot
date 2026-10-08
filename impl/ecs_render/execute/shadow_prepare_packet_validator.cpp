@@ -71,11 +71,13 @@ void ShadowPreparePacketValidator::validate(
     ;
     // Keep the upload in the first packet so it becomes the handoff.
     outResult.rayTraceMaterialContextSlotsUploadMerged =
-        !pipeline.m_rayTraceMaterialContextSlotsUploadTask.valid()
+        (!pipeline.m_rayTraceMaterialContextSlotsUploadTask.valid()
         || compiledPlan.tasksSharePacket(
             pipeline.m_deferredShadowPrepareTask,
             pipeline.m_rayTraceMaterialContextSlotsUploadTask
-        )
+        ))
+        && (!pipeline.m_csgTraceContextUploadTask.valid()
+        || compiledPlan.tasksSharePacket(pipeline.m_deferredShadowPrepareTask, pipeline.m_csgTraceContextUploadTask))
     ;
     // Nonempty caustic payloads must live in the Shadow Preparation packet.
     outResult.causticEmissionTargetsUploadMerged =

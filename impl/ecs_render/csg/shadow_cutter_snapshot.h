@@ -7,7 +7,7 @@
 
 #include "renderer_csg_types.h"
 
-#include <impl/assets/graphics/shadow/csg_shadow_constants.h>
+#include <impl/assets/graphics/csg/ray_constants.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -32,16 +32,18 @@ struct CsgShadowReceiverRangeGpu{
     u32 firstCutter = 0u;
     u32 cutterCount = 0u;
     u32 flags = 0u;
-    u32 padding = 0u;
+    // Packed contexts assign the absolute byte offset of this receiver's cooked membership words.
+    u32 solidTriangleWordOffset = 0u;
 };
-static_assert(sizeof(CsgShadowReceiverRangeGpu) == NWB_CSG_SHADOW_RANGE_BYTES);
+static_assert(sizeof(CsgShadowReceiverRangeGpu) == NWB_CSG_RAY_RANGE_BYTES);
+static_assert(offsetof(CsgShadowReceiverRangeGpu, solidTriangleWordOffset) == sizeof(u32) * 3u);
 static_assert(IsStandardLayout_V<CsgShadowReceiverRangeGpu>);
 static_assert(IsTriviallyCopyable_V<CsgShadowReceiverRangeGpu>);
-static_assert(sizeof(CsgCutterGpuData) == NWB_CSG_SHADOW_CUTTER_BYTES);
+static_assert(sizeof(CsgCutterGpuData) == NWB_CSG_RAY_CUTTER_BYTES);
 
 struct CsgShadowSnapshot{
     Vector<CsgShadowReceiverRangeGpu, Core::Alloc::GlobalArena> receiverRanges;
-    // Shadow records use NWB_CSG_SHADOW_SHAPE_* in shapeType, with the existing CSG cutter layout.
+    // Built-in ray records use NWB_CSG_RAY_SHAPE_* in shapeType, with the existing CSG cutter layout.
     Vector<CsgCutterGpuData, Core::Alloc::GlobalArena> cutters;
     u64 identity = 0u;
     u64 contentIdentity = 0u;

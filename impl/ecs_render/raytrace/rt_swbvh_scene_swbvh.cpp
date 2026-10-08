@@ -363,7 +363,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
             || indexBuffer->getCreationDescription().byteSize < indexCount * sizeof(u32)
         )
             m_lightSpaceShadow.m_sceneEligible = false;
-        const bool csgReceiver = csg.hasCsg && (csg.receiverRanges[index].flags & NWB_CSG_SHADOW_RECEIVER_ACTIVE) != 0u;
+        const bool csgReceiver = csg.hasCsg && (csg.receiverRanges[index].flags & NWB_CSG_RAY_RECEIVER_ACTIVE) != 0u;
         if(csgReceiver)
             instanceMaterials[index].flags |= NWB_RT_INSTANCE_MATERIAL_FLAG_CSG_SHADOW;
         caster.instanceIndex = index;

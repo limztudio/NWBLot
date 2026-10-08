@@ -411,6 +411,10 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
             blockByteCountOffset
         ));
 
+        NWB::Core::Assets::AssetBytes retiredFixtureLayoutBinary = binary;
+        EXPECT_TRUE(AssetsGraphicsFixture::OverwritePOD(retiredFixtureLayoutBinary, 0u, u32{ 0x4D544C39u }));
+        AssetsGraphicsFixture::CheckCodecRejectsBinary(testArena, codec, material.virtualPath(), retiredFixtureLayoutBinary);
+
         NWB::Core::Assets::AssetBytes hashMismatchBinary = binary;
         const u64 invalidLayoutHash = material.typedLayoutHash() == Limit<u64>::s_Max ? material.typedLayoutHash() - 1u : material.typedLayoutHash() + 1u;
         EXPECT_TRUE(AssetsGraphicsFixture::OverwritePOD(hashMismatchBinary, layoutHashOffset, invalidLayoutHash));
@@ -436,7 +440,7 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
         );
         AssetsGraphicsFixture::CheckCodecRejectsBinary(testArena, codec, material.virtualPath(), missingOccupancyBinary);
 
-        EXPECT_EQ(logger.errorCount(), 3u);
+        EXPECT_EQ(logger.errorCount(), 4u);
         EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("typed layout hash mismatch")));
         EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
             "typed block byte count does not match typed layout"
@@ -511,6 +515,15 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
         "material_bind_resource_attribute",
         NWB_TEXT("has unsupported attribute 'texture_asset'")
     );
+    for(const AStringView resourceType : { AStringView("texture2d"), AStringView("sampler") }){
+        const auto retiredFixtureBind = StringFormat(
+            testArena.arena,
+            "[material_constant] struct NwbResourceMaterial{{ "
+            "[fixture(\"builtin/material_fixture/checker_rgba8\")] {} resource; }}; NwbResourceMaterial surface;",
+            resourceType
+        );
+        expectParseFailure(retiredFixtureBind, resourceType, NWB_TEXT("has unsupported attribute 'fixture'"));
+    }
     expectParseFailure(
         AssetsGraphicsFixture::s_DuplicateInstanceMaterialBindSource,
         "material_bind_duplicate_instance",
@@ -612,27 +625,22 @@ TEST(AssetsGraphics, MaterialBindEngineAndProjectResourceValidation){
 
     EXPECT_FALSE(NWB::Impl::IsSupportedMaterialResourceReference(
         NWB::Impl::MaterialResourceKind::SampledImage2D,
-        NWB::Impl::MaterialResourceSource::Asset,
-        "builtin/material_fixture/checker_rgba8"
+        "builtin/textures/checker"
     ));
     EXPECT_FALSE(NWB::Impl::IsSupportedMaterialResourceReference(
         NWB::Impl::MaterialResourceKind::Sampler,
-        NWB::Impl::MaterialResourceSource::Asset,
         "project/samplers/../linear_clamp"
     ));
     EXPECT_FALSE(NWB::Impl::IsSupportedMaterialResourceReference(
         NWB::Impl::MaterialResourceKind::Sampler,
-        NWB::Impl::MaterialResourceSource::Asset,
         "engine/samplers/../linear_clamp"
     ));
     EXPECT_TRUE(NWB::Impl::IsSupportedMaterialResourceReference(
         NWB::Impl::MaterialResourceKind::Sampler,
-        NWB::Impl::MaterialResourceSource::Asset,
         "project/samplers/linear_clamp"
     ));
     EXPECT_TRUE(NWB::Impl::IsSupportedMaterialResourceReference(
         NWB::Impl::MaterialResourceKind::Sampler,
-        NWB::Impl::MaterialResourceSource::Asset,
         s_ENGINE_SAMPLERS_LINEAR_CLAMP
     ));
 

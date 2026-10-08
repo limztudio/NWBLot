@@ -272,18 +272,10 @@ static bool ReadMaterialTypedLayout(
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: malformed material resource reference at index {}"), i);
             return false;
         }
-        if(resourceReferenceBinary.reserved != 0u){
-            NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource reference at index {} has non-zero reserved bits"), i);
-            return false;
-        }
-
         const MaterialResourceKind::Enum resourceKind =
             static_cast<MaterialResourceKind::Enum>(resourceReferenceBinary.resourceKind);
-        const MaterialResourceSource::Enum resourceSource =
-            static_cast<MaterialResourceSource::Enum>(resourceReferenceBinary.resourceSource);
         const Name resourceName(resourceReferenceBinary.resourceNameHash);
-        const Name fixtureName(resourceReferenceBinary.fixtureNameHash);
-        if(!IsValidSerializedMaterialResourceReference(resourceKind, resourceSource, resourceName, fixtureName)){
+        if(!IsValidSerializedMaterialResourceReference(resourceKind, resourceName)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: material resource reference at index {} has an invalid asset identity"), i);
             return false;
         }
@@ -292,8 +284,6 @@ static bool ReadMaterialTypedLayout(
         resourceReference.blockName = Name(resourceReferenceBinary.blockNameHash);
         resourceReference.fieldName = Name(resourceReferenceBinary.fieldNameHash);
         resourceReference.resourceKind = resourceKind;
-        resourceReference.resourceSource = resourceSource;
-        resourceReference.fixtureName = fixtureName;
         resourceReference.constantByteOffset = resourceReferenceBinary.constantByteOffset;
         if(!AssignMaterialResourceReferenceAsset(resourceReference, resourceKind, resourceName))
             return false;

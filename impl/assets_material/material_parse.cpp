@@ -109,8 +109,7 @@ bool ValidateMaterialCookInterfaces(
             materialEntry.typedLayoutHash,
             materialEntry.typedLayoutBlocks,
             materialEntry.typedLayoutFields,
-            materialEntry.typedBlockBytes,
-            materialEntry.resourceReferences
+            materialEntry.typedBlockBytes
         );
         if(!ApplyMaterialBindTypedLayoutParameters(
             *layout,

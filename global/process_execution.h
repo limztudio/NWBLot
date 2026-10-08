@@ -342,6 +342,10 @@ template<typename ArenaT>
     const AString<ArenaT> nativeOutputPath(outputPath, arena);
 
 #if defined(NWB_PLATFORM_WINDOWS)
+    AString<ArenaT> commandLine{arena};
+    for(const AStringView argument : arguments)
+        ProcessExecutionDetail::AppendWindowsCommandLineArgument(commandLine, argument);
+
     SECURITY_ATTRIBUTES securityAttributes = {};
     securityAttributes.nLength = sizeof(securityAttributes);
     securityAttributes.bInheritHandle = TRUE;
@@ -357,10 +361,6 @@ template<typename ArenaT>
     );
     if(outputHandle == INVALID_HANDLE_VALUE)
         return -1;
-
-    AString<ArenaT> commandLine{arena};
-    for(const AStringView argument : arguments)
-        ProcessExecutionDetail::AppendWindowsCommandLineArgument(commandLine, argument);
 
     STARTUPINFOA startupInfo = {};
     startupInfo.cb = sizeof(startupInfo);
@@ -386,13 +386,14 @@ template<typename ArenaT>
     if(!created)
         return -1;
 
-    WaitForSingleObject(processInfo.hProcess, INFINITE);
+    const DWORD waitResult = WaitForSingleObject(processInfo.hProcess, INFINITE);
     DWORD exitCode = 1u;
-    if(!GetExitCodeProcess(processInfo.hProcess, &exitCode) && outExitCodeQueryFailed)
+    const bool queriedExitCode = waitResult == WAIT_OBJECT_0 && GetExitCodeProcess(processInfo.hProcess, &exitCode);
+    if(!queriedExitCode && outExitCodeQueryFailed)
         *outExitCodeQueryFailed = true;
     CloseHandle(processInfo.hThread);
     CloseHandle(processInfo.hProcess);
-    return static_cast<int>(exitCode);
+    return queriedExitCode ? static_cast<int>(exitCode) : -1;
 #elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
     static_cast<void>(arena);
 

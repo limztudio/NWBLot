@@ -285,6 +285,48 @@ TEST(Metascript, ConcatenatesNestedListElementsAcrossReallocation){
     }
 }
 
+TEST(Metascript, BindDeclarationsKeepFirstAssetAcrossDeclarationReallocation){
+    DestinationArena arena;
+    Document document(arena.arena);
+    ASSERT_TRUE(document.parse(LiteralView("material_bind asset;")));
+    const usize originalCapacity = document.declarations().capacity();
+
+    AString source("material_bind asset;\n");
+    for(usize index = 0u; index <= originalCapacity; ++index){
+        char indexText[TextDetail::s_DecimalTextBufferBytes] = {};
+        const AStringView indexView = FormatDecimal(index, indexText);
+        source.append("float extra");
+        source.append(indexView.data(), indexView.size());
+        source.append(";\n");
+    }
+    source.append(s_STRUCT_NWB_DUP.data(), s_STRUCT_NWB_DUP.size());
+    source.append(s_FLOAT_VALUE_LINE.data(), s_FLOAT_VALUE_LINE.size());
+    source.append(s_CLOSE_BRACE.data(), s_CLOSE_BRACE.size());
+    source.append(s_NWB_DUP_RUNTIME.data(), s_NWB_DUP_RUNTIME.size());
+
+    ASSERT_TRUE(document.parse(ViewOf(source)));
+    ASSERT_GT(document.declarations().capacity(), originalCapacity);
+    const Value& asset = document.asset();
+    const Value* structs = asset.findField(LiteralView("structs"));
+    ASSERT_NE(structs, nullptr);
+    const Value* declaredStruct = structs->findField(LiteralView("NwbDup"));
+    ASSERT_NE(declaredStruct, nullptr);
+    const Value* fields = declaredStruct->findField(LiteralView("fields"));
+    ASSERT_NE(fields, nullptr);
+    ASSERT_TRUE(fields->isList());
+    ASSERT_EQ(fields->asList().size(), 1u);
+    const Value* fieldName = fields->asList()[0u].findField(LiteralView("name"));
+    ASSERT_NE(fieldName, nullptr);
+    EXPECT_EQ(fieldName->asString(), LiteralView("value"));
+    const Value* instances = asset.findField(LiteralView("instances"));
+    ASSERT_NE(instances, nullptr);
+    ASSERT_TRUE(instances->isList());
+    ASSERT_EQ(instances->asList().size(), 1u);
+    const Value* instanceName = instances->asList()[0u].findField(LiteralView("name"));
+    ASSERT_NE(instanceName, nullptr);
+    EXPECT_EQ(instanceName->asString(), LiteralView("runtime"));
+}
+
 TEST(Metascript, BindStyleStructDuplicateRejections){
     const AString duplicateFieldSource = AString(s_STRUCT_NWB_DUP) + s_FLOAT_VALUE_LINE.data()
         + s_FLOAT_VALUE_LINE.data() + s_CLOSE_BRACE.data();

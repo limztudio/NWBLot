@@ -324,7 +324,7 @@ static bool AppendCsgProjectEvaluatorModuleDependencies(
             return false;
 
         moduleDependencies.clear();
-        if(!shaderCook.gatherShaderDependencies(modulePath, includeDirectories, moduleDependencies, scratchArena))
+        if(!shaderCook.gatherShaderDependencies(modulePath, includeDirectories, AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes, moduleDependencies, scratchArena))
             return false;
         for(const Path& dependency : moduleDependencies){
             if(!AppendUniqueDependency(inOutDependencies, dependency, seenDependencies, scratchArena))
@@ -489,6 +489,7 @@ bool PrepareShaderEntriesForCook(
         if(!shaderCook.gatherShaderDependencies(
             preparedEntry.sourcePath,
             preparedEntry.includeDirectories,
+            AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes,
             preparedEntry.dependencies,
             scratchArena
         ))
@@ -557,6 +558,7 @@ bool PrepareShaderEntriesForCook(
                 { csgShapeIncludeRoot, "csg_modules" }
             },
             preparedEntry.dependencyChecksum,
+            preparedEntry.compilerInputsHaveBom,
             scratchArena
         ))
             return false;
@@ -598,6 +600,7 @@ bool PrepareShaderEntriesForCook(
         meshComputeShadowEntry.includeDirectories = meshShaderEntry.includeDirectories;
         meshComputeShadowEntry.dependencies = meshShaderEntry.dependencies;
         meshComputeShadowEntry.dependencyChecksum = meshShaderEntry.dependencyChecksum;
+        meshComputeShadowEntry.compilerInputsHaveBom = meshShaderEntry.compilerInputsHaveBom;
         meshComputeShadowEntry.variantCount = meshShaderEntry.variantCount;
         meshComputeShadowEntry.supportsCsgClipVariant = meshShaderEntry.supportsCsgClipVariant;
         meshComputeShadowEntry.supportsAvboitCsgClipVariant = meshShaderEntry.supportsAvboitCsgClipVariant;

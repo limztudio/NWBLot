@@ -24,12 +24,14 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/cook.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook_checksum.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/slang_compiler.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/source_dependencies.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
         "${CMAKE_CURRENT_LIST_DIR}/asset.h"
         "${CMAKE_CURRENT_LIST_DIR}/shader_types.h"
         "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook.h"
         "${CMAKE_CURRENT_LIST_DIR}/slang_compiler.h"
+        "${CMAKE_CURRENT_LIST_DIR}/source_dependencies.h"
     )
     target_link_libraries(nwb_assets_shader_cook PUBLIC nwb_assets nwb_metascript PRIVATE nwb_shader_bytecode)
     target_compile_definitions(nwb_assets_shader_cook PRIVATE

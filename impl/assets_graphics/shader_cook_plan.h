@@ -55,6 +55,7 @@ struct PreparedShaderEntry{
     u64 variantCount = 0;
     CookString materialTypedBindingInterfacePath;
     Name materialTypedBindingInterface = s_NameNone;
+    bool compilerInputsHaveBom = false;
     bool usesMaterialTypedBinding = false;
     bool supportsCsgClipVariant = false;
     bool supportsAvboitCsgClipVariant = false;

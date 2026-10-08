@@ -16,6 +16,8 @@
 #include <impl/assets_shader/slang_compiler.h>
 
 #include <core/graphics/shader_archive.h>
+#include <core/graphics/shader_stage_names.h>
+#include <core/graphics/spirv_entry_point.h>
 #include <core/common/log.h>
 
 
@@ -36,16 +38,6 @@ namespace __hidden_shader_volume_writer{
 
 using namespace AssetsGraphicsCookDetail;
 
-struct VariantCachePaths{
-    Path bytecodePath;
-    Path sourceChecksumPath;
-
-    explicit VariantCachePaths(Path::Arena& arena)
-        : bytecodePath(arena)
-        , sourceChecksumPath(arena)
-    {}
-};
-
 namespace CacheReadStatus{
     enum Enum : u8{
         Hit = 0,
@@ -58,62 +50,15 @@ namespace CacheReadStatus{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Bytecode cache file-name layout: <shader>__<stage>__<fnv64-hex>.spv
-inline constexpr AStringView s_BytecodeNameSeparator = "__";
-inline constexpr AStringView s_BytecodeExtension = ".spv";
-inline constexpr AStringView s_SourceChecksumExtension = ".source";
-
-
-static VariantCachePaths BuildVariantCachePaths(
+static Path BuildVariantCachePath(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
-    const AStringView shaderSafeName,
-    const AStringView stageSafeName,
-    const AStringView variantName,
+    const AStringView sourceChecksumHex,
     ScratchArena& scratchArena
 ){
-    ScratchString bytecodeFileName{scratchArena};
-    bytecodeFileName.reserve(
-        shaderSafeName.size()
-        + s_BytecodeNameSeparator.size()
-        + stageSafeName.size()
-        + s_BytecodeNameSeparator.size()
-        + s_HexU64DigitCount
-        + s_BytecodeExtension.size()
-    );
-    bytecodeFileName += shaderSafeName;
-    bytecodeFileName += s_BytecodeNameSeparator;
-    bytecodeFileName += stageSafeName;
-    bytecodeFileName += s_BytecodeNameSeparator;
-    AppendHexU64(ComputeFnv64Text(variantName), bytecodeFileName);
-    bytecodeFileName += s_BytecodeExtension;
-
-    VariantCachePaths cachePaths(cacheDirectory.arena());
-    cachePaths.bytecodePath = cacheDirectory / configurationSafeName / bytecodeFileName;
-    cachePaths.sourceChecksumPath = cachePaths.bytecodePath;
-    cachePaths.sourceChecksumPath += s_SourceChecksumExtension;
-    return cachePaths;
-}
-
-static CacheReadStatus::Enum TryReadCachedSourceChecksum(
-    const ShaderCook::ShaderEntry& entry,
-    const Path& sourceChecksumPath,
-    ScratchString& outCachedText
-){
-    ErrorCode errorCode;
-    if(ReadBinaryFile(sourceChecksumPath, outCachedText, errorCode))
-        return CacheReadStatus::Hit;
-
-    if(errorCode && !IsMissingPathError(errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to read checksum cache '{}' for entry '{}': {}")
-            , PathToString<tchar>(sourceChecksumPath)
-            , StringConvert(entry.name)
-            , StringConvert(errorCode.message())
-        );
-        return CacheReadStatus::Error;
-    }
-
-    return CacheReadStatus::Miss;
+    ScratchString bytecodeFileName(sourceChecksumHex, scratchArena);
+    bytecodeFileName += ".spv";
+    return cacheDirectory / configurationSafeName / bytecodeFileName;
 }
 
 static CacheReadStatus::Enum TryReadCachedBytecode(
@@ -123,7 +68,14 @@ static CacheReadStatus::Enum TryReadCachedBytecode(
 ){
     ErrorCode errorCode;
     if(ReadBinaryFile(bytecodePath, outBytecode, errorCode)){
-        if(ShaderBinaryPayload::ValidateBytecode(outBytecode) == ShaderBinaryPayload::BytecodeValidationFailure::None)
+        const Core::ShaderType::Enum shaderType = Core::ShaderStageNames::ShaderTypeFromArchiveStageName(ToName(entry.stage.view()));
+        AStringView validatedEntryPoint;
+        if(Core::ResolveSpirvEntryPointName(
+            BinaryByteView{ outBytecode.data(), outBytecode.size() },
+            AStringView(entry.entryPoint),
+            Core::ShaderType::ToMask(shaderType),
+            validatedEntryPoint
+        ) == Core::SpirvEntryPointLookupResult::Found)
             return CacheReadStatus::Hit;
 
         outBytecode.clear();
@@ -154,8 +106,8 @@ static bool GetVariantBytecode(
     const ShaderCook::CookVector<Path>& includeDirectories,
     const ShaderCook::CookVector<Path>& dependencies,
     const Path& sourcePath,
-    const VariantCachePaths& cachePaths,
-    const AStringView sourceChecksumHex,
+    const Path& bytecodeCachePath,
+    const bool compilerInputsHaveBom,
     Core::GraphicsBytes& outBytecode,
     ScratchArena& scratchArena
 ){
@@ -163,26 +115,11 @@ static bool GetVariantBytecode(
 
     outBytecode.clear();
 
-    ScratchString cachedText{scratchArena};
-    const CacheReadStatus::Enum checksumCacheStatus = __hidden_shader_volume_writer::TryReadCachedSourceChecksum(
-        entry,
-        cachePaths.sourceChecksumPath,
-        cachedText
-    );
-    if(checksumCacheStatus == CacheReadStatus::Error)
+    const CacheReadStatus::Enum bytecodeCacheStatus = TryReadCachedBytecode(entry, bytecodeCachePath, outBytecode);
+    if(bytecodeCacheStatus == CacheReadStatus::Error)
         return false;
-
-    if(checksumCacheStatus == CacheReadStatus::Hit && TrimView(cachedText) == AStringView(sourceChecksumHex.data(), sourceChecksumHex.size())){
-        const CacheReadStatus::Enum bytecodeCacheStatus = __hidden_shader_volume_writer::TryReadCachedBytecode(
-            entry,
-            cachePaths.bytecodePath,
-            outBytecode
-        );
-        if(bytecodeCacheStatus == CacheReadStatus::Error)
-            return false;
-        if(bytecodeCacheStatus == CacheReadStatus::Hit)
-            return true;
-    }
+    if(bytecodeCacheStatus == CacheReadStatus::Hit)
+        return true;
 
     HashMap<AStringView, AStringView, ScratchArena, Hasher<AStringView>, EqualTo<AStringView>> mergedDefines(
         0,
@@ -217,9 +154,9 @@ static bool GetVariantBytecode(
     });
 
     errorCode.clear();
-    if(!EnsureDirectories(cachePaths.bytecodePath.parentPath(), errorCode)){
+    if(!EnsureDirectories(bytecodeCachePath.parentPath(), errorCode)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create cache directory '{}': {}")
-            , PathToString<tchar>(cachePaths.bytecodePath.parentPath())
+            , PathToString<tchar>(bytecodeCachePath.parentPath())
             , StringConvert(errorCode.message())
         );
         return false;
@@ -233,23 +170,15 @@ static bool GetVariantBytecode(
         .defines = compileDefines.data(),
         .includeDirectories = includeDirectories,
         .dependencies = dependencies,
+        .externallyPlannedMacroIncludes = AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes,
         .sourcePath = sourcePath,
-        .outputPath = cachePaths.bytecodePath,
+        .outputPath = bytecodeCachePath,
         .defineCount = static_cast<u32>(compileDefines.size()),
         .optimizationLevel = entry.optimizationLevel,
         .rayQuery = entry.rayQuery,
+        .compilerInputsHaveBom = compilerInputsHaveBom,
     };
-    if(!SlangShaderCompiler::CompileVariant(compileRequest, outBytecode))
-        return false;
-
-    if(!WriteTextFile(cachePaths.sourceChecksumPath, sourceChecksumHex)){
-        NWB_LOGGER_ERROR(NWB_TEXT("Failed to write cook source checksum '{}'")
-            , PathToString<tchar>(cachePaths.sourceChecksumPath)
-        );
-        return false;
-    }
-
-    return true;
+    return SlangShaderCompiler::CompileVariant(compileRequest, outBytecode);
 }
 
 
@@ -350,6 +279,10 @@ bool AppendPreparedShadersToManifest(
     if(!__hidden_shader_volume_writer::ReserveShaderIndexRecords(preparedEntries, shaderIndexRecords, shaderRecordCount))
         return false;
 
+    u64 compilerFingerprint = 0u;
+    if(!preparedEntries.empty() && !SlangShaderCompiler::ComputeCompilerFingerprint(cacheDirectory, compilerFingerprint, scratchArena))
+        return false;
+
     Core::GraphicsBytes cookedBytecode{cookArena};
     Core::GraphicsBytes shaderAssetPayload{cookArena};
     ShaderCook::CookVector<ShaderCook::DefineCombo> defineCombinations{ cookArena };
@@ -368,9 +301,6 @@ bool AppendPreparedShadersToManifest(
             return false;
         }
 
-        const CookString shaderSafeName = BuildSafeCacheName(entry.name);
-        const CookString stageSafeName = BuildSafeCacheName(cookArena, entry.archiveStage.view());
-
         auto appendShaderVariant = [&](const ShaderCook::DefineCombo& defineCombo) -> bool{
             const CookString generatedVariantName = shaderCook.buildVariantName(defineCombo, scratchArena);
 
@@ -378,16 +308,15 @@ bool AppendPreparedShadersToManifest(
                 entry,
                 generatedVariantName,
                 preparedEntry.dependencyChecksum,
+                compilerFingerprint,
                 scratchArena
             );
             const CookString sourceChecksumHex = FormatHex64A(cookArena, sourceChecksum);
 
-            const __hidden_shader_volume_writer::VariantCachePaths cachePaths = __hidden_shader_volume_writer::BuildVariantCachePaths(
+            const Path bytecodeCachePath = __hidden_shader_volume_writer::BuildVariantCachePath(
                 cacheDirectory,
                 configurationSafeName,
-                shaderSafeName,
-                stageSafeName,
-                generatedVariantName,
+                sourceChecksumHex,
                 scratchArena
             );
             if(!__hidden_shader_volume_writer::GetVariantBytecode(
@@ -397,8 +326,8 @@ bool AppendPreparedShadersToManifest(
                 preparedEntry.includeDirectories,
                 preparedEntry.dependencies,
                 preparedEntry.sourcePath,
-                cachePaths,
-                sourceChecksumHex,
+                bytecodeCachePath,
+                preparedEntry.compilerInputsHaveBom,
                 cookedBytecode,
                 scratchArena
             ))

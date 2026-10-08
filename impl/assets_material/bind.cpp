@@ -56,15 +56,6 @@ AStringView MaterialBindField::defaultArgument()const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-AStringView MaterialBindField::fixtureArgument()const{
-    const MaterialBindAttribute* attribute = findAttribute(MaterialBindDetail::s_FixtureAttribute);
-    return (attribute && attribute->arguments.size() == 1u) ? AStringView(attribute->arguments[0u]) : AStringView();
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 const MaterialBindField* MaterialBindStruct::findField(const AStringView fieldName)const{
     for(const MaterialBindField& field : fields){
         if(AStringView(field.name) == fieldName)
@@ -107,7 +98,6 @@ void MaterialBindTypedLayout::reset(){
     typedLayoutBlocks.clear();
     typedLayoutFields.clear();
     typedBlockBytes.clear();
-    resourceReferences.clear();
     blockLookup.clear();
     parameterLookup.clear();
 }
@@ -203,8 +193,7 @@ void CopyMaterialBindTypedLayoutDefaults(
     u64& outLayoutHash,
     Material::TypedLayoutBlockVector& outBlocks,
     Material::TypedLayoutFieldVector& outFields,
-    Material::TypedBlockByteVector& outBlockBytes,
-    Material::ResourceReferenceVector& outResourceReferences
+    Material::TypedBlockByteVector& outBlockBytes
 ){
     outLayoutHash = layout.layoutHash;
     outBlocks.reserve(layout.typedLayoutBlocks.size());
@@ -213,8 +202,6 @@ void CopyMaterialBindTypedLayoutDefaults(
     outFields.assign(layout.typedLayoutFields.begin(), layout.typedLayoutFields.end());
     outBlockBytes.reserve(layout.typedBlockBytes.size());
     outBlockBytes.assign(layout.typedBlockBytes.begin(), layout.typedBlockBytes.end());
-    outResourceReferences.reserve(layout.resourceReferences.size());
-    outResourceReferences.assign(layout.resourceReferences.begin(), layout.resourceReferences.end());
 }
 
 
@@ -228,9 +215,7 @@ bool ApplyMaterialBindTypedLayoutParameters(
     Material::TypedBlockByteVector& inOutBlockBytes,
     Material::ResourceReferenceVector& outResourceReferences
 ){
-    // Seed with the layout's static fixture references; per-material asset-path parameters append below.
-    outResourceReferences.reserve(layout.resourceReferences.size());
-    outResourceReferences.assign(layout.resourceReferences.begin(), layout.resourceReferences.end());
+    outResourceReferences.clear();
     for(const auto& [parameterName, parameterValue] : parameters){
         if(!MaterialBindDetail::ApplyMaterialBindTypedLayoutParameterValue(
             layout,

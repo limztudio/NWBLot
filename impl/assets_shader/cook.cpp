@@ -10,7 +10,7 @@
 
 #include "cook.h"
 
-#include "slang_compiler.h"
+#include "source_dependencies.h"
 #include "arena_names.h"
 #include "shader_types.h"
 
@@ -100,7 +100,7 @@ static ACompactString CanonicalAssetType(const Metascript::Document& doc){
 
 
 template <typename VisitedSet>
-static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVector<Path>& includeDirectories, VisitedSet& inOutVisitedPaths, ShaderCook::CookVector<Path>& inOutDependencies, Alloc::ScratchArena& scratchArena){
+static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVector<Path>& includeDirectories, const Span<const AStringView> externallyPlannedMacroIncludes, VisitedSet& inOutVisitedPaths, ShaderCook::CookVector<Path>& inOutDependencies, Alloc::ScratchArena& scratchArena){
     ErrorCode errorCode;
 
     Deque<Path, Alloc::ScratchArena> pending{scratchArena};
@@ -132,6 +132,8 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
             return false;
         }
         StripUtf8Bom(sourceText);
+        ShaderSourceDependencies::SpliceSourceLines(sourceText);
+        ShaderSourceDependencies::MaskSourceComments(sourceText);
 
         inOutDependencies.push_back(absolutePath);
 
@@ -147,9 +149,24 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
                 line.remove_suffix(1);
 
             AStringView includeName;
-            ShaderIncludeKind::Enum includeKind = ShaderIncludeKind::Relative;
-            if(SlangShaderCompiler::ExtractIncludeDirective(line, includeName, includeKind)){
-                if(!SlangShaderCompiler::ResolveIncludeFile(includeName, includeKind, absolutePath.parentPath(), includeDirectories, includePath)){
+            ShaderSourceDependencies::IncludeKind::Enum includeKind = ShaderSourceDependencies::IncludeKind::Relative;
+            if(ShaderSourceDependencies::ExtractIncludeDirective(line, includeName, includeKind)){
+                if(includeKind == ShaderSourceDependencies::IncludeKind::Macro || includeKind == ShaderSourceDependencies::IncludeKind::Unsupported){
+                    const bool plannedMacro = includeKind == ShaderSourceDependencies::IncludeKind::Macro
+                        && FindIf(externallyPlannedMacroIncludes.begin(), externallyPlannedMacroIncludes.end(), [includeName](const AStringView name)noexcept{
+                            return name == includeName;
+                        }) != externallyPlannedMacroIncludes.end();
+                    if(plannedMacro){
+                        lineBegin = lineEnd + 1u;
+                        continue;
+                    }
+                    NWB_LOGGER_ERROR(NWB_TEXT("ShaderCook: unsupported or untracked dependency directive '{}' in '{}'")
+                        , StringConvert(TrimView(line))
+                        , PathToString<tchar>(absolutePath)
+                    );
+                    return false;
+                }
+                if(!ShaderSourceDependencies::ResolveIncludeFile(includeName, includeKind, absolutePath.parentPath(), includeDirectories, includePath)){
                     NWB_LOGGER_ERROR(NWB_TEXT("Unable to resolve include '{}' from '{}'")
                         , StringConvert(includeName)
                         , PathToString<tchar>(absolutePath)
@@ -338,8 +355,17 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
             return false;
         }
         CookString defineName(key.data(), key.size(), arena);
-        if(defineName.empty()){
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define names must not be empty"), PathToString<tchar>(nwbFilePath));
+        const AStringView defineNameView(defineName);
+        if(
+            defineNameView.empty()
+            || !IsAsciiIdentifierChar(defineNameView.front())
+            || (defineNameView.front() >= '0' && defineNameView.front() <= '9')
+            || FindIf(defineNameView.begin(), defineNameView.end(), [](const char ch)noexcept{ return !IsAsciiIdentifierChar(ch); }) != defineNameView.end()
+        ){
+            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' must be an ASCII shader identifier")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(defineName)
+            );
             return false;
         }
 
@@ -356,14 +382,20 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
             return false;
         }
         for(const CookString& defineValue : defineValues){
-            if(!defineValue.empty())
-                continue;
-
-            NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' values must not be empty")
-                , PathToString<tchar>(nwbFilePath)
-                , StringConvert(defineName)
-            );
-            return false;
+            const AStringView valueView(defineValue);
+            if(
+                valueView.empty()
+                || TrimView(valueView) != valueView
+                || FindIf(valueView.begin(), valueView.end(), [](const char ch)noexcept{
+                    return ch == ';' || ch == '\0' || ch == '\r' || ch == '\n';
+                }) != valueView.end()
+            ){
+                NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' values must be nonempty variant text without semicolons, line breaks, nulls, or surrounding whitespace")
+                    , PathToString<tchar>(nwbFilePath)
+                    , StringConvert(defineName)
+                );
+                return false;
+            }
         }
 
         ShaderCook::DefineEntry defineEntry(Move(defineValues));
@@ -574,6 +606,7 @@ void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector
 bool ShaderCook::gatherShaderDependencies(
     const Path& sourcePath,
     const CookVector<Path>& includeDirectories,
+    const Span<const AStringView> externallyPlannedMacroIncludes,
     CookVector<Path>& outDependencies,
     Alloc::ScratchArena& scratchArena
 ){
@@ -585,7 +618,7 @@ bool ShaderCook::gatherShaderDependencies(
         EqualTo<__hidden_shader_cook::ScratchString>(),
         scratchArena
     };
-    return __hidden_shader_cook::CollectDependencies(sourcePath, includeDirectories, visited, outDependencies, scratchArena);
+    return __hidden_shader_cook::CollectDependencies(sourcePath, includeDirectories, externallyPlannedMacroIncludes, visited, outDependencies, scratchArena);
 }
 
 bool ShaderCook::expandDefineCombinations(

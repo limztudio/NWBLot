@@ -103,14 +103,6 @@ namespace MaterialResourceKind{
 
 
 // Resource fields name an engine/project asset resolved to a heap slot at runtime.
-namespace MaterialResourceSource{
-    static constexpr auto s_MaterialResourceSourceNoneBase = 0u;
-    enum Enum : u32{
-        None = s_MaterialResourceSourceNoneBase,
-        Asset,
-    };
-};
-
 [[nodiscard]] inline bool IsMaterialAssetReference(const AStringView resourceName)noexcept{
     const usize rootEnd = resourceName.find('/');
     if(
@@ -142,81 +134,19 @@ namespace MaterialResourceSource{
 
 [[nodiscard]] inline bool IsSupportedMaterialResourceReference(
     const MaterialResourceKind::Enum resourceKind,
-    const MaterialResourceSource::Enum resourceSource,
     const AStringView resourceName
 )noexcept{
     return IsValidMaterialResourceKind(resourceKind)
-        && resourceSource == MaterialResourceSource::Asset
         && IsMaterialAssetReference(resourceName)
     ;
 }
 
-// Serialized resource paths arrive as Name hashes, so their original text cannot be revalidated here.
-// The explicit asset source and the resource kind keep the renderer's asset-family dispatch unambiguous.
+// Serialized resource paths arrive as Name hashes; their original text is validated during cooking.
 [[nodiscard]] inline bool IsValidSerializedMaterialResourceReference(
     const MaterialResourceKind::Enum resourceKind,
-    const MaterialResourceSource::Enum resourceSource,
     const Name& resourceName
 )noexcept{
-    if(!resourceName)
-        return false;
-
-    return IsValidMaterialResourceKind(resourceKind)
-        && resourceSource == MaterialResourceSource::Asset
-    ;
-}
-
-
-// Material-authored fixture names resolve to heap descriptors through the shared cook/load/render contract.
-namespace MaterialResourceFixture{
-    inline constexpr AStringView s_CheckerRgba8 = "builtin/material_fixture/checker_rgba8";
-    inline constexpr AStringView s_LinearClamp = "builtin/material_fixture/linear_clamp";
-};
-
-
-[[nodiscard]] inline bool IsKnownMaterialResourceFixture(
-    const MaterialResourceKind::Enum resourceKind,
-    const AStringView fixtureName
-)noexcept{
-    switch(resourceKind){
-    case MaterialResourceKind::SampledImage2D:
-        return fixtureName == MaterialResourceFixture::s_CheckerRgba8;
-    case MaterialResourceKind::Sampler:
-        return fixtureName == MaterialResourceFixture::s_LinearClamp;
-    default:
-        return false;
-    }
-}
-
-
-[[nodiscard]] inline bool IsKnownMaterialResourceFixture(
-    const MaterialResourceKind::Enum resourceKind,
-    const Name& fixtureName
-){
-    switch(resourceKind){
-    case MaterialResourceKind::SampledImage2D:
-        return fixtureName == Name(MaterialResourceFixture::s_CheckerRgba8);
-    case MaterialResourceKind::Sampler:
-        return fixtureName == Name(MaterialResourceFixture::s_LinearClamp);
-    default:
-        return false;
-    }
-}
-
-
-[[nodiscard]] inline bool IsValidSerializedMaterialResourceReference(
-    const MaterialResourceKind::Enum resourceKind,
-    const MaterialResourceSource::Enum resourceSource,
-    const Name& resourceName,
-    const Name& fixtureName
-){
-    if(!IsValidMaterialResourceKind(resourceKind) || resourceSource != MaterialResourceSource::Asset)
-        return false;
-
-    if(fixtureName)
-        return IsKnownMaterialResourceFixture(resourceKind, fixtureName);
-
-    return static_cast<bool>(resourceName);
+    return resourceName && IsValidMaterialResourceKind(resourceKind);
 }
 
 
@@ -412,11 +342,7 @@ struct MaterialResourceReference{
     Name fieldName = s_NameNone;
     Core::Assets::AssetRef<Texture> textureAsset;
     Core::Assets::AssetRef<Sampler> samplerAsset;
-    // A cooked material keeps resource identity separate from its numeric/default typed payload.
-    // `constantByteOffset` points at the four-byte slot word the renderer patches after it resolves the device-lifetime descriptor handle.
-    Name fixtureName = s_NameNone;
     MaterialResourceKind::Enum resourceKind = MaterialResourceKind::None;
-    MaterialResourceSource::Enum resourceSource = MaterialResourceSource::None;
     u32 constantByteOffset = 0u;
 };
 

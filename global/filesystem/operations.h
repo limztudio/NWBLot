@@ -100,6 +100,10 @@ inline void SetValueTooLargeError(ErrorCode& outError)noexcept{
     outError = std::make_error_code(std::errc::value_too_large);
 }
 
+inline void SetIOError(ErrorCode& outError)noexcept{
+    outError = std::make_error_code(std::errc::io_error);
+}
+
 template<typename ArenaT>
 [[nodiscard]] inline bool IsRootComponent(const Path<ArenaT>& path)noexcept{
     const usize pathSize = path.size();

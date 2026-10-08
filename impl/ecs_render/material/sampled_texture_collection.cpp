@@ -19,7 +19,6 @@ NWB_IMPL_BEGIN
 bool AppendPreparedMaterialSurfaceSampledTextures(
     const MaterialSurfaceInfo& materialInfo,
     const RendererMaterialResourceState& resources,
-    const RendererMaterialResourceFixtureState& fixtures,
     MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector
 ){
     if(!materialInfo.resourceReferencesResolved)
@@ -27,19 +26,7 @@ bool AppendPreparedMaterialSurfaceSampledTextures(
     for(const MaterialResourceReference& resourceReference : materialInfo.resourceReferences){
         switch(resourceReference.resourceKind){
         case MaterialResourceKind::SampledImage2D:{
-            // The static first slice shares one fixture texture; per-material paths resolve from the asset cache.
-            if(resourceReference.fixtureName){
-                if(!IsKnownMaterialResourceFixture(resourceReference.resourceKind, resourceReference.fixtureName))
-                    return false;
-                if(!fixtures.checkerRgba8Texture)
-                    return false;
-                collector.append(fixtures.checkerRgba8Texture);
-                break;
-            }
-            if(
-                resourceReference.resourceSource != MaterialResourceSource::Asset
-                || !resourceReference.textureAsset.valid()
-            )
+            if(!resourceReference.textureAsset.valid())
                 return false;
 
             const auto foundTexture = resources.textureAssetCache.find(resourceReference.textureAsset.name());
@@ -69,7 +56,6 @@ bool AppendPreparedMaterialSurfaceSampledTextures(
 bool GatherPreparedMaterialPassSampledTextures(
     const MaterialSurfaceInfoMap& materials,
     const RendererMaterialResourceState& resources,
-    const RendererMaterialResourceFixtureState& fixtures,
     const MaterialPassDrawItems* const* const drawItemSets,
     const usize drawItemSetCount,
     Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& outTextures,
@@ -83,7 +69,7 @@ bool GatherPreparedMaterialPassSampledTextures(
     const auto appendDrawItem = [&](const MaterialPassDrawItem& drawItem){
         const auto foundMaterial = materials.find(drawItem.pipelineKey.material);
         return foundMaterial != materials.end()
-            && AppendPreparedMaterialSurfaceSampledTextures(foundMaterial.value(), resources, fixtures, collector)
+            && AppendPreparedMaterialSurfaceSampledTextures(foundMaterial.value(), resources, collector)
         ;
     };
 

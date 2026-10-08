@@ -604,7 +604,6 @@ static bool ReserveMaterialBindTypedLayoutVectors(
     outLayout.typedLayoutBlocks.reserve(sortedInstances.size());
     outLayout.typedLayoutFields.reserve(fieldReserveCount);
     outLayout.typedBlockBytes.reserve(byteReserveCount);
-    outLayout.resourceReferences.reserve(fieldReserveCount);
     return true;
 }
 
@@ -764,10 +763,6 @@ static bool BuildMaterialBindTypedLayoutParameterLookup(
                 );
                 return false;
             }
-            // Fixture-backed resource slots are fixed by the cooked fixture reference and are never material .nwb parameters.
-            // Bare resource fields still accept per-material asset paths, so only the fixture-backed ones are excluded from the parameter lookup.
-            if(IsMaterialLayoutResourceFieldType(field.fieldType) && !bindField.fixtureArgument().empty())
-                continue;
             if(field.offset > Limit<u32>::s_Max - blockEntry.byteBegin){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: interface '{}' field '{}.{}' "
                     "byte offset exceeds u32 for '{}'")
@@ -925,11 +920,7 @@ bool ApplyMaterialBindTypedLayoutParameterValue(
             !parameterEntry.blockName
             || !field.fieldName
             || !resourceName
-            || !IsSupportedMaterialResourceReference(
-                resourceKind,
-                MaterialResourceSource::Asset,
-                resourcePath
-            )
+            || !IsSupportedMaterialResourceReference(resourceKind, resourcePath)
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource parameter '{}' for '{}' must be an engine or project asset path")
                 , StringConvert(parameterName.view())
@@ -942,7 +933,6 @@ bool ApplyMaterialBindTypedLayoutParameterValue(
         resourceReference.blockName = parameterEntry.blockName;
         resourceReference.fieldName = field.fieldName;
         resourceReference.resourceKind = resourceKind;
-        resourceReference.resourceSource = MaterialResourceSource::Asset;
         resourceReference.constantByteOffset = parameterEntry.constantByteOffset;
         if(!AssignMaterialResourceReferenceAsset(resourceReference, resourceKind, resourceName))
             return false;
@@ -1020,7 +1010,6 @@ bool BuildMaterialBindTypedLayoutImpl(
         }
 
         const usize blockByteBegin = outLayout.typedBlockBytes.size();
-        const u32 blockConstantByteBegin = constantTypedByteSize;
 
         MaterialTypedLayoutBlock block;
         block.blockName = Name(AStringView(instance->name));
@@ -1117,39 +1106,6 @@ bool BuildMaterialBindTypedLayoutImpl(
 
             outLayout.typedLayoutFields.push_back(field);
             block.byteSize = fieldOffset + fieldByteSize;
-            if(IsMaterialLayoutResourceFieldType(fieldType)){
-                const MaterialResourceKind::Enum resourceKind = MaterialLayoutFieldResourceKind(fieldType);
-                const AStringView fixtureArgument = bindField.fixtureArgument();
-                // Bare resource fields carry no fixture; each material supplies its own asset path.
-                if(fixtureArgument.empty())
-                    continue;
-                const Name fixtureName(fixtureArgument);
-                if(!IsValidMaterialResourceKind(resourceKind) || !fixtureName || !IsKnownMaterialResourceFixture(resourceKind, fixtureArgument)){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource field '{}.{}' has an invalid fixture for '{}'")
-                        , StringConvert(instance->name)
-                        , StringConvert(bindField.name)
-                        , StringConvert(contextName.resolvedText())
-                    );
-                    return false;
-                }
-                if(field.offset > Limit<u32>::s_Max - blockConstantByteBegin){
-                    NWB_LOGGER_ERROR(NWB_TEXT("Material bind typed layout: resource field '{}.{}' byte offset exceeds u32 for '{}'")
-                        , StringConvert(instance->name)
-                        , StringConvert(bindField.name)
-                        , StringConvert(contextName.resolvedText())
-                    );
-                    return false;
-                }
-
-                MaterialResourceReference resourceReference;
-                resourceReference.blockName = block.blockName;
-                resourceReference.fieldName = field.fieldName;
-                resourceReference.fixtureName = fixtureName;
-                resourceReference.resourceKind = resourceKind;
-                resourceReference.resourceSource = MaterialResourceSource::Asset;
-                resourceReference.constantByteOffset = blockConstantByteBegin + field.offset;
-                outLayout.resourceReferences.push_back(resourceReference);
-            }
         }
 
         u32 alignedBlockByteSize = 0u;

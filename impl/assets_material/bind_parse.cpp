@@ -299,15 +299,12 @@ static bool ValidateMaterialBindStructAttributes(
 static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const MaterialBindStruct& bindStruct, const MaterialBindField& field){
     MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
     const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType);
-    // Resource fields accept two shapes: a fixture attribute for the static first-slice catalog, or no attributes when each material supplies its own engine/project asset path for the field.
     if(isResourceField && field.attributes.empty())
         return true;
-    const MaterialResourceKind::Enum resourceKind = MaterialLayoutFieldResourceKind(resourceFieldType);
-    const AStringView requiredAttribute = isResourceField ? s_FixtureAttribute : s_DefaultAttribute;
     bool foundRequiredAttribute = false;
 
     for(const MaterialBindAttribute& attribute : field.attributes){
-        if(attribute.name != requiredAttribute){
+        if(isResourceField || attribute.name != s_DefaultAttribute){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported attribute '{}'")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
@@ -321,7 +318,7 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(bindStruct.name)
                 , StringConvert(field.name)
-                , StringConvert(requiredAttribute)
+                , StringConvert(s_DefaultAttribute)
             );
             return false;
         }
@@ -342,24 +339,12 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
             , PathToString<tchar>(bindFilePath)
             , StringConvert(bindStruct.name)
             , StringConvert(field.name)
-            , StringConvert(requiredAttribute)
+            , StringConvert(s_DefaultAttribute)
         );
         return false;
     }
 
-    if(!isResourceField)
-        return true;
-    const AStringView fixtureName = field.fixtureArgument();
-    if(IsKnownMaterialResourceFixture(resourceKind, fixtureName))
-        return true;
-    NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' fixture '{}' is not supported for resource type '{}'")
-        , PathToString<tchar>(bindFilePath)
-        , StringConvert(bindStruct.name)
-        , StringConvert(field.name)
-        , StringConvert(fixtureName)
-        , StringConvert(field.type)
-    );
-    return false;
+    return true;
 }
 
 

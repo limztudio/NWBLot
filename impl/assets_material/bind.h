@@ -92,7 +92,6 @@ struct MaterialBindField{
 
     [[nodiscard]] const MaterialBindAttribute* findAttribute(AStringView attributeName)const;
     [[nodiscard]] AStringView defaultArgument()const;
-    [[nodiscard]] AStringView fixtureArgument()const;
 };
 
 struct MaterialBindStruct{
@@ -172,7 +171,6 @@ struct MaterialBindTypedLayout{
     Material::TypedLayoutBlockVector typedLayoutBlocks;
     Material::TypedLayoutFieldVector typedLayoutFields;
     Material::TypedBlockByteVector typedBlockBytes;
-    Material::ResourceReferenceVector resourceReferences;
     MaterialBindTypedLayoutBlockLookup blockLookup;
     MaterialBindTypedLayoutParameterLookup parameterLookup;
 
@@ -180,7 +178,6 @@ struct MaterialBindTypedLayout{
         : typedLayoutBlocks(memoryArena)
         , typedLayoutFields(memoryArena)
         , typedBlockBytes(memoryArena)
-        , resourceReferences(memoryArena)
         , blockLookup(0, Hasher<Name>(), EqualTo<Name>(), memoryArena)
         , parameterLookup(0, Hasher<ACompactString>(), EqualTo<ACompactString>(), memoryArena)
     {}
@@ -233,8 +230,7 @@ void CopyMaterialBindTypedLayoutDefaults(
     u64& outLayoutHash,
     Material::TypedLayoutBlockVector& outBlocks,
     Material::TypedLayoutFieldVector& outFields,
-    Material::TypedBlockByteVector& outBlockBytes,
-    Material::ResourceReferenceVector& outResourceReferences
+    Material::TypedBlockByteVector& outBlockBytes
 );
 [[nodiscard]] bool ApplyMaterialBindTypedLayoutParameters(
     const MaterialBindTypedLayout& layout,

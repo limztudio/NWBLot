@@ -98,6 +98,7 @@ bool ShaderCook::computeDependencyChecksum(
     const CookVector<Path>& dependencies,
     const InitializerList<DependencyRootAlias> dependencyRootAliases,
     u64& outChecksum,
+    bool& outCompilerInputsHaveBom,
     Core::Alloc::ScratchArena& scratchArena
 ){
     ErrorCode errorCode;
@@ -105,6 +106,7 @@ bool ShaderCook::computeDependencyChecksum(
     static constexpr u8 s_ZeroByte = 0;
 
     outChecksum = s_Fnv64OffsetBasis;
+    outCompilerInputsHaveBom = false;
 
     if(dependencyRootAliases.size() == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires at least one dependency root alias"));
@@ -201,6 +203,13 @@ bool ShaderCook::computeDependencyChecksum(
             }
             return false;
         }
+        if(
+            dependencyBytes.size() >= TextDetail::s_Utf8BomByteCount
+            && dependencyBytes[0u] == TextDetail::s_Utf8BomByte0
+            && dependencyBytes[1u] == TextDetail::s_Utf8BomByte1
+            && dependencyBytes[2u] == TextDetail::s_Utf8BomByte2
+        )
+            outCompilerInputsHaveBom = true;
         if(!dependencyBytes.empty()){
             outChecksum = UpdateFnv64(
                 outChecksum,
@@ -219,9 +228,10 @@ u64 ShaderCook::computeSourceChecksum(
     const ShaderEntry& entry,
     const AStringView variantSignature,
     const u64 dependencyChecksum,
+    const u64 compilerFingerprint,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    static constexpr AStringView s_ChecksumVersionTag = "shader-source-v3";
+    static constexpr AStringView s_ChecksumVersionTag = "shader-source-v4";
     const u8 newlineByte = '\n';
 
     u64 checksum = s_Fnv64OffsetBasis;
@@ -254,7 +264,8 @@ u64 ShaderCook::computeSourceChecksum(
             appendChecksumLine(*entryDefine.value);
         }
     }
-    checksum = UpdateFnv64(checksum, reinterpret_cast<const u8*>(&dependencyChecksum), sizeof(dependencyChecksum));
+    Fnv64AppendValue(checksum, dependencyChecksum);
+    Fnv64AppendValue(checksum, compilerFingerprint);
     return checksum;
 }
 

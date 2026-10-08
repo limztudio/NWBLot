@@ -16,6 +16,8 @@
 #include <core/alloc/scratch.h>
 #include <core/metascript/parser.h>
 
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -64,11 +66,13 @@ public:
         const ShaderMacroDefinition* defines = nullptr;
         const CookVector<Path>& includeDirectories;
         const CookVector<Path>& dependencies;
+        Span<const AStringView> externallyPlannedMacroIncludes;
         const Path& sourcePath;
         const Path& outputPath;
         u32 defineCount = 0;
         ShaderOptimizationLevel::Enum optimizationLevel = ShaderOptimizationLevel::Default;
         bool rayQuery = false;
+        bool compilerInputsHaveBom = false;
     };
 
     struct DependencyRootAlias{
@@ -185,6 +189,7 @@ public:
     bool gatherShaderDependencies(
         const Path& sourcePath,
         const CookVector<Path>& includeDirectories,
+        Span<const AStringView> externallyPlannedMacroIncludes,
         CookVector<Path>& outDependencies,
         Core::Alloc::ScratchArena& scratchArena
     );
@@ -204,12 +209,14 @@ public:
         const CookVector<Path>& dependencies,
         InitializerList<DependencyRootAlias> dependencyRootAliases,
         u64& outChecksum,
+        bool& outCompilerInputsHaveBom,
         Core::Alloc::ScratchArena& scratchArena
     );
     [[nodiscard]] u64 computeSourceChecksum(
         const ShaderEntry& entry,
         const AStringView variantSignature,
         u64 dependencyChecksum,
+        u64 compilerFingerprint,
         Core::Alloc::ScratchArena& scratchArena
     );
 

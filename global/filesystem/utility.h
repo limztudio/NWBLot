@@ -7,56 +7,10 @@
 
 #include "operations.h"
 #include "../text_utils.h"
-#include "../thread.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-namespace GlobalFilesystemDetail{
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-inline constexpr u32 s_DefaultDirectoryPollMilliseconds = 10u;
-inline constexpr u32 s_MinimumDirectoryPollMilliseconds = 1u;
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-};
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-template<typename ArenaT>
-[[nodiscard]] inline bool TextFileContains(const ::Path<ArenaT>& path, const AStringView needle){
-    AString<ArenaT> text(path.arena());
-    if(!ReadTextFile(path, text))
-        return false;
-
-    return AStringView(text.data(), text.size()).find(needle) != AStringView::npos;
-}
-
-template<typename ArenaT>
-[[nodiscard]] inline bool WaitForDirectory(
-    const ::Path<ArenaT>& path,
-    const u32 timeoutMilliseconds,
-    const u32 pollMilliseconds = GlobalFilesystemDetail::s_DefaultDirectoryPollMilliseconds
-){
-    const u32 stepMilliseconds = pollMilliseconds == 0u
-        ? GlobalFilesystemDetail::s_MinimumDirectoryPollMilliseconds
-        : pollMilliseconds;
-    for(u32 elapsedMilliseconds = 0u; elapsedMilliseconds <= timeoutMilliseconds; elapsedMilliseconds += stepMilliseconds){
-        if(PathIsDirectory(path))
-            return true;
-        SleepMS(stepMilliseconds);
-    }
-    return false;
-}
 
 template<typename StringT, typename PathT>
 [[nodiscard]] inline StringT LowerPathExtension(const PathT& path){

@@ -26,7 +26,7 @@ namespace MaterialBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_MaterialMagic = 0x4D544C39u; // MTL9
+inline constexpr u32 s_MaterialMagic = 0x4D544C41u; // MTLA
 inline constexpr usize s_ShaderEntryBytes = sizeof(Core::ShaderType::Enum) + sizeof(NameHash);
 // Serialized flags mirror authored booleans; Refractive classifies casters, while optical values stay shader-side.
 // All masks supported bits; loading rejects the rest.
@@ -87,14 +87,11 @@ struct MaterialResourceReferenceBinary{
     NameHash blockNameHash = {};
     NameHash fieldNameHash = {};
     NameHash resourceNameHash = {};
-    NameHash fixtureNameHash = {};
     u32 resourceKind = MaterialResourceKind::None;
-    u32 resourceSource = MaterialResourceSource::None;
     u32 constantByteOffset = 0u;
-    u32 reserved = 0u;
 };
 static_assert(
-    sizeof(MaterialResourceReferenceBinary) == sizeof(NameHash) * 4u + sizeof(u32) * 4u,
+    sizeof(MaterialResourceReferenceBinary) == sizeof(NameHash) * 3u + sizeof(u32) * 2u,
     "MaterialResourceReferenceBinary layout drifted"
 );
 static_assert(
@@ -109,59 +106,6 @@ static_assert(
 inline constexpr usize s_TypedLayoutBlockBytes = sizeof(MaterialTypedLayoutBlockBinary);
 inline constexpr usize s_TypedLayoutFieldBytes = sizeof(MaterialTypedLayoutFieldBinary);
 inline constexpr usize s_ResourceReferenceBytes = sizeof(MaterialResourceReferenceBinary);
-
-// Shared walker for the material binary prefix (magic + shader variant + interface + typed layout extents).
-// Both the codec and test tooling must agree on these offsets; keep the walk in one place.
-template<typename BinaryContainer>
-[[nodiscard]] inline bool FindMaterialBinaryPrefixExtents(
-    const BinaryContainer& binary,
-    usize& outTypedLayoutBegin,
-    u32& outBlockCount,
-    u32& outFieldCount
-){
-    outTypedLayoutBegin = 0u;
-    outBlockCount = 0u;
-    outFieldCount = 0u;
-
-    usize cursor = 0u;
-    u32 magic = 0u;
-    if(!ReadPOD(binary, cursor, magic) || magic != s_MaterialMagic)
-        return false;
-
-    AStringView shaderVariantView;
-    if(!BinaryDetail::ReadLengthPrefixedString(binary, cursor, shaderVariantView) || shaderVariantView.empty())
-        return false;
-
-    NameHash materialInterfaceHash = {};
-    if(!ReadPOD(binary, cursor, materialInterfaceHash) || !Name(materialInterfaceHash))
-        return false;
-
-    outTypedLayoutBegin = cursor;
-
-    u64 layoutHash = 0u;
-    if(
-        !ReadPOD(binary, cursor, layoutHash)
-        || !ReadPOD(binary, cursor, outBlockCount)
-        || !ReadPOD(binary, cursor, outFieldCount)
-        || layoutHash == 0u
-    )
-        return false;
-
-    usize layoutBytes = 0u;
-    if(outBlockCount > (binary.size() - cursor) / s_TypedLayoutBlockBytes)
-        return false;
-    layoutBytes = static_cast<usize>(outBlockCount) * s_TypedLayoutBlockBytes;
-    cursor += layoutBytes;
-
-    usize fieldBytes = 0u;
-    if(outFieldCount > (binary.size() - cursor) / s_TypedLayoutFieldBytes)
-        return false;
-    fieldBytes = static_cast<usize>(outFieldCount) * s_TypedLayoutFieldBytes;
-    if(!BinaryDetail::SkipBytes(binary, cursor, fieldBytes))
-        return false;
-
-    return true;
-}
 
 template<typename BlockVector>
 [[nodiscard]] inline bool ComputeMaterialTypedBlockByteSize(const BlockVector& blocks, usize& outByteSize){
@@ -194,7 +138,7 @@ template<typename BlockVector, typename FieldVector, typename ResourceReferenceV
             if(!IsMaterialLayoutResourceFieldType(field.fieldType))
                 continue;
 
-            // Opaque handles are intentionally static constants. A resource in mutable storage would make the cooked fixture contract ambiguous and permit instance data to become a descriptor slot.
+            // Descriptor slots are resolved during material preparation; instance overrides cannot replace them.
             if(block.blockClass != MaterialBlockClass::MaterialConstant)
                 return false;
             if(field.offset > Limit<u32>::s_Max - constantByteBegin)
@@ -215,31 +159,17 @@ template<typename BlockVector, typename FieldVector, typename ResourceReferenceV
                 )
                     return false;
 
-                // The static first slice resolves its fixture at runtime and carries no per-material asset path; asset-sourced fields carry a typed asset reference instead.
-                if(resourceReference.fixtureName){
-                    if(
-                        resourceReference.resourceSource != MaterialResourceSource::Asset
-                        || !IsKnownMaterialResourceFixture(resourceReference.resourceKind, resourceReference.fixtureName)
-                        || resourceReference.textureAsset.valid()
-                        || resourceReference.samplerAsset.valid()
-                    )
+                switch(expectedKind){
+                case MaterialResourceKind::SampledImage2D:
+                    if(!resourceReference.textureAsset.valid() || resourceReference.samplerAsset.valid())
                         return false;
-                }
-                else{
-                    if(resourceReference.resourceSource != MaterialResourceSource::Asset)
+                    break;
+                case MaterialResourceKind::Sampler:
+                    if(!resourceReference.samplerAsset.valid() || resourceReference.textureAsset.valid())
                         return false;
-                    switch(expectedKind){
-                    case MaterialResourceKind::SampledImage2D:
-                        if(!resourceReference.textureAsset.valid() || resourceReference.samplerAsset.valid())
-                            return false;
-                        break;
-                    case MaterialResourceKind::Sampler:
-                        if(!resourceReference.samplerAsset.valid() || resourceReference.textureAsset.valid())
-                            return false;
-                        break;
-                    default:
-                        return false;
-                    }
+                    break;
+                default:
+                    return false;
                 }
 
                 foundReference = true;

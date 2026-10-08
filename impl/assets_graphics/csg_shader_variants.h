@@ -41,6 +41,7 @@ using ShaderStageKeySet = HashSet<AssetsGraphicsCookDetail::ShaderStageKey, Core
 inline constexpr AStringView s_ClipImplicitDefineName = "NWB_CSG_ENABLED";
 inline constexpr AStringView s_IntervalSampleEnabledImplicitDefineName = "NWB_CSG_INTERVAL_SAMPLE_ENABLED";
 inline constexpr AStringView s_ProjectEvaluatorModuleDefineName = "NWB_CSG_PROJECT_EVALUATOR_MODULE";
+inline constexpr AStringView s_ExternallyPlannedMacroIncludes[]{ s_ProjectEvaluatorModuleDefineName };
 void CollectMaterialClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys);
 void CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys);
 [[nodiscard]] bool SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry);

@@ -127,13 +127,11 @@ using MaterialSurfaceInfoMap = HashMap<Name, MaterialSurfaceInfo, Core::Alloc::G
 [[nodiscard]] bool AppendPreparedMaterialSurfaceSampledTextures(
     const MaterialSurfaceInfo& materialInfo,
     const RendererMaterialResourceState& resources,
-    const RendererMaterialResourceFixtureState& fixtures,
     MaterialSampledTextureCollector<Core::Alloc::ScratchArena>& collector
 );
 [[nodiscard]] bool GatherPreparedMaterialPassSampledTextures(
     const MaterialSurfaceInfoMap& materials,
     const RendererMaterialResourceState& resources,
-    const RendererMaterialResourceFixtureState& fixtures,
     const MaterialPassDrawItems* const* drawItemSets,
     usize drawItemSetCount,
     Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& outTextures,

@@ -105,24 +105,11 @@ public:
     );
 
 public:
-    [[nodiscard]] static bool SplitMaterialTypedBytesByClass(
-        const Material& material,
-        const Name& materialPath,
-        MaterialTypedByteVector& outConstantTypedBytes,
-        MaterialTypedByteVector& outMutableDefaultTypedBytes
-    );
-
-public:
     void invalidateResources();
     [[nodiscard]] bool createMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo);
     // Prepared-only lookup: creation and descriptor-backed resource resolution belong to preparation.
     [[nodiscard]] virtual bool findMaterialSurfaceInfo(const Core::Assets::AssetRef<Material>& materialAsset, MaterialSurfaceInfo*& outInfo)override;
     [[nodiscard]] bool resolveMaterialResourceReferences(MaterialSurfaceInfo& materialInfo);
-    // Fixture texture/sampler/descriptor creation for resource/target setup. Draw submission and
-    // material pipeline hot paths must only consume the existing handles and fail if setup is missing.
-    [[nodiscard]] bool ensureMaterialResourceFixtures();
-    [[nodiscard]] bool resolveMaterialResourceFixtures(MaterialSurfaceInfo& materialInfo);
-    void releaseMaterialResourceFixtures();
     [[nodiscard]] bool prepareVisibleMaterialSurfaceInfos();
     void prepareVisibleMaterialInstanceMutableCache();
     [[nodiscard]] bool prepareMaterialPassBindingLayout(Core::BindingLayoutHandle& outBindingLayout);
@@ -319,6 +306,12 @@ public:
 
 private:
     void releaseMaterialResourceReferences();
+    static void SplitMaterialTypedBytesByClass(
+        const Material& material,
+        MaterialTypedByteVector& outConstantTypedBytes,
+        MaterialTypedByteVector& outMutableDefaultTypedBytes
+    );
+
 
 private:
     Core::Alloc::GlobalArena& m_arena;

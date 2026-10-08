@@ -1048,7 +1048,7 @@ public:
         const NWB::Core::Assets::AssetBytes& binary,
         usize& outLayoutHashOffset,
         usize& outBlockByteCountOffset
-    );
+    )noexcept;
 
     static bool EncodeTestMeshletRefs(
         NWB::Core::Assets::AssetVector<NWB::Impl::MeshletDesc>& meshlets,

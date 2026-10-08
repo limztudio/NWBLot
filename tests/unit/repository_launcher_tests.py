@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 import launcher  # noqa: E402
-from launcher import repository_windows_process  # noqa: E402
+from launcher import generate_name_symbols, repository_windows_process  # noqa: E402
 
 LIT_OPEN = "open"
 LIT_CLOSE = "close"
@@ -966,6 +966,55 @@ class LauncherExecutableMetadataTests(unittest.TestCase):
             launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, None, False)
         self.write_target_metadata(launcher.FILE_API_TARGET_EXECUTABLE, [Path(LIT_ACTUAL_EXECUTABLE)])
         self.assertEqual(self.actual, launcher.resolve_executable_path(self.settings, LIT_TESTBED, None, None, False))
+
+
+class NameSymbolCaptureBoundaryTests(unittest.TestCase):
+    def test_stale_sidecar_cleanup_failure_blocks_workloads_and_preserves_publication(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            capture = root / "capture"
+            destination = root / "published"
+            capture.mkdir()
+            destination.mkdir()
+            stale = capture / "probe.namesym"
+            published = destination / stale.name
+            stale_bytes = b"stale source symbols"
+            published_bytes = b"previous valid symbols"
+            fresh_bytes = b"freshly captured symbols"
+            stale.write_bytes(stale_bytes)
+            published.write_bytes(published_bytes)
+            arguments = [
+                "--source-dir", str(root), LIT_CONFIGURE_PRESET, "unused", "--build-preset", "unused",
+                LIT_BUILD_DIR, str(root / LIT_BUILD), LIT_CONFIG, LIT_OPT,
+                "--buildmode-bin-dir", str(capture), "--dest", str(destination), "--run", "probe", LIT_SKIP_BUILD,
+            ]
+            removal_error = PermissionError("sidecar is locked")
+            with (
+                mock.patch.object(generate_name_symbols.os, "remove", side_effect=removal_error) as remove,
+                mock.patch.object(generate_name_symbols, "run_workloads") as workloads,
+                mock.patch.object(generate_name_symbols, "collect_sidecars", wraps=generate_name_symbols.collect_sidecars) as collect,
+                mock.patch.object(generate_name_symbols, "log") as log,
+            ):
+                self.assertEqual(1, generate_name_symbols.main(arguments))
+                remove.assert_called_once_with(str(stale))
+                workloads.assert_not_called()
+                collect.assert_not_called()
+                log.assert_any_call(generate_name_symbols.MSG_STALE_REMOVE_FAIL.format(str(stale), removal_error))
+            self.assertEqual(stale_bytes, stale.read_bytes())
+            self.assertEqual(published_bytes, published.read_bytes())
+            self.assertEqual([published], list(destination.iterdir()))
+
+            def capture_fresh_sidecar(_arguments):
+                self.assertFalse(stale.exists())
+                stale.write_bytes(fresh_bytes)
+
+            with (
+                mock.patch.object(generate_name_symbols, "run_workloads", side_effect=capture_fresh_sidecar) as workloads,
+                mock.patch.object(generate_name_symbols, "log"),
+            ):
+                self.assertEqual(0, generate_name_symbols.main(arguments))
+                workloads.assert_called_once()
+            self.assertEqual(fresh_bytes, published.read_bytes())
 
 
 class PipelineLauncherTests(unittest.TestCase):

@@ -4,7 +4,7 @@
 
 #include "crash_test_helpers.h"
 
-#include <global/filesystem/utility.h>
+#include <tests/common/filesystem_helpers.h>
 #include <tests/common/capturing_logger.h>
 #include <tests/common/test_context.h>
 
@@ -61,7 +61,7 @@ static constexpr AStringView s_WINDOWS = "windows";
 
 using TestArena = NWB::Tests::TestArena<struct LoggerServerCrashTestsTag>;
 using CapturingLogger = NWB::Tests::CapturingLogger;
-using ::WaitForDirectory;
+using NWB::Tests::WaitForDirectory;
 using namespace NWB::Tests::LoggerServerCrash;
 namespace CrashNames = NWB::Core::Crash::PackageNames;
 inline constexpr AStringView s_InvalidArchiveHeader("NWBCRASHPKG 0\n");

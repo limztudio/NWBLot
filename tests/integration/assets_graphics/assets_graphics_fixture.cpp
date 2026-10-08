@@ -96,15 +96,7 @@ bool AssetsGraphicsFixture::WriteTextFile(const AssetsGraphicsFixture::Path& fil
     if(!EnsureDirectories(filePath.parentPath(), errorCode))
         return false;
 
-    GlobalFilesystemDetail::OutputFileStream file(
-        filePath,
-        GlobalFilesystemDetail::OutputFileStream::binary | GlobalFilesystemDetail::OutputFileStream::trunc
-    );
-    if(!file)
-        return false;
-
-    file.write(text.data(), static_cast<GlobalFilesystemDetail::StreamSize>(text.size()));
-    return static_cast<bool>(file);
+    return ::WriteTextFile(filePath, text);
 }
 
 
@@ -722,26 +714,47 @@ bool AssetsGraphicsFixture::FindMaterialBinaryTypedLayoutOffsets(
     const NWB::Core::Assets::AssetBytes& binary,
     usize& outLayoutHashOffset,
     usize& outBlockByteCountOffset
-){
+)noexcept{
     outLayoutHashOffset = 0u;
     outBlockByteCountOffset = 0u;
 
-    usize typedLayoutBegin = 0u;
+    usize cursor = 0u;
+    u32 magic = 0u;
+    if(!ReadPOD(binary, cursor, magic) || magic != NWB::Impl::MaterialBinaryPayload::s_MaterialMagic)
+        return false;
+
+    AStringView shaderVariantView;
+    if(!BinaryDetail::ReadLengthPrefixedString(binary, cursor, shaderVariantView) || shaderVariantView.empty())
+        return false;
+
+    NameHash materialInterfaceHash = {};
+    if(!ReadPOD(binary, cursor, materialInterfaceHash) || !Name(materialInterfaceHash))
+        return false;
+
+    const usize typedLayoutBegin = cursor;
+    u64 layoutHash = 0u;
     u32 blockCount = 0u;
     u32 fieldCount = 0u;
-    if(!NWB::Impl::MaterialBinaryPayload::FindMaterialBinaryPrefixExtents(binary, typedLayoutBegin, blockCount, fieldCount))
+    if(
+        !ReadPOD(binary, cursor, layoutHash)
+        || !ReadPOD(binary, cursor, blockCount)
+        || !ReadPOD(binary, cursor, fieldCount)
+        || layoutHash == 0u
+    )
+        return false;
+
+    if(blockCount > (binary.size() - cursor) / NWB::Impl::MaterialBinaryPayload::s_TypedLayoutBlockBytes)
+        return false;
+    cursor += static_cast<usize>(blockCount) * NWB::Impl::MaterialBinaryPayload::s_TypedLayoutBlockBytes;
+
+    if(fieldCount > (binary.size() - cursor) / NWB::Impl::MaterialBinaryPayload::s_TypedLayoutFieldBytes)
+        return false;
+    const usize fieldBytes = static_cast<usize>(fieldCount) * NWB::Impl::MaterialBinaryPayload::s_TypedLayoutFieldBytes;
+    if(!BinaryDetail::SkipBytes(binary, cursor, fieldBytes))
         return false;
 
     outLayoutHashOffset = typedLayoutBegin;
-    outBlockByteCountOffset = typedLayoutBegin
-        + sizeof(u64)
-        + sizeof(u32)
-        + sizeof(u32)
-        + static_cast<usize>(blockCount) * NWB::Impl::MaterialBinaryPayload::s_TypedLayoutBlockBytes
-        + static_cast<usize>(fieldCount) * NWB::Impl::MaterialBinaryPayload::s_TypedLayoutFieldBytes;
-    if(outBlockByteCountOffset > binary.size())
-        return false;
-
+    outBlockByteCountOffset = cursor;
     return true;
 }
 

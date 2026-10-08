@@ -10,6 +10,8 @@
 
 #include "mesh_object_shader_plan.h"
 
+#include "csg_shader_variants.h"
+
 #include <impl/assets_material/shader_stage_names.h>
 
 #include <core/assets/paths.h>
@@ -83,12 +85,13 @@ bool AppendMeshObjectShaderEntries(
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: fixed object geometry shader is missing: '{}'"), PathToString<tchar>(prepared.sourcePath));
         return false;
     }
-    if(!shaderCook.gatherShaderDependencies(prepared.sourcePath, prepared.includeDirectories, prepared.dependencies, scratchArena))
+    if(!shaderCook.gatherShaderDependencies(prepared.sourcePath, prepared.includeDirectories, AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes, prepared.dependencies, scratchArena))
         return false;
     if(!shaderCook.computeDependencyChecksum(
         prepared.dependencies,
         { { resolvedPaths.repoRoot, "repo" }, { resolvedPaths.cacheDirectory, "generated_cache" } },
         prepared.dependencyChecksum,
+        prepared.compilerInputsHaveBom,
         scratchArena
     ))
         return false;

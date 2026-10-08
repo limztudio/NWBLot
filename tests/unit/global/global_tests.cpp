@@ -93,6 +93,14 @@ using NameSymbolTestPath = ::Path<NWB::Core::Alloc::GlobalArena>;
 template<typename T>
 using Vector = NWB::Tests::TestVector<T>;
 
+struct OversizedBinarySource{
+    static constexpr u8 s_Byte = 0u;
+
+    [[nodiscard]] u64 size()const noexcept{ return static_cast<u64>(Limit<StreamSize>::s_Max) + 1u; }
+    [[nodiscard]] bool empty()const noexcept{ return false; }
+    [[nodiscard]] const u8* data()const noexcept{ return &s_Byte; }
+};
+
 struct NameSymbolCallbackProbe{
     NameDetail::NameSymbolRecorderState previousRecorder = NameDetail::SymbolRecorderState();
     NameDetail::NameSymbolResolverState previousResolver = NameDetail::SymbolResolverState();
@@ -419,6 +427,31 @@ TEST(Global, EnvironmentVariableNamesSupportSlicesAndOutputAliasing){
     EXPECT_FALSE(ReadEnvironmentVariable(AStringView(invalidName, LengthOf(invalidName)), actual));
     EXPECT_TRUE(actual.empty());
 }
+
+TEST(Global, FileWriteSizeRejectionPreservesExistingOutput){
+    NWB::Tests::TestArena<> testArena;
+    const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/oversized_file_write");
+    const auto outputPath = root / "output.bin";
+    ErrorCode error;
+    ASSERT_TRUE(EnsureEmptyDirectory(root, error));
+    ASSERT_TRUE(WriteTextFile(outputPath, "retained"));
+
+    EXPECT_FALSE(WriteBinaryFile(outputPath, OversizedBinarySource{}));
+    AString retained(testArena.arena);
+    ASSERT_TRUE(ReadTextFile(outputPath, retained));
+    EXPECT_EQ(retained, "retained");
+    EXPECT_TRUE(RemoveAllIfExists(root, error));
+}
+
+#if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
+TEST(Global, FileWritesRejectBufferedDeviceFailure){
+    NWB::Tests::TestArena<> testArena;
+    const Path<NWB::Core::Alloc::GlobalArena> fullDevice(testArena.arena, "/dev/full");
+    const u8 payload[]{ 1u, 2u, 3u };
+    EXPECT_FALSE(WriteTextFile(fullDevice, "buffered output"));
+    EXPECT_FALSE(WriteBinaryFile(fullDevice, Span<const u8>(payload)));
+}
+#endif
 
 TEST(Global, ProcessArgumentValidationPreservesExistingOutput){
     NWB::Tests::TestArena<> testArena;

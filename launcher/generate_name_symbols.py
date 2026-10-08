@@ -63,7 +63,7 @@ HELP_SKIP_BUILD = "Skip the buildmode configure + build steps."
 MSG_SKIP_BUILD = "skipping buildmode configure + build (--skip-build)"
 MSG_CONFIGURE_FAILED = "buildmode configure failed"
 MSG_BUILD_FAILED = "buildmode build failed"
-MSG_STALE_REMOVE_FAIL = "WARNING: could not remove stale sidecar {}: {}"
+MSG_STALE_REMOVE_FAIL = "ERROR: could not remove stale sidecar {}: {}"
 MSG_CLEARED_STALE = "cleared {} stale sidecar(s) from {}"
 MSG_EMPTY_RUN = "WARNING: empty --run spec, skipping"
 MSG_TARGET_NOT_FOUND = "WARNING: headless target not found, skipping: {}"
@@ -164,8 +164,10 @@ def clean_stale_sidecars(arguments):
             removed += 1
         except OSError as error:
             log(MSG_STALE_REMOVE_FAIL.format(old, error))
+            return False
     if removed:
         log(MSG_CLEARED_STALE.format(removed, arguments.buildmode_bin_dir))
+    return True
 
 
 def run_workloads(arguments):
@@ -234,8 +236,8 @@ def main(argv):
         return 1
 
     # Collection without workloads must preserve existing sidecars.
-    if arguments.run or arguments.ctest_regex:
-        clean_stale_sidecars(arguments)
+    if (arguments.run or arguments.ctest_regex) and not clean_stale_sidecars(arguments):
+        return 1
 
     run_workloads(arguments)
 

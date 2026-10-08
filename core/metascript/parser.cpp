@@ -177,10 +177,8 @@ private:
         MString key(variableName.data(), variableName.size(), m_arena);
         m_variables.emplace(Move(key), Move(initialValue));
         m_declarations.emplace_back(typeName, variableName, m_arena);
-        if(m_declaredAssetVariable.empty()){
-            const Document::Declaration& declaration = m_declarations.back();
-            m_declaredAssetVariable = MStringView(declaration.variable.data(), declaration.variable.size());
-        }
+        if(m_declaredAssetVariable.empty())
+            m_declaredAssetVariable = variableName;
         return true;
     }
 

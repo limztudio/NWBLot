@@ -182,7 +182,6 @@ struct MaterialSurfaceInfo{
     bool csgCapSurfaceDispatchAvailable = false;
     bool csgCapSurfaceDispatchUnavailableLogged = false;
     bool resourceReferencesResolved = false;
-    bool resourceFixturesResolved = false;
     // Refractive classifies RT casters; NwbMeshSurface owns IOR and shadow absorption values.
     bool transparent = false;
     bool twoSided = false;

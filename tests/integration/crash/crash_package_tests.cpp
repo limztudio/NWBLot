@@ -2,7 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include <global/filesystem/utility.h>
+#include <tests/common/filesystem_helpers.h>
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
@@ -42,8 +42,8 @@ static constexpr AStringView s_TEST = "test";
 
 using TestArena = NWB::Tests::TestArena<struct CrashTestsTag>;
 using CrashTestPath = Path<NWB::Core::Alloc::GlobalArena>;
-using ::TextFileContains;
-using ::WaitForDirectory;
+using NWB::Tests::TextFileContains;
+using NWB::Tests::WaitForDirectory;
 namespace CrashNames = NWB::Core::Crash::PackageNames;
 
 inline constexpr Name s_InstallArena("tests/integration/crash/install");

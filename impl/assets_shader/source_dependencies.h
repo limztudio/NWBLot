@@ -23,14 +23,29 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace SlangShaderCompiler{
+namespace ShaderSourceDependencies{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ComputeCompilerFingerprint(const Path& temporaryRoot, u64& outFingerprint, Core::Alloc::ScratchArena& scratchArena);
-[[nodiscard]] bool CompileVariant(const ShaderCook::ShaderCompilerRequest& request, ShaderCook::CookVector<u8>& outBytecode);
+namespace IncludeKind{
+    enum Enum : u8{
+        Relative,
+        Standard,
+        Macro,
+        Unsupported,
+    };
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+void SpliceSourceLines(AString<Core::Alloc::ScratchArena>& inOutSource)noexcept;
+void MaskSourceComments(AString<Core::Alloc::ScratchArena>& inOutSource)noexcept;
+[[nodiscard]] bool ExtractIncludeDirective(AStringView line, AStringView& outIncludeName, IncludeKind::Enum& outKind)noexcept;
+[[nodiscard]] bool ResolveIncludeFile(AStringView includeName, IncludeKind::Enum kind, const Path& sourceDirectory, const ShaderCook::CookVector<Path>& includeDirectories, Path& outPath);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

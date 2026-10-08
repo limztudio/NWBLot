@@ -512,6 +512,111 @@ TEST(AssetsGraphics, ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithR
     EXPECT_TRUE(RemoveAllIfExists(root, error));
 }
 
+TEST(AssetsGraphics, ShaderMetadataRejectsDefinesThatCannotRoundTripVariantSignatures){
+    CapturingLogger logger;
+    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    TestArena testArena;
+    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
+    Path root(testArena.arena);
+    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_invalid_define_tokens", root));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "void main(){}\n"));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "include.slangi", "static const uint sourceValue = 1u;\n"));
+    static constexpr AStringView s_InvalidDefines[] = {
+        "\"\": [\"1\"]",
+        "\"9QUALITY\": [\"1\"]",
+        "\"PROJECT-QUALITY\": [\"1\"]",
+        "\"PROJECT_QUALITY\": [\"1;OTHER=0\"]",
+        "\"PROJECT_QUALITY\": [\" 1\"]",
+        "\"PROJECT_QUALITY\": [\"1 \"]",
+    };
+    Impl::ShaderCook shaderCook(testArena.arena);
+    Impl::ShaderCook::ShaderEntry shaderEntry(testArena.arena);
+    Impl::ShaderCook::IncludeEntry includeEntry(testArena.arena);
+    for(const bool include : { false, true }){
+        SCOPED_TRACE(include ? "include" : "shader");
+        const Path metadataPath = root / (include ? "include.nwb" : "shader.nwb");
+        const AStringView declaration = include ? "include asset;\n" : "compute_shader asset;\nasset.entry_point = \"main\";\n";
+        const auto validMetadata = StringFormat(testArena.arena, "{}asset.defines = {{ \"PROJECT_QUALITY\": [\"1\"] }};\n", declaration);
+        const auto parse = [&](){
+            if(include)
+                return AssetsGraphicsFixture::ParseShaderMetadataFile(testArena, shaderCook, metadataPath, includeEntry, scratchArena);
+            return AssetsGraphicsFixture::ParseShaderMetadataFile(testArena, shaderCook, metadataPath, shaderEntry, scratchArena);
+        };
+        for(const AStringView invalidDefines : s_InvalidDefines){
+            SCOPED_TRACE(invalidDefines);
+            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, validMetadata));
+            ASSERT_TRUE(parse());
+            ASSERT_FALSE(include ? includeEntry.defineValues.empty() : shaderEntry.defineValues.empty());
+            const auto invalidMetadata = StringFormat(testArena.arena, "{}asset.defines = {{ {} }};\n", declaration, invalidDefines);
+            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, invalidMetadata));
+            EXPECT_FALSE(parse());
+            EXPECT_TRUE(include ? includeEntry.defineValues.empty() : shaderEntry.defineValues.empty());
+            ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, validMetadata));
+            ASSERT_TRUE(parse());
+            const auto& defineValues = include ? includeEntry.defineValues : shaderEntry.defineValues;
+            EXPECT_TRUE(shaderCook.validateVariantSignature("project/define_probe", "PROJECT_QUALITY=1", defineValues, scratchArena));
+        }
+    }
+    ErrorCode error;
+    EXPECT_TRUE(RemoveAllIfExists(root, error));
+}
+
+TEST(AssetsGraphics, ShaderDependenciesTrackContinuedIncludesAndRejectUnplannedIncludes){
+    CapturingLogger logger;
+    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    TestArena testArena;
+    Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
+    Path root(testArena.arena);
+    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "shader_dependency_directives", root));
+    const Path sourcePath = root / "source.slang";
+    const Path trackedInclude = root / "tracked.slangi";
+    static constexpr AStringView s_Source =
+        "/*\n#include \"missing_block.slangi\"\n*/\n"
+        "// #include \"missing_line.slangi\"\n"
+        "#include \\\r\n\"tracked.slangi\"\n"
+    ;
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(sourcePath, s_Source));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(trackedInclude, "static const uint trackedValue = 1u;\n"));
+    Impl::ShaderCook shaderCook(testArena.arena);
+    Impl::ShaderCook::CookVector<Path> includeDirectories(testArena.arena);
+    Impl::ShaderCook::CookVector<Path> dependencies(testArena.arena);
+    ASSERT_TRUE(shaderCook.gatherShaderDependencies(sourcePath, includeDirectories, {}, dependencies, scratchArena));
+    ASSERT_EQ(dependencies.size(), 2u);
+    ASSERT_NE(FindIf(dependencies.begin(), dependencies.end(), [&trackedInclude](const Path& path)noexcept{
+        return path == trackedInclude;
+    }), dependencies.end());
+    u64 beforeChecksum = 0u;
+    u64 afterChecksum = 0u;
+    bool compilerInputsHaveBom = false;
+    ASSERT_TRUE(shaderCook.computeDependencyChecksum(
+        dependencies, { { root, "source" } }, beforeChecksum, compilerInputsHaveBom, scratchArena
+    ));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(trackedInclude, "static const uint trackedValue = 2u;\n"));
+    ASSERT_TRUE(shaderCook.computeDependencyChecksum(
+        dependencies, { { root, "source" } }, afterChecksum, compilerInputsHaveBom, scratchArena
+    ));
+    EXPECT_NE(beforeChecksum, afterChecksum);
+    EXPECT_EQ(logger.errorCount(), 0u);
+
+    static constexpr AStringView s_UnplannedIncludes[] = {
+        "#define GENERATED_INCLUDE \"tracked.slangi\"\n#include GENERATED_INCLUDE\n",
+        "#include_next \"tracked.slangi\"\n",
+        "#import \"tracked.slangi\"\n",
+    };
+    for(const AStringView source : s_UnplannedIncludes){
+        SCOPED_TRACE(source);
+        ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(sourcePath, source));
+        EXPECT_FALSE(shaderCook.gatherShaderDependencies(sourcePath, includeDirectories, {}, dependencies, scratchArena));
+    }
+    const usize failureErrors = logger.errorCount();
+    EXPECT_GT(failureErrors, 0u);
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(sourcePath, s_Source));
+    EXPECT_TRUE(shaderCook.gatherShaderDependencies(sourcePath, includeDirectories, {}, dependencies, scratchArena));
+    EXPECT_EQ(logger.errorCount(), failureErrors);
+    ErrorCode error;
+    EXPECT_TRUE(RemoveAllIfExists(root, error));
+}
+
 TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
     TestArena testArena;
     Path root(testArena.arena);
@@ -535,12 +640,14 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
 
     u64 firstChecksum = 0u;
     u64 secondChecksum = 0u;
+    bool compilerInputsHaveBom = false;
     EXPECT_TRUE(shaderCook.computeDependencyChecksum(
         firstDependencies,
         {
             { firstGeneratedRoot, s_MATERIAL_BIND_INCLUDES }
         },
         firstChecksum,
+        compilerInputsHaveBom,
         scratchArena
     ));
     EXPECT_TRUE(shaderCook.computeDependencyChecksum(
@@ -549,6 +656,7 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
             { secondGeneratedRoot, s_MATERIAL_BIND_INCLUDES }
         },
         secondChecksum,
+        compilerInputsHaveBom,
         scratchArena
     ));
     EXPECT_EQ(firstChecksum, secondChecksum);
@@ -561,6 +669,7 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
             { secondGeneratedRoot, s_MATERIAL_BIND_INCLUDES }
         },
         changedChecksum,
+        compilerInputsHaveBom,
         scratchArena
     ));
     EXPECT_NE(firstChecksum, changedChecksum);
@@ -580,6 +689,7 @@ TEST(AssetsGraphics, ShaderDependencyChecksumAliasesGeneratedRoot){
             { firstGeneratedRoot, s_MATERIAL_BIND_INCLUDES }
         },
         rejectedChecksum,
+        compilerInputsHaveBom,
         scratchArena
     ));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
@@ -868,43 +978,64 @@ TEST(AssetsGraphics, GatherIndependentShaderBuildsWithoutSources){
 }
 
 
-TEST(AssetsGraphics, ShaderCookCompilesBomPrefixedSourceAndInclude){
-    CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
+static void ExpectNoShaderCompilerWorkDirectories(const Path& cacheDirectory){
+    ErrorCode error;
+    const RecursiveDirectoryIterator<Path::Arena> entries(cacheDirectory, error);
+    ASSERT_FALSE(error);
+    for(const auto& entry : entries){
+        const auto filename = PathToString(cacheDirectory.arena(), entry.path().filename());
+        EXPECT_FALSE(AStringView(filename).starts_with(".nwb_shader_")) << filename;
+    }
+    EXPECT_FALSE(error);
+}
 
+TEST(AssetsGraphics, ShaderCookCompilesBomPrefixedSourceAndExternalIncludeAndCleansFailedInvocation){
+    CapturingLogger logger;
+    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    EXPECT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
-        testArena,
-        "shader_cook_bom_compiler_inputs",
-        root,
-        outputDirectory
+    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
+        testArena, "shader_cook_bom_compiler_inputs", root, outputDirectory
+    ));
+    const Path assetRoot = root / "assets";
+    ASSERT_TRUE(WriteBomCompilerProbe(assetRoot));
+    const Path externalIncludeRoot = root / "external" / "includes";
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(
+        externalIncludeRoot / "bom_compiler_probe_include.slangi", s_BomCompilerProbeIncludeSource
+    ));
+    ErrorCode error;
+    ASSERT_TRUE(RemoveFile(assetRoot / "shaders" / "bom_compiler_probe_include.slangi", error));
+    const auto externalIncludeRootText = PathToString(testArena.arena, externalIncludeRoot);
+    const auto shaderMetadata = StringFormat(testArena.arena, "{}{}asset.include_roots = [\"{}\"];\n",
+        s_SHADER_ASSET_HEAD, s_ASSET_ENTRY_MAIN, externalIncludeRootText
+    );
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "bom_compiler_probe_ps.nwb", shaderMetadata));
+    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    EXPECT_EQ(logger.errorCount(), 0u);
+    ExpectNoShaderCompilerWorkDirectories(root / "cache");
+    const Name shaderPath = Core::ShaderArchive::BuildVirtualPathName(
+        Name("project/shaders/bom_compiler_probe_ps"), Core::ShaderArchive::s_DefaultVariant, Name(s_PS)
+    );
+    UniquePtr<Core::Assets::IAsset> loadedShader;
+    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<Impl::PixelShaderAssetCodec>(
+        testArena, outputDirectory, shaderPath, loadedShader, s_ExpectedDualCount
     ));
 
-    const Path assetRoot = root / "assets";
-    EXPECT_TRUE(WriteBomCompilerProbe(assetRoot));
-
-    const bool cooked = AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot });
-    EXPECT_TRUE(cooked);
-    if(cooked){
-        NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
-        EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory, records));
-
-        u64 sourceChecksum = 0u;
-        EXPECT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(
-            records,
-            Name("project/shaders/bom_compiler_probe_ps"),
-            Name(s_PS),
-            sourceChecksum
-        ));
-    }
-
-    EXPECT_EQ(logger.errorCount(), 0u);
-
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(
+        assetRoot / "shaders" / "bom_compiler_probe_ps.slang", "\xEF\xBB\xBF#error BOM_CLEANUP_REGRESSION\n"
+    ));
+    EXPECT_FALSE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("BOM_CLEANUP_REGRESSION")));
+    ExpectNoShaderCompilerWorkDirectories(root / "cache");
+    const usize failureErrors = logger.errorCount();
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "bom_compiler_probe_ps.slang", s_BomCompilerProbeSource));
+    EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    EXPECT_EQ(logger.errorCount(), failureErrors);
+    ExpectNoShaderCompilerWorkDirectories(root / "cache");
+    EXPECT_TRUE(RemoveAllIfExists(root, error));
 }
+
 
 TEST(AssetsGraphics, ShaderCookPreservesExactEntryPoint){
     CapturingLogger logger;
@@ -1003,48 +1134,83 @@ static bool FindSingleShaderBytecodeCachePath(TestArena& testArena, const Path& 
     return foundCount == 1u;
 }
 
-TEST(AssetsGraphics, ShaderCookIgnoresInvalidBytecodeCache){
+TEST(AssetsGraphics, ShaderCookRebuildsTruncatedMalformedAndWrongStageBytecodeCaches){
     CapturingLogger logger;
-    NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
-
+    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena;
     Path root(testArena.arena);
     Path outputDirectory(testArena.arena);
-    EXPECT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
-        testArena,
-        "shader_cook_invalid_bytecode_cache",
-        root,
-        outputDirectory
+    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
+        testArena, "shader_cook_invalid_bytecode_cache", root, outputDirectory
     ));
-
     const Path assetRoot = root / "assets";
-    EXPECT_TRUE(WriteStandaloneShaderProbe(assetRoot));
-    EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-
+    ASSERT_TRUE(WriteStandaloneShaderProbe(assetRoot));
+    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
     Path bytecodeCachePath(testArena.arena);
-    if(FindSingleShaderBytecodeCachePath(testArena, root / "cache", bytecodeCachePath)){
-        EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(bytecodeCachePath, "BAD!"));
-        EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    ASSERT_TRUE(FindSingleShaderBytecodeCachePath(testArena, root / "cache", bytecodeCachePath));
+    Core::Assets::AssetBytes originalBytes(testArena.arena);
+    ErrorCode error;
+    ASSERT_TRUE(ReadBinaryFile(bytecodeCachePath, originalBytes, error));
+    ASSERT_GT(originalBytes.size(), sizeof(u32));
 
-        const Name shaderVirtualPath = NWB::Core::ShaderArchive::BuildVirtualPathName(
-            Name(s_PROJECT_SHADERS_STANDALONE_PS),
-            NWB::Core::ShaderArchive::s_DefaultVariant,
-            Name(s_PS)
-        );
-        UniquePtr<NWB::Core::Assets::IAsset> loadedShader;
-        EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<NWB::Impl::PixelShaderAssetCodec>(
-            testArena,
-            outputDirectory,
-            shaderVirtualPath,
-            loadedShader,
-            s_ExpectedDualCount
+    const Path computeRoot = root / "compute_probe";
+    const Path computeAssets = computeRoot / "assets";
+    const Path computeOutput = computeRoot / "cooked";
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(
+        computeAssets / "shaders" / "cache_stage_cs.nwb", "compute_shader asset;\nasset.entry_point = \"main\";\n"
+    ));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(
+        computeAssets / "shaders" / "cache_stage_cs.slang", "[numthreads(1, 1, 1)] void main(){}\n"
+    ));
+    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, computeRoot, computeOutput, { computeAssets }));
+    const Name computePath = Core::ShaderArchive::BuildVirtualPathName(
+        Name("project/shaders/cache_stage_cs"), Core::ShaderArchive::s_DefaultVariant, Name("cs")
+    );
+    UniquePtr<Core::Assets::IAsset> computeAsset;
+    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<Impl::ComputeShaderAssetCodec>(
+        testArena, computeOutput, computePath, computeAsset, s_ExpectedDualCount
+    ));
+    const auto& compute = static_cast<const Impl::ComputeShader&>(*computeAsset);
+    const Name pixelPath = Core::ShaderArchive::BuildVirtualPathName(
+        Name(s_PROJECT_SHADERS_STANDALONE_PS), Core::ShaderArchive::s_DefaultVariant, Name(s_PS)
+    );
+    static constexpr AStringView s_CorruptionNames[] = { "magic", "truncated", "malformed tail", "wrong physical stage" };
+    Core::Assets::AssetBytes corrupted(testArena.arena);
+    Core::Assets::AssetBytes repaired(testArena.arena);
+    for(usize corruption = 0u; corruption < LengthOf(s_CorruptionNames); ++corruption){
+        SCOPED_TRACE(s_CorruptionNames[corruption]);
+        corrupted.assign(originalBytes.begin(), originalBytes.end());
+        switch(corruption){
+        case 0u:
+            corrupted.assign({ 'B', 'A', 'D', '!' });
+            break;
+        case 1u:
+            corrupted.pop_back();
+            break;
+        case 2u:
+            corrupted.resize(originalBytes.size() + sizeof(u32), 0u);
+            break;
+        case 3u:
+            corrupted.assign(compute.bytecode().begin(), compute.bytecode().end());
+            break;
+        }
+        ASSERT_TRUE(WriteBinaryFile(bytecodeCachePath, corrupted));
+        ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+        ASSERT_TRUE(ReadBinaryFile(bytecodeCachePath, repaired, error));
+        AStringView resolvedEntryPoint;
+        ASSERT_EQ(Core::ResolveSpirvEntryPointName(
+            { repaired.data(), repaired.size() }, s_MAIN, Core::ShaderType::Pixel, resolvedEntryPoint
+        ), Core::SpirvEntryPointLookupResult::Found);
+        EXPECT_EQ(resolvedEntryPoint, s_MAIN);
+        UniquePtr<Core::Assets::IAsset> pixelAsset;
+        ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<Impl::PixelShaderAssetCodec>(
+            testArena, outputDirectory, pixelPath, pixelAsset, s_ExpectedDualCount
         ));
+        const auto& pixel = static_cast<const Impl::PixelShader&>(*pixelAsset);
+        EXPECT_EQ(AStringView(pixel.entryPoint()), s_MAIN);
     }
-
     EXPECT_EQ(logger.errorCount(), 0u);
-
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(root, error));
 }
 
 

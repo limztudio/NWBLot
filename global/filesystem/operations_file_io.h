@@ -79,18 +79,31 @@ template<typename ArenaT, typename Container>
 [[nodiscard]] inline bool ReadWholeBinaryFile(const Path<ArenaT>& path, Container& outData, ErrorCode& outError){
     outData.clear();
 
-    const u64 fileSize = FileSize(path, outError);
-    if(outError)
+    ClearError(outError);
+    InputFileStream stream(path, InputFileStream::binary | InputFileStream::ate);
+    if(!stream.is_open()){
+        if(FileSize(path, outError) == 0u && outError)
+            return false;
+        SetIOError(outError);
         return false;
+    }
 
-    if(fileSize > static_cast<u64>(Limit<usize>::s_Max))
+    const StreamOffset fileSizeAtEnd = stream.tellg();
+    if(fileSizeAtEnd < 0){
+        SetIOError(outError);
         return false;
-    if(!CanRepresentStreamSize(fileSize))
+    }
+    const u64 fileSize = static_cast<u64>(fileSizeAtEnd);
+    if(fileSize > static_cast<u64>(Limit<usize>::s_Max) || !CanRepresentStreamSize(fileSize)){
+        SetValueTooLargeError(outError);
         return false;
+    }
 
-    InputFileStream stream(path, InputFileStream::binary);
-    if(!stream.is_open())
+    stream.seekg(0, InputFileStream::beg);
+    if(!stream.good()){
+        SetIOError(outError);
         return false;
+    }
 
     outData.resize(static_cast<usize>(fileSize));
     if(fileSize == 0)
@@ -104,6 +117,7 @@ template<typename ArenaT, typename Container>
         return true;
 
     outData.clear();
+    SetIOError(outError);
     return false;
 }
 
@@ -127,6 +141,9 @@ template<typename ArenaT, typename StringT>
 
 template<typename ArenaT>
 [[nodiscard]] inline bool WriteTextFile(const Path<ArenaT>& path, const AStringView content){
+    if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(content.size())))
+        return false;
+
     GlobalFilesystemDetail::OutputFileStream stream(
         path,
         GlobalFilesystemDetail::OutputFileStream::binary | GlobalFilesystemDetail::OutputFileStream::trunc
@@ -134,10 +151,9 @@ template<typename ArenaT>
     if(!stream.is_open())
         return false;
 
-    if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(content.size())))
-        return false;
-
-    stream.write(content.data(), static_cast<GlobalFilesystemDetail::StreamSize>(content.size()));
+    if(!content.empty())
+        stream.write(content.data(), static_cast<GlobalFilesystemDetail::StreamSize>(content.size()));
+    stream.close();
     return stream.good();
 }
 
@@ -152,14 +168,14 @@ template<typename ArenaT, typename Container>
 
 template<typename ArenaT, typename Container>
 [[nodiscard]] inline bool WriteBinaryFile(const Path<ArenaT>& path, const Container& bytes){
+    if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(bytes.size())))
+        return false;
+
     GlobalFilesystemDetail::OutputFileStream stream(
         path,
         GlobalFilesystemDetail::OutputFileStream::binary | GlobalFilesystemDetail::OutputFileStream::trunc
     );
     if(!stream.is_open())
-        return false;
-
-    if(!GlobalFilesystemDetail::CanRepresentStreamSize(static_cast<u64>(bytes.size())))
         return false;
 
     if(!bytes.empty()){
@@ -168,6 +184,7 @@ template<typename ArenaT, typename Container>
             static_cast<GlobalFilesystemDetail::StreamSize>(bytes.size())
         );
     }
+    stream.close();
     return stream.good();
 }
 

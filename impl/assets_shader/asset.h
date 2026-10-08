@@ -24,11 +24,6 @@ public:
     virtual ~IShader()noexcept override = 0;
 
 
-public:
-    [[nodiscard]] const Core::Assets::AssetString& entryPoint()const noexcept{ return m_entryPoint; }
-    [[nodiscard]] const Core::Assets::AssetBytes& bytecode()const noexcept{ return m_bytecode; }
-
-
 protected:
     IShader(Core::Assets::AssetArena& arena, const Name& assetType, const Name& virtualPath = s_NameNone)noexcept
         : Core::Assets::IAsset(assetType, virtualPath)
@@ -38,8 +33,14 @@ protected:
     IShader(const IShader&) = default;
     IShader(IShader&&)noexcept = default;
 
+protected:
     IShader& operator=(const IShader&) = default;
     IShader& operator=(IShader&&)noexcept = default;
+
+
+public:
+    [[nodiscard]] const Core::Assets::AssetString& entryPoint()const noexcept{ return m_entryPoint; }
+    [[nodiscard]] const Core::Assets::AssetBytes& bytecode()const noexcept{ return m_bytecode; }
 
 
 protected:
@@ -68,6 +69,7 @@ public:
     TypedShader(TypedShader&&)noexcept = default;
     virtual ~TypedShader()noexcept override = 0;
 
+public:
     TypedShader& operator=(const TypedShader&) = default;
     TypedShader& operator=(TypedShader&&)noexcept = default;
 
@@ -90,6 +92,8 @@ class VertexShader final : public TypedShader<VertexShader>{
 public:
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::VertexStage;
 
+
+public:
     [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
@@ -98,13 +102,12 @@ public:
 };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class HullShader final : public TypedShader<HullShader>{
 public:
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::HullStage;
 
+
+public:
     [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
@@ -113,13 +116,12 @@ public:
 };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class DomainShader final : public TypedShader<DomainShader>{
 public:
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::DomainStage;
 
+
+public:
     [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
@@ -128,13 +130,12 @@ public:
 };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class GeometryShader final : public TypedShader<GeometryShader>{
 public:
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::GeometryStage;
 
+
+public:
     [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
@@ -143,13 +144,12 @@ public:
 };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class PixelShader final : public TypedShader<PixelShader>{
 public:
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::PixelStage;
 
+
+public:
     [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
@@ -158,13 +158,12 @@ public:
 };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class ComputeShader final : public TypedShader<ComputeShader>{
 public:
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::ComputeStage;
 
+
+public:
     [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
@@ -173,13 +172,12 @@ public:
 };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class AmplificationShader final : public TypedShader<AmplificationShader>{
 public:
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::AmplificationStage;
 
+
+public:
     [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
@@ -188,13 +186,12 @@ public:
 };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class MeshShader final : public TypedShader<MeshShader>{
 public:
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::MeshStage;
 
+
+public:
     [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
@@ -203,13 +200,12 @@ public:
 };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class RayGenerationShader final : public TypedShader<RayGenerationShader>{
 public:
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::RayGenerationStage;
 
+
+public:
     [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
@@ -218,13 +214,12 @@ public:
 };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class AnyHitShader final : public TypedShader<AnyHitShader>{
 public:
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::AnyHitStage;
 
+
+public:
     [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
@@ -233,13 +228,12 @@ public:
 };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class ClosestHitShader final : public TypedShader<ClosestHitShader>{
 public:
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::ClosestHitStage;
 
+
+public:
     [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
@@ -248,13 +242,12 @@ public:
 };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class MissShader final : public TypedShader<MissShader>{
 public:
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::MissStage;
 
+
+public:
     [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
@@ -263,13 +256,12 @@ public:
 };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class IntersectionShader final : public TypedShader<IntersectionShader>{
 public:
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::IntersectionStage;
 
+
+public:
     [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
@@ -278,13 +270,12 @@ public:
 };
 
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class CallableShader final : public TypedShader<CallableShader>{
 public:
     static constexpr Core::ShaderType::Enum s_Stage = Core::ShaderType::CallableStage;
 
+
+public:
     [[nodiscard]] static constexpr const Name& AssetTypeName()noexcept{ return ShaderAssetTypes::AssetTypeNameFromShaderType(s_Stage); }
 
 
@@ -297,10 +288,34 @@ public:
 
 
 #if defined(NWB_COOK)
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace ShaderAssetSerialization{
-    [[nodiscard]] bool Serialize(const IShader& shader, Core::Assets::AssetBytes& outBinary);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] bool Serialize(const IShader& shader, Core::Assets::AssetBytes& outBinary);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 };
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 template<typename ShaderT>
 class ShaderAssetCodec final : public Core::Assets::AssetCodec<ShaderT>{

@@ -19,65 +19,21 @@
 #define interface struct
 #endif
 
-#ifndef __has_attribute
-#define __has_attribute(x) 0
-#endif
-
-#ifndef __has_builtin
-#define __has_builtin(x) 0
-#endif
-
-#ifndef __has_declspec_attribute
-#define __has_declspec_attribute(x) 0
-#endif
-
-#if defined(__clang__)
-#define NWB_COMPILER_CLANG 1
-#else
-#define NWB_COMPILER_CLANG 0
-#endif
-
-#if defined(_MSC_VER) && !defined(__clang__)
-#define NWB_COMPILER_MSVC 1
-#else
-#define NWB_COMPILER_MSVC 0
-#endif
-
-#if defined(__clang_cl__) || (defined(_MSC_VER) && !defined(__clang__))
-#define NWB_COMPILER_FRONTEND_MSVC 1
-#else
-#define NWB_COMPILER_FRONTEND_MSVC 0
-#endif
-
-#if !NWB_COMPILER_FRONTEND_MSVC
-#define NWB_COMPILER_FRONTEND_GNU 1
-#else
-#define NWB_COMPILER_FRONTEND_GNU 0
-#endif
-
-#if !defined(NWB_DEBUG) && (defined(DEBUG) || defined(_DEBUG))
-#define NWB_DEBUG
-#endif
-
-#if !defined(NWB_OPTIMIZE) && !defined(NWB_FINAL) && (defined(NDEBUG) || defined(_NDEBUG))
-#define NWB_OPTIMIZE
+#if !defined(__clang__)
+#error "NWB requires a Clang-based compiler."
 #endif
 
 #if defined(NWB_DEBUG)
 #define NWB_INLINE inline
 #elif defined(NWB_OPTIMIZE) || defined(NWB_FINAL)
-#if NWB_COMPILER_FRONTEND_MSVC
-#define NWB_INLINE __forceinline
-#elif __has_attribute(always_inline) || defined(__GNUC__)
+#if __has_attribute(always_inline) || defined(__GNUC__)
 #define NWB_INLINE inline __attribute__((always_inline))
 #else
 #define NWB_INLINE inline
 #endif
 #endif
 
-#if NWB_COMPILER_FRONTEND_MSVC
-#define NWB_NOINLINE __declspec(noinline)
-#elif __has_attribute(noinline) || defined(__GNUC__)
+#if __has_attribute(noinline) || defined(__GNUC__)
 #define NWB_NOINLINE __attribute__((noinline))
 #else
 #define NWB_NOINLINE
@@ -85,16 +41,11 @@
 
 #if __has_attribute(vectorcall)
 #define NWB_VECTORCALL __attribute__((vectorcall))
-#elif NWB_COMPILER_FRONTEND_MSVC
-#define NWB_VECTORCALL __vectorcall
 #else
 #define NWB_VECTORCALL
 #endif
 
-#if NWB_COMPILER_FRONTEND_MSVC
-#define NWB_ALLOCATOR_PREFIX __declspec(allocator)
-#define NWB_ALLOCATOR_SUFFIX
-#elif __has_attribute(malloc) || defined(__GNUC__)
+#if __has_attribute(malloc) || defined(__GNUC__)
 #define NWB_ALLOCATOR_PREFIX
 #define NWB_ALLOCATOR_SUFFIX __attribute__((malloc))
 #else
@@ -106,9 +57,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if NWB_COMPILER_FRONTEND_MSVC
-#define NWB_DEBUGTRAP __debugbreak()
-#elif __has_builtin(__builtin_debugtrap)
+#if __has_builtin(__builtin_debugtrap)
 #define NWB_DEBUGTRAP __builtin_debugtrap()
 #elif __has_builtin(__builtin_trap)
 #define NWB_DEBUGTRAP __builtin_trap()

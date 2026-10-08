@@ -12,9 +12,6 @@
 #if defined(_MSC_VER)
 #if defined(_M_ARM64)
 #include <intrin.h>
-#if !defined(__clang__)
-#pragma intrinsic(__yield)
-#endif
 #endif
 
 #if defined(_M_IX86) || defined(_M_X64)

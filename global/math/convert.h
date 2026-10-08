@@ -481,24 +481,6 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat44Neon(const secondRow& src)noexcep
     return result;
 }
 
-#if defined(_MSC_VER) && !defined(__clang__) && !defined(_ARM64_DISTINCT_NEON_TYPES)
-template<typename secondRow>
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat34NeonAligned(const secondRow& src)noexcept{
-    SIMDMatrix result;
-    result.v[0] = vld1q_f32_ex(&src._11, 128);
-    result.v[1] = vld1q_f32_ex(&src._21, 128);
-    result.v[2] = vld1q_f32_ex(&src._31, 128);
-    result.v[3] = s_SIMDIdentityR3;
-    return result;
-}
-
-template<typename secondRow>
-NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat44NeonAligned(const secondRow& src)noexcept{
-    SIMDMatrix result = LoadFloat34NeonAligned(src);
-    result.v[3] = vld1q_f32_ex(&src._41, 128);
-    return result;
-}
-#endif
 #endif
 
 #if defined(NWB_HAS_SSE4)
@@ -589,11 +571,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL LoadFloat(const Float4& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(src.x, src.y, src.z, src.w);
 #elif defined (NWB_HAS_NEON)
-#if defined(_MSC_VER) && !defined(__clang__) && !defined(_ARM64_DISTINCT_NEON_TYPES)
-    return vld1q_f32_ex(src.raw, 128);
-#else
     return vld1q_f32(src.raw);
-#endif
 #elif defined(NWB_HAS_SSE4)
     return _mm_load_ps(src.raw);
 #endif
@@ -643,11 +621,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float34& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::LoadFloat34Scalar(src);
 #elif defined (NWB_HAS_NEON)
-#if defined(_MSC_VER) && !defined(__clang__) && !defined(_ARM64_DISTINCT_NEON_TYPES)
-    return SIMDConvertDetail::LoadFloat34NeonAligned(src);
-#else
     return SIMDConvertDetail::LoadFloat34Neon(src);
-#endif
 #elif defined(NWB_HAS_SSE4)
     return SIMDConvertDetail::LoadFloat34Sse<true>(src);
 #endif
@@ -656,11 +630,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL LoadFloat(const Float44& src)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::LoadFloat44Scalar(src);
 #elif defined (NWB_HAS_NEON)
-#if defined(_MSC_VER) && !defined(__clang__) && !defined(_ARM64_DISTINCT_NEON_TYPES)
-    return SIMDConvertDetail::LoadFloat44NeonAligned(src);
-#else
     return SIMDConvertDetail::LoadFloat44Neon(src);
-#endif
 #elif defined(NWB_HAS_SSE4)
     return SIMDConvertDetail::LoadFloat44Sse<true>(src);
 #endif
@@ -861,11 +831,7 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDVector src, Float4& dst)noexcept{
     dst.z = src.f[2];
     dst.w = src.f[3];
 #elif defined (NWB_HAS_NEON)
-#if defined(_MSC_VER) && !defined(__clang__) && !defined(_ARM64_DISTINCT_NEON_TYPES)
-    vst1q_f32_ex(dst.raw, src, 128);
-#else
     vst1q_f32(dst.raw, src);
-#endif
 #elif defined(NWB_HAS_SSE4)
     _mm_store_ps(dst.raw, src);
 #endif
@@ -927,15 +893,9 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float34& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     SIMDConvertDetail::StoreFloat34Scalar(src, dst);
 #elif defined (NWB_HAS_NEON)
-#if defined(_MSC_VER) && !defined(__clang__) && !defined(_ARM64_DISTINCT_NEON_TYPES)
-    vst1q_f32_ex(&dst._11, src.v[0], 128);
-    vst1q_f32_ex(&dst._21, src.v[1], 128);
-    vst1q_f32_ex(&dst._31, src.v[2], 128);
-#else
     vst1q_f32(&dst._11, src.v[0]);
     vst1q_f32(&dst._21, src.v[1]);
     vst1q_f32(&dst._31, src.v[2]);
-#endif
 #elif defined(NWB_HAS_SSE4)
     _mm_store_ps(&dst._11, src.v[0]);
     _mm_store_ps(&dst._21, src.v[1]);
@@ -957,17 +917,10 @@ NWB_INLINE void NWB_SIMD_CALL StoreFloat(SIMDMatrix src, Float44& dst)noexcept{
 #if defined(NWB_HAS_SCALAR)
     SIMDConvertDetail::StoreFloat44Scalar(src, dst);
 #elif defined (NWB_HAS_NEON)
-#if defined(_MSC_VER) && !defined(__clang__) && !defined(_ARM64_DISTINCT_NEON_TYPES)
-    vst1q_f32_ex(&dst._11, src.v[0], 128);
-    vst1q_f32_ex(&dst._21, src.v[1], 128);
-    vst1q_f32_ex(&dst._31, src.v[2], 128);
-    vst1q_f32_ex(&dst._41, src.v[3], 128);
-#else
     vst1q_f32(&dst._11, src.v[0]);
     vst1q_f32(&dst._21, src.v[1]);
     vst1q_f32(&dst._31, src.v[2]);
     vst1q_f32(&dst._41, src.v[3]);
-#endif
 #elif defined(NWB_HAS_SSE4)
     _mm_store_ps(&dst._11, src.v[0]);
     _mm_store_ps(&dst._21, src.v[1]);

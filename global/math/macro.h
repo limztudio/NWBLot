@@ -8,7 +8,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#if defined(__SSE4_1__) || defined(__SSE4_2__) || defined(_M_AVX) || defined(_M_AVX2) || (defined(_MSC_VER) && !defined(__clang__) && (defined(_M_X64) || defined(_M_AMD64) || (defined(_M_IX86_FP) && (_M_IX86_FP >= 2))))
+#if defined(__SSE4_1__) || defined(__SSE4_2__) || defined(_M_AVX) || defined(_M_AVX2)
 #define NWB_HAS_SSE4 1
 #endif
 

@@ -27,7 +27,7 @@ Windows hosts require Windows 10 version 1709 or newer. The launcher requires [I
 
 Windows builds also need Visual Studio 2022 Build Tools or Visual Studio 2022 with the C++ workload and a Windows SDK. Install the ARM64 C++ tools when building the ARM64 presets. CMake, Ninja, and LLVM may come from Visual Studio or standalone installations. Compilation requires Clang; the Microsoft tools provide the target ABI, runtime, headers, and libraries. Compiler frontend support retains GNU-style Clang/AppleClang and clang-cl; native `cl.exe` compilation is unsupported.
 
-Configuration selects a supported C++23-or-newer frontend mode and compiles a real `std::expected` probe. The compiler and target standard library must provide `__cpp_lib_expected >= 202202L`; older language/library combinations fail configuration. Current result contracts use global `Expected<T, E>`, `Unexpected<E>` and `MakeUnexpected(error)` from `global/expected.h`. See [produced values and expected failures](docs/expected_results.md) for admission, ownership and mutation rules.
+Configuration selects a supported C++23-or-newer frontend mode and compiles a real `std::expected` probe. The compiler and target standard library must provide `__cpp_lib_expected >= 202202L`; older language/library combinations fail configuration. First-party headers also enforce the Clang compiler requirement and query its supported attributes/builtins directly; CMake owns compiler/frontend selection. The current filesystem `Path` API always supports `char8_t` input, and `genericU8String()` returns `std::u8string`. Current result contracts use global `Expected<T, E>`, `Unexpected<E>` and `MakeUnexpected(error)` from `global/expected.h`. See [produced values and expected failures](docs/expected_results.md) for admission, ownership and mutation rules.
 
 The Vulkan SDK is optional. The repository vendors Vulkan headers and Volk; the SDK is a convenient source for `slangc`, validation layers, and Vulkan diagnostics.
 
@@ -93,7 +93,7 @@ Use `--with-profile` to start the log server with a launched application. Use `-
 | `opt` | `NWB_OPTIMIZE` | `-O2` | Kept |
 | `fin` | `NWB_FINAL` | `-O3` | Omitted |
 
-CMake defines the corresponding configuration macro directly. Use `defined(NWB_DEBUG)`, `defined(NWB_OPTIMIZE)`, or `defined(NWB_FINAL)` for configuration-specific code.
+CMake defines the corresponding configuration macro directly. Use `defined(NWB_DEBUG)`, `defined(NWB_OPTIMIZE)`, or `defined(NWB_FINAL)` for configuration-specific code. First-party headers do not infer NWB modes from `DEBUG`, `_DEBUG`, `NDEBUG`, or `_NDEBUG`; external compiler/runtime uses of those spellings remain separate.
 
 Use the exact lowercase configuration names `dbg`, `opt`, and `fin`. A single-config build tree defaults an omitted or empty `CMAKE_BUILD_TYPE` to `dbg` and rejects every other nonempty name, including `Debug`, `Release`, `OFF`, `0`, and case variants. Multi-config presets expose the same canonical names. Imported third-party libraries may map those names to their vendor `Debug`/`Release` artifacts; the project configuration names remain unchanged.
 

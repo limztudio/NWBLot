@@ -26,9 +26,7 @@ namespace GlobalFilesystemPathDetail{
 
 template<typename CharT>
 concept PathChar = SameAs<CharT, char> || SameAs<CharT, wchar>
-#if defined(__cpp_char8_t)
     || SameAs<CharT, char8_t>
-#endif
 ;
 
 template<typename SourceT>
@@ -298,11 +296,7 @@ public:
     [[nodiscard]] std::wstring genericWString()const{ return toStdString<wchar>(true); }
     [[nodiscard]] auto genericU8String()const{
         const std::string text = genericString();
-#if defined(__cpp_char8_t)
         return std::u8string(reinterpret_cast<const char8_t*>(text.data()), text.size());
-#else
-        return text;
-#endif
     }
 
     [[nodiscard]] bool isAbsolute()const noexcept{

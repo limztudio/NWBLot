@@ -89,7 +89,7 @@ using InitializerList = std::initializer_list<T>;
 #define NWB_TEXT(x) NWB_DETAIL_TEXT(x)
 
 #if defined(NWB_PLATFORM_WINDOWS)
-#if NWB_COMPILER_FRONTEND_MSVC || __has_declspec_attribute(dllexport)
+#if __has_declspec_attribute(dllexport)
 #define NWB_DLL_EXPORT __declspec(dllexport)
 #define NWB_DLL_IMPORT __declspec(dllimport)
 #elif __has_attribute(dllexport)

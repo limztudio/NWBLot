@@ -43,11 +43,10 @@ bool RendererRayTracingSystem::ensureSurfelSpawnPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_rayTracingState.m_surfelSpawnShader,
         AssetsGraphicsGi::s_SurfelSpawnShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_SurfelSpawn"
     )){
         m_rayTracingState.m_surfelSpawnPipelineFailed = true;
@@ -97,11 +96,10 @@ bool RendererRayTracingSystem::ensureSurfelAgeFreePipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_rayTracingState.m_surfelAgeFreeShader,
         AssetsGraphicsGi::s_SurfelAgeFreeShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_SurfelAgeFree"
     )){
         m_rayTracingState.m_surfelAgeFreePipelineFailed = true;
@@ -151,11 +149,10 @@ bool RendererRayTracingSystem::ensureSurfelHashBuildPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_rayTracingState.m_surfelHashBuildShader,
         AssetsGraphicsGi::s_SurfelHashBuildShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_SurfelHashBuild"
     )){
         m_rayTracingState.m_surfelHashBuildPipelineFailed = true;
@@ -205,11 +202,10 @@ bool RendererRayTracingSystem::ensureSurfelTracePipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_rayTracingState.m_surfelTraceShader,
         AssetsGraphicsGi::s_SurfelTraceShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_SurfelTrace"
     )){
         m_rayTracingState.m_surfelTracePipelineFailed = true;
@@ -490,11 +486,10 @@ bool RendererRayTracingSystem::ensureSurfelTraceHwPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_rayTracingState.m_surfelTraceHwShader,
         AssetsGraphicsGi::s_SurfelTraceHwShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_SurfelTraceHw"
     )){
         m_rayTracingState.m_surfelTraceHwPipelineFailed = true;
@@ -548,11 +543,10 @@ bool RendererRayTracingSystem::ensureSurfelResolvePipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_rayTracingState.m_surfelResolveShader,
         AssetsGraphicsGi::s_SurfelResolveShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_SurfelResolve"
     )){
         m_rayTracingState.m_surfelResolvePipelineFailed = true;
@@ -602,11 +596,10 @@ bool RendererRayTracingSystem::ensureSurfelUpsamplePipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_rayTracingState.m_surfelUpsampleShader,
         AssetsGraphicsGi::s_SurfelUpsampleShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_SurfelUpsample"
     )){
         m_rayTracingState.m_surfelUpsamplePipelineFailed = true;
@@ -656,11 +649,10 @@ bool RendererRayTracingSystem::ensureSurfelTraceBuildArgsPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_rayTracingState.m_surfelTraceBuildArgsShader,
         AssetsGraphicsGi::s_SurfelTraceBuildArgsShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_SurfelTraceBuildArgs"
     )){
         m_rayTracingState.m_surfelTraceBuildArgsPipelineFailed = true;

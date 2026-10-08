@@ -68,11 +68,10 @@ bool RendererRayTracingSystem::prepareRefractionResources(){
             return true;
         if(failed)
             return false;
-        if(!m_shaderSystem.loadShader(
+        if(!m_shaderSystem.loadShader<ComputeShader>(
             shader,
             hardware ? AssetsGraphicsRefraction::s_HwResolveShaderName : AssetsGraphicsRefraction::s_ScreenResolveShaderName,
             Core::ShaderArchive::s_DefaultVariant,
-            Core::ShaderType::Compute,
             hardware ? "ECSRender_RefractionHw" : "ECSRender_RefractionScreen"
         )){
             failed = true;

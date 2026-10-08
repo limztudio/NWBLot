@@ -37,11 +37,10 @@ bool RendererMaterialSystem::createObjectGeometryPipelineResources(
     auto& heap = device.getDescriptorHeap();
     // A single fixed engine decoder defines cache contents independently of the selected material or raster pass.
     if(!m_materialState.m_objectGeometryDecodePipeline){
-        if(!m_shaderSystem.loadShader(
+        if(!m_shaderSystem.loadShader<ComputeShader>(
             m_materialState.m_objectGeometryDecodeShader,
             AssetsGraphicsMesh::s_ObjectGeometryDecodeShaderName,
             Core::ShaderArchive::s_DefaultVariant,
-            Core::ShaderType::Compute,
             "ECSRender_ObjectGeometryDecode"
         ))
             return false;
@@ -56,11 +55,10 @@ bool RendererMaterialSystem::createObjectGeometryPipelineResources(
         if(!m_materialState.m_objectGeometryDecodePipeline)
             return false;
     }
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<VertexShader>(
         resources.objectGeometryVertexShader,
         meshShaderName,
         variantName,
-        Core::ShaderType::Vertex,
         "ECSRender_ObjectGeometryVS",
         &MaterialShaderStageNames::s_MeshObjectVertexArchiveStageName
     ))

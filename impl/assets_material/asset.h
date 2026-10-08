@@ -24,7 +24,8 @@ NWB_IMPL_BEGIN
 
 
 class Sampler;
-class Shader;
+interface IShader;
+class PixelShader;
 class Texture;
 
 
@@ -34,9 +35,9 @@ class Texture;
 // Transparent materials need all three pass shaders; opaque materials carry none.
 [[nodiscard]] inline bool HasValidMaterialAvboitPixelShaderContract(
     const bool transparent,
-    const Core::Assets::AssetRef<Shader>& accumulatePixelShader,
-    const Core::Assets::AssetRef<Shader>& occupancyPixelShader,
-    const Core::Assets::AssetRef<Shader>& extinctionPixelShader
+    const Core::Assets::AssetRef<PixelShader>& accumulatePixelShader,
+    const Core::Assets::AssetRef<PixelShader>& occupancyPixelShader,
+    const Core::Assets::AssetRef<PixelShader>& extinctionPixelShader
 )noexcept{
     if(transparent){
         return
@@ -449,7 +450,7 @@ public:
 public:
     static constexpr auto s_ShaderStageCount = static_cast<usize>(Core::ShaderType::Count);
 
-    using StageShaderArray = Array<Core::Assets::AssetRef<Shader>, s_ShaderStageCount>;
+    using StageShaderArray = Array<Core::Assets::AssetRef<IShader>, s_ShaderStageCount>;
     using TypedLayoutBlockVector = Core::Assets::AssetVector<MaterialTypedLayoutBlock>;
     using TypedLayoutFieldVector = Core::Assets::AssetVector<MaterialTypedLayoutField>;
     using TypedBlockByteVector = Core::Assets::AssetVector<u8>;
@@ -482,9 +483,9 @@ public:
     void setMaterialInterface(const Name& materialInterface)noexcept{ m_materialInterface = materialInterface; }
     void setShadingModelId(const u32 shadingModelId)noexcept{ m_shadingModelId = shadingModelId; }
     void setSurfaceDispatchId(const u32 surfaceDispatchId)noexcept{ m_surfaceDispatchId = surfaceDispatchId; }
-    void setAvboitAccumulatePixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset)noexcept{ m_avboitAccumulatePixelShader = shaderAsset; }
-    void setAvboitOccupancyPixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset)noexcept{ m_avboitOccupancyPixelShader = shaderAsset; }
-    void setAvboitExtinctionPixelShader(const Core::Assets::AssetRef<Shader>& shaderAsset)noexcept{ m_avboitExtinctionPixelShader = shaderAsset; }
+    void setAvboitAccumulatePixelShader(const Core::Assets::AssetRef<PixelShader>& shaderAsset)noexcept{ m_avboitAccumulatePixelShader = shaderAsset; }
+    void setAvboitOccupancyPixelShader(const Core::Assets::AssetRef<PixelShader>& shaderAsset)noexcept{ m_avboitOccupancyPixelShader = shaderAsset; }
+    void setAvboitExtinctionPixelShader(const Core::Assets::AssetRef<PixelShader>& shaderAsset)noexcept{ m_avboitExtinctionPixelShader = shaderAsset; }
     void setTransparent(const bool transparent)noexcept{ m_transparent = transparent; }
     void setTwoSided(const bool twoSided)noexcept{ m_twoSided = twoSided; }
     void setRefractive(const bool refractive)noexcept{ m_refractive = refractive; }
@@ -495,9 +496,26 @@ public:
         const TypedBlockByteVector& blockBytes
     );
     void setResourceReferences(const ResourceReferenceVector& resourceReferences);
-    bool setShaderForStage(Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<Shader>& shaderAsset)noexcept;
+    bool setShaderForStage(Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<IShader>& shaderAsset)noexcept;
 
-    bool findShaderForStage(Core::ShaderType::Enum shaderType, Core::Assets::AssetRef<Shader>& outShaderAsset)const noexcept;
+    bool findShaderForStage(Core::ShaderType::Enum shaderType, Core::Assets::AssetRef<IShader>& outShaderAsset)const noexcept;
+
+    template<typename TShader>
+        requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
+    bool setShader(const Core::Assets::AssetRef<TShader>& shaderAsset)noexcept{
+        static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
+        Core::Assets::AssetRef<IShader> shaderReference;
+        shaderReference.virtualPath = shaderAsset.virtualPath;
+        return setShaderForStage(TShader::s_Stage, shaderReference);
+    }
+
+    template<typename TShader>
+        requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
+    [[nodiscard]] bool findShader(Core::Assets::AssetRef<TShader>& outShaderAsset)const noexcept{
+        static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
+        outShaderAsset.virtualPath = m_stageShaders[Core::ShaderType::ToIndex(TShader::s_Stage)].virtualPath;
+        return outShaderAsset.valid();
+    }
 
 public:
     [[nodiscard]] const Core::Assets::AssetString& shaderVariant()const noexcept{ return m_shaderVariant; }
@@ -513,10 +531,10 @@ public:
     [[nodiscard]] u32 stageShaderCount()const noexcept{ return m_stageShaderCount; }
     // Cook-generated AVBOIT accumulate pixel shader for this material's transparent draw. Valid only for surface-authored transparent materials; missing means a cook/runtime contract failure.
     // Not a graphics stage: the material has one pixel stage, and this is the transparent-only shader the renderer selects by pass.
-    [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitAccumulatePixelShader()const noexcept{ return m_avboitAccumulatePixelShader; }
+    [[nodiscard]] const Core::Assets::AssetRef<PixelShader>& avboitAccumulatePixelShader()const noexcept{ return m_avboitAccumulatePixelShader; }
     // Occupancy/extinction twins of the accumulate shader, so all three AVBOIT passes read the same surface renderCoverage. Same validity contract as above.
-    [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitOccupancyPixelShader()const noexcept{ return m_avboitOccupancyPixelShader; }
-    [[nodiscard]] const Core::Assets::AssetRef<Shader>& avboitExtinctionPixelShader()const noexcept{ return m_avboitExtinctionPixelShader; }
+    [[nodiscard]] const Core::Assets::AssetRef<PixelShader>& avboitOccupancyPixelShader()const noexcept{ return m_avboitOccupancyPixelShader; }
+    [[nodiscard]] const Core::Assets::AssetRef<PixelShader>& avboitExtinctionPixelShader()const noexcept{ return m_avboitExtinctionPixelShader; }
     [[nodiscard]] bool transparent()const noexcept{ return m_transparent; }
     [[nodiscard]] bool twoSided()const noexcept{ return m_twoSided; }
     // Refractive-caster flag, separate from `transparent`. Refraction values stay shader-side (NwbMeshSurface).
@@ -542,9 +560,9 @@ private:
     bool m_transparent = false;
     bool m_twoSided = false;
     bool m_refractive = false;
-    Core::Assets::AssetRef<Shader> m_avboitAccumulatePixelShader;
-    Core::Assets::AssetRef<Shader> m_avboitOccupancyPixelShader;
-    Core::Assets::AssetRef<Shader> m_avboitExtinctionPixelShader;
+    Core::Assets::AssetRef<PixelShader> m_avboitAccumulatePixelShader;
+    Core::Assets::AssetRef<PixelShader> m_avboitOccupancyPixelShader;
+    Core::Assets::AssetRef<PixelShader> m_avboitExtinctionPixelShader;
 };
 
 

@@ -5,7 +5,7 @@
 #pragma once
 
 
-#include "api.h"
+#include "rhi/shader.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,6 +42,15 @@ namespace ShaderStageNames{
 #define NWB_SHADER_STAGE_NAME_CONSTANT(Stage, Text) inline constexpr Name s_##Stage##Name(Text);
 NWB_SHADER_STAGE_NAME_ENTRIES(NWB_SHADER_STAGE_NAME_CONSTANT)
 #undef NWB_SHADER_STAGE_NAME_CONSTANT
+
+[[nodiscard]] inline constexpr AStringView ArchiveStageTextFromShaderType(const ShaderType::Enum shaderType)noexcept{
+    switch(shaderType){
+#define NWB_SHADER_STAGE_TEXT_CASE(Stage, Text) case Core::ShaderType::Stage: return Text;
+        NWB_SHADER_STAGE_NAME_ENTRIES(NWB_SHADER_STAGE_TEXT_CASE)
+#undef NWB_SHADER_STAGE_TEXT_CASE
+        default: return {};
+    }
+}
 
 inline const Name& ArchiveStageNameFromShaderType(const ShaderType::Enum shaderType)noexcept{
     switch(shaderType){

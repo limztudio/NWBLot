@@ -2,9 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-shader asset;
+compute_shader asset;
 
-asset.stage = "cs";
 asset.optimization_level = "none";
 asset.entry_point = "main";
 asset.include_roots = ["engine/graphics"];

@@ -70,7 +70,6 @@ NWB_IMPL_BEGIN
 
 
 class ObjectGeometryCacheGraph;
-class Shader;
 class Mesh;
 struct GraphClearTimingRecordState;
 struct RayTracingSceneGraphReads;

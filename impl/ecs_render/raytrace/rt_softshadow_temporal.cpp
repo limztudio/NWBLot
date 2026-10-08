@@ -37,11 +37,10 @@ bool RendererRayTracingSystem::ensureSoftCombinedTemporalPipeline(){
             return false;
         }
     }
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         resolve.m_combinedTemporal.m_shader,
         AssetsGraphicsShadow::s_SoftReprojectMergeCombinedShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_CombinedShadowTemporal"
     )){
         resolve.m_combinedTemporalFailed = true;

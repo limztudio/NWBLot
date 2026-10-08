@@ -908,7 +908,7 @@ public:
     static bool WriteMaterialBindShaderProbeSource(
         TestArena& testArena,
         const Path& assetRoot,
-        AStringView stage,
+        AStringView shaderAssetType,
         AStringView metaFilename,
         AStringView sourceFilename,
         const AStringView sourceText

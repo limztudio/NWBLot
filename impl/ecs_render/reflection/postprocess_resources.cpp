@@ -162,7 +162,7 @@ bool RendererReflectionPostprocess::preparePipeline(
         if(!m_layout)
             return false;
     }
-    if(!m_shaders.loadShader(shader, name, variant, Core::ShaderType::Compute, name))
+    if(!m_shaders.loadShader<ComputeShader>(shader, name, variant, name))
         return false;
     Core::ComputePipelineDesc desc;
     desc

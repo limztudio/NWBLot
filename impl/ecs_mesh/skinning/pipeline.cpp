@@ -37,11 +37,10 @@ static bool LoadComputeShader(
     const Name& shaderName,
     const Name& debugName
 ){
-    return ShaderAssetLoader::Load(
+    return ShaderAssetLoader::Load<ComputeShader>(
         shader,
         shaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         debugName,
         graphics,
         assetManager,

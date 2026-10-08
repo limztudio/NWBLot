@@ -13,8 +13,10 @@
 #include "slang_compiler.h"
 #include "arena_names.h"
 #include "binary_payload.h"
+#include "shader_types.h"
 
 #include <core/assets/paths.h>
+#include <core/graphics/shader_stage_names.h>
 #include <core/metascript/parser.h>
 #include <core/common/log.h>
 
@@ -63,7 +65,6 @@ template<typename T>
 using ScratchVector = Vector<T, Alloc::ScratchArena>;
 template<typename T>
 using ScratchHashSet = HashSet<T, Alloc::ScratchArena, Hasher<T>, EqualTo<T>>;
-static constexpr AStringView s_AssetTypeShader = "shader";
 static constexpr AStringView s_AssetTypeInclude = "include";
 static constexpr AStringView s_SlangSourceExtension = ".slang";
 static constexpr AStringView s_SlangIncludeExtension = ".slangi";
@@ -439,8 +440,16 @@ bool ShaderCook::parseShaderMeta(
 ){
     outEntry = ShaderEntry(m_memoryArena);
 
-    if(__hidden_shader_cook::CanonicalAssetType(doc).view() != __hidden_shader_cook::s_AssetTypeShader)
-        return true;
+    const auto declaredAssetType = doc.assetType();
+    const AStringView assetTypeText(declaredAssetType.data(), declaredAssetType.size());
+    const Core::ShaderType::Enum shaderType = ShaderAssetTypes::ShaderTypeFromAssetTypeText(assetTypeText);
+    if(shaderType == Core::ShaderType::Invalid){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported shader asset type '{}'")
+            , PathToString<tchar>(nwbFilePath)
+            , StringConvert(assetTypeText)
+        );
+        return false;
+    }
 
     const Metascript::Value* assetValue = Assets::FindMetadataAssetMapValue<Metascript::Document, Metascript::Value>(nwbFilePath, doc, "Shader");
     if(!assetValue)
@@ -458,16 +467,18 @@ bool ShaderCook::parseShaderMeta(
     ))
         return false;
 
-    if(!Assets::ReadMetadataCompactStringField(nwbFilePath, asset, "Shader meta", "stage", false, outEntry.stage))
+    if(!outEntry.stage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(shaderType))){
+        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': failed to derive shader stage"), PathToString<tchar>(nwbFilePath));
         return false;
+    }
     outEntry.archiveStage = outEntry.stage;
     if(!Assets::ValidateMetadataAssetFields(
         nwbFilePath,
         asset,
         "Shader meta",
-        [isMesh = outEntry.stage.view() == "mesh"](const AStringView field){
+        [isMesh = shaderType == Core::ShaderType::MeshStage](const AStringView field)noexcept{
             return
-                field == "stage" || field == "ray_query" || field == "optimization_level" || field == "entry_point"
+                field == "ray_query" || field == "optimization_level" || field == "entry_point"
                 || field == "include_roots" || field == "defines" || (isMesh && field == "emit_mesh_compute_shadow")
             ;
         }
@@ -527,11 +538,6 @@ bool ShaderCook::parseShaderMeta(
 
     if(!__hidden_shader_cook::ParseDefines(nwbFilePath, asset, m_memoryArena, outEntry.defineValues))
         return false;
-
-    if(outEntry.stage.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': stage is required"), PathToString<tchar>(nwbFilePath));
-        return false;
-    }
 
     return true;
 }

@@ -182,9 +182,8 @@ bool RayTracingOpticalBoundsFinalizeResources::ensurePipeline(RendererShaderSyst
             return false;
         }
     }
-    if(!shaderSystem.loadShader(
-        m_shader, Name("engine/graphics/raytrace/optical_bounds_finalize_cs"), ::__hidden_optical_shader::s_DefaultShaderVariant,
-        Core::ShaderType::Compute, Name("RayOpticalBoundsFinalize")
+    if(!shaderSystem.loadShader<ComputeShader>(
+        m_shader, Name("engine/graphics/raytrace/optical_bounds_finalize_cs"), ::__hidden_optical_shader::s_DefaultShaderVariant, Name("RayOpticalBoundsFinalize")
     ))
         return false;
     Core::ComputePipelineDesc desc;

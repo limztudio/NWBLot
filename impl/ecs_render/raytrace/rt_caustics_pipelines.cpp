@@ -47,11 +47,10 @@ bool RendererRayTracingSystem::ensureSwCausticPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_rayTracingState.m_swCausticShader,
         AssetsGraphicsCaustic::s_SwPhotonShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_SwCausticPhotons"
     )){
         m_rayTracingState.m_swCausticPipelineFailed = true;
@@ -130,11 +129,10 @@ bool RendererRayTracingSystem::ensureCausticResolvePipeline(){
     for(const StageRequest& stage : stages){
         if(stage.m_state.m_pipeline)
             continue;
-        if(!m_shaderSystem.loadShader(
+        if(!m_shaderSystem.loadShader<ComputeShader>(
             stage.m_state.m_shader,
             AssetsGraphicsCaustic::s_ResolveShaderName,
             stage.m_variant,
-            Core::ShaderType::Compute,
             "ECSRender_CausticResolve"
         )){
             resolve.m_failed = true;
@@ -185,11 +183,10 @@ bool RendererRayTracingSystem::ensureCausticGeometryDownsamplePipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_rayTracingState.m_causticGeometryDownsampleShader,
         AssetsGraphicsCaustic::s_GeometryDownsampleShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_CausticGeometryDownsample"
     )){
         m_rayTracingState.m_causticGeometryDownsamplePipelineFailed = true;
@@ -265,11 +262,10 @@ bool RendererRayTracingSystem::ensureCausticAccumulatorDecayPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_rayTracingState.m_causticAccumulatorDecayShader,
         AssetsGraphicsCaustic::s_AccumulatorDecayShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_CausticAccumulatorDecay"
     )){
         m_rayTracingState.m_causticAccumulatorDecayPipelineFailed = true;
@@ -336,9 +332,9 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
     Core::ShaderHandle missShader;
     Core::ShaderHandle closestHitShader;
     if(
-        !m_shaderSystem.loadShader(raygenShader, AssetsGraphicsCaustic::s_HwRaygenShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::RayGeneration, "ECSRender_CausticHwRaygen")
-        || !m_shaderSystem.loadShader(missShader, AssetsGraphicsCaustic::s_HwMissShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Miss, "ECSRender_CausticHwMiss")
-        || !m_shaderSystem.loadShader(closestHitShader, AssetsGraphicsCaustic::s_HwClosestHitShaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::ClosestHit, "ECSRender_CausticHwClosestHit")
+        !m_shaderSystem.loadShader<RayGenerationShader>(raygenShader, AssetsGraphicsCaustic::s_HwRaygenShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CausticHwRaygen")
+        || !m_shaderSystem.loadShader<MissShader>(missShader, AssetsGraphicsCaustic::s_HwMissShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CausticHwMiss")
+        || !m_shaderSystem.loadShader<ClosestHitShader>(closestHitShader, AssetsGraphicsCaustic::s_HwClosestHitShaderName, Core::ShaderArchive::s_DefaultVariant, "ECSRender_CausticHwClosestHit")
     ){
         m_rayTracingState.m_hwCausticPipelineFailed = true;
         return false;

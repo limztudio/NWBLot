@@ -31,6 +31,8 @@ Shader asset binary payload helpers, including SPIR-V bytecode payload validatio
 
 Runtime SPIR-V entry-point parsing is owned by `core/graphics/spirv_entry_point.*` because it maps SPIR-V execution models to engine `ShaderType` values for runtime shader setup. Do not move shader payload helpers into `core/graphics` only because runtime parsing also needs SPIR-V constants, and do not make core graphics depend on `impl/assets_shader` for runtime parsing.
 
+Concrete shader assets reuse that neutral parser at their admission boundary to validate the exact entry point and physical stage. `IShader`, concrete stage types, their codecs, and shared payload encoding remain owned by `impl/assets_shader`; archive roles do not change physical asset types or justify provider-specific consumer includes.
+
 ## Still Invalid
 
 Do not use this exception to justify these shapes:

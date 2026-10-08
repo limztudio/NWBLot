@@ -241,7 +241,7 @@ static bool ParseMaterialStageShaders(
         const Core::ShaderType::Enum shaderType =
             Core::ShaderStageNames::ShaderTypeFromArchiveStageName(ToName(stageKeyText));
         const Name shaderName = ToName(shaderPath);
-        Core::Assets::AssetRef<Shader> shaderAsset;
+        Core::Assets::AssetRef<IShader> shaderAsset;
         shaderAsset.virtualPath = shaderName;
         if(!Core::ShaderType::IsValid(shaderType) || !shaderAsset.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage entries must not be empty"), PathToString<tchar>(nwbFilePath));

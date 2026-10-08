@@ -414,7 +414,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
         }
 
         const Name shaderName(shaderNameHash);
-        Core::Assets::AssetRef<Shader> shaderAsset;
+        Core::Assets::AssetRef<IShader> shaderAsset;
         shaderAsset.virtualPath = shaderName;
         if(!Core::ShaderType::IsValid(shaderType) || !shaderAsset.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: shader stage entries must not be empty"));
@@ -455,7 +455,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
     }
 
     // Optional per-material AVBOIT pixel shaders (transparent materials only): accumulate, occupancy, extinction, each a presence flag plus shader name hash.
-    const auto readOptionalAvboitPixelShader = [&](const TStringView passLabel, Core::Assets::AssetRef<Shader>& outShaderRef) -> bool{
+    const auto readOptionalAvboitPixelShader = [&](const TStringView passLabel, Core::Assets::AssetRef<PixelShader>& outShaderRef) -> bool{
         u32 hasShader = 0u;
         if(!ReadPOD(binary, cursor, hasShader)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing AVBOIT {} pixel shader presence flag"), passLabel);
@@ -471,7 +471,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: missing AVBOIT {} pixel shader name"), passLabel);
                 return false;
             }
-            Core::Assets::AssetRef<Shader> shaderRef;
+            Core::Assets::AssetRef<PixelShader> shaderRef;
             shaderRef.virtualPath = Name(shaderNameHash);
             if(!shaderRef.valid()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Material::loadBinary failed: AVBOIT {} pixel shader name is empty"), passLabel);
@@ -506,7 +506,7 @@ bool Material::loadBinary(const Core::Assets::AssetBytes& binary){
 }
 
 void Material::clearStageShaders()noexcept{
-    for(Core::Assets::AssetRef<Shader>& shaderAsset : m_stageShaders)
+    for(Core::Assets::AssetRef<IShader>& shaderAsset : m_stageShaders)
         shaderAsset.reset();
     m_stageShaderCount = 0;
 }
@@ -531,11 +531,11 @@ void Material::setResourceReferences(const ResourceReferenceVector& resourceRefe
     m_resourceReferences.assign(resourceReferences.begin(), resourceReferences.end());
 }
 
-bool Material::setShaderForStage(const Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<Shader>& shaderAsset)noexcept{
+bool Material::setShaderForStage(const Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<IShader>& shaderAsset)noexcept{
     if(!Core::ShaderType::IsValid(shaderType) || !shaderAsset.valid())
         return false;
 
-    Core::Assets::AssetRef<Shader>& storedShader = m_stageShaders[Core::ShaderType::ToIndex(shaderType)];
+    Core::Assets::AssetRef<IShader>& storedShader = m_stageShaders[Core::ShaderType::ToIndex(shaderType)];
     if(!storedShader.valid())
         ++m_stageShaderCount;
 
@@ -543,7 +543,7 @@ bool Material::setShaderForStage(const Core::ShaderType::Enum shaderType, const 
     return true;
 }
 
-bool Material::findShaderForStage(const Core::ShaderType::Enum shaderType, Core::Assets::AssetRef<Shader>& outShaderAsset)const noexcept{
+bool Material::findShaderForStage(const Core::ShaderType::Enum shaderType, Core::Assets::AssetRef<IShader>& outShaderAsset)const noexcept{
     outShaderAsset.reset();
     if(!Core::ShaderType::IsValid(shaderType))
         return false;

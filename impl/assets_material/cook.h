@@ -29,7 +29,7 @@ NWB_IMPL_BEGIN
 
 
 struct MaterialCookEntry{
-    using StageShaderMap = MaterialCookMap<Core::ShaderType::Enum, Core::Assets::AssetRef<Shader>>;
+    using StageShaderMap = MaterialCookMap<Core::ShaderType::Enum, Core::Assets::AssetRef<IShader>>;
     using ParameterMap = MaterialBindParameterMap;
 
     // Readable source text (not Name); the cook builds paths and dedup keys from it.

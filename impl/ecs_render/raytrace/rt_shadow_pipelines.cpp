@@ -49,11 +49,10 @@ bool RendererRayTracingSystem::ensureShadowPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_rayTracingState.m_shadowShader,
         AssetsGraphicsShadow::s_RayQueryShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_ShadowRayQuery"
     )){
         m_rayTracingState.m_shadowPipelineFailed = true;
@@ -106,11 +105,10 @@ bool RendererRayTracingSystem::ensureShadowSoftPipeline(){
         return false;
     }
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_rayTracingState.m_shadowSoftShader,
         AssetsGraphicsShadow::s_RayQuerySoftShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_ShadowRayQuerySoft"
     )){
         m_rayTracingState.m_shadowSoftPipelineFailed = true;
@@ -230,11 +228,10 @@ bool RendererRayTracingSystem::ensureSwShadowPassPipeline(Core::ShaderHandle& sh
     if(pipeline)
         return true;
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         shader,
         shaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         Name(debugLabel)
     ))
         return false;

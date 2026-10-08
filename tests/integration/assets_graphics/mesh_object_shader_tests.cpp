@@ -54,28 +54,27 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
     const Path metadataPath = root / "shader.nwb";
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "void main(){}\n"));
     struct MetadataCase{
-        AStringView stage;
+        AStringView shaderAssetType;
         AStringView fields;
         bool accepted;
     };
     constexpr MetadataCase s_Cases[] = {
-        { "mesh", "", true },
-        { "ps", "", true },
-        { "mesh", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
-        { "mesh", "asset.mesh_object_vertex = \"\";\n", false },
-        { "cs", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
-        { "vs", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
-        { "ps", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
-        { "mesh", "asset.mesh_object_cull = \"object_cull_cs.slang\";\n", false },
+        { "mesh_shader", "", true },
+        { "pixel_shader", "", true },
+        { "mesh_shader", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
+        { "mesh_shader", "asset.mesh_object_vertex = \"\";\n", false },
+        { "compute_shader", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
+        { "vertex_shader", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
+        { "pixel_shader", "asset.mesh_object_vertex = \"object_vs.slang\";\n", false },
+        { "mesh_shader", "asset.mesh_object_cull = \"object_cull_cs.slang\";\n", false },
     };
     Impl::ShaderCook shaderCook(testArena.arena);
     Impl::ShaderCook::ShaderEntry entry(testArena.arena);
     for(const MetadataCase& testCase : s_Cases){
-        SCOPED_TRACE(testCase.stage);
+        SCOPED_TRACE(testCase.shaderAssetType);
         SCOPED_TRACE(testCase.fields);
-        Impl::ShaderCook::CookString metadata("shader asset;\nasset.stage = \"", testArena.arena);
-        metadata.append(testCase.stage.data(), testCase.stage.size());
-        metadata.append("\";\nasset.entry_point = \"main\";\n");
+        Impl::ShaderCook::CookString metadata(testCase.shaderAssetType, testArena.arena);
+        metadata.append(" asset;\nasset.entry_point = \"main\";\n");
         metadata.append(testCase.fields.data(), testCase.fields.size());
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, AStringView(metadata.data(), metadata.size())));
         const u32 priorErrors = logger.errorCount();

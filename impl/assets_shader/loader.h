@@ -31,7 +31,7 @@ namespace ShaderAssetLoader{
 
 
 template<typename ShaderPathResolver>
-[[nodiscard]] bool Load(
+[[nodiscard]] bool LoadForStage(
     Core::ShaderHandle& outShader,
     const Name& shaderName,
     AStringView variantName,
@@ -88,19 +88,29 @@ template<typename ShaderPathResolver>
         return false;
     }
 
-    UniquePtr<Core::Assets::IAsset> loadedAsset;
-    const Shader* loadedShader = assetManager.loadTypedSync<Shader>(
-        shaderVirtualPath,
-        loadedAsset,
-        ownerName,
-        "shader"
-    );
-    if(!loadedShader)
+    const Core::ShaderType::Enum physicalStage = Core::ShaderType::ToEnum(shaderType);
+    const Name& assetType = ShaderAssetTypes::AssetTypeNameFromShaderType(physicalStage);
+    if(!assetType){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: unsupported physical shader stage {}"), ownerName, static_cast<u32>(shaderType));
         return false;
+    }
 
-    const Shader& shaderAsset = *loadedShader;
+    UniquePtr<Core::Assets::IAsset> loadedAsset;
+    if(!assetManager.loadSync(assetType, shaderVirtualPath, loadedAsset)){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load {} asset '{}'")
+            , ownerName
+            , StringConvert(assetType.resolvedText())
+            , StringConvert(shaderVirtualPath.resolvedText())
+        );
+        return false;
+    }
+    if(!loadedAsset || loadedAsset->assetType() != assetType){
+        NWB_LOGGER_ERROR(NWB_TEXT("{}: loaded shader asset has an unexpected concrete type"), ownerName);
+        return false;
+    }
+
+    const IShader& shaderAsset = *checked_cast<const IShader*>(loadedAsset.get());
     const Core::Assets::AssetBytes& shaderBinary = shaderAsset.bytecode();
-    // Shader::loadBinary already ran DecodeAssetPayload; keep a debug-only invariant here.
     NWB_ASSERT(!shaderAsset.entryPoint().empty() && !shaderBinary.empty() && (shaderBinary.size() & 3u) == 0u);
 
     Core::ShaderDesc shaderDesc;
@@ -120,6 +130,35 @@ template<typename ShaderPathResolver>
     }
 
     return true;
+}
+
+
+template<typename ShaderT, typename ShaderPathResolver>
+    requires(IsBaseOf_V<IShader, ShaderT> && !IsAbstract_V<ShaderT>)
+[[nodiscard]] bool Load(
+    Core::ShaderHandle& outShader,
+    const Name& shaderName,
+    const AStringView variantName,
+    const Name& debugName,
+    Core::GraphicsRuntime& graphics,
+    Core::Assets::AssetManager& assetManager,
+    ShaderPathResolver& shaderPathResolver,
+    const TStringView ownerName,
+    const Name* archiveStageName = nullptr
+){
+    static_assert(Core::ShaderType::IsValid(ShaderT::s_Stage));
+    return LoadForStage(
+        outShader,
+        shaderName,
+        variantName,
+        Core::ShaderType::ToMask(ShaderT::s_Stage),
+        debugName,
+        graphics,
+        assetManager,
+        shaderPathResolver,
+        ownerName,
+        archiveStageName
+    );
 }
 
 

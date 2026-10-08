@@ -226,33 +226,30 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
     }
 
     if(!m_csgState.m_intervalPeelComputeShader){
-        if(!m_shaderSystem.loadShader(
+        if(!m_shaderSystem.loadShader<ComputeShader>(
             m_csgState.m_intervalPeelComputeShader,
             AssetsGraphicsCsg::s_IntervalPeelComputeShaderName,
             Core::ShaderArchive::s_DefaultVariant,
-            Core::ShaderType::Compute,
             "ECSRender_CsgIntervalPeelCS"
         ))
             return false;
     }
 
     if(!m_csgState.m_receiverSpanBuildComputeShader){
-        if(!m_shaderSystem.loadShader(
+        if(!m_shaderSystem.loadShader<ComputeShader>(
             m_csgState.m_receiverSpanBuildComputeShader,
             AssetsGraphicsCsg::s_ReceiverSpanBuildComputeShaderName,
             Core::ShaderArchive::s_DefaultVariant,
-            Core::ShaderType::Compute,
             "ECSRender_CsgReceiverSpanBuildCS"
         ))
             return false;
     }
 
     if(!m_csgState.m_intervalCombineComputeShader){
-        if(!m_shaderSystem.loadShader(
+        if(!m_shaderSystem.loadShader<ComputeShader>(
             m_csgState.m_intervalCombineComputeShader,
             AssetsGraphicsCsg::s_IntervalCombineComputeShaderName,
             Core::ShaderArchive::s_DefaultVariant,
-            Core::ShaderType::Compute,
             "ECSRender_CsgIntervalCombineCS"
         ))
             return false;
@@ -263,11 +260,10 @@ bool RendererCsgSystem::createCsgIntervalPeelResources(DeferredFrameTargets& tar
             return false;
 
         if(!m_csgState.m_intervalCapFillPixelShader){
-            if(!m_shaderSystem.loadShader(
+            if(!m_shaderSystem.loadShader<PixelShader>(
                 m_csgState.m_intervalCapFillPixelShader,
                 AssetsGraphicsCsg::s_IntervalCapFillPixelShaderName,
                 Core::ShaderArchive::s_DefaultVariant,
-                Core::ShaderType::Pixel,
                 "ECSRender_CsgIntervalCapFillPS"
             ))
                 return false;

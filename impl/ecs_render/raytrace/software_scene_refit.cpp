@@ -138,7 +138,7 @@ bool SoftwareSceneRefitResources::ensurePipeline(RendererShaderSystem& shaderSys
         if(!m_bindingLayout)
             return false;
     }
-    if(!shaderSystem.loadShader(m_shader, Name("engine/graphics/bvh/scene_refit_cs"), ::__hidden_refit_shader::s_DefaultShaderVariant, Core::ShaderType::Compute, Name("SoftwareSceneRefit")))
+    if(!shaderSystem.loadShader<ComputeShader>(m_shader, Name("engine/graphics/bvh/scene_refit_cs"), ::__hidden_refit_shader::s_DefaultShaderVariant, Name("SoftwareSceneRefit")))
         return false;
     Core::ComputePipelineDesc desc;
     desc

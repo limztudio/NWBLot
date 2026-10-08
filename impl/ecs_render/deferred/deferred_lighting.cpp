@@ -146,11 +146,10 @@ bool RendererDeferredSystem::createDeferredLightingResources(){
     }
 
     // Shading is material-driven via the generated BXDF dispatch.
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_deferredState.m_lightingComputeShader,
         AssetsGraphicsDeferred::s_LightingComputeShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_DeferredLightingCS"
     ))
         return false;

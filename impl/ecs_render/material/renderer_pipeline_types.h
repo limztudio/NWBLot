@@ -25,7 +25,8 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class Shader;
+class PixelShader;
+class MeshShader;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -162,13 +163,13 @@ struct MaterialSurfaceInfo{
     Name materialName = s_NameNone;
     Name materialInterface = s_NameNone;
     Core::GraphicsString shaderVariant;
-    Core::Assets::AssetRef<Shader> pixelShader;
-    Core::Assets::AssetRef<Shader> meshShader;
+    Core::Assets::AssetRef<PixelShader> pixelShader;
+    Core::Assets::AssetRef<MeshShader> meshShader;
     // Transparent surface materials require this cook-generated AVBOIT accumulation shader; opaque materials carry none.
-    Core::Assets::AssetRef<Shader> avboitAccumulatePixelShader;
+    Core::Assets::AssetRef<PixelShader> avboitAccumulatePixelShader;
     // Occupancy/extinction must evaluate the same surface.renderCoverage and follow the same presence contract.
-    Core::Assets::AssetRef<Shader> avboitOccupancyPixelShader;
-    Core::Assets::AssetRef<Shader> avboitExtinctionPixelShader;
+    Core::Assets::AssetRef<PixelShader> avboitOccupancyPixelShader;
+    Core::Assets::AssetRef<PixelShader> avboitExtinctionPixelShader;
     u64 typedLayoutHash = 0u;
     MaterialTypedLayoutBlockVector typedLayoutBlocks;
     MaterialTypedLayoutFieldVector typedLayoutFields;

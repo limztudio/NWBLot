@@ -96,7 +96,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         if(!csg && index >= 8u && index <= 12u)
             continue;
         if(
-            !state.m_shaders[index] && !m_shaderSystem.loadShader(state.m_shaders[index], names[index], variants[index], stages[index],
+            !state.m_shaders[index] && !m_shaderSystem.loadShaderForStage(state.m_shaders[index], names[index], variants[index], stages[index],
             Name("ECSRender_LightSpaceShadow"))
         ){
             state.m_pipelineFailed = true;

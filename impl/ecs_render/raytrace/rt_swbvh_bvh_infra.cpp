@@ -50,11 +50,10 @@ bool RendererRayTracingSystem::ensureBvhSortPipeline(){
         }
     }
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_rayTracingState.m_bvhSortShader,
         AssetsGraphicsBvh::s_BitonicSortShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_BvhBitonicSort"
     )){
         m_rayTracingState.m_bvhSortPipelineFailed = true;
@@ -287,7 +286,7 @@ bool RendererRayTracingSystem::ensureBvhBuildPipeline(){
     )->bool{
         if(pipeline)
             return true;
-        if(!m_shaderSystem.loadShader(shader, shaderName, Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Compute, Name(debugLabel)))
+        if(!m_shaderSystem.loadShader<ComputeShader>(shader, shaderName, Core::ShaderArchive::s_DefaultVariant, Name(debugLabel)))
             return false;
 
         Core::ComputePipelineDesc pipelineDesc;

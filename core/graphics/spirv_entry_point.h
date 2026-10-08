@@ -5,7 +5,9 @@
 #pragma once
 
 
-#include "api.h"
+#include "rhi/shader.h"
+
+#include <global/binary.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -35,6 +37,14 @@ namespace SpirvEntryPointLookupResult{
 [[nodiscard]] SpirvEntryPointLookupResult::Enum ResolveSpirvEntryPointName(
     const u32* words,
     usize wordCount,
+    AStringView entryName,
+    ShaderType::Mask shaderType,
+    AStringView& outEntryPointName
+)noexcept;
+
+// Byte backing may be unaligned; the result borrows the original module bytes.
+[[nodiscard]] SpirvEntryPointLookupResult::Enum ResolveSpirvEntryPointName(
+    BinaryByteView bytecode,
     AStringView entryName,
     ShaderType::Mask shaderType,
     AStringView& outEntryPointName

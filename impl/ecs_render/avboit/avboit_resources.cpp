@@ -67,24 +67,22 @@ bool RendererAvboitSystem::createAvboitResources(){
         return false;
     }
 
-    auto loadAvboitShader = [&](
+    auto loadAvboitComputeShader = [&](
         Core::ShaderHandle& outShader,
         const Name& shaderName,
-        const Core::ShaderType::Mask shaderType,
         const Name& debugName
     ) -> bool{
-        return m_shaderSystem.loadShader(
+        return m_shaderSystem.loadShader<ComputeShader>(
             outShader,
             shaderName,
             Core::ShaderArchive::s_DefaultVariant,
-            shaderType,
             debugName
         );
     };
 
     if(
-        !loadAvboitShader(m_avboitState.m_depthWarpComputeShader, AssetsGraphicsAvboit::s_DepthWarpComputeShaderName, Core::ShaderType::Compute, "ECSRender_AvboitDepthWarpCS")
-        || !loadAvboitShader(m_avboitState.m_integrateComputeShader, AssetsGraphicsAvboit::s_IntegrateComputeShaderName, Core::ShaderType::Compute, "ECSRender_AvboitIntegrateCS")
+        !loadAvboitComputeShader(m_avboitState.m_depthWarpComputeShader, AssetsGraphicsAvboit::s_DepthWarpComputeShaderName, "ECSRender_AvboitDepthWarpCS")
+        || !loadAvboitComputeShader(m_avboitState.m_integrateComputeShader, AssetsGraphicsAvboit::s_IntegrateComputeShaderName, "ECSRender_AvboitIntegrateCS")
     )
         return false;
 

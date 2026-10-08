@@ -502,8 +502,8 @@ bool RendererReflectionSystem::preparePipelines(const bool prepareHardware){
     ){
         if(pipeline)
             return true;
-        if(!m_shaders.loadShader(
-            shader, shaderName, variant, Core::ShaderType::Compute, debugName
+        if(!m_shaders.loadShader<ComputeShader>(
+            shader, shaderName, variant, debugName
         ))
             return false;
         Core::ComputePipelineDesc desc;

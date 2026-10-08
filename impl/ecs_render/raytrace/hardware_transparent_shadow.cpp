@@ -83,8 +83,8 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
     for(u32 i = 0u; i < LengthOf(state.m_pipelines); ++i){
         if(state.m_pipelines[i])
             continue;
-        if(!m_shaderSystem.loadShader(
-            state.m_shaders[i], shaderNames[i], Core::ShaderArchive::s_DefaultVariant, Core::ShaderType::Compute,
+        if(!m_shaderSystem.loadShader<ComputeShader>(
+            state.m_shaders[i], shaderNames[i], Core::ShaderArchive::s_DefaultVariant,
             "ECSRender_HardwareTransparentShadow"
         )){
             state.m_pipelineFailed = true;

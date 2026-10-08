@@ -15,7 +15,7 @@
 #include <impl/assets_csg/cook.h>
 #include <impl/assets_material/cook.h>
 #include <impl/assets_material/shader_stage_names.h>
-#include <impl/assets_shader/asset.h>
+#include <impl/assets_shader/shader_types.h>
 #include <impl/assets_shader/cook.h>
 #include <core/assets/volume/volume_prepare_registry.h>
 #include <core/assets/cook_metadata.h>
@@ -108,7 +108,7 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
 ){
     using namespace Core::Assets;
 
-    if(context.assetType == Shader::AssetTypeName()){
+    if(ShaderAssetTypes::ShaderTypeFromAssetType(context.assetType) != Core::ShaderType::Invalid){
         GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
         ShaderCook::ShaderEntry shaderEntry(context.cookArena);
         if(!graphicsMetadata.shaderCook.parseShaderMeta(context.discoveredNwbFile.filePath, context.doc, shaderEntry, context.scratchArena))

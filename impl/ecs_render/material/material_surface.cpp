@@ -6,6 +6,7 @@
 #include "sampled_texture_collection.h"
 
 #include <impl/assets_material/asset.h>
+#include <impl/assets_shader/asset.h>
 #include <impl/ecs_render/material/renderer_material_state.h>
 
 #include <core/assets/manager.h>
@@ -518,8 +519,8 @@ bool RendererMaterialSystem::createMaterialSurfaceInfo(const Core::Assets::Asset
     createdInfo.shaderVariant.reserve(material.shaderVariant().size());
     createdInfo.shaderVariant.assign(material.shaderVariant().data(), material.shaderVariant().size());
 
-    const bool hasPixelShader = material.findShaderForStage(Core::ShaderType::PixelStage, createdInfo.pixelShader);
-    const bool hasMeshShader = material.findShaderForStage(Core::ShaderType::MeshStage, createdInfo.meshShader);
+    const bool hasPixelShader = material.findShader(createdInfo.pixelShader);
+    const bool hasMeshShader = material.findShader(createdInfo.meshShader);
     createdInfo.avboitAccumulatePixelShader = material.avboitAccumulatePixelShader();
     createdInfo.avboitOccupancyPixelShader = material.avboitOccupancyPixelShader();
     createdInfo.avboitExtinctionPixelShader = material.avboitExtinctionPixelShader();

@@ -6,6 +6,13 @@ elseif(NOT NWB_GRAPHICS_BACKEND STREQUAL "Vulkan")
     message(FATAL_ERROR "Unknown graphics backend: ${NWB_GRAPHICS_BACKEND}")
 endif()
 
+nwb_declare_static_library(nwb_shader_bytecode)
+target_sources(nwb_shader_bytecode PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/spirv_entry_point.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/spirv_entry_point.h"
+)
+target_link_libraries(nwb_shader_bytecode PUBLIC nwb_common)
+
 nwb_declare_static_library(nwb_shader_archive)
 target_sources(nwb_shader_archive PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/shader_archive.cpp"
@@ -37,7 +44,6 @@ target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/pipeline_helpers.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/rhi/resource_state_selection.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/rhi/resource_state_selection.h"
-    "${CMAKE_CURRENT_LIST_DIR}/spirv_entry_point.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/rhi/hardware_ray_tracing_policy.h"
     "${CMAKE_CURRENT_LIST_DIR}/resource_base.h"
     "${CMAKE_CURRENT_LIST_DIR}/backend_contract.h"
@@ -51,7 +57,6 @@ target_sources(nwb_graphics_backend PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/frame_graph_nodes.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_param.h"
     "${CMAKE_CURRENT_LIST_DIR}/shader_stage_names.h"
-    "${CMAKE_CURRENT_LIST_DIR}/spirv_entry_point.h"
 )
 if(NWB_GRAPHICS_BACKEND STREQUAL "Vulkan")
     target_compile_definitions(nwb_graphics_backend PUBLIC NWB_GRAPHICS_BACKEND_VULKAN=1 NWB_GRAPHICS_BACKEND_METAL=0)
@@ -183,7 +188,7 @@ if(NWB_GRAPHICS_BACKEND STREQUAL "Vulkan")
         "${CMAKE_CURRENT_LIST_DIR}/vulkan/vma.h"
     )
 endif()
-target_link_libraries(nwb_graphics_backend PUBLIC nwb_common nwb_cpu_task)
+target_link_libraries(nwb_graphics_backend PUBLIC nwb_common nwb_cpu_task nwb_shader_bytecode)
 target_link_libraries(nwb_graphics_backend PUBLIC nwb_perf)
 target_link_libraries(nwb_graphics_backend PUBLIC nwb_telemetry)
 target_link_libraries(nwb_graphics_backend PRIVATE nwb_filesystem)

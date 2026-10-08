@@ -71,11 +71,10 @@ bool RendererMaterialSystem::createComputeEmulationResources(){
         return false;
 
     if(!m_materialState.m_emulationVertexShader){
-        if(!m_shaderSystem.loadShader(
+        if(!m_shaderSystem.loadShader<VertexShader>(
             m_materialState.m_emulationVertexShader,
             AssetsGraphicsMesh::s_EmulationVertexShaderName,
             Core::ShaderArchive::s_DefaultVariant,
-            Core::ShaderType::Vertex,
             "ECSRender_MeshEmulationVS"
         ))
             return false;

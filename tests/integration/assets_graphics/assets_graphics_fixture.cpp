@@ -474,7 +474,7 @@ bool AssetsGraphicsFixture::CookDuplicateGeneratedMaterialBindIncludePath(
 bool AssetsGraphicsFixture::WriteMaterialBindShaderProbeSource(
     AssetsGraphicsFixture::TestArena& testArena,
     const AssetsGraphicsFixture::Path& assetRoot,
-    AStringView stage,
+    AStringView shaderAssetType,
     AStringView metaFilename,
     AStringView sourceFilename,
     const AStringView sourceText
@@ -485,10 +485,9 @@ bool AssetsGraphicsFixture::WriteMaterialBindShaderProbeSource(
         engineGraphicsIncludeRoot
     );
     NWB::Impl::ShaderCook::CookString shaderMeta(testArena.arena);
-    shaderMeta += "shader asset;\n\nasset.stage = \"";
-    shaderMeta += stage;
+    shaderMeta += shaderAssetType;
     shaderMeta +=
-        "\";\n"
+        " asset;\n\n"
         "asset.entry_point = \"main\";\n"
         "asset.include_roots = [\""
     ;
@@ -519,7 +518,7 @@ bool AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelS
     if(!WriteMaterialBindShaderProbeSource(
         testArena,
         assetRoot,
-        "mesh",
+        "mesh_shader",
         "material_mesh.nwb",
         "material_mesh.slang",
         s_MaterialBindMeshSource
@@ -528,7 +527,7 @@ bool AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelS
     if(!WriteMaterialBindShaderProbeSource(
         testArena,
         assetRoot,
-        "ps",
+        "pixel_shader",
         "material_ps.nwb",
         "material_ps.slang",
         pixelSourceText

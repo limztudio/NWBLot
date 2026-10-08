@@ -161,9 +161,9 @@ bool EmitMaterialPixelShadersImpl(
             return false;
         }
 
-        Core::Assets::AssetRef<Shader> pixelShaderRef;
+        Core::Assets::AssetRef<IShader> pixelShaderRef;
         pixelShaderRef.virtualPath = pixelShaderName;
-        Core::Assets::AssetRef<Shader> meshShaderRef;
+        Core::Assets::AssetRef<IShader> meshShaderRef;
         meshShaderRef.virtualPath = sharedMeshShaderNameId;
         if(!entry.stageShaders.emplace(Core::ShaderType::PixelStage, pixelShaderRef).second
             || !entry.stageShaders.emplace(Core::ShaderType::MeshStage, meshShaderRef).second){

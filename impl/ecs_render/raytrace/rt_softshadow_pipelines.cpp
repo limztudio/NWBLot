@@ -41,7 +41,7 @@ namespace __hidden_softshadow_pipelines{
     for(const StageRequest& stage : stages){
         if(stage.m_state.m_pipeline)
             continue;
-        if(!shaderSystem.loadShader(stage.m_state.m_shader, shaderName, stage.m_variant, Core::ShaderType::Compute, "ECSRender_SoftShadowResolve")){
+        if(!shaderSystem.loadShader<ComputeShader>(stage.m_state.m_shader, shaderName, stage.m_variant, "ECSRender_SoftShadowResolve")){
             channel.m_failed = true;
             return false;
         }
@@ -92,11 +92,10 @@ bool RendererRayTracingSystem::ensureShadowGeometryDownsamplePipeline(){
             return false;
         }
     }
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_rayTracingState.m_shadowGeometryDownsampleShader,
         AssetsGraphicsShadow::s_GeometryDownsampleShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_ShadowGeometryDownsample"
     )){
         m_rayTracingState.m_shadowGeometryDownsamplePipelineFailed = true;
@@ -323,11 +322,10 @@ bool RendererRayTracingSystem::ensureShadowReprojectMergePipeline(){
             return false;
         }
     }
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_rayTracingState.m_shadowReprojectMergeShader,
         AssetsGraphicsShadow::s_SoftReprojectMergeShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_SoftShadowReprojectMerge"
     )){
         m_rayTracingState.m_shadowReprojectMergePipelineFailed = true;

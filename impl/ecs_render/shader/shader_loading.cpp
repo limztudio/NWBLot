@@ -19,7 +19,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererShaderSystem::loadShader(
+bool RendererShaderSystem::loadShaderForStage(
     Core::ShaderHandle& outShader,
     const Name& shaderName,
     const AStringView variantName,
@@ -27,7 +27,7 @@ bool RendererShaderSystem::loadShader(
     const Name& debugName,
     const Name* archiveStageName
 ){
-    return ShaderAssetLoader::Load(
+    return ShaderAssetLoader::LoadForStage(
         outShader,
         shaderName,
         variantName,
@@ -49,11 +49,10 @@ bool RendererShaderSystem::hasShaderArchiveStage(const Name& shaderName, const A
 
 
 bool RendererShaderSystem::loadDeferredCompositeVertexShader(){
-    return loadShader(
+    return loadShader<VertexShader>(
         m_deferredCompositeVertexShader,
         AssetsGraphicsDeferred::s_CompositeVertexShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Vertex,
         "ECSRender_DeferredCompositeVS"
     );
 }

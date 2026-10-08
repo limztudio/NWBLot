@@ -13,7 +13,7 @@
 [numthreads(NWB_LIGHT_SPACE_CULL_GROUP_SIZE, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint commandIndex = dispatchThreadID.x + dispatchThreadID.z * NWB_LIGHT_SPACE_CULL_MAX_GROUPS_X * NWB_LIGHT_SPACE_CULL_GROUP_SIZE;
-    const uint commandCount = g_NwbLightSpacePush.meshletCount / NWB_LIGHT_SPACE_MESHLETS_PER_DRAW(g_NwbLightSpacePush.meshletCount % NWB_LIGHT_SPACE_MESHLETS_PER_DRAW != 0u ? 1u : 0u);
+    const uint commandCount = g_NwbLightSpacePush.meshletCount / NWB_LIGHT_SPACE_MESHLETS_PER_DRAW + (g_NwbLightSpacePush.meshletCount % NWB_LIGHT_SPACE_MESHLETS_PER_DRAW != 0u ? 1u : 0u);
     if(commandIndex >= max(commandCount, 1u) || dispatchThreadID.y >= g_NwbLightSpacePush.viewCount)
         return;
     const NwbLightSpaceView view = nwbLightSpaceLoadView(dispatchThreadID.y);

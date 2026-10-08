@@ -2,9 +2,8 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-shader asset;
+compute_shader asset;
 
-asset.stage = "cs";
 asset.entry_point = "main";
 asset.include_roots = ["engine/graphics"];
 asset.defines = { "NWB_LIGHT_SPACE_CSG_SHADE": ["0", "1"], };

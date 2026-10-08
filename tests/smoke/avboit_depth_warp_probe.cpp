@@ -350,11 +350,10 @@ public:
             NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: bindless heap is unavailable"));
             return false;
         }
-        if(!Impl::ShaderAssetLoader::Load(
+        if(!Impl::ShaderAssetLoader::Load<Impl::ComputeShader>(
             m_shader,
             Impl::AssetsGraphicsAvboit::s_DepthWarpComputeShaderName,
             Core::ShaderArchive::s_DefaultVariant,
-            Core::ShaderType::Compute,
             s_ProbeName,
             graphics,
             m_context.assetManager,

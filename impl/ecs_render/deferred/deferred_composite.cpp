@@ -143,11 +143,10 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
         return false;
     }
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         m_deferredState.m_compositeComputeShader,
         AssetsGraphicsDeferred::s_CompositeComputeShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_DeferredCompositeCS"
     ))
         return false;
@@ -155,11 +154,10 @@ bool RendererDeferredSystem::createDeferredCompositeResources(){
     if(!m_shaderSystem.loadDeferredCompositeVertexShader())
         return false;
 
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<PixelShader>(
         m_deferredState.m_presentPixelShader,
         AssetsGraphicsDeferred::s_PresentPixelShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Pixel,
         "ECSRender_DeferredPresentPS"
     ))
         return false;

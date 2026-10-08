@@ -25,11 +25,10 @@ bool RendererRayTracingSystem::ensureSoftCombinedUpsamplePipeline(){
     auto& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
         return false;
-    if(!m_shaderSystem.loadShader(
+    if(!m_shaderSystem.loadShader<ComputeShader>(
         resolve.m_combinedUpsample.m_shader,
         AssetsGraphicsShadow::s_SoftResolveCombinedShaderName,
         Core::ShaderArchive::s_DefaultVariant,
-        Core::ShaderType::Compute,
         "ECSRender_CombinedShadowUpsample"
     )){
         resolve.m_combinedUpsampleFailed = true;

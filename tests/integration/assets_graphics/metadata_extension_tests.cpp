@@ -7,6 +7,7 @@
 
 #include <impl/assets_model/cook.h>
 #include <impl/assets_sampler/cook.h>
+#include <impl/assets_shader/asset.h>
 
 #include <tests/common/capturing_logger.h>
 
@@ -166,7 +167,7 @@ static void BenchmarkMetadataParsing(const usize pairCount, const usize iteratio
         ASSERT_TRUE(EnsureDirectories(directory, error));
         ASSERT_TRUE(WriteFixtureFile(directory / "shader.slang", "[numthreads(1, 1, 1)] void main(){}\r\n"));
         ASSERT_TRUE(WriteFixtureFile(directory / "include.slangi", "static const uint fixtureValue = 1;\r\n"));
-        ASSERT_TRUE(WriteFixtureFile(directory / "shader.nwb", "shader asset;\r\nasset.stage = \"cs\";\r\nasset.entry_point = \"main\";\r\n"));
+        ASSERT_TRUE(WriteFixtureFile(directory / "shader.nwb", "compute_shader asset;\r\nasset.entry_point = \"main\";\r\n"));
         ASSERT_TRUE(WriteFixtureFile(directory / "include.nwb", "include asset;\r\nasset.defines = { \"FIXTURE_OPTION\": [\"0\", \"1\"] };\r\n"));
         for(const AStringView fileName : { AStringView("shader.nwb"), AStringView("include.nwb") }){
             const NWB::Path path = directory / fileName;
@@ -454,14 +455,14 @@ TEST(MetadataExtensionOwnership, GraphicsParserFailureReleasesItsActualExtension
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
     Metascript::Document document(fixtureArena);
-    ASSERT_TRUE(document.parse("shader asset;"));
+    ASSERT_TRUE(document.parse("compute_shader asset;"));
     const NWB::Path root(fixtureArena, "tests/metadata_extension/assets");
     const NWB::Path path = root / "invalid_shader.nwb";
     const DiscoveredNwbFile file(fixtureArena, root, path, "tests/metadata_extension/assets/invalid_shader.nwb", ACompactString("project"));
     for(usize iteration = 0u; iteration < 4u; ++iteration){
         {
             ParsedAssetMetadata metadata(ownerArena);
-            AssetDocumentMetadataParseContext context{ ownerArena, file, Name("shader"), document, metadata, scratchArena };
+            AssetDocumentMetadataParseContext context{ ownerArena, file, Impl::ComputeShader::AssetTypeName(), document, metadata, scratchArena };
             EXPECT_EQ(TryAutoCollectedDocumentMetadataParsers(context), AssetMetadataParseResult::Error);
             EXPECT_EQ(metadata.extensions.size(), 1u);
             EXPECT_GT(ownerArena.memoryStats().usedBytes, 0u);

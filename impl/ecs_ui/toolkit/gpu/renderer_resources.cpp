@@ -87,14 +87,14 @@ struct TargetReadyTask{
     return state;
 }
 
+template<typename TShader>
 [[nodiscard]] static bool LoadShader(
     GpuRendererState& state,
     Core::ShaderHandle& shader,
-    const Name& identity,
-    const Core::ShaderType::Mask stage
+    const Name& identity
 ){
-    return ShaderAssetLoader::Load(
-        shader, identity, Core::ShaderArchive::s_DefaultVariant, stage, identity,
+    return ShaderAssetLoader::Load<TShader>(
+        shader, identity, Core::ShaderArchive::s_DefaultVariant, identity,
         state.m_graphics, state.m_assets, state.m_resolver, NWB_TEXT("GpuRenderer")
     );
 }
@@ -135,10 +135,10 @@ bool GpuRendererState::createResources(){
     if(!resources)
         return false;
     if(
-        !__hidden_ui_gpu_resources::LoadShader(*this, resources->m_vertexShader, AssetsGraphicsUi::s_VertexShaderName, Core::ShaderType::Vertex)
-        || !__hidden_ui_gpu_resources::LoadShader(*this, resources->m_pixelShader, AssetsGraphicsUi::s_PixelShaderName, Core::ShaderType::Pixel)
-        || !__hidden_ui_gpu_resources::LoadShader(*this, resources->m_outputVertexShader, AssetsGraphicsUi::s_OutputVertexShaderName, Core::ShaderType::Vertex)
-        || !__hidden_ui_gpu_resources::LoadShader(*this, resources->m_outputPixelShader, AssetsGraphicsUi::s_OutputPixelShaderName, Core::ShaderType::Pixel)
+        !__hidden_ui_gpu_resources::LoadShader<VertexShader>(*this, resources->m_vertexShader, AssetsGraphicsUi::s_VertexShaderName)
+        || !__hidden_ui_gpu_resources::LoadShader<PixelShader>(*this, resources->m_pixelShader, AssetsGraphicsUi::s_PixelShaderName)
+        || !__hidden_ui_gpu_resources::LoadShader<VertexShader>(*this, resources->m_outputVertexShader, AssetsGraphicsUi::s_OutputVertexShaderName)
+        || !__hidden_ui_gpu_resources::LoadShader<PixelShader>(*this, resources->m_outputPixelShader, AssetsGraphicsUi::s_OutputPixelShaderName)
     )
         return false;
     Core::VertexAttributeDesc attributes[NWB_UI_VERTEX_ATTRIBUTE_COUNT];

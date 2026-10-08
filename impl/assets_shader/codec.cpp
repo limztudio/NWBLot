@@ -23,11 +23,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShaderAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Assets::AssetBytes& outBinary)const{
-    if(!checkSerializeAssetType(asset, NWB_TEXT("ShaderAssetCodec::serialize")))
-        return false;
-
-    const Shader& shader = static_cast<const Shader&>(asset);
+bool ShaderAssetSerialization::Serialize(const IShader& shader, Core::Assets::AssetBytes& outBinary){
     const Core::Assets::AssetBytes& bytecode = shader.bytecode();
     switch(ShaderBinaryPayload::EncodeAssetPayload(AStringView(shader.entryPoint()), bytecode, outBinary)){
     case ShaderBinaryPayload::AssetPayloadFailure::None:

@@ -114,7 +114,7 @@ bool ResolveMaterialBindDependencyInterface(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using OptionalAvboitPixelShaderSetter = void(Material::*)(const Core::Assets::AssetRef<Shader>&);
+using OptionalAvboitPixelShaderSetter = void(Material::*)(const Core::Assets::AssetRef<PixelShader>&);
 
 static bool SetOptionalAvboitPixelShader(
     const MaterialCookEntry& materialEntry,
@@ -135,7 +135,7 @@ static bool SetOptionalAvboitPixelShader(
         return false;
     }
 
-    Core::Assets::AssetRef<Shader> shaderRef;
+    Core::Assets::AssetRef<PixelShader> shaderRef;
     shaderRef.virtualPath = shaderName;
     (outMaterial.*setter)(shaderRef);
     return true;
@@ -543,7 +543,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
 
     const Material::StageShaderArray& stageShaders = material.stageShaders();
     for(usize shaderIndex = 0u; shaderIndex < stageShaders.size(); ++shaderIndex){
-        const Core::Assets::AssetRef<Shader>& shaderAsset = stageShaders[shaderIndex];
+        const Core::Assets::AssetRef<IShader>& shaderAsset = stageShaders[shaderIndex];
         if(!shaderAsset.valid())
             continue;
 
@@ -570,7 +570,7 @@ bool MaterialAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asse
 
     // Optional per-material AVBOIT pixel shaders (accumulate, occupancy, extinction): each a presence flag plus
     // shader name hash, present only for surface-authored transparent materials and read back in this order.
-    const auto appendOptionalAvboitPixelShader = [&outBinary](const Core::Assets::AssetRef<Shader>& shaderRef){
+    const auto appendOptionalAvboitPixelShader = [&outBinary](const Core::Assets::AssetRef<PixelShader>& shaderRef){
         if(shaderRef.valid()){
             AppendPOD(outBinary, static_cast<u32>(1u));
             AppendPOD(outBinary, shaderRef.name().hash());

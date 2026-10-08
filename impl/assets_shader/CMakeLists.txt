@@ -2,9 +2,10 @@ nwb_declare_static_library(nwb_assets_shader)
 target_sources(nwb_assets_shader PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
+    "${CMAKE_CURRENT_LIST_DIR}/shader_types.h"
     "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
 )
-target_link_libraries(nwb_assets_shader PUBLIC nwb_assets)
+target_link_libraries(nwb_assets_shader PUBLIC nwb_assets PRIVATE nwb_shader_bytecode)
 
 nwb_declare_interface_library(nwb_assets_shader_loader)
 target_sources(nwb_assets_shader_loader INTERFACE
@@ -25,11 +26,12 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/slang_compiler.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/arena_names.h"
         "${CMAKE_CURRENT_LIST_DIR}/asset.h"
+        "${CMAKE_CURRENT_LIST_DIR}/shader_types.h"
         "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook.h"
         "${CMAKE_CURRENT_LIST_DIR}/slang_compiler.h"
     )
-    target_link_libraries(nwb_assets_shader_cook PUBLIC nwb_assets nwb_metascript)
+    target_link_libraries(nwb_assets_shader_cook PUBLIC nwb_assets nwb_metascript PRIVATE nwb_shader_bytecode)
     target_compile_definitions(nwb_assets_shader_cook PRIVATE
         NWB_COOK=1
         NWB_SLANGC_EXECUTABLE="${NWB_SLANGC_EXECUTABLE}"

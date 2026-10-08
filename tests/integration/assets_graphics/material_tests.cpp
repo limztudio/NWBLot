@@ -143,15 +143,15 @@ static bool RoundTripMaterialAssetCodec(
 }
 
 static void SetGeneratedMaterialAvboitPixelShaders(NWB::Impl::Material& material){
-    NWB::Core::Assets::AssetRef<NWB::Impl::Shader> accumulatePixelShader;
+    NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader> accumulatePixelShader;
     accumulatePixelShader.virtualPath = Name(s_GENERATED_AVBOIT_ACCUMULATE_PS_PROJECT_M);
     material.setAvboitAccumulatePixelShader(accumulatePixelShader);
 
-    NWB::Core::Assets::AssetRef<NWB::Impl::Shader> occupancyPixelShader;
+    NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader> occupancyPixelShader;
     occupancyPixelShader.virtualPath = Name(s_GENERATED_AVBOIT_OCCUPANCY_PS_PROJECT_MA);
     material.setAvboitOccupancyPixelShader(occupancyPixelShader);
 
-    NWB::Core::Assets::AssetRef<NWB::Impl::Shader> extinctionPixelShader;
+    NWB::Core::Assets::AssetRef<NWB::Impl::PixelShader> extinctionPixelShader;
     extinctionPixelShader.virtualPath = Name(s_GENERATED_AVBOIT_EXTINCTION_PS_PROJECT_M);
     material.setAvboitExtinctionPixelShader(extinctionPixelShader);
 }

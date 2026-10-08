@@ -508,6 +508,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 ## 15. Shader And Asset Text Style
 - Applies to `.slang`, `.slangi`, and `.bind` files under engine and project asset shader trees, including `impl/assets/graphics/`, `CoolStuff/Testbed/assets/shaders/`, and `tests/smoke/assets/shaders/`.
 - Project shader authoring is Slang-only; do not add alternate shader-language source standards, compatibility include trees, compiler paths, or per-asset compiler selectors.
+- Shader volume cooking calls the single `SlangShaderCompiler` module directly. `ShaderCook` owns metadata, define variants, dependencies, and checksums; it consumes the already-parsed metascript `Document` from discovery. Do not retain unused compiler interfaces, factories, injection paths, compile forwarding methods, or file-parsing convenience overloads. Keep test-owned file parsing helpers under `tests/`, and preserve all 14 current physical stages even if a stage has no authored fixture yet.
 - Use the same project banner, long separator, UTF-8 encoding, CRLF line endings, and exact EOF rule as other source files for `.slang`, `.slangi`, and `.bind`.
 - The same banner rule applies to authored shader hook fragments (`.bxdf`, `.surface`): start with `// limztudio@gmail.com` plus the 128-slash separator and end with the closing separator plus the exact EOF rule.
 - Keep `.nwb` metadata files as declarative metascript text without the source-file banner, but still use UTF-8 and CRLF line endings.

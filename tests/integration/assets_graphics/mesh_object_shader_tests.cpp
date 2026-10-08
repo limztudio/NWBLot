@@ -78,7 +78,16 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
         metadata.append(testCase.fields.data(), testCase.fields.size());
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, AStringView(metadata.data(), metadata.size())));
         const u32 priorErrors = logger.errorCount();
-        EXPECT_EQ(shaderCook.parseShaderMeta(metadataPath, entry, scratchArena), testCase.accepted);
+        EXPECT_EQ(
+            AssetsGraphicsFixture::ParseShaderMetadataFile(
+                testArena,
+                shaderCook,
+                metadataPath,
+                entry,
+                scratchArena
+            ),
+            testCase.accepted
+        );
         if(testCase.accepted){
             EXPECT_EQ(logger.errorCount(), priorErrors);
         }

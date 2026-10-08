@@ -56,7 +56,45 @@ template<typename BinaryContainer>
     return BytecodeValidationFailure::None;
 }
 
-namespace AssetPayloadFailure{
+namespace AssetPayloadEncodeFailure{
+    enum Enum : u8{
+        None,
+        InvalidEntryPoint,
+        InvalidBytecode,
+        OutputSizeOverflow,
+    };
+};
+
+template<typename BytecodeContainer, typename PayloadContainer>
+[[nodiscard]] inline AssetPayloadEncodeFailure::Enum EncodeAssetPayload(
+    const AStringView entryPoint,
+    const BytecodeContainer& bytecode,
+    PayloadContainer& outPayload
+){
+    if(entryPoint.empty() || entryPoint.size() > Limit<u32>::s_Max)
+        return AssetPayloadEncodeFailure::InvalidEntryPoint;
+    if(ValidateBytecode(bytecode) != BytecodeValidationFailure::None)
+        return AssetPayloadEncodeFailure::InvalidBytecode;
+
+    const usize entryPointBytes = sizeof(u32) + entryPoint.size();
+    if(entryPointBytes < entryPoint.size() || entryPointBytes > Limit<usize>::s_Max - s_AssetPayloadHeaderBytes)
+        return AssetPayloadEncodeFailure::OutputSizeOverflow;
+    const usize headerAndEntryPointBytes = s_AssetPayloadHeaderBytes + entryPointBytes;
+    if(bytecode.size() > Limit<usize>::s_Max - headerAndEntryPointBytes)
+        return AssetPayloadEncodeFailure::OutputSizeOverflow;
+
+    const usize payloadBytes = headerAndEntryPointBytes + bytecode.size();
+    outPayload.clear();
+    BinaryDetail::ReserveAppendBytesIfSupported(outPayload, payloadBytes);
+    AppendPOD(outPayload, s_AssetPayloadMagic);
+    AppendPOD(outPayload, s_AssetPayloadVersion);
+    if(!AppendString(outPayload, entryPoint))
+        return AssetPayloadEncodeFailure::OutputSizeOverflow;
+    BinaryDetail::AppendBytesNoReserveUnchecked(outPayload, bytecode.data(), bytecode.size());
+    return AssetPayloadEncodeFailure::None;
+}
+
+namespace AssetPayloadDecodeFailure{
     enum Enum : u8{
         None,
         InvalidHeader,
@@ -67,37 +105,8 @@ namespace AssetPayloadFailure{
     };
 };
 
-template<typename BytecodeContainer, typename PayloadContainer>
-[[nodiscard]] inline AssetPayloadFailure::Enum EncodeAssetPayload(
-    const AStringView entryPoint,
-    const BytecodeContainer& bytecode,
-    PayloadContainer& outPayload
-){
-    if(entryPoint.empty() || entryPoint.size() > Limit<u32>::s_Max)
-        return AssetPayloadFailure::InvalidEntryPoint;
-    if(ValidateBytecode(bytecode) != BytecodeValidationFailure::None)
-        return AssetPayloadFailure::InvalidBytecode;
-
-    const usize entryPointBytes = sizeof(u32) + entryPoint.size();
-    if(entryPointBytes < entryPoint.size() || entryPointBytes > Limit<usize>::s_Max - s_AssetPayloadHeaderBytes)
-        return AssetPayloadFailure::OutputSizeOverflow;
-    const usize headerAndEntryPointBytes = s_AssetPayloadHeaderBytes + entryPointBytes;
-    if(bytecode.size() > Limit<usize>::s_Max - headerAndEntryPointBytes)
-        return AssetPayloadFailure::OutputSizeOverflow;
-
-    const usize payloadBytes = headerAndEntryPointBytes + bytecode.size();
-    outPayload.clear();
-    BinaryDetail::ReserveAppendBytesIfSupported(outPayload, payloadBytes);
-    AppendPOD(outPayload, s_AssetPayloadMagic);
-    AppendPOD(outPayload, s_AssetPayloadVersion);
-    if(!AppendString(outPayload, entryPoint))
-        return AssetPayloadFailure::OutputSizeOverflow;
-    BinaryDetail::AppendBytesNoReserveUnchecked(outPayload, bytecode.data(), bytecode.size());
-    return AssetPayloadFailure::None;
-}
-
 template<typename PayloadContainer, typename StringT, typename BytecodeContainer>
-[[nodiscard]] inline AssetPayloadFailure::Enum DecodeAssetPayload(
+[[nodiscard]] inline AssetPayloadDecodeFailure::Enum DecodeAssetPayload(
     const PayloadContainer& payload,
     StringT& outEntryPoint,
     BytecodeContainer& outBytecode
@@ -109,24 +118,24 @@ template<typename PayloadContainer, typename StringT, typename BytecodeContainer
     u32 magic = 0u;
     u32 version = 0u;
     if(!ReadPOD(payload, cursor, magic) || !ReadPOD(payload, cursor, version) || magic != s_AssetPayloadMagic)
-        return AssetPayloadFailure::InvalidHeader;
+        return AssetPayloadDecodeFailure::InvalidHeader;
     if(version != s_AssetPayloadVersion)
-        return AssetPayloadFailure::UnsupportedVersion;
+        return AssetPayloadDecodeFailure::UnsupportedVersion;
     if(!ReadString(payload, cursor, outEntryPoint) || outEntryPoint.empty())
-        return AssetPayloadFailure::InvalidEntryPoint;
+        return AssetPayloadDecodeFailure::InvalidEntryPoint;
 
     const BinaryByteView bytecode{
         payload.data() + cursor,
         payload.size() - cursor
     };
     if(ValidateBytecode(bytecode) != BytecodeValidationFailure::None)
-        return AssetPayloadFailure::InvalidBytecode;
+        return AssetPayloadDecodeFailure::InvalidBytecode;
     if(!BinaryDetail::CanAppendBytes(outBytecode, bytecode.size()))
-        return AssetPayloadFailure::OutputSizeOverflow;
+        return AssetPayloadDecodeFailure::OutputSizeOverflow;
 
     BinaryDetail::ReserveAppendBytesIfSupported(outBytecode, bytecode.size());
     BinaryDetail::AppendBytesNoReserveUnchecked(outBytecode, bytecode.data(), bytecode.size());
-    return AssetPayloadFailure::None;
+    return AssetPayloadDecodeFailure::None;
 }
 
 

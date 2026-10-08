@@ -21,6 +21,7 @@
 #include <core/assets/cook_metadata.h>
 #include <core/assets/paths.h>
 #include <core/common/log.h>
+#include <core/graphics/shader_stage_names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -404,8 +405,10 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         ShaderCook::ShaderEntry pixelShaderEntry(shaderCookArena);
         pixelShaderEntry.name.assign(AStringView(generatedPixelShader.name));
         pixelShaderEntry.source.assign(AStringView(generatedPixelShader.source));
-        if(!pixelShaderEntry.stage.assign(MaterialShaderStageNames::s_PixelArchiveStageText) ||
-           !pixelShaderEntry.archiveStage.assign(MaterialShaderStageNames::s_PixelArchiveStageText)){
+        if(
+            !pixelShaderEntry.stage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::PixelStage))
+            || !pixelShaderEntry.archiveStage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::PixelStage))
+        ){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to allocate generated pixel shader entry"));
             return false;
         }

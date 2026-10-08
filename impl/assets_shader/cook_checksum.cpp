@@ -10,15 +10,12 @@
 
 #include "cook.h"
 #include "arena_names.h"
-#include "binary_payload.h"
 
 #include <impl/assets_material/shader_stage_names.h>
 
 #include <core/assets/paths.h>
-#include <core/metascript/parser.h>
 #include <core/common/log.h>
 #include <global/hash_utils.h>
-#include <global/process_execution.h>
 
 namespace __hidden_shader_cook_checksum{
 static constexpr StringView s_NoneOptName = "none";
@@ -44,12 +41,6 @@ namespace __hidden_cook_checksum{
 
 
 using CookString = ShaderCook::CookString;
-template<typename T>
-using CookVector = ShaderCook::CookVector<T>;
-template<typename T, typename V>
-using CookMap = ShaderCook::CookMap<T, V>;
-template<typename T>
-using CookHashSet = ShaderCook::CookHashSet<T>;
 using ScratchString = AString<Core::Alloc::ScratchArena>;
 
 struct NormalizedDependencyRootAlias{
@@ -224,21 +215,20 @@ bool ShaderCook::computeDependencyChecksum(
     return true;
 }
 
-bool ShaderCook::computeSourceChecksum(
+u64 ShaderCook::computeSourceChecksum(
     const ShaderEntry& entry,
     const AStringView variantSignature,
     const u64 dependencyChecksum,
-    u64& outChecksum,
     Core::Alloc::ScratchArena& scratchArena
 ){
     static constexpr AStringView s_ChecksumVersionTag = "shader-source-v3";
     const u8 newlineByte = '\n';
 
-    outChecksum = s_Fnv64OffsetBasis;
+    u64 checksum = s_Fnv64OffsetBasis;
 
-    const auto appendChecksumLine = [&outChecksum, &newlineByte](const AStringView text){
-        outChecksum = UpdateFnv64TextExact(outChecksum, text);
-        outChecksum = UpdateFnv64(outChecksum, &newlineByte, 1);
+    const auto appendChecksumLine = [&checksum, &newlineByte](const AStringView text){
+        checksum = UpdateFnv64TextExact(checksum, text);
+        checksum = UpdateFnv64(checksum, &newlineByte, 1);
     };
 
     appendChecksumLine(s_ChecksumVersionTag);
@@ -264,8 +254,8 @@ bool ShaderCook::computeSourceChecksum(
             appendChecksumLine(*entryDefine.value);
         }
     }
-    outChecksum = UpdateFnv64(outChecksum, reinterpret_cast<const u8*>(&dependencyChecksum), sizeof(dependencyChecksum));
-    return true;
+    checksum = UpdateFnv64(checksum, reinterpret_cast<const u8*>(&dependencyChecksum), sizeof(dependencyChecksum));
+    return checksum;
 }
 
 

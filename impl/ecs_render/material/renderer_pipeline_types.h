@@ -91,10 +91,6 @@ namespace MaterialPipelineCsgMode{
     }
 }
 
-[[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgReceiverSurface(const MaterialPipelinePass::Enum pass)noexcept{
-    return pass == MaterialPipelinePass::CsgReceiverSurface;
-}
-
 [[nodiscard]] NWB_INLINE bool MaterialPipelinePassUsesRendererCsgIntervalSample(const MaterialPipelinePass::Enum pass){
     return pass == MaterialPipelinePass::Opaque || MaterialPipelinePassUsesRendererAvboit(pass);
 }
@@ -144,7 +140,7 @@ struct MaterialPipelineCsgBindingUse{
     ;
     result.receiverSurface =
         result.clip
-        && MaterialPipelinePassUsesRendererCsgReceiverSurface(pass)
+        && pass == MaterialPipelinePass::CsgReceiverSurface
     ;
     result.intervalSample =
         result.clip

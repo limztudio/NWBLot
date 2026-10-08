@@ -26,21 +26,15 @@ NWB_IMPL_BEGIN
 bool ShaderAssetSerialization::Serialize(const IShader& shader, Core::Assets::AssetBytes& outBinary){
     const Core::Assets::AssetBytes& bytecode = shader.bytecode();
     switch(ShaderBinaryPayload::EncodeAssetPayload(AStringView(shader.entryPoint()), bytecode, outBinary)){
-    case ShaderBinaryPayload::AssetPayloadFailure::None:
+    case ShaderBinaryPayload::AssetPayloadEncodeFailure::None:
         break;
-    case ShaderBinaryPayload::AssetPayloadFailure::InvalidHeader:
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: invalid shader payload header"));
-        return false;
-    case ShaderBinaryPayload::AssetPayloadFailure::UnsupportedVersion:
-        NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: unsupported shader payload version"));
-        return false;
-    case ShaderBinaryPayload::AssetPayloadFailure::InvalidEntryPoint:
+    case ShaderBinaryPayload::AssetPayloadEncodeFailure::InvalidEntryPoint:
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: shader entry point is empty or too long"));
         return false;
-    case ShaderBinaryPayload::AssetPayloadFailure::InvalidBytecode:
+    case ShaderBinaryPayload::AssetPayloadEncodeFailure::InvalidBytecode:
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: invalid SPIR-V bytecode"));
         return false;
-    case ShaderBinaryPayload::AssetPayloadFailure::OutputSizeOverflow:
+    case ShaderBinaryPayload::AssetPayloadEncodeFailure::OutputSizeOverflow:
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderAssetCodec::serialize failed: shader payload size overflow"));
         return false;
     }

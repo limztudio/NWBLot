@@ -543,15 +543,6 @@ bool Material::setShaderForStage(const Core::ShaderType::Enum shaderType, const 
     return true;
 }
 
-bool Material::findShaderForStage(const Core::ShaderType::Enum shaderType, Core::Assets::AssetRef<IShader>& outShaderAsset)const noexcept{
-    outShaderAsset.reset();
-    if(!Core::ShaderType::IsValid(shaderType))
-        return false;
-
-    outShaderAsset = m_stageShaders[Core::ShaderType::ToIndex(shaderType)];
-    return outShaderAsset.valid();
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

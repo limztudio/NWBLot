@@ -13,6 +13,7 @@
 #include "csg_shader_variants.h"
 
 #include <impl/assets_shader/binary_payload.h>
+#include <impl/assets_shader/slang_compiler.h>
 
 #include <core/graphics/shader_archive.h>
 #include <core/common/log.h>
@@ -155,7 +156,6 @@ static bool GetVariantBytecode(
     const Path& sourcePath,
     const VariantCachePaths& cachePaths,
     const AStringView sourceChecksumHex,
-    ShaderCook& shaderCook,
     Core::GraphicsBytes& outBytecode,
     ScratchArena& scratchArena
 ){
@@ -239,7 +239,7 @@ static bool GetVariantBytecode(
         .optimizationLevel = entry.optimizationLevel,
         .rayQuery = entry.rayQuery,
     };
-    if(!shaderCook.compileVariant(compileRequest, outBytecode))
+    if(!SlangShaderCompiler::CompileVariant(compileRequest, outBytecode))
         return false;
 
     if(!WriteTextFile(cachePaths.sourceChecksumPath, sourceChecksumHex)){
@@ -374,15 +374,12 @@ bool AppendPreparedShadersToManifest(
         auto appendShaderVariant = [&](const ShaderCook::DefineCombo& defineCombo) -> bool{
             const CookString generatedVariantName = shaderCook.buildVariantName(defineCombo, scratchArena);
 
-            u64 sourceChecksum = 0;
-            if(!shaderCook.computeSourceChecksum(
+            const u64 sourceChecksum = shaderCook.computeSourceChecksum(
                 entry,
                 generatedVariantName,
                 preparedEntry.dependencyChecksum,
-                sourceChecksum,
                 scratchArena
-            ))
-                return false;
+            );
             const CookString sourceChecksumHex = FormatHex64A(cookArena, sourceChecksum);
 
             const __hidden_shader_volume_writer::VariantCachePaths cachePaths = __hidden_shader_volume_writer::BuildVariantCachePaths(
@@ -402,7 +399,6 @@ bool AppendPreparedShadersToManifest(
                 preparedEntry.sourcePath,
                 cachePaths,
                 sourceChecksumHex,
-                shaderCook,
                 cookedBytecode,
                 scratchArena
             ))
@@ -434,12 +430,12 @@ bool AppendPreparedShadersToManifest(
                 sourceChecksum,
                 bytecodeChecksum
             );
-            const ShaderBinaryPayload::AssetPayloadFailure::Enum payloadFailure = ShaderBinaryPayload::EncodeAssetPayload(
+            const ShaderBinaryPayload::AssetPayloadEncodeFailure::Enum payloadFailure = ShaderBinaryPayload::EncodeAssetPayload(
                 AStringView(entry.entryPoint),
                 cookedBytecode,
                 shaderAssetPayload
             );
-            if(payloadFailure != ShaderBinaryPayload::AssetPayloadFailure::None){
+            if(payloadFailure != ShaderBinaryPayload::AssetPayloadEncodeFailure::None){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to package shader payload '{}' (failure {})")
                     , StringConvert(virtualPath.resolvedText())
                     , static_cast<u32>(payloadFailure)

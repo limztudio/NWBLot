@@ -14,6 +14,7 @@
 
 #include <core/assets/paths.h>
 #include <core/common/log.h>
+#include <core/graphics/shader_stage_names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,7 +44,6 @@ bool AppendMeshObjectShaderEntries(
     // The fixed decoder and this raster stage share an engine ABI, independent of authored material defines.
     static constexpr AStringView s_SharedMeshProgramName = "engine/graphics/mesh/shared_ms";
     static constexpr AStringView s_ObjectVertexSourceName = "object_vs.slang";
-    static constexpr AStringView s_VertexStageText = "vs";
     static constexpr AStringView s_ImplPathToken = "impl";
     static constexpr AStringView s_AssetsPathToken = "assets";
     static constexpr AStringView s_GraphicsPathToken = "graphics";
@@ -58,8 +58,8 @@ bool AppendMeshObjectShaderEntries(
         return true;
     if(
         mesh.name != s_SharedMeshProgramName
-        || mesh.archiveStage.view() != MaterialShaderStageNames::s_MeshArchiveStageText
-        || mesh.stage.view() != MaterialShaderStageNames::s_MeshArchiveStageText
+        || mesh.archiveStage.view() != Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage)
+        || mesh.stage.view() != Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage)
         || !hasFixedSource
         || !mesh.emitMeshComputeShadow
     ){
@@ -69,8 +69,8 @@ bool AppendMeshObjectShaderEntries(
 
     PreparedShaderEntry prepared(cookArena);
     prepared.entry.name = mesh.name;
-    if(!prepared.entry.stage.assign(s_VertexStageText)
-        || !prepared.entry.archiveStage.assign(MaterialShaderStageNames::MeshObjectVertexArchiveStageText()))
+    if(!prepared.entry.stage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::VertexStage))
+        || !prepared.entry.archiveStage.assign(MaterialShaderStageNames::s_MeshObjectVertexArchiveStageText))
         return false;
     prepared.entry.emitMeshComputeShadow = false;
     prepared.sourcePath = meshEntry.sourcePath.parentPath() / s_ObjectVertexSourceName;

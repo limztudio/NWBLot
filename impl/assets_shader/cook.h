@@ -41,7 +41,7 @@ namespace ShaderOptimizationLevel{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class ShaderCook{
+class ShaderCook : NoCopy{
 public:
     using CookArena = Core::Alloc::GlobalArena;
     using CookString = AString<CookArena>;
@@ -50,9 +50,6 @@ public:
 
     template<typename T, typename V>
     using CookMap = HashMap<T, V, CookArena, Hasher<T>, EqualTo<T>>;
-
-    template<typename T>
-    using CookHashSet = HashSet<T, CookArena, Hasher<T>, EqualTo<T>>;
 
     struct ShaderMacroDefinition{
         AStringView name;
@@ -73,24 +70,6 @@ public:
         ShaderOptimizationLevel::Enum optimizationLevel = ShaderOptimizationLevel::Default;
         bool rayQuery = false;
     };
-
-    class IShaderCompiler : NoCopy{
-    public:
-        IShaderCompiler(CookArena& memoryArena)
-            : m_memoryArena(memoryArena)
-        {}
-        virtual ~IShaderCompiler() = default;
-
-
-    public:
-        virtual bool compileVariant(const ShaderCompilerRequest& request, CookVector<u8>& outBytecode) = 0;
-
-
-    protected:
-        CookArena& m_memoryArena;
-    };
-
-    using ShaderCompilerFactory = Core::GlobalUniquePtr<IShaderCompiler> (*)(CookArena& memoryArena);
 
     struct DependencyRootAlias{
         Path root;
@@ -175,32 +154,21 @@ private:
 
 
 public:
-    ShaderCook(CookArena& memoryArena, ShaderCompilerFactory compilerFactory = nullptr);
+    explicit ShaderCook(CookArena& memoryArena)noexcept
+        : m_memoryArena(memoryArena)
+    {}
 
 
 public:
-    inline bool compileVariant(const ShaderCompilerRequest& request, CookVector<u8>& outBytecode){ return m_compiler->compileVariant(request, outBytecode); }
-
-    bool parseDocument(const Path& nwbFilePath, Core::Metascript::Document& outDoc);
     bool parseShaderMeta(
         const Path& nwbFilePath,
         const Core::Metascript::Document& doc,
         ShaderEntry& outEntry,
         Core::Alloc::ScratchArena& scratchArena
     );
-    bool parseShaderMeta(
-        const Path& nwbFilePath,
-        ShaderEntry& outEntry,
-        Core::Alloc::ScratchArena& scratchArena
-    );
     bool parseIncludeMeta(
         const Path& nwbFilePath,
         const Core::Metascript::Document& doc,
-        IncludeEntry& outEntry,
-        Core::Alloc::ScratchArena& scratchArena
-    );
-    bool parseIncludeMeta(
-        const Path& nwbFilePath,
         IncludeEntry& outEntry,
         Core::Alloc::ScratchArena& scratchArena
     );
@@ -238,11 +206,10 @@ public:
         u64& outChecksum,
         Core::Alloc::ScratchArena& scratchArena
     );
-    bool computeSourceChecksum(
+    [[nodiscard]] u64 computeSourceChecksum(
         const ShaderEntry& entry,
         const AStringView variantSignature,
         u64 dependencyChecksum,
-        u64& outChecksum,
         Core::Alloc::ScratchArena& scratchArena
     );
 
@@ -262,7 +229,6 @@ private:
 
 private:
     CookArena& m_memoryArena;
-    Core::GlobalUniquePtr<IShaderCompiler> m_compiler;
 };
 
 

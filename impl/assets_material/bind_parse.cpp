@@ -41,24 +41,6 @@ bool ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& aren
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ValidatePairedSourceExtension(
-    const Path& bindFilePath,
-    const AStringView sourcePath,
-    ScratchArena& scratchArena
-){
-    return Core::Assets::CheckPairedSourceExtension(
-        bindFilePath,
-        sourcePath,
-        MaterialBindNames::SourceExtensionText(),
-        "Material bind",
-        scratchArena
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 static bool IsMaterialBindIdentifier(const AStringView text){
     if(text.empty())
         return false;
@@ -616,7 +598,13 @@ bool ParseMaterialBindSource(
     outEntry.reset();
 
     outEntry.source = PathToString(arena, bindFilePath);
-    if(!ValidatePairedSourceExtension(bindFilePath, outEntry.source, scratchArena))
+    if(!Core::Assets::CheckPairedSourceExtension(
+        bindFilePath,
+        outEntry.source,
+        MaterialBindNames::SourceExtensionText(),
+        "Material bind",
+        scratchArena
+    ))
         return false;
 
     const Metascript::Value* assetValue = Core::Assets::FindMetadataAssetMapValue<Metascript::Document, Metascript::Value>(bindFilePath, doc, "Material bind");

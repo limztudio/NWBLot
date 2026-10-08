@@ -18,6 +18,7 @@
 
 #include <core/assets/paths.h>
 #include <core/common/log.h>
+#include <core/graphics/shader_stage_names.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -179,14 +180,14 @@ static bool SetShaderImplicitDefine(
 
 static bool BuildMeshComputeShadowEntry(const ShaderCook::ShaderEntry& sourceEntry, ShaderCook::ShaderEntry& outEntry){
     outEntry = sourceEntry;
-    if(!outEntry.archiveStage.assign(MaterialShaderStageNames::MeshComputeArchiveStageText()))
+    if(!outEntry.archiveStage.assign(MaterialShaderStageNames::s_MeshComputeArchiveStageText))
         return false;
-    if(!outEntry.stage.assign(MaterialShaderStageNames::s_ComputeArchiveStageText))
+    if(!outEntry.stage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::ComputeStage)))
         return false;
 
     return SetShaderImplicitDefine(
         outEntry,
-        MaterialShaderStageNames::MeshComputeImplicitDefineText(),
+        MaterialShaderStageNames::s_MeshComputeImplicitDefineText,
         s_EnabledImplicitDefineValue
     );
 }
@@ -529,13 +530,13 @@ bool PrepareShaderEntriesForCook(
         // when depending on a material interface; the generic mesh shader stays interface-free.
         const AStringView preparedEntryArchiveStage = preparedEntry.entry.archiveStage.view();
         const bool preparedEntryStageReadsTypedMaterial =
-            preparedEntryArchiveStage == MaterialShaderStageNames::s_MeshArchiveStageText
-            || preparedEntryArchiveStage == MaterialShaderStageNames::s_PixelArchiveStageText
-            || preparedEntryArchiveStage == MaterialShaderStageNames::s_ComputeArchiveStageText
-            || preparedEntryArchiveStage == MaterialShaderStageNames::s_RayGenerationArchiveStageText
-            || preparedEntryArchiveStage == MaterialShaderStageNames::s_RayAnyHitArchiveStageText
-            || preparedEntryArchiveStage == MaterialShaderStageNames::s_RayClosestHitArchiveStageText
-            || preparedEntryArchiveStage == MaterialShaderStageNames::s_RayMissArchiveStageText
+            preparedEntryArchiveStage == Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage)
+            || preparedEntryArchiveStage == Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::PixelStage)
+            || preparedEntryArchiveStage == Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::ComputeStage)
+            || preparedEntryArchiveStage == Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::RayGenerationStage)
+            || preparedEntryArchiveStage == Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::AnyHitStage)
+            || preparedEntryArchiveStage == Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::ClosestHitStage)
+            || preparedEntryArchiveStage == Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MissStage)
         ;
         preparedEntry.usesMaterialTypedBinding =
             preparedEntryStageReadsTypedMaterial
@@ -572,7 +573,10 @@ bool PrepareShaderEntriesForCook(
         if(!Core::Assets::AddPlannedFileCount(preparedEntry.variantCount, outPreparedPlan.plannedFileCount))
             return false;
 
-        const bool emitMeshComputeShadow = preparedEntry.entry.archiveStage.view() == MaterialShaderStageNames::s_MeshArchiveStageText && preparedEntry.entry.emitMeshComputeShadow;
+        const bool emitMeshComputeShadow =
+            preparedEntry.entry.archiveStage.view() == Core::ShaderStageNames::ArchiveStageTextFromShaderType(Core::ShaderType::MeshStage)
+            && preparedEntry.entry.emitMeshComputeShadow
+        ;
         const usize meshEntryIndex = outPreparedPlan.preparedEntries.size();
         outPreparedPlan.preparedEntries.push_back(Move(preparedEntry));
         if(!AppendMeshObjectShaderEntries(cookArena, shaderCook, resolvedPaths, outPreparedPlan.preparedEntries[meshEntryIndex], outPreparedPlan, scratchArena))

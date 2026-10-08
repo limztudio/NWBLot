@@ -12,7 +12,6 @@
 
 #include "slang_compiler.h"
 #include "arena_names.h"
-#include "binary_payload.h"
 #include "shader_types.h"
 
 #include <core/assets/paths.h>
@@ -54,12 +53,6 @@ namespace __hidden_shader_cook{
 
 
 using CookString = ShaderCook::CookString;
-template<typename T>
-using CookVector = ShaderCook::CookVector<T>;
-template<typename T, typename V>
-using CookMap = ShaderCook::CookMap<T, V>;
-template<typename T>
-using CookHashSet = ShaderCook::CookHashSet<T>;
 using ScratchString = AString<Alloc::ScratchArena>;
 template<typename T>
 using ScratchVector = Vector<T, Alloc::ScratchArena>;
@@ -292,27 +285,6 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseMetascriptDocument(const Path& sourceFilePath, const AStringView sourceKind, ShaderCook::CookArena& arena, Metascript::Document& outDoc){
-    CookString metaText{arena};
-    return Assets::ParseMetadataDocumentText(
-        sourceFilePath,
-        sourceKind,
-        metaText,
-        outDoc,
-        [&](const AStringView text){ return outDoc.parse(text); }
-    );
-}
-
-static bool ValidatePairedSourceExtension(
-    const Path& nwbFilePath,
-    const AStringView sourcePath,
-    const AStringView expectedExtension,
-    const AStringView metaKind,
-    Alloc::ScratchArena& scratchArena
-){
-    return Assets::CheckPairedSourceExtension(nwbFilePath, sourcePath, expectedExtension, metaKind, scratchArena);
-}
-
 static bool ParseOptionalIntegerFlagField(
     const Path& nwbFilePath,
     const Metascript::Value& asset,
@@ -410,28 +382,6 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-ShaderCook::ShaderCook(CookArena& memoryArena, ShaderCompilerFactory compilerFactory)
-    : m_memoryArena(memoryArena)
-{
-    const ShaderCompilerFactory createCompiler = compilerFactory ? compilerFactory : CreateSlangShaderCompiler;
-    m_compiler = createCompiler(m_memoryArena);
-}
-
-
-bool ShaderCook::parseDocument(const Path& nwbFilePath, Metascript::Document& outDoc){
-    return __hidden_shader_cook::ParseMetascriptDocument(nwbFilePath, "Meta", m_memoryArena, outDoc);
-}
-
-
-bool ShaderCook::validateVariantSignature(
-    const AStringView contextLabel,
-    const AStringView variantSignature,
-    const CookMap<CookString, DefineEntry>& defineValues,
-    Alloc::ScratchArena& scratchArena
-){
-    return __hidden_shader_cook::ValidateVariantSignature(contextLabel, variantSignature, defineValues, scratchArena);
-}
-
 bool ShaderCook::parseShaderMeta(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
@@ -458,7 +408,7 @@ bool ShaderCook::parseShaderMeta(
 
     if(!Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, outEntry.source))
         return false;
-    if(!__hidden_shader_cook::ValidatePairedSourceExtension(
+    if(!Assets::CheckPairedSourceExtension(
         nwbFilePath,
         outEntry.source,
         __hidden_shader_cook::s_SlangSourceExtension,
@@ -542,14 +492,6 @@ bool ShaderCook::parseShaderMeta(
     return true;
 }
 
-bool ShaderCook::parseShaderMeta(const Path& nwbFilePath, ShaderEntry& outEntry, Alloc::ScratchArena& scratchArena){
-    Metascript::Document doc(m_memoryArena);
-    if(!parseDocument(nwbFilePath, doc))
-        return false;
-
-    return parseShaderMeta(nwbFilePath, doc, outEntry, scratchArena);
-}
-
 bool ShaderCook::parseIncludeMeta(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
@@ -563,7 +505,7 @@ bool ShaderCook::parseIncludeMeta(
 
     if(!Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, outEntry.source))
         return false;
-    if(!__hidden_shader_cook::ValidatePairedSourceExtension(
+    if(!Assets::CheckPairedSourceExtension(
         nwbFilePath,
         outEntry.source,
         __hidden_shader_cook::s_SlangIncludeExtension,
@@ -585,12 +527,13 @@ bool ShaderCook::parseIncludeMeta(
     return true;
 }
 
-bool ShaderCook::parseIncludeMeta(const Path& nwbFilePath, IncludeEntry& outEntry, Alloc::ScratchArena& scratchArena){
-    Metascript::Document doc(m_memoryArena);
-    if(!parseDocument(nwbFilePath, doc))
-        return false;
-
-    return parseIncludeMeta(nwbFilePath, doc, outEntry, scratchArena);
+bool ShaderCook::validateVariantSignature(
+    const AStringView contextLabel,
+    const AStringView variantSignature,
+    const CookMap<CookString, DefineEntry>& defineValues,
+    Alloc::ScratchArena& scratchArena
+){
+    return __hidden_shader_cook::ValidateVariantSignature(contextLabel, variantSignature, defineValues, scratchArena);
 }
 
 void ShaderCook::mergeInheritedDefines(ShaderEntry& inOutEntry, const CookVector<Path>& dependencies, const CookMap<CookString, IncludeEntry>& includeMetadata){

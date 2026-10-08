@@ -905,6 +905,33 @@ public:
         Path& outOutputDirectory
     );
     #endif
+    template<typename EntryT>
+    static bool ParseShaderMetadataFile(
+        TestArena& testArena,
+        NWB::Impl::ShaderCook& shaderCook,
+        const Path& metadataPath,
+        EntryT& outEntry,
+        NWB::Core::Alloc::ScratchArena& scratchArena
+    ){
+        NWB::Core::Metascript::Document document(testArena.arena);
+        NWB::Impl::ShaderCook::CookString source(testArena.arena);
+        if(!NWB::Core::Assets::ParseMetadataDocumentText(
+            metadataPath,
+            "Meta",
+            source,
+            document,
+            [&document](const AStringView text){ return document.parse(text); }
+        ))
+            return false;
+
+        if constexpr(IsSame_V<EntryT, NWB::Impl::ShaderCook::ShaderEntry>)
+            return shaderCook.parseShaderMeta(metadataPath, document, outEntry, scratchArena);
+        else{
+            static_assert(IsSame_V<EntryT, NWB::Impl::ShaderCook::IncludeEntry>);
+            return shaderCook.parseIncludeMeta(metadataPath, document, outEntry, scratchArena);
+        }
+    }
+
     static bool WriteMaterialBindShaderProbeSource(
         TestArena& testArena,
         const Path& assetRoot,

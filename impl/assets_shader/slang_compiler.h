@@ -34,32 +34,21 @@ namespace ShaderIncludeKind{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-class SlangShaderCompiler final : public ShaderCook::IShaderCompiler{
-public:
-    static bool ExtractIncludeDirective(const AStringView line, AStringView& outIncludeName, ShaderIncludeKind::Enum& outKind);
-    static bool ResolveIncludeFile(const AStringView includeName, const ShaderIncludeKind::Enum kind, const Path& sourceDirectory, const ShaderCook::CookVector<Path>& includeDirectories, Path& outPath);
-
-
-public:
-    explicit SlangShaderCompiler(ShaderCook::CookArena& memoryArena)
-        : ShaderCook::IShaderCompiler(memoryArena)
-    {}
-
-
-public:
-    virtual bool compileVariant(const ShaderCook::ShaderCompilerRequest& request, ShaderCook::CookVector<u8>& outBytecode)override;
-
-
-private:
-    static bool TryMapStageToSlangStage(const AStringView stage, AStringView& outStage)noexcept;
-    static AStringView SlangOptimizationArgument(const ShaderOptimizationLevel::Enum optimizationLevel)noexcept;
-};
+namespace SlangShaderCompiler{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-Core::GlobalUniquePtr<ShaderCook::IShaderCompiler> CreateSlangShaderCompiler(ShaderCook::CookArena& memoryArena);
+[[nodiscard]] bool ExtractIncludeDirective(AStringView line, AStringView& outIncludeName, ShaderIncludeKind::Enum& outKind)noexcept;
+[[nodiscard]] bool ResolveIncludeFile(AStringView includeName, ShaderIncludeKind::Enum kind, const Path& sourceDirectory, const ShaderCook::CookVector<Path>& includeDirectories, Path& outPath);
+[[nodiscard]] bool CompileVariant(const ShaderCook::ShaderCompilerRequest& request, ShaderCook::CookVector<u8>& outBytecode);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

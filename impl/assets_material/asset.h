@@ -498,17 +498,6 @@ public:
     void setResourceReferences(const ResourceReferenceVector& resourceReferences);
     bool setShaderForStage(Core::ShaderType::Enum shaderType, const Core::Assets::AssetRef<IShader>& shaderAsset)noexcept;
 
-    bool findShaderForStage(Core::ShaderType::Enum shaderType, Core::Assets::AssetRef<IShader>& outShaderAsset)const noexcept;
-
-    template<typename TShader>
-        requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
-    bool setShader(const Core::Assets::AssetRef<TShader>& shaderAsset)noexcept{
-        static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
-        Core::Assets::AssetRef<IShader> shaderReference;
-        shaderReference.virtualPath = shaderAsset.virtualPath;
-        return setShaderForStage(TShader::s_Stage, shaderReference);
-    }
-
     template<typename TShader>
         requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
     [[nodiscard]] bool findShader(Core::Assets::AssetRef<TShader>& outShaderAsset)const noexcept{

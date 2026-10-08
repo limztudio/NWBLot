@@ -275,7 +275,13 @@ TEST(AssetsGraphics, ShaderMetadataRejectsDefaultVariantAlias){
     NWB::Impl::ShaderCook shaderCook(testArena.arena);
     NWB::Impl::ShaderCook::IncludeEntry includeEntry(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    EXPECT_FALSE(shaderCook.parseIncludeMeta(includeMetaPath, includeEntry, scratchArena));
+    EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile(
+        testArena,
+        shaderCook,
+        includeMetaPath,
+        includeEntry,
+        scratchArena
+    ));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
         "unsupported asset field 'default_variant'"
     )));
@@ -308,11 +314,29 @@ TEST(AssetsGraphics, ShaderMetadataRejectsRetiredGenericTypeAndStageField){
     for(const AStringView metadata : s_RetiredMetadata){
         SCOPED_TRACE(metadata);
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_ValidMetadata));
-        ASSERT_TRUE(shaderCook.parseShaderMeta(metadataPath, entry, scratchArena));
+        ASSERT_TRUE(AssetsGraphicsFixture::ParseShaderMetadataFile(
+            testArena,
+            shaderCook,
+            metadataPath,
+            entry,
+            scratchArena
+        ));
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, metadata));
-        EXPECT_FALSE(shaderCook.parseShaderMeta(metadataPath, entry, scratchArena));
+        EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile(
+            testArena,
+            shaderCook,
+            metadataPath,
+            entry,
+            scratchArena
+        ));
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_ValidMetadata));
-        EXPECT_TRUE(shaderCook.parseShaderMeta(metadataPath, entry, scratchArena));
+        EXPECT_TRUE(AssetsGraphicsFixture::ParseShaderMetadataFile(
+            testArena,
+            shaderCook,
+            metadataPath,
+            entry,
+            scratchArena
+        ));
     }
     ErrorCode error;
     EXPECT_TRUE(RemoveAllIfExists(root, error));
@@ -354,18 +378,39 @@ TEST(AssetsGraphics, ShaderMetadataRejectsObsoleteProfilesAndInvalidConditionalF
         Impl::ShaderCook::CookString metadata("compute_shader asset;\nasset.entry_point = \"main\";\n", testArena.arena);
         metadata.append(testCase.fields);
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, metadata));
-        EXPECT_EQ(shaderCook.parseShaderMeta(metadataPath, entry, scratchArena), testCase.accepted);
+        EXPECT_EQ(
+            AssetsGraphicsFixture::ParseShaderMetadataFile(
+                testArena,
+                shaderCook,
+                metadataPath,
+                entry,
+                scratchArena
+            ),
+            testCase.accepted
+        );
     }
     constexpr AStringView s_ShaderAssetTypes[] = { "vertex_shader", "pixel_shader", "ray_generation_shader" };
     for(const AStringView shaderAssetType : s_ShaderAssetTypes){
         const auto metadata = StringFormat(testArena.arena,
             "{} asset;\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 1;\n", shaderAssetType);
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, metadata));
-        EXPECT_FALSE(shaderCook.parseShaderMeta(metadataPath, entry, scratchArena));
+        EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile(
+            testArena,
+            shaderCook,
+            metadataPath,
+            entry,
+            scratchArena
+        ));
     }
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath,
         "mesh_shader asset;\nasset.entry_point = \"main\";\nasset.emit_mesh_compute_shadow = 0;\n"));
-    ASSERT_TRUE(shaderCook.parseShaderMeta(metadataPath, entry, scratchArena));
+    ASSERT_TRUE(AssetsGraphicsFixture::ParseShaderMetadataFile(
+        testArena,
+        shaderCook,
+        metadataPath,
+        entry,
+        scratchArena
+    ));
     ErrorCode error;
     EXPECT_TRUE(RemoveAllIfExists(root, error));
 }
@@ -392,7 +437,13 @@ TEST(AssetsGraphics, ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithR
     for(const AStringView retiredValue : { AStringView("0"), AStringView("1") }){
         SCOPED_TRACE(retiredValue);
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, validShaderMetadata));
-        ASSERT_TRUE(shaderCook.parseShaderMeta(shaderPath, shaderEntry, scratchArena));
+        ASSERT_TRUE(AssetsGraphicsFixture::ParseShaderMetadataFile(
+            testArena,
+            shaderCook,
+            shaderPath,
+            shaderEntry,
+            scratchArena
+        ));
         ASSERT_FALSE(shaderEntry.defineValues.empty());
         const auto obsoleteShaderMetadata = StringFormat(
             testArena.arena,
@@ -401,11 +452,23 @@ TEST(AssetsGraphics, ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithR
             retiredValue
         );
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, obsoleteShaderMetadata));
-        EXPECT_FALSE(shaderCook.parseShaderMeta(shaderPath, shaderEntry, scratchArena));
+        EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile(
+            testArena,
+            shaderCook,
+            shaderPath,
+            shaderEntry,
+            scratchArena
+        ));
         EXPECT_TRUE(shaderEntry.defineValues.empty());
         EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("define 'NWB_BINDLESS_TLAS' is an engine transport feature")));
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(shaderPath, validShaderMetadata));
-        ASSERT_TRUE(shaderCook.parseShaderMeta(shaderPath, shaderEntry, scratchArena));
+        ASSERT_TRUE(AssetsGraphicsFixture::ParseShaderMetadataFile(
+            testArena,
+            shaderCook,
+            shaderPath,
+            shaderEntry,
+            scratchArena
+        ));
         EXPECT_TRUE(shaderCook.validateVariantSignature("project/shader", "PROJECT_QUALITY=0", shaderEntry.defineValues, scratchArena));
         EXPECT_TRUE(shaderCook.validateVariantSignature("project/shader", "PROJECT_QUALITY=1", shaderEntry.defineValues, scratchArena));
         EXPECT_FALSE(shaderCook.validateVariantSignature(
@@ -413,7 +476,13 @@ TEST(AssetsGraphics, ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithR
         ));
 
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(includePath, validIncludeMetadata));
-        ASSERT_TRUE(shaderCook.parseIncludeMeta(includePath, includeEntry, scratchArena));
+        ASSERT_TRUE(AssetsGraphicsFixture::ParseShaderMetadataFile(
+            testArena,
+            shaderCook,
+            includePath,
+            includeEntry,
+            scratchArena
+        ));
         ASSERT_FALSE(includeEntry.defineValues.empty());
         const auto obsoleteIncludeMetadata = StringFormat(
             testArena.arena,
@@ -421,10 +490,22 @@ TEST(AssetsGraphics, ShaderMetadataRejectsEngineTransportDefinesAndRecoversWithR
             retiredValue
         );
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(includePath, obsoleteIncludeMetadata));
-        EXPECT_FALSE(shaderCook.parseIncludeMeta(includePath, includeEntry, scratchArena));
+        EXPECT_FALSE(AssetsGraphicsFixture::ParseShaderMetadataFile(
+            testArena,
+            shaderCook,
+            includePath,
+            includeEntry,
+            scratchArena
+        ));
         EXPECT_TRUE(includeEntry.defineValues.empty());
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(includePath, validIncludeMetadata));
-        ASSERT_TRUE(shaderCook.parseIncludeMeta(includePath, includeEntry, scratchArena));
+        ASSERT_TRUE(AssetsGraphicsFixture::ParseShaderMetadataFile(
+            testArena,
+            shaderCook,
+            includePath,
+            includeEntry,
+            scratchArena
+        ));
         EXPECT_TRUE(shaderCook.validateVariantSignature("project/include", "PROJECT_QUALITY=1", includeEntry.defineValues, scratchArena));
     }
     ErrorCode error;
@@ -599,6 +680,38 @@ static bool WriteExactEntryPointShaderProbe(const Path& assetRoot){
     return AssetsGraphicsFixture::WriteTextFile(assetRoot / "shaders" / "exact_entry_point_ps.slang", s_ExactEntryPointShaderProbeSource);
 }
 
+TEST(AssetsGraphics, ShaderCookCompilesAmplificationStageWithoutMeshDependency){
+    CapturingLogger logger;
+    const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
+    TestArena testArena;
+    Path root(testArena.arena);
+    Path outputDirectory(testArena.arena);
+    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
+        testArena, "standalone_amplification_stage", root, outputDirectory
+    ));
+    const Path assetRoot = root / "assets";
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(
+        assetRoot / "shaders" / "standalone_task.nwb",
+        "amplification_shader asset;\nasset.entry_point = \"main\";\n"
+    ));
+    ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(
+        assetRoot / "shaders" / "standalone_task.slang",
+        "[shader(\"amplification\")]\n[numthreads(1, 1, 1)]\nvoid main(){}\n"
+    ));
+    ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
+    const Name virtualPath = Core::ShaderArchive::BuildVirtualPathName(
+        Name("project/shaders/standalone_task"), Core::ShaderArchive::s_DefaultVariant, Name("task")
+    );
+    UniquePtr<Core::Assets::IAsset> loaded;
+    ASSERT_TRUE(AssetsGraphicsFixture::LoadCookedAsset<Impl::AmplificationShaderAssetCodec>(
+        testArena, outputDirectory, virtualPath, loaded, s_ExpectedDualCount
+    ));
+    EXPECT_EQ(logger.errorCount(), 0u);
+    ErrorCode error;
+    EXPECT_TRUE(RemoveAllIfExists(root, error));
+}
+
+
 TEST(AssetsGraphics, ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedState){
     CapturingLogger logger;
     const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
@@ -640,10 +753,10 @@ TEST(AssetsGraphics, ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedS
     Core::Assets::AssetBytes computeBinary(testArena.arena);
     ASSERT_EQ(Impl::ShaderBinaryPayload::EncodeAssetPayload(
         AStringView(cookedPixel.entryPoint()), cookedPixel.bytecode(), pixelBinary
-    ), Impl::ShaderBinaryPayload::AssetPayloadFailure::None);
+    ), Impl::ShaderBinaryPayload::AssetPayloadEncodeFailure::None);
     ASSERT_EQ(Impl::ShaderBinaryPayload::EncodeAssetPayload(
         AStringView(cookedCompute.entryPoint()), cookedCompute.bytecode(), computeBinary
-    ), Impl::ShaderBinaryPayload::AssetPayloadFailure::None);
+    ), Impl::ShaderBinaryPayload::AssetPayloadEncodeFailure::None);
 
     Core::Assets::IAsset* const preservedPixel = pixelAsset.get();
     Core::Assets::IAsset* const preservedCompute = computeAsset.get();
@@ -674,7 +787,7 @@ TEST(AssetsGraphics, ConcreteShaderAdmissionRejectsWrongStageAndPreservesLoadedS
     Core::Assets::AssetBytes missingEntryBinary(testArena.arena);
     ASSERT_EQ(Impl::ShaderBinaryPayload::EncodeAssetPayload(
         "absent", cookedCompute.bytecode(), missingEntryBinary
-    ), Impl::ShaderBinaryPayload::AssetPayloadFailure::None);
+    ), Impl::ShaderBinaryPayload::AssetPayloadEncodeFailure::None);
     EXPECT_FALSE(compute.loadBinary(missingEntryBinary));
     EXPECT_EQ(pixel.bytecode().data(), pixelBytes);
     EXPECT_EQ(compute.bytecode().data(), computeBytes);

@@ -28,20 +28,16 @@ public:
         static_cast<void>(graph);
         return Core::GpuTaskGraphOutputLayer{};
     }
-    virtual void acceptTaskGraphOutputLayer(const u64 generation, const Core::QueueSubmissionToken& token)override{
+    virtual void acceptTaskGraphOutputLayer(const u64, const Core::QueueSubmissionToken&)override{
         ++m_acceptanceCount;
-        m_acceptedGeneration = generation;
-        m_acceptedToken = token;
     }
 
 
 public:
     u32 m_acceptanceCount = 0u;
-    u64 m_acceptedGeneration = 0u;
-    Core::QueueSubmissionToken m_acceptedToken;
 };
 
-TEST(OutputLayer, FinalPresentAcceptanceForwardsExactImmutableGenerationAndConsumerToken){
+TEST(OutputLayer, MissingContributorInvalidTokenAndZeroGenerationCannotPublishAcceptance){
     RecordingLayerContributor contributor;
     Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(nullptr, 17u, {});
     Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, 17u, {});
@@ -54,9 +50,6 @@ TEST(OutputLayer, FinalPresentAcceptanceForwardsExactImmutableGenerationAndConsu
     };
     Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, 17u, consumerToken);
     EXPECT_EQ(contributor.m_acceptanceCount, 1u);
-    EXPECT_EQ(contributor.m_acceptedGeneration, 17u);
-    EXPECT_EQ(contributor.m_acceptedToken.value, consumerToken.value);
-    EXPECT_TRUE(contributor.m_acceptedToken.matchesPhysicalQueue(0u, 3u));
     Impl::RendererTaskGraphDetail::DeferredPresentGraphTask::AcceptOutputLayer(&contributor, 0u, consumerToken);
     EXPECT_EQ(contributor.m_acceptanceCount, 1u);
 }

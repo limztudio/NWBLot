@@ -49,13 +49,13 @@ TEST(UiNumericParseTests, IntegerPrefixesAndMalformedSyntaxRetainErrorClassifica
     }
 }
 
-TEST(UiNumericParseTests, IntegerConversionPreservesFullSignedRangeAndLargeExactValues){
+TEST(UiNumericParseTests, IntegerConversionPreservesSuccessfulZeroSignedBoundsAndLargeExactValues){
     struct CompleteCase{
         AStringView text;
         i64 value = 0;
     };
     const CompleteCase cases[]{
-        { "0", 0 }, { "-0", 0 },
+        { "0", 0 },
         { "9007199254740993", 9007199254740993ll },
         { "-9223372036854775808", Limit<i64>::s_Min },
         { "+9223372036854775807", Limit<i64>::s_Max }

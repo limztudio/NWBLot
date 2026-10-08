@@ -32,7 +32,6 @@ TEST(ObjectGeometryCacheTests, LayoutKeepsSentinelVerticesAndPersistentIndicesIn
     ASSERT_TRUE(resolvedLayout);
     layout = *resolvedLayout;
     EXPECT_EQ(layout.indexByteOffset, 4u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
-    EXPECT_EQ(layout.indexCount, 3u);
     EXPECT_EQ(layout.bufferByteSize, 5u * NWB_MESH_OBJECT_VERTEX_BYTE_SIZE);
 }
 

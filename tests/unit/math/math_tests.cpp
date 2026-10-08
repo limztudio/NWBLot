@@ -73,7 +73,7 @@ TEST(Math, HyperbolicTangentSaturatesAndPreservesSignedZero){
     EXPECT_FALSE(SignBit(VectorGetY(signedZeroTanH)));
 }
 
-TEST(Math, VectorIntegerAddKeepsPackedLaneArithmetic){
+TEST(Math, VectorIntegerAddWrapsAtUnsignedLaneLimits){
     const SIMDVector sum = VectorAddInt(
         VectorSetInt(Limit<u32>::s_Max, 4u, 0xFFFFFFFEu, 19u),
         VectorSetInt(1u, 7u, 3u, Limit<u32>::s_Max)

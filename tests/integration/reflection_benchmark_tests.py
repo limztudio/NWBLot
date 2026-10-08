@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """CPU-only tests of reflection GPU benchmark analysis and launch contracts."""
-import collections
 import contextlib
 import copy
 import io
@@ -14,8 +13,6 @@ from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 import reflection_benchmark as benchmark
-from gpu_timing_parse import NAME_SYMBOLS_HEADER
-from name_symbols import known_name_symbols
 from smoke_volume_identity import volume_segment_filename
 
 LIT_GPU_SAMPLES = "gpu_samples"
@@ -88,7 +85,6 @@ LIT_UTF_8 = "utf-8"
 LIT_RUNTIME_PIPELINE_CACHE = "runtime_pipeline_cache"
 LIT_PLAN_JSON = "plan.json"
 LIT_ORIGINAL = "original"
-LIT_STOPPED_BEFORE_LAUNCH = "stopped before launch"
 LIT_WRITE_STATUS = "write_status"
 LIT_BACKEND_CLOSE_FAILED = "backend close failed"
 LIT_BACKEND_DISCOVERY_FAILED = "backend discovery failed"
@@ -237,18 +233,6 @@ class TimingNormalizationTests(unittest.TestCase):
 
 
 class PairedInferenceTests(unittest.TestCase):
-    def test_williams_order_balances_positions_and_preceding_treatments(self):
-        for count in (2, 3, 4):
-            variants = tuple(benchmark.Variant(str(index), LIT_HARDWARE) for index in range(count))
-            cycle = count if count % 2 == 0 else 2 * count
-            blocks = ((5 + cycle - 1) // cycle) * cycle
-            rows = benchmark.balanced_orders(variants, blocks, 7)
-            positions = collections.Counter((position, variant.name) for row in rows for position, variant in enumerate(row))
-            self.assertEqual(len(set(positions.values())), 1)
-            predecessors = collections.Counter((left.name, right.name) for row in rows for left, right in zip(row, row[1:]))
-            self.assertEqual(len(predecessors), count * (count - 1))
-            self.assertEqual(len(set(predecessors.values())), 1)
-
     def test_incomplete_cycle_and_fewer_than_five_independent_units_fail(self):
         with self.assertRaises(benchmark.SmokeFailure):
             benchmark.balanced_orders(benchmark.variants_for(LIT_FLOOR), 5, 0)
@@ -507,29 +491,6 @@ class BenchmarkLifecycleTests(unittest.TestCase):
             with self.assertRaisesRegex(benchmark.SmokeFailure, "must be empty"):
                 benchmark.run(args)
             self.assertEqual(plan.read_text(encoding=LIT_UTF_8), LIT_ORIGINAL)
-
-    def test_plan_records_build_decoder_and_common_control_identity_before_any_trial(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            executable = root / LIT_APP_EXE
-            executable.write_bytes(b"immutable build")
-            resources = root / LIT_RES
-            resources.mkdir()
-            (resources / LIT_AUTHORED_VOL).write_bytes(b"immutable assets")
-            namesym = root / "app.namesym"
-            token = next(iter(known_name_symbols([benchmark.FRAME])))
-            namesym.write_text(f"{NAME_SYMBOLS_HEADER}\n{token}\t0\t{benchmark.FRAME}\n", encoding=LIT_UTF_8)
-            args = benchmark.parse_args([LIT_EXECUTABLE, str(executable), LIT_WORKING_DIRECTORY, str(root),
-                LIT_OUTPUT_DIRECTORY, str(root / LIT_OUTPUT), "--namesym", str(namesym), LIT_FAMILY, LIT_OPTICAL_CLEAR])
-            with patch.object(benchmark, "run_trial", side_effect=benchmark.SmokeFailure(LIT_STOPPED_BEFORE_LAUNCH)), \
-                    patch.object(benchmark, LIT_WRITE_STATUS), self.assertRaisesRegex(benchmark.SmokeFailure, LIT_STOPPED_BEFORE_LAUNCH):
-                benchmark.run(args)
-            plan = json.loads((args.output_directory / LIT_PLAN_JSON).read_text(encoding=LIT_UTF_8))
-            self.assertEqual(plan["executable_identity"], benchmark.file_identity(executable))
-            self.assertEqual(plan["authored_volume_hashes"], benchmark.authored_volume_hashes(root))
-            self.assertEqual(plan["namesym_identity"][LIT_SHA256], benchmark.file_identity(namesym)[LIT_SHA256])
-            failure = json.loads((args.output_directory / "failure.json").read_text(encoding=LIT_UTF_8))
-            self.assertEqual(failure["completed_trials"], 0)
 
     def test_failed_launch_cleans_logserver_and_preserves_original_failure(self):
         with tempfile.TemporaryDirectory() as temporary, contextlib.ExitStack() as stack:

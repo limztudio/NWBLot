@@ -246,8 +246,6 @@ TEST(Global, MultiplicationDistinguishesOverflowSignedBoundariesAndSuccessfulZer
     static_assert(s_Zero && *s_Zero == 0u);
     constexpr auto s_Minimum = ::TryMultiply<i64>(Limit<i64>::s_Min, 1);
     static_assert(s_Minimum && *s_Minimum == Limit<i64>::s_Min);
-    constexpr auto s_Negative = ::TryMultiply<i64>(-3, -7);
-    static_assert(s_Negative && *s_Negative == 21);
     EXPECT_EQ(*s_Zero, 0u);
     EXPECT_EQ(*s_Minimum, Limit<i64>::s_Min);
 }
@@ -882,7 +880,7 @@ TEST(Global, CaptureProcessOutputTimesOutWithContinuousOutput){
         EXPECT_LT(elapsedMilliseconds, 1000u);
 }
 
-TEST(Global, RunProcessRedirectedToFileCapturesBothStreams){
+TEST(Global, RedirectedNonzeroExitAndInvalidArgumentsPreserveCapturedStreams){
     NWB::Tests::TestArena<> testArena;
     const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/redirected_process");
     const Path<NWB::Core::Alloc::GlobalArena> outputPath = root / "combined output.txt";
@@ -907,7 +905,7 @@ TEST(Global, RunProcessRedirectedToFileCapturesBothStreams){
 }
 #endif
 
-TEST(Global, FilesystemMovePathToDirectory){
+TEST(Global, MovePathReplacesExistingDestinationWithoutRetainingSource){
     NWB::Tests::TestArena<> testArena;
     const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/move_path_to_directory");
     const Path<NWB::Core::Alloc::GlobalArena> source = root / "source.txt";

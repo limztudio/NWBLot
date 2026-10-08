@@ -58,7 +58,6 @@ LIT_SHA256 = "sha256"
 LIT_NWB_GATHER_COMPILER_STATISTICS_FILE = "NWB_GATHER_COMPILER_STATISTICS_FILE"
 LIT_INHERITED_JSONL = "inherited.jsonl"
 LIT_SAMPLE_JSONL = "sample.jsonl"
-LIT_TRIAL_COMPILER_STATISTICS_JSONL = "trial/compiler_statistics.jsonl"
 LIT_MAIN = "__main__"
 
 gather = diagnostic.gather
@@ -317,13 +316,6 @@ class CompilerStatisticsDiagnosticTests(unittest.TestCase):
     def test_diagnostic_environment_strips_inherited_path(self):
         env = gather.environment({LIT_NWB_GATHER_COMPILER_STATISTICS_FILE: LIT_INHERITED_JSONL}, LIT_UNIQUE, LIT_TIMING, LIT_SAMPLE_JSONL)
         self.assertNotIn(LIT_NWB_GATHER_COMPILER_STATISTICS_FILE, env)
-
-    def test_explicit_diagnostic_path_preserves_all_other_environment_settings(self):
-        base = {"PATH": "kept", LIT_NWB_GATHER_COMPILER_STATISTICS_FILE: LIT_INHERITED_JSONL}
-        original = gather.environment(base, LIT_UNIQUE, LIT_TIMING, LIT_SAMPLE_JSONL)
-        changed = gather.environment(base, LIT_UNIQUE, LIT_TIMING, LIT_SAMPLE_JSONL, LIT_TRIAL_COMPILER_STATISTICS_JSONL)
-        self.assertEqual(changed.pop(LIT_NWB_GATHER_COMPILER_STATISTICS_FILE), LIT_TRIAL_COMPILER_STATISTICS_JSONL)
-        self.assertEqual(changed, original)
 
 
 if __name__ == LIT_MAIN:

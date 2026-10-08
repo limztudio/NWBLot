@@ -214,7 +214,7 @@ TEST(Ecs, DestroyedEntityGenerationCannotReachRecycledComponents){
     EXPECT_NE(recycledEntity.id(), entityId);
 }
 
-TEST(Ecs, ComponentMutationVersion){
+TEST(Ecs, DuplicateAddAndRemovePreserveComponentMutationVersions){
     TestWorld testWorld;
 
     auto entity = testWorld.world.createEntity();

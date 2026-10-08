@@ -25,7 +25,7 @@ using namespace TelemetryTestDetail;
 
 
 
-TEST(Telemetry, FrameGraphPacketSubmissionStatisticsValidation){
+TEST(Telemetry, PacketSubmissionStatisticsRejectInconsistentCountsAndNonfiniteTime){
     Telemetry::FrameGraphPacketSubmissionStatisticsRecord statistics{
         .packetGeneration = 72u,
         .taskCount = s_ExpectedDualCount,

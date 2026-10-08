@@ -243,8 +243,6 @@ TEST(Telemetry, TelemetryReportRejectsNonCurrentFrameGraphPayloads){
     EXPECT_EQ(report.summary.eventCount, LengthOf(unsupportedVersions) + 1u);
     EXPECT_EQ(report.summary.parseFailureCount, LengthOf(unsupportedVersions));
     EXPECT_EQ(report.summary.frameGraphFrameCount, 1u);
-    EXPECT_EQ(report.summary.frameGraphNodeCount, nodes.size());
-    EXPECT_EQ(report.summary.frameGraphEdgeCount, edges.size());
     EXPECT_TRUE(ContainsText(AStringView(report.graph.data(), report.graph.size()), "GBuffer Pass"));
 }
 

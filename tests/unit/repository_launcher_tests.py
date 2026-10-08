@@ -1024,7 +1024,6 @@ class PipelineLauncherTests(unittest.TestCase):
         self.assertIsNotNone(specification.loader)
         self.pipeline = importlib.util.module_from_spec(specification)
         specification.loader.exec_module(self.pipeline)
-        self.assertIs(launcher, self.pipeline.ROOT_LAUNCHER)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)

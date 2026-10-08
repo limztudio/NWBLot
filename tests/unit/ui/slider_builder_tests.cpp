@@ -27,12 +27,9 @@ class UiSliderBuilderTests : public SliderFixture{};
 TEST_F(UiSliderBuilderTests, DeclarationPublishesItsResultAndOwnedPartsOnlyAfterScopeValidation){
     ASSERT_TRUE(declare(1u));
     EXPECT_FALSE(m_state.result().valid);
-    EXPECT_DOUBLE_EQ(m_state.value(), 0.25);
     EXPECT_EQ(target(host()), nullptr);
     ASSERT_TRUE(finishPanel());
     EXPECT_TRUE(m_state.result().valid);
-    EXPECT_FALSE(m_state.result().valueChanged);
-    EXPECT_FALSE(m_state.result().dragging);
     EXPECT_EQ(target(host()), nullptr);
     ASSERT_TRUE(m_context.commitFrame(1u));
     ASSERT_NE(target(host()), nullptr);

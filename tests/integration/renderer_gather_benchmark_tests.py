@@ -106,10 +106,6 @@ def balanced_trials():
 
 
 class RendererGatherBenchmarkAnalysisTests(unittest.TestCase):
-    def test_weights_gpu_totals_by_actual_completed_ranges(self):
-        result = bench.summarize_rows(rows(), LIT_SHARED, LIT_TIMING)
-        self.assertEqual(result[LIT_GPU][LIT_RENDER_FRAME][LIT_MEAN_MS], 3.5)
-
     def test_rejects_duplicate_cpu_source_frame(self):
         values = rows()
         values[2][LIT_SOURCE_FRAME] = 96

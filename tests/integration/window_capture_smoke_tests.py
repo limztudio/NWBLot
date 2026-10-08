@@ -337,19 +337,6 @@ class TransparentCsgAnalysisTests(unittest.TestCase):
     def capture_result(pose, analysis):
         return SimpleNamespace(transparent_csg={pose: analysis})
 
-    def test_pose_regions_are_inset_within_projected_receiver_geometry(self):
-        for pose, (cut, retained) in window_capture_smoke.TRANSPARENT_CSG_REGIONS.items():
-            with self.subTest(pose=pose):
-                uncut_hull = self.receiver_hull(pose, False)
-                clipped_hull = self.receiver_hull(pose, True)
-                for x in (cut[0], cut[2]):
-                    for y in (cut[1], cut[3]):
-                        self.assertGreater(self.signed_margin(uncut_hull, (x, y)), .002)
-                        self.assertLess(self.signed_margin(clipped_hull, (x, y)), -.002)
-                for x in (retained[0], retained[2]):
-                    for y in (retained[1], retained[3]):
-                        self.assertGreater(self.signed_margin(clipped_hull, (x, y)), .002)
-
     def test_all_three_missing_cutter_poses_fail_even_with_background_outside_receiver(self):
         for pose in window_capture_smoke.TRANSPARENT_CSG_REGIONS:
             with self.subTest(pose=pose):

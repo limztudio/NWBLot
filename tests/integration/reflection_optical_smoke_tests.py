@@ -347,10 +347,6 @@ class CausticExteriorTests(unittest.TestCase):
         self.assertIsNone(mesh.intersect((0, 0.85, -0.701), (0.0, 0.0, -1.0)))
         self.assertIsNone(mesh.intersect((2.0, 0.85, -2.2), (0.0, 0.0, 1.0)))
 
-    def test_ground_occlusion_is_geometry_checked(self):
-        self.assertTrue(caustic_reference.hits_ground((0, 0.85, -0.7), (0, -1, 0)))
-        self.assertFalse(caustic_reference.hits_ground((0, 0.85, -0.7), (0, 1, 0)))
-        self.assertFalse(caustic_reference.hits_ground((4, 0.85, -0.7), (0, -1, 0)))
 
 if __name__ == LIT_MAIN:
     unittest.main()

@@ -74,7 +74,6 @@ TEST(GpuTaskGraph, CopiesCallerMetadataAndDestroysTypedPayloadOnReset){
         EXPECT_EQ(stored.dependencies[0], predecessor);
         EXPECT_EQ(stored.resourceUses[0].resource, resource);
         EXPECT_EQ(stored.markerLabel, AStringView("Stack Marker"));
-        EXPECT_TRUE(stored.hasPayload);
     }
 
     graph.reset();

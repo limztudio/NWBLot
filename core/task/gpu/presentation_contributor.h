@@ -26,7 +26,7 @@ class GpuTaskGraph;
 // output and before the swap-chain submission is signalled. The contributor owns its payload and CPU-side
 // acceptance lifecycle; Graphics only keeps this non-owning registration seam so renderer and UI modules stay
 // independent.
-struct IGpuTaskGraphPresentationContributor{
+interface IGpuTaskGraphPresentationContributor{
 public:
     virtual ~IGpuTaskGraphPresentationContributor() = default;
 

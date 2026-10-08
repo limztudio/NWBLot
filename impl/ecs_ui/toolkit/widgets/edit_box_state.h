@@ -59,7 +59,7 @@ struct EditBoxResult{
 
 
 // The toolkit lends a model only during edit(). Native services and asynchronous exchange belong to the host adapter.
-struct IEditBoxHost : private NoCopy{
+interface IEditBoxHost : private NoCopy{
 public:
     virtual ~IEditBoxHost()noexcept = default;
 

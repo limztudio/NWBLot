@@ -105,7 +105,7 @@ private:
 };
 
 // An optional guard is borrowed only during reconciliation to stop source calls when its declaration context fails.
-struct IRadioGroupReconcileGuard{
+interface IRadioGroupReconcileGuard{
 public:
     virtual ~IRadioGroupReconcileGuard()noexcept = default;
 

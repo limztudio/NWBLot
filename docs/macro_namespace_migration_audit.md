@@ -8,7 +8,7 @@ Date: 2026-10-08. Source base: `b5181049e735e800cd2d845ea12d5b7f007df8a1`, pulle
 | --- | --- |
 | Shared utilities | NWBLot-owned macro APIs use `NWB_`, including compiler/platform, memory/string, stream, assertion, math, and global utility macros. Definitions remain in their owning headers; utility types and functions retain their existing scopes. |
 | Build configuration | CMake defines `NWB_DEBUG`, `NWB_OPTIMIZE`, and `NWB_FINAL` directly for `dbg`, `opt`, and `fin`, without intermediate configuration aliases. |
-| Interface declarations | Project C++ interfaces use plain `struct`; no project-owned lowercase annotation or wrapper macro is defined. External SDK spellings remain externally owned. |
+| Interface declarations | Project C++ abstract interfaces retain the lowercase `interface` declaration annotation. `global/compile.h` supplies the portable `struct` expansion only when an external SDK has not already defined it. This canonical annotation is an intentional macro-prefix exception; external SDK spellings remain externally owned. |
 | Engine namespace | Root `engine_namespace.h` alone defines `NWB_BEGIN` and `NWB_END`, opening and closing `namespace NWB`. It contains no engine type or service dependency. Engine-domain umbrellas include it and define their own domain wrappers. |
 | Application namespace | `CoolStuff/Testbed/namespace.h` independently defines `TESTBED_BEGIN`/`TESTBED_END` for `namespace Testbed`, without including engine headers. Testbed headers use that local header; the owning CMake source list registers it. |
 | Application types | The callback object is `Testbed::Project`; UI classes and sources live in `Testbed`, including `Testbed::UiSkinPreview` and the `Testbed::Ui*` galleries. Existing translation-unit helpers remain in their named `__hidden_*` groups inside the application namespace. |
@@ -74,6 +74,8 @@ Repository and wiki diff checks passed after final documentation updates. Histor
 
 ## Configuration and interface follow-up: October 8, 2026
 
+This records the earlier interface removal; the current declaration contract is restored in the next section.
+
 Published source `99845979361d56477e768d4eb4d110fa7533418d` removes the remaining configuration indirection and
 project-owned keyword-like annotation. `configuration/CodeGen.cmake` emits `NWB_DEBUG`, `NWB_OPTIMIZE`, and
 `NWB_FINAL` directly for `dbg`, `opt`, and `fin`. `global/compile.h` retains the required external compiler configuration
@@ -99,3 +101,18 @@ requested `--gpudbg`, which Final does not support; that failed diagnostic attem
 qualification. It is not Final GPU-validation evidence. Manual capture wrappers must use `--no-gpu-validation` with
 a `fin` executable; validated runtime checks use `dbg` or `opt`. `qualification_summary.json`, `ctest_results.json`,
 `preprocessor_comparison.json`, and `canonical_mode_visibility_review.json` retain the exact results and limits.
+
+## C++ interface spelling restoration: October 8, 2026
+
+Project-owned C++ abstract interfaces again use the lowercase `interface` declaration annotation. `global/compile.h`
+owns the portable `interface` to `struct` expansion and defines it only when an external SDK has not already supplied
+the spelling. Preserve that SDK definition and isolate collisions with identifiers in external headers at the include
+boundary. Ordinary value aggregates and concrete implementations keep their existing `struct` or `class` declarations.
+
+The annotation is the current canonical declaration spelling and an intentional exception to the `NWB_` macro-prefix
+rule. Keep it during naming and compatibility cleanup; do not replace it with plain `struct` or introduce a prefixed
+declaration wrapper. This changes declaration spelling without adding runtime work or storage. Canonical configuration
+macros remain `NWB_DEBUG`, `NWB_OPTIMIZE`, and `NWB_FINAL`; their direct CMake definitions are unchanged.
+
+`.helper/standard.md` and `.helper/note.md` record this restored contract. The earlier removal and its qualification
+above remain historical evidence, rather than verification of the restoration.

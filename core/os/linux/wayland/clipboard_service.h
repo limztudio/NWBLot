@@ -10,10 +10,13 @@
 #include <core/os/clipboard_service.h>
 #include <core/os/linux/pipe_io.h>
 
+#pragma push_macro("interface")
+#undef interface
 #include <wayland-client.h>
 #if defined(NWB_OS_WITH_PRIMARY_SELECTION)
 #include <primary-selection-client-protocol.h>
 #endif
+#pragma pop_macro("interface")
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

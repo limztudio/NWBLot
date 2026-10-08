@@ -42,7 +42,7 @@ struct GpuTaskGraphOutputLayer{
 };
 
 
-struct IGpuTaskGraphOutputLayerContributor{
+interface IGpuTaskGraphOutputLayerContributor{
 public:
     virtual ~IGpuTaskGraphOutputLayerContributor() = default;
 

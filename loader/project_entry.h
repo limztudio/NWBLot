@@ -22,8 +22,8 @@ NWB_CORE_BEGIN
 
 class GraphicsRuntime;
 class InputDispatcher;
-struct IClipboardService;
-struct ITextInputService;
+interface IClipboardService;
+interface ITextInputService;
 
 namespace ECS{
     class World;
@@ -111,7 +111,7 @@ struct ProjectRuntimeContext{
 };
 
 
-struct IProjectEntryCallbacks{
+interface IProjectEntryCallbacks{
 public:
     virtual ~IProjectEntryCallbacks() = default;
 

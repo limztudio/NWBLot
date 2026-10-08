@@ -51,7 +51,7 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
   - `using namespace` directives for project namespaces (e.g., `using namespace ShaderCook;`) are allowed inside `__hidden_*` namespaces for convenience.
 
 ## 3. Naming conventions
-- Types (`class`, `struct`, `enum namespaces`) use `PascalCase`.
+- Types (`class`, `struct`, `interface`, `enum namespaces`) use `PascalCase`.
 - Non-static C++ member functions, parameters, and local variables use `lowerCamelCase`. Static C++ class/struct member functions, including static helpers and factories, use `UpperCamelCase`, starting with an uppercase letter.
 - Internal/class state fields use the `m_` prefix. Public aggregate, descriptor, and serialized-layout fields use semantic `lowerCamelCase` names; preserve their layout and authored field contracts.
 - Non-static global variables use `g_` prefix.
@@ -66,7 +66,8 @@ Derived from `core/`, `global/`, and `logger/` source files (excluding `3rd_part
 - NWBLot-owned utility, configuration, diagnostic, namespace, and shader feature macro APIs use the `NWB_` prefix, including those under `global/`. The prefix identifies ownership; the defining header and directory identify the domain.
 - Application-owned macro APIs use that application's prefix, such as `TESTBED_`; preserve required external API, compiler interoperability, toolchain, and third-party macro spellings. Consuming an engine-owned shader or runtime contract from a project does not change that contract's prefix.
 - Existing shader resource-view aliases follow the shader symbol contract in section 15, including `g_*` resource aliases. Preserve those resource names; a utility/configuration macro-prefix migration does not rename shader resources or rewrite their authored contracts.
-- Declare project-owned interfaces with plain `struct`; do not define a lowercase keyword-like `interface` alias or add a wrapper macro for these declarations. Preserve external SDK/compiler macro ownership without redefining their spellings.
+- Maintain the lowercase `interface` keyword for project interface definitions and forward declarations. `global/compile.h` provides the canonical portable `interface` -> `struct` annotation under `#ifndef interface`, preserving an existing SDK/compiler definition. This language-like annotation is an intentional exception to the `NWB_` macro-prefix rule and is a current authoring convention; do not remove it as backward compatibility, replace interface declarations with plain `struct`, or rename it to a prefixed wrapper. Preserve existing access, inheritance, destructor, virtual, and exception contracts. Do not reclassify deliberate abstract implementation/base classes solely from an `I` name prefix.
+- When external C headers use `interface` as an ordinary identifier, temporarily suspend the annotation around that include group with `#pragma push_macro("interface")`, `#undef interface`, and `#pragma pop_macro("interface")`. Restore its previous definition immediately after the external includes; keep this interop boundary local and preserve external declarations.
 - Preserve project scalar aliases, template parameter conventions, required standard-library customization/iterator names, and external API/entry-point spellings. Project-owned methods that merely resemble standard APIs follow the project method convention.
 - Python uses `snake_case` functions, parameters, and variables, `PascalCase` classes, and `UPPER_SNAKE_CASE` module constants. Project CMake helpers use the `nwb_` prefix.
 - For virtual overrides, explicitly write both `virtual` and `override`.

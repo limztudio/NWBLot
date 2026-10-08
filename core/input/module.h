@@ -207,7 +207,7 @@ static_assert(Key::World1 == 161 && Key::World2 == 162);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct IInputEventHandler{
+interface IInputEventHandler{
 public:
     virtual ~IInputEventHandler() = default;
 

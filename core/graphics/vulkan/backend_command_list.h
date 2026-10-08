@@ -310,7 +310,7 @@ public:
     [[nodiscard]] bool resetTimerQuery(TimerQuery& query);
     [[nodiscard]] bool canRecordTimerQueryHere()const;
     [[nodiscard]] bool canResetTimerQueryHere()const;
-    [[nodiscard]] bool beginTimerQuery(TimerQuery& query, TimerQueryRecordingToken& outToken);
+    [[nodiscard]] Expected<TimerQueryRecordingToken> beginTimerQuery(TimerQuery& query);
     [[nodiscard]] bool endTimerQuery(TimerQuery& query, const TimerQueryRecordingToken& token);
     // Claim closure consumes only the beginTimerQuery() claim from this same command buffer; no retention,
     // diagnostics, or observers.
@@ -362,11 +362,9 @@ private:
     [[nodiscard]] bool canResetTimerQueryHereUnchecked()const noexcept;
     // False only when graph publication blocks inspection. True reports whether this exact native lease holds
     // the requested cycle's begin and end claims.
-    [[nodiscard]] bool inspectExactTimerQueryRecordingEndpoints(
+    [[nodiscard]] Expected<TimerQueryRecordingEndpoints> inspectExactTimerQueryRecordingEndpoints(
         const TimerQueryRecordingToken& token,
-        u64 recordingLeaseSerial,
-        bool& outRecordsBegin,
-        bool& outRecordsEnd
+        u64 recordingLeaseSerial
     )const noexcept;
     [[nodiscard]] bool beginGraphRecordingOwnership(u64 recordingLeaseSerial);
     void publishGraphRecordingOwnership(u64 recordingLeaseSerial)noexcept;
@@ -374,7 +372,7 @@ private:
     // A recorded graph may outlive its strong reference via a task-retained handle. Revoke only that graph's
     // still-unsubmitted publication.
     void revokeGraphRecordingPublication(u64 recordingLeaseSerial)noexcept;
-    [[nodiscard]] bool beginGraphSubmissionOwnership(u64& outRecordingLeaseSerial)noexcept;
+    [[nodiscard]] Expected<u64> beginGraphSubmissionOwnership()noexcept;
     void acceptGraphSubmissionOwnership(u64 recordingLeaseSerial)noexcept;
     void endGraphSubmissionOwnership(u64 recordingLeaseSerial)noexcept;
     void closeInternal(CommandListResourceStateHandoff* finalStates);
@@ -494,14 +492,13 @@ private:
         u32 commandCount,
         TStringView commandName
     );
-    [[nodiscard]] bool prepareDrawIndirect(
+    [[nodiscard]] Expected<Buffer*> prepareDrawIndirect(
         u32 offsetBytes,
         u32 drawCount,
         u64 commandSizeBytes,
         TStringView operationLabel,
         TStringView commandName,
-        VulkanDetail::IndirectDrawIndexMode::Enum indexMode,
-        Buffer*& outIndirectBuffer
+        VulkanDetail::IndirectDrawIndexMode::Enum indexMode
     );
     void clearColorTexture(Texture& texture, TextureSubresourceSet subresources, TStringView valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
     void clearColorTextureBox(Texture& texture, TextureSubresourceSet subresources, const Box& box, TStringView valueName, const VkClearColorValue& clearValue, bool integerValue, bool signedIntegerValue);
@@ -514,44 +511,36 @@ private:
         VkImageUsageFlags requiredImageUsage,
         TStringView operationName
     );
-    bool prepareStagingTextureCopy(
+    Expected<VkBufferImageCopy> prepareStagingTextureCopy(
         StagingTexture& stagingResource,
         const TextureSlice& stagingSlice,
         Texture& textureResource,
-        const TextureSlice& textureSlice,
-        VkBufferImageCopy& outRegion
+        const TextureSlice& textureSlice
     )const;
-    bool prepareUploadStaging(
+    [[nodiscard]] Expected<BufferSuballocation> prepareUploadStaging(
         usize dataSize,
         TStringView operationName,
-        Buffer*& outStagingBuffer,
-        u64& outStagingOffset,
-        void*& outCpuVA,
         u32 alignment = s_DefaultUploadSuballocationAlignment
     );
-    bool prepareUploadStaging(
+    [[nodiscard]] Expected<BufferSuballocation> prepareUploadStaging(
         const void* data,
         usize dataSize,
         TStringView operationName,
-        Buffer*& outStagingBuffer,
-        u64& outStagingOffset,
         u32 alignment = s_DefaultUploadSuballocationAlignment
     );
-    [[nodiscard]] bool suballocateBuildScratchAddress(
+    [[nodiscard]] Expected<VkDeviceAddress> suballocateBuildScratchAddress(
         u64 buildScratchSize,
         u64 scratchAlignment,
-        VkDeviceAddress& outScratchAddress,
         TStringView operationName
     );
-    [[nodiscard]] bool validateAccelStructBuildSignature(
+    [[nodiscard]] Expected<bool> validateAccelStructBuildSignature(
         AccelStruct& accelStruct,
         VkAccelerationStructureTypeKHR accelStructType,
         VkBuildAccelerationStructureFlagsKHR buildFlags,
         const AccelStructGeometryBuildSignature* geometrySignatures,
         usize geometrySignatureCount,
         bool performUpdate,
-        TStringView operationName,
-        bool& outHasPriorBuild
+        TStringView operationName
     );
     bool buildTopLevelAccelStructFromInstanceData(
         RayTracingAccelStruct& as,

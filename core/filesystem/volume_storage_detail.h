@@ -106,7 +106,7 @@ ACompactString LastErrnoMessage();
 void LogFailure(AStringView volumeName, AStringView operation, AStringView detail);
 void LogFailureWithPath(AStringView volumeName, AStringView operation, const Path& path, AStringView detail);
 void LogFailureWithFsError(AStringView volumeName, AStringView operation, const Path& path, const ErrorCode& errorCode);
-bool ReadVolumeHeaderFromSegment(AStringView volumeName, const Path& segmentPath, VolumeHeaderDisk& outHeader);
+[[nodiscard]] Expected<VolumeHeaderDisk> ReadVolumeHeaderFromSegment(AStringView volumeName, const Path& segmentPath);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

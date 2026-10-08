@@ -119,10 +119,10 @@ bool SliderBehavior::Validate(const SliderOptions& options)noexcept{
     ;
 }
 
-bool SliderBehavior::Normalize(const f64 minimum, const f64 maximum, const f64 value, f64& out)noexcept{
+Expected<f64> SliderBehavior::Normalize(const f64 minimum, const f64 maximum, const f64 value)noexcept{
     using namespace __hidden_ui_slider_behavior;
     if(!ValidRange(minimum, maximum) || !IsFinite(value))
-        return false;
+        return MakeUnexpected(Failure{});
     f64 normalized = 0.0;
     if(minimum != maximum && value > minimum){
         if(value >= maximum)
@@ -134,15 +134,14 @@ bool SliderBehavior::Normalize(const f64 minimum, const f64 maximum, const f64 v
         }
     }
     if(!IsFinite(normalized))
-        return false;
-    out = Clamp(normalized, 0.0, 1.0);
-    return true;
+        return MakeUnexpected(Failure{});
+    return Clamp(normalized, 0.0, 1.0);
 }
 
-bool SliderBehavior::Interpolate(const f64 minimum, const f64 maximum, const f64 normalized, f64& out)noexcept{
+Expected<f64> SliderBehavior::Interpolate(const f64 minimum, const f64 maximum, const f64 normalized)noexcept{
     using namespace __hidden_ui_slider_behavior;
     if(!ValidRange(minimum, maximum) || !IsFinite(normalized) || normalized < 0.0 || normalized > 1.0)
-        return false;
+        return MakeUnexpected(Failure{});
     f64 value = minimum;
     if(normalized == 1.0)
         value = maximum;
@@ -152,9 +151,8 @@ bool SliderBehavior::Interpolate(const f64 minimum, const f64 maximum, const f64
         value = ClampValue(value, minimum, maximum);
     }
     if(!IsFinite(value))
-        return false;
-    out = value;
-    return true;
+        return MakeUnexpected(Failure{});
+    return value;
 }
 
 bool SliderBehavior::Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement)noexcept{
@@ -260,13 +258,13 @@ bool SliderBehavior::Seek(
     }
     const f64 normalized = Clamp((static_cast<f64>(gesture.position.x) - gesture.referenceRectangle.x)
         / gesture.referenceRectangle.width, 0.0, 1.0);
-    f64 value = state.m_value;
-    if(!Interpolate(options.minimum, options.maximum, normalized, value))
+    const auto value = Interpolate(options.minimum, options.maximum, normalized);
+    if(!value)
         return false;
-    accepted.valueChanged = accepted.valueChanged || BitCast<u64>(state.m_value) != BitCast<u64>(value);
+    accepted.valueChanged = accepted.valueChanged || BitCast<u64>(state.m_value) != BitCast<u64>(*value);
     accepted.dragging = gesture.state == PointerGestureState::Active;
     state.advanceRevision();
-    state.m_value = value;
+    state.m_value = *value;
     state.m_press = accepted.dragging ? gesture.id : InputActionId{};
     state.m_pressMoved = false;
     result = accepted;
@@ -307,12 +305,13 @@ bool SliderBehavior::Drag(
             value = baseline;
     }
     else{
-        f64 normalized = 0.0;
-        if(!Normalize(options.minimum, options.maximum, baseline, normalized))
+        const auto normalized = Normalize(options.minimum, options.maximum, baseline);
+        if(!normalized)
             return false;
-        normalized = Clamp(normalized + delta / travel, 0.0, 1.0);
-        if(!Interpolate(options.minimum, options.maximum, normalized, value))
+        const auto interpolated = Interpolate(options.minimum, options.maximum, Clamp(*normalized + delta / travel, 0.0, 1.0));
+        if(!interpolated)
             return false;
+        value = *interpolated;
         moved = true;
     }
     accepted.valueChanged = accepted.valueChanged || BitCast<u64>(state.m_value) != BitCast<u64>(value);

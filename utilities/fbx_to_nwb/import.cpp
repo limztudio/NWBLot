@@ -19,47 +19,29 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildMesh(
+Expected<MeshBuildResult> BuildMesh(
     const UtilityVector<MeshInstance>& instances,
     const UtilityVector<usize>& selection,
     const ImportOptions& options,
     const bool wantsSkinning,
     const Vec4& defaultColor,
-    Core::CpuTaskScheduler& cpuScheduler,
-    SourceMeshStreams& outMesh,
-    UtilityVector<ufbx_node*>& outSkeletonJoints,
-    UtilityVector<JointMatrix>& outSkeletonBindPoseMatrices,
-    UtilityVector<JointMatrix>& outInverseBindMatrices,
-    bool& outSawVertexColors,
-    bool& outSawVertexUvs,
-    SourceTangentReport& outTangentReport
+    Core::CpuTaskScheduler& cpuScheduler
 ){
-    outMesh = SourceMeshStreams{};
-    outSkeletonJoints.clear();
-    outSkeletonBindPoseMatrices.clear();
-    outInverseBindMatrices.clear();
-    outSawVertexColors = false;
-    outSawVertexUvs = false;
-    outTangentReport = SourceTangentReport{};
+    MeshBuildResult result;
+    const auto estimatedTriangleCorners = FbxMeshBuild::EstimateSelectedTriangleCorners(instances, selection);
+    if(!estimatedTriangleCorners)
+        return MakeUnexpected(Failure{});
 
-    usize estimatedTriangleCorners = 0u;
-    if(!FbxMeshBuild::EstimateSelectedTriangleCorners(
-        instances,
-        selection,
-        estimatedTriangleCorners
-    ))
-        return false;
-
-    NormalMode::Enum normalMode = NormalMode::Imported;
-    if(!ParseNormalModeText(options.normalMode, normalMode)){
+    const auto normalMode = ParseNormalModeText(options.normalMode);
+    if(!normalMode){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {}"), StringConvert(NormalModeErrorText()));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     bool usedDefaultUvs = false;
-    FbxSourceMeshStreams::ReserveSourceMeshStreams(outMesh, estimatedTriangleCorners, wantsSkinning);
-    SourceMeshBuildContext meshContext{ outMesh };
-    FbxSourceMeshStreams::ReserveSourceMeshBuildContext(meshContext, estimatedTriangleCorners, wantsSkinning);
+    FbxSourceMeshStreams::ReserveSourceMeshStreams(result.mesh, *estimatedTriangleCorners, wantsSkinning);
+    SourceMeshBuildContext meshContext{ result.mesh };
+    FbxSourceMeshStreams::ReserveSourceMeshBuildContext(meshContext, *estimatedTriangleCorners, wantsSkinning);
 
     UtilityVector<u32> triangleIndices;
     FbxSkinDetail::ExportContext skinContext;
@@ -70,40 +52,44 @@ bool BuildMesh(
                 instances[instanceIndex],
                 options,
                 wantsSkinning,
-                normalMode,
+                *normalMode,
                 defaultColor,
                 triangleIndices,
                 meshContext,
                 skinContext,
-                outSawVertexColors,
-                outSawVertexUvs,
+                result.sawVertexColors,
+                result.sawVertexUvs,
                 usedDefaultUvs
             )
         ){
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
-    if(outMesh.indices.empty()){
+    if(result.mesh.indices.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: selected meshes produced no triangles"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    if(normalMode != NormalMode::Imported || !FbxSourceMeshStreams::SourceMeshHasCompleteTangents(outMesh)){
-        FbxSourceMeshStreams::DropSourceMeshTangents(outMesh);
-        if(!FbxSourceMeshStreams::GenerateSourceMeshTangents(outMesh, usedDefaultUvs, outTangentReport))
-            return false;
+    if(*normalMode != NormalMode::Imported || !FbxSourceMeshStreams::SourceMeshHasCompleteTangents(result.mesh)){
+        FbxSourceMeshStreams::DropSourceMeshTangents(result.mesh);
+        const auto tangentReport = FbxSourceMeshStreams::GenerateSourceMeshTangents(result.mesh, usedDefaultUvs);
+        if(!tangentReport)
+            return MakeUnexpected(Failure{});
+        result.tangentReport = *tangentReport;
     }
     if(wantsSkinning){
         if(skinContext.joints.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: skinned mesh did not produce any skeleton joints"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outSkeletonJoints = Move(skinContext.joints);
-        outSkeletonBindPoseMatrices = Move(skinContext.bindPoseMatrices);
-        outInverseBindMatrices = Move(skinContext.inverseBindMatrices);
+        result.skeletonJoints = Move(skinContext.joints);
+        result.skeletonBindPoseMatrices = Move(skinContext.bindPoseMatrices);
+        result.inverseBindMatrices = Move(skinContext.inverseBindMatrices);
     }
 
-    return CanonicalizeSourceMeshStreams(outMesh, cpuScheduler, nullptr);
+    if(!CanonicalizeSourceMeshStreams(result.mesh, cpuScheduler))
+        return MakeUnexpected(Failure{});
+    return result;
 }
 
 

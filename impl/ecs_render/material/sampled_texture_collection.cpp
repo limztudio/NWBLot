@@ -53,19 +53,18 @@ bool AppendPreparedMaterialSurfaceSampledTextures(
     return true;
 }
 
-bool GatherPreparedMaterialPassSampledTextures(
+Expected<Vector<Core::TextureHandle, Core::Alloc::ScratchArena>> GatherPreparedMaterialPassSampledTextures(
     const MaterialSurfaceInfoMap& materials,
     const RendererMaterialResourceState& resources,
     const MaterialPassDrawItems* const* const drawItemSets,
     const usize drawItemSetCount,
-    Vector<Core::TextureHandle, Core::Alloc::ScratchArena>& outTextures,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    outTextures.clear();
+    Vector<Core::TextureHandle, Core::Alloc::ScratchArena> textures(scratchArena);
     if(drawItemSetCount != 0u && !drawItemSets)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    MaterialSampledTextureCollector<Core::Alloc::ScratchArena> collector(outTextures, scratchArena);
+    MaterialSampledTextureCollector<Core::Alloc::ScratchArena> collector(textures, scratchArena);
     const auto appendDrawItem = [&](const MaterialPassDrawItem& drawItem){
         const auto foundMaterial = materials.find(drawItem.pipelineKey.material);
         return foundMaterial != materials.end()
@@ -76,21 +75,21 @@ bool GatherPreparedMaterialPassSampledTextures(
     for(usize drawItemSetIndex = 0u; drawItemSetIndex < drawItemSetCount; ++drawItemSetIndex){
         const MaterialPassDrawItems* const drawItems = drawItemSets[drawItemSetIndex];
         if(!drawItems)
-            return false;
+            return MakeUnexpected(Failure{});
         for(const MaterialPassDrawItem& drawItem : drawItems->meshDrawItems){
             if(!appendDrawItem(drawItem))
-                return false;
+                return MakeUnexpected(Failure{});
         }
         for(const MaterialPassDrawItem& drawItem : drawItems->indexedDrawItems){
             if(!appendDrawItem(drawItem))
-                return false;
+                return MakeUnexpected(Failure{});
         }
         for(const MaterialPassDrawItem& drawItem : drawItems->computeDrawItems){
             if(!appendDrawItem(drawItem))
-                return false;
+                return MakeUnexpected(Failure{});
         }
     }
-    return true;
+    return textures;
 }
 
 bool MergePreparedShadowMaterialSampledTextures(

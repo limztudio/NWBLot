@@ -30,8 +30,10 @@ protected:
     [[nodiscard]] bool installKoreanFallback(){
         const auto path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "korean.font";
         Core::Assets::AssetBytes bytes(m_arena);
-        if(!Tests::ReadBundledFontBytes(path, bytes))
+        auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
+        if(!bytesResult)
             return false;
+        bytes = Move(*bytesResult);
         Font korean(m_arena, Name("tests/ui/fonts/korean"));
         korean.setFontBytes(Move(bytes));
         if(!korean.validatePayload())

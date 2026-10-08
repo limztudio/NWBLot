@@ -23,10 +23,10 @@ class UiComboBuilderTests : public ComboFixture{};
 // Behavior resolves the selection first; the subsequent label lookup deliberately violates the stable-key round trip.
 class LabelLookupSource final : public ComboSource{
 public:
-    [[nodiscard]] virtual bool indexOf(const u64 key, u64& index)const override{
-        const bool found = ComboSource::indexOf(key, index);
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const override{
+        auto found = ComboSource::indexOf(key);
         if(found && lookupCalls >= 4u)
-            index = (index + 1u) % count;
+            *found = (*found + 1u) % count;
         return found;
     }
 };
@@ -46,11 +46,11 @@ TEST_F(UiComboBuilderTests, SiblingComboFieldsPaintTheirOwnDeclarationStyles){
     ASSERT_TRUE(m_builder.comboBox("second", m_source, secondState, Options()).valid);
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    Rect first;
-    Rect second;
-    ASSERT_TRUE(skinQuad(snapshot, 6u, first));
-    ASSERT_TRUE(skinQuad(snapshot, 7u, second));
-    EXPECT_LT(first.y, second.y);
+    const auto first = skinQuad(snapshot, 6u);
+    ASSERT_TRUE(first);
+    const auto second = skinQuad(snapshot, 7u);
+    ASSERT_TRUE(second);
+    EXPECT_LT(first->y, second->y);
 }
 
 TEST_F(UiComboBuilderTests, LargeClosedFieldReadsOnlySelectedTextWithoutOpeningRows){

@@ -89,9 +89,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
-        const HardwareCausticsStageInputs& inputs,
-        HardwareCausticsStageResult& outResult
+    [[nodiscard]] Expected<HardwareCausticsStageResult> declare(
+        const HardwareCausticsStageInputs& inputs
     );
 
 

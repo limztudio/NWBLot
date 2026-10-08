@@ -32,15 +32,12 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool DeferredLightingStageBuilder::declare(
+[[nodiscard]] Expected<DeferredLightingStageResult> DeferredLightingStageBuilder::declare(
     const DeferredLightingStageInputs& inputs,
-    Core::GpuTaskId& outUploadTask,
-    Core::GpuTimingSubmissionTicket& timingTicket,
-    DeferredLightingStageResult& outResult
+    Core::GpuTimingSubmissionTicket& timingTicket
 ){
     using namespace RendererTaskGraphDetail;
-    outResult = DeferredLightingStageResult{};
-    outUploadTask = Core::GpuTaskId{};
+    DeferredLightingStageResult result{};
     if(
         !inputs.targets
         || !inputs.albedo.valid()
@@ -61,13 +58,13 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(
         || (inputs.declaresHardwareCaustics && !inputs.hardwareCausticsTask.valid())
         || (!inputs.declaresHardwareCaustics && !inputs.softwareCausticsTask.valid())
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     DeferredFrameTargets& deferredTargets = *inputs.targets;
     const bool useLaggedLightingHistory = inputs.useLaggedLightingHistory;
     const DeferredLaggedLightingHistoryResources* const history = inputs.history;
     if(useLaggedLightingHistory && !history)
-        return false;
+        return MakeUnexpected(Failure{});
     const bool hasTransparentRenderers = inputs.hasTransparentRenderers;
 
     // Live Lighting joins current producers via graph edges; lagged Lighting reads history.
@@ -99,7 +96,7 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(
             alignof(DeferredBindlessResourceSlots)
         );
         if(!laggedBindlessSlotsBlob.valid())
-            return false;
+            return MakeUnexpected(Failure{});
 
         Core::GpuTaskSchedulingHint uploadScheduling;
         uploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -126,9 +123,8 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(
             }
         );
         if(!historySlotsUploadTask.valid())
-            return false;
+            return MakeUnexpected(Failure{});
     }
-    outUploadTask = historySlotsUploadTask;
     const Core::GpuTaskId laggedLightingWithSelectorDependencies[] = {
         inputs.graphicsPrefixTask,
         historySlotsUploadTask,
@@ -210,17 +206,17 @@ DeferredLightingStageBuilder::DeferredLightingStageBuilder(
         .setExternalDependencies(lightingExternalDependencies, lightingExternalDependencyCount)
         .setResourceUses(resourceUses, LengthOf(resourceUses))
     ;
-    outResult.lightingTask = m_deferredSystem.declareDeferredLightingTask(
+    result.lightingTask = m_deferredSystem.declareDeferredLightingTask(
         m_graph,
         desc,
         deferredTargets,
         useLaggedLightingHistory,
         timingTicket
     );
-    if(!outResult.lightingTask.valid())
-        return false;
-    outResult.historySlotsUploadTask = historySlotsUploadTask;
-    return true;
+    if(!result.lightingTask.valid())
+        return MakeUnexpected(Failure{});
+    result.historySlotsUploadTask = historySlotsUploadTask;
+    return result;
 }
 
 

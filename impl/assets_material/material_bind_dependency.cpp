@@ -36,15 +36,15 @@ static bool TryResolveMaterialBindDependencyInterface(
     if(normalizedMaterialBindIncludeRoot.empty())
         return true;
 
-    ErrorCode errorCode;
-    Path normalizedDependency = AbsolutePath(dependency, errorCode).lexicallyNormal();
-    if(errorCode){
+    auto normalizedDependencyResult = AbsolutePath(dependency);
+    if(!normalizedDependencyResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: failed to normalize shader dependency '{}': {}")
             , PathToString<tchar>(dependency)
-            , StringConvert(errorCode.message())
+            , StringConvert(normalizedDependencyResult.error().message())
         );
         return false;
     }
+    Path normalizedDependency = normalizedDependencyResult->lexicallyNormal();
 
     if(!PathHasDirectoryAncestor(normalizedDependency, normalizedMaterialBindIncludeRoot))
         return true;
@@ -70,33 +70,28 @@ static bool TryResolveMaterialBindDependencyInterface(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ResolveMaterialBindDependencyInterface(
+Expected<MaterialBindDependency> ResolveMaterialBindDependencyInterface(
+    CookArena& arena,
     const AStringView shaderName,
     const Path& materialBindIncludeRoot,
     const CookVector<Path>& dependencies,
-    CookString& outInterfacePath,
-    Name& outInterfaceName,
-    bool& outDependsOnMaterialBind,
     ScratchArena& scratchArena
 ){
-    outInterfacePath.clear();
-    outInterfaceName = s_NameNone;
-    outDependsOnMaterialBind = false;
+    MaterialBindDependency result(arena);
 
     Path normalizedMaterialBindIncludeRoot(materialBindIncludeRoot.arena());
     if(!materialBindIncludeRoot.empty()){
-        ErrorCode errorCode;
-        normalizedMaterialBindIncludeRoot = AbsolutePath(materialBindIncludeRoot, errorCode).lexicallyNormal();
-        if(errorCode){
+        const auto normalizedRoot = AbsolutePath(materialBindIncludeRoot);
+        if(!normalizedRoot){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind dependency: failed to normalize generated include root '{}': {}")
                 , PathToString<tchar>(materialBindIncludeRoot)
-                , StringConvert(errorCode.message())
+                , StringConvert(normalizedRoot.error().message())
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
+        normalizedMaterialBindIncludeRoot = normalizedRoot->lexicallyNormal();
     }
 
-    CookArena& arena = outInterfacePath.get_allocator().arena();
     CookString dependencyInterfacePath{arena};
     bool dependsOnMultipleInterfaces = false;
     for(const Path& dependency : dependencies){
@@ -106,7 +101,7 @@ bool ResolveMaterialBindDependencyInterface(
             dependencyInterfacePath,
             scratchArena
         ))
-            return false;
+            return MakeUnexpected(Failure{});
         if(dependencyInterfacePath.empty())
             continue;
 
@@ -117,29 +112,29 @@ bool ResolveMaterialBindDependencyInterface(
                 , StringConvert(shaderName)
                 , StringConvert(dependencyInterfacePath)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         // Reads typed material constants, so it needs the typed binding.
-        outDependsOnMaterialBind = true;
+        result.dependsOnMaterialBind = true;
         if(dependsOnMultipleInterfaces)
             continue;
 
-        if(!outInterfaceName){
-            outInterfacePath = dependencyInterfacePath;
-            outInterfaceName = dependencyInterfaceName;
+        if(!result.interfaceName){
+            result.interfacePath = dependencyInterfacePath;
+            result.interfaceName = dependencyInterfaceName;
             continue;
         }
 
-        if(outInterfaceName != dependencyInterfaceName){
+        if(result.interfaceName != dependencyInterfaceName){
             // Generic dispatch consumer: no single owning interface.
-            outInterfacePath.clear();
-            outInterfaceName = s_NameNone;
+            result.interfacePath.clear();
+            result.interfaceName = s_NameNone;
             dependsOnMultipleInterfaces = true;
         }
     }
 
-    return true;
+    return result;
 }
 
 

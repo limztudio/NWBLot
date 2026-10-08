@@ -65,30 +65,29 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AvboitExtinctionRecordBuilder::declare(
+[[nodiscard]] Expected<AvboitExtinctionRecordResult> AvboitExtinctionRecordBuilder::declare(
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
     ObjectGeometryCacheGraph& objectGeometry,
     AvboitExtinctionRecordInputs& inputs,
     RendererTaskGraphDetail::AvboitExtinctionGraphTask::Payload& extinctionPayload,
-    RendererTaskGraphDetail::AvboitExtinctionComputeEmulationGraphTask::Payload& computeEmulationPayload,
-    AvboitExtinctionRecordResult& outResult
+    RendererTaskGraphDetail::AvboitExtinctionComputeEmulationGraphTask::Payload& computeEmulationPayload
 ){
     using namespace RendererTaskGraphDetail;
     static_cast<void>(csgResources);
-    outResult = AvboitExtinctionRecordResult{};
+    AvboitExtinctionRecordResult result{};
     if(!inputs.targets)
-        return false;
+        return MakeUnexpected(Failure{});
     if(!inputs.extinctionTimingTicket)
-        return false;
+        return MakeUnexpected(Failure{});
     if(!inputs.extinctionComputeEmulationTiming)
-        return false;
+        return MakeUnexpected(Failure{});
     if(!inputs.depthWarpCompletionTask.valid() || !inputs.uploadTask.valid())
-        return false;
+        return MakeUnexpected(Failure{});
 
     const bool generatedGeometryReused = inputs.generatedGeometryReused();
     if(!inputs.generatedGeometryReusePlansValid())
-        return false;
+        return MakeUnexpected(Failure{});
     extinctionPayload.generatedGeometryReused = generatedGeometryReused;
     m_avboitSystem.taskGraphStage().m_extinctionReusedGeometryProducer = inputs.reusedGeometryProducer;
 
@@ -113,26 +112,28 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
     ;
     bool extinctionComputeEmulationOutputStatesGraphOwned = false;
     if(inputs.regularComputeEmulationPlanCaptured){
-        extinctionComputeEmulationOutputStatesGraphOwned = GatherImportedOutputBufferResourceSet(
+        const auto extinctionComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
             m_graph,
             computeEmulationPayload.plan,
             extinctionComputeEmulationResourceScratch,
             Name("render.avboit.extinction.compute_emulation.outputs"),
-            "AVBOIT Extinction Compute Emulation Outputs",
-            extinctionComputeEmulationOutputSet
+            "AVBOIT Extinction Compute Emulation Outputs"
         );
+        extinctionComputeEmulationOutputStatesGraphOwned = extinctionComputeEmulationOutputSetResult.has_value();
+        if(extinctionComputeEmulationOutputSetResult)
+            extinctionComputeEmulationOutputSet = *extinctionComputeEmulationOutputSetResult;
     }
     else if(inputs.csgComputeEmulationPlanCaptured){
-        extinctionComputeEmulationOutputStatesGraphOwned =
-            GatherImportedOutputBufferResourceSet(
+        const auto extinctionComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
                 m_graph,
                 computeEmulationPayload.csgPlan,
                 extinctionComputeEmulationResourceScratch,
                 Name("render.avboit.extinction.csg_compute_emulation.outputs"),
-                "AVBOIT Extinction CSG Compute Emulation Outputs",
-                extinctionComputeEmulationOutputSet
-            )
-        ;
+                "AVBOIT Extinction CSG Compute Emulation Outputs"
+            );
+        extinctionComputeEmulationOutputStatesGraphOwned = extinctionComputeEmulationOutputSetResult.has_value();
+        if(extinctionComputeEmulationOutputSetResult)
+            extinctionComputeEmulationOutputSet = *extinctionComputeEmulationOutputSetResult;
     }
     if(
         extinctionComputeEmulationPlanCaptured
@@ -143,15 +144,17 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
         ));
     }
     Core::GpuGraphResourceId extinctionSharedComputeEmulationOutput;
-    const bool extinctionSharedComputeEmulationOutputStatesGraphOwned =
-        inputs.sharedComputeEmulationPlanCaptured
-        && GatherRegularSharedComputeEmulationResource(
-            m_graph,
-            inputs.sharedComputeEmulationPlan,
-            "AVBOIT Extinction Shared Compute Emulation Output",
-            extinctionSharedComputeEmulationOutput
-        )
-    ;
+    bool extinctionSharedComputeEmulationOutputStatesGraphOwned = false;
+    if(inputs.sharedComputeEmulationPlanCaptured){
+        const auto extinctionSharedComputeEmulationOutputResult = GatherRegularSharedComputeEmulationResource(
+                m_graph,
+                inputs.sharedComputeEmulationPlan,
+                "AVBOIT Extinction Shared Compute Emulation Output"
+            );
+        extinctionSharedComputeEmulationOutputStatesGraphOwned = extinctionSharedComputeEmulationOutputResult.has_value();
+        if(extinctionSharedComputeEmulationOutputResult)
+            extinctionSharedComputeEmulationOutput = *extinctionSharedComputeEmulationOutputResult;
+    }
     if(
         inputs.sharedComputeEmulationPlanCaptured
         && !extinctionSharedComputeEmulationOutputStatesGraphOwned
@@ -161,7 +164,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
         ));
     }
     if(generatedGeometryReused && !extinctionComputeEmulationOutputStatesGraphOwned)
-        return false;
+        return MakeUnexpected(Failure{});
     extinctionPayload.extinctionComputeEmulationOutputStatesGraphOwned =
         inputs.regularComputeEmulationPlanCaptured
         && extinctionComputeEmulationOutputStatesGraphOwned
@@ -286,13 +289,13 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
         extinctionPayload.extinctionSnapshot.regularIndexedDrawItems.size(),
         frameBindings, *inputs.targets, extinctionDependency, extinctionResourceUses, extinctionResourceScratch, inputs.extinctionTimingTicket
     ))
-        return false;
+        return MakeUnexpected(Failure{});
     if(inputs.streamsUploaded && !objectGeometry.prepare(
         extinctionPayload.extinctionSnapshot.csgIndexedDrawItems.data(),
         extinctionPayload.extinctionSnapshot.csgIndexedDrawItems.size(),
         frameBindings, *inputs.targets, extinctionDependency, extinctionResourceUses, extinctionResourceScratch, inputs.extinctionTimingTicket
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
     if(extinctionComputeEmulationOutputStatesGraphOwned && !generatedGeometryReused){
         computeEmulationPayload.conservativeGeometryScissor = inputs.producesReusableGeometry;
@@ -391,7 +394,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
             NWB_LOGGER_WARNING(NWB_TEXT(
                 "RendererSystem: could not declare AVBOIT Extinction compute-emulation producer"
             ));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         extinctionDependency = m_avboitSystem.taskGraphStage().m_extinctionComputeEmulationTask;
         avboitExtinctionScheduling.allowMergeAcrossConsumerFrontier = true;
@@ -559,7 +562,7 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
                 NWB_LOGGER_WARNING(NWB_TEXT(
                     "RendererSystem: could not declare AVBOIT Extinction shared compute-emulation phase"
                 ));
-                return false;
+                return MakeUnexpected(Failure{});
             }
             extinctionSharedComputeEmulationDependency =
                 m_avboitSystem.taskGraphStage().m_extinctionSharedComputeEmulationTasks[phaseIndex];
@@ -590,12 +593,12 @@ AvboitExtinctionRecordBuilder::AvboitExtinctionRecordBuilder(
     );
     if(!m_avboitSystem.taskGraphStage().m_extinctionTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT extinction graph task"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     }
-    outResult.extinctionTask = m_avboitSystem.taskGraphStage().m_extinctionTask;
-    outResult.declared = true;
-    return true;
+    result.extinctionTask = m_avboitSystem.taskGraphStage().m_extinctionTask;
+    result.declared = true;
+    return result;
 }
 
 

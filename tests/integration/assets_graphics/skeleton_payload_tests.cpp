@@ -67,32 +67,37 @@ struct SkeletonInputs{
 
 TEST(SkeletonPayload, MissingJointLookupReturnsInvalidIndex){
     SkeletonInputs inputs;
-    ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
+    auto skeletonBuildResult = BuildSkeletonAsset(inputs.entry, inputs.entry.joints.get_allocator().arena());
+    ASSERT_TRUE(skeletonBuildResult);
+    inputs.skeleton = Move(*skeletonBuildResult);
     EXPECT_EQ(inputs.skeleton.findJointIndex(Name("missing")), s_SkeletonInvalidJointIndex);
 }
 
-TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsAndClearsPreviousOutput){
+TEST(SkeletonPayload, RejectsLaterSelfAndMissingParentsWithoutReplacingPreviousValue){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     for(u32 invalidCase = 0u; invalidCase < 4u; ++invalidCase){
         SkeletonInputs inputs;
-        ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
+        auto skeletonBuildResult2 = BuildSkeletonAsset(inputs.entry, inputs.entry.joints.get_allocator().arena());
+        ASSERT_TRUE(skeletonBuildResult2);
+        inputs.skeleton = Move(*skeletonBuildResult2);
         switch(invalidCase){
         case 0u: inputs.entry.joints[0u].parent = Name(s_LEFT); break;
         case 1u: inputs.entry.joints[1u].parent = Name(s_LEFT); break;
         case s_ExpectedDualCount: inputs.entry.joints[3u].parent = Name("missing"); break;
         case 3u: inputs.entry.joints[1u].parent = Name(s_RIGHT); break;
         }
-        EXPECT_FALSE(BuildSkeletonAsset(inputs.entry, inputs.skeleton)) << invalidCase;
-        EXPECT_TRUE(inputs.skeleton.joints().empty());
-        EXPECT_TRUE(inputs.skeleton.jointIndices().empty());
-        EXPECT_TRUE(inputs.skeleton.jointChildRanges().empty());
-        EXPECT_TRUE(inputs.skeleton.jointChildIndices().empty());
+        EXPECT_FALSE(BuildSkeletonAsset(inputs.entry, inputs.entry.joints.get_allocator().arena())) << invalidCase;
+        EXPECT_EQ(inputs.skeleton.jointCount(), 4u);
+        EXPECT_EQ(inputs.skeleton.findJointIndex(Name("hand")), 3u);
+        EXPECT_EQ(inputs.skeleton.joints()[3u].parentIndex, 1u);
         EXPECT_EQ(inputs.skeleton.virtualPath(), inputs.entry.virtualPath);
         inputs.entry.joints[0u].parent = s_NameNone;
         inputs.entry.joints[1u].parent = Name(s_ROOT);
         inputs.entry.joints[3u].parent = Name(s_LEFT);
-        EXPECT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
+        auto skeletonBuildResult3 = BuildSkeletonAsset(inputs.entry, inputs.entry.joints.get_allocator().arena());
+        EXPECT_TRUE(skeletonBuildResult3);
+        inputs.skeleton = Move(*skeletonBuildResult3);
         EXPECT_EQ(inputs.skeleton.jointCount(), 4u);
     }
     EXPECT_EQ(logger.errorCount(), 4u);
@@ -104,14 +109,15 @@ TEST(SkeletonPayload, RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent){
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     for(const Name& duplicate : { Name(s_LEFT), Name("ROOT") }){
         SkeletonInputs inputs;
-        ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
+        auto skeletonBuildResult4 = BuildSkeletonAsset(inputs.entry, inputs.entry.joints.get_allocator().arena());
+        ASSERT_TRUE(skeletonBuildResult4);
+        inputs.skeleton = Move(*skeletonBuildResult4);
         inputs.entry.joints[3u].name = duplicate;
         inputs.entry.joints[3u].parent = duplicate;
-        EXPECT_FALSE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
-        EXPECT_TRUE(inputs.skeleton.joints().empty());
-        EXPECT_TRUE(inputs.skeleton.jointIndices().empty());
-        EXPECT_TRUE(inputs.skeleton.jointChildRanges().empty());
-        EXPECT_TRUE(inputs.skeleton.jointChildIndices().empty());
+        EXPECT_FALSE(BuildSkeletonAsset(inputs.entry, inputs.entry.joints.get_allocator().arena()));
+        EXPECT_EQ(inputs.skeleton.jointCount(), 4u);
+        EXPECT_EQ(inputs.skeleton.findJointIndex(Name("hand")), 3u);
+        EXPECT_EQ(inputs.skeleton.joints()[3u].parentIndex, 1u);
     }
     EXPECT_EQ(logger.errorCount(), s_ExpectedDualCount);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate joint name")));
@@ -119,10 +125,14 @@ TEST(SkeletonPayload, RejectsDuplicateCanonicalIdsAfterResolvingEarlierParent){
 
 TEST(SkeletonPayload, RebuildChangedHierarchyClearsPreviousChildren){
     SkeletonInputs inputs;
-    ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
+    auto skeletonBuildResult5 = BuildSkeletonAsset(inputs.entry, inputs.entry.joints.get_allocator().arena());
+    ASSERT_TRUE(skeletonBuildResult5);
+    inputs.skeleton = Move(*skeletonBuildResult5);
     inputs.entry.joints[s_ThirdElementIndex].parent = s_NameNone;
     inputs.entry.joints[3u].parent = Name(s_RIGHT);
-    ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
+    auto skeletonBuildResult6 = BuildSkeletonAsset(inputs.entry, inputs.entry.joints.get_allocator().arena());
+    ASSERT_TRUE(skeletonBuildResult6);
+    inputs.skeleton = Move(*skeletonBuildResult6);
     EXPECT_EQ(inputs.skeleton.rootJointCount(), s_ExpectedDualCount);
     EXPECT_EQ(inputs.skeleton.joints()[3u].parentIndex, s_ExpectedDualCount);
     EXPECT_EQ(inputs.skeleton.jointChildRanges()[1u].childCount, 0u);
@@ -139,13 +149,18 @@ static void BenchmarkSkeletonBuild(const usize jointCount, const usize iteration
             .parent = jointIndex == 0u ? s_NameNone : inputs.entry.joints.back().name,
         });
     }
-    ASSERT_TRUE(BuildSkeletonAsset(inputs.entry, inputs.skeleton));
+    auto skeletonBuildResult7 = BuildSkeletonAsset(inputs.entry, inputs.entry.joints.get_allocator().arena());
+    ASSERT_TRUE(skeletonBuildResult7);
+    inputs.skeleton = Move(*skeletonBuildResult7);
     const ArenaMemoryStats before = HeapBackingMemoryStats();
     usize succeeded = 0u;
     const Timer begin = TimerNow();
     for(usize iteration = 0u; iteration < iterations; ++iteration){
-        if(BuildSkeletonAsset(inputs.entry, inputs.skeleton))
+        auto built = BuildSkeletonAsset(inputs.entry, inputs.arena);
+        if(built){
+            inputs.skeleton = Move(*built);
             ++succeeded;
+        }
     }
     const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
     const ArenaMemoryStats after = HeapBackingMemoryStats();

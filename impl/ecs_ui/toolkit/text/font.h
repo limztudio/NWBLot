@@ -74,7 +74,7 @@ public:
     [[nodiscard]] u32 unitsPerEm()const noexcept;
     [[nodiscard]] bool coverageInkReliable()const noexcept;
     [[nodiscard]] const SharedBakedFontAtlas& bakedAtlas()const noexcept;
-    [[nodiscard]] bool metrics(f32 fontSize, FontMetrics& output)const;
+    [[nodiscard]] Expected<FontMetrics> metrics(f32 fontSize)const;
     [[nodiscard]] bool shape(
         const ShapeRequest& request,
         u32 byteBegin,

@@ -151,24 +151,18 @@ public:
         UtilityVector<u32>& inOutTriangleIndices
     );
     template<typename Value, typename Lookup>
-    [[nodiscard]] static bool InternSourceValue(
+    [[nodiscard]] static Expected<u32> InternSourceValue(
         UtilityVector<Value>& stream,
         Lookup& lookup,
         const Value& value,
-        const AStringView streamName,
-        u32& outIndex
-    );
-    [[nodiscard]] static bool GenerateSourceMeshTangents(
+        const AStringView streamName);
+    [[nodiscard]] static Expected<SourceTangentReport> GenerateSourceMeshTangents(
         SourceMeshStreams& mesh,
-        const bool usedDefaultUvs,
-        SourceTangentReport& outTangentReport
-    );
-    [[nodiscard]] static bool InternSourceCorner(
+        const bool usedDefaultUvs);
+    [[nodiscard]] static Expected<u32> InternSourceCorner(
         SourceMeshBuildContext& context,
         const SourceTriangleCorner& corner,
-        const bool wantsSkinning,
-        u32& outVertexRefIndex
-    );
+        const bool wantsSkinning);
 
 
 public:
@@ -180,28 +174,26 @@ public:
 
 
 template<typename Value, typename Lookup>
-[[nodiscard]] bool FbxSourceMeshStreams::InternSourceValue(
+[[nodiscard]] Expected<u32> FbxSourceMeshStreams::InternSourceValue(
     UtilityVector<Value>& stream,
     Lookup& lookup,
     const Value& value,
-    const AStringView streamName,
-    u32& outIndex
+    const AStringView streamName
 ){
     auto found = lookup.find(value);
     if(found != lookup.end()){
-        outIndex = found.value();
-        return true;
+        return found.value();
     }
 
     if(stream.size() >= static_cast<usize>(s_MissingSourceStreamIndex)){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: {} stream has too many unique values"), StringConvert(streamName));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outIndex = static_cast<u32>(stream.size());
+    const u32 index = static_cast<u32>(stream.size());
     stream.push_back(value);
-    lookup.emplace(value, outIndex);
-    return true;
+    lookup.emplace(value, index);
+    return index;
 }
 
 

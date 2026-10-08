@@ -82,13 +82,15 @@ static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ParseFileHeader(const AStringView line, AStringView& outRelativePath, usize& outFileSize){
-    outRelativePath = AStringView();
-    outFileSize = 0u;
+struct ArchiveFileHeader{
+    AStringView relativePath;
+    usize fileSize = 0u;
+};
 
+[[nodiscard]] static Expected<ArchiveFileHeader> ParseFileHeader(const AStringView line)noexcept{
     constexpr AStringView prefix(CrashNames::s_ArchiveFileHeaderPrefix);
     if(line.size() <= prefix.size() || AStringView(line.data(), prefix.size()) != prefix)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const AStringView body(line.data() + prefix.size(), line.size() - prefix.size());
     usize split = Limit<usize>::s_Max;
@@ -99,24 +101,24 @@ static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, c
         }
     }
     if(split == Limit<usize>::s_Max || split == 0u || split + 1u >= body.size())
-        return false;
+        return MakeUnexpected(Failure{});
 
     const AStringView sizeText(body.data() + split + 1u, body.size() - split - 1u);
-    u64 fileSize = 0u;
-    if(!ParseU64(sizeText, fileSize) || fileSize > static_cast<u64>(Limit<usize>::s_Max))
-        return false;
+    const auto fileSize = ParseU64(sizeText);
+    if(!fileSize || *fileSize > static_cast<u64>(Limit<usize>::s_Max))
+        return MakeUnexpected(Failure{});
 
-    outRelativePath = AStringView(body.data(), split);
-    outFileSize = static_cast<usize>(fileSize);
-    return IsSafeArchiveRelativePath(outRelativePath);
+    const AStringView relativePath(body.data(), split);
+    if(!IsSafeArchiveRelativePath(relativePath))
+        return MakeUnexpected(Failure{});
+    return ArchiveFileHeader{ relativePath, static_cast<usize>(*fileSize) };
 }
 
 [[nodiscard]] static bool WriteExtractedFile(LogArena& arena, const Path& packageDirectory, const AStringView relativePath, const u8* bytes, const usize byteCount){
     const Path outputPath = packageDirectory / Path(arena, relativePath);
     const Path outputDirectory = outputPath.parentPath();
-    ErrorCode error;
     if(!outputDirectory.empty()){
-        if(!EnsureDirectories(outputDirectory, error))
+        if(!EnsureDirectories(outputDirectory))
             return false;
     }
 
@@ -124,78 +126,66 @@ static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, c
     return WriteBinaryFile(outputPath, fileBytes);
 }
 
-[[nodiscard]] static bool ExtractCrashArchive(LogArena& arena, const Path& archivePath, const Path& packageDirectory, CrashText& outError){
+[[nodiscard]] static Expected<void, AStringView> ExtractCrashArchive(LogArena& arena, const Path& archivePath, const Path& packageDirectory){
     CrashBytes archiveBytes{arena};
-    ErrorCode readError;
-    if(!ReadBinaryFile(archivePath, archiveBytes, readError)){
-        outError = "failed to read crash archive";
-        return false;
+    if(!ReadBinaryFile(archivePath, archiveBytes)){
+        return MakeUnexpected(AStringView("failed to read crash archive"));
     }
 
     usize cursor = 0u;
-    AStringView line;
-    if(!NextLfByteLine(archiveBytes, cursor, line) || line != CrashNames::s_ArchiveHeaderLine){
-        outError = "invalid crash archive header";
-        return false;
+    auto line = NextLfByteLine(archiveBytes, cursor);
+    if(!line || *line != CrashNames::s_ArchiveHeaderLine){
+        return MakeUnexpected(AStringView("invalid crash archive header"));
     }
 
-    ErrorCode error;
-    if(!EnsureEmptyDirectory(packageDirectory, error)){
-        outError = "failed to create extracted crash package directory";
-        return false;
+    if(!EnsureEmptyDirectory(packageDirectory)){
+        return MakeUnexpected(AStringView("failed to create extracted crash package directory"));
     }
 
     usize fileCount = 0u;
     while(cursor < archiveBytes.size()){
-        if(!NextLfByteLine(archiveBytes, cursor, line)){
-            outError = "truncated crash archive file header";
-            return false;
+        line = NextLfByteLine(archiveBytes, cursor);
+        if(!line){
+            return MakeUnexpected(AStringView("truncated crash archive file header"));
         }
-        AStringView relativePath;
-        usize fileSize = 0u;
-        if(!ParseFileHeader(line, relativePath, fileSize)){
-            outError = "malformed crash archive file header";
-            return false;
+        const auto header = ParseFileHeader(*line);
+        if(!header){
+            return MakeUnexpected(AStringView("malformed crash archive file header"));
         }
+        const usize fileSize = header->fileSize;
         if(cursor > archiveBytes.size() || fileSize > archiveBytes.size() - cursor){
-            outError = "truncated crash archive file payload";
-            return false;
+            return MakeUnexpected(AStringView("truncated crash archive file payload"));
         }
 
-        if(!WriteExtractedFile(arena, packageDirectory, relativePath, archiveBytes.data() + cursor, fileSize)){
-            outError = "failed to write extracted crash package file";
-            return false;
+        if(!WriteExtractedFile(arena, packageDirectory, header->relativePath, archiveBytes.data() + cursor, fileSize)){
+            return MakeUnexpected(AStringView("failed to write extracted crash package file"));
         }
         cursor += fileSize;
 
-        AStringView separator;
-        AStringView endMarker;
-        if(
-            !NextLfByteLine(archiveBytes, cursor, separator)
-            || !separator.empty()
-            || !NextLfByteLine(archiveBytes, cursor, endMarker)
-            || endMarker != CrashNames::s_ArchiveEntryEndLine
-        ){
-            outError = "malformed crash archive file footer";
-            return false;
+        const auto separator = NextLfByteLine(archiveBytes, cursor);
+        if(!separator || !separator->empty()){
+            return MakeUnexpected(AStringView("malformed crash archive file footer"));
+        }
+        const auto endMarker = NextLfByteLine(archiveBytes, cursor);
+        if(!endMarker || *endMarker != CrashNames::s_ArchiveEntryEndLine){
+            return MakeUnexpected(AStringView("malformed crash archive file footer"));
         }
 
         ++fileCount;
     }
 
     if(fileCount == 0u){
-        outError = "crash archive contained no files";
-        return false;
+        return MakeUnexpected(AStringView("crash archive contained no files"));
     }
 
-    return true;
+    return {};
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool FindGeneratedJsonValueCursor(LogArena& arena, const AStringView manifest, const AStringView key, usize& outCursor){
+[[nodiscard]] static Expected<usize> FindGeneratedJsonValueCursor(LogArena& arena, const AStringView manifest, const AStringView key){
     CrashText needle{arena};
     needle.reserve(key.size() + s_GeneratedJsonNeedleReserveSlack);
     needle += '"';
@@ -204,27 +194,24 @@ static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, c
 
     const usize cursor = manifest.find(AStringView(needle.data(), needle.size()));
     if(cursor == AStringView::npos)
-        return false;
-    outCursor = cursor + needle.size();
-    return true;
+        return MakeUnexpected(Failure{});
+    return cursor + needle.size();
 }
 
-[[nodiscard]] static bool FindGeneratedJsonStringValue(LogArena& arena, const AStringView manifest, const AStringView key, CrashText& outValue){
-    outValue.clear();
-
-    usize cursor = 0u;
-    if(!FindGeneratedJsonValueCursor(arena, manifest, key, cursor))
-        return false;
+[[nodiscard]] static Expected<CrashText> FindGeneratedJsonStringValue(LogArena& arena, const AStringView manifest, const AStringView key){
+    const auto valueCursor = FindGeneratedJsonValueCursor(arena, manifest, key);
+    if(!valueCursor)
+        return MakeUnexpected(Failure{});
+    usize cursor = *valueCursor;
     if(cursor >= manifest.size() || manifest[cursor] != '"')
-        return false;
+        return MakeUnexpected(Failure{});
     ++cursor;
 
     CrashText parsedValue{arena};
     for(; cursor < manifest.size(); ++cursor){
         const char ch = manifest[cursor];
         if(ch == '"'){
-            outValue = Move(parsedValue);
-            return true;
+            return parsedValue;
         }
 
         if(ch != '\\'){
@@ -234,7 +221,7 @@ static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, c
 
         ++cursor;
         if(cursor >= manifest.size())
-            return false;
+            return MakeUnexpected(Failure{});
 
         switch(manifest[cursor]){
         case '"':
@@ -251,115 +238,124 @@ static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, c
             parsedValue.push_back('\t');
             break;
         default:
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] static bool FindGeneratedJsonUnsignedValue(LogArena& arena, const AStringView manifest, const AStringView key, u64& outValue){
-    outValue = 0u;
-
-    usize cursor = 0u;
-    if(!FindGeneratedJsonValueCursor(arena, manifest, key, cursor))
-        return false;
+[[nodiscard]] static Expected<u64> FindGeneratedJsonUnsignedValue(LogArena& arena, const AStringView manifest, const AStringView key){
+    const auto valueCursor = FindGeneratedJsonValueCursor(arena, manifest, key);
+    if(!valueCursor)
+        return MakeUnexpected(Failure{});
+    usize cursor = *valueCursor;
 
     const usize begin = cursor;
     while(cursor < manifest.size() && manifest[cursor] >= '0' && manifest[cursor] <= '9')
         ++cursor;
     if(cursor == begin)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    return ParseU64(AStringView(manifest.data() + begin, cursor - begin), outValue);
+    return ParseU64(AStringView(manifest.data() + begin, cursor - begin));
 }
 
-[[nodiscard]] static bool FindGeneratedJsonBoolValue(LogArena& arena, const AStringView manifest, const AStringView key, bool& outValue){
-    outValue = false;
-
-    usize cursor = 0u;
-    if(!FindGeneratedJsonValueCursor(arena, manifest, key, cursor))
-        return false;
+[[nodiscard]] static Expected<bool> FindGeneratedJsonBoolValue(LogArena& arena, const AStringView manifest, const AStringView key){
+    const auto valueCursor = FindGeneratedJsonValueCursor(arena, manifest, key);
+    if(!valueCursor)
+        return MakeUnexpected(Failure{});
+    usize cursor = *valueCursor;
 
     constexpr AStringView s_TrueText("true");
     constexpr AStringView s_FalseText("false");
     if(cursor + s_TrueText.size() <= manifest.size() && AStringView(manifest.data() + cursor, s_TrueText.size()) == s_TrueText){
-        outValue = true;
         return true;
     }
     if(cursor + s_FalseText.size() <= manifest.size() && AStringView(manifest.data() + cursor, s_FalseText.size()) == s_FalseText){
-        outValue = false;
-        return true;
+        return false;
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] static bool ValidateManifest(LogArena& arena, const Path& packageDirectory, CrashPackageSummary& outSummary, CrashText& outError){
+[[nodiscard]] static Expected<CrashPackageSummary, AStringView> ValidateManifest(LogArena& arena, const Path& packageDirectory){
+    CrashPackageSummary outSummary(arena);
     CrashText manifest{arena};
     if(!ReadTextFile(packageDirectory / CrashNames::s_ManifestFileName, manifest)){
-        outError = "missing ";
-        outError += CrashNames::s_ManifestFileName;
-        return false;
+        return MakeUnexpected(AStringView("missing manifest.json"));
     }
 
     const AStringView manifestText(manifest.data(), manifest.size());
-    CrashText manifestFormat{arena};
+    const auto manifestFormat = FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestFormatKey);
     const auto requireString = [&arena, manifestText](const AStringView key){
-        CrashText value{arena};
-        return FindGeneratedJsonStringValue(arena, manifestText, key, value);
+        return FindGeneratedJsonStringValue(arena, manifestText, key);
     };
     const auto requireUnsigned = [&arena, manifestText](const AStringView key){
-        u64 value = 0u;
-        return FindGeneratedJsonUnsignedValue(arena, manifestText, key, value);
+        return FindGeneratedJsonUnsignedValue(arena, manifestText, key);
     };
     const auto requireBool = [&arena, manifestText](const AStringView key){
-        bool value = false;
-        return FindGeneratedJsonBoolValue(arena, manifestText, key, value);
+        return FindGeneratedJsonBoolValue(arena, manifestText, key);
     };
+    auto crashId = FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestCrashIdKey);
+    auto platform = FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestPlatformKey);
+    auto reasonKind = FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestReasonKindKey);
+    auto reasonCode = FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestReasonCodeKey);
+    auto threadId = FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestThreadIdKey);
+    auto event = FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestEventKey);
+    auto triggerExpression = FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestTriggerExpressionKey);
+    auto triggerMessage = FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestTriggerMessageKey);
+    auto triggerFile = FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestTriggerFileKey);
+    auto triggerLine = FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestTriggerLineKey);
+    auto artifactStrategy = FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestArtifactStrategyKey);
     if(
-        !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestFormatKey, manifestFormat)
-        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestCrashIdKey, outSummary.crashId)
+        !manifestFormat
+        || !crashId
         || !requireString(CrashNames::s_ManifestApplicationKey)
         || !requireString(CrashNames::s_ManifestVersionKey)
         || !requireString(CrashNames::s_ManifestBuildIdKey)
         || !requireString(CrashNames::s_ManifestAbiKey)
-        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestPlatformKey, outSummary.platform)
-        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestReasonKindKey, outSummary.reasonKind)
-        || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestReasonCodeKey, outSummary.reasonCode)
+        || !platform
+        || !reasonKind
+        || !reasonCode
         || !requireUnsigned(CrashNames::s_ManifestProcessIdKey)
-        || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestThreadIdKey, outSummary.threadId)
+        || !threadId
         || !requireBool(CrashNames::s_ManifestHasExceptionContextKey)
         || !requireUnsigned(CrashNames::s_ManifestFaultAddressKey)
         || !requireUnsigned(CrashNames::s_ManifestInstructionPointerKey)
         || !requireUnsigned(CrashNames::s_ManifestStackPointerKey)
         || !requireUnsigned(CrashNames::s_ManifestFramePointerKey)
-        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestEventKey, outSummary.event)
+        || !event
         || !requireString(CrashNames::s_ManifestTriggerCategoryKey)
-        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestTriggerExpressionKey, outSummary.triggerExpression)
-        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestTriggerMessageKey, outSummary.triggerMessage)
-        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestTriggerFileKey, outSummary.triggerFile)
-        || !FindGeneratedJsonUnsignedValue(arena, manifestText, CrashNames::s_ManifestTriggerLineKey, outSummary.triggerLine)
+        || !triggerExpression
+        || !triggerMessage
+        || !triggerFile
+        || !triggerLine
         || !requireString(CrashNames::s_ManifestDumpDetailModeKey)
-        || !FindGeneratedJsonStringValue(arena, manifestText, CrashNames::s_ManifestArtifactStrategyKey, outSummary.artifactStrategy)
+        || !artifactStrategy
         || !requireString(CrashNames::s_ManifestHandlerLifetimeKey)
     ){
-        outError = CrashNames::s_ManifestFileName;
-        outError += " is missing required fields";
-        return false;
+        return MakeUnexpected(AStringView("manifest.json is missing required fields"));
     }
 
-    if(manifestFormat != CrashNames::s_ManifestFormatValue){
-        outError = CrashNames::s_ManifestFileName;
-        outError += " has unsupported crash package format";
-        return false;
+    outSummary.crashId = Move(*crashId);
+    outSummary.platform = Move(*platform);
+    outSummary.reasonKind = Move(*reasonKind);
+    outSummary.reasonCode = *reasonCode;
+    outSummary.threadId = *threadId;
+    outSummary.event = Move(*event);
+    outSummary.triggerExpression = Move(*triggerExpression);
+    outSummary.triggerMessage = Move(*triggerMessage);
+    outSummary.triggerFile = Move(*triggerFile);
+    outSummary.triggerLine = *triggerLine;
+    outSummary.artifactStrategy = Move(*artifactStrategy);
+
+    if(*manifestFormat != CrashNames::s_ManifestFormatValue){
+        return MakeUnexpected(AStringView("manifest.json has unsupported crash package format"));
     }
     if(outSummary.crashId.empty() || outSummary.platform.empty() || outSummary.reasonKind.empty() || outSummary.artifactStrategy.empty() || outSummary.event.empty()){
-        outError = CrashNames::s_ManifestFileName;
-        outError += " contains empty required fields";
-        return false;
+        return MakeUnexpected(AStringView("manifest.json contains empty required fields"));
     }
 
-    return true;
+    return outSummary;
 }
 
 
@@ -373,12 +369,11 @@ static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, c
     const CrashIngestConfig& config,
     const AStringView reason
 ){
-    ErrorCode removeError;
-    if(!RemoveAllIfExists(packageDirectory, removeError))
+    if(!RemoveAllIfExists(packageDirectory))
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove rejected crash package directory"));
 
-    Path invalidPath(arena);
-    if(!::MovePathToDirectory(archivePath, CrashInvalidDirectory(arena, config.storageDirectory), invalidPath))
+    const auto invalidPath = ::MovePathToDirectory(archivePath, CrashInvalidDirectory(arena, config.storageDirectory));
+    if(!invalidPath)
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to move rejected crash archive to invalid directory"));
     ApplyRetention(arena, config);
 
@@ -388,7 +383,7 @@ static void AppendAcceptedIngestDetails(LogArena& arena, CrashText& outReport, c
         arena,
         NWB_TEXT("Crash upload rejected: {}; raw='{}'"),
         StringConvert(reason),
-        PathToString<tchar>(invalidPath.empty() ? archivePath : invalidPath)
+        PathToString<tchar>(invalidPath ? *invalidPath : archivePath)
     );
     return result;
 }
@@ -407,28 +402,26 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
     namespace Ingest = __hidden_logger_crash_ingest;
 
     CrashIngestResult result(arena);
-    Ingest::CrashText error(arena);
     const Path packageDirectory = CrashExtractedPackageDirectory(arena, config.storageDirectory, archivePath);
 
-    if(!Ingest::ExtractCrashArchive(arena, archivePath, packageDirectory, error)){
-        return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, AStringView(error.data(), error.size()));
-    }
+    const auto extracted = Ingest::ExtractCrashArchive(arena, archivePath, packageDirectory);
+    if(!extracted)
+        return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, extracted.error());
 
-    CrashPackageSummary summary(arena);
-    if(!Ingest::ValidateManifest(arena, packageDirectory, summary, error)){
-        return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, AStringView(error.data(), error.size()));
-    }
+    auto summaryResult = Ingest::ValidateManifest(arena, packageDirectory);
+    if(!summaryResult)
+        return Ingest::RejectCrashUpload(arena, archivePath, packageDirectory, config, summaryResult.error());
+    const CrashPackageSummary& summary = *summaryResult;
 
     CrashReportText symbolicationReport = BuildCrashSymbolicationReport(arena, packageDirectory, summary, config.symbolication);
     // Report-write failure retains the valid package and in-memory report; it is not a malformed crash.
     if(!WriteTextFile(packageDirectory / s_ServerSymbolicationFileName, AStringView(symbolicationReport.data(), symbolicationReport.size())))
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to persist server crash symbolication report; retaining the package and returning the in-memory report"));
 
-    Path rawPath(arena);
-    const bool rawArchived = ::MovePathToDirectory(archivePath, CrashRawDirectory(arena, config.storageDirectory), rawPath);
+    const auto rawPath = ::MovePathToDirectory(archivePath, CrashRawDirectory(arena, config.storageDirectory));
+    const bool rawArchived = rawPath.has_value();
     if(!rawArchived){
-        ErrorCode removeError;
-        if(!RemoveFile(archivePath, removeError))
+        if(const auto removed = RemoveFile(archivePath); !removed || !*removed)
             NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove crash archive that could not be retained"));
     }
     Ingest::ApplyRetention(arena, config);
@@ -438,7 +431,7 @@ CrashIngestResult ProcessCrashUpload(LogArena& arena, const Path& archivePath, c
         ? Ingest::AcceptedCrashLogType(summary)
         : Core::Common::LogType::Warning
     ;
-    Ingest::AppendAcceptedIngestDetails(arena, symbolicationReport, rawArchived ? rawPath : archivePath, rawArchived);
+    Ingest::AppendAcceptedIngestDetails(arena, symbolicationReport, rawArchived ? *rawPath : archivePath, rawArchived);
     result.message = StringConvert(arena, AStringView(symbolicationReport.data(), symbolicationReport.size()));
     return result;
 }

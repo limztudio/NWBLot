@@ -158,16 +158,14 @@ TEST(NoexceptFailureTests, PlacementAllocationFailurePropagatesThroughCaptureCon
     EXPECT_EQ(previousInvocations, 0u);
 }
 
-TEST(NoexceptFailureTests, ThrowingByteGetterPreservesReadOffsetAndDestination){
+TEST(NoexceptFailureTests, ThrowingByteGetterPreservesReadOffset){
     using namespace __hidden_noexcept_failure_tests;
     ThrowingByteSource source;
     usize offset = 0u;
-    u32 destination = 17u;
-    static_assert(!noexcept(ReadPOD(source, offset, destination)));
+    static_assert(!noexcept(ReadPOD<u32>(source, offset)));
 
-    EXPECT_THROW(EXPECT_FALSE(ReadPOD(source, offset, destination)), u32);
+    EXPECT_THROW(EXPECT_FALSE(ReadPOD<u32>(source, offset)), u32);
     EXPECT_EQ(offset, 0u);
-    EXPECT_EQ(destination, 17u);
 }
 
 

@@ -13,9 +13,8 @@
 
 int RunPipelineTool(const int argc, char** argv){
     NWB::Core::Assets::AssetArena arena(Name("pipeline/asset_gatherer"));
-    PipelineOptions parsed(arena);
     PipelineCommandLine commandLine(PipelineTool::AssetGatherer);
-    return commandLine.run(argc, argv, parsed, [&](PipelineOptions& options){
+    return commandLine.run(argc, argv, arena, [&](PipelineOptions& options){
         NWB::Pipeline::AssetGatherer::AssetGatherOptions gatherOptions(arena);
         gatherOptions.inputs = Move(options.inputs);
         gatherOptions.outputDirectory = Move(options.outputPath);

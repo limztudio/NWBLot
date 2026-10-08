@@ -154,42 +154,45 @@ struct RayDispatchLimits{
     const RayDispatchLimits& limits
 )noexcept;
 
-bool ComputeRayTracingHandleLayout(
+struct RayTracingHandleLayout{
+    u32 handleSize = 0u;
+    u32 handleSizeAligned = 0u;
+    u32 baseAlignment = 0u;
+};
+
+Expected<RayTracingHandleLayout> ComputeRayTracingHandleLayout(
     const VulkanContext& context,
-    u32& outHandleSize,
-    u32& outHandleSizeAligned,
-    u32& outBaseAlignment,
     TStringView operation
 );
 
-bool ComputeShaderTableByteSize(
+Expected<u64> ComputeShaderTableByteSize(
     u32 recordCount,
     u32 handleSizeAligned,
-    u64& outByteSize,
     TStringView operation
 );
 
-[[nodiscard]] bool ComputeShaderTableAllocationByteSize(
+[[nodiscard]] Expected<u64> ComputeShaderTableAllocationByteSize(
     u64 recordByteSize,
-    u32 baseAlignment,
-    u64& outAllocationByteSize
+    u32 baseAlignment
 )noexcept;
 
-[[nodiscard]] bool ComputeShaderTableAlignedOffset(
+[[nodiscard]] Expected<u64> ComputeShaderTableAlignedOffset(
     u64 deviceAddress,
     u64 allocationByteSize,
     u64 recordByteSize,
-    u32 baseAlignment,
-    u64& outOffset
+    u32 baseAlignment
 )noexcept;
 
-bool FillBlasGeometryForSizeQuery(
+struct BlasGeometry{
+    VkAccelerationStructureGeometryKHR geometry = {};
+    VkAccelerationStructureGeometrySpheresDataNV spheresData = {};
+    VkAccelerationStructureGeometryLinearSweptSpheresDataNV lssData = {};
+    u32 primitiveCount = 0u;
+};
+
+Expected<BlasGeometry> FillBlasGeometryForSizeQuery(
     const VulkanContext& context,
     const RayTracingGeometryDesc& geomDesc,
-    VkAccelerationStructureGeometryKHR& geometry,
-    VkAccelerationStructureGeometrySpheresDataNV& spheresData,
-    VkAccelerationStructureGeometryLinearSweptSpheresDataNV& lssData,
-    u32& primitiveCount,
     TStringView operation,
     bool requireBuffers
 );

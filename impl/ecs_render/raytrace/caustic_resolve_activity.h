@@ -37,7 +37,7 @@ struct CausticResolveActivitySnapshot{
     [[nodiscard]] bool matches(const CausticResolveActivitySnapshot& other)const noexcept;
 };
 
-[[nodiscard]] bool ResolveCausticActivityLayout(u32 halfWidth, u32 halfHeight, CausticResolveActivityLayout& output)noexcept;
+[[nodiscard]] Expected<CausticResolveActivityLayout> ResolveCausticActivityLayout(u32 halfWidth, u32 halfHeight)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -115,13 +115,11 @@ void MaterialBindTypedLayoutCache::reserve(const usize count){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildMaterialBindParameterKey(
-    const AStringView instanceName,
-    const AStringView fieldName,
-    ACompactString& outKey
-){
-    outKey.clear();
-    return outKey.assign(instanceName) && outKey.pushBack('.') && outKey.append(fieldName);
+Expected<ACompactString> BuildMaterialBindParameterKey(const AStringView instanceName, const AStringView fieldName){
+    ACompactString key;
+    if(!key.assign(instanceName) || !key.pushBack('.') || !key.append(fieldName))
+        return MakeUnexpected(Failure{});
+    return key;
 }
 
 
@@ -136,50 +134,45 @@ u64 ComputeMaterialBindParameterKeyHash(const AStringView parameterKey){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ParseMaterialBindSource(
+Expected<MaterialBindEntry> ParseMaterialBindSource(
     const Path& bindFilePath,
-    MaterialBindEntry& outEntry,
+    MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    outEntry.reset();
+    auto doc = MaterialBindDetail::ParseMaterialBindDocument(bindFilePath, arena);
+    if(!doc)
+        return MakeUnexpected(Failure{});
 
-    MaterialCookArena& arena = outEntry.source.get_allocator().arena();
-    Metascript::Document doc(arena);
-    if(!MaterialBindDetail::ParseMaterialBindDocument(bindFilePath, arena, doc))
-        return false;
-
-    return MaterialBindDetail::ParseMaterialBindSource(bindFilePath, doc, arena, outEntry, scratchArena);
+    return MaterialBindDetail::ParseMaterialBindSource(bindFilePath, *doc, arena, scratchArena);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildMaterialBindTypedLayout(
+Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(
     const MaterialBindEntry& bindEntry,
     const Name& contextName,
-    MaterialBindTypedLayout& outLayout,
+    MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    return MaterialBindDetail::BuildMaterialBindTypedLayoutImpl(bindEntry, contextName, outLayout, scratchArena);
+    return MaterialBindDetail::BuildMaterialBindTypedLayoutImpl(bindEntry, contextName, arena, scratchArena);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool FindOrBuildMaterialBindTypedLayout(
+Expected<const MaterialBindTypedLayout*> FindOrBuildMaterialBindTypedLayout(
     const Name& materialInterface,
     const MaterialBindEntry& bindEntry,
     MaterialBindTypedLayoutCache& inOutCache,
-    const MaterialBindTypedLayout*& outLayout,
     Core::Alloc::ScratchArena& scratchArena
 ){
     return MaterialBindDetail::FindOrBuildMaterialBindTypedLayoutImpl(
         materialInterface,
         bindEntry,
         inOutCache,
-        outLayout,
         scratchArena
     );
 }

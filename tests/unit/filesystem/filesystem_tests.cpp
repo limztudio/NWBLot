@@ -49,8 +49,7 @@ public:
 
 protected:
     virtual void SetUp()override{
-        ErrorCode error;
-        ASSERT_TRUE(RemoveAllIfExists(m_directory, error));
+        ASSERT_TRUE(RemoveAllIfExists(m_directory));
         ASSERT_TRUE(m_desc.volumeName.assign("test"));
         m_desc.mountDirectory = m_directory;
         m_desc.segmentSize = 4096;
@@ -59,8 +58,7 @@ protected:
         m_desc.usage = VolumeUsage::CookWrite;
     }
     virtual void TearDown()override{
-        ErrorCode error;
-        EXPECT_TRUE(RemoveAllIfExists(m_directory, error));
+        EXPECT_TRUE(RemoveAllIfExists(m_directory));
     }
 
 
@@ -119,21 +117,24 @@ TEST_F(FilesystemVolumeTest, ReadsAcrossSegmentsAndSeeksAtBoundaries){
     ASSERT_TRUE(filesystem->writeFileDeferred(s_TestFile, payload));
     ASSERT_TRUE(filesystem->flush());
 
-    FileCursor cursor;
-    ASSERT_TRUE(filesystem->openFile(s_TestFile, cursor));
+    const auto opened = filesystem->openFile(s_TestFile);
+    ASSERT_TRUE(opened);
+    FileCursor cursor = *opened;
     ASSERT_TRUE(filesystem->seekFile(cursor, 3570, FileSeekOrigin::Begin));
     Array<u8, 64> buffer{};
-    usize bytesRead = 0;
-    ASSERT_TRUE(filesystem->readFile(cursor, buffer.data(), buffer.size(), bytesRead));
-    ASSERT_EQ(bytesRead, buffer.size());
-    EXPECT_EQ(NWB_MEMCMP(buffer.data(), payload.data() + 3570, bytesRead), 0);
+    auto bytesRead = filesystem->readFile(cursor, buffer.data(), buffer.size());
+    ASSERT_TRUE(bytesRead);
+    ASSERT_EQ(*bytesRead, buffer.size());
+    EXPECT_EQ(NWB_MEMCMP(buffer.data(), payload.data() + 3570, *bytesRead), 0);
     EXPECT_EQ(cursor.offset, 3634u);
     ASSERT_TRUE(filesystem->seekFile(cursor, -10, FileSeekOrigin::End));
-    ASSERT_TRUE(filesystem->readFile(cursor, buffer.data(), buffer.size(), bytesRead));
-    EXPECT_EQ(bytesRead, 10u);
-    EXPECT_EQ(NWB_MEMCMP(buffer.data(), payload.data() + 9990, bytesRead), 0);
-    ASSERT_TRUE(filesystem->readFile(cursor, buffer.data(), buffer.size(), bytesRead));
-    EXPECT_EQ(bytesRead, 0u);
+    bytesRead = filesystem->readFile(cursor, buffer.data(), buffer.size());
+    ASSERT_TRUE(bytesRead);
+    EXPECT_EQ(*bytesRead, 10u);
+    EXPECT_EQ(NWB_MEMCMP(buffer.data(), payload.data() + 9990, *bytesRead), 0);
+    bytesRead = filesystem->readFile(cursor, buffer.data(), buffer.size());
+    ASSERT_TRUE(bytesRead);
+    EXPECT_EQ(*bytesRead, 0u);
     EXPECT_EQ(cursor.offset, 10000u);
     EXPECT_FALSE(filesystem->seekFile(cursor, 1, FileSeekOrigin::Current));
     EXPECT_FALSE(filesystem->seekFile(cursor, -10001, FileSeekOrigin::End));
@@ -142,7 +143,7 @@ TEST_F(FilesystemVolumeTest, ReadsAcrossSegmentsAndSeeksAtBoundaries){
     EXPECT_FALSE(filesystem->seekFile(cursor, 0, static_cast<FileSeekOrigin::Enum>(255)));
     EXPECT_EQ(cursor.offset, 10000u);
     filesystem->closeFile(cursor);
-    EXPECT_FALSE(filesystem->readFile(cursor, buffer.data(), buffer.size(), bytesRead));
+    EXPECT_FALSE(filesystem->readFile(cursor, buffer.data(), buffer.size()));
     ASSERT_TRUE(filesystem->unmount());
 }
 
@@ -192,9 +193,7 @@ TEST_F(FilesystemVolumeTest, ReplacesRemovesAndReadsEmptyFiles){
     EXPECT_EQ(filesystem->fileCount(), 1u);
     EXPECT_FALSE(filesystem->writeFile(s_TestFile, nullptr, 1));
     EXPECT_FALSE(filesystem->writeFile(s_NameNone, payload));
-    usize bytesRead = 27;
-    EXPECT_FALSE(filesystem->readFile(s_TestFile, 1, nullptr, 0, bytesRead));
-    EXPECT_EQ(bytesRead, 0u);
+    EXPECT_FALSE(filesystem->readFile(s_TestFile, 1, nullptr, 0));
     ASSERT_TRUE(filesystem->removeFile(s_TestFile));
     EXPECT_EQ(filesystem->fileCount(), 0u);
     EXPECT_FALSE(filesystem->readFile(s_TestFile, loaded));
@@ -245,8 +244,7 @@ TEST_F(FilesystemVolumeTest, MetadataImagePreservesCompleteHashesAndClearsRemove
         expected.resize(static_cast<usize>(m_desc.metadataSize), 0u);
         expected.insert(expected.end(), payload.begin(), payload.end());
         expected.insert(expected.end(), payload.begin(), payload.end());
-        ErrorCode error;
-        ASSERT_TRUE(ReadBinaryFile(segmentPath, actual, error));
+        ASSERT_TRUE(ReadBinaryFile(segmentPath, actual));
         ASSERT_EQ(actual.size(), expected.size());
         EXPECT_EQ(NWB_MEMCMP(actual.data(), expected.data(), expected.size()), 0);
     };

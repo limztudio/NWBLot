@@ -103,9 +103,9 @@ protected:
         EXPECT_EQ(m_router.focus(), m_targets[0u].id);
     }
 
-    [[nodiscard]] bool take(ControlAction& action, const usize owner = 1u){
+    [[nodiscard]] Expected<ControlAction> take(const usize owner = 1u){
         const HitTarget& target = m_targets[owner];
-        return m_router.consumeControlAction(target.id, target.declarationGeneration, target.control, action);
+        return m_router.consumeControlAction(target.id, target.declarationGeneration, target.control);
     }
 
     [[nodiscard]] PopupScope popup(){
@@ -137,9 +137,15 @@ TEST_F(UiKeyboardOwnerTests, EnterIntentionSharesNavigationSequenceWithoutAnActi
     ControlAction down;
     ControlAction submit;
     ControlAction up;
-    ASSERT_TRUE(take(down));
-    ASSERT_TRUE(take(submit));
-    ASSERT_TRUE(take(up));
+    const auto downResult = take();
+    ASSERT_TRUE(downResult);
+    down = *downResult;
+    const auto submitResult = take();
+    ASSERT_TRUE(submitResult);
+    submit = *submitResult;
+    const auto upResult = take();
+    ASSERT_TRUE(upResult);
+    up = *upResult;
     EXPECT_EQ(down.kind, ControlActionKind::Down);
     EXPECT_EQ(submit.kind, ControlActionKind::Submit);
     EXPECT_EQ(up.kind, ControlActionKind::Up);
@@ -156,11 +162,15 @@ TEST_F(UiKeyboardOwnerTests, AcceptedOwnerGeometryAndPageRowsRemainUntilTheCandi
     m_targets[1u].rectangle.height = 180.0f;
     press(Core::Key::PageDown);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult1 = take();
+    ASSERT_TRUE(actionResult1);
+    action = *actionResult1;
     EXPECT_EQ(action.pageRows, 5u);
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
     press(Core::Key::PageDown);
-    ASSERT_TRUE(take(action));
+    const auto actionResult2 = take();
+    ASSERT_TRUE(actionResult2);
+    action = *actionResult2;
     EXPECT_EQ(action.pageRows, 17u);
     EXPECT_EQ(action.id.layoutGeneration, 2u);
 }
@@ -193,7 +203,9 @@ TEST_F(UiKeyboardOwnerTests, PartialBindingAndWrongOwnerEpochRejectRatherThanSwa
     EXPECT_FALSE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
     press(Core::Key::Down);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_EQ(action.id.layoutGeneration, 1u);
 }
 
@@ -237,7 +249,9 @@ TEST_F(UiKeyboardOwnerTests, RebindingEditorRetiresQueuedActionsAndTheHeldInitia
     EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).keyboardConsumed);
     press(Core::Key::Down);
     ControlAction action;
-    EXPECT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
 }
 
 TEST_F(UiKeyboardOwnerTests, OmittedEditorRetiresItsActionsEvenWhenTheListSurvives){
@@ -316,7 +330,9 @@ TEST_F(UiKeyboardOwnerTests, PopupDelegationRetainsItsAcceptedScopeAndCannotCros
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
     press(Core::Key::Down);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_EQ(action.popup, scope.token);
     targets[2u].popup = {};
     targets[2u].layer = 0u;
@@ -330,13 +346,17 @@ TEST_F(UiKeyboardOwnerTests, HeldEnterCannotSubmitAgainUntilItsConsumedRelease){
     focus();
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter)).keyboardConsumed);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult1 = take();
+    ASSERT_TRUE(actionResult1);
+    action = *actionResult1;
     EXPECT_EQ(action.kind, ControlActionKind::Submit);
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter, true)).keyboardConsumed);
-    EXPECT_FALSE(take(action));
+    EXPECT_FALSE(take());
     EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
     press(Core::Key::Enter);
-    EXPECT_TRUE(take(action));
+    const auto actionResult2 = take();
+    ASSERT_TRUE(actionResult2);
+    action = *actionResult2;
 }
 
 

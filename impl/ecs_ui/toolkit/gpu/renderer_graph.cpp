@@ -14,27 +14,27 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutputLayer& outLayer, bool allowEmptySceneLayer){
-    outLayer = {};
+Expected<Core::GpuTaskGraphOutputLayer> GpuRendererState::declare(Core::GpuTaskGraph& graph, bool allowEmptySceneLayer){
+    Core::GpuTaskGraphOutputLayer layer;
     if(!m_pending || !m_pending->m_prepared || !m_readyToDeclare)
-        return true;
+        return layer;
     const Core::AcquiredPresentationFrame& current = m_graphics.acquiredPresentationFrame();
     const Core::AcquiredPresentationFrame& prepared = m_pending->m_acquired;
     if(!MatchesAcquired(current, prepared))
-        return true;
+        return layer;
     u64 generation = 0u;
     {
         const Core::GpuTaskGraph::DeclarationReadView view(graph);
         if(!view.valid())
-            return false;
+            return MakeUnexpected(Failure{});
         generation = view.generation();
     }
     if(m_claimed && m_declaredGraph == &graph && m_graphGeneration == generation){
-        outLayer = m_declaredLayer;
-        return true;
+        layer = m_declaredLayer;
+        return layer;
     }
     if(!m_pending->prefixComplete(m_graphics.getDevice()))
-        return true;
+        return layer;
     const GpuFrame frame = m_pending;
     frame->m_vertexUpload = {};
     frame->m_indexUpload = {};
@@ -50,19 +50,19 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
         && snapshot.sdfPages().empty()
         && snapshot.textureImages().empty()
     ){
-        outLayer.frameGeneration = snapshot.generation();
-        m_declaredLayer = outLayer;
+        layer.frameGeneration = snapshot.generation();
+        m_declaredLayer = layer;
         m_declaredGraph = &graph;
         m_graphGeneration = generation;
         m_claimed = true;
-        return true;
+        return layer;
     }
     const Core::GpuExternalCompletionId targetReady = graph.importExternalCompletion(
         Core::GpuExternalCompletionDesc().setIdentity(Name("ui.layer_ready")).setMarkerLabel("UI Layer Initialization Completion")
             .setToken(frame->m_target->m_readinessToken)
     );
     if(!targetReady.valid())
-        return false;
+        return MakeUnexpected(Failure{});
     const Core::GpuGraphResourceId color = graph.importTexture(
         frame->m_target->m_color,
         Core::GpuGraphResourceDesc().setIdentity(Name("ui.layer")).setMarkerLabel("UI Linear Layer").setType(Core::GpuGraphResourceType::Texture)
@@ -73,7 +73,7 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
             .setToken(frame->m_skin->m_texture.readinessToken)
     );
     if(!color.valid() || !skinReady.valid())
-        return false;
+        return MakeUnexpected(Failure{});
     const Core::GpuGraphResourceId skin = graph.importTexture(
         frame->m_skin->m_texture.texture,
         Core::GpuGraphResourceDesc().setIdentity(Name("ui.atlas")).setMarkerLabel("UI Atlas").setType(Core::GpuGraphResourceType::Texture)
@@ -87,7 +87,7 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
             .setType(Core::GpuGraphPipelineType::Graphics)
     );
     if(!skin.valid() || !version.valid() || !pipeline.valid())
-        return false;
+        return MakeUnexpected(Failure{});
     Core::GpuTaskSchedulingHint uploadScheduling;
     uploadScheduling.cost = Core::GpuTaskCostHint::Small;
     uploadScheduling.allowParallelRecording = true;
@@ -95,18 +95,19 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
     uploadScheduling.preferNonPrimarySameClassQueue = true;
     FixedVector<Core::GpuTaskId, 3u> dependencies;
     GpuRasterResourceUses uses;
-    GpuGlyphGraphResources glyphPages;
-    GpuSdfGraphResources sdfPages;
-    GpuTextureGraphResources textureImages;
     Core::GpuGraphResourceId vertices;
     Core::GpuGraphResourceId indices;
     uses.push_back({ color, {}, Core::ResourceStates::RenderTarget, Core::GpuTaskResourceAccess::Write });
     uses.push_back({ skin, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read });
-    if(
-        !declareGlyphPages(graph, frame, glyphPages, uses) || !declareSdfPages(graph, frame, sdfPages, uses)
-        || !declareTextureImages(graph, frame, textureImages, uses)
-    )
-        return false;
+    auto glyphPages = declareGlyphPages(graph, frame, uses);
+    if(!glyphPages)
+        return MakeUnexpected(Failure{});
+    auto sdfPages = declareSdfPages(graph, frame, uses);
+    if(!sdfPages)
+        return MakeUnexpected(Failure{});
+    auto textureImages = declareTextureImages(graph, frame, uses);
+    if(!textureImages)
+        return MakeUnexpected(Failure{});
     if(!frame->m_snapshot.vertices().empty()){
         vertices = graph.importBuffer(
             frame->m_vertices, Core::GpuGraphResourceDesc().setIdentity(Name("ui.vertices")).setMarkerLabel("UI Vertices").setType(Core::GpuGraphResourceType::Buffer)
@@ -117,7 +118,7 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
                 .setExternalFinalState(Core::ResourceStates::Common)
         );
         if(!vertices.valid() || !indices.valid())
-            return false;
+            return MakeUnexpected(Failure{});
         const Core::GpuUploadBlobId vertexBytes = graph.copyUploadData(
             frame->m_snapshot.vertices().data(), frame->m_snapshot.vertices().size() * sizeof(Vertex), alignof(Vertex)
         );
@@ -125,7 +126,7 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
             frame->m_snapshot.indices().data(), frame->m_snapshot.indices().size() * sizeof(u32), alignof(u32)
         );
         if(!vertexBytes.valid() || !indexBytes.valid())
-            return false;
+            return MakeUnexpected(Failure{});
         const Core::GpuTaskId vertexUpload = graph.addUploadBufferTask(
             Core::GpuTaskDesc().setIdentity(Name("ui.vertex_upload")).setMarkerLabel("UI Vertex Upload").setScheduling(uploadScheduling),
             Core::GpuUploadBufferTaskDesc{
@@ -145,7 +146,7 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
             }
         );
         if(!vertexUpload.valid() || !indexUpload.valid())
-            return false;
+            return MakeUnexpected(Failure{});
         dependencies.push_back(vertexUpload);
         dependencies.push_back(indexUpload);
         uses.push_back({ vertices, {}, Core::ResourceStates::VertexBuffer, Core::GpuTaskResourceAccess::Read });
@@ -161,7 +162,7 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
         }
     );
     if(!clear.valid())
-        return false;
+        return MakeUnexpected(Failure{});
     dependencies.push_back(clear);
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Small;
@@ -174,16 +175,16 @@ bool GpuRendererState::declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutp
             .setDependencies(dependencies.data(), dependencies.size()).setResourceUses(uses.data(), uses.size())
             .setResourceVersionUses(&produce, 1u)
             .setTimingMetadata({ 0u, m_width ^ (m_height << 16u), Core::GpuTaskTimingPolicy::Task }),
-        GpuRasterTask::Payload{ frame, color, skin, pipeline, vertices, indices, Move(glyphPages), Move(sdfPages), Move(textureImages) }
+        GpuRasterTask::Payload{ frame, color, skin, pipeline, vertices, indices, Move(*glyphPages), Move(*sdfPages), Move(*textureImages) }
     );
     if(!raster.valid())
-        return false;
-    outLayer = { raster, color, version, frame->m_target->m_sampledImage, frame->m_snapshot.generation() };
-    m_declaredLayer = outLayer;
+        return MakeUnexpected(Failure{});
+    layer = { raster, color, version, frame->m_target->m_sampledImage, frame->m_snapshot.generation() };
+    m_declaredLayer = layer;
     m_declaredGraph = &graph;
     m_graphGeneration = generation;
     m_claimed = true;
-    return true;
+    return layer;
 }
 
 

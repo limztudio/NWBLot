@@ -23,14 +23,13 @@ bool Builder::paintTextArea(const Item& item, const LayoutBox& box){
     if(!textAreaMatches(frame))
         return false;
     TextAreaState& state = *frame.state;
-    EditBoxPlacement placement;
-    ScrollViewportPlacement viewport;
     const Rect clip = visibleClip(box.clip);
     const f32 caretWidth = 1.0f / m_paint.displayMetrics().pixelScaleX;
-    if(!ScrollbarLayout::Calculate(
+    const auto viewport = ScrollbarLayout::Calculate(
         box.rectangle, clip, item.padding, item.editView.layout().measure(), caretWidth,
-        state.scroll(), item.scrollbarStyle.thickness, item.scrollbarStyle.minimumThumb, viewport
-    ))
+        state.scroll(), item.scrollbarStyle.thickness, item.scrollbarStyle.minimumThumb
+    );
+    if(!viewport)
         return false;
     const f32 lineHeight = item.editView.layout().lines().empty() ? item.editView.layout().fontSize() : item.editView.layout().lines().front().height;
     const Point step{ item.editView.layout().fontSize() * frame.wheelLines, lineHeight * frame.wheelLines };
@@ -38,14 +37,16 @@ bool Builder::paintTextArea(const Item& item, const LayoutBox& box){
         return false;
     const ControlToken token = state.m_scrollInput.prepare(
         item.state, m_context.popupToken(), state.instanceGeneration(), state.revision(), *frame.model,
-        item.editOptions.enabled, item.editOptions.readOnly, viewport, step
+        item.editOptions.enabled, item.editOptions.readOnly, *viewport, step
     );
     m_context.input().fenceControl(item.state.id, item.state.declarationGeneration, token);
-    if(
-        !applyTextAreaScrollInput(item, frame, token)
-        || !item.editView.arrangeViewport(box.rectangle, viewport.viewport, clip, state.scroll(), placement, caretWidth, state.m_revealCaret)
-        || !state.m_scrollInput.updateOffsets({ placement.scroll, placement.scrollY })
-    )
+    if(!applyTextAreaScrollInput(item, frame, token))
+        return false;
+    const auto arranged = item.editView.arrangeViewport(box.rectangle, viewport->viewport, clip, state.scroll(), caretWidth, state.m_revealCaret);
+    if(!arranged)
+        return false;
+    const EditBoxPlacement& placement = *arranged;
+    if(!state.m_scrollInput.updateOffsets({ placement.scroll, placement.scrollY }))
         return false;
     if(!item.editView.paint(m_text, m_paint, *m_skin, placement, item.editStyle, item.editFlags) || !textAreaMatches(frame))
         return false;

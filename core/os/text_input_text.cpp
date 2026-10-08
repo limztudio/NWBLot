@@ -20,8 +20,8 @@ TextInputAdmission::Enum ValidateTextInputUtf8(const AStringView text, const usi
         return TextInputAdmission::TooLarge;
     usize offset = 0u;
     while(offset < text.size()){
-        u32 codePoint = 0u;
-        if(!Utf8TextDetail::DecodeCodePoint(text, offset, codePoint))
+        const auto codePoint = Utf8TextDetail::DecodeCodePoint(text, offset);
+        if(!codePoint)
             return TextInputAdmission::InvalidText;
     }
     return TextInputAdmission::Accepted;
@@ -39,10 +39,10 @@ bool IsTextInputCaretRectValid(const TextInputRect rect)noexcept{
     ;
 }
 
-TextInputAdmission::Enum EncodeTextInputCodePoint(const u32 codePoint, char (&bytes)[4], usize& length)noexcept{
-    length = 0u;
+Expected<usize, TextInputAdmission::Enum> EncodeTextInputCodePoint(const u32 codePoint, char (&bytes)[4])noexcept{
+    usize length = 0u;
     if(codePoint == 0u || codePoint > 0x10ffffu || (codePoint >= 0xd800u && codePoint <= 0xdfffu))
-        return TextInputAdmission::InvalidText;
+        return MakeUnexpected(TextInputAdmission::InvalidText);
     if(codePoint < 0x80u){
         bytes[0] = static_cast<char>(codePoint);
         length = 1u;
@@ -65,7 +65,7 @@ TextInputAdmission::Enum EncodeTextInputCodePoint(const u32 codePoint, char (&by
         bytes[3] = static_cast<char>(0x80u | (codePoint & 0x3fu));
         length = 4u;
     }
-    return TextInputAdmission::Accepted;
+    return length;
 }
 
 

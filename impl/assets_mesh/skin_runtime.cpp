@@ -66,16 +66,16 @@ bool Skin::loadBinary(const Core::Assets::AssetBytes& binary){
     m_inverseBindMatrices.clear();
 
     usize cursor = 0u;
-    SkinBinaryPayload::HeaderBinary header;
-    if(!Core::Assets::ReadMagicHeaderPayload(
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkinBinaryPayload::HeaderBinary>(
         binary,
         cursor,
-        header,
         SkinBinaryPayload::s_SkinMagic,
         NWB_TEXT("Skin::loadBinary"),
         NWB_TEXT("skin")
-    ))
+    );
+    if(!headerResult)
         return false;
+    const SkinBinaryPayload::HeaderBinary& header = *headerResult;
 
     m_mesh.virtualPath = Name(header.meshNameHash);
     m_skeleton.virtualPath = Name(header.skeletonNameHash);

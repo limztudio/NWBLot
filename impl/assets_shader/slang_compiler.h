@@ -29,7 +29,7 @@ namespace SlangShaderCompiler{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ComputeCompilerFingerprint(const Path& temporaryRoot, u64& outFingerprint, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<u64> ComputeCompilerFingerprint(const Path& temporaryRoot, Core::Alloc::ScratchArena& scratchArena);
 [[nodiscard]] bool CompileVariant(const ShaderCook::ShaderCompilerRequest& request, ShaderCook::CookVector<u8>& outBytecode);
 
 

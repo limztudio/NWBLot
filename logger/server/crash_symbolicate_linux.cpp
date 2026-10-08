@@ -81,18 +81,18 @@ struct LinuxSymbolFileCache{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ParseCallstackFrameAddress(const AStringView line, u64& outAddress){
+[[nodiscard]] static Expected<u64> ParseCallstackFrameAddress(const AStringView line)noexcept{
     const usize prefix = line.find(s_HexAddressPrefix);
     if(prefix == AStringView::npos)
-        return false;
+        return MakeUnexpected(Failure{});
 
     usize end = prefix + 2u;
     while(end < line.size() && line[end] != ' ' && line[end] != '\t' && line[end] != '\r' && line[end] != '\n')
         ++end;
     if(end == prefix + 2u)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    return ::ParseVariableHexU64(AStringView(line.data() + prefix + 2u, end - prefix - 2u), outAddress);
+    return ::ParseVariableHexU64(AStringView(line.data() + prefix + 2u, end - prefix - 2u));
 }
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
@@ -101,21 +101,18 @@ struct LinuxSymbolFileCache{
     return trimmed.empty() || trimmed == s_LinuxUnknownSymbolText || StartsWith(trimmed, s_LinuxUnknownLocationPrefix);
 }
 
-[[nodiscard]] static bool ExtractSymbolizerResult(
-    CrashReportText& outSymbol,
+[[nodiscard]] static Expected<CrashReportText> ExtractSymbolizerResult(
+    LogArena& arena,
     const AStringView outputText
 ){
-    outSymbol.clear();
+    CrashReportText outSymbol(arena);
 
     usize cursor = 0u;
-    AStringView function;
-    AStringView location;
-    while(NextTrimmedTextLine(outputText, cursor, function)){
-        location = AStringView();
-        const bool readLocation = NextTrimmedTextLine(outputText, cursor, location);
+    while(const auto function = NextTrimmedTextLine(outputText, cursor)){
+        const auto location = NextTrimmedTextLine(outputText, cursor);
 
-        const bool hasFunction = !IsUnknownSymbolLine(function);
-        const bool hasLocation = readLocation && !IsUnknownSymbolLine(location);
+        const bool hasFunction = !IsUnknownSymbolLine(*function);
+        const bool hasLocation = location && !IsUnknownSymbolLine(*location);
         if(!hasFunction && !hasLocation)
             continue;
 
@@ -123,7 +120,7 @@ struct LinuxSymbolFileCache{
             outSymbol += s_LinuxSymbolFrameSeparator;
         bool wroteFrame = false;
         if(hasFunction){
-            outSymbol.append(function.data(), function.size());
+            outSymbol.append(function->data(), function->size());
             wroteFrame = true;
         }
         if(hasLocation){
@@ -131,31 +128,31 @@ struct LinuxSymbolFileCache{
                 outSymbol += s_LinuxSymbolLocationSeparator;
             else
                 outSymbol += s_LinuxSymbolLocationBarePrefix;
-            outSymbol.append(location.data(), location.size());
+            outSymbol.append(location->data(), location->size());
         }
     }
 
-    return !outSymbol.empty();
+    if(outSymbol.empty())
+        return MakeUnexpected(Failure{});
+    return outSymbol;
 }
 
-[[nodiscard]] static bool RunLinuxSymbolizerCommand(
+[[nodiscard]] static Expected<CrashReportText> RunLinuxSymbolizerCommand(
     LogArena& arena,
-    const Span<const AStringView> arguments,
-    CrashReportText& outSymbol
+    const Span<const AStringView> arguments
 ){
     CrashReportText output{arena};
     if(!CaptureProcessOutput(arena, output, arguments))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    return ExtractSymbolizerResult(outSymbol, AStringView(output.data(), output.size()));
+    return ExtractSymbolizerResult(arena, AStringView(output.data(), output.size()));
 }
 
-[[nodiscard]] static bool TryRunLinuxSymbolizer(
+[[nodiscard]] static Expected<CrashReportText> TryRunLinuxSymbolizer(
     LogArena& arena,
     const AStringView toolName,
     const AStringView modulePathText,
-    const u64 moduleOffset,
-    CrashReportText& outSymbol
+    const u64 moduleOffset
 ){
     CrashReportText addressArgument{arena};
     AppendHexAddress(arena, addressArgument, moduleOffset);
@@ -174,7 +171,7 @@ struct LinuxSymbolFileCache{
             AStringView(addressArgument),
         };
 
-        return RunLinuxSymbolizerCommand(arena, arguments, outSymbol);
+        return RunLinuxSymbolizerCommand(arena, arguments);
     }
 
     CrashReportText modulePathArgument{arena};
@@ -190,90 +187,82 @@ struct LinuxSymbolFileCache{
         AStringView(addressArgument),
     };
 
-    return RunLinuxSymbolizerCommand(arena, arguments, outSymbol);
+    return RunLinuxSymbolizerCommand(arena, arguments);
 }
 
-[[nodiscard]] static bool FindLinuxSymbolFile(
+[[nodiscard]] static Expected<Path> FindLinuxSymbolFile(
     LogArena& arena,
     const AStringView modulePathText,
-    const CrashSymbolicationConfig& config,
-    Path& outPath
+    const CrashSymbolicationConfig& config
 ){
     if(modulePathText.empty() || modulePathText == s_AnonymousModulePath)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    const Path modulePath(arena, modulePathText);
+    Path modulePath(arena, modulePathText);
     if(PathIsRegularFile(modulePath)){
-        outPath = modulePath;
-        return true;
+        return modulePath;
     }
 
     const Path symbolStoreDirectory = EffectiveSymbolStoreDirectory(arena, config);
     if(symbolStoreDirectory.empty())
-        return false;
+        return MakeUnexpected(Failure{});
 
     const Path moduleFileName = modulePath.filename();
     if(moduleFileName.empty())
-        return false;
+        return MakeUnexpected(Failure{});
 
-    const Path symbolStoreCandidate = symbolStoreDirectory / moduleFileName;
+    Path symbolStoreCandidate = symbolStoreDirectory / moduleFileName;
     if(PathIsRegularFile(symbolStoreCandidate)){
-        outPath = symbolStoreCandidate;
-        return true;
+        return symbolStoreCandidate;
     }
 
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] static bool FindLinuxSymbolFileText(
+[[nodiscard]] static Expected<AStringView> FindLinuxSymbolFileText(
     LogArena& arena,
     LinuxSymbolFileCache& cache,
     const AStringView modulePathText,
-    const CrashSymbolicationConfig& config,
-    AStringView& outSymbolPathText
+    const CrashSymbolicationConfig& config
 ){
-    outSymbolPathText = AStringView();
-
     for(const LinuxSymbolFileCacheEntry& entry : cache.entries){
         if(AStringView(entry.modulePath.data(), entry.modulePath.size()) != modulePathText)
             continue;
 
         if(!entry.found)
-            return false;
+            return MakeUnexpected(Failure{});
 
-        outSymbolPathText = AStringView(entry.symbolPath.data(), entry.symbolPath.size());
-        return true;
+        return AStringView(entry.symbolPath.data(), entry.symbolPath.size());
     }
 
     LinuxSymbolFileCacheEntry& entry = cache.entries.emplace_back(arena);
     entry.modulePath.assign(modulePathText.data(), modulePathText.size());
 
-    Path symbolPath(arena);
-    entry.found = FindLinuxSymbolFile(arena, modulePathText, config, symbolPath);
+    const auto symbolPath = FindLinuxSymbolFile(arena, modulePathText, config);
+    entry.found = symbolPath.has_value();
     if(!entry.found)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    const CrashReportText symbolPathText = PathToString<char>(arena, symbolPath);
+    const CrashReportText symbolPathText = PathToString<char>(arena, *symbolPath);
     entry.symbolPath.assign(symbolPathText.data(), symbolPathText.size());
-    outSymbolPathText = AStringView(entry.symbolPath.data(), entry.symbolPath.size());
-    return true;
+    return AStringView(entry.symbolPath.data(), entry.symbolPath.size());
 }
 
-[[nodiscard]] static bool ResolveLinuxFrameSymbol(
+[[nodiscard]] static Expected<CrashReportText> ResolveLinuxFrameSymbol(
     LogArena& arena,
     LinuxSymbolFileCache& cache,
     const AStringView modulePathText,
     const u64 moduleOffset,
-    const CrashSymbolicationConfig& config,
-    CrashReportText& outSymbol
+    const CrashSymbolicationConfig& config
 ){
-    AStringView symbolPathText;
-    if(!FindLinuxSymbolFileText(arena, cache, modulePathText, config, symbolPathText))
-        return false;
+    const auto symbolPathText = FindLinuxSymbolFileText(arena, cache, modulePathText, config);
+    if(!symbolPathText)
+        return MakeUnexpected(Failure{});
 
-    return TryRunLinuxSymbolizer(arena, s_LlvmSymbolizerTool, symbolPathText, moduleOffset, outSymbol)
-        || TryRunLinuxSymbolizer(arena, s_Addr2LineTool, symbolPathText, moduleOffset, outSymbol)
-    ;
+    auto llvmSymbol = TryRunLinuxSymbolizer(arena, s_LlvmSymbolizerTool, *symbolPathText, moduleOffset);
+    if(llvmSymbol)
+        return Move(*llvmSymbol);
+    return TryRunLinuxSymbolizer(arena, s_Addr2LineTool, *symbolPathText, moduleOffset);
 }
 #endif
 
@@ -293,30 +282,29 @@ static void AppendLinuxClientCallstack(
 #endif
 
     usize cursor = 0u;
-    AStringView line;
-    while(NextTextLine(callstackText, cursor, line)){
-        const AStringView trimmed = TrimLeftView(line);
+    while(const auto line = NextTextLine(callstackText, cursor)){
+        const AStringView trimmed = TrimLeftView(*line);
         if(trimmed.empty())
             continue;
 
         outReport.append(trimmed.data(), trimmed.size());
 
-        u64 address = 0u;
-        if(procMaps && ParseCallstackFrameAddress(trimmed, address)){
-            LinuxProcessMemoryMapEntry mapEntry;
-            if(::FindLinuxProcessMemoryMapForAddress(procMaps->entries, address, mapEntry)){
-                const u64 moduleOffset = address - mapEntry.begin;
-                const AStringView modulePath = mapEntry.path.empty() ? AStringView("<anonymous>") : mapEntry.path;
+        const auto address = ParseCallstackFrameAddress(trimmed);
+        if(procMaps && address){
+            const auto mapEntry = ::FindLinuxProcessMemoryMapForAddress(procMaps->entries, *address);
+            if(mapEntry){
+                const u64 moduleOffset = *address - mapEntry->begin;
+                const AStringView modulePath = mapEntry->path.empty() ? AStringView("<anonymous>") : mapEntry->path;
                 outReport += " ";
                 outReport.append(modulePath.data(), modulePath.size());
                 outReport += "+";
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
-                const u64 symbolOffset = moduleOffset + mapEntry.fileOffset;
+                const u64 symbolOffset = moduleOffset + mapEntry->fileOffset;
                 AppendHexAddress(arena, outReport, moduleOffset);
-                CrashReportText symbol{arena};
-                if(ResolveLinuxFrameSymbol(arena, symbolFileCache, modulePath, symbolOffset, config, symbol)){
+                const auto symbol = ResolveLinuxFrameSymbol(arena, symbolFileCache, modulePath, symbolOffset, config);
+                if(symbol){
                     outReport += " ";
-                    outReport += symbol;
+                    outReport += *symbol;
                 }
 #else
                 AppendHexAddress(arena, outReport, moduleOffset);
@@ -357,8 +345,8 @@ void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, c
         ::ParseLinuxProcessMemoryMaps(AStringView(procMaps.data(), procMaps.size()), procMapTable.entries);
     const LinuxProcessMemoryMapTable* const procMapTablePtr = procMapsPresent ? &procMapTable : nullptr;
 
-    u64 instructionPointer = 0u;
-    if(!cpuContextPresent || !FindLineKeyValueU64(AStringView(cpuContext.data(), cpuContext.size()), "instruction_pointer", instructionPointer) || instructionPointer == 0u){
+    const auto instructionPointer = FindLineKeyValueU64(AStringView(cpuContext.data(), cpuContext.size()), "instruction_pointer");
+    if(!cpuContextPresent || !instructionPointer || *instructionPointer == 0u){
         outReport += "detail=ELF/DWARF stack resolver requires a Linux core artifact; instruction pointer mapping unavailable\n";
         if(clientCallstackPresent)
             AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), procMapTablePtr, config, outReport);
@@ -366,7 +354,7 @@ void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, c
     }
 
     outReport += "instruction_pointer=";
-    AppendHexAddress(arena, outReport, instructionPointer);
+    AppendHexAddress(arena, outReport, *instructionPointer);
     outReport += "\n";
 
     if(!procMapsPresent){
@@ -376,22 +364,22 @@ void AppendLinuxArtifactSummary(LogArena& arena, const Path& packageDirectory, c
         return;
     }
 
-    LinuxProcessMemoryMapEntry instructionMapEntry;
-    if(!::FindLinuxProcessMemoryMapForAddress(procMapTable.entries, instructionPointer, instructionMapEntry)){
+    const auto instructionMapEntry = ::FindLinuxProcessMemoryMapForAddress(procMapTable.entries, *instructionPointer);
+    if(!instructionMapEntry){
         outReport += "detail=instruction pointer was not found in proc maps\n";
         if(clientCallstackPresent)
             AppendLinuxClientCallstack(arena, AStringView(clientCallstack.data(), clientCallstack.size()), procMapTablePtr, config, outReport);
         return;
     }
 
-    const AStringView modulePath = instructionMapEntry.path.empty() ? AStringView("<anonymous>") : instructionMapEntry.path;
+    const AStringView modulePath = instructionMapEntry->path.empty() ? AStringView("<anonymous>") : instructionMapEntry->path;
     outReport += "instruction_pointer_module=";
     outReport.append(modulePath.data(), modulePath.size());
     outReport += "\nmodule_relative_ip=";
-    AppendHexAddress(arena, outReport, instructionPointer - instructionMapEntry.begin);
+    AppendHexAddress(arena, outReport, *instructionPointer - instructionMapEntry->begin);
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
     outReport += "\nsymbolication_relative_ip=";
-    AppendHexAddress(arena, outReport, instructionPointer - instructionMapEntry.begin + instructionMapEntry.fileOffset);
+    AppendHexAddress(arena, outReport, *instructionPointer - instructionMapEntry->begin + instructionMapEntry->fileOffset);
 #endif
     outReport += clientCallstackPresent
         ? "\ndetail=client callstack captured; module frames are symbolized with DWARF when symbols are reachable\n"

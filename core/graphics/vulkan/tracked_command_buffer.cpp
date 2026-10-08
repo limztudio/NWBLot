@@ -472,28 +472,18 @@ bool TrackedCommandBuffer::appendPendingAccelStructBuildCommit(
     return true;
 }
 
-bool TrackedCommandBuffer::getPendingAccelStructBuildSignature(
-    const AccelStruct& accelStruct,
-    VkAccelerationStructureTypeKHR& outAccelStructType,
-    VkBuildAccelerationStructureFlagsKHR& outBuildFlags,
-    const AccelStructGeometryBuildSignature*& outGeometrySignatures,
-    usize& outGeometrySignatureCount
-)const noexcept{
+Expected<const AccelStructBuildSignatureRole*> TrackedCommandBuffer::getPendingAccelStructBuildSignature(const AccelStruct& accelStruct)const noexcept{
     for(usize commitIndex = m_pendingAccelStructBuildCommits.size(); commitIndex > 0u; --commitIndex){
         const PendingAccelStructBuildCommit& commit = m_pendingAccelStructBuildCommits[commitIndex - 1u];
         if(commit.accelStruct == &accelStruct){
             if(!commit.preparedRole)
-                return false;
+                return MakeUnexpected(Failure{});
 
-            outAccelStructType = commit.preparedRole->accelStructType;
-            outBuildFlags = commit.preparedRole->buildFlags;
-            outGeometrySignatures = commit.preparedRole->geometrySignatures.empty() ? nullptr : commit.preparedRole->geometrySignatures.data();
-            outGeometrySignatureCount = commit.preparedRole->geometrySignatures.size();
-            return true;
+            return commit.preparedRole;
         }
     }
 
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 bool TrackedCommandBuffer::validatePendingAccelStructBuildCommits()const noexcept{

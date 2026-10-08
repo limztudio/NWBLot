@@ -228,25 +228,25 @@ private:
     [[nodiscard]] SIMDVector resolveCutterAnchorLocalCenter()const{
         const SIMDVector fallback = VectorSet(0.0f, s_CutterAnchorFallbackY, 0.0f, 0.0f);
 
-        UniquePtr<NWB::Core::Assets::IAsset> modelAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name(), modelAsset)){
+        const auto modelAsset = m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_Model.name());
+        if(!modelAsset){
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to load model for cutter anchor"));
             return fallback;
         }
-        NWB_ASSERT(modelAsset);
-        const auto* model = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(modelAsset.get());
+        NWB_ASSERT(*modelAsset);
+        const auto* model = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(modelAsset->get());
         if(!model)
             return fallback;
         if(model->skeletonObjects().empty())
             return fallback;
 
-        UniquePtr<NWB::Core::Assets::IAsset> skeletonAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model->skeletonObjects().front().skeleton.name(), skeletonAsset)){
+        const auto skeletonAsset = m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), model->skeletonObjects().front().skeleton.name());
+        if(!skeletonAsset){
             NWB_LOGGER_ERROR(NWB_TEXT("CsgSkinnedVisibleSmokeProject: failed to load skeleton for cutter anchor"));
             return fallback;
         }
-        NWB_ASSERT(skeletonAsset);
-        const auto* skeleton = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(skeletonAsset.get());
+        NWB_ASSERT(*skeletonAsset);
+        const auto* skeleton = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(skeletonAsset->get());
         if(!skeleton)
             return fallback;
 

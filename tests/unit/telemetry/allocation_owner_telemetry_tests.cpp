@@ -95,13 +95,6 @@ static void ExpectDelta(const Perf::MemoryDelta& actual, const Perf::MemoryDelta
     EXPECT_EQ(actual.deallocationCount, expected.deallocationCount);
 }
 
-static void ExpectEmptyPayload(const Telemetry::PerfMemoryPayload& parsed){
-    EXPECT_EQ(parsed.scopeName, s_NameNone);
-    EXPECT_TRUE(parsed.scopeText.empty());
-    ExpectSnapshot(parsed.snapshot, Perf::MemorySnapshot{});
-    ExpectDelta(parsed.delta, Perf::MemoryDelta{});
-}
-
 [[nodiscard]] static const Telemetry::EventRecord* FindOwnerEvent(
     Telemetry::TelemetryArena& arena,
     const Telemetry::EventView& events,
@@ -112,11 +105,11 @@ static void ExpectEmptyPayload(const Telemetry::PerfMemoryPayload& parsed){
         const Telemetry::EventRecord* const event = events.eventAt(eventIndex);
         if(!event || event->header.kind != Telemetry::EventKind::MemoryFrame)
             continue;
-        Telemetry::PerfMemoryPayload parsed(arena);
+        const auto parsed = Telemetry::ParsePerfMemoryPayload(arena, event->payload.data(), event->payload.size());
         if(
-            Telemetry::ParsePerfMemoryPayload(arena, event->payload.data(), event->payload.size(), parsed)
-            && parsed.scopeName == owner
-            && parsed.snapshot.source == source
+            parsed
+            && parsed->scopeName == owner
+            && parsed->snapshot.source == source
         )
             return event;
     }
@@ -159,7 +152,7 @@ static void ExpectJsonNumber(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(AllocationOwnerTelemetry, ResetsOutputForMalformedMemoryPayloads){
+TEST(AllocationOwnerTelemetry, RejectsMalformedMemoryPayloadsWithoutInvalidatingPriorValue){
     TestArena testArena;
     const Name owner("tests/telemetry/payload_validation_owner");
     const Perf::MemorySnapshot snapshot = MakeSnapshot(owner, Perf::MemorySource::Arena);
@@ -168,11 +161,12 @@ TEST(AllocationOwnerTelemetry, ResetsOutputForMalformedMemoryPayloads){
     ASSERT_TRUE(Telemetry::BuildPerfMemoryPayload(testArena.arena, owner, "Payload Validation Owner", snapshot, delta, bytes));
     Telemetry::EncodedPerfMemoryPayloadHeader validHeader;
     NWB_MEMCPY(&validHeader, sizeof(validHeader), bytes.data(), sizeof(validHeader));
-    Telemetry::PerfMemoryPayload parsed(testArena.arena);
-    ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size(), parsed));
+    auto parsed = Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size());
+    ASSERT_TRUE(parsed);
     for(u32 invalidCase = 0u; invalidCase < 9u; ++invalidCase){
         NWB_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
-        ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size(), parsed));
+        parsed = Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size());
+        ASSERT_TRUE(parsed);
         Telemetry::EncodedPerfMemoryPayloadHeader malformed = validHeader;
         switch(invalidCase){
         case 0u: malformed.version = 0u; break;
@@ -186,14 +180,17 @@ TEST(AllocationOwnerTelemetry, ResetsOutputForMalformedMemoryPayloads){
         case 8u: ++malformed.scopeNameBytes; break;
         }
         NWB_MEMCPY(bytes.data(), bytes.size(), &malformed, sizeof(malformed));
-        EXPECT_FALSE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size(), parsed));
-        ExpectEmptyPayload(parsed);
+        EXPECT_FALSE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size()));
+        ExpectSnapshot(parsed->snapshot, snapshot);
+        EXPECT_EQ(parsed->scopeName, owner);
     }
     for(const usize truncatedSize : { sizeof(validHeader) - 1u, bytes.size() - 1u }){
         NWB_MEMCPY(bytes.data(), bytes.size(), &validHeader, sizeof(validHeader));
-        ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size(), parsed));
-        EXPECT_FALSE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), truncatedSize, parsed));
-        ExpectEmptyPayload(parsed);
+        parsed = Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), bytes.size());
+        ASSERT_TRUE(parsed);
+        EXPECT_FALSE(Telemetry::ParsePerfMemoryPayload(testArena.arena, bytes.data(), truncatedSize));
+        ExpectSnapshot(parsed->snapshot, snapshot);
+        EXPECT_EQ(parsed->scopeName, owner);
     }
 
     Perf::MemorySnapshot invalidSnapshot = snapshot;
@@ -326,10 +323,10 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
     ASSERT_NE(firstEvent, nullptr);
     EXPECT_NE(FindOwnerEvent(testArena.arena, capture.view(), ownerName, Perf::MemorySource::ExplicitScope), nullptr);
     EXPECT_EQ(firstEvent->header.frameIndex, 41u);
-    Telemetry::PerfMemoryPayload parsed(testArena.arena);
-    ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, firstEvent->payload.data(), firstEvent->payload.size(), parsed));
-    ExpectSnapshot(parsed.snapshot, first);
-    EXPECT_FALSE(parsed.delta.hasSamples);
+    auto parsed = Telemetry::ParsePerfMemoryPayload(testArena.arena, firstEvent->payload.data(), firstEvent->payload.size());
+    ASSERT_TRUE(parsed);
+    ExpectSnapshot(parsed->snapshot, first);
+    EXPECT_FALSE(parsed->delta.hasSamples);
 
     void* const resized = owner.reallocate(allocation.pointer, 1u, 101u);
     ASSERT_NE(resized, nullptr);
@@ -366,15 +363,18 @@ TEST(AllocationOwnerTelemetry, CapturesAutomaticAllocationOwnersAcrossEnableReal
     ASSERT_TRUE(retiredRecorded.ok());
     const Telemetry::EventRecord* const retiredEvent = FindOwnerEvent(testArena.arena, capture.view(), ownerName, Perf::MemorySource::Arena);
     ASSERT_NE(retiredEvent, nullptr);
-    ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, retiredEvent->payload.data(), retiredEvent->payload.size(), parsed));
-    ExpectSnapshot(parsed.snapshot, retired);
-    ExpectDelta(parsed.delta, retiredDelta);
+    parsed = Telemetry::ParsePerfMemoryPayload(testArena.arena, retiredEvent->payload.data(), retiredEvent->payload.size());
+    ASSERT_TRUE(parsed);
+    ExpectSnapshot(parsed->snapshot, retired);
+    ExpectDelta(parsed->delta, retiredDelta);
     EXPECT_NE(FindOwnerEvent(testArena.arena, capture.view(), scratchName, Perf::MemorySource::Arena), nullptr);
     const Name heapName("core/alloc/heap_backing");
     EXPECT_NE(FindOwnerEvent(testArena.arena, capture.view(), heapName, Perf::MemorySource::HeapBacking), nullptr);
 
     Log::TelemetryReport report(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, capture.view(), report));
+    auto reportResult1 = Log::BuildTelemetryReport(testArena.arena, capture.view());
+    ASSERT_TRUE(reportResult1);
+    report = Move(*reportResult1);
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
     const AStringView json(report.json.data(), report.json.size());
     const AStringView ownerRecord = FindOwnerJsonRecord(json, ownerName, "\"source\": \"arena\"");
@@ -453,7 +453,9 @@ TEST(AllocationOwnerTelemetry, SharedNameSumsLiveUsageAndPreservesLargestIndivid
     const Telemetry::PerfSessionRecordResult recorded = capture.recordPerfReport(perfSession.report(), 17u);
     ASSERT_TRUE(recorded.ok());
     Log::TelemetryReport report(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, capture.view(), report));
+    auto reportResult2 = Log::BuildTelemetryReport(testArena.arena, capture.view());
+    ASSERT_TRUE(reportResult2);
+    report = Move(*reportResult2);
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
     const AStringView json(report.json.data(), report.json.size());
     const AStringView record = FindOwnerJsonRecord(json, ownerName, "\"source\": \"arena\"");
@@ -482,7 +484,9 @@ TEST(AllocationOwnerTelemetry, KeepsHeapBackingRecordsWithoutCountingTheirUsageA
         ASSERT_TRUE(Telemetry::RecordPerfMemory(recorder, owner, "Shared Owner", snapshot, delta, 7u));
     }
     Log::TelemetryReport report(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    auto reportResult3 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    ASSERT_TRUE(reportResult3);
+    report = Move(*reportResult3);
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
     EXPECT_EQ(report.summary.memoryEventCount, 3u);
     for(const Perf::MemorySource::Enum source : sources){
@@ -544,7 +548,9 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
         recorder, unknownOwner, unknownHashText, MakeSnapshot(unknownOwner, Perf::MemorySource::HeapBacking), TelemetryTestDetail::MakeTestMemoryDelta(-1), 94u
     ));
     Log::TelemetryReport report(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    auto reportResult4 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    ASSERT_TRUE(reportResult4);
+    report = Move(*reportResult4);
     const AStringView beforeJson(report.json.data(), report.json.size());
     const AStringView beforeRecord = FindOwnerJsonRecord(beforeJson, firstOwner, "\"source\": \"arena\"");
     ASSERT_FALSE(beforeRecord.empty());
@@ -557,7 +563,9 @@ TEST(AllocationOwnerTelemetry, ResolvesLoadedOwnerSymbolsByFullIdentityAndPreser
         NameSymbols::s_FileHeader, firstHashText, secondHashText
     );
     ASSERT_TRUE(NameSymbols::LoadFromMemory(AStringView(namesymText.data(), namesymText.size())));
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    auto reportResult5 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    ASSERT_TRUE(reportResult5);
+    report = Move(*reportResult5);
     EXPECT_EQ(report.summary.parseFailureCount, 0u);
     const AStringView json(report.json.data(), report.json.size());
     const AStringView firstRecord = FindOwnerJsonRecord(json, firstOwner, "\"source\": \"arena\"");

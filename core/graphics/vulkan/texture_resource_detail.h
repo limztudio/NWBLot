@@ -178,12 +178,11 @@ inline u32 GetMaxMipLevels(const TextureDesc& desc)noexcept{
     ;
 }
 
-[[nodiscard]] constexpr bool TryTextureDimensionToImageType(
-    const TextureDimension::Enum dimension,
-    VkImageType& outImageType
-)noexcept{
-    outImageType = GetTextureImageType(dimension);
-    return outImageType != VK_IMAGE_TYPE_MAX_ENUM;
+[[nodiscard]] constexpr Expected<VkImageType> TryTextureDimensionToImageType(const TextureDimension::Enum dimension)noexcept{
+    const VkImageType imageType = GetTextureImageType(dimension);
+    if(imageType == VK_IMAGE_TYPE_MAX_ENUM)
+        return MakeUnexpected(Failure{});
+    return imageType;
 }
 
 inline VkImageViewType TextureDimensionToViewType(TextureDimension::Enum dimension)noexcept{
@@ -259,9 +258,9 @@ inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, co
     const VkImageCreateInfo& imageInfo,
     const VkImageUsageFlags requiredUsage = 0u
 )noexcept{
-    VkImageType expectedImageType = VK_IMAGE_TYPE_MAX_ENUM;
+    const auto expectedImageType = TryTextureDimensionToImageType(desc.dimension);
     if(
-        !TryTextureDimensionToImageType(desc.dimension, expectedImageType)
+        !expectedImageType
         || !VulkanDetail::IsSupportedSampleCount(desc.sampleCount)
         || desc.sampleQuality != 0u
     )
@@ -290,7 +289,7 @@ inline VkImageCreateInfo BuildTextureImageCreateInfo(const TextureDesc& desc, co
     ;
     return
         imageInfo.sType == VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO
-        && imageInfo.imageType == expectedImageType
+        && imageInfo.imageType == *expectedImageType
         && imageInfo.format == expectedFormat
         && imageInfo.extent.width == desc.width
         && imageInfo.extent.height == desc.height
@@ -334,20 +333,19 @@ inline bool ValidateTextureViewShape(const TextureDimension::Enum dimension, con
     return true;
 }
 
-inline bool ReportTextureCreateDescError(TStringView operationName, TStringView message, const bool assertFailure){
+inline Unexpected<Failure> ReportTextureCreateDescError(TStringView operationName, TStringView message, const bool assertFailure){
     NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
     if(assertFailure)
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
-inline bool ValidateTextureCreateDesc(
+inline Expected<TextureCreateMetadata> ValidateTextureCreateDesc(
     const TextureDesc& desc,
     TStringView operationName,
-    const bool assertFailure,
-    TextureCreateMetadata& outMetadata
+    const bool assertFailure
 ){
-    outMetadata = {};
+    TextureCreateMetadata metadata{};
     if(!ResourceQueueSharing::IsValid(desc.queueSharing))
         return ReportTextureCreateDescError(operationName, NWB_TEXT("queue sharing contains unknown bits"), assertFailure);
     if(!IsTextureCreationStateMaskValid(desc.initialState))
@@ -355,28 +353,32 @@ inline bool ValidateTextureCreateDesc(
     if(!VulkanDetail::ValidateTextureShape(desc, operationName)){
         if(assertFailure)
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: invalid texture shape"), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outMetadata.format = VulkanDetail::ConvertFormat(desc.format);
-    if(outMetadata.format == VK_FORMAT_UNDEFINED)
+    metadata.format = VulkanDetail::ConvertFormat(desc.format);
+    if(metadata.format == VK_FORMAT_UNDEFINED)
         return ReportTextureCreateDescError(operationName, NWB_TEXT("format is unsupported"), assertFailure);
 
     const FormatInfo& formatInfo = GetFormatInfo(desc.format);
-    if(!VulkanDetail::GetTextureFormatBlockLayout(formatInfo, outMetadata.formatLayout))
+    const auto formatLayout = VulkanDetail::GetTextureFormatBlockLayout(formatInfo);
+    if(!formatLayout)
         return ReportTextureCreateDescError(operationName, NWB_TEXT("invalid texture format"), assertFailure);
+    metadata.formatLayout = *formatLayout;
 
-    outMetadata.aspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
+    metadata.aspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
     if(!VulkanDetail::IsSupportedSampleCount(desc.sampleCount))
         return ReportTextureCreateDescError(operationName, NWB_TEXT("sample count is unsupported"), assertFailure);
     if(desc.sampleQuality != 0u)
         return ReportTextureCreateDescError(operationName, NWB_TEXT("sample quality must be zero"), assertFailure);
-    if(!TryTextureDimensionToImageType(desc.dimension, outMetadata.imageType))
+    const auto imageType = TryTextureDimensionToImageType(desc.dimension);
+    if(!imageType)
         return ReportTextureCreateDescError(operationName, NWB_TEXT("texture dimension is unsupported"), assertFailure);
+    metadata.imageType = *imageType;
     if(
         desc.sampleCount != 1u
         && (
-            outMetadata.imageType != VK_IMAGE_TYPE_2D
+            metadata.imageType != VK_IMAGE_TYPE_2D
             || (PickImageFlags(desc) & VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT) != 0u
         )
     )
@@ -388,18 +390,18 @@ inline bool ValidateTextureCreateDesc(
     if(desc.sampleCount != 1 && desc.mipLevels != 1)
         return ReportTextureCreateDescError(operationName, NWB_TEXT("multisampled texture mip levels must be 1"), assertFailure);
 
-    outMetadata.usage = PickImageUsage(desc, outMetadata.aspectMask);
+    metadata.usage = PickImageUsage(desc, metadata.aspectMask);
     const VkImageUsageFlags requiredInitialUsage = RequiredImageUsageForResourceStates(desc.initialState);
-    if((outMetadata.usage & requiredInitialUsage) != requiredInitialUsage){
+    if((metadata.usage & requiredInitialUsage) != requiredInitialUsage){
         return ReportTextureCreateDescError(
             operationName,
             NWB_TEXT("initial state requires an undeclared image usage"),
             assertFailure
         );
     }
-    outMetadata.flags = PickImageFlags(desc);
-    outMetadata.sampleCount = VulkanDetail::GetSampleCountFlagBits(desc.sampleCount);
-    return true;
+    metadata.flags = PickImageFlags(desc);
+    metadata.sampleCount = VulkanDetail::GetSampleCountFlagBits(desc.sampleCount);
+    return metadata;
 }
 
 

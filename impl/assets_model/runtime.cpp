@@ -169,16 +169,16 @@ bool Model::loadBinary(const Core::Assets::AssetBytes& binary){
     m_skinnedMeshObjects.clear();
 
     usize cursor = 0u;
-    ModelBinaryPayload::ModelHeaderBinary header;
-    if(!Core::Assets::ReadMagicHeaderPayload(
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<ModelBinaryPayload::ModelHeaderBinary>(
         binary,
         cursor,
-        header,
         ModelBinaryPayload::s_ModelMagic,
         NWB_TEXT("Model::loadBinary"),
         NWB_TEXT("model")
-    ))
+    );
+    if(!headerResult)
         return false;
+    const ModelBinaryPayload::ModelHeaderBinary& header = *headerResult;
 
     Core::Assets::AssetVector<ModelBinaryPayload::ModelSkeletonObjectBinary> skeletonObjectBinaries(m_skeletonObjects.get_allocator().arena());
     Core::Assets::AssetVector<ModelBinaryPayload::ModelStaticMeshObjectBinary> staticMeshObjectBinaries(m_staticMeshObjects.get_allocator().arena());

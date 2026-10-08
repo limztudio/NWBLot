@@ -369,7 +369,7 @@ bool MeshSkinningSystem::prepareResources(Core::Framebuffer* framebuffer){
     return ready;
 }
 
-bool MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, RuntimeMeshDesc& outMesh){
+Expected<RuntimeMeshDesc> MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity){
     RuntimeMeshHandle runtimeMesh;
     if(const SkinnedMeshBindingComponent* binding = m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
         runtimeMesh = binding->runtimeMesh;
@@ -379,8 +379,7 @@ bool MeshSkinningSystem::resolveRuntimeMesh(const Core::ECS::EntityID entity, Ru
         runtimeMesh,
         instance,
         __hidden_system::s_RuntimeSkinningMeshletFrustumCullingEnabled,
-        __hidden_system::s_RuntimeSkinningMeshletConeCullingEnabled,
-        outMesh
+        __hidden_system::s_RuntimeSkinningMeshletConeCullingEnabled
     );
 }
 
@@ -391,9 +390,9 @@ bool MeshSkinningSystem::hasRuntimeMeshBinding(const Core::ECS::EntityID entity)
 void MeshSkinningSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests){
     MarkLiveSkinnedRuntimeMeshes(
         m_world, requests,
-        [this](const Core::ECS::EntityID entity, const SkinnedMeshBindingComponent& binding, Name& meshKey, u64& version){
+        [this](const Core::ECS::EntityID entity, const SkinnedMeshBindingComponent& binding){
             const MeshSkinningRuntimeInstance* const instance = binding.runtimeMesh.valid() ? m_runtimeMeshCache.findInstance(binding.runtimeMesh) : nullptr;
-            return ResolveSkinnedRuntimeMeshIdentity(entity, binding.runtimeMesh, instance, meshKey, version);
+            return ResolveSkinnedRuntimeMeshIdentity(entity, binding.runtimeMesh, instance);
         }
     );
 }
@@ -695,14 +694,12 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             }
 
             if(copiesRestStreams){
-                usize positionBytes = 0u;
-                usize normalBytes = 0u;
-                usize tangentBytes = 0u;
+                const auto copyByteCounts = ResolveRestToSkinnedCopyByteCounts(*instance);
                 if(
-                    !ResolveRestToSkinnedCopyByteCounts(*instance, positionBytes, normalBytes, tangentBytes)
-                    || positionBytes == 0u
-                    || normalBytes == 0u
-                    || tangentBytes == 0u
+                    !copyByteCounts
+                    || copyByteCounts->positionBytes == 0u
+                    || copyByteCounts->normalBytes == 0u
+                    || copyByteCounts->tangentBytes == 0u
                 ){
                     NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to resolve rest-to-skinned copy sizes for runtime mesh '{}'"), instance->handle.value);
                     declarationFailed = true;
@@ -713,17 +710,17 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
                     Core::GpuCopyBufferTaskRegion{
                         .source = plan.restPositionResource,
                         .destination = plan.skinnedPositionResource,
-                        .dataSizeBytes = positionBytes,
+                        .dataSizeBytes = copyByteCounts->positionBytes,
                     },
                     Core::GpuCopyBufferTaskRegion{
                         .source = plan.restNormalResource,
                         .destination = plan.skinnedNormalResource,
-                        .dataSizeBytes = normalBytes,
+                        .dataSizeBytes = copyByteCounts->normalBytes,
                     },
                     Core::GpuCopyBufferTaskRegion{
                         .source = plan.restTangentResource,
                         .destination = plan.skinnedTangentResource,
-                        .dataSizeBytes = tangentBytes,
+                        .dataSizeBytes = copyByteCounts->tangentBytes,
                     },
                 };
                 Core::GpuTaskDesc copyDesc;
@@ -834,8 +831,8 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
     if(dispatchPlans.empty())
         return true;
 
-    MeshSkinningGraphResourceUses resourceUses(scratchArena);
-    if(!BuildMeshSkinningGraphResourceUses(dispatchPlans.data(), dispatchPlans.size(), scratchArena, resourceUses))
+    const auto resourceUses = BuildMeshSkinningGraphResourceUses(dispatchPlans.data(), dispatchPlans.size(), scratchArena);
+    if(!resourceUses)
         return false;
 
     // Retain prior-frame state with its consuming task; source stays serial by contract.
@@ -870,7 +867,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         }
     }
     Core::GpuTaskId postDispatchDependency = terminalTask;
-    if(!resourceUses.deformation.empty()){
+    if(!resourceUses->deformation.empty()){
         TaskGraphSkinningDeformationTask::Payload deformationPayload(m_arena, *this, timingTicket);
         deformationPayload.plans.clear();
         deformationPayload.plans.reserve(dispatchPlans.size());
@@ -884,7 +881,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             .setIdentity(Name("mesh_skinning.frame_deformation"))
             .setMarkerLabel("Runtime Skinning Deformation")
             .setScheduling(__hidden_system::SkinningDispatchScheduling())
-            .setResourceUses(resourceUses.deformation.data(), resourceUses.deformation.size())
+            .setResourceUses(resourceUses->deformation.data(), resourceUses->deformation.size())
         ;
         if(previousFrameStateSourceCount != 0u)
             deformationDesc.setExternalStateSources(previousFrameStateSources, previousFrameStateSourceCount);
@@ -908,7 +905,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         .setIdentity(Name("mesh_skinning.frame_bounds_repack"))
         .setMarkerLabel("Runtime Skinning Bounds and Repack")
         .setScheduling(__hidden_system::SkinningDispatchScheduling())
-        .setResourceUses(resourceUses.postDispatch.data(), resourceUses.postDispatch.size())
+        .setResourceUses(resourceUses->postDispatch.data(), resourceUses->postDispatch.size())
     ;
     if(previousFrameStateSourceCount != 0u)
         postDispatchDesc.setExternalStateSources(previousFrameStateSources, previousFrameStateSourceCount);
@@ -929,7 +926,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         .setMarkerLabel("Runtime Skinning Local Bounds")
         .setScheduling(__hidden_system::SkinningDispatchScheduling())
         .setDependencies(&postDispatchTask, 1u)
-        .setResourceUses(resourceUses.localBounds.data(), resourceUses.localBounds.size())
+        .setResourceUses(resourceUses->localBounds.data(), resourceUses->localBounds.size())
     ;
     if(previousFrameStateSourceCount != 0u)
         localBoundsDesc.setExternalStateSources(previousFrameStateSources, previousFrameStateSourceCount);
@@ -944,7 +941,7 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
         .setMarkerLabel("Runtime Skinning Finalize States")
         .setScheduling(__hidden_system::SkinningDispatchScheduling())
         .setDependencies(&localBoundsTask, 1u)
-        .setResourceUses(resourceUses.finalizer.data(), resourceUses.finalizer.size())
+        .setResourceUses(resourceUses->finalizer.data(), resourceUses->finalizer.size())
     ;
     const Core::GpuTaskId finalizerTask = graph.addTask<TaskGraphSkinningFinalizerTask>(
         finalizerDesc,

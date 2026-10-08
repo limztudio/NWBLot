@@ -14,15 +14,15 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputRouter::consumePopupDismissal(const PopupToken& token, PopupDismissReason::Enum& reason){
+Expected<PopupDismissReason::Enum> InputRouter::consumePopupDismissal(const PopupToken& token){
     for(usize index = 0u; index < m_popupDismissals.size(); ++index){
         if(m_popupDismissals[index].token == token){
-            reason = m_popupDismissals[index].reason;
+            const PopupDismissReason::Enum reason = m_popupDismissals[index].reason;
             m_popupDismissals.erase(m_popupDismissals.begin() + static_cast<isize>(index));
-            return true;
+            return reason;
         }
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 bool InputRouter::dismissPopup(const PopupDismissReason::Enum reason){

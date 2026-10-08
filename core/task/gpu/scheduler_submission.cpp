@@ -301,20 +301,20 @@ bool GpuTaskScheduler::submitPacketWithinSubmissionOperation(
     preparedTimingTicketsUnwind.abandonOnUnwind();
     submittingPacketUnwind.arm(packetID, submissionLease);
 
-    usize emittedTimelineWaitCount = 0u;
     QueueSubmissionDesc submitDesc;
-    submitDesc.outTimelineWaitCount = &emittedTimelineWaitCount;
     if(!waitTokens.empty())
         submitDesc.setWaitTokens(waitTokens.data(), waitTokens.size());
     if(preSubmitHook)
         submitDesc.setPreSubmitHook(*preSubmitHook);
     const Timer submissionBegin = TimerNow();
-    const QueueSubmissionToken token = device().executeGraphCommandLists(
+    const auto submission = device().executeGraphCommandLists(
         recordedPacket->commandLists,
         recordedPacket->commandListCount,
         packet.queue,
         submitDesc
     );
+    const QueueSubmissionToken token = submission ? submission->token : QueueSubmissionToken{};
+    const usize emittedTimelineWaitCount = submission ? submission->timelineWaitCount : 0u;
     if(token.valid()){
         for(u8 commandListIndex = 0u; commandListIndex < recordedPacket->commandListCount; ++commandListIndex){
             graphSubmissionOwnerships[commandListIndex].value().accept();

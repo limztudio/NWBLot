@@ -70,14 +70,13 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
+    [[nodiscard]] Expected<AvboitOccupancyRecordResult> declare(
         const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
         ObjectGeometryCacheGraph& objectGeometry,
         AvboitOccupancyRecordInputs& inputs,
         RendererTaskGraphDetail::AvboitOccupancyGraphTask::Payload& occupancyPayload,
-        RendererTaskGraphDetail::AvboitOccupancyComputeEmulationGraphTask::Payload& computeEmulationPayload,
-        AvboitOccupancyRecordResult& outResult
+        RendererTaskGraphDetail::AvboitOccupancyComputeEmulationGraphTask::Payload& computeEmulationPayload
     );
 
 

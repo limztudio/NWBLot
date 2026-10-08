@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <global/expected.h>
 #include "recorder.h"
 
 #include <global/diagnostics.h>
@@ -75,7 +76,7 @@ struct DiagnosticPayload{
 
 
 [[nodiscard]] bool BuildDiagnosticPayload(TelemetryArena& arena, const DiagnosticEventRecord& record, TelemetryBytes& outPayload);
-[[nodiscard]] bool ParseDiagnosticPayload(TelemetryArena& arena, const void* payload, usize payloadBytes, DiagnosticPayload& outPayload);
+[[nodiscard]] Expected<DiagnosticPayload> ParseDiagnosticPayload(TelemetryArena& arena, const void* payload, usize payloadBytes);
 [[nodiscard]] bool RecordDiagnostic(
     Recorder& recorder,
     const DiagnosticEventRecord& record,

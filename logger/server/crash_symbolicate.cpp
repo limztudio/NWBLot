@@ -57,12 +57,11 @@ static void AppendSymbolStoreStatus(LogArena& arena, CrashReportText& outReport,
     outReport += PathToString<char>(arena, symbolStoreDirectory);
     outReport += "\nsymbol_store_status=";
 
-    ErrorCode error;
-    const bool exists = IsDirectory(symbolStoreDirectory, error);
-    if(error)
+    const auto exists = IsDirectory(symbolStoreDirectory);
+    if(!exists)
         outReport += s_SymbolStoreErrorText;
     else
-        outReport += exists ? s_SymbolStorePresentText : s_SymbolStoreMissingText;
+        outReport += *exists ? s_SymbolStorePresentText : s_SymbolStoreMissingText;
     outReport += "\n";
 }
 
@@ -126,13 +125,12 @@ struct ReportSectionRange{
     [[nodiscard]] bool found()const noexcept{ return removeBegin != AStringView::npos; }
 };
 
-[[nodiscard]] static bool FindReportSection(
+[[nodiscard]] static Expected<ReportSectionRange> FindReportSection(
     const AStringView report,
     const AStringView header,
-    const AStringView headerWithLeadingNewline,
-    ReportSectionRange& outRange
-){
-    outRange = ReportSectionRange{};
+    const AStringView headerWithLeadingNewline
+)noexcept{
+    ReportSectionRange outRange;
 
     if(StartsWith(report, header)){
         outRange.removeBegin = 0u;
@@ -141,7 +139,7 @@ struct ReportSectionRange{
     else{
         const usize headerBegin = report.find(headerWithLeadingNewline);
         if(headerBegin == AStringView::npos)
-            return false;
+            return MakeUnexpected(Failure{});
 
         outRange.removeBegin = headerBegin;
         outRange.contentBegin = headerBegin + headerWithLeadingNewline.size();
@@ -150,17 +148,15 @@ struct ReportSectionRange{
     const usize nextSection = report.find(AStringView("\n["), outRange.contentBegin);
     outRange.contentEnd = nextSection == AStringView::npos ? report.size() : nextSection;
     outRange.removeEnd = outRange.contentEnd;
-    return true;
+    return outRange;
 }
 
-[[nodiscard]] static ReportSectionRange FindCallstackSection(const AStringView report){
-    ReportSectionRange range;
-    if(FindReportSection(report, AStringView("[callstack]\n"), AStringView("\n[callstack]\n"), range))
-        return range;
-    if(FindReportSection(report, AStringView("[tombstone_callstack]\n"), AStringView("\n[tombstone_callstack]\n"), range))
-        return range;
-
-    return ReportSectionRange{};
+[[nodiscard]] static ReportSectionRange FindCallstackSection(const AStringView report)noexcept{
+    const auto callstack = FindReportSection(report, AStringView("[callstack]\n"), AStringView("\n[callstack]\n"));
+    if(callstack)
+        return *callstack;
+    const auto tombstone = FindReportSection(report, AStringView("[tombstone_callstack]\n"), AStringView("\n[tombstone_callstack]\n"));
+    return tombstone ? *tombstone : ReportSectionRange{};
 }
 
 [[nodiscard]] static AStringView ReportSectionContent(const AStringView report, const ReportSectionRange& range){

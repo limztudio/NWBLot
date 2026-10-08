@@ -112,18 +112,17 @@ namespace __hidden_gpu_command_ir_upload_preflight{
 )noexcept{
     if(!graph.validUploadBlob(record.sourceUploadBlob))
         return false;
-    usize sourceSize = 0u;
-    const void* const source = graph.uploadBlobData(record.sourceUploadBlob, sourceSize);
+    const auto source = graph.uploadBlobData(record.sourceUploadBlob);
     if(
         !source
         || !blobBytes.data()
         || record.blobOffsetBytes > static_cast<u64>(blobBytes.size())
         || record.blobSizeBytes > static_cast<u64>(blobBytes.size()) - record.blobOffsetBytes
-        || record.blobSizeBytes > static_cast<u64>(sourceSize)
+        || record.blobSizeBytes > static_cast<u64>(source->size())
     )
         return false;
     return NWB_MEMCMP(
-        source,
+        source->data(),
         blobBytes.data() + static_cast<usize>(record.blobOffsetBytes),
         static_cast<usize>(record.blobSizeBytes)
     ) == 0;
@@ -197,31 +196,30 @@ namespace __hidden_gpu_command_ir_upload_preflight{
 
     const TextureDesc& description = destination->getCreationDescription();
     const TextureSlice& slice = record.destinationSlice;
-    usize requiredBytes = 0u;
-    TextureUploadAspect::Enum resolvedAspect;
+    Expected<usize> requiredBytes = MakeUnexpected(Failure{});
+    if(static_cast<usize>(description.format) >= static_cast<usize>(Format::kCount))
+        return GpuCommandIrReplayError::InvalidTextureUpload;
+    const auto resolvedAspect = ResolveTextureUploadAspect(GetFormatInfo(description.format), record.uploadAspect);
     if(
-        static_cast<usize>(description.format) >= static_cast<usize>(Format::kCount)
-        ||
         record.rowPitch > static_cast<u64>(Limit<usize>::s_Max)
         || record.depthPitch > static_cast<u64>(Limit<usize>::s_Max)
         || record.finalState == ResourceStates::Unknown
-        || !ResolveTextureUploadAspect(GetFormatInfo(description.format), record.uploadAspect, resolvedAspect)
+        || !resolvedAspect
         || !GpuTaskGraphBuiltinDetail::UploadTextureTaskCanMaterializeRetainedState(
             description,
             view.initialState,
             view.externalFinalState,
             record.finalState
         )
-        || !GpuTaskGraphBuiltinDetail::ComputeTextureUploadByteSize(
+        || !(requiredBytes = GpuTaskGraphBuiltinDetail::ComputeTextureUploadByteSize(
             description,
             slice.arraySlice,
             slice.mipLevel,
             static_cast<usize>(record.rowPitch),
             static_cast<usize>(record.depthPitch),
-            record.uploadAspect,
-            requiredBytes
-        )
-        || requiredBytes != record.blobSizeBytes
+            record.uploadAspect
+        ))
+        || *requiredBytes != record.blobSizeBytes
     )
         return GpuCommandIrReplayError::InvalidTextureUpload;
 
@@ -245,7 +243,7 @@ namespace __hidden_gpu_command_ir_upload_preflight{
         (taskCapabilities & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
         || (queueCapabilities & static_cast<u8>(GpuQueueCapability::Transfer)) == 0u
         || (
-            resolvedAspect != TextureUploadAspect::Color
+            *resolvedAspect != TextureUploadAspect::Color
             && (
                 (taskCapabilities & static_cast<u8>(GpuQueueCapability::Graphics)) == 0u
                 || (queueCapabilities & static_cast<u8>(GpuQueueCapability::Graphics)) == 0u

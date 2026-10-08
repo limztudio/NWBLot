@@ -71,25 +71,25 @@ struct MeshCookEntry{
     {}
 };
 
-[[nodiscard]] bool ParseMeshCookMetadata(
+[[nodiscard]] Expected<MeshCookEntry> ParseMeshCookMetadata(
     const Path& assetRoot,
     AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    MeshCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] bool ParseMeshCookMetadata(
+[[nodiscard]] Expected<MeshCookEntry> ParseMeshCookMetadata(
     Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    MeshCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 );
 
-[[nodiscard]] bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh);
+[[nodiscard]] Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -21,22 +21,20 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ExtractUiSkinTextureDependency(
+Expected<Core::Assets::AssetRef<Texture>> ExtractUiSkinTextureDependency(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    Core::Assets::AssetRef<Texture>& out,
     Core::Alloc::ScratchArena& scratchArena
 ){
     if(doc.declarations().size() != 1u)
-        return false;
+        return MakeUnexpected(Failure{});
     Core::Assets::AssetArena assetArena(Name("impl/assets_ui_skin/dependencies"));
-    UiSkinCookEntry entry(assetArena);
-    if(!ParseUiSkinCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, entry, scratchArena))
-        return false;
-    out = entry.texture;
-    return true;
+    auto entryResult = ParseUiSkinCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, assetArena, scratchArena);
+    if(!entryResult)
+        return MakeUnexpected(Failure{});
+    return entryResult->texture;
 }
 
 

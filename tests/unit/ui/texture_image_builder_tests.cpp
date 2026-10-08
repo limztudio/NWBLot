@@ -39,24 +39,20 @@ struct TextureImagePaintSample{
     Core::Alloc::GlobalArena& arena, const StringView path = "tests/ui/builder_image",
     const u8 seed = 37u, const u32 width = 20u, const u32 height = 12u
 ){
-    u32 mipCount = 0u;
-    if(!TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture2D, width, height, 1u, mipCount))
+    const auto mipCount = TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture2D, width, height, 1u);
+    if(!mipCount)
         return {};
     Texture::MipLevelVector mips(arena);
-    mips.reserve(mipCount);
+    mips.reserve(*mipCount);
     u32 mipWidth = width;
     u32 mipHeight = height;
     u64 offset = 0u;
-    for(u32 index = 0u; index < mipCount; ++index){
-        u32 blocksX = 0u;
-        u32 blocksY = 0u;
-        u64 byteCount = 0u;
-        if(!TextureFormat::ComputeMipPlaneBlockLayout(
-            TexturePayloadFormat::UastcLdr4x4, mipWidth, mipHeight, blocksX, blocksY, byteCount
-        ))
+    for(u32 index = 0u; index < *mipCount; ++index){
+        const auto plane = TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcLdr4x4, mipWidth, mipHeight);
+        if(!plane)
             return {};
-        mips.push_back({ mipWidth, mipHeight, blocksX, blocksY, offset, byteCount, 1u });
-        offset += byteCount;
+        mips.push_back({ mipWidth, mipHeight, plane->blocksX, plane->blocksY, offset, plane->planeByteCount, 1u });
+        offset += plane->planeByteCount;
         mipWidth = mipWidth > 1u ? mipWidth >> 1u : 1u;
         mipHeight = mipHeight > 1u ? mipHeight >> 1u : 1u;
     }
@@ -75,7 +71,7 @@ struct TextureImagePaintSample{
     return MakeImageSource(arena, texture);
 }
 
-[[nodiscard]] static bool SampleImage(const DrawSnapshot& snapshot, const u64 generation, TextureImagePaintSample& out){
+[[nodiscard]] static Expected<TextureImagePaintSample> SampleImage(const DrawSnapshot& snapshot, const u64 generation)noexcept{
     TextureImagePaintSample candidate;
     f32 right = 0.0f;
     f32 bottom = 0.0f;
@@ -106,11 +102,10 @@ struct TextureImagePaintSample{
         }
     }
     if(candidate.quads == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
     candidate.bounds.width = right - candidate.bounds.x;
     candidate.bounds.height = bottom - candidate.bounds.y;
-    out = candidate;
-    return true;
+    return candidate;
 }
 
 
@@ -181,14 +176,14 @@ TEST_F(UiTextureImageBuilderTests, DeclarationRetainsSourceAndOptionsAcrossCalle
     EXPECT_EQ(snapshot.textureImages()[0u]->generation(), generation);
     EXPECT_EQ(snapshot.textureImages()[0u]->texture().width(), 20u);
     EXPECT_EQ(snapshot.textureImages()[0u]->texture().payloadBytes()[0u], 37u);
-    TextureImagePaintSample sample;
-    ASSERT_TRUE(SampleImage(snapshot, generation, sample));
-    EXPECT_FLOAT_EQ(sample.bounds.width, 80.0f);
-    EXPECT_FLOAT_EQ(sample.bounds.height, 32.0f);
-    EXPECT_FLOAT_EQ(sample.color.r, 1.0f);
-    EXPECT_FLOAT_EQ(sample.color.g, 0.4f);
-    EXPECT_FLOAT_EQ(sample.color.b, 0.3f);
-    EXPECT_FLOAT_EQ(sample.color.a, 0.5f);
+    const auto sample = SampleImage(snapshot, generation);
+    ASSERT_TRUE(sample);
+    EXPECT_FLOAT_EQ(sample->bounds.width, 80.0f);
+    EXPECT_FLOAT_EQ(sample->bounds.height, 32.0f);
+    EXPECT_FLOAT_EQ(sample->color.r, 1.0f);
+    EXPECT_FLOAT_EQ(sample->color.g, 0.4f);
+    EXPECT_FLOAT_EQ(sample->color.b, 0.3f);
+    EXPECT_FLOAT_EQ(sample->color.a, 0.5f);
 }
 
 TEST_F(UiTextureImageBuilderTests, FrozenSnapshotsKeepVersionsAcrossBuilderResetAndSourceRelease){
@@ -222,12 +217,12 @@ TEST_F(UiTextureImageBuilderTests, FrozenSnapshotsKeepVersionsAcrossBuilderReset
     EXPECT_NE(original, replacement);
     EXPECT_EQ(retained.textureImages()[0u]->texture().payloadBytes()[0u], 37u);
     EXPECT_EQ(next.textureImages()[0u]->texture().payloadBytes()[0u], 73u);
-    TextureImagePaintSample oldSample;
-    TextureImagePaintSample nextSample;
-    ASSERT_TRUE(SampleImage(retained, original, oldSample));
-    ASSERT_TRUE(SampleImage(next, replacement, nextSample));
-    EXPECT_FLOAT_EQ(oldSample.bounds.width, 20.0f);
-    EXPECT_FLOAT_EQ(nextSample.bounds.width, 9.0f);
+    const auto oldSample = SampleImage(retained, original);
+    ASSERT_TRUE(oldSample);
+    const auto nextSample = SampleImage(next, replacement);
+    ASSERT_TRUE(nextSample);
+    EXPECT_FLOAT_EQ(oldSample->bounds.width, 20.0f);
+    EXPECT_FLOAT_EQ(nextSample->bounds.width, 9.0f);
 }
 
 TEST_F(UiTextureImageBuilderTests, SamePathVersionsStayDistinctAndRepeatedHandlesKeepOneBinding){
@@ -266,12 +261,12 @@ TEST_F(UiTextureImageBuilderTests, ExternalClipTrimsFullImageUvsAndRestoresThePa
     ASSERT_TRUE(m_paint.popClip());
     m_paint.fillRect({ 60.0f, 80.0f, 8.0f, 8.0f }, { 1.0f, 0.0f, 0.0f, 1.0f });
     const DrawSnapshot snapshot = m_paint.freeze();
-    TextureImagePaintSample sample;
-    ASSERT_TRUE(SampleImage(snapshot, source->generation(), sample));
-    EXPECT_FLOAT_EQ(sample.bounds.x, 20.0f);
-    EXPECT_FLOAT_EQ(sample.bounds.width, 20.0f);
-    EXPECT_NEAR(sample.uv.x, 7.0f / 96.0f, 0.000001f);
-    EXPECT_NEAR(sample.uv.x + sample.uv.width, 27.0f / 96.0f, 0.000001f);
+    const auto sample = SampleImage(snapshot, source->generation());
+    ASSERT_TRUE(sample);
+    EXPECT_FLOAT_EQ(sample->bounds.x, 20.0f);
+    EXPECT_FLOAT_EQ(sample->bounds.width, 20.0f);
+    EXPECT_NEAR(sample->uv.x, 7.0f / 96.0f, 0.000001f);
+    EXPECT_NEAR(sample->uv.x + sample->uv.width, 27.0f / 96.0f, 0.000001f);
     bool sentinel = false;
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material != PaintMaterial::Solid)
@@ -294,8 +289,7 @@ TEST_F(UiTextureImageBuilderTests, TransparentAndZeroAxisImagesAreValidWithoutBi
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
     EXPECT_TRUE(snapshot.textureImages().empty());
-    TextureImagePaintSample sample;
-    EXPECT_FALSE(SampleImage(snapshot, source->generation(), sample));
+    EXPECT_FALSE(SampleImage(snapshot, source->generation()));
 }
 
 TEST_F(UiTextureImageBuilderTests, ActiveNullSourceRejectsEvenTransparentPolicyWithoutReplacingAcceptedInput){
@@ -376,13 +370,13 @@ TEST_F(UiTextureImageBuilderTests, EndedNestedChildRetainsSourceAndOptionsUntilT
     ASSERT_EQ(snapshot.textureImages().size(), 1u);
     EXPECT_EQ(snapshot.textureImages()[0u]->generation(), generation);
     EXPECT_EQ(snapshot.textureImages()[0u]->texture().payloadBytes()[0u], 37u);
-    TextureImagePaintSample sample;
-    ASSERT_TRUE(SampleImage(snapshot, generation, sample));
-    EXPECT_FLOAT_EQ(sample.bounds.width, 80.0f);
-    EXPECT_FLOAT_EQ(sample.bounds.height, 32.0f);
-    EXPECT_FLOAT_EQ(sample.color.r, 0.4f);
-    EXPECT_FLOAT_EQ(sample.color.a, 0.5f);
-    EXPECT_EQ(sample.layer, 2u);
+    const auto sample = SampleImage(snapshot, generation);
+    ASSERT_TRUE(sample);
+    EXPECT_FLOAT_EQ(sample->bounds.width, 80.0f);
+    EXPECT_FLOAT_EQ(sample->bounds.height, 32.0f);
+    EXPECT_FLOAT_EQ(sample->color.r, 0.4f);
+    EXPECT_FLOAT_EQ(sample->color.a, 0.5f);
+    EXPECT_EQ(sample->layer, 2u);
     EXPECT_EQ(m_context.input().popupCount(), 2u);
 }
 
@@ -430,8 +424,7 @@ TEST_F(UiTextureImageBuilderTests, VisibleImageAtFullBindingCapacityRejectsDefer
     EXPECT_FALSE(m_context.commitFrame(1u));
     const DrawSnapshot snapshot = m_paint.freeze();
     EXPECT_EQ(snapshot.textureImages().size(), s_PaintMaxImages);
-    TextureImagePaintSample sample;
-    EXPECT_FALSE(SampleImage(snapshot, addition->generation(), sample));
+    EXPECT_FALSE(SampleImage(snapshot, addition->generation()));
 }
 
 TEST_F(UiTextureImageBuilderTests, FullyClippedImageAtFullBindingCapacityConsumesNoAdditionalSlot){
@@ -452,8 +445,7 @@ TEST_F(UiTextureImageBuilderTests, FullyClippedImageAtFullBindingCapacityConsume
     ASSERT_TRUE(m_context.commitFrame(1u));
     const DrawSnapshot snapshot = m_paint.freeze();
     EXPECT_EQ(snapshot.textureImages().size(), s_PaintMaxImages);
-    TextureImagePaintSample sample;
-    EXPECT_FALSE(SampleImage(snapshot, addition->generation(), sample));
+    EXPECT_FALSE(SampleImage(snapshot, addition->generation()));
     EXPECT_FALSE(m_context.failed());
 }
 

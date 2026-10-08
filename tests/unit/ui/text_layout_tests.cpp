@@ -28,9 +28,9 @@ public:
 
 
 public:
-    [[nodiscard]] virtual TextLayoutStatus::Enum shape(const ShapeRequest& request, ShapedRun& output)override{
+    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override{
         if(request.text == "FAIL")
-            return TextLayoutStatus::MissingGlyph;
+            return MakeUnexpected(TextLayoutStatus::MissingGlyph);
         ShapedRun run(m_arena);
         run.metrics = { 8.0f, 2.0f, 2.0f };
         if(request.text == "ffi")
@@ -54,8 +54,7 @@ public:
                     Swap(run.glyphs[index], run.glyphs[run.glyphs.size() - index - 1u]);
             }
         }
-        output = Move(run);
-        return TextLayoutStatus::Success;
+        return run;
     }
 
 
@@ -85,7 +84,11 @@ protected:
 
 
 TEST_F(TextLayoutTests, CrLfAndTrailingNewlinePreserveSourceRangesAndEmptyFinalLine){
-    ASSERT_EQ(m_builder.layout({ "A\r\nB\n" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_builder.layout({ "A\r\nB\n" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.lines().size(), 3u);
     EXPECT_EQ(m_layout.lines()[0].byteEnd, 1u);
     EXPECT_EQ(m_layout.lines()[0].breakEnd, 3u);
@@ -94,51 +97,68 @@ TEST_F(TextLayoutTests, CrLfAndTrailingNewlinePreserveSourceRangesAndEmptyFinalL
     EXPECT_EQ(m_layout.lines()[2].glyphCount, 0u);
     EXPECT_FLOAT_EQ(m_layout.measure().y, 36.0f);
     EXPECT_EQ(m_layout.hitTest({ 20.0f, 100.0f }).byteOffset, 5u);
-    Rect caret;
-    EXPECT_FALSE(m_layout.caretRect(2u, TextCaretEdge::Leading, caret));
-    ASSERT_TRUE(m_layout.caretRect(5u, TextCaretEdge::Leading, caret));
-    EXPECT_FLOAT_EQ(caret.y, 24.0f);
-    EXPECT_FLOAT_EQ(caret.height, 12.0f);
+    Expected<Rect> caret = MakeUnexpected(Failure{});
+    EXPECT_FALSE(m_layout.caretRect(2u, TextCaretEdge::Leading));
+    caret = m_layout.caretRect(5u, TextCaretEdge::Leading);
+    ASSERT_TRUE(caret);
+    EXPECT_FLOAT_EQ(caret->y, 24.0f);
+    EXPECT_FLOAT_EQ(caret->height, 12.0f);
 }
 
 TEST_F(TextLayoutTests, LigatureAndCombiningClustersHaveOnlyRealSourceEdges){
-    ASSERT_EQ(m_builder.layout({ "ffi" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_builder.layout({ "ffi" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.clusters().size(), 1u);
     EXPECT_EQ(m_layout.clusters()[0].byteBegin, 0u);
     EXPECT_EQ(m_layout.clusters()[0].byteEnd, 3u);
     EXPECT_EQ(m_layout.hitTest({ 11.0f, 4.0f }).byteOffset, 0u);
     EXPECT_EQ(m_layout.hitTest({ 11.01f, 4.0f }).byteOffset, 3u);
-    Rect caret;
-    EXPECT_FALSE(m_layout.caretRect(1u, TextCaretEdge::Leading, caret));
-    ASSERT_EQ(m_builder.layout({ "A\xcc\x81" }, m_layout), TextLayoutStatus::Success);
+    EXPECT_FALSE(m_layout.caretRect(1u, TextCaretEdge::Leading));
+    {
+        auto layoutResult = m_builder.layout({ "A\xcc\x81" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.clusters().size(), 1u);
     EXPECT_EQ(m_layout.clusters()[0].glyphCount, 2u);
     EXPECT_FLOAT_EQ(m_layout.measure().x, 10.0f);
-    EXPECT_FALSE(m_layout.caretRect(1u, TextCaretEdge::Leading, caret));
-    EXPECT_FALSE(m_layout.caretRect(2u, TextCaretEdge::Leading, caret));
+    EXPECT_FALSE(m_layout.caretRect(1u, TextCaretEdge::Leading));
+    EXPECT_FALSE(m_layout.caretRect(2u, TextCaretEdge::Leading));
     EXPECT_EQ(m_layout.hitTest({ 10.0f, 4.0f }).byteOffset, 3u);
 }
 
 TEST_F(TextLayoutTests, NonBmpAndHangulClustersMapUtf8BytesRatherThanScalarIndices){
     constexpr StringView s_Text = "A\xed\x95\x9c\xf0\x9f\x98\x80";
-    ASSERT_EQ(m_builder.layout({ s_Text }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_builder.layout({ s_Text });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.clusters().size(), 3u);
     EXPECT_EQ(m_layout.clusters()[0].byteEnd, 1u);
     EXPECT_EQ(m_layout.clusters()[1].byteBegin, 1u);
     EXPECT_EQ(m_layout.clusters()[1].byteEnd, 4u);
     EXPECT_EQ(m_layout.clusters()[2].byteBegin, 4u);
     EXPECT_EQ(m_layout.clusters()[2].byteEnd, 8u);
-    Rect caret;
-    EXPECT_FALSE(m_layout.caretRect(2u, TextCaretEdge::Trailing, caret));
-    EXPECT_FALSE(m_layout.caretRect(6u, TextCaretEdge::Leading, caret));
-    ASSERT_TRUE(m_layout.caretRect(4u, TextCaretEdge::Leading, caret));
-    EXPECT_FLOAT_EQ(caret.x, 20.0f);
+    Expected<Rect> caret = MakeUnexpected(Failure{});
+    EXPECT_FALSE(m_layout.caretRect(2u, TextCaretEdge::Trailing));
+    EXPECT_FALSE(m_layout.caretRect(6u, TextCaretEdge::Leading));
+    caret = m_layout.caretRect(4u, TextCaretEdge::Leading);
+    ASSERT_TRUE(caret);
+    EXPECT_FLOAT_EQ(caret->x, 20.0f);
 }
 
 TEST_F(TextLayoutTests, RtlVisualOrderReversesLogicalClusterEdgesAndPreservesByteEnds){
     ShapeRequest request{ "abc" };
     request.direction = TextDirection::RightToLeft;
-    ASSERT_EQ(m_builder.layout(request, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_builder.layout(request);
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.clusters().size(), 3u);
     EXPECT_EQ(m_layout.clusters()[0].byteBegin, 2u);
     EXPECT_EQ(m_layout.clusters()[0].byteEnd, 3u);
@@ -147,53 +167,92 @@ TEST_F(TextLayoutTests, RtlVisualOrderReversesLogicalClusterEdgesAndPreservesByt
     EXPECT_EQ(m_layout.hitTest({ -1.0f, 4.0f }).byteOffset, 3u);
     EXPECT_EQ(m_layout.hitTest({ 31.0f, 4.0f }).byteOffset, 0u);
     EXPECT_EQ(m_layout.hitTest({ 5.0f, 4.0f }).byteOffset, 2u);
-    Rect caret;
-    ASSERT_TRUE(m_layout.caretRect(0u, TextCaretEdge::Leading, caret));
-    EXPECT_FLOAT_EQ(caret.x, 30.0f);
-    ASSERT_TRUE(m_layout.caretRect(3u, TextCaretEdge::Trailing, caret));
-    EXPECT_FLOAT_EQ(caret.x, 0.0f);
+    Expected<Rect> caret = MakeUnexpected(Failure{});
+    caret = m_layout.caretRect(0u, TextCaretEdge::Leading);
+    ASSERT_TRUE(caret);
+    EXPECT_FLOAT_EQ(caret->x, 30.0f);
+    caret = m_layout.caretRect(3u, TextCaretEdge::Trailing);
+    ASSERT_TRUE(caret);
+    EXPECT_FLOAT_EQ(caret->x, 0.0f);
 }
 
 TEST_F(TextLayoutTests, FailedLaterLineAndSourceMutationPreserveCommittedLayout){
     AString<Core::Alloc::GlobalArena> source(m_arena);
     source = "AB";
-    ASSERT_EQ(m_builder.layout({ { source.data(), source.size() } }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_builder.layout({ { source.data(), source.size() } });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     source = "changed";
     EXPECT_EQ(m_layout.utf8(), "AB");
-    EXPECT_EQ(m_builder.layout({ "C\nFAIL" }, m_layout), TextLayoutStatus::MissingGlyph);
+    {
+        const auto layoutResult = m_builder.layout({ "C\nFAIL" });
+        ASSERT_FALSE(layoutResult);
+        EXPECT_EQ(layoutResult.error(), TextLayoutStatus::MissingGlyph);
+    }
     EXPECT_EQ(m_layout.utf8(), "AB");
     EXPECT_FLOAT_EQ(m_layout.measure().x, 20.0f);
     ASSERT_EQ(m_layout.lines().size(), 1u);
-    EXPECT_EQ(m_builder.layout({ "A\tB" }, m_layout), TextLayoutStatus::UnsupportedControl);
+    {
+        const auto layoutResult = m_builder.layout({ "A\tB" });
+        ASSERT_FALSE(layoutResult);
+        EXPECT_EQ(layoutResult.error(), TextLayoutStatus::UnsupportedControl);
+    }
     EXPECT_EQ(m_layout.utf8(), "AB");
 }
 
 TEST_F(TextLayoutTests, EmptyTextHasOneTypographicLineAndNoInk){
-    ASSERT_EQ(m_builder.layout({}, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_builder.layout({});
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     EXPECT_EQ(m_layout.lines().size(), 1u);
     EXPECT_TRUE(m_layout.glyphs().empty());
     EXPECT_FLOAT_EQ(m_layout.measure().x, 0.0f);
     EXPECT_FLOAT_EQ(m_layout.measure().y, 12.0f);
     EXPECT_FLOAT_EQ(m_layout.inkBounds().width, 0.0f);
-    Rect caret;
-    ASSERT_TRUE(m_layout.caretRect(0u, TextCaretEdge::Leading, caret));
-    EXPECT_FLOAT_EQ(caret.height, 12.0f);
+    Expected<Rect> caret = MakeUnexpected(Failure{});
+    caret = m_layout.caretRect(0u, TextCaretEdge::Leading);
+    ASSERT_TRUE(caret);
+    EXPECT_FLOAT_EQ(caret->height, 12.0f);
 }
 
 TEST_F(TextLayoutTests, StrictUtf8AndHorizontalRequestValidationAreFailureAtomic){
-    ASSERT_EQ(m_builder.layout({ "AB" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_builder.layout({ "AB" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     const StringView invalid[]{ "\xc0\x80", "\xed\xa0\x80", "\xf4\x90\x80\x80", "\xe2\x82", { "\0", 1u } };
     for(const StringView text : invalid){
-        EXPECT_EQ(m_builder.layout({ text }, m_layout), TextLayoutStatus::InvalidUtf8);
+        {
+            const auto layoutResult = m_builder.layout({ text });
+            ASSERT_FALSE(layoutResult);
+            EXPECT_EQ(layoutResult.error(), TextLayoutStatus::InvalidUtf8);
+        }
         EXPECT_EQ(m_layout.utf8(), "AB");
     }
-    EXPECT_EQ(m_builder.layout({ "A\rB" }, m_layout), TextLayoutStatus::UnsupportedControl);
+    {
+        const auto layoutResult = m_builder.layout({ "A\rB" });
+        ASSERT_FALSE(layoutResult);
+        EXPECT_EQ(layoutResult.error(), TextLayoutStatus::UnsupportedControl);
+    }
     ShapeRequest request{ "AB" };
     request.fontSize = Limit<f32>::s_QuietNaN;
-    EXPECT_EQ(m_builder.layout(request, m_layout), TextLayoutStatus::InvalidParameters);
+    {
+        const auto layoutResult = m_builder.layout(request);
+        ASSERT_FALSE(layoutResult);
+        EXPECT_EQ(layoutResult.error(), TextLayoutStatus::InvalidParameters);
+    }
     request.fontSize = 16.0f;
     request.scriptTag = 0u;
-    EXPECT_EQ(m_builder.layout(request, m_layout), TextLayoutStatus::InvalidParameters);
+    {
+        const auto layoutResult = m_builder.layout(request);
+        ASSERT_FALSE(layoutResult);
+        EXPECT_EQ(layoutResult.error(), TextLayoutStatus::InvalidParameters);
+    }
     EXPECT_EQ(m_layout.utf8(), "AB");
 }
 

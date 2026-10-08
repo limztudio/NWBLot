@@ -139,12 +139,16 @@ bool RendererRayTracingSystem::prepareHardwareTransparentShadowResources(Deferre
                 .enableAutomaticStateTracking(Core::ResourceStates::UnorderedAccess)
             ;
             buffers[i] = m_graphics.createBuffer(desc);
-            if(!buffers[i] || !RayTracingDetail::RegisterHeapBuffer(
-                heap, *buffers[i], Core::GpuDescriptorClass::StorageBuffer, true, descriptors[i]
-            )){
+            if(!buffers[i]){
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware transparent-shadow scratch {}"), i);
                 return false;
             }
+            const auto descriptor = RayTracingDetail::RegisterHeapBuffer(heap, *buffers[i], Core::GpuDescriptorClass::StorageBuffer, true);
+            if(!descriptor){
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create hardware transparent-shadow scratch {}"), i);
+                return false;
+            }
+            descriptors[i] = *descriptor;
         }
         RayTracingDetail::RetireHeapHandle(heap, state.m_crossingsHeapHandle);
         RayTracingDetail::RetireHeapHandle(heap, state.m_overflowListHeapHandle);

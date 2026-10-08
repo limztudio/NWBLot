@@ -62,8 +62,10 @@ protected:
         const ::Path<Core::Alloc::GlobalArena> directory(m_arena, NWB_TEST_FONT_DIRECTORY);
         const ::Path<Core::Alloc::GlobalArena> path = directory / filename;
         Core::Assets::AssetBytes bytes(m_arena);
-        if(!Tests::ReadBundledFontBytes(path, bytes))
+        auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
+        if(!bytesResult)
             return false;
+        bytes = Move(*bytesResult);
         font.setFontBytes(Move(bytes));
         return font.validatePayload();
     }
@@ -171,11 +173,11 @@ TEST(TextGlyphVisibilityTests, NativeCoverageOriginSnapsToWholePhysicalPixelsAtO
     record.pixels = { 0.0f, 0.0f, 5.0f, 7.0f };
     record.bearingX = -2;
     record.bearingY = 3;
-    Rect rectangle;
-    ASSERT_TRUE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0f, { 10.0f, 20.0f }, rectangle, { 1.0f, 1.0f }));
-    UiWidgetTests::ExpectRect(rectangle, { 8.0f, 17.0f, 5.0f, 7.0f });
-    ASSERT_TRUE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0f, { 10.5f, 20.5f }, rectangle, { 1.0f, 1.0f }));
-    UiWidgetTests::ExpectRect(rectangle, { 9.0f, 18.0f, 5.0f, 7.0f });
+    Expected<Rect> rectangle;
+    ASSERT_TRUE(rectangle = TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0f, { 10.0f, 20.0f }, { 1.0f, 1.0f }));
+    UiWidgetTests::ExpectRect(*rectangle, { 8.0f, 17.0f, 5.0f, 7.0f });
+    ASSERT_TRUE(rectangle = TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0f, { 10.5f, 20.5f }, { 1.0f, 1.0f }));
+    UiWidgetTests::ExpectRect(*rectangle, { 9.0f, 18.0f, 5.0f, 7.0f });
 }
 
 TEST(TextGlyphVisibilityTests, NativeCoverageOriginSnapsUsingEachPhysicalPixelScale){
@@ -186,49 +188,41 @@ TEST(TextGlyphVisibilityTests, NativeCoverageOriginSnapsUsingEachPhysicalPixelSc
     record.pixels = { 0.0f, 0.0f, 6.0f, 9.0f };
     record.bearingX = -3;
     record.bearingY = 6;
-    Rect rectangle;
-    ASSERT_TRUE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.5f, { 4.25f, 8.25f }, rectangle, { 1.5f, 1.5f }));
-    UiWidgetTests::ExpectRect(rectangle, { 4.0f / 1.5f, 7.0f / 1.5f, 4.0f, 6.0f });
-    ASSERT_TRUE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.5f, { 4.25f, 8.25f }, rectangle, { 1.0f, 1.5f }));
-    UiWidgetTests::ExpectRect(rectangle, { 3.0f, 7.0f / 1.5f, 4.0f, 6.0f });
+    Expected<Rect> rectangle;
+    ASSERT_TRUE(rectangle = TextGlyphVisibility::CoverageRectangle(glyph, record, 1.5f, { 4.25f, 8.25f }, { 1.5f, 1.5f }));
+    UiWidgetTests::ExpectRect(*rectangle, { 4.0f / 1.5f, 7.0f / 1.5f, 4.0f, 6.0f });
+    ASSERT_TRUE(rectangle = TextGlyphVisibility::CoverageRectangle(glyph, record, 1.5f, { 4.25f, 8.25f }, { 1.0f, 1.5f }));
+    UiWidgetTests::ExpectRect(*rectangle, { 3.0f, 7.0f / 1.5f, 4.0f, 6.0f });
 }
 
-TEST(TextGlyphVisibilityTests, InvalidCoverageGeometryPreservesTheOutput){
+TEST(TextGlyphVisibilityTests, InvalidCoverageGeometryRejectsTheResult){
     PlacedGlyph glyph;
     AtlasGlyph record;
     record.pageIndex = 0u;
     record.pixels = { 0.0f, 0.0f, 1.0f, 1.0f };
-    const Rect original{ 1.0f, 2.0f, 3.0f, 4.0f };
-    Rect rectangle = original;
     const f32 invalidScales[]{ 0.0f, -1.0f, Limit<f32>::s_Infinity, Limit<f32>::s_QuietNaN };
     for(const f32 scale : invalidScales){
-        EXPECT_FALSE(TextGlyphVisibility::CoverageRectangle(glyph, record, scale, {}, rectangle));
-        UiWidgetTests::ExpectRect(rectangle, original);
+        EXPECT_FALSE(TextGlyphVisibility::CoverageRectangle(glyph, record, scale, {}));
     }
     record.pixels.width = -1.0f;
-    EXPECT_FALSE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0f, {}, rectangle));
-    UiWidgetTests::ExpectRect(rectangle, original);
+    EXPECT_FALSE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0f, {}));
     record.pixels.width = 1.0f;
     glyph.position.x = Limit<f32>::s_QuietNaN;
-    EXPECT_FALSE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0f, {}, rectangle));
-    UiWidgetTests::ExpectRect(rectangle, original);
+    EXPECT_FALSE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0f, {}));
 }
 
-TEST(TextGlyphVisibilityTests, InvalidPhysicalPixelScalesRejectNativeCoverageWithoutChangingTheOutput){
+TEST(TextGlyphVisibilityTests, InvalidPhysicalPixelScalesRejectNativeCoverage){
     PlacedGlyph glyph;
     glyph.coverage = { { 1.0f, 2.0f, 3.0f, 4.0f }, true };
     AtlasGlyph record;
     record.pageIndex = 0u;
     record.pixels = { 0.0f, 0.0f, 3.0f, 4.0f };
-    const Rect original{ 1.0f, 2.0f, 3.0f, 4.0f };
-    Rect rectangle = original;
     const Point invalidScales[]{
         { 0.0f, 1.0f }, { -1.0f, 1.0f }, { Limit<f32>::s_Infinity, 1.0f },
         { 1.0f, 0.0f }, { 1.0f, -1.0f }, { 1.0f, Limit<f32>::s_QuietNaN },
     };
     for(const Point& pixelScale : invalidScales){
-        EXPECT_FALSE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0f, {}, rectangle, pixelScale));
-        UiWidgetTests::ExpectRect(rectangle, original);
+        EXPECT_FALSE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0f, {}, pixelScale));
         EXPECT_EQ(
             TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 16.0f, {}, { 0.0f, 0.0f, 10.0f, 10.0f }, pixelScale),
             TextGlyphIntersection::Invalid
@@ -236,19 +230,15 @@ TEST(TextGlyphVisibilityTests, InvalidPhysicalPixelScalesRejectNativeCoverageWit
     }
 }
 
-TEST(TextGlyphVisibilityTests, UnrepresentableCoverageGeometryPreservesTheOutput){
+TEST(TextGlyphVisibilityTests, UnrepresentableCoverageGeometryRejectsTheResult){
     PlacedGlyph glyph;
     glyph.position = { Limit<f32>::s_Max, 0.0f };
     AtlasGlyph record;
     record.pageIndex = 0u;
     record.pixels = { 0.0f, 0.0f, 2.0f, 2.0f };
-    const Rect original{ 1.0f, 2.0f, 3.0f, 4.0f };
-    Rect rectangle = original;
-    EXPECT_FALSE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0f, { Limit<f32>::s_Max, 0.0f }, rectangle));
-    UiWidgetTests::ExpectRect(rectangle, original);
+    EXPECT_FALSE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0f, { Limit<f32>::s_Max, 0.0f }));
     glyph.position = {};
-    EXPECT_FALSE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0e-39f, {}, rectangle));
-    UiWidgetTests::ExpectRect(rectangle, original);
+    EXPECT_FALSE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.0e-39f, {}));
 }
 
 TEST(TextGlyphVisibilityTests, MissingNativeFaceAndCoverageBoundsRejectsUnknownInk){
@@ -312,10 +302,10 @@ TEST(TextGlyphVisibilityTests, AnisotropicPhysicalScaleRetainsSnappedNativeFring
     record.bearingX = -3;
     const Point pixelScale{ 1.5f, 1.0f };
     const Rect clip{ 8.6f, 20.0f, 0.1f, 1.0f };
-    Rect rectangle;
-    ASSERT_TRUE(TextGlyphVisibility::CoverageRectangle(glyph, record, 1.5f, {}, rectangle, pixelScale));
-    UiWidgetTests::ExpectRect(rectangle, { 8.0f, 20.0f, 2.0f, 2.0f });
-    EXPECT_EQ(TextGlyphVisibility::Intersect(rectangle, clip), TextGlyphIntersection::Visible);
+    Expected<Rect> rectangle;
+    ASSERT_TRUE(rectangle = TextGlyphVisibility::CoverageRectangle(glyph, record, 1.5f, {}, pixelScale));
+    UiWidgetTests::ExpectRect(*rectangle, { 8.0f, 20.0f, 2.0f, 2.0f });
+    EXPECT_EQ(TextGlyphVisibility::Intersect(*rectangle, clip), TextGlyphIntersection::Visible);
     EXPECT_EQ(
         TextGlyphVisibility::Candidate(glyph, nullptr, 16.0f, 24.0f, {}, clip, pixelScale),
         TextGlyphIntersection::Visible
@@ -463,28 +453,23 @@ TEST_F(TextGlyphVisibilityAtlasTests, SdfCandidateUsesExactPlanesRatherThanShapi
 TEST_F(TextGlyphVisibilityAtlasTests, NondrawableAtlasGlyphHasNoCandidateImage){
     PlacedGlyph glyph;
     glyph.glyphId = 1u;
-    Rect rectangle{ 1.0f, 2.0f, 3.0f, 4.0f };
-    ASSERT_TRUE(TextGlyphVisibility::AtlasRectangle(glyph, *m_atlas, 32.0f, {}, rectangle));
-    UiWidgetTests::ExpectRect(rectangle, {});
+    const auto rectangle = TextGlyphVisibility::AtlasRectangle(glyph, *m_atlas, 32.0f, {});
+    ASSERT_TRUE(rectangle);
+    UiWidgetTests::ExpectRect(*rectangle, {});
     EXPECT_EQ(
         TextGlyphVisibility::Candidate(glyph, m_atlas.get(), 32.0f, 32.0f, {}, { 0.0f, 0.0f, 100.0f, 100.0f }),
         TextGlyphIntersection::Invisible
     );
 }
 
-TEST_F(TextGlyphVisibilityAtlasTests, RejectedAtlasRectanglesPreserveTheOutput){
+TEST_F(TextGlyphVisibilityAtlasTests, RejectedAtlasRectanglesRejectTheResult){
     PlacedGlyph glyph;
-    const Rect original{ 1.0f, 2.0f, 3.0f, 4.0f };
-    Rect rectangle = original;
     glyph.glyphId = 2u;
-    EXPECT_FALSE(TextGlyphVisibility::AtlasRectangle(glyph, *m_atlas, 32.0f, {}, rectangle));
-    UiWidgetTests::ExpectRect(rectangle, original);
+    EXPECT_FALSE(TextGlyphVisibility::AtlasRectangle(glyph, *m_atlas, 32.0f, {}));
     glyph.glyphId = 0u;
-    EXPECT_FALSE(TextGlyphVisibility::AtlasRectangle(glyph, *m_atlas, 0.0f, {}, rectangle));
-    UiWidgetTests::ExpectRect(rectangle, original);
+    EXPECT_FALSE(TextGlyphVisibility::AtlasRectangle(glyph, *m_atlas, 0.0f, {}));
     glyph.position.x = Limit<f32>::s_Max;
-    EXPECT_FALSE(TextGlyphVisibility::AtlasRectangle(glyph, *m_atlas, 32.0f, { Limit<f32>::s_Max, 0.0f }, rectangle));
-    UiWidgetTests::ExpectRect(rectangle, original);
+    EXPECT_FALSE(TextGlyphVisibility::AtlasRectangle(glyph, *m_atlas, 32.0f, { Limit<f32>::s_Max, 0.0f }));
 }
 
 

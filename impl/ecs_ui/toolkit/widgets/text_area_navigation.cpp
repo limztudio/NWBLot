@@ -70,13 +70,18 @@ private:
     return nullptr;
 }
 
-[[nodiscard]] static bool PageTarget(const EditCaretGeometry& geometry, const usize activeCaret, const Rect& caret,
-    const bool down, const f32 preferredX, const f32 viewportHeight, usize& committedByte
+[[nodiscard]] static Expected<usize> PageTarget(
+    const EditCaretGeometry& geometry,
+    const usize activeCaret,
+    const Rect& caret,
+    const bool down,
+    const f32 preferredX,
+    const f32 viewportHeight
 ){
     const auto& lines = geometry.lines();
     const EditBoxCaretStop* current = FindStop(geometry, activeCaret);
     if(lines.empty() || !current || current->lineIndex >= lines.size())
-        return false;
+        return MakeUnexpected(Failure{});
     const f64 center = static_cast<f64>(caret.y) + static_cast<f64>(caret.height) * 0.5;
     const f64 displacement = static_cast<f64>(viewportHeight);
     const f64 target = center + (down ? displacement : -displacement);
@@ -85,17 +90,18 @@ private:
     const f64 minimum = static_cast<f64>(first.top) + static_cast<f64>(first.height) * 0.5;
     const f64 maximum = static_cast<f64>(last.top) + static_cast<f64>(last.height) * 0.5;
     if(!IsFinite(target) || !IsFinite(minimum) || !IsFinite(maximum) || minimum > maximum)
-        return false;
+        return MakeUnexpected(Failure{});
     const Point point{ preferredX, static_cast<f32>(Clamp(target, minimum, maximum)) };
-    usize result = 0u;
-    if(!IsFinite(point.y) || !geometry.hitTest(point, result))
-        return false;
-    const EditBoxCaretStop* resolved = FindStop(geometry, result);
+    if(!IsFinite(point.y))
+        return MakeUnexpected(Failure{});
+    const auto result = geometry.hitTest(point);
+    if(!result)
+        return MakeUnexpected(Failure{});
+    const EditBoxCaretStop* resolved = FindStop(geometry, *result);
     if(!resolved || resolved->lineIndex >= lines.size())
-        return false;
+        return MakeUnexpected(Failure{});
     // A page that cannot reach another row preserves the active caret, including a short document boundary.
-    committedByte = resolved->lineIndex == current->lineIndex ? activeCaret : result;
-    return true;
+    return resolved->lineIndex == current->lineIndex ? activeCaret : *result;
 }
 
 
@@ -142,18 +148,18 @@ EditNavigationResult TextAreaNavigationResolver::resolve(const EditModel& model,
     if(!current() || !expected.matches(model) || !m_state.navigation().matches(preferred))
         return {};
     const EditCaretGeometry& geometry = view.caretGeometry();
-    Rect caret;
-    if(!geometry.caretRect(view.displayCaret(), caret))
+    const auto caret = geometry.caretRect(view.displayCaret());
+    if(!caret)
         return {};
-    const f32 preferredX = preferred.valid ? preferred.preferredX : caret.x;
+    const f32 preferredX = preferred.valid ? preferred.preferredX : caret->x;
     if(!IsFinite(preferredX))
         return {};
-    usize committedByte = 0u;
     const bool down = direction == EditNavigationDirection::Down || direction == EditNavigationDirection::PageDown;
-    const bool resolved = page
-        ? __hidden_ui_text_area_navigation::PageTarget(geometry, model.caret(), caret, down, preferredX, viewportHeight, committedByte)
-        : geometry.verticalTarget(view.displayCaret(), down, preferredX, committedByte);
-    return resolved ? EditNavigationResult{ committedByte, preferredX, true } : EditNavigationResult{};
+    const auto resolved = page
+        ? __hidden_ui_text_area_navigation::PageTarget(geometry, model.caret(), *caret, down, preferredX, viewportHeight)
+        : geometry.verticalTarget(view.displayCaret(), down, preferredX)
+    ;
+    return resolved ? EditNavigationResult{ *resolved, preferredX, true } : EditNavigationResult{};
 }
 
 bool TextAreaNavigationResolver::current()const noexcept{

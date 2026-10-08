@@ -144,3 +144,7 @@ contracts. A callback receives the duplicate virtual identity, an existing paylo
 to update, and the incoming payload bytes. Returning `false` rejects the conflict
 and preserves the published volume. Callbacks must leave the existing payload
 unchanged when they fail.
+
+## Library result contracts
+
+Fallible path, metadata, dependency-selection and volume-write producers return values through global `Expected<T, E>`. `ProviderCatalog::selectInputs`, `read` and `resolve` return the selection, parsed document and provider index after admission. `WriteAssetVolume` returns `AssetVolumeWriteResult`, and `ReadBuiltAsset` returns identity/payload-offset data while retaining its caller-owned byte buffer. Build/gather orchestration, registered metadata accumulation and conflict callbacks keep their actual mutation or callback contracts. Check results before consuming them, preserve supplied arenas, and propagate failure before manifest or volume publication. See [produced values and expected failures](../docs/expected_results.md).

@@ -76,11 +76,11 @@ TEST(Telemetry, TextLogPayloadRejectsCorruptedHeaderAfterValidParse){
         payload
     ));
 
-    Telemetry::TextLogPayload parsed(testArena.arena);
-    ASSERT_TRUE(Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    Expected<Telemetry::TextLogPayload> parsed = MakeUnexpected(Failure{});
+    ASSERT_TRUE((parsed = Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size())));
 
     payload[0u] = 0u;
-    EXPECT_FALSE(Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_FALSE((parsed = Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size())));
 }
 
 TEST(Telemetry, DiagnosticPayloadPreservesBoundedTextAndRejectsCorruptedHeader){
@@ -101,13 +101,13 @@ TEST(Telemetry, DiagnosticPayloadPreservesBoundedTextAndRejectsCorruptedHeader){
 
     ASSERT_TRUE(Telemetry::BuildDiagnosticPayload(testArena.arena, source, payload));
 
-    Telemetry::DiagnosticPayload parsed(testArena.arena);
-    ASSERT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size(), parsed));
-    EXPECT_EQ(AStringView(parsed.event), source.event);
-    EXPECT_EQ(AStringView(parsed.message), source.message);
+    Expected<Telemetry::DiagnosticPayload> parsed = MakeUnexpected(Failure{});
+    ASSERT_TRUE((parsed = Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size())));
+    EXPECT_EQ(AStringView(parsed->event), source.event);
+    EXPECT_EQ(AStringView(parsed->message), source.message);
 
     payload[0u] = 0u;
-    EXPECT_FALSE(Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_FALSE((parsed = Telemetry::ParseDiagnosticPayload(testArena.arena, payload.data(), payload.size())));
 }
 
 TEST(Telemetry, DiagnosticCaptureGuardDestructionStopsGlobalCapture){
@@ -219,11 +219,11 @@ TEST(Telemetry, DiagnosticCaptureGuardConcurrentLifetimeStress){
         const Telemetry::EventRecord* const event = events.eventAt(eventIndex);
         ASSERT_NE(event, nullptr);
 
-        Telemetry::DiagnosticPayload parsed(testArena.arena);
-        ASSERT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-        EXPECT_EQ(parsed.event, DiagnosticEventName::s_Error);
-        EXPECT_EQ(parsed.category, "telemetry_guard");
-        EXPECT_EQ(parsed.message, "capture during destruction");
+        Expected<Telemetry::DiagnosticPayload> parsed = MakeUnexpected(Failure{});
+        ASSERT_TRUE((parsed = Telemetry::ParseDiagnosticPayload(testArena.arena, event->payload.data(), event->payload.size())));
+        EXPECT_EQ(parsed->event, DiagnosticEventName::s_Error);
+        EXPECT_EQ(parsed->category, "telemetry_guard");
+        EXPECT_EQ(parsed->message, "capture during destruction");
     }
 }
 

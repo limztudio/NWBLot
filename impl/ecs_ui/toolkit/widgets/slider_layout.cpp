@@ -44,7 +44,7 @@ namespace __hidden_ui_slider_layout{
     ;
 }
 
-[[nodiscard]] static bool MakeRect(const f64 x, const f64 y, const f64 width, const f64 height, Rect& out)noexcept{
+[[nodiscard]] static Expected<Rect> MakeRect(const f64 x, const f64 y, const f64 width, const f64 height)noexcept{
     if(
         !IsFinite(x) || x < -Limit<f32>::s_Max || x > Limit<f32>::s_Max
         || !IsFinite(y) || y < -Limit<f32>::s_Max || y > Limit<f32>::s_Max
@@ -53,23 +53,22 @@ namespace __hidden_ui_slider_layout{
         || x + width < -Limit<f32>::s_Max || x + width > Limit<f32>::s_Max
         || y + height < -Limit<f32>::s_Max || y + height > Limit<f32>::s_Max
     )
-        return false;
+        return MakeUnexpected(Failure{});
     const Rect candidate{ static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(width), static_cast<f32>(height) };
     if(
         !IsPreciseUiRect(candidate) || (width > 0.0 && candidate.x + candidate.width <= candidate.x)
         || (height > 0.0 && candidate.y + candidate.height <= candidate.y)
     )
-        return false;
-    out = candidate;
-    return true;
+        return MakeUnexpected(Failure{});
+    return candidate;
 }
 
-[[nodiscard]] static bool Intersect(const Rect& lhs, const Rect& rhs, Rect& out)noexcept{
+[[nodiscard]] static Expected<Rect> Intersect(const Rect& lhs, const Rect& rhs)noexcept{
     const f64 left = Max(static_cast<f64>(lhs.x), static_cast<f64>(rhs.x));
     const f64 top = Max(static_cast<f64>(lhs.y), static_cast<f64>(rhs.y));
     const f64 right = Min(static_cast<f64>(lhs.x) + lhs.width, static_cast<f64>(rhs.x) + rhs.width);
     const f64 bottom = Min(static_cast<f64>(lhs.y) + lhs.height, static_cast<f64>(rhs.y) + rhs.height);
-    return MakeRect(left, top, Max(0.0, right - left), Max(0.0, bottom - top), out);
+    return MakeRect(left, top, Max(0.0, right - left), Max(0.0, bottom - top));
 }
 
 
@@ -82,7 +81,7 @@ namespace __hidden_ui_slider_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SliderLayout::Measure(const SliderOptions& options, const SliderStyle& style, SliderMetrics& out)noexcept{
+Expected<SliderMetrics> SliderLayout::Measure(const SliderOptions& options, const SliderStyle& style)noexcept{
     using namespace __hidden_ui_slider_layout;
     if(
         !SliderBehavior::Validate(options) || !IsValidUiPadding(style.padding)
@@ -91,7 +90,7 @@ bool SliderLayout::Measure(const SliderOptions& options, const SliderStyle& styl
         || !IsFinite(style.trackHeight) || style.trackHeight <= 0.0f
         || !IsValidUiColor(style.hoverTint) || !IsValidUiColor(style.pressedTint) || !IsValidUiColor(style.disabledTint)
     )
-        return false;
+        return MakeUnexpected(Failure{});
     SliderMetrics candidate;
     candidate.padding = style.padding;
     candidate.thumbExtent = style.thumbExtent;
@@ -100,31 +99,31 @@ bool SliderLayout::Measure(const SliderOptions& options, const SliderStyle& styl
     const f64 height = Max(static_cast<f64>(options.height), static_cast<f64>(style.padding.top) + style.padding.bottom
         + Max(static_cast<f64>(style.thumbExtent.y), static_cast<f64>(style.trackHeight)));
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
-        return false;
+        return MakeUnexpected(Failure{});
     candidate.contentSize = { static_cast<f32>(width), static_cast<f32>(height) };
     if(!ValidMetrics(candidate))
-        return false;
-    out = candidate;
-    return true;
+        return MakeUnexpected(Failure{});
+    return candidate;
 }
 
-bool SliderLayout::Place(
+Expected<SliderPlacement> SliderLayout::Place(
     const Rect& bounds,
     const Rect& clip,
     const SliderMetrics& metrics,
-    const f64 normalized,
-    SliderPlacement& out
+    const f64 normalized
 )noexcept{
     using namespace __hidden_ui_slider_layout;
     if(
         !IsPreciseUiRect(bounds) || !IsPreciseUiRect(clip) || !ValidMetrics(metrics)
         || !IsFinite(normalized) || normalized < 0.0 || normalized > 1.0
     )
-        return false;
+        return MakeUnexpected(Failure{});
     SliderPlacement candidate;
     candidate.bounds = bounds;
-    if(!Intersect(bounds, clip, candidate.clip))
-        return false;
+    const auto intersection = Intersect(bounds, clip);
+    if(!intersection)
+        return MakeUnexpected(Failure{});
+    candidate.clip = *intersection;
     const f64 leftInset = Min(static_cast<f64>(metrics.padding.left), static_cast<f64>(bounds.width));
     const f64 rightInset = Min(static_cast<f64>(metrics.padding.right), static_cast<f64>(bounds.width) - leftInset);
     const f64 topInset = Min(static_cast<f64>(metrics.padding.top), static_cast<f64>(bounds.height));
@@ -139,16 +138,24 @@ bool SliderLayout::Place(
     const f64 travel = width - thumbWidth;
     const f64 centerStart = x + thumbWidth * 0.5;
     const f64 thumbX = normalized == 0.0 ? x : normalized == 1.0 ? x + travel : x + travel * normalized;
-    if(
-        !MakeRect(x, y, width, height, candidate.travelBounds)
-        || !MakeRect(centerStart, y, travel, height, candidate.centerTravel)
-        || !MakeRect(centerStart, y + (height - trackHeight) * 0.5, travel, trackHeight, candidate.track)
-        || !MakeRect(thumbX, y + (height - thumbHeight) * 0.5, thumbWidth, thumbHeight, candidate.thumb)
-    )
-        return false;
+    const auto travelBounds = MakeRect(x, y, width, height);
+    if(!travelBounds)
+        return MakeUnexpected(Failure{});
+    const auto centerTravel = MakeRect(centerStart, y, travel, height);
+    if(!centerTravel)
+        return MakeUnexpected(Failure{});
+    const auto track = MakeRect(centerStart, y + (height - trackHeight) * 0.5, travel, trackHeight);
+    if(!track)
+        return MakeUnexpected(Failure{});
+    const auto thumb = MakeRect(thumbX, y + (height - thumbHeight) * 0.5, thumbWidth, thumbHeight);
+    if(!thumb)
+        return MakeUnexpected(Failure{});
+    candidate.travelBounds = *travelBounds;
+    candidate.centerTravel = *centerTravel;
+    candidate.track = *track;
+    candidate.thumb = *thumb;
     candidate.thumbExtent = { static_cast<f32>(thumbWidth), static_cast<f32>(thumbHeight) };
-    out = candidate;
-    return true;
+    return candidate;
 }
 
 

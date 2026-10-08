@@ -22,9 +22,13 @@ protected:
     [[nodiscard]] bool prepareDense(){ return m_model.setText("abcdef\nabcdef\nabcdef") && shapeView(); }
 
     [[nodiscard]] bool manualPlace(const Point scroll, const f32 width = 20.0f, const f32 height = 12.0f){
-        return m_view.arrange(
-            { 10.0f, 20.0f, width, height }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, scroll, m_placement, 1.0f, false
+        const auto placement = m_view.arrange(
+            { 10.0f, 20.0f, width, height }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, scroll, 1.0f, false
         );
+        if(!placement)
+            return false;
+        m_placement = *placement;
+        return true;
     }
 };
 
@@ -41,9 +45,10 @@ TEST_F(UiTextAreaViewTests, SuppressedCaretRevealPreservesBothRequestedAxesAndHi
     EXPECT_FLOAT_EQ(m_placement.textOrigin.y, 14.0f);
     EXPECT_GT(m_placement.caret.x, m_placement.clip.x + m_placement.clip.width);
     EXPECT_GT(m_placement.caret.y, m_placement.clip.y + m_placement.clip.height);
-    usize hit = 99u;
-    ASSERT_TRUE(m_view.hitTest({ 15.0f, 20.0f }, m_placement, hit));
-    EXPECT_EQ(hit, 1u);
+    Expected<usize> hit = MakeUnexpected(Failure{});
+    hit = m_view.hitTest({ 15.0f, 20.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, 1u);
 }
 
 TEST_F(UiTextAreaViewTests, SuppressedRevealStillClampsToBothContentExtents){
@@ -89,9 +94,7 @@ TEST_F(UiTextAreaViewTests, FailedManualArrangementPreservesThePriorPlacement){
         EXPECT_FALSE(manualPlace(scroll));
         ExpectPlacement(m_placement, previous);
     }
-    EXPECT_FALSE(m_view.arrange(
-        { 10.0f, 20.0f, 20.0f, 12.0f }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, Point{ 5.0f, 6.0f }, m_placement, 0.0f, false
-    ));
+    EXPECT_FALSE(m_view.arrange({ 10.0f, 20.0f, 20.0f, 12.0f }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, Point{ 5.0f, 6.0f }, 0.0f, false));
     ExpectPlacement(m_placement, previous);
 }
 

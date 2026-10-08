@@ -167,9 +167,10 @@ TEST(OpticalScene, AffineBoundsEncloseMirroringNonuniformScaleAndLargeTranslatio
     transform._33 = 0.5f;
     const Float3U localMin(-3.f, -2.f, -1.f);
     const Float3U localMax(1.f, 4.f, 5.f);
-    Float3U minimum{};
-    Float3U maximum{};
-    ASSERT_TRUE(ComputeOpticalWorldBounds(transform, localMin, localMax, minimum, maximum));
+    const auto bounds = ComputeOpticalWorldBounds(transform, localMin, localMax);
+    ASSERT_TRUE(bounds);
+    const Float3U& minimum = bounds->minimum;
+    const Float3U& maximum = bounds->maximum;
     for(u32 corner = 0u; corner < 8u; ++corner){
         const f64 coordinates[] = {
             (corner & 1u) ? localMax.x : localMin.x,
@@ -192,11 +193,8 @@ TEST(OpticalScene, NonfiniteAffineBoundsNeverPublishAPartialResult){
     transform._22 = 1.f;
     transform._33 = 1.f;
     transform._34 = Limit<f32>::s_Infinity;
-    Float3U minimum(7.f, 8.f, 9.f);
-    Float3U maximum(10.f, 11.f, 12.f);
-    EXPECT_FALSE(ComputeOpticalWorldBounds(transform, {}, { 1.f, 1.f, 1.f }, minimum, maximum));
-    EXPECT_EQ(minimum.x, 7.f);
-    EXPECT_EQ(maximum.z, 12.f);
+    const auto bounds = ComputeOpticalWorldBounds(transform, {}, { 1.f, 1.f, 1.f });
+    EXPECT_FALSE(bounds);
 }
 
 

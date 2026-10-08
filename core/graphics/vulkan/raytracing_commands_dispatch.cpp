@@ -92,8 +92,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         return;
     }
 
-    ShaderTable::DispatchSnapshot snapshot;
-    shaderTable->captureDispatchSnapshot(snapshot);
+    const auto snapshot = shaderTable->captureDispatchSnapshot();
 
     RayTracingPipeline* const pipeline = snapshot.pipeline.get();
     if(
@@ -119,19 +118,14 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         return;
     }
 
-    u32 handleSize = 0u;
-    u32 handleSizeAligned = 0u;
-    u32 baseAlignment = 0u;
-    if(!VulkanDetail::ComputeRayTracingHandleLayout(
-        m_context,
-        handleSize,
-        handleSizeAligned,
-        baseAlignment,
-        s_DispatchRaysOperation
-    )){
+    const auto handleLayout = VulkanDetail::ComputeRayTracingHandleLayout(m_context, s_DispatchRaysOperation);
+    if(!handleLayout){
         rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader group handle layout is invalid"));
         return;
     }
+    const u32 handleSize = handleLayout->handleSize;
+    const u32 handleSizeAligned = handleLayout->handleSizeAligned;
+    const u32 baseAlignment = handleLayout->baseAlignment;
     const u32 handleAlignment = m_context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
     const u32 maxShaderGroupStride = m_context.rayTracingPipelineProperties.maxShaderGroupStride;
     if(
@@ -146,23 +140,15 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
         return;
     }
 
-    VkStridedDeviceAddressRegionKHR raygenRegion = {};
-    VkStridedDeviceAddressRegionKHR missRegion = {};
-    VkStridedDeviceAddressRegionKHR hitRegion = {};
-    VkStridedDeviceAddressRegionKHR callableRegion = {};
-
     const auto buildRegion = [&](
         const ShaderTable::DispatchRegionSnapshot& regionSnapshot,
-        const bool required,
-        VkStridedDeviceAddressRegionKHR& outRegion
-    ) -> bool{
+        const bool required
+    ) -> Expected<VkStridedDeviceAddressRegionKHR>{
         Buffer* const buffer = regionSnapshot.buffer.get();
         if(!buffer){
-            return !required
-                && regionSnapshot.offset == 0u
-                && regionSnapshot.recordCount == 0u
-                && regionSnapshot.selectedGroupCount == 0u
-            ;
+            if(required || regionSnapshot.offset != 0u || regionSnapshot.recordCount != 0u || regionSnapshot.selectedGroupCount != 0u)
+                return MakeUnexpected(Failure{});
+            return VkStridedDeviceAddressRegionKHR{};
         }
         if(
             regionSnapshot.recordCount == 0u
@@ -177,7 +163,7 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
             || buffer->m_buffer == VK_NULL_HANDLE
             || buffer->m_deviceAddress == 0u
         )
-            return false;
+            return MakeUnexpected(Failure{});
 
         const BufferDesc& creationDesc = buffer->getCreationDescription();
         constexpr u8 s_RequiredQueueSharing = static_cast<u8>(ResourceQueueSharing::GraphicsAndAsyncCompute);
@@ -189,14 +175,14 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
             || (buffer->m_bufferInfo.usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) == 0u
             || static_cast<u64>(regionSnapshot.recordCount) > Limit<u64>::s_Max / handleSizeAligned
         )
-            return false;
+            return MakeUnexpected(Failure{});
 
         const u64 regionSize = static_cast<u64>(regionSnapshot.recordCount) * handleSizeAligned;
         if(
             !VulkanDetail::IsBufferRangeInBounds(creationDesc, regionSnapshot.offset, regionSize)
             || regionSnapshot.offset > Limit<u64>::s_Max - buffer->m_deviceAddress
         )
-            return false;
+            return MakeUnexpected(Failure{});
 
         const u64 deviceAddress = buffer->m_deviceAddress + regionSnapshot.offset;
         if(
@@ -204,20 +190,16 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
             || deviceAddress % baseAlignment != 0u
             || regionSize > Limit<u64>::s_Max - deviceAddress
         )
-            return false;
+            return MakeUnexpected(Failure{});
 
-        outRegion.deviceAddress = deviceAddress;
-        outRegion.stride = handleSizeAligned;
-        outRegion.size = regionSize;
-        return true;
+        return VkStridedDeviceAddressRegionKHR{ deviceAddress, handleSizeAligned, regionSize };
     };
 
-    if(
-        !buildRegion(snapshot.rayGeneration, true, raygenRegion)
-        || !buildRegion(snapshot.miss, false, missRegion)
-        || !buildRegion(snapshot.hit, false, hitRegion)
-        || !buildRegion(snapshot.callable, false, callableRegion)
-    ){
+    const auto raygenRegion = buildRegion(snapshot.rayGeneration, true);
+    const auto missRegion = buildRegion(snapshot.miss, false);
+    const auto hitRegion = buildRegion(snapshot.hit, false);
+    const auto callableRegion = buildRegion(snapshot.callable, false);
+    if(!raygenRegion || !missRegion || !hitRegion || !callableRegion){
         rejectCommandRecording(s_DispatchRaysOperation, NWB_TEXT("shader table regions are incoherent or not ready"));
         return;
     }
@@ -229,10 +211,10 @@ void CommandList::dispatchRays(const RayTracingDispatchRaysArguments& args){
 
     m_context.deviceDispatch.vkCmdTraceRaysKHR(
         m_currentCmdBuf->m_cmdBuf,
-        &raygenRegion,
-        &missRegion,
-        &hitRegion,
-        &callableRegion,
+        &*raygenRegion,
+        &*missRegion,
+        &*hitRegion,
+        &*callableRegion,
         args.width,
         args.height,
         args.depth

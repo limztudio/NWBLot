@@ -148,12 +148,14 @@ void WaylandClipboardService::startNativeRequest(
             NWB_FATAL_ASSERT(false);
         return;
     }
-    int writeFd = -1;
-    if(!OpenClipboardPipe(m_readFd, writeFd)){
+    const auto pipe = OpenClipboardPipe();
+    if(!pipe){
         if(!completeNativeRequest(token, ClipboardStatus::NativeFailure))
             NWB_FATAL_ASSERT(false);
         return;
     }
+    m_readFd = pipe->readFd;
+    int writeFd = pipe->writeFd;
     m_readToken = token;
     m_readDeadline = TimerAddMS(TimerNow(), s_TimeoutMs);
     m_received.clear();
@@ -189,13 +191,12 @@ void WaylandClipboardService::finishRead(const ClipboardStatus::Enum status){
 void WaylandClipboardService::pumpNativeRequests(){
     const Timer now = TimerNow();
     if(m_readToken.valid()){
-        bool finished = false;
-        const ClipboardStatus::Enum status = now >= m_readDeadline
-            ? ClipboardStatus::Unavailable
-            : ReadClipboardPipe(m_readFd, m_received, finished)
+        const auto read = now >= m_readDeadline
+            ? Expected<bool, ClipboardPipeReadFailure>(MakeUnexpected(ClipboardPipeReadFailure{ .status = ClipboardStatus::Unavailable }))
+            : ReadClipboardPipe(m_readFd, m_received)
         ;
-        if(finished || status != ClipboardStatus::Success)
-            finishRead(status);
+        if(!read || *read)
+            finishRead(read ? ClipboardStatus::Success : read.error().status);
     }
     for(usize index = m_writers.size(); index > 0u; --index){
         ClipboardPipeWriter& writer = *m_writers[index - 1u];

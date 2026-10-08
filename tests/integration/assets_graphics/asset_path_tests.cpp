@@ -25,7 +25,6 @@ namespace __hidden_asset_path_tests{
 
 static constexpr AStringView s_PROJECT = "project";
 static constexpr AStringView s_STALE_OUTPUT = "stale/output";
-static constexpr AStringView s_STALE_NAME = "stale/name";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -85,9 +84,8 @@ static void PrepareWorkload(
 }
 
 [[nodiscard]] static bool BuildAndVerifyDerivedPath(const PathFixture& fixture, Alloc::ScratchArena& scratchArena){
-    AString<Alloc::ScratchArena> output(scratchArena);
-    return BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView("project"), fixture.sourcePath, output)
-        && AStringView(output) == AStringView(fixture.expectedDerived);
+    const auto output = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView("project"), fixture.sourcePath);
+    return output && AStringView(*output) == AStringView(fixture.expectedDerived);
 }
 
 static void BenchmarkDerivedPath(
@@ -197,38 +195,31 @@ TEST(AssetPaths, RelativeBackslashesFollowHostComponentRulesBeforeCanonicalizati
 TEST(AssetPaths, DerivedPathRemovesOnlyFinalExtensionAndPreservesVirtualRootText){
     PathFixture fixture;
     Alloc::ScratchArena scratchArena(Name("tests/asset_path/derived_scratch"));
-    AString<Alloc::ScratchArena> output(scratchArena);
     const NWB::Path source = fixture.assetRoot / "Models//./Hero.LOD0.NWB";
-    ASSERT_TRUE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView("MiXeD/Root"), source, output));
-    EXPECT_EQ(AStringView(output), "MiXeD/Root/models/hero.lod0");
+    const auto output = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView("MiXeD/Root"), source);
+    ASSERT_TRUE(output);
+    EXPECT_EQ(AStringView(*output), "MiXeD/Root/models/hero.lod0");
     const NWB::Path hiddenSource = fixture.assetRoot / "Folder.Name/.Hidden";
-    ASSERT_TRUE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_PROJECT), hiddenSource, output));
-    EXPECT_EQ(AStringView(output), "project/folder.name/.hidden");
+    const auto hiddenOutput = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView(s_PROJECT), hiddenSource);
+    ASSERT_TRUE(hiddenOutput);
+    EXPECT_EQ(AStringView(*hiddenOutput), "project/folder.name/.hidden");
     const NWB::Path extensionlessSource = fixture.assetRoot / "Folder/NoExtension";
-    ASSERT_TRUE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(""), extensionlessSource, output));
-    EXPECT_EQ(AStringView(output), "/folder/noextension");
+    const auto extensionlessOutput = BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView(""), extensionlessSource);
+    ASSERT_TRUE(extensionlessOutput);
+    EXPECT_EQ(AStringView(*extensionlessOutput), "/folder/noextension");
 
 }
 
-TEST(AssetPaths, DerivedPathRejectsOutsideAndEmptyLogicalPathsAndClearsBothOutputs){
+TEST(AssetPaths, DerivedPathRejectsOutsideAndEmptyLogicalPaths){
     Tests::CapturingLogger logger;
     Common::LoggerRegistrationGuard registration(logger, Common::LoggerBreakPolicy::BreakOnFatal);
     PathFixture fixture;
     Alloc::ScratchArena scratchArena(Name("tests/asset_path/rejection_scratch"));
-    AString<Alloc::ScratchArena> output(scratchArena);
     const NWB::Path outside = fixture.assetRoot / "../Elsewhere/Model.NWB";
-    output = s_STALE_OUTPUT;
-    EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_PROJECT), outside, output));
-    EXPECT_TRUE(output.empty());
-    Name identity(s_STALE_NAME);
-    EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_PROJECT), outside, identity, scratchArena));
-    EXPECT_EQ(identity, s_NameNone);
-    output = s_STALE_OUTPUT;
-    EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_PROJECT), fixture.assetRoot, output));
-    EXPECT_TRUE(output.empty());
-    identity = Name(s_STALE_NAME);
-    EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_PROJECT), fixture.assetRoot, identity, scratchArena));
-    EXPECT_EQ(identity, s_NameNone);
+    EXPECT_FALSE(BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView(s_PROJECT), outside));
+    EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_PROJECT), outside, scratchArena));
+    EXPECT_FALSE(BuildDerivedAssetVirtualPath(scratchArena, fixture.assetRoot, AStringView(s_PROJECT), fixture.assetRoot));
+    EXPECT_FALSE(BuildDerivedAssetVirtualPath(fixture.assetRoot, AStringView(s_PROJECT), fixture.assetRoot, scratchArena));
     EXPECT_EQ(logger.errorCount(), 4u);
 }
 

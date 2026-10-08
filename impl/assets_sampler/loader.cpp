@@ -82,13 +82,12 @@ bool SamplerAssetLoader::Load(
 
     const Name& samplerVirtualPath = samplerAsset.name();
 
-    UniquePtr<Core::Assets::IAsset> loadedAsset;
-    const Sampler* loadedSampler = assetManager.loadTypedSync<Sampler>(
+    auto loadedAsset = assetManager.loadTypedSync<Sampler>(
         samplerVirtualPath,
-        loadedAsset,
         owner,
         Sampler::s_AssetTypeText
     );
+    const Sampler* loadedSampler = loadedAsset ? loadedAsset->get() : nullptr;
     if(!loadedSampler)
         return false;
 

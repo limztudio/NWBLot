@@ -87,16 +87,16 @@ static_assert(UiSkinColorRole::Count == UiSkinBinaryPayload::s_UiSkinPaletteColo
 
 bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
     usize cursor = 0u;
-    UiSkinBinaryPayload::HeaderBinary header;
-    if(!Core::Assets::ReadMagicHeaderPayload(
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<UiSkinBinaryPayload::HeaderBinary>(
         binary,
         cursor,
-        header,
         UiSkinBinaryPayload::s_UiSkinMagic,
         NWB_TEXT("UiSkin::loadBinary"),
         NWB_TEXT("UI skin")
-    ))
+    );
+    if(!headerResult)
         return false;
+    const UiSkinBinaryPayload::HeaderBinary& header = *headerResult;
     if(header.version != UiSkinBinaryPayload::s_UiSkinVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: unsupported UI skin version {}; recook required"), header.version);
         return false;
@@ -122,10 +122,12 @@ bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
     candidate.m_regions.reserve(header.regionCount);
     for(u32 index = 0u; index < header.regionCount; ++index){
         UiSkinBinaryPayload::RegionBinary packed;
-        if(!ReadPOD(binary, cursor, packed)){
+        const auto packedResult = ReadPOD<UiSkinBinaryPayload::RegionBinary>(binary, cursor);
+        if(!packedResult){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed region {}"), index);
             return false;
         }
+        packed = *packedResult;
         if(packed.reserved != 0u || packed.drawMode > static_cast<u32>(UiSkinDrawMode::NineSlice)){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: region {} contains an invalid draw mode or flags"), index);
             return false;
@@ -144,18 +146,22 @@ bool UiSkin::loadBinary(const Core::Assets::AssetBytes& binary){
     UiSkinPalette palette;
     for(u32 index = 0u; index < UiSkinColorRole::Count; ++index){
         UiSkinBinaryPayload::ColorBinary packed;
-        if(!ReadPOD(binary, cursor, packed)){
+        const auto packedResult = ReadPOD<UiSkinBinaryPayload::ColorBinary>(binary, cursor);
+        if(!packedResult){
             NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed palette color {}"), index);
             return false;
         }
+        packed = *packedResult;
         palette.colors[index] = { packed.r, packed.g, packed.b, packed.a };
     }
     candidate.setPalette(palette);
     UiSkinBinaryPayload::TypographyBinary typography;
-    if(!ReadPOD(binary, cursor, typography)){
+    const auto typographyResult = ReadPOD<UiSkinBinaryPayload::TypographyBinary>(binary, cursor);
+    if(!typographyResult){
         NWB_LOGGER_ERROR(NWB_TEXT("UiSkin::loadBinary failed: malformed typography payload"));
         return false;
     }
+    typography = *typographyResult;
     candidate.setTypography({ typography.defaultFontSize });
     if(!Core::Assets::ReadCompletePayload(binary, cursor, NWB_TEXT("UiSkin::loadBinary")))
         return false;

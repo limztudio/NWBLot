@@ -20,21 +20,20 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTaskGraph::appendMarkerLabel(const AStringView text, u32& outOffset, u32& outSize){
+Expected<GpuTaskGraph::MarkerLabelRange> GpuTaskGraph::appendMarkerLabel(const AStringView text){
     if(
         text.empty()
         || !text.data()
         || text.size() > Limit<u32>::s_Max
         || text.size() > Limit<u32>::s_Max - m_markerText.size()
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outOffset = static_cast<u32>(m_markerText.size());
-    outSize = static_cast<u32>(text.size());
+    const MarkerLabelRange range{ static_cast<u32>(m_markerText.size()), static_cast<u32>(text.size()) };
     const usize nextSize = m_markerText.size() + text.size();
     m_markerText.resize(nextSize);
-    NWB_MEMCPY(m_markerText.data() + outOffset, outSize, text.data(), text.size());
-    return true;
+    NWB_MEMCPY(m_markerText.data() + range.offset, range.size, text.data(), text.size());
+    return range;
 }
 
 AStringView GpuTaskGraph::markerLabel(const u32 offset, const u32 size)const{

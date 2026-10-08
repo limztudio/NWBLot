@@ -54,10 +54,9 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
+    [[nodiscard]] Expected<OpaqueCsgIntervalClearResult> declare(
         const OpaqueCsgIntervalClearInputs& inputs,
-        GraphClearTimingRecordState& clearTimingState,
-        OpaqueCsgIntervalClearResult& outResult
+        GraphClearTimingRecordState& clearTimingState
     );
 
 

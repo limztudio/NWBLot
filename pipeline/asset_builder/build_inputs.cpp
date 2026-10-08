@@ -108,19 +108,25 @@ bool SelectBuildInputs(
     Optional<__hidden_build_inputs::PathSelectionIndex> directoryIndex;
 #endif
     for(const Assets::AssetString& input : options.inputs){
-        ErrorCode error;
-        Path path(paths.repoRoot.arena());
-        if(!ResolveAbsolutePath(paths.repoRoot, AStringView(input), path, error)){
+        const auto pathResult = ResolveAbsolutePath(paths.repoRoot.arena(), paths.repoRoot, AStringView(input));
+        if(!pathResult){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve input '{}'"), StringConvert(input));
             return false;
         }
 
-        const bool isDirectory = IsDirectory(path, error);
-        if(error || (!isDirectory && !IsRegularFile(path, error))){
+        const Path& path = *pathResult;
+        const auto directory = IsDirectory(path);
+        if(!directory){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input is not a file or directory '{}'"), PathToString<tchar>(path));
+            return false;
+        }
+        const auto regular = *directory ? Expected<bool, ErrorCode>(true) : IsRegularFile(path);
+        if(!*directory && (!regular || !*regular)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: input is not a file or directory '{}'"), PathToString<tchar>(path));
             return false;
         }
 
+        const bool isDirectory = *directory;
         Assets::ScratchString normalized = PathToString(scratchArena, path.lexicallyNormal());
 #if defined(NWB_PLATFORM_WINDOWS)
         CanonicalizeTextInPlace(normalized);

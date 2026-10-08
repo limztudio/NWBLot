@@ -58,12 +58,12 @@ TEST(Telemetry, PendingNameEdgesChooseFirstDuplicateAndOmitMissingTargets){
     const Telemetry::EventRecord* event = session.view().eventAt(0u);
     ASSERT_NE(event, nullptr);
 
-    Telemetry::FrameGraphPayload parsed(testArena.arena);
-    EXPECT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size(), parsed));
-    ASSERT_EQ(parsed.nodes.size(), 3u);
-    ASSERT_EQ(parsed.edges.size(), 1u);
-    EXPECT_EQ(parsed.edges[0u].fromNodeIndex, 0u);
-    EXPECT_EQ(parsed.edges[0u].toNodeIndex, 1u);
+    Expected<Telemetry::FrameGraphPayload> parsed = MakeUnexpected(Failure{});
+    EXPECT_TRUE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, event->payload.data(), event->payload.size())));
+    ASSERT_EQ(parsed->nodes.size(), 3u);
+    ASSERT_EQ(parsed->edges.size(), 1u);
+    EXPECT_EQ(parsed->edges[0u].fromNodeIndex, 0u);
+    EXPECT_EQ(parsed->edges[0u].toNodeIndex, 1u);
 }
 
 TEST(Telemetry, PhysicalQueueBuilderOwnsSourceAndRejectsDuplicateOrExcessCounts){

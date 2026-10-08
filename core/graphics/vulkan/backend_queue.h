@@ -79,18 +79,25 @@ public:
         bool graphSubmissionAuthorized = false;
     };
 
-    u64 submit(
+    struct SubmissionReceipt{
+        u64 submittedID = 0u;
+        usize timelineWaitCount = 0u;
+        bool accepted = false;
+    };
+    struct SubmissionFailure{
+        u64 lastSubmittedID = 0u;
+        VkResult nativeResult = VK_SUCCESS;
+    };
+
+    [[nodiscard]] Expected<SubmissionReceipt, SubmissionFailure> submit(
         CommandList* const* ppCmd,
         usize numCmd,
         const SubmissionCommandListIdentity* expectedCommandLists = nullptr,
         const SubmissionWait* localWaits = nullptr,
         usize localWaitCount = 0u,
-        bool* outSubmissionAccepted = nullptr,
-        VkResult* outNativeResult = nullptr,
         const SubmissionSignal* localSignals = nullptr,
         usize localSignalCount = 0u,
-        bool forceNativeSubmission = false,
-        usize* outTimelineWaitCount = nullptr
+        bool forceNativeSubmission = false
     );
     [[nodiscard]] VkResult updateLastFinishedID();
 

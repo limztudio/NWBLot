@@ -150,15 +150,15 @@ public:
             else if(options.enabled && event.kind == AreaEventKind::Selection)
                 result.valid = model.setSelection(event.anchor, event.caret);
             else if(options.enabled && event.kind == AreaEventKind::Key){
-                EditNavigationDirection::Enum direction;
-                vertical = TranslateEditNavigation(event.intent, direction);
+                const auto direction = TranslateEditNavigation(event.intent);
+                vertical = direction.has_value();
                 if(vertical && !model.composition().active){
                     resolutions.emplace_back(m_arena);
                     AreaResolution& call = resolutions.back();
                     call.text.assign(model.text().data(), model.text().size());
                     call.caret = model.caret();
                     call.preferred = navigation.snapshot();
-                    call.result = resolver.resolve(model, direction, call.preferred, viewportHeight);
+                    call.result = resolver.resolve(model, *direction, call.preferred, viewportHeight);
                     const usize targetAnchor = event.intent.extend ? model.anchor() : call.result.committedByte;
                     result.valid = call.result.resolved && model.setSelection(targetAnchor, call.result.committedByte)
                         && navigation.setPreferredX(call.result.preferredX);

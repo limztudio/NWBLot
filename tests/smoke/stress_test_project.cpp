@@ -146,15 +146,15 @@ private:
     [[nodiscard]] static u32 M4PixelCaptureFreezeFrame(){
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
         static const u32 s_captureFrame = [](){
-            f32 configuredFrame = 0.0f;
+            const auto configuredFrame = ReadSmokeEnvironmentF32("NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME");
             if(
-                !ReadSmokeEnvironmentF32("NWB_M4_PIXEL_CAPTURE_FREEZE_FRAME", configuredFrame)
-                || !IsFinite(configuredFrame)
-                || configuredFrame < 1.0f
+                !configuredFrame
+                || !IsFinite(*configuredFrame)
+                || *configuredFrame < 1.0f
             ){
                 return 0u;
             }
-            return static_cast<u32>(Min(configuredFrame, 1000000.0f));
+            return static_cast<u32>(Min(*configuredFrame, 1000000.0f));
         }();
         return s_captureFrame;
 #else
@@ -180,20 +180,19 @@ private:
 #endif
     }
 
-    [[nodiscard]] static bool ReadCharactersPerClass(u32& count){
-        count = s_DefaultCharactersPerClass;
+    [[nodiscard]] static Expected<u32> ReadCharactersPerClass(){
         NWB::Core::Alloc::GlobalArena arena(Name("tests/stress/workload"));
-        NWB::Tests::Smoke::SmokeEnvironmentString value(arena);
-        if(!ReadEnvironmentVariable("NWB_STRESS_CHARACTERS_PER_CLASS", value))
-            return true;
-        const AStringView text(value.data(), value.size());
+        const auto value = ReadEnvironmentVariable(arena, "NWB_STRESS_CHARACTERS_PER_CLASS");
+        if(!value)
+            return s_DefaultCharactersPerClass;
+        const AStringView text(value->data(), value->size());
         if(text == "5")
-            count = s_ComparisonCharactersPerClass;
-        else if(text != "10"){
+            return s_ComparisonCharactersPerClass;
+        if(text != "10"){
             NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: characters per class must be exactly 5 or 10"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        return true;
+        return s_DefaultCharactersPerClass;
     }
 
     static NotNullUniquePtr<NWB::Core::ECS::World> CreateWorldOrDie(NWB::ProjectRuntimeContext& context){
@@ -314,9 +313,10 @@ private:
     void reportReflectionStatistics(){
         if(!m_reflectionDiagnosticsEnabled)
             return;
-        NWB::Impl::ReflectionStatistics statistics;
-        if(!m_renderer.tryGetLatestReflectionStatistics(statistics))
+        const auto statisticsResult = m_renderer.tryGetLatestReflectionStatistics();
+        if(!statisticsResult)
             return;
+        const NWB::Impl::ReflectionStatistics& statistics = *statisticsResult;
         if(statistics.sequence == m_reflectionStatisticsSequence && statistics.generation == m_reflectionStatisticsGeneration)
             return;
         m_reflectionStatisticsSequence = statistics.sequence;
@@ -476,17 +476,21 @@ public:
 #endif
 
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
-        if(
-            NWB::Tests::Smoke::ReadSmokeEnvironmentText("NWB_STRESS_FRAME_GRAPH_FILE", m_frameGraphSnapshotPath)
-            && (m_timingEnabled || M4PixelCaptureFreezeFrame() == 0u)
-        ){
+        auto snapshotPath = NWB::Tests::Smoke::ReadSmokeEnvironmentText(m_context.objectArena, "NWB_STRESS_FRAME_GRAPH_FILE");
+        if(snapshotPath)
+            m_frameGraphSnapshotPath = Move(*snapshotPath);
+        else
+            m_frameGraphSnapshotPath.clear();
+        if(snapshotPath && (m_timingEnabled || M4PixelCaptureFreezeFrame() == 0u)){
             NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: frame graph snapshot requires pixel freeze and excludes presentation measurement"));
             return false;
         }
 #endif
 
-        if(!ReadCharactersPerClass(m_charactersPerClass))
+        const auto charactersPerClass = ReadCharactersPerClass();
+        if(!charactersPerClass)
             return false;
+        m_charactersPerClass = *charactersPerClass;
         NWB::Impl::ReflectionSettings reflectionSettings;
         reflectionSettings.diagnosticsEnabled = m_reflectionDiagnosticsEnabled;
         if(!NWB::Tests::Smoke::ApplyReflectionQualitySmokeSettings(m_renderer, reflectionSettings, m_context.objectArena))

@@ -43,14 +43,12 @@ struct SliderPlacement{
 
 class SliderLayout final{
 public:
-    // Invalid metrics or prospective rectangles preserve the previous output.
-    [[nodiscard]] static bool Measure(const SliderOptions& options, const SliderStyle& style, SliderMetrics& out)noexcept;
-    [[nodiscard]] static bool Place(
+    [[nodiscard]] static Expected<SliderMetrics> Measure(const SliderOptions& options, const SliderStyle& style)noexcept;
+    [[nodiscard]] static Expected<SliderPlacement> Place(
         const Rect& bounds,
         const Rect& clip,
         const SliderMetrics& metrics,
-        f64 normalized,
-        SliderPlacement& out
+        f64 normalized
     )noexcept;
 };
 

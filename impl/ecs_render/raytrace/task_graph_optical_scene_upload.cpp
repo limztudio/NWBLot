@@ -39,20 +39,19 @@ struct OpticalUploadTask{
     };
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        usize byteSize = 0u;
-        const void* const bytes = context.declarations.uploadBlobData(payload.source, byteSize);
+        const auto bytes = context.declarations.uploadBlobData(payload.source);
         if(
-            !payload.destination || !payload.upload || !bytes || byteSize == 0u
-            || byteSize != payload.upload->bytes.size() || !payload.reservation.valid() || context.commandIrCapture
+            !payload.destination || !payload.upload || !bytes || bytes->size() == 0u
+            || bytes->size() != payload.upload->bytes.size() || !payload.reservation.valid() || context.commandIrCapture
             || context.queue != payload.queue
         )
             return false;
 
         commandList.endRenderPass();
-        const Core::BufferRange range(0u, byteSize);
+        const Core::BufferRange range(0u, bytes->size());
         commandList.setBufferState(payload.destination.get(), Core::ResourceStates::CopyDest, false, range);
         commandList.commitBarriers();
-        if(!commandList.tryWriteBuffer(*payload.destination, bytes, byteSize, 0u))
+        if(!commandList.tryWriteBuffer(*payload.destination, bytes->data(), bytes->size(), 0u))
             return false;
         commandList.setBufferState(payload.destination.get(), Core::ResourceStates::Common, false, range);
         commandList.commitBarriers();

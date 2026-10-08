@@ -111,17 +111,20 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
 
     if(ShaderAssetTypes::ShaderTypeFromAssetType(context.assetType) != Core::ShaderType::Invalid){
         GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
-        ShaderCook::ShaderEntry shaderEntry(context.cookArena);
-        if(!graphicsMetadata.shaderCook.parseShaderMeta(context.discoveredNwbFile.filePath, context.doc, shaderEntry, context.scratchArena))
+        auto shaderEntryResult = graphicsMetadata.shaderCook.parseShaderMeta(context.discoveredNwbFile.filePath, context.doc, context.scratchArena);
+        if(!shaderEntryResult)
             return AssetMetadataParseResult::Error;
+        ShaderCook::ShaderEntry& shaderEntry = *shaderEntryResult;
 
-        if(!Core::Assets::BuildDerivedAssetVirtualPath(
+        auto shaderName = Core::Assets::BuildDerivedAssetVirtualPath(
+            context.cookArena,
             context.discoveredNwbFile.assetRoot,
             context.discoveredNwbFile.virtualRoot.view(),
-            Path(context.cookArena, shaderEntry.source),
-            shaderEntry.name
-        ))
+            Path(context.cookArena, shaderEntry.source)
+        );
+        if(!shaderName)
             return AssetMetadataParseResult::Error;
+        shaderEntry.name = Move(*shaderName);
 
         if(!AppendUniqueShaderEntry(shaderEntry, context.discoveredNwbFile.filePath, graphicsMetadata, graphicsMetadata.shaderEntries))
             return AssetMetadataParseResult::Error;
@@ -130,22 +133,23 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
 
     if(context.assetType == s_IncludeAssetTypeName){
         GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
-        ShaderCook::IncludeEntry includeEntry(context.cookArena);
-        if(!graphicsMetadata.shaderCook.parseIncludeMeta(context.discoveredNwbFile.filePath, context.doc, includeEntry, context.scratchArena))
+        auto includeEntryResult = graphicsMetadata.shaderCook.parseIncludeMeta(context.discoveredNwbFile.filePath, context.doc, context.scratchArena);
+        if(!includeEntryResult)
             return AssetMetadataParseResult::Error;
+        ShaderCook::IncludeEntry& includeEntry = *includeEntryResult;
 
         if(!includeEntry.source.empty() && !includeEntry.defineValues.empty()){
-            ErrorCode errorCode;
             const Path sourcePath(context.cookArena, includeEntry.source);
-            const Path absSource = AbsolutePath(sourcePath, errorCode).lexicallyNormal();
-            if(errorCode){
+            auto absSourceResult = AbsolutePath(sourcePath);
+            if(!absSourceResult){
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve include metadata source '{}' from '{}': {}")
                     , StringConvert(includeEntry.source)
                     , PathToString<tchar>(context.discoveredNwbFile.filePath)
-                    , StringConvert(errorCode.message())
+                    , StringConvert(absSourceResult.error().message())
                 );
                 return AssetMetadataParseResult::Error;
             }
+            const Path absSource = absSourceResult->lexicallyNormal();
 
             ScratchString key = PathToString(context.scratchArena, absSource);
             CanonicalizeTextInPlace(key);
@@ -163,17 +167,13 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
 
     if(context.assetType == AssetsCsgCook::s_CsgShapeAssetTypeName){
         GraphicsVolumeMetadata& graphicsMetadata = GraphicsMetadata(context.parsedMetadata);
-        AssetsCsgCook::CsgShapeCookEntry csgShapeEntry(context.cookArena);
-        if(!AssetsCsgCook::ParseCsgShapeCookMetadata(
-            context.cookArena,
-            context.discoveredNwbFile.filePath,
-            context.doc,
-            csgShapeEntry,
-            context.scratchArena
-        ))
+        auto csgShapeEntryResult = AssetsCsgCook::ParseCsgShapeCookMetadata(
+            context.cookArena, context.discoveredNwbFile.filePath, context.doc, context.scratchArena
+        );
+        if(!csgShapeEntryResult)
             return AssetMetadataParseResult::Error;
 
-        graphicsMetadata.csgShapeEntries.push_back(Move(csgShapeEntry));
+        graphicsMetadata.csgShapeEntries.push_back(Move(*csgShapeEntryResult));
         return AssetMetadataParseResult::Parsed;
     }
 
@@ -181,28 +181,31 @@ static Core::Assets::AssetMetadataParseResult::Enum ParseGraphicsDocumentMetadat
 }
 
 static bool ParseMaterialBindFiles(Core::Assets::AssetsVolumeCookDetail::AssetVolumePrepareContext& context, GraphicsVolumeMetadata& graphicsMetadata){
-    Core::Assets::DiscoveredBindFileVector bindFiles{ context.arena };
-    if(!Core::Assets::DiscoverFilesWithExtension(
+    const auto bindFiles = Core::Assets::DiscoverFilesWithExtension(
+        context.arena,
         context.resolvedPaths.assetRoots,
         MaterialBindNames::SourceExtensionText(),
-        bindFiles,
         context.scratchArena
-    ))
+    );
+    if(!bindFiles)
         return false;
 
-    graphicsMetadata.materialBindEntries.reserve(bindFiles.size());
-    for(const Core::Assets::DiscoveredNwbFile& discoveredBindFile : bindFiles){
-        MaterialBindEntry bindEntry(context.arena);
-        if(!ParseMaterialBindSource(discoveredBindFile.filePath, bindEntry, context.scratchArena))
+    graphicsMetadata.materialBindEntries.reserve(bindFiles->size());
+    for(const Core::Assets::DiscoveredNwbFile& discoveredBindFile : *bindFiles){
+        auto bindResult = ParseMaterialBindSource(discoveredBindFile.filePath, context.arena, context.scratchArena);
+        if(!bindResult)
             return false;
+        MaterialBindEntry& bindEntry = *bindResult;
 
-        if(!Core::Assets::BuildDerivedAssetVirtualPath(
+        auto virtualPath = Core::Assets::BuildDerivedAssetVirtualPath(
+            context.arena,
             discoveredBindFile.assetRoot,
             discoveredBindFile.virtualRoot.view(),
-            discoveredBindFile.filePath,
-            bindEntry.virtualPath
-        ))
+            discoveredBindFile.filePath
+        );
+        if(!virtualPath)
             return false;
+        bindEntry.virtualPath = Move(*virtualPath);
 
         graphicsMetadata.materialBindEntries.push_back(Move(bindEntry));
     }
@@ -235,16 +238,16 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     if(!ValidateMaterialCookInterfaces(graphicsMetadata.materialBindEntries, materialEntries, context.scratchArena))
         return false;
 
-    Path materialBindIncludeRoot(context.arena);
-    if(!EmitMaterialBindIncludes(
+    auto materialBindIncludeRootResult = EmitMaterialBindIncludes(
         context.arena,
         context.resolvedPaths.cacheDirectory,
         context.configurationSafeName,
         graphicsMetadata.materialBindEntries,
-        materialBindIncludeRoot,
         context.scratchArena
-    ))
+    );
+    if(!materialBindIncludeRootResult)
         return false;
+    const Path& materialBindIncludeRoot = *materialBindIncludeRootResult;
 
     // Resolve each CSG `eval` virtual path to its absolute source (cross-asset phase; verbatim #include in the
     // generated module, checksum-covered). Runs before EmitCsgShapeModuleIncludes.
@@ -252,13 +255,13 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         if(csgShapeEntry.evalInclude.empty())
             continue;
 
-        Path resolvedEvalSource(context.arena);
-        if(!Core::Assets::ResolveVirtualAssetPath(
+        auto resolvedEvalSourceResult = Core::Assets::ResolveVirtualAssetPath(
+            context.arena,
             context.resolvedPaths.assetRoots,
             AStringView(csgShapeEntry.evalInclude),
-            resolvedEvalSource,
             context.scratchArena
-        )){
+        );
+        if(!resolvedEvalSourceResult){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: CSG shape '{}' eval '{}' does not resolve against any asset root")
                 , StringConvert(csgShapeEntry.shapeName.resolvedText())
                 , StringConvert(AStringView(csgShapeEntry.evalInclude))
@@ -266,7 +269,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
             return false;
         }
 
-        auto resolvedEvalText = PathToString(context.scratchArena, resolvedEvalSource);
+        auto resolvedEvalText = PathToString(context.scratchArena, *resolvedEvalSourceResult);
         for(auto& ch : resolvedEvalText){
             if(ch == '\\')
                 ch = '/';
@@ -274,15 +277,15 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         csgShapeEntry.evalInclude.assign(AStringView(resolvedEvalText));
     }
 
-    Path csgShapeIncludeRoot(context.arena);
-    if(!AssetsCsgCook::EmitCsgShapeModuleIncludes(
+    auto csgShapeIncludeRootResult = AssetsCsgCook::EmitCsgShapeModuleIncludes(
         context.resolvedPaths.cacheDirectory,
         context.configurationSafeName,
         graphicsMetadata.csgShapeEntries,
-        csgShapeIncludeRoot,
         context.scratchArena
-    ))
+    );
+    if(!csgShapeIncludeRootResult)
         return false;
+    Path& csgShapeIncludeRoot = *csgShapeIncludeRootResult;
 
     // Resolve each material `bxdf`/`surface` virtual path to its absolute source (verbatim #include, checksum-covered,
     // mirroring `interface` -> .bind resolution).
@@ -292,13 +295,13 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         if(virtualSource.empty())
             return true;
 
-        Path resolvedSource(context.arena);
-        if(!Core::Assets::ResolveVirtualAssetPath(
+        const auto resolvedSource = Core::Assets::ResolveVirtualAssetPath(
+            context.arena,
             context.resolvedPaths.assetRoots,
             AStringView(virtualSource),
-            resolvedSource,
             context.scratchArena
-        )){
+        );
+        if(!resolvedSource){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: material '{}' {} '{}' does not resolve against any asset root")
                 , StringConvert(materialName)
                 , StringConvert(label)
@@ -307,7 +310,7 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
             return false;
         }
 
-        auto resolvedText = PathToString(context.scratchArena, resolvedSource);
+        auto resolvedText = PathToString(context.scratchArena, *resolvedSource);
         for(auto& ch : resolvedText){
             if(ch == '\\')
                 ch = '/';
@@ -327,77 +330,73 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
     if(!AssignMaterialShadingModelIds(materialEntries, context.scratchArena))
         return false;
 
-    Path deferredBxdfIncludeRoot(context.arena);
-    if(!EmitDeferredBxdfDispatchModule(
+    auto deferredBxdfIncludeRootResult = EmitDeferredBxdfDispatchModule(
         context.resolvedPaths.cacheDirectory,
         context.configurationSafeName,
         materialEntries,
-        deferredBxdfIncludeRoot,
         context.scratchArena
-    ))
+    );
+    if(!deferredBxdfIncludeRootResult)
         return false;
+    const Path& deferredBxdfIncludeRoot = *deferredBxdfIncludeRootResult;
 
     // Trace dispatch also needs assigned surface ids and must participate in shader dependency checksums.
-    Path shadowSurfaceIncludeRoot(context.arena);
-    if(!EmitShadowSurfaceDispatchModule(
+    auto shadowSurfaceIncludeRootResult = EmitShadowSurfaceDispatchModule(
         context.resolvedPaths.cacheDirectory,
         context.configurationSafeName,
         graphicsMetadata.materialBindEntries,
         materialEntries,
-        shadowSurfaceIncludeRoot,
         context.scratchArena
-    ))
+    );
+    if(!shadowSurfaceIncludeRootResult)
         return false;
+    const Path& shadowSurfaceIncludeRoot = *shadowSurfaceIncludeRootResult;
 
     // Generate per-`surface` G-buffer PS (pixel = generated, mesh = shared), synthesize shader entries like authored
     // ones. Before shader prep + ValidateMaterials.
     auto& materialCookArena = materialEntries.get_allocator().arena();
     static constexpr AStringView s_SharedMeshProgramName = "engine/graphics/mesh/shared_ms";
-    MaterialCookVector<GeneratedMaterialPixelShader> generatedPixelShaders(materialCookArena);
-    if(!EmitMaterialPixelShaders(
+    auto generatedPixelShadersResult = EmitMaterialPixelShaders(
         materialCookArena,
         context.resolvedPaths.cacheDirectory,
         context.configurationSafeName,
         s_SharedMeshProgramName,
         materialEntries,
-        generatedPixelShaders,
         context.scratchArena
-    ))
+    );
+    if(!generatedPixelShadersResult)
         return false;
 
     // Generate AVBOIT accumulation from the same surface hook before shader preparation and material validation.
-    MaterialCookVector<GeneratedMaterialPixelShader> generatedAvboitAccumulatePixelShaders(materialCookArena);
-    if(!EmitMaterialAvboitAccumulatePixelShaders(
+    auto generatedAvboitAccumulatePixelShadersResult = EmitMaterialAvboitAccumulatePixelShaders(
         materialCookArena,
         context.resolvedPaths.cacheDirectory,
         context.configurationSafeName,
         materialEntries,
-        generatedAvboitAccumulatePixelShaders,
         context.scratchArena
-    ))
+    );
+    if(!generatedAvboitAccumulatePixelShadersResult)
         return false;
 
     // Occupancy, extinction, and accumulation must share the surface hook so renderCoverage agrees across passes.
-    MaterialCookVector<GeneratedMaterialPixelShader> generatedAvboitOccupancyPixelShaders(materialCookArena);
-    if(!EmitMaterialAvboitOccupancyPixelShaders(
+    auto generatedAvboitOccupancyPixelShadersResult = EmitMaterialAvboitOccupancyPixelShaders(
         materialCookArena,
         context.resolvedPaths.cacheDirectory,
         context.configurationSafeName,
         materialEntries,
-        generatedAvboitOccupancyPixelShaders,
         context.scratchArena
-    ))
+    );
+    if(!generatedAvboitOccupancyPixelShadersResult)
         return false;
 
-    MaterialCookVector<GeneratedMaterialPixelShader> generatedAvboitExtinctionPixelShaders(materialCookArena);
-    if(!EmitMaterialAvboitExtinctionPixelShaders(
+    auto generatedAvboitExtinctionPixelShadersResult = EmitMaterialAvboitExtinctionPixelShaders(
         materialCookArena,
         context.resolvedPaths.cacheDirectory,
         context.configurationSafeName,
         materialEntries,
-        generatedAvboitExtinctionPixelShaders,
         context.scratchArena
-    ))
+    );
+    if(!generatedAvboitExtinctionPixelShadersResult)
         return false;
 
     auto& shaderCookArena = graphicsMetadata.shaderEntries.get_allocator().arena();
@@ -429,24 +428,24 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         graphicsMetadata.shaderEntries.push_back(Move(pixelShaderEntry));
         return true;
     };
-    for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedPixelShaders){
+    for(const GeneratedMaterialPixelShader& generatedPixelShader : *generatedPixelShadersResult){
         if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
             return false;
     }
-    for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedAvboitAccumulatePixelShaders){
+    for(const GeneratedMaterialPixelShader& generatedPixelShader : *generatedAvboitAccumulatePixelShadersResult){
         if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
             return false;
     }
-    for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedAvboitOccupancyPixelShaders){
+    for(const GeneratedMaterialPixelShader& generatedPixelShader : *generatedAvboitOccupancyPixelShadersResult){
         if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
             return false;
     }
-    for(const GeneratedMaterialPixelShader& generatedPixelShader : generatedAvboitExtinctionPixelShaders){
+    for(const GeneratedMaterialPixelShader& generatedPixelShader : *generatedAvboitExtinctionPixelShadersResult){
         if(!appendGeneratedPixelShaderEntry(generatedPixelShader))
             return false;
     }
 
-    if(!AssetsGraphicsCookDetail::PrepareShaderEntriesForCook(
+    auto preparedPlan = AssetsGraphicsCookDetail::PrepareShaderEntriesForCook(
         context.arena,
         graphicsMetadata.shaderCook,
         context.resolvedPaths,
@@ -457,10 +456,11 @@ static bool PrepareGraphicsVolumeAssets(Core::Assets::AssetsVolumeCookDetail::As
         graphicsMetadata.includeMetadata,
         graphicsMetadata.shaderEntries,
         materialEntries,
-        graphicsMetadata.preparedPlan,
         context.scratchArena
-    ))
+    );
+    if(!preparedPlan)
         return false;
+    graphicsMetadata.preparedPlan = Move(*preparedPlan);
 
     if(!AssetsGraphicsCookDetail::ValidateMaterials(
         graphicsMetadata.shaderCook,

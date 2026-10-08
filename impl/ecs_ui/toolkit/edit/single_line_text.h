@@ -22,9 +22,9 @@ namespace EditTextStatus{
 };
 
 // CRLF becomes one space. Other line breaks and tabs become spaces; NUL and other ASCII controls are rejected.
-// UTF8 and normalized byte length are checked before allocation. Failure preserves the caller's output.
-[[nodiscard]] EditTextStatus::Enum NormalizeSingleLineText(
-    AStringView source, AString<Core::Alloc::GlobalArena>& output, usize maxBytes
+// UTF8 and normalized byte length are checked before allocation.
+[[nodiscard]] Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeSingleLineText(
+    Core::Alloc::GlobalArena& arena, AStringView source, usize maxBytes
 );
 
 

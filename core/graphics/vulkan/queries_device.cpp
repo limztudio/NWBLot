@@ -83,8 +83,8 @@ bool Device::pollTimerQuery(TimerQuery& query){
         )
             return false;
 
-        u64 timestamps[s_TimerQueryTimestampCount] = {};
-        res = VulkanTimerQueryDetail::GetTimerQueryResults(m_context, query.m_queryPool, timestamps);
+        const auto timestamps = VulkanTimerQueryDetail::GetTimerQueryResults(m_context, query.m_queryPool);
+        res = timestamps ? VK_SUCCESS : timestamps.error();
         if(res == VK_ERROR_DEVICE_LOST)
             markDeviceLost();
     }
@@ -93,11 +93,11 @@ bool Device::pollTimerQuery(TimerQuery& query){
     return res == VK_SUCCESS;
 }
 
-bool Device::getTimerQueryResult(TimerQuery& query, TimerQueryResult& outResult){
-    outResult = TimerQueryResult{};
+Expected<TimerQueryResult> Device::getTimerQueryResult(TimerQuery& query){
+    TimerQueryResult result{};
 
     if(query.m_queryPool == VK_NULL_HANDLE || &query.m_context != &m_context)
-        return false;
+        return MakeUnexpected(Failure{});
 
     QueueSubmissionToken completedSubmission;
     u64 completedGeneration = 0u;
@@ -110,7 +110,7 @@ bool Device::getTimerQueryResult(TimerQuery& query, TimerQueryResult& outResult)
             || !query.m_completedCycleSubmission.valid()
             || query.m_completedCycleGeneration == 0u
         )
-            return false;
+            return MakeUnexpected(Failure{});
         completedSubmission = query.m_completedCycleSubmission;
         completedGeneration = query.m_completedCycleGeneration;
     }
@@ -120,9 +120,8 @@ bool Device::getTimerQueryResult(TimerQuery& query, TimerQueryResult& outResult)
         .deviceGeneration = completedSubmission.deviceGeneration,
     };
     if(queueGetCompletedInstance(completionQueue) < completedSubmission.value)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    u64 timestamps[s_TimerQueryTimestampCount] = {};
     VkResult res = VK_SUCCESS;
     {
         ScopedLock queryLock(query.m_mutex);
@@ -137,21 +136,22 @@ bool Device::getTimerQueryResult(TimerQuery& query, TimerQueryResult& outResult)
             || query.m_timestampValidBits == 0u
             || queueInfo->timestampValidBits != query.m_timestampValidBits
         )
-            return false;
+            return MakeUnexpected(Failure{});
 
-        res = VulkanTimerQueryDetail::GetTimerQueryResults(m_context, query.m_queryPool, timestamps);
+        const auto timestamps = VulkanTimerQueryDetail::GetTimerQueryResults(m_context, query.m_queryPool);
+        res = timestamps ? VK_SUCCESS : timestamps.error();
         if(res == VK_ERROR_DEVICE_LOST)
             markDeviceLost();
         if(res == VK_SUCCESS){
             const f64 secondsPerTick = static_cast<f64>(m_context.physicalDeviceProperties.limits.timestampPeriod)
                 * VulkanTimerQueryDetail::s_TimestampNanosecondsToSeconds
             ;
-            outResult.beginTicks = timestamps[s_TimerQueryBeginIndex];
-            outResult.endTicks = timestamps[s_TimerQueryEndIndex];
-            outResult.secondsPerTick = secondsPerTick;
-            outResult.timestampValidBits = query.m_timestampValidBits;
-            outResult.physicalQueue = query.m_timestampQueue;
-            outResult.comparableAcrossSubmissions = supportsComparableGpuTimestamps(query.m_timestampQueue);
+            result.beginTicks = (*timestamps)[s_TimerQueryBeginIndex];
+            result.endTicks = (*timestamps)[s_TimerQueryEndIndex];
+            result.secondsPerTick = secondsPerTick;
+            result.timestampValidBits = query.m_timestampValidBits;
+            result.physicalQueue = query.m_timestampQueue;
+            result.comparableAcrossSubmissions = supportsComparableGpuTimestamps(query.m_timestampQueue);
         }
     }
     if(res != VK_SUCCESS){
@@ -159,17 +159,19 @@ bool Device::getTimerQueryResult(TimerQuery& query, TimerQueryResult& outResult)
             captureDeviceLoss("timer query results");
         if(res != VK_NOT_READY)
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to retrieve timer query results: {}"), ResultToString(res));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    return outResult.valid();
+    if(!result.valid())
+        return MakeUnexpected(Failure{});
+    return result;
 }
 
 f32 Device::getTimerQueryTime(TimerQuery& query){
-    TimerQueryResult result;
-    if(!getTimerQueryResult(query, result))
+    const auto result = getTimerQueryResult(query);
+    if(!result)
         return 0.f;
-    return static_cast<f32>(result.durationSeconds());
+    return static_cast<f32>(result->durationSeconds());
 }
 
 bool Device::resetTimerQuery(TimerQuery& query){

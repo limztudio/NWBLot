@@ -36,14 +36,13 @@ FrameGraphAvboitExtinctionUploadChain::FrameGraphAvboitExtinctionUploadChain(
 }
 
 
-bool FrameGraphAvboitExtinctionUploadChain::declare(
+Expected<FrameGraphAvboitExtinctionUploadResult> FrameGraphAvboitExtinctionUploadChain::declare(
     const FrameGraphAvboitExtinctionUploadInputs& inputs,
     RendererTaskGraphDetail::AvboitExtinctionGraphTask::Payload& extinctionPayload,
     RendererTaskGraphDetail::AvboitExtinctionComputeEmulationGraphTask::Payload& computeEmulationPayload,
-    AvboitGeneratedGeometryReuse& generatedGeometry,
-    FrameGraphAvboitExtinctionUploadResult& outResult
+    AvboitGeneratedGeometryReuse& generatedGeometry
 ){
-    outResult = FrameGraphAvboitExtinctionUploadResult{};
+    FrameGraphAvboitExtinctionUploadResult result{};
     RendererTaskGraphDetail::AvboitExtinctionGraphTask::Payload& avboitExtinctionPayload = extinctionPayload;
     RendererTaskGraphDetail::AvboitExtinctionComputeEmulationGraphTask::Payload& avboitExtinctionComputeEmulationPayload = computeEmulationPayload;
     DeferredFrameTargets& deferredTargets = *inputs.targets;
@@ -73,7 +72,7 @@ bool FrameGraphAvboitExtinctionUploadChain::declare(
     Core::Alloc::ScratchArena extinctionMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
     Core::GpuGraphResourceSetId extinctionMaterialGeometrySet;
     Core::GpuGraphResourceSetId extinctionMaterialSampledTextureSet;
-    outResult.uploadTask = extinctionUploadTask;
+    result.uploadTask = extinctionUploadTask;
     if(inputs.hasTransparentRenderers){
         Core::Alloc::ScratchArena extinctionUploadScratch(RendererArenaScope::s_TaskGraphArena);
         MaterialPassDrawItemPartitions extinctionDrawItems{ extinctionUploadScratch };
@@ -84,8 +83,7 @@ bool FrameGraphAvboitExtinctionUploadChain::declare(
 #endif
         MaterialTypedByteDataVector extinctionMaterialTypedBytes{ extinctionUploadScratch };
         AvboitPassUploadHelper extinctionUploadHelper(m_materialSystem);
-        AvboitPassUploadResult extinctionUploadResult;
-        if(!extinctionUploadHelper.gather(
+        auto extinctionUploadResult = extinctionUploadHelper.gather(
             AvboitPassUploadInputs{
                 .framebuffer = deferredTargets.avboit.lowFramebuffer.get(),
                 .pass = MaterialPipelinePass::AvboitExtinction,
@@ -106,19 +104,19 @@ bool FrameGraphAvboitExtinctionUploadChain::declare(
 #if defined(NWB_DEBUG)
             extinctionMaterialTypedRanges,
 #endif
-            extinctionMaterialTypedBytes,
-            extinctionUploadResult
-        )){
+            extinctionMaterialTypedBytes
+        );
+        if(!extinctionUploadResult){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT extinction resources were unavailable during graph declaration"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
-        const bool extinctionHasCsgDrawItems = extinctionUploadResult.hasCsgDrawItems;
+        const bool extinctionHasCsgDrawItems = extinctionUploadResult->hasCsgDrawItems;
         if(extinctionHasCsgDrawItems && !intervalOutputsGraphOwned){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: clipped AVBOIT extinction draws require prepared interval outputs"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        if(extinctionUploadResult.hasDrawItems){
+        if(extinctionUploadResult->hasDrawItems){
 
             const MaterialPassDrawItems* const extinctionMaterialGeometryDrawSets[] = {
                 &extinctionDrawItems.regular,
@@ -129,20 +127,19 @@ bool FrameGraphAvboitExtinctionUploadChain::declare(
                 m_materialSystem,
                 extinctionMaterialGeometryScratch
             );
-            AvboitGeometryPreparationResult extinctionGeometryPreparationResult;
-            if(!extinctionGeometryPreparationBuilder.declare(
+            auto extinctionGeometryPreparationResult = extinctionGeometryPreparationBuilder.declare(
                 AvboitGeometryPreparationInputs{
                     .drawItemSets = extinctionMaterialGeometryDrawSets,
                     .drawItemSetCount = LengthOf(extinctionMaterialGeometryDrawSets),
                     .phase = AvboitGeometryPhase::Extinction,
-                },
-                extinctionGeometryPreparationResult
-            ))
-                return false;
-            avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned = extinctionGeometryPreparationResult.geometryOwned;
-            extinctionMaterialGeometrySet = extinctionGeometryPreparationResult.materialGeometrySet;
-            extinctionMaterialSampledTextureSet = extinctionGeometryPreparationResult.materialSampledTextureSet;
-            extinctionMaterialSampledTexturesCollected = extinctionGeometryPreparationResult.sampledTexturesCollected;
+                }
+            );
+            if(!extinctionGeometryPreparationResult)
+                return MakeUnexpected(Failure{});
+            avboitExtinctionPayload.extinctionMaterialGeometryStatesGraphOwned = extinctionGeometryPreparationResult->geometryOwned;
+            extinctionMaterialGeometrySet = extinctionGeometryPreparationResult->materialGeometrySet;
+            extinctionMaterialSampledTextureSet = extinctionGeometryPreparationResult->materialSampledTextureSet;
+            extinctionMaterialSampledTexturesCollected = extinctionGeometryPreparationResult->sampledTexturesCollected;
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(extinctionInstanceData, csgResources);
 #if defined(NWB_DEBUG)
@@ -152,7 +149,7 @@ bool FrameGraphAvboitExtinctionUploadChain::declare(
                 || extinctionCsgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
             ){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: AVBOIT extinction upload size overflows graph blob capacity"));
-                return false;
+                return MakeUnexpected(Failure{});
             }
             NWB_ASSERT(extinctionInstanceData.size() == extinctionMaterialTypedRanges.size());
             ECSRenderDetail::AssertMaterialTypedUploadRanges(
@@ -165,7 +162,7 @@ bool FrameGraphAvboitExtinctionUploadChain::declare(
                 m_graph,
                 m_csgSystem
             );
-            if(!extinctionMaterialUploadBuilder.declare(
+            auto extinctionCsgStreamsUploadedResult = extinctionMaterialUploadBuilder.declare(
                 AvboitMaterialUploadInputs{
                     .targets = &deferredTargets,
                     .csgResources = &csgResources,
@@ -182,12 +179,13 @@ bool FrameGraphAvboitExtinctionUploadChain::declare(
                 extinctionMaterialTypedBytes,
                 extinctionCsgFrameData,
                 extinctionHasCsgDrawItems,
-                extinctionUploadTask,
-                extinctionCsgStreamsUploaded
-            )){
+                extinctionUploadTask
+            );
+            if(!extinctionCsgStreamsUploadedResult){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT extinction material upload"));
-                return false;
+                return MakeUnexpected(Failure{});
             }
+            extinctionCsgStreamsUploaded = *extinctionCsgStreamsUploadedResult;
 
             avboitExtinctionPayload.extinctionSnapshot.capture(
                 extinctionDrawItems,
@@ -199,8 +197,7 @@ bool FrameGraphAvboitExtinctionUploadChain::declare(
             extinctionStreamsUploaded = true;
             // Mixed work keeps local interleaving; one handoff cannot preserve per-draw order.
             AvboitComputeEmulationCapture extinctionComputeEmulationCapture;
-            AvboitComputeEmulationCaptureResult extinctionComputeEmulationCaptureResult;
-            if(!extinctionComputeEmulationCapture.capture(
+            auto extinctionComputeEmulationCaptureResult = extinctionComputeEmulationCapture.capture(
                 AvboitComputeEmulationCaptureInputs{
                     .drawItems = &extinctionDrawItems,
                     .csgFrameData = &extinctionCsgFrameData,
@@ -213,16 +210,16 @@ bool FrameGraphAvboitExtinctionUploadChain::declare(
                 avboitExtinctionComputeEmulationPayload.csgPlan,
                 extinctionUploadScratch,
                 extinctionInstanceData.size(),
-                extinctionMaterialTypedBytes.size(),
-                extinctionComputeEmulationCaptureResult
-            ))
-                return false;
-            extinctionRegularComputeEmulationPlanCaptured = extinctionComputeEmulationCaptureResult.regularCaptured;
-            extinctionCsgComputeEmulationPlanCaptured = extinctionComputeEmulationCaptureResult.csgCaptured;
-            extinctionSharedComputeEmulationPlanCaptured = extinctionComputeEmulationCaptureResult.sharedCaptured;
-            extinctionSharedComputeEmulationPlan = extinctionComputeEmulationCaptureResult.sharedPlan;
-            extinctionSharedComputeEmulationInstanceCount = extinctionComputeEmulationCaptureResult.sharedInstanceCount;
-            extinctionSharedComputeEmulationMaterialTypedByteCount = extinctionComputeEmulationCaptureResult.sharedMaterialTypedByteCount;
+                extinctionMaterialTypedBytes.size()
+            );
+            if(!extinctionComputeEmulationCaptureResult)
+                return MakeUnexpected(Failure{});
+            extinctionRegularComputeEmulationPlanCaptured = extinctionComputeEmulationCaptureResult->regularCaptured;
+            extinctionCsgComputeEmulationPlanCaptured = extinctionComputeEmulationCaptureResult->csgCaptured;
+            extinctionSharedComputeEmulationPlanCaptured = extinctionComputeEmulationCaptureResult->sharedCaptured;
+            extinctionSharedComputeEmulationPlan = extinctionComputeEmulationCaptureResult->sharedPlan;
+            extinctionSharedComputeEmulationInstanceCount = extinctionComputeEmulationCaptureResult->sharedInstanceCount;
+            extinctionSharedComputeEmulationMaterialTypedByteCount = extinctionComputeEmulationCaptureResult->sharedMaterialTypedByteCount;
             if(extinctionRegularComputeEmulationPlanCaptured && generatedGeometry.matches(
                 extinctionDrawItems, extinctionInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitExtinction
             ))
@@ -245,21 +242,21 @@ bool FrameGraphAvboitExtinctionUploadChain::declare(
             avboitExtinctionPayload.extinctionPhasePrepared = true;
         }
     }
-    outResult.uploadTask = extinctionUploadTask;
-    outResult.materialGeometrySet = extinctionMaterialGeometrySet;
-    outResult.materialSampledTextureSet = extinctionMaterialSampledTextureSet;
-    outResult.streamsUploaded = extinctionStreamsUploaded;
-    outResult.csgStreamsUploaded = extinctionCsgStreamsUploaded;
-    outResult.regularComputeEmulationPlanCaptured = extinctionRegularComputeEmulationPlanCaptured;
-    outResult.producesReusableGeometry = extinctionProducesReusableGeometry;
-    outResult.reusedGeometryProducer = extinctionReusedGeometryProducer;
-    outResult.csgComputeEmulationPlanCaptured = extinctionCsgComputeEmulationPlanCaptured;
-    outResult.sharedComputeEmulationPlanCaptured = extinctionSharedComputeEmulationPlanCaptured;
-    outResult.sharedComputeEmulationPlan = extinctionSharedComputeEmulationPlan;
-    outResult.sharedComputeEmulationInstanceCount = extinctionSharedComputeEmulationInstanceCount;
-    outResult.sharedComputeEmulationMaterialTypedByteCount = extinctionSharedComputeEmulationMaterialTypedByteCount;
-    outResult.declared = true;
-    return true;
+    result.uploadTask = extinctionUploadTask;
+    result.materialGeometrySet = extinctionMaterialGeometrySet;
+    result.materialSampledTextureSet = extinctionMaterialSampledTextureSet;
+    result.streamsUploaded = extinctionStreamsUploaded;
+    result.csgStreamsUploaded = extinctionCsgStreamsUploaded;
+    result.regularComputeEmulationPlanCaptured = extinctionRegularComputeEmulationPlanCaptured;
+    result.producesReusableGeometry = extinctionProducesReusableGeometry;
+    result.reusedGeometryProducer = extinctionReusedGeometryProducer;
+    result.csgComputeEmulationPlanCaptured = extinctionCsgComputeEmulationPlanCaptured;
+    result.sharedComputeEmulationPlanCaptured = extinctionSharedComputeEmulationPlanCaptured;
+    result.sharedComputeEmulationPlan = extinctionSharedComputeEmulationPlan;
+    result.sharedComputeEmulationInstanceCount = extinctionSharedComputeEmulationInstanceCount;
+    result.sharedComputeEmulationMaterialTypedByteCount = extinctionSharedComputeEmulationMaterialTypedByteCount;
+    result.declared = true;
+    return result;
 }
 
 

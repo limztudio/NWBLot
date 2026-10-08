@@ -163,8 +163,7 @@ static void BenchmarkMetadataParsing(const usize pairCount, const usize iteratio
     for(usize index = 0u; index < pairCount; ++index){
         const AssetString directoryName = StringFormat(fixtureArena, "pair_{:04}", index);
         const NWB::Path directory = root / directoryName;
-        ErrorCode error;
-        ASSERT_TRUE(EnsureDirectories(directory, error));
+        ASSERT_TRUE(EnsureDirectories(directory));
         ASSERT_TRUE(WriteFixtureFile(directory / "shader.slang", "[numthreads(1, 1, 1)] void main(){}\r\n"));
         ASSERT_TRUE(WriteFixtureFile(directory / "include.slangi", "static const uint fixtureValue = 1;\r\n"));
         ASSERT_TRUE(WriteFixtureFile(directory / "shader.nwb", "compute_shader asset;\r\nasset.entry_point = \"main\";\r\n"));
@@ -481,8 +480,7 @@ TEST(MetadataRegistryStorage, TypedGrowthPreservesInputOrderAndDoesNotReserveUnu
     Common::LoggerRegistrationGuard loggerGuard(logger, Common::LoggerBreakPolicy::BreakOnFatal);
     const NWB::Path root = Tests::RepoRootOf(fixtureArena, __FILE__)
         / "__build_obj" / "metadata_registry_storage";
-    ErrorCode error;
-    ASSERT_TRUE(EnsureDirectories(root, error));
+    ASSERT_TRUE(EnsureDirectories(root));
     DiscoveredNwbFileVector files(fixtureArena);
     constexpr usize s_SamplerCount = 65u;
     files.reserve(s_SamplerCount + 1u);

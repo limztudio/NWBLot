@@ -55,16 +55,11 @@ bool MeshSkinningSystem::prepareRuntimeMeshResources(
     if(instance.attributeBuffer && !repackPipelineReady())
         return false;
 
-    RuntimeResources* resources = nullptr;
-    bool resourcesRebuilt = false;
-    if(!ensureRuntimeResources(
-        instance,
-        payload,
-        scratchArena,
-        resources,
-        resourcesRebuilt
-    ))
+    const auto preparedResources = ensureRuntimeResources(instance, payload, scratchArena);
+    if(!preparedResources)
         return false;
+    RuntimeResources* const resources = preparedResources->resources;
+    const bool resourcesRebuilt = preparedResources->rebuilt;
 
     // Releasing a pose rebuilds descriptors; force one rest->skinned copy.
     if(!hasActiveSkin && hadSkinningResources && resourcesRebuilt){

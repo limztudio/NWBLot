@@ -127,21 +127,12 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         return;
     }
 
-    VkClusterAccelerationStructureInputInfoNV inputInfo{};
-    VkClusterAccelerationStructureMoveObjectsInputNV moveInput{};
-    VkClusterAccelerationStructureTriangleClusterInputNV clusterInput{};
-    VkClusterAccelerationStructureClustersBottomLevelInputNV blasInput{};
-    if(!VulkanDetail::BuildClusterOperationInputInfo(
-        opDesc.params,
-        inputInfo,
-        moveInput,
-        clusterInput,
-        blasInput,
-        s_OperationName
-    )){
+    auto input = VulkanDetail::BuildClusterOperationInputInfo(opDesc.params, s_OperationName);
+    if(!input){
         rejectCommandRecording(s_OperationName, NWB_TEXT("operation parameters are invalid"));
         return;
     }
+    const auto inputInfo = input->nativeInfo();
 
     if(
         opDesc.params.type == RayTracingClusterOperationType::ClasBuild
@@ -160,7 +151,7 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         }
 
         VkFormatProperties formatProperties{};
-        m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, clusterInput.vertexFormat, &formatProperties);
+        m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, input->cluster.vertexFormat, &formatProperties);
         if((formatProperties.bufferFeatures & VK_FORMAT_FEATURE_ACCELERATION_STRUCTURE_VERTEX_BUFFER_BIT_KHR) == 0u){
             rejectCommandRecording(s_OperationName, NWB_TEXT("triangle-cluster vertex format lacks acceleration-structure support"));
             return;
@@ -181,44 +172,41 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         const u64 stride,
         const u64 elementSize,
         const u32 count,
-        const TStringView rangeName,
-        u64& outSize
-    ) -> bool{
+        const TStringView rangeName
+    ) -> Expected<u64>{
         const u64 spanCount = static_cast<u64>(count - 1u);
         if(stride != 0u && spanCount > (Limit<u64>::s_Max - elementSize) / stride){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} range overflows"), s_OperationName, rangeName);
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outSize = spanCount * stride + elementSize;
-        return true;
+        return spanCount * stride + elementSize;
     };
     const auto getCheckedAddress = [s_OperationName](
         Buffer& buffer,
         const u64 offset,
         const u64 size,
         const u64 alignment,
-        const TStringView rangeName,
-        VkDeviceAddress& outAddress
-    ) -> bool{
+        const TStringView rangeName
+    ) -> Expected<VkDeviceAddress>{
         const VkDeviceAddress baseAddress = buffer.getGpuVirtualAddress();
         if(baseAddress == 0u || baseAddress > Limit<u64>::s_Max - offset){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} device address is invalid or overflows"), s_OperationName, rangeName);
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outAddress = baseAddress + offset;
-        if(outAddress == 0u || alignment == 0u || (outAddress % alignment) != 0u){
+        const VkDeviceAddress address = baseAddress + offset;
+        if(address == 0u || alignment == 0u || (address % alignment) != 0u){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} device address is not aligned to {} bytes")
                 , s_OperationName
                 , rangeName
                 , alignment
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        if(size == 0u || outAddress > Limit<u64>::s_Max - (size - 1u)){
+        if(size == 0u || address > Limit<u64>::s_Max - (size - 1u)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {} device-address range is empty or overflows"), s_OperationName, rangeName);
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        return true;
+        return address;
     };
 
     const BufferDesc& sourceDesc = indirectArgsBuffer->getCreationDescription();
@@ -227,10 +215,10 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         return;
     }
     const u64 sourceStride = sourceDesc.structStride != 0u ? sourceDesc.structStride : sourceInfoSize;
-    u64 sourceRangeSize = 0u;
+    const auto sourceRangeSize = computeStridedRangeSize(sourceStride, sourceInfoSize, opDesc.params.maxArgCount, NWB_TEXT("source-info"));
     if(
-        !computeStridedRangeSize(sourceStride, sourceInfoSize, opDesc.params.maxArgCount, NWB_TEXT("source-info"), sourceRangeSize)
-        || !VulkanDetail::IsBufferRangeInBounds(sourceDesc, opDesc.inIndirectArgsOffsetInBytes, sourceRangeSize)
+        !sourceRangeSize
+        || !VulkanDetail::IsBufferRangeInBounds(sourceDesc, opDesc.inIndirectArgsOffsetInBytes, *sourceRangeSize)
     ){
         rejectCommandRecording(s_OperationName, NWB_TEXT("indirect source-info range is outside the buffer"));
         return;
@@ -246,17 +234,19 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
             rejectCommandRecording(s_OperationName, NWB_TEXT("size-array stride must be at least four bytes"));
             return;
         }
+        const auto sizeRange = computeStridedRangeSize(sizeStride, sizeof(u32), opDesc.params.maxArgCount, NWB_TEXT("size-array"));
         if(
-            !computeStridedRangeSize(sizeStride, sizeof(u32), opDesc.params.maxArgCount, NWB_TEXT("size-array"), sizeRangeSize)
+            !sizeRange
             || !VulkanDetail::IsBufferRangeInBounds(
                 outSizesBuffer->getCreationDescription(),
                 opDesc.outSizesOffsetInBytes,
-                sizeRangeSize
+                *sizeRange
             )
         ){
             rejectCommandRecording(s_OperationName, NWB_TEXT("size-array range is outside the buffer"));
             return;
         }
+        sizeRangeSize = *sizeRange;
     }
     if(inOutAddressesBuffer){
         addressStride = inOutAddressesBuffer->getCreationDescription().structStride;
@@ -264,23 +254,24 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
             rejectCommandRecording(s_OperationName, NWB_TEXT("address-array stride must be at least eight bytes"));
             return;
         }
-        if(
-            !computeStridedRangeSize(
+        const auto addressRange = computeStridedRangeSize(
                 addressStride,
                 sizeof(VkDeviceAddress),
                 opDesc.params.maxArgCount,
-                NWB_TEXT("address-array"),
-                addressRangeSize
-            )
+                NWB_TEXT("address-array")
+            );
+        if(
+            !addressRange
             || !VulkanDetail::IsBufferRangeInBounds(
                 inOutAddressesBuffer->getCreationDescription(),
                 opDesc.inOutAddressesOffsetInBytes,
-                addressRangeSize
+                *addressRange
             )
         ){
             rejectCommandRecording(s_OperationName, NWB_TEXT("address-array range is outside the buffer"));
             return;
         }
+        addressRangeSize = *addressRange;
     }
 
     if(
@@ -341,46 +332,61 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
     )
         return;
 
-    VkDeviceAddress sourceAddress = 0u;
+    const auto sourceAddress = getCheckedAddress(
+        *indirectArgsBuffer,
+        opDesc.inIndirectArgsOffsetInBytes,
+        *sourceRangeSize,
+        alignof(VkDeviceAddress),
+        NWB_TEXT("source-info")
+    );
+    if(!sourceAddress){
+        rejectCommandRecording(s_OperationName, NWB_TEXT("a required device-address range is invalid"));
+        return;
+    }
     VkDeviceAddress sourceCountAddress = 0u;
-    VkDeviceAddress addressArrayAddress = 0u;
-    VkDeviceAddress sizeArrayAddress = 0u;
-    if(
-        !getCheckedAddress(
-            *indirectArgsBuffer,
-            opDesc.inIndirectArgsOffsetInBytes,
-            sourceRangeSize,
-            alignof(VkDeviceAddress),
-            NWB_TEXT("source-info"),
-            sourceAddress
-        )
-        || (indirectArgCountBuffer && !getCheckedAddress(
+    if(indirectArgCountBuffer){
+        const auto address = getCheckedAddress(
             *indirectArgCountBuffer,
             opDesc.inIndirectArgCountOffsetInBytes,
             sizeof(u32),
             alignof(u32),
-            NWB_TEXT("source-info count"),
-            sourceCountAddress
-        ))
-        || (outSizesBuffer && !getCheckedAddress(
+            NWB_TEXT("source-info count")
+        );
+        if(!address){
+            rejectCommandRecording(s_OperationName, NWB_TEXT("a required device-address range is invalid"));
+            return;
+        }
+        sourceCountAddress = *address;
+    }
+    VkDeviceAddress sizeArrayAddress = 0u;
+    if(outSizesBuffer){
+        const auto address = getCheckedAddress(
             *outSizesBuffer,
             opDesc.outSizesOffsetInBytes,
             sizeRangeSize,
             alignof(u32),
-            NWB_TEXT("size-array"),
-            sizeArrayAddress
-        ))
-        || (inOutAddressesBuffer && !getCheckedAddress(
+            NWB_TEXT("size-array")
+        );
+        if(!address){
+            rejectCommandRecording(s_OperationName, NWB_TEXT("a required device-address range is invalid"));
+            return;
+        }
+        sizeArrayAddress = *address;
+    }
+    VkDeviceAddress addressArrayAddress = 0u;
+    if(inOutAddressesBuffer){
+        const auto address = getCheckedAddress(
             *inOutAddressesBuffer,
             opDesc.inOutAddressesOffsetInBytes,
             addressRangeSize,
             alignof(VkDeviceAddress),
-            NWB_TEXT("address-array"),
-            addressArrayAddress
-        ))
-    ){
-        rejectCommandRecording(s_OperationName, NWB_TEXT("a required device-address range is invalid"));
-        return;
+            NWB_TEXT("address-array")
+        );
+        if(!address){
+            rejectCommandRecording(s_OperationName, NWB_TEXT("a required device-address range is invalid"));
+            return;
+        }
+        addressArrayAddress = *address;
     }
 
     auto buildSize = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildSizesInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR);
@@ -424,40 +430,38 @@ void CommandList::executeMultiIndirectClusterOperation(const RayTracingClusterOp
         case RayTracingClusterOperationType::BlasBuild:                destinationAlignment = properties.clusterBottomLevelByteAlignment; break;
         default:                                                       return;
         }
-        if(!getCheckedAddress(
+        const auto address = getCheckedAddress(
             *outAccelerationStructuresBuffer,
             opDesc.outAccelerationStructuresOffsetInBytes,
             destinationSize,
             destinationAlignment,
-            NWB_TEXT("implicit destination"),
-            destinationAddress
-        )){
+            NWB_TEXT("implicit destination")
+        );
+        if(!address){
             rejectCommandRecording(s_OperationName, NWB_TEXT("the implicit destination device-address range is invalid"));
             return;
         }
+        destinationAddress = *address;
     }
 
     VkDeviceAddress scratchAddress = 0u;
     if(buildSize.buildScratchSize != 0u){
         const u64 scratchAlignment = m_context.nvClusterAccelerationStructureProperties.clusterScratchByteAlignment;
-        if(!suballocateBuildScratchAddress(
-            buildSize.buildScratchSize,
-            scratchAlignment,
-            scratchAddress,
-            s_OperationName
-        )){
+        const auto scratchAddressResult = suballocateBuildScratchAddress(buildSize.buildScratchSize, scratchAlignment, s_OperationName);
+        if(!scratchAddressResult){
             rejectCommandRecording(s_OperationName, NWB_TEXT("scratch-buffer suballocation failed"));
             return;
         }
+        scratchAddress = *scratchAddressResult;
     }
 
     auto commandsInfo = VulkanDetail::MakeVkStruct<VkClusterAccelerationStructureCommandsInfoNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_COMMANDS_INFO_NV);
     commandsInfo.input = inputInfo;
     commandsInfo.dstImplicitData = destinationAddress;
     commandsInfo.scratchData = scratchAddress;
-    commandsInfo.srcInfosArray.deviceAddress = sourceAddress;
+    commandsInfo.srcInfosArray.deviceAddress = *sourceAddress;
     commandsInfo.srcInfosArray.stride = sourceDesc.structStride;
-    commandsInfo.srcInfosArray.size = sourceRangeSize;
+    commandsInfo.srcInfosArray.size = *sourceRangeSize;
     commandsInfo.srcInfosCount = sourceCountAddress;
     if(outSizesBuffer){
         commandsInfo.dstSizesArray.deviceAddress = sizeArrayAddress;

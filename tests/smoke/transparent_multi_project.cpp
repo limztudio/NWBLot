@@ -346,18 +346,16 @@ private:
         );
 #elif defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         auto& rendererSystem = AddSmokeRenderSystems(*world, context);
-        f32 refractionSetting = 1.0f;
-        const bool refractionEnabled = !ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_ENABLED", refractionSetting)
-            || refractionSetting != 0.0f;
-        f32 hardwareSetting = 1.0f;
-        const bool hardwareEnabled = !ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_HARDWARE", hardwareSetting)
-            || hardwareSetting != 0.0f;
+        const auto refractionSetting = ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_ENABLED");
+        const bool refractionEnabled = !refractionSetting || *refractionSetting != 0.0f;
+        const auto hardwareSetting = ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_HARDWARE");
+        const bool hardwareEnabled = !hardwareSetting || *hardwareSetting != 0.0f;
         rendererSystem.setRefractionEnabled(refractionEnabled);
         rendererSystem.setRefractionHardwareTracingEnabled(hardwareEnabled);
         NWB::Impl::ReflectionSettings reflectionSettings;
-        NWB::Tests::Smoke::SmokeEnvironmentString reflectionModeText(context.objectArena);
-        if(NWB::Tests::Smoke::ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_MODE", reflectionModeText)){
-            const AStringView mode(reflectionModeText.data(), reflectionModeText.size());
+        const auto reflectionModeText = NWB::Tests::Smoke::ReadSmokeEnvironmentText(context.objectArena, "NWB_REFLECTION_SMOKE_MODE");
+        if(reflectionModeText){
+            const AStringView mode(reflectionModeText->data(), reflectionModeText->size());
             if(mode == "disabled")
                 reflectionSettings.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
             else if(mode == "hardware")
@@ -420,7 +418,11 @@ private:
 
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
     [[nodiscard]] bool configureFramebufferCapture(){
-        return NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("CausticSphereSmokeProject"), 360u, m_framebufferCapture);
+        auto capture = NWB::Tests::Smoke::ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("CausticSphereSmokeProject"), 360u);
+        if(!capture)
+            return false;
+        m_framebufferCapture = Move(*capture);
+        return true;
     }
 #endif
 
@@ -487,12 +489,12 @@ public:
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
         if(causticTiming){
             // Camera distance varies visible footprint while the optical geometry, light and photon quality stay fixed.
-            NWB::Tests::Smoke::SmokeEnvironmentString presetText(m_context.objectArena);
-            if(!NWB::Tests::Smoke::ReadSmokeEnvironmentText("NWB_CAUSTIC_SMOKE_CAMERA_PRESET", presetText)){
+            const auto presetText = NWB::Tests::Smoke::ReadSmokeEnvironmentText(m_context.objectArena, "NWB_CAUSTIC_SMOKE_CAMERA_PRESET");
+            if(!presetText){
                 NWB_LOGGER_ERROR(NWB_TEXT("CausticTimingProbe: camera preset is required"));
                 return false;
             }
-            const AStringView preset(presetText.data(), presetText.size());
+            const AStringView preset(presetText->data(), presetText->size());
             if(preset != "populated" && preset != "sparse"){
                 NWB_LOGGER_ERROR(NWB_TEXT("CausticTimingProbe: camera preset must be populated or sparse"));
                 return false;
@@ -530,8 +532,8 @@ public:
             s_DefaultDirectionalLightIntensity
         );
 #if defined(NWB_TRANSPARENT_MULTI_CAUSTIC_SPHERE)
-        f32 causticSetting = 1.f;
-        const bool causticsEnabled = !ReadSmokeEnvironmentF32("NWB_CAUSTIC_SMOKE_ENABLED", causticSetting) || causticSetting != 0.f;
+        const auto causticSetting = ReadSmokeEnvironmentF32("NWB_CAUSTIC_SMOKE_ENABLED");
+        const bool causticsEnabled = !causticSetting || *causticSetting != 0.f;
         m_world->entity(lightEntity).getComponent<NWB::Impl::Scene::LightComponent>().enableCaustics = causticsEnabled;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("CausticSphereSmokeProject: caustics {}")
             , causticsEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
@@ -735,10 +737,10 @@ public:
     // Vary spin speed from one build to compare caustic motion-vector reprojection.
     static f32 EffectiveRotationSpeed(){
         static const f32 s_speed = [](){
-            f32 parsed = 0.0f;
-            if(!ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_SPEED", parsed))
+            const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_SPEED");
+            if(!parsed)
                 return s_TransparentSceneRotationSpeed;
-            return IsFinite(parsed) && (parsed >= 0.0f) ? parsed : s_TransparentSceneRotationSpeed;
+            return IsFinite(*parsed) && (*parsed >= 0.0f) ? *parsed : s_TransparentSceneRotationSpeed;
         }();
         return s_speed;
     }
@@ -746,10 +748,10 @@ public:
     // Pin yaw for deterministic captures; an unset override leaves normal spin active.
     static f32 EffectiveFrozenAngle(){
         static const f32 s_angle = [](){
-            f32 parsed = 0.0f;
-            if(!ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_ANGLE", parsed))
+            const auto parsed = ReadSmokeEnvironmentF32("NWB_TRANSPARENT_MULTI_SPIN_ANGLE");
+            if(!parsed)
                 return Limit<f32>::s_QuietNaN;
-            return IsFinite(parsed) ? parsed : Limit<f32>::s_QuietNaN;
+            return IsFinite(*parsed) ? *parsed : Limit<f32>::s_QuietNaN;
         }();
         return s_angle;
     }

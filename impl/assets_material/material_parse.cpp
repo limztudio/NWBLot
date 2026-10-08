@@ -87,16 +87,13 @@ bool ValidateMaterialCookInterfaces(
         }
         const MaterialBindEntry* bindEntry = bindEntryIt.value();
 
-        const MaterialBindTypedLayout* layout = nullptr;
-        if(!FindOrBuildMaterialBindTypedLayout(
+        const auto layoutResult = FindOrBuildMaterialBindTypedLayout(
             materialInterfaceName,
             *bindEntry,
             layoutCache,
-            layout,
             scratchArena
-        ))
-            return false;
-        if(!layout){
+        );
+        if(!layoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Material '{}' failed to resolve typed layout cache for interface '{}'")
                 , StringConvert(AStringView(materialEntry.virtualPath))
                 , StringConvert(AStringView(materialEntry.materialInterface))
@@ -104,6 +101,7 @@ bool ValidateMaterialCookInterfaces(
             return false;
         }
 
+        const MaterialBindTypedLayout* layout = *layoutResult;
         CopyMaterialBindTypedLayoutDefaults(
             *layout,
             materialEntry.typedLayoutHash,

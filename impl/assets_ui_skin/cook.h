@@ -49,15 +49,15 @@ struct UiSkinCookEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ParseUiSkinCookMetadata(
+[[nodiscard]] Expected<UiSkinCookEntry> ParseUiSkinCookMetadata(
     const Path& assetRoot,
     AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    UiSkinCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] bool BuildUiSkinAsset(const UiSkinCookEntry& entry, UiSkin& outSkin);
+[[nodiscard]] Expected<UiSkin> BuildUiSkinAsset(const UiSkinCookEntry& entry, Core::Assets::AssetArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

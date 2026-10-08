@@ -39,11 +39,10 @@ static constexpr AStringView s_ColorField = "color";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ParseFiniteF32(
+[[nodiscard]] Expected<f32> ParseFiniteF32(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
-    const AStringView label,
-    f32& outValue
+    const AStringView label
 ){
     if(!value.isNumeric()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only numeric values")
@@ -51,7 +50,7 @@ static constexpr AStringView s_ColorField = "color";
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const f64 numericValue = value.toDouble();
@@ -61,18 +60,16 @@ static constexpr AStringView s_ColorField = "color";
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outValue = static_cast<f32>(numericValue);
-    return true;
+    return static_cast<f32>(numericValue);
 }
 
-[[nodiscard]] bool ParseU32(
+[[nodiscard]] Expected<u32> ParseU32(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
-    const AStringView label,
-    u32& outValue
+    const AStringView label
 ){
     if(!value.isNumeric()){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must contain only integer values")
@@ -80,7 +77,7 @@ static constexpr AStringView s_ColorField = "color";
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const f64 numericValue = value.toDouble();
@@ -90,11 +87,10 @@ static constexpr AStringView s_ColorField = "color";
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outValue = static_cast<u32>(numericValue);
-    return true;
+    return static_cast<u32>(numericValue);
 }
 
 [[nodiscard]] AString MakeIndexedLabel(const AStringView fieldName, const usize index){
@@ -129,17 +125,16 @@ static constexpr AStringView s_ColorField = "color";
 }
 
 template<typename ElementT, usize ComponentCount>
-[[nodiscard]] bool ParseFloatListField(
+[[nodiscard]] Expected<UtilityVector<ElementT>> ParseFloatListField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    const AStringView fieldName,
-    UtilityVector<ElementT>& outValues
+    const AStringView fieldName
 ){
-    outValues.clear();
+    UtilityVector<ElementT> outValues;
 
     const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, asset, fieldName);
     if(!field)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const auto& list = field->asList();
     outValues.reserve(list.size());
@@ -152,7 +147,7 @@ template<typename ElementT, usize ComponentCount>
                 , StringConvert(MakeIndexedLabel(fieldName, i))
                 , ComponentCount
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         f32 tuple[ComponentCount] = {};
@@ -160,8 +155,10 @@ template<typename ElementT, usize ComponentCount>
         for(usize componentIndex = 0u; componentIndex < ComponentCount; ++componentIndex){
             AStringStream label;
             label << fieldName << "[" << i << "][" << componentIndex << "]";
-            if(!ParseFiniteF32(nwbFilePath, components[componentIndex], label.str(), tuple[componentIndex]))
-                return false;
+            const auto component = ParseFiniteF32(nwbFilePath, components[componentIndex], label.str());
+            if(!component)
+                return MakeUnexpected(Failure{});
+            tuple[componentIndex] = *component;
         }
 
         ElementT element;
@@ -180,21 +177,20 @@ template<typename ElementT, usize ComponentCount>
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    return true;
+    return outValues;
 }
 
-[[nodiscard]] bool ParseVertexRefs(
+[[nodiscard]] Expected<UtilityVector<SourceVertexRef>> ParseVertexRefs(
     const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    UtilityVector<SourceVertexRef>& outVertexRefs
+    const Core::Metascript::Value& asset
 ){
-    outVertexRefs.clear();
+    UtilityVector<SourceVertexRef> outVertexRefs;
 
     const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, asset, s_VertexRefsField);
     if(!field)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const auto& list = field->asList();
     outVertexRefs.reserve(list.size());
@@ -207,7 +203,7 @@ template<typename ElementT, usize ComponentCount>
                 , i
                 , s_AuthoredVertexRefComponentCount
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         SourceVertexRef ref;
@@ -222,8 +218,10 @@ template<typename ElementT, usize ComponentCount>
         for(usize componentIndex = 0u; componentIndex < s_AuthoredVertexRefComponentCount; ++componentIndex){
             AStringStream label;
             label << "vertex_refs[" << i << "][" << componentIndex << "]";
-            if(!ParseU32(nwbFilePath, components[componentIndex], label.str(), *componentValues[componentIndex]))
-                return false;
+            const auto component = ParseU32(nwbFilePath, components[componentIndex], label.str());
+            if(!component)
+                return MakeUnexpected(Failure{});
+            *componentValues[componentIndex] = *component;
         }
 
         outVertexRefs.push_back(ref);
@@ -234,22 +232,21 @@ template<typename ElementT, usize ComponentCount>
             , StringConvert(s_MeshMetaKind)
             , PathToString<tchar>(nwbFilePath)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    return true;
+    return outVertexRefs;
 }
 
-[[nodiscard]] bool ParseSkinInfluences(
+[[nodiscard]] Expected<UtilityVector<MeshSkinInfluence>> ParseSkinInfluences(
     const Path& nwbFilePath,
     const Core::Metascript::Value& skinAsset,
-    const AStringView skinVariableName,
-    UtilityVector<MeshSkinInfluence>& outInfluences
+    const AStringView skinVariableName
 ){
-    outInfluences.clear();
+    UtilityVector<MeshSkinInfluence> outInfluences;
 
     const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, skinAsset, "influences");
     if(!field)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const auto& list = field->asList();
     outInfluences.reserve(list.size());
@@ -262,7 +259,7 @@ template<typename ElementT, usize ComponentCount>
                 , StringConvert(skinVariableName)
                 , i
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         const Core::Metascript::Value* jointsValue = Core::Metascript::FindField(influenceValue, "joints");
@@ -275,7 +272,7 @@ template<typename ElementT, usize ComponentCount>
                 , i
                 , s_MeshSkinInfluenceCount
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(!weightsValue || !weightsValue->isList() || weightsValue->asList().size() != s_MeshSkinInfluenceCount){
             NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}.influences[{}].weights' must contain {} numeric values")
@@ -285,30 +282,32 @@ template<typename ElementT, usize ComponentCount>
                 , i
                 , s_MeshSkinInfluenceCount
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         MeshSkinInfluence influence;
         for(usize componentIndex = 0u; componentIndex < s_MeshSkinInfluenceCount; ++componentIndex){
-            u32 jointIndex = 0u;
             AStringStream jointLabel;
             jointLabel << skinVariableName << ".influences[" << i << "].joints[" << componentIndex << "]";
-            if(!ParseU32(nwbFilePath, jointsValue->asList()[componentIndex], jointLabel.str(), jointIndex))
-                return false;
-            if(jointIndex > static_cast<u32>(Limit<u16>::s_Max)){
+            const auto jointIndex = ParseU32(nwbFilePath, jointsValue->asList()[componentIndex], jointLabel.str());
+            if(!jointIndex)
+                return MakeUnexpected(Failure{});
+            if(*jointIndex > static_cast<u32>(Limit<u16>::s_Max)){
                 NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' contains an out-of-range joint index")
                     , StringConvert(s_MeshMetaKind)
                     , PathToString<tchar>(nwbFilePath)
                     , StringConvert(jointLabel.str())
                 );
-                return false;
+                return MakeUnexpected(Failure{});
             }
 
             AStringStream weightLabel;
             weightLabel << skinVariableName << ".influences[" << i << "].weights[" << componentIndex << "]";
-            influence.joint[componentIndex] = static_cast<u16>(jointIndex);
-            if(!ParseFiniteF32(nwbFilePath, weightsValue->asList()[componentIndex], weightLabel.str(), influence.weight.raw[componentIndex]))
-                return false;
+            influence.joint[componentIndex] = static_cast<u16>(*jointIndex);
+            const auto weight = ParseFiniteF32(nwbFilePath, weightsValue->asList()[componentIndex], weightLabel.str());
+            if(!weight)
+                return MakeUnexpected(Failure{});
+            influence.weight.raw[componentIndex] = *weight;
         }
 
         outInfluences.push_back(influence);
@@ -320,9 +319,9 @@ template<typename ElementT, usize ComponentCount>
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(skinVariableName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    return true;
+    return outInfluences;
 }
 
 [[nodiscard]] bool FillIndicesRecursive(
@@ -342,33 +341,32 @@ template<typename ElementT, usize ComponentCount>
         return true;
     }
 
-    u32 index = 0u;
-    if(!ParseU32(nwbFilePath, value, label, index))
+    const auto index = ParseU32(nwbFilePath, value, label);
+    if(!index)
         return false;
-    outIndices.push_back(index);
+    outIndices.push_back(*index);
     return true;
 }
 
-[[nodiscard]] bool ParseIndices(
+[[nodiscard]] Expected<UtilityVector<u32>> ParseIndices(
     const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    UtilityVector<u32>& outIndices
+    const Core::Metascript::Value& asset
 ){
-    outIndices.clear();
+    UtilityVector<u32> outIndices;
 
     const Core::Metascript::Value* field = FindRequiredListField(nwbFilePath, asset, s_IndicesField);
     if(!field)
-        return false;
+        return MakeUnexpected(Failure{});
     if(!FillIndicesRecursive(nwbFilePath, *field, s_IndicesField, outIndices))
-        return false;
+        return MakeUnexpected(Failure{});
     if(outIndices.empty() || (outIndices.size() % s_TriangleIndexCount) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': 'indices' must contain whole triangles")
             , StringConvert(s_MeshMetaKind)
             , PathToString<tchar>(nwbFilePath)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    return true;
+    return outIndices;
 }
 
 [[nodiscard]] bool ValidateStreamIndex(
@@ -463,23 +461,41 @@ template<typename ElementT, usize ComponentCount>
     return true;
 }
 
-[[nodiscard]] bool ParseMeshValue(
-    const Path& nwbFilePath,
-    const AStringView meshVariableName,
-    const Core::Metascript::Value& asset,
-    SourceMeshStreams& outMesh
-){
+[[nodiscard]] Expected<SourceMeshStreams> ParseMeshValue(const Path& nwbFilePath, const AStringView meshVariableName, const Core::Metascript::Value& asset){
     if(!ValidateMeshAssetFields(nwbFilePath, meshVariableName, asset))
-        return false;
-    return ParseFloatListField<Vec3, 3u>(nwbFilePath, asset, s_PositionsField, outMesh.positions)
-        && ParseFloatListField<Vec3, 3u>(nwbFilePath, asset, s_NormalsField, outMesh.normals)
-        && ParseFloatListField<Vec4, 4u>(nwbFilePath, asset, s_TangentsField, outMesh.tangents)
-        && ParseFloatListField<Vec2, 2u>(nwbFilePath, asset, s_Uv0Field, outMesh.uv0)
-        && ParseFloatListField<Vec4, 4u>(nwbFilePath, asset, s_ColorsField, outMesh.colors)
-        && ParseVertexRefs(nwbFilePath, asset, outMesh.vertexRefs)
-        && ParseIndices(nwbFilePath, asset, outMesh.indices)
-        && ValidateMesh(nwbFilePath, outMesh)
-    ;
+        return MakeUnexpected(Failure{});
+    SourceMeshStreams mesh;
+    auto positions = ParseFloatListField<Vec3, 3u>(nwbFilePath, asset, s_PositionsField);
+    if(!positions)
+        return MakeUnexpected(positions.error());
+    mesh.positions = Move(*positions);
+    auto normals = ParseFloatListField<Vec3, 3u>(nwbFilePath, asset, s_NormalsField);
+    if(!normals)
+        return MakeUnexpected(normals.error());
+    mesh.normals = Move(*normals);
+    auto tangents = ParseFloatListField<Vec4, 4u>(nwbFilePath, asset, s_TangentsField);
+    if(!tangents)
+        return MakeUnexpected(tangents.error());
+    mesh.tangents = Move(*tangents);
+    auto uv0 = ParseFloatListField<Vec2, 2u>(nwbFilePath, asset, s_Uv0Field);
+    if(!uv0)
+        return MakeUnexpected(uv0.error());
+    mesh.uv0 = Move(*uv0);
+    auto colors = ParseFloatListField<Vec4, 4u>(nwbFilePath, asset, s_ColorsField);
+    if(!colors)
+        return MakeUnexpected(colors.error());
+    mesh.colors = Move(*colors);
+    auto vertexRefs = ParseVertexRefs(nwbFilePath, asset);
+    if(!vertexRefs)
+        return MakeUnexpected(vertexRefs.error());
+    mesh.vertexRefs = Move(*vertexRefs);
+    auto indices = ParseIndices(nwbFilePath, asset);
+    if(!indices)
+        return MakeUnexpected(indices.error());
+    mesh.indices = Move(*indices);
+    if(!ValidateMesh(nwbFilePath, mesh))
+        return MakeUnexpected(Failure{});
+    return mesh;
 }
 
 

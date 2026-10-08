@@ -7,6 +7,8 @@
 
 #include "recorder.h"
 
+#include <global/expected.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -68,15 +70,20 @@ struct DecodeResult{
     [[nodiscard]] bool ok()const noexcept{ return status == DecodeStatus::Ok; }
 };
 
+struct DecodedEvent{
+    EventRecord event;
+    usize bytesRead = 0u;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 [[nodiscard]] bool EncodeEvent(const EventRecord& event, TelemetryBytes& outBytes);
 [[nodiscard]] bool EncodeEvent(const EventHeader& header, const void* payload, usize payloadBytes, TelemetryBytes& outBytes);
-[[nodiscard]] DecodeResult DecodeEvent(TelemetryArena& arena, const void* bytes, usize byteCount, EventRecord& outEvent);
+[[nodiscard]] Expected<DecodedEvent, DecodeResult> DecodeEvent(TelemetryArena& arena, const void* bytes, usize byteCount);
 [[nodiscard]] bool EncodeEventStream(const EventView& events, TelemetryBytes& outBytes);
-[[nodiscard]] DecodeResult DecodeEventStream(TelemetryArena& arena, const void* bytes, usize byteCount, Recorder& outRecorder);
+[[nodiscard]] Expected<usize, DecodeResult> DecodeEventStream(TelemetryArena& arena, const void* bytes, usize byteCount, Recorder& inOutRecorder);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

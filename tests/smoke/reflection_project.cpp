@@ -51,9 +51,9 @@ static constexpr f32 s_GlassIor = 3.8f;
 static constexpr f32 s_GlassF0 = ((s_GlassIor - 1.0f) * (s_GlassIor - 1.0f)) / ((s_GlassIor + 1.0f) * (s_GlassIor + 1.0f));
 
 static NWB::Impl::RendererSystem& CreateReflectionRenderer(NWB::Core::ECS::World& world, NWB::ProjectRuntimeContext& context){
-    SmokeEnvironmentString caseText(context.objectArena);
-    const bool hasCase = ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_CASE", caseText);
-    const AStringView caseName(caseText.data(), caseText.size());
+    const auto caseText = ReadSmokeEnvironmentText(context.objectArena, "NWB_REFLECTION_SMOKE_CASE");
+    const bool hasCase = caseText.has_value();
+    const AStringView caseName = hasCase ? AStringView(caseText->data(), caseText->size()) : AStringView{};
     if(hasCase && (caseName == "temporal_deform" || caseName == "rough_deform")){
         AddSmokeSkinnedRenderSystems(world, context);
         auto* rendererPtr = world.getSystem<NWB::Impl::RendererSystem>();
@@ -145,9 +145,9 @@ public:
     virtual ~ReflectionSmokeProject()override{ destroyWorld(); }
 
     virtual bool onStartup()override{
-        SmokeEnvironmentString caseText(m_context.objectArena);
-        const bool hasCase = ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_CASE", caseText);
-        const AStringView caseName = hasCase ? AStringView(caseText.data(), caseText.size()) : AStringView("offscreen");
+        const auto caseText = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_REFLECTION_SMOKE_CASE");
+        const bool hasCase = caseText.has_value();
+        const AStringView caseName = hasCase ? AStringView(caseText->data(), caseText->size()) : AStringView("offscreen");
         m_feedbackCase = caseName.starts_with("feedback_");
         m_opticalCase = caseName.starts_with("optical_");
         m_extendedCase = m_feedbackCase || m_opticalCase || caseName.starts_with("rough") || caseName.starts_with("temporal_");
@@ -156,8 +156,8 @@ public:
         m_glassRoughnessCase = caseName == "rough_glass";
         if(!configureRenderer())
             return false;
-        SmokeEnvironmentString spatialOwnerSelection(m_context.objectArena);
-        if(ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_SPATIAL_OWNER", spatialOwnerSelection)){
+        const auto spatialOwnerSelection = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_REFLECTION_SMOKE_SPATIAL_OWNER");
+        if(spatialOwnerSelection){
             if(caseName != "rough" || m_authoredRoughness != 0.4f){
                 NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: requires the unchanged roughness0.4 scene"));
                 return false;
@@ -166,7 +166,7 @@ public:
             if(
                 !m_spatialOwnerProbe
                 || !m_spatialOwnerProbe->configure(
-                    AStringView(spatialOwnerSelection.data(), spatialOwnerSelection.size()), m_reflectionSettings
+                    AStringView(spatialOwnerSelection->data(), spatialOwnerSelection->size()), m_reflectionSettings
                 )
                 || !m_renderer.setReflectionSettings(m_reflectionSettings)
             )
@@ -262,12 +262,12 @@ public:
 
 private:
     bool readFlag(const AStringView name, bool& value){
-        SmokeEnvironmentString text(m_context.objectArena);
-        if(!ReadSmokeEnvironmentText(name, text))
+        const auto text = ReadSmokeEnvironmentText(m_context.objectArena, name);
+        if(!text)
             return true;
-        if(text == "0")
+        if(*text == "0")
             value = false;
-        else if(text == "1")
+        else if(*text == "1")
             value = true;
         else{
             NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: {} must be 0 or 1"), StringConvert(name));
@@ -277,15 +277,15 @@ private:
     }
 
     bool readU32(const AStringView name, u32& value, const u32 minimum, const u32 maximum){
-        SmokeEnvironmentString text(m_context.objectArena);
-        if(!ReadSmokeEnvironmentText(name, text))
+        const auto text = ReadSmokeEnvironmentText(m_context.objectArena, name);
+        if(!text)
             return true;
-        u64 parsed = 0u;
-        if(!ParseU64(AStringView(text.data(), text.size()), parsed) || parsed < minimum || parsed > maximum){
+        const auto parsed = ParseU64(AStringView(text->data(), text->size()));
+        if(!parsed || *parsed < minimum || *parsed > maximum){
             NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: {} must be in [{}, {}]"), StringConvert(name), minimum, maximum);
             return false;
         }
-        value = static_cast<u32>(parsed);
+        value = static_cast<u32>(*parsed);
         return true;
     }
 
@@ -378,13 +378,13 @@ private:
         settings.samplingSeed = m_freshFinalState ? m_requestedSeed + 1u : m_requestedSeed;
         if(m_extendedCase && !m_feedbackCase){
             m_authoredRoughness = 0.4f;
-            SmokeEnvironmentString roughnessText(m_context.objectArena);
-            if(
-                ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_ROUGHNESS", roughnessText)
-                && (!ParseF32FromChars(AStringView(roughnessText.data(), roughnessText.size()), m_authoredRoughness)
-                    || !IsFinite(m_authoredRoughness) || m_authoredRoughness < 0.f || m_authoredRoughness > 1.f)
-            )
-                return false;
+            const auto roughnessText = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_REFLECTION_SMOKE_ROUGHNESS");
+            if(roughnessText){
+                const auto roughness = ParseF32FromChars(AStringView(roughnessText->data(), roughnessText->size()));
+                if(!roughness || !IsFinite(*roughness) || *roughness < 0.f || *roughness > 1.f)
+                    return false;
+                m_authoredRoughness = *roughness;
+            }
             NWB::Impl::PresentationSettings presentation;
             presentation.shoulder = 1.f;
             if(!m_renderer.setPresentationSettings(presentation))
@@ -395,18 +395,18 @@ private:
             settings.environmentBottom = Float3U(1.f, 1.f, 1.f);
             settings.roughnessCutoff = 1.f;
         }
-        SmokeEnvironmentString budgetText(m_context.objectArena);
-        if(ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_RAY_BUDGET", budgetText)){
-            u64 parsed = 0u;
-            if(!ParseU64(AStringView(budgetText.data(), budgetText.size()), parsed) || parsed > Limit<u32>::s_Max){
+        const auto budgetText = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_REFLECTION_SMOKE_RAY_BUDGET");
+        if(budgetText){
+            const auto parsed = ParseU64(AStringView(budgetText->data(), budgetText->size()));
+            if(!parsed || *parsed > Limit<u32>::s_Max){
                 NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: ray budget must be a nonnegative u32"));
                 return false;
             }
-            settings.maxHardwareRaysPerFrame = static_cast<u32>(parsed);
+            settings.maxHardwareRaysPerFrame = static_cast<u32>(*parsed);
         }
-        SmokeEnvironmentString routeText(m_context.objectArena);
-        const bool hasRoute = ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_MODE", routeText);
-        const AStringView route = hasRoute ? AStringView(routeText.data(), routeText.size()) : AStringView("hardware");
+        const auto routeText = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_REFLECTION_SMOKE_MODE");
+        const bool hasRoute = routeText.has_value();
+        const AStringView route = hasRoute ? AStringView(routeText->data(), routeText->size()) : AStringView("hardware");
         if(route == "disabled")
             settings.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
         else if(route == "screen")
@@ -417,9 +417,9 @@ private:
             NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: unknown reflection mode '{}'"), StringConvert(route));
             return false;
         }
-        SmokeEnvironmentString debugText(m_context.objectArena);
-        if(ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_DEBUG", debugText)){
-            const AStringView debugView(debugText.data(), debugText.size());
+        const auto debugText = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_REFLECTION_SMOKE_DEBUG");
+        if(debugText){
+            const AStringView debugView(debugText->data(), debugText->size());
             if(debugView == "source")
                 settings.debugView = NWB::Impl::ReflectionDebugView::TraceSource;
             else if(debugView == "confidence")
@@ -448,9 +448,10 @@ private:
     }
 
     void reportReflectionStatistics(){
-        NWB::Impl::ReflectionStatistics statistics;
-        if(!m_renderer.tryGetLatestReflectionStatistics(statistics))
+        const auto statisticsResult = m_renderer.tryGetLatestReflectionStatistics();
+        if(!statisticsResult)
             return;
+        const NWB::Impl::ReflectionStatistics& statistics = *statisticsResult;
         if(statistics.sequence == m_statisticsSequence && statistics.generation == m_statisticsGeneration)
             return;
         m_statisticsSequence = statistics.sequence;
@@ -512,8 +513,8 @@ private:
         if(m_extendedCase || m_feedbackCapture){
             if(!m_reflectionSettings.diagnosticsEnabled){
                 // Timing-only extended scenes do not request completed-state capture.
-                SmokeEnvironmentString capturePath(m_context.objectArena);
-                if(ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", capturePath)){
+                const auto capturePath = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+                if(capturePath){
                     NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSmokeProject: controlled completed-state capture requires diagnostics"));
                     return false;
                 }
@@ -524,7 +525,11 @@ private:
                 return static_cast<ReflectionSmokeProject*>(owner)->shouldCapture(graphicsFrame);
             };
         }
-        return ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("ReflectionSmokeProject"), 16u, m_framebufferCapture, options);
+        auto capture = ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("ReflectionSmokeProject"), 16u, options);
+        if(!capture)
+            return false;
+        m_framebufferCapture = Move(*capture);
+        return true;
     }
 
     void destroyWorld(){
@@ -682,10 +687,10 @@ private:
 
 NWB::ProjectFrameClientSize NWB::QueryProjectFrameClientSize(){
     NWB::Core::Alloc::GlobalArena arena(Tests::Smoke::s_SmokeEnvironmentArena);
-    Tests::Smoke::SmokeEnvironmentString extent(arena);
-    if(!Tests::Smoke::ReadSmokeEnvironmentText("NWB_REFLECTION_SMOKE_EXTENT", extent) || extent == "native")
+    const auto extent = Tests::Smoke::ReadSmokeEnvironmentText(arena, "NWB_REFLECTION_SMOKE_EXTENT");
+    if(!extent || *extent == "native")
         return { 960, 720 };
-    NWB_FATAL_ASSERT_MSG(extent == "npot", NWB_TEXT("ReflectionSmokeProject: extent must be native or npot"));
+    NWB_FATAL_ASSERT_MSG(*extent == "npot", NWB_TEXT("ReflectionSmokeProject: extent must be native or npot"));
     return { 953, 713 };
 }
 TStringView NWB::QueryProjectWindowTitle(){ return NWB_TEXT("NWB Reflection Smoke"); }

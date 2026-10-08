@@ -98,3 +98,7 @@ at offset 0, 3x2 uses 16 bytes at offset 64, and 1x1 uses 16 bytes at offset 80.
 The primary stream therefore contains exactly 96 bytes. A variable-alpha HDR
 source appends another 96-byte stream. The cooker computes these ranges from
 the semantic fields and rejects a sidecar whose total byte count differs.
+
+## Library result contracts
+
+`ResolveOutputPaths` returns `Expected<OutputPaths>`, and `EncodeTexture` returns `Expected<TexturePayload>`. Decoders and mip producers return their owned candidates through the same contract. Check success before moving payloads or starting paired publication; append/alpha helpers retain existing payload/image storage and capacity. Transaction ownership flags remain live cleanup state, including a staged path created before a later write fails. See [produced values and expected failures](../../docs/expected_results.md).

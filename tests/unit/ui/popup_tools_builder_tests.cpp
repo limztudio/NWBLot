@@ -73,10 +73,10 @@ TEST_F(UiPopupToolsBuilderTests, VisibleTooltipPaintsItsDeclarationStyleAfterALa
     ASSERT_TRUE(finishPanel());
     ASSERT_TRUE(m_tooltip.visible());
     const DrawSnapshot snapshot = m_paint.freeze();
-    Rect background;
-    ASSERT_TRUE(skinQuad(snapshot, 6u, background));
-    EXPECT_FLOAT_EQ(background.x, m_tooltip.placement().bounds.x);
-    EXPECT_FLOAT_EQ(background.y, m_tooltip.placement().bounds.y);
+    const auto background = skinQuad(snapshot, 6u);
+    ASSERT_TRUE(background);
+    EXPECT_FLOAT_EQ(background->x, m_tooltip.placement().bounds.x);
+    EXPECT_FLOAT_EQ(background->y, m_tooltip.placement().bounds.y);
 }
 
 TEST_F(UiPopupToolsBuilderTests, LeavingTheAnchorCancelsVisibleTooltipAndRequiresAnotherDelay){

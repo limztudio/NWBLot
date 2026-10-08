@@ -44,18 +44,20 @@ public:
         return index < 50u ? index + 1u : 0u;
     }
 
-    [[nodiscard]] virtual bool indexOf(const u64 keyValue, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const override{
+        u64 index = 0u;
         if(keyValue == 0u || keyValue > 50u)
-            return false;
+            return MakeUnexpected(Failure{});
         index = keyValue - 1u;
-        return true;
+        return index;
     }
 
-    [[nodiscard]] virtual bool findEnabled(const u64 start, bool, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, bool)const override{
+        u64 index = 0u;
         if(start >= 50u)
-            return false;
+            return MakeUnexpected(Failure{});
         index = start;
-        return true;
+        return index;
     }
 
     [[nodiscard]] virtual StringView text(u64)const override{

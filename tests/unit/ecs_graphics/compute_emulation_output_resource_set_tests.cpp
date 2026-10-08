@@ -35,17 +35,15 @@ struct OutputContext{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(ComputeEmulationOutputResourceSet, EmptyPlansClearTheOutputWithoutImporting){
+TEST(ComputeEmulationOutputResourceSet, EmptyPlansFailWithoutImporting){
     OutputContext context;
     Core::Alloc::ScratchArena scratch(Name("tests/compute_output_set/empty"));
-    Core::GpuGraphResourceSetId result{ .generation = 1u, .index = 17u };
     EXPECT_FALSE(RendererTaskGraphDetail::GatherImportedOutputBufferResourceSet(
-        context.graph, context.plan, scratch, s_SetIdentity, s_SetLabel, result
+        context.graph, context.plan, scratch, s_SetIdentity, s_SetLabel
     ));
-    EXPECT_FALSE(result.valid());
     context.plan.captured = true;
     EXPECT_FALSE(RendererTaskGraphDetail::GatherImportedOutputBufferResourceSet(
-        context.graph, context.plan, scratch, s_SetIdentity, s_SetLabel, result
+        context.graph, context.plan, scratch, s_SetIdentity, s_SetLabel
     ));
     const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
     ASSERT_TRUE(view.valid());

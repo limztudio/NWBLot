@@ -107,22 +107,20 @@ bool UiEditBoxHost::apply(Entry& entry, Ui::EditModel& model, const Ui::EditBoxO
             return true;
         }
         if(event.wordSelect){
-            usize begin = 0u;
-            usize end = 0u;
-            if(!model.wordRangeAt(event.wordPosition, begin, end) || !model.setSelection(begin, end))
+            const auto range = model.wordRangeAt(event.wordPosition);
+            if(!range || !model.setSelection(range->begin, range->end))
                 return true;
-            entry.wordDragStart = begin;
-            entry.wordDragEnd = end;
+            entry.wordDragStart = range->begin;
+            entry.wordDragEnd = range->end;
             entry.wordDragging = true;
         }
         else if(event.dragging && entry.dragging && entry.wordDragging){
-            usize begin = 0u;
-            usize end = 0u;
-            if(!model.wordRangeAt(event.wordPosition, begin, end))
+            const auto range = model.wordRangeAt(event.wordPosition);
+            if(!range)
                 return true;
             const usize anchor = event.wordPosition < entry.wordDragStart ? entry.wordDragEnd : entry.wordDragStart;
-            const usize caret = event.wordPosition < entry.wordDragStart ? begin
-                : event.wordPosition >= entry.wordDragEnd ? end : entry.wordDragEnd;
+            const usize caret = event.wordPosition < entry.wordDragStart ? range->begin
+                : event.wordPosition >= entry.wordDragEnd ? range->end : entry.wordDragEnd;
             if(!model.setSelection(anchor, caret))
                 return true;
         }

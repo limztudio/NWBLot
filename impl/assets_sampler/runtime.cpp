@@ -53,16 +53,16 @@ bool Sampler::loadBinary(const Core::Assets::AssetBytes& binary){
     m_description = {};
 
     usize cursor = 0u;
-    SamplerBinaryPayload::HeaderBinary header;
-    if(!Core::Assets::ReadMagicHeaderPayload(
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SamplerBinaryPayload::HeaderBinary>(
         binary,
         cursor,
-        header,
         SamplerBinaryPayload::s_SamplerMagic,
         NWB_TEXT("Sampler::loadBinary"),
         NWB_TEXT("sampler")
-    ))
+    );
+    if(!headerResult)
         return false;
+    const SamplerBinaryPayload::HeaderBinary& header = *headerResult;
     if(header.version != SamplerBinaryPayload::s_SamplerVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("Sampler::loadBinary failed: unsupported sampler version {}; recook required"), header.version);
         return false;

@@ -80,21 +80,22 @@ bool AppendMeshObjectShaderEntries(
     prepared.includeDirectories = meshEntry.includeDirectories;
     prepared.variantCount = 1u;
 
-    ErrorCode errorCode;
-    if(!IsRegularFile(prepared.sourcePath, errorCode) || errorCode){
+    const auto sourceExists = IsRegularFile(prepared.sourcePath);
+    if(!sourceExists || !*sourceExists){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: fixed object geometry shader is missing: '{}'"), PathToString<tchar>(prepared.sourcePath));
         return false;
     }
     if(!shaderCook.gatherShaderDependencies(prepared.sourcePath, prepared.includeDirectories, AssetsGraphicsCsgShaderVariants::s_ExternallyPlannedMacroIncludes, prepared.dependencies, scratchArena))
         return false;
-    if(!shaderCook.computeDependencyChecksum(
+    const auto dependency = shaderCook.computeDependencyChecksum(
         prepared.dependencies,
         { { resolvedPaths.repoRoot, "repo" }, { resolvedPaths.cacheDirectory, "generated_cache" } },
-        prepared.dependencyChecksum,
-        prepared.compilerInputsHaveBom,
         scratchArena
-    ))
+    );
+    if(!dependency)
         return false;
+    prepared.dependencyChecksum = dependency->checksum;
+    prepared.compilerInputsHaveBom = dependency->compilerInputsHaveBom;
     if(!Core::Assets::AddPlannedFileCount(prepared.variantCount, plan.plannedFileCount))
         return false;
     plan.preparedEntries.push_back(Move(prepared));

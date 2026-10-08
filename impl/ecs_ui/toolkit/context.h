@@ -69,9 +69,9 @@ public:
     [[nodiscard]] bool addTarget(const WidgetState& state, HitTarget target);
     [[nodiscard]] bool addPartTarget(const WidgetState& owner, WidgetId part, HitTarget target);
     [[nodiscard]] bool takeActivation(const WidgetState& state, bool enabled);
-    [[nodiscard]] bool takePointerGesture(const WidgetState& state, bool enabled, PointerGesture& gesture);
-    [[nodiscard]] bool takeControlAction(const WidgetState& state, bool enabled, const ControlToken& token, ControlAction& action);
-    [[nodiscard]] bool takePartPointerGesture(const WidgetState& owner, WidgetId part, bool enabled, PointerGesture& gesture);
+    [[nodiscard]] Expected<PointerGesture> takePointerGesture(const WidgetState& state, bool enabled);
+    [[nodiscard]] Expected<ControlAction> takeControlAction(const WidgetState& state, bool enabled, const ControlToken& token);
+    [[nodiscard]] Expected<PointerGesture> takePartPointerGesture(const WidgetState& owner, WidgetId part, bool enabled);
     // Registration reserves the declaration-order layer; activation may be repeated during deferred painting.
     [[nodiscard]] bool registerPopupScope(const WidgetState& state, PopupScope scope);
     [[nodiscard]] bool activatePopupScope(const PopupToken& token);

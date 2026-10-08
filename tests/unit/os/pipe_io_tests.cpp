@@ -34,7 +34,14 @@ struct OwnedPipe final : NoCopy{
         CloseClipboardPipe(m_writeFd);
     }
 
-    [[nodiscard]] bool open()noexcept{ return OpenClipboardPipe(m_readFd, m_writeFd); }
+    [[nodiscard]] bool open()noexcept{
+        const auto pipe = OpenClipboardPipe();
+        if(!pipe)
+            return false;
+        m_readFd = pipe->readFd;
+        m_writeFd = pipe->writeFd;
+        return true;
+    }
 
     [[nodiscard]] int releaseWrite()noexcept{
         const int fd = m_writeFd;
@@ -52,17 +59,17 @@ TEST(ClipboardPipe, PartialUnicodeStaysPendingUntilValidEof){
     OwnedPipe pipe;
     ASSERT_TRUE(pipe.open());
     ClipboardTextAccumulator received(arena.arena);
-    bool finished = false;
+    Expected<bool, ClipboardPipeReadFailure> finished = MakeUnexpected(ClipboardPipeReadFailure{});
     ASSERT_EQ(write(pipe.m_writeFd, "\xED", 1u), 1);
-    EXPECT_EQ(ReadClipboardPipe(pipe.m_readFd, received, finished), ClipboardStatus::Success);
-    EXPECT_FALSE(finished);
+    ASSERT_TRUE((finished = ReadClipboardPipe(pipe.m_readFd, received)));
+    EXPECT_FALSE(*finished);
     ASSERT_EQ(write(pipe.m_writeFd, "\x95\x9C\xF0\x9F", 4u), 4);
-    EXPECT_EQ(ReadClipboardPipe(pipe.m_readFd, received, finished), ClipboardStatus::Success);
-    EXPECT_FALSE(finished);
+    ASSERT_TRUE((finished = ReadClipboardPipe(pipe.m_readFd, received)));
+    EXPECT_FALSE(*finished);
     ASSERT_EQ(write(pipe.m_writeFd, "\x98\x80", 2u), 2);
     CloseClipboardPipe(pipe.m_writeFd);
-    EXPECT_EQ(ReadClipboardPipe(pipe.m_readFd, received, finished), ClipboardStatus::Success);
-    EXPECT_TRUE(finished);
+    ASSERT_TRUE((finished = ReadClipboardPipe(pipe.m_readFd, received)));
+    EXPECT_TRUE(*finished);
     EXPECT_EQ(received.text(), "\xED\x95\x9C\xF0\x9F\x98\x80");
 }
 
@@ -73,9 +80,11 @@ TEST(ClipboardPipe, TruncatedUnicodeIsRejectedAtEof){
     ClipboardTextAccumulator received(arena.arena);
     ASSERT_EQ(write(pipe.m_writeFd, "\xF0\x9F", 2u), 2);
     CloseClipboardPipe(pipe.m_writeFd);
-    bool finished = false;
-    EXPECT_EQ(ReadClipboardPipe(pipe.m_readFd, received, finished), ClipboardStatus::InvalidText);
-    EXPECT_TRUE(finished);
+    Expected<bool, ClipboardPipeReadFailure> finished = MakeUnexpected(ClipboardPipeReadFailure{});
+    finished = ReadClipboardPipe(pipe.m_readFd, received);
+    ASSERT_FALSE(finished);
+    EXPECT_EQ(finished.error().status, ClipboardStatus::InvalidText);
+    EXPECT_TRUE(finished.error().finished);
 }
 
 TEST(ClipboardPipe, WriterOwnsLargeInputAndResumesAfterFullPipe){
@@ -98,12 +107,12 @@ TEST(ClipboardPipe, WriterOwnsLargeInputAndResumesAfterFullPipe){
     ASSERT_EQ(poll(&writable, 1u, 0), 0);
 
     ClipboardTextAccumulator received(arena.arena);
-    bool finished = false;
-    for(usize attempt = 0u; attempt < 4096u && !finished; ++attempt){
-        ASSERT_EQ(ReadClipboardPipe(pipe.m_readFd, received, finished), ClipboardStatus::Success);
+    Expected<bool, ClipboardPipeReadFailure> finished = MakeUnexpected(ClipboardPipeReadFailure{});
+    for(usize attempt = 0u; attempt < 4096u && !finished.value_or(false); ++attempt){
+        ASSERT_TRUE((finished = ReadClipboardPipe(pipe.m_readFd, received)));
         ASSERT_EQ(writer.advance(), ClipboardStatus::Success);
     }
-    EXPECT_TRUE(finished);
+    EXPECT_TRUE(*finished);
     EXPECT_TRUE(writer.finished());
     EXPECT_EQ(received.text(), expected);
 }
@@ -128,14 +137,14 @@ TEST(ClipboardPipe, WriterCanBeReusedForEmptyAndShorterTransfers){
     NWB::Tests::TestArena arena;
     ClipboardPipeWriter writer(arena.arena);
     ClipboardTextAccumulator received(arena.arena);
-    bool finished = false;
+    Expected<bool, ClipboardPipeReadFailure> finished = MakeUnexpected(ClipboardPipeReadFailure{});
     OwnedPipe first;
     ASSERT_TRUE(first.open());
     ASSERT_TRUE(writer.begin(first.releaseWrite(), "old long contents"));
     ASSERT_EQ(writer.advance(), ClipboardStatus::Success);
     ASSERT_TRUE(writer.finished());
-    ASSERT_EQ(ReadClipboardPipe(first.m_readFd, received, finished), ClipboardStatus::Success);
-    ASSERT_TRUE(finished);
+    ASSERT_TRUE((finished = ReadClipboardPipe(first.m_readFd, received)));
+    ASSERT_TRUE(*finished);
     EXPECT_EQ(received.text(), "old long contents");
 
     OwnedPipe empty;
@@ -144,8 +153,8 @@ TEST(ClipboardPipe, WriterCanBeReusedForEmptyAndShorterTransfers){
     ASSERT_EQ(writer.advance(), ClipboardStatus::Success);
     ASSERT_TRUE(writer.finished());
     received.clear();
-    ASSERT_EQ(ReadClipboardPipe(empty.m_readFd, received, finished), ClipboardStatus::Success);
-    EXPECT_TRUE(finished);
+    ASSERT_TRUE((finished = ReadClipboardPipe(empty.m_readFd, received)));
+    EXPECT_TRUE(*finished);
     EXPECT_TRUE(received.text().empty());
 
     OwnedPipe last;
@@ -154,8 +163,8 @@ TEST(ClipboardPipe, WriterCanBeReusedForEmptyAndShorterTransfers){
     ASSERT_EQ(writer.advance(), ClipboardStatus::Success);
     ASSERT_TRUE(writer.finished());
     received.clear();
-    ASSERT_EQ(ReadClipboardPipe(last.m_readFd, received, finished), ClipboardStatus::Success);
-    EXPECT_TRUE(finished);
+    ASSERT_TRUE((finished = ReadClipboardPipe(last.m_readFd, received)));
+    EXPECT_TRUE(*finished);
     EXPECT_EQ(received.text(), "new");
 }
 

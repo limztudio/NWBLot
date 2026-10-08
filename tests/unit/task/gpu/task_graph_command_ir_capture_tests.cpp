@@ -145,8 +145,7 @@ TEST(GpuCommandIrCapture, RejectsDegenerateRectUIntClearAndEarlierStreamVersions
     ASSERT_EQ(capture.recordCount(), 1u);
     const BinaryByteView bytes = capture.commandBytes();
     Graphics::GpuCommandIrStreamReader reader(bytes);
-    Graphics::GpuCommandIrBuiltinTaskRecord decoded;
-    ASSERT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::Record);
+    ASSERT_TRUE(reader.nextBuiltinTask());
 
     clear.rect = Graphics::Rect(4, 4, 0, 1);
     EXPECT_FALSE(capture.captureClearTextureRectUInt(
@@ -169,7 +168,9 @@ TEST(GpuCommandIrCapture, RejectsDegenerateRectUIntClearAndEarlierStreamVersions
         downgradedRectBytes.data(),
         downgradedRectBytes.size(),
     });
-    EXPECT_EQ(downgradedRectReader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::Error);
+    const auto terminal1 = downgradedRectReader.nextBuiltinTask();
+    ASSERT_FALSE(terminal1);
+    EXPECT_EQ(terminal1.error(), Graphics::GpuCommandIrStreamReadStatus::Error);
     EXPECT_EQ(
         downgradedRectReader.validation().error,
         Graphics::GpuCommandIrStreamValidationError::UnsupportedVersion
@@ -243,11 +244,11 @@ TEST(GpuCommandIrCapture, RollbackPreservesExactMixedRecordPrefixAtRecordBoundar
     );
 
     usize cursor = 0u;
-    Graphics::GpuCommandIrStreamHeader streamHeader;
-    ASSERT_TRUE(ReadPOD(rolledBackBytes, cursor, streamHeader));
-    EXPECT_EQ(streamHeader.recordCount, s_ExpectedDualCount);
+    const auto streamHeader = ReadPOD<Graphics::GpuCommandIrStreamHeader>(rolledBackBytes, cursor);
+    ASSERT_TRUE(streamHeader);
+    EXPECT_EQ(streamHeader->recordCount, s_ExpectedDualCount);
     EXPECT_EQ(
-        streamHeader.commandBytes,
+        streamHeader->commandBytes,
         sizeof(Graphics::GpuCommandIrCopyBufferRecord) + sizeof(Graphics::GpuCommandIrCopyTextureRecord)
     );
 }

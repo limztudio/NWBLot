@@ -43,17 +43,16 @@ template<
     typename AttributeDeltaContainer,
     typename PrimitiveContainer,
     typename NormalContainer,
-    typename Uv0Container,
-    typename AttributeOutContainer
+    typename Uv0Container
 >
-[[nodiscard]] bool BuildMeshletTriangleAttributes(
+[[nodiscard]] Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(
+    Core::Alloc::ScratchArena& scratchArena,
     const MeshletContainer& meshlets,
     const LocalVertexRefContainer& localVertexRefs,
     const AttributeDeltaContainer& attributeRefDeltas,
     const PrimitiveContainer& primitiveIndices,
     const NormalContainer& normalStream,
-    const Uv0Container& uv0Stream,
-    AttributeOutContainer& outAttributes
+    const Uv0Container& uv0Stream
 ){
     const u8* const attributeDeltaBytes = attributeRefDeltas.data();
     const usize attributeDeltaByteCount = attributeRefDeltas.size();
@@ -61,38 +60,42 @@ template<
     const usize normalCount = normalStream.size();
     const usize uv0Count = uv0Stream.size();
 
-    outAttributes.assign(primitiveIndexCount, AttribGpu{});
+    Vector<AttribGpu, Core::Alloc::ScratchArena> outAttributes(primitiveIndexCount, scratchArena);
 
-    return ForEachMeshletTriangleCorner(
+    if(!ForEachMeshletTriangleCorner(
         meshlets,
         localVertexRefs,
         primitiveIndices,
         [&](const MeshletDesc& meshlet, const usize primitiveByte, const MeshletLocalVertexRef& localVertexRef) -> bool {
             const u32 localAttributeIndex = static_cast<u32>(localVertexRef.localAttribute);
-            MeshletAttributeStreamRef attributeRef;
-            if(!DecodeMeshletAttributeRef(attributeDeltaBytes, attributeDeltaByteCount, meshlet, localAttributeIndex, attributeRef))
+            const auto attributeRef = DecodeMeshletAttributeRef(attributeDeltaBytes, attributeDeltaByteCount, meshlet, localAttributeIndex);
+            if(!attributeRef)
                 return false;
-            if(static_cast<usize>(attributeRef.normal) >= normalCount || static_cast<usize>(attributeRef.uv0) >= uv0Count)
+            if(static_cast<usize>(attributeRef->normal) >= normalCount || static_cast<usize>(attributeRef->uv0) >= uv0Count)
                 return false;
 
             AttribGpu& attribute = outAttributes[primitiveByte];
-            attribute.normal = normalStream[attributeRef.normal];
-            attribute.uv0 = uv0Stream[attributeRef.uv0];
+            attribute.normal = normalStream[attributeRef->normal];
+            attribute.uv0 = uv0Stream[attributeRef->uv0];
             return true;
         }
-    );
+    ))
+        return MakeUnexpected(Failure{});
+    return outAttributes;
 }
 
-template<typename AttributeOutContainer>
-[[nodiscard]] bool BuildMeshletTriangleAttributes(const MeshGeometryPayload& payload, AttributeOutContainer& outAttributes){
+[[nodiscard]] inline Expected<Vector<AttribGpu, Core::Alloc::ScratchArena>> BuildMeshletTriangleAttributes(
+    Core::Alloc::ScratchArena& scratchArena,
+    const MeshGeometryPayload& payload
+){
     return BuildMeshletTriangleAttributes(
+        scratchArena,
         payload.meshlets(),
         payload.meshletLocalVertexRefs(),
         payload.meshletAttributeRefDeltas(),
         payload.meshletPrimitiveIndices(),
         payload.normalStream(),
-        payload.uv0Stream(),
-        outAttributes
+        payload.uv0Stream()
     );
 }
 

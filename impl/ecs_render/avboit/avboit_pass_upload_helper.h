@@ -64,7 +64,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool gather(
+    [[nodiscard]] Expected<AvboitPassUploadResult> gather(
         const AvboitPassUploadInputs& inputs,
         MaterialPassDrawItemPartitions& drawItems,
         InstanceGpuDataVector& instanceData,
@@ -72,8 +72,7 @@ public:
 #if defined(NWB_DEBUG)
         ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif
-        MaterialTypedByteDataVector& materialTypedBytes,
-        AvboitPassUploadResult& outResult
+        MaterialTypedByteDataVector& materialTypedBytes
     );
 
 

@@ -46,11 +46,10 @@ struct CookedObjectPayloadView{
     AssetVolumePackManifest& manifest,
     VirtualPathHashSet& seenVirtualPathHashes
 );
-[[nodiscard]] bool ReadCookedObjectPayload(
+[[nodiscard]] Expected<CookedObjectPayloadView> ReadCookedObjectPayload(
     const Path& objectPath,
     const Name& expectedVirtualPath,
-    Core::Assets::AssetBytes& objectBytes,
-    CookedObjectPayloadView& outPayload
+    Core::Assets::AssetBytes& inOutObjectBytes
 );
 
 

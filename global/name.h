@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "array.h"
+#include "expected.h"
 #include "hash_utils.h"
 #include <functional>
 #include <type_traits>
@@ -100,47 +102,51 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool CopyDebugHashToken(const BasicStringView<CharT> text, const usize offset, char (&outHashText)[s_DebugHashTextLength + 1u])noexcept(IsArithmetic_V<CharT>){
-    if(offset + s_DebugHashTextLength > text.size())
-        return false;
+[[nodiscard]] inline Expected<Array<char, s_DebugHashTextLength + 1u>> CopyDebugHashToken(const BasicStringView<CharT> text, const usize offset)noexcept(IsArithmetic_V<CharT>){
+    Array<char, s_DebugHashTextLength + 1u> hashText;
+    if(offset > text.size() || s_DebugHashTextLength > text.size() - offset)
+        return MakeUnexpected(Failure{});
     if(offset > 0u && IsNameHashTokenChar(text[offset - 1u]))
-        return false;
+        return MakeUnexpected(Failure{});
     if(offset + s_DebugHashTextLength < text.size() && IsNameHashTokenChar(text[offset + s_DebugHashTextLength]))
-        return false;
+        return MakeUnexpected(Failure{});
 
     for(usize i = 0u; i < s_DebugHashTextLength; ++i){
         const CharT ch = text[offset + i];
         if(((i + 1u) % (s_HexDigitsPerHashLane + 1u)) == 0u){
             if(ch != static_cast<CharT>('_'))
-                return false;
+                return MakeUnexpected(Failure{});
         }
         else if(!IsNameHashTokenChar(ch) || ch == static_cast<CharT>('_')){
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
-        outHashText[i] = static_cast<char>(ch);
+        hashText[i] = static_cast<char>(ch);
     }
-    outHashText[s_DebugHashTextLength] = 0;
-    return true;
+    hashText[s_DebugHashTextLength] = 0;
+    return hashText;
 }
 
-[[nodiscard]] inline bool DecodeDebugHashText(const AStringView text, NameHash& outHash)noexcept{
+[[nodiscard]] inline Expected<NameHash> DecodeDebugHashText(const AStringView text)noexcept{
     if(text.size() != s_DebugHashTextLength)
-        return false;
+        return MakeUnexpected(Failure{});
 
     NameHash hash = {};
     usize cursor = 0u;
     for(u32 lane = 0u; lane < s_HashLaneCount; ++lane){
         if((lane > 0u && text[cursor++] != '_') || cursor + s_HexDigitsPerHashLane > text.size())
-            return false;
+            return MakeUnexpected(Failure{});
 
-        if(!ParseHexU64<char>(AStringView(text.data() + cursor, s_HexDigitsPerHashLane), hash.qwords[lane]))
-            return false;
+        const auto laneHash = ParseHexU64<char>(AStringView(text.data() + cursor, s_HexDigitsPerHashLane));
+        if(!laneHash)
+            return MakeUnexpected(Failure{});
+        hash.qwords[lane] = *laneHash;
         cursor += s_HexDigitsPerHashLane;
     }
 
-    outHash = hash;
-    return cursor == text.size();
+    if(cursor != text.size())
+        return MakeUnexpected(Failure{});
+    return hash;
 }
 
 
@@ -710,16 +716,16 @@ inline constexpr u64 s_DerivePrefixHash = UpdateFnv64TextCanonical(s_Fnv64Offset
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool BeginDerivedNameHash(const Name& baseName, NameHash& outDerivedHash){
-    outDerivedHash = {};
+[[nodiscard]] inline Expected<NameHash> BeginDerivedNameHash(const Name& baseName){
+    NameHash derivedHash = {};
     if(!baseName)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const NameHash& baseHash = baseName.hash();
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane)
-        outDerivedHash.qwords[lane] = NameDetail::UpdateFnv64U64(NameDetail::s_DerivePrefixHash, baseHash.qwords[lane]);
+        derivedHash.qwords[lane] = NameDetail::UpdateFnv64U64(NameDetail::s_DerivePrefixHash, baseHash.qwords[lane]);
 
-    return true;
+    return derivedHash;
 }
 
 template<typename CharT>
@@ -736,13 +742,13 @@ template<typename CharT>
     if(!baseName || suffix.empty())
         return s_NameNone;
 
-    NameHash derivedHash = {};
-    if(!BeginDerivedNameHash(baseName, derivedHash))
+    auto derivedHash = BeginDerivedNameHash(baseName);
+    if(!derivedHash)
         return s_NameNone;
-    if(!UpdateDerivedNameHashText(derivedHash, suffix))
+    if(!UpdateDerivedNameHashText(*derivedHash, suffix))
         return s_NameNone;
 
-    return FinishDerivedNameHash(derivedHash);
+    return FinishDerivedNameHash(*derivedHash);
 }
 template<typename CharT, typename ArenaT>
 [[nodiscard]] inline Name DeriveName(const Name& baseName, const BasicString<CharT, ArenaT>& suffix){
@@ -750,25 +756,26 @@ template<typename CharT, typename ArenaT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool DecodeNameHash(const BasicStringView<CharT> encodedHash, Name& outName)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline Expected<Name> DecodeNameHash(const BasicStringView<CharT> encodedHash)noexcept(IsArithmetic_V<CharT>){
     if(encodedHash.size() != NameDetail::s_EncodedNameHashLength)
-        return false;
+        return MakeUnexpected(Failure{});
 
     NameHash hash = {};
     for(u32 lane = 0u; lane < NameDetail::s_HashLaneCount; ++lane){
         const usize begin = static_cast<usize>(lane) * NameDetail::s_HexDigitsPerHashLane;
         const BasicStringView<CharT> laneHex = encodedHash.substr(begin, NameDetail::s_HexDigitsPerHashLane);
 
-        if(!ParseHexU64<CharT>(laneHex, hash.qwords[lane]))
-            return false;
+        const auto laneHash = ParseHexU64<CharT>(laneHex);
+        if(!laneHash)
+            return MakeUnexpected(Failure{});
+        hash.qwords[lane] = *laneHash;
     }
 
-    outName = Name(hash);
-    return true;
+    return Name(hash);
 }
 template<typename CharT, typename ArenaT>
-[[nodiscard]] inline bool DecodeNameHash(const BasicString<CharT, ArenaT>& encodedHash, Name& outName)noexcept(IsArithmetic_V<CharT>){
-    return DecodeNameHash(BasicStringView<CharT>(encodedHash), outName);
+[[nodiscard]] inline Expected<Name> DecodeNameHash(const BasicString<CharT, ArenaT>& encodedHash)noexcept(IsArithmetic_V<CharT>){
+    return DecodeNameHash(BasicStringView<CharT>(encodedHash));
 }
 
 

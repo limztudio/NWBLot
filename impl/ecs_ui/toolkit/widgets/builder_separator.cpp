@@ -41,10 +41,12 @@ bool Builder::separator(const AStringView stableKey, const SeparatorOptions& opt
     description.width = horizontal ? options.length : LayoutSize{ LayoutSizePolicy::Fixed, thickness };
     description.height = horizontal ? LayoutSize{ LayoutSizePolicy::Fixed, thickness } : options.length;
     description.intrinsicSize = { skinRegion->minimumWidth, skinRegion->minimumHeight };
-    if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, item.node)){
+    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
+    if(!admittedNode){
         m_context.fail();
         return false;
     }
+    item.node = *admittedNode;
     m_scope->m_items.push_back(Move(item));
     return true;
 }

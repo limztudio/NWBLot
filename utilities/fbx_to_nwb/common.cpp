@@ -14,17 +14,16 @@ NWB_FBX_TO_NWB_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<typename EnumT, typename TextFunction, typename ParseFunction>
+template<typename TextFunction, typename ParseFunction>
 static bool ValidateOptionText(
     AString& inOutValue,
     TextFunction textFunction,
-    ParseFunction parseValue,
-    const EnumT initial
+    ParseFunction parseValue
 ){
     inOutValue = NormalizeOptionText(Move(inOutValue));
-    EnumT parsed = initial;
-    if(parseValue(inOutValue, parsed)){
-        inOutValue = AString(textFunction(parsed));
+    const auto parsed = parseValue(inOutValue);
+    if(parsed){
+        inOutValue = AString(textFunction(*parsed));
         return true;
     }
 
@@ -74,24 +73,22 @@ AString OutputAssetTypeErrorText(){
     return MakeOptionsErrorText<AString>("Asset type must be ", OutputAssetTypeOptionsText());
 }
 
-static bool ParseNormalizedAssetTypeText(const AStringView value, OutputAssetType::Enum& outAssetType){
+static Expected<OutputAssetType::Enum> ParseNormalizedAssetTypeText(const AStringView value){
     return ::ParseNormalizedEnumText<OutputAssetType::Enum, AStringView (*)(OutputAssetType::Enum)>(
         value,
-        outAssetType,
         OutputAssetTypeText,
         s_OutputAssetTypeValues,
-        LengthOf(s_OutputAssetTypeValues),
-        OutputAssetType::Bunch
+        LengthOf(s_OutputAssetTypeValues)
     );
 }
 
-bool ParseAssetTypeText(const AStringView value, OutputAssetType::Enum& outAssetType){
+Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value){
     const AString normalized = NormalizeOptionText(AString(value));
-    return ParseNormalizedAssetTypeText(AStringView(normalized), outAssetType);
+    return ParseNormalizedAssetTypeText(AStringView(normalized));
 }
 
 bool ValidateAssetTypeText(AString& inOutValue){
-    return ValidateOptionText<OutputAssetType::Enum>(inOutValue, OutputAssetTypeText, ParseNormalizedAssetTypeText, OutputAssetType::Mesh);
+    return ValidateOptionText(inOutValue, OutputAssetTypeText, ParseNormalizedAssetTypeText);
 }
 
 static AStringView NormalModeText(const NormalMode::Enum normalMode){
@@ -119,24 +116,22 @@ AString NormalModeErrorText(){
     return MakeOptionsErrorText<AString>("normal mode must be ", NormalModeOptionsText());
 }
 
-static bool ParseNormalizedNormalModeText(const AStringView value, NormalMode::Enum& outNormalMode){
+static Expected<NormalMode::Enum> ParseNormalizedNormalModeText(const AStringView value){
     return ::ParseNormalizedEnumText<NormalMode::Enum, AStringView (*)(NormalMode::Enum)>(
         value,
-        outNormalMode,
         NormalModeText,
         s_NormalModeValues,
-        LengthOf(s_NormalModeValues),
-        NormalMode::Imported
+        LengthOf(s_NormalModeValues)
     );
 }
 
-bool ParseNormalModeText(const AStringView value, NormalMode::Enum& outNormalMode){
+Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value){
     const AString normalized = NormalizeOptionText(AString(value));
-    return ParseNormalizedNormalModeText(AStringView(normalized), outNormalMode);
+    return ParseNormalizedNormalModeText(AStringView(normalized));
 }
 
 bool ValidateNormalModeText(AString& inOutValue){
-    return ValidateOptionText<NormalMode::Enum>(inOutValue, NormalModeText, ParseNormalizedNormalModeText, NormalMode::Imported);
+    return ValidateOptionText(inOutValue, NormalModeText, ParseNormalizedNormalModeText);
 }
 
 AStringView SourceTangentModeText(const SourceTangentMode::Enum mode){
@@ -152,7 +147,7 @@ AStringView SourceTangentModeText(const SourceTangentMode::Enum mode){
     }
 }
 
-bool ParseColorText(const AStringView text, Vec4& outColor){
+Expected<Vec4> ParseColorText(const AStringView text){
     AString normalized(text);
     Replace(normalized.begin(), normalized.end(), ',', ' ');
     AStringStream in(normalized);
@@ -162,18 +157,19 @@ bool ParseColorText(const AStringView text, Vec4& outColor){
     f32 blue = 0.0f;
     f32 alpha = 0.0f;
     if(!(in >> red >> green >> blue >> alpha))
-        return false;
+        return MakeUnexpected(Failure{});
 
     AString trailing;
     if(in >> trailing)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const SIMDVector color = VectorSet(red, green, blue, alpha);
     if(!VectorIsFinite(color, VectorComponentMask::s_XYZW))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    StoreFloat(color, outColor);
-    return true;
+    Vec4 result;
+    StoreFloat(color, result);
+    return result;
 }
 
 Path DefaultOutputPath(const AStringView inputPath){

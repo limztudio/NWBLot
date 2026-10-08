@@ -151,13 +151,7 @@ private:
         const AccelStructGeometryBuildSignature* geometrySignatures,
         usize geometrySignatureCount
     );
-    [[nodiscard]] bool getPendingAccelStructBuildSignature(
-        const AccelStruct& accelStruct,
-        VkAccelerationStructureTypeKHR& outAccelStructType,
-        VkBuildAccelerationStructureFlagsKHR& outBuildFlags,
-        const AccelStructGeometryBuildSignature*& outGeometrySignatures,
-        usize& outGeometrySignatureCount
-    )const noexcept;
+    [[nodiscard]] Expected<const AccelStructBuildSignatureRole*> getPendingAccelStructBuildSignature(const AccelStruct& accelStruct)const noexcept;
     [[nodiscard]] bool validatePendingAccelStructBuildCommits()const noexcept;
     void commitPendingAccelStructBuildCommits()noexcept;
     void releasePendingAccelStructBuildCommits();

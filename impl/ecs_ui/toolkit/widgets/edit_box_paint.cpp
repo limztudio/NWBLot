@@ -75,32 +75,32 @@ bool EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& sk
     if(painted){
         const Color& selection = flags.focused && flags.enabled ? style.selection : style.inactiveSelection;
         for(u32 line = 0u; line < m_geometry.lines().size(); ++line){
-            Rect segment;
-            if(!m_geometry.rangeOnLine(m_selection, line, placement.caret.width, segment)){
+            auto segment = m_geometry.rangeOnLine(m_selection, line, placement.caret.width);
+            if(!segment){
                 painted = false;
                 break;
             }
-            if(segment.width > 0.0f){
-                segment.x += placement.textOrigin.x;
-                segment.y += placement.textOrigin.y;
-                paint.fillRect(segment, selection);
+            if(segment->width > 0.0f){
+                segment->x += placement.textOrigin.x;
+                segment->y += placement.textOrigin.y;
+                paint.fillRect(*segment, selection);
             }
         }
         painted = painted && text.paint(paint, layout(), placement.textOrigin, flags.enabled ? style.text : style.disabledText);
     }
     if(painted && m_composing && flags.focused && flags.enabled){
         for(u32 line = 0u; line < m_geometry.lines().size(); ++line){
-            Rect segment;
-            if(!m_geometry.rangeOnLine(m_preedit, line, placement.caret.width, segment)){
+            auto segment = m_geometry.rangeOnLine(m_preedit, line, placement.caret.width);
+            if(!segment){
                 painted = false;
                 break;
             }
-            if(segment.width > 0.0f){
-                const f32 thickness = Min(placement.caret.width, segment.height);
-                segment.x += placement.textOrigin.x;
-                segment.y += placement.textOrigin.y + Max(0.0f, segment.height - thickness);
-                segment.height = thickness;
-                paint.fillRect(segment, style.preedit);
+            if(segment->width > 0.0f){
+                const f32 thickness = Min(placement.caret.width, segment->height);
+                segment->x += placement.textOrigin.x;
+                segment->y += placement.textOrigin.y + Max(0.0f, segment->height - thickness);
+                segment->height = thickness;
+                paint.fillRect(*segment, style.preedit);
             }
         }
     }

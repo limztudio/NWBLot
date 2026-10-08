@@ -126,12 +126,11 @@ struct ShadowVisibilityOpaqueGraphTask{
 
         bool opaqueRecorded = false;
         if(payload.prepared){
-            opaqueRecorded = payload.hardwareShadowSupported
+            const auto opaqueFrame = payload.hardwareShadowSupported
                 ? payload.raytracingSystem.renderShadowVisibilityOpaque(
                     commandList,
                     payload.targets,
                     payload.deferredLightingResources,
-                    payload.opaqueFrameIndex,
                     payload.graphOwnsOpaqueTemporalMergeEntryStates,
                     &payload.lightSpace
                 )
@@ -139,11 +138,13 @@ struct ShadowVisibilityOpaqueGraphTask{
                     commandList,
                     payload.targets,
                     payload.deferredLightingResources,
-                    payload.opaqueFrameIndex,
                     payload.graphOwnsOpaqueTemporalMergeEntryStates,
                     &payload.lightSpace
                 )
             ;
+            opaqueRecorded = opaqueFrame.has_value();
+            if(opaqueFrame)
+                payload.opaqueFrameIndex = *opaqueFrame;
         }
         if(!opaqueRecorded){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: split opaque soft-shadow producer failed; retaining all-lit visibility"));
@@ -719,7 +720,7 @@ struct ShadowVisibilityGraphTask{
                 commandList,
                 payload.targets,
                 payload.deferredLightingResources
-            );
+            ).has_value();
             if(!shadowVisibilityWritten)
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: ray-traced shadow visibility pass failed"));
         }
@@ -729,11 +730,10 @@ struct ShadowVisibilityGraphTask{
                 payload.targets,
                 payload.deferredLightingResources,
                 false,
-                nullptr,
                 false,
                 false,
                 graphOwnedAdaptivePlan
-            );
+            ).has_value();
         }
         // The preceding typed white clear remains the all-lit result when no producer records.
 

@@ -31,7 +31,9 @@ TEST(UiMultilineText, AcceptsEmptyAndCanonicalLfLinesWithoutChangingBytes){
     for(const AStringView text : cases){
         SCOPED_TRACE(text);
         EXPECT_TRUE(ValidateMultilineText(text));
-        ASSERT_EQ(NormalizeMultilineText(text, output, text.size()), EditTextStatus::Accepted);
+        auto normalized = NormalizeMultilineText(arena.arena, text, text.size());
+        ASSERT_TRUE(normalized);
+        output = Move(*normalized);
         EXPECT_EQ(AStringView(output.data(), output.size()), text);
         EXPECT_TRUE(ValidateMultilineText({ output.data(), output.size() }));
     }
@@ -49,18 +51,21 @@ TEST(UiMultilineText, ControlsAndPrintableAsciiBoundariesRespectCanonicalLfAndNo
         EXPECT_EQ(ValidateMultilineText(text), canonical);
         AString<Core::Alloc::GlobalArena> output("before", arena.arena);
         const bool normalizable = canonical || scalar == 0x9u || scalar == 0xDu;
-        EXPECT_EQ(
-            NormalizeMultilineText(text, output, 3u),
-            normalizable ? EditTextStatus::Accepted : EditTextStatus::InvalidText
-        );
+        auto normalized = NormalizeMultilineText(arena.arena, text, 3u);
+        EXPECT_EQ(normalized.has_value(), normalizable);
         if(normalizable){
+            ASSERT_TRUE(normalized);
+            output = Move(*normalized);
             const char replacement = scalar == 0x9u ? ' ' : scalar == 0xDu ? '\n' : static_cast<char>(scalar);
             const char expected[]{ 'a', replacement, 'b' };
             EXPECT_EQ(AStringView(output.data(), output.size()), AStringView(expected, 3u));
             EXPECT_TRUE(ValidateMultilineText({ output.data(), output.size() }));
         }
-        else
+        else{
+            ASSERT_FALSE(normalized);
+            EXPECT_EQ(normalized.error(), EditTextStatus::InvalidText);
             EXPECT_EQ(output, "before");
+        }
     }
 }
 
@@ -72,10 +77,13 @@ TEST(UiMultilineText, RejectsEveryC1ControlExceptNelDuringNormalization){
         const AStringView text(bytes, 4u);
         EXPECT_FALSE(ValidateMultilineText(text));
         AString<Core::Alloc::GlobalArena> output("before", arena.arena);
-        EXPECT_EQ(
-            NormalizeMultilineText(text, output, 4u),
-            scalar == 0x85u ? EditTextStatus::Accepted : EditTextStatus::InvalidText
-        );
+        auto normalized = NormalizeMultilineText(arena.arena, text, 4u);
+        if(scalar == 0x85u){
+            ASSERT_TRUE(normalized);
+            output = Move(*normalized);
+        }
+        else
+            EXPECT_EQ(normalized, MakeUnexpected(EditTextStatus::InvalidText));
         EXPECT_EQ(output, scalar == 0x85u ? "a\nb" : "before");
     }
 }
@@ -94,7 +102,9 @@ TEST(UiMultilineText, RequiresNormalizationForTabsAndEveryNoncanonicalLineSepara
     for(const SeparatorCase& test : cases){
         SCOPED_TRACE(test.source);
         EXPECT_FALSE(ValidateMultilineText(test.source));
-        ASSERT_EQ(NormalizeMultilineText(test.source, output, 1u), EditTextStatus::Accepted);
+        auto normalized = NormalizeMultilineText(arena.arena, test.source, 1u);
+        ASSERT_TRUE(normalized);
+        output = Move(*normalized);
         EXPECT_EQ(AStringView(output.data(), output.size()), test.expected);
         EXPECT_TRUE(ValidateMultilineText({ output.data(), output.size() }));
     }
@@ -114,7 +124,9 @@ TEST(UiMultilineText, PreservesConsecutiveLeadingAndTrailingLinesWhileNormalizin
     AString<Core::Alloc::GlobalArena> output(arena.arena);
     for(const LineCase& test : cases){
         SCOPED_TRACE(test.source);
-        ASSERT_EQ(NormalizeMultilineText(test.source, output, test.expected.size()), EditTextStatus::Accepted);
+        auto normalized = NormalizeMultilineText(arena.arena, test.source, test.expected.size());
+        ASSERT_TRUE(normalized);
+        output = Move(*normalized);
         EXPECT_EQ(AStringView(output.data(), output.size()), test.expected);
         EXPECT_TRUE(ValidateMultilineText({ output.data(), output.size() }));
     }
@@ -131,7 +143,9 @@ TEST(UiMultilineText, UnicodeScalarAndSeparatorAdjacentBoundariesPreserveExactBy
     for(const AStringView text : cases){
         SCOPED_TRACE(text);
         EXPECT_TRUE(ValidateMultilineText(text));
-        ASSERT_EQ(NormalizeMultilineText(text, output, text.size()), EditTextStatus::Accepted);
+        auto normalized = NormalizeMultilineText(arena.arena, text, text.size());
+        ASSERT_TRUE(normalized);
+        output = Move(*normalized);
         EXPECT_EQ(AStringView(output.data(), output.size()), text);
     }
 }
@@ -149,7 +163,7 @@ TEST(UiMultilineText, RejectsMalformedUtf8AndNonScalarSequencesWithoutPublishing
     for(const AStringView text : cases){
         SCOPED_TRACE(text);
         EXPECT_FALSE(ValidateMultilineText(text));
-        EXPECT_EQ(NormalizeMultilineText(text, output, 128u), EditTextStatus::InvalidText);
+        EXPECT_EQ(NormalizeMultilineText(arena.arena, text, 128u), MakeUnexpected(EditTextStatus::InvalidText));
         EXPECT_EQ(output, "before\nunchanged");
     }
 }
@@ -164,7 +178,7 @@ TEST(UiMultilineText, RejectedControlsAfterNormalizedPrefixesLeaveOutputUnchange
     AString<Core::Alloc::GlobalArena> output("before", arena.arena);
     for(const AStringView text : cases){
         SCOPED_TRACE(text);
-        EXPECT_EQ(NormalizeMultilineText(text, output, 64u), EditTextStatus::InvalidText);
+        EXPECT_EQ(NormalizeMultilineText(arena.arena, text, 64u), MakeUnexpected(EditTextStatus::InvalidText));
         EXPECT_EQ(output, "before");
     }
 }
@@ -184,9 +198,11 @@ TEST(UiMultilineText, LimitsNormalizedBytesAndNeverTruncatesUtf8Scalars){
     for(const BudgetCase& test : cases){
         SCOPED_TRACE(test.source);
         AString<Core::Alloc::GlobalArena> output("before", arena.arena);
-        ASSERT_EQ(NormalizeMultilineText(test.source, output, test.expected.size()), EditTextStatus::Accepted);
+        auto normalized = NormalizeMultilineText(arena.arena, test.source, test.expected.size());
+        ASSERT_TRUE(normalized);
+        output = Move(*normalized);
         EXPECT_EQ(AStringView(output.data(), output.size()), test.expected);
-        EXPECT_EQ(NormalizeMultilineText(test.source, output, test.expected.size() - 1u), EditTextStatus::TooLarge);
+        EXPECT_EQ(NormalizeMultilineText(arena.arena, test.source, test.expected.size() - 1u), MakeUnexpected(EditTextStatus::TooLarge));
         EXPECT_EQ(AStringView(output.data(), output.size()), test.expected);
         EXPECT_TRUE(ValidateMultilineText({ output.data(), output.size() }));
     }
@@ -198,13 +214,17 @@ TEST(UiMultilineText, ZeroBudgetAcceptsEmptyInputAndRejectsEveryNonemptyNormaliz
     const AStringView cases[]{ "a", "\n", "\r\n", "\t", "\xC2\x85", "\xE2\x80\xA8", "\xE2\x80\xA9" };
     for(const AStringView text : cases){
         SCOPED_TRACE(text);
-        EXPECT_EQ(NormalizeMultilineText(text, output, 0u), EditTextStatus::TooLarge);
+        EXPECT_EQ(NormalizeMultilineText(arena.arena, text, 0u), MakeUnexpected(EditTextStatus::TooLarge));
         EXPECT_EQ(output, "before");
     }
-    ASSERT_EQ(NormalizeMultilineText(AStringView{}, output, 0u), EditTextStatus::Accepted);
+    auto nullText = NormalizeMultilineText(arena.arena, AStringView{}, 0u);
+    ASSERT_TRUE(nullText);
+    output = Move(*nullText);
     EXPECT_TRUE(output.empty());
     EXPECT_TRUE(ValidateMultilineText(AStringView{}));
-    ASSERT_EQ(NormalizeMultilineText("", output, 0u), EditTextStatus::Accepted);
+    auto emptyText = NormalizeMultilineText(arena.arena, "", 0u);
+    ASSERT_TRUE(emptyText);
+    output = Move(*emptyText);
     EXPECT_TRUE(output.empty());
 }
 
@@ -212,21 +232,29 @@ TEST(UiMultilineText, SupportsWholeOutputAndSubviewAliasingBeforePublishing){
     Tests::TestArena arena;
     AString<Core::Alloc::GlobalArena> output("a\r\nb\t\xED\x95\x9C\xE2\x80\xA9", arena.arena);
     const AStringView whole(output.data(), output.size());
-    ASSERT_EQ(NormalizeMultilineText(whole, output, 8u), EditTextStatus::Accepted);
+    auto normalizedWhole = NormalizeMultilineText(arena.arena, whole, 8u);
+    ASSERT_TRUE(normalizedWhole);
+    output = Move(*normalizedWhole);
     EXPECT_EQ(output, "a\nb \xED\x95\x9C\n");
 
     output.assign("prefix a\r\nb\tz suffix");
     const AStringView middle(output.data() + 7u, 6u);
-    ASSERT_EQ(NormalizeMultilineText(middle, output, 5u), EditTextStatus::Accepted);
+    auto normalizedMiddle = NormalizeMultilineText(arena.arena, middle, 5u);
+    ASSERT_TRUE(normalizedMiddle);
+    output = Move(*normalizedMiddle);
     EXPECT_EQ(output, "a\nb z");
 
     output.assign("prefix\xE2\x80\xA8");
     const AStringView trailing(output.data() + 6u, 3u);
-    ASSERT_EQ(NormalizeMultilineText(trailing, output, 1u), EditTextStatus::Accepted);
+    auto normalizedTrailing = NormalizeMultilineText(arena.arena, trailing, 1u);
+    ASSERT_TRUE(normalizedTrailing);
+    output = Move(*normalizedTrailing);
     EXPECT_EQ(output, "\n");
 
     const AStringView empty(output.data() + output.size(), 0u);
-    ASSERT_EQ(NormalizeMultilineText(empty, output, 0u), EditTextStatus::Accepted);
+    auto normalizedEmpty = NormalizeMultilineText(arena.arena, empty, 0u);
+    ASSERT_TRUE(normalizedEmpty);
+    output = Move(*normalizedEmpty);
     EXPECT_TRUE(output.empty());
 }
 
@@ -248,7 +276,7 @@ TEST(UiMultilineText, FailuresPreserveOutputBytesStorageAndAliasedSourceBytes){
     const usize capacity = output.capacity();
     for(const FailureCase& test : cases){
         SCOPED_TRACE(test.source);
-        EXPECT_EQ(NormalizeMultilineText(test.source, output, test.maxBytes), test.status);
+        EXPECT_EQ(NormalizeMultilineText(arena.arena, test.source, test.maxBytes), MakeUnexpected(test.status));
         EXPECT_EQ(output, saved);
         EXPECT_EQ(output.data(), storage);
         EXPECT_EQ(output.capacity(), capacity);
@@ -259,12 +287,12 @@ TEST(UiMultilineText, FailuresPreserveOutputBytesStorageAndAliasedSourceBytes){
     storage = output.data();
     const usize aliasCapacity = output.capacity();
     const AStringView whole(output.data(), output.size());
-    EXPECT_EQ(NormalizeMultilineText(whole, output, 1u), EditTextStatus::TooLarge);
+    EXPECT_EQ(NormalizeMultilineText(arena.arena, whole, 1u), MakeUnexpected(EditTextStatus::TooLarge));
     EXPECT_EQ(output, savedAlias);
     EXPECT_EQ(output.data(), storage);
     EXPECT_EQ(output.capacity(), aliasCapacity);
     const AStringView middle(output.data() + 7u, 6u);
-    EXPECT_EQ(NormalizeMultilineText(middle, output, 4u), EditTextStatus::TooLarge);
+    EXPECT_EQ(NormalizeMultilineText(arena.arena, middle, 4u), MakeUnexpected(EditTextStatus::TooLarge));
     EXPECT_EQ(output, savedAlias);
     EXPECT_EQ(output.data(), storage);
     EXPECT_EQ(output.capacity(), aliasCapacity);
@@ -276,7 +304,7 @@ TEST(UiMultilineText, FailuresPreserveOutputBytesStorageAndAliasedSourceBytes){
         const char* invalidStorage = output.data();
         const usize invalidCapacity = output.capacity();
         const AStringView source(output.data() + 7u, output.size() - 7u);
-        EXPECT_EQ(NormalizeMultilineText(source, output, 64u), EditTextStatus::InvalidText);
+        EXPECT_EQ(NormalizeMultilineText(arena.arena, source, 64u), MakeUnexpected(EditTextStatus::InvalidText));
         EXPECT_EQ(output, savedInvalid);
         EXPECT_EQ(output.data(), invalidStorage);
         EXPECT_EQ(output.capacity(), invalidCapacity);

@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "../expected.h"
 #include "quaternion.h"
 
 
@@ -392,7 +393,13 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixInverse(SIMDVector* outDeterminant, co
     return result;
 }
 
-NWB_INLINE bool NWB_SIMD_CALL MatrixDecompose(SIMDVector& outScale, SIMDVector& outRotQuat, SIMDVector& outTrans, const SIMDMatrix& matrix)noexcept{
+struct MatrixDecomposition{
+    SIMDVector scale;
+    SIMDVector rotation;
+    SIMDVector translation;
+};
+
+[[nodiscard]] NWB_INLINE Expected<MatrixDecomposition> NWB_SIMD_CALL MatrixDecompose(const SIMDMatrix& matrix)noexcept{
     const SIMDVector canonicalBasis[3] = {
         s_SIMDIdentityR0,
         s_SIMDIdentityR1,
@@ -400,7 +407,6 @@ NWB_INLINE bool NWB_SIMD_CALL MatrixDecompose(SIMDVector& outScale, SIMDVector& 
     };
 
     SIMDMatrix transposed = MatrixTranspose(matrix);
-    outTrans = transposed.v[3];
 
     SIMDVector basis[3] = {
         VectorAndInt(transposed.v[0], s_SIMDMask3),
@@ -468,11 +474,9 @@ NWB_INLINE bool NWB_SIMD_CALL MatrixDecompose(SIMDVector& outScale, SIMDVector& 
         VectorMultiply(determinantError, determinantError),
         VectorReplicate(SIMDMatrixDetail::s_MatrixDecomposeEpsilon)
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outScale = scale;
-    outRotQuat = QuaternionRotationMatrix(rotationMatrix);
-    return true;
+    return MatrixDecomposition{ scale, QuaternionRotationMatrix(rotationMatrix), transposed.v[3] };
 }
 
 
@@ -545,31 +549,33 @@ NWB_INLINE bool NWB_SIMD_CALL MatrixDecompose(SIMDVector& outScale, SIMDVector& 
     ;
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixTryBuildRigidRotationQuaternion(
+[[nodiscard]] NWB_INLINE Expected<SIMDVector> NWB_SIMD_CALL MatrixTryBuildRigidRotationQuaternion(
     const SIMDMatrix& matrix,
     const f32 affineEpsilon,
-    const f32 rigidEpsilon,
-    SIMDVector& outQuaternion
+    const f32 rigidEpsilon
 )noexcept{
-    outQuaternion = QuaternionIdentity();
     if(!MatrixIsRigidAffine(matrix, affineEpsilon, rigidEpsilon))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outQuaternion = QuaternionRotationMatrix(MatrixTranspose(matrix));
-    return !QuaternionIsNaN(outQuaternion) && !QuaternionIsInfinite(outQuaternion);
+    const SIMDVector quaternion = QuaternionRotationMatrix(MatrixTranspose(matrix));
+    if(QuaternionIsNaN(quaternion) || QuaternionIsInfinite(quaternion))
+        return MakeUnexpected(Failure{});
+    return quaternion;
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL MatrixTryBuildRigidDualQuaternion(
+struct RigidDualQuaternion{
+    SIMDVector real;
+    SIMDVector dual;
+};
+
+[[nodiscard]] NWB_INLINE Expected<RigidDualQuaternion> NWB_SIMD_CALL MatrixTryBuildRigidDualQuaternion(
     const SIMDMatrix& matrix,
     const f32 affineEpsilon,
-    const f32 rigidEpsilon,
-    SIMDVector& outReal,
-    SIMDVector& outDual
+    const f32 rigidEpsilon
 )noexcept{
-    outReal = QuaternionIdentity();
-    outDual = VectorZero();
-    if(!MatrixTryBuildRigidRotationQuaternion(matrix, affineEpsilon, rigidEpsilon, outReal))
-        return false;
+    const auto real = MatrixTryBuildRigidRotationQuaternion(matrix, affineEpsilon, rigidEpsilon);
+    if(!real)
+        return MakeUnexpected(real.error());
 
     const SIMDVector translation = VectorMergeX(
         VectorSplatW(matrix.v[0]),
@@ -577,8 +583,10 @@ NWB_INLINE bool NWB_SIMD_CALL MatrixDecompose(SIMDVector& outScale, SIMDVector& 
         VectorSplatW(matrix.v[2]),
         VectorZero()
     );
-    outDual = VectorScale(QuaternionMultiply(translation, outReal), SIMDMatrixDetail::s_MatrixHalf);
-    return VectorIsFinite(outDual, VectorComponentMask::s_XYZW);
+    const SIMDVector dual = VectorScale(QuaternionMultiply(translation, *real), SIMDMatrixDetail::s_MatrixHalf);
+    if(!VectorIsFinite(dual, VectorComponentMask::s_XYZW))
+        return MakeUnexpected(Failure{});
+    return RigidDualQuaternion{ *real, dual };
 }
 
 

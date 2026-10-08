@@ -68,8 +68,8 @@ template<typename ShaderPathResolver>
         return false;
     }
 
-    Name shaderVirtualPath = s_NameNone;
-    if(!shaderPathResolver(shaderName, variantName, stageName, shaderVirtualPath)){
+    const auto shaderVirtualPath = shaderPathResolver(shaderName, variantName, stageName);
+    if(!shaderVirtualPath){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to resolve shader '{}' variant '{}' stage '{}'")
             , ownerName
             , StringConvert(shaderName.resolvedText())
@@ -78,7 +78,7 @@ template<typename ShaderPathResolver>
         );
         return false;
     }
-    if(!shaderVirtualPath){
+    if(!*shaderVirtualPath){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: shader resolver returned an empty path for shader '{}' variant '{}' stage '{}'")
             , ownerName
             , StringConvert(shaderName.resolvedText())
@@ -95,21 +95,21 @@ template<typename ShaderPathResolver>
         return false;
     }
 
-    UniquePtr<Core::Assets::IAsset> loadedAsset;
-    if(!assetManager.loadSync(assetType, shaderVirtualPath, loadedAsset)){
+    auto loadedAsset = assetManager.loadSync(assetType, *shaderVirtualPath);
+    if(!loadedAsset){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load {} asset '{}'")
             , ownerName
             , StringConvert(assetType.resolvedText())
-            , StringConvert(shaderVirtualPath.resolvedText())
+            , StringConvert(shaderVirtualPath->resolvedText())
         );
         return false;
     }
-    if(!loadedAsset || loadedAsset->assetType() != assetType){
+    if(!*loadedAsset || (*loadedAsset)->assetType() != assetType){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: loaded shader asset has an unexpected concrete type"), ownerName);
         return false;
     }
 
-    const IShader& shaderAsset = *checked_cast<const IShader*>(loadedAsset.get());
+    const IShader& shaderAsset = *checked_cast<const IShader*>(loadedAsset->get());
     const Core::Assets::AssetBytes& shaderBinary = shaderAsset.bytecode();
     NWB_ASSERT(!shaderAsset.entryPoint().empty() && !shaderBinary.empty() && (shaderBinary.size() & 3u) == 0u);
 
@@ -124,7 +124,7 @@ template<typename ShaderPathResolver>
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create shader '{}' from asset '{}'")
             , ownerName
             , StringConvert(debugName.resolvedText())
-            , StringConvert(shaderVirtualPath.resolvedText())
+            , StringConvert(shaderVirtualPath->resolvedText())
         );
         return false;
     }

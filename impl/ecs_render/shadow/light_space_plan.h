@@ -72,11 +72,11 @@ struct LightSpacePlan{
     u64 totalByteSize = 0u;
 };
 
-// Invalid input leaves the output unchanged. Valid but ineligible or over-budget lights retain software tracing.
-[[nodiscard]] bool BuildLightSpacePlan(
+// Invalid input is rejected. Valid but ineligible or over-budget lights retain software tracing.
+[[nodiscard]] Expected<LightSpacePlan> BuildLightSpacePlan(
     const SoftwareShadowSettings& settings, const LightSpaceLightRequest* requests, usize requestCount,
-    u64 maxStorageBufferRange, u32 drawCount, LightSpacePlan& outPlan, bool csgIntervalDepth = false
-);
+    u64 maxStorageBufferRange, u32 drawCount, bool csgIntervalDepth = false
+)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

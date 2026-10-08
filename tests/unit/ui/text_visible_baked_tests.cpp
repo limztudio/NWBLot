@@ -57,8 +57,12 @@ public:
 
 protected:
     [[nodiscard]] bool installBaked(const StringView text){
-        if(!installCoverageFonts() || m_text.layout({ .text = text, .fontSize = 32.0f }, m_layout) != TextLayoutStatus::Success)
+        if(!installCoverageFonts())
             return false;
+        auto layout = m_text.layout({ .text = text, .fontSize = 32.0f });
+        if(!layout)
+            return false;
+        m_layout = Move(*layout);
         FontAtlasPayload payload(m_arena);
         payload.font = Core::Assets::AssetRef<Font>("tests/ui/fonts/latin");
         const Core::Assets::AssetBytes& bytes = m_latin.fontBytes();
@@ -131,10 +135,13 @@ protected:
             { Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_latin, 1u, &m_baked },
             { Core::Assets::AssetRef<Font>("tests/ui/fonts/korean"), m_korean, 1u },
         };
-        return
-            m_text.setFonts(sources, 2u)
-            && m_text.layout({ .text = text, .fontSize = 32.0f }, m_layout) == TextLayoutStatus::Success
-        ;
+        if(!m_text.setFonts(sources, 2u))
+            return false;
+        layout = m_text.layout({ .text = text, .fontSize = 32.0f });
+        if(!layout)
+            return false;
+        m_layout = Move(*layout);
+        return true;
     }
 
 
@@ -263,7 +270,11 @@ TEST_F(TextVisibleBakedTests, FullyOutsideBakedGroupsRemainAbsentUntilALaterVisi
 
 TEST_F(TextVisibleBakedTests, VisibleMixedCapacityFailurePreservesPriorPageVersionBindingsAndGeometry){
     ASSERT_TRUE(installBaked("A"));
-    ASSERT_EQ(m_text.layout({ .text = "\xED\x95\x9C", .fontSize = 32.0f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "\xED\x95\x9C", .fontSize = 32.0f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.glyphs().size(), 1u);
     ASSERT_FALSE(m_layout.glyphs()[0u].face->bakedAtlas());
     const u32 warmGlyph = m_layout.glyphs()[0u].glyphId;
@@ -280,7 +291,11 @@ TEST_F(TextVisibleBakedTests, VisibleMixedCapacityFailurePreservesPriorPageVersi
         ASSERT_TRUE(page);
         prior.push_back(Move(page));
     }
-    ASSERT_EQ(m_text.layout({ .text = "\xEA\xB8\x80" "A", .fontSize = 32.0f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "\xEA\xB8\x80" "A", .fontSize = 32.0f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.glyphs().size(), 2u);
     ASSERT_NE(m_layout.glyphs()[0u].glyphId, warmGlyph);
     ASSERT_FALSE(m_layout.glyphs()[0u].face->bakedAtlas());
@@ -302,7 +317,11 @@ TEST_F(TextVisibleBakedTests, VisibleMixedCapacityFailurePreservesPriorPageVersi
     ASSERT_EQ(rejected.glyphPages().size(), s_PaintMaxImages);
     EXPECT_EQ(rejected.glyphPages()[0u].get(), oldPage.get());
     EXPECT_EQ(rejected.glyphPages()[0u]->binding().generation, oldPage->binding().generation);
-    ASSERT_EQ(m_text.layout({ .text = "\xEA\xB8\x80", .fontSize = 32.0f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "\xEA\xB8\x80", .fontSize = 32.0f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     beginPaint(3u);
     ASSERT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }));
     const DrawSnapshot upgraded = m_paint.freeze();

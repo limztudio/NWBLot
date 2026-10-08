@@ -196,9 +196,9 @@ TEST_F(UiWindowTests, CollapseKeepsHostSizeAndRequiresBalancedEnd){
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_EQ(target(id("apply")), nullptr);
     EXPECT_EQ(target(id("@window.resize")), nullptr);
-    Rect skin;
-    ASSERT_TRUE(skinQuad(collapsed, 0u, skin));
-    EXPECT_FLOAT_EQ(skin.height, 34.0f);
+    const auto skin = skinQuad(collapsed, 0u);
+    ASSERT_TRUE(skin);
+    EXPECT_FLOAT_EQ(skin->height, 34.0f);
     EXPECT_FALSE(send({ InputEventType::PrimaryDown, { 100.0f, 120.0f } }).pointerConsumed);
     EXPECT_FALSE(send({ InputEventType::PrimaryUp, { 100.0f, 120.0f } }).pointerConsumed);
 }

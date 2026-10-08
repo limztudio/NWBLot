@@ -24,22 +24,16 @@ namespace EncodeBackendDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool GetBasisTextureType(
-    const TextureDimension::Enum dimension,
-    basist::basis_texture_type& outTextureType
-){
+[[nodiscard]] Expected<basist::basis_texture_type> GetBasisTextureType(const TextureDimension::Enum dimension)noexcept{
     switch(dimension){
     case TextureDimension::Texture2D:
-        outTextureType = basist::cBASISTexType2D;
-        return true;
+        return basist::cBASISTexType2D;
     case TextureDimension::TextureCube:
-        outTextureType = basist::cBASISTexTypeCubemapArray;
-        return true;
+        return basist::cBASISTexTypeCubemapArray;
     case TextureDimension::Texture3D:
-        outTextureType = basist::cBASISTexTypeVolume;
-        return true;
+        return basist::cBASISTexTypeVolume;
     default:
-        return false;
+        return MakeUnexpected(Failure{});
     }
 }
 
@@ -79,9 +73,7 @@ namespace EncodeBackendDetail{
     return true;
 }
 
-[[nodiscard]] bool LoadHdrPlanes(const Vector<Path>& inputPaths, HdrImagePlanes& outPlanes){
-    return LoadPlanesFromFiles<HdrPlaneLoader>(inputPaths, outPlanes);
-}
+
 
 [[nodiscard]] bool ApplyHdrAlphaSource(const AlphaSource& alphaSource, HdrImagePlanes& inOutPlanes){
     if(inOutPlanes.empty())
@@ -96,8 +88,8 @@ namespace EncodeBackendDetail{
         }
     }
 
-    basisu::imagef alphaMask;
-    if(alphaSource.mode == AlphaSourceMode::Image && !LoadAlphaMask(alphaSource, width, height, alphaMask))
+    const auto alphaMask = LoadAlphaMask(alphaSource, width, height);
+    if(!alphaMask)
         return false;
     if(alphaSource.mode == AlphaSourceMode::Constant && !IsFinite(alphaSource.constant)){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha constant must be finite."));
@@ -136,7 +128,7 @@ namespace EncodeBackendDetail{
                     plane(x + 3u, y)[3u] = VectorGetX(saturatedConstantAlpha);
                 }
                 else{
-                    const SIMDVector saturatedLanes = VectorSaturate(VectorSet(alphaMask(x, y)[0u], alphaMask(x + 1u, y)[0u], alphaMask(x + 2u, y)[0u], alphaMask(x + 3u, y)[0u]));
+                    const SIMDVector saturatedLanes = VectorSaturate(VectorSet((*alphaMask)(x, y)[0u], (*alphaMask)(x + 1u, y)[0u], (*alphaMask)(x + 2u, y)[0u], (*alphaMask)(x + 3u, y)[0u]));
                     plane(x, y)[3u] = VectorGetX(saturatedLanes);
                     plane(x + 1u, y)[3u] = VectorGetY(saturatedLanes);
                     plane(x + 2u, y)[3u] = VectorGetZ(saturatedLanes);
@@ -155,7 +147,7 @@ namespace EncodeBackendDetail{
                 else if(alphaSource.mode == AlphaSourceMode::Constant)
                     alpha = VectorGetX(saturatedConstantAlpha);
                 else
-                    alpha = alphaMask(x, y)[0u];
+                    alpha = (*alphaMask)(x, y)[0u];
                 plane(x, y)[3u] = VectorGetX(VectorSaturate(VectorReplicate(alpha)));
             }
         }
@@ -163,42 +155,45 @@ namespace EncodeBackendDetail{
     return true;
 }
 
-[[nodiscard]] bool GenerateNextHdrMip(const HdrImagePlanes& sourcePlanes, HdrImagePlanes& outPlanes){
+[[nodiscard]] Expected<HdrImagePlanes> GenerateNextHdrMip(const HdrImagePlanes& sourcePlanes){
+    HdrImagePlanes planes;
     if(sourcePlanes.empty())
-        return false;
+        return MakeUnexpected(Failure{});
 
     const u32 sourceWidth = sourcePlanes.front().get_width();
     const u32 sourceHeight = sourcePlanes.front().get_height();
     const u32 targetWidth = sourceWidth > 1u ? sourceWidth >> 1u : 1u;
     const u32 targetHeight = sourceHeight > 1u ? sourceHeight >> 1u : 1u;
-    outPlanes.clear();
-    outPlanes.resize(sourcePlanes.size());
+    planes.resize(sourcePlanes.size());
     for(usize planeIndex = 0u; planeIndex < sourcePlanes.size(); ++planeIndex){
         const basisu::imagef& source = sourcePlanes[planeIndex];
-        basisu::imagef& target = outPlanes[planeIndex];
+        basisu::imagef& target = planes[planeIndex];
         target.resize(targetWidth, targetHeight);
         if(!basisu::image_resample(source, target, s_BasisResampleBoxFilter.data(), s_BasisResampleFilterScale, false, s_BasisResampleFilterChannelStart, s_HdrChannelCount)){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to generate an HDR mip level."));
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
-    return true;
+    return planes;
 }
 
-[[nodiscard]] bool GenerateNextHdrVolumeMip(const HdrImagePlanes& sourcePlanes, HdrImagePlanes& outPlanes){
-    EncodeBackendDetail::VolumeMipDims mipDims;
-    if(!EncodeBackendDetail::PrepareVolumeMipTargets(sourcePlanes, outPlanes, mipDims))
-        return false;
+[[nodiscard]] Expected<HdrImagePlanes> GenerateNextHdrVolumeMip(const HdrImagePlanes& sourcePlanes){
+    auto targets = EncodeBackendDetail::PrepareVolumeMipTargets(sourcePlanes);
+    if(!targets)
+        return MakeUnexpected(Failure{});
+    auto& outPlanes = targets->planes;
+    const auto& mipDims = targets->dims;
     const u32 sourceDepth = mipDims.sourceDepth;
     const u32 targetWidth = mipDims.targetWidth;
     const u32 targetHeight = mipDims.targetHeight;
     const u32 targetDepth = mipDims.targetDepth;
 
     for(u32 targetZ = 0u; targetZ < targetDepth; ++targetZ){
-        u32 sourceFirst = 0u;
-        u32 sourceEnd = 0u;
-        if(!EncodeBackendDetail::ComputeVolumeMipSliceRange(sourceDepth, targetDepth, targetZ, sourceFirst, sourceEnd))
-            return false;
+        const auto range = EncodeBackendDetail::ComputeVolumeMipSliceRange(sourceDepth, targetDepth, targetZ);
+        if(!range)
+            return MakeUnexpected(Failure{});
+        const u32 sourceFirst = range->first;
+        const u32 sourceEnd = range->end;
 
         HdrImagePlanes filteredPlanes;
         filteredPlanes.resize(sourceEnd - sourceFirst);
@@ -215,7 +210,7 @@ namespace EncodeBackendDetail{
                 s_HdrChannelCount
             )){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to generate an HDR volume mip level."));
-                return false;
+                return MakeUnexpected(Failure{});
             }
         }
 
@@ -241,30 +236,33 @@ namespace EncodeBackendDetail{
             }
         }
     }
-    return true;
+    return Move(targets->planes);
 }
 
-[[nodiscard]] bool ExtractHdrAlphaMips(
-    HdrVolumeMips& inOutMipPlanes,
-    VolumeMips& outAlphaMips,
-    TextureAlphaMode::Enum& outAlphaMode,
-    u8& outAlphaConstantUnorm8
+struct HdrAlphaMips{
+    VolumeMips mips;
+    TextureAlphaMode::Enum mode = TextureAlphaMode::Opaque;
+    u8 constantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
+};
+
+[[nodiscard]] Expected<HdrAlphaMips> ExtractHdrAlphaMips(
+    HdrVolumeMips& inOutMipPlanes
 ){
+    HdrAlphaMips alpha;
     if(inOutMipPlanes.empty())
-        return false;
+        return MakeUnexpected(Failure{});
 
     bool foundAlpha = false;
     bool allOpaque = true;
     bool allConstant = true;
     u8 constantAlpha = TextureFormat::s_OpaqueAlphaUnorm8;
-    outAlphaMips.clear();
-    outAlphaMips.resize(inOutMipPlanes.size());
+    alpha.mips.resize(inOutMipPlanes.size());
     for(usize mipIndex = 0u; mipIndex < inOutMipPlanes.size(); ++mipIndex){
         HdrImagePlanes& hdrPlanes = inOutMipPlanes[mipIndex];
         if(!ValidateHdrRgbPlanes(hdrPlanes))
-            return false;
+            return MakeUnexpected(Failure{});
 
-        ImagePlanes& alphaPlanes = outAlphaMips[mipIndex];
+        ImagePlanes& alphaPlanes = alpha.mips[mipIndex];
         alphaPlanes.resize(hdrPlanes.size());
         const u32 width = hdrPlanes.front().get_width();
         const u32 height = hdrPlanes.front().get_height();
@@ -278,7 +276,7 @@ namespace EncodeBackendDetail{
                     const f32 alpha = hdrColor[3u];
                     if(!IsFinite(alpha)){
                         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: HDR mip generation produced a non-finite alpha value."));
-                        return false;
+                        return MakeUnexpected(Failure{});
                     }
                     const SIMDVector quantizedAlphaLanes = VectorTruncate(VectorAdd(VectorMultiply(VectorSaturate(VectorReplicate(alpha)), VectorReplicate(s_BasisColorChannelMax)), VectorReplicate(s_BasisColorChannelRoundingBias)));
                     const u8 quantizedAlpha = static_cast<u8>(VectorGetX(quantizedAlphaLanes));
@@ -303,21 +301,21 @@ namespace EncodeBackendDetail{
         }
     }
     if(!foundAlpha)
-        return false;
+        return MakeUnexpected(Failure{});
 
     if(allOpaque){
-        outAlphaMode = TextureAlphaMode::Opaque;
-        outAlphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
+        alpha.mode = TextureAlphaMode::Opaque;
+        alpha.constantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
     }
     else if(allConstant){
-        outAlphaMode = TextureAlphaMode::ConstantUnorm8;
-        outAlphaConstantUnorm8 = constantAlpha;
+        alpha.mode = TextureAlphaMode::ConstantUnorm8;
+        alpha.constantUnorm8 = constantAlpha;
     }
     else{
-        outAlphaMode = TextureAlphaMode::SeparateUastcLdr4x4;
-        outAlphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
+        alpha.mode = TextureAlphaMode::SeparateUastcLdr4x4;
+        alpha.constantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
     }
-    return true;
+    return alpha;
 }
 
 [[nodiscard]] bool EncodeHdrMip(
@@ -328,8 +326,8 @@ namespace EncodeBackendDetail{
     if(!ValidateHdrRgbPlanes(planes))
         return false;
 
-    basist::basis_texture_type textureType = basist::cBASISTexType2D;
-    if(!GetBasisTextureType(dimension, textureType))
+    const auto textureType = GetBasisTextureType(dimension);
+    if(!textureType)
         return false;
 
     const u32 width = planes.front().get_width();
@@ -338,7 +336,7 @@ namespace EncodeBackendDetail{
     basisu::basis_compressor_params parameters;
     EncodeBackendDetail::ConfigureCompressor(parameters, jobPool, basist::basis_tex_format::cUASTC_HDR_4x4, false);
     parameters.m_read_source_images = false;
-    parameters.m_tex_type = textureType;
+    parameters.m_tex_type = *textureType;
     parameters.m_source_images_hdr = planes;
     parameters.m_mip_gen = false;
 
@@ -387,15 +385,15 @@ namespace EncodeBackendDetail{
         }
     }
 
-    basist::basis_texture_type textureType = basist::cBASISTexType2D;
-    if(!GetBasisTextureType(dimension, textureType))
+    const auto textureType = GetBasisTextureType(dimension);
+    if(!textureType)
         return false;
 
     basisu::job_pool jobPool(s_BasisEncoderWorkerCount);
     basisu::basis_compressor_params parameters;
     EncodeBackendDetail::ConfigureCompressor(parameters, jobPool, basist::basis_tex_format::cUASTC_LDR_4x4, false);
     parameters.m_read_source_images = false;
-    parameters.m_tex_type = textureType;
+    parameters.m_tex_type = *textureType;
     parameters.m_source_images = planes;
     parameters.m_mip_gen = false;
 
@@ -487,25 +485,23 @@ namespace EncodeBackendDetail{
     return true;
 }
 
-[[nodiscard]] bool EncodeHdrMipChain(
+[[nodiscard]] Expected<TexturePayload> EncodeHdrMipChain(
     HdrVolumeMips& inOutMipPlanes,
     const TextureDimension::Enum dimension,
     const u32 width,
     const u32 height,
-    const u32 depth,
-    TexturePayload& outPayload
+    const u32 depth
 ){
+    TexturePayload payload;
     if(inOutMipPlanes.empty())
-        return false;
+        return MakeUnexpected(Failure{});
 
-    VolumeMips alphaMips;
-    TextureAlphaMode::Enum alphaMode = TextureAlphaMode::Opaque;
-    u8 alphaConstantUnorm8 = TextureFormat::s_OpaqueAlphaUnorm8;
-    if(!ExtractHdrAlphaMips(inOutMipPlanes, alphaMips, alphaMode, alphaConstantUnorm8))
-        return false;
+    const auto alpha = ExtractHdrAlphaMips(inOutMipPlanes);
+    if(!alpha)
+        return MakeUnexpected(Failure{});
 
     ResetPayload(
-        outPayload,
+        payload,
         dimension,
         width,
         height,
@@ -513,98 +509,93 @@ namespace EncodeBackendDetail{
         TexturePayloadFormat::UastcHdr4x4,
         false
     );
-    outPayload.mips.reserve(inOutMipPlanes.size());
+    payload.mips.reserve(inOutMipPlanes.size());
     for(const HdrImagePlanes& mipPlanes : inOutMipPlanes){
-        if(!EncodeHdrMip(mipPlanes, dimension, outPayload))
-            return false;
+        if(!EncodeHdrMip(mipPlanes, dimension, payload))
+            return MakeUnexpected(Failure{});
     }
 
-    outPayload.alphaMode = alphaMode;
-    outPayload.alphaConstantUnorm8 = alphaConstantUnorm8;
-    outPayload.hasAlpha = alphaMode != TextureAlphaMode::Opaque;
-    if(alphaMode == TextureAlphaMode::SeparateUastcLdr4x4){
-        if(!EncodeHdrAlphaMips(alphaMips, dimension, width, height, depth, outPayload))
-            return false;
+    payload.alphaMode = alpha->mode;
+    payload.alphaConstantUnorm8 = alpha->constantUnorm8;
+    payload.hasAlpha = alpha->mode != TextureAlphaMode::Opaque;
+    if(alpha->mode == TextureAlphaMode::SeparateUastcLdr4x4){
+        if(!EncodeHdrAlphaMips(alpha->mips, dimension, width, height, depth, payload))
+            return MakeUnexpected(Failure{});
     }
-    return true;
+    return payload;
 }
 
-[[nodiscard]] bool EncodeHdr2DOrCube(
+[[nodiscard]] Expected<TexturePayload> EncodeHdr2DOrCube(
     const Vector<Path>& inputPaths,
     const TextureDimension::Enum dimension,
-    const AlphaSource& alphaSource,
-    TexturePayload& outPayload
+    const AlphaSource& alphaSource
 ){
     const u32 planeCount = dimension == TextureDimension::TextureCube ? TextureFormat::s_TextureCubeFaceCount : 1u;
     if(inputPaths.size() != planeCount)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    HdrImagePlanes sourcePlanes;
-    if(
-        !LoadHdrPlanes(inputPaths, sourcePlanes)
-        || !ValidateHdrRgbPlanes(sourcePlanes)
-        || !ApplyHdrAlphaSource(alphaSource, sourcePlanes)
-    )
-        return false;
-    const u32 width = sourcePlanes.front().get_width();
-    const u32 height = sourcePlanes.front().get_height();
+    auto sourcePlanes = LoadPlanesFromFiles<HdrPlaneLoader>(inputPaths);
+    if(!sourcePlanes || !ValidateHdrRgbPlanes(*sourcePlanes) || !ApplyHdrAlphaSource(alphaSource, *sourcePlanes))
+        return MakeUnexpected(Failure{});
+    const u32 width = sourcePlanes->front().get_width();
+    const u32 height = sourcePlanes->front().get_height();
     if(dimension == TextureDimension::TextureCube && width != height){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: HDR cubemap faces must be square."));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    u32 mipCount = 0u;
-    if(!TextureFormat::ComputeCompleteMipCount(dimension, width, height, 1u, mipCount)){
+    const auto mipCountResult = TextureFormat::ComputeCompleteMipCount(dimension, width, height, 1u);
+    if(!mipCountResult){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: HDR texture dimensions cannot form a complete mip chain."));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
+    const u32 mipCount = *mipCountResult;
     HdrVolumeMips mipPlanes;
     mipPlanes.resize(mipCount);
-    mipPlanes[0u] = Move(sourcePlanes);
+    mipPlanes[0u] = Move(*sourcePlanes);
     for(u32 mipIndex = 1u; mipIndex < mipCount; ++mipIndex){
-        if(!GenerateNextHdrMip(mipPlanes[mipIndex - 1u], mipPlanes[mipIndex]))
-            return false;
+        auto mip = GenerateNextHdrMip(mipPlanes[mipIndex - 1u]);
+        if(!mip)
+            return MakeUnexpected(Failure{});
+        mipPlanes[mipIndex] = Move(*mip);
     }
-    return EncodeHdrMipChain(mipPlanes, dimension, width, height, 1u, outPayload);
+    return EncodeHdrMipChain(mipPlanes, dimension, width, height, 1u);
 }
 
-[[nodiscard]] bool EncodeHdrVolume(
+[[nodiscard]] Expected<TexturePayload> EncodeHdrVolume(
     const Vector<Path>& inputPaths,
-    const AlphaSource& alphaSource,
-    TexturePayload& outPayload
+    const AlphaSource& alphaSource
 ){
-    HdrImagePlanes sourcePlanes;
-    if(
-        !LoadHdrPlanes(inputPaths, sourcePlanes)
-        || !ValidateHdrRgbPlanes(sourcePlanes)
-        || !ApplyHdrAlphaSource(alphaSource, sourcePlanes)
-    )
-        return false;
+    auto sourcePlanes = LoadPlanesFromFiles<HdrPlaneLoader>(inputPaths);
+    if(!sourcePlanes || !ValidateHdrRgbPlanes(*sourcePlanes) || !ApplyHdrAlphaSource(alphaSource, *sourcePlanes))
+        return MakeUnexpected(Failure{});
 
-    const u32 width = sourcePlanes.front().get_width();
-    const u32 height = sourcePlanes.front().get_height();
-    const u32 depth = static_cast<u32>(sourcePlanes.size());
-    u32 mipCount = 0u;
-    if(!TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture3D, width, height, depth, mipCount)){
+    const u32 width = sourcePlanes->front().get_width();
+    const u32 height = sourcePlanes->front().get_height();
+    const u32 depth = static_cast<u32>(sourcePlanes->size());
+    const auto mipCountResult = TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture3D, width, height, depth);
+    if(!mipCountResult){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: HDR volume dimensions cannot form a complete mip chain."));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
+    const u32 mipCount = *mipCountResult;
     HdrVolumeMips mipVolumes;
     mipVolumes.resize(mipCount);
-    mipVolumes[0u] = Move(sourcePlanes);
+    mipVolumes[0u] = Move(*sourcePlanes);
     for(u32 mipIndex = 1u; mipIndex < mipCount; ++mipIndex){
-        if(!GenerateNextHdrVolumeMip(mipVolumes[mipIndex - 1u], mipVolumes[mipIndex]))
-            return false;
+        auto mip = GenerateNextHdrVolumeMip(mipVolumes[mipIndex - 1u]);
+        if(!mip)
+            return MakeUnexpected(Failure{});
+        mipVolumes[mipIndex] = Move(*mip);
     }
     return EncodeHdrMipChain(
         mipVolumes,
         TextureDimension::Texture3D,
         width,
         height,
-        depth,
-        outPayload
+        depth
     );
 }
 

@@ -22,80 +22,86 @@ namespace __hidden_gpu_task_resource_versions{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ResolvePhysicalRange(
+[[nodiscard]] static Expected<GpuTaskResourceRange> ResolvePhysicalRange(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphResourceView& resource,
-    const GpuTaskResourceRange& range,
-    GpuTaskResourceRange& outRange
+    const GpuTaskResourceRange& range
 )noexcept{
     using namespace GpuTaskGraphCompilerDetail;
 
-    outRange = range;
+    GpuTaskResourceRange result = range;
     switch(resource.type){
     case GpuGraphResourceType::Texture:
-        if(!ResolveTextureRangeForPlanning(graph.textureForResource(resource.id), range, outRange))
-            return false;
-        return outRange.textureSubresources.hasExtent();
+    {
+        const auto resolved = ResolveTextureRangeForPlanning(graph.textureForResource(resource.id), range);
+        if(!resolved || !resolved->textureSubresources.hasExtent())
+            return MakeUnexpected(Failure{});
+        return *resolved;
+    }
     case GpuGraphResourceType::Buffer:
         if(!range.bufferRange.hasExtent())
-            return false;
+            return MakeUnexpected(Failure{});
         if(const Buffer* const buffer = graph.bufferForResource(resource.id))
-            outRange.bufferRange = range.bufferRange.resolve(buffer->getCreationDescription());
-        return outRange.bufferRange.hasExtent();
+            result.bufferRange = range.bufferRange.resolve(buffer->getCreationDescription());
+        if(!result.bufferRange.hasExtent())
+            return MakeUnexpected(Failure{});
+        return result;
     case GpuGraphResourceType::AccelStruct:
     case GpuGraphResourceType::HazardDomain:
-        return true;
+        return result;
     default:
-        return false;
+        return MakeUnexpected(Failure{});
     }
 }
 
-[[nodiscard]] static bool ResolveVersionRange(
+[[nodiscard]] static Expected<GpuTaskResourceRange> ResolveVersionRange(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphResourceView& resource,
-    const GpuTaskResourceRange& range,
-    GpuTaskResourceRange& outRange
+    const GpuTaskResourceRange& range
 )noexcept{
-    if(!ResolvePhysicalRange(graph, resource, range, outRange))
-        return false;
+    const auto result = ResolvePhysicalRange(graph, resource, range);
+    if(!result)
+        return MakeUnexpected(Failure{});
 
     switch(resource.type){
     case GpuGraphResourceType::Texture:
     {
         const Texture* const texture = graph.textureForResource(resource.id);
         if(!texture)
-            return true;
+            return *result;
 
         const TextureSubresourceSet& requested = range.textureSubresources;
-        const TextureSubresourceSet& resolved = outRange.textureSubresources;
-        return requested.baseMipLevel == resolved.baseMipLevel
-            && (
-                requested.numMipLevels == TextureSubresourceSet::s_AllMipLevels
-                || requested.numMipLevels == resolved.numMipLevels
-            )
-            && requested.baseArraySlice == resolved.baseArraySlice
-            && (
-                requested.numArraySlices == TextureSubresourceSet::s_AllArraySlices
-                || requested.numArraySlices == resolved.numArraySlices
-            )
-        ;
+        const TextureSubresourceSet& resolved = result->textureSubresources;
+        if(
+            requested.baseMipLevel != resolved.baseMipLevel
+            || (requested.numMipLevels != TextureSubresourceSet::s_AllMipLevels && requested.numMipLevels != resolved.numMipLevels)
+            || requested.baseArraySlice != resolved.baseArraySlice
+            || (requested.numArraySlices != TextureSubresourceSet::s_AllArraySlices && requested.numArraySlices != resolved.numArraySlices)
+        )
+            return MakeUnexpected(Failure{});
+        return *result;
     }
     case GpuGraphResourceType::Buffer:
     {
         const BufferRange& requested = range.bufferRange;
         if(!graph.bufferForResource(resource.id))
-            return true;
+            return *result;
 
-        const BufferRange& resolved = outRange.bufferRange;
-        return requested.byteOffset == resolved.byteOffset
-            && (requested.byteSize == BufferRange::s_AllBytes || requested.byteSize == resolved.byteSize)
-        ;
+        const BufferRange& resolved = result->bufferRange;
+        if(
+            requested.byteOffset != resolved.byteOffset
+            || (requested.byteSize != BufferRange::s_AllBytes && requested.byteSize != resolved.byteSize)
+        )
+            return MakeUnexpected(Failure{});
+        return *result;
     }
     case GpuGraphResourceType::AccelStruct:
     case GpuGraphResourceType::HazardDomain:
-        return range.textureSubresources == s_AllSubresources && range.bufferRange == s_EntireBuffer;
+        if(range.textureSubresources != s_AllSubresources || range.bufferRange != s_EntireBuffer)
+            return MakeUnexpected(Failure{});
+        return *result;
     default:
-        return false;
+        return MakeUnexpected(Failure{});
     }
 }
 
@@ -105,18 +111,18 @@ namespace __hidden_gpu_task_resource_versions{
     const GpuTaskResourceRange& outer,
     const GpuTaskResourceRange& inner
 )noexcept{
-    GpuTaskResourceRange resolvedOuter;
-    GpuTaskResourceRange resolvedInner;
+    Expected<GpuTaskResourceRange> resolvedOuter = GpuTaskResourceRange{};
+    Expected<GpuTaskResourceRange> resolvedInner = GpuTaskResourceRange{};
     if(
-        !ResolvePhysicalRange(graph, resource, outer, resolvedOuter)
-        || !ResolveVersionRange(graph, resource, inner, resolvedInner)
+        !(resolvedOuter = ResolvePhysicalRange(graph, resource, outer))
+        || !(resolvedInner = ResolveVersionRange(graph, resource, inner))
     )
         return false;
 
     switch(resource.type){
     case GpuGraphResourceType::Texture:
     case GpuGraphResourceType::Buffer:
-        return GpuTaskGraphCompilerDetail::RangeContains(resource, resolvedOuter, resolvedInner);
+        return GpuTaskGraphCompilerDetail::RangeContains(resource, (*resolvedOuter), (*resolvedInner));
     case GpuGraphResourceType::AccelStruct:
     case GpuGraphResourceType::HazardDomain:
         return true;
@@ -131,18 +137,18 @@ namespace __hidden_gpu_task_resource_versions{
     const GpuTaskResourceRange& physicalRange,
     const GpuTaskResourceRange& versionRange
 )noexcept{
-    GpuTaskResourceRange resolvedPhysical;
-    GpuTaskResourceRange resolvedVersion;
+    Expected<GpuTaskResourceRange> resolvedPhysical = GpuTaskResourceRange{};
+    Expected<GpuTaskResourceRange> resolvedVersion = GpuTaskResourceRange{};
     if(
-        !ResolvePhysicalRange(graph, resource, physicalRange, resolvedPhysical)
-        || !ResolveVersionRange(graph, resource, versionRange, resolvedVersion)
+        !(resolvedPhysical = ResolvePhysicalRange(graph, resource, physicalRange))
+        || !(resolvedVersion = ResolveVersionRange(graph, resource, versionRange))
     )
         return false;
 
     switch(resource.type){
     case GpuGraphResourceType::Texture:
     case GpuGraphResourceType::Buffer:
-        return GpuTaskGraphCompilerDetail::RangesOverlap(resource, resolvedPhysical, resolvedVersion);
+        return GpuTaskGraphCompilerDetail::RangesOverlap(resource, (*resolvedPhysical), (*resolvedVersion));
     case GpuGraphResourceType::AccelStruct:
     case GpuGraphResourceType::HazardDomain:
         return true;
@@ -309,16 +315,15 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildResourceVersionDependencyEdges(
+Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdges(
     const GpuTaskGraph::DeclarationReadView& graph,
     Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& outEdges,
-    GpuTaskGraphAnalysisDiagnostic& outDiagnostic,
     Alloc::ScratchArena& scratchArena
 ){
     using namespace __hidden_gpu_task_resource_versions;
 
     outEdges.clear();
-    outDiagnostic = GpuTaskGraphAnalysisDiagnostic{};
+    GpuTaskGraphAnalysisDiagnostic diagnostic;
     const auto fail = [&](
         const GpuTaskGraphAnalysisStatus::Enum status,
         const GpuTaskId task,
@@ -326,12 +331,12 @@ bool BuildResourceVersionDependencyEdges(
         const GpuGraphResourceId resource,
         const GpuGraphResourceVersionId version
     ){
-        outDiagnostic.status = status;
-        outDiagnostic.task = task;
-        outDiagnostic.relatedTask = relatedTask;
-        outDiagnostic.resource = resource;
-        outDiagnostic.resourceVersion = version;
-        return false;
+        diagnostic.status = status;
+        diagnostic.task = task;
+        diagnostic.relatedTask = relatedTask;
+        diagnostic.resource = resource;
+        diagnostic.resourceVersion = version;
+        return MakeUnexpected(diagnostic);
     };
 
     bool hasTaskProducedVersions = false;
@@ -348,8 +353,8 @@ bool BuildResourceVersionDependencyEdges(
         }
 
         const GpuTaskGraphResourceView resource = graph.resourceAt(version.resource.index);
-        GpuTaskResourceRange resolvedRange;
-        if(!ResolveVersionRange(graph, resource, version.range, resolvedRange)){
+        const auto resolvedRange = ResolveVersionRange(graph, resource, version.range);
+        if(!resolvedRange){
             return fail(
                 GpuTaskGraphAnalysisStatus::InvalidResourceVersion,
                 {},
@@ -468,7 +473,7 @@ bool BuildResourceVersionDependencyEdges(
         }
     }
     if(graph.resourceVersionCount() == 0u)
-        return true;
+        return {};
     outEdges.reserve(resourceVersionUseCount);
 
     for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){
@@ -660,7 +665,7 @@ bool BuildResourceVersionDependencyEdges(
             }
         }
     }
-    return true;
+    return {};
 }
 
 

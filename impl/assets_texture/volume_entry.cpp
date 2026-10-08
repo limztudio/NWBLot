@@ -30,12 +30,11 @@ namespace __hidden_assets_texture_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseTextureDocument(
+static Expected<TextureCookEntry> ParseTextureDocument(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    TextureCookEntry& outEntry,
     Core::Assets::CookEntryParseContext& context
 ){
     return ParseTextureCookMetadata(
@@ -43,7 +42,7 @@ static bool ParseTextureDocument(
         virtualRoot,
         nwbFilePath,
         doc,
-        outEntry,
+        context.cookArena,
         context.scratchArena
     );
 }
@@ -53,7 +52,7 @@ static bool RegisterTextureCookEntry(Core::Assets::CookEntryRegistry& registry){
         registry,
         TextureBinaryPayload::s_TextureAssetKindLabel,
         &ParseTextureDocument,
-        [](TextureCookEntry& entry, Texture& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildTextureAsset); },
+        [](TextureCookEntry& entry, Core::Assets::AssetArena& arena){ return Core::Assets::ForwardCookBuild(entry, arena, &BuildTextureAsset); },
         false
     );
 }

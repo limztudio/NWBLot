@@ -25,23 +25,31 @@ inline constexpr Name s_SmokeEnvironmentArena("tests/smoke/environment");
 
 using SmokeEnvironmentString = AString<Core::Alloc::GlobalArena>;
 
-[[nodiscard]] inline bool ReadSmokeEnvironmentText(const AStringView variableName, SmokeEnvironmentString& outValue){
-    return ReadEnvironmentVariable(variableName, outValue) && !outValue.empty();
+[[nodiscard]] inline Expected<SmokeEnvironmentString> ReadSmokeEnvironmentText(
+    Core::Alloc::GlobalArena& arena,
+    const AStringView variableName
+){
+    auto value = ReadEnvironmentVariable(arena, variableName);
+    if(!value || value->empty())
+        return MakeUnexpected(Failure{});
+    return value;
 }
 
-[[nodiscard]] inline bool ReadSmokeEnvironmentF32(const AStringView variableName, f32& outValue){
+[[nodiscard]] inline Expected<f32> ReadSmokeEnvironmentF32(const AStringView variableName){
     Core::Alloc::GlobalArena arena(s_SmokeEnvironmentArena);
-    SmokeEnvironmentString value(arena);
-    return ReadSmokeEnvironmentText(variableName, value) && ParseF32FromChars(AStringView(value.data(), value.size()), outValue);
+    const auto value = ReadEnvironmentVariable(arena, variableName);
+    if(!value || value->empty())
+        return MakeUnexpected(Failure{});
+    return ParseF32FromChars(AStringView(value->data(), value->size()));
 }
 
 // Truthy env reader for on/off flags: absent/empty/"0" -> false, anything else -> true.
 [[nodiscard]] inline bool ReadSmokeEnvironmentFlag(const AStringView variableName){
     Core::Alloc::GlobalArena arena(s_SmokeEnvironmentArena);
-    SmokeEnvironmentString value(arena);
-    if(!ReadSmokeEnvironmentText(variableName, value))
+    const auto value = ReadSmokeEnvironmentText(arena, variableName);
+    if(!value)
         return false;
-    return value[0] != '\0' && value[0] != '0';
+    return (*value)[0] != '\0' && (*value)[0] != '0';
 }
 
 

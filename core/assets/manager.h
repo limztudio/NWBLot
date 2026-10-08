@@ -76,11 +76,11 @@ public:
 public:
     void setAsyncExecutor(IAssetAsyncExecutor* asyncExecutor);
 
-    bool loadSync(const Name& assetType, const Name& virtualPath, UniquePtr<IAsset>& outAsset)const;
+    [[nodiscard]] Expected<UniquePtr<IAsset>> loadSync(const Name& assetType, const Name& virtualPath)const;
 
     [[nodiscard]] u64 enqueueLoad(const Name& assetType, const Name& virtualPath);
     void processPending();
-    bool tryPopResult(u64 requestId, AssetLoadResult& outResult);
+    [[nodiscard]] Expected<AssetLoadResult> tryPopResult(u64 requestId);
 
     void clear();
 
@@ -104,30 +104,30 @@ public:
     }
 
     template<typename AssetT>
-    [[nodiscard]] const AssetT* loadTypedSync(
+    [[nodiscard]] Expected<UniquePtr<AssetT>> loadTypedSync(
         const Name& virtualPath,
-        UniquePtr<IAsset>& outLoadedAsset,
         const TStringView ownerName,
         const AStringView assetKindText
     )const{
-        if(!loadSync(AssetT::AssetTypeName(), virtualPath, outLoadedAsset)){
+        auto loadedAsset = loadSync(AssetT::AssetTypeName(), virtualPath);
+        if(!loadedAsset){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to load {} asset '{}'")
                 , ownerName
                 , StringConvert(assetKindText)
                 , StringConvert(virtualPath.resolvedText())
             );
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
-        const AssetT* typedAsset = CastAsset<AssetT>(outLoadedAsset.get());
+        const AssetT* typedAsset = CastAsset<AssetT>(loadedAsset->get());
         if(!typedAsset){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: asset '{}' is not a {}")
                 , ownerName
                 , StringConvert(virtualPath.resolvedText())
                 , StringConvert(assetKindText)
             );
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
-        return typedAsset;
+        return UniquePtr<AssetT>(checked_cast<AssetT*>(loadedAsset->release()));
     }
 
 

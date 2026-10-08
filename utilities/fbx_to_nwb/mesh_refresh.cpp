@@ -109,18 +109,17 @@ struct StreamSortEntry{
 }
 
 template<typename Value>
-[[nodiscard]] bool DeduplicateStream(
+[[nodiscard]] Expected<UtilityVector<u32>> DeduplicateStream(
     UtilityVector<Value>& stream,
     Core::CpuTaskScheduler& cpuScheduler,
-    UtilityVector<u32>& outRemap,
     const AStringView streamName
 ){
-    outRemap.clear();
+    UtilityVector<u32> outRemap;
     outRemap.reserve(stream.size());
     outRemap.resize(stream.size());
 
     if(stream.empty())
-        return true;
+        return outRemap;
 
     UtilityVector<StreamSortEntry<Value>> sortedEntries;
     sortedEntries.resize(stream.size());
@@ -152,12 +151,12 @@ template<typename Value>
     if(uniqueCount == stream.size()){
         for(usize i = 0u; i < outRemap.size(); ++i)
             outRemap[i] = static_cast<u32>(i);
-        return true;
+        return outRemap;
     }
 
     if(uniqueCount >= static_cast<usize>(s_MissingSourceStreamIndex)){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize mesh: {} stream has too many unique values"), StringConvert(streamName));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     UtilityVector<Value> compact;
@@ -168,7 +167,7 @@ template<typename Value>
         if(sortedIndex == 0u || !SameValue(sortedEntries[sortedIndex].value, sortedEntries[sortedIndex - 1u].value)){
             if(compact.size() >= static_cast<usize>(s_MissingSourceStreamIndex)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize mesh: {} stream has too many unique values"), StringConvert(streamName));
-                return false;
+                return MakeUnexpected(Failure{});
             }
 
             compactIndex = static_cast<u32>(compact.size());
@@ -179,7 +178,7 @@ template<typename Value>
     }
 
     stream = Move(compact);
-    return true;
+    return outRemap;
 }
 
 [[nodiscard]] bool RemapRequiredIndex(u32& inOutIndex, const UtilityVector<u32>& remap, const AStringView streamName){
@@ -224,27 +223,21 @@ template<typename Value>
     return true;
 }
 
-[[nodiscard]] bool CanonicalizeSkinnedMeshStreams(
+[[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSkinnedMeshStreams(
     SourceMeshStreams& mesh,
     UtilityVector<MeshSkinInfluence>& skinInfluences,
-    Core::CpuTaskScheduler& cpuScheduler,
-    SourceMeshCanonicalizeReport* const outReport
+    Core::CpuTaskScheduler& cpuScheduler
 ){
     if(mesh.positions.size() != skinInfluences.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to canonicalize skinned mesh: position and skin influence counts must match"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    if(outReport){
-        outReport->before = CountSourceMeshStreams(mesh);
-        outReport->before.skin = skinInfluences.size();
-    }
+    SourceMeshCanonicalizeReport report;
+    report.before = CountSourceMeshStreams(mesh);
+    report.before.skin = skinInfluences.size();
 
     UtilityVector<u32> positionRemap(mesh.positions.size());
-    UtilityVector<u32> normalRemap;
-    UtilityVector<u32> tangentRemap;
-    UtilityVector<u32> uv0Remap;
-    UtilityVector<u32> colorRemap;
     UtilityVector<u32> skinRemap(skinInfluences.size());
 
     for(usize i = 0u; i < positionRemap.size(); ++i)
@@ -252,44 +245,47 @@ template<typename Value>
     for(usize i = 0u; i < skinRemap.size(); ++i)
         skinRemap[i] = static_cast<u32>(i);
 
-    if(!DeduplicateStream(mesh.normals, cpuScheduler, normalRemap, s_NormalStreamLabel))
-        return false;
-    if(!DeduplicateStream(mesh.tangents, cpuScheduler, tangentRemap, s_TangentStreamLabel))
-        return false;
-    if(!DeduplicateStream(mesh.uv0, cpuScheduler, uv0Remap, s_Uv0StreamLabel))
-        return false;
-    if(!DeduplicateStream(mesh.colors, cpuScheduler, colorRemap, s_ColorsStreamLabel))
-        return false;
+    const auto normalRemap = DeduplicateStream(mesh.normals, cpuScheduler, s_NormalStreamLabel);
+    if(!normalRemap)
+        return MakeUnexpected(Failure{});
+    const auto tangentRemap = DeduplicateStream(mesh.tangents, cpuScheduler, s_TangentStreamLabel);
+    if(!tangentRemap)
+        return MakeUnexpected(Failure{});
+    const auto uv0Remap = DeduplicateStream(mesh.uv0, cpuScheduler, s_Uv0StreamLabel);
+    if(!uv0Remap)
+        return MakeUnexpected(Failure{});
+    const auto colorRemap = DeduplicateStream(mesh.colors, cpuScheduler, s_ColorsStreamLabel);
+    if(!colorRemap)
+        return MakeUnexpected(Failure{});
 
-    if(!RemapComponentRefs(mesh, positionRemap, normalRemap, tangentRemap, uv0Remap, colorRemap, skinRemap))
-        return false;
+    if(!RemapComponentRefs(mesh, positionRemap, *normalRemap, *tangentRemap, *uv0Remap, *colorRemap, skinRemap))
+        return MakeUnexpected(Failure{});
 
-    if(outReport){
-        outReport->after = CountSourceMeshStreams(mesh);
-        outReport->after.skin = skinInfluences.size();
-    }
-    return true;
+    report.after = CountSourceMeshStreams(mesh);
+    report.after.skin = skinInfluences.size();
+    return report;
 }
 
 
-[[nodiscard]] bool ReadMetascriptSource(const Path& nwbFilePath, AString& outText){
-    outText.clear();
+[[nodiscard]] Expected<AString> ReadMetascriptSource(const Path& nwbFilePath){
+    AString outText;
     if(!ReadTextFile(nwbFilePath, outText)){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: failed to read '{}'"), PathToString<tchar>(nwbFilePath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     StripUtf8Bom(outText);
-    return true;
+    return outText;
 }
 
-[[nodiscard]] bool ParseMetascriptDocument(
+[[nodiscard]] Expected<Core::Metascript::Document> ParseMetascriptDocument(
     const Path& nwbFilePath,
     const AStringView text,
-    Core::Metascript::Document& outDoc
+    Core::Metascript::MetaArena& arena
 ){
+    Core::Metascript::Document outDoc(arena);
     if(outDoc.parse(text))
-        return true;
+        return outDoc;
 
     for(const Core::Metascript::ParseError& error : outDoc.errors()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: '{}' parse error at {}:{}: {}")
@@ -299,7 +295,7 @@ template<typename Value>
             , StringConvert(AStringView(error.message.data(), error.message.size()))
         );
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 
@@ -346,49 +342,50 @@ SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh){
     return counts;
 }
 
-bool CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::CpuTaskScheduler& cpuScheduler, SourceMeshCanonicalizeReport* const outReport){
-    if(outReport)
-        outReport->before = CountSourceMeshStreams(mesh);
+Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::CpuTaskScheduler& cpuScheduler){
+    SourceMeshCanonicalizeReport report;
+    report.before = CountSourceMeshStreams(mesh);
 
-    UtilityVector<u32> positionRemap;
-    UtilityVector<u32> normalRemap;
-    UtilityVector<u32> tangentRemap;
-    UtilityVector<u32> uv0Remap;
-    UtilityVector<u32> colorRemap;
-    UtilityVector<u32> skinRemap;
 
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.positions, cpuScheduler, positionRemap, __hidden_mesh_refresh::s_PositionStreamLabel))
-        return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.normals, cpuScheduler, normalRemap, __hidden_mesh_refresh::s_NormalStreamLabel))
-        return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.tangents, cpuScheduler, tangentRemap, __hidden_mesh_refresh::s_TangentStreamLabel))
-        return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.uv0, cpuScheduler, uv0Remap, __hidden_mesh_refresh::s_Uv0StreamLabel))
-        return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.colors, cpuScheduler, colorRemap, __hidden_mesh_refresh::s_ColorsStreamLabel))
-        return false;
-    if(!__hidden_mesh_refresh::DeduplicateStream(mesh.skin, cpuScheduler, skinRemap, __hidden_mesh_refresh::s_SkinStreamLabel))
-        return false;
-    if(!__hidden_mesh_refresh::RemapComponentRefs(mesh, positionRemap, normalRemap, tangentRemap, uv0Remap, colorRemap, skinRemap))
-        return false;
+    const auto positionRemap = __hidden_mesh_refresh::DeduplicateStream(mesh.positions, cpuScheduler, __hidden_mesh_refresh::s_PositionStreamLabel);
+    if(!positionRemap)
+        return MakeUnexpected(Failure{});
+    const auto normalRemap = __hidden_mesh_refresh::DeduplicateStream(mesh.normals, cpuScheduler, __hidden_mesh_refresh::s_NormalStreamLabel);
+    if(!normalRemap)
+        return MakeUnexpected(Failure{});
+    const auto tangentRemap = __hidden_mesh_refresh::DeduplicateStream(mesh.tangents, cpuScheduler, __hidden_mesh_refresh::s_TangentStreamLabel);
+    if(!tangentRemap)
+        return MakeUnexpected(Failure{});
+    const auto uv0Remap = __hidden_mesh_refresh::DeduplicateStream(mesh.uv0, cpuScheduler, __hidden_mesh_refresh::s_Uv0StreamLabel);
+    if(!uv0Remap)
+        return MakeUnexpected(Failure{});
+    const auto colorRemap = __hidden_mesh_refresh::DeduplicateStream(mesh.colors, cpuScheduler, __hidden_mesh_refresh::s_ColorsStreamLabel);
+    if(!colorRemap)
+        return MakeUnexpected(Failure{});
+    const auto skinRemap = __hidden_mesh_refresh::DeduplicateStream(mesh.skin, cpuScheduler, __hidden_mesh_refresh::s_SkinStreamLabel);
+    if(!skinRemap)
+        return MakeUnexpected(Failure{});
+    if(!__hidden_mesh_refresh::RemapComponentRefs(mesh, *positionRemap, *normalRemap, *tangentRemap, *uv0Remap, *colorRemap, *skinRemap))
+        return MakeUnexpected(Failure{});
 
-    if(outReport)
-        outReport->after = CountSourceMeshStreams(mesh);
-    return true;
+    report.after = CountSourceMeshStreams(mesh);
+    return report;
 }
 
-bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::CpuTaskScheduler& cpuScheduler, SourceMeshCanonicalizeReport& outReport){
-    outReport = SourceMeshCanonicalizeReport{};
+Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::CpuTaskScheduler& cpuScheduler){
+    SourceMeshCanonicalizeReport outReport;
 
-    AString source;
-    if(!__hidden_mesh_refresh::ReadMetascriptSource(inputPath, source))
-        return false;
+    auto sourceResult = __hidden_mesh_refresh::ReadMetascriptSource(inputPath);
+    if(!sourceResult)
+        return MakeUnexpected(Failure{});
+    AString& source = *sourceResult;
     const bool useCrlf = HasCrlfLineEndings(AStringView(source.data(), source.size()));
 
     Core::Metascript::MetaArena metaArena(UtilityDetail::s_UtilityArena);
-    Core::Metascript::Document doc(metaArena);
-    if(!__hidden_mesh_refresh::ParseMetascriptDocument(inputPath, source, doc))
-        return false;
+    auto docResult = __hidden_mesh_refresh::ParseMetascriptDocument(inputPath, source, metaArena);
+    if(!docResult)
+        return MakeUnexpected(Failure{});
+    const Core::Metascript::Document& doc = *docResult;
 
     UtilityVector<MeshRefreshTextDetail::TextReplacement> replacements;
     bool sawMesh = false;
@@ -405,26 +402,33 @@ bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Cp
         const Core::Metascript::Value* meshValue = doc.findVariable(meshVariableView);
         if(!meshValue){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing mesh variable '{}'"), StringConvert(meshVariableName));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
-        SourceMeshStreams mesh;
-        if(!MeshRefreshParseDetail::ParseMeshValue(inputPath, meshVariableName, *meshValue, mesh))
-            return false;
+        auto meshResult = MeshRefreshParseDetail::ParseMeshValue(inputPath, meshVariableName, *meshValue);
+        if(!meshResult)
+            return MakeUnexpected(Failure{});
+        SourceMeshStreams& mesh = *meshResult;
 
         SourceMeshStreams before = mesh;
         SourceMeshCanonicalizeReport itemReport;
 
-        AStringView skinVariableName;
-        const Core::Metascript::Value* skinValue = MeshRefreshTextDetail::FindSkinForMesh(doc, meshVariableName, skinVariableName);
-        if(!skinVariableName.empty()){
-            UtilityVector<MeshSkinInfluence> skinInfluences;
-            if(!skinValue || !MeshRefreshParseDetail::ParseSkinInfluences(inputPath, *skinValue, skinVariableName, skinInfluences))
-                return false;
-            if(!__hidden_mesh_refresh::CanonicalizeSkinnedMeshStreams(mesh, skinInfluences, cpuScheduler, &itemReport))
-                return false;
+        const auto skinReference = MeshRefreshTextDetail::FindSkinForMesh(doc, meshVariableName);
+        if(!skinReference)
+            return MakeUnexpected(Failure{});
+        const AStringView skinVariableName = skinReference->variableName;
+        const Core::Metascript::Value* skinValue = skinReference->value;
+        if(skinValue){
+            auto influences = MeshRefreshParseDetail::ParseSkinInfluences(inputPath, *skinValue, skinVariableName);
+            if(!influences)
+                return MakeUnexpected(Failure{});
+            UtilityVector<MeshSkinInfluence>& skinInfluences = *influences;
+            const auto canonicalized = __hidden_mesh_refresh::CanonicalizeSkinnedMeshStreams(mesh, skinInfluences, cpuScheduler);
+            if(!canonicalized)
+                return MakeUnexpected(Failure{});
+            itemReport = *canonicalized;
             if(!MeshRefreshTextDetail::AppendMeshReplacements(replacements, source, meshVariableName, before, mesh))
-                return false;
+                return MakeUnexpected(Failure{});
             if(itemReport.before.skin != itemReport.after.skin && !MeshRefreshTextDetail::AddReplacement(
                 replacements,
                 source,
@@ -432,14 +436,16 @@ bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Cp
                 "influences",
                 MeshRefreshTextDetail::WriteSkinInfluenceList(skinInfluences)
             )){
-                return false;
+                return MakeUnexpected(Failure{});
             }
         }
         else{
-            if(!CanonicalizeSourceMeshStreams(mesh, cpuScheduler, &itemReport))
-                return false;
+            const auto canonicalized = CanonicalizeSourceMeshStreams(mesh, cpuScheduler);
+            if(!canonicalized)
+                return MakeUnexpected(Failure{});
+            itemReport = *canonicalized;
             if(!MeshRefreshTextDetail::AppendMeshReplacements(replacements, source, meshVariableName, before, mesh))
-                return false;
+                return MakeUnexpected(Failure{});
         }
 
         __hidden_mesh_refresh::AccumulateReport(outReport, itemReport);
@@ -447,16 +453,18 @@ bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::Cp
 
     if(!sawMesh){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: '{}' contains no mesh declarations"), PathToString<tchar>(inputPath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     if(!MeshRefreshTextDetail::ApplyTextReplacements(source, replacements)){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: failed to apply text replacements for '{}'"), PathToString<tchar>(inputPath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     NormalizeLineEndingsInPlace(source, useCrlf);
 
-    return WriteTextFile(outputPath, AStringView(source.data(), source.size()));
+    if(!WriteTextFile(outputPath, AStringView(source.data(), source.size())))
+        return MakeUnexpected(Failure{});
+    return outReport;
 }
 
 

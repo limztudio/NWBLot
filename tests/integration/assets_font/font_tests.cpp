@@ -46,17 +46,18 @@ using FontTestArena = TestArena<FontTestArenaTag>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool LoadLatin(FontTestArena& testArena, Font& outFont){
+[[nodiscard]] static Expected<Font> LoadLatin(FontTestArena& testArena){
     const Path path = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default" / "latin.font";
     Core::Assets::AssetBytes source(testArena.arena);
     Font candidate(testArena.arena, Name("engine/ui/fonts/default/latin/face"));
-    if(!ReadBundledFontBytes(path, source))
-        return false;
+    auto sourceResult = ReadBundledFontBytes(path, source.get_allocator().arena());
+    if(!sourceResult)
+        return MakeUnexpected(Failure{});
+    source = Move(*sourceResult);
     candidate.setFontBytes(Move(source));
     if(!candidate.validatePayload())
-        return false;
-    outFont = Move(candidate);
-    return true;
+        return MakeUnexpected(Failure{});
+    return candidate;
 }
 
 [[nodiscard]] static Core::Assets::AssetBytes MakeBinary(
@@ -111,15 +112,16 @@ TEST(AssetsFont, PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedByRunti
     for(usize index = 0u; index < LengthOf(s_BundledNames); ++index){
         const Path bundledPath = bundledRoot / s_BundledNames[index];
         Core::Assets::AssetBytes source(testArena.arena);
-        ASSERT_TRUE(ReadBundledFontBytes(bundledPath, source));
+        auto sourceResult = ReadBundledFontBytes(bundledPath, source.get_allocator().arena());
+        ASSERT_TRUE(sourceResult);
+        source = Move(*sourceResult);
         Font font(testArena.arena, s_Names[index]);
         Core::Assets::AssetBytes sourceCopy(source.begin(), source.end(), testArena.arena);
         font.setFontBytes(Move(sourceCopy));
         ASSERT_TRUE(font.validatePayload());
 
         Core::Assets::AssetBytes prepared(testArena.arena);
-        ErrorCode error;
-        ASSERT_TRUE(ReadBinaryFile(bundledPath, prepared, error));
+        ASSERT_TRUE(ReadBinaryFile(bundledPath, prepared));
         FontAssetCodec codec;
         Core::Assets::AssetBytes binary(testArena.arena);
         ASSERT_TRUE(codec.serialize(font, binary));
@@ -136,8 +138,9 @@ TEST(AssetsFont, MalformedBinaryPreservesThePreviouslyLoadedFont){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     FontTestArena testArena;
-    Font font(testArena.arena);
-    ASSERT_TRUE(LoadLatin(testArena, font));
+    auto fontResult = LoadLatin(testArena);
+    ASSERT_TRUE(fontResult);
+    Font& font = *fontResult;
     const Core::Assets::AssetBytes original(font.fontBytes().begin(), font.fontBytes().end(), testArena.arena);
     FontBinaryPayload::HeaderBinary validHeader;
     validHeader.byteCount = original.size();
@@ -191,8 +194,9 @@ TEST(AssetsFont, RejectsCollectionsCompressedFontsAndVariableTables){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     FontTestArena testArena;
-    Font font(testArena.arena);
-    ASSERT_TRUE(LoadLatin(testArena, font));
+    auto fontResult = LoadLatin(testArena);
+    ASSERT_TRUE(fontResult);
+    Font& font = *fontResult;
     static constexpr u32 s_UnsupportedSignatures[] = { 0x74746366u, 0x774f4646u, 0x774f4632u, 0x74727565u };
     for(const u32 signature : s_UnsupportedSignatures){
         Core::Assets::AssetBytes bytes(font.fontBytes().begin(), font.fontBytes().end(), testArena.arena);
@@ -212,8 +216,9 @@ TEST(AssetsFont, RejectsMalformedDirectoriesAndNativeFaceMetrics){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     FontTestArena testArena;
-    Font font(testArena.arena);
-    ASSERT_TRUE(LoadLatin(testArena, font));
+    auto fontResult = LoadLatin(testArena);
+    ASSERT_TRUE(fontResult);
+    Font& font = *fontResult;
     for(u32 variant = 0u; variant < 7u; ++variant){
         Core::Assets::AssetBytes bytes(font.fontBytes().begin(), font.fontBytes().end(), testArena.arena);
         switch(variant){

@@ -35,13 +35,12 @@ FrameGraphReflectionResolve::FrameGraphReflectionResolve(
 }
 
 
-bool FrameGraphReflectionResolve::declare(
+Expected<FrameGraphReflectionResolveResult> FrameGraphReflectionResolve::declare(
     const FrameGraphReflectionResolveInputs& inputs,
     RayTracingSceneGraphReads& sceneReads,
-    Core::Alloc::ScratchArena& scratchArena,
-    FrameGraphReflectionResolveResult& outResult
+    Core::Alloc::ScratchArena& scratchArena
 ){
-    outResult = FrameGraphReflectionResolveResult{};
+    FrameGraphReflectionResolveResult result{};
     using namespace RendererTaskGraphDetail;
     DeferredFrameTargets& deferredTargets = *inputs.targets;
     const ECSRenderDetail::MeshViewBufferSnapshot& meshViewBufferSnapshot = *inputs.meshViewSnapshot;
@@ -84,7 +83,7 @@ bool FrameGraphReflectionResolve::declare(
         reflectionSettings, inputs.reflectionFrameIndex, reflectionContentStamp
     );
     if(!reflectionResources.valid())
-        return false;
+        return MakeUnexpected(Failure{});
     if(
         !sceneReads.valid()
         && (reflectionResources.hasHardwareWork() || (refractionActive && refractionResources.valid() && refractionResources.usesHardwareTrace))
@@ -93,7 +92,7 @@ bool FrameGraphReflectionResolve::declare(
             m_graph, sceneResources, m_raytracingSystem.sceneTlasBackingInitialState(), traceGeometryScratchArena
         );
         if(!sceneReads.valid())
-            return false;
+            return MakeUnexpected(Failure{});
     }
     const Core::GpuTaskResourceUse reflectionSurfaceReads[] = {
         ReadUse(specularRoughness), ReadUse(refractionSpecularRoughness), ReadUse(normal), ReadUse(depth), ReadUse(worldPosition),
@@ -134,7 +133,7 @@ bool FrameGraphReflectionResolve::declare(
         reflectionResources, reflectionInputs, inputs.lightingTask
     );
     if(!reflectionGraph.valid())
-        return false;
+        return MakeUnexpected(Failure{});
     const ReflectionCompositeInputs reflectionCompositeInputs{
         .opaqueRadianceSlot = reflectionResources.parameters.opaqueRadianceSlot,
         .glassRadianceSlot = reflectionResources.parameters.glassRadianceSlot,
@@ -207,12 +206,12 @@ bool FrameGraphReflectionResolve::declare(
             clearDesc, clear);
     }
     if(!refractionResolveTask.valid())
-        return false;
-    outResult.reflectionGraph = reflectionGraph;
-    outResult.reflectionCompositeInputs = reflectionCompositeInputs;
-    outResult.refractionResolveTask = refractionResolveTask;
-    outResult.declared = true;
-    return true;
+        return MakeUnexpected(Failure{});
+    result.reflectionGraph = reflectionGraph;
+    result.reflectionCompositeInputs = reflectionCompositeInputs;
+    result.refractionResolveTask = refractionResolveTask;
+    result.declared = true;
+    return result;
 }
 
 

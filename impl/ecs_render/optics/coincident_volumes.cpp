@@ -152,15 +152,19 @@ void RendererOpticalVolumeSelection::prepare(
     for(auto&& [entity, renderer] : rendererView){
         if(!mergingEnabled(renderer))
             continue;
-        MaterialSurfaceInfo* material = nullptr;
+        const auto materialResult = materials.findMaterialSurfaceInfo(renderer.material);
         const bool closed = renderer.opticalBoundaryMode == OpticalBoundaryMode::ClosedNested
             || renderer.opticalBoundaryMode == OpticalBoundaryMode::ClosedPriority;
-        if(!materials.findMaterialSurfaceInfo(renderer.material, material) || !material->transparent || (!material->refractive && !closed))
+        if(!materialResult)
+            continue;
+        MaterialSurfaceInfo* const material = *materialResult;
+        if(!material->transparent || (!material->refractive && !closed))
             continue;
 
-        RenderableMeshDesc mesh;
-        if(!meshSystemPtr->resolveRenderableMesh(entity, mesh) || mesh.runtime || !mesh.mesh.valid())
+        const auto meshResult = meshSystemPtr->resolveRenderableMeshStatus(entity);
+        if(!meshResult || meshResult->runtime || !meshResult->mesh.valid())
             continue;
+        const auto& mesh = *meshResult;
         // Runtime providers and CSG can change boundaries; skip them here.
         if(
             world.tryGetComponent<StaticCsgMeshComponent>(entity)
@@ -170,8 +174,8 @@ void RendererOpticalVolumeSelection::prepare(
             continue;
 
         const auto* materialInstance = world.tryGetComponent<MaterialInstanceComponent>(entity);
-        const MaterialTypedByteVector* mutableBytes = nullptr;
-        if(!materials.findPreparedMaterialInstanceMutableTypedBytes(entity, *material, materialInstance, mutableBytes))
+        const auto mutableBytes = materials.findPreparedMaterialInstanceMutableTypedBytes(entity, *material, materialInstance);
+        if(!mutableBytes)
             continue;
 
         CoincidentOpticalVolumeCandidate candidate;
@@ -183,8 +187,8 @@ void RendererOpticalVolumeSelection::prepare(
         candidate.priority = renderer.opticalVolumePriority;
         candidate.boundaryMode = static_cast<u32>(renderer.opticalBoundaryMode);
         candidate.mediumPriority = renderer.opticalMediumPriority;
-        candidate.mutableTypedBytes = mutableBytes->data();
-        candidate.mutableTypedByteCount = mutableBytes->size();
+        candidate.mutableTypedBytes = (*mutableBytes)->data();
+        candidate.mutableTypedByteCount = (*mutableBytes)->size();
         if(const auto* transformPtr = world.tryGetComponent<Scene::TransformComponent>(entity)){
             StoreFloat(LoadFloat(transformPtr->position), candidate.position);
             StoreFloat(LoadFloat(transformPtr->rotation), candidate.rotation);

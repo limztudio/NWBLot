@@ -121,12 +121,12 @@ TEST(CpuTaskProfileIntegration, DelayedTaskTimingPreservesExecutionFrameAtLaterP
     for(usize index = 0u; index < events.eventCount(); ++index){
         const Telemetry::EventRecord* event = events.eventAt(index);
         ASSERT_NE(event, nullptr);
-        Telemetry::PerfTimingPayload payload(arena.arena);
-        ASSERT_TRUE(Telemetry::ParsePerfTimingPayload(arena.arena, event->payload.data(), event->payload.size(), payload));
-        if(payload.scopeName == taskName){
+        Expected<Telemetry::PerfTimingPayload> payload = MakeUnexpected(Failure{});
+        ASSERT_TRUE((payload = Telemetry::ParsePerfTimingPayload(arena.arena, event->payload.data(), event->payload.size())));
+        if(payload->scopeName == taskName){
             foundNamedTask = true;
-            EXPECT_EQ(payload.stats.firstSampleFrameIndex, 41u);
-            EXPECT_EQ(payload.stats.publishFrameIndex, 42u);
+            EXPECT_EQ(payload->stats.firstSampleFrameIndex, 41u);
+            EXPECT_EQ(payload->stats.publishFrameIndex, 42u);
         }
     }
     EXPECT_TRUE(foundNamedTask);

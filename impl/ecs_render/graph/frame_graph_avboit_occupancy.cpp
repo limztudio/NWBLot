@@ -36,14 +36,13 @@ FrameGraphAvboitOccupancyUploadChain::FrameGraphAvboitOccupancyUploadChain(
 }
 
 
-bool FrameGraphAvboitOccupancyUploadChain::declare(
+Expected<FrameGraphAvboitOccupancyUploadResult> FrameGraphAvboitOccupancyUploadChain::declare(
     const FrameGraphAvboitOccupancyUploadInputs& inputs,
     RendererTaskGraphDetail::AvboitOccupancyGraphTask::Payload& occupancyPayload,
     RendererTaskGraphDetail::AvboitOccupancyComputeEmulationGraphTask::Payload& computeEmulationPayload,
-    AvboitGeneratedGeometryReuse& generatedGeometry,
-    FrameGraphAvboitOccupancyUploadResult& outResult
+    AvboitGeneratedGeometryReuse& generatedGeometry
 ){
-    outResult = FrameGraphAvboitOccupancyUploadResult{};
+    FrameGraphAvboitOccupancyUploadResult result{};
     RendererTaskGraphDetail::AvboitOccupancyGraphTask::Payload& avboitOccupancyPayload = occupancyPayload;
     RendererTaskGraphDetail::AvboitOccupancyComputeEmulationGraphTask::Payload& avboitOccupancyComputeEmulationPayload = computeEmulationPayload;
     DeferredFrameTargets& deferredTargets = *inputs.targets;
@@ -71,7 +70,7 @@ bool FrameGraphAvboitOccupancyUploadChain::declare(
     Core::Alloc::ScratchArena occupancyMaterialGeometryScratch(RendererArenaScope::s_TaskGraphArena);
     Core::GpuGraphResourceSetId occupancyMaterialGeometrySet;
     Core::GpuGraphResourceSetId occupancyMaterialSampledTextureSet;
-    outResult.uploadTask = occupancyUploadTask;
+    result.uploadTask = occupancyUploadTask;
     if(inputs.hasTransparentRenderers){
         Core::Alloc::ScratchArena occupancyUploadScratch(RendererArenaScope::s_TaskGraphArena);
         MaterialPassDrawItemPartitions occupancyDrawItems{ occupancyUploadScratch };
@@ -82,8 +81,7 @@ bool FrameGraphAvboitOccupancyUploadChain::declare(
 #endif
         MaterialTypedByteDataVector occupancyMaterialTypedBytes{ occupancyUploadScratch };
         AvboitPassUploadHelper occupancyUploadHelper(m_materialSystem);
-        AvboitPassUploadResult occupancyUploadResult;
-        if(!occupancyUploadHelper.gather(
+        auto occupancyUploadResult = occupancyUploadHelper.gather(
             AvboitPassUploadInputs{
                 .framebuffer = deferredTargets.avboit.lowFramebuffer.get(),
                 .pass = MaterialPipelinePass::AvboitOccupancy,
@@ -104,19 +102,19 @@ bool FrameGraphAvboitOccupancyUploadChain::declare(
 #if defined(NWB_DEBUG)
             occupancyMaterialTypedRanges,
 #endif
-            occupancyMaterialTypedBytes,
-            occupancyUploadResult
-        )){
+            occupancyMaterialTypedBytes
+        );
+        if(!occupancyUploadResult){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: prepared AVBOIT occupancy resources were unavailable during graph declaration"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
-        const bool occupancyHasCsgDrawItems = occupancyUploadResult.hasCsgDrawItems;
+        const bool occupancyHasCsgDrawItems = occupancyUploadResult->hasCsgDrawItems;
         if(occupancyHasCsgDrawItems && !intervalOutputsGraphOwned){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: clipped AVBOIT occupancy draws require prepared interval outputs"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        if(occupancyUploadResult.hasDrawItems){
+        if(occupancyUploadResult->hasDrawItems){
 
             const MaterialPassDrawItems* const occupancyMaterialGeometryDrawSets[] = {
                 &occupancyDrawItems.regular,
@@ -127,20 +125,19 @@ bool FrameGraphAvboitOccupancyUploadChain::declare(
                 m_materialSystem,
                 occupancyMaterialGeometryScratch
             );
-            AvboitGeometryPreparationResult occupancyGeometryPreparationResult;
-            if(!occupancyGeometryPreparationBuilder.declare(
+            auto occupancyGeometryPreparationResult = occupancyGeometryPreparationBuilder.declare(
                 AvboitGeometryPreparationInputs{
                     .drawItemSets = occupancyMaterialGeometryDrawSets,
                     .drawItemSetCount = LengthOf(occupancyMaterialGeometryDrawSets),
                     .phase = AvboitGeometryPhase::Occupancy,
-                },
-                occupancyGeometryPreparationResult
-            ))
-                return false;
-            avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned = occupancyGeometryPreparationResult.geometryOwned;
-            occupancyMaterialGeometrySet = occupancyGeometryPreparationResult.materialGeometrySet;
-            occupancyMaterialSampledTextureSet = occupancyGeometryPreparationResult.materialSampledTextureSet;
-            occupancyMaterialSampledTexturesCollected = occupancyGeometryPreparationResult.sampledTexturesCollected;
+                }
+            );
+            if(!occupancyGeometryPreparationResult)
+                return MakeUnexpected(Failure{});
+            avboitOccupancyPayload.occupancyMaterialGeometryStatesGraphOwned = occupancyGeometryPreparationResult->geometryOwned;
+            occupancyMaterialGeometrySet = occupancyGeometryPreparationResult->materialGeometrySet;
+            occupancyMaterialSampledTextureSet = occupancyGeometryPreparationResult->materialSampledTextureSet;
+            occupancyMaterialSampledTexturesCollected = occupancyGeometryPreparationResult->sampledTexturesCollected;
 
             m_materialSystem.prepareMaterialPassInstanceUploadData(occupancyInstanceData, csgResources);
 #if defined(NWB_DEBUG)
@@ -150,7 +147,7 @@ bool FrameGraphAvboitOccupancyUploadChain::declare(
                 || occupancyCsgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
             ){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: AVBOIT occupancy upload size overflows graph blob capacity"));
-                return false;
+                return MakeUnexpected(Failure{});
             }
             NWB_ASSERT(occupancyInstanceData.size() == occupancyMaterialTypedRanges.size());
             ECSRenderDetail::AssertMaterialTypedUploadRanges(
@@ -163,7 +160,7 @@ bool FrameGraphAvboitOccupancyUploadChain::declare(
                 m_graph,
                 m_csgSystem
             );
-            if(!occupancyMaterialUploadBuilder.declare(
+            auto occupancyCsgStreamsUploadedResult = occupancyMaterialUploadBuilder.declare(
                 AvboitMaterialUploadInputs{
                     .targets = &deferredTargets,
                     .csgResources = &csgResources,
@@ -180,12 +177,13 @@ bool FrameGraphAvboitOccupancyUploadChain::declare(
                 occupancyMaterialTypedBytes,
                 occupancyCsgFrameData,
                 occupancyHasCsgDrawItems,
-                occupancyUploadTask,
-                occupancyCsgStreamsUploaded
-            )){
+                occupancyUploadTask
+            );
+            if(!occupancyCsgStreamsUploadedResult){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT occupancy material upload"));
-                return false;
+                return MakeUnexpected(Failure{});
             }
+            occupancyCsgStreamsUploaded = *occupancyCsgStreamsUploadedResult;
 
             avboitOccupancyPayload.occupancySnapshot.capture(
                 occupancyDrawItems,
@@ -197,8 +195,7 @@ bool FrameGraphAvboitOccupancyUploadChain::declare(
             avboitOccupancyPayload.occupancyStreamsUploaded = true;
             // A phase owns one alias-free stream; mixed work keeps local interleaving.
             AvboitComputeEmulationCapture occupancyComputeEmulationCapture;
-            AvboitComputeEmulationCaptureResult occupancyComputeEmulationCaptureResult;
-            if(!occupancyComputeEmulationCapture.capture(
+            auto occupancyComputeEmulationCaptureResult = occupancyComputeEmulationCapture.capture(
                 AvboitComputeEmulationCaptureInputs{
                     .drawItems = &occupancyDrawItems,
                     .csgFrameData = &occupancyCsgFrameData,
@@ -211,16 +208,16 @@ bool FrameGraphAvboitOccupancyUploadChain::declare(
                 avboitOccupancyComputeEmulationPayload.csgPlan,
                 occupancyUploadScratch,
                 occupancyInstanceData.size(),
-                occupancyMaterialTypedBytes.size(),
-                occupancyComputeEmulationCaptureResult
-            ))
-                return false;
-            occupancyRegularComputeEmulationPlanCaptured = occupancyComputeEmulationCaptureResult.regularCaptured;
-            occupancyCsgComputeEmulationPlanCaptured = occupancyComputeEmulationCaptureResult.csgCaptured;
-            occupancySharedComputeEmulationPlanCaptured = occupancyComputeEmulationCaptureResult.sharedCaptured;
-            occupancySharedComputeEmulationPlan = occupancyComputeEmulationCaptureResult.sharedPlan;
-            occupancySharedComputeEmulationInstanceCount = occupancyComputeEmulationCaptureResult.sharedInstanceCount;
-            occupancySharedComputeEmulationMaterialTypedByteCount = occupancyComputeEmulationCaptureResult.sharedMaterialTypedByteCount;
+                occupancyMaterialTypedBytes.size()
+            );
+            if(!occupancyComputeEmulationCaptureResult)
+                return MakeUnexpected(Failure{});
+            occupancyRegularComputeEmulationPlanCaptured = occupancyComputeEmulationCaptureResult->regularCaptured;
+            occupancyCsgComputeEmulationPlanCaptured = occupancyComputeEmulationCaptureResult->csgCaptured;
+            occupancySharedComputeEmulationPlanCaptured = occupancyComputeEmulationCaptureResult->sharedCaptured;
+            occupancySharedComputeEmulationPlan = occupancyComputeEmulationCaptureResult->sharedPlan;
+            occupancySharedComputeEmulationInstanceCount = occupancyComputeEmulationCaptureResult->sharedInstanceCount;
+            occupancySharedComputeEmulationMaterialTypedByteCount = occupancyComputeEmulationCaptureResult->sharedMaterialTypedByteCount;
             if(occupancyRegularComputeEmulationPlanCaptured && generatedGeometry.matches(
                 occupancyDrawItems, occupancyInstanceData, frameBindings, meshViewState, MaterialPipelinePass::AvboitOccupancy
             ))
@@ -243,20 +240,20 @@ bool FrameGraphAvboitOccupancyUploadChain::declare(
             avboitOccupancyPayload.occupancyPhasePrepared = true;
         }
     }
-    outResult.uploadTask = occupancyUploadTask;
-    outResult.materialGeometrySet = occupancyMaterialGeometrySet;
-    outResult.materialSampledTextureSet = occupancyMaterialSampledTextureSet;
-    outResult.csgStreamsUploaded = occupancyCsgStreamsUploaded;
-    outResult.regularComputeEmulationPlanCaptured = occupancyRegularComputeEmulationPlanCaptured;
-    outResult.producesReusableGeometry = occupancyProducesReusableGeometry;
-    outResult.reusedGeometryProducer = occupancyReusedGeometryProducer;
-    outResult.csgComputeEmulationPlanCaptured = occupancyCsgComputeEmulationPlanCaptured;
-    outResult.sharedComputeEmulationPlanCaptured = occupancySharedComputeEmulationPlanCaptured;
-    outResult.sharedComputeEmulationPlan = occupancySharedComputeEmulationPlan;
-    outResult.sharedComputeEmulationInstanceCount = occupancySharedComputeEmulationInstanceCount;
-    outResult.sharedComputeEmulationMaterialTypedByteCount = occupancySharedComputeEmulationMaterialTypedByteCount;
-    outResult.declared = true;
-    return true;
+    result.uploadTask = occupancyUploadTask;
+    result.materialGeometrySet = occupancyMaterialGeometrySet;
+    result.materialSampledTextureSet = occupancyMaterialSampledTextureSet;
+    result.csgStreamsUploaded = occupancyCsgStreamsUploaded;
+    result.regularComputeEmulationPlanCaptured = occupancyRegularComputeEmulationPlanCaptured;
+    result.producesReusableGeometry = occupancyProducesReusableGeometry;
+    result.reusedGeometryProducer = occupancyReusedGeometryProducer;
+    result.csgComputeEmulationPlanCaptured = occupancyCsgComputeEmulationPlanCaptured;
+    result.sharedComputeEmulationPlanCaptured = occupancySharedComputeEmulationPlanCaptured;
+    result.sharedComputeEmulationPlan = occupancySharedComputeEmulationPlan;
+    result.sharedComputeEmulationInstanceCount = occupancySharedComputeEmulationInstanceCount;
+    result.sharedComputeEmulationMaterialTypedByteCount = occupancySharedComputeEmulationMaterialTypedByteCount;
+    result.declared = true;
+    return result;
 }
 
 

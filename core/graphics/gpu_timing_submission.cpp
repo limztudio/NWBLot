@@ -84,7 +84,8 @@ NWB_INLINE QueueSubmissionToken GpuTimingSubmissionTicket::submitToQueue(
     QueueSubmissionDesc mergedSubmitDesc = submitDesc;
     if(!waitTokens.empty())
         mergedSubmitDesc.setWaitTokens(waitTokens.data(), waitTokens.size());
-    const QueueSubmissionToken token = device.executeCommandLists(commandLists, commandListCount, executionQueue, mergedSubmitDesc);
+    const auto submission = device.executeCommandLists(commandLists, commandListCount, executionQueue, mergedSubmitDesc);
+    const QueueSubmissionToken token = submission ? submission->token : QueueSubmissionToken{};
     const bool resolved = resolveSubmission(token);
     submissionUnwind.release();
     if(!resolved)
@@ -98,8 +99,11 @@ NWB_INLINE QueueSubmissionToken GpuTimingSubmissionTicket::submitToQueue(
 
 GpuTimingSubmissionTicket::RecordingScope::RecordingScope(GpuTimingSubmissionTicket& ticket)noexcept
     : m_ticket(ticket)
-    , m_activated(m_ticket.activateOnCurrentThread(m_previousTicket))
-{}
+{
+    const auto activation = m_ticket.activateOnCurrentThread();
+    m_activated = activation.has_value();
+    m_previousTicket = activation ? *activation : activation.error().previousTicket;
+}
 
 GpuTimingSubmissionTicket::RecordingScope::~RecordingScope()noexcept{
     m_ticket.deactivateOnCurrentThread(m_previousTicket, m_activated);
@@ -268,26 +272,20 @@ GpuTimingSubmissionTicket::ScopeEndpointValidationResult GpuTimingSubmissionTick
         if(beginIndex == Limit<usize>::s_Max || endIndex == Limit<usize>::s_Max || endIndex < beginIndex)
             return ScopeEndpointValidationResult::RetryableBatchMismatch;
 
-        bool beginRecordsBegin = false;
-        bool beginRecordsEnd = false;
-        if(!commandLists[beginIndex]->inspectExactTimerQueryRecordingEndpoints(
+        const auto beginEndpoints = commandLists[beginIndex]->inspectExactTimerQueryRecordingEndpoints(
             publication.scope.timerQueryRecording,
-            publication.beginEndpoint.recordingLeaseSerial,
-            beginRecordsBegin,
-            beginRecordsEnd
-        ))
+            publication.beginEndpoint.recordingLeaseSerial
+        );
+        if(!beginEndpoints)
             return ScopeEndpointValidationResult::RetryableBatchMismatch;
 
-        bool endRecordsBegin = false;
-        bool endRecordsEnd = false;
-        if(!commandLists[endIndex]->inspectExactTimerQueryRecordingEndpoints(
+        const auto endEndpoints = commandLists[endIndex]->inspectExactTimerQueryRecordingEndpoints(
             publication.scope.timerQueryRecording,
-            publication.endEndpoint.recordingLeaseSerial,
-            endRecordsBegin,
-            endRecordsEnd
-        ))
+            publication.endEndpoint.recordingLeaseSerial
+        );
+        if(!endEndpoints)
             return ScopeEndpointValidationResult::RetryableBatchMismatch;
-        if(!beginRecordsBegin || !endRecordsEnd)
+        if(!beginEndpoints->recordsBegin || !endEndpoints->recordsEnd)
             return ScopeEndpointValidationResult::InvalidEndpoint;
     }
     return ScopeEndpointValidationResult::Valid;
@@ -477,13 +475,13 @@ bool GpuTimingSubmissionTicket::trackSubmissionPrerequisite(const QueueSubmissio
     return true;
 }
 
-bool GpuTimingSubmissionTicket::activateOnCurrentThread(GpuTimingSubmissionTicket*& outPreviousTicket)noexcept{
+Expected<GpuTimingSubmissionTicket*, GpuTimingSubmissionTicket::ActivationFailure> GpuTimingSubmissionTicket::activateOnCurrentThread()noexcept{
     NothrowScopedLock lock(m_mutex);
-    outPreviousTicket = GpuTimingRecorder::s_ActiveSubmissionTicket;
+    GpuTimingSubmissionTicket* const previousTicket = GpuTimingRecorder::s_ActiveSubmissionTicket;
     NWB_ASSERT_MSG(!m_resolved && !m_submissionPrepared, NWB_TEXT("GPU timing submission ticket activated after recording closed"));
     if(m_resolved || m_submissionPrepared){
         GpuTimingRecorder::s_ActiveSubmissionTicket = nullptr;
-        return false;
+        return MakeUnexpected(ActivationFailure{ previousTicket });
     }
     const bool countAvailable = m_recordingScopeCount != Limit<u32>::s_Max;
     NWB_FATAL_ASSERT_MSG(countAvailable, "GPU timing submission ticket recording-scope count exhausted");
@@ -492,7 +490,7 @@ bool GpuTimingSubmissionTicket::activateOnCurrentThread(GpuTimingSubmissionTicke
 
     GpuTimingRecorder::s_ActiveSubmissionTicket = this;
     ++m_recordingScopeCount;
-    return true;
+    return previousTicket;
 }
 
 void GpuTimingSubmissionTicket::deactivateOnCurrentThread(

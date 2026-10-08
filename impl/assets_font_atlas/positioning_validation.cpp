@@ -110,9 +110,9 @@ public:
                 continue;
             if(!range(list, 4u))
                 return false;
-            u32 coverageCount = 0u;
             const u32 count = u16At(list + 2u);
-            if(!coverage(list + u16At(list), coverageCount) || count != coverageCount || !range(list + 4u, count * 2u))
+            const auto coverageCount = coverage(list + u16At(list));
+            if(!coverageCount || count != *coverageCount || !range(list + 4u, count * 2u))
                 return false;
             for(u32 index = 0u; index < count; ++index){
                 const u64 item = list + u16At(list + 4u + index * 2u);
@@ -135,9 +135,8 @@ public:
             if(!range(sets, 4u) || u16At(sets) != 1u || !range(sets + 4u, u16At(sets + 2u) * 4u))
                 return false;
             for(u32 index = 0u; index < u16At(sets + 2u); ++index){
-                u32 count = 0u;
                 const u32 offset = u32At(sets + 4u + index * 4u);
-                if(offset == 0u || !coverage(sets + offset, count))
+                if(offset == 0u || !coverage(sets + offset))
                     return false;
             }
         }
@@ -166,16 +165,16 @@ private:
     [[nodiscard]] u32 u32At(u64 offset)const noexcept{
         return (static_cast<u32>(u16At(offset)) << 16u) | u16At(offset + 2u);
     }
-    [[nodiscard]] bool coverage(u64 offset, u32& outCount)noexcept{
+    [[nodiscard]] Expected<u32> coverage(u64 offset)noexcept{
         if(!range(offset, 4u))
-            return false;
+            return MakeUnexpected(Failure{});
         const u16 format = u16At(offset);
         const u32 count = u16At(offset + 2u);
-        outCount = 0u;
+        u32 glyphCount = 0u;
         if(format != 1u && format != 2u)
-            return false;
+            return MakeUnexpected(Failure{});
         if(!range(offset + 4u, count * (format == 1u ? 2u : 6u)) || !spend(count))
-            return false;
+            return MakeUnexpected(Failure{});
         u32 previous = 0u;
         for(u32 index = 0u; index < count; ++index){
             const u64 record = offset + 4u + index * (format == 1u ? 2u : 6u);
@@ -183,13 +182,13 @@ private:
             const u32 end = format == 1u ? start : u16At(record + 2u);
             if(
                 start > end || end >= m_glyphCount || (index > 0u && start <= previous)
-                || (format == 2u && u16At(record + 4u) != outCount)
+                || (format == 2u && u16At(record + 4u) != glyphCount)
             )
-                return false;
-            outCount += end - start + 1u;
+                return MakeUnexpected(Failure{});
+            glyphCount += end - start + 1u;
             previous = end;
         }
-        return true;
+        return glyphCount;
     }
     [[nodiscard]] bool classDef(u64 offset, u32 classCount)noexcept{
         if(offset == 0u)
@@ -325,16 +324,15 @@ private:
         const u16 format = u16At(offset);
         const u16 firstFormat = u16At(offset + 4u);
         const u16 secondFormat = u16At(offset + 6u);
-        u32 coverageCount = 0u;
-        if(
-            u16At(offset + 2u) == 0u || !coverage(offset + u16At(offset + 2u), coverageCount)
-            || ((firstFormat | secondFormat) & 0xff00u) != 0u
-        )
+        if(u16At(offset + 2u) == 0u)
+            return false;
+        const auto coverageCount = coverage(offset + u16At(offset + 2u));
+        if(!coverageCount || ((firstFormat | secondFormat) & 0xff00u) != 0u)
             return false;
         const u32 stride = valueSize(firstFormat) + valueSize(secondFormat);
         if(format == 1u){
             const u32 count = u16At(offset + 8u);
-            if(count != coverageCount || !range(offset + 10u, count * 2u))
+            if(count != *coverageCount || !range(offset + 10u, count * 2u))
                 return false;
             for(u32 index = 0u; index < count; ++index){
                 const u32 delta = u16At(offset + 10u + index * 2u);
@@ -393,15 +391,17 @@ private:
         if(type == 1u){
             if(!range(offset, 6u))
                 return false;
-            u32 count = 0u;
             const u16 valueFormat = u16At(offset + 4u);
-            if(u16At(offset + 2u) == 0u || !coverage(offset + u16At(offset + 2u), count))
+            if(u16At(offset + 2u) == 0u)
+                return false;
+            const auto count = coverage(offset + u16At(offset + 2u));
+            if(!count)
                 return false;
             if(format == 1u)
                 return value(offset + 6u, valueFormat, offset);
-            if(format != 2u || !range(offset, 8u) || count != u16At(offset + 6u) || !spend(count))
+            if(format != 2u || !range(offset, 8u) || *count != u16At(offset + 6u) || !spend(*count))
                 return false;
-            for(u32 index = 0u; index < count; ++index){
+            for(u32 index = 0u; index < *count; ++index){
                 if(!value(offset + 8u + static_cast<u64>(index) * valueSize(valueFormat), valueFormat, offset))
                     return false;
             }
@@ -409,8 +409,7 @@ private:
         }
         // Non-pair positioning is retained opaque after bounded format/root admission; runtime executes the source font.
         if(type >= 3u && type <= 6u){
-            u32 count = 0u;
-            return format == 1u && u16At(offset + 2u) != 0u && coverage(offset + u16At(offset + 2u), count);
+            return format == 1u && u16At(offset + 2u) != 0u && coverage(offset + u16At(offset + 2u));
         }
         return (type == 7u || type == 8u) && format >= 1u && format <= 3u;
     }

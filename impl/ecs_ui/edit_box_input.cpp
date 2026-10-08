@@ -86,8 +86,10 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
         event.focusGeneration = entry->focusGeneration;
         const Ui::InputCommandIntent intent{ input.command, input.extend, input.edit };
         event.command = Ui::TranslateEditCommand(intent, input.repeat, entry->displayed.textMode);
-        event.navigation = Ui::TranslateEditNavigation(intent, event.navigationDirection);
-        if(event.navigation){
+        const auto navigation = Ui::TranslateEditNavigation(intent);
+        event.navigation = navigation.has_value();
+        if(navigation){
+            event.navigationDirection = *navigation;
             if(entry->navigationInstanceGeneration == 0u || entry->displayed.textMode != Ui::EditTextMode::Multiline)
                 return;
             event.navigationViewportHeight = entry->displayed.placement.content.height;
@@ -107,9 +109,17 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
             return;
         }
         Entry* entry = find(target);
-        usize byte = 0u;
-        usize wordByte = 0u;
-        if(!entry || !hit(*entry, input.position, byte) || !hitWord(*entry, input.position, wordByte)){
+        if(!entry){
+            m_clickTracker.cancel();
+            return;
+        }
+        const auto byte = hit(*entry, input.position);
+        if(!byte){
+            m_clickTracker.cancel();
+            return;
+        }
+        const auto wordByte = hitWord(*entry, input.position);
+        if(!wordByte){
             m_clickTracker.cancel();
             return;
         }
@@ -117,8 +127,8 @@ void UiEditBoxHost::input(const Ui::InputEvent& input, const Ui::WidgetId previo
         event.owner = entry->owner;
         event.focusGeneration = entry->focusGeneration;
         event.kind = UiEditBoxEventKind::Selection;
-        event.position = byte;
-        event.wordPosition = wordByte;
+        event.position = *byte;
+        event.wordPosition = *wordByte;
         event.geometryRevision = entry->displayed.revision;
         event.geometryExternalRevision = entry->displayed.externalRevision;
         event.extend = input.shift;

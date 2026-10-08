@@ -109,14 +109,14 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     }
 
     // Trace buffers finalized by preflight; retain slots before compile.
-    RayTraceMaterialContextSlots rayTraceMaterialContextSlots;
-    if(!m_raytracingSystem.snapshotRayTraceMaterialContextSlots(rayTraceMaterialContextSlots)){
+    const auto rayTraceMaterialContextSlots = m_raytracingSystem.snapshotRayTraceMaterialContextSlots();
+    if(!rayTraceMaterialContextSlots){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot ray-trace material-context selector"));
         return false;
     }
     const Core::GpuUploadBlobId rayTraceMaterialContextSlotsBlob = m_deferredLightingTaskGraph.copyUploadData(
-        &rayTraceMaterialContextSlots,
-        sizeof(rayTraceMaterialContextSlots),
+        &*rayTraceMaterialContextSlots,
+        sizeof(*rayTraceMaterialContextSlots),
         alignof(RayTraceMaterialContextSlots)
     );
     if(!rayTraceMaterialContextSlotsBlob.valid()){
@@ -176,17 +176,16 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         return false;
     }
 
-    Core::GpuUploadBlobId causticEmissionTargetsBlob;
-    if(!m_raytracingSystem.retainPreparedCausticEmissionTargetUpload(
-        m_deferredLightingTaskGraph,
-        causticEmissionTargetsBlob
-    )){
+    const auto causticEmissionTargetsBlob = m_raytracingSystem.retainPreparedCausticEmissionTargetUpload(
+        m_deferredLightingTaskGraph
+    );
+    if(!causticEmissionTargetsBlob){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted caustic emission-target upload data"));
         return false;
     }
 
     Core::GpuTaskId shadowPrepareDependency = m_rayTraceMaterialContextSlotsUploadTask;
-    if(causticEmissionTargetsBlob.valid()){
+    if(causticEmissionTargetsBlob->valid()){
         if(!causticEmissionTargets.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: caustic emission-target upload has no imported destination"));
             return false;
@@ -207,7 +206,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         m_causticEmissionTargetsUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
             causticEmissionTargetsUploadDesc,
             Core::GpuUploadBufferTaskDesc{
-                .source = causticEmissionTargetsBlob,
+                .source = *causticEmissionTargetsBlob,
                 .destination = causticEmissionTargets,
                 // Buffer publishes Common; Shadow Preparation owns the SRV handoff.
                 .finalState = Core::ResourceStates::Common,
@@ -233,16 +232,15 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         return false;
     }
 
-    Core::GpuUploadBlobId surfelFrameConstantsBlob;
-    if(!m_raytracingSystem.retainPreparedSurfelFrameConstantsUpload(
+    const auto surfelFrameConstantsBlob = m_raytracingSystem.retainPreparedSurfelFrameConstantsUpload(
         m_deferredLightingTaskGraph,
-        deferredTargets,
-        surfelFrameConstantsBlob
-    )){
+        deferredTargets
+    );
+    if(!surfelFrameConstantsBlob){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted surfel-frame constants upload data"));
         return false;
     }
-    if(surfelFrameConstantsBlob.valid()){
+    if(surfelFrameConstantsBlob->valid()){
         if(!surfelFrameConstants.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: surfel-frame constants upload has no imported destination"));
             return false;
@@ -263,7 +261,7 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         m_surfelFrameConstantsUploadTask = m_deferredLightingTaskGraph.addUploadBufferTask(
             surfelFrameConstantsUploadDesc,
             Core::GpuUploadBufferTaskDesc{
-                .source = surfelFrameConstantsBlob,
+                .source = *surfelFrameConstantsBlob,
                 .destination = surfelFrameConstants,
                 // Buffer publishes Common; Shadow Preparation owns the CB handoff.
                 .finalState = Core::ResourceStates::Common,
@@ -309,18 +307,16 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         return false;
     }
 
-    Core::GpuUploadBlobId shadowInstanceMaterialsBlob;
-    Core::GpuUploadBlobId shadowInstancesBlob;
-    Core::GpuUploadBlobId shadowMaterialTypedBlob;
-    if(!m_raytracingSystem.retainPreparedShadowMaterialContextUploads(
-        m_deferredLightingTaskGraph,
-        shadowInstanceMaterialsBlob,
-        shadowInstancesBlob,
-        shadowMaterialTypedBlob
-    )){
+    const auto shadowMaterialContextUploads = m_raytracingSystem.retainPreparedShadowMaterialContextUploads(
+        m_deferredLightingTaskGraph
+    );
+    if(!shadowMaterialContextUploads){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted shadow material-context upload data"));
         return false;
     }
+    const Core::GpuUploadBlobId shadowInstanceMaterialsBlob = shadowMaterialContextUploads->instanceMaterial;
+    const Core::GpuUploadBlobId shadowInstancesBlob = shadowMaterialContextUploads->instance;
+    const Core::GpuUploadBlobId shadowMaterialTypedBlob = shadowMaterialContextUploads->materialTyped;
     const bool shadowMaterialContextBatchGraphOwned = shadowInstanceMaterialsBlob.valid();
     if(
         shadowMaterialContextBatchGraphOwned != shadowInstancesBlob.valid()
@@ -427,16 +423,15 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
         return false;
     }
 
-    Core::GpuUploadBlobId sceneBvhNodesBlob;
-    Core::GpuUploadBlobId sceneBvhInstancesBlob;
-    if(!m_raytracingSystem.retainPreparedSceneBvhUploads(
-        m_deferredLightingTaskGraph,
-        sceneBvhNodesBlob,
-        sceneBvhInstancesBlob
-    )){
+    const auto sceneBvhUploads = m_raytracingSystem.retainPreparedSceneBvhUploads(
+        m_deferredLightingTaskGraph
+    );
+    if(!sceneBvhUploads){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain preflighted software scene-BVH upload data"));
         return false;
     }
+    const Core::GpuUploadBlobId sceneBvhNodesBlob = sceneBvhUploads->node;
+    const Core::GpuUploadBlobId sceneBvhInstancesBlob = sceneBvhUploads->instance;
     const bool sceneBvhBatchGraphOwned = sceneBvhNodesBlob.valid();
     if(sceneBvhBatchGraphOwned != sceneBvhInstancesBlob.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: incomplete frozen software scene-BVH upload pair"));
@@ -561,7 +556,6 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     );
     resourceSetUses.reserve(3u);
     geometryResources.prepareStorage(meshBlasGeometryBuildInputStatesGraphOwned);
-    pureSoftwareMeshSwBvhGraphResources.reserve(preparedMeshSwBvhBuilds.size());
     // Shadow Preparation owns post-transition boundaries; Compute readers wait on this packet.
     resourceUses.push_back(ReadWriteUse(currentBindlessSlots, Core::ResourceStates::ConstantBuffer));
     // Retain Shadow Preparation as producer; WAW handoff retires the immutable upload.
@@ -746,11 +740,13 @@ bool RendererFramePipeline::declareDeferredShadowPrepareTask(
     }
 
     const bool pureSoftwareMeshSwBvhBuildsGraphOwned = pureSoftwareMeshSwBvhBuildsGraphOwnedCandidate;
-    if(pureSoftwareMeshSwBvhBuildsGraphOwned && !ResolvePreparedSoftwareBvhGraphResources(
-        m_deferredLightingTaskGraph, preparedMeshSwBvhBuilds, pureSoftwareMeshSwBvhGraphResources
-    )){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build is missing graph resources"));
-        return false;
+    if(pureSoftwareMeshSwBvhBuildsGraphOwned){
+        auto resources = ResolvePreparedSoftwareBvhGraphResources(scratchArena, m_deferredLightingTaskGraph, preparedMeshSwBvhBuilds);
+        if(!resources){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software BVH build is missing graph resources"));
+            return false;
+        }
+        pureSoftwareMeshSwBvhGraphResources = Move(*resources);
     }
 
     if(pureSoftwareMeshSwBvhBuildsGraphOwned){

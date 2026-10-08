@@ -37,18 +37,16 @@ namespace FilesystemVolumeDetail{
 constexpr usize s_ErrnoMessageBufferBytes = 256u;
 
 
-static bool ToStreamOff(const u64 value, GlobalFilesystemDetail::StreamOffset& out)noexcept{
+static Expected<GlobalFilesystemDetail::StreamOffset> ToStreamOff(const u64 value)noexcept{
     if(!CanRepresentU64<GlobalFilesystemDetail::StreamOffset>(value))
-        return false;
-    out = static_cast<GlobalFilesystemDetail::StreamOffset>(value);
-    return true;
+        return MakeUnexpected(Failure{});
+    return static_cast<GlobalFilesystemDetail::StreamOffset>(value);
 }
 
-static bool ToStreamSize(const u64 value, GlobalFilesystemDetail::StreamSize& out)noexcept{
+static Expected<GlobalFilesystemDetail::StreamSize> ToStreamSize(const u64 value)noexcept{
     if(!CanRepresentU64<GlobalFilesystemDetail::StreamSize>(value))
-        return false;
-    out = static_cast<GlobalFilesystemDetail::StreamSize>(value);
-    return true;
+        return MakeUnexpected(Failure{});
+    return static_cast<GlobalFilesystemDetail::StreamSize>(value);
 }
 
 ACompactString LastErrnoMessage(){
@@ -95,12 +93,11 @@ void LogFailureWithFsError(AStringView volumeName, AStringView operation, const 
     );
 }
 
-bool ReadVolumeHeaderFromSegment(
+Expected<VolumeHeaderDisk> ReadVolumeHeaderFromSegment(
     const AStringView volumeName,
-    const Path& segmentPath,
-    VolumeHeaderDisk& outHeader
+    const Path& segmentPath
 ){
-    outHeader = {};
+    VolumeHeaderDisk header{};
 
     GlobalFilesystemDetail::InputFileStream stream(
         segmentPath,
@@ -108,20 +105,20 @@ bool ReadVolumeHeaderFromSegment(
     );
     if(!stream.is_open()){
         LogFailureWithPath(volumeName, FilesystemVolumeDetail::s_VolumeOpMountOpenHeader, segmentPath, LastErrnoMessage());
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     stream.read(
-        reinterpret_cast<char*>(&outHeader),
-        static_cast<GlobalFilesystemDetail::StreamSize>(sizeof(outHeader))
+        reinterpret_cast<char*>(&header),
+        static_cast<GlobalFilesystemDetail::StreamSize>(sizeof(header))
     );
     if(stream.good())
-        return true;
-    if(stream.eof() && stream.gcount() == static_cast<GlobalFilesystemDetail::StreamSize>(sizeof(outHeader)))
-        return true;
+        return header;
+    if(stream.eof() && stream.gcount() == static_cast<GlobalFilesystemDetail::StreamSize>(sizeof(header)))
+        return header;
 
     LogFailureWithPath(volumeName, FilesystemVolumeDetail::s_VolumeOpMountReadHeader, segmentPath, LastErrnoMessage());
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 template<typename SegmentPaths, typename ChunkFunc>
@@ -140,10 +137,12 @@ static bool ForEachSegmentChunk(
     }
 
     u64 endOffset = 0;
-    if(!AddNoOverflow(offset, byteCount, endOffset)){
+    const auto endOffsetResult = AddNoOverflow(offset, byteCount);
+    if(!endOffsetResult){
         LogFailure(volumeName, operation, "offset overflow");
         return false;
     }
+    endOffset = *endOffsetResult;
     if(static_cast<u64>(segmentPaths.size()) > Limit<u64>::s_Max / segmentSize){
         LogFailure(volumeName, operation, "capacity overflow");
         return false;
@@ -167,18 +166,18 @@ static bool ForEachSegmentChunk(
         const u64 segmentOffset = currentOffset % segmentSize;
         const u64 chunkBytes = Min(remainingBytes, segmentSize - segmentOffset);
 
-        GlobalFilesystemDetail::StreamOffset streamOffset = 0;
-        GlobalFilesystemDetail::StreamSize streamChunkSize = 0;
-        if(!ToStreamOff(segmentOffset, streamOffset)){
+        const auto streamOffset = ToStreamOff(segmentOffset);
+        if(!streamOffset){
             LogFailure(volumeName, operation, "segment offset cannot be represented as stream offset");
             return false;
         }
-        if(!ToStreamSize(chunkBytes, streamChunkSize)){
+        const auto streamChunkSize = ToStreamSize(chunkBytes);
+        if(!streamChunkSize){
             LogFailure(volumeName, operation, "chunk size cannot be represented as stream size");
             return false;
         }
 
-        if(!chunkFunc(segmentIndex, streamOffset, streamChunkSize, chunkBytes))
+        if(!chunkFunc(segmentIndex, *streamOffset, *streamChunkSize, chunkBytes))
             return false;
 
         currentOffset += chunkBytes;
@@ -421,8 +420,8 @@ bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
         return false;
     }
 
-    GlobalFilesystemDetail::StreamOffset streamOffset = 0;
-    if(!FilesystemVolumeDetail::ToStreamOff(m_segmentSize - 1, streamOffset)){
+    const auto streamOffset = FilesystemVolumeDetail::ToStreamOff(m_segmentSize - 1);
+    if(!streamOffset){
         NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): createSegment failed: segment size {} cannot be represented as stream offset")
             , StringConvert(m_volumeName)
             , m_segmentSize
@@ -430,7 +429,7 @@ bool VolumeFileSystem::createSegmentLocked(const usize segmentIndex){
         return false;
     }
 
-    stream.seekp(streamOffset);
+    stream.seekp(*streamOffset);
     if(!stream.good()){
         FilesystemVolumeDetail::LogFailureWithPath(
             m_volumeName,
@@ -476,11 +475,12 @@ bool VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
     }
 
     for(;;){
-        u64 capacity = 0;
-        if(!computeLogicalCapacityLocked(capacity)){
+        const auto capacityResult = computeLogicalCapacityLocked();
+        if(!capacityResult){
             FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpEnsureCapacity, "capacity overflow while computing current volume size");
             return false;
         }
+        const u64 capacity = *capacityResult;
 
         if(requiredBytes <= capacity)
             return true;
@@ -498,50 +498,47 @@ bool VolumeFileSystem::ensureCapacityLocked(const u64 requiredBytes){
     }
 }
 
-bool VolumeFileSystem::computeLogicalCapacityLocked(u64& outCapacityBytes)const noexcept{
-    outCapacityBytes = 0;
+Expected<u64> VolumeFileSystem::computeLogicalCapacityLocked()const noexcept{
     if(m_segmentSize == 0)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const u64 segmentCount = static_cast<u64>(m_segmentPaths.size());
     if(segmentCount > Limit<u64>::s_Max / m_segmentSize)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outCapacityBytes = segmentCount * m_segmentSize;
-    return true;
+    return segmentCount * m_segmentSize;
 }
 
-bool VolumeFileSystem::computePhysicalCapacityLocked(u64& outCapacityBytes)const{
-    outCapacityBytes = 0;
-
+Expected<u64> VolumeFileSystem::computePhysicalCapacityLocked()const{
     if(m_segmentPaths.empty() || m_segmentSize == 0){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpPhysicalCapacity, FilesystemVolumeDetail::s_VolumeDetailNoMountedSegmentsOrSizeZero);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const usize fullSegmentCount = m_segmentPaths.size() - 1u;
     if(static_cast<u64>(fullSegmentCount) > Limit<u64>::s_Max / m_segmentSize){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpPhysicalCapacity, "segment capacity overflow");
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    ErrorCode errorCode;
-    const u64 lastSegmentBytes = FileSize(m_segmentPaths.back(), errorCode);
-    if(errorCode){
+    const auto lastSegmentBytes = FileSize(m_segmentPaths.back());
+    if(!lastSegmentBytes){
+        const ErrorCode& errorCode = lastSegmentBytes.error();
         FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpPhysicalCapacityFileSize, m_segmentPaths.back(), errorCode);
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    if(lastSegmentBytes == 0 || lastSegmentBytes > m_segmentSize){
+    if(*lastSegmentBytes == 0 || *lastSegmentBytes > m_segmentSize){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpPhysicalCapacity, "final segment size is outside logical bounds");
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const u64 fullSegmentBytes = static_cast<u64>(fullSegmentCount) * m_segmentSize;
-    if(FilesystemVolumeDetail::AddNoOverflow(fullSegmentBytes, lastSegmentBytes, outCapacityBytes))
-        return true;
+    const auto capacityBytes = FilesystemVolumeDetail::AddNoOverflow(fullSegmentBytes, *lastSegmentBytes);
+    if(capacityBytes)
+        return capacityBytes;
 
     FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpPhysicalCapacity, "capacity overflow while adding final segment");
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 bool VolumeFileSystem::readBytesLocked(const u64 offset, void* data, const u64 byteCount)const{
@@ -574,10 +571,12 @@ bool VolumeFileSystem::writeBytesLocked(const u64 offset, const void* data, cons
     }
 
     u64 endOffset = 0;
-    if(!FilesystemVolumeDetail::AddNoOverflow(offset, byteCount, endOffset)){
+    const auto endOffsetResult = FilesystemVolumeDetail::AddNoOverflow(offset, byteCount);
+    if(!endOffsetResult){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteBytes, "offset overflow");
         return false;
     }
+    endOffset = *endOffsetResult;
     if(!ensureCapacityLocked(endOffset)){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpWriteBytes, "insufficient capacity");
         return false;

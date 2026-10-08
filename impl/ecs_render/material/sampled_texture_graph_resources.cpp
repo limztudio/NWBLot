@@ -17,35 +17,37 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SampledTextureImportResult::Enum ImportMaterialSampledTextureResources(
+Expected<Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>, SampledTextureImportFailure::Enum> ImportMaterialSampledTextureResources(
     Core::GpuTaskGraph& graph,
     const Core::TextureHandle* const textures,
     const usize textureCount,
     const AStringView markerLabel,
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& outResources
+    Core::Alloc::ScratchArena& scratchArena
 ){
+    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> resources(scratchArena);
+    resources.reserve(textureCount);
     for(usize textureIndex = 0u; textureIndex < textureCount; ++textureIndex){
         const Core::TextureHandle& texture = textures[textureIndex];
         Core::GpuGraphResourceId resource;
         {
             const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
             if(!declarations.valid())
-                return SampledTextureImportResult::GraphUnavailable;
+                return MakeUnexpected(SampledTextureImportFailure::GraphUnavailable);
             resource = declarations.findImportedTexture(texture);
         }
         if(!resource.valid()){
             if(!texture)
-                return SampledTextureImportResult::MissingIdentity;
+                return MakeUnexpected(SampledTextureImportFailure::MissingIdentity);
             const Name identity = texture->getCreationDescription().name;
             if(!identity)
-                return SampledTextureImportResult::MissingIdentity;
+                return MakeUnexpected(SampledTextureImportFailure::MissingIdentity);
             resource = graph.importTexture(texture, RendererTaskGraphDetail::TextureResourceDesc(identity, markerLabel));
             if(!resource.valid())
-                return SampledTextureImportResult::ImportFailed;
+                return MakeUnexpected(SampledTextureImportFailure::ImportFailed);
         }
-        outResources.push_back(resource);
+        resources.push_back(resource);
     }
-    return SampledTextureImportResult::Success;
+    return resources;
 }
 
 

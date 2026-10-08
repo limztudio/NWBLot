@@ -296,8 +296,8 @@ void RendererReflectionSystem::pollStatistics(){
     m_statistics.pollCompleted();
 }
 
-bool RendererReflectionSystem::tryGetLatestStatistics(ReflectionStatistics& outStatistics)const{
-    return m_statistics.tryGetLatestStatistics(outStatistics);
+Expected<ReflectionStatistics> RendererReflectionSystem::tryGetLatestStatistics()const noexcept{
+    return m_statistics.tryGetLatestStatistics();
 }
 
 ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(

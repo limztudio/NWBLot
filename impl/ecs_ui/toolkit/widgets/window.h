@@ -77,10 +77,10 @@ public:
 
 class WindowLayout final{
 public:
-    [[nodiscard]] static bool Measure(
+    [[nodiscard]] static Expected<WindowMetrics> Measure(
         const UiSkinRegion& frame, const UiSkinRegion& title, const UiSkinRegion* collapse,
         const UiSkinRegion* resize, const WidgetStyle& style, const WindowOptions& options,
-        const Point& titleSize, f32 density, WindowMetrics& metrics
+        const Point& titleSize, f32 density
     )noexcept;
     [[nodiscard]] static Rect Visible(const WindowState& state, const WindowMetrics& metrics)noexcept;
     [[nodiscard]] static Rect Content(const WindowState& state, const WindowMetrics& metrics)noexcept;

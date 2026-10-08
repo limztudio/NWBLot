@@ -108,15 +108,16 @@ static void WriteLittleU32(Core::Assets::AssetBytes& bytes, const usize offset, 
 
 
 TEST(AssetsFontAtlas, EmptyAndPaddingBoundaryDigestsRejectMalformedText){
-    Sha256Digest expected;
-    ASSERT_TRUE(ParseSha256("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", expected));
-    EXPECT_EQ(ComputeSha256({}), expected);
+    const auto emptyHash = ParseSha256("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    ASSERT_TRUE(emptyHash);
+    EXPECT_EQ(ComputeSha256({}), *emptyHash);
     // A 56-byte input requires a second block for the SHA-256 padding.
-    ASSERT_TRUE(ParseSha256("248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1", expected));
+    const auto paddedHash = ParseSha256("248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1");
+    ASSERT_TRUE(paddedHash);
     static constexpr AStringView s_MultiBlock = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
-    EXPECT_EQ(ComputeSha256({ reinterpret_cast<const u8*>(s_MultiBlock.data()), s_MultiBlock.size() }), expected);
-    EXPECT_FALSE(ParseSha256("BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD", expected));
-    EXPECT_FALSE(ParseSha256("ba78", expected));
+    EXPECT_EQ(ComputeSha256({ reinterpret_cast<const u8*>(s_MultiBlock.data()), s_MultiBlock.size() }), *paddedHash);
+    EXPECT_FALSE(ParseSha256("BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD"));
+    EXPECT_FALSE(ParseSha256("ba78"));
 }
 
 TEST(AssetsFontAtlas, EmptyGlyphRetainsAdvanceAndFirstOutOfRangeLookupMissesAfterLoad){
@@ -141,10 +142,10 @@ TEST(AssetsFontAtlas, MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas){
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     AtlasTestArena testArena;
     FontAtlasPayload payload = MakePayload(testArena);
-    Core::Assets::AssetBytes valid(testArena.arena);
-    ASSERT_TRUE(SerializeFontAtlasPayload(payload, valid));
+    auto valid = SerializeFontAtlasPayload(payload, testArena.arena);
+    ASSERT_TRUE(valid);
     FontAtlas atlas(testArena.arena, Name("project/fonts/body_atlas"));
-    ASSERT_TRUE(atlas.loadBinary(valid));
+    ASSERT_TRUE(atlas.loadBinary(*valid));
     const usize corruptOffsets[] = { 0u, 4u, 8u, 12u, 112u, 120u, 136u, 152u, 156u, 160u,
         FontAtlasBinaryPayload::s_HeaderBytes + 48u,
         FontAtlasBinaryPayload::s_HeaderBytes + 5u * FontAtlasBinaryPayload::s_GlyphBytes,
@@ -152,20 +153,20 @@ TEST(AssetsFontAtlas, MalformedBinaryDoesNotReplacePreviouslyLoadedAtlas){
         FontAtlasBinaryPayload::s_HeaderBytes + 5u * FontAtlasBinaryPayload::s_GlyphBytes + 8u,
         FontAtlasBinaryPayload::s_HeaderBytes + 5u * FontAtlasBinaryPayload::s_GlyphBytes + 12u };
     for(const usize offset : corruptOffsets){
-        Core::Assets::AssetBytes invalid(valid);
+        Core::Assets::AssetBytes invalid(*valid);
         WriteLittleU32(invalid, offset, Limit<u32>::s_Max);
         EXPECT_FALSE(atlas.loadBinary(invalid)) << offset;
         EXPECT_EQ(atlas.payload().fontSha256, payload.fontSha256);
         EXPECT_EQ(atlas.payload().groups[0u].pixels, payload.groups[0u].pixels);
     }
-    Core::Assets::AssetBytes changed(valid);
+    Core::Assets::AssetBytes changed(*valid);
     changed.back() ^= 1u;
     EXPECT_FALSE(atlas.loadBinary(changed));
     EXPECT_EQ(atlas.payload().groups[0u].pixels, payload.groups[0u].pixels);
-    Core::Assets::AssetBytes truncated(valid);
+    Core::Assets::AssetBytes truncated(*valid);
     truncated.pop_back();
     EXPECT_FALSE(atlas.loadBinary(truncated));
-    Core::Assets::AssetBytes trailing(valid);
+    Core::Assets::AssetBytes trailing(*valid);
     trailing.push_back(0u);
     EXPECT_FALSE(atlas.loadBinary(trailing));
 }
@@ -193,10 +194,10 @@ TEST(AssetsFontAtlas, CompactNonPowerOfTwoGroupsRejectMissingChannelsAndLostGuar
         }
         payload.glyphs[channelCount] = {};
         payload.glyphs[channelCount].glyphId = channelCount;
-        Core::Assets::AssetBytes binary(testArena.arena);
-        ASSERT_TRUE(SerializeFontAtlasPayload(payload, binary)) << channelCount;
-        FontAtlasPayload loaded(testArena.arena);
-        ASSERT_TRUE(DeserializeFontAtlasPayload(binary, loaded)) << channelCount;
+        auto binary = SerializeFontAtlasPayload(payload, testArena.arena);
+        ASSERT_TRUE(binary) << channelCount;
+        auto loaded = DeserializeFontAtlasPayload(*binary, testArena.arena);
+        ASSERT_TRUE(loaded) << channelCount;
         FontAtlasPayload invalid(payload);
         invalid.glyphs[0u].channel = channelCount;
         EXPECT_FALSE(ValidateFontAtlasPayload(invalid));
@@ -209,8 +210,8 @@ TEST(AssetsFontAtlas, CompactNonPowerOfTwoGroupsRejectMissingChannelsAndLostGuar
         invalid = payload;
         invalid.groups[0u].pixels.push_back(0u);
         invalid.groups[0u].sha256 = ComputeSha256({ invalid.groups[0u].pixels.data(), invalid.groups[0u].pixels.size() });
-        EXPECT_FALSE(SerializeFontAtlasPayload(invalid, binary));
-        EXPECT_EQ(loaded.groups[0u].pixels, group.pixels);
+        EXPECT_FALSE(SerializeFontAtlasPayload(invalid, testArena.arena));
+        EXPECT_EQ(loaded->groups[0u].pixels, group.pixels);
     }
 }
 
@@ -220,10 +221,10 @@ TEST(AssetsFontAtlas, UnsupportedVersionsAndCompactGroupHeadersPreservePublished
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     AtlasTestArena testArena;
     const FontAtlasPayload payload = MakePayload(testArena);
-    Core::Assets::AssetBytes binary(testArena.arena);
-    ASSERT_TRUE(SerializeFontAtlasPayload(payload, binary));
-    FontAtlasPayload loaded(testArena.arena);
-    ASSERT_TRUE(DeserializeFontAtlasPayload(binary, loaded));
+    auto binary = SerializeFontAtlasPayload(payload, testArena.arena);
+    ASSERT_TRUE(binary);
+    auto loaded = DeserializeFontAtlasPayload(*binary, testArena.arena);
+    ASSERT_TRUE(loaded);
     const usize groupOffset = FontAtlasBinaryPayload::s_HeaderBytes + payload.glyphs.size() * FontAtlasBinaryPayload::s_GlyphBytes;
     const Pair<usize, u32> invalidFields[] = {
         { 4u, 1u }, { 4u, 0u }, { 4u, FontAtlasBinaryPayload::s_Version + 1u },
@@ -234,11 +235,11 @@ TEST(AssetsFontAtlas, UnsupportedVersionsAndCompactGroupHeadersPreservePublished
     for(const auto& field : invalidFields){
         const usize offset = field.first();
         const u32 value = field.second();
-        Core::Assets::AssetBytes invalid(binary);
+        Core::Assets::AssetBytes invalid(*binary);
         WriteLittleU32(invalid, offset, value);
-        EXPECT_FALSE(DeserializeFontAtlasPayload(invalid, loaded)) << offset << ": " << value;
-        EXPECT_EQ(loaded.groups[0u].pixels, payload.groups[0u].pixels);
-        EXPECT_EQ(loaded.groups[0u].channelCount, 4u);
+        EXPECT_FALSE(DeserializeFontAtlasPayload(invalid, testArena.arena)) << offset << ": " << value;
+        EXPECT_EQ(loaded->groups[0u].pixels, payload.groups[0u].pixels);
+        EXPECT_EQ(loaded->groups[0u].channelCount, 4u);
     }
     FontAtlasPayload invalid(payload);
     invalid.groups[0u].channelCount = 0u;
@@ -275,19 +276,15 @@ TEST(AssetsFontAtlas, CodecRejectsUnnamedOrCorruptAtlasWithoutReplacingOutput){
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("pixel content hash mismatch")));
 }
 
-TEST(AssetsFontAtlas, InvalidHashAndGeometryAreRejectedBeforeSerializationPublication){
+TEST(AssetsFontAtlas, InvalidHashAndGeometryAreRejectedBySerialization){
     using namespace __hidden_font_atlas_tests;
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     AtlasTestArena testArena;
     FontAtlasPayload original = MakePayload(testArena);
-    Core::Assets::AssetBytes binary(testArena.arena);
-    binary.push_back(42u);
     FontAtlasPayload candidate(original);
     candidate.groups[0u].pixels[0u] ^= 1u;
-    EXPECT_FALSE(SerializeFontAtlasPayload(candidate, binary));
-    ASSERT_EQ(binary.size(), 1u);
-    EXPECT_EQ(binary[0u], 42u);
+    EXPECT_FALSE(SerializeFontAtlasPayload(candidate, testArena.arena));
     candidate = original;
     candidate.glyphs[0u].channel = 4u;
     EXPECT_FALSE(ValidateFontAtlasPayload(candidate));
@@ -389,7 +386,9 @@ TEST(AssetsFontAtlas, OriginalSourcePositioningSetAndBytesMustMatchTheShapingFon
     AtlasTestArena testArena;
     const Path sourcePath = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets" / "ui" / "fonts" / "default" / "latin.font";
     Core::Assets::AssetBytes bytes(testArena.arena);
-    ASSERT_TRUE(ReadBundledFontBytes(sourcePath, bytes));
+    auto bytesResult = ReadBundledFontBytes(sourcePath, bytes.get_allocator().arena());
+    ASSERT_TRUE(bytesResult);
+    bytes = Move(*bytesResult);
     Font font(testArena.arena, Name("project/fonts/body"));
     font.setFontBytes(Move(bytes));
     ASSERT_TRUE(font.validatePayload());

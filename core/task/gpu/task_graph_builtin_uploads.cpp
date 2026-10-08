@@ -41,12 +41,11 @@ struct UploadBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBa
         CommandList& commandList,
         const GpuTaskRecordContext& context
     ){
-        usize byteSize = 0u;
-        const void* const bytes = context.declarations.uploadBlobData(payload.source, byteSize);
+        const auto bytes = context.declarations.uploadBlobData(payload.source);
         if(
             !payload.destination
             || !bytes
-            || byteSize == 0u
+            || bytes->empty()
             || payload.finalState == ResourceStates::Unknown
         )
             return false;
@@ -60,7 +59,7 @@ struct UploadBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBa
                 payload.source,
                 payload.destinationResource,
                 payload.destinationOffsetBytes,
-                BinaryByteView{ static_cast<const u8*>(bytes), byteSize },
+                *bytes,
                 payload.finalState
             )
         )
@@ -69,10 +68,10 @@ struct UploadBufferTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskBa
         commandList.endRenderPass();
         // The compiler tracks `finalState` for later tasks, but the native write itself requires CopyDest. Make the
         // internal transition explicit and commit it before vkCmdCopyBuffer; writeBuffer only queues its own state.
-        const BufferRange uploadRange(payload.destinationOffsetBytes, byteSize);
+        const BufferRange uploadRange(payload.destinationOffsetBytes, bytes->size());
         commandList.setBufferState(payload.destination.get(), ResourceStates::CopyDest, false, uploadRange);
         commandList.commitBarriers();
-        if(!commandList.tryWriteBuffer(*payload.destination, bytes, byteSize, payload.destinationOffsetBytes))
+        if(!commandList.tryWriteBuffer(*payload.destination, bytes->data(), bytes->size(), payload.destinationOffsetBytes))
             return false;
         if(payload.finalState != ResourceStates::CopyDest){
             commandList.setBufferState(payload.destination.get(), payload.finalState, false, uploadRange);
@@ -103,13 +102,12 @@ struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskB
         CommandList& commandList,
         const GpuTaskRecordContext& context
     ){
-        usize byteSize = 0u;
-        const void* const bytes = context.declarations.uploadBlobData(payload.source, byteSize);
+        const auto bytes = context.declarations.uploadBlobData(payload.source);
         if(
             !payload.destination
             || !bytes
             || payload.requiredBytes == 0u
-            || byteSize < payload.requiredBytes
+            || bytes->size() < payload.requiredBytes
             || payload.finalState == ResourceStates::Unknown
         )
             return false;
@@ -126,7 +124,7 @@ struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskB
                 payload.rowPitch,
                 payload.depthPitch,
                 payload.aspect,
-                BinaryByteView{ static_cast<const u8*>(bytes), payload.requiredBytes },
+                BinaryByteView{ bytes->data(), payload.requiredBytes },
                 payload.finalState
             )
         )
@@ -141,7 +139,7 @@ struct UploadTextureTask : public GpuTaskGraphBuiltinDetail::SingletonTokenTaskB
             *payload.destination,
             payload.arraySlice,
             payload.mipLevel,
-            bytes,
+            bytes->data(),
             payload.rowPitch,
             payload.depthPitch,
             payload.aspect
@@ -310,11 +308,11 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
     )
         return {};
 
-    usize requiredBytes = 0u;
+    Expected<usize> requiredBytes = MakeUnexpected(Failure{});
     const TextureDesc& destinationDesc = destinationResource.texture->getCreationDescription();
     const FormatInfo& destinationFormatInfo = GetFormatInfo(destinationDesc.format);
-    TextureUploadAspect::Enum resolvedAspect;
-    if(!ResolveTextureUploadAspect(destinationFormatInfo, uploadDesc.aspect, resolvedAspect))
+    const auto resolvedAspect = ResolveTextureUploadAspect(destinationFormatInfo, uploadDesc.aspect);
+    if(!resolvedAspect)
         return {};
     if(
         !GpuTaskGraphBuiltinDetail::UploadTextureTaskCanMaterializeRetainedState(
@@ -324,16 +322,15 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
             uploadDesc.finalState
         )
         ||
-        !GpuTaskGraphBuiltinDetail::ComputeTextureUploadByteSize(
+        !(requiredBytes = GpuTaskGraphBuiltinDetail::ComputeTextureUploadByteSize(
             destinationDesc,
             uploadDesc.arraySlice,
             uploadDesc.mipLevel,
             uploadDesc.rowPitch,
             uploadDesc.depthPitch,
-            uploadDesc.aspect,
-            requiredBytes
-        )
-        || source->bytes.size() < requiredBytes
+            uploadDesc.aspect
+        ))
+        || source->bytes.size() < *requiredBytes
     )
         return {};
 
@@ -353,7 +350,7 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
     payload->mipLevel = uploadDesc.mipLevel;
     payload->rowPitch = uploadDesc.rowPitch;
     payload->depthPitch = uploadDesc.depthPitch;
-    payload->requiredBytes = requiredBytes;
+    payload->requiredBytes = *requiredBytes;
     payload->finalState = uploadDesc.finalState;
     payload->acceptedToken = uploadDesc.acceptedToken;
     payload->aspect = uploadDesc.aspect;
@@ -378,7 +375,7 @@ GpuTaskId GpuTaskGraph::addUploadTextureTask(
     const usize resourceUseCount = uploadDesc.finalState == ResourceStates::CopyDest ? 1u : LengthOf(resourceUses);
     GpuTaskDesc resolvedDesc = desc;
     GpuTaskCommandRequirements commands{ GpuQueueCapability::Transfer };
-    if(resolvedAspect != TextureUploadAspect::Color)
+    if(*resolvedAspect != TextureUploadAspect::Color)
         commands.requiredCapabilities |= GpuQueueCapability::Graphics;
     resolvedDesc.setResourceUses(resourceUses, resourceUseCount);
     return appendBuiltinTaskWithinMutation<UploadTask>(resolvedDesc, payload, mutation, commands);

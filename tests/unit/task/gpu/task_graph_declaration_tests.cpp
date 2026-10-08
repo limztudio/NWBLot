@@ -259,17 +259,16 @@ TEST(GpuTaskGraph, OwnsUploadBlobsAndInvalidatesThemOnReset){
 
     const Graphics::GpuUploadBlobId blob = graph.copyUploadData(sourceBytes, sizeof(sourceBytes), alignof(u32));
     ASSERT_TRUE(blob.valid());
-    usize byteSize = 0u;
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_TRUE(declarations.validUploadBlob(blob));
         EXPECT_EQ(declarations.uploadBlobCount(), 1u);
 
         sourceBytes[0u] = 0u;
-        const auto* const storedBytes = static_cast<const u8*>(declarations.uploadBlobData(blob, byteSize));
-        ASSERT_NE(storedBytes, nullptr);
-        ASSERT_EQ(byteSize, sizeof(sourceBytes));
-        EXPECT_EQ(storedBytes[0u], 0x17u);
+        const auto storedBytes = declarations.uploadBlobData(blob);
+        ASSERT_TRUE(storedBytes);
+        ASSERT_EQ(storedBytes->size(), sizeof(sourceBytes));
+        EXPECT_EQ((*storedBytes)[0u], 0x17u);
     }
 
     graph.reset();
@@ -277,9 +276,7 @@ TEST(GpuTaskGraph, OwnsUploadBlobsAndInvalidatesThemOnReset){
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
         EXPECT_FALSE(declarations.validUploadBlob(blob));
         EXPECT_EQ(declarations.uploadBlobCount(), 0u);
-        byteSize = Limit<usize>::s_Max;
-        EXPECT_EQ(declarations.uploadBlobData(blob, byteSize), nullptr);
-        EXPECT_EQ(byteSize, 0u);
+        EXPECT_FALSE(declarations.uploadBlobData(blob));
     }
 
     const Graphics::GpuUploadBlobId replacement = graph.copyUploadData(sourceBytes, sizeof(sourceBytes), alignof(u32));

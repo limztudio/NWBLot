@@ -99,9 +99,9 @@ SubmissionBindingFixture::SubmissionBindingFixture()
     Graphics::QueueSubmissionPreSubmitHook result;
     result.context = &hookInvocationCount;
     result.identity = identity;
-    result.invoke = [](void* const context, u64, const Graphics::GpuPhysicalQueueId&, Graphics::QueueSubmissionNativeSignal&){
+    result.invoke = [](void* const context, u64, const Graphics::GpuPhysicalQueueId&)->Expected<Graphics::QueueSubmissionNativeSignal>{
         ++*static_cast<u32*>(context);
-        return false;
+        return MakeUnexpected(Failure{});
     };
     return result;
 }
@@ -157,7 +157,7 @@ void BenchmarkSubmissionBindings(const usize packetCount, const usize bindingCou
             begin = TimerNow();
             for(usize packetIndex = 0u; packetIndex < packetCount; ++packetIndex){
                 const Graphics::QueueSubmissionPreSubmitHook* hook = nullptr;
-                resolved.collectPacket(plan.packetIdAt(packetIndex), packetTickets, hook);
+                hook = resolved.collectPacket(plan.packetIdAt(packetIndex), packetTickets);
                 resolvedTicketCount += packetTickets.size();
                 if(hook)
                     hookSum += hook->identity;
@@ -228,7 +228,7 @@ TEST(GpuTaskSubmissionBindings, PreservesMergedAliasesAndReversedBindingOrderWit
         const Graphics::GpuSubmissionPacketId packet = plan.packetForTask(fixture.tasks[first]);
         ASSERT_EQ(packet, plan.packetIdAt(packetIndex));
         const Graphics::QueueSubmissionPreSubmitHook* hook = nullptr;
-        resolved.collectPacket(packet, packetTickets, hook);
+        hook = resolved.collectPacket(packet, packetTickets);
         ASSERT_EQ(packetTickets.size(), 2u);
         EXPECT_EQ(packetTickets[0u], fixture.tickets[first].get());
         EXPECT_EQ(packetTickets[1u], fixture.tickets[first + 1u].get());
@@ -243,7 +243,7 @@ TEST(GpuTaskSubmissionBindings, PreservesMergedAliasesAndReversedBindingOrderWit
     Graphics::GpuSubmissionPacketId stalePacket = plan.packetIdAt(0u);
     ++stalePacket.generation;
     const Graphics::QueueSubmissionPreSubmitHook* hook = nullptr;
-    resolved.collectPacket(stalePacket, packetTickets, hook);
+    hook = resolved.collectPacket(stalePacket, packetTickets);
     EXPECT_TRUE(packetTickets.empty());
     EXPECT_EQ(hook, nullptr);
     EXPECT_FALSE(resolved.validateOwnedTimingTicket(stalePacket, fixture.tickets[0u].get()));
@@ -252,18 +252,18 @@ TEST(GpuTaskSubmissionBindings, PreservesMergedAliasesAndReversedBindingOrderWit
     const Graphics::GpuTaskGraphTaskTimingTicket singleTiming{ .task = fixture.tasks[0u], .timingTicket = fixture.tickets[0u].get() };
     const Graphics::GpuTaskGraphTaskSubmissionHook singleHook{ .task = fixture.tasks[1u], .hook = fixture.hook(99u) };
     ASSERT_TRUE(resolved.resolve(declarations, plan, plan.allPacketRange(), &singleTiming, 1u, &singleHook, 1u));
-    resolved.collectPacket(plan.packetIdAt(0u), packetTickets, hook);
+    hook = resolved.collectPacket(plan.packetIdAt(0u), packetTickets);
     ASSERT_EQ(packetTickets.size(), 1u);
     EXPECT_EQ(packetTickets[0u], fixture.tickets[0u].get());
     ASSERT_NE(hook, nullptr);
     EXPECT_EQ(hook->identity, 99u);
-    resolved.collectPacket(plan.packetIdAt(15u), packetTickets, hook);
+    hook = resolved.collectPacket(plan.packetIdAt(15u), packetTickets);
     EXPECT_TRUE(packetTickets.empty());
     EXPECT_EQ(hook, nullptr);
     EXPECT_TRUE(resolved.validateOwnedTimingTicket(plan.packetIdAt(0u), fixture.tickets[3u].get()));
 
     ASSERT_TRUE(resolved.resolve(declarations, plan, plan.allPacketRange(), nullptr, 0u, nullptr, 0u));
-    resolved.collectPacket(plan.packetIdAt(0u), packetTickets, hook);
+    hook = resolved.collectPacket(plan.packetIdAt(0u), packetTickets);
     EXPECT_TRUE(packetTickets.empty());
     EXPECT_EQ(hook, nullptr);
     EXPECT_TRUE(resolved.validateOwnedTimingTicket(stalePacket, fixture.tickets[0u].get()));

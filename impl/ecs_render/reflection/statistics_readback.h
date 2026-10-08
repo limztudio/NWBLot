@@ -49,6 +49,12 @@ struct ReflectionStatisticsReservationKey{
     [[nodiscard]] bool valid()const noexcept{ return sequence != 0u && generation != 0u; }
 };
 
+struct ReflectionStatisticsPendingReadback{
+    ReflectionStatisticsReservationKey key;
+    Core::QueueSubmissionToken token;
+};
+
+
 // CPU lifecycle shared by owner and leases; completion follows GPU token completion.
 class ReflectionStatisticsState : NoCopy{
 private:
@@ -76,17 +82,13 @@ public:
         const ReflectionHistoryOutcome* history = nullptr,
         const ReflectionFeedbackOutcome* feedback = nullptr
     )noexcept;
-    [[nodiscard]] bool pending(
-        u32 slot,
-        ReflectionStatisticsReservationKey& outKey,
-        Core::QueueSubmissionToken& outToken
-    )const noexcept;
+    [[nodiscard]] Expected<ReflectionStatisticsPendingReadback> pending(u32 slot)const noexcept;
     void complete(
         const ReflectionStatisticsReservationKey& key,
         const Core::QueueSubmissionToken& token,
         const u32* counters
     )noexcept;
-    [[nodiscard]] bool tryGetLatestStatistics(ReflectionStatistics& outStatistics)const noexcept;
+    [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept;
 
 private:
     [[nodiscard]] Slot* matchingSlot(const ReflectionStatisticsReservationKey& key)noexcept;
@@ -150,7 +152,7 @@ public:
     void invalidateResources();
     [[nodiscard]] bool prepareResources();
     void pollCompleted();
-    [[nodiscard]] bool tryGetLatestStatistics(ReflectionStatistics& outStatistics)const;
+    [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept;
     [[nodiscard]] ReflectionStatisticsReadbackSnapshot snapshot(const ReflectionStatistics& metadata)const noexcept;
 
 private:

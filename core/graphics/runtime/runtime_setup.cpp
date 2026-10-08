@@ -30,57 +30,54 @@ inline constexpr Name s_SetupTextureResourceIdentity("graphics.setup_texture.res
 inline constexpr Name s_SetupTextureUploadIdentity("graphics.setup_texture.upload");
 
 
-[[nodiscard]] static bool ComputeTextureUploadByteSize(const GraphicsRuntime::TextureSetupDesc& desc, usize& outRequiredBytes){
-    outRequiredBytes = 0;
-
+[[nodiscard]] static Expected<usize> ComputeTextureUploadByteSize(const GraphicsRuntime::TextureSetupDesc& desc){
     const TextureDesc& textureDesc = desc.textureDesc;
     if(textureDesc.width == 0 || textureDesc.height == 0 || textureDesc.depth == 0 || textureDesc.mipLevels == 0 || textureDesc.arraySize == 0)
-        return false;
+        return MakeUnexpected(Failure{});
     if(textureDesc.sampleCount != 1)
-        return false;
+        return MakeUnexpected(Failure{});
     if(desc.mipLevel >= textureDesc.mipLevels || desc.arraySlice >= textureDesc.arraySize)
-        return false;
+        return MakeUnexpected(Failure{});
     if(static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::kCount))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
-    TextureUploadAspectLayout aspectLayout;
-    if(!GetTextureUploadAspectLayout(formatInfo, desc.aspect, aspectLayout))
-        return false;
+    const auto aspectLayout = GetTextureUploadAspectLayout(formatInfo, desc.aspect);
+    if(!aspectLayout)
+        return MakeUnexpected(Failure{});
 
     const u32 width = Max<u32>(1u, textureDesc.width >> desc.mipLevel);
     const u32 height = Max<u32>(1u, textureDesc.height >> desc.mipLevel);
     const u32 depth = Max<u32>(1u, textureDesc.depth >> desc.mipLevel);
 
-    const u64 blockCountX = DivideUp(static_cast<u64>(width), static_cast<u64>(aspectLayout.blockWidth));
-    const u64 blockCountY = DivideUp(static_cast<u64>(height), static_cast<u64>(aspectLayout.blockHeight));
-    if(blockCountX > Limit<u64>::s_Max / aspectLayout.bytesPerBlock)
-        return false;
+    const u64 blockCountX = DivideUp(static_cast<u64>(width), static_cast<u64>(aspectLayout->blockWidth));
+    const u64 blockCountY = DivideUp(static_cast<u64>(height), static_cast<u64>(aspectLayout->blockHeight));
+    if(blockCountX > Limit<u64>::s_Max / aspectLayout->bytesPerBlock)
+        return MakeUnexpected(Failure{});
 
-    const u64 naturalRowPitch = blockCountX * aspectLayout.bytesPerBlock;
+    const u64 naturalRowPitch = blockCountX * aspectLayout->bytesPerBlock;
     const u64 effectiveRowPitch = desc.rowPitch != 0 ? static_cast<u64>(desc.rowPitch) : naturalRowPitch;
-    if(effectiveRowPitch == 0 || effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % aspectLayout.bytesPerBlock) != 0)
-        return false;
+    if(effectiveRowPitch == 0 || effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % aspectLayout->bytesPerBlock) != 0)
+        return MakeUnexpected(Failure{});
     if(blockCountY > Limit<u64>::s_Max / effectiveRowPitch)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const u64 packedSlicePitch = effectiveRowPitch * blockCountY;
     const u64 effectiveDepthPitch = desc.depthPitch != 0 ? static_cast<u64>(desc.depthPitch) : packedSlicePitch;
     if(effectiveDepthPitch == 0 || effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0)
-        return false;
+        return MakeUnexpected(Failure{});
 
     if(depth > 1 && static_cast<u64>(depth - 1) > (Limit<u64>::s_Max - packedSlicePitch) / effectiveDepthPitch)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const u64 requiredBytes = depth > 1
         ? effectiveDepthPitch * static_cast<u64>(depth - 1) + packedSlicePitch
         : packedSlicePitch
     ;
     if(requiredBytes > static_cast<u64>(Limit<usize>::s_Max))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outRequiredBytes = static_cast<usize>(requiredBytes);
-    return true;
+    return static_cast<usize>(requiredBytes);
 }
 
 
@@ -255,16 +252,15 @@ bool ValidateTextureSetupUpload(const GraphicsRuntime::TextureSetupDesc& desc){
     }
 
     const FormatInfo& formatInfo = GetFormatInfo(desc.textureDesc.format);
-    TextureUploadAspect::Enum resolvedAspect;
-    if(!ResolveTextureUploadAspect(formatInfo, desc.aspect, resolvedAspect)){
+    if(!ResolveTextureUploadAspect(formatInfo, desc.aspect)){
         NWB_LOGGER_ERROR(
             NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': upload aspect must name one aspect present in the texture format; D24S8/D32S8 require Depth or Stencil")
             , StringConvert(desc.textureDesc.name.resolvedText())
         );
         return false;
     }
-    usize requiredBytes = 0;
-    if(!__hidden_graphics_setup::ComputeTextureUploadByteSize(desc, requiredBytes)){
+    const auto requiredBytes = __hidden_graphics_setup::ComputeTextureUploadByteSize(desc);
+    if(!requiredBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': invalid upload layout"), StringConvert(desc.textureDesc.name.resolvedText()));
         return false;
     }
@@ -274,11 +270,11 @@ bool ValidateTextureSetupUpload(const GraphicsRuntime::TextureSetupDesc& desc){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': keep-initial-state uploads require a concrete initial state"), StringConvert(desc.textureDesc.name.resolvedText()));
         return false;
     }
-    if(desc.uploadDataSize < requiredBytes){
+    if(desc.uploadDataSize < *requiredBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to set up texture '{}': upload data size {} is smaller than required size {}")
             , StringConvert(desc.textureDesc.name.resolvedText())
             , desc.uploadDataSize
-            , requiredBytes
+            , *requiredBytes
         );
         return false;
     }

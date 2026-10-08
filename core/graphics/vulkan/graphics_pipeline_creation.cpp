@@ -273,8 +273,7 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         VK_DYNAMIC_STATE_STENCIL_WRITE_MASK,
         VK_DYNAMIC_STATE_STENCIL_REFERENCE,
     };
-    VulkanDetail::GraphicsPipelineFixedState fixedState{ scratchArena };
-    if(!buildGraphicsPipelineFixedStateOrDestroy(
+    const auto fixedState = buildGraphicsPipelineFixedStateOrDestroy(
         fbinfo,
         desc.renderState,
         VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces,
@@ -282,18 +281,19 @@ GraphicsPipelineHandle Device::createGraphicsPipeline(const GraphicsPipelineDesc
         static_cast<u32>(LengthOf(dynamicStates)),
         NWB_TEXT("graphics pipeline"),
         *pso,
-        fixedState
-    ))
+        scratchArena
+    );
+    if(!fixedState)
         return nullptr;
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
-    VulkanDetail::AttachPipelineBindingState(pipelineInfo, *pso, &fixedState.renderingInfo);
+    VulkanDetail::AttachPipelineBindingState(pipelineInfo, *pso, &fixedState->renderingInfo);
     pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
     pipelineInfo.pStages = shaderStages.data();
     pipelineInfo.pVertexInputState = &vertexInputInfo;
     pipelineInfo.pInputAssemblyState = &inputAssembly;
     pipelineInfo.pTessellationState = (desc.patchControlPoints > 0) ? &tessellationState : nullptr;
-    VulkanDetail::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, fixedState);
+    VulkanDetail::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, *fixedState);
     pipelineInfo.renderPass = VK_NULL_HANDLE;
     pipelineInfo.subpass = 0;
 

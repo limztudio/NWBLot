@@ -91,39 +91,35 @@ bool CsgDeformWallBuilder::NormalizeDeformVertex(CsgDeformVertex& vertex)noexcep
     return CsgDeformValidator::FiniteVertex(vertex);
 }
 
-bool CsgDeformWallBuilder::SplitEdgeVertex(
+Expected<u32> CsgDeformWallBuilder::SplitEdgeVertex(
     CsgDeformVertexVector<ScratchArena>& vertices,
     CsgDeformEdgeSplitMap& edgeSplits,
     const u32 first,
     const u32 second,
     const f32 firstDistance,
-    const f32 secondDistance,
-    u32& outVertex
+    const f32 secondDistance
 ){
-    outVertex = 0u;
     if(vertices.size() + 1u > s_MaxDeformVertices)
-        return false;
+        return MakeUnexpected(Failure{});
     const u64 edge = CsgDeformEdgeKey(first, second);
     const auto found = edgeSplits.find(edge);
     if(found != edgeSplits.end()){
-        outVertex = found.value();
-        return true;
+        return found.value();
     }
     const f32 denominator = firstDistance - secondDistance;
     if(!CsgDeformValidator::FiniteFloat(denominator) || Abs(denominator) < s_SplitDenominatorEpsilon)
-        return false;
+        return MakeUnexpected(Failure{});
     // A zero secondDistance selects the second endpoint.
     const f32 firstWeight = VectorGetX(CsgDeformValidator::SaturateVec(
         CsgDeformValidator::AbsDivideVec(VectorReplicate(secondDistance), VectorReplicate(denominator))
     ));
     CsgDeformVertex mixed = CsgDeformWallBuilder::MixVertices(vertices[first], vertices[second], firstWeight);
     if(!CsgDeformWallBuilder::NormalizeDeformVertex(mixed))
-        return false;
+        return MakeUnexpected(Failure{});
     const u32 created = static_cast<u32>(vertices.size());
     vertices.push_back(mixed);
     edgeSplits.emplace(edge, created);
-    outVertex = created;
-    return true;
+    return created;
 }
 
 void CsgDeformWallBuilder::EmitTriangle(
@@ -140,19 +136,18 @@ void CsgDeformWallBuilder::EmitTriangle(
 }
 
 // Keep side is distance >= 0; caller snaps |distance| <= epsilon to zero first.
-bool CsgDeformWallBuilder::ClipShell(
+Expected<void, CsgDeformViabilityReason::Enum> CsgDeformWallBuilder::ClipShell(
     ScratchArena& scratchArena,
     const CsgDeformShape& shape,
     const f32 epsilon,
     CsgDeformVertexVector<ScratchArena>& inOutVertices,
     CsgDeformTriangleVector<ScratchArena>& inOutTriangles,
     CsgDeformTriangleVector<ScratchArena>& scratchKept,
-    Vector<f32, ScratchArena>& scratchDistances,
-    CsgDeformViabilityReason::Enum& outReason
+    Vector<f32, ScratchArena>& scratchDistances
 ){
-    outReason = CsgDeformViabilityReason::Ok;
-    if(!CsgDeformCutterField::ShapeDistances(shape, inOutVertices, epsilon, scratchDistances, outReason))
-        return false;
+    const auto shapeDistances = CsgDeformCutterField::ShapeDistances(shape, inOutVertices, epsilon, scratchDistances);
+    if(!shapeDistances)
+        return MakeUnexpected(shapeDistances.error());
 
     CsgDeformEdgeSplitMap edgeSplits(0, CsgDeformEdgeSplitKeyHash(), EqualTo<u64>(), scratchArena);
     edgeSplits.reserve(inOutTriangles.size() * s_EdgesPerTriangle + s_ReserveSlack);
@@ -192,13 +187,13 @@ bool CsgDeformWallBuilder::ClipShell(
             const f32 keepDistance = distances[keepCorner];
             const f32 dropDistanceA = distances[(keepCorner + 1u) % s_TriangleCornerCount];
             const f32 dropDistanceB = distances[(keepCorner + 2u) % s_TriangleCornerCount];
-            u32 splitA = 0u;
-            u32 splitB = 0u;
-            if(!CsgDeformWallBuilder::SplitEdgeVertex(inOutVertices, edgeSplits, keepVertex, dropA, keepDistance, dropDistanceA, splitA))
-                return false;
-            if(!CsgDeformWallBuilder::SplitEdgeVertex(inOutVertices, edgeSplits, keepVertex, dropB, keepDistance, dropDistanceB, splitB))
-                return false;
-            CsgDeformWallBuilder::EmitTriangle(scratchKept, keepVertex, splitA, splitB);
+            const auto splitA = CsgDeformWallBuilder::SplitEdgeVertex(inOutVertices, edgeSplits, keepVertex, dropA, keepDistance, dropDistanceA);
+            if(!splitA)
+                return MakeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
+            const auto splitB = CsgDeformWallBuilder::SplitEdgeVertex(inOutVertices, edgeSplits, keepVertex, dropB, keepDistance, dropDistanceB);
+            if(!splitB)
+                return MakeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
+            CsgDeformWallBuilder::EmitTriangle(scratchKept, keepVertex, *splitA, *splitB);
             continue;
         }
         u32 dropCorner = 0u;
@@ -214,19 +209,19 @@ bool CsgDeformWallBuilder::ClipShell(
         const f32 dropDistance = distances[dropCorner];
         const f32 keepDistanceA = distances[(dropCorner + 1u) % s_TriangleCornerCount];
         const f32 keepDistanceB = distances[(dropCorner + 2u) % s_TriangleCornerCount];
-        u32 splitA = 0u;
-        u32 splitB = 0u;
-        if(!CsgDeformWallBuilder::SplitEdgeVertex(inOutVertices, edgeSplits, keepA, dropVertex, keepDistanceA, dropDistance, splitA))
-            return false;
-        if(!CsgDeformWallBuilder::SplitEdgeVertex(inOutVertices, edgeSplits, keepB, dropVertex, keepDistanceB, dropDistance, splitB))
-            return false;
-        CsgDeformWallBuilder::EmitTriangle(scratchKept, keepA, splitA, splitB);
-        CsgDeformWallBuilder::EmitTriangle(scratchKept, keepA, splitB, keepB);
+        const auto splitA = CsgDeformWallBuilder::SplitEdgeVertex(inOutVertices, edgeSplits, keepA, dropVertex, keepDistanceA, dropDistance);
+        if(!splitA)
+            return MakeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
+        const auto splitB = CsgDeformWallBuilder::SplitEdgeVertex(inOutVertices, edgeSplits, keepB, dropVertex, keepDistanceB, dropDistance);
+        if(!splitB)
+            return MakeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
+        CsgDeformWallBuilder::EmitTriangle(scratchKept, keepA, *splitA, *splitB);
+        CsgDeformWallBuilder::EmitTriangle(scratchKept, keepA, *splitB, keepB);
         if(scratchKept.size() > s_MaxDeformTriangles)
-            return false;
+            return MakeUnexpected(CsgDeformViabilityReason::NoKeptGeometry);
     }
     inOutTriangles = scratchKept;
-    return true;
+    return {};
 }
 
 

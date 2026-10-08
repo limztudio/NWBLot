@@ -249,23 +249,20 @@ u32 GetFormatBlockHeight(const FormatInfo& formatInfo)noexcept{
     }
 }
 
-bool ResolveTextureUploadAspect(
+Expected<TextureUploadAspect::Enum> ResolveTextureUploadAspect(
     const FormatInfo& formatInfo,
-    const TextureUploadAspect::Enum requestedAspect,
-    TextureUploadAspect::Enum& outAspect
+    const TextureUploadAspect::Enum requestedAspect
 )noexcept{
-    outAspect = TextureUploadAspect::Automatic;
     if(requestedAspect >= TextureUploadAspect::kCount)
-        return false;
+        return MakeUnexpected(Failure{});
 
     if(formatInfo.hasDepth && formatInfo.hasStencil){
         if(
             requestedAspect != TextureUploadAspect::Depth
             && requestedAspect != TextureUploadAspect::Stencil
         )
-            return false;
-        outAspect = requestedAspect;
-        return true;
+            return MakeUnexpected(Failure{});
+        return requestedAspect;
     }
 
     if(formatInfo.hasDepth){
@@ -273,9 +270,8 @@ bool ResolveTextureUploadAspect(
             requestedAspect != TextureUploadAspect::Automatic
             && requestedAspect != TextureUploadAspect::Depth
         )
-            return false;
-        outAspect = TextureUploadAspect::Depth;
-        return true;
+            return MakeUnexpected(Failure{});
+        return TextureUploadAspect::Depth;
     }
 
     if(formatInfo.hasStencil){
@@ -283,45 +279,41 @@ bool ResolveTextureUploadAspect(
             requestedAspect != TextureUploadAspect::Automatic
             && requestedAspect != TextureUploadAspect::Stencil
         )
-            return false;
-        outAspect = TextureUploadAspect::Stencil;
-        return true;
+            return MakeUnexpected(Failure{});
+        return TextureUploadAspect::Stencil;
     }
 
     if(
         requestedAspect != TextureUploadAspect::Automatic
         && requestedAspect != TextureUploadAspect::Color
     )
-        return false;
-    outAspect = TextureUploadAspect::Color;
-    return true;
+        return MakeUnexpected(Failure{});
+    return TextureUploadAspect::Color;
 }
 
-bool GetTextureUploadAspectLayout(
+Expected<TextureUploadAspectLayout> GetTextureUploadAspectLayout(
     const FormatInfo& formatInfo,
-    const TextureUploadAspect::Enum requestedAspect,
-    TextureUploadAspectLayout& outLayout
+    const TextureUploadAspect::Enum requestedAspect
 )noexcept{
-    outLayout = {};
+    TextureUploadAspectLayout layout;
 
-    TextureUploadAspect::Enum resolvedAspect;
-    if(!ResolveTextureUploadAspect(formatInfo, requestedAspect, resolvedAspect))
-        return false;
+    const auto resolvedAspect = ResolveTextureUploadAspect(formatInfo, requestedAspect);
+    if(!resolvedAspect)
+        return MakeUnexpected(Failure{});
 
-    outLayout.blockWidth = GetFormatBlockWidth(formatInfo);
-    outLayout.blockHeight = GetFormatBlockHeight(formatInfo);
-    outLayout.bytesPerBlock = formatInfo.bytesPerBlock;
+    layout.blockWidth = GetFormatBlockWidth(formatInfo);
+    layout.blockHeight = GetFormatBlockHeight(formatInfo);
+    layout.bytesPerBlock = formatInfo.bytesPerBlock;
     // Depth/stencil image aspects are copied from independent CPU planes.  D24S8/D32S8 both use a 32-bit
     // depth plane and an 8-bit stencil plane even though their opaque whole-image allocation sizes differ.
-    if(resolvedAspect == TextureUploadAspect::Depth && formatInfo.hasStencil)
-        outLayout.bytesPerBlock = sizeof(u32);
-    else if(resolvedAspect == TextureUploadAspect::Stencil)
-        outLayout.bytesPerBlock = sizeof(u8);
+    if(*resolvedAspect == TextureUploadAspect::Depth && formatInfo.hasStencil)
+        layout.bytesPerBlock = sizeof(u32);
+    else if(*resolvedAspect == TextureUploadAspect::Stencil)
+        layout.bytesPerBlock = sizeof(u8);
 
-    return outLayout.blockWidth != 0u
-        && outLayout.blockHeight != 0u
-        && outLayout.bytesPerBlock != 0u
-    ;
+    if(layout.blockWidth == 0u || layout.blockHeight == 0u || layout.bytesPerBlock == 0u)
+        return MakeUnexpected(Failure{});
+    return layout;
 }
 
 
@@ -475,20 +467,22 @@ namespace __hidden_graphics_api{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ResolveFramebufferAttachmentExtent(const FramebufferAttachment& attachment, u32& outWidth, u32& outHeight, u32& outArraySize){
+struct FramebufferAttachmentExtent{
+    u32 width = 0u;
+    u32 height = 0u;
+    u32 arraySize = 0u;
+};
+
+[[nodiscard]] Expected<FramebufferAttachmentExtent> ResolveFramebufferAttachmentExtent(const FramebufferAttachment& attachment)noexcept{
     const TextureDesc& textureDesc = attachment.texture->getCreationDescription();
     const TextureSubresourceSet subresources = attachment.subresources.resolve(textureDesc, TextureSubresourceMipResolve::Single);
-    if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
-        outWidth = 0;
-        outHeight = 0;
-        outArraySize = 0;
-        return false;
-    }
-
-    outWidth = Max(textureDesc.width >> subresources.baseMipLevel, static_cast<u32>(1));
-    outHeight = Max(textureDesc.height >> subresources.baseMipLevel, static_cast<u32>(1));
-    outArraySize = subresources.numArraySlices;
-    return true;
+    if(subresources.numMipLevels == 0u || subresources.numArraySlices == 0u)
+        return MakeUnexpected(Failure{});
+    return FramebufferAttachmentExtent{
+        .width = Max(textureDesc.width >> subresources.baseMipLevel, static_cast<u32>(1)),
+        .height = Max(textureDesc.height >> subresources.baseMipLevel, static_cast<u32>(1)),
+        .arraySize = subresources.numArraySlices,
+    };
 }
 
 
@@ -528,14 +522,23 @@ FramebufferInfo::FramebufferInfo(const FramebufferDesc& desc){
 FramebufferInfoEx::FramebufferInfoEx(const FramebufferDesc& desc)
     : FramebufferInfo(desc)
 {
-    if(desc.depthAttachment.valid()){
-        if(!__hidden_graphics_api::ResolveFramebufferAttachmentExtent(desc.depthAttachment, width, height, arraySize))
-            return;
+    const FramebufferAttachment* attachment = nullptr;
+    if(desc.depthAttachment.valid())
+        attachment = &desc.depthAttachment;
+    else if(!desc.colorAttachments.empty() && desc.colorAttachments[0].valid())
+        attachment = &desc.colorAttachments[0];
+    if(!attachment)
+        return;
+    const auto extent = __hidden_graphics_api::ResolveFramebufferAttachmentExtent(*attachment);
+    if(!extent){
+        width = 0u;
+        height = 0u;
+        arraySize = 0u;
+        return;
     }
-    else if(!desc.colorAttachments.empty() && desc.colorAttachments[0].valid()){
-        if(!__hidden_graphics_api::ResolveFramebufferAttachmentExtent(desc.colorAttachments[0], width, height, arraySize))
-            return;
-    }
+    width = extent->width;
+    height = extent->height;
+    arraySize = extent->arraySize;
 }
 
 
@@ -594,12 +597,12 @@ usize GetCooperativeVectorOptimalMatrixStride(CooperativeVectorDataType::Enum ty
     }
 
     const usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
-    usize minorByteSize = 0u;
-    if(!TryMultiply<usize>(minorElementCount, dataTypeSize, minorByteSize))
+    const auto minorByteSize = TryMultiply<usize>(minorElementCount, dataTypeSize);
+    if(!minorByteSize)
         return 0;
-    if(AddOverflows<usize>(minorByteSize, dataTypeSize))
+    if(AddOverflows<usize>(*minorByteSize, dataTypeSize))
         return 0;
-    return minorByteSize + dataTypeSize;
+    return *minorByteSize + dataTypeSize;
 }
 
 

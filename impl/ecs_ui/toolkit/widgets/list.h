@@ -26,9 +26,9 @@ interface IListDataSource{
     [[nodiscard]] virtual u64 revision()const = 0;
     [[nodiscard]] virtual u64 rowCount()const = 0;
     [[nodiscard]] virtual u64 key(u64 index)const = 0;
-    [[nodiscard]] virtual bool indexOf(u64 key, u64& index)const = 0;
-    // Inclusive search from start in the requested direction; return false when no enabled row remains.
-    [[nodiscard]] virtual bool findEnabled(u64 start, bool reverse, u64& index)const = 0;
+    [[nodiscard]] virtual Expected<u64> indexOf(u64 key)const = 0;
+    // Inclusive search from start in the requested direction; failure means no enabled row remains.
+    [[nodiscard]] virtual Expected<u64> findEnabled(u64 start, bool reverse)const = 0;
     // Text may be temporary until the next source call; the list shapes/copies it before that call.
     [[nodiscard]] virtual StringView text(u64 index)const = 0;
     [[nodiscard]] virtual bool enabled(u64 index)const = 0;

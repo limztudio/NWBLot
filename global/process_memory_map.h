@@ -6,6 +6,8 @@
 
 
 #include "basic_string.h"
+#include "expected.h"
+#include "hash_utils.h"
 #include "text_utils.h"
 #include "type.h"
 
@@ -71,50 +73,45 @@ inline void SkipProcMapWhitespace(const AStringView line, usize& cursor)noexcept
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ParseLinuxProcessMemoryMapLine(const AStringView line, LinuxProcessMemoryMapEntry& outEntry)noexcept{
-    outEntry = LinuxProcessMemoryMapEntry{};
-
+[[nodiscard]] inline Expected<LinuxProcessMemoryMapEntry> ParseLinuxProcessMemoryMapLine(const AStringView line)noexcept{
     const usize split = line.find('-');
     if(split == AStringView::npos)
-        return false;
+        return MakeUnexpected(Failure{});
 
     usize rangeEnd = split + 1u;
     while(rangeEnd < line.size() && line[rangeEnd] != ' ' && line[rangeEnd] != '\t')
         ++rangeEnd;
 
-    u64 begin = 0u;
-    u64 end = 0u;
+    const auto begin = ParseVariableHexU64(AStringView(line.data(), split));
+    const auto end = ParseVariableHexU64(AStringView(line.data() + split + 1u, rangeEnd - split - 1u));
     if(
-        !ParseVariableHexU64(AStringView(line.data(), split), begin)
-        || !ParseVariableHexU64(AStringView(line.data() + split + 1u, rangeEnd - split - 1u), end)
-        || begin >= end
+        !begin
+        || !end
+        || *begin >= *end
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     usize cursor = 0u;
     if(!ProcessMemoryMapDetail::SkipProcMapField(line, cursor))
-        return false;
+        return MakeUnexpected(Failure{});
 
     ProcessMemoryMapDetail::SkipProcMapWhitespace(line, cursor);
     if(!ProcessMemoryMapDetail::SkipProcMapField(line, cursor))
-        return false;
+        return MakeUnexpected(Failure{});
 
     ProcessMemoryMapDetail::SkipProcMapWhitespace(line, cursor);
     const usize offsetBegin = cursor;
     if(!ProcessMemoryMapDetail::SkipProcMapField(line, cursor))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    u64 fileOffset = 0u;
     // File-offset is optional in /proc maps; failures keep the default of 0.
-    const bool parsedFileOffset = ParseVariableHexU64(AStringView(line.data() + offsetBegin, cursor - offsetBegin), fileOffset);
-    if(!parsedFileOffset)
-        fileOffset = 0u;
-
-    outEntry.begin = begin;
-    outEntry.end = end;
-    outEntry.fileOffset = fileOffset;
-    outEntry.path = ProcessMemoryMapDetail::ProcMapPathField(line);
-    return true;
+    const auto fileOffset = ParseVariableHexU64(AStringView(line.data() + offsetBegin, cursor - offsetBegin));
+    return LinuxProcessMemoryMapEntry{
+        .begin = *begin,
+        .end = *end,
+        .fileOffset = fileOffset.value_or(0u),
+        .path = ProcessMemoryMapDetail::ProcMapPathField(line),
+    };
 }
 
 template<typename EntryVectorT>
@@ -122,30 +119,26 @@ inline void ParseLinuxProcessMemoryMaps(const AStringView mapsText, EntryVectorT
     outEntries.clear();
 
     usize cursor = 0u;
-    AStringView line;
-    while(NextTextLine(mapsText, cursor, line)){
-        LinuxProcessMemoryMapEntry entry;
-        if(ParseLinuxProcessMemoryMapLine(line, entry))
-            outEntries.push_back(entry);
+    while(const auto line = NextTextLine(mapsText, cursor)){
+        const auto entry = ParseLinuxProcessMemoryMapLine(*line);
+        if(entry)
+            outEntries.push_back(*entry);
     }
 }
 
 template<typename EntryRangeT>
-[[nodiscard]] inline bool FindLinuxProcessMemoryMapForAddress(
+[[nodiscard]] inline Expected<LinuxProcessMemoryMapEntry> FindLinuxProcessMemoryMapForAddress(
     const EntryRangeT& entries,
-    const u64 address,
-    LinuxProcessMemoryMapEntry& outEntry
+    const u64 address
 ){
     for(const LinuxProcessMemoryMapEntry& entry : entries){
         if(address < entry.begin || address >= entry.end)
             continue;
 
-        outEntry = entry;
-        return true;
+        return entry;
     }
 
-    outEntry = LinuxProcessMemoryMapEntry{};
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 

@@ -45,7 +45,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual TextLayoutStatus::Enum shape(const ShapeRequest& request, ShapedRun& output)override{
+    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override{
         ShapedRun run(m_arena);
         run.metrics = { 8.0f, 2.0f, 2.0f };
         if(request.text == "ffi")
@@ -66,8 +66,7 @@ public:
             for(usize index = 0u; index < run.glyphs.size() / 2u; ++index)
                 Swap(run.glyphs[index], run.glyphs[run.glyphs.size() - index - 1u]);
         }
-        output = Move(run);
-        return TextLayoutStatus::Success;
+        return run;
     }
 
 
@@ -129,23 +128,26 @@ protected:
     [[nodiscard]] bool shapeView(){
         if(!m_view.snapshot(m_model))
             return false;
-        TextLayout layout(m_arena);
-        return
-            m_layoutBuilder.layout({ m_view.displayText() }, layout) == TextLayoutStatus::Success
-            && m_view.adoptLayout(Move(layout))
-        ;
+        auto layout = m_layoutBuilder.layout({ m_view.displayText() });
+        return layout && m_view.adoptLayout(Move(*layout));
     }
 
     [[nodiscard]] bool place(const f32 width = 100.0f, const f32 height = 100.0f, const Point previousScroll = {}){
-        return m_view.arrange({ 10.0f, 20.0f, width, height }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, previousScroll, m_placement);
+        const auto placement = m_view.arrange({ 10.0f, 20.0f, width, height }, {}, { 0.0f, 0.0f, 500.0f, 500.0f }, previousScroll);
+        if(!placement)
+            return false;
+        m_placement = *placement;
+        return true;
     }
 
     [[nodiscard]] bool loadFont(){
         const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY)
             / "latin.font";
         Core::Assets::AssetBytes bytes(m_arena);
-        if(!Tests::ReadBundledFontBytes(path, bytes))
+        auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
+        if(!bytesResult)
             return false;
+        bytes = Move(*bytesResult);
         m_font.setFontBytes(Move(bytes));
         if(!m_font.validatePayload())
             return false;
@@ -153,14 +155,13 @@ protected:
         return m_text.setFonts(&source, 1u);
     }
 
-    [[nodiscard]] bool paintView(DrawSnapshot& output, const EditBoxStyle& style, const EditBoxPaintFlags& flags){
+    [[nodiscard]] Expected<DrawSnapshot> paintView(const EditBoxStyle& style, const EditBoxPaintFlags& flags){
         m_paint.begin({ 500.0f, 500.0f, 1.0f, 1.0f }, 1u, 1u,
             Core::Assets::AssetRef<UiSkin>("tests/ui/widgets/multiline_view/skin"), m_skin);
         if(!m_view.paint(m_text, m_paint, m_skin, m_placement, style, flags))
-            return false;
+            return MakeUnexpected(Failure{});
         EXPECT_FALSE(m_paint.popClip());
-        output = m_paint.freeze();
-        return true;
+        return m_paint.freeze();
     }
 
 

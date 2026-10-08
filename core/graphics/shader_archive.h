@@ -7,6 +7,8 @@
 
 #include "rhi/foundation.h"
 
+#include <global/expected.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -42,9 +44,9 @@ public:
 public:
     [[nodiscard]] static const Name& IndexVirtualPathName()noexcept;
     [[nodiscard]] static Name BuildVirtualPathName(const Name& shaderName, AStringView variantName, const Name& stageName);
-    static bool SerializeIndex(const GraphicsVector<Record>& records, GraphicsBytes& outBinary);
-    static bool DeserializeIndex(const GraphicsBytes& binary, GraphicsVector<Record>& outRecords);
-    static bool FindVirtualPath(const GraphicsVector<Record>& records, const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath);
+    static Expected<GraphicsBytes> SerializeIndex(GraphicsArena& arena, const GraphicsVector<Record>& records);
+    [[nodiscard]] static Expected<GraphicsVector<Record>> DeserializeIndex(GraphicsArena& arena, const GraphicsBytes& binary);
+    [[nodiscard]] static Expected<Name> FindVirtualPath(const GraphicsVector<Record>& records, const Name& shaderName, AStringView variantName, const Name& stageName);
 };
 
 

@@ -32,16 +32,15 @@ void AssetManager::setAsyncExecutor(IAssetAsyncExecutor* asyncExecutor){
 }
 
 
-bool AssetManager::loadSync(const Name& assetType, const Name& virtualPath, UniquePtr<IAsset>& outAsset)const{
-    outAsset.reset();
+Expected<UniquePtr<IAsset>> AssetManager::loadSync(const Name& assetType, const Name& virtualPath)const{
 
     if(!assetType){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: asset type is empty"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!virtualPath){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: virtual path is empty"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     AssetBytes binary{m_arena};
@@ -50,18 +49,19 @@ bool AssetManager::loadSync(const Name& assetType, const Name& virtualPath, Uniq
             , StringConvert(virtualPath.resolvedText())
             , StringConvert(assetType.resolvedText())
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    if(!m_registry.deserializeAsset(assetType, virtualPath, binary, outAsset)){
+    auto asset = m_registry.deserializeAsset(assetType, virtualPath, binary);
+    if(!asset){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetManager: failed to deserialize asset '{}' of type '{}'")
             , StringConvert(virtualPath.resolvedText())
             , StringConvert(assetType.resolvedText())
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    return true;
+    return asset;
 }
 
 
@@ -115,23 +115,22 @@ void AssetManager::processPending(){
 }
 
 
-bool AssetManager::tryPopResult(const u64 requestId, AssetLoadResult& outResult){
-    outResult = {};
+Expected<AssetLoadResult> AssetManager::tryPopResult(const u64 requestId){
 
     ScopedLock lock(m_mutex);
 
     auto found = m_requests.find(requestId);
     if(found == m_requests.end())
-        return false;
+        return MakeUnexpected(Failure{});
 
     RequestRecord& request = found.value();
     if(request.result.state != AssetLoadState::Completed)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outResult = Move(request.result);
+    AssetLoadResult result = Move(request.result);
 
     m_requests.erase(found);
-    return true;
+    return result;
 }
 
 
@@ -209,8 +208,7 @@ void AssetManager::processRequest(const u64 requestId){
         virtualPath = request.virtualPath;
     }
 
-    UniquePtr<IAsset> loadedAsset;
-    const bool success = loadSync(assetType, virtualPath, loadedAsset);
+    auto loadedAsset = loadSync(assetType, virtualPath);
 
     {
         ScopedLock lock(m_mutex);
@@ -221,8 +219,9 @@ void AssetManager::processRequest(const u64 requestId){
 
         RequestRecord& request = found.value();
         request.result.state = AssetLoadState::Completed;
-        request.result.success = success;
-        request.result.asset = Move(loadedAsset);
+        request.result.success = loadedAsset.has_value();
+        if(loadedAsset)
+            request.result.asset = Move(*loadedAsset);
     }
 }
 

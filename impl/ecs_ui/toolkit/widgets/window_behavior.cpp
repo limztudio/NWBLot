@@ -33,17 +33,23 @@ namespace __hidden_ui_window_behavior{
         && lhs.layoutGeneration == rhs.layoutGeneration && lhs.sequence == rhs.sequence;
 }
 
-[[nodiscard]] bool Displacement(const PointerGesture& gesture, f64& x, f64& y)noexcept{
+struct PointerDisplacement{
+    f64 x;
+    f64 y;
+};
+
+[[nodiscard]] Expected<PointerDisplacement> Displacement(const PointerGesture& gesture)noexcept{
     if(
         !gesture.id.valid() || !IsFinite(gesture.origin.x) || !IsFinite(gesture.origin.y)
         || !IsFinite(gesture.position.x) || !IsFinite(gesture.position.y)
         || !ValidBounds(gesture.referenceRectangle) || gesture.referenceRectangle.width <= 0.0f
         || gesture.referenceRectangle.height <= 0.0f || gesture.state > PointerGestureState::Completed
     )
-        return false;
-    x = static_cast<f64>(gesture.position.x) - gesture.origin.x;
-    y = static_cast<f64>(gesture.position.y) - gesture.origin.y;
-    return true;
+        return MakeUnexpected(Failure{});
+    return PointerDisplacement{
+        static_cast<f64>(gesture.position.x) - gesture.origin.x,
+        static_cast<f64>(gesture.position.y) - gesture.origin.y
+    };
 }
 
 
@@ -84,17 +90,16 @@ bool WindowBehavior::Initialize(WindowState& state, const WindowOptions& options
 }
 
 bool WindowBehavior::ApplyMove(WindowState& state, const PointerGesture& gesture)noexcept{
-    f64 x = 0.0;
-    f64 y = 0.0;
-    if(!__hidden_ui_window_behavior::Displacement(gesture, x, y))
+    const auto displacement = __hidden_ui_window_behavior::Displacement(gesture);
+    if(!displacement)
         return false;
     WindowGestureState movement = state.moveGesture;
     if(!__hidden_ui_window_behavior::SameGesture(movement.id, gesture.id)){
         movement.id = gesture.id;
         movement.initialBounds = gesture.referenceRectangle;
     }
-    const f64 left = static_cast<f64>(movement.initialBounds.x) + x;
-    const f64 top = static_cast<f64>(movement.initialBounds.y) + y;
+    const f64 left = static_cast<f64>(movement.initialBounds.x) + displacement->x;
+    const f64 top = static_cast<f64>(movement.initialBounds.y) + displacement->y;
     if(Abs(left) > Limit<f32>::s_Max || Abs(top) > Limit<f32>::s_Max)
         return false;
     Rect candidate = state.bounds;
@@ -108,10 +113,9 @@ bool WindowBehavior::ApplyMove(WindowState& state, const PointerGesture& gesture
 }
 
 bool WindowBehavior::ApplyResize(WindowState& state, const PointerGesture& gesture, const Point& minimumSize)noexcept{
-    f64 x = 0.0;
-    f64 y = 0.0;
+    const auto displacement = __hidden_ui_window_behavior::Displacement(gesture);
     if(
-        !__hidden_ui_window_behavior::Displacement(gesture, x, y)
+        !displacement
         || !IsFinite(minimumSize.x) || minimumSize.x <= 0.0f
         || !IsFinite(minimumSize.y) || minimumSize.y <= 0.0f
     )
@@ -121,8 +125,8 @@ bool WindowBehavior::ApplyResize(WindowState& state, const PointerGesture& gestu
         resizing.id = gesture.id;
         resizing.initialBounds = gesture.referenceRectangle;
     }
-    const f64 width = Max(static_cast<f64>(minimumSize.x), static_cast<f64>(resizing.initialBounds.width) + x);
-    const f64 height = Max(static_cast<f64>(minimumSize.y), static_cast<f64>(resizing.initialBounds.height) + y);
+    const f64 width = Max(static_cast<f64>(minimumSize.x), static_cast<f64>(resizing.initialBounds.width) + displacement->x);
+    const f64 height = Max(static_cast<f64>(minimumSize.y), static_cast<f64>(resizing.initialBounds.height) + displacement->y);
     if(width > Limit<f32>::s_Max || height > Limit<f32>::s_Max)
         return false;
     Rect candidate = state.bounds;

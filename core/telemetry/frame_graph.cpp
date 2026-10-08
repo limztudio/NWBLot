@@ -124,20 +124,22 @@ inline constexpr Name s_PacketStatisticsValidationScratch("Telemetry/PacketStati
     return encoded;
 }
 
-[[nodiscard]] static bool DecodeCompiledTask(
-    const EncodedFrameGraphCompiledTask& encoded,
-    FrameGraphCompiledTask& outCompiledTask
+[[nodiscard]] static Expected<FrameGraphCompiledTask> DecodeCompiledTask(
+    const EncodedFrameGraphCompiledTask& encoded
 )noexcept{
+    FrameGraphCompiledTask decoded;
     if(encoded.reserved[0u] != 0u || encoded.reserved[1u] != 0u || encoded.reserved[2u] != 0u)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outCompiledTask.planGeneration = encoded.planGeneration;
-    outCompiledTask.packetIndex = encoded.packetIndex;
-    outCompiledTask.packetizationDecision = static_cast<FrameGraphTaskPacketizationDecision::Enum>(
+    decoded.planGeneration = encoded.planGeneration;
+    decoded.packetIndex = encoded.packetIndex;
+    decoded.packetizationDecision = static_cast<FrameGraphTaskPacketizationDecision::Enum>(
         encoded.packetizationDecision
     );
-    outCompiledTask.present = true;
-    return IsValidFrameGraphCompiledTask(outCompiledTask);
+    decoded.present = true;
+    if(!IsValidFrameGraphCompiledTask(decoded))
+        return MakeUnexpected(Failure{});
+    return decoded;
 }
 
 template<typename OutputT, typename InputT>
@@ -249,14 +251,14 @@ template<typename OutputT, typename InputT>
     return encoded;
 }
 
-[[nodiscard]] static bool DecodeRuntimeStatistics(
-    const EncodedFrameGraphRuntimeStatistics& encoded,
-    FrameGraphRuntimeStatistics& outStatistics
+[[nodiscard]] static Expected<FrameGraphRuntimeStatistics> DecodeRuntimeStatistics(
+    const EncodedFrameGraphRuntimeStatistics& encoded
 )noexcept{
+    FrameGraphRuntimeStatistics decoded;
     if(encoded.reserved != 0u)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outStatistics = {
+    decoded = {
         .graphGeneration = encoded.graphGeneration,
         .planGeneration = encoded.planGeneration,
         .recordingAttemptGeneration = encoded.recordingAttemptGeneration,
@@ -266,7 +268,9 @@ template<typename OutputT, typename InputT>
         .deviceGeneration = encoded.deviceGeneration,
         .present = true,
     };
-    return IsValidFrameGraphRuntimeStatistics(outStatistics);
+    if(!IsValidFrameGraphRuntimeStatistics(decoded))
+        return MakeUnexpected(Failure{});
+    return decoded;
 }
 
 [[nodiscard]] static bool PhysicalQueueRuntimeStatisticsRecordLess(
@@ -298,9 +302,10 @@ struct FrameGraphPhysicalQueueRuntimeStatisticsAccumulator{
     const FrameGraphRuntimeStatistics& ownerStatistics,
     FrameGraphPhysicalQueueRuntimeStatisticsAccumulator& total
 )noexcept{
-    u64 ownerBarrierCount = 0u;
-    if(!FrameGraphStatisticsDetail::FrameGraphCompileBarrierCount(ownerStatistics.compile, ownerBarrierCount))
+    const auto barrierCount = FrameGraphStatisticsDetail::FrameGraphCompileBarrierCount(ownerStatistics.compile);
+    if(!barrierCount)
         return false;
+    const u64 ownerBarrierCount = *barrierCount;
 
     const FrameGraphPhysicalQueueCompileRuntimeStatistics& compile = statistics.compile;
     const FrameGraphCompileRuntimeStatistics& ownerCompile = ownerStatistics.compile;
@@ -546,11 +551,11 @@ template<typename OutputT, typename InputT>
     return encoded;
 }
 
-[[nodiscard]] static bool DecodePhysicalQueueRuntimeStatistics(
+[[nodiscard]] static Expected<FrameGraphPhysicalQueueRuntimeStatisticsRecord> DecodePhysicalQueueRuntimeStatistics(
     const EncodedFrameGraphPhysicalQueueRuntimeStatistics& encoded,
-    const FrameGraphRuntimeStatistics& ownerStatistics,
-    FrameGraphPhysicalQueueRuntimeStatisticsRecord& outRecord
+    const FrameGraphRuntimeStatistics& ownerStatistics
 )noexcept{
+    FrameGraphPhysicalQueueRuntimeStatisticsRecord decoded;
     if(
         encoded.reserved[0u] != 0u
         || encoded.reserved[1u] != 0u
@@ -560,9 +565,9 @@ template<typename OutputT, typename InputT>
         || encoded.reserved[5u] != 0u
         || encoded.reserved[6u] != 0u
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outRecord = {
+    decoded = {
         .ownerNodeIndex = encoded.ownerNodeIndex,
         .statistics = {
             .graphGeneration = ownerStatistics.graphGeneration,
@@ -576,7 +581,9 @@ template<typename OutputT, typename InputT>
             .submission = ConvertSubmissionRuntimeStatistics<FrameGraphPhysicalQueueSubmissionRuntimeStatistics>(encoded.submission),
         },
     };
-    return IsValidFrameGraphPhysicalQueueRuntimeStatistics(outRecord.statistics);
+    if(!IsValidFrameGraphPhysicalQueueRuntimeStatistics(decoded.statistics))
+        return MakeUnexpected(Failure{});
+    return decoded;
 }
 
 [[nodiscard]] static bool PacketSubmissionStatisticsRecordLess(
@@ -610,18 +617,18 @@ template<typename OutputT, typename InputT>
     };
 }
 
-[[nodiscard]] static bool DecodePacketSubmissionStatistics(
-    const EncodedFrameGraphPacketSubmissionStatistics& encoded,
-    FrameGraphPacketSubmissionStatisticsRecord& outStatistics
+[[nodiscard]] static Expected<FrameGraphPacketSubmissionStatisticsRecord> DecodePacketSubmissionStatistics(
+    const EncodedFrameGraphPacketSubmissionStatistics& encoded
 )noexcept{
+    FrameGraphPacketSubmissionStatisticsRecord decoded;
     if(
         encoded.joinsAcceptedQueueFrontier > 1u
         || encoded.recoverySubmission > 1u
         || encoded.reserved != 0u
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outStatistics = {
+    decoded = {
         .packetGeneration = encoded.packetGeneration,
         .taskCount = encoded.taskCount,
         .commandListCount = encoded.commandListCount,
@@ -638,7 +645,9 @@ template<typename OutputT, typename InputT>
         .inheritedTimelineWaitElisionCount = encoded.inheritedTimelineWaitElisionCount,
         .submissionSeconds = encoded.submissionSeconds,
     };
-    return IsValidFrameGraphPacketSubmissionStatistics(outStatistics);
+    if(!IsValidFrameGraphPacketSubmissionStatistics(decoded))
+        return MakeUnexpected(Failure{});
+    return decoded;
 }
 
 struct FrameGraphPacketSubmissionStatisticsAccumulator{
@@ -1084,13 +1093,13 @@ bool BuildFrameGraphPayloadImpl(
     encodedNodes.reserve(nodes.size());
 
     for(const FrameGraphNodeDesc& node : nodes){
-        u32 labelOffset = Limit<u32>::s_Max;
-        if(!AppendStringTableText(stringTable, node.label, labelOffset))
+        const auto labelOffset = AppendStringTableText(stringTable, node.label);
+        if(!labelOffset)
             return false;
 
         EncodedFrameGraphNode encodedNode;
         encodedNode.nameHash = node.name.hash();
-        encodedNode.labelOffset = labelOffset;
+        encodedNode.labelOffset = *labelOffset;
         encodedNode.kind = node.kind;
         encodedNode.flags = node.flags;
         encodedNodes.push_back(encodedNode);
@@ -1171,23 +1180,23 @@ bool BuildFrameGraphPayloadImpl(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ParseFrameGraphPayload(
+Expected<FrameGraphPayload> ParseFrameGraphPayload(
     TelemetryArena& arena,
     const void* const payload,
-    const usize payloadBytes,
-    FrameGraphPayload& outPayload
+    const usize payloadBytes
 ){
-    outPayload = FrameGraphPayload(arena);
+    FrameGraphPayload parsedPayload(arena);
 
     if(payloadBytes < sizeof(EncodedFrameGraphPayloadHeader) || !payload)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const BinaryByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
     usize cursor = 0u;
 
-    EncodedFrameGraphPayloadHeader header;
-    if(!ReadPOD(encoded, cursor, header))
-        return false;
+    const auto decodedHeader = ReadPOD<EncodedFrameGraphPayloadHeader>(encoded, cursor);
+    if(!decodedHeader)
+        return MakeUnexpected(Failure{});
+    const EncodedFrameGraphPayloadHeader& header = *decodedHeader;
     if(
         header.version != s_FrameGraphPayloadVersion
         || !__hidden_telemetry_frame_graph::ValidateHeader(header.magic, header.reserved)
@@ -1197,7 +1206,7 @@ bool ParseFrameGraphPayload(
         || header.reservedTail[2u] != 0u
         || (header.packetSubmissionStatisticsPresent == 0u && header.packetSubmissionStatisticsCount != 0u)
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     const usize headerBytes = sizeof(EncodedFrameGraphPayloadHeader);
     const u32 queueAssignmentCount = header.queueAssignmentCount;
@@ -1206,13 +1215,13 @@ bool ParseFrameGraphPayload(
     const u32 physicalQueueRuntimeStatisticsCount = header.physicalQueueRuntimeStatisticsCount;
     const u32 packetSubmissionStatisticsCount = header.packetSubmissionStatisticsCount;
     const bool packetSubmissionStatisticsPresent = header.packetSubmissionStatisticsPresent != 0u;
-    outPayload.packetSubmissionStatisticsPresent = packetSubmissionStatisticsPresent;
+    parsedPayload.packetSubmissionStatisticsPresent = packetSubmissionStatisticsPresent;
     if(
         queueAssignmentCount > header.nodeCount
         || compiledTaskCount > header.nodeCount
         || runtimeStatisticsCount > header.nodeCount
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     usize expectedBytes = headerBytes;
     if(
@@ -1246,15 +1255,15 @@ bool ParseFrameGraphPayload(
         || !AddBinaryReserveBytes(expectedBytes, header.stringTableBytes)
         || expectedBytes != payloadBytes
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     usize edgeOffset = headerBytes;
     if(!AddBinaryRepeatedReserveBytes(edgeOffset, header.nodeCount, sizeof(EncodedFrameGraphNode)))
-        return false;
+        return MakeUnexpected(Failure{});
 
     usize queueAssignmentOffset = edgeOffset;
     if(!AddBinaryRepeatedReserveBytes(queueAssignmentOffset, header.edgeCount, sizeof(EncodedFrameGraphEdge)))
-        return false;
+        return MakeUnexpected(Failure{});
 
     usize compiledTaskOffset = queueAssignmentOffset;
     if(!AddBinaryRepeatedReserveBytes(
@@ -1262,7 +1271,7 @@ bool ParseFrameGraphPayload(
         queueAssignmentCount,
         sizeof(EncodedFrameGraphQueueAssignment)
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
     usize runtimeStatisticsOffset = compiledTaskOffset;
     if(!AddBinaryRepeatedReserveBytes(
@@ -1270,7 +1279,7 @@ bool ParseFrameGraphPayload(
         compiledTaskCount,
         sizeof(EncodedFrameGraphCompiledTask)
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
     usize physicalQueueRuntimeStatisticsOffset = runtimeStatisticsOffset;
     if(!AddBinaryRepeatedReserveBytes(
@@ -1278,7 +1287,7 @@ bool ParseFrameGraphPayload(
         runtimeStatisticsCount,
         sizeof(EncodedFrameGraphRuntimeStatistics)
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
     usize stringTableOffset = physicalQueueRuntimeStatisticsOffset;
     if(!AddBinaryRepeatedReserveBytes(
@@ -1286,53 +1295,54 @@ bool ParseFrameGraphPayload(
         physicalQueueRuntimeStatisticsCount,
         sizeof(EncodedFrameGraphPhysicalQueueRuntimeStatistics)
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
     if(!AddBinaryRepeatedReserveBytes(
         stringTableOffset,
         packetSubmissionStatisticsCount,
         sizeof(EncodedFrameGraphPacketSubmissionStatistics)
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outPayload.frameIndex = header.frameIndex;
-    outPayload.nodes.reserve(header.nodeCount);
-    outPayload.edges.reserve(header.edgeCount);
-    outPayload.physicalQueueRuntimeStatistics.reserve(physicalQueueRuntimeStatisticsCount);
-    outPayload.packetSubmissionStatistics.reserve(packetSubmissionStatisticsCount);
+    parsedPayload.frameIndex = header.frameIndex;
+    parsedPayload.nodes.reserve(header.nodeCount);
+    parsedPayload.edges.reserve(header.edgeCount);
+    parsedPayload.physicalQueueRuntimeStatistics.reserve(physicalQueueRuntimeStatisticsCount);
+    parsedPayload.packetSubmissionStatistics.reserve(packetSubmissionStatisticsCount);
 
     for(u32 nodeIndex = 0u; nodeIndex < header.nodeCount; ++nodeIndex){
-        EncodedFrameGraphNode encodedNode;
-        if(!ReadPOD(encoded, cursor, encodedNode))
-            return false;
+        const auto decodedEncodedNode = ReadPOD<EncodedFrameGraphNode>(encoded, cursor);
+        if(!decodedEncodedNode)
+            return MakeUnexpected(Failure{});
+        const EncodedFrameGraphNode& encodedNode = *decodedEncodedNode;
         if(!__hidden_telemetry_frame_graph::ValidateEncodedNode(encodedNode))
-            return false;
+            return MakeUnexpected(Failure{});
 
-        AStringView labelView;
-        if(!BinaryDetail::ReadStringTableTextView(
+        const auto labelView = BinaryDetail::ReadStringTableTextView(
             encoded,
             stringTableOffset,
             header.stringTableBytes,
-            encodedNode.labelOffset,
-            labelView
-        ))
-            return false;
+            encodedNode.labelOffset
+        );
+        if(!labelView)
+            return MakeUnexpected(Failure{});
 
-        FrameGraphNodePayload& node = outPayload.nodes.emplace_back(arena);
+        FrameGraphNodePayload& node = parsedPayload.nodes.emplace_back(arena);
         node.name = Name(encodedNode.nameHash);
-        node.label.assign(labelView.data(), labelView.size());
+        node.label.assign(labelView->data(), labelView->size());
         node.kind = static_cast<FrameGraphNodeKind::Enum>(encodedNode.kind);
         node.flags = encodedNode.flags;
     }
 
     for(u32 edgeIndex = 0u; edgeIndex < header.edgeCount; ++edgeIndex){
-        EncodedFrameGraphEdge encodedEdge;
-        if(!ReadPOD(encoded, cursor, encodedEdge))
-            return false;
+        const auto decodedEncodedEdge = ReadPOD<EncodedFrameGraphEdge>(encoded, cursor);
+        if(!decodedEncodedEdge)
+            return MakeUnexpected(Failure{});
+        const EncodedFrameGraphEdge& encodedEdge = *decodedEncodedEdge;
         if(!__hidden_telemetry_frame_graph::ValidateEncodedEdge(encodedEdge, header.nodeCount))
-            return false;
+            return MakeUnexpected(Failure{});
 
-        FrameGraphEdgePayload& edge = outPayload.edges.emplace_back();
+        FrameGraphEdgePayload& edge = parsedPayload.edges.emplace_back();
         edge.fromNodeIndex = encodedEdge.fromNodeIndex;
         edge.toNodeIndex = encodedEdge.toNodeIndex;
         edge.kind = static_cast<FrameGraphEdgeKind::Enum>(encodedEdge.kind);
@@ -1341,56 +1351,59 @@ bool ParseFrameGraphPayload(
 
     u32 previousNodeIndex = 0u;
     for(u32 assignmentIndex = 0u; assignmentIndex < queueAssignmentCount; ++assignmentIndex){
-        EncodedFrameGraphQueueAssignment encodedAssignment;
-        if(!ReadPOD(encoded, cursor, encodedAssignment))
-            return false;
+        const auto decodedEncodedAssignment = ReadPOD<EncodedFrameGraphQueueAssignment>(encoded, cursor);
+        if(!decodedEncodedAssignment)
+            return MakeUnexpected(Failure{});
+        const EncodedFrameGraphQueueAssignment& encodedAssignment = *decodedEncodedAssignment;
         if(
             encodedAssignment.nodeIndex >= header.nodeCount
             || (assignmentIndex != 0u && encodedAssignment.nodeIndex <= previousNodeIndex)
-            || outPayload.nodes[encodedAssignment.nodeIndex].kind != FrameGraphNodeKind::Pass
-            || !FrameGraphQueueCodecDetail::DecodeQueueAssignment(
-                encodedAssignment,
-                outPayload.nodes[encodedAssignment.nodeIndex].queueAssignment
-            )
+            || parsedPayload.nodes[encodedAssignment.nodeIndex].kind != FrameGraphNodeKind::Pass
         )
-            return false;
+            return MakeUnexpected(Failure{});
+        const auto assignment = FrameGraphQueueCodecDetail::DecodeQueueAssignment(encodedAssignment);
+        if(!assignment)
+            return MakeUnexpected(Failure{});
+        parsedPayload.nodes[encodedAssignment.nodeIndex].queueAssignment = *assignment;
         previousNodeIndex = encodedAssignment.nodeIndex;
     }
 
     previousNodeIndex = 0u;
     for(u32 compiledTaskIndex = 0u; compiledTaskIndex < compiledTaskCount; ++compiledTaskIndex){
-        EncodedFrameGraphCompiledTask encodedCompiledTask;
-        if(!ReadPOD(encoded, cursor, encodedCompiledTask))
-            return false;
+        const auto decodedEncodedCompiledTask = ReadPOD<EncodedFrameGraphCompiledTask>(encoded, cursor);
+        if(!decodedEncodedCompiledTask)
+            return MakeUnexpected(Failure{});
+        const EncodedFrameGraphCompiledTask& encodedCompiledTask = *decodedEncodedCompiledTask;
         if(
             encodedCompiledTask.nodeIndex >= header.nodeCount
             || (compiledTaskIndex != 0u && encodedCompiledTask.nodeIndex <= previousNodeIndex)
-            || outPayload.nodes[encodedCompiledTask.nodeIndex].kind != FrameGraphNodeKind::Pass
-            || !__hidden_telemetry_frame_graph::DecodeCompiledTask(
-                encodedCompiledTask,
-                outPayload.nodes[encodedCompiledTask.nodeIndex].compiledTask
-            )
+            || parsedPayload.nodes[encodedCompiledTask.nodeIndex].kind != FrameGraphNodeKind::Pass
         )
-            return false;
+            return MakeUnexpected(Failure{});
+        const auto compiledTask = __hidden_telemetry_frame_graph::DecodeCompiledTask(encodedCompiledTask);
+        if(!compiledTask)
+            return MakeUnexpected(Failure{});
+        parsedPayload.nodes[encodedCompiledTask.nodeIndex].compiledTask = *compiledTask;
         previousNodeIndex = encodedCompiledTask.nodeIndex;
     }
 
     previousNodeIndex = 0u;
     for(u32 statisticsIndex = 0u; statisticsIndex < runtimeStatisticsCount; ++statisticsIndex){
-        EncodedFrameGraphRuntimeStatistics encodedStatistics;
-        if(!ReadPOD(encoded, cursor, encodedStatistics))
-            return false;
+        const auto decodedEncodedStatistics = ReadPOD<EncodedFrameGraphRuntimeStatistics>(encoded, cursor);
+        if(!decodedEncodedStatistics)
+            return MakeUnexpected(Failure{});
+        const EncodedFrameGraphRuntimeStatistics& encodedStatistics = *decodedEncodedStatistics;
         const u32 nodeIndex = encodedStatistics.nodeIndex;
-        FrameGraphRuntimeStatistics statistics;
-        if(!__hidden_telemetry_frame_graph::DecodeRuntimeStatistics(encodedStatistics, statistics))
-            return false;
+        const auto statistics = __hidden_telemetry_frame_graph::DecodeRuntimeStatistics(encodedStatistics);
+        if(!statistics)
+            return MakeUnexpected(Failure{});
         if(
             nodeIndex >= header.nodeCount
             || (statisticsIndex != 0u && nodeIndex <= previousNodeIndex)
-            || outPayload.nodes[nodeIndex].kind != FrameGraphNodeKind::Pass
+            || parsedPayload.nodes[nodeIndex].kind != FrameGraphNodeKind::Pass
         )
-            return false;
-        outPayload.nodes[nodeIndex].runtimeStatistics = statistics;
+            return MakeUnexpected(Failure{});
+        parsedPayload.nodes[nodeIndex].runtimeStatistics = *statistics;
         previousNodeIndex = nodeIndex;
     }
 
@@ -1398,35 +1411,36 @@ bool ParseFrameGraphPayload(
     u32 accumulatedOwnerNodeIndex = Limit<u32>::s_Max;
     __hidden_telemetry_frame_graph::FrameGraphPhysicalQueueRuntimeStatisticsAccumulator accumulatedStatistics;
     for(u32 statisticsIndex = 0u; statisticsIndex < physicalQueueRuntimeStatisticsCount; ++statisticsIndex){
-        EncodedFrameGraphPhysicalQueueRuntimeStatistics encodedStatistics;
-        if(!ReadPOD(encoded, cursor, encodedStatistics))
-            return false;
-        if(encodedStatistics.ownerNodeIndex >= outPayload.nodes.size())
-            return false;
-        FrameGraphPhysicalQueueRuntimeStatisticsRecord statistics;
-        if(!__hidden_telemetry_frame_graph::DecodePhysicalQueueRuntimeStatistics(
+        const auto decodedEncodedStatistics = ReadPOD<EncodedFrameGraphPhysicalQueueRuntimeStatistics>(encoded, cursor);
+        if(!decodedEncodedStatistics)
+            return MakeUnexpected(Failure{});
+        const EncodedFrameGraphPhysicalQueueRuntimeStatistics& encodedStatistics = *decodedEncodedStatistics;
+        if(encodedStatistics.ownerNodeIndex >= parsedPayload.nodes.size())
+            return MakeUnexpected(Failure{});
+        const auto decodedStatistics = __hidden_telemetry_frame_graph::DecodePhysicalQueueRuntimeStatistics(
             encodedStatistics,
-            outPayload.nodes[encodedStatistics.ownerNodeIndex].runtimeStatistics,
-            statistics
-        ))
-            return false;
+            parsedPayload.nodes[encodedStatistics.ownerNodeIndex].runtimeStatistics
+        );
+        if(!decodedStatistics)
+            return MakeUnexpected(Failure{});
+        const FrameGraphPhysicalQueueRuntimeStatisticsRecord& statistics = *decodedStatistics;
         if(statistics.ownerNodeIndex != accumulatedOwnerNodeIndex){
             accumulatedOwnerNodeIndex = statistics.ownerNodeIndex;
             accumulatedStatistics = {};
         }
         if(!__hidden_telemetry_frame_graph::AccumulatePhysicalQueueRuntimeStatistics(
             statistics.statistics,
-            outPayload.nodes[statistics.ownerNodeIndex].runtimeStatistics,
+            parsedPayload.nodes[statistics.ownerNodeIndex].runtimeStatistics,
             accumulatedStatistics
         ))
-            return false;
+            return MakeUnexpected(Failure{});
         if(!__hidden_telemetry_frame_graph::ValidatePhysicalQueueRuntimeStatisticsOwner(
             statistics,
-            outPayload.nodes.size(),
-            outPayload.nodes[statistics.ownerNodeIndex].kind,
-            outPayload.nodes[statistics.ownerNodeIndex].runtimeStatistics
+            parsedPayload.nodes.size(),
+            parsedPayload.nodes[statistics.ownerNodeIndex].kind,
+            parsedPayload.nodes[statistics.ownerNodeIndex].runtimeStatistics
         ))
-            return false;
+            return MakeUnexpected(Failure{});
         if(
             statisticsIndex != 0u
             && !__hidden_telemetry_frame_graph::PhysicalQueueRuntimeStatisticsRecordLess(
@@ -1434,33 +1448,36 @@ bool ParseFrameGraphPayload(
                 statistics
             )
         )
-            return false;
-        outPayload.physicalQueueRuntimeStatistics.push_back(statistics);
+            return MakeUnexpected(Failure{});
+        parsedPayload.physicalQueueRuntimeStatistics.push_back(statistics);
         previousPhysicalQueueStatistics = statistics;
     }
 
     for(u32 statisticsIndex = 0u; statisticsIndex < packetSubmissionStatisticsCount; ++statisticsIndex){
-        EncodedFrameGraphPacketSubmissionStatistics encodedStatistics;
-        if(!ReadPOD(encoded, cursor, encodedStatistics))
-            return false;
+        const auto decodedEncodedStatistics = ReadPOD<EncodedFrameGraphPacketSubmissionStatistics>(encoded, cursor);
+        if(!decodedEncodedStatistics)
+            return MakeUnexpected(Failure{});
+        const EncodedFrameGraphPacketSubmissionStatistics& encodedStatistics = *decodedEncodedStatistics;
 
-        FrameGraphPacketSubmissionStatisticsRecord statistics;
-        if(!__hidden_telemetry_frame_graph::DecodePacketSubmissionStatistics(encodedStatistics, statistics))
-            return false;
-        outPayload.packetSubmissionStatistics.push_back(statistics);
+        const auto statistics = __hidden_telemetry_frame_graph::DecodePacketSubmissionStatistics(encodedStatistics);
+        if(!statistics)
+            return MakeUnexpected(Failure{});
+        parsedPayload.packetSubmissionStatistics.push_back(*statistics);
     }
-    if(outPayload.packetSubmissionStatisticsPresent){
+    if(parsedPayload.packetSubmissionStatisticsPresent){
         Alloc::ScratchArena scratchArena(__hidden_telemetry_frame_graph::s_PacketStatisticsValidationScratch);
         if(!__hidden_telemetry_frame_graph::ValidatePacketSubmissionStatisticsTable(
             scratchArena,
-            outPayload.nodes,
-            outPayload.physicalQueueRuntimeStatistics,
-            outPayload.packetSubmissionStatistics
+            parsedPayload.nodes,
+            parsedPayload.physicalQueueRuntimeStatistics,
+            parsedPayload.packetSubmissionStatistics
         ))
-            return false;
+            return MakeUnexpected(Failure{});
     }
 
-    return cursor == stringTableOffset;
+    if(cursor != stringTableOffset)
+        return MakeUnexpected(Failure{});
+    return parsedPayload;
 }
 
 

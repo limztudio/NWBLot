@@ -74,14 +74,12 @@ public:
 
 
 public:
-    [[nodiscard]] bool declareDepthWarp(
-        const AvboitDepthWarpStageInputs& inputs,
-        AvboitDepthWarpStageResult& outResult
+    [[nodiscard]] Expected<AvboitDepthWarpStageResult> declareDepthWarp(
+        const AvboitDepthWarpStageInputs& inputs
     );
 
-    [[nodiscard]] bool declareIntegration(
-        const AvboitIntegrationStageInputs& inputs,
-        AvboitIntegrationStageResult& outResult
+    [[nodiscard]] Expected<AvboitIntegrationStageResult> declareIntegration(
+        const AvboitIntegrationStageInputs& inputs
     );
 
 

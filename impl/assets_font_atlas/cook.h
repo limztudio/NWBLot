@@ -42,22 +42,22 @@ struct FontAtlasCookEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ParseFontAtlasCookMetadata(
+[[nodiscard]] Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(
     const Path& assetRoot,
     AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    FontAtlasCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] bool ParseFontAtlasCookMetadataValue(
+[[nodiscard]] Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(
     Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    FontAtlasCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] bool BuildFontAtlasAsset(const FontAtlasCookEntry& entry, FontAtlas& outAtlas);
+[[nodiscard]] Expected<FontAtlas> BuildFontAtlasAsset(const FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

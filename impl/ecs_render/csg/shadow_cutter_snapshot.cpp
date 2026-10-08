@@ -37,10 +37,11 @@ namespace __hidden_shadow_cutter_snapshot{
     return NWB_CSG_SHADOW_SHAPE_UNSUPPORTED;
 }
 
-[[nodiscard]] bool ResolveParameters(
-    const CsgShapeTypeInfo& shapeType, const CsgCutterComponent& cutter,
-    const u8*& parameterBytes, usize& parameterByteCount
-){
+[[nodiscard]] Expected<BinaryByteView> ResolveParameters(
+    const CsgShapeTypeInfo& shapeType, const CsgCutterComponent& cutter
+)noexcept{
+    const u8* parameterBytes = nullptr;
+    usize parameterByteCount = 0u;
     if(cutter.parameterBytes.empty()){
         parameterBytes = shapeType.desc.defaultParameterBytes.data();
         parameterByteCount = shapeType.desc.defaultParameterBytes.size();
@@ -49,7 +50,9 @@ namespace __hidden_shadow_cutter_snapshot{
         parameterBytes = cutter.parameterBytes.data();
         parameterByteCount = cutter.parameterBytes.size();
     }
-    return parameterByteCount == shapeType.desc.parameterByteSize && (parameterByteCount == 0u || parameterBytes);
+    if(parameterByteCount != shapeType.desc.parameterByteSize || (parameterByteCount != 0u && !parameterBytes))
+        return MakeUnexpected(Failure{});
+    return BinaryByteView(parameterBytes, parameterByteCount);
 }
 
 void AppendReceiverCutters(
@@ -62,23 +65,20 @@ void AppendReceiverCutters(
     const bool boundsCanCull = receiver.boundsValid && AabbTests::Valid(receiverMin, receiverMax);
     range.firstCutter = static_cast<u32>(snapshot.cutters.size());
     receiverLookup.forEachReceiverCutter(drawState, [&](const Core::ECS::EntityID entity, const CsgCutterComponent& cutter){
-        CsgShapeTypeInfo shapeType;
-        if(!shapeRegistry.findShapeType(cutter.shapeType, shapeType))
+        const auto shapeType = shapeRegistry.findShapeType(cutter.shapeType);
+        if(!shapeType)
             return;
-        const u8* parameterBytes = nullptr;
-        usize parameterByteCount = 0u;
-        if(!ResolveParameters(shapeType, cutter, parameterBytes, parameterByteCount))
+        const auto parameters = ResolveParameters(*shapeType, cutter);
+        if(!parameters)
             return;
+        const u8* parameterBytes = parameters->data();
+        const usize parameterByteCount = parameters->size();
 
-        SIMDVector cutterMin;
-        SIMDVector cutterMax;
-        bool finiteBounds = false;
         const SIMDMatrix shapeToWorld = LoadFloat(cutter.shapeToWorld);
-        if(!shapeRegistry.buildShapeBounds(
-            shapeType.id, shapeToWorld, parameterBytes, parameterByteCount, cutterMin, cutterMax, finiteBounds
-        ))
+        const auto bounds = shapeRegistry.buildShapeBounds(shapeType->id, shapeToWorld, parameterBytes, parameterByteCount);
+        if(!bounds)
             return;
-        if(boundsCanCull && finiteBounds && !AabbTests::Intersects(receiverMin, receiverMax, cutterMin, cutterMax))
+        if(boundsCanCull && bounds->finiteBounds && !AabbTests::Intersects(receiverMin, receiverMax, bounds->minBounds, bounds->maxBounds))
             return;
 
         Fnv64AppendValue(snapshot.contentIdentity, entity.id);
@@ -90,7 +90,7 @@ void AppendReceiverCutters(
         Fnv64AppendValue(snapshot.identity, cutter.shapeToWorld);
         Fnv64AppendBuffer(snapshot.identity, parameterBytes, parameterByteCount);
         range.flags |= NWB_CSG_SHADOW_RECEIVER_ACTIVE;
-        const u32 shapeKind = ResolveShapeKind(shapeType);
+        const u32 shapeKind = ResolveShapeKind(*shapeType);
         const SIMDMatrix worldToShape = LoadFloat(cutter.worldToShape);
         if(
             shapeKind == NWB_CSG_SHADOW_SHAPE_UNSUPPORTED
@@ -151,8 +151,10 @@ bool BuildCsgShadowSnapshot(
     bool hasReceiver = false;
     usize cutterCapacity = 0u;
     for(usize index = 0u; index < receiverCount; ++index){
-        if(!receiverLookup.resolveReceiverDrawState(receivers[index].entity, receivers[index].receiverPass, drawStates[index]))
+        const auto drawState = receiverLookup.resolveReceiverDrawState(receivers[index].entity, receivers[index].receiverPass);
+        if(!drawState)
             continue;
+        drawStates[index] = *drawState;
         hasReceiver = true;
         cutterCapacity = AddSaturating<usize>(cutterCapacity, Min<usize>(drawStates[index].cutterCount, NWB_CSG_SHADOW_MAX_CUTTERS));
     }

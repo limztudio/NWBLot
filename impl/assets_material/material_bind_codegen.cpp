@@ -26,10 +26,7 @@ namespace MaterialBindDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ParseMaterialBindResourceFieldTypeText(
-    const AStringView typeText,
-    MaterialLayoutFieldType::Enum& outFieldType
-)noexcept;
+Expected<MaterialLayoutFieldType::Enum> ParseMaterialBindResourceFieldTypeText(AStringView typeText)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -67,21 +64,18 @@ static Path BuildMaterialBindIncludeRoot(const Path& cacheDirectory, const AStri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool BuildMaterialBindIncludeVirtualPathImpl(
+static Expected<CookString> BuildMaterialBindIncludeVirtualPathImpl(
     CookArena& arena,
-    const MaterialBindEntry& entry,
-    CookString& outIncludePath
+    const MaterialBindEntry& entry
 ){
-    outIncludePath.clear();
     if(entry.virtualPath.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation failed: virtual path is empty for '{}'"), StringConvert(entry.source));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     CookString includePath(entry.virtualPath, arena);
     includePath += MaterialBindNames::SourceExtensionText();
-    outIncludePath = Move(includePath);
-    return true;
+    return includePath;
 }
 
 
@@ -287,36 +281,35 @@ static bool AppendMaterialBindU64Constant(
 }
 
 
-static bool ResolveMaterialBindGeneratedLayoutBlock(
+struct MaterialBindGeneratedLayoutBlock{
+    MaterialBindTypedLayoutBlockLookupEntry entry;
+    const MaterialTypedLayoutBlock* block = nullptr;
+};
+
+static Expected<MaterialBindGeneratedLayoutBlock> ResolveMaterialBindGeneratedLayoutBlock(
     const AStringView includePath,
     const MaterialBindInstance& instance,
-    const MaterialBindTypedLayout& layout,
-    MaterialBindTypedLayoutBlockLookupEntry& outBlockEntry,
-    const MaterialTypedLayoutBlock*& outBlock
+    const MaterialBindTypedLayout& layout
 ){
-    outBlockEntry = {};
-    outBlock = nullptr;
-
     const auto blockIt = layout.blockLookup.find(Name(AStringView(instance.name)));
     if(blockIt == layout.blockLookup.end()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': instance '{}' has no typed layout block")
             , StringConvert(includePath)
             , StringConvert(instance.name)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outBlockEntry = blockIt.value();
-    if(outBlockEntry.blockIndex >= layout.typedLayoutBlocks.size()){
+    const auto& blockEntry = blockIt.value();
+    if(blockEntry.blockIndex >= layout.typedLayoutBlocks.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': instance '{}' typed layout block index is out of range")
             , StringConvert(includePath)
             , StringConvert(instance.name)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outBlock = &layout.typedLayoutBlocks[outBlockEntry.blockIndex];
-    return true;
+    return MaterialBindGeneratedLayoutBlock{ blockEntry, &layout.typedLayoutBlocks[blockEntry.blockIndex] };
 }
 
 
@@ -333,42 +326,43 @@ static u32* MaterialBindStorageByteSizePointer(
 }
 
 
-static bool ComputeMaterialBindStorageByteSizes(
+struct MaterialBindStorageByteSizes{
+    u32 constantBytes = 0u;
+    u32 mutableBytes = 0u;
+};
+
+static Expected<MaterialBindStorageByteSizes> ComputeMaterialBindStorageByteSizes(
     const AStringView includePath,
-    const MaterialBindTypedLayout& layout,
-    u32& outConstantByteSize,
-    u32& outMutableByteSize
+    const MaterialBindTypedLayout& layout
 ){
-    outConstantByteSize = 0u;
-    outMutableByteSize = 0u;
+    MaterialBindStorageByteSizes sizes;
 
     for(const MaterialTypedLayoutBlock& block : layout.typedLayoutBlocks){
-        u32* storageByteSize = MaterialBindStorageByteSizePointer(block.blockClass, outConstantByteSize, outMutableByteSize);
+        u32* storageByteSize = MaterialBindStorageByteSizePointer(block.blockClass, sizes.constantBytes, sizes.mutableBytes);
         if(!storageByteSize){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout block has invalid storage class"), StringConvert(includePath));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(block.byteSize > Limit<u32>::s_Max - *storageByteSize){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout storage byte size exceeds u32"), StringConvert(includePath));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         *storageByteSize += block.byteSize;
     }
 
-    return true;
+    return sizes;
 }
 
-static bool ComputeMaterialBindBlockStorageByteBegin(
+static Expected<u32> ComputeMaterialBindBlockStorageByteBegin(
     const AStringView includePath,
     const MaterialBindTypedLayout& layout,
-    const u32 blockIndex,
-    u32& outByteBegin
+    const u32 blockIndex
 ){
-    outByteBegin = 0u;
+    u32 byteBegin = 0u;
     if(blockIndex >= layout.typedLayoutBlocks.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout block index is out of range"), StringConvert(includePath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const MaterialBlockClass::Enum blockClass = layout.typedLayoutBlocks[blockIndex].blockClass;
@@ -376,15 +370,15 @@ static bool ComputeMaterialBindBlockStorageByteBegin(
         const MaterialTypedLayoutBlock& block = layout.typedLayoutBlocks[currentBlockIndex];
         if(block.blockClass != blockClass)
             continue;
-        if(block.byteSize > Limit<u32>::s_Max - outByteBegin){
+        if(block.byteSize > Limit<u32>::s_Max - byteBegin){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': typed layout block byte offset exceeds u32"), StringConvert(includePath));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
-        outByteBegin += block.byteSize;
+        byteBegin += block.byteSize;
     }
 
-    return true;
+    return byteBegin;
 }
 
 
@@ -397,10 +391,11 @@ static bool AppendMaterialBindLayoutConstants(
     ScratchArena& scratchArena,
     CookString& inOutSource
 ){
-    u32 constantByteSize = 0u;
-    u32 mutableByteSize = 0u;
-    if(!ComputeMaterialBindStorageByteSizes(includePath, layout, constantByteSize, mutableByteSize))
+    const auto storageByteSizes = ComputeMaterialBindStorageByteSizes(includePath, layout);
+    if(!storageByteSizes)
         return false;
+    const u32 constantByteSize = storageByteSizes->constantBytes;
+    const u32 mutableByteSize = storageByteSizes->mutableBytes;
 
     const Name interfaceName(AStringView(entry.virtualPath));
     const NameHash& interfaceHash = interfaceName.hash();
@@ -491,14 +486,15 @@ static bool AppendMaterialBindLayoutConstants(
     }
 
     for(const MaterialBindInstance& instance : entry.instances){
-        MaterialBindTypedLayoutBlockLookupEntry blockEntry;
-        const MaterialTypedLayoutBlock* block = nullptr;
-        if(!ResolveMaterialBindGeneratedLayoutBlock(includePath, instance, layout, blockEntry, block))
+        const auto generatedBlock = ResolveMaterialBindGeneratedLayoutBlock(includePath, instance, layout);
+        if(!generatedBlock)
             return false;
-
-        u32 blockStorageByteBegin = 0u;
-        if(!ComputeMaterialBindBlockStorageByteBegin(includePath, layout, blockEntry.blockIndex, blockStorageByteBegin))
+        const auto& blockEntry = generatedBlock->entry;
+        const MaterialTypedLayoutBlock* block = generatedBlock->block;
+        const auto blockStorageByteBeginResult = ComputeMaterialBindBlockStorageByteBegin(includePath, layout, blockEntry.blockIndex);
+        if(!blockStorageByteBeginResult)
             return false;
+        const u32 blockStorageByteBegin = *blockStorageByteBeginResult;
 
         const CookString storageSymbol =
             BuildMaterialBindGeneratedSymbol(arena, { AStringView(instance.name) }, "_STORAGE");
@@ -552,8 +548,8 @@ static bool AppendMaterialBindFieldConstants(
         return false;
     }
 
-    ACompactString keyText;
-    if(!BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(field.name), keyText)){
+    const auto keyResult = BuildMaterialBindParameterKey(AStringView(instance.name), AStringView(field.name));
+    if(!keyResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': field '{}.{}' exceeds ACompactString capacity")
             , StringConvert(includePath)
             , StringConvert(bindStruct.name)
@@ -561,6 +557,7 @@ static bool AppendMaterialBindFieldConstants(
         );
         return false;
     }
+    const ACompactString& keyText = *keyResult;
     const u64 keyHash = ComputeMaterialBindParameterKeyHash(keyText.view());
 
     if(!AppendMaterialBindU64Constant(
@@ -656,16 +653,11 @@ static bool AppendMaterialBindGeneratedInstance(
     inOutSource += "\n";
     AppendMaterialBindGeneratedSeparator(inOutSource, 3u);
 
-    MaterialBindTypedLayoutBlockLookupEntry layoutBlockEntry;
-    const MaterialTypedLayoutBlock* layoutBlock = nullptr;
-    if(!ResolveMaterialBindGeneratedLayoutBlock(
-        includePath,
-        instance,
-        layout,
-        layoutBlockEntry,
-        layoutBlock
-    ))
+    const auto generatedBlock = ResolveMaterialBindGeneratedLayoutBlock(includePath, instance, layout);
+    if(!generatedBlock)
         return false;
+    const auto& layoutBlockEntry = generatedBlock->entry;
+    const MaterialTypedLayoutBlock* layoutBlock = generatedBlock->block;
 
     if(layoutBlock->fieldCount != bindStruct.fields.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind include '{}': instance '{}' typed layout field count mismatch")
@@ -675,14 +667,10 @@ static bool AppendMaterialBindGeneratedInstance(
         return false;
     }
 
-    u32 layoutBlockStorageByteBegin = 0u;
-    if(!ComputeMaterialBindBlockStorageByteBegin(
-        includePath,
-        layout,
-        layoutBlockEntry.blockIndex,
-        layoutBlockStorageByteBegin
-    ))
+    const auto layoutBlockStorageByteBeginResult = ComputeMaterialBindBlockStorageByteBegin(includePath, layout, layoutBlockEntry.blockIndex);
+    if(!layoutBlockStorageByteBeginResult)
         return false;
+    const u32 layoutBlockStorageByteBegin = *layoutBlockStorageByteBeginResult;
 
     for(u32 fieldOffset = 0u; fieldOffset < layoutBlock->fieldCount; ++fieldOffset){
         const usize layoutFieldIndex = static_cast<usize>(layoutBlock->fieldBegin) + fieldOffset;
@@ -809,8 +797,7 @@ static bool AppendMaterialBindGeneratedInstance(
     inOutSource += bindStruct.name;
     inOutSource += " value;\n";
     for(const MaterialBindField& field : bindStruct.fields){
-        MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
-        if(MaterialBindDetail::ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
+        if(MaterialBindDetail::ParseMaterialBindResourceFieldTypeText(AStringView(field.type)))
             continue;
 
         const CookString functionName =
@@ -828,28 +815,29 @@ static bool AppendMaterialBindGeneratedInstance(
 }
 
 
-bool BuildMaterialBindIncludeSourceImpl(
+Expected<CookString> BuildMaterialBindIncludeSourceImpl(
     CookArena& arena,
     const MaterialBindEntry& entry,
-    CookString& outSource,
     ScratchArena& scratchArena
 ){
-    outSource.clear();
+    CookString source(arena);
 
-    CookString includePath(arena);
-    if(!BuildMaterialBindIncludeVirtualPathImpl(arena, entry, includePath))
-        return false;
+    auto includePathResult = BuildMaterialBindIncludeVirtualPathImpl(arena, entry);
+    if(!includePathResult)
+        return MakeUnexpected(Failure{});
+    CookString includePath = Move(*includePathResult);
 
     const CookString includeGuard = BuildMaterialBindIncludeGuard(arena, AStringView(includePath));
 
-    MaterialBindTypedLayout layout(arena);
-    if(!BuildMaterialBindTypedLayout(
+    const auto layoutResult = BuildMaterialBindTypedLayout(
         entry,
         Name(AStringView(entry.virtualPath)),
-        layout,
+        arena,
         scratchArena
-    ))
-        return false;
+    );
+    if(!layoutResult)
+        return MakeUnexpected(Failure{});
+    const MaterialBindTypedLayout& layout = *layoutResult;
 
     ScratchHashSet<ScratchString> generatedSymbols{
         0,
@@ -858,24 +846,24 @@ bool BuildMaterialBindIncludeSourceImpl(
         scratchArena
     };
 
-    outSource += "// generated by NWBLot material bind cook\n";
-    AppendMaterialBindGeneratedSeparator(outSource, 3u);
-    outSource += "#ifndef ";
-    outSource += includeGuard;
-    outSource += "\n#define ";
-    outSource += includeGuard;
-    outSource += "\n\n\n";
-    AppendMaterialBindGeneratedSeparator(outSource, 3u);
-    outSource += "#ifndef NWB_MATERIAL_TYPED_BINDING\n";
-    outSource += "#error \"generated material bind includes require mesh/authoring.slangi\"\n";
-    outSource += "#endif\n\n";
-    outSource += "#ifndef NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE\n";
-    outSource += "#error \"generated material bind includes require mesh/authoring.slangi\"\n";
-    outSource += "#endif\n\n";
-    outSource += "#if NWB_MATERIAL_TYPED_BINDING != NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE\n";
-    outSource += "#error \"generated material bind accessors require NWB_MATERIAL_TYPED_BINDING to match NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE\"\n";
-    outSource += "#endif\n\n\n";
-    AppendMaterialBindGeneratedSeparator(outSource, 3u);
+    source += "// generated by NWBLot material bind cook\n";
+    AppendMaterialBindGeneratedSeparator(source, 3u);
+    source += "#ifndef ";
+    source += includeGuard;
+    source += "\n#define ";
+    source += includeGuard;
+    source += "\n\n\n";
+    AppendMaterialBindGeneratedSeparator(source, 3u);
+    source += "#ifndef NWB_MATERIAL_TYPED_BINDING\n";
+    source += "#error \"generated material bind includes require mesh/authoring.slangi\"\n";
+    source += "#endif\n\n";
+    source += "#ifndef NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE\n";
+    source += "#error \"generated material bind includes require mesh/authoring.slangi\"\n";
+    source += "#endif\n\n";
+    source += "#if NWB_MATERIAL_TYPED_BINDING != NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE\n";
+    source += "#error \"generated material bind accessors require NWB_MATERIAL_TYPED_BINDING to match NWB_MATERIAL_TYPED_BINDING_REQUIRED_VALUE\"\n";
+    source += "#endif\n\n\n";
+    AppendMaterialBindGeneratedSeparator(source, 3u);
 
     if(!AppendMaterialBindLayoutConstants(
         arena,
@@ -884,12 +872,12 @@ bool BuildMaterialBindIncludeSourceImpl(
         layout,
         generatedSymbols,
         scratchArena,
-        outSource
+        source
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outSource += "\n";
-    AppendMaterialBindGeneratedSeparator(outSource, 3u);
+    source += "\n";
+    AppendMaterialBindGeneratedSeparator(source, 3u);
 
     {
         usize estimatedStructBytes = 0u;
@@ -900,7 +888,7 @@ bool BuildMaterialBindIncludeSourceImpl(
         }
         for(const MaterialBindInstance& bindInstance : entry.instances)
             estimatedStructBytes += bindInstance.type.size() + bindInstance.name.size() + s_MaterialBindGeneratedInstanceReserveBytes;
-        outSource.reserve(outSource.size() + estimatedStructBytes);
+        source.reserve(source.size() + estimatedStructBytes);
     }
 
     for(const MaterialBindStruct& bindStruct : entry.structs){
@@ -910,23 +898,22 @@ bool BuildMaterialBindIncludeSourceImpl(
             generatedSymbols,
             scratchArena
         ))
-            return false;
+            return MakeUnexpected(Failure{});
 
-        outSource += "struct ";
-        outSource += bindStruct.name;
-        outSource += "{\n";
+        source += "struct ";
+        source += bindStruct.name;
+        source += "{\n";
         for(const MaterialBindField& field : bindStruct.fields){
-            MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
-            if(MaterialBindDetail::ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType))
+            if(MaterialBindDetail::ParseMaterialBindResourceFieldTypeText(AStringView(field.type)))
                 continue;
 
-            outSource += "    ";
-            outSource += field.type;
-            outSource += ' ';
-            outSource += field.name;
-            outSource += ";\n";
+            source += "    ";
+            source += field.type;
+            source += ' ';
+            source += field.name;
+            source += ";\n";
         }
-        outSource += "};\n\n";
+        source += "};\n\n";
     }
 
     for(const MaterialBindInstance& instance : entry.instances){
@@ -937,7 +924,7 @@ bool BuildMaterialBindIncludeSourceImpl(
                 , StringConvert(instance.name)
                 , StringConvert(instance.type)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         if(!AppendMaterialBindGeneratedInstance(
@@ -948,68 +935,68 @@ bool BuildMaterialBindIncludeSourceImpl(
             layout,
             generatedSymbols,
             scratchArena,
-            outSource
+            source
         ))
-            return false;
+            return MakeUnexpected(Failure{});
     }
 
-    outSource += "\n";
-    AppendMaterialBindGeneratedSeparator(outSource, 3u);
-    outSource += "#endif\n\n\n";
-    AppendMaterialBindGeneratedSeparator(outSource, 1u);
-    return true;
+    source += "\n";
+    AppendMaterialBindGeneratedSeparator(source, 3u);
+    source += "#endif\n\n\n";
+    AppendMaterialBindGeneratedSeparator(source, 1u);
+    return source;
 }
 
 
 
-bool EmitMaterialBindIncludes(
+Expected<Path> EmitMaterialBindIncludes(
     CookArena& arena,
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     const CookVector<MaterialBindEntry>& materialBindEntries,
-    Path& outIncludeRoot,
     ScratchArena& scratchArena
 ){
-    outIncludeRoot.clear();
-    outIncludeRoot = BuildMaterialBindIncludeRoot(cacheDirectory, configurationSafeName);
-    if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "Material bind include generation"))
-        return false;
+    Path includeRoot = BuildMaterialBindIncludeRoot(cacheDirectory, configurationSafeName);
+    if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "Material bind include generation"))
+        return MakeUnexpected(Failure{});
     if(materialBindEntries.empty())
-        return true;
+        return includeRoot;
 
     CookHashSet<CookString> seenIncludePaths{arena};
     seenIncludePaths.reserve(materialBindEntries.size());
 
     for(const MaterialBindEntry& bindEntry : materialBindEntries){
-        CookString includePath(arena);
-        if(!BuildMaterialBindIncludeVirtualPathImpl(arena, bindEntry, includePath))
-            return false;
+        auto includePathResult = BuildMaterialBindIncludeVirtualPathImpl(arena, bindEntry);
+        if(!includePathResult)
+            return MakeUnexpected(Failure{});
+        CookString includePath = Move(*includePathResult);
         if(!seenIncludePaths.insert(includePath).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: duplicate material bind include path '{}'"), StringConvert(includePath));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
-        CookString generatedSource{arena};
-        if(!BuildMaterialBindIncludeSourceImpl(arena, bindEntry, generatedSource, scratchArena))
-            return false;
+        auto generatedSourceResult = BuildMaterialBindIncludeSourceImpl(arena, bindEntry, scratchArena);
+        if(!generatedSourceResult)
+            return MakeUnexpected(Failure{});
+        const CookString& generatedSource = *generatedSourceResult;
 
-        const Path outputPath = outIncludeRoot / AStringView(includePath);
-        ErrorCode errorCode;
-        if(!EnsureDirectories(outputPath.parentPath(), errorCode)){
+        const Path outputPath = includeRoot / AStringView(includePath);
+        auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
+        if(!ensureDirectoriesResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to create generated include parent '{}': {}")
                 , PathToString<tchar>(outputPath.parentPath())
-                , StringConvert(errorCode.message())
+                , StringConvert(ensureDirectoriesResult.error().message())
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         if(!WriteTextFile(outputPath, AStringView(generatedSource))){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind include generation: failed to write generated include '{}'"), PathToString<tchar>(outputPath));
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
-    return true;
+    return includeRoot;
 }
 
 

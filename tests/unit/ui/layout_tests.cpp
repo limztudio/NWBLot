@@ -51,9 +51,9 @@ public:
 
 protected:
     u32 add(const u32 parent, const LayoutNodeDesc& description){
-        u32 index = s_LayoutNoParent;
-        EXPECT_TRUE(m_tree.addNode(parent, description, index));
-        return index;
+        const auto index = m_tree.addNode(parent, description);
+        EXPECT_TRUE(index);
+        return index.value_or(s_LayoutNoParent);
     }
 
 
@@ -178,21 +178,19 @@ TEST_F(UiLayoutTests, InvalidConstructionPoisonsTheBuildUntilResetAndPreservesPu
     add(s_LayoutNoParent, StretchContainer(LayoutDirection::Overlay));
     ASSERT_TRUE(m_tree.arrange({ 0.0f, 0.0f, 21.0f, 13.0f }));
     const LayoutBox* published = m_tree.box(0u);
-    u32 unchanged = 77u;
-    EXPECT_FALSE(m_tree.addNode(s_LayoutNoParent, FixedLeaf(1.0f, 1.0f), unchanged));
-    EXPECT_EQ(unchanged, 77u);
+    EXPECT_FALSE(m_tree.addNode(s_LayoutNoParent, FixedLeaf(1.0f, 1.0f)));
     EXPECT_FALSE(m_tree.arrange({ 0.0f, 0.0f, 41.0f, 37.0f }));
     EXPECT_EQ(m_tree.box(0u), published);
     m_tree.reset();
-    EXPECT_FALSE(m_tree.addNode(0u, FixedLeaf(1.0f, 1.0f), unchanged));
-    EXPECT_FALSE(m_tree.addNode(s_LayoutNoParent, FixedLeaf(1.0f, 1.0f), unchanged));
+    EXPECT_FALSE(m_tree.addNode(0u, FixedLeaf(1.0f, 1.0f)));
+    EXPECT_FALSE(m_tree.addNode(s_LayoutNoParent, FixedLeaf(1.0f, 1.0f)));
     m_tree.reset();
     const u32 leaf = add(s_LayoutNoParent, FixedLeaf(1.0f, 1.0f));
-    EXPECT_FALSE(m_tree.addNode(leaf, FixedLeaf(1.0f, 1.0f), unchanged));
+    EXPECT_FALSE(m_tree.addNode(leaf, FixedLeaf(1.0f, 1.0f)));
     EXPECT_FALSE(m_tree.arrange({ 0.0f, 0.0f, 1.0f, 1.0f }));
     m_tree.reset();
     const u32 root = add(s_LayoutNoParent, StretchContainer(LayoutDirection::Overlay));
-    EXPECT_FALSE(m_tree.addNode(root + 1u, FixedLeaf(1.0f, 1.0f), unchanged));
+    EXPECT_FALSE(m_tree.addNode(root + 1u, FixedLeaf(1.0f, 1.0f)));
     EXPECT_EQ(m_tree.box(0u), published);
     m_tree.reset();
     add(s_LayoutNoParent, FixedLeaf(7.0f, 9.0f));
@@ -200,7 +198,7 @@ TEST_F(UiLayoutTests, InvalidConstructionPoisonsTheBuildUntilResetAndPreservesPu
     NWB::UiWidgetTests::ExpectRect(m_tree.box(0u)->rectangle, { 3.0f, 4.0f, 7.0f, 9.0f });
 }
 
-TEST_F(UiLayoutTests, InvalidDescriptionsAndBoundedCapacityLeaveAdmissionIndexUnchanged){
+TEST_F(UiLayoutTests, InvalidDescriptionsAndBoundedCapacityRejectNodeAdmission){
     LayoutNodeDesc invalid;
     LayoutNodeDesc invalidDescriptions[7u];
     invalidDescriptions[0u].width = { LayoutSizePolicy::Stretch, 0.0f };
@@ -212,27 +210,25 @@ TEST_F(UiLayoutTests, InvalidDescriptionsAndBoundedCapacityLeaveAdmissionIndexUn
     invalidDescriptions[6u].direction = static_cast<LayoutDirection::Enum>(255u);
     for(const LayoutNodeDesc& description : invalidDescriptions){
         m_tree.reset();
-        u32 index = 42u;
-        EXPECT_FALSE(m_tree.addNode(s_LayoutNoParent, description, index));
-        EXPECT_EQ(index, 42u);
+        EXPECT_FALSE(m_tree.addNode(s_LayoutNoParent, description));
         EXPECT_EQ(m_tree.nodeCount(), 0u);
         EXPECT_FALSE(m_tree.arrange({ 0.0f, 0.0f, 31.0f, 17.0f }));
     }
     LayoutTree bounded(m_arena, 2u);
     u32 root = s_LayoutNoParent;
-    ASSERT_TRUE(bounded.addNode(s_LayoutNoParent, StretchContainer(LayoutDirection::Overlay), root));
-    u32 index = s_LayoutNoParent;
-    ASSERT_TRUE(bounded.addNode(root, FixedLeaf(1.0f, 1.0f), index));
+    {
+        const auto admittedNode = bounded.addNode(s_LayoutNoParent, StretchContainer(LayoutDirection::Overlay));
+        ASSERT_TRUE(admittedNode);
+        root = *admittedNode;
+    }
+    ASSERT_TRUE(bounded.addNode(root, FixedLeaf(1.0f, 1.0f)));
     ASSERT_TRUE(bounded.arrange({ 0.0f, 0.0f, 31.0f, 17.0f }));
     const LayoutBox* published = bounded.box(root);
-    index = 42u;
-    EXPECT_FALSE(bounded.addNode(root, FixedLeaf(1.0f, 1.0f), index));
-    EXPECT_EQ(index, 42u);
+    EXPECT_FALSE(bounded.addNode(root, FixedLeaf(1.0f, 1.0f)));
     EXPECT_FALSE(bounded.arrange({ 0.0f, 0.0f, 31.0f, 17.0f }));
     EXPECT_EQ(bounded.box(root), published);
     LayoutTree empty(m_arena, 0u);
-    EXPECT_FALSE(empty.addNode(s_LayoutNoParent, invalid, index));
-    EXPECT_EQ(index, 42u);
+    EXPECT_FALSE(empty.addNode(s_LayoutNoParent, invalid));
 }
 
 TEST_F(UiLayoutTests, MaximumDepthArrangesWithoutRecursionAndRejectsFurtherNodes){
@@ -243,9 +239,7 @@ TEST_F(UiLayoutTests, MaximumDepthArrangesWithoutRecursionAndRejectsFurtherNodes
     ASSERT_TRUE(m_tree.arrange({ 3.0f, 5.0f, 101.0f, 79.0f }));
     ASSERT_EQ(m_tree.boxes().size(), s_LayoutMaxNodes);
     NWB::UiWidgetTests::ExpectRect(m_tree.box(parent)->rectangle, { 3.0f, 5.0f, 101.0f, 79.0f });
-    u32 unchanged = 17u;
-    EXPECT_FALSE(m_tree.addNode(parent, FixedLeaf(1.0f, 1.0f), unchanged));
-    EXPECT_EQ(unchanged, 17u);
+    EXPECT_FALSE(m_tree.addNode(parent, FixedLeaf(1.0f, 1.0f)));
 }
 
 

@@ -49,18 +49,16 @@ static bool ConfigureRuntime(NWB::ProjectStartupContext& context){
     ;
 }
 
-static bool CreateInitialWorld(NWB::ProjectRuntimeContext& context, UniquePtr<NWB::Core::ECS::World>& outWorld){
-    outWorld.reset();
-
+static Expected<UniquePtr<NWB::Core::ECS::World>, TStringView> CreateInitialWorld(NWB::ProjectRuntimeContext& context){
     auto world = MakeUnique<NWB::Core::ECS::World>(context.objectArena, context.cpuTasks);
     if(!world){
         NWB_LOGGER_FATAL(s_WorldAllocFailed);
-        return false;
+        return MakeUnexpected(s_WorldAllocFailed);
     }
 
     if(!context.shaderPathResolver){
         NWB_LOGGER_FATAL(s_ResolverNull);
-        return false;
+        return MakeUnexpected(s_ResolverNull);
     }
 
     auto& meshSystem = world->addSystem<NWB::Impl::MeshSystem>(*world);
@@ -103,9 +101,7 @@ static bool CreateInitialWorld(NWB::ProjectRuntimeContext& context, UniquePtr<NW
     context.graphics.addRenderPassToBack(uiLayerSystem);
     context.frameGraphRegistry.registerContributor(rendererSystem);
 
-    outWorld = Move(world);
-
-    return true;
+    return world;
 }
 
 static void DestroyInitialWorld(NWB::ProjectRuntimeContext& context, UniquePtr<NWB::Core::ECS::World>& world){
@@ -170,8 +166,8 @@ UniquePtr<NWB::IProjectEntryCallbacks> NWB::CreateProjectEntryCallbacks(NWB::Pro
     return MakeUnique<Testbed::Project>(context);
 }
 
-bool NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& outWorld){
-    return Testbed::__hidden_testbed_entry::CreateInitialWorld(context, outWorld);
+Expected<UniquePtr<NWB::Core::ECS::World>, TStringView> NWB::CreateInitialProjectWorld(ProjectRuntimeContext& context){
+    return Testbed::__hidden_testbed_entry::CreateInitialWorld(context);
 }
 
 void NWB::DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& world){

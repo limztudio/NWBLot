@@ -45,10 +45,10 @@ using namespace GpuTaskGraphCompilerDetail;
     const GpuTaskGraphInitialOwnerHandoffSourceView* selectedSource = nullptr;
     for(usize sourceIndex = 0u; sourceIndex < resource.initialOwnerHandoffSourceCount; ++sourceIndex){
         const GpuTaskGraphInitialOwnerHandoffSourceView& source = resource.initialOwnerHandoffSources[sourceIndex];
-        GpuTaskResourceRange sourceRange;
-        if(!ResolveResourceRangeForPlanning(graph, resource, source.range, sourceRange))
+        const auto sourceRange = ResolveResourceRangeForPlanning(graph, resource, source.range);
+        if(!sourceRange)
             return false;
-        if(!RangeContains(resource, sourceRange, range))
+        if(!RangeContains(resource, (*sourceRange), range))
             continue;
         if(selectedSource)
             return false;
@@ -58,11 +58,10 @@ using namespace GpuTaskGraphCompilerDetail;
 }
 
 
-[[nodiscard]] bool BuildInitialOwnershipQueueConstraints(
+[[nodiscard]] Expected<void, GpuTaskId> BuildInitialOwnershipQueueConstraints(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     Vector<GpuPhysicalQueueId, Alloc::ScratchArena>& outQueues,
-    GpuTaskId& outFailedTask,
     Alloc::ScratchArena& scratchArena
 ){
     usize taskUseCapacity = 0u;
@@ -80,7 +79,7 @@ using namespace GpuTaskGraphCompilerDetail;
         }
     }
     if(ownedResourceUseCount == 0u)
-        return true;
+        return {};
 
     Vector<TrackedCompiledResourceState, Alloc::ScratchArena> states(scratchArena);
     states.reserve(ownedResourceUseCount);
@@ -89,10 +88,9 @@ using namespace GpuTaskGraphCompilerDetail;
     Vector<GpuTaskResourceRange, Alloc::ScratchArena> firstUseRanges(scratchArena);
     Vector<TrackedResourceStateFragment, Alloc::ScratchArena> fragments(scratchArena);
     for(const GpuTaskId taskID : analysis.topologicalOrder()){
-        outFailedTask = taskID;
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
         if(!taskUses.build(task))
-            return false;
+            return MakeUnexpected(taskID);
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
             const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
@@ -106,9 +104,9 @@ using namespace GpuTaskGraphCompilerDetail;
             )
                 continue;
 
-            GpuTaskResourceRange plannedRange;
-            if(!ResolveResourceRangeForPlanning(graph, resource, use.range, plannedRange))
-                return false;
+            const auto plannedRange = ResolveResourceRangeForPlanning(graph, resource, use.range);
+            if(!plannedRange)
+                return MakeUnexpected(taskID);
             if(resource.type == GpuGraphResourceType::Texture || resource.type == GpuGraphResourceType::Buffer){
                 if(!CollectResourceFirstUseRangesWithinTask(
                     graph,
@@ -116,34 +114,34 @@ using namespace GpuTaskGraphCompilerDetail;
                     taskUses,
                     useIndex,
                     resource,
-                    plannedRange,
+                    (*plannedRange),
                     scratchArena,
                     firstUseRanges
                 ))
-                    return false;
+                    return MakeUnexpected(taskID);
                 if(!CollectLatestResourceStateFragments(states, history, resource, firstUseRanges, scratchArena, fragments))
-                    return false;
+                    return MakeUnexpected(taskID);
                 for(const TrackedResourceStateFragment& fragment : fragments){
                     if(!fragment.state && !AccumulateInitialOwnershipQueue(graph, resource, fragment.range, outQueues[taskID.index]))
-                        return false;
+                        return MakeUnexpected(taskID);
                 }
             }
             else if(history.last(use.resource) == Limit<usize>::s_Max){
-                if(!AccumulateInitialOwnershipQueue(graph, resource, plannedRange, outQueues[taskID.index]))
-                    return false;
+                if(!AccumulateInitialOwnershipQueue(graph, resource, (*plannedRange), outQueues[taskID.index]))
+                    return MakeUnexpected(taskID);
             }
             if(!history.append(TrackedCompiledResourceState{
                 .resource = use.resource,
-                .range = plannedRange,
+                .range = (*plannedRange),
                 .task = taskID,
                 .state = use.requiredState,
                 .access = use.access,
                 .queue = {},
             }))
-                return false;
+                return MakeUnexpected(taskID);
         }
     }
-    return true;
+    return {};
 }
 
 
@@ -229,39 +227,39 @@ namespace GpuTaskGraphCompilerDetail{
 }
 
 
-[[nodiscard]] bool BuildQueuePlacementGroups(
+[[nodiscard]] Expected<void, GpuTaskQueueAssignmentDiagnostic> BuildQueuePlacementGroups(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphQueueAssignmentOptions& options,
     Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena>& outGroups,
-    GpuTaskQueueAssignmentDiagnostic& outDiagnostic,
     Alloc::ScratchArena& scratchArena
 ){
     using namespace __hidden_gpu_task_graph_compiler_queue_placement;
 
+    GpuTaskQueueAssignmentDiagnostic diagnostic;
     const auto fail = [&](const GpuTaskGraphQueueAssignmentStatus::Enum status, const GpuTaskId task){
-        outDiagnostic.status = status;
-        outDiagnostic.task = task;
-        outDiagnostic.requiredCapabilities = graph.taskAt(task.index).commands.requiredCapabilities;
-        return false;
+        diagnostic.status = status;
+        diagnostic.task = task;
+        diagnostic.requiredCapabilities = graph.taskAt(task.index).commands.requiredCapabilities;
+        return MakeUnexpected(diagnostic);
     };
     Vector<GpuPhysicalQueueId, Alloc::ScratchArena> initialOwnershipQueues(graph.taskCount(), scratchArena);
     Vector<GpuPhysicalQueueId, Alloc::ScratchArena> diagnosticOverrideQueues(graph.taskCount(), scratchArena);
-    GpuTaskId failedTask;
-    if(!BuildInitialOwnershipQueueConstraints(graph, analysis, initialOwnershipQueues, failedTask, scratchArena))
-        return fail(GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue, failedTask);
+    const auto ownershipConstraints = BuildInitialOwnershipQueueConstraints(graph, analysis, initialOwnershipQueues, scratchArena);
+    if(!ownershipConstraints)
+        return fail(GpuTaskGraphQueueAssignmentStatus::NoCompatibleQueue, ownershipConstraints.error());
 
     if(options.diagnosticQueueOverrideCount != 0u && !options.diagnosticQueueOverrides){
-        outDiagnostic.status = GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride;
-        return false;
+        diagnostic.status = GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride;
+        return MakeUnexpected(diagnostic);
     }
     for(usize overrideIndex = 0u; overrideIndex < options.diagnosticQueueOverrideCount; ++overrideIndex){
         const GpuTaskDiagnosticQueueOverride& override = options.diagnosticQueueOverrides[overrideIndex];
         if(!graph.validTask(override.task)){
-            outDiagnostic.status = GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride;
-            outDiagnostic.task = override.task;
-            return false;
+            diagnostic.status = GpuTaskGraphQueueAssignmentStatus::InvalidDiagnosticQueueOverride;
+            diagnostic.task = override.task;
+            return MakeUnexpected(diagnostic);
         }
         const GpuPhysicalQueueInfo* const candidate = FindPhysicalQueueInfo(topology, override.queue);
         if(
@@ -329,7 +327,7 @@ namespace GpuTaskGraphCompilerDetail{
         outGroups.push_back(singleton);
         legalityWitness = singletonQueue;
     }
-    return true;
+    return {};
 }
 
 

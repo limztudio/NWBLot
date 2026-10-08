@@ -29,16 +29,15 @@ namespace __hidden_csg_frame_state{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool BuildCsgFrameStateCacheSignature(
+[[nodiscard]] static Expected<CsgFrameStateCacheSignature> BuildCsgFrameStateCacheSignature(
     Core::ECS::World& world,
-    const CsgShapeRegistry& shapeRegistry,
-    CsgFrameStateCacheSignature& outSignature
+    const CsgShapeRegistry& shapeRegistry
 ){
-    outSignature = CsgFrameStateCacheSignature{};
-    outSignature.shapeRegistryRevision = shapeRegistry.revision();
+    CsgFrameStateCacheSignature signature;
+    signature.shapeRegistryRevision = shapeRegistry.revision();
 
     if(world.view<SkinnedCsgMeshComponent>().candidateCount() > 0u)
-        return false;
+        return MakeUnexpected(Failure{});
 
     u64 contentHash = s_Fnv64OffsetBasis;
     auto cutterView = world.view<CsgCutterComponent>();
@@ -91,10 +90,10 @@ namespace __hidden_csg_frame_state{
         }
     );
     if(!cacheable)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outSignature.contentHash = contentHash;
-    return true;
+    signature.contentHash = contentHash;
+    return signature;
 }
 
 
@@ -111,16 +110,16 @@ CsgFrameState RendererCsgSystem::buildFrameState(
     Core::Alloc::ScratchArena& scratchArena,
     IMaterialSurfaceLookup& materialSurfaceLookup
 ){
-    CsgFrameStateCacheSignature signature;
-    const bool cacheable = __hidden_csg_frame_state::BuildCsgFrameStateCacheSignature(m_world, m_csgShapeRegistry, signature);
-    if(cacheable && m_csgState.m_frameStateCacheValid && m_csgState.m_frameStateCacheSignature == signature)
+    const auto signature = __hidden_csg_frame_state::BuildCsgFrameStateCacheSignature(m_world, m_csgShapeRegistry);
+    const bool cacheable = signature.has_value();
+    if(cacheable && m_csgState.m_frameStateCacheValid && m_csgState.m_frameStateCacheSignature == *signature)
         return m_csgState.m_frameStateCache;
 
     bool frameStateCacheable = cacheable;
     CsgFrameState state;
     auto finishFrameState = [&](const CsgFrameState& frameState) -> CsgFrameState{
         if(frameStateCacheable){
-            m_csgState.m_frameStateCacheSignature = signature;
+            m_csgState.m_frameStateCacheSignature = *signature;
             m_csgState.m_frameStateCache = frameState;
             m_csgState.m_frameStateCacheValid = true;
         }
@@ -146,48 +145,52 @@ CsgFrameState RendererCsgSystem::buildFrameState(
         if(!renderer.visible)
             continue;
 
-        CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
-        const CsgReceiverComponent* receiver = ResolveCsgReceiverComponent(m_world, entity, receiverKind);
-        if(!receiver || !receiver->enabled)
+        const auto resolvedReceiver = ResolveCsgReceiverComponent(m_world, entity);
+        if(!resolvedReceiver || !resolvedReceiver->receiver->enabled)
             continue;
+        const CsgReceiverComponent* receiver = resolvedReceiver->receiver;
+        const CsgReceiverKind::Enum receiverKind = resolvedReceiver->receiverKind;
 
-        RenderableMeshDesc resolvedMesh;
-        if(!ecsMeshSystem.resolveRenderableMesh(entity, resolvedMesh)){
+        const auto resolvedMeshResult = ecsMeshSystem.resolveRenderableMeshStatus(entity);
+        if(!resolvedMeshResult){
             frameStateCacheable = false;
             continue;
         }
+        const auto& resolvedMesh = *resolvedMeshResult;
 
-        MeshResources* mesh = nullptr;
-        if(resolvedMesh.runtime){
+        if(resolvedMesh.runtime)
             frameStateCacheable = false;
-            if(!m_meshSystem.createRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh))
-                continue;
-        }
-        else if(!m_meshSystem.createMeshResources(resolvedMesh.mesh, mesh)){
+        const auto meshResult = resolvedMesh.runtime
+            ? m_meshSystem.createRuntimeMeshResources(resolvedMesh.runtimeMesh)
+            : m_meshSystem.createMeshResources(resolvedMesh.mesh)
+        ;
+        if(!meshResult){
             frameStateCacheable = false;
             continue;
         }
+        MeshResources* const mesh = *meshResult;
 
-        MaterialSurfaceInfo* materialInfo = nullptr;
-        if(!materialSurfaceLookup.findMaterialSurfaceInfo(renderer.material, materialInfo)){
+        const auto materialInfoResult = materialSurfaceLookup.findMaterialSurfaceInfo(renderer.material);
+        if(!materialInfoResult){
             frameStateCacheable = false;
             continue;
         }
+        MaterialSurfaceInfo* const materialInfo = *materialInfoResult;
 
         const Scene::TransformComponent* transform = m_world.tryGetComponent<Scene::TransformComponent>(entity);
 
         auto countPassCutters = [&](const CsgReceiverPass::Enum pass) -> u32{
-            CsgReceiverDrawState drawState;
-            if(!receiverLookup.resolveReceiverDrawState(entity, pass, drawState) || drawState.receiverKind != receiverKind)
+            const auto drawState = receiverLookup.resolveReceiverDrawState(entity, pass);
+            if(!drawState || drawState->receiverKind != receiverKind)
                 return 0u;
 
-            CsgReceiverClipDrawInfo clipInfo;
-            if(!resolveCsgReceiverClipDrawInfo(receiverLookup, drawState, mesh->csgLocalBounds, transform, clipInfo))
+            const auto clipInfo = resolveCsgReceiverClipDrawInfo(receiverLookup, *drawState, mesh->csgLocalBounds, transform);
+            if(!clipInfo)
                 return 0u;
-            if(clipInfo.cutterCount == 0u)
+            if(clipInfo->cutterCount == 0u)
                 return 0u;
 
-            return clipInfo.cutterCount;
+            return clipInfo->cutterCount;
         };
 
         const u32 opaqueCutterCount =

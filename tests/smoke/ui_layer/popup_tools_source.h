@@ -29,8 +29,8 @@ public:
     virtual u64 revision()const noexcept override{ return m_revision; }
     virtual u64 rowCount()const noexcept override{ return 5u; }
     virtual u64 key(u64 index)const override;
-    virtual bool indexOf(u64 key, u64& index)const override;
-    virtual bool findEnabled(u64 start, bool reverse, u64& index)const override;
+    virtual Expected<u64> indexOf(u64 key)const override;
+    virtual Expected<u64> findEnabled(u64 start, bool reverse)const override;
     virtual StringView text(u64 index)const override;
     virtual bool enabled(u64 index)const override{ return index < rowCount() && key(index) != 3u; }
 

@@ -530,18 +530,17 @@ Device::Device(const DeviceDesc& desc)
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to initialize VMA allocator"));
 
     if(m_gpuCrashDiagnosticsEnabled && m_context.extensions.amdBufferMarker){
-        VulkanDetail::AmdBreadcrumbRingLayout breadcrumbLayout;
-        if(!VulkanDetail::TryBuildAmdBreadcrumbRingLayout(
+        const auto breadcrumbLayout = VulkanDetail::TryBuildAmdBreadcrumbRingLayout(
             getPhysicalQueueTopology(),
-            s_MaxAmdBreadcrumbSlots,
-            breadcrumbLayout
-        )){
+            s_MaxAmdBreadcrumbSlots
+        );
+        if(!breadcrumbLayout){
             NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Invalid AMD breadcrumb ring layout; AMD GPU breadcrumbs disabled."));
             m_context.extensions.amdBufferMarker = false;
         }
         else{
             if(!m_amdBreadcrumb.initializeMetadata(
-                breadcrumbLayout,
+                *breadcrumbLayout,
                 VulkanArenaScope::s_AmdBreadcrumbMetadataArena
             )){
                 NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to reserve AMD breadcrumb metadata; AMD GPU breadcrumbs disabled."));
@@ -550,7 +549,7 @@ Device::Device(const DeviceDesc& desc)
             else{
 
                 auto breadcrumbInfo = VulkanDetail::MakeVkStruct<VkBufferCreateInfo>(VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO);
-                breadcrumbInfo.size = breadcrumbLayout.totalByteSize;
+                breadcrumbInfo.size = breadcrumbLayout->totalByteSize;
                 breadcrumbInfo.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
                 Alloc::ScratchArena breadcrumbQueueArena(VulkanArenaScope::s_QueueFamilyQueryArena);
                 Vector<u32, Alloc::ScratchArena> breadcrumbQueueFamilies(breadcrumbQueueArena);
@@ -564,18 +563,18 @@ Device::Device(const DeviceDesc& desc)
                     breadcrumbInfo.queueFamilyIndexCount = static_cast<u32>(breadcrumbQueueFamilies.size());
                     breadcrumbInfo.pQueueFamilyIndices = breadcrumbQueueFamilies.data();
                 }
-                const VkResult breadcrumbRes = m_allocator.createHostMappedBuffer(
-                    m_amdBreadcrumb.buffer,
-                    m_amdBreadcrumb.allocation,
-                    m_amdBreadcrumb.mappedMemory,
-                    breadcrumbInfo
-                );
-                if(breadcrumbRes == VK_SUCCESS && m_amdBreadcrumb.mappedMemory){
+                const auto breadcrumb = m_allocator.createHostMappedBuffer(breadcrumbInfo);
+                if(breadcrumb){
+                    m_amdBreadcrumb.buffer = breadcrumb->buffer;
+                    m_amdBreadcrumb.allocation = breadcrumb->allocation;
+                    m_amdBreadcrumb.mappedMemory = breadcrumb->mappedMemory;
+                }
+                if(breadcrumb && m_amdBreadcrumb.mappedMemory){
                     NWB_MEMSET(m_amdBreadcrumb.mappedMemory, 0, static_cast<usize>(breadcrumbInfo.size));
                 }
                 else{
                     // Release an unusable allocation before disabling breadcrumbs.
-                    if(breadcrumbRes == VK_SUCCESS){
+                    if(breadcrumb){
                         m_allocator.destroyHostMappedBuffer(
                             m_amdBreadcrumb.buffer,
                             m_amdBreadcrumb.allocation,
@@ -584,7 +583,7 @@ Device::Device(const DeviceDesc& desc)
                     }
                     NWB_LOGGER_WARNING(
                         NWB_TEXT("Vulkan: Failed to allocate AMD breadcrumb buffer ({}); breadcrumbs disabled."),
-                        ResultToString(breadcrumbRes)
+                        ResultToString(breadcrumb ? VK_SUCCESS : breadcrumb.error())
                     );
                     m_context.extensions.amdBufferMarker = false;
                 }
@@ -609,17 +608,17 @@ Device::Device(const DeviceDesc& desc)
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Required global GpuDescriptorHeap is unavailable."));
     }
 
-    GraphicsBytes pipelineCacheInitialData{m_context.objectArena};
-    if(!loadPipelineCacheData(pipelineCacheInitialData))
+    const auto pipelineCacheInitialData = loadPipelineCacheData();
+    if(!pipelineCacheInitialData)
         NWB_LOGGER_INFO(NWB_TEXT("Vulkan: No usable pipeline cache found; starting with an empty cache."));
 
     auto cacheInfo = VulkanDetail::MakeVkStruct<VkPipelineCacheCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO);
-    if(!pipelineCacheInitialData.empty()){
-        cacheInfo.initialDataSize = pipelineCacheInitialData.size();
-        cacheInfo.pInitialData = pipelineCacheInitialData.data();
+    if(pipelineCacheInitialData && !pipelineCacheInitialData->empty()){
+        cacheInfo.initialDataSize = pipelineCacheInitialData->size();
+        cacheInfo.pInitialData = pipelineCacheInitialData->data();
     }
     res = m_context.deviceDispatch.vkCreatePipelineCache(m_context.device, &cacheInfo, m_context.allocationCallbacks, &m_context.pipelineCache);
-    if(res != VK_SUCCESS && !pipelineCacheInitialData.empty()){
+    if(res != VK_SUCCESS && pipelineCacheInitialData && !pipelineCacheInitialData->empty()){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to create pipeline cache from runtime volume '{}'. Retrying empty cache. {}")
             , StringConvert(m_pipelineCacheVolumeName)
             , ResultToString(res)

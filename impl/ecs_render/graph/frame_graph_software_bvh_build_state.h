@@ -52,10 +52,9 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
+    [[nodiscard]] Expected<FrameGraphSoftwareBvhBuildStateResult> declare(
         const FrameGraphSoftwareBvhBuildStateInputs& inputs,
-        Core::Alloc::ScratchArena& scratchArena,
-        FrameGraphSoftwareBvhBuildStateResult& outResult
+        Core::Alloc::ScratchArena& scratchArena
     );
 
 

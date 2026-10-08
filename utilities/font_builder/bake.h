@@ -47,7 +47,7 @@ struct RasterGlyph{
 using RasterGlyphs = Core::Assets::AssetVector<RasterGlyph>;
 
 [[nodiscard]] bool ValidateOptions(const BakeOptions& options);
-[[nodiscard]] bool Bake(const BakeOptions& options, Impl::FontAtlasPayload& outPayload, Core::Alloc::ScratchArena& scratch);
+[[nodiscard]] Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch);
 [[nodiscard]] bool PackGlyphs(const BakeOptions& options, const RasterGlyphs& glyphs, Impl::FontAtlasPayload& outPayload, Core::Alloc::ScratchArena& scratch);
 [[nodiscard]] bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payload);
 int Run(int argc, char** argv);

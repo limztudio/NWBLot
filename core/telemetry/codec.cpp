@@ -90,23 +90,6 @@ template<typename Container>
     return true;
 }
 
-[[nodiscard]] static DecodeResult ReadHeader(const BinaryByteView& encoded, EventHeader& outHeader){
-    DecodeResult result;
-    result.status = DecodeStatus::TruncatedHeader;
-
-    usize cursor = 0u;
-    EncodedEventHeader encodedHeader;
-    if(!ReadPOD(encoded, cursor, encodedHeader)){
-        result.bytesRead = cursor;
-        return result;
-    }
-
-    outHeader = DecodeHeader(encodedHeader);
-    result.status = DecodeStatus::Ok;
-    result.bytesRead = cursor;
-    return result;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -136,42 +119,31 @@ bool EncodeEvent(const EventHeader& header, const void* payload, const usize pay
     return outBytes.size() == encodedBytes;
 }
 
-DecodeResult DecodeEvent(TelemetryArena& arena, const void* const bytes, const usize byteCount, EventRecord& outEvent){
-    DecodeResult result;
-    outEvent = EventRecord(arena);
-
-    if(byteCount < sizeof(EncodedEventHeader) || !bytes){
-        result.status = DecodeStatus::TruncatedHeader;
-        return result;
-    }
+Expected<DecodedEvent, DecodeResult> DecodeEvent(TelemetryArena& arena, const void* const bytes, const usize byteCount){
+    if(byteCount < sizeof(EncodedEventHeader) || !bytes)
+        return MakeUnexpected(DecodeResult{ .status = DecodeStatus::TruncatedHeader });
 
     const BinaryByteView encoded{ static_cast<const u8*>(bytes), byteCount };
-    result = __hidden_telemetry_codec::ReadHeader(encoded, outEvent.header);
-    if(!result.ok())
-        return result;
+    usize cursor = 0u;
+    const auto encodedHeader = ReadPOD<EncodedEventHeader>(encoded, cursor);
+    if(!encodedHeader)
+        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::TruncatedHeader });
 
-    if(!__hidden_telemetry_codec::ValidateHeaderPayload(outEvent.header)){
-        result.status = DecodeStatus::InvalidHeader;
-        return result;
-    }
+    EventRecord event(arena);
+    event.header = __hidden_telemetry_codec::DecodeHeader(*encodedHeader);
+    if(!__hidden_telemetry_codec::ValidateHeaderPayload(event.header))
+        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::InvalidHeader });
+    if(event.header.payloadBytes > static_cast<u64>(Limit<usize>::s_Max))
+        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::PayloadSizeOverflow });
 
-    if(outEvent.header.payloadBytes > static_cast<u64>(Limit<usize>::s_Max)){
-        result.status = DecodeStatus::PayloadSizeOverflow;
-        return result;
-    }
-
-    const usize payloadBytes = static_cast<usize>(outEvent.header.payloadBytes);
-    if(byteCount - result.bytesRead < payloadBytes){
-        result.status = DecodeStatus::TruncatedPayload;
-        return result;
-    }
-
+    const usize payloadBytes = static_cast<usize>(event.header.payloadBytes);
+    if(byteCount - cursor < payloadBytes)
+        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::TruncatedPayload });
     if(payloadBytes != 0u){
-        outEvent.payload.resize(payloadBytes);
-        NWB_MEMCPY(outEvent.payload.data(), outEvent.payload.size(), encoded.data() + result.bytesRead, payloadBytes);
+        event.payload.resize(payloadBytes);
+        NWB_MEMCPY(event.payload.data(), event.payload.size(), encoded.data() + cursor, payloadBytes);
     }
-    result.bytesRead += payloadBytes;
-    return result;
+    return DecodedEvent{ .event = Move(event), .bytesRead = cursor + payloadBytes };
 }
 
 bool EncodeEventStream(const EventView& events, TelemetryBytes& outBytes){
@@ -213,71 +185,44 @@ bool EncodeEventStream(const EventView& events, TelemetryBytes& outBytes){
     return outBytes.size() == encodedBytes;
 }
 
-DecodeResult DecodeEventStream(TelemetryArena& arena, const void* const bytes, const usize byteCount, Recorder& outRecorder){
-    DecodeResult result;
-    outRecorder.clear();
-
-    if(byteCount < sizeof(EncodedStreamHeader) || !bytes){
-        result.status = DecodeStatus::TruncatedHeader;
-        return result;
-    }
+Expected<usize, DecodeResult> DecodeEventStream(
+    TelemetryArena& arena,
+    const void* const bytes,
+    const usize byteCount,
+    Recorder& inOutRecorder
+){
+    inOutRecorder.clear();
+    if(byteCount < sizeof(EncodedStreamHeader) || !bytes)
+        return MakeUnexpected(DecodeResult{ .status = DecodeStatus::TruncatedHeader });
 
     const BinaryByteView encoded{ static_cast<const u8*>(bytes), byteCount };
     usize cursor = 0u;
-
-    EncodedStreamHeader streamHeader;
-    if(!ReadPOD(encoded, cursor, streamHeader)){
-        result.status = DecodeStatus::TruncatedHeader;
-        result.bytesRead = cursor;
-        return result;
-    }
-
-    if(!__hidden_telemetry_codec::ValidateStreamHeader(streamHeader)){
-        result.status = DecodeStatus::InvalidHeader;
-        result.bytesRead = cursor;
-        return result;
-    }
-
-    if(streamHeader.payloadBytes > static_cast<u64>(Limit<usize>::s_Max)){
-        result.status = DecodeStatus::PayloadSizeOverflow;
-        result.bytesRead = cursor;
-        return result;
-    }
+    const auto decodedHeader = ReadPOD<EncodedStreamHeader>(encoded, cursor);
+    if(!decodedHeader)
+        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::TruncatedHeader });
+    const EncodedStreamHeader& streamHeader = *decodedHeader;
+    if(!__hidden_telemetry_codec::ValidateStreamHeader(streamHeader))
+        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::InvalidHeader });
+    if(streamHeader.payloadBytes > static_cast<u64>(Limit<usize>::s_Max))
+        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::PayloadSizeOverflow });
 
     const usize streamPayloadBytes = static_cast<usize>(streamHeader.payloadBytes);
-    if(byteCount - cursor < streamPayloadBytes){
-        result.status = DecodeStatus::TruncatedPayload;
-        result.bytesRead = cursor;
-        return result;
-    }
-
+    if(byteCount - cursor < streamPayloadBytes)
+        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::TruncatedPayload });
     const usize streamEnd = cursor + streamPayloadBytes;
     for(u64 i = 0u; i < streamHeader.eventCount; ++i){
-        EventRecord event(arena);
-        const DecodeResult eventResult = DecodeEvent(arena, encoded.data() + cursor, streamEnd - cursor, event);
-        if(!eventResult.ok()){
-            result.status = eventResult.status;
-            result.bytesRead = cursor + eventResult.bytesRead;
-            return result;
+        auto decodedEvent = DecodeEvent(arena, encoded.data() + cursor, streamEnd - cursor);
+        if(!decodedEvent){
+            const DecodeResult& failure = decodedEvent.error();
+            return MakeUnexpected(DecodeResult{ .bytesRead = cursor + failure.bytesRead, .status = failure.status });
         }
-        cursor += eventResult.bytesRead;
-
-        if(!outRecorder.append(event.header, Move(event.payload))){
-            result.status = DecodeStatus::InvalidHeader;
-            result.bytesRead = cursor;
-            return result;
-        }
+        cursor += decodedEvent->bytesRead;
+        if(!inOutRecorder.append(decodedEvent->event.header, Move(decodedEvent->event.payload)))
+            return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::InvalidHeader });
     }
-
-    if(cursor != streamEnd){
-        result.status = DecodeStatus::InvalidHeader;
-        result.bytesRead = cursor;
-        return result;
-    }
-
-    result.status = DecodeStatus::Ok;
-    result.bytesRead = cursor;
-    return result;
+    if(cursor != streamEnd)
+        return MakeUnexpected(DecodeResult{ .bytesRead = cursor, .status = DecodeStatus::InvalidHeader });
+    return cursor;
 }
 
 

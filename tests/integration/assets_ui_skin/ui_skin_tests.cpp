@@ -68,14 +68,14 @@ static_assert(LengthOf(s_PaletteRoleNames) == UiSkinColorRole::Count, "UI skin p
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ParseMetadata(SkinTestArena& testArena, const AStringView metadata, UiSkinCookEntry& entry){
+[[nodiscard]] static Expected<UiSkinCookEntry> ParseMetadata(SkinTestArena& testArena, const AStringView metadata){
     Core::Metascript::Document document(testArena.arena);
     if(!document.parse(metadata))
-        return false;
+        return MakeUnexpected(Failure{});
     const Path assetRoot(testArena.arena, "C:/ui_skin_tests/assets");
     const Path metadataPath = assetRoot / "ui" / "atlas.nwb";
     Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    return ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena);
+    return ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena);
 }
 
 [[nodiscard]] static Core::Assets::AssetBytes MakeBinary(
@@ -199,13 +199,14 @@ TEST(AssetsUiSkin, TypographyMetadataRequiresValidFontSize){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
-    UiSkinCookEntry entry(testArena.arena);
-    ASSERT_TRUE(ParseMetadata(testArena, TypographyMetadata(), entry));
+    auto entryResult = ParseMetadata(testArena, TypographyMetadata());
+    ASSERT_TRUE(entryResult);
+    const UiSkinCookEntry& entry = *entryResult;
     const AStringView malformed[]{ "", "{}", "{\"default_font_size\": 0.0}",
         "{\"default_font_size\": 2049.0}", "{\"default_font_size\": \"large\"}",
         "{\"default_font_size\": 16.0, \"body\": 18.0}" };
     for(u32 index = 0u; index < LengthOf(malformed); ++index){
-        EXPECT_FALSE(ParseMetadata(testArena, TypographyMetadata(malformed[index]), entry)) << index;
+        EXPECT_FALSE(ParseMetadata(testArena, TypographyMetadata(malformed[index]))) << index;
         EXPECT_FLOAT_EQ(entry.typography.defaultFontSize, 21.5f);
     }
 }
@@ -248,10 +249,11 @@ TEST(AssetsUiSkin, PaletteMetadataRequiresEveryKnownRoleAndValidRgba){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
-    UiSkinCookEntry entry(testArena.arena);
-    ASSERT_TRUE(ParseMetadata(testArena, PaletteMetadata(), entry));
+    auto entryResult = ParseMetadata(testArena, PaletteMetadata());
+    ASSERT_TRUE(entryResult);
+    const UiSkinCookEntry& entry = *entryResult;
     for(u32 variant = 1u; variant <= 6u; ++variant){
-        EXPECT_FALSE(ParseMetadata(testArena, PaletteMetadata(variant), entry)) << variant;
+        EXPECT_FALSE(ParseMetadata(testArena, PaletteMetadata(variant))) << variant;
         EXPECT_EQ(entry.virtualPath, Name("project/ui/atlas"));
         EXPECT_FLOAT_EQ(entry.palette.colors[UiSkinColorRole::TextNormal].r, 0.25f);
     }
@@ -372,14 +374,11 @@ TEST(AssetsUiSkin, RejectsOverLimitCountsBeforeReadingOrCopyingRegions){
     regions.asList().reserve(s_UiSkinMaxRegionCount + 1u);
     for(u32 index = 0u; index <= s_UiSkinMaxRegionCount; ++index)
         regions.asList().push_back(regionTemplate);
-    UiSkinCookEntry entry(testArena.arena);
     const Path assetRoot(testArena.arena, "C:/ui_skin_tests/assets");
     const Path metadataPath = assetRoot / "ui" / "atlas.nwb";
     Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    EXPECT_FALSE(ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena));
+    EXPECT_FALSE(ParseUiSkinCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("regions exceed schema limit 4096")));
-    EXPECT_TRUE(entry.regions.empty());
-    EXPECT_EQ(entry.virtualPath, s_NameNone);
 
     UiSkin::RegionVector oversized(testArena.arena);
     oversized.reserve(s_UiSkinMaxRegionCount + 1u);
@@ -422,10 +421,7 @@ TEST(AssetsUiSkin, CookRejectsObsoleteMetadataUnknownFieldsAndMalformedArrays){
     for(const AStringView overrideText : s_Overrides){
         TestAString metadata(PaletteMetadata());
         metadata.append(overrideText);
-        UiSkinCookEntry entry(testArena.arena);
-        EXPECT_FALSE(ParseMetadata(testArena, metadata, entry)) << overrideText;
-        EXPECT_TRUE(entry.regions.empty());
-        EXPECT_EQ(entry.virtualPath, s_NameNone);
+            EXPECT_FALSE(ParseMetadata(testArena, metadata)) << overrideText;
     }
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field")));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("toolkit_contract must be 'widgets'")));
@@ -435,8 +431,9 @@ TEST(AssetsUiSkin, RetiredSpriteSliceFieldsPreservePriorCookEntry){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SkinTestArena testArena;
-    UiSkinCookEntry entry(testArena.arena);
-    ASSERT_TRUE(ParseMetadata(testArena, PaletteMetadata(), entry));
+    auto entryResult = ParseMetadata(testArena, PaletteMetadata());
+    ASSERT_TRUE(entryResult);
+    const UiSkinCookEntry& entry = *entryResult;
     const Name originalPath = entry.virtualPath;
     const Name originalTexture = entry.texture.name();
     const usize originalRegionCount = entry.regions.size();
@@ -449,7 +446,7 @@ TEST(AssetsUiSkin, RetiredSpriteSliceFieldsPreservePriorCookEntry){
         TestAString metadata(PaletteMetadata());
         metadata.append("asset.texture = \"project/other_texture\";\r\n");
         metadata.append(overrideText);
-        EXPECT_FALSE(ParseMetadata(testArena, metadata, entry));
+        EXPECT_FALSE(ParseMetadata(testArena, metadata));
         EXPECT_EQ(entry.virtualPath, originalPath);
         EXPECT_EQ(entry.texture.name(), originalTexture);
         ASSERT_EQ(entry.regions.size(), originalRegionCount);
@@ -463,8 +460,9 @@ TEST(AssetsUiSkin, RetiredSpriteSliceFieldsPreservePriorCookEntry){
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'slice'")));
     TestAString spriteMetadata(PaletteMetadata());
     spriteMetadata.append("asset.regions = [{ \"name\": \"sprite\", \"rect\": [0, 0, 4, 4], \"draw_mode\": \"sprite\" }];\r\n");
-    UiSkinCookEntry spriteEntry(testArena.arena);
-    ASSERT_TRUE(ParseMetadata(testArena, spriteMetadata, spriteEntry));
+    auto spriteEntryResult = ParseMetadata(testArena, spriteMetadata);
+    ASSERT_TRUE(spriteEntryResult);
+    const UiSkinCookEntry& spriteEntry = *spriteEntryResult;
     ASSERT_EQ(spriteEntry.regions.size(), 1u);
 }
 
@@ -483,8 +481,7 @@ TEST(AssetsUiSkin, CookRejectsDuplicateNamesAndAtlasOrSliceOverflow){
     for(const AStringView overrideText : s_Overrides){
         TestAString metadata(PaletteMetadata());
         metadata.append(overrideText);
-        UiSkinCookEntry entry(testArena.arena);
-        EXPECT_FALSE(ParseMetadata(testArena, metadata, entry)) << overrideText;
+            EXPECT_FALSE(ParseMetadata(testArena, metadata)) << overrideText;
     }
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate region")));
 }

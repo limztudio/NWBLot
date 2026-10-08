@@ -20,15 +20,15 @@ namespace __hidden_ui_combo_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ResolveKey(const IListDataSource& source, const u64 count, const u64 key, bool& present){
-    present = false;
-    u64 index = 0u;
-    if(key == 0u || count == 0u || !source.indexOf(key, index))
-        return true;
-    if(index >= count || source.key(index) != key)
+[[nodiscard]] static Expected<bool> ResolveKey(const IListDataSource& source, const u64 count, const u64 key){
+    if(key == 0u || count == 0u)
         return false;
-    present = source.enabled(index);
-    return true;
+    const auto index = source.indexOf(key);
+    if(!index)
+        return false;
+    if(*index >= count || source.key(*index) != key)
+        return MakeUnexpected(Failure{});
+    return source.enabled(*index);
 }
 
 [[nodiscard]] static bool SourceMatches(const IListDataSource& source, const u64 generation,
@@ -70,14 +70,14 @@ bool ComboBehavior::Reconcile(ComboState& state, const IListDataSource& source){
         return false;
     const bool replacement = state.m_sourceGeneration != 0u && state.m_sourceGeneration != generation;
     const u64 selected = replacement ? 0u : state.m_selectedKey;
-    bool present = false;
-    if(!ResolveKey(source, count, selected, present))
+    const auto present = ResolveKey(source, count, selected);
+    if(!present)
         return false;
     if(!SourceMatches(source, generation, revision, count) || state.m_inputGeneration != inputGeneration)
         return false;
     if(replacement && !state.m_list.scrollTo(0.0))
         return false;
-    state.m_selectedKey = present ? selected : 0u;
+    state.m_selectedKey = *present ? selected : 0u;
     state.m_sourceGeneration = generation;
     state.m_sourceRevision = revision;
     if(replacement)
@@ -106,8 +106,8 @@ bool ComboBehavior::Commit(ComboState& state, const IListDataSource& source, con
     const u64 count = source.rowCount();
     if(!SourceMatches(source, generation, revision, count) || state.m_inputGeneration != inputGeneration)
         return false;
-    bool present = false;
-    if(!ResolveKey(source, count, key, present) || !present)
+    const auto present = ResolveKey(source, count, key);
+    if(!present || !*present)
         return false;
     if(
         !SourceMatches(source, generation, revision, count) || state.m_inputGeneration != inputGeneration

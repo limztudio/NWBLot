@@ -105,18 +105,16 @@ static void AccumulatePacketMergeSummary(
 }
 
 
-[[nodiscard]] bool ResolvePacketTimingEnvelope(
+[[nodiscard]] Expected<GpuSubmissionPacketRange> ResolvePacketTimingEnvelope(
     const GpuTaskGraphPacketTimingEnvelopeOptions& options,
-    GpuTaskGraphCompilerDetail::GpuTaskGraphCompiledPlanStorage& compiledPlan,
-    GpuSubmissionPacketRange& outRange
+    GpuTaskGraphCompilerDetail::GpuTaskGraphCompiledPlanStorage& compiledPlan
 ){
-    outRange = {};
     const bool hasFirstTask = options.firstTask.valid();
     const bool hasLastTask = options.lastTask.valid();
     if(hasFirstTask != hasLastTask)
-        return false;
+        return MakeUnexpected(Failure{});
     if(!hasFirstTask)
-        return true;
+        return GpuSubmissionPacketRange{};
 
     const u32 firstTaskIndex = GpuTaskGraphCompilerDetail::FindCompiledTaskIndex(compiledPlan, options.firstTask);
     const u32 lastTaskIndex = GpuTaskGraphCompilerDetail::FindCompiledTaskIndex(compiledPlan, options.lastTask);
@@ -125,7 +123,7 @@ static void AccumulatePacketMergeSummary(
         || lastTaskIndex == Limit<u32>::s_Max
         || lastTaskIndex < firstTaskIndex
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     const GpuSubmissionPacketId firstPacket = compiledPlan.tasks[firstTaskIndex].packet;
     const GpuSubmissionPacketId lastPacket = compiledPlan.tasks[lastTaskIndex].packet;
@@ -138,21 +136,21 @@ static void AccumulatePacketMergeSummary(
         || lastPacket.index >= compiledPlan.packets.size()
         || lastPacket.index < firstPacket.index
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     for(usize packetIndex = 0u; packetIndex <= lastPacket.index; ++packetIndex){
         if(compiledPlan.packets[packetIndex].joinsAcceptedQueueFrontier)
-            return false;
+            return MakeUnexpected(Failure{});
     }
 
     const usize packetCount = static_cast<usize>(lastPacket.index) - firstPacket.index + 1u;
-    outRange = GpuSubmissionPacketRange{ .first = firstPacket, .packetCount = packetCount };
+    const GpuSubmissionPacketRange range{ .first = firstPacket, .packetCount = packetCount };
     for(usize packetOffset = 0u; packetOffset < packetCount; ++packetOffset){
         GpuSubmissionPacket& packet = compiledPlan.packets[firstPacket.index + packetOffset];
         packet.recordsPacketEnvelopeTiming = true;
         packet.recordsTiming = true;
     }
-    return true;
+    return range;
 }
 
 
@@ -231,14 +229,13 @@ namespace GpuTaskGraphCompilerDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool BuildSubmissionPackets(
+[[nodiscard]] Expected<GpuSubmissionPacketRange> BuildSubmissionPackets(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuTaskGraphQueueAssignments& assignments,
     const GpuTaskGraphPacketizationPolicy::Enum policy,
     const GpuTaskGraphPacketTimingEnvelopeOptions& timingEnvelope,
-    GpuTaskGraphCompiledPlanStorage& compiledPlan,
-    GpuSubmissionPacketRange& outTimingEnvelopeRange
+    GpuTaskGraphCompiledPlanStorage& compiledPlan
 ){
     if(
         !analysis.validFor(graph)
@@ -246,7 +243,7 @@ namespace GpuTaskGraphCompilerDetail{
         || compiledPlan.compiledTaskIndexByTask.size() != graph.taskCount()
         || !compiledPlan.tasks.empty()
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     // Default: one acceptance/sync point per task. Opt-in successors may share the preceding compatible packet
     // (FrontierScored absorbs only cheap successors with no cross-queue frontier). Renderer boundaries stay stable.
@@ -262,12 +259,12 @@ namespace GpuTaskGraphCompilerDetail{
             || compiledPlan.compiledTaskIndexByTask[taskID.index] != Limit<u32>::s_Max
             || compiledPlan.tasks.size() >= Limit<u32>::s_Max
         )
-            return false;
+            return MakeUnexpected(Failure{});
         const u32 compiledTaskIndex = static_cast<u32>(compiledPlan.tasks.size());
 
         const GpuTaskQueueAssignment* const assignment = assignments.find(taskID);
         if(!assignment || !assignment->queue.valid())
-            return false;
+            return MakeUnexpected(Failure{});
 
         const GpuTaskGraphTaskView task = graph.taskAt(taskID.index);
         const bool taskRecordsTiming = task.timing.policy != GpuTaskTimingPolicy::None;
@@ -430,11 +427,10 @@ namespace GpuTaskGraphCompilerDetail{
         compiledPlan.compiledTaskIndexByTask[taskID.index] = compiledTaskIndex;
     }
     if(compiledPlan.tasks.size() != compiledPlan.compiledTaskIndexByTask.size())
-        return false;
+        return MakeUnexpected(Failure{});
     return __hidden_gpu_task_graph_compiler_packetization::ResolvePacketTimingEnvelope(
         timingEnvelope,
-        compiledPlan,
-        outTimingEnvelopeRange
+        compiledPlan
     );
 }
 

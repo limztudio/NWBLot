@@ -206,22 +206,22 @@ namespace __hidden_gpu_command_ir_replay_lowering{
 
     u64 recordIndex = 0u;
     GpuCommandIrDetail::RasterReplayState rasterState;
-    GpuCommandIrDecodedRecord decoded;
     for(;;){
-        const GpuCommandIrStreamReadStatus::Enum status = reader.next(decoded);
-        if(status == GpuCommandIrStreamReadStatus::End){
+        const auto decodedResult = reader.next();
+        if(!decodedResult && decodedResult.error() == GpuCommandIrStreamReadStatus::End){
             return GpuCommandIrReplayResult{
                 .streamValidation = reader.validation(),
                 .recordIndex = recordIndex,
             };
         }
-        if(status == GpuCommandIrStreamReadStatus::Error){
+        if(!decodedResult){
             return ReplayFailure(
                 GpuCommandIrReplayError::StreamChangedDuringReplay,
                 reader.validation(),
                 reader.validation().recordIndex
             );
         }
+        const auto& decoded = *decodedResult;
 
         const bool raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
         const GpuSubmissionPacketId recordPacket = raster ? decoded.raster.packet : decoded.builtin.packet;
@@ -337,22 +337,22 @@ static void LowerOperation(
     }
 
     u64 recordIndex = 0u;
-    GpuCommandIrBuiltinTaskRecord record;
     for(;;){
-        const GpuCommandIrStreamReadStatus::Enum status = reader.next(record);
-        if(status == GpuCommandIrStreamReadStatus::End){
+        const auto recordResult = reader.nextBuiltinTask();
+        if(!recordResult && recordResult.error() == GpuCommandIrStreamReadStatus::End){
             return GpuCommandIrReplayResult{
                 .streamValidation = reader.validation(),
                 .recordIndex = recordIndex,
             };
         }
-        if(status == GpuCommandIrStreamReadStatus::Error){
+        if(!recordResult){
             return ReplayFailure(
                 GpuCommandIrReplayError::StreamChangedDuringReplay,
                 reader.validation(),
                 reader.validation().recordIndex
             );
         }
+        const auto& record = *recordResult;
 
         if(record.packet == packet && record.opcode != GpuCommandIrOpcode::CopyBuffer){
             return ReplayFailure(
@@ -449,22 +449,22 @@ static void LowerOperation(
     const u64 recordingLeaseSerial = commandList.recordingLeaseSerial();
     // Preflight already proved legality, so this walk can lower without a duplicate command list.
     GpuCommandIrStreamReader reader(bytes);
-    GpuCommandIrDecodedRecord decoded;
     u64 recordIndex = 0u;
     for(;;){
-        const GpuCommandIrStreamReadStatus::Enum status = reader.next(decoded);
-        if(status == GpuCommandIrStreamReadStatus::End)
+        const auto decodedResult = reader.next();
+        if(!decodedResult && decodedResult.error() == GpuCommandIrStreamReadStatus::End)
             return GpuCommandIrReplayResult{
                 .streamValidation = reader.validation(),
                 .recordIndex = recordIndex,
             };
-        if(status == GpuCommandIrStreamReadStatus::Error){
+        if(!decodedResult){
             return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
                 GpuCommandIrReplayError::StreamChangedDuringReplay,
                 reader.validation(),
                 reader.validation().recordIndex
             );
         }
+        const auto& decoded = *decodedResult;
 
         const bool raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
         const GpuSubmissionPacketId recordPacket = raster ? decoded.raster.packet : decoded.builtin.packet;
@@ -625,23 +625,23 @@ GpuCommandIrReplayResult ReplayGpuCommandIrPacketDirectBackend(
 
     // Barriers are already lowered; bypass copyBuffer to exercise direct native copy emission only.
     GpuCommandIrStreamReader reader(bytes);
-    GpuCommandIrBuiltinTaskRecord record;
     u64 recordIndex = 0u;
     for(;;){
-        const GpuCommandIrStreamReadStatus::Enum status = reader.next(record);
-        if(status == GpuCommandIrStreamReadStatus::End){
+        const auto recordResult = reader.nextBuiltinTask();
+        if(!recordResult && recordResult.error() == GpuCommandIrStreamReadStatus::End){
             return GpuCommandIrReplayResult{
                 .streamValidation = reader.validation(),
                 .recordIndex = recordIndex,
             };
         }
-        if(status == GpuCommandIrStreamReadStatus::Error){
+        if(!recordResult){
             return __hidden_gpu_command_ir_replay_lowering::ReplayFailure(
                 GpuCommandIrReplayError::StreamChangedDuringReplay,
                 reader.validation(),
                 reader.validation().recordIndex
             );
         }
+        const auto& record = *recordResult;
 
         if(record.packet != packet){
             ++recordIndex;

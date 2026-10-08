@@ -169,17 +169,17 @@ void RunScalingScenario(const u32 packetCount, const u32 ownerCount){
     );
     const u64 encodeNanoseconds = DurationInNS<u64>(TimerNow(), encodeBegin);
     ASSERT_TRUE(encoded);
-    Telemetry::FrameGraphPayload decoded(testArena.arena);
+    Expected<Telemetry::FrameGraphPayload> decoded = MakeUnexpected(Failure{});
     const Timer decodeBegin = TimerNow();
-    const bool parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), decoded);
+    const bool parsed = (decoded = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())).has_value();
     const u64 decodeNanoseconds = DurationInNS<u64>(TimerNow(), decodeBegin);
     ASSERT_TRUE(parsed);
-    ASSERT_EQ(decoded.nodes.size(), ownerCount);
-    ASSERT_EQ(decoded.physicalQueueRuntimeStatistics.size(), ownerCount * s_ExpectedDualCount);
-    ASSERT_EQ(decoded.packetSubmissionStatistics.size(), packetCount);
+    ASSERT_EQ(decoded->nodes.size(), ownerCount);
+    ASSERT_EQ(decoded->physicalQueueRuntimeStatistics.size(), ownerCount * s_ExpectedDualCount);
+    ASSERT_EQ(decoded->packetSubmissionStatistics.size(), packetCount);
     const u32 packetsPerOwner = packetCount / ownerCount;
     for(u32 index = 0u; index < packetCount; ++index){
-        const auto& packet = decoded.packetSubmissionStatistics[index];
+        const auto& packet = decoded->packetSubmissionStatistics[index];
         EXPECT_EQ(packet.ownerNodeIndex, index / packetsPerOwner);
         EXPECT_EQ(packet.packetIndex, index % packetsPerOwner);
         EXPECT_EQ(packet.queue.index, (packet.packetIndex & 1u) == 0u ? 1u : 3u);
@@ -225,9 +225,9 @@ TEST(Telemetry, PacketStatisticsPreserveOptionalQueueCoverageAndRejectMismatched
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(
         testArena.arena, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, payload
     ));
-    Telemetry::FrameGraphPayload decoded(testArena.arena);
-    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), decoded));
-    ASSERT_EQ(decoded.physicalQueueRuntimeStatistics.size(), 3u);
+    Expected<Telemetry::FrameGraphPayload> decoded = MakeUnexpected(Failure{});
+    ASSERT_TRUE((decoded = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
+    ASSERT_EQ(decoded->physicalQueueRuntimeStatistics.size(), 3u);
     const auto original = fixture.packets[0u];
     fixture.packets[0u].queue.index = original.queue.index == 1u ? 3u : 1u;
     fixture.packets[0u].queueClass = original.queueClass == Telemetry::FrameGraphQueueClass::Graphics

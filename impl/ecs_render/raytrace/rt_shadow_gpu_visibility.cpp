@@ -28,26 +28,26 @@ void RendererRayTracingSystem::clearShadowVisibility(Core::CommandList& commandL
     commandList.clearTextureFloat(*targets.shadowVisibility, ECSRenderDetail::s_ShadowVisibilitySubresources, Core::Color(1.f, 1.f, 1.f, 1.f));
 }
 
-bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
+Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const bool splitSoftTransparentFold,
-    u32* const opaqueFrameIndex,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
     const bool splitOpaqueSoftResolve,
     const GraphOwnedAdaptiveShadowPlan* const graphOwnedAdaptivePlan,
     const LightSpaceShadowSnapshot* const lightSpace
 ){
+    u32 producedFrameIndex = 0u;
     NWB_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
     if(!targets.shadowVisibility)
-        return false;
+        return MakeUnexpected(Failure{});
     NWB_ASSERT(targets.bindless.valid());
     NWB_ASSERT(deferredLightingResources.valid());
     if(!m_rayTracingState.m_sceneBvhNodeBuffer || m_rayTracingState.m_sceneBvhInstanceCount == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
     if(!m_rayTracingState.m_swShadowOpaquePrepassPipeline || m_rayTracingState.m_swShadowMeshCount == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(
@@ -64,7 +64,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_swShadowIndirectArgsHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software-shadow heap resources are incomplete"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     Optional<Core::GpuTimingMeasure> timing;
@@ -138,6 +138,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
 
         // Advance the primary producer's jitter sequence once.
         const u32 frameIndex = m_rayTracingState.m_softShadowFrameIndex++;
+        producedFrameIndex = frameIndex;
 
         // Resolve reads the soft trace and geometry scratch in place.
         commandList.setEnableUavBarriersForTexture(targets.shadowSoftHalfA.get(), true);
@@ -173,7 +174,7 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
                     commandList, heap, m_graphics.gpuTiming(), *lightSpace, *targets.shadowSoftHalfA, frameIndex, softTracePush.softSampleCount,
                     targets.bindless.shadowSoftHalfAStorage.slot(), false
                 ))
-                    return false;
+                    return MakeUnexpected(Failure{});
                 if((lightSpace->push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u && !m_lightSpaceShadow.m_csgDispatchLogged){
                     m_lightSpaceShadow.m_csgDispatchLogged = true;
                     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched CSG light-space shadows (hardware_compose=0, {} instances)")
@@ -221,12 +222,10 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
             false
         );
         if(splitSoftTransparentFold){
-            if(opaqueFrameIndex)
-                *opaqueFrameIndex = frameIndex;
             // The graph-owned transparent tail records in a later callback, so preserve the normal route's
             // one-shot traversal diagnostic before this opaque producer returns.
             reportSoftwareShadowTraversal(targets);
-            return true;
+            return producedFrameIndex;
         }
         softTransparentRan = m_rayTracingState.m_softTransparentReady;
     }
@@ -338,30 +337,27 @@ bool RendererRayTracingSystem::renderGpuBvhShadowVisibility(
     }
 
     reportSoftwareShadowTraversal(targets);
-    return true;
+    return producedFrameIndex;
 }
 
-bool RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
+Expected<u32> RendererRayTracingSystem::renderGpuBvhShadowVisibilityOpaque(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    u32& outFrameIndex,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
     const LightSpaceShadowSnapshot* const lightSpace
 ){
-    outFrameIndex = 0u;
     if(
         !m_rayTracingState.m_softShadowReady
         || !m_rayTracingState.m_softTransparentReady
         || m_rayTracingState.m_softShadowSlotMask == 0u
     )
-        return false;
+        return MakeUnexpected(Failure{});
     return renderGpuBvhShadowVisibility(
         commandList,
         targets,
         deferredLightingResources,
         true,
-        &outFrameIndex,
         graphOwnsOpaqueTemporalMergeEntryStates,
         true,
         nullptr,

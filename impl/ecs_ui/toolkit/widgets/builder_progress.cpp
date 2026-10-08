@@ -38,13 +38,16 @@ bool Builder::progress(const AStringView stableKey, const f64 fraction, const Pr
     frame.style = m_progressStyle;
     const UiSkinRegion* track = region(frame.style.track, frame.style.trackFallback);
     const UiSkinRegion* fill = region(frame.style.fill, frame.style.fillFallback);
-    if(
-        !IsFinite(fraction) || !track || !fill
-        || !ProgressLayout::Measure(options, frame.style, *track, *fill, m_skin->referenceDensity(), frame.metrics)
-    ){
+    if(!IsFinite(fraction) || !track || !fill){
         m_context.fail();
         return false;
     }
+    const auto metrics = ProgressLayout::Measure(options, frame.style, *track, *fill, m_skin->referenceDensity());
+    if(!metrics){
+        m_context.fail();
+        return false;
+    }
+    frame.metrics = *metrics;
     frame.style.track = track->name;
     frame.style.fill = fill->name;
     Item item(m_arena);
@@ -53,10 +56,12 @@ bool Builder::progress(const AStringView stableKey, const f64 fraction, const Pr
     LayoutNodeDesc description;
     description.width = frame.options.width;
     description.intrinsicSize = frame.metrics.contentSize;
-    if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, item.node)){
+    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
+    if(!admittedNode){
         m_context.fail();
         return false;
     }
+    item.node = *admittedNode;
     m_scope->m_progress.push_back(Move(frame));
     m_scope->m_items.push_back(Move(item));
     return true;

@@ -31,6 +31,11 @@ struct EditLimits{
     usize maxHistoryBytes = 131072u;
 };
 
+struct EditWordRange{
+    usize begin = 0u;
+    usize end = 0u;
+};
+
 struct EditCompositionView{
     AStringView text;
     usize anchor = 0u;
@@ -85,7 +90,7 @@ public:
     // Word movement groups whitespace, ASCII punctuation, and all remaining graphemes without a linguistic word claim.
     [[nodiscard]] bool move(EditMove::Enum movement, bool extend = false);
     // Returns the complete run containing a grapheme boundary; document end selects the preceding run.
-    [[nodiscard]] bool wordRangeAt(usize position, usize& begin, usize& end)const;
+    [[nodiscard]] Expected<EditWordRange> wordRangeAt(usize position)const noexcept;
     [[nodiscard]] bool replaceSelection(AStringView text);
     [[nodiscard]] bool backspace();
     [[nodiscard]] bool eraseForward();
@@ -112,7 +117,7 @@ private:
     [[nodiscard]] usize wordBoundary(usize position, bool forward)const;
     [[nodiscard]] bool replaceRange(usize begin, usize end, AStringView replacement);
     [[nodiscard]] bool validateText(AStringView text)const;
-    [[nodiscard]] bool buildBoundaries(AStringView text, Vector<usize, Core::Alloc::GlobalArena>& output)const;
+    [[nodiscard]] Expected<Vector<usize, Core::Alloc::GlobalArena>> buildBoundaries(AStringView text)const;
     void recordHistory(AStringView before, usize beforeAnchor, usize beforeCaret,
         AStringView after, usize afterAnchor, usize afterCaret);
     void clearHistory();

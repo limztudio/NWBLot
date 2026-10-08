@@ -239,10 +239,10 @@ bool GpuRenderer::setSkin(
                 && existing.referenceDensity == binding.referenceDensity
             ;
     }
-    UniquePtr<Core::Assets::IAsset> loadedAsset;
-    const Texture* texture = m_state->m_assets.loadTypedSync<Texture>(
-        binding.texture.name(), loadedAsset, NWB_TEXT("GpuRenderer"), "UI atlas texture"
+    auto loadedAsset = m_state->m_assets.loadTypedSync<Texture>(
+        binding.texture.name(), NWB_TEXT("GpuRenderer"), "UI atlas texture"
     );
+    const Texture* texture = loadedAsset ? loadedAsset->get() : nullptr;
     if(!texture || !skin.validateTexture(*texture))
         return false;
     GpuVersion<GpuSkinVersion> version = MakeGpuVersion<GpuSkinVersion>(m_state->m_arena, m_state->m_graphics);
@@ -311,8 +311,8 @@ bool GpuRenderer::prepareTaskGraphOutputLayer(const Core::AcquiredPresentationFr
     return m_state->prepare(frame);
 }
 
-bool GpuRenderer::declareTaskGraphOutputLayer(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutputLayer& outLayer){
-    return m_state->declare(graph, outLayer, true);
+Expected<Core::GpuTaskGraphOutputLayer> GpuRenderer::declareTaskGraphOutputLayer(Core::GpuTaskGraph& graph){
+    return m_state->declare(graph, true);
 }
 
 void GpuRenderer::acceptTaskGraphOutputLayer(const u64 frameGeneration, const Core::QueueSubmissionToken& submissionToken){

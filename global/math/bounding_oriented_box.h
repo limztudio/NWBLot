@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "../expected.h"
 #include "matrix.h"
 #include "collision_detail.h"
 #include "collision_plane.h"
@@ -25,10 +26,8 @@
 
 inline void NWB_SIMD_CALL BoundingOrientedBox::TransformOrientedBoxValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, const SIMDMatrix& matrix, SIMDVector& outCenter, SIMDVector& outExtents, SIMDVector& outOrientation, bool& outCollapsedToAxisAligned)noexcept{
     outCollapsedToAxisAligned = false;
-    SIMDVector scale{};
-    SIMDVector rotation{};
-    SIMDVector translation{};
-    if(!MatrixDecompose(scale, rotation, translation, matrix)){
+    const auto decomposition = MatrixDecompose(matrix);
+    if(!decomposition){
         SIMDVector corners[s_CornerCount];
         CollisionDetail::ObbCorners(boxCenter, boxExtents, boxOrientation, corners);
         SIMDVector minBounds = Vector3Transform(corners[0], matrix);
@@ -43,8 +42,8 @@ inline void NWB_SIMD_CALL BoundingOrientedBox::TransformOrientedBoxValue(SIMDVec
     }
 
     outCenter = Vector3Transform(boxCenter, matrix);
-    outExtents = VectorMultiply(boxExtents, VectorAbs(scale));
-    outOrientation = QuaternionNormalize(QuaternionMultiply(boxOrientation, rotation));
+    outExtents = VectorMultiply(boxExtents, VectorAbs(decomposition->scale));
+    outOrientation = QuaternionNormalize(QuaternionMultiply(boxOrientation, decomposition->rotation));
 }
 
 
@@ -392,22 +391,21 @@ inline void BoundingOrientedBox::getCorners(Float3U* corners)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool NWB_SIMD_CALL BoundingOrientedBox::IntersectsRayValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector origin, SIMDVector direction, f32& outDistance)noexcept{
+[[nodiscard]] inline Expected<f32> NWB_SIMD_CALL BoundingOrientedBox::IntersectsRayValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector origin, SIMDVector direction)noexcept{
     const SIMDVector localOrigin = CollisionDetail::PointToObbLocal(origin, boxCenter, boxOrientation);
     const SIMDVector localDirection = Vector3InverseRotate(direction, boxOrientation);
-    return CollisionDetail::RayIntersectsMinMax(localOrigin, localDirection, VectorNegate(boxExtents), boxExtents, outDistance);
+    return CollisionDetail::RayIntersectsMinMax(localOrigin, localDirection, VectorNegate(boxExtents), boxExtents);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool NWB_SIMD_CALL BoundingOrientedBox::intersects(
+[[nodiscard]] inline Expected<f32> NWB_SIMD_CALL BoundingOrientedBox::intersects(
     SIMDVector origin,
-    SIMDVector direction,
-    f32& outDistance
+    SIMDVector direction
 )const noexcept{
-    return IntersectsRayValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), origin, direction, outDistance);
+    return IntersectsRayValue(LoadFloat(center), LoadFloat(extents), LoadFloat(orientation), origin, direction);
 }
 
 

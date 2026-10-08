@@ -23,11 +23,11 @@ bool GpuTaskGraph::abandonPacketRecordingWithoutCallbacks(
     const GpuSubmissionPacketId packet,
     PacketRecordingLease& lease
 )const noexcept{
-    GpuCompiledPacketView packetView;
-    if(!ResolveLeasedPacketView(compiledGraph, planAccess, packet, lease, packetView))
+    const auto packetView = ResolveLeasedPacketView(compiledGraph, planAccess, packet, lease);
+    if(!packetView)
         return false;
-    const GpuSubmissionPacket& packetPlan = *packetView.plan;
-    const GpuTaskId* const tasks = packetView.tasks;
+    const GpuSubmissionPacket& packetPlan = *packetView->plan;
+    const GpuTaskId* const tasks = packetView->tasks;
 
     NothrowScopedLock lock(m_lifecycleMutex);
     if(

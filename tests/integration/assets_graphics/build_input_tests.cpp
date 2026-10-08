@@ -50,8 +50,7 @@ protected:
     virtual void SetUp()override{
         m_root = NWB::Tests::RepoRootOf(m_testArena.arena, __FILE__)
             / "__build_obj" / "build_input_tests";
-        ErrorCode error;
-        ASSERT_TRUE(EnsureDirectories(m_root / s_ASSETS / "empty", error));
+        ASSERT_TRUE(EnsureDirectories(m_root / s_ASSETS / "empty"));
         m_paths.repoRoot = m_root;
         m_paths.assetRoots.emplace_back(m_root / s_ASSETS, ACompactString(s_PROJECT));
     }
@@ -62,8 +61,7 @@ protected:
 
     void addFile(AStringView relativePath){
         const NWB::Path path = m_root / relativePath;
-        ErrorCode error;
-        ASSERT_TRUE(EnsureDirectories(path.parentPath(), error));
+        ASSERT_TRUE(EnsureDirectories(path.parentPath()));
         GlobalFilesystemDetail::OutputFileStream stream(path, GlobalFilesystemDetail::OutputFileStream::binary);
         ASSERT_TRUE(stream);
         Assets::AssetString normalized = PathToString(m_testArena.arena, path.lexicallyNormal());

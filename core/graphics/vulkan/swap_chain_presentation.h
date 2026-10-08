@@ -123,16 +123,15 @@ inline bool SurfaceFormatSupports(
     return supported.colorSpace == colorSpace && (supported.format == format || supported.format == VK_FORMAT_UNDEFINED);
 }
 
-inline bool SelectSurfaceFormat(
+[[nodiscard]] inline Expected<SwapChainSurfaceFormatSelection> SelectSurfaceFormat(
     const VkSurfaceFormatKHR* const supportedFormats,
     const u32 supportedFormatCount,
     const Format::Enum requestedSdrFormat,
-    const bool hdr10Allowed,
-    SwapChainSurfaceFormatSelection& outSelection
+    const bool hdr10Allowed
 ){
-    outSelection = {};
+    SwapChainSurfaceFormatSelection selection;
     if(!supportedFormats || supportedFormatCount == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
 
     if(hdr10Allowed){
         for(u32 formatIndex = 0u; formatIndex < supportedFormatCount; ++formatIndex){
@@ -144,12 +143,12 @@ inline bool SelectSurfaceFormat(
             ))
                 continue;
 
-            outSelection.surfaceFormat = supported;
-            outSelection.surfaceFormat.format = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-            outSelection.surfaceFormat.colorSpace = VK_COLOR_SPACE_HDR10_ST2084_EXT;
-            outSelection.backBufferFormat = Format::R10G10B10A2_UNORM;
-            outSelection.outputMode = SwapChainOutputMode::HDR10;
-            return true;
+            selection.surfaceFormat = supported;
+            selection.surfaceFormat.format = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+            selection.surfaceFormat.colorSpace = VK_COLOR_SPACE_HDR10_ST2084_EXT;
+            selection.backBufferFormat = Format::R10G10B10A2_UNORM;
+            selection.outputMode = SwapChainOutputMode::HDR10;
+            return selection;
         }
     }
 
@@ -180,16 +179,16 @@ inline bool SelectSurfaceFormat(
             if(!SurfaceFormatSupports(supported, candidate.format, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR))
                 continue;
 
-            outSelection.surfaceFormat = supported;
-            outSelection.surfaceFormat.format = candidate.format;
-            outSelection.surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-            outSelection.backBufferFormat = candidate.rhiFormat;
-            outSelection.outputMode = SwapChainOutputMode::SDR;
-            return true;
+            selection.surfaceFormat = supported;
+            selection.surfaceFormat.format = candidate.format;
+            selection.surfaceFormat.colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+            selection.backBufferFormat = candidate.rhiFormat;
+            selection.outputMode = SwapChainOutputMode::SDR;
+            return selection;
         }
     }
 
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 

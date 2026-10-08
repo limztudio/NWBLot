@@ -55,8 +55,10 @@ protected:
     [[nodiscard]] bool loadFont(Font& font, StringView filename){
         const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / filename;
         Core::Assets::AssetBytes bytes(m_arena);
-        if(!Tests::ReadBundledFontBytes(path, bytes))
+        auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
+        if(!bytesResult)
             return false;
+        bytes = Move(*bytesResult);
         font.setFontBytes(Move(bytes));
         return font.validatePayload();
     }
@@ -85,7 +87,11 @@ TEST_F(TextFontTests, MissingLatinHangulGlyphsUseKoreanFallbackForBothLabelClust
     ShapeRequest request{ "\xed\x95\x9c\xea\xb8\x80" };
     request.scriptTag = TextScriptTag('H', 'a', 'n', 'g');
     request.language = "ko";
-    ASSERT_EQ(m_service.layout(request, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_service.layout(request);
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.clusters().size(), 2u);
     for(const PlacedGlyph& glyph : m_layout.glyphs())
         EXPECT_EQ(glyph.face->identity().name(), Name("tests/ui/fonts/korean"));
@@ -94,7 +100,11 @@ TEST_F(TextFontTests, MissingLatinHangulGlyphsUseKoreanFallbackForBothLabelClust
 TEST_F(TextFontTests, RtlHarfBuzzClustersUseLogicalEndRatherThanNextVisualStart){
     ShapeRequest request{ "abc" };
     request.direction = TextDirection::RightToLeft;
-    ASSERT_EQ(m_service.layout(request, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_service.layout(request);
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.clusters().size(), 3u);
     EXPECT_EQ(m_layout.clusters()[0].byteBegin, 2u);
     EXPECT_EQ(m_layout.clusters()[0].byteEnd, 3u);
@@ -104,7 +114,11 @@ TEST_F(TextFontTests, RtlHarfBuzzClustersUseLogicalEndRatherThanNextVisualStart)
 }
 
 TEST_F(TextFontTests, FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutUsable){
-    ASSERT_EQ(m_service.layout({ "AV" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_service.layout({ "AV" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     const SharedFontFace oldFace = m_layout.glyphs()[0].face;
     const f32 width = m_layout.measure().x;
     const u64 oldServiceGeneration = m_service.generation();
@@ -125,7 +139,11 @@ TEST_F(TextFontTests, FontReplacementAndAssetMutationKeepOldCpuFaceAndLayoutUsab
 }
 
 TEST_F(TextFontTests, AppendingGlyphKeepsEarlierCoverageBytesImmutable){
-    ASSERT_EQ(m_service.layout({ "A" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_service.layout({ "A" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     beginPaint(1u);
     ASSERT_TRUE(m_service.paint(m_paint, m_layout, { 20.0f, 20.0f }));
     const DrawSnapshot first = m_paint.freeze();
@@ -133,7 +151,11 @@ TEST_F(TextFontTests, AppendingGlyphKeepsEarlierCoverageBytesImmutable){
     const SharedGlyphPage oldPage = first.glyphPages()[0];
     PaintVector<u8> saved(m_arena);
     saved.assign(oldPage->pixels().begin(), oldPage->pixels().end());
-    ASSERT_EQ(m_service.layout({ "B" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_service.layout({ "B" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     beginPaint(2u);
     ASSERT_TRUE(m_service.paint(m_paint, m_layout, { 20.0f, 20.0f }));
     const DrawSnapshot second = m_paint.freeze();
@@ -149,7 +171,11 @@ TEST_F(TextFontTests, AppendingGlyphKeepsEarlierCoverageBytesImmutable){
 }
 
 TEST_F(TextFontTests, RasterDpiChangesPagesWithoutChangingLogicalMeasurement){
-    ASSERT_EQ(m_service.layout({ "Ag" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_service.layout({ "Ag" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     const Point measured = m_layout.measure();
     beginPaint(1u);
     ASSERT_TRUE(m_service.paint(m_paint, m_layout, { 20.0f, 20.0f }));
@@ -167,7 +193,11 @@ TEST_F(TextFontTests, RasterDpiChangesPagesWithoutChangingLogicalMeasurement){
 TEST_F(TextFontTests, OversizedGlyphRejectsWholeLabelBeforePaintingAnyQuads){
     ShapeRequest request{ "W" };
     request.fontSize = 1024.0f;
-    ASSERT_EQ(m_service.layout(request, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_service.layout(request);
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     beginPaint(1u);
     m_paint.fillRect({ 1.0f, 1.0f, 10.0f, 10.0f });
     EXPECT_FALSE(m_service.paint(m_paint, m_layout, { 20.0f, 20.0f }));
@@ -177,7 +207,11 @@ TEST_F(TextFontTests, OversizedGlyphRejectsWholeLabelBeforePaintingAnyQuads){
 }
 
 TEST_F(TextFontTests, GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcrossReset){
-    ASSERT_EQ(m_service.layout({ "A" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_service.layout({ "A" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.glyphs().size(), 1u);
     const SharedFontFace face = m_layout.glyphs()[0].face;
     const u32 glyphId = m_layout.glyphs()[0].glyphId;
@@ -198,7 +232,11 @@ TEST_F(TextFontTests, GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcrossRe
     EXPECT_NE(atlas.find(face, glyphId, 32u), first);
     EXPECT_NE(atlas.find(otherFace, glyphId, 24u), first);
 
-    ASSERT_EQ(m_service.layout({ " " }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_service.layout({ " " });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.glyphs().size(), 1u);
     const u32 spaceId = m_layout.glyphs()[0].glyphId;
     GlyphBitmap bitmap(m_arena);
@@ -225,7 +263,11 @@ TEST_F(TextFontTests, GlyphAtlasIndexKeepsFaceSizeAndEmptyGlyphsDistinctAcrossRe
 }
 
 TEST_F(TextFontTests, AtlasGrowthStaysWithinBoundsAndStopsAtSixteenPages){
-    ASSERT_EQ(m_service.layout({ "W" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_service.layout({ "W" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     const PlacedGlyph& glyph = m_layout.glyphs()[0];
     GlyphAtlas atlas(m_arena);
     for(u32 index = 0u; index < s_GlyphAtlasMaxPages; ++index){
@@ -248,7 +290,11 @@ TEST_F(TextFontTests, NativeCffCoverageAndFaceSurviveFontReplacement){
     ShapeRequest request{ "\xed\x95\x9c" };
     request.scriptTag = 0x48616e67u;
     request.language = "ko";
-    ASSERT_EQ(m_service.layout(request, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_service.layout(request);
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.glyphs().size(), 1u);
     const PlacedGlyph& glyph = m_layout.glyphs()[0];
     EXPECT_FALSE(glyph.face->coverageInkReliable());
@@ -271,7 +317,11 @@ TEST_F(TextFontTests, NativeCffBoundsCoverFractionalDpiRasterFringes){
         request.scriptTag = 0x48616e67u;
         request.language = "ko";
         request.fontSize = fontSize;
-        ASSERT_EQ(m_service.layout(request, m_layout), TextLayoutStatus::Success);
+        {
+            auto layoutResult = m_service.layout(request);
+            ASSERT_TRUE(layoutResult);
+            m_layout = Move(*layoutResult);
+        }
         ASSERT_EQ(m_layout.glyphs().size(), 1u);
         const PlacedGlyph& glyph = m_layout.glyphs()[0];
         ASSERT_TRUE(glyph.coverage.known);

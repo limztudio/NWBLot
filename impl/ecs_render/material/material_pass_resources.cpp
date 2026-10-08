@@ -28,8 +28,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererMaterialSystem::prepareMaterialPassBindingLayout(Core::BindingLayoutHandle& outBindingLayout){
-    outBindingLayout.reset();
+Expected<Core::BindingLayoutHandle> RendererMaterialSystem::prepareMaterialPassBindingLayout(){
     if(!m_materialState.m_materialPassBindingLayout){
         Core::BindingLayoutDesc bindingLayoutDesc(m_arena);
         bindingLayoutDesc
@@ -40,11 +39,10 @@ bool RendererMaterialSystem::prepareMaterialPassBindingLayout(Core::BindingLayou
         m_materialState.m_materialPassBindingLayout = m_graphics.getDevice().createBindingLayout(bindingLayoutDesc);
         if(!m_materialState.m_materialPassBindingLayout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create the shared material-pass push-constant layout"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
-    outBindingLayout = m_materialState.m_materialPassBindingLayout;
-    return true;
+    return m_materialState.m_materialPassBindingLayout;
 }
 
 
@@ -221,10 +219,12 @@ bool RendererMaterialSystem::reserveInstanceBufferCapacity(const usize instanceC
 bool RendererMaterialSystem::reserveMaterialTypedBufferCapacity(const usize byteCount){
     usize requiredByteCount = Max<usize>(byteCount, sizeof(u32));
 #if defined(NWB_DEBUG)
-    if(!AlignUpChecked(requiredByteCount, sizeof(u32), requiredByteCount)){
+    const auto alignedByteCount = AlignUpChecked(requiredByteCount, sizeof(u32));
+    if(!alignedByteCount){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed buffer request overflows alignment"));
         return false;
     }
+    requiredByteCount = *alignedByteCount;
     if(requiredByteCount > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed buffer request exceeds u32 byte-offset limits"));
         return false;
@@ -259,9 +259,7 @@ bool RendererMaterialSystem::prepareMaterialPassDrawBuffers(
     const InstanceGpuDataVector& instanceData,
     const MaterialTypedByteDataVector& materialTypedBytes
 ){
-    usize uploadBytes = 0u;
-    if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes, uploadBytes))
-        return false;
+    const usize uploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes);
 
     return reserveInstanceBufferCapacity(instanceData.size()) && reserveMaterialTypedBufferCapacity(uploadBytes);
 }
@@ -270,9 +268,7 @@ bool RendererMaterialSystem::materialPassDrawBuffersReady(
     const InstanceGpuDataVector& instanceData,
     const MaterialTypedByteDataVector& materialTypedBytes
 )const{
-    usize uploadBytes = 0u;
-    if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes, uploadBytes))
-        return false;
+    const usize uploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(materialTypedBytes);
 
     return materialPassDrawBuffersReady(instanceData.size(), uploadBytes);
 }
@@ -311,11 +307,9 @@ void RendererMaterialSystem::prepareMaterialPassInstanceUploadData(
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources
 ){
     // Slot 6 carries CSG context for every raster instance; avoids a second local descriptor.
-    u32 csgContextHeapSlot = 0u;
-    if(!csgResources.findClipContextHeapSlot(csgContextHeapSlot))
-        csgContextHeapSlot = 0u;
+    const auto csgContextHeapSlot = csgResources.findClipContextHeapSlot();
     for(InstanceGpuData& instance : instanceData)
-        instance.geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT] = csgContextHeapSlot;
+        instance.geometryHeapSlots[NWB_MESH_INSTANCE_CSG_CONTEXT_HEAP_SLOT] = csgContextHeapSlot.value_or(0u);
 }
 
 

@@ -16,70 +16,69 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ResolveSkinnedRuntimeMeshIdentity(
+Expected<SkinnedRuntimeMeshIdentity> ResolveSkinnedRuntimeMeshIdentity(
     const Core::ECS::EntityID entity,
     const RuntimeMeshHandle runtimeMesh,
-    const MeshSkinningRuntimeInstance* const instance,
-    Name& outMeshKey,
-    u64& outVersion
+    const MeshSkinningRuntimeInstance* const instance
 ){
-    outMeshKey = s_NameNone;
-    outVersion = 0u;
+    SkinnedRuntimeMeshIdentity identity;
     if(!runtimeMesh.valid())
-        return false;
+        return MakeUnexpected(Failure{});
 
     if(!instance || instance->entity != entity)
-        return false;
+        return MakeUnexpected(Failure{});
     if((instance->dirtyFlags & (RuntimeMeshDirtyFlag::SkinningInputDirty | RuntimeMeshDirtyFlag::MeshletBoundsDirty)) != 0u)
-        return false;
+        return MakeUnexpected(Failure{});
     NWB_ASSERT(instance->valid());
     NWB_ASSERT(instance->meshlets.size() <= static_cast<usize>(Limit<u32>::s_Max));
     NWB_ASSERT(instance->meshletPrimitiveIndices.size() <= static_cast<usize>(Limit<u32>::s_Max));
 
-    outMeshKey = DeriveRuntimeResourceName(instance->sourceName, instance->handle.value, instance->editRevision, "skinned_draw");
-    outVersion = instance->editRevision;
-    NWB_ASSERT(outMeshKey);
-    return true;
+    identity.meshKey = DeriveRuntimeResourceName(instance->sourceName, instance->handle.value, instance->editRevision, "skinned_draw");
+    identity.version = instance->editRevision;
+    NWB_ASSERT(identity.meshKey);
+    return identity;
 }
 
-bool BuildSkinnedRuntimeMeshDesc(
+Expected<RuntimeMeshDesc> BuildSkinnedRuntimeMeshDesc(
     const Core::ECS::EntityID entity,
     const RuntimeMeshHandle runtimeMesh,
     const MeshSkinningRuntimeInstance* const instance,
     const bool boundsFresh,
-    const bool conesFresh,
-    RuntimeMeshDesc& outMesh
+    const bool conesFresh
 ){
-    outMesh = RuntimeMeshDesc{};
-    if(!ResolveSkinnedRuntimeMeshIdentity(entity, runtimeMesh, instance, outMesh.meshKey, outMesh.version))
-        return false;
+    const auto identity = ResolveSkinnedRuntimeMeshIdentity(entity, runtimeMesh, instance);
+    if(!identity)
+        return MakeUnexpected(Failure{});
+    RuntimeMeshDesc mesh;
+    mesh.meshKey = identity->meshKey;
+    mesh.version = identity->version;
 
-    outMesh.entity = entity;
-    outMesh.geometryContentRevision = instance->deformationState.contentRevision();
-    if(outMesh.geometryContentRevision != 0u){
-        outMesh.localBoundsBuffer = instance->localBoundsBuffer;
-        outMesh.meshletLocalBoundsBuffer = instance->meshletLocalBoundsBuffer;
+    mesh.entity = entity;
+    mesh.geometryContentRevision = instance->deformationState.contentRevision();
+    if(mesh.geometryContentRevision != 0u){
+        mesh.localBoundsBuffer = instance->localBoundsBuffer;
+        mesh.meshletLocalBoundsBuffer = instance->meshletLocalBoundsBuffer;
     }
-    outMesh.positionBuffer = instance->skinnedPositionBuffer;
-    outMesh.normalBuffer = instance->skinnedNormalBuffer;
-    outMesh.tangentBuffer = instance->skinnedTangentBuffer;
-    outMesh.uv0Buffer = instance->uv0Buffer;
-    outMesh.colorBuffer = instance->colorBuffer;
-    outMesh.meshletDescBuffer = instance->meshletDescBuffer;
-    outMesh.meshletBoundsBuffer = instance->meshletBoundsBuffer;
-    outMesh.meshletPositionRefDeltaBuffer = instance->meshletPositionRefDeltaBuffer;
-    outMesh.meshletAttributeRefDeltaBuffer = instance->meshletAttributeRefDeltaBuffer;
-    outMesh.meshletLocalVertexRefBuffer = instance->meshletLocalVertexRefBuffer;
-    outMesh.meshletPrimitiveIndexBuffer = instance->meshletPrimitiveIndexBuffer;
-    outMesh.triangleIndexBuffer = instance->triangleIndexBuffer;
-    outMesh.attributeBuffer = instance->attributeBuffer;
-    outMesh.localBounds = instance->localBounds;
-    outMesh.meshletCount = static_cast<u32>(instance->meshlets.size());
-    outMesh.meshletPrimitiveIndexCount = static_cast<u32>(instance->meshletPrimitiveIndices.size());
-    outMesh.dynamicMeshletBoundsFresh = boundsFresh;
-    outMesh.dynamicMeshletConesFresh = conesFresh;
-    NWB_ASSERT(outMesh.valid());
-    return true;
+    mesh.positionBuffer = instance->skinnedPositionBuffer;
+    mesh.normalBuffer = instance->skinnedNormalBuffer;
+    mesh.tangentBuffer = instance->skinnedTangentBuffer;
+    mesh.uv0Buffer = instance->uv0Buffer;
+    mesh.colorBuffer = instance->colorBuffer;
+    mesh.meshletDescBuffer = instance->meshletDescBuffer;
+    mesh.meshletBoundsBuffer = instance->meshletBoundsBuffer;
+    mesh.meshletPositionRefDeltaBuffer = instance->meshletPositionRefDeltaBuffer;
+    mesh.meshletAttributeRefDeltaBuffer = instance->meshletAttributeRefDeltaBuffer;
+    mesh.meshletLocalVertexRefBuffer = instance->meshletLocalVertexRefBuffer;
+    mesh.meshletPrimitiveIndexBuffer = instance->meshletPrimitiveIndexBuffer;
+    mesh.triangleIndexBuffer = instance->triangleIndexBuffer;
+    mesh.attributeBuffer = instance->attributeBuffer;
+    mesh.localBounds = instance->localBounds;
+    mesh.meshletCount = static_cast<u32>(instance->meshlets.size());
+    mesh.meshletPrimitiveIndexCount = static_cast<u32>(instance->meshletPrimitiveIndices.size());
+    mesh.dynamicMeshletBoundsFresh = boundsFresh;
+    mesh.dynamicMeshletConesFresh = conesFresh;
+    NWB_ASSERT(mesh.valid());
+    return mesh;
 }
 
 

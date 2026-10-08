@@ -137,8 +137,7 @@ bool GpuTaskScheduler::submitPacketRangeWithinSubmissionOperation(
         const GpuCompiledPacketView packetView = planAccess.packet(packet);
         if(!packetView.valid())
             return false;
-        const QueueSubmissionPreSubmitHook* preSubmitHook = nullptr;
-        bindings.collectPacket(packet, resolvedTimingTickets, preSubmitHook);
+        const QueueSubmissionPreSubmitHook* const preSubmitHook = bindings.collectPacket(packet, resolvedTimingTickets);
         SubmissionAttemptExceptionScope packetExceptionScope(
             graph,
             compiledGraph,

@@ -14,22 +14,22 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshCookMetadata::BuildDiscoveredNwbFile(
+Expected<DiscoveredNwbFile> MeshCookMetadata::BuildDiscoveredNwbFile(
     const Path& assetRoot,
     const AStringView virtualRoot,
-    const Path& nwbFilePath,
-    DiscoveredNwbFile& outFile
+    const Path& nwbFilePath
 ){
-    outFile.assetRoot = assetRoot;
-    outFile.virtualRoot.clear();
-    outFile.filePath = nwbFilePath;
-    if(!outFile.virtualRoot.assign(virtualRoot)){
+    DiscoveredNwbFile file(nwbFilePath.arena());
+    file.assetRoot = assetRoot;
+    file.virtualRoot.clear();
+    file.filePath = nwbFilePath;
+    if(!file.virtualRoot.assign(virtualRoot)){
         NWB_LOGGER_ERROR(NWB_TEXT("Mesh meta '{}': virtual root exceeds ACompactString capacity")
             , PathToString<tchar>(nwbFilePath)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    return true;
+    return file;
 }
 
 
@@ -50,9 +50,11 @@ bool MeshCookMetadata::AccumulateFlattenedValueLeafCount(const Core::Metascript:
 }
 
 
-bool MeshCookMetadata::CountFlattenedValueLeaves(const Core::Metascript::Value& value, usize& outCount){
-    outCount = 0u;
-    return AccumulateFlattenedValueLeafCount(value, outCount);
+Expected<usize> MeshCookMetadata::CountFlattenedValueLeaves(const Core::Metascript::Value& value){
+    usize count = 0u;
+    if(!AccumulateFlattenedValueLeafCount(value, count))
+        return MakeUnexpected(Failure{});
+    return count;
 }
 
 
@@ -94,21 +96,19 @@ const Core::Metascript::Value* MeshCookMetadata::FindRequiredMetadataListField(
 }
 
 
-MetadataF32ValueFailure::Enum MeshCookMetadata::ValidateMetadataFiniteF32Value(
-    const Core::Metascript::Value& value,
-    f32& outValue
+Expected<f32, MetadataF32ValueFailure::Enum> MeshCookMetadata::ValidateMetadataFiniteF32Value(
+    const Core::Metascript::Value& value
 ){
     if(!value.isNumeric())
-        return MetadataF32ValueFailure::NotNumeric;
+        return Unexpected<MetadataF32ValueFailure::Enum>(MetadataF32ValueFailure::NotNumeric);
 
     const f64 numericValue = value.toDouble();
     if(!IsFinite(numericValue))
-        return MetadataF32ValueFailure::NonFinite;
+        return Unexpected<MetadataF32ValueFailure::Enum>(MetadataF32ValueFailure::NonFinite);
     if(numericValue < static_cast<f64>(Limit<f32>::s_Min) || numericValue > static_cast<f64>(Limit<f32>::s_Max))
-        return MetadataF32ValueFailure::OutOfRange;
+        return Unexpected<MetadataF32ValueFailure::Enum>(MetadataF32ValueFailure::OutOfRange);
 
-    outValue = static_cast<f32>(numericValue);
-    return MetadataF32ValueFailure::None;
+    return static_cast<f32>(numericValue);
 }
 
 
@@ -149,18 +149,17 @@ void MeshCookMetadata::LogMetadataFiniteF32ValueFailure(
 }
 
 
-MetadataU32ValueFailure::Enum MeshCookMetadata::ValidateMetadataU32Value(const Core::Metascript::Value& value, u32& outValue){
+Expected<u32, MetadataU32ValueFailure::Enum> MeshCookMetadata::ValidateMetadataU32Value(const Core::Metascript::Value& value){
     if(!value.isNumeric())
-        return MetadataU32ValueFailure::NotNumeric;
+        return Unexpected<MetadataU32ValueFailure::Enum>(MetadataU32ValueFailure::NotNumeric);
 
     const f64 numericValue = value.toDouble();
     if(!IsFinite(numericValue) || numericValue < 0.0 || numericValue != Floor(numericValue))
-        return MetadataU32ValueFailure::NonIntegerOrNegative;
+        return Unexpected<MetadataU32ValueFailure::Enum>(MetadataU32ValueFailure::NonIntegerOrNegative);
     if(numericValue > static_cast<f64>(Limit<u32>::s_Max))
-        return MetadataU32ValueFailure::OutOfRange;
+        return Unexpected<MetadataU32ValueFailure::Enum>(MetadataU32ValueFailure::OutOfRange);
 
-    outValue = static_cast<u32>(numericValue);
-    return MetadataU32ValueFailure::None;
+    return static_cast<u32>(numericValue);
 }
 
 
@@ -201,19 +200,18 @@ void MeshCookMetadata::LogMetadataU32ValueFailure(
 }
 
 
-bool MeshCookMetadata::ParseMetadataU32Value(
+Expected<u32, MetadataU32ValueFailure::Enum> MeshCookMetadata::ParseMetadataU32Value(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
     const TStringView metaKind,
-    const AStringView label,
-    u32& outValue
+    const AStringView label
 ){
-    const MetadataU32ValueFailure::Enum failure = ValidateMetadataU32Value(value, outValue);
-    if(failure == MetadataU32ValueFailure::None)
-        return true;
+    const auto parsedValue = ValidateMetadataU32Value(value);
+    if(parsedValue)
+        return parsedValue;
 
-    LogMetadataU32ValueFailure(nwbFilePath, metaKind, label, failure);
-    return false;
+    LogMetadataU32ValueFailure(nwbFilePath, metaKind, label, parsedValue.error());
+    return parsedValue;
 }
 
 

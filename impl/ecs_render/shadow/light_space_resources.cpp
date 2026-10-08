@@ -177,9 +177,14 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
                     .enableAutomaticStateTracking(Core::ResourceStates::Common)
                 ;
                 csgBuffers[index] = m_graphics.createBuffer(desc);
-                if(!csgBuffers[index] || !RayTracingDetail::RegisterHeapBuffer(heap, *csgBuffers[index],
-                    Core::GpuDescriptorClass::StorageBuffer, index == 1u, csgDescriptors[index]))
+                if(!csgBuffers[index])
                     return false;
+                const auto descriptor = RayTracingDetail::RegisterHeapBuffer(
+                    heap, *csgBuffers[index], Core::GpuDescriptorClass::StorageBuffer, index == 1u
+                );
+                if(!descriptor)
+                    return false;
+                csgDescriptors[index] = *descriptor;
             }
             RayTracingDetail::RetireHeapHandle(heap, snapshot.csgContextDescriptor);
             RayTracingDetail::RetireHeapHandle(heap, snapshot.csgOpaqueDepthDescriptor);
@@ -218,11 +223,12 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
             .enableAutomaticStateTracking(Core::ResourceStates::Common)
         ;
         buffers[index] = m_graphics.createBuffer(desc);
-        if(
-            !buffers[index] || !RayTracingDetail::RegisterHeapBuffer(heap, *buffers[index], Core::GpuDescriptorClass::StorageBuffer,
-            true, descriptors[index])
-        )
+        if(!buffers[index])
             return false;
+        const auto descriptor = RayTracingDetail::RegisterHeapBuffer(heap, *buffers[index], Core::GpuDescriptorClass::StorageBuffer, true);
+        if(!descriptor)
+            return false;
+        descriptors[index] = *descriptor;
     }
     Core::TextureDesc depthDesc;
     depthDesc

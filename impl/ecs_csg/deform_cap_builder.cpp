@@ -135,14 +135,13 @@ SIMDVector CsgDeformCapBuilder::CapCenterNormalVec(SIMDVector loopNormalVec)noex
     return loopNormalVec;
 }
 
-bool CsgDeformCapBuilder::CapNormal(
+Expected<Float4> CsgDeformCapBuilder::CapNormal(
     const CsgDeformVertexVector<ScratchArena>& vertices,
-    const Vector<u32, ScratchArena>& loop,
-    Float4& outNormal
+    const Vector<u32, ScratchArena>& loop
 )noexcept{
-    outNormal = s_UpAxis;
+    Float4 normal;
     if(loop.size() < s_MinLoopVertices)
-        return false;
+        return MakeUnexpected(Failure{});
     const SIMDVector originVec = LoadFloat(vertices[loop[0u]].position);
     SIMDVector areaVec = VectorZero();
     for(usize vertexIndex = 1u; vertexIndex + 1u < loop.size(); ++vertexIndex){
@@ -152,25 +151,24 @@ bool CsgDeformCapBuilder::CapNormal(
     }
     const f32 areaLengthSq = VectorGetX(Vector3LengthSq(areaVec));
     if(!(areaLengthSq > s_LoopAreaEpsilonSq))
-        return false;
+        return MakeUnexpected(Failure{});
     const SIMDVector normalized = Vector3Normalize(areaVec);
     const SIMDVector packed = VectorSelect(normalized, CsgDeformWallBuilder::UpAxisVec(), s_SIMDMaskW);
-    StoreFloat(packed, outNormal);
-    return true;
+    StoreFloat(packed, normal);
+    return normal;
 }
 
-bool CsgDeformCapBuilder::FillCapLoop(
+Expected<u32> CsgDeformCapBuilder::FillCapLoop(
     const Float4& loopNormal,
     CsgDeformVertexVector<ScratchArena>& inOutVertices,
     CsgDeformTriangleVector<ScratchArena>& inOutTriangles,
-    const Vector<u32, ScratchArena>& loop,
-    u32& outCapTriangles
+    const Vector<u32, ScratchArena>& loop
 ){
-    outCapTriangles = 0u;
+    u32 capTriangles = 0u;
     if(loop.size() < s_MinLoopVertices)
-        return false;
+        return MakeUnexpected(Failure{});
     if(inOutVertices.size() + 1u > s_MaxDeformVertices)
-        return false;
+        return MakeUnexpected(Failure{});
     SIMDVector centerPositionVec = VectorZero();
     SIMDVector centerUvVec = VectorZero();
     SIMDVector centerColorVec = VectorZero();
@@ -191,33 +189,32 @@ bool CsgDeformCapBuilder::FillCapLoop(
     StoreFloat(CsgDeformCapBuilder::ScaleCenterVec(centerUvVec, loopSizeVec), center.uv0);
     StoreFloat(CsgDeformCapBuilder::ScaleCenterVec(centerColorVec, loopSizeVec), center.color);
     if(!CsgDeformWallBuilder::NormalizeDeformVertex(center))
-        return false;
+        return MakeUnexpected(Failure{});
     const u32 centerIndex = static_cast<u32>(inOutVertices.size());
     inOutVertices.push_back(center);
 
     // One orientation rule for every loop: reverse kept winding so caps face the cut.
     for(usize vertexIndex = 0u; vertexIndex < loop.size(); ++vertexIndex){
         if(inOutTriangles.size() + 1u > s_MaxDeformTriangles)
-            return false;
+            return MakeUnexpected(Failure{});
         const u32 first = loop[vertexIndex];
         const u32 second = loop[(vertexIndex + 1u) % loop.size()];
         CsgDeformWallBuilder::EmitTriangle(inOutTriangles, centerIndex, second, first);
-        ++outCapTriangles;
+        ++capTriangles;
     }
-    return true;
+    return capTriangles;
 }
 
-bool CsgDeformCapBuilder::FillCutCaps(
+Expected<u32> CsgDeformCapBuilder::FillCutCaps(
     ScratchArena& scratchArena,
     CsgDeformVertexVector<ScratchArena>& inOutVertices,
     CsgDeformTriangleVector<ScratchArena>& inOutTriangles,
-    Vector<CsgDeformCutLoopEdge, ScratchArena>& scratchEdges,
-    u32& outCapTriangles
+    Vector<CsgDeformCutLoopEdge, ScratchArena>& scratchEdges
 ){
-    outCapTriangles = 0u;
+    u32 capTriangles = 0u;
     CsgDeformCapBuilder::CollectBoundaryEdges(scratchArena, inOutTriangles, scratchEdges);
     if(scratchEdges.empty())
-        return true;
+        return capTriangles;
     // Peel one closed loop at a time from the boundary set; open chains stay cap-free while a closed but degenerate loop fails viability.
     Vector<CsgDeformCutLoopEdge, ScratchArena> remaining(scratchArena);
     remaining = scratchEdges;
@@ -253,15 +250,15 @@ bool CsgDeformCapBuilder::FillCutCaps(
         // Open boundary chains (e.g. cuts across an open sheet) carry no closable volume loop; they stay viable cap-free. Only a closed but degenerate loop fails viability.
         if(!CsgDeformCapBuilder::OrderBoundaryLoop(scratchArena, loopEdges, loop))
             continue;
-        Float4 loopNormal;
-        if(!CsgDeformCapBuilder::CapNormal(inOutVertices, loop, loopNormal))
-            return false;
-        u32 loopCaps = 0u;
-        if(!CsgDeformCapBuilder::FillCapLoop(loopNormal, inOutVertices, inOutTriangles, loop, loopCaps))
-            return false;
-        outCapTriangles += loopCaps;
+        const auto loopNormal = CsgDeformCapBuilder::CapNormal(inOutVertices, loop);
+        if(!loopNormal)
+            return MakeUnexpected(Failure{});
+        const auto loopCaps = CsgDeformCapBuilder::FillCapLoop(*loopNormal, inOutVertices, inOutTriangles, loop);
+        if(!loopCaps)
+            return MakeUnexpected(Failure{});
+        capTriangles += *loopCaps;
     }
-    return true;
+    return capTriangles;
 }
 
 

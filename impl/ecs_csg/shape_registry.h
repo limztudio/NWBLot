@@ -35,13 +35,16 @@ inline constexpr Float4 s_CsgCapsuleDefaultRadiusHalfHeight = Float4(1.0f, 1.0f,
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-using CsgShapeBoundsCallback = bool(*)(
+struct CsgShapeBounds{
+    SIMDVector minBounds = VectorZero();
+    SIMDVector maxBounds = VectorZero();
+    bool finiteBounds = false;
+};
+
+using CsgShapeBoundsCallback = Expected<CsgShapeBounds>(*)(
     const SIMDMatrix& shapeToWorld,
     const u8* parameterBytes,
-    usize parameterByteSize,
-    SIMDVector& outMinBounds,
-    SIMDVector& outMaxBounds,
-    bool& outFiniteBounds
+    usize parameterByteSize
 );
 
 struct CsgShapeTypeDesc{
@@ -106,41 +109,35 @@ public:
 
 
 public:
-    bool registerShapeType(const CsgShapeTypeDesc& desc, CsgShapeTypeId& outTypeId, bool replaceExisting = false);
+    [[nodiscard]] Expected<CsgShapeTypeId> registerShapeType(const CsgShapeTypeDesc& desc, bool replaceExisting = false);
 
 
 public:
     [[nodiscard]] CsgShapeTypeId findShapeTypeId(const Name& name)const;
-    [[nodiscard]] bool findShapeType(const Name& name, CsgShapeTypeInfo& outShapeType)const;
-    [[nodiscard]] bool findShapeType(CsgShapeTypeId typeId, CsgShapeTypeInfo& outShapeType)const;
+    [[nodiscard]] Expected<CsgShapeTypeInfo> findShapeType(const Name& name)const;
+    [[nodiscard]] Expected<CsgShapeTypeInfo> findShapeType(CsgShapeTypeId typeId)const;
     [[nodiscard]] usize shapeTypeCount()const;
     [[nodiscard]] u64 revision()const;
-    [[nodiscard]] bool findShaderModuleInclude(const Name& shaderModule, ACompactString& outShaderModuleInclude)const;
+    [[nodiscard]] Expected<ACompactString> findShaderModuleInclude(const Name& shaderModule)const;
 
 
 public:
-    [[nodiscard]] bool buildShapeBounds(
+    [[nodiscard]] Expected<CsgShapeBounds> buildShapeBounds(
         const Name& name,
         const SIMDMatrix& shapeToWorld,
         const u8* parameterBytes,
-        usize parameterByteSize,
-        SIMDVector& outMinBounds,
-        SIMDVector& outMaxBounds,
-        bool& outFiniteBounds
+        usize parameterByteSize
     )const;
-    [[nodiscard]] bool buildShapeBounds(
+    [[nodiscard]] Expected<CsgShapeBounds> buildShapeBounds(
         CsgShapeTypeId typeId,
         const SIMDMatrix& shapeToWorld,
         const u8* parameterBytes,
-        usize parameterByteSize,
-        SIMDVector& outMinBounds,
-        SIMDVector& outMaxBounds,
-        bool& outFiniteBounds
+        usize parameterByteSize
     )const;
 
 
 private:
-    [[nodiscard]] bool shapeTypeById(CsgShapeTypeId typeId, CsgShapeTypeInfo& outShapeType)const;
+    [[nodiscard]] Expected<CsgShapeTypeInfo> shapeTypeById(CsgShapeTypeId typeId)const;
 
 
 private:

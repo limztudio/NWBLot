@@ -48,47 +48,47 @@ namespace RendererTaskGraphDetail{
 }
 
 template<typename Plan>
-[[nodiscard]] inline bool GatherImportedOutputBufferResourceSet(
+[[nodiscard]] inline Expected<Core::GpuGraphResourceSetId> GatherImportedOutputBufferResourceSet(
     Core::GpuTaskGraph& graph,
     const Plan& plan,
     Core::Alloc::ScratchArena& scratchArena,
     const Name& identity,
-    const AStringView label,
-    Core::GpuGraphResourceSetId& outResourceSet
+    const AStringView label
 ){
-    outResourceSet = {};
     if(!plan.captured || plan.outputBuffers.empty())
-        return false;
+        return MakeUnexpected(Failure{});
 
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> members{ scratchArena };
     members.reserve(plan.outputBuffers.size());
     for(const Core::BufferHandle& buffer : plan.outputBuffers){
         if(!buffer)
-            return false;
+            return MakeUnexpected(Failure{});
         Core::GpuGraphResourceId resource;
         {
             const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
             if(!declarations.valid())
-                return false;
+                return MakeUnexpected(Failure{});
             resource = declarations.findImportedBuffer(buffer);
         }
         if(!resource.valid()){
             const Name bufferIdentity = buffer->getCreationDescription().debugName;
             if(!bufferIdentity)
-                return false;
+                return MakeUnexpected(Failure{});
             resource = graph.importBuffer(buffer, BufferResourceDesc(bufferIdentity, label));
         }
         if(!resource.valid())
-            return false;
+            return MakeUnexpected(Failure{});
         members.push_back(resource);
     }
-    outResourceSet = graph.importResourceSet(
+    const Core::GpuGraphResourceSetId result = graph.importResourceSet(
         Core::GpuGraphResourceSetDesc{}
             .setIdentity(identity)
             .setMarkerLabel(label)
             .setMembers(members.data(), members.size())
     );
-    return outResourceSet.valid();
+    if(!result.valid())
+        return MakeUnexpected(Failure{});
+    return result;
 }
 
 [[nodiscard]] inline Core::GpuGraphResourceDesc HazardDomainDesc(const Name& identity, const AStringView label){

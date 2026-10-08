@@ -304,20 +304,16 @@ static_assert(
     return MaterialParameterValueTypeByteSize(MaterialLayoutFieldValueType(fieldType));
 }
 
-[[nodiscard]] inline bool AlignMaterialLayoutFieldOffset(
-    const u32 byteOffset,
-    const MaterialLayoutFieldType::Enum fieldType,
-    u32& outByteOffset
-)noexcept{
+[[nodiscard]] inline Expected<u32> AlignMaterialLayoutFieldOffset(const u32 byteOffset, const MaterialLayoutFieldType::Enum fieldType)noexcept{
     const u32 alignment = MaterialLayoutFieldAlignment(fieldType);
     if(alignment == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    return AlignUpU32Checked(byteOffset, alignment, outByteOffset);
+    return AlignUpU32Checked(byteOffset, alignment);
 }
 
-[[nodiscard]] inline bool AlignMaterialLayoutBlockByteSize(const u32 byteSize, u32& outByteSize)noexcept{
-    return AlignUpU32Checked(byteSize, NWB_MATERIAL_TYPED_WORD_BYTES, outByteSize);
+[[nodiscard]] inline Expected<u32> AlignMaterialLayoutBlockByteSize(const u32 byteSize)noexcept{
+    return AlignUpU32Checked(byteSize, NWB_MATERIAL_TYPED_WORD_BYTES);
 }
 
 struct MaterialTypedLayoutBlock{
@@ -426,10 +422,13 @@ public:
 
     template<typename TShader>
         requires(IsBaseOf_V<IShader, TShader> && requires{ TShader::s_Stage; })
-    [[nodiscard]] bool findShader(Core::Assets::AssetRef<TShader>& outShaderAsset)const noexcept{
+    [[nodiscard]] Expected<Core::Assets::AssetRef<TShader>> findShader()const noexcept{
         static_assert(Core::ShaderType::IsValid(TShader::s_Stage));
-        outShaderAsset.virtualPath = m_stageShaders[Core::ShaderType::ToIndex(TShader::s_Stage)].virtualPath;
-        return outShaderAsset.valid();
+        Core::Assets::AssetRef<TShader> shaderAsset;
+        shaderAsset.virtualPath = m_stageShaders[Core::ShaderType::ToIndex(TShader::s_Stage)].virtualPath;
+        if(!shaderAsset.valid())
+            return MakeUnexpected(Failure{});
+        return shaderAsset;
     }
 
 public:

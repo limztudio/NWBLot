@@ -60,24 +60,22 @@ QueueSubmissionPreSubmitHook BackendContext::claimFramePresentationSignal()noexc
     };
 }
 
-bool BackendContext::InvokeFramePresentationSignalPreparation(
+Expected<QueueSubmissionNativeSignal> BackendContext::InvokeFramePresentationSignalPreparation(
     void* const context,
     const u64 identity,
-    const GpuPhysicalQueueId& executionQueue,
-    QueueSubmissionNativeSignal& outSignal
+    const GpuPhysicalQueueId& executionQueue
 ){
     if(!context)
-        return false;
-    return static_cast<BackendContext*>(context)->prepareFramePresentationSignal(identity, executionQueue, outSignal);
+        return MakeUnexpected(Failure{});
+    return static_cast<BackendContext*>(context)->prepareFramePresentationSignal(identity, executionQueue);
 }
 
-bool BackendContext::prepareFramePresentationSignal(
+Expected<QueueSubmissionNativeSignal> BackendContext::prepareFramePresentationSignal(
     const u64 identity,
-    const GpuPhysicalQueueId& executionQueue,
-    QueueSubmissionNativeSignal& outSignal
+    const GpuPhysicalQueueId& executionQueue
 )noexcept{
     NothrowScopedLock presentationLock(m_framePresentationMutex);
-    outSignal = {};
+    QueueSubmissionNativeSignal signal;
     if(
         !m_framePresentationClaimsEnabled
         || !m_rhiDevice
@@ -92,25 +90,25 @@ bool BackendContext::prepareFramePresentationSignal(
         || m_swapChainIndex >= m_presentSemaphores.size()
         || m_presentSemaphores[m_swapChainIndex] != m_framePresentationSemaphore
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     const GpuPhysicalQueueInfo* const queueInfo = m_rhiDevice->getPhysicalQueueInfo(executionQueue);
     const GpuPhysicalQueueId primaryGraphicsQueue = m_rhiDevice->getPrimaryPhysicalQueue(CommandQueue::Graphics);
     if(!VulkanDetail::IsPrimaryGraphicsPresentationQueue(primaryGraphicsQueue, queueInfo))
-        return false;
+        return MakeUnexpected(Failure{});
 
 #if VK_USE_64_BIT_PTR_DEFINES
-    outSignal.semaphore = Object(static_cast<void*>(m_framePresentationSemaphore));
+    signal.semaphore = Object(static_cast<void*>(m_framePresentationSemaphore));
 #else
-    outSignal.semaphore = Object(static_cast<u64>(m_framePresentationSemaphore));
+    signal.semaphore = Object(static_cast<u64>(m_framePresentationSemaphore));
 #endif
-    outSignal.value = 0u;
-    if(!outSignal.valid())
-        return false;
+    signal.value = 0u;
+    if(!signal.valid())
+        return MakeUnexpected(Failure{});
 
     m_framePresentationQueue = executionQueue;
     m_framePresentationSignalState = FramePresentationSignalState::Queued;
-    return true;
+    return signal;
 }
 
 bool BackendContext::InvokeFramePresentationSignalResolution(

@@ -109,18 +109,17 @@ inline ShaderType::Mask ConvertExecutionModel(const u32 executionModel)noexcept{
 }
 
 template<typename Source>
-[[nodiscard]] NWB_INLINE bool DecodeEntryPointInstruction(
+[[nodiscard]] NWB_INLINE Expected<SpirvEntryPointInstruction> DecodeEntryPointInstruction(
     const Source& source,
     const usize instructionIndex,
-    const u16 instructionWordCount,
-    SpirvEntryPointInstruction& outEntryPoint
+    const u16 instructionWordCount
 )noexcept{
-    outEntryPoint = SpirvEntryPointInstruction();
+    SpirvEntryPointInstruction entryPoint;
 
     if(instructionWordCount <= s_SpirvEntryPointFixedWordCount)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outEntryPoint.shaderType = ConvertExecutionModel(source.word(instructionIndex + s_SpirvEntryPointExecutionModelWordIndex));
+    entryPoint.shaderType = ConvertExecutionModel(source.word(instructionIndex + s_SpirvEntryPointExecutionModelWordIndex));
 
     const AStringView entryPointBytes = source.nameBytes(
         instructionIndex + s_SpirvEntryPointNameWordIndex,
@@ -128,10 +127,10 @@ template<typename Source>
     );
     const usize entryPointLength = entryPointBytes.find('\0');
     if(entryPointLength == AStringView::npos)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outEntryPoint.name = entryPointBytes.substr(0u, entryPointLength);
-    return true;
+    entryPoint.name = entryPointBytes.substr(0u, entryPointLength);
+    return entryPoint;
 }
 
 template<typename Source, typename EntryPointCallback>
@@ -157,11 +156,11 @@ template<typename Source, typename EntryPointCallback>
             return false;
 
         if(opcode == s_OpEntryPoint){
-            SpirvEntryPointInstruction entryPoint;
-            if(!DecodeEntryPointInstruction(source, instructionIndex, instructionWordCount, entryPoint))
+            const auto entryPoint = DecodeEntryPointInstruction(source, instructionIndex, instructionWordCount);
+            if(!entryPoint)
                 return false;
 
-            entryPointCallback(entryPoint);
+            entryPointCallback(*entryPoint);
         }
 
         instructionIndex += instructionWordCount;
@@ -171,16 +170,15 @@ template<typename Source, typename EntryPointCallback>
 }
 
 template<typename Source>
-[[nodiscard]] NWB_INLINE SpirvEntryPointLookupResult::Enum ResolveEntryPointName(
+[[nodiscard]] NWB_INLINE Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveEntryPointName(
     const Source& source,
     const AStringView entryName,
-    const ShaderType::Mask shaderType,
-    AStringView& outEntryPointName
+    const ShaderType::Mask shaderType
 )noexcept{
-    outEntryPointName = {};
+    AStringView entryPointName;
 
     if(entryName.empty() || shaderType == ShaderType::None)
-        return SpirvEntryPointLookupResult::NotFound;
+        return MakeUnexpected(SpirvEntryPointLookupResult::NotFound);
 
     bool found = false;
     const bool validModule = ScanSpirvEntryPoints(
@@ -189,16 +187,16 @@ template<typename Source>
             if(found || entryPoint.shaderType == ShaderType::None || entryPoint.shaderType != shaderType || entryPoint.name != entryName)
                 return;
 
-            outEntryPointName = entryPoint.name;
+            entryPointName = entryPoint.name;
             found = true;
         }
     );
-    if(!validModule){
-        outEntryPointName = {};
-        return SpirvEntryPointLookupResult::InvalidSpirv;
-    }
+    if(!validModule)
+        return MakeUnexpected(SpirvEntryPointLookupResult::InvalidSpirv);
+    if(!found)
+        return MakeUnexpected(SpirvEntryPointLookupResult::NotFound);
 
-    return found ? SpirvEntryPointLookupResult::Found : SpirvEntryPointLookupResult::NotFound;
+    return entryPointName;
 }
 
 
@@ -225,26 +223,24 @@ bool IsValidSpirvModuleWords(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SpirvEntryPointLookupResult::Enum ResolveSpirvEntryPointName(
+Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveSpirvEntryPointName(
     const u32* words,
     const usize wordCount,
     const AStringView entryName,
-    const ShaderType::Mask shaderType,
-    AStringView& outEntryPointName
+    const ShaderType::Mask shaderType
 )noexcept{
     return __hidden_spirv_entry_point::ResolveEntryPointName(
-        __hidden_spirv_entry_point::SpirvWordSource{ words, wordCount }, entryName, shaderType, outEntryPointName
+        __hidden_spirv_entry_point::SpirvWordSource{ words, wordCount }, entryName, shaderType
     );
 }
 
-SpirvEntryPointLookupResult::Enum ResolveSpirvEntryPointName(
+Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveSpirvEntryPointName(
     const BinaryByteView bytecode,
     const AStringView entryName,
-    const ShaderType::Mask shaderType,
-    AStringView& outEntryPointName
+    const ShaderType::Mask shaderType
 )noexcept{
     return __hidden_spirv_entry_point::ResolveEntryPointName(
-        __hidden_spirv_entry_point::SpirvByteSource{ bytecode }, entryName, shaderType, outEntryPointName
+        __hidden_spirv_entry_point::SpirvByteSource{ bytecode }, entryName, shaderType
     );
 }
 

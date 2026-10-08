@@ -22,9 +22,9 @@ using EditBoundaryVector = Vector<usize, Core::Alloc::GlobalArena>;
 // Unicode 17.0.0 UAX #29 revision 47 default extended grapheme boundaries, including GB9c.
 class GraphemeSegmentation final{
 public:
-    // Output is unchanged for invalid UTF8. General segmentation accepts controls; single-line editing rejects line breaks and NUL.
-    [[nodiscard]] static bool Build(AStringView text, EditBoundaryVector& output, bool singleLine = false);
-    [[nodiscard]] static bool Validate(AStringView text, bool singleLine = false);
+    // General segmentation accepts controls; single-line editing rejects line breaks and NUL.
+    [[nodiscard]] static Expected<EditBoundaryVector> Build(Core::Alloc::GlobalArena& arena, AStringView text, bool singleLine = false);
+    [[nodiscard]] static bool Validate(AStringView text, bool singleLine = false)noexcept;
     // The supplied text must have passed Validate; native preedit selections may use scalar boundaries inside graphemes.
     [[nodiscard]] static bool IsScalarBoundary(AStringView text, usize position)noexcept;
 };

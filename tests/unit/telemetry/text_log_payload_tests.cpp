@@ -23,9 +23,10 @@ namespace LogType = NWB::Core::Common::LogType;
 
 void CheckPayload(const Telemetry::TelemetryBytes& payload, const u8* expected, const usize count){
     ASSERT_EQ(payload.size(), sizeof(Telemetry::EncodedTextLogPayloadHeader) + count);
-    Telemetry::EncodedTextLogPayloadHeader header;
     usize cursor = 0u;
-    ASSERT_TRUE(ReadPOD(payload, cursor, header));
+    const auto readHeader = ReadPOD<Telemetry::EncodedTextLogPayloadHeader>(payload, cursor);
+    ASSERT_TRUE(readHeader);
+    Telemetry::EncodedTextLogPayloadHeader header = *readHeader;
     EXPECT_EQ(header.messageBytes, count);
     for(usize index = 0u; index < count; ++index)
         EXPECT_EQ(payload[cursor + index], expected[index]) << index;
@@ -116,19 +117,19 @@ TEST(Telemetry, TextLogPayloadRejectsNonCurrentVersionsAndRecovers){
         static_cast<u16>(Telemetry::s_TextLogPayloadVersion + 1u),
         Limit<u16>::s_Max,
     };
-    Telemetry::TextLogPayload parsed(testArena.arena);
+    Expected<Telemetry::TextLogPayload> parsed = MakeUnexpected(Failure{});
     for(const u16 version : unsupportedVersions){
         SCOPED_TRACE(version);
-        ASSERT_TRUE(Telemetry::ParseTextLogPayload(testArena.arena, current.data(), current.size(), parsed));
-        Telemetry::EncodedTextLogPayloadHeader header;
+        ASSERT_TRUE((parsed = Telemetry::ParseTextLogPayload(testArena.arena, current.data(), current.size())));
         usize cursor = 0u;
-        ASSERT_TRUE(ReadPOD(current, cursor, header));
+        const auto readHeader = ReadPOD<Telemetry::EncodedTextLogPayloadHeader>(current, cursor);
+        ASSERT_TRUE(readHeader);
+        Telemetry::EncodedTextLogPayloadHeader header = *readHeader;
         header.version = version;
         NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-        EXPECT_FALSE(Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size(), parsed));
-        EXPECT_TRUE(parsed.messageUtf8.empty());
-        ASSERT_TRUE(Telemetry::ParseTextLogPayload(testArena.arena, current.data(), current.size(), parsed));
-        EXPECT_EQ(AStringView(parsed.messageUtf8), AStringView("retained log"));
+        EXPECT_FALSE((parsed = Telemetry::ParseTextLogPayload(testArena.arena, payload.data(), payload.size())));
+        ASSERT_TRUE((parsed = Telemetry::ParseTextLogPayload(testArena.arena, current.data(), current.size())));
+        EXPECT_EQ(AStringView(parsed->messageUtf8), AStringView("retained log"));
     }
 }
 

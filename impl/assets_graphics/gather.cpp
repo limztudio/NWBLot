@@ -62,11 +62,14 @@ bool MergeGatheredGraphicsAsset(
     incomingBytes.reserve(incomingSize);
     BinaryDetail::AppendBytesNoReserveUnchecked(incomingBytes, incomingPayload, incomingSize);
 
-    Core::GraphicsVector<Core::ShaderArchive::Record> records(arena);
-    Core::GraphicsVector<Core::ShaderArchive::Record> incomingRecords(arena);
-    if(!Core::ShaderArchive::DeserializeIndex(existingPayload, records)
-        || !Core::ShaderArchive::DeserializeIndex(incomingBytes, incomingRecords))
+    auto parsedRecords = Core::ShaderArchive::DeserializeIndex(arena, existingPayload);
+    if(!parsedRecords)
         return false;
+    auto parsedIncomingRecords = Core::ShaderArchive::DeserializeIndex(arena, incomingBytes);
+    if(!parsedIncomingRecords)
+        return false;
+    auto& records = *parsedRecords;
+    auto& incomingRecords = *parsedIncomingRecords;
     if(AddOverflows<usize>(records.size(), incomingRecords.size())){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: merged shader index size overflows"));
         return false;
@@ -108,10 +111,10 @@ bool MergeGatheredGraphicsAsset(
         }
     }
 
-    Core::GraphicsBytes merged(arena);
-    if(!Core::ShaderArchive::SerializeIndex(records, merged))
+    auto merged = Core::ShaderArchive::SerializeIndex(arena, records);
+    if(!merged)
         return false;
-    existingPayload = Move(merged);
+    existingPayload = Move(*merged);
     return true;
 }
 

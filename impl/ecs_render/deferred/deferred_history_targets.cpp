@@ -103,44 +103,45 @@ bool RendererDeferredSystem::createLaggedLightingHistoryResources(DeferredFrameT
         return false;
     }
 
-    const auto registerTexture = [&heap](
-        Core::GpuDescriptorHandle& handle,
-        const Core::GpuDescriptorClass::Enum descriptorClass,
-        Core::Texture* texture,
-        const Core::Format::Enum format,
-        const Core::TextureSubresourceSet& subresources,
-        const Core::TextureDimension::Enum dimension
-    ) -> bool{
-        return DeferredDescriptorRegisterDetail::RegisterSampledTexture(heap, handle, descriptorClass, texture, format, subresources, dimension);
-    };
 
-    const bool descriptorsRegistered =
-        registerTexture(
-            history.shadowVisibilityDescriptor,
+
+    const auto descriptorsRegistered = [&]() -> Expected<void>{
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
+            heap,
             Core::GpuDescriptorClass::SampledImage2DArray,
             history.shadowVisibility.get(),
             targets.shadowVisibilityFormat,
             ECSRenderDetail::s_ShadowVisibilitySubresources,
             Core::TextureDimension::Texture2DArray
-        )
-        && registerTexture(
-            history.causticIrradianceDescriptor,
+        ); descriptor)
+            history.shadowVisibilityDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
+            heap,
             Core::GpuDescriptorClass::SampledImage,
             history.causticIrradiance.get(),
             targets.causticIrradianceFormat,
             ECSRenderDetail::s_FramebufferSubresources,
             Core::TextureDimension::Texture2D
-        )
-        && registerTexture(
-            history.surfelIrradianceDescriptor,
+        ); descriptor)
+            history.causticIrradianceDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        if(const auto descriptor = DeferredDescriptorRegisterDetail::RegisterSampledTexture(
+            heap,
             Core::GpuDescriptorClass::SampledImage,
             history.surfelIrradiance.get(),
             targets.surfelIrradianceFormat,
             ECSRenderDetail::s_FramebufferSubresources,
             Core::TextureDimension::Texture2D
-        )
-    ;
-    if(!descriptorsRegistered){
+        ); descriptor)
+            history.surfelIrradianceDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        return {};
+    };
+    if(!descriptorsRegistered()){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register lagged lighting-history images in the descriptor heap"));
         resetLaggedLightingHistoryResources(targets);
         return false;

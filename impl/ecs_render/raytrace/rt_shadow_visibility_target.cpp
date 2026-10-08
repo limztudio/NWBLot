@@ -249,22 +249,22 @@ bool RendererRayTracingSystem::createShadowVisibilityTarget(DeferredFrameTargets
     return true;
 }
 
-bool RendererRayTracingSystem::renderShadowVisibility(
+Expected<u32> RendererRayTracingSystem::renderShadowVisibility(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
     const bool splitSoftTransparentFold,
-    u32* const opaqueFrameIndex,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
     const bool splitOpaqueSoftResolve,
     const LightSpaceShadowSnapshot* const lightSpace
 ){
+    u32 producedFrameIndex = 0u;
     NWB_ASSERT(!splitOpaqueSoftResolve || splitSoftTransparentFold);
     NWB_ASSERT(deferredLightingResources.valid());
     if(!targets.shadowVisibility)
-        return false;
+        return MakeUnexpected(Failure{});
     if(!m_rayTracingState.m_tlas || !m_rayTracingState.m_shadowPipeline)
-        return false;
+        return MakeUnexpected(Failure{});
 
     Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
     if(
@@ -276,7 +276,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(
         || !RayTracingDetail::IsHeapHandle(targets.bindless.shadowSoftHalfAStorage, Core::GpuDescriptorClass::StorageImage)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: shadow trace heap resources are incomplete"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     Optional<Core::GpuTimingMeasure> timing;
@@ -305,6 +305,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(
 
         // Advance the jitter sequence once for the primary shadow producer.
         const u32 frameIndex = m_rayTracingState.m_softShadowFrameIndex++;
+        producedFrameIndex = frameIndex;
 
         {
             Core::GpuTimingMeasure opaqueTraceTiming(
@@ -342,7 +343,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(
             if(!RecordLightSpaceResolve(commandList, heap, m_graphics.gpuTiming(), *lightSpace, *targets.shadowSoftHalfA,
                 frameIndex, softShadowTemporalHistoryUsable() ? NWB_SW_SHADOW_SOFT_TEMPORAL_SPP : NWB_SW_SHADOW_SOFT_SPP,
                 targets.bindless.shadowSoftHalfAStorage.slot(), false))
-                return false;
+                return MakeUnexpected(Failure{});
             if(!m_lightSpaceShadow.m_csgDispatchLogged){
                 m_lightSpaceShadow.m_csgDispatchLogged = true;
                 NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererSystem: dispatched CSG light-space shadows (hardware_compose=1, {} instances)")
@@ -377,11 +378,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(
             !splitOpaqueSoftResolve,
             false
         );
-        if(splitSoftTransparentFold){
-            if(opaqueFrameIndex)
-                *opaqueFrameIndex = frameIndex;
-        }
-        return true;
+        return producedFrameIndex;
     }
 
     // Full-resolution inline-RayQuery fallback.
@@ -399,6 +396,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(
         heap.bindCompute(commandList, *m_rayTracingState.m_shadowPipeline.get(), m_rayTracingState.m_tlasHeapHandle);
         ShadowRqPushConstants shadowPush;
         shadowPush.frameIndex = m_rayTracingState.m_softShadowFrameIndex++;
+        producedFrameIndex = shadowPush.frameIndex;
         shadowPush.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
         shadowPush.normalSlot = targets.bindless.gbufferNormal.slot();
         shadowPush.depthSlot = targets.bindless.gbufferDepth.slot();
@@ -411,7 +409,7 @@ bool RendererRayTracingSystem::renderShadowVisibility(
             1u
         );
     }
-    return true;
+    return producedFrameIndex;
 }
 
 

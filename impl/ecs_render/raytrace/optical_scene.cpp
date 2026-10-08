@@ -112,12 +112,10 @@ u64 RayTracingOpticalSceneGather::contentHash()const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ComputeOpticalWorldBounds(
+Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(
     const Float34U& objectToWorld,
     const Float3U& localMin,
-    const Float3U& localMax,
-    Float3U& outMin,
-    Float3U& outMax
+    const Float3U& localMax
 )noexcept{
     // SIMD lanes own the affine corner math: all eight AABB corners are transformed as one
     // lane batch, and the enclosure margin is reduced from lane magnitudes on vector lanes.
@@ -129,14 +127,14 @@ bool ComputeOpticalWorldBounds(
     const SIMDVector localMinVec = LoadFloat(localMin);
     const SIMDVector localMaxVec = LoadFloat(localMax);
     if(!VectorIsFinite(localMinVec, VectorComponentMask::s_XYZ) || !VectorIsFinite(localMaxVec, VectorComponentMask::s_XYZ))
-        return false;
+        return MakeUnexpected(Failure{});
     if(!Vector3LessOrEqual(localMinVec, localMaxVec))
-        return false;
+        return MakeUnexpected(Failure{});
     const SIMDVector row0 = LoadFloat(objectToWorld.rows[0u]);
     const SIMDVector row1 = LoadFloat(objectToWorld.rows[1u]);
     const SIMDVector row2 = LoadFloat(objectToWorld.rows[2u]);
     if(!VectorIsFinite(row0, VectorComponentMask::s_XYZW) || !VectorIsFinite(row1, VectorComponentMask::s_XYZW) || !VectorIsFinite(row2, VectorComponentMask::s_XYZW))
-        return false;
+        return MakeUnexpected(Failure{});
     SIMDVector laneMin = VectorReplicate(Limit<f32>::s_Infinity);
     SIMDVector laneMax = VectorReplicate(-Limit<f32>::s_Infinity);
     SIMDVector laneMagnitude = VectorZero();
@@ -163,7 +161,7 @@ bool ComputeOpticalWorldBounds(
         // Float34U rows pack translation in W lanes (_14/_24/_34); W lane itself stays zero.
         cornerVec = VectorAdd(cornerVec, VectorSet(VectorGetW(row0), VectorGetW(row1), VectorGetW(row2), 0.0f));
         if(!VectorIsFinite(cornerVec, VectorComponentMask::s_XYZ))
-            return false;
+            return MakeUnexpected(Failure{});
         laneMin = VectorMin(laneMin, cornerVec);
         laneMax = VectorMax(laneMax, cornerVec);
         laneMagnitude = VectorMax(laneMagnitude, VectorAbs(cornerVec));
@@ -173,10 +171,11 @@ bool ComputeOpticalWorldBounds(
     const SIMDVector minimum = VectorSubtract(laneMin, marginVec);
     const SIMDVector maximum = VectorAdd(laneMax, marginVec);
     if(!VectorIsFinite(minimum, VectorComponentMask::s_XYZ) || !VectorIsFinite(maximum, VectorComponentMask::s_XYZ))
-        return false;
-    StoreFloat(minimum, outMin);
-    StoreFloat(maximum, outMax);
-    return true;
+        return MakeUnexpected(Failure{});
+    OpticalWorldBounds result;
+    StoreFloat(minimum, result.minimum);
+    StoreFloat(maximum, result.maximum);
+    return result;
 }
 
 

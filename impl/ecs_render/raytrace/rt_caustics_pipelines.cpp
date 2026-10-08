@@ -562,18 +562,13 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
         return false;
     }
 
-    const auto acquireHeapHandle = [&](Core::Buffer& buffer, Core::GpuDescriptorHandle& outHandle) -> bool{
-        if(!RayTracingDetail::RegisterHeapBuffer(
-            heap,
-            buffer,
-            Core::GpuDescriptorClass::StorageBuffer,
-            false,
-            outHandle
-        )){
+    const auto acquireHeapHandle = [&](Core::Buffer& buffer) -> Expected<Core::GpuDescriptorHandle>{
+        const auto handle = RayTracingDetail::RegisterHeapBuffer(heap, buffer, Core::GpuDescriptorClass::StorageBuffer, false);
+        if(!handle){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register caustic emission targets in the descriptor heap"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        return true;
+        return *handle;
     };
 
     if(m_rayTracingState.m_causticEmissionTargetBuffer && m_rayTracingState.m_causticEmissionTargetCapacity >= targetCount){
@@ -581,10 +576,11 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
             NWB_ASSERT(m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() == Core::GpuDescriptorClass::StorageBuffer);
             return true;
         }
-        return acquireHeapHandle(
-            *m_rayTracingState.m_causticEmissionTargetBuffer.get(),
-            m_rayTracingState.m_causticEmissionTargetHeapHandle
-        );
+        const auto handle = acquireHeapHandle(*m_rayTracingState.m_causticEmissionTargetBuffer.get());
+        if(!handle)
+            return false;
+        m_rayTracingState.m_causticEmissionTargetHeapHandle = *handle;
+        return true;
     }
 
     const usize capacity = ::NextGrowingCapacity(
@@ -608,14 +604,14 @@ bool RendererRayTracingSystem::ensureCausticEmissionTargetBuffer(usize targetCou
         return false;
     }
 
-    Core::GpuDescriptorHandle targetHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    if(!acquireHeapHandle(*targetBuffer.get(), targetHeapHandle))
+    const auto targetHeapHandle = acquireHeapHandle(*targetBuffer.get());
+    if(!targetHeapHandle)
         return false;
 
     if(m_rayTracingState.m_causticEmissionTargetHeapHandle.valid())
         heap.free(m_rayTracingState.m_causticEmissionTargetHeapHandle);
     m_rayTracingState.m_causticEmissionTargetBuffer = Move(targetBuffer);
-    m_rayTracingState.m_causticEmissionTargetHeapHandle = targetHeapHandle;
+    m_rayTracingState.m_causticEmissionTargetHeapHandle = *targetHeapHandle;
     m_rayTracingState.m_causticEmissionTargetCapacity = capacity;
     NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: created caustic emission-target buffer (capacity {} targets)")
         , static_cast<u64>(capacity)

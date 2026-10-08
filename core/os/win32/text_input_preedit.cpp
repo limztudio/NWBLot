@@ -42,10 +42,10 @@ TextInputAdmission::Enum Win32TextInputService::acceptInsertedPreedit(
         return TextInputAdmission::InvalidText;
     }
     char bytes[4] = {};
-    usize length = 0u;
-    const TextInputAdmission::Enum encoded = EncodeTextInputCodePoint(codePoint, bytes, length);
-    if(encoded != TextInputAdmission::Accepted)
-        return encoded;
+    const auto encoded = EncodeTextInputCodePoint(codePoint, bytes);
+    if(!encoded)
+        return encoded.error();
+    const usize length = *encoded;
     if(length > s_TextInputMaxEventTextBytes - m_preeditText.size())
         return TextInputAdmission::TooLarge;
     m_utf8Text.assign(m_preeditText.data(), m_preeditText.size());

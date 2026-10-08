@@ -35,12 +35,13 @@ struct TextStep{
     return scalar == '\n' || (scalar >= 0x20u && (scalar < 0x7Fu || scalar > 0x9Fu) && scalar != 0x2028u && scalar != 0x2029u);
 }
 
-[[nodiscard]] static bool ReadStep(const AStringView source, const usize offset, TextStep& step){
-    u32 scalar = 0u;
-    const i32 decoded = DecodeUtf8CodePoint(source.substr(offset, 4u), scalar);
-    if(decoded <= 0 || (scalar >= 0xD800u && scalar <= 0xDFFFu))
-        return false;
-    step.sourceBytes = static_cast<usize>(decoded);
+[[nodiscard]] static Expected<TextStep> ReadStep(const AStringView source, const usize offset)noexcept{
+    const auto decoded = DecodeUtf8CodePoint(source.substr(offset, 4u));
+    if(!decoded || (decoded->codePoint >= 0xD800u && decoded->codePoint <= 0xDFFFu))
+        return MakeUnexpected(Failure{});
+    const u32 scalar = decoded->codePoint;
+    TextStep step;
+    step.sourceBytes = static_cast<usize>(decoded->byteCount);
     const bool lineBreak = scalar == '\r' || scalar == 0x85u || scalar == 0x2028u || scalar == 0x2029u;
     if(lineBreak || scalar == '\t'){
         step.replacement = lineBreak ? '\n' : ' ';
@@ -50,10 +51,10 @@ struct TextStep{
     }
     else{
         if(!IsCanonicalScalar(scalar))
-            return false;
+            return MakeUnexpected(Failure{});
         step.outputBytes = step.sourceBytes;
     }
-    return true;
+    return step;
 }
 
 
@@ -66,51 +67,49 @@ struct TextStep{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ValidateMultilineText(const AStringView text){
+bool ValidateMultilineText(const AStringView text)noexcept{
     if(!GraphemeSegmentation::Validate(text))
         return false;
     usize offset = 0u;
     while(offset < text.size()){
-        u32 scalar = 0u;
-        const i32 decoded = DecodeUtf8CodePoint(text.substr(offset, 4u), scalar);
-        if(decoded <= 0 || !__hidden_ui_multiline_text::IsCanonicalScalar(scalar))
+        const auto decoded = DecodeUtf8CodePoint(text.substr(offset, 4u));
+        if(!decoded || !__hidden_ui_multiline_text::IsCanonicalScalar(decoded->codePoint))
             return false;
-        offset += static_cast<usize>(decoded);
+        offset += static_cast<usize>(decoded->byteCount);
     }
     return true;
 }
 
-EditTextStatus::Enum NormalizeMultilineText(
-    const AStringView source, AString<Core::Alloc::GlobalArena>& output, const usize maxBytes
+Expected<AString<Core::Alloc::GlobalArena>, EditTextStatus::Enum> NormalizeMultilineText(
+    Core::Alloc::GlobalArena& arena, const AStringView source, const usize maxBytes
 ){
     if(!GraphemeSegmentation::Validate(source))
-        return EditTextStatus::InvalidText;
+        return MakeUnexpected(EditTextStatus::InvalidText);
     usize normalizedBytes = 0u;
     usize offset = 0u;
     while(offset < source.size()){
-        __hidden_ui_multiline_text::TextStep step;
-        if(!__hidden_ui_multiline_text::ReadStep(source, offset, step))
-            return EditTextStatus::InvalidText;
-        if(step.outputBytes > maxBytes - normalizedBytes)
-            return EditTextStatus::TooLarge;
-        normalizedBytes += step.outputBytes;
-        offset += step.sourceBytes;
+        const auto step = __hidden_ui_multiline_text::ReadStep(source, offset);
+        if(!step)
+            return MakeUnexpected(EditTextStatus::InvalidText);
+        if(step->outputBytes > maxBytes - normalizedBytes)
+            return MakeUnexpected(EditTextStatus::TooLarge);
+        normalizedBytes += step->outputBytes;
+        offset += step->sourceBytes;
     }
-    AString<Core::Alloc::GlobalArena> candidate(output.get_allocator());
+    AString<Core::Alloc::GlobalArena> candidate(arena);
     candidate.reserve(normalizedBytes);
     offset = 0u;
     while(offset < source.size()){
-        __hidden_ui_multiline_text::TextStep step;
-        if(!__hidden_ui_multiline_text::ReadStep(source, offset, step))
-            return EditTextStatus::InvalidText;
-        if(step.replacement != 0)
-            candidate.push_back(step.replacement);
+        const auto step = __hidden_ui_multiline_text::ReadStep(source, offset);
+        if(!step)
+            return MakeUnexpected(EditTextStatus::InvalidText);
+        if(step->replacement != 0)
+            candidate.push_back(step->replacement);
         else
-            candidate.append(source.data() + offset, step.sourceBytes);
-        offset += step.sourceBytes;
+            candidate.append(source.data() + offset, step->sourceBytes);
+        offset += step->sourceBytes;
     }
-    output = Move(candidate);
-    return EditTextStatus::Accepted;
+    return candidate;
 }
 
 

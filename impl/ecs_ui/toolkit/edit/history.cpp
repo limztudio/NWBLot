@@ -19,13 +19,13 @@ bool EditModel::undo(){
     if(!canUndo())
         return false;
     const HistoryRecord& record = m_history[m_historyCursor - 1u];
-    EditBoundaryVector boundaries(m_arena);
     const AStringView value(record.before.data(), record.before.size());
-    if(!buildBoundaries(value, boundaries))
+    auto boundaries = buildBoundaries(value);
+    if(!boundaries)
         return false;
     AString<Core::Alloc::GlobalArena> candidate(record.before, m_arena);
     m_text = Move(candidate);
-    m_boundaries = Move(boundaries);
+    m_boundaries = Move(*boundaries);
     m_anchor = record.beforeAnchor;
     m_caret = record.beforeCaret;
     advanceSelectionGeneration();
@@ -39,13 +39,13 @@ bool EditModel::redo(){
     if(!canRedo())
         return false;
     const HistoryRecord& record = m_history[m_historyCursor];
-    EditBoundaryVector boundaries(m_arena);
     const AStringView value(record.after.data(), record.after.size());
-    if(!buildBoundaries(value, boundaries))
+    auto boundaries = buildBoundaries(value);
+    if(!boundaries)
         return false;
     AString<Core::Alloc::GlobalArena> candidate(record.after, m_arena);
     m_text = Move(candidate);
-    m_boundaries = Move(boundaries);
+    m_boundaries = Move(*boundaries);
     m_anchor = record.afterAnchor;
     m_caret = record.afterCaret;
     advanceSelectionGeneration();

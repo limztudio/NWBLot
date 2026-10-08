@@ -390,25 +390,23 @@ bool CommandList::validateIndirectBuffer(
     return true;
 }
 
-bool CommandList::prepareDrawIndirect(
+Expected<Buffer*> CommandList::prepareDrawIndirect(
     const u32 offsetBytes,
     const u32 drawCount,
     const u64 commandSizeBytes,
     const TStringView operationLabel,
     const TStringView commandName,
-    const VulkanDetail::IndirectDrawIndexMode::Enum indexMode,
-    Buffer*& outIndirectBuffer
+    const VulkanDetail::IndirectDrawIndexMode::Enum indexMode
 ){
-    outIndirectBuffer = nullptr;
     if(drawCount == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const bool indexed = indexMode == VulkanDetail::IndirectDrawIndexMode::Indexed;
     if(!validateGraphicsDrawState(operationLabel, indexed))
-        return false;
+        return MakeUnexpected(Failure{});
     if(!m_context.drawIndirectFirstInstanceFeatureEnabled){
         rejectCommandRecording(operationLabel, NWB_TEXT("drawIndirectFirstInstance was not enabled"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!VulkanDetail::IsIndirectDrawCountValid(
         drawCount,
@@ -416,7 +414,7 @@ bool CommandList::prepareDrawIndirect(
         m_context.multiDrawIndirectFeatureEnabled
     )){
         rejectCommandRecording(operationLabel, NWB_TEXT("indirect draw count is unsupported or exceeds the device limit"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!validateIndirectBuffer(
         m_currentGraphicsState.indirectParams,
@@ -425,10 +423,9 @@ bool CommandList::prepareDrawIndirect(
         drawCount,
         commandName
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outIndirectBuffer = m_currentGraphicsState.indirectParams;
-    return true;
+    return m_currentGraphicsState.indirectParams;
 }
 
 

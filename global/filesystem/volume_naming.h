@@ -67,13 +67,13 @@ template<typename ArenaT>
     if(directory.empty())
         return false;
 
-    ErrorCode errorCode;
-    if(!IsDirectory(directory, errorCode) || errorCode)
+    const auto isDirectory = IsDirectory(directory);
+    if(!isDirectory || !*isDirectory)
         return false;
 
     const Path<ArenaT> segmentPath = MakeVolumeSegmentPath(directory, volumeName, segmentIndex);
-    errorCode.clear();
-    return FileExists(segmentPath, errorCode) && !errorCode;
+    const auto exists = FileExists(segmentPath);
+    return exists && *exists;
 }
 
 

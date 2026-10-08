@@ -8,6 +8,7 @@
 #include "rhi/command.h"
 
 #include <core/alloc/scratch.h>
+#include <global/expected.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,27 +34,23 @@ struct GpuComparableTimestampRange{
     }
 };
 
-// Returns false when the ranges do not share one calibrated logical-device epoch and exact tick period. Comparable
-// disjoint ranges return true with zero overlap. Integer intersection preserves precision beyond f64's exact range.
-[[nodiscard]] inline bool TryComputeGpuTimestampOverlap(
+// Ranges must share one calibrated logical-device epoch and exact tick period. Comparable disjoint ranges return
+// zero overlap. Integer intersection preserves precision beyond f64's exact range.
+[[nodiscard]] inline Expected<u64> TryComputeGpuTimestampOverlap(
     const GpuComparableTimestampRange& first,
-    const GpuComparableTimestampRange& second,
-    u64& outOverlapTicks
+    const GpuComparableTimestampRange& second
 )noexcept{
-    outOverlapTicks = 0u;
     if(
         !first.valid()
         || !second.valid()
         || first.physicalQueue.deviceGeneration != second.physicalQueue.deviceGeneration
         || first.secondsPerTick != second.secondsPerTick
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     const u64 overlapBegin = Max(first.beginTicks, second.beginTicks);
     const u64 overlapEnd = Min(first.endTicks, second.endTicks);
-    if(overlapEnd > overlapBegin)
-        outOverlapTicks = overlapEnd - overlapBegin;
-    return true;
+    return overlapEnd > overlapBegin ? overlapEnd - overlapBegin : 0u;
 }
 
 
@@ -76,10 +73,9 @@ using GpuQueuePacketEnvelopeMetricsVector = Vector<GpuQueuePacketEnvelopeMetrics
 
 // Aggregates half-open packet envelopes in raw ticks (same device generation + tick period). Same-queue unioned
 // before gap/concurrency measure. False resets outputs; caller allocator kept, scratch is temporary.
-[[nodiscard]] bool TryAggregateGpuPacketEnvelopeMetrics(
+[[nodiscard]] Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(
     const GpuComparableTimestampRange* packetEnvelopes,
     usize packetEnvelopeCount,
-    GpuPacketEnvelopeMetrics& outMetrics,
     GpuQueuePacketEnvelopeMetricsVector& outQueueMetrics,
     Alloc::ScratchArena& scratchArena
 );

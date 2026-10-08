@@ -82,11 +82,11 @@ TEST(Global, DegenerateUvsUseStableTangentFallback){
     for(TangentFrameRebuildVertex& vertex : vertices)
         vertex.uv0 = Float2U(0.0f, 0.0f);
 
-    TangentFrameRebuildResult result;
-    EXPECT_TRUE(::RebuildTangentFrames(scratchArena, vertices, indices, &result));
-    EXPECT_EQ(result.rebuiltVertexCount, vertices.size());
-    EXPECT_EQ(result.degenerateUvTriangleCount, s_ExpectedDualCount);
-    EXPECT_EQ(result.fallbackTangentVertexCount, vertices.size());
+    const auto result = ::RebuildTangentFrames(scratchArena, vertices, indices);
+    ASSERT_TRUE(result);
+    EXPECT_EQ(result->rebuiltVertexCount, vertices.size());
+    EXPECT_EQ(result->degenerateUvTriangleCount, s_ExpectedDualCount);
+    EXPECT_EQ(result->fallbackTangentVertexCount, vertices.size());
 
     for(const TangentFrameRebuildVertex& vertex : vertices){
         EXPECT_TRUE(NWB::Tests::NearlyEqual3(vertex.normal, 0.0f, 0.0f, 1.0f));

@@ -49,18 +49,21 @@ bool BuildAssets(const AssetBuildOptions& options){
 
     Core::Alloc::ScratchArena scratchArena(Assets::AssetsVolumeArenaScope::s_CookArena);
 
-    Assets::ResolvedCookPaths resolvedPaths(arena);
-    if(!ResolveCookPaths(options, resolvedPaths, scratchArena))
+    auto paths = ResolveCookPaths(options, arena, scratchArena);
+    if(!paths)
         return false;
+    const Assets::ResolvedCookPaths& resolvedPaths = *paths;
 
-    Assets::DiscoveredNwbFileVector nwbFiles{ arena };
-    if(!Assets::DiscoverFilesWithExtension(
+    auto discoveredFiles = Assets::DiscoverFilesWithExtension(
+        arena,
         resolvedPaths.assetRoots,
         Assets::s_NwbExtension,
-        nwbFiles,
         scratchArena
-    ))
+    );
+    if(!discoveredFiles)
         return false;
+
+    auto& nwbFiles = *discoveredFiles;
 
     if((options.useExplicitInputs || !options.inputs.empty()) && !SelectBuildInputs(options, resolvedPaths, nwbFiles, scratchArena))
         return false;

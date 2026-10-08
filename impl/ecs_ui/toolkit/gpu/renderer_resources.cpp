@@ -216,10 +216,12 @@ GpuVersion<GpuTargetVersion> GpuRendererState::createTarget(const u32 width, con
     // A creation descriptor does not transition a fresh native image. Initialize before publishing its bindless view.
     if(!queue.valid())
         return {};
-    if(!m_graphics.submitStandaloneTaskGraph(
-        &target, __hidden_ui_gpu_resources::DeclareTargetInitialization, target->m_readinessToken, queue
-    ))
+    const auto submission = m_graphics.submitStandaloneTaskGraph(
+        &target, __hidden_ui_gpu_resources::DeclareTargetInitialization, queue
+    );
+    if(!submission)
         return {};
+    target->m_readinessToken = *submission;
     if(!target->m_readinessToken.valid() || !target->m_readinessToken.hasPhysicalQueueIdentity())
         return {};
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();

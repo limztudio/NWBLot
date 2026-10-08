@@ -21,6 +21,18 @@ NWB_IMPL_BEGIN
 
 
 // Freeze adaptive software-shadow compaction before graph compilation so its append-counter clear is a graph primitive.
+struct PreparedShadowMaterialContextUploads{
+    Core::GpuUploadBlobId instanceMaterial;
+    Core::GpuUploadBlobId instance;
+    Core::GpuUploadBlobId materialTyped;
+};
+
+struct PreparedSceneBvhUploads{
+    Core::GpuUploadBlobId node;
+    Core::GpuUploadBlobId instance;
+};
+
+
 struct GraphOwnedAdaptiveShadowPlan{
     bool enabled = false;
     bool compact = false;

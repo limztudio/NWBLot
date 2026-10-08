@@ -85,32 +85,19 @@ TEST(AssetsGraphics, MeshletRefEncodingCrossesIndexWidthBoundaries){
     EXPECT_EQ(NWB::Impl::MeshletRefEncodingWidth(meshlet.encoding, NWB::Impl::s_MeshletRefEncodingUv0Shift), NWB::Impl::MeshletRefDeltaWidth::U32);
 
     for(u32 localPositionIndex = 0u; localPositionIndex < NWB::Impl::MeshletPositionCount(meshlet); ++localPositionIndex){
-        NWB::Impl::MeshletPositionStreamRef decodedRef;
-        EXPECT_TRUE(NWB::Impl::DecodeMeshletPositionRef(
-            positionRefDeltas.data(),
-            positionRefDeltas.size(),
-            meshlet,
-            localPositionIndex,
-            true,
-            decodedRef
-        ));
-        EXPECT_EQ(decodedRef.position, positionRefs[localPositionIndex].position);
-        EXPECT_EQ(decodedRef.skin, positionRefs[localPositionIndex].skin);
+        const auto decodedRef = NWB::Impl::DecodeMeshletPositionRef(positionRefDeltas.data(), positionRefDeltas.size(), meshlet, localPositionIndex, true);
+        ASSERT_TRUE(decodedRef);
+        EXPECT_EQ(decodedRef->position, positionRefs[localPositionIndex].position);
+        EXPECT_EQ(decodedRef->skin, positionRefs[localPositionIndex].skin);
     }
 
     for(u32 localAttributeIndex = 0u; localAttributeIndex < NWB::Impl::MeshletAttributeCount(meshlet); ++localAttributeIndex){
-        NWB::Impl::MeshletAttributeStreamRef decodedRef;
-        EXPECT_TRUE(NWB::Impl::DecodeMeshletAttributeRef(
-            attributeRefDeltas.data(),
-            attributeRefDeltas.size(),
-            meshlet,
-            localAttributeIndex,
-            decodedRef
-        ));
-        EXPECT_EQ(decodedRef.normal, attributeRefs[localAttributeIndex].normal);
-        EXPECT_EQ(decodedRef.tangent, attributeRefs[localAttributeIndex].tangent);
-        EXPECT_EQ(decodedRef.uv0, attributeRefs[localAttributeIndex].uv0);
-        EXPECT_EQ(decodedRef.color, attributeRefs[localAttributeIndex].color);
+        const auto decodedRef = NWB::Impl::DecodeMeshletAttributeRef(attributeRefDeltas.data(), attributeRefDeltas.size(), meshlet, localAttributeIndex);
+        ASSERT_TRUE(decodedRef);
+        EXPECT_EQ(decodedRef->normal, attributeRefs[localAttributeIndex].normal);
+        EXPECT_EQ(decodedRef->tangent, attributeRefs[localAttributeIndex].tangent);
+        EXPECT_EQ(decodedRef->uv0, attributeRefs[localAttributeIndex].uv0);
+        EXPECT_EQ(decodedRef->color, attributeRefs[localAttributeIndex].color);
     }
 }
 

@@ -137,6 +137,15 @@ struct StagingTextureRange{
 };
 using StagingTextureQueueFamilyVector = Vector<u32, Alloc::GlobalArena>;
 
+struct PipelineRenderingInfo{
+    VkPipelineRenderingCreateInfo info = {};
+    PipelineRenderingFormatVector colorFormats;
+
+    explicit PipelineRenderingInfo(Alloc::ScratchArena& scratchArena)
+        : colorFormats(scratchArena)
+    {}
+};
+
 struct GraphicsPipelineFixedState{
     VkPipelineViewportStateCreateInfo viewportState = {};
     VkPipelineMultisampleStateCreateInfo multisampling = {};
@@ -186,29 +195,19 @@ extern VkDeviceAddress GetBufferDeviceAddress(Buffer* bufferResource, u64 offset
 bool IsSupportedSampleCount(u32 sampleCount)noexcept;
 bool ValidateTextureShape(const TextureDesc& desc, TStringView operationName);
 VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo)noexcept;
-bool GetTextureFormatBlockLayout(const FormatInfo& formatInfo, TextureFormatBlockLayout& outLayout)noexcept;
-bool TryComputeCommonAlignment(u32 firstAlignment, u32 secondAlignment, u32& outAlignment)noexcept;
-bool TryComputeUploadSuballocationAlignment(u32 requiredAlignment, u32& outAlignment)noexcept;
+Expected<TextureFormatBlockLayout> GetTextureFormatBlockLayout(const FormatInfo& formatInfo)noexcept;
+Expected<u32> TryComputeCommonAlignment(u32 firstAlignment, u32 secondAlignment)noexcept;
+Expected<u32> TryComputeUploadSuballocationAlignment(u32 requiredAlignment)noexcept;
 bool IsBufferImageCopyAspectMaskSupported(VkImageAspectFlags aspectMask)noexcept;
 VkExtent3D GetTextureMipExtent(const TextureDesc& desc, MipLevel mipLevel)noexcept;
-bool BuildBufferImageCopyLayout(
+Expected<BufferImageCopyLayout> BuildBufferImageCopyLayout(
     const VkExtent3D& extent,
     const TextureFormatBlockLayout& formatLayout,
     u64 rowPitch,
     u64 depthPitch,
     BufferImageCopyRequiredSize::Enum requiredSizeMode,
     BufferImageCopyPitchFields::Enum pitchFields,
-    BufferImageCopyLayout& outLayout
-);
-bool BuildBufferImageCopyLayout(
-    const VkExtent3D& extent,
-    const TextureFormatBlockLayout& formatLayout,
-    u64 rowPitch,
-    u64 depthPitch,
-    BufferImageCopyRequiredSize::Enum requiredSizeMode,
-    BufferImageCopyPitchFields::Enum pitchFields,
-    TStringView operationName,
-    BufferImageCopyLayout& outLayout
+    TStringView operationName = {}
 );
 VkImageSubresourceLayers BuildImageSubresourceLayers(
     VkImageAspectFlags aspectMask,
@@ -217,27 +216,24 @@ VkImageSubresourceLayers BuildImageSubresourceLayers(
     ArraySlice layerCount = 1u
 )noexcept;
 VkImageSubresourceRange BuildImageSubresourceRange(const TextureSubresourceSet& subresources, VkImageAspectFlags aspectMask)noexcept;
-bool BuildTextureImageViewCreateInfo(
+Expected<VkImageViewCreateInfo> BuildTextureImageViewCreateInfo(
     Texture& texture,
     const TextureSubresourceSet& resolvedSubresources,
     TextureDimension::Enum dimension,
     Format::Enum format,
     TStringView operationName,
-    bool assertFailure,
-    VkImageViewCreateInfo& outViewInfo
+    bool assertFailure
 );
-bool BuildImageViewCreateInfo(Texture& texture, const DescriptorWriteItem& item, VkImageViewCreateInfo& outViewInfo);
-bool BuildStagingTextureRange(
+Expected<StagingTextureRange> BuildStagingTextureRange(
     const TextureSlice& resolvedSlice,
     const StagingTextureMipLayout& mipLayout,
     const TextureFormatBlockLayout& formatLayout,
     u64 arrayByteSize,
     u64 totalByteSize,
     u32 requiredOffsetAlignment,
-    bool requireHostPointerRange,
-    StagingTextureRange& outRange
+    bool requireHostPointerRange
 )noexcept;
-bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout, TextureSlice* outResolved = nullptr);
+Expected<TextureSlice> ResolveTextureSlice(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout)noexcept;
 bool IsBufferRangeInBounds(const BufferDesc& desc, u64 offsetBytes, u64 sizeBytes)noexcept;
 
 template<typename... Pointers>
@@ -297,28 +293,27 @@ inline bool DebugValidateBufferRange(
     return true;
 }
 
-inline bool DebugResolveTextureSlice(
+inline Expected<TextureSlice> DebugResolveTextureSlice(
     const TextureDesc& desc,
     const TextureSlice& slice,
     const TextureFormatBlockLayout& formatLayout,
     TStringView operationName,
-    TStringView message,
-    TextureSlice& outResolved
+    TStringView message
 ){
 #if defined(NWB_DEBUG)
-    if(!IsTextureSliceInBounds(desc, slice, formatLayout, &outResolved)){
+    const auto resolved = ResolveTextureSlice(desc, slice, formatLayout);
+    if(!resolved){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to {}: {}"), operationName, message);
-        return false;
+        return MakeUnexpected(resolved.error());
     }
+    return *resolved;
 #else
     static_cast<void>(formatLayout);
     static_cast<void>(operationName);
     static_cast<void>(message);
-    outResolved = slice.resolve(desc);
+    return slice.resolve(desc);
 #endif
-
-    return true;
 }
 
 inline bool DebugValidateTextureSliceExtentsMatch(
@@ -346,28 +341,46 @@ inline bool DebugValidateTextureSliceExtentsMatch(
 bool BufferRangesOverlap(u64 firstOffsetBytes, u64 firstSizeBytes, u64 secondOffsetBytes, u64 secondSizeBytes)noexcept;
 u32 GetPushConstantByteSize(const BindingLayoutDesc& desc)noexcept;
 bool ValidatePushConstantByteSize(const VulkanContext& context, u32 byteSize, TStringView operationName);
-bool CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, VkPipelineLayout& outLayout, TStringView operationName);
+Expected<VkPipelineLayout> CreatePipelineLayout(const VulkanContext& context, const VkDescriptorSetLayout* setLayouts, u32 setLayoutCount, u32 pushConstantByteSize, TStringView operationName);
 void DestroyPipelineAndOwnedLayout(const VulkanContext& context, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, bool& ownsPipelineLayout);
-[[nodiscard]] bool ConvertAccelStructBuildFlags(
+[[nodiscard]] Expected<VkBuildAccelerationStructureFlagsKHR> ConvertAccelStructBuildFlags(
     RayTracingAccelStructBuildFlags::Mask buildFlags,
-    VkBuildAccelerationStructureFlagsKHR& outBuildFlags,
     TStringView operationName
 );
-bool BuildGraphicsPipelineFixedState(
+Expected<GraphicsPipelineFixedState> BuildGraphicsPipelineFixedState(
     const FramebufferInfo& fbinfo,
     const RenderState& renderState,
     PipelineStencilFaceMode::Enum stencilFaceMode,
     const VkDynamicState* dynamicStates,
     u32 dynamicStateCount,
     TStringView operationName,
-    GraphicsPipelineFixedState& outState
+    Alloc::ScratchArena& scratchArena
 );
-bool BuildClusterOperationInputInfo(
+struct ClusterOperationInput{
+    VkClusterAccelerationStructureInputInfoNV info = {};
+    VkClusterAccelerationStructureMoveObjectsInputNV move = {};
+    VkClusterAccelerationStructureTriangleClusterInputNV cluster = {};
+    VkClusterAccelerationStructureClustersBottomLevelInputNV blas = {};
+
+    [[nodiscard]] VkClusterAccelerationStructureInputInfoNV nativeInfo()noexcept{
+        auto native = info;
+        switch(info.opType){
+        case VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_MOVE_OBJECTS_NV:
+            native.opInput.pMoveObjects = &move;
+            break;
+        case VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_CLUSTERS_BOTTOM_LEVEL_NV:
+            native.opInput.pClustersBottomLevel = &blas;
+            break;
+        default:
+            native.opInput.pTriangleClusters = &cluster;
+            break;
+        }
+        return native;
+    }
+};
+
+Expected<ClusterOperationInput> BuildClusterOperationInputInfo(
     const RayTracingClusterOperationParams& params,
-    VkClusterAccelerationStructureInputInfoNV& outInputInfo,
-    VkClusterAccelerationStructureMoveObjectsInputNV& outMoveInput,
-    VkClusterAccelerationStructureTriangleClusterInputNV& outClusterInput,
-    VkClusterAccelerationStructureClustersBottomLevelInputNV& outBlasInput,
     TStringView operationName
 );
 VkDescriptorType ConvertDescriptorType(ResourceType::Enum type)noexcept;
@@ -377,7 +390,7 @@ u32 GetDescriptorBufferOffsetAlignmentBytes(const VulkanContext& context)noexcep
 VkComponentTypeKHR ConvertCoopVecDataType(CooperativeVectorDataType::Enum type);
 CooperativeVectorDataType::Enum ConvertCoopVecDataType(VkComponentTypeKHR type);
 VkCooperativeVectorMatrixLayoutNV ConvertCoopVecMatrixLayout(CooperativeVectorMatrixLayout::Enum layout);
-bool BuildPipelineRenderingInfo(const FramebufferInfo& fbinfo, TStringView operationName, VkPipelineRenderingCreateInfo& outRenderingInfo, PipelineRenderingFormatVector& outColorFormats);
+Expected<PipelineRenderingInfo> BuildPipelineRenderingInfo(const FramebufferInfo& fbinfo, TStringView operationName, Alloc::ScratchArena& scratchArena);
 
 template<typename T>
 constexpr T MakeVkStruct(VkStructureType sType)noexcept(noexcept(T{}) && noexcept(static_cast<T*>(nullptr)->sType = sType) && IsNothrowMoveConstructible_V<T> && IsNothrowDestructible_V<T>){
@@ -532,7 +545,7 @@ inline VkPipelineColorBlendStateCreateInfo BuildPipelineColorBlendState(const Fr
     return colorBlending;
 }
 
-bool ConfigurePipelineMultisampleState(const u32 sampleCount, const bool alphaToCoverageEnable, VkPipelineMultisampleStateCreateInfo& outState, TStringView operationName);
+Expected<VkPipelineMultisampleStateCreateInfo> ConfigurePipelineMultisampleState(u32 sampleCount, bool alphaToCoverageEnable, TStringView operationName);
 void ConfigurePipelineDepthStencilState(const DepthStencilState& state, PipelineStencilFaceMode::Enum stencilFaceMode, VkPipelineDepthStencilStateCreateInfo& outState)noexcept;
 VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc)noexcept;
 

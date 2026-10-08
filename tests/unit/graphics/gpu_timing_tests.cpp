@@ -326,31 +326,29 @@ TEST(GpuComparableTimestampRange, IntersectsRawTicksBeforeFloatingPointConversio
         .physicalQueue = { .index = 3u, .deviceGeneration = 7u },
     };
 
-    u64 overlapTicks = 0u;
-    ASSERT_TRUE(Core::TryComputeGpuTimestampOverlap(first, second, overlapTicks));
-    EXPECT_EQ(overlapTicks, 1u);
+    const auto overlapTicks = Core::TryComputeGpuTimestampOverlap(first, second);
+    ASSERT_TRUE(overlapTicks);
+    EXPECT_EQ(*overlapTicks, 1u);
 
     Core::GpuComparableTimestampRange disjoint = second;
     disjoint.beginTicks = first.endTicks;
     disjoint.endTicks = first.endTicks + s_ExpectedDualCount;
-    ASSERT_TRUE(Core::TryComputeGpuTimestampOverlap(first, disjoint, overlapTicks));
-    EXPECT_EQ(overlapTicks, 0u);
+    const auto disjointOverlap = Core::TryComputeGpuTimestampOverlap(first, disjoint);
+    ASSERT_TRUE(disjointOverlap);
+    EXPECT_EQ(*disjointOverlap, 0u);
 
     Core::GpuComparableTimestampRange recreatedDevice = second;
     recreatedDevice.physicalQueue.deviceGeneration = 8u;
-    EXPECT_FALSE(Core::TryComputeGpuTimestampOverlap(first, recreatedDevice, overlapTicks));
-    EXPECT_EQ(overlapTicks, 0u);
+    EXPECT_FALSE(Core::TryComputeGpuTimestampOverlap(first, recreatedDevice));
 
     Core::GpuComparableTimestampRange mismatchedPeriod = second;
     mismatchedPeriod.secondsPerTick = 0.5;
-    EXPECT_FALSE(Core::TryComputeGpuTimestampOverlap(first, mismatchedPeriod, overlapTicks));
-    EXPECT_EQ(overlapTicks, 0u);
+    EXPECT_FALSE(Core::TryComputeGpuTimestampOverlap(first, mismatchedPeriod));
 
     Core::GpuComparableTimestampRange infinitePeriod = second;
     infinitePeriod.secondsPerTick = Limit<f64>::s_Infinity;
     EXPECT_FALSE(infinitePeriod.valid());
-    EXPECT_FALSE(Core::TryComputeGpuTimestampOverlap(first, infinitePeriod, overlapTicks));
-    EXPECT_EQ(overlapTicks, 0u);
+    EXPECT_FALSE(Core::TryComputeGpuTimestampOverlap(first, infinitePeriod));
 }
 
 TEST(GpuTimingOverlapRegistration, IsCanonicalIdempotentAndRejectsMetricRoleConflicts){

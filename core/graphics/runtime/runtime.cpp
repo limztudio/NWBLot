@@ -317,8 +317,8 @@ bool GraphicsRuntime::updateWindowState(u32 width, u32 height, bool windowVisibl
 bool GraphicsRuntime::destroy(){
     m_lastPresentationReceipt.reset();
 
-    SwapChainTransitionTicket transitionTicket;
-    if(!m_backend->prepareSwapChainTransition(SwapChainTransitionKind::Destroy, transitionTicket)){
+    auto transitionTicket = m_backend->prepareSwapChainTransition(SwapChainTransitionKind::Destroy);
+    if(!transitionTicket){
         m_deviceRecreationRequested = true;
         return false;
     }
@@ -335,7 +335,7 @@ bool GraphicsRuntime::destroy(){
         requestDeviceRecreation();
         return false;
     }
-    if(!m_backend->commitDestroy(Move(transitionTicket))){
+    if(!m_backend->commitDestroy(Move(*transitionTicket))){
         // Commit rejection retains the backend device. Restore only our binding; failed initialization must never
         // detach or replace a scheduler belonging to a different runtime.
         if(detachScheduler && m_backend->getDevice() == device && !m_gpuTasks.attachDevice(*device))
@@ -369,12 +369,12 @@ GraphicsBackend::Device& GraphicsRuntime::getDevice()const noexcept{
     return *device;
 }
 
-bool GraphicsRuntime::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters){
-    return m_backend->enumerateAdapters(outAdapters);
+Expected<GraphicsVector<AdapterInfo>> GraphicsRuntime::enumerateAdapters(){
+    return m_backend->enumerateAdapters();
 }
 
-bool GraphicsRuntime::getSelectedAdapterInfo(AdapterInfo& outAdapter)const{
-    return m_backend->getSelectedAdapterInfo(outAdapter);
+Expected<AdapterInfo> GraphicsRuntime::getSelectedAdapterInfo()const{
+    return m_backend->getSelectedAdapterInfo();
 }
 
 QueueSubmissionPreSubmitHook GraphicsRuntime::claimFramePresentationSignal()noexcept{
@@ -713,8 +713,8 @@ bool GraphicsRuntime::animateRenderPresentInternal(CpuTimingPhaseBatch* const ph
             Timer presentBegin;
             if(phaseTiming)
                 presentBegin = TimerNow();
-            bool presentationAccepted = false;
-            const bool presented = m_backend->present(presentationAccepted);
+            const auto presented = m_backend->present();
+            const bool presentationAccepted = presented ? *presented : presented.error().presentationAccepted;
             m_lastPresentationReceipt.record(m_acquiredPresentationFrame.backBuffer, presentationAccepted);
             if(presentationAccepted)
                 ++m_successfulPresentationCount;

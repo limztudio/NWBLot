@@ -21,20 +21,24 @@ NWB_IMPL_UI_BEGIN
 NumericEditResult FloatEditModel::commit(const FloatBounds& bounds, const bool canonical){
     if(!ValidateFloatBounds(bounds))
         return {};
-    f64 candidate = 0.0;
-    const NumericParseStatus::Enum parsed = ParseFloatDraft(m_draft.text(), candidate);
-    const bool outside = parsed == NumericParseStatus::Complete && (candidate < bounds.minimum || candidate > bounds.maximum);
+    auto parsed = ParseFloatDraft(m_draft.text());
+    const bool outside = parsed && (*parsed < bounds.minimum || *parsed > bounds.maximum);
     const bool clamped = outside && bounds.policy == NumericBoundsPolicy::Clamp;
-    const bool rejected = parsed != NumericParseStatus::Complete || (outside && !clamped);
+    const bool rejected = !parsed || (outside && !clamped);
     NumericEditResult result;
     if(rejected){
-        if(canonical && !canonicalize(m_value, &result.restored))
-            return result;
+        if(canonical){
+            const auto restored = canonicalize(m_value);
+            if(!restored)
+                return result;
+            result.restored = *restored;
+        }
         result.valid = true;
         result.rejected = true;
         advanceRevision();
         return result;
     }
+    f64 candidate = *parsed;
     if(clamped)
         candidate = candidate < bounds.minimum ? bounds.minimum : bounds.maximum;
     if(canonical || clamped){
@@ -52,16 +56,14 @@ NumericEditResult FloatEditModel::commit(const FloatBounds& bounds, const bool c
     return result;
 }
 
-bool FloatEditModel::canonicalize(const f64 value, bool* textChanged){
+Expected<bool> FloatEditModel::canonicalize(const f64 value){
     char buffer[s_NumericEditMaxBytes];
     const AStringView formatted = FormatF64(value, buffer);
     const bool changed = formatted != m_draft.text();
     if(formatted.empty() || !m_draft.setText(formatted))
-        return false;
+        return MakeUnexpected(Failure{});
     m_acceptedDraft.assign(formatted.data(), formatted.size());
-    if(textChanged)
-        *textChanged = changed;
-    return true;
+    return changed;
 }
 
 void FloatEditModel::advanceRevision()noexcept{
@@ -86,11 +88,10 @@ FloatEditModel::FloatEditModel(Core::Alloc::GlobalArena& arena)
 NumericParseStatus::Enum FloatEditModel::status(const FloatBounds& bounds)const{
     if(!ValidateFloatBounds(bounds))
         return NumericParseStatus::Invalid;
-    f64 candidate = 0.0;
-    const NumericParseStatus::Enum parsed = ParseFloatDraft(m_draft.text(), candidate);
-    if(parsed == NumericParseStatus::Complete && (candidate < bounds.minimum || candidate > bounds.maximum))
+    auto parsed = ParseFloatDraft(m_draft.text());
+    if(parsed && (*parsed < bounds.minimum || *parsed > bounds.maximum))
         return NumericParseStatus::OutOfRange;
-    return parsed;
+    return parsed ? NumericParseStatus::Complete : parsed.error();
 }
 
 bool FloatEditModel::dirty()const{
@@ -118,8 +119,10 @@ NumericEditResult FloatEditModel::blur(const FloatBounds& bounds){ return commit
 
 NumericEditResult FloatEditModel::cancel(){
     NumericEditResult result;
-    if(!canonicalize(m_value, &result.restored))
+    const auto restored = canonicalize(m_value);
+    if(!restored)
         return result;
+    result.restored = *restored;
     result.valid = true;
     result.cancelled = true;
     advanceRevision();
@@ -128,8 +131,10 @@ NumericEditResult FloatEditModel::cancel(){
 
 NumericEditResult FloatEditModel::abandon(){
     NumericEditResult result;
-    if(!canonicalize(m_value, &result.restored))
+    const auto restored = canonicalize(m_value);
+    if(!restored)
         return result;
+    result.restored = *restored;
     result.valid = true;
     advanceRevision();
     return result;

@@ -84,7 +84,7 @@ struct PreparedShaderPlan{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool PrepareShaderEntriesForCook(
+[[nodiscard]] Expected<PreparedShaderPlan> PrepareShaderEntriesForCook(
     ShaderCook::CookArena& cookArena,
     ShaderCook& shaderCook,
     const ResolvedCookPaths& resolvedPaths,
@@ -95,7 +95,6 @@ struct PreparedShaderPlan{
     const IncludeMetadataMap& includeMetadata,
     ShaderEntryVector& inOutShaderEntries,
     const ShaderCook::CookVector<MaterialCookEntry>& materialEntries,
-    PreparedShaderPlan& outPreparedPlan,
     ScratchArena& scratchArena
 );
 

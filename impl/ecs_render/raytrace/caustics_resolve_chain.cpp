@@ -63,14 +63,13 @@ struct ResolveStageDesc{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool CausticsResolveChainBuilder::declare(
+[[nodiscard]] Expected<CausticsResolveChainResult> CausticsResolveChainBuilder::declare(
     const CausticsResolveChainInputs& inputs,
     const CausticsResolveChainNaming& naming,
-    CausticsResolveChainResult& outResult,
     Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace RendererTaskGraphDetail;
-    outResult = CausticsResolveChainResult{};
+    CausticsResolveChainResult result{};
     if(
         !inputs.targets
         || !inputs.geometryTask.valid()
@@ -78,7 +77,7 @@ struct ResolveStageDesc{
         || !inputs.timingTicket
         || !inputs.resolveTiming
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     const CausticResolveActivitySnapshot activity = m_raytracingSystem.causticResolveActivitySnapshot(*inputs.targets);
     Core::GpuGraphResourceId activityResources[2];
@@ -89,18 +88,18 @@ struct ResolveStageDesc{
             desc.setInitialState(Core::ResourceStates::Common).setExternalFinalState(Core::ResourceStates::Common);
             activityResources[index] = m_graph.importBuffer(activity.buffers[index], desc);
             if(!activityResources[index].valid())
-                return false;
+                return MakeUnexpected(Failure{});
         }
     }
 
     const __hidden_caustics_resolve_chain::ResolveStageDesc stages[] = {
-        {&naming.prepare, true, &inputs.prepare, &outResult.causticResolvePrepareTask, &RendererRayTracingSystem::declareCausticResolvePrepareTask},
-        {&naming.wavelet, true, &inputs.wavelet, &outResult.causticResolveWaveletTask, &RendererRayTracingSystem::declareCausticResolveWaveletTask},
-        {&naming.secondWavelet, false, &inputs.secondWavelet, &outResult.causticResolveSecondWaveletTask, &RendererRayTracingSystem::declareCausticResolveSecondWaveletTask},
-        {&naming.thirdWavelet, false, &inputs.thirdWavelet, &outResult.causticResolveThirdWaveletTask, &RendererRayTracingSystem::declareCausticResolveThirdWaveletTask},
-        {&naming.fourthWavelet, false, &inputs.fourthWavelet, &outResult.causticResolveFourthWaveletTask, &RendererRayTracingSystem::declareCausticResolveFourthWaveletTask},
-        {&naming.fifthWavelet, false, &inputs.fifthWavelet, &outResult.causticResolveFifthWaveletTask, &RendererRayTracingSystem::declareCausticResolveFifthWaveletTask},
-        {&naming.upsample, false, &inputs.upsample, &outResult.causticResolveUpsampleTask, &RendererRayTracingSystem::declareCausticResolveUpsampleTask},
+        {&naming.prepare, true, &inputs.prepare, &result.causticResolvePrepareTask, &RendererRayTracingSystem::declareCausticResolvePrepareTask},
+        {&naming.wavelet, true, &inputs.wavelet, &result.causticResolveWaveletTask, &RendererRayTracingSystem::declareCausticResolveWaveletTask},
+        {&naming.secondWavelet, false, &inputs.secondWavelet, &result.causticResolveSecondWaveletTask, &RendererRayTracingSystem::declareCausticResolveSecondWaveletTask},
+        {&naming.thirdWavelet, false, &inputs.thirdWavelet, &result.causticResolveThirdWaveletTask, &RendererRayTracingSystem::declareCausticResolveThirdWaveletTask},
+        {&naming.fourthWavelet, false, &inputs.fourthWavelet, &result.causticResolveFourthWaveletTask, &RendererRayTracingSystem::declareCausticResolveFourthWaveletTask},
+        {&naming.fifthWavelet, false, &inputs.fifthWavelet, &result.causticResolveFifthWaveletTask, &RendererRayTracingSystem::declareCausticResolveFifthWaveletTask},
+        {&naming.upsample, false, &inputs.upsample, &result.causticResolveUpsampleTask, &RendererRayTracingSystem::declareCausticResolveUpsampleTask},
     };
     Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> activityUses{ scratchArena };
     if(activity.valid()){
@@ -143,7 +142,7 @@ struct ResolveStageDesc{
         );
         if(!stage.outTask->valid()){
             NWB_LOGGER_WARNING(stage.naming->warnText);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         previousTask = *stage.outTask;
     }
@@ -153,20 +152,20 @@ struct ResolveStageDesc{
         .setIdentity(naming.timingClose.identity)
         .setMarkerLabel(naming.timingClose.label)
         .setScheduling(stageScheduling)
-        .setDependencies(&outResult.causticResolveUpsampleTask, 1u)
+        .setDependencies(&result.causticResolveUpsampleTask, 1u)
     ;
-    outResult.causticsTask = m_raytracingSystem.declareCausticResolveTask(
+    result.causticsTask = m_raytracingSystem.declareCausticResolveTask(
         m_graph,
         timingCloseDesc,
         (*inputs.timingTicket),
         (*inputs.producerDispatched),
         (*inputs.resolveTiming)
     );
-    if(!outResult.causticsTask.valid()){
+    if(!result.causticsTask.valid()){
         NWB_LOGGER_WARNING(naming.timingClose.warnText);
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    return true;
+    return result;
 }
 
 

@@ -16,26 +16,27 @@ NWB_FONT_BUILDER_UTILITY_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Rasterize(FontSource& font, const BakeOptions& options, RasterGlyphs& outGlyphs){
+Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options){
+    RasterGlyphs glyphs(font.bytes().get_allocator().arena());
     FT_Face face = font.face();
     const f32 designPerPixel = static_cast<f32>(face->units_per_EM) / static_cast<f32>(options.ppem);
     const u64 capacity = static_cast<u64>(options.extent) * options.extent * 4u * options.maxGroups;
     u64 rasterBytes = 0u;
-    outGlyphs.reserve(static_cast<usize>(face->num_glyphs));
+    glyphs.reserve(static_cast<usize>(face->num_glyphs));
     for(u32 glyphId = 0u; glyphId < static_cast<u32>(face->num_glyphs); ++glyphId){
-        RasterGlyph glyph(outGlyphs.get_allocator().arena());
+        RasterGlyph glyph(glyphs.get_allocator().arena());
         glyph.record.glyphId = glyphId;
         if(FT_Load_Glyph(face, glyphId, FT_LOAD_NO_SCALE | FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP) != 0){
             NWB_LOGGER_ERROR(NWB_TEXT("font_builder: design metrics failed for glyph {}"), glyphId);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         glyph.record.advanceUnits = static_cast<f32>(face->glyph->advance.x);
         if(face->glyph->format != FT_GLYPH_FORMAT_OUTLINE){
             NWB_LOGGER_ERROR(NWB_TEXT("font_builder: glyph {} is not a supported scalable outline"), glyphId);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(face->glyph->outline.n_points == 0){
-            outGlyphs.push_back(Move(glyph));
+            glyphs.push_back(Move(glyph));
             continue;
         }
         FT_Error result = FT_Load_Glyph(face, glyphId, FT_LOAD_NO_HINTING | FT_LOAD_NO_BITMAP);
@@ -49,11 +50,11 @@ bool Rasterize(FontSource& font, const BakeOptions& options, RasterGlyphs& outGl
                 , glyphId
                 , result
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const FT_Bitmap& bitmap = face->glyph->bitmap;
         if(bitmap.width == 0u || bitmap.rows == 0u){
-            outGlyphs.push_back(Move(glyph));
+            glyphs.push_back(Move(glyph));
             continue;
         }
         if(bitmap.pixel_mode != FT_PIXEL_MODE_GRAY || bitmap.width + 2u > options.extent || bitmap.rows + 2u > options.extent){
@@ -63,12 +64,12 @@ bool Rasterize(FontSource& font, const BakeOptions& options, RasterGlyphs& outGl
                 , bitmap.rows + 2u
                 , options.extent
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const u64 byteCount = static_cast<u64>(bitmap.width) * bitmap.rows;
         if(byteCount > capacity - rasterBytes){
             NWB_LOGGER_ERROR(NWB_TEXT("font_builder: raster bytes exceed {} group capacity at glyph {}; increase extent or lower ppem"), options.maxGroups, glyphId);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         rasterBytes += byteCount;
         glyph.pixels.resize(static_cast<usize>(byteCount));
@@ -76,7 +77,7 @@ bool Rasterize(FontSource& font, const BakeOptions& options, RasterGlyphs& outGl
         const usize absolutePitch = static_cast<usize>(pitch < 0 ? -pitch : pitch);
         if(!bitmap.buffer || absolutePitch < bitmap.width){
             NWB_LOGGER_ERROR(NWB_TEXT("font_builder: invalid native bitmap for glyph {}"), glyphId);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         for(u32 y = 0u; y < bitmap.rows; ++y){
             const u32 sourceY = pitch < 0 ? bitmap.rows - 1u - y : y;
@@ -89,9 +90,9 @@ bool Rasterize(FontSource& font, const BakeOptions& options, RasterGlyphs& outGl
         glyph.record.planeTop = static_cast<f32>(-face->glyph->bitmap_top) * designPerPixel;
         glyph.record.planeRight = glyph.record.planeLeft + static_cast<f32>(bitmap.width) * designPerPixel;
         glyph.record.planeBottom = glyph.record.planeTop + static_cast<f32>(bitmap.rows) * designPerPixel;
-        outGlyphs.push_back(Move(glyph));
+        glyphs.push_back(Move(glyph));
     }
-    return true;
+    return glyphs;
 }
 
 

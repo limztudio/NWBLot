@@ -65,10 +65,10 @@ protected:
         return begin(generation) && m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 400.0f });
     }
 
-    [[nodiscard]] bool sample(const DrawSnapshot& snapshot, const Name& name, ImagePaintSample& out)const{
+    [[nodiscard]] Expected<ImagePaintSample> sample(const DrawSnapshot& snapshot, const Name& name)const noexcept{
         const UiSkinRegion* region = m_skin.findRegion(name);
         if(!region)
-            return false;
+            return MakeUnexpected(Failure{});
         const f32 leftU = static_cast<f32>(region->rectangle.x) / m_skin.atlasWidth();
         const f32 rightU = static_cast<f32>(region->rectangle.x + region->rectangle.width) / m_skin.atlasWidth();
         const f32 topV = static_cast<f32>(region->rectangle.y) / m_skin.atlasHeight();
@@ -103,11 +103,10 @@ protected:
             }
         }
         if(candidate.quads == 0u)
-            return false;
+            return MakeUnexpected(Failure{});
         candidate.bounds.width = right - candidate.bounds.x;
         candidate.bounds.height = bottom - candidate.bounds.y;
-        out = candidate;
-        return true;
+        return candidate;
     }
 };
 
@@ -125,14 +124,14 @@ TEST_F(UiImageBuilderTests, DeclarationCopiesNameSizeAndStraightTintBeforePaint)
     options = Fixed(20.0f, 20.0f);
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    ImagePaintSample sprite;
-    ASSERT_TRUE(sample(snapshot, Name("image.sprite"), sprite));
-    EXPECT_FLOAT_EQ(sprite.bounds.width, 80.0f);
-    EXPECT_FLOAT_EQ(sprite.bounds.height, 32.0f);
-    EXPECT_FLOAT_EQ(sprite.color.r, 0.4f);
-    EXPECT_FLOAT_EQ(sprite.color.g, 0.5f);
-    EXPECT_FLOAT_EQ(sprite.color.b, 0.3f);
-    EXPECT_FLOAT_EQ(sprite.color.a, 0.5f);
+    const auto sprite = sample(snapshot, Name("image.sprite"));
+    ASSERT_TRUE(sprite);
+    EXPECT_FLOAT_EQ(sprite->bounds.width, 80.0f);
+    EXPECT_FLOAT_EQ(sprite->bounds.height, 32.0f);
+    EXPECT_FLOAT_EQ(sprite->color.r, 0.4f);
+    EXPECT_FLOAT_EQ(sprite->color.g, 0.5f);
+    EXPECT_FLOAT_EQ(sprite->color.b, 0.3f);
+    EXPECT_FLOAT_EQ(sprite->color.a, 0.5f);
 }
 
 TEST_F(UiImageBuilderTests, ExternalClipUpdatesSpriteUvsAndRestoresThePaintStack){
@@ -143,11 +142,11 @@ TEST_F(UiImageBuilderTests, ExternalClipUpdatesSpriteUvsAndRestoresThePaintStack
     ASSERT_TRUE(m_paint.popClip());
     m_paint.fillRect({ 60.0f, 80.0f, 8.0f, 8.0f }, { 1.0f, 0.0f, 0.0f, 1.0f });
     const DrawSnapshot snapshot = m_paint.freeze();
-    ImagePaintSample sprite;
-    ASSERT_TRUE(sample(snapshot, Name("image.sprite"), sprite));
-    EXPECT_FLOAT_EQ(sprite.bounds.x, 20.0f);
-    EXPECT_FLOAT_EQ(sprite.bounds.width, 20.0f);
-    EXPECT_NEAR(sprite.maximumU, (27.0f / 96.0f) * (20.0f / 128.0f), 0.000001f);
+    const auto sprite = sample(snapshot, Name("image.sprite"));
+    ASSERT_TRUE(sprite);
+    EXPECT_FLOAT_EQ(sprite->bounds.x, 20.0f);
+    EXPECT_FLOAT_EQ(sprite->bounds.width, 20.0f);
+    EXPECT_NEAR(sprite->maximumU, (27.0f / 96.0f) * (20.0f / 128.0f), 0.000001f);
     bool sentinel = false;
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material != PaintMaterial::Solid)
@@ -166,8 +165,7 @@ TEST_F(UiImageBuilderTests, FullyTransparentAndEmptyImagesRemainValidWithoutQuad
     ASSERT_TRUE(m_builder.image("empty", Name("image.sprite"), Fixed(0.0f, 20.0f)));
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    ImagePaintSample sprite;
-    EXPECT_FALSE(sample(snapshot, Name("image.sprite"), sprite));
+    EXPECT_FALSE(sample(snapshot, Name("image.sprite")));
 }
 
 TEST_F(UiImageBuilderTests, UnknownRegionRejectsWithoutReplacingAcceptedTargets){

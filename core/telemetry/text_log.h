@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <global/expected.h>
 #include "recorder.h"
 
 #include <core/common/log.h>
@@ -53,7 +54,7 @@ struct TextLogPayload{
 
 [[nodiscard]] bool IsValidTextLogType(Common::LogType::Enum type)noexcept;
 [[nodiscard]] bool BuildTextLogPayload(TelemetryArena& arena, Common::LogType::Enum type, TStringView message, TelemetryBytes& outPayload);
-[[nodiscard]] bool ParseTextLogPayload(TelemetryArena& arena, const void* payload, usize payloadBytes, TextLogPayload& outPayload);
+[[nodiscard]] Expected<TextLogPayload> ParseTextLogPayload(TelemetryArena& arena, const void* payload, usize payloadBytes);
 [[nodiscard]] bool RecordTextLog(
     Recorder& recorder,
     Common::LogType::Enum type,

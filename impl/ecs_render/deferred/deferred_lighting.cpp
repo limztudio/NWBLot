@@ -201,75 +201,63 @@ Core::GpuTaskId RendererDeferredSystem::declareDeferredLightingTask(
     );
 }
 
-bool RendererDeferredSystem::prepareSceneShadingBufferUploads(
+SceneShadingBufferUploads RendererDeferredSystem::prepareSceneShadingBufferUploads(
     const f32 fallbackAspectRatio,
-    const RayTracingLightingClassificationInput& rayTracingInput,
-    ECSRenderDetail::SceneLightGpuData* const outLightData,
-    const usize lightDataCapacity,
-    u32& outLightCount,
-    RayTracingLightingClassification& outRayTracingClassification,
-    bool& outLightUploadRequired,
-    ECSRenderDetail::SceneShadingGpuData& outSceneShadingState,
-    bool& outSceneShadingUploadRequired
+    const RayTracingLightingClassificationInput& rayTracingInput
 ){
     NWB_ASSERT(m_deferredState.m_sceneShadingBuffer);
     NWB_ASSERT(m_deferredState.m_lightBuffer);
-    outLightCount = 0u;
-    outRayTracingClassification = {};
-    outLightUploadRequired = false;
-    outSceneShadingUploadRequired = false;
-    if(!outLightData || lightDataCapacity < NWB_SCENE_MAX_LIGHTS)
-        return false;
+    SceneShadingBufferUploads uploads{};
 
     f32 causticLightImportance[NWB_SCENE_MAX_LIGHTS];
     const u32 lightCount = ECSRenderDetail::ResolveSceneLights(
         m_world,
-        outLightData,
+        uploads.lightData,
         causticLightImportance,
         NWB_SCENE_MAX_LIGHTS
     );
 
     // Rank caustic lights into params.w; needs a refractive instance.
     const u32 causticLightCount = ECSRenderDetail::ResolveCausticLights(
-        outLightData,
+        uploads.lightData,
         causticLightImportance,
         lightCount,
         rayTracingInput.refractiveInstanceCount
     );
-    outRayTracingClassification.causticLightCount = causticLightCount;
+    uploads.lightingClassification.causticLightCount = causticLightCount;
     // Bitmask of shadow slots holding a light.
     u32 softShadowSlotMask = 0u;
     for(u32 i = 0u; i < lightCount; ++i){
-        const f32 slot = outLightData[i].params.z;
+        const f32 slot = uploads.lightData[i].params.z;
         if(slot >= 0.f){
             const u32 slotIndex = static_cast<u32>(slot);
             if(slotIndex < NWB_SCENE_SHADOW_SLOT_COUNT)
                 softShadowSlotMask |= (1u << slotIndex);
         }
     }
-    outRayTracingClassification.softShadowSlotMask = softShadowSlotMask;
+    uploads.lightingClassification.softShadowSlotMask = softShadowSlotMask;
 
     const usize lightByteCount = static_cast<usize>(lightCount) * sizeof(ECSRenderDetail::SceneLightGpuData);
     NWB_ASSERT(lightByteCount <= sizeof(m_deferredState.m_lightGpuData));
     const bool lightDataUnchanged =
         m_deferredState.m_lightGpuDataValid
         && m_deferredState.m_lightGpuDataCount == lightCount
-        && NWB_MEMCMP(m_deferredState.m_lightGpuData, outLightData, lightByteCount) == 0
+        && NWB_MEMCMP(m_deferredState.m_lightGpuData, uploads.lightData, lightByteCount) == 0
     ;
     // A zero-light scene has nothing to copy; still record the empty mirror.
-    outLightUploadRequired = !lightDataUnchanged && lightByteCount != 0u;
-    outLightCount = lightCount;
+    uploads.lightUploadRequired = !lightDataUnchanged && lightByteCount != 0u;
+    uploads.lightCount = lightCount;
 
-    outSceneShadingState = ECSRenderDetail::ResolveSceneShadingState(m_world, fallbackAspectRatio, lightCount);
-    outSceneShadingUploadRequired = !(
+    uploads.sceneShadingState = ECSRenderDetail::ResolveSceneShadingState(m_world, fallbackAspectRatio, lightCount);
+    uploads.sceneShadingUploadRequired = !(
         m_deferredState.m_sceneShadingGpuDataValid
         && NWB_MEMCMP(
             m_deferredState.m_sceneShadingGpuData,
-            &outSceneShadingState,
-            sizeof(outSceneShadingState)
+            &uploads.sceneShadingState,
+            sizeof(uploads.sceneShadingState)
         ) == 0
     );
-    return true;
+    return uploads;
 }
 
 void RendererDeferredSystem::confirmSceneShadingBufferUploads(

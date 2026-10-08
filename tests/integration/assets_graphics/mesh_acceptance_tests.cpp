@@ -44,42 +44,32 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-template<
-    typename MeshT,
-    typename PositionRefT
->
-static bool TestDecodeMeshletPositionRef(
+template<typename MeshT>
+static Expected<NWB::Impl::MeshletPositionStreamRef> TestDecodeMeshletPositionRef(
     const MeshT& mesh,
     const NWB::Impl::MeshletDesc& meshlet,
-    const u32 localPositionIndex,
-    PositionRefT& outRef
+    const u32 localPositionIndex
 ){
     return NWB::Impl::DecodeMeshletPositionRef(
         mesh.meshletPositionRefDeltas().data(),
         mesh.meshletPositionRefDeltas().size(),
         meshlet,
         localPositionIndex,
-        NWB::Core::Mesh::MeshClassUsesSkinning(mesh.meshClass()),
-        outRef
+        NWB::Core::Mesh::MeshClassUsesSkinning(mesh.meshClass())
     );
 }
 
-template<
-    typename MeshT,
-    typename AttributeRefT
->
-static bool TestDecodeMeshletAttributeRef(
+template<typename MeshT>
+static Expected<NWB::Impl::MeshletAttributeStreamRef> TestDecodeMeshletAttributeRef(
     const MeshT& mesh,
     const NWB::Impl::MeshletDesc& meshlet,
-    const u32 localAttributeIndex,
-    AttributeRefT& outRef
+    const u32 localAttributeIndex
 ){
     return NWB::Impl::DecodeMeshletAttributeRef(
         mesh.meshletAttributeRefDeltas().data(),
         mesh.meshletAttributeRefDeltas().size(),
         meshlet,
-        localAttributeIndex,
-        outRef
+        localAttributeIndex
     );
 }
 
@@ -100,16 +90,16 @@ static bool TestMeshletHasPositionNormalValue(
 ){
     for(u32 localVertexIndex = 0u; localVertexIndex < NWB::Impl::MeshletVertexCount(meshlet); ++localVertexIndex){
         const NWB::Impl::MeshletLocalVertexRef& localRef = localRefs[meshlet.localVertexOffset + localVertexIndex];
-        NWB::Impl::MeshletPositionStreamRef positionRef;
-        NWB::Impl::MeshletAttributeStreamRef attributeRef;
+        const auto positionRef = TestDecodeMeshletPositionRef(mesh, meshlet, localRef.localDeformedPosition);
+        const auto attributeRef = TestDecodeMeshletAttributeRef(mesh, meshlet, localRef.localAttribute);
         if(
-            !TestDecodeMeshletPositionRef(mesh, meshlet, localRef.localDeformedPosition, positionRef)
-            || !TestDecodeMeshletAttributeRef(mesh, meshlet, localRef.localAttribute, attributeRef)
+            !positionRef
+            || !attributeRef
         )
             return false;
 
-        const Float3U& position = positions[positionRef.position];
-        const Float4U normal = LoadHalf4U(normals[attributeRef.normal]);
+        const Float3U& position = positions[positionRef->position];
+        const Float4U normal = LoadHalf4U(normals[attributeRef->normal]);
         if(
             position.x == expectedPosition.x
             && position.y == expectedPosition.y
@@ -141,26 +131,17 @@ template<typename MeshT>
     return count;
 }
 
-static bool CookAndLoadSmokeMesh(
+static Expected<UniquePtr<NWB::Core::Assets::IAsset>> CookAndLoadSmokeMesh(
     TestArena& testArena,
     AStringView assetFilename,
-    const AStringView caseName,
     const Name assetName,
-    Path& outRoot,
-    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset
+    const AssetsGraphicsFixture::CookCase& cookCase
 ){
-    Path outputDirectory(testArena.arena);
-    const bool cooked = AssetsGraphicsFixture::CookSmokeMeshMeta(
-        assetFilename,
-        caseName,
-        testArena,
-        outRoot,
-        outputDirectory
-    );
+    const bool cooked = AssetsGraphicsFixture::CookSmokeMeshMeta(assetFilename, testArena, cookCase);
     EXPECT_TRUE(cooked);
     if(!cooked)
-        return false;
-    return AssetsGraphicsFixture::LoadCookedMesh(testArena, outputDirectory, assetName, outLoadedAsset);
+        return MakeUnexpected(Failure{});
+    return AssetsGraphicsFixture::LoadCookedMesh(testArena, cookCase.outputDirectory, assetName);
 }
 
 template<typename CallbackT>
@@ -174,16 +155,16 @@ static void RunSmokeMeshAcceptance(
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root(testArena.arena);
-    UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    if(CookAndLoadSmokeMesh(testArena, assetFilename, caseName, assetName, root, loadedAsset)){
-        const NWB::Impl::Mesh& loadedMesh = static_cast<const NWB::Impl::Mesh&>(*loadedAsset);
+    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, caseName);
+    ASSERT_TRUE(cookCase);
+    auto loadedAssetResult = CookAndLoadSmokeMesh(testArena, assetFilename, assetName, *cookCase);
+    if(loadedAssetResult){
+        const NWB::Impl::Mesh& loadedMesh = static_cast<const NWB::Impl::Mesh&>(**loadedAssetResult);
         Forward<CallbackT>(callback)(loadedMesh);
     }
     EXPECT_EQ(logger.errorCount(), 0u);
 
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(cookCase->root));
 }
 
 TEST(AssetsGraphics, MeshAcceptanceHardEdgeCubeZippedRefs){
@@ -256,22 +237,22 @@ TEST(AssetsGraphics, MeshAcceptanceUvSeamQuad){
             EXPECT_NE(localRefs[0u].localAttribute, localRefs[3u].localAttribute);
             EXPECT_NE(localRefs[s_ThirdElementIndex].localAttribute, localRefs[4u].localAttribute);
 
-            NWB::Impl::MeshletAttributeStreamRef attributeRef0;
-            NWB::Impl::MeshletAttributeStreamRef attributeRef2;
-            NWB::Impl::MeshletAttributeStreamRef attributeRef3;
-            NWB::Impl::MeshletAttributeStreamRef attributeRef4;
-            EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute, attributeRef0));
-            EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[s_ThirdElementIndex].localAttribute, attributeRef2));
-            EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute, attributeRef3));
-            EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[4u].localAttribute, attributeRef4));
-            EXPECT_EQ(attributeRef0.uv0, 0u);
-            EXPECT_EQ(attributeRef2.uv0, s_ExpectedDualCount);
-            EXPECT_EQ(attributeRef3.uv0, 1u);
-            EXPECT_EQ(attributeRef4.uv0, 3u);
-            EXPECT_EQ(attributeRef0.tangent, 0u);
-            EXPECT_EQ(attributeRef2.tangent, 0u);
-            EXPECT_EQ(attributeRef3.tangent, 1u);
-            EXPECT_EQ(attributeRef4.tangent, 1u);
+            const auto attributeRef0 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute);
+            const auto attributeRef2 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[s_ThirdElementIndex].localAttribute);
+            const auto attributeRef3 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute);
+            const auto attributeRef4 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[4u].localAttribute);
+            ASSERT_TRUE(attributeRef0);
+            ASSERT_TRUE(attributeRef2);
+            ASSERT_TRUE(attributeRef3);
+            ASSERT_TRUE(attributeRef4);
+            EXPECT_EQ(attributeRef0->uv0, 0u);
+            EXPECT_EQ(attributeRef2->uv0, s_ExpectedDualCount);
+            EXPECT_EQ(attributeRef3->uv0, 1u);
+            EXPECT_EQ(attributeRef4->uv0, 3u);
+            EXPECT_EQ(attributeRef0->tangent, 0u);
+            EXPECT_EQ(attributeRef2->tangent, 0u);
+            EXPECT_EQ(attributeRef3->tangent, 1u);
+            EXPECT_EQ(attributeRef4->tangent, 1u);
         }
     );
 }
@@ -288,12 +269,12 @@ TEST(AssetsGraphics, MeshAcceptanceMirroredUvQuad){
 
             const NWB::Impl::MeshletDesc& meshlet = loadedMesh.meshlets()[0u];
             const auto& localRefs = loadedMesh.meshletLocalVertexRefs();
-            NWB::Impl::MeshletAttributeStreamRef attributeRef0;
-            NWB::Impl::MeshletAttributeStreamRef attributeRef3;
-            EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute, attributeRef0));
-            EXPECT_TRUE(TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute, attributeRef3));
-            EXPECT_EQ(attributeRef0.tangent, 0u);
-            EXPECT_EQ(attributeRef3.tangent, 1u);
+            const auto attributeRef0 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[0u].localAttribute);
+            const auto attributeRef3 = TestDecodeMeshletAttributeRef(loadedMesh, meshlet, localRefs[3u].localAttribute);
+            ASSERT_TRUE(attributeRef0);
+            ASSERT_TRUE(attributeRef3);
+            EXPECT_EQ(attributeRef0->tangent, 0u);
+            EXPECT_EQ(attributeRef3->tangent, 1u);
         }
     );
 }

@@ -179,24 +179,20 @@ SharedSdfAtlasPage PaintImageFixture::makeSdf(const u64 atlasIdentity){
 SharedImageSource PaintImageFixture::makeImage(const StringView path, const u8 seed, const u32 width, const u32 height){
     if(path.empty() || width == 0u || height == 0u)
         return {};
-    u32 mipCount = 0u;
-    if(!TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture2D, width, height, 1u, mipCount))
+    const auto mipCount = TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture2D, width, height, 1u);
+    if(!mipCount)
         return {};
     Texture::MipLevelVector mips(m_arena);
-    mips.reserve(mipCount);
+    mips.reserve(*mipCount);
     u32 mipWidth = width;
     u32 mipHeight = height;
     u64 offset = 0u;
-    for(u32 index = 0u; index < mipCount; ++index){
-        u32 blocksX = 0u;
-        u32 blocksY = 0u;
-        u64 byteCount = 0u;
-        if(!TextureFormat::ComputeMipPlaneBlockLayout(
-            TexturePayloadFormat::UastcLdr4x4, mipWidth, mipHeight, blocksX, blocksY, byteCount
-        ))
+    for(u32 index = 0u; index < *mipCount; ++index){
+        const auto plane = TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcLdr4x4, mipWidth, mipHeight);
+        if(!plane)
             return {};
-        mips.push_back({ mipWidth, mipHeight, blocksX, blocksY, offset, byteCount, 1u });
-        offset += byteCount;
+        mips.push_back({ mipWidth, mipHeight, plane->blocksX, plane->blocksY, offset, plane->planeByteCount, 1u });
+        offset += plane->planeByteCount;
         mipWidth = mipWidth > 1u ? mipWidth >> 1u : 1u;
         mipHeight = mipHeight > 1u ? mipHeight >> 1u : 1u;
     }

@@ -34,11 +34,11 @@ namespace __hidden_ui_gpu_command_ir{
 ){
     if(capture.recordCount() == 0u)
         return !commands.commandRecordingFailed();
-    Core::GpuCommandIrOwnedStream stream(frame->m_arena);
-    if(!capture.exportOwned(stream))
+    const auto stream = capture.exportOwned(frame->m_arena);
+    if(!stream)
         return false;
     const Core::GpuCommandIrReplayResult replay = Core::ReplayGpuCommandIrPacket(
-        stream, context.declarations, context.compiledPlan, context.packet, commands
+        *stream, context.declarations, context.compiledPlan, context.packet, commands
     );
     return replay.valid() && !commands.commandRecordingFailed();
 }

@@ -104,8 +104,8 @@ bool Builder::paintComboPopup(ComboFrame& frame){
     PopupOptions options;
     options.anchor = anchor;
     options.size = { anchor.width, frame.options.popupHeight };
-    PopupPlacement placement;
-    if(!PopupLayout::Place(options, m_paint.displayMetrics(), placement))
+    const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
+    if(!placement)
         return false;
     const Insets padding{ Max(frame.popupStyle.padding.left, background->padding.left),
         Max(frame.popupStyle.padding.top, background->padding.top), Max(frame.popupStyle.padding.right, background->padding.right),
@@ -113,8 +113,8 @@ bool Builder::paintComboPopup(ComboFrame& frame){
     PopupScope scope;
     scope.token = frame.popupToken;
     scope.parent = frame.parentToken;
-    scope.bounds = placement.bounds;
-    scope.viewport = placement.viewport;
+    scope.bounds = placement->bounds;
+    scope.viewport = placement->viewport;
     scope.dismissFocusTraversal = true;
     scope.focusAnchor = frame.state->m_owner;
     scope.focusAnchorDeclarationGeneration = frame.state->m_ownerDeclaration;
@@ -126,28 +126,28 @@ bool Builder::paintComboPopup(ComboFrame& frame){
             m_context.fail();
         return false;
     }
-    m_paint.pushClip(placement.viewport);
-    const bool backgroundPainted = m_paint.drawRegion(background->name, placement.bounds);
+    m_paint.pushClip(placement->viewport);
+    const bool backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
     const bool clipPopped = m_paint.popClip();
     HitTarget barrier;
-    barrier.rectangle = placement.bounds;
-    barrier.clip = placement.viewport;
+    barrier.rectangle = placement->bounds;
+    barrier.clip = placement->viewport;
     bool painted = backgroundPainted && clipPopped && m_context.addTarget(frame.popup, barrier);
     if(painted){
         Item listItem(m_arena);
         listItem.state = frame.rows;
         listItem.list = frame.list;
         LayoutBox box;
-        box.rectangle = { placement.bounds.x + padding.left, placement.bounds.y + padding.top,
-            Max(0.0f, placement.bounds.width - padding.left - padding.right),
-            Max(0.0f, placement.bounds.height - padding.top - padding.bottom) };
-        box.clip = placement.bounds;
+        box.rectangle = { placement->bounds.x + padding.left, placement->bounds.y + padding.top,
+            Max(0.0f, placement->bounds.width - padding.left - padding.right),
+            Max(0.0f, placement->bounds.height - padding.top - padding.bottom) };
+        box.clip = placement->bounds;
         painted = (!frame.search || paintComboQuery(frame, box)) && paintList(listItem, box) && comboMatches(frame);
     }
     const bool overlayEnded = m_paint.endOverlay();
     const bool scopeEnded = m_context.endPopupScope(painted);
     if(painted)
-        frame.state->m_popup.m_placement = placement;
+        frame.state->m_popup.m_placement = *placement;
     return painted && overlayEnded && scopeEnded;
 }
 

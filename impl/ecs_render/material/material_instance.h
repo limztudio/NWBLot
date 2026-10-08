@@ -21,34 +21,30 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool SplitMaterialInstanceParameterName(
-    const AStringView parameterName,
-    Name& outParameterName,
-    Name& outBlockName,
-    Name& outFieldName
-){
-    outParameterName = s_NameNone;
-    outBlockName = s_NameNone;
-    outFieldName = s_NameNone;
+struct MaterialInstanceParameterNames{
+    Name parameterName = s_NameNone;
+    Name blockName = s_NameNone;
+    Name fieldName = s_NameNone;
+};
 
+[[nodiscard]] inline Expected<MaterialInstanceParameterNames> SplitMaterialInstanceParameterName(
+    const AStringView parameterName
+){
     const usize dotIndex = parameterName.find('.');
     if(parameterName.empty() || dotIndex == AStringView::npos || dotIndex == 0u || dotIndex + 1u >= parameterName.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must use block.field form")
             , StringConvert(parameterName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(parameterName.find('.', dotIndex + 1u) != AStringView::npos){
         NWB_LOGGER_ERROR(NWB_TEXT("MaterialInstanceComponent: parameter '{}' must not contain more than one block separator")
             , StringConvert(parameterName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outParameterName = Name(parameterName);
-    outBlockName = Name(parameterName.substr(0u, dotIndex));
-    outFieldName = Name(parameterName.substr(dotIndex + 1u));
-    return true;
+    return MaterialInstanceParameterNames{ Name(parameterName), Name(parameterName.substr(0u, dotIndex)), Name(parameterName.substr(dotIndex + 1u)) };
 }
 
 [[nodiscard]] inline UInt4U PackMaterialInstanceBytes(const void* bytes, const usize byteCount){
@@ -158,14 +154,13 @@ struct MaterialInstanceValueTraits<Half4U>{
     if(!ValidateMaterialInstanceInterface(component, materialInterface, parameterNameText))
         return false;
 
-    MaterialInstanceParameter parameter;
-    if(!SplitMaterialInstanceParameterName(
-        parameterNameText,
-        parameter.parameterName,
-        parameter.blockName,
-        parameter.fieldName
-    ))
+    const auto names = SplitMaterialInstanceParameterName(parameterNameText);
+    if(!names)
         return false;
+    MaterialInstanceParameter parameter;
+    parameter.parameterName = names->parameterName;
+    parameter.blockName = names->blockName;
+    parameter.fieldName = names->fieldName;
     parameter.fieldType = fieldType;
     parameter.value = value;
 
@@ -246,35 +241,6 @@ template<typename TValue>
 ){
     const Half4U packedValue = MakeHalf4U(value.x, value.y, value.z, value.w);
     return SetMaterialMutableValue(world, entity, materialInterface, parameterName, packedValue);
-}
-
-// Inverse of SetMaterialMutableHalf4: false when unoverridden (outValue untouched). Probe/photon producers read the
-// authored tint through it (per-instance mutable, not material-static).
-[[nodiscard]] inline bool GetMaterialMutableHalf4(
-    const MaterialInstanceComponent& component,
-    const AStringView parameterName,
-    Float4& outValue
-){
-    const Name queryName(parameterName);
-    for(const MaterialInstanceParameter& parameter : component.overrides){
-        if(parameter.parameterName != queryName)
-            continue;
-        if(parameter.fieldType == MaterialLayoutFieldType::Half4){
-            Half4U packedValue;
-            NWB_MEMCPY(&packedValue, sizeof(packedValue), parameter.value.raw, sizeof(packedValue));
-            const Float4U unpackedValue = LoadHalf4U(packedValue);
-            outValue = Float4(unpackedValue.x, unpackedValue.y, unpackedValue.z, unpackedValue.w);
-            return true;
-        }
-        if(parameter.fieldType == MaterialLayoutFieldType::Float4){
-            Float4 components;
-            NWB_MEMCPY(&components, sizeof(components), parameter.value.raw, sizeof(components));
-            outValue = components;
-            return true;
-        }
-        return false;
-    }
-    return false;
 }
 
 

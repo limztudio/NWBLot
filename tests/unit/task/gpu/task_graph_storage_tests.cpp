@@ -181,12 +181,11 @@ TEST(GpuTaskGraphStorage, MixedDeclarationsAndUploadBytesSurviveStorageGrowth){
             EXPECT_EQ(resourceSet.members[0u], resource.id);
             EXPECT_EQ(pipeline.identity, identities[index]);
             EXPECT_EQ(completion.identity, identities[index]);
-            usize byteSize = 0u;
-            const void* const storedBytes = declarations.uploadBlobData(uploads[index], byteSize);
+            const auto storedBytes = declarations.uploadBlobData(uploads[index]);
             const u64 expectedBytes[] = { static_cast<u64>(index), ~static_cast<u64>(index) };
-            ASSERT_NE(storedBytes, nullptr);
-            ASSERT_EQ(byteSize, sizeof(expectedBytes));
-            EXPECT_EQ(NWB_MEMCMP(storedBytes, expectedBytes, sizeof(expectedBytes)), 0);
+            ASSERT_TRUE(storedBytes);
+            ASSERT_EQ(storedBytes->size(), sizeof(expectedBytes));
+            EXPECT_EQ(NWB_MEMCMP(storedBytes->data(), expectedBytes, sizeof(expectedBytes)), 0);
         }
     }
     graph.reset();

@@ -28,31 +28,31 @@ public:
     virtual u64 rowCount()const noexcept override final{ return LabelCount; }
     virtual u64 key(const u64 index)const noexcept override final{ return index < LabelCount ? index + 1u : 0u; }
 
-    virtual bool indexOf(const u64 keyValue, u64& index)const noexcept override final{
+    virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override final{
         if(keyValue == 0u || keyValue > LabelCount)
-            return false;
-        index = keyValue - 1u;
-        return true;
+            return MakeUnexpected(Failure{});
+        return keyValue - 1u;
     }
 
-    virtual bool findEnabled(const u64 start, const bool reverse, u64& index)const noexcept override final{
+    virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override final{
         if(start >= LabelCount)
-            return false;
-        if(enabled(start)){
-            index = start;
-            return true;
-        }
+            return MakeUnexpected(Failure{});
+        if(enabled(start))
+            return start;
+        u64 index = 0u;
         if(reverse){
             if(start == 0u)
-                return false;
+                return MakeUnexpected(Failure{});
             index = start - 1u;
         }
         else{
             if(start + 1u >= LabelCount)
-                return false;
+                return MakeUnexpected(Failure{});
             index = start + 1u;
         }
-        return enabled(index);
+        if(!enabled(index))
+            return MakeUnexpected(Failure{});
+        return index;
     }
 
     virtual StringView text(const u64 index)const override{ return index < LabelCount ? Source::s_Labels[index] : StringView{}; }
@@ -77,28 +77,26 @@ private:
         virtual u64 rowCount()const noexcept override{ return m_source.m_count; }
         virtual u64 key(const u64 index)const noexcept override{ return index < rowCount() ? m_source.key(m_source.m_indices[index]) : 0u; }
 
-        virtual bool indexOf(const u64 keyValue, u64& index)const noexcept override{
+        virtual Expected<u64> indexOf(const u64 keyValue)const noexcept override{
             for(u64 candidate = 0u; candidate < rowCount(); ++candidate){
                 if(key(candidate) == keyValue){
-                    index = candidate;
-                    return true;
+                    return candidate;
                 }
             }
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
-        virtual bool findEnabled(const u64 start, const bool reverse, u64& index)const noexcept override{
+        virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const noexcept override{
             if(start >= rowCount())
-                return false;
+                return MakeUnexpected(Failure{});
             for(u64 candidate = start; candidate < rowCount(); reverse ? --candidate : ++candidate){
                 if(enabled(candidate)){
-                    index = candidate;
-                    return true;
+                    return candidate;
                 }
                 if(reverse && candidate == 0u)
                     break;
             }
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         virtual StringView text(const u64 index)const override{

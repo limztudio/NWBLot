@@ -24,26 +24,27 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     if(!listMatches(frame))
         return false;
     const Rect clip = visibleClip(box.clip);
-    ScrollPlacement placement;
-    if(!ScrollLayout::Calculate(
+    auto placement = ScrollLayout::Calculate(
         box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb,
-        frame.rowCount, frame.options.rowHeight, frame.state->scrollOffset(), placement
-    ))
+        frame.rowCount, frame.options.rowHeight, frame.state->scrollOffset()
+    );
+    if(!placement)
         return false;
     if(
-        !ListBehavior::EnsureCursor(*frame.state, *frame.source, frame.options.rowHeight, placement.viewport.height)
+        !ListBehavior::EnsureCursor(*frame.state, *frame.source, frame.options.rowHeight, placement->viewport.height)
         || !listStateMatches(frame)
     )
         return false;
-    if(!ScrollLayout::Calculate(
+    placement = ScrollLayout::Calculate(
         box.rectangle, clip, frame.padding, frame.style.scrollbarWidth, frame.style.minimumThumb,
-        frame.rowCount, frame.options.rowHeight, frame.state->scrollOffset(), placement
-    ))
+        frame.rowCount, frame.options.rowHeight, frame.state->scrollOffset()
+    );
+    if(!placement)
         return false;
     // The dataset never determines allocation or target capacity; excessive visible density rejects this frame.
-    if(placement.endRow - placement.firstRow > 1024u || !frame.state->m_scroll.setOffset(placement.offset))
+    if(placement->endRow - placement->firstRow > 1024u || !frame.state->m_scroll.setOffset(placement->offset))
         return false;
-    frame.state->m_placement = placement;
+    frame.state->m_placement = *placement;
     const UiSkinRegion* background = region(frame.style.background, frame.style.backgroundFallback);
     if(!background)
         return false;
@@ -62,14 +63,14 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
     host.navigable = item.enabled;
     host.scrollable = item.enabled;
     host.scrollStep = static_cast<f64>(frame.options.rowHeight) * static_cast<f64>(frame.options.wheelRows);
-    const f64 page = Floor(static_cast<f64>(placement.viewport.height) / static_cast<f64>(frame.options.rowHeight));
+    const f64 page = Floor(static_cast<f64>(placement->viewport.height) / static_cast<f64>(frame.options.rowHeight));
     host.pageRows = page >= static_cast<f64>(frame.rowCount) ? Max<u64>(1u, frame.rowCount)
         : Max<u64>(1u, static_cast<u64>(page));
-    host.gestureMaximum = placement.maxOffset;
+    host.gestureMaximum = placement->maxOffset;
     host.focusOnCommit = frame.focusOnCommit;
-    if(!m_context.addTarget(item.state, host) || !paintListRows(item, frame, placement))
+    if(!m_context.addTarget(item.state, host) || !paintListRows(item, frame, *placement))
         return false;
-    if(placement.scrollbarVisible){
+    if(placement->scrollbarVisible){
         const UiSkinRegion* track = region(frame.style.track, frame.style.trackFallback);
         const WidgetId thumbId = MakeWidgetId(item.state.id, "scrollbar");
         const bool hover = m_context.input().hover() == thumbId;
@@ -77,22 +78,22 @@ bool Builder::paintList(const Item& item, const LayoutBox& box){
         if(!track || !thumb)
             return false;
         m_paint.pushClip(clip);
-        const bool trackPainted = m_paint.drawRegion(track->name, placement.track);
-        const bool thumbPainted = trackPainted && m_paint.drawRegion(thumb->name, placement.thumb);
+        const bool trackPainted = m_paint.drawRegion(track->name, placement->track);
+        const bool thumbPainted = trackPainted && m_paint.drawRegion(thumb->name, placement->thumb);
         const bool trackPopped = m_paint.popClip();
         if(!thumbPainted || !trackPopped)
             return false;
         if(item.enabled){
             HitTarget target;
-            target.rectangle = placement.track;
+            target.rectangle = placement->track;
             target.clip = clip;
             target.control = frame.token;
             if(!m_context.addPartTarget(item.state, MakeWidgetId(item.state.id, "track"), target))
                 return false;
-            target.rectangle = placement.thumb;
-            target.pointerGesture = placement.track.height > placement.thumb.height;
-            target.gestureReference = placement.track;
-            target.gestureMaximum = placement.maxOffset;
+            target.rectangle = placement->thumb;
+            target.pointerGesture = placement->track.height > placement->thumb.height;
+            target.gestureReference = placement->track;
+            target.gestureMaximum = placement->maxOffset;
             if(!m_context.addPartTarget(item.state, thumbId, target))
                 return false;
         }
@@ -104,36 +105,40 @@ bool Builder::paintListRows(const Item& item, const ListFrame& frame, const Scro
     const WidgetId rows = MakeWidgetId(item.state.id, "rows");
     const bool focused = m_context.input().focus() == item.state.id
         || (frame.keyboardFocus.valid() && m_context.input().focus() == frame.keyboardFocus);
-    TextLayout text(m_arena);
     for(u64 index = placement.firstRow; index < placement.endRow; ++index){
         if(!listStateMatches(frame))
             return false;
         const u64 key = frame.source->key(index);
         if(!listStateMatches(frame))
             return false;
-        u64 resolved = 0u;
-        if(key == 0u || !frame.source->indexOf(key, resolved) || !listStateMatches(frame) || resolved != index)
+        if(key == 0u)
+            return false;
+        const auto resolved = frame.source->indexOf(key);
+        if(!resolved || !listStateMatches(frame) || *resolved != index)
             return false;
         const bool enabled = item.enabled && frame.source->enabled(index);
         if(!listStateMatches(frame))
             return false;
         const WidgetId part = MakeWidgetPartId(rows, key);
-        Rect rectangle;
-        if(!ScrollLayout::RowBounds(index, placement, frame.options.rowHeight, rectangle))
+        const auto rectangle = ScrollLayout::RowBounds(index, placement, frame.options.rowHeight);
+        if(!rectangle)
             return false;
         const ShapeRequest request = textShapeRequest(frame.source->text(index), frame.widgetStyle.fontSize);
-        if(!listStateMatches(frame) || m_text.layout(request, text) != TextLayoutStatus::Success)
+        if(!listStateMatches(frame))
+            return false;
+        auto layout = m_text.layout(request);
+        if(!layout)
             return false;
         const SelectablePaintFlags flags{ enabled, frame.state->selectedKey() == key,
             m_context.input().hover() == part, focused && frame.state->cursorKey() == key };
         if(!SelectablePainter::Paint(
-            m_paint, m_text, *m_skin, text, rectangle, placement.contentClip, frame.style.row, flags,
+            m_paint, m_text, *m_skin, *layout, *rectangle, placement.contentClip, frame.style.row, flags,
             frame.widgetStyle.text, frame.widgetStyle.disabledText
         ))
             return false;
         if(item.enabled){
             HitTarget target;
-            target.rectangle = rectangle;
+            target.rectangle = *rectangle;
             target.clip = placement.contentClip;
             target.enabled = enabled;
             target.activatable = enabled;

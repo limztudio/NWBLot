@@ -24,7 +24,7 @@ using ScratchArena = Core::Alloc::ScratchArena;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CsgDeformPipeline::RebuildSequentialCuts(
+Expected<CsgDeformStats, CsgDeformFailure> CsgDeformPipeline::RebuildSequentialCuts(
     ScratchArena& scratchArena,
     NotNull<const CsgDeformVertex*> inputVertices,
     const usize inputVertexCount,
@@ -34,39 +34,28 @@ bool CsgDeformPipeline::RebuildSequentialCuts(
     const usize cutCount,
     const CsgDeformBuildOptions& options,
     CsgDeformVertexVector<ScratchArena>& outVertices,
-    CsgDeformTriangleVector<ScratchArena>& outTriangles,
-    CsgDeformPipelineResult& outResult
+    CsgDeformTriangleVector<ScratchArena>& outTriangles
 ){
-    outResult = CsgDeformPipelineResult{};
+    CsgDeformStats stats;
     outVertices.clear();
     outTriangles.clear();
-    outResult.stats.inputVertexCount = static_cast<u32>(inputVertexCount);
-    outResult.stats.inputTriangleCount = static_cast<u32>(inputTriangleCount);
+    stats.inputVertexCount = static_cast<u32>(inputVertexCount);
+    stats.inputTriangleCount = static_cast<u32>(inputTriangleCount);
     if(inputVertexCount == 0u || inputTriangleCount == 0u){
-        outResult.viability.viable = false;
-        outResult.viability.reason = CsgDeformViabilityReason::EmptyInput;
-        return false;
+        return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::EmptyInput, stats });
     }
     if(inputVertexCount > s_MaxDeformVertices || inputTriangleCount > s_MaxDeformTriangles){
-        outResult.viability.viable = false;
-        outResult.viability.reason = CsgDeformViabilityReason::TooLarge;
-        return false;
+        return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::TooLarge, stats });
     }
     if(!CsgDeformValidator::ValidOptions(options)){
-        outResult.viability.viable = false;
-        outResult.viability.reason = CsgDeformViabilityReason::InvalidCutter;
-        return false;
+        return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::InvalidCutter, stats });
     }
-    CsgDeformViabilityReason::Enum inputReason = CsgDeformViabilityReason::Ok;
-    if(!CsgDeformValidator::FiniteInput(inputVertices, inputVertexCount, inputReason)){
-        outResult.viability.viable = false;
-        outResult.viability.reason = inputReason;
-        return false;
+    const auto finiteInput = CsgDeformValidator::FiniteInput(inputVertices, inputVertexCount);
+    if(!finiteInput){
+        return MakeUnexpected(CsgDeformFailure{ finiteInput.error(), stats });
     }
     if(!CsgDeformValidator::ValidTopology(inputTriangles, inputTriangleCount, inputVertexCount)){
-        outResult.viability.viable = false;
-        outResult.viability.reason = CsgDeformViabilityReason::InvalidTopology;
-        return false;
+        return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::InvalidTopology, stats });
     }
 
     const f32 epsilon = CsgDeformValidator::ShapeEpsilon(options);
@@ -88,54 +77,37 @@ bool CsgDeformPipeline::RebuildSequentialCuts(
         const CsgDeformCutDesc& cut = cuts[cutIndex];
         if(!cut.active)
             continue;
-        CsgDeformViabilityReason::Enum cutReason = CsgDeformViabilityReason::Ok;
-        if(!CsgDeformWallBuilder::ClipShell(scratchArena, cut.shape, epsilon, outVertices, outTriangles, scratchKept, scratchDistances, cutReason)){
-            outResult.viability.viable = false;
-            outResult.viability.reason = cutReason == CsgDeformViabilityReason::Ok
-                ? CsgDeformViabilityReason::NoKeptGeometry
-                : cutReason
-            ;
-            return false;
+        const auto clipped = CsgDeformWallBuilder::ClipShell(scratchArena, cut.shape, epsilon, outVertices, outTriangles, scratchKept, scratchDistances);
+        if(!clipped){
+            return MakeUnexpected(CsgDeformFailure{ clipped.error(), stats });
         }
         ++appliedCuts;
         if(outTriangles.empty() || outVertices.size() > s_MaxDeformVertices || outTriangles.size() > s_MaxDeformTriangles){
-            outResult.viability.viable = false;
-            outResult.viability.reason = outTriangles.empty()
-                ? CsgDeformViabilityReason::NoKeptGeometry
-                : CsgDeformViabilityReason::TooLarge
-            ;
-            return false;
+            const auto reason = outTriangles.empty() ? CsgDeformViabilityReason::NoKeptGeometry : CsgDeformViabilityReason::TooLarge;
+            return MakeUnexpected(CsgDeformFailure{ reason, stats });
         }
         if(options.fillCaps){
-            u32 cutCaps = 0u;
-            if(!CsgDeformCapBuilder::FillCutCaps(scratchArena, outVertices, outTriangles, scratchEdges, cutCaps)){
-                outResult.viability.viable = false;
-                outResult.viability.reason = CsgDeformViabilityReason::CapLoopFailed;
-                return false;
+            const auto cutCaps = CsgDeformCapBuilder::FillCutCaps(scratchArena, outVertices, outTriangles, scratchEdges);
+            if(!cutCaps){
+                return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::CapLoopFailed, stats });
             }
-            capTriangles += cutCaps;
+            capTriangles += *cutCaps;
         }
     }
 
     if(outVertices.empty() || outTriangles.empty()){
-        outResult.viability.viable = false;
-        outResult.viability.reason = CsgDeformViabilityReason::NoKeptGeometry;
-        return false;
+        return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::NoKeptGeometry, stats });
     }
     for(const CsgDeformVertex& vertex : outVertices){
         if(!CsgDeformValidator::FiniteVertex(vertex)){
-            outResult.viability.viable = false;
-            outResult.viability.reason = CsgDeformViabilityReason::NonFiniteInput;
-            return false;
+            return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::NonFiniteInput, stats });
         }
     }
-    outResult.viability.viable = true;
-    outResult.viability.reason = CsgDeformViabilityReason::Ok;
-    outResult.stats.outputVertexCount = static_cast<u32>(outVertices.size());
-    outResult.stats.outputTriangleCount = static_cast<u32>(outTriangles.size());
-    outResult.stats.appliedCutCount = appliedCuts;
-    outResult.stats.capTriangleCount = capTriangles;
-    return true;
+    stats.outputVertexCount = static_cast<u32>(outVertices.size());
+    stats.outputTriangleCount = static_cast<u32>(outTriangles.size());
+    stats.appliedCutCount = appliedCuts;
+    stats.capTriangleCount = capTriangles;
+    return stats;
 }
 
 

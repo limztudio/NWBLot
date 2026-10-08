@@ -54,15 +54,14 @@ bool RendererFramePipeline::validateResources(const u32 width, const u32 height,
         resetFrameTargets();
         m_materialSystem.invalidateRendererPipelines();
 
-        DeferredFrameTargets createdTargets;
+        auto createdTargetsResult = m_deferredSystem.createDeferredFrameTargets(width, height);
+        if(!createdTargetsResult)
+            return false;
+        DeferredFrameTargets& createdTargets = *createdTargetsResult;
         const auto resetCreatedTargets = [this, &createdTargets](){
             m_avboitSystem.resetAvboitFrameTargets(createdTargets.avboit);
             m_deferredSystem.resetDeferredFrameTargets(createdTargets);
         };
-        if(!m_deferredSystem.createDeferredFrameTargets(createdTargets, width, height)){
-            resetCreatedTargets();
-            return false;
-        }
         if(!m_avboitSystem.createAvboitResources()){
             resetCreatedTargets();
             return false;

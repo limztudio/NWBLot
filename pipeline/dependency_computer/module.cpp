@@ -28,14 +28,16 @@ inline constexpr usize s_LineFeedReserveBytes = 1u;
 
 int RunPipelineTool(const int argc, char** argv){
     NWB::Core::Assets::AssetArena arena(__hidden_dependency_computer::s_DependencyComputerArena);
-    PipelineOptions options(arena);
     PipelineCommandLine commandLine(PipelineTool::DependencyComputer);
-    return commandLine.run(argc, argv, options, [&](PipelineOptions& parsed){
+    return commandLine.run(argc, argv, arena, [&](PipelineOptions& parsed){
         NWB::Core::Alloc::ScratchArena scratchArena(__hidden_dependency_computer::s_DependencyComputerArena);
-        NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString> resolvedInputs(arena);
-        if(parsed.includeSkinDependencies && !ComputeSkinDependencies(parsed, resolvedInputs, scratchArena))
-            return s_PipelineExitFailure;
-        const auto& inputs = parsed.includeSkinDependencies ? resolvedInputs : parsed.inputs;
+        Expected<NWB::Core::Assets::AssetVector<NWB::Core::Assets::AssetString>> resolvedInputs = MakeUnexpected(Failure{});
+        if(parsed.includeSkinDependencies){
+            resolvedInputs = ComputeSkinDependencies(parsed, arena, scratchArena);
+            if(!resolvedInputs)
+                return s_PipelineExitFailure;
+        }
+        const auto& inputs = parsed.includeSkinDependencies ? *resolvedInputs : parsed.inputs;
 
         usize outputReserveBytes = 0u;
         for(const auto& input : inputs)
@@ -46,9 +48,8 @@ int RunPipelineTool(const int argc, char** argv){
             text += input;
             text += '\n';
         }
-        ErrorCode error;
-        const Path output = AbsolutePath(Path(arena, parsed.outputPath), error);
-        if(error || !EnsureDirectories(output.parentPath(), error) || !WriteTextFile(output, AStringView(text))){
+        const auto output = AbsolutePath(Path(arena, parsed.outputPath));
+        if(!output || !EnsureDirectories(output->parentPath()) || !WriteTextFile(*output, AStringView(text))){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to write output '{}'"), StringConvert(parsed.outputPath));
             return s_PipelineExitFailure;
         }

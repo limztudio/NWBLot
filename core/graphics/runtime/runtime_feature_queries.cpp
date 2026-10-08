@@ -34,14 +34,14 @@ constexpr u32 s_DefaultWaveLaneCount = 64u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GraphicsRuntime::queryFeatureSupport(const Feature::Enum feature, void* featureInfo, const usize featureInfoSize)const{
+bool GraphicsRuntime::queryFeatureSupport(const Feature::Enum feature)const noexcept{
     auto& device = getDevice();
-    return device.queryFeatureSupport(feature, featureInfo, featureInfoSize);
+    return device.queryFeatureSupport(feature);
 }
 
 u32 GraphicsRuntime::queryWaveLaneCount()const noexcept{
-    WaveLaneCountMinMaxFeatureInfo info{};
-    if(queryFeatureSupport(Feature::WaveLaneCountMinMax, &info, sizeof(info)) && info.maxWaveLaneCount > 0u)
+    const auto info = getDevice().getWaveLaneCounts();
+    if(info.maxWaveLaneCount > 0u)
         return info.maxWaveLaneCount;
     // Conservative fallback for backends/paths that cannot report a wave size: 64 lanes is the safe upper
     // bound across all desktop GPUs and keeps groupshared reductions correct without wave intrinsics.

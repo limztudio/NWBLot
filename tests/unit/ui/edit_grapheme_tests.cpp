@@ -42,11 +42,11 @@ class UiEditGraphemeTests : public EditFixture{};
 
 TEST_F(UiEditGraphemeTests, PassesEveryPinnedOfficialUnicode17ExtendedGraphemeCase){
     static_assert(sizeof(s_ConformanceCases) / sizeof(GraphemeCase) == 766u);
-    EditBoundaryVector actual(m_arena);
     for(usize index = 0u; index < 766u; ++index){
         SCOPED_TRACE(index);
         const GraphemeCase& test = s_ConformanceCases[index];
-        ASSERT_TRUE(GraphemeSegmentation::Build(test.text, actual));
+        const auto actual = GraphemeSegmentation::Build(m_arena, test.text);
+        ASSERT_TRUE(actual);
         const AStringView expectedOffsets = test.expectedOffsets;
         usize cursor = 0u;
         usize offsetIndex = 0u;
@@ -56,59 +56,62 @@ TEST_F(UiEditGraphemeTests, PassesEveryPinnedOfficialUnicode17ExtendedGraphemeCa
                 expected = expected * 10u + static_cast<usize>(expectedOffsets[cursor] - '0');
                 ++cursor;
             }
-            ASSERT_LT(offsetIndex, actual.size());
-            EXPECT_EQ(actual[offsetIndex], expected);
+            ASSERT_LT(offsetIndex, actual->size());
+            EXPECT_EQ((*actual)[offsetIndex], expected);
             ++offsetIndex;
             if(cursor < expectedOffsets.size() && expectedOffsets[cursor] == ',')
                 ++cursor;
         }
-        EXPECT_EQ(offsetIndex, actual.size());
+        EXPECT_EQ(offsetIndex, actual->size());
     }
 }
 
 TEST_F(UiEditGraphemeTests, RegionalIndicatorsPairAndEmojiModifierZwjSequencesRemainWhole){
     const AStringView flags("\xF0\x9F\x87\xB0\xF0\x9F\x87\xB7\xF0\x9F\x87\xBA\xF0\x9F\x87\xB8"
         "\xF0\x9F\x87\xAF");
-    EditBoundaryVector boundaries(m_arena);
-    ASSERT_TRUE(GraphemeSegmentation::Build(flags, boundaries));
-    ASSERT_EQ(boundaries.size(), 4u);
-    EXPECT_EQ(boundaries[0], 0u);
-    EXPECT_EQ(boundaries[1], 8u);
-    EXPECT_EQ(boundaries[2], 16u);
-    EXPECT_EQ(boundaries[3], 20u);
+    auto boundaries = GraphemeSegmentation::Build(m_arena, flags);
+    ASSERT_TRUE(boundaries);
+    ASSERT_EQ(boundaries->size(), 4u);
+    EXPECT_EQ((*boundaries)[0], 0u);
+    EXPECT_EQ((*boundaries)[1], 8u);
+    EXPECT_EQ((*boundaries)[2], 16u);
+    EXPECT_EQ((*boundaries)[3], 20u);
     const AStringView emoji("\xF0\x9F\x91\xA9\xF0\x9F\x8F\xBD\xE2\x80\x8D\xF0\x9F\x92\xBB");
-    ASSERT_TRUE(GraphemeSegmentation::Build(emoji, boundaries));
-    ASSERT_EQ(boundaries.size(), 2u);
-    EXPECT_EQ(boundaries[1], 15u);
+    boundaries = GraphemeSegmentation::Build(m_arena, emoji);
+    ASSERT_TRUE(boundaries);
+    ASSERT_EQ(boundaries->size(), 2u);
+    EXPECT_EQ((*boundaries)[1], 15u);
     ASSERT_TRUE(m_model.setText(emoji));
     ASSERT_TRUE(m_model.backspace());
     EXPECT_TRUE(m_model.text().empty());
 }
 
 TEST_F(UiEditGraphemeTests, GeneralSegmentationAcceptsCrLfButSingleLineValidationRejectsIt){
-    EditBoundaryVector boundaries(m_arena);
-    ASSERT_TRUE(GraphemeSegmentation::Build("x\r\ny", boundaries));
-    ASSERT_EQ(boundaries.size(), 4u);
-    EXPECT_EQ(boundaries[0], 0u);
-    EXPECT_EQ(boundaries[1], 1u);
-    EXPECT_EQ(boundaries[2], 3u);
-    EXPECT_EQ(boundaries[3], 4u);
-    EXPECT_FALSE(GraphemeSegmentation::Build("x\r\ny", boundaries, true));
-    EXPECT_EQ(boundaries[2], 3u);
+    const auto boundaries = GraphemeSegmentation::Build(m_arena, "x\r\ny");
+    ASSERT_TRUE(boundaries);
+    ASSERT_EQ(boundaries->size(), 4u);
+    EXPECT_EQ((*boundaries)[0], 0u);
+    EXPECT_EQ((*boundaries)[1], 1u);
+    EXPECT_EQ((*boundaries)[2], 3u);
+    EXPECT_EQ((*boundaries)[3], 4u);
+    EXPECT_FALSE(GraphemeSegmentation::Build(m_arena, "x\r\ny", true));
+    EXPECT_EQ((*boundaries)[2], 3u);
     EXPECT_TRUE(GraphemeSegmentation::Validate(AStringView("\0", 1u)));
     EXPECT_FALSE(GraphemeSegmentation::Validate(AStringView("\0", 1u), true));
 }
 
-TEST_F(UiEditGraphemeTests, InvalidUtf8PreservesExistingBoundaries){
-    EditBoundaryVector boundaries(m_arena);
-    ASSERT_TRUE(GraphemeSegmentation::Build("ok", boundaries));
-    EXPECT_FALSE(GraphemeSegmentation::Build("\xED\xA0\x80", boundaries));
-    EXPECT_FALSE(GraphemeSegmentation::Build("\xF5\x80\x80\x80", boundaries));
-    EXPECT_FALSE(GraphemeSegmentation::Build("\x80", boundaries));
-    ASSERT_EQ(boundaries.size(), 3u);
-    EXPECT_EQ(boundaries[0], 0u);
-    EXPECT_EQ(boundaries[1], 1u);
-    EXPECT_EQ(boundaries[2], 2u);
+TEST_F(UiEditGraphemeTests, InvalidUtf8FailsBeforeAllocatingBoundaries){
+    const auto boundaries = GraphemeSegmentation::Build(m_arena, "ok");
+    ASSERT_TRUE(boundaries);
+    const auto before = m_arena.memoryStats();
+    EXPECT_FALSE(GraphemeSegmentation::Build(m_arena, "\xED\xA0\x80"));
+    EXPECT_FALSE(GraphemeSegmentation::Build(m_arena, "\xF5\x80\x80\x80"));
+    EXPECT_FALSE(GraphemeSegmentation::Build(m_arena, "\x80"));
+    EXPECT_EQ(m_arena.memoryStats().allocationCount, before.allocationCount);
+    ASSERT_EQ(boundaries->size(), 3u);
+    EXPECT_EQ((*boundaries)[0], 0u);
+    EXPECT_EQ((*boundaries)[1], 1u);
+    EXPECT_EQ((*boundaries)[2], 2u);
 }
 
 TEST_F(UiEditGraphemeTests, ScalarPositionsDifferFromGraphemePositionsWithoutSplittingUtf8){

@@ -26,60 +26,64 @@ namespace Tests{
 
 TEST(Base64, RejectsMalformedAlphabetLengthPaddingAndUnusedBits){
     TestArena<> context;
-    Vector<u8, Core::Alloc::GlobalArena> output(context.arena);
-    output.push_back(91u);
+    using Bytes = ::Vector<u8, Core::Alloc::GlobalArena>;
+    const typename Bytes::allocator_type allocator(context.arena);
     const AStringView invalid[] = {
         "Z", "Zg", "Zg=", "Zg===", "=g==", "Z===", "Zg=A", "Zg==AAAA", "AAAAZg==AAAA",
         "Zm9=", "Zh==", "AB==", "AAB=", "Zg-_", "Zg\r\n", "Zg \t", "Zg#=", "====",
         AStringView("Zg\0=", 4u), AStringView("Zg\xff=", 4u),
     };
     for(const AStringView text : invalid){
-        usize size = 77u;
-        EXPECT_FALSE(Base64DecodedSize(text, 1024u, size));
-        EXPECT_EQ(size, 77u);
-        EXPECT_FALSE(DecodeBase64(text, output, 1024u));
-        ASSERT_EQ(output.size(), 1u);
-        EXPECT_EQ(output[0u], 91u);
+        EXPECT_FALSE(Base64DecodedSize(text, 1024u));
+        EXPECT_FALSE(DecodeBase64<Bytes>(text, allocator, 1024u));
     }
 }
 
-TEST(Base64, ExactDecodedBoundsAreCheckedBeforePublication){
+TEST(Base64, ExactDecodedBoundsAreCheckedBeforeAllocation){
     TestArena<> context;
-    Vector<u8, Core::Alloc::GlobalArena> output(context.arena);
-    output.push_back(91u);
-    usize size = 77u;
-    EXPECT_FALSE(Base64DecodedSize("Zm9v", 2u, size));
-    EXPECT_EQ(size, 77u);
-    EXPECT_FALSE(DecodeBase64("Zm9v", output, 2u));
-    ASSERT_EQ(output.size(), 1u);
-    EXPECT_EQ(output[0u], 91u);
-    ASSERT_TRUE(Base64DecodedSize("Zm9v", 3u, size));
-    EXPECT_EQ(size, 3u);
-    ASSERT_TRUE(DecodeBase64("Zm9v", output, 3u));
-    EXPECT_EQ(output[0u], static_cast<u8>('f'));
-    ASSERT_TRUE(DecodeBase64("", output, 0u));
-    EXPECT_TRUE(output.empty());
+    using Bytes = ::Vector<u8, Core::Alloc::GlobalArena>;
+    const typename Bytes::allocator_type allocator(context.arena);
+    const auto before = context.arena.memoryStats();
+    EXPECT_FALSE(Base64DecodedSize("Zm9v", 2u));
+    EXPECT_FALSE(DecodeBase64<Bytes>("Zm9v", allocator, 2u));
+    EXPECT_EQ(context.arena.memoryStats().allocationCount, before.allocationCount);
+    const auto size = Base64DecodedSize("Zm9v", 3u);
+    ASSERT_TRUE(size);
+    EXPECT_EQ(*size, 3u);
+    const auto output = DecodeBase64<Bytes>("Zm9v", allocator, 3u);
+    ASSERT_TRUE(output);
+    ASSERT_EQ(output->size(), 3u);
+    EXPECT_EQ((*output)[0u], static_cast<u8>('f'));
+    const auto empty = DecodeBase64<Bytes>("", allocator, 0u);
+    ASSERT_TRUE(empty);
+    EXPECT_TRUE(empty->empty());
 }
 
-TEST(Base64, AliasedInputSurvivesOutputReplacement){
+TEST(Base64, AliasedInputSurvivesOwnerReplacement){
     TestArena<> context;
-    AString<Core::Alloc::GlobalArena> text("foobar", context.arena);
-    ASSERT_TRUE(EncodeBase64({ reinterpret_cast<const u8*>(text.data()), text.size() }, text));
+    ::AString<Core::Alloc::GlobalArena> text("foobar", context.arena);
+    auto encoded = EncodeBase64<decltype(text)>({ reinterpret_cast<const u8*>(text.data()), text.size() }, text.get_allocator());
+    ASSERT_TRUE(encoded);
+    text = Move(*encoded);
     EXPECT_EQ(text, "Zm9vYmFy");
-    ASSERT_TRUE(DecodeBase64(AStringView(text.data(), text.size()), text, 6u));
+    auto decoded = DecodeBase64<decltype(text)>(AStringView(text.data(), text.size()), text.get_allocator(), 6u);
+    ASSERT_TRUE(decoded);
+    text = Move(*decoded);
     EXPECT_EQ(text, "foobar");
 }
 
-TEST(Base64, InvalidEncodeInputAndSizeOverflowPreserveOutput){
+TEST(Base64, InvalidEncodeInputAndSizeOverflowDoNotAllocate){
     TestArena<> context;
-    AString<Core::Alloc::GlobalArena> output("previous", context.arena);
-    EXPECT_FALSE(EncodeBase64({ nullptr, 1u }, output));
-    EXPECT_EQ(output, "previous");
+    using Text = ::AString<Core::Alloc::GlobalArena>;
+    const typename Text::allocator_type allocator(context.arena);
+    const auto before = context.arena.memoryStats();
+    EXPECT_FALSE(EncodeBase64<Text>({ nullptr, 1u }, allocator));
     const u8 byte = 0u;
-    EXPECT_FALSE(EncodeBase64({ &byte, Limit<usize>::s_Max }, output));
-    EXPECT_EQ(output, "previous");
-    ASSERT_TRUE(EncodeBase64({}, output));
-    EXPECT_TRUE(output.empty());
+    EXPECT_FALSE(EncodeBase64<Text>({ &byte, Limit<usize>::s_Max }, allocator));
+    EXPECT_EQ(context.arena.memoryStats().allocationCount, before.allocationCount);
+    const auto empty = EncodeBase64<Text>({}, allocator);
+    ASSERT_TRUE(empty);
+    EXPECT_TRUE(empty->empty());
 }
 
 

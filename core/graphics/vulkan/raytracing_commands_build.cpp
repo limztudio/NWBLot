@@ -168,79 +168,70 @@ void CommandList::setRayTracingState(const RayTracingState& state){
 }
 
 
-bool CommandList::suballocateBuildScratchAddress(
+Expected<VkDeviceAddress> CommandList::suballocateBuildScratchAddress(
     const u64 buildScratchSize,
     const u64 scratchAlignment,
-    VkDeviceAddress& outScratchAddress,
     TStringView operationName
 ){
-    outScratchAddress = 0u;
     if(buildScratchSize == 0u)
-        return true;
+        return VkDeviceAddress{0u};
     if(!m_currentCmdBuf || m_nativeRecordingID == 0u || scratchAlignment == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch recording identity or alignment is invalid"), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     const u64 scratchPadding = scratchAlignment - 1u;
     if(buildScratchSize > Limit<u64>::s_Max - scratchPadding){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch allocation size overflows"), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     const u64 scratchAllocationSize = buildScratchSize + scratchPadding;
 
-    Buffer* scratchBuffer = nullptr;
-    u64 scratchAllocationOffset = 0u;
     const GpuPhysicalQueueId physicalQueue = m_currentCmdBuf->m_queue.m_physicalQueue;
     const u64 completedVersion = m_device.queueGetCompletedInstance(physicalQueue);
-    if(!m_device.m_scratchManager.suballocateBuffer(
+    const auto allocation = m_device.m_scratchManager.suballocateBuffer(
         scratchAllocationSize,
-        &scratchBuffer,
-        &scratchAllocationOffset,
-        nullptr,
         m_currentCmdBuf.get(),
         m_nativeRecordingID,
         physicalQueue,
         completedVersion,
         1u
-    )){
+    );
+    if(!allocation){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch-buffer suballocation failed"), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!isBufferReadyForCommandQueue(
-        scratchBuffer,
+        allocation->buffer,
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch buffer is not ready for device-address access"), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    const VkDeviceAddress scratchBaseAddress = VulkanDetail::GetBufferDeviceAddress(scratchBuffer, scratchAllocationOffset);
-    VkDeviceAddress alignedScratchAddress = 0u;
-    if(scratchBaseAddress == 0u || !AlignUpChecked(scratchBaseAddress, scratchAlignment, alignedScratchAddress)){
+    const VkDeviceAddress scratchBaseAddress = VulkanDetail::GetBufferDeviceAddress(allocation->buffer, allocation->offset);
+    const auto alignedScratchAddress = AlignUpChecked(scratchBaseAddress, scratchAlignment);
+    if(scratchBaseAddress == 0u || !alignedScratchAddress){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: scratch device address is null or cannot be aligned"), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    const u64 scratchOffset = alignedScratchAddress - scratchBaseAddress;
+    const u64 scratchOffset = *alignedScratchAddress - scratchBaseAddress;
     if(scratchOffset > scratchAllocationSize || buildScratchSize > scratchAllocationSize - scratchOffset){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: aligned scratch range is outside the buffer"), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outScratchAddress = alignedScratchAddress;
-    return true;
+    return *alignedScratchAddress;
 }
 
-bool CommandList::validateAccelStructBuildSignature(
+Expected<bool> CommandList::validateAccelStructBuildSignature(
     AccelStruct& accelStruct,
     const VkAccelerationStructureTypeKHR accelStructType,
     const VkBuildAccelerationStructureFlagsKHR buildFlags,
     const AccelStructGeometryBuildSignature* const geometrySignatures,
     const usize geometrySignatureCount,
     const bool performUpdate,
-    const TStringView operationName,
-    bool& outHasPriorBuild
+    const TStringView operationName
 ){
-    outHasPriorBuild = false;
     accelStruct.collectRetiredBuildSignatureRoles();
 
     const auto validatePriorSignature = [
@@ -280,45 +271,34 @@ bool CommandList::validateAccelStructBuildSignature(
         return true;
     };
 
-    VkAccelerationStructureTypeKHR priorAccelStructType = VK_ACCELERATION_STRUCTURE_TYPE_MAX_ENUM_KHR;
-    VkBuildAccelerationStructureFlagsKHR priorBuildFlags = 0u;
-    const AccelStructGeometryBuildSignature* priorGeometrySignatures = nullptr;
-    usize priorGeometrySignatureCount = 0u;
-    if(m_currentCmdBuf->getPendingAccelStructBuildSignature(
-        accelStruct,
-        priorAccelStructType,
-        priorBuildFlags,
-        priorGeometrySignatures,
-        priorGeometrySignatureCount
-    )){
-        outHasPriorBuild = true;
-        return !performUpdate || validatePriorSignature(
-            priorAccelStructType,
-            priorBuildFlags,
-            priorGeometrySignatures,
-            priorGeometrySignatureCount
-        );
+    const auto pendingRole = m_currentCmdBuf->getPendingAccelStructBuildSignature(accelStruct);
+    if(pendingRole){
+        const AccelStructBuildSignatureRole& prior = **pendingRole;
+        if(performUpdate && !validatePriorSignature(prior.accelStructType, prior.buildFlags, prior.geometrySignatures.data(), prior.geometrySignatures.size()))
+            return MakeUnexpected(Failure{});
+        return true;
     }
 
     ScopedLock lock(accelStruct.m_acceptedBuildSignatureMutex);
     const AccelStructBuildSignatureRole* const acceptedRole = accelStruct.m_acceptedBuildSignatureRole;
-    outHasPriorBuild = acceptedRole != nullptr;
     if(!performUpdate)
-        return true;
-    if(!outHasPriorBuild){
+        return acceptedRole != nullptr;
+    if(!acceptedRole){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Vulkan: Failed to {}: PerformUpdate requires a previously accepted build or an earlier same-command-buffer build")
             , operationName
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    return validatePriorSignature(
+    if(!validatePriorSignature(
         acceptedRole->accelStructType,
         acceptedRole->buildFlags,
         acceptedRole->geometrySignatures.data(),
         acceptedRole->geometrySignatures.size()
-    );
+    ))
+        return MakeUnexpected(Failure{});
+    return true;
 }
 
 bool CommandList::buildTopLevelAccelStructFromInstanceData(
@@ -369,17 +349,16 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
             false
         )
     ;
-    bool hasPriorBuild = false;
-    if(!validateAccelStructBuildSignature(
+    const auto hasPriorBuildResult = validateAccelStructBuildSignature(
         as,
         VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR,
         vkBuildFlags,
         &geometrySignature,
         1u,
         performUpdate,
-        operationName,
-        hasPriorBuild
-    ))
+        operationName
+    );
+    if(!hasPriorBuildResult)
         return false;
 
     auto buildInfo = VulkanDetail::MakeVkStruct<VkAccelerationStructureBuildGeometryInfoKHR>(VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR);
@@ -409,13 +388,10 @@ bool CommandList::buildTopLevelAccelStructFromInstanceData(
         static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment),
         1u
     );
-    if(!suballocateBuildScratchAddress(
-        scratchSize,
-        scratchAlignment,
-        buildInfo.scratchData.deviceAddress,
-        NWB_TEXT("allocate TLAS scratch buffer")
-    ))
+    const auto scratchAddressResult = suballocateBuildScratchAddress(scratchSize, scratchAlignment, NWB_TEXT("allocate TLAS scratch buffer"));
+    if(!scratchAddressResult)
         return false;
+    buildInfo.scratchData.deviceAddress = *scratchAddressResult;
 
     // Order BLAS writes and prior TLAS writes before this TLAS build.
     {
@@ -486,9 +462,10 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build BLAS: acceleration structure storage is not ready"));
         return;
     }
-    VkBuildAccelerationStructureFlagsKHR vkBuildFlags = 0u;
-    if(!VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, vkBuildFlags, NWB_TEXT("build BLAS")))
+    const auto vkBuildFlagsResult = VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, NWB_TEXT("build BLAS"));
+    if(!vkBuildFlagsResult)
         return;
+    const VkBuildAccelerationStructureFlagsKHR vkBuildFlags = *vkBuildFlagsResult;
 
     const bool performUpdate = (buildFlags & RayTracingAccelStructBuildFlags::PerformUpdate) != 0u;
     if(performUpdate && !(buildFlags & RayTracingAccelStructBuildFlags::AllowUpdate)){
@@ -601,17 +578,17 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         }
 
         blasScratch.transformOffsets[i] = Limit<usize>::s_Max;
-        if(!VulkanDetail::FillBlasGeometryForSizeQuery(
-            m_context,
-            pGeometries[i],
-            blasScratch.geometries[i],
-            blasScratch.spheresData[i],
-            blasScratch.lssData[i],
-            blasScratch.primitiveCounts[i],
-            NWB_TEXT("build BLAS"),
-            true
-        ))
+        const auto geometry = VulkanDetail::FillBlasGeometryForSizeQuery(m_context, pGeometries[i], NWB_TEXT("build BLAS"), true);
+        if(!geometry)
             return;
+        blasScratch.geometries[i] = geometry->geometry;
+        blasScratch.spheresData[i] = geometry->spheresData;
+        blasScratch.lssData[i] = geometry->lssData;
+        blasScratch.primitiveCounts[i] = geometry->primitiveCount;
+        if(geometry->geometry.geometryType == VK_GEOMETRY_TYPE_SPHERES_NV)
+            blasScratch.geometries[i].pNext = &blasScratch.spheresData[i];
+        else if(geometry->geometry.geometryType == VK_GEOMETRY_TYPE_LINEAR_SWEPT_SPHERES_NV)
+            blasScratch.geometries[i].pNext = &blasScratch.lssData[i];
         if(
             pGeometries[i].geometryType == RayTracingGeometryType::Triangles
             && pGeometries[i].geometryData.triangles.opacityMicromap
@@ -776,18 +753,18 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         return;
     }
 
-    bool hasPriorBuild = false;
-    if(!validateAccelStructBuildSignature(
+    const auto hasPriorBuildResult = validateAccelStructBuildSignature(
         *as,
         VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
         vkBuildFlags,
         geometrySignatures.data(),
         geometrySignatures.size(),
         performUpdate,
-        performUpdate ? NWB_TEXT("update BLAS") : NWB_TEXT("build BLAS"),
-        hasPriorBuild
-    ))
+        performUpdate ? NWB_TEXT("update BLAS") : NWB_TEXT("build BLAS")
+    );
+    if(!hasPriorBuildResult)
         return;
+    const bool hasPriorBuild = *hasPriorBuildResult;
 
     for(usize i = 0u; i < numGeometries; ++i){
         if(opacityMicromapUsageOffsets[i] == Limit<usize>::s_Max)
@@ -935,13 +912,10 @@ void CommandList::buildBottomLevelAccelStruct(RayTracingAccelStruct* accelStruct
         static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment),
         1u
     );
-    if(!suballocateBuildScratchAddress(
-        scratchSize,
-        scratchAlignment,
-        buildInfo.scratchData.deviceAddress,
-        NWB_TEXT("allocate BLAS scratch buffer")
-    ))
+    const auto scratchAddressResult = suballocateBuildScratchAddress(scratchSize, scratchAlignment, NWB_TEXT("allocate BLAS scratch buffer"));
+    if(!scratchAddressResult)
         return;
+    buildInfo.scratchData.deviceAddress = *scratchAddressResult;
 
     // Reused acceleration structures need build-write ordering.
     if(hasPriorBuild){

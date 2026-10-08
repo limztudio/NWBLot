@@ -102,10 +102,9 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
+    [[nodiscard]] Expected<CausticsResolveChainResult> declare(
         const CausticsResolveChainInputs& inputs,
         const CausticsResolveChainNaming& naming,
-        CausticsResolveChainResult& outResult,
         Core::Alloc::ScratchArena& scratchArena
     );
 

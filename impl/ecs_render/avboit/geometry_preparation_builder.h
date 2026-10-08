@@ -61,9 +61,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
-        const AvboitGeometryPreparationInputs& inputs,
-        AvboitGeometryPreparationResult& outResult
+    [[nodiscard]] Expected<AvboitGeometryPreparationResult> declare(
+        const AvboitGeometryPreparationInputs& inputs
     );
 
 

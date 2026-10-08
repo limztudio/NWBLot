@@ -143,13 +143,14 @@ inline u64 s_NextDescriptorBufferStorageIdentity = 1u;
     return size > UINT32_MAX ? 0u : static_cast<u32>(size);
 }
 
-[[nodiscard]] inline bool ResolveDescriptorBufferRange(
+[[nodiscard]] inline Expected<BufferRange> ResolveDescriptorBufferRange(
     const DescriptorWriteItem& item,
-    const BufferDesc& bufferDesc,
-    BufferRange& outRange
+    const BufferDesc& bufferDesc
 )noexcept{
-    outRange = item.range.resolve(bufferDesc);
-    return outRange.byteSize > 0;
+    const auto range = item.range.resolve(bufferDesc);
+    if(range.byteSize == 0u)
+        return MakeUnexpected(Failure{});
+    return range;
 }
 
 

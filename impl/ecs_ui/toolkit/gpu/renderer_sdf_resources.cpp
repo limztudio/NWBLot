@@ -196,15 +196,15 @@ bool GpuRendererState::prepareSdfPages(GpuFrameData& frame){
     return true;
 }
 
-bool GpuRendererState::declareSdfPages(
+Expected<GpuSdfGraphResources> GpuRendererState::declareSdfPages(
     Core::GpuTaskGraph& graph,
     const GpuFrame& frame,
-    GpuSdfGraphResources& resources,
     GpuRasterResourceUses& uses
 ){
+    Expected<GpuSdfGraphResources> resources{s_InPlace};
     if(frame->m_sdfPages.size() != frame->m_snapshot.sdfPages().size()){
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared SDF page count does not match the immutable snapshot"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     for(usize index = 0u; index < frame->m_sdfPages.size(); ++index){
         const auto& page = frame->m_sdfPages[index];
@@ -220,7 +220,7 @@ bool GpuRendererState::declareSdfPages(
             NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: SDF page {} upload completion import failed (queue={}, generation={}, value={})")
                 , index, page->m_readinessToken.physicalQueueIndex, page->m_readinessToken.deviceGeneration, page->m_readinessToken.value
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const Core::GpuGraphResourceId texture = graph.importTexture(
             page->m_texture,
@@ -232,12 +232,12 @@ bool GpuRendererState::declareSdfPages(
             NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: SDF page {} texture import failed (atlas={}, group={}, generation={})")
                 , index, page->m_page->binding().atlasIdentity, page->m_page->binding().index, page->m_page->binding().generation
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        resources.push_back(texture);
+        resources->push_back(texture);
         uses.push_back({ texture, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read });
     }
-    return true;
+    return resources;
 }
 
 

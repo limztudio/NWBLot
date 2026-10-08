@@ -185,26 +185,19 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         localVertexRefs,
         attributeRefCount,
         attributeSkins,
-        [&](const usize meshletIndex, const MeshletDesc& meshlet, const usize, const u32 localPositionIndex, u32& outSkin){
-            MeshletPositionStreamRef positionRef;
-            if(!DecodeMeshletPositionRef(
-                positionRefDeltas.data(),
-                positionRefDeltas.size(),
-                meshlet,
-                localPositionIndex,
-                true,
-                positionRef
-            )){
-                return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(
+        [&](const usize meshletIndex, const MeshletDesc& meshlet, const usize, const u32 localPositionIndex)->Expected<u32>{
+            const auto positionRef = DecodeMeshletPositionRef(positionRefDeltas.data(), positionRefDeltas.size(), meshlet, localPositionIndex, true);
+            if(!positionRef){
+                static_cast<void>(MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(
                     contextText,
                     meshPathText,
                     meshletIndex,
                     NWB_TEXT("has invalid encoded position ref")
-                );
+                ));
+                return MakeUnexpected(Failure{});
             }
 
-            outSkin = positionRef.skin;
-            return true;
+            return positionRef->skin;
         },
         [&](const usize meshletIndex, const usize attributeIndex, const u32 previousSkin, const u32 skinIndex){
             static_cast<void>(previousSkin);
@@ -322,11 +315,11 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
             );
         }
 
-        usize encodedPositionBytes = 0u;
-        usize encodedAttributeBytes = 0u;
+        const auto encodedPositionBytes = MeshletEncodedPositionRefByteCount(meshlet, skinRequired);
+        const auto encodedAttributeBytes = MeshletEncodedAttributeRefByteCount(meshlet);
         if(
-            !MeshletEncodedPositionRefByteCount(meshlet, skinRequired, encodedPositionBytes)
-            || !MeshletEncodedAttributeRefByteCount(meshlet, encodedAttributeBytes)
+            !encodedPositionBytes
+            || !encodedAttributeBytes
         ){
             return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(
                 contextText,
@@ -336,8 +329,8 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
             );
         }
         if(
-            encodedPositionBytes > Limit<usize>::s_Max - expectedPositionRefByteCount
-            || encodedAttributeBytes > Limit<usize>::s_Max - expectedAttributeRefByteCount
+            *encodedPositionBytes > Limit<usize>::s_Max - expectedPositionRefByteCount
+            || *encodedAttributeBytes > Limit<usize>::s_Max - expectedAttributeRefByteCount
         ){
             return MeshPayloadValidationDiagnostics::FailMeshletPayloadValidation(
                 contextText,
@@ -348,8 +341,8 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         }
 
         expectedLocalVertexRefCount += vertexCount;
-        expectedPositionRefByteCount += encodedPositionBytes;
-        expectedAttributeRefByteCount += encodedAttributeBytes;
+        expectedPositionRefByteCount += *encodedPositionBytes;
+        expectedAttributeRefByteCount += *encodedAttributeBytes;
         expectedPrimitiveIndexCount += static_cast<usize>(primitiveCount) * s_MeshletTriangleIndexCount;
         if(
             expectedLocalVertexRefCount > localVertexRefs.size()
@@ -393,17 +386,10 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         }
 
         for(u32 localPositionIndex = 0u; localPositionIndex < encodedPositionCount; ++localPositionIndex){
-            MeshletPositionStreamRef ref;
+            const auto ref = DecodeMeshletPositionRef(positionRefDeltas.data(), positionRefDeltas.size(), meshlet, localPositionIndex, skinRequired);
             if(
-                DecodeMeshletPositionRef(
-                    positionRefDeltas.data(),
-                    positionRefDeltas.size(),
-                    meshlet,
-                    localPositionIndex,
-                    skinRequired,
-                    ref
-                )
-                && MeshMeshletRefValidation::MeshletPositionRefInRange(ref, positionCount, skinCount, skinRequired)
+                ref
+                && MeshMeshletRefValidation::MeshletPositionRefInRange(*ref, positionCount, skinCount, skinRequired)
             )
                 continue;
 
@@ -416,16 +402,10 @@ inline constexpr f32 s_TangentHandednessTolerance = 0.001f;
         }
 
         for(u32 localAttributeIndex = 0u; localAttributeIndex < attributeCount; ++localAttributeIndex){
-            MeshletAttributeStreamRef ref;
+            const auto ref = DecodeMeshletAttributeRef(attributeRefDeltas.data(), attributeRefDeltas.size(), meshlet, localAttributeIndex);
             if(
-                DecodeMeshletAttributeRef(
-                    attributeRefDeltas.data(),
-                    attributeRefDeltas.size(),
-                    meshlet,
-                    localAttributeIndex,
-                    ref
-                )
-                && MeshMeshletRefValidation::MeshletAttributeRefInRange(ref, normalCount, tangentCount, uv0Count, colorCount)
+                ref
+                && MeshMeshletRefValidation::MeshletAttributeRefInRange(*ref, normalCount, tangentCount, uv0Count, colorCount)
             )
                 continue;
 

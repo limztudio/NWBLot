@@ -38,8 +38,10 @@ protected:
     [[nodiscard]] bool installKoreanFallback(){
         const auto path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / "korean.font";
         Core::Assets::AssetBytes bytes(m_arena);
-        if(!Tests::ReadBundledFontBytes(path, bytes))
+        auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
+        if(!bytesResult)
             return false;
+        bytes = Move(*bytesResult);
         Font korean(m_arena, Name("tests/ui/fonts/korean"));
         korean.setFontBytes(Move(bytes));
         if(!korean.validatePayload())
@@ -356,10 +358,10 @@ TEST_F(UiTextAreaNavigationTests, ExplicitHangulPolicyKeepsVerticalTargetAligned
     EditBoxView visual(m_arena);
     ASSERT_TRUE(visual.snapshot(m_model));
     ASSERT_EQ(visual.shape(m_text, request), TextLayoutStatus::Success);
-    Rect caret;
-    ASSERT_TRUE(visual.caretGeometry().caretRect(visual.displayCaret(), caret));
-    usize expected = 0u;
-    ASSERT_TRUE(visual.caretGeometry().verticalTarget(visual.displayCaret(), true, caret.x, expected));
+    const auto caret = visual.caretGeometry().caretRect(visual.displayCaret());
+    ASSERT_TRUE(caret);
+    const auto expected = visual.caretGeometry().verticalTarget(visual.displayCaret(), true, caret->x);
+    ASSERT_TRUE(expected);
 
     const auto preferred = m_state.navigation().snapshot();
     AString<Core::Alloc::GlobalArena> language("ko", m_arena);
@@ -368,7 +370,7 @@ TEST_F(UiTextAreaNavigationTests, ExplicitHangulPolicyKeepsVerticalTargetAligned
     language.assign("!!", 2u);
     const EditNavigationResult matching = configured.resolve(m_model, EditNavigationDirection::Down, preferred, 0.0f);
     ASSERT_TRUE(matching.resolved);
-    EXPECT_EQ(matching.committedByte, expected);
+    EXPECT_EQ(matching.committedByte, *expected);
     TextAreaNavigationResolver defaultPolicy(m_arena, m_text, m_context, m_state, 14.0f);
     const EditNavigationResult different = defaultPolicy.resolve(m_model, EditNavigationDirection::Down, preferred, 0.0f);
     ASSERT_TRUE(different.resolved);

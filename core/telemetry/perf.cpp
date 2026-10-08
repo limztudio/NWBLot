@@ -99,29 +99,33 @@ template<typename HeaderT>
 }
 
 template<typename HeaderT>
-[[nodiscard]] static bool ParsePerfPayloadWithScopeText(
+struct ParsedPerfPayload{
+    HeaderT header;
+    AStringView scopeText;
+};
+
+template<typename HeaderT>
+[[nodiscard]] static Expected<ParsedPerfPayload<HeaderT>> ParsePerfPayloadWithScopeText(
     const void* const payload,
-    const usize payloadBytes,
-    HeaderT& outHeader,
-    AStringView& outScopeText
+    const usize payloadBytes
 ){
-    outScopeText = {};
     if(payloadBytes < sizeof(HeaderT) || !payload)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const BinaryByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
     usize cursor = 0u;
-    if(!ReadPOD(encoded, cursor, outHeader))
-        return false;
-    if(!ValidateHeader(outHeader))
-        return false;
-    if(!BinaryDetail::CanReadBytes(encoded, cursor, outHeader.scopeNameBytes))
-        return false;
-    if(payloadBytes - cursor != outHeader.scopeNameBytes)
-        return false;
+    const auto header = ReadPOD<HeaderT>(encoded, cursor);
+    if(!header || !ValidateHeader(*header))
+        return MakeUnexpected(Failure{});
+    if(!BinaryDetail::CanReadBytes(encoded, cursor, header->scopeNameBytes))
+        return MakeUnexpected(Failure{});
+    if(payloadBytes - cursor != header->scopeNameBytes)
+        return MakeUnexpected(Failure{});
 
-    outScopeText = AStringView(reinterpret_cast<const char*>(encoded.data() + cursor), outHeader.scopeNameBytes);
-    return true;
+    return ParsedPerfPayload<HeaderT>{
+        .header = *header,
+        .scopeText = AStringView(reinterpret_cast<const char*>(encoded.data() + cursor), header->scopeNameBytes),
+    };
 }
 
 static void RecordTimingView(
@@ -234,31 +238,31 @@ bool BuildPerfTimingPayload(
     return BuildPerfTimingPayload(arena, source, scopeName, scopeName.resolvedText(), stats, outPayload);
 }
 
-bool ParsePerfTimingPayload(
+Expected<PerfTimingPayload> ParsePerfTimingPayload(
     TelemetryArena& arena,
     const void* const payload,
-    const usize payloadBytes,
-    PerfTimingPayload& outPayload
+    const usize payloadBytes
 ){
-    outPayload = PerfTimingPayload(arena);
+    PerfTimingPayload parsedPayload(arena);
 
-    EncodedPerfTimingPayloadHeader header;
-    AStringView scopeText;
-    if(!__hidden_telemetry_perf::ParsePerfPayloadWithScopeText(payload, payloadBytes, header, scopeText))
-        return false;
+    const auto decoded = __hidden_telemetry_perf::ParsePerfPayloadWithScopeText<EncodedPerfTimingPayloadHeader>(payload, payloadBytes);
+    if(!decoded)
+        return MakeUnexpected(Failure{});
+    const EncodedPerfTimingPayloadHeader& header = decoded->header;
+    const AStringView scopeText = decoded->scopeText;
 
-    outPayload.source = static_cast<PerfTimingSource::Enum>(header.source);
-    outPayload.scopeName = Name(header.scopeHash);
-    outPayload.scopeText.assign(scopeText.data(), scopeText.size());
-    outPayload.stats.seconds = header.seconds;
-    outPayload.stats.minSeconds = header.minSeconds;
-    outPayload.stats.maxSeconds = header.maxSeconds;
-    outPayload.stats.lastSeconds = header.lastSeconds;
-    outPayload.stats.sampleCount = header.sampleCount;
-    outPayload.stats.publishFrameIndex = header.publishFrameIndex;
-    outPayload.stats.firstSampleFrameIndex = header.firstSampleFrameIndex;
-    outPayload.stats.lastSampleFrameIndex = header.lastSampleFrameIndex;
-    return true;
+    parsedPayload.source = static_cast<PerfTimingSource::Enum>(header.source);
+    parsedPayload.scopeName = Name(header.scopeHash);
+    parsedPayload.scopeText.assign(scopeText.data(), scopeText.size());
+    parsedPayload.stats.seconds = header.seconds;
+    parsedPayload.stats.minSeconds = header.minSeconds;
+    parsedPayload.stats.maxSeconds = header.maxSeconds;
+    parsedPayload.stats.lastSeconds = header.lastSeconds;
+    parsedPayload.stats.sampleCount = header.sampleCount;
+    parsedPayload.stats.publishFrameIndex = header.publishFrameIndex;
+    parsedPayload.stats.firstSampleFrameIndex = header.firstSampleFrameIndex;
+    parsedPayload.stats.lastSampleFrameIndex = header.lastSampleFrameIndex;
+    return parsedPayload;
 }
 
 bool RecordPerfTiming(
@@ -338,44 +342,44 @@ bool BuildPerfMemoryPayload(
     return BuildPerfMemoryPayload(arena, scopeName, scopeName.resolvedText(), snapshot, delta, outPayload);
 }
 
-bool ParsePerfMemoryPayload(
+Expected<PerfMemoryPayload> ParsePerfMemoryPayload(
     TelemetryArena& arena,
     const void* const payload,
-    const usize payloadBytes,
-    PerfMemoryPayload& outPayload
+    const usize payloadBytes
 ){
-    outPayload = PerfMemoryPayload(arena);
+    PerfMemoryPayload parsedPayload(arena);
 
-    EncodedPerfMemoryPayloadHeader header;
-    AStringView scopeText;
-    if(!__hidden_telemetry_perf::ParsePerfPayloadWithScopeText(payload, payloadBytes, header, scopeText))
-        return false;
+    const auto decoded = __hidden_telemetry_perf::ParsePerfPayloadWithScopeText<EncodedPerfMemoryPayloadHeader>(payload, payloadBytes);
+    if(!decoded)
+        return MakeUnexpected(Failure{});
+    const EncodedPerfMemoryPayloadHeader& header = decoded->header;
+    const AStringView scopeText = decoded->scopeText;
 
-    outPayload.scopeName = Name(header.scopeHash);
-    outPayload.scopeText.assign(scopeText.data(), scopeText.size());
-    outPayload.snapshot.scopeName = outPayload.scopeName;
-    outPayload.snapshot.source = static_cast<Perf::MemorySource::Enum>(header.source);
-    outPayload.snapshot.frameIndex = header.frameIndex;
-    outPayload.snapshot.reservedBytes = header.reservedBytes;
-    outPayload.snapshot.usedBytes = header.usedBytes;
-    outPayload.snapshot.peakUsedBytes = header.peakUsedBytes;
-    outPayload.snapshot.allocationCount = header.allocationCount;
-    outPayload.snapshot.reallocationCount = header.reallocationCount;
-    outPayload.snapshot.deallocationCount = header.deallocationCount;
+    parsedPayload.scopeName = Name(header.scopeHash);
+    parsedPayload.scopeText.assign(scopeText.data(), scopeText.size());
+    parsedPayload.snapshot.scopeName = parsedPayload.scopeName;
+    parsedPayload.snapshot.source = static_cast<Perf::MemorySource::Enum>(header.source);
+    parsedPayload.snapshot.frameIndex = header.frameIndex;
+    parsedPayload.snapshot.reservedBytes = header.reservedBytes;
+    parsedPayload.snapshot.usedBytes = header.usedBytes;
+    parsedPayload.snapshot.peakUsedBytes = header.peakUsedBytes;
+    parsedPayload.snapshot.allocationCount = header.allocationCount;
+    parsedPayload.snapshot.reallocationCount = header.reallocationCount;
+    parsedPayload.snapshot.deallocationCount = header.deallocationCount;
 
     if((header.flags & PerfMemoryPayloadFlag::HasDelta) != 0u){
-        outPayload.delta.previousFrameIndex = header.previousFrameIndex;
-        outPayload.delta.currentFrameIndex = header.frameIndex;
-        outPayload.delta.reservedBytes = header.deltaReservedBytes;
-        outPayload.delta.usedBytes = header.deltaUsedBytes;
-        outPayload.delta.peakUsedBytes = header.deltaPeakUsedBytes;
-        outPayload.delta.allocationCount = header.deltaAllocationCount;
-        outPayload.delta.reallocationCount = header.deltaReallocationCount;
-        outPayload.delta.deallocationCount = header.deltaDeallocationCount;
-        outPayload.delta.hasSamples = true;
+        parsedPayload.delta.previousFrameIndex = header.previousFrameIndex;
+        parsedPayload.delta.currentFrameIndex = header.frameIndex;
+        parsedPayload.delta.reservedBytes = header.deltaReservedBytes;
+        parsedPayload.delta.usedBytes = header.deltaUsedBytes;
+        parsedPayload.delta.peakUsedBytes = header.deltaPeakUsedBytes;
+        parsedPayload.delta.allocationCount = header.deltaAllocationCount;
+        parsedPayload.delta.reallocationCount = header.deltaReallocationCount;
+        parsedPayload.delta.deallocationCount = header.deltaDeallocationCount;
+        parsedPayload.delta.hasSamples = true;
     }
 
-    return true;
+    return parsedPayload;
 }
 
 bool RecordPerfMemory(

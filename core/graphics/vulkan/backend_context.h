@@ -143,8 +143,8 @@ public:
 public:
     [[nodiscard]] Device* getDevice()const noexcept{ return m_rhiDevice.get(); }
     [[nodiscard]] TStringView getRendererString()const noexcept{ return m_rendererString; }
-    bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters);
-    [[nodiscard]] bool getSelectedAdapterInfo(AdapterInfo& outAdapter)const;
+    [[nodiscard]] Expected<GraphicsVector<AdapterInfo>> enumerateAdapters();
+    [[nodiscard]] Expected<AdapterInfo> getSelectedAdapterInfo()const;
     [[nodiscard]] bool isValidationMessageIdIgnored(i32 messageId)const noexcept;
 
     [[nodiscard]] bool isInstanceExtensionEnabled(AStringView extensionName)const{
@@ -165,9 +165,8 @@ public:
     bool createDevice();
     bool createSwapChain();
     [[nodiscard]] bool destroy();
-    [[nodiscard]] bool prepareSwapChainTransition(
-        SwapChainTransitionKind::Enum kind,
-        SwapChainTransitionTicket& outTicket
+    [[nodiscard]] Expected<SwapChainTransitionTicket> prepareSwapChainTransition(
+        SwapChainTransitionKind::Enum kind
     );
     [[nodiscard]] bool commitSwapChainResize(SwapChainTransitionTicket&& ticket);
     [[nodiscard]] bool commitDestroy(SwapChainTransitionTicket&& ticket)noexcept;
@@ -177,7 +176,7 @@ public:
     [[nodiscard]] bool abandonAcquiredFrame();
     // The return value retains continuation/retirement status. The output reports native presentation acceptance
     // independently: it can be true even if later synchronization fails, and is false for out-of-date surfaces.
-    bool present(bool& outPresentationAccepted);
+    [[nodiscard]] Expected<bool, PresentationFailure> present();
     // Claims the acquired image's completion semaphore for one exact graph packet. A null hook leaves the
     // direct transition-submit path in present() active.
     [[nodiscard]] QueueSubmissionPreSubmitHook claimFramePresentationSignal()noexcept;
@@ -229,16 +228,14 @@ private:
         const VulkanDetail::DirectPresentTransitionPolicy::Enum transitionPolicy,
         Texture* backbufferTexture
     );
-    [[nodiscard]] static bool InvokeFramePresentationSignalPreparation(
+    [[nodiscard]] static Expected<QueueSubmissionNativeSignal> InvokeFramePresentationSignalPreparation(
         void* context,
         u64 identity,
-        const GpuPhysicalQueueId& executionQueue,
-        QueueSubmissionNativeSignal& outSignal
+        const GpuPhysicalQueueId& executionQueue
     );
-    [[nodiscard]] bool prepareFramePresentationSignal(
+    [[nodiscard]] Expected<QueueSubmissionNativeSignal> prepareFramePresentationSignal(
         u64 identity,
-        const GpuPhysicalQueueId& executionQueue,
-        QueueSubmissionNativeSignal& outSignal
+        const GpuPhysicalQueueId& executionQueue
     )noexcept;
     [[nodiscard]] static bool InvokeFramePresentationSignalResolution(
         void* context,

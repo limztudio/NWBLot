@@ -8,6 +8,7 @@
 #include <impl/ecs_render/shared/renderer_frame_types.h>
 #include <impl/ecs_render/reflection/composite_inputs.h>
 #include <impl/ecs_render/deferred/presentation_settings.h>
+#include <impl/ecs_render/deferred/scene_shading_uploads.h>
 
 #include <core/alloc/global.h>
 #include <core/ecs/global.h>
@@ -108,16 +109,9 @@ public:
     [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings);
 
     // Resolve immutable per-frame data; confirm CPU mirrors only after packet accepts.
-    [[nodiscard]] bool prepareSceneShadingBufferUploads(
+    [[nodiscard]] SceneShadingBufferUploads prepareSceneShadingBufferUploads(
         f32 fallbackAspectRatio,
-        const RayTracingLightingClassificationInput& rayTracingInput,
-        ECSRenderDetail::SceneLightGpuData* outLightData,
-        usize lightDataCapacity,
-        u32& outLightCount,
-        RayTracingLightingClassification& outRayTracingClassification,
-        bool& outLightUploadRequired,
-        ECSRenderDetail::SceneShadingGpuData& outSceneShadingState,
-        bool& outSceneShadingUploadRequired
+        const RayTracingLightingClassificationInput& rayTracingInput
     );
     void confirmSceneShadingBufferUploads(
         const ECSRenderDetail::SceneLightGpuData* lightData,
@@ -140,7 +134,7 @@ public:
         DeferredFrameTargets& targets,
         bool useLaggedLightingHistory = false
     );
-    [[nodiscard]] bool createDeferredFrameTargets(DeferredFrameTargets& outTargets, u32 width, u32 height);
+    [[nodiscard]] Expected<DeferredFrameTargets> createDeferredFrameTargets(u32 width, u32 height);
     [[nodiscard]] bool createDeferredFrameTargetResources(DeferredFrameTargets& targets, Core::Sampler& avboitLinearSampler);
     [[nodiscard]] bool createDeferredCompositeResources();
     [[nodiscard]] bool createDeferredCompositePipeline();

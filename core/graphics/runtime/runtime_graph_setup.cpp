@@ -422,41 +422,39 @@ ResourceStates::Mask SetupUploadGraphFinalState(const ResourceStates::Mask decla
 }
 
 
-bool SubmitGraphOwnedStandaloneTask(
+Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     const GraphicsRuntime& graphics,
     GraphicsArena& graphArena,
     void* const userData,
     const GraphTaskDeclaration declareTask,
-    QueueSubmissionToken& outSubmissionToken,
     const GpuPhysicalQueueId requiredTerminalQueue,
     CpuTaskScheduler* const readyFrontierScheduler,
     GpuTimingRecorder* const timingRecorder,
     GpuTimingFrameTransaction* const frameTimingTransaction
 ){
-    outSubmissionToken = {};
     if(!declareTask || (frameTimingTransaction && !timingRecorder))
-        return false;
+        return MakeUnexpected(Failure{});
 
     auto& device = graphics.getDevice();
 
     GpuTaskGraph graph(graphArena);
     const GpuTaskId terminalTask = declareTask(userData, graph);
     if(!terminalTask.valid())
-        return false;
+        return MakeUnexpected(Failure{});
     GpuTaskId frameTimingBeginTask;
     if(frameTimingTransaction){
         const GpuTaskGraph::DeclarationReadView declaredTasks(graph);
         if(!declaredTasks.valid() || declaredTasks.taskCount() < 2u)
-            return false;
+            return MakeUnexpected(Failure{});
         frameTimingBeginTask = declaredTasks.taskAt(0u).id;
         if(!frameTimingBeginTask.valid() || frameTimingBeginTask == terminalTask)
-            return false;
+            return MakeUnexpected(Failure{});
     }
     const GpuTaskId recoveryTask = __hidden_graphics_graph_setup::DeclareStandaloneTaskGraphRecoveryTask(
         graph, frameTimingTransaction
     );
     if(!recoveryTask.valid())
-        return false;
+        return MakeUnexpected(Failure{});
 
     GpuTaskGraphAnalysis analysis(graphArena);
     GpuTaskGraphQueueAssignments assignments(graphArena);
@@ -486,13 +484,13 @@ bool SubmitGraphOwnedStandaloneTask(
             , static_cast<u32>(analysisDiagnostic.status), analysisDiagnostic.task.index, analysisDiagnostic.resource.index
             , analysisDiagnostic.resourceVersion.index, static_cast<u32>(queueDiagnostic.status), queueDiagnostic.task.index
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const GpuTaskGraph::DeclarationReadView declarations(graph);
     const GpuCompiledGraph::ReadView compiledPlan(compiledGraph);
     if(!declarations.valid() || !compiledPlan.validFor(declarations))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const GpuSubmissionPacketId terminalPacket = compiledPlan.packetForTask(terminalTask);
     const GpuSubmissionPacketId recoveryPacket = compiledPlan.packetForTask(recoveryTask);
@@ -511,14 +509,14 @@ bool SubmitGraphOwnedStandaloneTask(
         || recoveryPacket != compiledPlan.packetIdAt(compiledPlan.packetCount() - 1u)
         || !compiledPlan.taskJoinsAcceptedQueueFrontier(recoveryTask)
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     const GpuCompiledPacketView terminalPacketView = compiledPlan.packet(terminalPacket);
     const GpuCompiledPacketView recoveryPacketView = compiledPlan.packet(recoveryPacket);
     if(!terminalPacketView.valid() || !recoveryPacketView.valid())
-        return false;
+        return MakeUnexpected(Failure{});
     if(requiredTerminalQueue.valid() && terminalPacketView.plan->queue != requiredTerminalQueue)
-        return false;
+        return MakeUnexpected(Failure{});
     if(frameTimingTransaction){
         const GpuCompiledPacketView beginPacketView = compiledPlan.packet(frameTimingBeginPacket);
         const GpuSubmissionPacketRange timingEnvelope = compiledPlan.packetTimingEnvelopeRange();
@@ -536,7 +534,7 @@ bool SubmitGraphOwnedStandaloneTask(
             || timingEnvelope.first != frameTimingBeginPacket
             || timingEnvelope.first.index + timingEnvelope.packetCount - 1u != terminalPacket.index
         )
-            return false;
+            return MakeUnexpected(Failure{});
     }
 
     const GpuSubmissionPacket& recoveryPacketPlan = *recoveryPacketView.plan;
@@ -546,7 +544,7 @@ bool SubmitGraphOwnedStandaloneTask(
         || recoveryPacketPlan.externalDependencyCount != 0u
         || !recoveryPacketPlan.joinsAcceptedQueueFrontier
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     // Setup and timing callers preserve their established serial behavior. The public standalone graph boundary supplies the Graphics worker pool
     GpuTaskGraphNormalExecutionDesc normalExecution;
@@ -593,10 +591,9 @@ bool SubmitGraphOwnedStandaloneTask(
             compiledGraph,
             recordedGraph.recordingAttemptGeneration()
         );
-        outSubmissionToken = {};
-        if(!recovered || !discarded)
+            if(!recovered || !discarded)
             graphics.requestDeviceRecreation();
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const bool discarded = transaction.discardUnaccepted(
@@ -613,11 +610,9 @@ bool SubmitGraphOwnedStandaloneTask(
     }
     if(!discarded || !terminalToken.valid()){
         graphics.requestDeviceRecreation();
-        outSubmissionToken = {};
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outSubmissionToken = terminalToken;
-    return true;
+    return terminalToken;
 }
 
 bool SubmitGraphOwnedSetupUpload(
@@ -627,10 +622,10 @@ bool SubmitGraphOwnedSetupUpload(
     const CommandQueue::Enum consumerQueue,
     void* const userData,
     const GraphTaskDeclaration declareTask,
-    QueueSubmissionToken& outUploadToken,
+    QueueSubmissionToken& inOutUploadToken,
     const GpuPhysicalQueueId requiredTerminalQueue
 ){
-    outUploadToken = {};
+    inOutUploadToken = {};
     if(!declareTask)
         return false;
 
@@ -642,18 +637,17 @@ bool SubmitGraphOwnedSetupUpload(
         .queueSharing = queueSharing,
         .consumerQueue = consumerQueue,
     };
-    QueueSubmissionToken terminalToken;
-    if(!SubmitGraphOwnedStandaloneTask(
+    const auto terminalToken = SubmitGraphOwnedStandaloneTask(
         graphics,
         graphArena,
         &submissionData,
         &__hidden_graphics_graph_setup::DeclareSetupUploadGraph,
-        terminalToken,
         requiredTerminalQueue
-    ))
+    );
+    if(!terminalToken)
         return false;
 
-    if(!outUploadToken.valid()){
+    if(!inOutUploadToken.valid()){
         // The producer's accepted callback supplies the public token. A successful bridge graph without that token would weaken the existing setup API contract, so reject it rather than returning a falsely ready handle.
         return false;
     }
@@ -673,19 +667,18 @@ bool SubmitGraphOwnedFrameTimingReset(
     __hidden_graphics_graph_setup::FrameTimingResetSubmissionData submissionData{
         .timing = timing,
     };
-    QueueSubmissionToken acceptedToken;
-    if(!SubmitGraphOwnedStandaloneTask(
+    const auto acceptedToken = SubmitGraphOwnedStandaloneTask(
         graphics,
         graphArena,
         &submissionData,
         &__hidden_graphics_graph_setup::DeclareFrameTimingResetGraph,
-        acceptedToken,
         graphicsQueue
-    ))
+    );
+    if(!acceptedToken)
         return false;
 
-    return acceptedToken.queue == CommandQueue::Graphics
-        && acceptedToken.matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration)
+    return acceptedToken->queue == CommandQueue::Graphics
+        && acceptedToken->matchesPhysicalQueue(graphicsQueue.index, graphicsQueue.deviceGeneration)
     ;
 }
 
@@ -699,24 +692,21 @@ bool SubmitGraphOwnedFrameTimingReset(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GraphicsRuntime::submitStandaloneTaskGraph(
+Expected<QueueSubmissionToken> GraphicsRuntime::submitStandaloneTaskGraph(
     void* const userData,
     const StandaloneTaskGraphDeclaration declareTask,
-    QueueSubmissionToken& outSubmissionToken,
     const GpuPhysicalQueueId requiredTerminalQueue,
     GpuTimingRecorder* const timingRecorder,
     GpuTimingFrameTransaction* const frameTimingTransaction
 )const{
-    outSubmissionToken = {};
     if(!declareTask)
-        return false;
+        return MakeUnexpected(Failure{});
 
     return GraphicsModuleDetail::SubmitGraphOwnedStandaloneTask(
         *this,
         m_allocator.getObjectArena(),
         userData,
         declareTask,
-        outSubmissionToken,
         requiredTerminalQueue,
         &m_cpuScheduler,
         timingRecorder,

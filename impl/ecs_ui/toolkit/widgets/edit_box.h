@@ -81,12 +81,24 @@ public:
     [[nodiscard]] TextLayoutStatus::Enum shape(TextService& text, ShapeRequest request = {});
     // Admits matching source bytes and mode-appropriate hard lines with LTR edges. Failure preserves prior geometry.
     [[nodiscard]] bool adoptLayout(TextLayout&& layout);
-    [[nodiscard]] bool arrange(const Rect& bounds, const Insets& padding, const Rect& clip,
-        Point previousScroll, EditBoxPlacement& output, f32 caretWidth = 1.0f, bool revealCaret = true)const noexcept;
+    [[nodiscard]] Expected<EditBoxPlacement> arrange(
+        const Rect& bounds,
+        const Insets& padding,
+        const Rect& clip,
+        Point previousScroll,
+        f32 caretWidth = 1.0f,
+        bool revealCaret = true
+    )const noexcept;
     // Uses a caller-reserved content viewport, such as a two-axis scrollbar layout.
-    [[nodiscard]] bool arrangeViewport(const Rect& bounds, const Rect& viewport, const Rect& clip,
-        Point previousScroll, EditBoxPlacement& output, f32 caretWidth = 1.0f, bool revealCaret = true)const noexcept;
-    [[nodiscard]] bool hitTest(Point point, const EditBoxPlacement& placement, usize& committedByte)const noexcept;
+    [[nodiscard]] Expected<EditBoxPlacement> arrangeViewport(
+        const Rect& bounds,
+        const Rect& viewport,
+        const Rect& clip,
+        Point previousScroll,
+        f32 caretWidth = 1.0f,
+        bool revealCaret = true
+    )const noexcept;
+    [[nodiscard]] Expected<usize> hitTest(Point point, const EditBoxPlacement& placement)const noexcept;
     [[nodiscard]] bool paint(TextService& text, PaintBuilder& paint, const UiSkin& skin,
         const EditBoxPlacement& placement, const EditBoxStyle& style = {}, const EditBoxPaintFlags& flags = {})const;
 

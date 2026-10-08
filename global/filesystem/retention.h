@@ -46,19 +46,18 @@ template<typename ArenaT, typename PredicateT>
     if(maxEntries == 0u)
         return true;
 
-    ErrorCode error;
-    const bool exists = IsDirectory(directory, error);
-    if(error)
-        return false;
+    const auto exists = IsDirectory(directory);
     if(!exists)
+        return false;
+    if(!*exists)
         return true;
 
     Vector<Path<ArenaT>, ArenaT> entries{arena};
-    DirectoryIterator directoryIt(directory, error);
-    if(error)
+    auto directoryIt = DirectoryIterator<ArenaT>::Create(directory);
+    if(!directoryIt)
         return false;
 
-    for(const auto& entry : directoryIt){
+    for(const auto& entry : *directoryIt){
         if(shouldRetainPath(entry.path()))
             entries.emplace_back(arena, entry.path());
     }
@@ -71,8 +70,7 @@ template<typename ArenaT, typename PredicateT>
     bool ok = true;
     const usize removeCount = entries.size() - maxEntries;
     for(usize i = 0u; i < removeCount; ++i){
-        error.clear();
-        if(!RemoveAllIfExists(entries[i], error))
+        if(!RemoveAllIfExists(entries[i]))
             ok = false;
     }
     return ok;

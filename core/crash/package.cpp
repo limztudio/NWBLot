@@ -272,8 +272,7 @@ static CrashStringT<ArenaT> BuildArtifactStrategyText(ArenaT& arena, const Crash
 template<typename ArenaT>
 static bool WriteCrashPackageBasics(ArenaT& arena, const CrashRequest& request){
     const ::Path<ArenaT> packageDirectory = RequestPendingDirectory(arena, request);
-    ErrorCode error;
-    if(!EnsureDirectories(packageDirectory, error))
+    if(!EnsureDirectories(packageDirectory))
         return false;
 
     if(!WriteCrashTextFile(packageDirectory / PackageNames::s_ManifestFileName, BuildManifest(arena, request)))
@@ -430,50 +429,48 @@ static void AppendArchiveUnsigned(CrashBytesT<ArenaT>& out, const u64 value){
 }
 
 template<typename ArenaT>
-bool BuildPackageArchive(ArenaT& arena, const ::Path<ArenaT>& packageDirectory, CrashBytesT<ArenaT>& outArchive){
-    outArchive.clear();
-    AppendArchiveText(outArchive, PackageNames::s_ArchiveHeaderText);
+Expected<CrashBytesT<ArenaT>> BuildPackageArchive(ArenaT& arena, const ::Path<ArenaT>& packageDirectory){
+    CrashBytesT<ArenaT> archive(arena);
+    AppendArchiveText(archive, PackageNames::s_ArchiveHeaderText);
 
-    ErrorCode error;
-    RecursiveDirectoryIterator directory(packageDirectory, error);
-    if(error)
-        return false;
+    const auto directory = RecursiveDirectoryIterator<ArenaT>::Create(packageDirectory);
+    if(!directory)
+        return MakeUnexpected(Failure{});
 
     bool wroteFile = false;
-    for(const auto& entry : directory){
-        ErrorCode entryError;
-        if(!entry.isRegularFile(entryError) || entryError)
+    for(const auto& entry : *directory){
+        const auto regularFile = entry.isRegularFile();
+        if(!regularFile || !*regularFile)
             continue;
 
         CrashBytesT<ArenaT> fileBytes{arena};
-        ErrorCode readError;
-        if(!ReadBinaryFile(entry.path(), fileBytes, readError))
-            return false;
+        if(!ReadBinaryFile(entry.path(), fileBytes))
+            return MakeUnexpected(Failure{});
 
         const CrashStringT<ArenaT> pathText = PathToGenericString<char>(arena, entry.path().lexicallyRelative(packageDirectory));
-        AppendArchiveText(outArchive, PackageNames::s_ArchiveFileHeaderPrefix);
-        AppendArchiveText(outArchive, AStringView(pathText.data(), pathText.size()));
-        AppendArchiveText(outArchive, " ");
-        AppendArchiveUnsigned(outArchive, fileBytes.size());
-        AppendArchiveText(outArchive, "\n");
-        outArchive.insert(outArchive.end(), fileBytes.begin(), fileBytes.end());
-        AppendArchiveText(outArchive, PackageNames::s_ArchiveEntryEndText);
+        AppendArchiveText(archive, PackageNames::s_ArchiveFileHeaderPrefix);
+        AppendArchiveText(archive, AStringView(pathText.data(), pathText.size()));
+        AppendArchiveText(archive, " ");
+        AppendArchiveUnsigned(archive, fileBytes.size());
+        AppendArchiveText(archive, "\n");
+        archive.insert(archive.end(), fileBytes.begin(), fileBytes.end());
+        AppendArchiveText(archive, PackageNames::s_ArchiveEntryEndText);
         wroteFile = true;
     }
 
-    return wroteFile;
+    if(!wroteFile)
+        return MakeUnexpected(Failure{});
+    return archive;
 }
 
-template bool BuildPackageArchive(
+template Expected<CrashBytesT<Alloc::GlobalArena>> BuildPackageArchive(
     Alloc::GlobalArena& arena,
-    const ::Path<Alloc::GlobalArena>& packageDirectory,
-    CrashBytesT<Alloc::GlobalArena>& outArchive
+    const ::Path<Alloc::GlobalArena>& packageDirectory
 );
 
-template bool BuildPackageArchive(
+template Expected<CrashBytesT<Alloc::PersistentArena>> BuildPackageArchive(
     Alloc::PersistentArena& arena,
-    const ::Path<Alloc::PersistentArena>& packageDirectory,
-    CrashBytesT<Alloc::PersistentArena>& outArchive
+    const ::Path<Alloc::PersistentArena>& packageDirectory
 );
 
 

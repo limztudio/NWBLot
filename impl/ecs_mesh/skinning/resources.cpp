@@ -52,38 +52,32 @@ static Core::BufferHandle SetupStructuredBuffer(
     );
 }
 
-static bool RegisterStorageBuffer(
+static Expected<Core::GpuDescriptorHandle> RegisterStorageBuffer(
     Core::GpuDescriptorHeap& heap,
-    Core::GpuDescriptorHandle& outHandle,
     const Core::DescriptorWriteItem& item
 ){
-    outHandle = Core::GpuDescriptorHandle::Invalid();
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(!handle.valid())
-        return false;
+        return MakeUnexpected(Failure{});
     if(!heap.write(handle, item)){
         heap.free(handle);
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outHandle = handle;
-    return true;
+    return handle;
 }
 
-static bool RegisterUniformBuffer(
+static Expected<Core::GpuDescriptorHandle> RegisterUniformBuffer(
     Core::GpuDescriptorHeap& heap,
-    Core::GpuDescriptorHandle& outHandle,
     Core::Buffer& buffer
 ){
-    outHandle = Core::GpuDescriptorHandle::Invalid();
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::UniformBuffer);
     if(!handle.valid())
-        return false;
+        return MakeUnexpected(Failure{});
     if(!heap.write(handle, Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer))){
         heap.free(handle);
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outHandle = handle;
-    return true;
+    return handle;
 }
 
 
@@ -141,8 +135,12 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: failed to register persistent compute buffers for runtime mesh '{}' in the descriptor heap"), instance.handle.value);
         return false;
     };
-    const auto registerBuffer = [&](Core::GpuDescriptorHandle& outHandle, const Core::DescriptorWriteItem& item){
-        return __hidden_resources::RegisterStorageBuffer(heap, outHandle, item);
+    const auto registerBuffer = [&](Core::GpuDescriptorHandle& inOutHandle, const Core::DescriptorWriteItem& item){
+        const auto handle = __hidden_resources::RegisterStorageBuffer(heap, item);
+        if(!handle)
+            return false;
+        inOutHandle = *handle;
+        return true;
     };
 
     if(
@@ -195,12 +193,10 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
         if(!registerBuffer(resources.bindlessHeapHandles.attributeBuffer, Core::DescriptorWriteItem::RawBufferUav(0u, instance.attributeBuffer.get())))
             return fail();
     }
-    if(!__hidden_resources::RegisterUniformBuffer(
-        heap,
-        resources.bindlessHeapHandles.resourceSlots,
-        *resources.bindlessResourceSlotsBuffer.get()
-    ))
+    const auto resourceSlots = __hidden_resources::RegisterUniformBuffer(heap, *resources.bindlessResourceSlotsBuffer.get());
+    if(!resourceSlots)
         return fail();
+    resources.bindlessHeapHandles.resourceSlots = *resourceSlots;
 
     MeshSkinningBindlessResourceSlots& slots = resources.bindlessResourceSlots;
     slots.restPosition = resources.bindlessHeapHandles.restPosition.slot();
@@ -227,15 +223,11 @@ bool MeshSkinningSystem::createRuntimeResourceBindlessHeapHandles(MeshSkinningRu
     return true;
 }
 
-bool MeshSkinningSystem::ensureRuntimeResources(
+Expected<MeshSkinningSystem::RuntimeResourcePreparation> MeshSkinningSystem::ensureRuntimeResources(
     MeshSkinningRuntimeInstance& instance,
     const RuntimeSkinPayloadScratch& payload,
-    Core::Alloc::ScratchArena& scratchArena,
-    RuntimeResources*& outResources,
-    bool& outResourcesRebuilt
+    Core::Alloc::ScratchArena& scratchArena
 ){
-    outResources = nullptr;
-    outResourcesRebuilt = false;
     NWB_ASSERT((payload.skinInfluenceCount == 0u) == payload.jointMatrices.empty());
 
     const bool hasActiveSkin = payload.hasActiveSkin();
@@ -264,10 +256,8 @@ bool MeshSkinningSystem::ensureRuntimeResources(
         || (hasActiveSkin && (!resources.skinBuffer || !resources.jointPaletteBuffer))
         || (!hasActiveSkin && resources.usesSkinning())
     ;
-    if(!rebuild){
-        outResources = &resources;
-        return true;
-    }
+    if(!rebuild)
+        return RuntimeResourcePreparation{ &resources, false };
 
     RuntimeResources rebuilt;
     rebuilt.handle = instance.handle;
@@ -281,12 +271,12 @@ bool MeshSkinningSystem::ensureRuntimeResources(
 
     const auto failRebuild = [&](){
         releaseRuntimeResourceBindlessHeapHandles(rebuilt);
-        return false;
+        return MakeUnexpected(Failure{});
     };
 
     if(hasActiveSkin){
-        Vector<MeshSkinningInfluenceGpu, Core::Alloc::ScratchArena> skinInfluences(scratchArena);
-        if(!MeshSkinningPayload::BuildSkinInfluences(instance, skinInfluences))
+        const auto skinInfluences = MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
+        if(!skinInfluences)
             return failRebuild();
 
         const Name skinBufferName = DeriveRuntimeResourceName(instance.sourceName, instance.handle.value, instance.editRevision, "mesh_skinning_skin");
@@ -299,8 +289,8 @@ bool MeshSkinningSystem::ensureRuntimeResources(
         rebuilt.skinBuffer = __hidden_resources::SetupStructuredBuffer(
             m_graphics,
             skinBufferName,
-            skinInfluences.data(),
-            skinInfluences.size(),
+            skinInfluences->data(),
+            skinInfluences->size(),
             NWB_TEXT("skin influence")
         );
         if(!rebuilt.skinBuffer){
@@ -348,12 +338,10 @@ bool MeshSkinningSystem::ensureRuntimeResources(
     if(!createRuntimeResourceBindlessHeapHandles(instance, rebuilt))
         return failRebuild();
 
-    // Rebuilds allocate fresh slots; free replaced generation before dropping handles.tors.
+    // Rebuilds allocate fresh slots; free the replaced generation before dropping its handles.
     releaseRuntimeResourceBindlessHeapHandles(resources);
     resources = Move(rebuilt);
-    outResources = &resources;
-    outResourcesRebuilt = true;
-    return true;
+    return RuntimeResourcePreparation{ &resources, true };
 }
 
 

@@ -424,12 +424,12 @@ public:
             payload.cases = m_cases.data() + firstCase;
             payload.firstCase = firstCase;
             payload.caseCount = Min(s_BatchSize, static_cast<u32>(m_cases.size()) - firstCase);
-            Core::QueueSubmissionToken token;
-            if(!m_context.graphics.submitStandaloneTaskGraph(&payload, DeclareBatch, token)){
+            const auto token = m_context.graphics.submitStandaloneTaskGraph(&payload, DeclareBatch);
+            if(!token){
                 NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: batch submission failed at case {}"), firstCase);
                 return false;
             }
-            if(!m_context.graphics.getDevice().waitForSubmissionToken(token)){
+            if(!m_context.graphics.getDevice().waitForSubmissionToken(*token)){
                 NWB_LOGGER_ERROR(NWB_TEXT("AvboitDepthWarpProbe: batch completion wait failed at case {}"), firstCase);
                 return false;
             }

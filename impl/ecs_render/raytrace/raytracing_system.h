@@ -245,10 +245,9 @@ public:
 
     // Resource identity is frozen by the shared deferred graph.  Select/grow every trace resource before graph compilation, then let the graph-owned preparation packet issue only GPU work against that frozen set.
     [[nodiscard]] bool preflightShadowVisibilityResources(DeferredFrameTargets& targets, Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool recordPreflightShadowVisibilityResources(
+    [[nodiscard]] Expected<bool> recordPreflightShadowVisibilityResources(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
-        bool& outBackendReady,
         bool sceneTlasBuildGraphOwned,
         bool meshBlasBuildsGraphOwned,
         bool meshBlasGeometryBuildInputStatesGraphOwned,
@@ -275,32 +274,25 @@ public:
     [[nodiscard]] bool createSurfelTargets(DeferredFrameTargets& targets);
     // Resolve the frozen shared material-context heap slots after preflight has settled all backing-buffer capacities.
     // The shared graph retains this POD as an immutable upload blob before recording begins.
-    [[nodiscard]] bool snapshotRayTraceMaterialContextSlots(RayTraceMaterialContextSlots& outSlots);
+    [[nodiscard]] Expected<RayTraceMaterialContextSlots> snapshotRayTraceMaterialContextSlots();
     // Retain the exact preflight-gathered caustic AABB stream as an immutable graph blob. A valid empty result authoritatively represents a frame without refractive emission targets.
-    [[nodiscard]] bool retainPreparedCausticEmissionTargetUpload(
-        Core::GpuTaskGraph& graph,
-        Core::GpuUploadBlobId& outBlob
+    [[nodiscard]] Expected<Core::GpuUploadBlobId> retainPreparedCausticEmissionTargetUpload(
+        Core::GpuTaskGraph& graph
     )const;
     // Retain the exact per-frame surfel constant payload before graph recording. A valid empty result represents an inactive surfel frame
-    [[nodiscard]] bool retainPreparedSurfelFrameConstantsUpload(
+    [[nodiscard]] Expected<Core::GpuUploadBlobId> retainPreparedSurfelFrameConstantsUpload(
         Core::GpuTaskGraph& graph,
-        const DeferredFrameTargets& targets,
-        Core::GpuUploadBlobId& outBlob
+        const DeferredFrameTargets& targets
     )const;
     // The material table, instance stream, and typed bytes share indices and offsets. A fresh context retains one all-or-nothing upload batch
-    [[nodiscard]] bool retainPreparedShadowMaterialContextUploads(
-        Core::GpuTaskGraph& graph,
-        Core::GpuUploadBlobId& outInstanceMaterialBlob,
-        Core::GpuUploadBlobId& outInstanceBlob,
-        Core::GpuUploadBlobId& outMaterialTypedBlob
+    [[nodiscard]] Expected<PreparedShadowMaterialContextUploads> retainPreparedShadowMaterialContextUploads(
+        Core::GpuTaskGraph& graph
     )const;
     void confirmPreparedShadowMaterialContextUploads()noexcept;
     // The software scene hierarchy and its leaf instances share topology and leaf indices,
     // retain them as one immutable preflight batch and publish both only when the accepting Shadow Preparation packet submits.
-    [[nodiscard]] bool retainPreparedSceneBvhUploads(
-        Core::GpuTaskGraph& graph,
-        Core::GpuUploadBlobId& outNodeBlob,
-        Core::GpuUploadBlobId& outInstanceBlob
+    [[nodiscard]] Expected<PreparedSceneBvhUploads> retainPreparedSceneBvhUploads(
+        Core::GpuTaskGraph& graph
     )const;
     void confirmPreparedSceneBvhUploads()noexcept;
     // Hardware TLAS work records from this frozen preflight plan in Shadow Preparation. Its static cache becomes valid only after that packet accepts.
@@ -328,12 +320,11 @@ public:
     void releaseSwBvhScratchHeapHandles();
     void releaseSurfelGiHeapHandles();
     // The deferred graph declares hardware trace entry resources before recording.
-    [[nodiscard]] bool renderShadowVisibility(
+    [[nodiscard]] Expected<u32> renderShadowVisibility(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         bool splitSoftTransparentFold = false,
-        u32* opaqueFrameIndex = nullptr,
         bool graphOwnsOpaqueTemporalMergeEntryStates = false,
         bool splitOpaqueSoftResolve = false,
         const LightSpaceShadowSnapshot* lightSpace = nullptr
@@ -475,12 +466,11 @@ public:
         f32 decayFactor
     );
     // Software visibility consumes graph-declared traversal inputs for opaque shadows and transparent transmittance.
-    [[nodiscard]] bool renderGpuBvhShadowVisibility(
+    [[nodiscard]] Expected<u32> renderGpuBvhShadowVisibility(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
         bool splitSoftTransparentFold = false,
-        u32* opaqueFrameIndex = nullptr,
         bool graphOwnsOpaqueTemporalMergeEntryStates = false,
         bool splitOpaqueSoftResolve = false,
         const GraphOwnedAdaptiveShadowPlan* graphOwnedAdaptivePlan = nullptr,
@@ -887,11 +877,10 @@ private:
         SoftShadowOpaqueResolvePhase::Enum opaquePhase = SoftShadowOpaqueResolvePhase::TemporalAndWavelet
     );
     // Graph-only phase helpers preserve the complete direct route above while exposing both in-packet handoffs to the shared deferred graph.
-    [[nodiscard]] bool renderShadowVisibilityOpaque(
+    [[nodiscard]] Expected<u32> renderShadowVisibilityOpaque(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
-        u32& outFrameIndex,
         bool graphOwnsOpaqueTemporalMergeEntryStates,
         const LightSpaceShadowSnapshot* lightSpace
     );
@@ -911,11 +900,10 @@ private:
         u32 frameIndex,
         bool hardwareShadowSupported
     );
-    [[nodiscard]] bool renderGpuBvhShadowVisibilityOpaque(
+    [[nodiscard]] Expected<u32> renderGpuBvhShadowVisibilityOpaque(
         Core::CommandList& commandList,
         DeferredFrameTargets& targets,
         const DeferredLightingGraphResources& deferredLightingResources,
-        u32& outFrameIndex,
         bool graphOwnsOpaqueTemporalMergeEntryStates,
         const LightSpaceShadowSnapshot* lightSpace = nullptr
     );
@@ -977,7 +965,7 @@ private:
     [[nodiscard]] bool buildMeshSwBvhPrepared(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, const SIMDVector aabbMin, const SIMDVector aabbMax, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle);
     [[nodiscard]] bool refitMeshSwBvhPrepared(Core::CommandList& commandList, u32 positionHeapSlot, u32 triangleIndexHeapSlot, u32 primitiveCount, Core::BufferHandle& nodeBuffer, Core::BufferHandle& parentBuffer, Core::GpuDescriptorHandle nodeHeapHandle, Core::GpuDescriptorHandle parentHeapHandle);
     void preflightLightSpaceShadowResources();
-    [[nodiscard]] bool buildLightSpaceShadowPlan(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount, LightSpacePlan& plan)const;
+    [[nodiscard]] Expected<LightSpacePlan> buildLightSpaceShadowPlan(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount)const;
     void prepareLightSpaceShadows(const ECSRenderDetail::SceneLightGpuData* lights, u32 lightCount);
     [[nodiscard]] bool ensureLightSpaceShadowPipelines();
     [[nodiscard]] bool ensureLightSpaceShadowStorage(const LightSpacePlan& plan);

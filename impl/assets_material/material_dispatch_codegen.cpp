@@ -122,17 +122,15 @@ static Path BuildDeferredBxdfIncludeRoot(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EmitDeferredBxdfDispatchModuleImpl(
+Expected<Path> EmitDeferredBxdfDispatchModuleImpl(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     const CookVector<MaterialCookEntry>& materialEntries,
-    Path& outIncludeRoot,
     ScratchArena& scratchArena
 ){
-    outIncludeRoot.clear();
-    outIncludeRoot = BuildDeferredBxdfIncludeRoot(cacheDirectory, configurationSafeName);
-    if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "Deferred bxdf dispatch"))
-        return false;
+    Path includeRoot = BuildDeferredBxdfIncludeRoot(cacheDirectory, configurationSafeName);
+    if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "Deferred bxdf dispatch"))
+        return MakeUnexpected(Failure{});
 
     // Each assigned BXDF id maps to one source; materials sharing that source share the slot.
     u32 maxId = 0u;
@@ -156,7 +154,7 @@ bool EmitDeferredBxdfDispatchModuleImpl(
         AStringView& slot = sourceById[entry.shadingModelId];
         if(!slot.empty() && slot != source){
             NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: shading model id {} maps to multiple bxdf sources"), entry.shadingModelId);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         slot = source;
     }
@@ -204,22 +202,23 @@ bool EmitDeferredBxdfDispatchModuleImpl(
     source += "    }\n";
     source += "}\n\n#endif\n";
 
-    const Path outputPath = outIncludeRoot / s_DeferredBxdfModuleSubPath.data();
+    const Path outputPath = includeRoot / s_DeferredBxdfModuleSubPath.data();
     ErrorCode errorCode;
-    if(!EnsureDirectories(outputPath.parentPath(), errorCode)){
+    auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
+    if(!ensureDirectoriesResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to create generated include parent '{}': {}")
             , PathToString<tchar>(outputPath.parentPath())
-            , StringConvert(errorCode.message())
+            , StringConvert(ensureDirectoriesResult.error().message())
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!WriteTextFile(outputPath, AStringView(source))){
         NWB_LOGGER_ERROR(NWB_TEXT("Deferred bxdf dispatch: failed to write generated include '{}'")
             , PathToString<tchar>(outputPath)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    return true;
+    return includeRoot;
 }
 
 
@@ -436,45 +435,43 @@ static void AppendShadowSurfaceBindAliasUndefines(
     }
 }
 
-static bool BuildShadowSurfaceBindEntryLookup(
+static Expected<ShadowSurfaceBindEntryLookup> BuildShadowSurfaceBindEntryLookup(
     const CookVector<MaterialBindEntry>& materialBindEntries,
-    ShadowSurfaceBindEntryLookup& outLookup
+    ScratchArena& arena
 ){
-    outLookup.clear();
-    outLookup.reserve(materialBindEntries.size());
+    ShadowSurfaceBindEntryLookup lookup(0, Hasher<Name>(), EqualTo<Name>(), arena);
+    lookup.reserve(materialBindEntries.size());
     for(const MaterialBindEntry& bindEntry : materialBindEntries){
         const Name interfaceName(AStringView(bindEntry.virtualPath));
         if(!interfaceName){
             NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: material bind interface path '{}' is invalid")
                 , StringConvert(bindEntry.virtualPath)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        if(!outLookup.emplace(interfaceName, &bindEntry).second){
+        if(!lookup.emplace(interfaceName, &bindEntry).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: duplicate material bind interface '{}'"), StringConvert(bindEntry.virtualPath));
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
-    return true;
+    return lookup;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EmitShadowSurfaceDispatchModuleImpl(
+Expected<Path> EmitShadowSurfaceDispatchModuleImpl(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     const CookVector<MaterialBindEntry>& materialBindEntries,
     const CookVector<MaterialCookEntry>& materialEntries,
-    Path& outIncludeRoot,
     ScratchArena& scratchArena
 ){
-    outIncludeRoot.clear();
-    outIncludeRoot = BuildShadowSurfaceIncludeRoot(cacheDirectory, configurationSafeName);
-    if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "Shadow surface dispatch"))
-        return false;
+    Path includeRoot = BuildShadowSurfaceIncludeRoot(cacheDirectory, configurationSafeName);
+    if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "Shadow surface dispatch"))
+        return MakeUnexpected(Failure{});
 
     // Each surface id maps to one source and .bind interface; shared surfaces require the same interface
     // because their hooks use fixed accessor names.
@@ -502,7 +499,7 @@ bool EmitShadowSurfaceDispatchModuleImpl(
         AStringView& surfaceSlot = surfaceById[entry.surfaceDispatchId];
         if(!surfaceSlot.empty() && surfaceSlot != surface){
             NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} maps to multiple surface sources"), entry.surfaceDispatchId);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         surfaceSlot = surface;
 
@@ -510,19 +507,14 @@ bool EmitShadowSurfaceDispatchModuleImpl(
         AStringView& interfaceSlot = interfaceById[entry.surfaceDispatchId];
         if(!interfaceSlot.empty() && interfaceSlot != interfaceName){
             NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} maps to multiple material interfaces"), entry.surfaceDispatchId);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         interfaceSlot = interfaceName;
     }
 
-    ShadowSurfaceBindEntryLookup bindEntryLookup(
-        0,
-        Hasher<Name>(),
-        EqualTo<Name>(),
-        scratchArena
-    );
-    if(!BuildShadowSurfaceBindEntryLookup(materialBindEntries, bindEntryLookup))
-        return false;
+    const auto bindEntryLookup = BuildShadowSurfaceBindEntryLookup(materialBindEntries, scratchArena);
+    if(!bindEntryLookup)
+        return MakeUnexpected(Failure{});
 
     Vector<const MaterialBindEntry*, ScratchArena> bindEntryById(scratchArena);
     Vector<u32, ScratchArena> bindNamespaceIdById(scratchArena);
@@ -543,13 +535,13 @@ bool EmitShadowSurfaceDispatchModuleImpl(
             continue;
 
         const Name interfaceName(interfaceById[id]);
-        const auto bindEntryIt = bindEntryLookup.find(interfaceName);
-        if(bindEntryIt == bindEntryLookup.end()){
+        const auto bindEntryIt = bindEntryLookup->find(interfaceName);
+        if(bindEntryIt == bindEntryLookup->end()){
             NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: model id {} references unknown material interface '{}'")
                 , id
                 , StringConvert(interfaceById[id])
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         bindEntryById[id] = bindEntryIt.value();
 
@@ -608,7 +600,7 @@ bool EmitShadowSurfaceDispatchModuleImpl(
             source,
             scratchArena
         ))
-            return false;
+            return MakeUnexpected(Failure{});
         source += "#define ";
         source += s_ShadowSurfaceFunctionMacro;
         source += ' ';
@@ -656,22 +648,23 @@ bool EmitShadowSurfaceDispatchModuleImpl(
     source += "    }\n";
     source += "}\n\n#endif\n";
 
-    const Path outputPath = outIncludeRoot / s_ShadowSurfaceModuleSubPath.data();
+    const Path outputPath = includeRoot / s_ShadowSurfaceModuleSubPath.data();
     ErrorCode errorCode;
-    if(!EnsureDirectories(outputPath.parentPath(), errorCode)){
+    auto ensureDirectoriesResult2 = EnsureDirectories(outputPath.parentPath());
+    if(!ensureDirectoriesResult2){
         NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: failed to create generated include parent '{}': {}")
             , PathToString<tchar>(outputPath.parentPath())
-            , StringConvert(errorCode.message())
+            , StringConvert(ensureDirectoriesResult2.error().message())
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!WriteTextFile(outputPath, AStringView(source))){
         NWB_LOGGER_ERROR(NWB_TEXT("Shadow surface dispatch: failed to write generated include '{}'")
             , PathToString<tchar>(outputPath)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    return true;
+    return includeRoot;
 }
 
 

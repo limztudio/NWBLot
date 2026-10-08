@@ -110,8 +110,11 @@ bool GpuTaskGraphCompiler::assignQueues(
     outAssignments.m_assignments.reserve(graph.taskCount());
 
     Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena> groups(scratchArena);
-    if(!BuildQueuePlacementGroups(graph, analysis, topology, options, groups, outAssignments.m_diagnostic, scratchArena))
+    const auto placementGroups = BuildQueuePlacementGroups(graph, analysis, topology, options, groups, scratchArena);
+    if(!placementGroups){
+        outAssignments.m_diagnostic = placementGroups.error();
         return false;
+    }
     bool needsSchedulingReachability = false;
     if(topology.queueCount > 1u && graph.taskCount() > 1u && groups.size() > 1u){
         for(usize taskIndex = 0u; taskIndex < graph.taskCount(); ++taskIndex){

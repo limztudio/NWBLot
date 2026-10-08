@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "../expected.h"
 #include "vector2.h"
 
 
@@ -116,15 +117,14 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL Vector3Normalize(SIMDVector value)noexcept{
 #endif
 }
 
-[[nodiscard]] NWB_INLINE bool NWB_SIMD_CALL Vector3TryNormalize(SIMDVector value, SIMDVector& outValue)noexcept{
+[[nodiscard]] NWB_INLINE Expected<SIMDVector> NWB_SIMD_CALL Vector3TryNormalize(SIMDVector value)noexcept{
     const SIMDVector lengthSquared = Vector3LengthSq(value);
     if(!VectorIsFinite(lengthSquared, VectorComponentMask::s_XYZW) || !Vector3Greater(lengthSquared, VectorZero()))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const SIMDVector normalized = Vector3Normalize(value);
     NWB_ASSERT(Vector3IsFinite(normalized));
-    outValue = normalized;
-    return true;
+    return normalized;
 }
 
 [[nodiscard]] NWB_INLINE SIMDVector NWB_SIMD_CALL Vector3NormalizeOr(SIMDVector value, SIMDVector fallback, const f32 minLengthSquared)noexcept{

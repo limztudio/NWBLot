@@ -69,28 +69,30 @@ u64 UiNestedPopupSmokeSource::View::key(const u64 index)const{
     return index < rowCount() ? m_source.key(m_source.m_indices[index]) : 0u;
 }
 
-bool UiNestedPopupSmokeSource::View::indexOf(const u64 keyValue, u64& index)const{
+Expected<u64> UiNestedPopupSmokeSource::View::indexOf(const u64 keyValue)const{
+    u64 index = 0u;
     for(u64 candidate = 0u; candidate < rowCount(); ++candidate){
         if(key(candidate) == keyValue){
             index = candidate;
-            return true;
+            return index;
         }
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
-bool UiNestedPopupSmokeSource::View::findEnabled(const u64 start, const bool reverse, u64& index)const{
+Expected<u64> UiNestedPopupSmokeSource::View::findEnabled(const u64 start, const bool reverse)const{
+    u64 index = 0u;
     if(start >= rowCount())
-        return false;
+        return MakeUnexpected(Failure{});
     for(u64 candidate = start; candidate < rowCount(); reverse ? --candidate : ++candidate){
         if(enabled(candidate)){
             index = candidate;
-            return true;
+            return index;
         }
         if(reverse && candidate == 0u)
             break;
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 StringView UiNestedPopupSmokeSource::View::text(const u64 index)const{
@@ -113,31 +115,33 @@ UiNestedPopupSmokeSource::UiNestedPopupSmokeSource(Core::Alloc::GlobalArena& are
     NWB_FATAL_ASSERT(initialized);
 }
 
-bool UiNestedPopupSmokeSource::indexOf(const u64 keyValue, u64& index)const{
+Expected<u64> UiNestedPopupSmokeSource::indexOf(const u64 keyValue)const{
+    u64 index = 0u;
     if(keyValue == 0u || keyValue > rowCount())
-        return false;
+        return MakeUnexpected(Failure{});
     index = keyValue - 1u;
-    return true;
+    return index;
 }
 
-bool UiNestedPopupSmokeSource::findEnabled(const u64 start, const bool reverse, u64& index)const{
+Expected<u64> UiNestedPopupSmokeSource::findEnabled(const u64 start, const bool reverse)const{
+    u64 index = 0u;
     if(start >= rowCount())
-        return false;
+        return MakeUnexpected(Failure{});
     if(enabled(start)){
         index = start;
-        return true;
+        return index;
     }
     if(reverse){
         if(start == 0u)
-            return false;
+            return MakeUnexpected(Failure{});
         index = start - 1u;
     }
     else{
         if(start + 1u >= rowCount())
-            return false;
+            return MakeUnexpected(Failure{});
         index = start + 1u;
     }
-    return enabled(index);
+    return enabled(index) ? Expected<u64>{ index } : MakeUnexpected(Failure{});
 }
 
 StringView UiNestedPopupSmokeSource::text(const u64 index)const{

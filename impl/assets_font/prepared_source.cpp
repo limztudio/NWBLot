@@ -46,11 +46,10 @@ static void AppendU32(Core::Assets::AssetBytes& bytes, const u32 value){
     ;
 }
 
-[[nodiscard]] static bool ImageByteCount(const u32 width, const u32 height, const u32 channels, u32& outByteCount)noexcept{
+[[nodiscard]] static Expected<u32> ImageByteCount(const u32 width, const u32 height, const u32 channels)noexcept{
     if(width == 0u || width > s_MaxSide || height == 0u || height > s_MaxSide || channels == 0u || channels > 4u)
-        return false;
-    outByteCount = width * height * channels;
-    return true;
+        return MakeUnexpected(Failure{});
+    return width * height * channels;
 }
 
 [[nodiscard]] static bool ReadExact(GlobalFilesystemDetail::InputFileStream& stream, void* destination, const usize byteCount){
@@ -58,9 +57,9 @@ static void AppendU32(Core::Assets::AssetBytes& bytes, const u32 value){
     return stream.gcount() == static_cast<GlobalFilesystemDetail::StreamSize>(byteCount) && !stream.bad();
 }
 
-[[nodiscard]] static bool ReadFailure(const Path& path, const AStringView reason){
+[[nodiscard]] static Unexpected<AStringView> ReadFailure(const Path& path, const AStringView reason){
     NWB_LOGGER_ERROR(NWB_TEXT("Prepared font '{}': {}"), PathToString<tchar>(path), StringConvert(reason));
-    return false;
+    return MakeUnexpected(reason);
 }
 
 
@@ -73,12 +72,12 @@ static void AppendU32(Core::Assets::AssetBytes& bytes, const u32 value){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SerializePreparedFontSource(
+Expected<Core::Assets::AssetBytes, AStringView> SerializePreparedFontSource(
     const BinaryByteView sfnt,
     const u32 faceIndex,
     const PreparedFontImageView* groups,
     const usize groupCount,
-    Core::Assets::AssetBytes& outBinary
+    Core::Assets::AssetArena& arena
 ){
     using namespace __hidden_prepared_source;
     if(
@@ -86,26 +85,25 @@ bool SerializePreparedFontSource(
         || !groups || groupCount == 0u || groupCount > s_MaxGroupCount
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Prepared font serialization: invalid font bytes, face index, or image group count"));
-        return false;
+        return MakeUnexpected(AStringView("invalid font bytes, face index, or image group count"));
     }
 
     u64 pixelByteCount = 0u;
     for(usize index = 0u; index < groupCount; ++index){
         const PreparedFontImageView& group = groups[index];
-        u32 expectedBytes = 0u;
+        const auto expectedBytes = ImageByteCount(group.width, group.height, group.channelCount);
         if(
-            !ImageByteCount(group.width, group.height, group.channelCount, expectedBytes)
-            || !group.pixels.data() || group.pixels.size() != expectedBytes
-            || expectedBytes > s_MaxPixelBytes - pixelByteCount
+            !expectedBytes || !group.pixels.data() || group.pixels.size() != *expectedBytes
+            || *expectedBytes > s_MaxPixelBytes - pixelByteCount
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("Prepared font serialization: image group {} has invalid dimensions, channels, or pixel bytes"), index);
-            return false;
+            return MakeUnexpected(AStringView("image dimensions, channels, or pixel bytes are invalid"));
         }
-        pixelByteCount += expectedBytes;
+        pixelByteCount += *expectedBytes;
     }
 
     const usize byteCount = s_HeaderBytes + groupCount * s_GroupHeaderBytes + sfnt.size() + static_cast<usize>(pixelByteCount);
-    Core::Assets::AssetBytes binary(outBinary.get_allocator().arena());
+    Core::Assets::AssetBytes binary(arena);
     binary.reserve(byteCount);
     AppendU32(binary, s_Magic);
     AppendU32(binary, s_Version);
@@ -129,11 +127,10 @@ bool SerializePreparedFontSource(
         const BinaryByteView pixels = groups[index].pixels;
         binary.insert(binary.end(), pixels.data(), pixels.data() + pixels.size());
     }
-    outBinary = Move(binary);
-    return true;
+    return binary;
 }
 
-bool ReadPreparedFontSource(const Path& path, PreparedFontSource& outSource, const bool includePixels){
+Expected<PreparedFontSource, AStringView> ReadPreparedFontSource(const Path& path, Core::Assets::AssetArena& arena, const bool includePixels){
     using namespace __hidden_prepared_source;
     GlobalFilesystemDetail::InputFileStream stream(path, GlobalFilesystemDetail::InputFileStream::binary);
     if(!stream.is_open())
@@ -159,7 +156,7 @@ bool ReadPreparedFontSource(const Path& path, PreparedFontSource& outSource, con
     if(fontByteCount == 0u || fontByteCount > s_FontMaxSourceBytes || groupCount == 0u || groupCount > s_MaxGroupCount)
         return ReadFailure(path, "font size or image group count is outside prepared-source limits");
 
-    PreparedFontSource candidate(outSource.fontBytes.get_allocator().arena());
+    PreparedFontSource candidate(arena);
     candidate.faceIndex = ReadU32(header + 8u);
     NWB_MEMCPY(candidate.fontSha256.bytes, sizeof(candidate.fontSha256.bytes), header + 24u, sizeof(candidate.fontSha256.bytes));
     candidate.groups.reserve(groupCount);
@@ -173,15 +170,14 @@ bool ReadPreparedFontSource(const Path& path, PreparedFontSource& outSource, con
         group.width = ReadU32(groupHeader);
         group.height = ReadU32(groupHeader + 4u);
         group.channelCount = ReadU32(groupHeader + 8u);
-        u32 expectedBytes = 0u;
+        const auto expectedBytes = ImageByteCount(group.width, group.height, group.channelCount);
         if(
-            !ImageByteCount(group.width, group.height, group.channelCount, expectedBytes)
-            || ReadU32(groupHeader + 12u) != expectedBytes
-            || expectedBytes > s_MaxPixelBytes - pixelByteCount
+            !expectedBytes || ReadU32(groupHeader + 12u) != *expectedBytes
+            || *expectedBytes > s_MaxPixelBytes - pixelByteCount
         )
             return ReadFailure(path, "image dimensions, channels, or byte count are invalid");
-        pixelByteCount += expectedBytes;
-        groupByteCounts[index] = expectedBytes;
+        pixelByteCount += *expectedBytes;
+        groupByteCounts[index] = *expectedBytes;
         NWB_MEMCPY(group.sha256.bytes, sizeof(group.sha256.bytes), groupHeader + 16u, sizeof(group.sha256.bytes));
         candidate.groups.push_back(Move(group));
     }
@@ -214,8 +210,7 @@ bool ReadPreparedFontSource(const Path& path, PreparedFontSource& outSource, con
     stream.read(&extraByte, 1);
     if(stream.gcount() != 0 || !stream.eof() || stream.bad())
         return ReadFailure(path, "prepared source changed during read");
-    outSource = Move(candidate);
-    return true;
+    return candidate;
 }
 
 

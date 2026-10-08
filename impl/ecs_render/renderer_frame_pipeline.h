@@ -181,7 +181,7 @@ public:
         return m_raytracingSystem.setShadowQualitySettings(settings);
     }
     [[nodiscard]] bool setReflectionSettings(const ReflectionSettings& settings);
-    [[nodiscard]] bool tryGetLatestReflectionStatistics(ReflectionStatistics& statistics)const;
+    [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestReflectionStatistics()const noexcept;
     [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings);
     void setFrameLaggedAsyncLightingEnabled(const bool enabled)noexcept{
         if(m_frameLaggedAsyncLightingEnabled == enabled)
@@ -238,7 +238,7 @@ private:
         bool softwareTraceResourcesPrepared,
         Core::GpuTimingSubmissionTicket& timingTicket
     );
-    [[nodiscard]] bool declareDeferredGraphicsPrefixTasks(
+    [[nodiscard]] Expected<u64> declareDeferredGraphicsPrefixTasks(
         DeferredFrameTargets& deferredTargets,
         ObjectGeometryCacheGraph& objectGeometry,
         Core::GpuTaskId shadowPrepareTask,
@@ -287,8 +287,7 @@ private:
         Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
         Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
         Core::GpuTimingSubmissionTicket** timingTickets,
-        const bool* asyncPrefixTimingSpansOnePacket,
-        u64& outSceneLightingContentHash
+        const bool* asyncPrefixTimingSpansOnePacket
     );
     [[nodiscard]] bool declareDeferredShadowVisibilityTask(
         DeferredFrameTargets& deferredTargets,

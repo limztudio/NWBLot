@@ -130,41 +130,45 @@ static bool HeaderMatches(
     ;
 }
 
-static bool ReadObjectFileHeader(
+struct DecodedObjectFileHeader{
+    AssetVolumeObjectFileHeader header;
+    usize payloadOffset = 0u;
+};
+
+static Expected<DecodedObjectFileHeader> ReadObjectFileHeader(
     const Path& objectPath,
-    Core::Assets::AssetBytes& objectBytes,
-    AssetVolumeObjectFileHeader& outHeader,
-    usize& outPayloadOffset
+    Core::Assets::AssetBytes& objectBytes
 ){
-    ErrorCode errorCode;
-    if(!ReadBinaryFile(objectPath, objectBytes, errorCode)){
+    const auto read = ReadBinaryFile(objectPath, objectBytes);
+    if(!read){
+        const ErrorCode& errorCode = read.error();
         if(errorCode && !IsMissingPathError(errorCode)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to read object cache '{}': {}")
                 , PathToString<tchar>(objectPath)
                 , StringConvert(errorCode.message())
             );
         }
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     usize cursor = 0u;
-    if(!ReadPOD(objectBytes, cursor, outHeader))
-        return false;
-    if(outHeader.magic != s_ObjectFileMagic || outHeader.version != s_ObjectFileVersion)
-        return false;
-    if(outHeader.headerSize != sizeof(AssetVolumeObjectFileHeader))
-        return false;
+    const auto header = ReadPOD<AssetVolumeObjectFileHeader>(objectBytes, cursor);
+    if(!header)
+        return MakeUnexpected(Failure{});
+    if(header->magic != s_ObjectFileMagic || header->version != s_ObjectFileVersion)
+        return MakeUnexpected(Failure{});
+    if(header->headerSize != sizeof(AssetVolumeObjectFileHeader))
+        return MakeUnexpected(Failure{});
 
-    if(outHeader.payloadSize > static_cast<u64>(Limit<usize>::s_Max))
-        return false;
-    const usize payloadSize = static_cast<usize>(outHeader.payloadSize);
+    if(header->payloadSize > static_cast<u64>(Limit<usize>::s_Max))
+        return MakeUnexpected(Failure{});
+    const usize payloadSize = static_cast<usize>(header->payloadSize);
     if(cursor > objectBytes.size() || objectBytes.size() - cursor != payloadSize)
-        return false;
-    if(outHeader.payloadHash != ComputeFnv64Bytes(objectBytes.data() + cursor, payloadSize))
-        return false;
+        return MakeUnexpected(Failure{});
+    if(header->payloadHash != ComputeFnv64Bytes(objectBytes.data() + cursor, payloadSize))
+        return MakeUnexpected(Failure{});
 
-    outPayloadOffset = cursor;
-    return true;
+    return DecodedObjectFileHeader{ .header = *header, .payloadOffset = cursor };
 }
 
 static bool WriteObjectFile(
@@ -183,8 +187,9 @@ static bool WriteObjectFile(
     AppendPOD(objectBytes, header);
     BinaryDetail::AppendBytesNoReserveUnchecked(objectBytes, payload.data(), payload.size());
 
-    ErrorCode errorCode;
-    if(!EnsureDirectories(objectPath.parentPath(), errorCode)){
+    const auto directories = EnsureDirectories(objectPath.parentPath());
+    if(!directories){
+        const ErrorCode& errorCode = directories.error();
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create object cache directory '{}': {}")
             , PathToString<tchar>(objectPath.parentPath())
             , StringConvert(errorCode.message())
@@ -204,9 +209,8 @@ static bool UpdateObjectFileIfChanged(
     const Core::Assets::AssetBytes& payload,
     Core::Assets::AssetBytes& objectBytes
 ){
-    AssetVolumeObjectFileHeader cachedHeader;
-    usize payloadOffset = 0u;
-    if(ReadObjectFileHeader(objectPath, objectBytes, cachedHeader, payloadOffset) && HeaderMatches(cachedHeader, header))
+    const auto cached = ReadObjectFileHeader(objectPath, objectBytes);
+    if(cached && HeaderMatches(cached->header, header))
         return true;
 
     return WriteObjectFile(objectPath, header, payload, objectBytes);
@@ -418,31 +422,25 @@ bool BuildRegistryObjectManifestEntries(
     );
 }
 
-bool ReadCookedObjectPayload(
+Expected<CookedObjectPayloadView> ReadCookedObjectPayload(
     const Path& objectPath,
     const Name& expectedVirtualPath,
-    Core::Assets::AssetBytes& objectBytes,
-    CookedObjectPayloadView& outPayload
+    Core::Assets::AssetBytes& inOutObjectBytes
 ){
-    outPayload = {};
-
-    __hidden_cooked_object_cache::AssetVolumeObjectFileHeader header;
-    usize payloadOffset = 0u;
-    if(!__hidden_cooked_object_cache::ReadObjectFileHeader(objectPath, objectBytes, header, payloadOffset)){
+    const auto decoded = __hidden_cooked_object_cache::ReadObjectFileHeader(objectPath, inOutObjectBytes);
+    if(!decoded){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid object cache '{}' for '{}'")
             , PathToString<tchar>(objectPath)
             , StringConvert(expectedVirtualPath.resolvedText())
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outPayload.data = objectBytes.data() + payloadOffset;
-    outPayload.size = static_cast<usize>(header.payloadSize);
-    outPayload.identity = AssetVolumePayloadIdentity{
-        header.payloadSize,
-        header.payloadHash,
-        header.cookKeyHash
+    const auto& header = decoded->header;
+    return CookedObjectPayloadView{
+        .data = inOutObjectBytes.data() + decoded->payloadOffset,
+        .size = static_cast<usize>(header.payloadSize),
+        .identity = { header.payloadSize, header.payloadHash, header.cookKeyHash },
     };
-    return true;
 }
 
 

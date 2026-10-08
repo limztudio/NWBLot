@@ -55,10 +55,10 @@ bool StressCsgScene::initialize(
     const usize ownerCount,
     const bool opaqueOnly
 ){
-    SmokeEnvironmentString value(arena);
-    if(!ReadSmokeEnvironmentText("NWB_STRESS_CSG_PROFILE", value) || AStringView(value.data(), value.size()) == "none")
+    const auto value = ReadSmokeEnvironmentText(arena, "NWB_STRESS_CSG_PROFILE");
+    if(!value || AStringView(value->data(), value->size()) == "none")
         return true;
-    if(AStringView(value.data(), value.size()) != "waist_bands"){
+    if(AStringView(value->data(), value->size()) != "waist_bands"){
         NWB_LOGGER_ERROR(NWB_TEXT("StressTestSmokeProject: CSG profile must be none or waist_bands"));
         return false;
     }

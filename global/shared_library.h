@@ -6,6 +6,7 @@
 
 
 #include "basic_string.h"
+#include "expected.h"
 
 #if defined(NWB_PLATFORM_WINDOWS)
 #include <windows.h>
@@ -56,10 +57,12 @@ public:
         m_handle = nullptr;
     }
 
-    template<typename ArenaT, typename Fn>
-    [[nodiscard]] bool resolve(ArenaT& arena, const AStringView symbolName, Fn& outFn){
-        outFn = reinterpret_cast<Fn>(resolveRaw(arena, symbolName));
-        return outFn != nullptr;
+    template<typename Fn, typename ArenaT>
+    [[nodiscard]] Expected<Fn> resolve(ArenaT& arena, const AStringView symbolName){
+        const Fn function = reinterpret_cast<Fn>(resolveRaw(arena, symbolName));
+        if(!function)
+            return MakeUnexpected(Failure{});
+        return function;
     }
 
 

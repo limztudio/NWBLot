@@ -115,12 +115,12 @@ bool WaylandTextInputService::dispatchDirectCodePoint(const u32 codePoint){
     if(codePoint < 32u || codePoint == 127u)
         return true;
     char bytes[4]{};
-    usize length = 0u;
-    if(EncodeTextInputCodePoint(codePoint, bytes, length) != TextInputAdmission::Accepted){
+    const auto length = EncodeTextInputCodePoint(codePoint, bytes);
+    if(!length){
         nativeFailure();
         return true;
     }
-    const TextInputAdmission::Enum status = emitCommit(token, AStringView(bytes, length));
+    const TextInputAdmission::Enum status = emitCommit(token, AStringView(bytes, *length));
     if(status != TextInputAdmission::Accepted && status != TextInputAdmission::InvalidSession)
         nativeFailure();
     return true;

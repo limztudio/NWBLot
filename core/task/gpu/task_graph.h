@@ -200,8 +200,8 @@ public:
     [[nodiscard]] Buffer* bufferForResource(const GpuGraphResourceId& resource)const && = delete;
     [[nodiscard]] RayTracingAccelStruct* accelStructForResource(const GpuGraphResourceId& resource)const & noexcept;
     [[nodiscard]] RayTracingAccelStruct* accelStructForResource(const GpuGraphResourceId& resource)const && = delete;
-    [[nodiscard]] const void* uploadBlobData(const GpuUploadBlobId& blob, usize& outByteSize)const & noexcept;
-    [[nodiscard]] const void* uploadBlobData(const GpuUploadBlobId& blob, usize& outByteSize)const && = delete;
+    [[nodiscard]] Expected<BinaryByteView> uploadBlobData(const GpuUploadBlobId& blob)const & noexcept;
+    [[nodiscard]] Expected<BinaryByteView> uploadBlobData(const GpuUploadBlobId& blob)const && = delete;
     [[nodiscard]] GraphicsPipeline* graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const & noexcept;
     [[nodiscard]] GraphicsPipeline* graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const && = delete;
     [[nodiscard]] ComputePipeline* computePipelineFor(const GpuGraphPipelineId& pipeline)const & noexcept;
@@ -1060,53 +1060,47 @@ private:
         bool& outRecordThunkInvoked
     )const;
 
-    [[nodiscard]] static bool ResolvePacketView(
+    [[nodiscard]] static Expected<GpuCompiledPacketView> ResolvePacketView(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
-        const GpuSubmissionPacketId packet,
-        GpuCompiledPacketView& outPacketView
+        const GpuSubmissionPacketId packet
     )noexcept{
-        if(
-            !planAccess.validFor(compiledGraph)
-            || !planAccess.validPacket(packet)
-        )
-            return false;
-        outPacketView = planAccess.packetWithTasks(packet);
-        return outPacketView.valid();
+        if(!planAccess.validFor(compiledGraph) || !planAccess.validPacket(packet))
+            return MakeUnexpected(Failure{});
+        const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
+        if(!packetView.valid())
+            return MakeUnexpected(Failure{});
+        return packetView;
     }
 
-    [[nodiscard]] static bool ResolveLeasedPacketView(
+    [[nodiscard]] static Expected<GpuCompiledPacketView> ResolveLeasedPacketView(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuSubmissionPacketId packet,
-        const PacketRecordingLease& lease,
-        GpuCompiledPacketView& outPacketView
+        const PacketRecordingLease& lease
     )noexcept{
+        const auto packetView = ResolvePacketView(compiledGraph, planAccess, packet);
         if(
-            !ResolvePacketView(compiledGraph, planAccess, packet, outPacketView)
+            !packetView
             || !lease.valid()
             || lease.m_packet != packet
             || lease.m_planGeneration != planAccess.planGeneration()
         )
-            return false;
-        return true;
+            return MakeUnexpected(Failure{});
+        return *packetView;
     }
 
-    [[nodiscard]] static bool ResolveAttemptPacketView(
+    [[nodiscard]] static Expected<GpuCompiledPacketView> ResolveAttemptPacketView(
         const GpuCompiledGraph& compiledGraph,
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuSubmissionPacketId packet,
         const u64 recordingAttemptGeneration,
-        const bool outLeaseValid,
-        GpuCompiledPacketView& outPacketView
+        const bool leaseValid
     )noexcept{
-        if(
-            !ResolvePacketView(compiledGraph, planAccess, packet, outPacketView)
-            || recordingAttemptGeneration == 0u
-            || outLeaseValid
-        )
-            return false;
-        return true;
+        const auto packetView = ResolvePacketView(compiledGraph, planAccess, packet);
+        if(!packetView || recordingAttemptGeneration == 0u || leaseValid)
+            return MakeUnexpected(Failure{});
+        return *packetView;
     }
 
     // Caller owns teardown/binding validation, lease reset, and claim release; task mutation holds the lifecycle lock.
@@ -1280,7 +1274,7 @@ private:
     [[nodiscard]] Texture* textureForResource(const GpuGraphResourceId& resource)const noexcept;
     [[nodiscard]] Buffer* bufferForResource(const GpuGraphResourceId& resource)const noexcept;
     [[nodiscard]] RayTracingAccelStruct* accelStructForResource(const GpuGraphResourceId& resource)const noexcept;
-    [[nodiscard]] const void* uploadBlobData(const GpuUploadBlobId& blob, usize& outByteSize)const noexcept;
+    [[nodiscard]] Expected<BinaryByteView> uploadBlobData(const GpuUploadBlobId& blob)const noexcept;
     [[nodiscard]] GraphicsPipeline* graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
     [[nodiscard]] ComputePipeline* computePipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
     [[nodiscard]] MeshletPipeline* meshletPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept;
@@ -1327,7 +1321,12 @@ private:
     [[nodiscard]] GpuGraphPipelineId appendPipeline(const GpuGraphPipelineDesc& desc, const PipelineBinding& binding);
     [[nodiscard]] GpuExternalCompletionId appendExternalCompletion(const GpuExternalCompletionDesc& desc);
     [[nodiscard]] const GpuUploadBlobNode* findUploadBlob(const GpuUploadBlobId& blob)const noexcept;
-    [[nodiscard]] bool appendMarkerLabel(AStringView text, u32& outOffset, u32& outSize);
+    struct MarkerLabelRange{
+        u32 offset = 0u;
+        u32 size = 0u;
+    };
+
+    [[nodiscard]] Expected<MarkerLabelRange> appendMarkerLabel(AStringView text);
     [[nodiscard]] AStringView markerLabel(u32 offset, u32 size)const;
     [[nodiscard]] bool destroyTaskPayloads();
     [[nodiscard]] bool destroyTaskPayloadsWithoutCallbacks()noexcept;

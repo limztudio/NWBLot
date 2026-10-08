@@ -286,13 +286,12 @@ struct GpuTaskQueuePlacementGroup{
     GpuPhysicalQueueId diagnosticOverrideQueue;
 };
 
-[[nodiscard]] bool BuildQueuePlacementGroups(
+[[nodiscard]] Expected<void, GpuTaskQueueAssignmentDiagnostic> BuildQueuePlacementGroups(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuPhysicalQueueTopology& topology,
     const GpuTaskGraphQueueAssignmentOptions& options,
     Vector<GpuTaskQueuePlacementGroup, Alloc::ScratchArena>& outGroups,
-    GpuTaskQueueAssignmentDiagnostic& outDiagnostic,
     Alloc::ScratchArena& scratchArena
 );
 
@@ -409,16 +408,14 @@ struct GpuTaskQueuePlacementGroup{
 
 [[nodiscard]] bool IsReadAccess(GpuTaskResourceAccess::Enum access)noexcept;
 [[nodiscard]] bool IsWriteAccess(GpuTaskResourceAccess::Enum access)noexcept;
-[[nodiscard]] bool ResolveTextureRangeForPlanning(
+[[nodiscard]] Expected<GpuTaskResourceRange> ResolveTextureRangeForPlanning(
     const Texture* texture,
-    const GpuTaskResourceRange& range,
-    GpuTaskResourceRange& outRange
+    const GpuTaskResourceRange& range
 )noexcept;
-[[nodiscard]] bool ResolveResourceRangeForPlanning(
+[[nodiscard]] Expected<GpuTaskResourceRange> ResolveResourceRangeForPlanning(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphResourceView& resource,
-    const GpuTaskResourceRange& range,
-    GpuTaskResourceRange& outRange
+    const GpuTaskResourceRange& range
 )noexcept;
 [[nodiscard]] bool RangesOverlap(
     const GpuTaskGraphResourceView& resource,
@@ -431,10 +428,9 @@ struct GpuTaskQueuePlacementGroup{
     const GpuTaskResourceRange& inner
 )noexcept;
 
-[[nodiscard]] bool BuildResourceVersionDependencyEdges(
+[[nodiscard]] Expected<void, GpuTaskGraphAnalysisDiagnostic> BuildResourceVersionDependencyEdges(
     const GpuTaskGraph::DeclarationReadView& graph,
     Vector<GpuTaskDependencyEdge, Alloc::ScratchArena>& outEdges,
-    GpuTaskGraphAnalysisDiagnostic& outDiagnostic,
     Alloc::ScratchArena& scratchArena
 );
 
@@ -506,14 +502,13 @@ struct GpuTaskQueuePlacementGroup{
     GpuOwnershipTransferRoute::Enum route
 );
 
-[[nodiscard]] bool BuildSubmissionPackets(
+[[nodiscard]] Expected<GpuSubmissionPacketRange> BuildSubmissionPackets(
     const GpuTaskGraph::DeclarationReadView& graph,
     const GpuTaskGraphAnalysis& analysis,
     const GpuTaskGraphQueueAssignments& assignments,
     GpuTaskGraphPacketizationPolicy::Enum policy,
     const GpuTaskGraphPacketTimingEnvelopeOptions& timingEnvelope,
-    GpuTaskGraphCompiledPlanStorage& compiledPlan,
-    GpuSubmissionPacketRange& outTimingEnvelopeRange
+    GpuTaskGraphCompiledPlanStorage& compiledPlan
 );
 
 

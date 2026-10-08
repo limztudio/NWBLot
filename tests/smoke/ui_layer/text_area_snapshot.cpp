@@ -62,15 +62,15 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     const EditBoxPlacement& placement = m_state.placement();
     const ScrollViewportPlacement& scrollbars = m_state.scrollbars();
     const auto& geometry = m_observed.caretGeometry();
-    Rect localCaret;
-    if(!geometry.caretRect(m_observed.displayCaret(), localCaret) || geometry.lines().size() > 32u)
+    const auto localCaret = geometry.caretRect(m_observed.displayCaret());
+    if(!localCaret || geometry.lines().size() > 32u)
         return false;
     UiTextAreaSnapshot current;
     current.display = context.display;
     current.scroll = m_state.scroll();
     current.measure = m_observed.layout().measure();
     current.maximum = { static_cast<f32>(scrollbars.horizontal.maximum), static_cast<f32>(scrollbars.vertical.maximum) };
-    current.lineHeight = localCaret.height;
+    current.lineHeight = localCaret->height;
     current.rectangles[0u] = placement.bounds;
     current.rectangles[1u] = placement.content;
     current.rectangles[2u] = placement.clip;
@@ -86,17 +86,17 @@ bool UiTextAreaSmokeScene::observeState(Impl::UiPaintContext& context){
     current.rectangles[14u] = scrollbars.vertical.thumb;
     current.rectangles[15u] = scrollbars.corner;
     for(u32 index = 0u; index < geometry.lines().size(); ++index){
-        Rect rectangle;
-        if(!geometry.rangeOnLine(m_observed.selectionRange(), index, placement.caret.width, rectangle))
+        auto rectangle = geometry.rangeOnLine(m_observed.selectionRange(), index, placement.caret.width);
+        if(!rectangle)
             return false;
-        if(rectangle.width == 0.0f)
+        if(rectangle->width == 0.0f)
             continue;
-        rectangle.x += placement.textOrigin.x;
-        rectangle.y += placement.textOrigin.y;
-        current.selections[current.selectionCount++] = rectangle;
+        rectangle->x += placement.textOrigin.x;
+        rectangle->y += placement.textOrigin.y;
+        current.selections[current.selectionCount++] = *rectangle;
     }
-    const bool coherent = Abs(placement.caret.x - placement.textOrigin.x - localCaret.x) < 0.02f
-        && Abs(placement.caret.y - placement.textOrigin.y - localCaret.y) < 0.02f
+    const bool coherent = Abs(placement.caret.x - placement.textOrigin.x - localCaret->x) < 0.02f
+        && Abs(placement.caret.y - placement.textOrigin.y - localCaret->y) < 0.02f
         && current.scroll.x == placement.scroll && current.scroll.y == placement.scrollY
         && SameSmokeRect(placement.content, scrollbars.viewport) && SameSmokeRect(placement.clip, scrollbars.contentClip)
         && current.scroll.x == scrollbars.horizontal.offset && current.scroll.y == scrollbars.vertical.offset;

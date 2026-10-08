@@ -110,8 +110,7 @@ TEST_F(UiTextAreaBuilderTests, RawPointerCapturePersistsOutsideWithoutGestureRec
     EXPECT_EQ(m_context.input().capture(), widget);
     EXPECT_TRUE(send({ InputEventType::PrimaryUp, { 780.0f, 580.0f } }).pointerConsumed);
     EXPECT_FALSE(m_context.input().capture().valid());
-    PointerGesture gesture;
-    EXPECT_FALSE(m_context.input().consumePointerGesture(widget, area->declarationGeneration, gesture));
+    EXPECT_FALSE(m_context.input().consumePointerGesture(widget, area->declarationGeneration));
 }
 
 TEST_F(UiTextAreaBuilderTests, DisabledAreaRetainsAPointerBarrierAndDiscardsHostText){
@@ -209,10 +208,10 @@ TEST_F(UiTextAreaBuilderTests, BorrowedPreferredColumnSurvivesShortLineThenRetur
     EditBoxView reference(m_arena);
     ASSERT_TRUE(reference.snapshot(m_model));
     ASSERT_EQ(reference.shape(m_text, { {}, 14.0f }), TextLayoutStatus::Success);
-    Rect caret;
-    ASSERT_TRUE(reference.caretGeometry().caretRect(reference.displayCaret(), caret));
+    const auto caret = reference.caretGeometry().caretRect(reference.displayCaret());
+    ASSERT_TRUE(caret);
     m_host.seedColumn = true;
-    m_host.seededColumn = caret.x;
+    m_host.seededColumn = caret->x;
     m_host.key(Core::Key::Down);
     m_host.key(Core::Key::Down);
     ASSERT_TRUE(frameArea(1u));
@@ -220,8 +219,8 @@ TEST_F(UiTextAreaBuilderTests, BorrowedPreferredColumnSurvivesShortLineThenRetur
     EXPECT_EQ(m_host.resolutions[0u].result.committedByte, 8u);
     EXPECT_EQ(m_host.resolutions[1u].result.committedByte, 14u);
     EXPECT_TRUE(m_host.resolutions[1u].preferred.valid);
-    EXPECT_FLOAT_EQ(m_host.resolutions[1u].preferred.preferredX, caret.x);
-    EXPECT_FLOAT_EQ(m_state.navigation().preferredX(), caret.x);
+    EXPECT_FLOAT_EQ(m_host.resolutions[1u].preferred.preferredX, caret->x);
+    EXPECT_FLOAT_EQ(m_state.navigation().preferredX(), caret->x);
     EXPECT_EQ(m_model.caret(), 14u);
     EXPECT_FALSE(m_model.canUndo());
 }

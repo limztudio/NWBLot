@@ -46,20 +46,19 @@ int Run(const int argc, char** argv){
                 options.output = Path(UtilityDetail::Arena(), AString(outputArgument.data(), outputArgument.size()));
                 if(!ValidateOptions(options))
                     return 1;
-                ErrorCode error;
-                const bool exists = FileExists(options.output, error);
-                if(error || (exists && !options.overwrite)){
+                const auto exists = FileExists(options.output);
+                if(!exists || (*exists && !options.overwrite)){
                     NWB_LOGGER_ERROR(NWB_TEXT("font_builder: cannot replace output metadata without --overwrite"));
                     return 1;
                 }
                 Core::Alloc::ScratchArena scratch(Name("utilities/font_builder/bake"));
-                Impl::FontAtlasPayload payload(UtilityDetail::Arena());
-                if(!Bake(options, payload, scratch) || !WriteOutputs(options, payload))
+                auto payload = Bake(options, UtilityDetail::Arena(), scratch);
+                if(!payload || !WriteOutputs(options, *payload))
                     return 1;
                 NWB_LOGGER_INFO(NWB_TEXT("font_builder: published font asset bunch '{}' with {} glyphs / {} compact groups")
                     , PathToString<tchar>(options.output)
-                    , payload.glyphs.size()
-                    , payload.groups.size()
+                    , payload->glyphs.size()
+                    , payload->groups.size()
                 );
                 return 0;
             },

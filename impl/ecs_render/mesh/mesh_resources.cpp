@@ -78,26 +78,24 @@ static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc
     mesh.csgLocalBounds.maxBounds.w = 0;
 }
 
-[[nodiscard]] static bool ReportMeshBufferSetupFailure(
+static void ReportMeshBufferSetupFailure(
     const RuntimeMeshBufferUpload::BufferSetupFailure::Enum failure,
     const Name& meshName,
     const TStringView label
 ){
     switch(failure){
-    case RuntimeMeshBufferUpload::BufferSetupFailure::None:
-        return true;
     case RuntimeMeshBufferUpload::BufferSetupFailure::EmptyPayload:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has empty {} payload")
             , StringConvert(meshName.resolvedText())
             , label
         );
-        return false;
+        return;
     case RuntimeMeshBufferUpload::BufferSetupFailure::ByteSizeOverflow:
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' {} payload byte size overflows")
             , StringConvert(meshName.resolvedText())
             , label
         );
-        return false;
+        return;
     case RuntimeMeshBufferUpload::BufferSetupFailure::CreateFailed:
         break;
     }
@@ -105,7 +103,7 @@ static void RefreshRuntimeMeshContent(MeshResources& mesh, const RuntimeMeshDesc
         , label
         , StringConvert(meshName.resolvedText())
     );
-    return false;
+    return;
 }
 
 [[nodiscard]] static Name DeriveMeshBufferName(const Name& meshName, const AStringView suffix, const TStringView label){
@@ -133,8 +131,7 @@ template<typename PayloadT, typename PayloadVector>
     if(!bufferName)
         return {};
 
-    Core::BufferHandle buffer;
-    const RuntimeMeshBufferUpload::BufferSetupFailure::Enum failure = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(
+    auto buffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<PayloadT>(
         graphics,
         bufferName,
         payload,
@@ -143,12 +140,13 @@ template<typename PayloadT, typename PayloadVector>
             canHaveRawViews,
             accelStructBuildInput,
             Core::ResourceQueueSharing::GraphicsAndAsyncCompute
-        },
-        buffer
+        }
     );
-    if(!ReportMeshBufferSetupFailure(failure, meshName, label))
+    if(!buffer){
+        ReportMeshBufferSetupFailure(buffer.error(), meshName, label);
         return {};
-    return buffer;
+    }
+    return Move(*buffer);
 }
 
 template<typename PayloadT, typename PayloadVector>
@@ -190,25 +188,24 @@ template<typename PayloadVector>
     if(!bufferName)
         return false;
 
-    const RuntimeMeshBufferUpload::BufferSetupFailure::Enum failure =
-        RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(
-            graphics,
-            arena,
-            bufferName,
-            payload,
-            {
-                false,
-                true,
-                false,
-                Core::ResourceQueueSharing::GraphicsAndAsyncCompute
-            },
-            outBuffer
-        )
-    ;
-    if(failure == RuntimeMeshBufferUpload::BufferSetupFailure::None)
-        return true;
-
-    return ReportMeshBufferSetupFailure(failure, meshName, label);
+    auto buffer = RuntimeMeshBufferUpload::SetupRequiredPaddedRawByteBuffer(
+        graphics,
+        arena,
+        bufferName,
+        payload,
+        {
+            false,
+            true,
+            false,
+            Core::ResourceQueueSharing::GraphicsAndAsyncCompute
+        }
+    );
+    if(!buffer){
+        ReportMeshBufferSetupFailure(buffer.error(), meshName, label);
+        return false;
+    }
+    outBuffer = Move(*buffer);
+    return true;
 }
 
 [[nodiscard]] static bool ValidateRawBufferLogicalByteCount(
@@ -241,10 +238,10 @@ template<typename PayloadVector>
 }
 
 template<typename PositionVector>
-[[nodiscard]] static bool BuildPositionStreamBounds(const PositionVector& positions, CsgReceiverCpuBounds& outBounds){
-    outBounds = CsgReceiverCpuBounds{};
+[[nodiscard]] static Expected<CsgReceiverCpuBounds> BuildPositionStreamBounds(const PositionVector& positions){
+    CsgReceiverCpuBounds bounds;
     if(positions.empty())
-        return false;
+        return MakeUnexpected(Failure{});
 
     SIMDVector minBounds;
     SIMDVector maxBounds;
@@ -253,11 +250,11 @@ template<typename PositionVector>
         AabbTests::Expand(LoadFloat(position), minBounds, maxBounds);
 
     if(!AabbTests::Valid(minBounds, maxBounds))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    StoreFloatInt(VectorSetW(minBounds, 0.0f), s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag, outBounds.minBounds);
-    StoreFloatInt(VectorSetW(maxBounds, 0.0f), 0, outBounds.maxBounds);
-    return true;
+    StoreFloatInt(VectorSetW(minBounds, 0.0f), s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag, bounds.minBounds);
+    StoreFloatInt(VectorSetW(maxBounds, 0.0f), 0, bounds.maxBounds);
+    return bounds;
 }
 
 
@@ -270,34 +267,31 @@ template<typename PositionVector>
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh){
-    outMesh = nullptr;
+Expected<MeshResources*> RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset){
 
     const Name meshPath = meshAsset.name();
     if(!meshPath){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: renderer mesh is empty"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const auto foundMesh = m_meshState.m_meshes.find(meshPath);
     if(foundMesh != m_meshState.m_meshes.end()){
         NWB_ASSERT(meshRenderBindingsReady(foundMesh.value()));
         if(!meshRenderBindingsReady(foundMesh.value()))
-            return false;
-        outMesh = &foundMesh.value();
-        NWB_ASSERT(outMesh->valid());
-        return true;
+            return MakeUnexpected(Failure{});
+        NWB_ASSERT(foundMesh.value().valid());
+        return &foundMesh.value();
     }
 
-    UniquePtr<Core::Assets::IAsset> loadedAsset;
-    const Mesh* loadedMesh = m_assetManager.loadTypedSync<Mesh>(
+    auto loadedAsset = m_assetManager.loadTypedSync<Mesh>(
         meshPath,
-        loadedAsset,
         NWB_TEXT("RendererSystem"),
         Mesh::s_AssetTypeText
     );
+    const Mesh* loadedMesh = loadedAsset ? loadedAsset->get() : nullptr;
     if(!loadedMesh)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const Mesh& mesh = *loadedMesh;
     // Mesh::loadBinary already ran the full payload validation (including u32 stream limits).
@@ -309,12 +303,14 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
     createdMesh.meshName = meshPath;
     createdMesh.meshletCount = static_cast<u32>(mesh.meshlets().size());
     createdMesh.meshletPrimitiveIndexCount = static_cast<u32>(mesh.meshletPrimitiveIndices().size());
-    if(!__hidden_mesh::BuildPositionStreamBounds(mesh.positionStream(), createdMesh.csgLocalBounds)){
+    const auto positionBounds = __hidden_mesh::BuildPositionStreamBounds(mesh.positionStream());
+    if(!positionBounds){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: mesh '{}' has invalid CSG receiver bounds")
             , StringConvert(meshPath.resolvedText())
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
+    createdMesh.csgLocalBounds = *positionBounds;
 
     const bool rtSupported = m_graphics.queryFeatureSupport(Core::Feature::RayTracingAccelStruct);
     // Both tracing backends read raw position/index buffers for material evaluation.
@@ -416,7 +412,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         RendererArenaScope::s_MeshletPrimitiveIndexBufferLabel
     ) && uploaded;
     if(!uploaded)
-        return false;
+        return MakeUnexpected(Failure{});
 
     // Both shadow backends trace triangles; always create the reconstructed index buffer.
     {
@@ -425,13 +421,12 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
             RendererArenaScope::s_RayTracingBuildArena,
             indexCount * sizeof(u32) + __hidden_mesh::s_RayTracingReconstructionScratchPaddingBytes
         );
-        Vector<u32, Core::Alloc::ScratchArena> triangleIndices{ scratchArena };
-        triangleIndices.reserve(indexCount);
-        if(!BuildMeshletTriangleIndices(mesh, triangleIndices)){
+        const auto triangleIndices = BuildMeshletTriangleIndices(scratchArena, mesh);
+        if(!triangleIndices){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace triangle indices for mesh '{}'")
                 , StringConvert(meshPath.resolvedText())
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         const Name indexBufferName = DeriveName(meshPath, RendererArenaScope::s_RtTriangleIndicesBufferName);
@@ -439,7 +434,7 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace index buffer name for mesh '{}'")
                 , StringConvert(meshPath.resolvedText())
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         RuntimeMeshBufferUpload::BufferFlags indexFlags;
@@ -448,23 +443,24 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
         indexFlags.accelStructBuildInput = rtSupported;
         // Async shadow packet shares this stream; keep sharing consistent to avoid ownership transfer.
         indexFlags.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
-        const RuntimeMeshBufferUpload::BufferSetupFailure::Enum indexFailure = RuntimeMeshBufferUpload::SetupRequiredBuffer<u32>(
+        auto indexBuffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<u32>(
             m_graphics,
             indexBufferName,
-            triangleIndices,
-            indexFlags,
-            createdMesh.triangleIndexBuffer
+            *triangleIndices,
+            indexFlags
         );
-        if(indexFailure != RuntimeMeshBufferUpload::BufferSetupFailure::None){
+        if(!indexBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow trace index buffer for mesh '{}'")
                 , StringConvert(meshPath.resolvedText())
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
+
+        createdMesh.triangleIndexBuffer = Move(*indexBuffer);
 
         NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: mesh '{}' shadow trace index buffer ready ({} indices, expected {})")
             , StringConvert(meshPath.resolvedText())
-            , static_cast<u64>(triangleIndices.size())
+            , static_cast<u64>(triangleIndices->size())
             , static_cast<u64>(createdMesh.meshletPrimitiveIndexCount)
         );
 
@@ -480,12 +476,12 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
             RendererArenaScope::s_RayTracingAttributeArena,
             attributeCount * sizeof(AttribGpu) + __hidden_mesh::s_RayTracingReconstructionScratchPaddingBytes
         );
-        Vector<AttribGpu, Core::Alloc::ScratchArena> triangleAttributes{ scratchArena };
-        if(!BuildMeshletTriangleAttributes(mesh, triangleAttributes)){
+        const auto triangleAttributes = BuildMeshletTriangleAttributes(scratchArena, mesh);
+        if(!triangleAttributes){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to reconstruct shadow trace triangle attributes for mesh '{}'")
                 , StringConvert(meshPath.resolvedText())
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         const Name attributeBufferName = DeriveName(meshPath, RendererArenaScope::s_RtTriangleAttributesBufferName);
@@ -493,67 +489,63 @@ bool RendererMeshSystem::createMeshResources(const Core::Assets::AssetRef<Mesh>&
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to derive shadow trace attribute buffer name for mesh '{}'")
                 , StringConvert(meshPath.resolvedText())
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         RuntimeMeshBufferUpload::BufferFlags attributeFlags;
         attributeFlags.canHaveRawViews = true;
         // Tracing shares these attributes on AsyncCompute; keep shared-read input.
         attributeFlags.queueSharing = Core::ResourceQueueSharing::GraphicsAndAsyncCompute;
-        const RuntimeMeshBufferUpload::BufferSetupFailure::Enum attributeFailure = RuntimeMeshBufferUpload::SetupRequiredBuffer<AttribGpu>(
+        auto attributeBuffer = RuntimeMeshBufferUpload::SetupRequiredBuffer<AttribGpu>(
             m_graphics,
             attributeBufferName,
-            triangleAttributes,
-            attributeFlags,
-            createdMesh.attributeBuffer
+            *triangleAttributes,
+            attributeFlags
         );
-        if(attributeFailure != RuntimeMeshBufferUpload::BufferSetupFailure::None){
+        if(!attributeBuffer){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create shadow trace triangle attribute buffer for mesh '{}'")
                 , StringConvert(meshPath.resolvedText())
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
+        createdMesh.attributeBuffer = Move(*attributeBuffer);
+
     }
 
     NWB_ASSERT(createdMesh.valid());
     if(!createMeshRenderBindings(createdMesh))
-        return false;
+        return MakeUnexpected(Failure{});
 
     auto result = m_meshState.m_meshes.try_emplace(meshPath, Move(createdMesh));
     auto it = result.first;
 
-    outMesh = &it.value();
-    NWB_ASSERT(outMesh->valid());
-    return true;
+    NWB_ASSERT(it.value().valid());
+    return &it.value();
 }
 
-bool RendererMeshSystem::findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh){
-    outMesh = nullptr;
+Expected<MeshResources*> RendererMeshSystem::findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset){
 
     const Name meshPath = meshAsset.name();
-    return findMeshResources(meshPath, outMesh);
+    return findMeshResources(meshPath);
 }
 
-bool RendererMeshSystem::findMeshResources(const Name& meshKey, MeshResources*& outMesh){
-    outMesh = nullptr;
+Expected<MeshResources*> RendererMeshSystem::findMeshResources(const Name& meshKey){
     if(!meshKey)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const auto foundMesh = m_meshState.m_meshes.find(meshKey);
     if(foundMesh == m_meshState.m_meshes.end())
-        return false;
+        return MakeUnexpected(Failure{});
 
     NWB_ASSERT(meshRenderBindingsReady(foundMesh.value()));
     if(!meshRenderBindingsReady(foundMesh.value()))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outMesh = &foundMesh.value();
-    NWB_ASSERT(outMesh->valid());
-    return true;
+    NWB_ASSERT(foundMesh.value().valid());
+    return &foundMesh.value();
 }
 
-bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh){
-    outMesh = nullptr;
+Expected<MeshResources*> RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc){
 
     NWB_ASSERT(desc.valid());
 
@@ -563,7 +555,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: runtime mesh '{}' collides with a static mesh resource")
                 , StringConvert(desc.meshKey.resolvedText())
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(!__hidden_mesh::RuntimeMeshSourceMatches(foundMesh.value(), desc)){
             releaseMeshGeometryHeapHandles(foundMesh.value());
@@ -572,11 +564,11 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
         else{
             NWB_ASSERT(meshRenderBindingsReady(foundMesh.value()));
             if(!meshRenderBindingsReady(foundMesh.value()))
-                return false;
-            outMesh = &foundMesh.value();
-            __hidden_mesh::RefreshRuntimeMeshContent(*outMesh, desc);
-            NWB_ASSERT(outMesh->valid());
-            return true;
+                return MakeUnexpected(Failure{});
+            MeshResources& mesh = foundMesh.value();
+            __hidden_mesh::RefreshRuntimeMeshContent(mesh, desc);
+            NWB_ASSERT(mesh.valid());
+            return &mesh;
         }
     }
 
@@ -609,7 +601,7 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
             , StringConvert(createdMesh.meshName.resolvedText())
             , createdMesh.meshletPrimitiveIndexCount
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!__hidden_mesh::ValidateRawBufferLogicalByteCount(
         createdMesh.meshletPrimitiveIndexBuffer,
@@ -617,39 +609,36 @@ bool RendererMeshSystem::createRuntimeMeshResources(const RuntimeMeshDesc& desc,
         createdMesh.meshName,
         RendererArenaScope::s_MeshletPrimitiveIndexBufferLabel
     ))
-        return false;
+        return MakeUnexpected(Failure{});
     NWB_ASSERT(createdMesh.valid());
     if(!createMeshRenderBindings(createdMesh))
-        return false;
+        return MakeUnexpected(Failure{});
 
     auto result = m_meshState.m_meshes.try_emplace(desc.meshKey, Move(createdMesh));
     auto it = result.first;
 
-    outMesh = &it.value();
-    NWB_ASSERT(outMesh->valid());
-    return true;
+    NWB_ASSERT(it.value().valid());
+    return &it.value();
 }
 
-bool RendererMeshSystem::findRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh){
-    outMesh = nullptr;
+Expected<MeshResources*> RendererMeshSystem::findRuntimeMeshResources(const RuntimeMeshDesc& desc){
     NWB_ASSERT(desc.valid());
 
     const auto foundMesh = m_meshState.m_meshes.find(desc.meshKey);
     if(foundMesh == m_meshState.m_meshes.end())
-        return false;
+        return MakeUnexpected(Failure{});
 
     MeshResources& mesh = foundMesh.value();
     if(!mesh.runtimeMesh || !__hidden_mesh::RuntimeMeshSourceMatches(mesh, desc))
-        return false;
+        return MakeUnexpected(Failure{});
 
     NWB_ASSERT(meshRenderBindingsReady(mesh));
     if(!meshRenderBindingsReady(mesh))
-        return false;
+        return MakeUnexpected(Failure{});
 
     __hidden_mesh::RefreshRuntimeMeshContent(mesh, desc);
-    outMesh = &mesh;
-    NWB_ASSERT(outMesh->valid());
-    return true;
+    NWB_ASSERT(mesh.valid());
+    return &mesh;
 }
 
 void RendererMeshSystem::pruneRuntimeMeshResources(){

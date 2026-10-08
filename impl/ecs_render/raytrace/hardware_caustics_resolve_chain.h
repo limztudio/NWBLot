@@ -60,9 +60,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
+    [[nodiscard]] Expected<HardwareCausticsResolveChainResult> declare(
         const HardwareCausticsResolveChainInputs& inputs,
-        HardwareCausticsResolveChainResult& outResult,
         Core::Alloc::ScratchArena& scratchArena
     );
 

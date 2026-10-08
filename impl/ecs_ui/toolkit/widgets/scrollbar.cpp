@@ -24,27 +24,26 @@ namespace __hidden_ui_scrollbar{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool MakeRect(const f64 x, const f64 y, const f64 width, const f64 height, Rect& out)noexcept{
+[[nodiscard]] static Expected<Rect> MakeRect(const f64 x, const f64 y, const f64 width, const f64 height)noexcept{
     if(
         !IsFinite(x) || x < -Limit<f32>::s_Max || x > Limit<f32>::s_Max
         || !IsFinite(y) || y < -Limit<f32>::s_Max || y > Limit<f32>::s_Max
         || !IsFinite(width) || width < 0.0 || width > Limit<f32>::s_Max
         || !IsFinite(height) || height < 0.0 || height > Limit<f32>::s_Max
     )
-        return false;
+        return MakeUnexpected(Failure{});
     const Rect candidate{ static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(width), static_cast<f32>(height) };
     if(!IsValidUiRect(candidate))
-        return false;
-    out = candidate;
-    return true;
+        return MakeUnexpected(Failure{});
+    return candidate;
 }
 
-[[nodiscard]] static bool Intersect(const Rect& lhs, const Rect& rhs, Rect& out)noexcept{
+[[nodiscard]] static Expected<Rect> Intersect(const Rect& lhs, const Rect& rhs)noexcept{
     const f64 x = Max(static_cast<f64>(lhs.x), static_cast<f64>(rhs.x));
     const f64 y = Max(static_cast<f64>(lhs.y), static_cast<f64>(rhs.y));
     const f64 right = Min(static_cast<f64>(lhs.x) + lhs.width, static_cast<f64>(rhs.x) + rhs.width);
     const f64 bottom = Min(static_cast<f64>(lhs.y) + lhs.height, static_cast<f64>(rhs.y) + rhs.height);
-    return MakeRect(x, y, Max(0.0, right - x), Max(0.0, bottom - y), out);
+    return MakeRect(x, y, Max(0.0, right - x), Max(0.0, bottom - y));
 }
 
 [[nodiscard]] static bool ValidBar(const ScrollbarPlacement& bar, const ScrollAxis::Enum axis)noexcept{
@@ -101,25 +100,24 @@ namespace __hidden_ui_scrollbar{
     return ValidBar(bar, axis);
 }
 
-[[nodiscard]] static bool BuildBar(
+[[nodiscard]] static Expected<ScrollbarPlacement> BuildBar(
     const f64 contentExtent,
     const f64 viewportExtent,
     const Rect& track,
     const f32 minThumb,
     const f64 offset,
-    const ScrollAxis::Enum axis,
-    ScrollbarPlacement& out
+    const ScrollAxis::Enum axis
 )noexcept{
     ScrollbarPlacement candidate;
     candidate.contentExtent = contentExtent;
     candidate.viewportExtent = viewportExtent;
     candidate.maximum = Max(0.0, contentExtent - viewportExtent);
     if(!IsFinite(candidate.maximum) || (viewportExtent > 0.0 && candidate.maximum > 0.0 && candidate.maximum >= contentExtent))
-        return false;
+        return MakeUnexpected(Failure{});
     candidate.visible = track.width > 0.0f && track.height > 0.0f;
     if(candidate.visible){
         if(candidate.maximum <= 0.0)
-            return false;
+            return MakeUnexpected(Failure{});
         candidate.track = track;
         const f64 length = axis == ScrollAxis::Horizontal ? track.width : track.height;
         const f64 proportional = length * (viewportExtent / contentExtent);
@@ -131,9 +129,8 @@ namespace __hidden_ui_scrollbar{
             candidate.thumb.height = Min(thumbExtent, track.height);
     }
     if(!MoveThumb(offset, axis, candidate) || !ValidBar(candidate, axis))
-        return false;
-    out = candidate;
-    return true;
+        return MakeUnexpected(Failure{});
+    return candidate;
 }
 
 
@@ -146,7 +143,7 @@ namespace __hidden_ui_scrollbar{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ScrollbarLayout::Calculate(
+Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(
     const Rect& bounds,
     const Rect& clip,
     const Insets& padding,
@@ -154,8 +151,7 @@ bool ScrollbarLayout::Calculate(
     const f32 caretWidth,
     const Point& previousScroll,
     const f32 thickness,
-    const f32 minThumb,
-    ScrollViewportPlacement& out
+    const f32 minThumb
 )noexcept{
     using namespace __hidden_ui_scrollbar;
     if(
@@ -164,22 +160,22 @@ bool ScrollbarLayout::Calculate(
         || !IsFinite(caretWidth) || caretWidth <= 0.0f
         || !IsFinite(thickness) || thickness < 0.0f || !IsFinite(minThumb) || minThumb < 0.0f
     )
-        return false;
+        return MakeUnexpected(Failure{});
     const f64 x = static_cast<f64>(bounds.x) + Min(static_cast<f64>(padding.left), static_cast<f64>(bounds.width));
     const f64 y = static_cast<f64>(bounds.y) + Min(static_cast<f64>(padding.top), static_cast<f64>(bounds.height));
     const f64 width = Max(0.0, static_cast<f64>(bounds.width) - padding.left - padding.right);
     const f64 height = Max(0.0, static_cast<f64>(bounds.height) - padding.top - padding.bottom);
-    Rect padded;
-    if(!MakeRect(x, y, width, height, padded))
-        return false;
-    const f64 availableWidth = padded.width;
-    const f64 availableHeight = padded.height;
+    const auto padded = MakeRect(x, y, width, height);
+    if(!padded)
+        return MakeUnexpected(Failure{});
+    const f64 availableWidth = padded->width;
+    const f64 availableHeight = padded->height;
     const f64 verticalWidth = Min(static_cast<f64>(thickness), availableWidth);
     const f64 horizontalHeight = Min(static_cast<f64>(thickness), availableHeight);
     const f64 contentWidth = static_cast<f64>(contentMeasure.x) + caretWidth;
     const f64 contentHeight = contentMeasure.y;
     if(!IsFinite(contentWidth))
-        return false;
+        return MakeUnexpected(Failure{});
     bool horizontal = false;
     bool vertical = false;
     // Each axis can only add a reservation; the other axis is rechecked after either addition.
@@ -196,37 +192,49 @@ bool ScrollbarLayout::Calculate(
     const f64 barWidth = vertical ? verticalWidth : 0.0;
     const f64 barHeight = horizontal ? horizontalHeight : 0.0;
     ScrollViewportPlacement candidate;
-    if(!MakeRect(padded.x, padded.y, availableWidth - barWidth, availableHeight - barHeight, candidate.viewport))
-        return false;
-    if((barWidth > 0.0 && candidate.viewport.width >= padded.width) || (barHeight > 0.0 && candidate.viewport.height >= padded.height))
-        return false;
-    if(!Intersect(candidate.viewport, clip, candidate.contentClip))
-        return false;
+    const auto viewport = MakeRect(padded->x, padded->y, availableWidth - barWidth, availableHeight - barHeight);
+    if(!viewport)
+        return MakeUnexpected(Failure{});
+    candidate.viewport = *viewport;
+    if((barWidth > 0.0 && candidate.viewport.width >= padded->width) || (barHeight > 0.0 && candidate.viewport.height >= padded->height))
+        return MakeUnexpected(Failure{});
+    const auto contentClip = Intersect(candidate.viewport, clip);
+    if(!contentClip)
+        return MakeUnexpected(Failure{});
+    candidate.contentClip = *contentClip;
     const f64 viewportWidth = candidate.viewport.width;
     const f64 viewportHeight = candidate.viewport.height;
     Rect horizontalTrack;
     Rect verticalTrack;
     if(horizontal && viewportWidth > 0.0 && barHeight > 0.0){
-        if(!MakeRect(padded.x, static_cast<f64>(padded.y) + viewportHeight, viewportWidth, barHeight, horizontalTrack))
-            return false;
+        const auto track = MakeRect(padded->x, static_cast<f64>(padded->y) + viewportHeight, viewportWidth, barHeight);
+        if(!track)
+            return MakeUnexpected(Failure{});
+        horizontalTrack = *track;
     }
     if(vertical && viewportHeight > 0.0 && barWidth > 0.0){
-        if(!MakeRect(static_cast<f64>(padded.x) + viewportWidth, padded.y, barWidth, viewportHeight, verticalTrack))
-            return false;
+        const auto track = MakeRect(static_cast<f64>(padded->x) + viewportWidth, padded->y, barWidth, viewportHeight);
+        if(!track)
+            return MakeUnexpected(Failure{});
+        verticalTrack = *track;
     }
     if(barWidth > 0.0 && barHeight > 0.0){
-        if(!MakeRect(
-            static_cast<f64>(padded.x) + viewportWidth, static_cast<f64>(padded.y) + viewportHeight,
-            barWidth, barHeight, candidate.corner
-        ))
-            return false;
+        const auto corner = MakeRect(
+            static_cast<f64>(padded->x) + viewportWidth, static_cast<f64>(padded->y) + viewportHeight, barWidth, barHeight
+        );
+        if(!corner)
+            return MakeUnexpected(Failure{});
+        candidate.corner = *corner;
     }
-    if(!BuildBar(contentWidth, viewportWidth, horizontalTrack, minThumb, previousScroll.x, ScrollAxis::Horizontal, candidate.horizontal))
-        return false;
-    if(!BuildBar(contentHeight, viewportHeight, verticalTrack, minThumb, previousScroll.y, ScrollAxis::Vertical, candidate.vertical))
-        return false;
-    out = candidate;
-    return true;
+    const auto horizontalBar = BuildBar(contentWidth, viewportWidth, horizontalTrack, minThumb, previousScroll.x, ScrollAxis::Horizontal);
+    if(!horizontalBar)
+        return MakeUnexpected(Failure{});
+    candidate.horizontal = *horizontalBar;
+    const auto verticalBar = BuildBar(contentHeight, viewportHeight, verticalTrack, minThumb, previousScroll.y, ScrollAxis::Vertical);
+    if(!verticalBar)
+        return MakeUnexpected(Failure{});
+    candidate.vertical = *verticalBar;
+    return candidate;
 }
 
 bool ScrollbarLayout::UpdateOffsets(const Point& scroll, ScrollViewportPlacement& out)noexcept{

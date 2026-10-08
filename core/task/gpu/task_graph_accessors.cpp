@@ -196,13 +196,11 @@ RayTracingAccelStruct* GpuTaskGraph::accelStructForResource(const GpuGraphResour
     return node.type == GpuGraphResourceType::AccelStruct ? node.accelStruct.get() : nullptr;
 }
 
-const void* GpuTaskGraph::uploadBlobData(const GpuUploadBlobId& blob, usize& outByteSize)const noexcept{
-    outByteSize = 0u;
+Expected<BinaryByteView> GpuTaskGraph::uploadBlobData(const GpuUploadBlobId& blob)const noexcept{
     const GpuUploadBlobNode* const node = findUploadBlob(blob);
     if(!node || node->bytes.empty())
-        return nullptr;
-    outByteSize = node->bytes.size();
-    return node->bytes.data();
+        return MakeUnexpected(Failure{});
+    return BinaryByteView{ node->bytes.data(), node->bytes.size() };
 }
 
 GraphicsPipeline* GpuTaskGraph::graphicsPipelineFor(const GpuGraphPipelineId& pipeline)const noexcept{

@@ -103,7 +103,7 @@ TEST(UiEditNavigationStateTests, FiniteExtremeColumnsRemainFiniteAuthoritativeIn
     EXPECT_TRUE(state.matches(state.snapshot()));
 }
 
-TEST(UiEditNavigationStateTests, OsModifiersAndUnrelatedIntentsLeaveDirectionOutputUntouched){
+TEST(UiEditNavigationStateTests, OsModifiersAndUnrelatedIntentsRejectNavigation){
     Core::Alloc::GlobalArena arena(Name("tests/ui/edit/navigation"));
     InputBindings bindings(arena);
     const InputKeyBinding chords[]{
@@ -113,9 +113,7 @@ TEST(UiEditNavigationStateTests, OsModifiersAndUnrelatedIntentsLeaveDirectionOut
         { Core::Key::Unknown }, { Core::Key::Enter }, { Core::Key::Left }, { static_cast<i32>(Core::Key::Menu) + 1 }
     };
     for(const auto& chord : chords){
-        EditNavigationDirection::Enum output = EditNavigationDirection::PageDown;
-        EXPECT_FALSE(TranslateEditNavigation(bindings.resolve(chord.key, chord.modifiers), output));
-        EXPECT_EQ(output, EditNavigationDirection::PageDown);
+        EXPECT_FALSE(TranslateEditNavigation(bindings.resolve(chord.key, chord.modifiers)));
     }
     const InputCommandIntent rejected[]{
         { InputCommand::Up, true, false }, { InputCommand::Down, false, false },
@@ -123,9 +121,7 @@ TEST(UiEditNavigationStateTests, OsModifiersAndUnrelatedIntentsLeaveDirectionOut
         { InputCommand::FocusNext }, { static_cast<InputCommand::Enum>(255u), true }
     };
     for(const InputCommandIntent& intent : rejected){
-        EditNavigationDirection::Enum output = EditNavigationDirection::PageDown;
-        EXPECT_FALSE(TranslateEditNavigation(intent, output));
-        EXPECT_EQ(output, EditNavigationDirection::PageDown);
+        EXPECT_FALSE(TranslateEditNavigation(intent));
     }
 }
 

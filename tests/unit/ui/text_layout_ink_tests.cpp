@@ -28,15 +28,14 @@ public:
 
 
 public:
-    [[nodiscard]] virtual TextLayoutStatus::Enum shape(const ShapeRequest& request, ShapedRun& output)override{
+    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override{
         ShapedRun run(m_arena);
         run.metrics = { 8.0f, 2.0f, 2.0f };
         for(usize index = 0u; index < request.text.size(); ++index){
             run.glyphs.push_back({ {}, 1u, static_cast<u32>(index), static_cast<u32>(index + 1u),
                 index == 0u ? m_offset : m_secondOffset, m_advance, m_ink, m_coverage });
         }
-        output = Move(run);
-        return TextLayoutStatus::Success;
+        return run;
     }
 
 
@@ -75,7 +74,11 @@ protected:
 
 TEST_F(TextLayoutInkTests, EmptyShapingInkRemainsAnUnknownPerGlyphRectangle){
     m_shaper.m_ink = {};
-    ASSERT_EQ(m_builder.layout({ "a" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_builder.layout({ "a" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.glyphs().size(), 1u);
     EXPECT_FLOAT_EQ(m_layout.glyphs()[0].ink.width, 0.0f);
     EXPECT_FLOAT_EQ(m_layout.glyphs()[0].ink.height, 0.0f);
@@ -84,46 +87,82 @@ TEST_F(TextLayoutInkTests, EmptyShapingInkRemainsAnUnknownPerGlyphRectangle){
 }
 
 TEST_F(TextLayoutInkTests, UnrepresentableRelativeInkEndpointRejectsTheShaperWithoutReplacingLayout){
-    ASSERT_EQ(m_builder.layout({ "a" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_builder.layout({ "a" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     m_shaper.m_ink = { Limit<f32>::s_Max, 0.0f, Limit<f32>::s_Max, 1.0f };
-    EXPECT_EQ(m_builder.layout({ "b" }, m_layout), TextLayoutStatus::FontFailure);
+    {
+        const auto layoutResult = m_builder.layout({ "b" });
+        ASSERT_FALSE(layoutResult);
+        EXPECT_EQ(layoutResult.error(), TextLayoutStatus::FontFailure);
+    }
     EXPECT_EQ(m_layout.utf8(), "a");
     EXPECT_FLOAT_EQ(m_layout.glyphs()[0].ink.x, -2.0f);
 }
 
 TEST_F(TextLayoutInkTests, UnrepresentableTranslatedInkRejectsAtomicallyEvenWithEmptyInk){
-    ASSERT_EQ(m_builder.layout({ "a" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_builder.layout({ "a" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     m_shaper.m_offset.x = Limit<f32>::s_Max;
     m_shaper.m_ink = { Limit<f32>::s_Max, 0.0f, 0.0f, 0.0f };
-    EXPECT_EQ(m_builder.layout({ "b" }, m_layout), TextLayoutStatus::InvalidParameters);
+    {
+        const auto layoutResult = m_builder.layout({ "b" });
+        ASSERT_FALSE(layoutResult);
+        EXPECT_EQ(layoutResult.error(), TextLayoutStatus::InvalidParameters);
+    }
     EXPECT_EQ(m_layout.utf8(), "a");
     EXPECT_FLOAT_EQ(m_layout.glyphs()[0].position.x, 0.0f);
 }
 
 TEST_F(TextLayoutInkTests, UnrepresentableUnionAcrossValidGlyphsRejectsAtomically){
-    ASSERT_EQ(m_builder.layout({ "a" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_builder.layout({ "a" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     m_shaper.m_offset.x = -Limit<f32>::s_Max * 0.75f;
     m_shaper.m_secondOffset.x = Limit<f32>::s_Max * 0.75f;
     m_shaper.m_ink = { 0.0f, -8.0f, 1.0f, 10.0f };
     m_shaper.m_advance.x = 0.0f;
-    EXPECT_EQ(m_builder.layout({ "bc" }, m_layout), TextLayoutStatus::InvalidParameters);
+    {
+        const auto layoutResult = m_builder.layout({ "bc" });
+        ASSERT_FALSE(layoutResult);
+        EXPECT_EQ(layoutResult.error(), TextLayoutStatus::InvalidParameters);
+    }
     EXPECT_EQ(m_layout.utf8(), "a");
     EXPECT_FLOAT_EQ(m_layout.inkBounds().x, -2.0f);
 }
 
 TEST_F(TextLayoutInkTests, UnrepresentablePositionOrAdvanceRejectsBeforeGlyphPublication){
-    ASSERT_EQ(m_builder.layout({ "a" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_builder.layout({ "a" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     m_shaper.m_ink = {};
     m_shaper.m_advance.x = Limit<f32>::s_Max;
     m_shaper.m_secondOffset.x = Limit<f32>::s_Max;
-    EXPECT_EQ(m_builder.layout({ "bc" }, m_layout), TextLayoutStatus::InvalidParameters);
+    {
+        const auto layoutResult = m_builder.layout({ "bc" });
+        ASSERT_FALSE(layoutResult);
+        EXPECT_EQ(layoutResult.error(), TextLayoutStatus::InvalidParameters);
+    }
     EXPECT_EQ(m_layout.utf8(), "a");
     ASSERT_EQ(m_layout.glyphs().size(), 1u);
 }
 
 TEST_F(TextLayoutInkTests, NativeCoverageBoundsAreCopiedSeparatelyFromShapedInk){
     m_shaper.m_coverage = { { -4.0f, -10.0f, 15.0f, 14.0f }, true };
-    ASSERT_EQ(m_builder.layout({ "a" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_builder.layout({ "a" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.glyphs().size(), 1u);
     const PlacedGlyph& glyph = m_layout.glyphs()[0];
     m_shaper.m_coverage = {};
@@ -134,14 +173,26 @@ TEST_F(TextLayoutInkTests, NativeCoverageBoundsAreCopiedSeparatelyFromShapedInk)
 }
 
 TEST_F(TextLayoutInkTests, MalformedOrUnrepresentableKnownCoverageRejectsAtomically){
-    ASSERT_EQ(m_builder.layout({ "a" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_builder.layout({ "a" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     m_shaper.m_coverage = { { 0.0f, 0.0f, -1.0f, 1.0f }, true };
-    EXPECT_EQ(m_builder.layout({ "b" }, m_layout), TextLayoutStatus::FontFailure);
+    {
+        const auto layoutResult = m_builder.layout({ "b" });
+        ASSERT_FALSE(layoutResult);
+        EXPECT_EQ(layoutResult.error(), TextLayoutStatus::FontFailure);
+    }
     EXPECT_EQ(m_layout.utf8(), "a");
     m_shaper.m_coverage = { { Limit<f32>::s_Max, 0.0f, 0.0f, 0.0f }, true };
     m_shaper.m_offset.x = Limit<f32>::s_Max;
     m_shaper.m_ink = {};
-    EXPECT_EQ(m_builder.layout({ "b" }, m_layout), TextLayoutStatus::InvalidParameters);
+    {
+        const auto layoutResult = m_builder.layout({ "b" });
+        ASSERT_FALSE(layoutResult);
+        EXPECT_EQ(layoutResult.error(), TextLayoutStatus::InvalidParameters);
+    }
     EXPECT_EQ(m_layout.utf8(), "a");
     EXPECT_FALSE(m_layout.glyphs()[0].coverage.known);
 }

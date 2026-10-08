@@ -19,9 +19,9 @@ NWB_ASSET_BUILDER_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ResolveCookPaths(
+[[nodiscard]] Expected<Core::Assets::ResolvedCookPaths> ResolveCookPaths(
     const AssetBuildOptions& options,
-    Core::Assets::ResolvedCookPaths& outPaths,
+    Core::Assets::AssetArena& arena,
     Core::Assets::ScratchArena& scratchArena
 );
 

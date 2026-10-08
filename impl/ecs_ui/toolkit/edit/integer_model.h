@@ -22,7 +22,7 @@ NWB_IMPL_UI_BEGIN
 class IntegerEditModel final : NoCopy{
 private:
     [[nodiscard]] NumericEditResult commit(const IntegerBounds& bounds, bool canonical);
-    [[nodiscard]] bool canonicalize(i64 value, bool* textChanged = nullptr);
+    [[nodiscard]] Expected<bool> canonicalize(i64 value);
     void advanceRevision()noexcept;
 
 

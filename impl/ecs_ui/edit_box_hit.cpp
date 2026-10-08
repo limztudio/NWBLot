@@ -25,7 +25,7 @@ Core::TextInputRect UiEditBoxHost::nativeCaret(const UiEditBoxGeometry& geometry
         Max(1, coordinate(Ceil(caret.width * m_display.pixelScaleX))), Max(1, coordinate(Ceil(caret.height * m_display.pixelScaleY))) };
 }
 
-bool UiEditBoxHost::hit(const Entry& entry, const Ui::Point position, usize& byte)const noexcept{
+Expected<usize> UiEditBoxHost::hit(const Entry& entry, const Ui::Point position)const noexcept{
     const UiEditBoxGeometry& geometry = entry.displayed;
     if(
         geometry.generation == 0u || geometry.stops.empty() || geometry.lines.empty()
@@ -33,14 +33,15 @@ bool UiEditBoxHost::hit(const Entry& entry, const Ui::Point position, usize& byt
         || (geometry.textMode != Ui::EditTextMode::SingleLine && geometry.textMode != Ui::EditTextMode::Multiline)
         || (geometry.textMode == Ui::EditTextMode::SingleLine && geometry.lines.size() != 1u)
     )
-        return false;
+        return MakeUnexpected(Failure{});
     const Ui::Point local{ position.x - geometry.placement.textOrigin.x, position.y - geometry.placement.textOrigin.y };
-    return Ui::HitEditCaretGeometry(geometry.lines, geometry.stops, local, byte);
+    return Ui::HitEditCaretGeometry(geometry.lines, geometry.stops, local);
 }
 
-bool UiEditBoxHost::hitWord(const Entry& entry, const Ui::Point position, usize& byte)const noexcept{
-    if(!hit(entry, position, byte))
-        return false;
+Expected<usize> UiEditBoxHost::hitWord(const Entry& entry, const Ui::Point position)const noexcept{
+    const auto byte = hit(entry, position);
+    if(!byte)
+        return MakeUnexpected(byte.error());
     const UiEditBoxGeometry& geometry = entry.displayed;
     const Ui::Point local{ position.x - geometry.placement.textOrigin.x, position.y - geometry.placement.textOrigin.y };
     u32 lineIndex = static_cast<u32>(geometry.lines.size() - 1u);
@@ -52,21 +53,20 @@ bool UiEditBoxHost::hitWord(const Entry& entry, const Ui::Point position, usize&
     }
     const Ui::EditCaretLine& line = geometry.lines[lineIndex];
     if(line.stopCount < 2u)
-        return true;
+        return *byte;
     const usize first = line.firstStop;
     const usize end = first + line.stopCount;
     usize selected = first;
     for(usize index = first + 1u; index < end; ++index){
         if(geometry.stops[index].lineIndex != lineIndex || geometry.stops[index].x < geometry.stops[index - 1u].x)
-            return false;
+            return MakeUnexpected(Failure{});
         if(local.x < geometry.stops[index].x)
             break;
         selected = index;
     }
     if(selected + 1u == end)
         --selected;
-    byte = geometry.stops[selected].committedByte;
-    return true;
+    return geometry.stops[selected].committedByte;
 }
 
 

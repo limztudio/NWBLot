@@ -37,29 +37,30 @@ using namespace TaskGraphTestUtils;
 using TaskGraphTestUtils::TestArena;
 
 
-TEST(GpuCommandIrStreamReader, EmptyAndExhaustedStreamsLeaveTheOutputUnchanged){
+TEST(GpuCommandIrStreamReader, EmptyAndExhaustedStreamsReportEndWithoutProducingARecord){
     TestArena testArena;
     Graphics::GpuCommandIrCapture emptyCapture(testArena.arena);
     Graphics::GpuCommandIrStreamReader emptyReader(emptyCapture.commandBytes());
-    Graphics::GpuCommandIrBuiltinTaskRecord emptyOutput;
-    emptyOutput.task = Graphics::GpuTaskId{ .generation = 98u, .index = 99u };
-    EXPECT_EQ(emptyReader.next(emptyOutput), Graphics::GpuCommandIrStreamReadStatus::End);
+
+    const auto terminal1 = emptyReader.nextBuiltinTask();
+    ASSERT_FALSE(terminal1);
+    EXPECT_EQ(terminal1.error(), Graphics::GpuCommandIrStreamReadStatus::End);
     EXPECT_TRUE(emptyReader.validation().valid());
-    EXPECT_EQ(emptyOutput.task.index, 99u);
-    EXPECT_EQ(emptyOutput.task.generation, 98u);
+
 
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     ASSERT_TRUE(CaptureAllBuiltinCommandIrRecords(capture));
     Graphics::GpuCommandIrStreamReader reader(capture.commandBytes());
-    Graphics::GpuCommandIrBuiltinTaskRecord record;
     for(u32 recordIndex = 0u; recordIndex < 4u; ++recordIndex)
-        ASSERT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::Record);
+        ASSERT_TRUE(reader.nextBuiltinTask());
 
-    record.task = Graphics::GpuTaskId{ .generation = 98u, .index = 99u };
-    EXPECT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::End);
-    EXPECT_EQ(reader.next(record), Graphics::GpuCommandIrStreamReadStatus::End);
-    EXPECT_EQ(record.task.index, 99u);
-    EXPECT_EQ(record.task.generation, 98u);
+    const auto terminal2 = reader.nextBuiltinTask();
+    ASSERT_FALSE(terminal2);
+    EXPECT_EQ(terminal2.error(), Graphics::GpuCommandIrStreamReadStatus::End);
+    const auto terminal3 = reader.nextBuiltinTask();
+    ASSERT_FALSE(terminal3);
+    EXPECT_EQ(terminal3.error(), Graphics::GpuCommandIrStreamReadStatus::End);
+
     EXPECT_TRUE(reader.validation().complete);
     EXPECT_TRUE(reader.validation().valid());
     EXPECT_EQ(reader.validation().byteOffset, capture.commandBytes().size());
@@ -147,7 +148,7 @@ TEST(GpuCommandIrStreamReader, RejectsMalformedHeadersBeforeReadingRecords){
     }, Graphics::GpuCommandIrStreamValidationError::InvalidRecordCount);
 }
 
-TEST(GpuCommandIrStreamReader, RejectsMalformedRecordsWithoutPublishingPartialOutput){
+TEST(GpuCommandIrStreamReader, RejectsMalformedRecordsWithoutProducingPartialValues){
     TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
     ASSERT_TRUE(CaptureAllBuiltinCommandIrRecords(capture));
@@ -164,40 +165,23 @@ TEST(GpuCommandIrStreamReader, RejectsMalformedRecordsWithoutPublishingPartialOu
         mutate(corruptedBytes);
 
         Graphics::GpuCommandIrStreamReader reader(BinaryByteView{ corruptedBytes.data(), corruptedBytes.size() });
-        Graphics::GpuCommandIrBuiltinTaskRecord output;
         for(usize recordIndex = 0u; recordIndex < validPrefixCount; ++recordIndex)
-            ASSERT_EQ(reader.next(output), Graphics::GpuCommandIrStreamReadStatus::Record);
+            ASSERT_TRUE(reader.nextBuiltinTask());
 
-        output.opcode = Graphics::GpuCommandIrOpcode::ClearTexture;
-        output.task = Graphics::GpuTaskId{ .generation = 92u, .index = 91u };
-        output.packet = Graphics::GpuSubmissionPacketId{ .generation = 92u, .index = 93u };
-        output.queue = Graphics::GpuPhysicalQueueId{ .index = 94u, .deviceGeneration = 95u };
-        output.source = Graphics::GpuGraphResourceId{ .generation = 92u, .index = 96u };
-        output.destination = Graphics::GpuGraphResourceId{ .generation = 92u, .index = 97u };
-        output.dataSizeBytes = 98u;
-        output.clearDepth = true;
-        output.clearStencil = true;
-        EXPECT_EQ(reader.next(output), Graphics::GpuCommandIrStreamReadStatus::Error);
-        EXPECT_EQ(output.opcode, Graphics::GpuCommandIrOpcode::ClearTexture);
-        EXPECT_EQ(output.task.index, 91u);
-        EXPECT_EQ(output.task.generation, 92u);
-        EXPECT_EQ(output.packet.index, 93u);
-        EXPECT_EQ(output.packet.generation, 92u);
-        EXPECT_EQ(output.queue.index, 94u);
-        EXPECT_EQ(output.queue.deviceGeneration, 95u);
-        EXPECT_EQ(output.source.index, 96u);
-        EXPECT_EQ(output.source.generation, 92u);
-        EXPECT_EQ(output.destination.index, 97u);
-        EXPECT_EQ(output.destination.generation, 92u);
-        EXPECT_EQ(output.dataSizeBytes, 98u);
-        EXPECT_TRUE(output.clearDepth);
-        EXPECT_TRUE(output.clearStencil);
+
+        const auto terminal4 = reader.nextBuiltinTask();
+        ASSERT_FALSE(terminal4);
+        EXPECT_EQ(terminal4.error(), Graphics::GpuCommandIrStreamReadStatus::Error);
+
+
         EXPECT_EQ(reader.validation().error, expectedError);
         EXPECT_TRUE(reader.validation().complete);
         EXPECT_TRUE(reader.validation().failed());
         EXPECT_EQ(reader.validation().byteOffset, expectedByteOffset);
         EXPECT_EQ(reader.validation().recordIndex, validPrefixCount);
-        EXPECT_EQ(reader.next(output), Graphics::GpuCommandIrStreamReadStatus::Error);
+        const auto terminal5 = reader.nextBuiltinTask();
+        ASSERT_FALSE(terminal5);
+        EXPECT_EQ(terminal5.error(), Graphics::GpuCommandIrStreamReadStatus::Error);
     };
 
     expectRecordError(1u, s_CommandIrCopyTextureOffset, [](Graphics::GraphicsBytes& bytes){

@@ -121,23 +121,27 @@ TEST_F(UiEditModelTests, ByteLimitFailureIsAtomicAndEmptyLimitAcceptsOnlyEmptyTe
 }
 
 TEST_F(UiEditModelTests, WordRangeRejectsInteriorGraphemeAndKeepsHardLinesSeparate){
+    const auto empty = m_model.wordRangeAt(0u);
+    ASSERT_TRUE(empty);
+    EXPECT_EQ(empty->begin, 0u);
+    EXPECT_EQ(empty->end, 0u);
     ASSERT_TRUE(m_model.setText("a\xCC\x81" "b,  z"));
-    usize begin = 99u;
-    usize end = 99u;
-    EXPECT_FALSE(m_model.wordRangeAt(1u, begin, end));
-    EXPECT_EQ(begin, 99u);
-    EXPECT_EQ(end, 99u);
-    ASSERT_TRUE(m_model.wordRangeAt(3u, begin, end));
-    EXPECT_EQ(begin, 0u);
-    EXPECT_EQ(end, 4u);
+    EXPECT_FALSE(m_model.wordRangeAt(1u));
+    Expected<EditWordRange> range = MakeUnexpected(Failure{});
+    range = m_model.wordRangeAt(3u);
+    ASSERT_TRUE(range);
+    EXPECT_EQ(range->begin, 0u);
+    EXPECT_EQ(range->end, 4u);
     EditModel multiline(m_arena, {}, EditTextMode::Multiline);
     ASSERT_TRUE(multiline.setText("ab\ncd"));
-    ASSERT_TRUE(multiline.wordRangeAt(2u, begin, end));
-    EXPECT_EQ(begin, 2u);
-    EXPECT_EQ(end, 3u);
-    ASSERT_TRUE(multiline.wordRangeAt(3u, begin, end));
-    EXPECT_EQ(begin, 3u);
-    EXPECT_EQ(end, 5u);
+    range = multiline.wordRangeAt(2u);
+    ASSERT_TRUE(range);
+    EXPECT_EQ(range->begin, 2u);
+    EXPECT_EQ(range->end, 3u);
+    range = multiline.wordRangeAt(3u);
+    ASSERT_TRUE(range);
+    EXPECT_EQ(range->begin, 3u);
+    EXPECT_EQ(range->end, 5u);
 }
 
 TEST_F(UiEditModelTests, ExternalValueResetsSelectionHistoryAndComposition){

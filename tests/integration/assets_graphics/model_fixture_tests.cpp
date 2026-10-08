@@ -115,32 +115,29 @@ asset_bunch bunch = [
 )");
 
     TestArena testArena;
-    Path root(testArena.arena);
-    Path outputDirectory(testArena.arena);
+    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "model_bunch_four_row_transform");
+    ASSERT_TRUE(cookCase);
     EXPECT_FALSE(AssetsGraphicsFixture::CookSingleGraphicsMeta(
         AStringView(meta.data(), meta.size()),
-        "model_bunch_four_row_transform",
         "characters",
         s_MODEL_FIXTURE_NWB.data(),
         testArena,
-        root,
-        outputDirectory
+        *cookCase
     ));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("must be a 3x4 affine matrix")));
 #endif
 }
 
 #if defined(NWB_FINAL)
-static bool ExpandModelBunchFixture(
+static Expected<NWB::Core::Assets::ExpandedAssetMetadataVector> ExpandModelBunchFixture(
     TestArena& testArena,
     const AStringView meta,
     const AStringView caseName,
     NWB::Core::Metascript::Document& doc,
-    NWB::Core::Assets::ExpandedAssetMetadataVector& outAssets,
     NWB::Core::Alloc::ScratchArena& scratchArena
 ){
     if(!doc.parse(meta))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, caseName) / "assets";
     const Path nwbFilePath = assetRoot / "characters" / s_MODEL_FIXTURE_NWB;
@@ -149,7 +146,6 @@ static bool ExpandModelBunchFixture(
         "project",
         nwbFilePath,
         doc,
-        outAssets,
         scratchArena
     );
 }
@@ -181,13 +177,11 @@ asset_bunch bunch = [
     TestArena testArena;
     NWB::Core::Metascript::Document doc(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ModelFixtureScratchArena);
-    NWB::Core::Assets::ExpandedAssetMetadataVector expandedAssets(scratchArena);
-    const bool expanded = ExpandModelBunchFixture(
+    const auto expanded = ExpandModelBunchFixture(
         testArena,
         AStringView(meta.data(), meta.size()),
         "model_bunch_duplicate_local_reference",
         doc,
-        expandedAssets,
         scratchArena
     );
     EXPECT_FALSE(expanded);
@@ -221,13 +215,11 @@ asset_bunch bunch = [
     TestArena testArena;
     NWB::Core::Metascript::Document doc(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ModelFixtureScratchArena);
-    NWB::Core::Assets::ExpandedAssetMetadataVector expandedAssets(scratchArena);
-    const bool expanded = ExpandModelBunchFixture(
+    const auto expanded = ExpandModelBunchFixture(
         testArena,
         AStringView(meta.data(), meta.size()),
         "model_bunch_missing_local_reference",
         doc,
-        expandedAssets,
         scratchArena
     );
     EXPECT_FALSE(expanded);

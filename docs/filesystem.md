@@ -86,15 +86,13 @@ custom implementation and may be a no-op.
 
 ## Reading and seeking
 
-`readFile(path, offset, buffer, capacity, outBytesRead)` reads a range without modifying shared cursor state.
-A successful read can be shorter than the requested capacity at EOF. Reading at EOF succeeds with zero bytes;
-reading beyond EOF fails. Failure leaves `outBytesRead` zero. A nonzero capacity requires a valid buffer.
+`readFile(path, offset, buffer, capacity)` returns `Expected<usize>` with the copied byte count and does not modify shared cursor state. A successful read can be shorter than the requested capacity at EOF. Reading at EOF succeeds with zero bytes; reading beyond EOF returns an unexpected failure. Check admission before reading the count; zero is a successful value. A nonzero capacity requires a valid buffer.
 
 `readFile(path, byteContainer)` obtains the file size, sizes the caller's container, and reads the complete
 payload through the virtual range operation. It clears the container on failure. Container overloads require
 one-byte element types.
 
-`openFile(path, cursor)` creates a resource-free `FileCursor` bound to that filesystem. Cursor reads advance by
+`openFile(path)` returns `Expected<FileCursor>` bound to that filesystem without owning backend resources. Cursor reads return `Expected<usize>` and advance by
 the number of bytes actually read. `seekFile(cursor, offset, origin)` supports `Begin`, `Current`, and `End`,
 permits positions from zero through EOF, and rejects invalid origins, overflow, and out-of-range positions
 without changing the cursor. `closeFile` clears the cursor. Cursors do not retain their filesystem; discard
@@ -113,3 +111,5 @@ projects can schedule asset work through the existing asynchronous asset executo
 
 Host source-file discovery and compiler/cache scratch files continue to use the platform-independent helpers
 under `global/filesystem`; they are not virtual runtime asset namespaces.
+
+`fileSize(path)` returns `Expected<u64>`; an empty file succeeds with zero. Whole-container reads retain the caller's arena and capacity. Host helpers such as `FileExists` and `FileSize` return `Expected<bool, ErrorCode>` and `Expected<u64, ErrorCode>`; successful missing-path false is distinct from a host error. See [produced values and expected failures](expected_results.md).

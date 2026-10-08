@@ -46,14 +46,14 @@ struct ViewTupleAccess{
     }
 
     template<usize I, typename... Ts>
-    static bool FindDenseIndex(const Tuple<ComponentPool<Ts>*...>& pools, usize anchorPoolIndex, usize anchorDenseIndex, EntityID entityId, u32& outDenseIndex)noexcept{
-        if(I == anchorPoolIndex){
-            outDenseIndex = static_cast<u32>(anchorDenseIndex);
-            return true;
-        }
+    static Expected<u32> FindDenseIndex(const Tuple<ComponentPool<Ts>*...>& pools, usize anchorPoolIndex, usize anchorDenseIndex, EntityID entityId)noexcept{
+        if(I == anchorPoolIndex)
+            return static_cast<u32>(anchorDenseIndex);
 
         auto* pool = Get<I>(pools);
-        return pool != nullptr && pool->findDenseIndex(entityId, outDenseIndex);
+        if(!pool)
+            return MakeUnexpected(Failure{});
+        return pool->findDenseIndex(entityId);
     }
 
     template<usize I, typename... Ts>
@@ -129,9 +129,18 @@ struct ViewIterator{
     bool resolveDenseIndices(EntityID entityId, usize anchorDenseIndex)noexcept{
         return resolveDenseIndicesImpl(entityId, anchorDenseIndex, IndexSequenceFor<Ts...>{});
     }
+    template<usize I>
+    bool resolveDenseIndex(EntityID entityId, usize anchorDenseIndex)noexcept{
+        const auto denseIndex = ViewTupleAccess::FindDenseIndex<I>(pools, anchorPoolIndex, anchorDenseIndex, entityId);
+        if(!denseIndex)
+            return false;
+        Get<I>(denseIndices) = *denseIndex;
+        return true;
+    }
+
     template<usize... Is>
     bool resolveDenseIndicesImpl(EntityID entityId, usize anchorDenseIndex, IndexSequence<Is...>)noexcept{
-        return (ViewTupleAccess::FindDenseIndex<Is>(pools, anchorPoolIndex, anchorDenseIndex, entityId, Get<Is>(denseIndices)) && ...);
+        return (resolveDenseIndex<Is>(entityId, anchorDenseIndex) && ...);
     }
 
     EntityID entityAt(usize denseIndex)const{
@@ -289,11 +298,11 @@ private:
     template<usize I = 0, typename Func, typename... Args>
     void tryApplyFunc(Func& func, EntityID entityId, usize denseIndex, Args&... args)const{
         if constexpr(I < sizeof...(Ts)){
-            u32 componentDenseIndex = 0;
-            if(!ECSDetail::ViewTupleAccess::FindDenseIndex<I>(m_pools, m_anchorPoolIndex, denseIndex, entityId, componentDenseIndex))
+            const auto componentDenseIndex = ECSDetail::ViewTupleAccess::FindDenseIndex<I>(m_pools, m_anchorPoolIndex, denseIndex, entityId);
+            if(!componentDenseIndex)
                 return;
 
-            auto& component = ECSDetail::ViewTupleAccess::ComponentAtDense<I>(m_pools, componentDenseIndex);
+            auto& component = ECSDetail::ViewTupleAccess::ComponentAtDense<I>(m_pools, *componentDenseIndex);
             tryApplyFunc<I + 1u>(func, entityId, denseIndex, args..., component);
         }
         else{

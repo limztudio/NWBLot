@@ -26,8 +26,7 @@ CsgDeformViability CheckCsgDeformCutsViability(
 ){
     CsgDeformVertexVector<Core::Alloc::ScratchArena> vertices(scratchArena);
     CsgDeformTriangleVector<Core::Alloc::ScratchArena> triangles(scratchArena);
-    CsgDeformPipelineResult result;
-    if(!CsgDeformPipeline::RebuildSequentialCuts(
+    const auto result = CsgDeformPipeline::RebuildSequentialCuts(
         scratchArena,
         inputVertices,
         inputVertexCount,
@@ -37,14 +36,15 @@ CsgDeformViability CheckCsgDeformCutsViability(
         cutCount,
         options,
         vertices,
-        triangles,
-        result
-    ))
-        return result.viability;
-    return result.viability;
+        triangles
+    );
+    return result
+        ? CsgDeformViability{ true, CsgDeformViabilityReason::Ok }
+        : CsgDeformViability{ false, result.error().reason }
+    ;
 }
 
-bool PreviewCsgDeformCuts(
+Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
     Core::Alloc::ScratchArena& scratchArena,
     NotNull<const CsgDeformVertex*> inputVertices,
     const usize inputVertexCount,
@@ -54,12 +54,9 @@ bool PreviewCsgDeformCuts(
     const usize cutCount,
     const CsgDeformBuildOptions& options,
     CsgDeformVertexVector<Core::Alloc::ScratchArena>& outVertices,
-    CsgDeformTriangleVector<Core::Alloc::ScratchArena>& outTriangles,
-    CsgDeformStats& outStats
+    CsgDeformTriangleVector<Core::Alloc::ScratchArena>& outTriangles
 ){
-    outStats = CsgDeformStats{};
-    CsgDeformPipelineResult result;
-    if(!CsgDeformPipeline::RebuildSequentialCuts(
+    return CsgDeformPipeline::RebuildSequentialCuts(
         scratchArena,
         inputVertices,
         inputVertexCount,
@@ -69,17 +66,11 @@ bool PreviewCsgDeformCuts(
         cutCount,
         options,
         outVertices,
-        outTriangles,
-        result
-    )){
-        outStats = result.stats;
-        return false;
-    }
-    outStats = result.stats;
-    return result.viability.viable;
+        outTriangles
+    );
 }
 
-bool CommitCsgDeformCuts(
+Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
     Core::Alloc::ScratchArena& scratchArena,
     Core::Alloc::GlobalArena& commitArena,
     NotNull<const CsgDeformVertex*> inputVertices,
@@ -90,19 +81,16 @@ bool CommitCsgDeformCuts(
     const usize cutCount,
     const CsgDeformBuildOptions& options,
     CsgDeformVertexVector<Core::Alloc::GlobalArena>& outVertices,
-    CsgDeformTriangleVector<Core::Alloc::GlobalArena>& outTriangles,
-    CsgDeformStats& outStats
+    CsgDeformTriangleVector<Core::Alloc::GlobalArena>& outTriangles
 ){
-    outStats = CsgDeformStats{};
     if(outVertices.get_allocator().arenaPtr() != &commitArena || outTriangles.get_allocator().arenaPtr() != &commitArena)
-        return false;
+        return MakeUnexpected(CsgDeformFailure{ CsgDeformViabilityReason::InvalidOutputArena, {} });
     outVertices.clear();
     outTriangles.clear();
     // Commit reuses the preview entry point so both always observe the same rebuild, viability classifier, and stats for identical inputs.
     CsgDeformVertexVector<Core::Alloc::ScratchArena> previewVertices(scratchArena);
     CsgDeformTriangleVector<Core::Alloc::ScratchArena> previewTriangles(scratchArena);
-    CsgDeformStats previewStats{};
-    if(!PreviewCsgDeformCuts(
+    const auto preview = PreviewCsgDeformCuts(
         scratchArena,
         inputVertices,
         inputVertexCount,
@@ -112,20 +100,17 @@ bool CommitCsgDeformCuts(
         cutCount,
         options,
         previewVertices,
-        previewTriangles,
-        previewStats
-    )){
-        outStats = previewStats;
-        return false;
-    }
+        previewTriangles
+    );
+    if(!preview)
+        return MakeUnexpected(preview.error());
     outVertices.reserve(previewVertices.size());
     outTriangles.reserve(previewTriangles.size());
     for(const CsgDeformVertex& vertex : previewVertices)
         outVertices.push_back(vertex);
     for(const CsgDeformTriangle& triangle : previewTriangles)
         outTriangles.push_back(triangle);
-    outStats = previewStats;
-    return true;
+    return *preview;
 }
 
 

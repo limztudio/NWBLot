@@ -57,11 +57,13 @@ TEST_F(UiMultilineViewTests, NewSnapshotRequiresMatchingLayoutBeforePlacementOrH
     EXPECT_FALSE(m_view.ready());
     EXPECT_FALSE(place());
     ExpectPlacement(m_placement, previous);
-    usize hit = 77u;
-    EXPECT_FALSE(m_view.hitTest({ 10.0f, 20.0f }, previous, hit));
-    EXPECT_EQ(hit, 77u);
+    EXPECT_FALSE(m_view.hitTest({ 10.0f, 20.0f }, previous));
     TextLayout layout(m_arena);
-    ASSERT_EQ(m_layoutBuilder.layout({ m_view.displayText() }, layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_layoutBuilder.layout({ m_view.displayText() });
+        ASSERT_TRUE(layoutResult);
+        layout = Move(*layoutResult);
+    }
     ASSERT_TRUE(m_view.adoptLayout(Move(layout)));
     EXPECT_TRUE(m_view.ready());
     ASSERT_TRUE(place());
@@ -93,15 +95,19 @@ TEST_F(UiMultilineViewTests, HitTestingUsesYAndClampsOutsideTheFirstAndLastLine)
     ASSERT_TRUE(m_model.setText("ab\ncd\n"));
     ASSERT_TRUE(shapeView());
     ASSERT_TRUE(place());
-    usize hit = 99u;
-    ASSERT_TRUE(m_view.hitTest({ 21.0f, 26.0f }, m_placement, hit));
-    EXPECT_EQ(hit, 1u);
-    ASSERT_TRUE(m_view.hitTest({ 21.0f, 50.0f }, m_placement, hit));
-    EXPECT_EQ(hit, 6u);
-    ASSERT_TRUE(m_view.hitTest({ 21.0f, -100.0f }, m_placement, hit));
-    EXPECT_EQ(hit, 1u);
-    ASSERT_TRUE(m_view.hitTest({ 100.0f, 400.0f }, m_placement, hit));
-    EXPECT_EQ(hit, 6u);
+    Expected<usize> hit = MakeUnexpected(Failure{});
+    hit = m_view.hitTest({ 21.0f, 26.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, 1u);
+    hit = m_view.hitTest({ 21.0f, 50.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, 6u);
+    hit = m_view.hitTest({ 21.0f, -100.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, 1u);
+    hit = m_view.hitTest({ 100.0f, 400.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, 6u);
 }
 
 TEST_F(UiMultilineViewTests, LigatureStopsRetainTheirHardLineAndCommittedOffsets){
@@ -117,9 +123,10 @@ TEST_F(UiMultilineViewTests, LigatureStopsRetainTheirHardLineAndCommittedOffsets
     EXPECT_FLOAT_EQ(m_view.caretStops()[5u].x, 10.0f);
     ASSERT_TRUE(place());
     ExpectRect(m_placement.caret, { 30.0f, 32.0f, 1.0f, 12.0f });
-    usize hit = 99u;
-    ASSERT_TRUE(m_view.hitTest({ 21.0f, 38.0f }, m_placement, hit));
-    EXPECT_EQ(hit, 5u);
+    Expected<usize> hit = MakeUnexpected(Failure{});
+    hit = m_view.hitTest({ 21.0f, 38.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, 5u);
 }
 
 TEST_F(UiMultilineViewTests, CrossLinePreeditKeepsNativeScalarCaretInsideItsGrapheme){
@@ -139,9 +146,10 @@ TEST_F(UiMultilineViewTests, CrossLinePreeditKeepsNativeScalarCaretInsideItsGrap
     EXPECT_EQ(m_view.displayCaret(), 7u);
     ASSERT_TRUE(place());
     ExpectRect(m_placement.caret, { 14.0f, 44.0f, 1.0f, 12.0f });
-    usize hit = 99u;
-    ASSERT_TRUE(m_view.hitTest({ 20.0f, 62.0f }, m_placement, hit));
-    EXPECT_EQ(hit, 5u);
+    Expected<usize> hit = MakeUnexpected(Failure{});
+    hit = m_view.hitTest({ 20.0f, 62.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, 5u);
     m_model.cancelComposition();
     ASSERT_TRUE(m_model.setText("changed"));
     EXPECT_TRUE(m_view.composing());
@@ -157,9 +165,10 @@ TEST_F(UiMultilineViewTests, BothScrollAxesRevealCaretAndClampAfterDocumentHomeO
     EXPECT_FLOAT_EQ(m_placement.scroll, 51.0f);
     EXPECT_FLOAT_EQ(m_placement.scrollY, 24.0f);
     ExpectRect(m_placement.caret, { 29.0f, 20.0f, 1.0f, 12.0f });
-    usize hit = 99u;
-    ASSERT_TRUE(m_view.hitTest({ m_placement.caret.x, m_placement.caret.y + 6.0f }, m_placement, hit));
-    EXPECT_EQ(hit, m_model.caret());
+    Expected<usize> hit = MakeUnexpected(Failure{});
+    hit = m_view.hitTest({ m_placement.caret.x, m_placement.caret.y + 6.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, m_model.caret());
     const Point previous{ m_placement.scroll, m_placement.scrollY };
     ASSERT_TRUE(m_model.move(EditMove::DocumentHome));
     ASSERT_TRUE(shapeView());
@@ -176,8 +185,9 @@ TEST_F(UiMultilineViewTests, BothScrollAxesRevealCaretAndClampAfterDocumentHomeO
 TEST_F(UiMultilineViewTests, PaddingAndOuterClipIntersectWithoutChangingLogicalLineGeometry){
     ASSERT_TRUE(m_model.setText("ab\ncd"));
     ASSERT_TRUE(shapeView());
-    ASSERT_TRUE(m_view.arrange({ 10.0f, 20.0f, 100.0f, 40.0f }, { 8.0f, 4.0f, 8.0f, 4.0f },
-        { 30.0f, 22.0f, 20.0f, 40.0f }, Point{}, m_placement));
+    const auto arranged = m_view.arrange({ 10.0f, 20.0f, 100.0f, 40.0f }, { 8.0f, 4.0f, 8.0f, 4.0f }, { 30.0f, 22.0f, 20.0f, 40.0f }, Point{});
+    ASSERT_TRUE(arranged);
+    m_placement = *arranged;
     ExpectRect(m_placement.frameClip, { 30.0f, 22.0f, 20.0f, 38.0f });
     ExpectRect(m_placement.clip, { 30.0f, 24.0f, 20.0f, 32.0f });
     ExpectRect(m_placement.caret, { 38.0f, 36.0f, 1.0f, 12.0f });
@@ -196,7 +206,7 @@ TEST_F(UiMultilineViewTests, ZeroViewportKeepsFiniteCaretAndScrollAndProducesAnE
     EXPECT_FLOAT_EQ(m_placement.caret.y + m_placement.caret.height, m_placement.content.y);
 }
 
-TEST_F(UiMultilineViewTests, FailedPlacementAndHitsPreserveAllCallerOutputs){
+TEST_F(UiMultilineViewTests, FailedPlacementPreservesStateAndInvalidHitsAreRejected){
     ASSERT_TRUE(m_model.setText("abc\ndef"));
     ASSERT_TRUE(shapeView());
     ASSERT_TRUE(place(20.0f, 12.0f));
@@ -205,19 +215,16 @@ TEST_F(UiMultilineViewTests, FailedPlacementAndHitsPreserveAllCallerOutputs){
     ExpectPlacement(m_placement, previous);
     EXPECT_FALSE(place(20.0f, 12.0f, { 0.0f, -1.0f }));
     ExpectPlacement(m_placement, previous);
-    EXPECT_FALSE(m_view.arrange({ 10.0f, 20.0f, -1.0f, 20.0f }, {}, {}, Point{}, m_placement));
+    EXPECT_FALSE(m_view.arrange({ 10.0f, 20.0f, -1.0f, 20.0f }, {}, {}, Point{}));
     ExpectPlacement(m_placement, previous);
-    EXPECT_FALSE(m_view.arrange(previous.bounds, { 0.0f, -1.0f }, previous.clip, Point{}, m_placement));
+    EXPECT_FALSE(m_view.arrange(previous.bounds, { 0.0f, -1.0f }, previous.clip, Point{}));
     ExpectPlacement(m_placement, previous);
-    EXPECT_FALSE(m_view.arrange(previous.bounds, {}, previous.clip, Point{}, m_placement, 0.0f));
+    EXPECT_FALSE(m_view.arrange(previous.bounds, {}, previous.clip, Point{}, 0.0f));
     ExpectPlacement(m_placement, previous);
-    usize hit = 123u;
-    EXPECT_FALSE(m_view.hitTest({ 10.0f, Limit<f32>::s_QuietNaN }, previous, hit));
-    EXPECT_EQ(hit, 123u);
+    EXPECT_FALSE(m_view.hitTest({ 10.0f, Limit<f32>::s_QuietNaN }, previous));
     EditBoxPlacement malformed = previous;
     malformed.textOrigin.y = Limit<f32>::s_QuietNaN;
-    EXPECT_FALSE(m_view.hitTest({ 10.0f, 20.0f }, malformed, hit));
-    EXPECT_EQ(hit, 123u);
+    EXPECT_FALSE(m_view.hitTest({ 10.0f, 20.0f }, malformed));
 }
 
 TEST_F(UiMultilineViewTests, FailedLayoutAdoptionRetainsMultilineGeometryAndPlacement){
@@ -226,12 +233,20 @@ TEST_F(UiMultilineViewTests, FailedLayoutAdoptionRetainsMultilineGeometryAndPlac
     ASSERT_TRUE(place());
     const EditBoxPlacement previous = m_placement;
     TextLayout wrong(m_arena);
-    ASSERT_EQ(m_layoutBuilder.layout({ "other\ntext" }, wrong), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_layoutBuilder.layout({ "other\ntext" });
+        ASSERT_TRUE(layoutResult);
+        wrong = Move(*layoutResult);
+    }
     EXPECT_FALSE(m_view.adoptLayout(Move(wrong)));
     TextLayout rtl(m_arena);
     ShapeRequest request{ m_view.displayText() };
     request.direction = TextDirection::RightToLeft;
-    ASSERT_EQ(m_layoutBuilder.layout(request, rtl), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_layoutBuilder.layout(request);
+        ASSERT_TRUE(layoutResult);
+        rtl = Move(*layoutResult);
+    }
     EXPECT_FALSE(m_view.adoptLayout(Move(rtl)));
     EXPECT_EQ(m_view.layout().utf8(), "ab\ncd");
     EXPECT_EQ(m_view.caretGeometry().lines().size(), 2u);
@@ -260,11 +275,14 @@ TEST_F(UiMultilineViewTests, MovingTheViewRetainsOwnedPreeditLineMappingsAndRead
     EXPECT_EQ(assigned.layout().utf8(), "ax\nyd");
     EXPECT_TRUE(assigned.composing());
     EXPECT_TRUE(assigned.ready());
-    ASSERT_TRUE(assigned.arrange(previous.bounds, {}, previous.clip, Point{}, m_placement));
+    const auto arranged = assigned.arrange(previous.bounds, {}, previous.clip, Point{});
+    ASSERT_TRUE(arranged);
+    m_placement = *arranged;
     ExpectPlacement(m_placement, previous);
-    usize hit = 99u;
-    ASSERT_TRUE(assigned.hitTest({ 30.0f, 38.0f }, m_placement, hit));
-    EXPECT_EQ(hit, 5u);
+    Expected<usize> hit = MakeUnexpected(Failure{});
+    hit = assigned.hitTest({ 30.0f, 38.0f }, m_placement);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(*hit, 5u);
 }
 
 TEST_F(UiMultilineViewTests, PaintOwnsSelectionSegmentsIncludingAnEmptySelectedHardLine){
@@ -280,10 +298,10 @@ TEST_F(UiMultilineViewTests, PaintOwnsSelectionSegmentsIncludingAnEmptySelectedH
     EditBoxPaintFlags flags;
     flags.focused = true;
     flags.caretVisible = false;
-    DrawSnapshot snapshot(m_arena);
-    ASSERT_TRUE(paintView(snapshot, style, flags));
+    const auto snapshot = paintView(style, flags);
+    ASSERT_TRUE(snapshot);
     PaintVector<Rect> selected(m_arena);
-    CollectSolidRects(snapshot, style.selection, selected);
+    CollectSolidRects(*snapshot, style.selection, selected);
     ASSERT_EQ(selected.size(), 3u);
     for(u32 line = 0u; line < 3u; ++line){
         EXPECT_FLOAT_EQ(selected[line].y, m_placement.textOrigin.y + m_view.caretGeometry().lines()[line].top);
@@ -292,7 +310,7 @@ TEST_F(UiMultilineViewTests, PaintOwnsSelectionSegmentsIncludingAnEmptySelectedH
     EXPECT_FLOAT_EQ(selected[1u].x, m_placement.textOrigin.x);
     EXPECT_FLOAT_EQ(selected[1u].width, 1.0f);
     EXPECT_FLOAT_EQ(selected[2u].width, m_view.caretGeometry().lines()[2u].advance);
-    EXPECT_FALSE(snapshot.glyphPages().empty());
+    EXPECT_FALSE(snapshot->glyphPages().empty());
     EXPECT_EQ(m_view.layout().utf8(), "ab\n\ncd\n");
 }
 
@@ -313,10 +331,10 @@ TEST_F(UiMultilineViewTests, PaintOwnsPreeditUnderlinesIncludingAnEmptyHardLine)
     flags.focused = true;
     flags.caretVisible = false;
     flags.preeditCaretVisible = false;
-    DrawSnapshot snapshot(m_arena);
-    ASSERT_TRUE(paintView(snapshot, style, flags));
+    const auto snapshot = paintView(style, flags);
+    ASSERT_TRUE(snapshot);
     PaintVector<Rect> underlines(m_arena);
-    CollectSolidRects(snapshot, style.preedit, underlines);
+    CollectSolidRects(*snapshot, style.preedit, underlines);
     ASSERT_EQ(underlines.size(), 3u);
     for(u32 index = 0u; index < 3u; ++index){
         const EditCaretLine& line = m_view.caretGeometry().lines()[index + 1u];
@@ -333,7 +351,11 @@ TEST_F(UiMultilineViewTests, SingleLineCenteringRejectsVerticalScrollInfluence){
     ASSERT_TRUE(single.setText("abc"));
     ASSERT_TRUE(m_view.snapshot(single));
     TextLayout layout(m_arena);
-    ASSERT_EQ(m_layoutBuilder.layout({ m_view.displayText() }, layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_layoutBuilder.layout({ m_view.displayText() });
+        ASSERT_TRUE(layoutResult);
+        layout = Move(*layoutResult);
+    }
     ASSERT_TRUE(m_view.adoptLayout(Move(layout)));
     ASSERT_TRUE(place(100.0f, 40.0f, { 0.0f, 20.0f }));
     EXPECT_FLOAT_EQ(m_placement.scrollY, 0.0f);

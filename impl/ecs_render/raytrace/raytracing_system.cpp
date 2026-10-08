@@ -367,8 +367,8 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
     };
 
     for(const PreparedSceneSwBvhMesh& prepared : m_preparedSceneSwBvhMeshes){
-        ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
-        if(!m_meshSystem.findRayTracingResourceSnapshot(prepared.meshName, mesh) || !matchesMesh(mesh, prepared)){
+        auto meshResult = m_meshSystem.findRayTracingResourceSnapshot(prepared.meshName);
+        if(!meshResult || !matchesMesh((*meshResult), prepared)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen software scene lost mesh '{}'"), StringConvert(prepared.meshName.resolvedText()));
             return rejectPreparedTraversal();
         }
@@ -409,15 +409,12 @@ bool RendererRayTracingSystem::recordPreparedSceneSwBvhTraversal(){
     return true;
 }
 
-bool RendererRayTracingSystem::retainPreparedSceneBvhUploads(
-    Core::GpuTaskGraph& graph,
-    Core::GpuUploadBlobId& outNodeBlob,
-    Core::GpuUploadBlobId& outInstanceBlob
+Expected<PreparedSceneBvhUploads> RendererRayTracingSystem::retainPreparedSceneBvhUploads(
+    Core::GpuTaskGraph& graph
 )const{
-    outNodeBlob = {};
-    outInstanceBlob = {};
+    PreparedSceneBvhUploads result;
     if(!m_preparedSceneBvhReady)
-        return true;
+        return result;
 
     const auto& state = m_rayTracingState;
     if(
@@ -433,7 +430,7 @@ bool RendererRayTracingSystem::retainPreparedSceneBvhUploads(
         || state.m_sceneInstanceHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen software scene-BVH identity no longer matches preflight storage"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!m_preparedSceneBvhUploadRequired){
         if(
@@ -443,9 +440,9 @@ bool RendererRayTracingSystem::retainPreparedSceneBvhUploads(
             || state.m_sceneBvhInstanceCount != m_preparedSceneBvhInstanceCount
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen software scene-BVH cache identity is no longer accepted"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        return true;
+        return result;
     }
     if(
         m_preparedSceneBvhNodeBytes.empty()
@@ -454,20 +451,22 @@ bool RendererRayTracingSystem::retainPreparedSceneBvhUploads(
         || m_preparedSceneBvhInstanceBytes.size() != m_preparedSceneBvhInstanceCount * sizeof(SceneSwBvhInstanceGpu)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen software scene-BVH payload is incomplete"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outNodeBlob = graph.copyUploadData(
+    result.node = graph.copyUploadData(
         m_preparedSceneBvhNodeBytes.data(),
         m_preparedSceneBvhNodeBytes.size(),
         alignof(NwbBvhNodeGpu)
     );
-    outInstanceBlob = graph.copyUploadData(
+    result.instance = graph.copyUploadData(
         m_preparedSceneBvhInstanceBytes.data(),
         m_preparedSceneBvhInstanceBytes.size(),
         alignof(SceneSwBvhInstanceGpu)
     );
-    return outNodeBlob.valid() && outInstanceBlob.valid();
+    if(!(result.node.valid() && result.instance.valid()))
+        return MakeUnexpected(Failure{});
+    return result;
 }
 
 void RendererRayTracingSystem::confirmPreparedSceneBvhUploads()noexcept{
@@ -947,54 +946,50 @@ bool RendererRayTracingSystem::preflightShadowVisibilityResources(
 }
 
 
-bool RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
+Expected<bool> RendererRayTracingSystem::recordPreflightShadowVisibilityResources(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
-    bool& outBackendReady,
     const bool sceneTlasBuildGraphOwned,
     const bool meshBlasBuildsGraphOwned,
     const bool meshBlasGeometryBuildInputStatesGraphOwned,
     const bool meshSwBvhBuildsGraphOwned,
     const bool preparedMeshSwBvhBuildsRecordedByGraph
 ){
-    outBackendReady = false;
     if(!m_shadowVisibilityResourcesPreflighted || m_shadowVisibilityPreparedTargets != &targets)
-        return false;
+        return MakeUnexpected(Failure{});
 
     // A non-fatal preflight miss intentionally leaves tracing unavailable for this frame. Do not retry capacity growth
     // recording: the shared graph has already frozen its imported resource identities.
     if(!m_shadowVisibilityTraceResourcesPreflighted)
-        return true;
+        return false;
 
     if(m_shadowVisibilityHardwareSupported){
         if(meshBlasBuildsGraphOwned && !recordPreparedMeshBlasBuilds(commandList, meshBlasGeometryBuildInputStatesGraphOwned))
-            return false;
+            return MakeUnexpected(Failure{});
         if(sceneTlasBuildGraphOwned && !recordPreparedSceneTlasBuild(commandList))
-            return false;
-        outBackendReady = m_shadowVisibilityBackendPipelinePreflighted;
-        return true;
+            return MakeUnexpected(Failure{});
+        return m_shadowVisibilityBackendPipelinePreflighted;
     }
 
     if(!m_preparedMeshSwBvhBuildPlanFrozen || (meshSwBvhBuildsGraphOwned && !preparedMeshSwBvhBuildsRecordedByGraph)){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow mesh builds have no frozen graph completion"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     // Pure software frames have no opaque-HW fallback. Fresh uploads and accepted cache reuse both retain their matching traversal snapshot,
     // recording validates that exact plan without regathering scene/material data. A missing or stale plan rejects the packet
     if(!m_preparedSceneSwBvhReady){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: software shadow scene has no frozen preflight traversal"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!recordPreparedSceneSwBvhTraversal())
-        return false;
+        return MakeUnexpected(Failure{});
     if(m_rayTracingState.m_sceneBvhInstanceCount == 0u){
         m_rayTracingState.m_surfelEnabled = false;
         m_rayTracingState.m_surfelUseHwTrace = false;
-        return true;
+        return false;
     }
 
-    outBackendReady = m_shadowVisibilityBackendPipelinePreflighted;
-    return true;
+    return m_shadowVisibilityBackendPipelinePreflighted;
 }
 
 

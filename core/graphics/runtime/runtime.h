@@ -199,11 +199,11 @@ public:
 public:
     [[nodiscard]] GraphicsBackend::Device& getDevice()const noexcept;
     [[nodiscard]] GpuTaskScheduler& gpuTasks()const noexcept{ return m_gpuTasks; }
-    [[nodiscard]] bool enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters);
+    [[nodiscard]] Expected<GraphicsVector<AdapterInfo>> enumerateAdapters();
     // Returns identity from the physical device selected for the current logical device, rather than from a later
     // adapter enumeration. Available only after successful device creation.
-    [[nodiscard]] bool getSelectedAdapterInfo(AdapterInfo& outAdapter)const;
-    [[nodiscard]] bool queryFeatureSupport(Feature::Enum feature, void* featureInfo = nullptr, usize featureInfoSize = 0)const;
+    [[nodiscard]] Expected<AdapterInfo> getSelectedAdapterInfo()const;
+    [[nodiscard]] bool queryFeatureSupport(Feature::Enum feature)const noexcept;
     // Resolves the GPU wave/subgroup size, or returns a conservative fallback (64) when the device cannot report it.
     // Use the returned value to size groupshared reductions and wave-intrinsic shader specializations.
     [[nodiscard]] u32 queryWaveLaneCount()const noexcept;
@@ -282,10 +282,9 @@ public:
     [[nodiscard]] bool uploadTextureBatch(const TextureUploadBatchDesc& desc)const;
     // Compiles, records, and submits an isolated graph synchronously. This is the graph-owned escape hatch for a
     // standalone caller that has no renderer-owned frame graph but can still provide immutable task inputs.
-    [[nodiscard]] bool submitStandaloneTaskGraph(
+    [[nodiscard]] Expected<QueueSubmissionToken> submitStandaloneTaskGraph(
         void* userData,
         StandaloneTaskGraphDeclaration declareTask,
-        QueueSubmissionToken& outSubmissionToken,
         GpuPhysicalQueueId requiredTerminalQueue = {},
         GpuTimingRecorder* timingRecorder = nullptr,
         GpuTimingFrameTransaction* frameTimingTransaction = nullptr
@@ -295,7 +294,7 @@ public:
     [[nodiscard]] CooperativeVectorDeviceFeatures queryCoopVecFeatures()const;
     [[nodiscard]] usize getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, CooperativeVectorMatrixLayout::Enum layout, i32 rows, i32 columns)const;
 
-    [[nodiscard]] bool backBufferResizing(SwapChainTransitionTicket& outTicket);
+    [[nodiscard]] Expected<SwapChainTransitionTicket> backBufferResizing();
     [[nodiscard]] bool backBufferResized();
     void invalidateRenderPassResources();
     [[nodiscard]] bool validateRenderPassResources();

@@ -111,35 +111,21 @@ static NWB::Impl::Texture::MipLevelVector MakeTextureTestMipLevels(TestArena& te
 
 
 TEST(AssetsGraphics, TextureFormatRoundsPartialBlocksAndNonPowerOfTwoMips){
-    u32 mipCount = 0u;
-    EXPECT_TRUE(TextureFormat::ComputeCompleteMipCount(
-        TextureDimension::Texture2D,
-        7u,
-        5u,
-        1u,
-        mipCount
-    ));
-    EXPECT_EQ(mipCount, 3u);
+    const auto mipCount = TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture2D, 7u, 5u, 1u);
+    ASSERT_TRUE(mipCount);
+    EXPECT_EQ(*mipCount, 3u);
 
-    u32 blocksX = 0u;
-    u32 blocksY = 0u;
-    u64 planeByteCount = 0u;
-    EXPECT_TRUE(TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcLdr4x4, 7u, 5u, blocksX, blocksY, planeByteCount));
-    EXPECT_EQ(blocksX, s_ExpectedDualCount);
-    EXPECT_EQ(blocksY, s_ExpectedDualCount);
-    EXPECT_EQ(planeByteCount, 64u);
+    const auto ldrPlane = TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcLdr4x4, 7u, 5u);
+    ASSERT_TRUE(ldrPlane);
+    EXPECT_EQ(ldrPlane->blocksX, s_ExpectedDualCount);
+    EXPECT_EQ(ldrPlane->blocksY, s_ExpectedDualCount);
+    EXPECT_EQ(ldrPlane->planeByteCount, 64u);
 
-    EXPECT_TRUE(TextureFormat::ComputeMipPlaneBlockLayout(
-        TexturePayloadFormat::UastcHdr4x4,
-        4u,
-        s_ExpectedDualCount,
-        blocksX,
-        blocksY,
-        planeByteCount
-    ));
-    EXPECT_EQ(blocksX, 1u);
-    EXPECT_EQ(blocksY, 1u);
-    EXPECT_EQ(planeByteCount, 16u);
+    const auto hdrPlane = TextureFormat::ComputeMipPlaneBlockLayout(TexturePayloadFormat::UastcHdr4x4, 4u, s_ExpectedDualCount);
+    ASSERT_TRUE(hdrPlane);
+    EXPECT_EQ(hdrPlane->blocksX, 1u);
+    EXPECT_EQ(hdrPlane->blocksY, 1u);
+    EXPECT_EQ(hdrPlane->planeByteCount, 16u);
 }
 
 
@@ -170,7 +156,7 @@ TEST(AssetsGraphics, TextureCodecRejectsUnsupportedBinaryVersions){
     for(const u32 version : { 0u, 1u, 2u, NWB::Impl::TextureBinaryPayload::s_TextureVersion + 1u }){
         NWB_MEMCPY(binary.data() + offsetof(NWB::Impl::TextureBinaryPayload::HeaderBinary, version), sizeof(version), &version, sizeof(version));
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        EXPECT_FALSE(codec.deserialize(testArena.arena, texture.virtualPath(), binary, loadedAsset)) << version;
+        EXPECT_FALSE(codec.deserialize(testArena.arena, texture.virtualPath(), binary)) << version;
         EXPECT_EQ(loadedAsset.get(), nullptr);
     }
     EXPECT_EQ(logger.errorCount(), 4u);
@@ -179,7 +165,9 @@ TEST(AssetsGraphics, TextureCodecRejectsUnsupportedBinaryVersions){
     const u32 currentVersion = NWB::Impl::TextureBinaryPayload::s_TextureVersion;
     NWB_MEMCPY(binary.data() + offsetof(NWB::Impl::TextureBinaryPayload::HeaderBinary, version), sizeof(currentVersion), &currentVersion, sizeof(currentVersion));
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    EXPECT_TRUE(codec.deserialize(testArena.arena, texture.virtualPath(), binary, loadedAsset));
+    auto loadedAssetResult = codec.deserialize(testArena.arena, texture.virtualPath(), binary);
+    ASSERT_TRUE(loadedAssetResult);
+    loadedAsset = Move(*loadedAssetResult);
 }
 
 TEST(AssetsGraphics, TexturePayloadRejectsMismatchedExplicitAlphaMode){
@@ -252,14 +240,7 @@ TEST(AssetsGraphics, TextureCookerRejectsObsoleteAndDerivedMetadata){
             const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_obsolete_metadata") / "assets";
             const Path metadataPath = assetRoot / "textures" / "checker.nwb";
             NWB::Impl::TextureCookEntry entry(testArena.arena);
-            EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(
-                assetRoot,
-                "project",
-                metadataPath,
-                document,
-                entry,
-                scratchArena
-            )) << field.assignment;
+            EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry.payloadBytes.get_allocator().arena(), scratchArena)) << field.assignment;
             EXPECT_TRUE(logger.sawErrorContaining(field.diagnostic)) << field.assignment;
         }
     }
@@ -295,14 +276,7 @@ TEST(AssetsGraphics, TextureCookerRejectsMissingMalformedAndUnsupportedFormats){
         const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_invalid_format") / "assets";
         const Path metadataPath = assetRoot / "textures" / "checker.nwb";
         NWB::Impl::TextureCookEntry entry(testArena.arena);
-        EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(
-            assetRoot,
-            "project",
-            metadataPath,
-            document,
-            entry,
-            scratchArena
-        )) << invalidFormat.assignment;
+        EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry.payloadBytes.get_allocator().arena(), scratchArena)) << invalidFormat.assignment;
         EXPECT_TRUE(logger.sawErrorContaining(invalidFormat.diagnostic)) << invalidFormat.assignment;
     }
 }
@@ -340,7 +314,7 @@ TEST(AssetsGraphics, TextureCookerRejectsFieldsDerivedFromFormatAndDimension){
         const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_derived_fields") / "assets";
         const Path metadataPath = assetRoot / "textures" / "checker.nwb";
         NWB::Impl::TextureCookEntry entry(testArena.arena);
-        EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena));
+        EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry.payloadBytes.get_allocator().arena(), scratchArena));
         EXPECT_TRUE(logger.sawErrorContaining(field.diagnostic)) << field.assignment;
     }
 }
@@ -359,8 +333,10 @@ TEST(AssetsGraphics, TextureCookerRequiresExactDerivedSidecarSize){
     }};
     for(const SidecarCase& sidecarCase : s_SidecarCases){
         TestArena testArena;
-        Path root(testArena.arena);
-        ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "texture_derived_sidecar_size", root));
+        auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "texture_derived_sidecar_size");
+        ASSERT_TRUE(rootResult);
+        Path root = Move(*rootResult);
+
         const Path assetRoot = root / "assets";
         const Path metadataPath = assetRoot / "textures" / "checker.nwb";
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, sidecarCase.metadata));
@@ -376,18 +352,22 @@ TEST(AssetsGraphics, TextureCookerRequiresExactDerivedSidecarSize){
             ASSERT_TRUE(WriteBinaryFile(assetRoot / "textures" / sidecarCase.filename, MakeTextureTestUastcPayload(testArena, byteCount)));
             NWB::Impl::TextureCookEntry entry(testArena.arena);
             NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-            const bool parsed = NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena);
+            auto entryResult = NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena);
+            const bool parsed = entryResult.has_value();
+            if(entryResult)
+                entry = Move(*entryResult);
             EXPECT_EQ(parsed, byteCount == sidecarCase.byteCount) << sidecarCase.filename << ": " << byteCount;
             if(parsed){
                 NWB::Impl::Texture texture(testArena.arena, s_NameNone);
-                EXPECT_TRUE(NWB::Impl::BuildTextureAsset(entry, texture));
+                auto textureBuildResult = NWB::Impl::BuildTextureAsset(entry, entry.payloadBytes.get_allocator().arena());
+                EXPECT_TRUE(textureBuildResult);
+                texture = Move(*textureBuildResult);
                 EXPECT_EQ(logger.errorCount(), 0u);
             }
             else
                 EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("sidecar size does not match the derived mip and alpha layout")));
         }
-        ErrorCode errorCode;
-        EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+        EXPECT_TRUE(RemoveAllIfExists(root));
     }
 }
 
@@ -405,8 +385,10 @@ TEST(AssetsGraphics, TextureCookerInfersHdrAlphaAndChecksConstantBounds){
     }};
     constexpr AStringView s_AlphaAssignment = "asset.alpha_mode = \"uastc_ldr_4x4\";";
     TestArena testArena;
-    Path root(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "texture_hdr_alpha_inference", root));
+    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "texture_hdr_alpha_inference");
+    ASSERT_TRUE(rootResult);
+    Path root = Move(*rootResult);
+
     const Path assetRoot = root / "assets";
     const Path metadataPath = assetRoot / "textures" / "bright.nwb";
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, s_TextureHdrTestMetadata));
@@ -425,19 +407,23 @@ TEST(AssetsGraphics, TextureCookerInfersHdrAlphaAndChecksConstantBounds){
         NWB::Core::Metascript::Document document(testArena.arena);
         ASSERT_TRUE(document.parse(metadata));
         NWB::Impl::TextureCookEntry entry(testArena.arena);
-        const bool parsed = NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena);
+        auto entryResult = NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, testArena.arena, scratchArena);
+        const bool parsed = entryResult.has_value();
+        if(entryResult)
+            entry = Move(*entryResult);
         EXPECT_EQ(parsed, alphaCase.valid) << alphaCase.assignment;
         if(parsed){
             NWB::Impl::Texture texture(testArena.arena, s_NameNone);
-            ASSERT_TRUE(NWB::Impl::BuildTextureAsset(entry, texture));
+            auto textureBuildResult2 = NWB::Impl::BuildTextureAsset(entry, entry.payloadBytes.get_allocator().arena());
+            ASSERT_TRUE(textureBuildResult2);
+            texture = Move(*textureBuildResult2);
             EXPECT_EQ(texture.alphaConstantUnorm8(), alphaCase.alphaConstant);
             EXPECT_EQ(logger.errorCount(), 0u);
         }
         else
             EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("field 'alpha_constant_unorm8' is outside the supported range")));
     }
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
 TEST(AssetsGraphics, TextureCookerRejectsDerivedMipAndAlphaSizeOverflow){
@@ -483,7 +469,7 @@ TEST(AssetsGraphics, TextureCookerRejectsDerivedMipAndAlphaSizeOverflow){
         const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "texture_derived_size_overflow") / "assets";
         const Path metadataPath = assetRoot / "textures" / "overflow.nwb";
         NWB::Impl::TextureCookEntry entry(testArena.arena);
-        EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry, scratchArena));
+        EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry.payloadBytes.get_allocator().arena(), scratchArena));
         EXPECT_TRUE(logger.sawErrorContaining(overflowCase.diagnostic));
     }
 }
@@ -506,14 +492,7 @@ TEST(AssetsGraphics, TextureCookerRejectsSidecarPathTraversal){
     const Path metadataPath = assetRoot / "textures" / "checker.nwb";
     NWB::Impl::TextureCookEntry entry(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-    EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(
-        assetRoot,
-        "project",
-        metadataPath,
-        document,
-        entry,
-        scratchArena
-    ));
+    EXPECT_FALSE(NWB::Impl::ParseTextureCookMetadata(assetRoot, "project", metadataPath, document, entry.payloadBytes.get_allocator().arena(), scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("sidecar filename without path components")));
 #else
 #endif

@@ -32,11 +32,11 @@ HardwareCausticsResolveChainBuilder::HardwareCausticsResolveChainBuilder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool HardwareCausticsResolveChainBuilder::declare(
+[[nodiscard]] Expected<HardwareCausticsResolveChainResult> HardwareCausticsResolveChainBuilder::declare(
     const HardwareCausticsResolveChainInputs& inputs,
-    HardwareCausticsResolveChainResult& outResult,
     Core::Alloc::ScratchArena& scratchArena
 ){
+    HardwareCausticsResolveChainResult result{};
     CausticsResolveChainInputs sharedInputs;
     sharedInputs.targets = inputs.targets;
     sharedInputs.geometryTask = inputs.geometryTask;
@@ -62,18 +62,18 @@ HardwareCausticsResolveChainBuilder::HardwareCausticsResolveChainBuilder(
         {Name("render.hardware_caustics.resolve_timing_close"), "Hardware Caustics Resolve Timing Close", NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve graph task")},
     };
     CausticsResolveChainBuilder sharedBuilder(m_graph, m_raytracingSystem);
-    CausticsResolveChainResult sharedResult;
-    if(!sharedBuilder.declare(sharedInputs, naming, sharedResult, scratchArena))
-        return false;
-    outResult.causticResolvePrepareTask = sharedResult.causticResolvePrepareTask;
-    outResult.causticResolveWaveletTask = sharedResult.causticResolveWaveletTask;
-    outResult.causticResolveSecondWaveletTask = sharedResult.causticResolveSecondWaveletTask;
-    outResult.causticResolveThirdWaveletTask = sharedResult.causticResolveThirdWaveletTask;
-    outResult.causticResolveFourthWaveletTask = sharedResult.causticResolveFourthWaveletTask;
-    outResult.causticResolveFifthWaveletTask = sharedResult.causticResolveFifthWaveletTask;
-    outResult.causticResolveUpsampleTask = sharedResult.causticResolveUpsampleTask;
-    outResult.hardwareCausticsTask = sharedResult.causticsTask;
-    return true;
+    auto sharedResult = sharedBuilder.declare(sharedInputs, naming, scratchArena);
+    if(!sharedResult)
+        return MakeUnexpected(Failure{});
+    result.causticResolvePrepareTask = sharedResult->causticResolvePrepareTask;
+    result.causticResolveWaveletTask = sharedResult->causticResolveWaveletTask;
+    result.causticResolveSecondWaveletTask = sharedResult->causticResolveSecondWaveletTask;
+    result.causticResolveThirdWaveletTask = sharedResult->causticResolveThirdWaveletTask;
+    result.causticResolveFourthWaveletTask = sharedResult->causticResolveFourthWaveletTask;
+    result.causticResolveFifthWaveletTask = sharedResult->causticResolveFifthWaveletTask;
+    result.causticResolveUpsampleTask = sharedResult->causticResolveUpsampleTask;
+    result.hardwareCausticsTask = sharedResult->causticsTask;
+    return result;
 }
 
 

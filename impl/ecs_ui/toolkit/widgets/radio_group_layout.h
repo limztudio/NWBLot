@@ -60,20 +60,17 @@ struct RadioGroupPlacement{
 
 class RadioGroupLayout final{
 public:
-    // A rejected measurement or placement preserves the caller's previous output.
-    [[nodiscard]] static bool Measure(
+    [[nodiscard]] static Expected<RadioGroupMetrics> Measure(
         u32 count,
         const Point& maximumLabel,
         const RadioGroupOptions& options,
-        const RadioGroupStyle& style,
-        RadioGroupMetrics& out
+        const RadioGroupStyle& style
     )noexcept;
-    [[nodiscard]] static bool Place(
+    [[nodiscard]] static Expected<RadioGroupPlacement> Place(
         const Rect& bounds,
         const Rect& clip,
         const RadioGroupChoices& choices,
-        const RadioGroupMetrics& metrics,
-        RadioGroupPlacement& out
+        const RadioGroupMetrics& metrics
     )noexcept;
 };
 

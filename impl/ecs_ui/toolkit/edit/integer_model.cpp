@@ -20,20 +20,24 @@ NWB_IMPL_UI_BEGIN
 NumericEditResult IntegerEditModel::commit(const IntegerBounds& bounds, const bool canonical){
     if(!ValidateIntegerBounds(bounds))
         return {};
-    i64 candidate = 0;
-    const NumericParseStatus::Enum parsed = ParseIntegerDraft(m_draft.text(), candidate);
-    const bool outside = parsed == NumericParseStatus::Complete && (candidate < bounds.minimum || candidate > bounds.maximum);
+    auto parsed = ParseIntegerDraft(m_draft.text());
+    const bool outside = parsed && (*parsed < bounds.minimum || *parsed > bounds.maximum);
     const bool clamped = outside && bounds.policy == NumericBoundsPolicy::Clamp;
-    const bool rejected = parsed != NumericParseStatus::Complete || (outside && !clamped);
+    const bool rejected = !parsed || (outside && !clamped);
     NumericEditResult result;
     if(rejected){
-        if(canonical && !canonicalize(m_value, &result.restored))
-            return result;
+        if(canonical){
+            const auto restored = canonicalize(m_value);
+            if(!restored)
+                return result;
+            result.restored = *restored;
+        }
         result.valid = true;
         result.rejected = true;
         advanceRevision();
         return result;
     }
+    i64 candidate = *parsed;
     if(clamped)
         candidate = candidate < bounds.minimum ? bounds.minimum : bounds.maximum;
     if(canonical || clamped){
@@ -51,16 +55,14 @@ NumericEditResult IntegerEditModel::commit(const IntegerBounds& bounds, const bo
     return result;
 }
 
-bool IntegerEditModel::canonicalize(const i64 value, bool* textChanged){
+Expected<bool> IntegerEditModel::canonicalize(const i64 value){
     char buffer[s_NumericEditMaxBytes];
     const AStringView formatted = FormatI64(value, buffer);
     const bool changed = formatted != m_draft.text();
     if(formatted.empty() || !m_draft.setText(formatted))
-        return false;
+        return MakeUnexpected(Failure{});
     m_acceptedDraft.assign(formatted.data(), formatted.size());
-    if(textChanged)
-        *textChanged = changed;
-    return true;
+    return changed;
 }
 
 void IntegerEditModel::advanceRevision()noexcept{
@@ -85,11 +87,10 @@ IntegerEditModel::IntegerEditModel(Core::Alloc::GlobalArena& arena)
 NumericParseStatus::Enum IntegerEditModel::status(const IntegerBounds& bounds)const{
     if(!ValidateIntegerBounds(bounds))
         return NumericParseStatus::Invalid;
-    i64 candidate = 0;
-    const NumericParseStatus::Enum parsed = ParseIntegerDraft(m_draft.text(), candidate);
-    if(parsed == NumericParseStatus::Complete && (candidate < bounds.minimum || candidate > bounds.maximum))
+    auto parsed = ParseIntegerDraft(m_draft.text());
+    if(parsed && (*parsed < bounds.minimum || *parsed > bounds.maximum))
         return NumericParseStatus::OutOfRange;
-    return parsed;
+    return parsed ? NumericParseStatus::Complete : parsed.error();
 }
 
 bool IntegerEditModel::dirty()const{
@@ -117,8 +118,10 @@ NumericEditResult IntegerEditModel::blur(const IntegerBounds& bounds){ return co
 
 NumericEditResult IntegerEditModel::cancel(){
     NumericEditResult result;
-    if(!canonicalize(m_value, &result.restored))
+    const auto restored = canonicalize(m_value);
+    if(!restored)
         return result;
+    result.restored = *restored;
     result.valid = true;
     result.cancelled = true;
     advanceRevision();
@@ -127,8 +130,10 @@ NumericEditResult IntegerEditModel::cancel(){
 
 NumericEditResult IntegerEditModel::abandon(){
     NumericEditResult result;
-    if(!canonicalize(m_value, &result.restored))
+    const auto restored = canonicalize(m_value);
+    if(!restored)
         return result;
+    result.restored = *restored;
     result.valid = true;
     advanceRevision();
     return result;

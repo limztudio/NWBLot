@@ -44,12 +44,11 @@ public:
     [[nodiscard]] static f32 BoxSignedDistance(SIMDVector shapePosition, SIMDVector parameter0)noexcept;
     [[nodiscard]] static f32 SphereSignedDistance(SIMDVector shapePosition, SIMDVector parameter0)noexcept;
     [[nodiscard]] static f32 CapsuleSignedDistance(SIMDVector shapePosition, SIMDVector parameter0)noexcept;
-    [[nodiscard]] static bool ShapeDistances(
+    [[nodiscard]] static Expected<void, CsgDeformViabilityReason::Enum> ShapeDistances(
         const CsgDeformShape& shape,
         const CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices,
         const f32 epsilon,
-        Vector<f32, Core::Alloc::ScratchArena>& outDistances,
-        CsgDeformViabilityReason::Enum& outReason
+        Vector<f32, Core::Alloc::ScratchArena>& outDistances
     );
 
 

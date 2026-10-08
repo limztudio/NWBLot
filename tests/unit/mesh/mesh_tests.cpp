@@ -18,9 +18,8 @@ namespace __hidden_mesh_tests{
 TEST(Mesh, RejectsWrongCaseAndUnknownMeshClasses){
     using namespace NWB::Core::Mesh;
 
-    u32 parsedClass = MeshClass::Static;
-    EXPECT_FALSE(ParseMeshClassText("STATIC", parsedClass));
-    EXPECT_EQ(parsedClass, MeshClass::Invalid);
+    EXPECT_FALSE(ParseMeshClassText("STATIC"));
+    EXPECT_FALSE(ParseMeshClassText("unknown"));
     EXPECT_EQ(MeshClassText(999u), AStringView("unknown"));
 }
 

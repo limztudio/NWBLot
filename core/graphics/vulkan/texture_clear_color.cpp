@@ -382,17 +382,15 @@ void CommandList::clearColorTextureBox(
         return;
     }
 
-    u8 clearPattern[VulkanTextureDetail::s_TextureClearMaxPatternBytes] = {};
-    u32 clearPatternSize = 0u;
-    const bool patternReady = !integerValue
-        ? VulkanTextureDetail::BuildTextureFloatClearPattern(desc.format, clearValue, clearPattern, clearPatternSize)
+    const auto clearPattern = !integerValue
+        ? VulkanTextureDetail::BuildTextureFloatClearPattern(desc.format, clearValue)
         : (
             signedIntegerValue
-            ? VulkanTextureDetail::BuildTextureIntClearPattern(desc.format, clearValue, clearPattern, clearPatternSize)
-            : VulkanTextureDetail::BuildTextureUIntClearPattern(desc.format, clearValue, clearPattern, clearPatternSize)
+            ? VulkanTextureDetail::BuildTextureIntClearPattern(desc.format, clearValue)
+            : VulkanTextureDetail::BuildTextureUIntClearPattern(desc.format, clearValue)
         )
     ;
-    if(!patternReady || clearPatternSize != texture.m_formatLayout.bytesPerBlock){
+    if(!clearPattern || clearPattern->byteCount != texture.m_formatLayout.bytesPerBlock){
         rejectCommandRecording(
             s_ClearTextureBoxOperation,
             NWB_TEXT("bounded texture box clears do not support the texture format")
@@ -448,18 +446,19 @@ void CommandList::clearColorTextureBox(
             return;
         }
         const u64 clearBlockCount = clearSliceBlockCount * clearDepth;
-        if(!VulkanTextureDetail::BuildTextureClearUploadLayout(
+        const auto uploadLayout = VulkanTextureDetail::BuildTextureClearUploadLayout(
             clearBlockCount,
-            clearPatternSize,
-            arrayLayerCount,
-            mipPlan.uploadLayout
-        )){
+            clearPattern->byteCount,
+            arrayLayerCount
+        );
+        if(!uploadLayout){
             rejectCommandRecording(
                 s_ClearTextureBoxOperation,
                 NWB_TEXT("clear upload layout is not addressable")
             );
             return;
         }
+        mipPlan.uploadLayout = *uploadLayout;
     }
     if(!hasNonemptyMip)
         return;
@@ -499,20 +498,18 @@ void CommandList::clearColorTextureBox(
         const u64 clearHeight = static_cast<u64>(mipPlan.resolvedBox.height());
         const u64 clearDepth = static_cast<u64>(mipPlan.resolvedBox.depth());
 
-        Buffer* stagingBuffer = nullptr;
-        u64 stagingOffset = 0;
-        void* stagingBytes = nullptr;
-        if(!prepareUploadStaging(
+        const auto staging = prepareUploadStaging(
             mipPlan.uploadLayout.clearByteCount,
             NWB_TEXT("clearTextureBox"),
-            stagingBuffer,
-            stagingOffset,
-            stagingBytes,
             mipPlan.uploadLayout.stagingAlignment
-        )){
+        );
+        if(!staging){
             rejectCommandRecording(s_ClearTextureBoxOperation, NWB_TEXT("staging allocation failed"));
             return;
         }
+        Buffer* const stagingBuffer = staging->buffer;
+        const u64 stagingOffset = staging->offset;
+        void* const stagingBytes = staging->cpuAddress;
         if(
             !stagingBuffer
             || !stagingBytes
@@ -531,8 +528,8 @@ void CommandList::clearColorTextureBox(
         VulkanTextureDetail::FillTextureClearBytes(
             stagingBytes,
             mipPlan.uploadLayout.clearByteCount,
-            clearPattern,
-            clearPatternSize
+            clearPattern->bytes.data(),
+            clearPattern->byteCount
         );
 
         if(desc.dimension == TextureDimension::Texture3D){

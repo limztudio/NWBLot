@@ -412,21 +412,20 @@ bool BackendContext::validPreparedTicket(
     ;
 }
 
-bool BackendContext::prepareSwapChainTransition(
-    const SwapChainTransitionKind::Enum kind,
-    SwapChainTransitionTicket& outTicket
+Expected<SwapChainTransitionTicket> BackendContext::prepareSwapChainTransition(
+    const SwapChainTransitionKind::Enum kind
 ){
     UniqueLock<Futex> lifecycleLock(m_swapChainLifecycleMutex);
-    outTicket = {};
+    SwapChainTransitionTicket ticket;
     if(kind >= SwapChainTransitionKind::kCount)
-        return false;
+        return MakeUnexpected(Failure{});
     if(m_swapChainLifecycleState == SwapChainLifecycleState::Destroyed){
         if(kind != SwapChainTransitionKind::Destroy || m_swapChainLifecycleEpoch == 0u)
-            return false;
-        outTicket.owner = this;
-        outTicket.epoch = m_swapChainLifecycleEpoch;
-        outTicket.kind = kind;
-        return true;
+            return MakeUnexpected(Failure{});
+        ticket.owner = this;
+        ticket.epoch = m_swapChainLifecycleEpoch;
+        ticket.kind = kind;
+        return ticket;
     }
     if(
         m_swapChainLifecycleState == SwapChainLifecycleState::PreparedResize
@@ -437,13 +436,13 @@ bool BackendContext::prepareSwapChainTransition(
             || (m_swapChainLifecycleState == SwapChainLifecycleState::PreparedDestroy && kind == SwapChainTransitionKind::Destroy)
         ;
         if(preparedForRequestedKind){
-            outTicket.owner = this;
-            outTicket.epoch = m_swapChainLifecycleEpoch;
-            outTicket.kind = kind;
-            return true;
+            ticket.owner = this;
+            ticket.epoch = m_swapChainLifecycleEpoch;
+            ticket.kind = kind;
+            return ticket;
         }
         if(m_swapChainLifecycleState != SwapChainLifecycleState::PreparedResize || kind != SwapChainTransitionKind::Destroy)
-            return false;
+            return MakeUnexpected(Failure{});
         m_swapChainLifecycleState = SwapChainLifecycleState::Preparing;
         DeviceHandle device = m_rhiDevice;
         if(device){
@@ -454,34 +453,34 @@ bool BackendContext::prepareSwapChainTransition(
         if(m_rhiDevice && !m_rhiDevice->sealLifecycleDrainForDestruction()){
             m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to seal an already prepared resize for destruction."));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         ++m_swapChainLifecycleEpoch;
         if(m_swapChainLifecycleEpoch == 0u)
             ++m_swapChainLifecycleEpoch;
         m_swapChainLifecycleState = SwapChainLifecycleState::PreparedDestroy;
-        outTicket.owner = this;
-        outTicket.epoch = m_swapChainLifecycleEpoch;
-        outTicket.kind = kind;
-        return true;
+        ticket.owner = this;
+        ticket.epoch = m_swapChainLifecycleEpoch;
+        ticket.kind = kind;
+        return ticket;
     }
     if(
         m_swapChainLifecycleState == SwapChainLifecycleState::RetiringPresentation
         || m_swapChainLifecycleState == SwapChainLifecycleState::Preparing
         || (m_swapChainLifecycleState == SwapChainLifecycleState::NeedsDestroy && kind != SwapChainTransitionKind::Destroy)
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     if(m_rhiDevice && !m_lifecycleDrainActive){
         if(m_rhiDevice->submissionOperationActiveOnCurrentThread()){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: A submission callback cannot synchronously prepare a swapchain lifecycle transition."));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(!m_rhiDevice->beginLifecycleDrain()){
             m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to close the submission gate for a swapchain transition."));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         m_lifecycleDrainActive = true;
     }
@@ -493,14 +492,14 @@ bool BackendContext::prepareSwapChainTransition(
 
     if(!prepareSwapChainImageRevocation()){
         m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const bool acquireProofsComplete = waitAcquireSyncSlotsForLifecycle();
     if(!acquireProofsComplete && (!m_rhiDevice || !m_rhiDevice->isDeviceLost())){
         m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain transition could not prove WSI acquire completion."));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!acquireProofsComplete && m_rhiDevice && m_rhiDevice->isDeviceLost()){
         DeviceHandle device = m_rhiDevice;
@@ -522,11 +521,11 @@ bool BackendContext::prepareSwapChainTransition(
         if(idleResult != VK_SUCCESS && !m_rhiDevice->isDeviceLost()){
             m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Swapchain transition could not prove device idle."));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(kind == SwapChainTransitionKind::Resize && m_rhiDevice->requiresRecreation()){
             m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(kind == SwapChainTransitionKind::Destroy){
             DeviceHandle device = m_rhiDevice;
@@ -536,7 +535,7 @@ bool BackendContext::prepareSwapChainTransition(
             if(!m_rhiDevice->sealLifecycleDrainForDestruction()){
                 m_swapChainLifecycleState = SwapChainLifecycleState::NeedsDestroy;
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to seal the prepared device destruction state."));
-                return false;
+                return MakeUnexpected(Failure{});
             }
         }
     }
@@ -548,10 +547,10 @@ bool BackendContext::prepareSwapChainTransition(
         ? SwapChainLifecycleState::PreparedResize
         : SwapChainLifecycleState::PreparedDestroy
     ;
-    outTicket.epoch = m_swapChainLifecycleEpoch;
-    outTicket.owner = this;
-    outTicket.kind = kind;
-    return true;
+    ticket.epoch = m_swapChainLifecycleEpoch;
+    ticket.owner = this;
+    ticket.kind = kind;
+    return ticket;
 }
 
 bool BackendContext::commitSwapChainResize(SwapChainTransitionTicket&& ticket){
@@ -647,10 +646,10 @@ bool BackendContext::destroy(){
             return true;
     }
 
-    SwapChainTransitionTicket ticket;
-    if(!prepareSwapChainTransition(SwapChainTransitionKind::Destroy, ticket))
+    auto ticket = prepareSwapChainTransition(SwapChainTransitionKind::Destroy);
+    if(!ticket)
         return false;
-    return commitDestroy(Move(ticket));
+    return commitDestroy(Move(*ticket));
 }
 
 

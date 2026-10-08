@@ -41,6 +41,10 @@ struct AcquiredPresentationFrame{
     [[nodiscard]] bool valid()const noexcept{ return backBuffer.valid() && framebuffer; }
 };
 
+struct PresentationFailure{
+    bool presentationAccepted = false;
+};
+
 namespace PresentationReceiptStatus{
     enum Enum : u8{ Pending, Accepted, Rejected };
 };

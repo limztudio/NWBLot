@@ -686,19 +686,19 @@ bool RendererFramePipeline::declareDeferredSoftwareCausticsTask(
     resolveChainInputs.producerDispatched = &m_deferredCausticProducerDispatched;
     resolveChainInputs.timingTicket = &timingTicket;
     resolveChainInputs.resolveTiming = &causticResolveTiming;
-    SoftwareCausticsResolveChainResult resolveChainResult;
-    if(!resolveChainBuilder.declare(resolveChainInputs, resolveChainResult, scratchArena)){
+    auto resolveChainResult = resolveChainBuilder.declare(resolveChainInputs, scratchArena);
+    if(!resolveChainResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve chain"));
         return false;
     }
-    m_deferredCausticResolvePrepareTask = resolveChainResult.causticResolvePrepareTask;
-    m_deferredCausticResolveWaveletTask = resolveChainResult.causticResolveWaveletTask;
-    m_deferredCausticResolveSecondWaveletTask = resolveChainResult.causticResolveSecondWaveletTask;
-    m_deferredCausticResolveThirdWaveletTask = resolveChainResult.causticResolveThirdWaveletTask;
-    m_deferredCausticResolveFourthWaveletTask = resolveChainResult.causticResolveFourthWaveletTask;
-    m_deferredCausticResolveFifthWaveletTask = resolveChainResult.causticResolveFifthWaveletTask;
-    m_deferredCausticResolveUpsampleTask = resolveChainResult.causticResolveUpsampleTask;
-    m_deferredSoftwareCausticsTask = resolveChainResult.softwareCausticsTask;
+    m_deferredCausticResolvePrepareTask = resolveChainResult->causticResolvePrepareTask;
+    m_deferredCausticResolveWaveletTask = resolveChainResult->causticResolveWaveletTask;
+    m_deferredCausticResolveSecondWaveletTask = resolveChainResult->causticResolveSecondWaveletTask;
+    m_deferredCausticResolveThirdWaveletTask = resolveChainResult->causticResolveThirdWaveletTask;
+    m_deferredCausticResolveFourthWaveletTask = resolveChainResult->causticResolveFourthWaveletTask;
+    m_deferredCausticResolveFifthWaveletTask = resolveChainResult->causticResolveFifthWaveletTask;
+    m_deferredCausticResolveUpsampleTask = resolveChainResult->causticResolveUpsampleTask;
+    m_deferredSoftwareCausticsTask = resolveChainResult->softwareCausticsTask;
     return true;
 }
 

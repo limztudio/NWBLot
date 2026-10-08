@@ -69,11 +69,9 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
+    [[nodiscard]] Expected<DeferredLightingStageResult> declare(
         const DeferredLightingStageInputs& inputs,
-        Core::GpuTaskId& outUploadTask,
-        Core::GpuTimingSubmissionTicket& timingTicket,
-        DeferredLightingStageResult& outResult
+        Core::GpuTimingSubmissionTicket& timingTicket
     );
 
 

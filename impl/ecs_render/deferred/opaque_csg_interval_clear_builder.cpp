@@ -28,18 +28,17 @@ OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool OpaqueCsgIntervalClearBuilder::declare(
+[[nodiscard]] Expected<OpaqueCsgIntervalClearResult> OpaqueCsgIntervalClearBuilder::declare(
     const OpaqueCsgIntervalClearInputs& inputs,
-    GraphClearTimingRecordState& clearTimingState,
-    OpaqueCsgIntervalClearResult& outResult
+    GraphClearTimingRecordState& clearTimingState
 ){
-    outResult = OpaqueCsgIntervalClearResult{};
+    OpaqueCsgIntervalClearResult result{};
     if(!inputs.targets || !inputs.csgFrameData || !inputs.dependencyTask.valid())
-        return false;
+        return MakeUnexpected(Failure{});
     if(!inputs.hasOpaqueCsgFrameWork)
-        return true;
+        return result;
     if(!inputs.csgIntervalId.valid() || !inputs.csgReceiverEventCount.valid())
-        return false;
+        return MakeUnexpected(Failure{});
 
     Core::GpuTaskSchedulingHint csgIntervalClearScheduling;
     csgIntervalClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -90,9 +89,9 @@ OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(
     );
     if(!clearTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG interval-id clear"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outResult.clearFirstTask = clearTask;
+    result.clearFirstTask = clearTask;
     Core::GpuTaskSchedulingHint csgIntervalClearTailScheduling = csgIntervalClearScheduling;
     // The timing endpoint must remain in the first clear's Graphics packet even when another queue observes the
     // interval id. The explicit immediate dependency satisfies FrontierSafe's consumer-frontier override.
@@ -116,10 +115,10 @@ OpaqueCsgIntervalClearBuilder::OpaqueCsgIntervalClearBuilder(
     );
     if(!clearTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned opaque CSG receiver-event clear"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outResult.clearTask = clearTask;
-    return true;
+    result.clearTask = clearTask;
+    return result;
 }
 
 

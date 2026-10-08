@@ -29,14 +29,13 @@ public:
     // Storage conversion stays at these boundaries; the cores use SIMD lanes.
     [[nodiscard]] static CsgDeformVertex MixVertices(const CsgDeformVertex& first, const CsgDeformVertex& second, const f32 firstWeight)noexcept;
     [[nodiscard]] static bool NormalizeDeformVertex(CsgDeformVertex& vertex)noexcept;
-    [[nodiscard]] static bool SplitEdgeVertex(
+    [[nodiscard]] static Expected<u32> SplitEdgeVertex(
         CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices,
         CsgDeformEdgeSplitMap& edgeSplits,
         const u32 first,
         const u32 second,
         const f32 firstDistance,
-        const f32 secondDistance,
-        u32& outVertex
+        const f32 secondDistance
     );
     static void EmitTriangle(
         CsgDeformTriangleVector<Core::Alloc::ScratchArena>& triangles,
@@ -45,15 +44,14 @@ public:
         const u32 third
     );
     // Keep side is distance >= 0; caller snaps |distance| <= epsilon to zero first.
-    [[nodiscard]] static bool ClipShell(
+    [[nodiscard]] static Expected<void, CsgDeformViabilityReason::Enum> ClipShell(
         Core::Alloc::ScratchArena& scratchArena,
         const CsgDeformShape& shape,
         const f32 epsilon,
         CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
         CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles,
         CsgDeformTriangleVector<Core::Alloc::ScratchArena>& scratchKept,
-        Vector<f32, Core::Alloc::ScratchArena>& scratchDistances,
-        CsgDeformViabilityReason::Enum& outReason
+        Vector<f32, Core::Alloc::ScratchArena>& scratchDistances
     );
 
 

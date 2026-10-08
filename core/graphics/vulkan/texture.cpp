@@ -127,23 +127,18 @@ VkImageAspectFlags GetImageAspectMask(const FormatInfo& formatInfo)noexcept{
     return aspectMask;
 }
 
-bool GetTextureFormatBlockLayout(const FormatInfo& formatInfo, TextureFormatBlockLayout& outLayout)noexcept{
-    outLayout = {};
-    outLayout.blockWidth = GetFormatBlockWidth(formatInfo);
-    outLayout.blockHeight = GetFormatBlockHeight(formatInfo);
-    outLayout.bytesPerBlock = formatInfo.bytesPerBlock;
-    return outLayout.blockWidth != 0 && outLayout.blockHeight != 0 && outLayout.bytesPerBlock != 0;
+Expected<TextureFormatBlockLayout> GetTextureFormatBlockLayout(const FormatInfo& formatInfo)noexcept{
+    const TextureFormatBlockLayout layout{
+        GetFormatBlockWidth(formatInfo), GetFormatBlockHeight(formatInfo), formatInfo.bytesPerBlock
+    };
+    if(layout.blockWidth == 0u || layout.blockHeight == 0u || layout.bytesPerBlock == 0u)
+        return MakeUnexpected(Failure{});
+    return layout;
 }
 
-bool TryComputeCommonAlignment(
-    const u32 firstAlignment,
-    const u32 secondAlignment,
-    u32& outAlignment
-)noexcept{
-    outAlignment = 0u;
+Expected<u32> TryComputeCommonAlignment(const u32 firstAlignment, const u32 secondAlignment)noexcept{
     if(firstAlignment == 0u || secondAlignment == 0u)
-        return false;
-
+        return MakeUnexpected(Failure{});
     u32 first = firstAlignment;
     u32 second = secondAlignment;
     while(second != 0u){
@@ -151,16 +146,11 @@ bool TryComputeCommonAlignment(
         first = second;
         second = remainder;
     }
-    if(first == 0u)
-        return false;
-
-    return TryMultiply<u32>(firstAlignment / first, secondAlignment, outAlignment)
-        && outAlignment != 0u
-    ;
+    return TryMultiply<u32>(firstAlignment / first, secondAlignment);
 }
 
-bool TryComputeUploadSuballocationAlignment(const u32 requiredAlignment, u32& outAlignment)noexcept{
-    return TryComputeCommonAlignment(s_DefaultUploadSuballocationAlignment, requiredAlignment, outAlignment);
+Expected<u32> TryComputeUploadSuballocationAlignment(const u32 requiredAlignment)noexcept{
+    return TryComputeCommonAlignment(s_DefaultUploadSuballocationAlignment, requiredAlignment);
 }
 
 bool IsBufferImageCopyAspectMaskSupported(const VkImageAspectFlags aspectMask)noexcept{
@@ -175,42 +165,20 @@ VkExtent3D GetTextureMipExtent(const TextureDesc& desc, const MipLevel mipLevel)
     return extent;
 }
 
-bool BuildBufferImageCopyLayout(
+Expected<BufferImageCopyLayout> BuildBufferImageCopyLayout(
     const VkExtent3D& extent,
     const TextureFormatBlockLayout& formatLayout,
     const u64 rowPitch,
     const u64 depthPitch,
     const BufferImageCopyRequiredSize::Enum requiredSizeMode,
     const BufferImageCopyPitchFields::Enum pitchFields,
-    BufferImageCopyLayout& outLayout
+    TStringView operationName
 ){
-    return BuildBufferImageCopyLayout(
-        extent,
-        formatLayout,
-        rowPitch,
-        depthPitch,
-        requiredSizeMode,
-        pitchFields,
-        {},
-        outLayout
-    );
-}
-
-bool BuildBufferImageCopyLayout(
-    const VkExtent3D& extent,
-    const TextureFormatBlockLayout& formatLayout,
-    const u64 rowPitch,
-    const u64 depthPitch,
-    const BufferImageCopyRequiredSize::Enum requiredSizeMode,
-    const BufferImageCopyPitchFields::Enum pitchFields,
-    TStringView operationName,
-    BufferImageCopyLayout& outLayout
-){
-    outLayout = {};
+    BufferImageCopyLayout outLayout{};
     if(formatLayout.blockWidth == 0 || formatLayout.blockHeight == 0 || formatLayout.bytesPerBlock == 0){
         if(!operationName.empty())
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: invalid texture format"), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const u64 blockCountX = Max<u64>(DivideUp(static_cast<u64>(extent.width), static_cast<u64>(formatLayout.blockWidth)), 1ull);
@@ -218,7 +186,7 @@ bool BuildBufferImageCopyLayout(
     if(blockCountX > Limit<u64>::s_Max / formatLayout.bytesPerBlock){
         if(!operationName.empty())
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: natural row pitch overflows"), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const u64 naturalRowPitch = blockCountX * formatLayout.bytesPerBlock;
@@ -226,12 +194,12 @@ bool BuildBufferImageCopyLayout(
     if(effectiveRowPitch == 0 || blockCountY > UINT64_MAX / effectiveRowPitch){
         if(!operationName.empty())
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: texture pitch size overflows"), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(effectiveRowPitch < naturalRowPitch || (effectiveRowPitch % formatLayout.bytesPerBlock) != 0){
         if(!operationName.empty())
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: invalid row pitch"), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const u64 packedSlicePitch = effectiveRowPitch * blockCountY;
@@ -239,7 +207,7 @@ bool BuildBufferImageCopyLayout(
     if(effectiveDepthPitch < packedSlicePitch || (effectiveDepthPitch % effectiveRowPitch) != 0){
         if(!operationName.empty())
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: invalid depth pitch"), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const u64 bufferRowBlocks = effectiveRowPitch / formatLayout.bytesPerBlock;
@@ -249,7 +217,7 @@ bool BuildBufferImageCopyLayout(
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: row pitch or depth pitch exceeds Vulkan buffer image copy limits")
                 , operationName
             );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const u64 bufferRowLength = bufferRowBlocks * formatLayout.blockWidth;
@@ -259,14 +227,14 @@ bool BuildBufferImageCopyLayout(
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: row pitch or depth pitch exceeds Vulkan buffer image copy limits")
                 , operationName
             );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     if(requiredSizeMode == BufferImageCopyRequiredSize::PaddedSlices){
         if(extent.depth > 1 && static_cast<u64>(extent.depth - 1) > (UINT64_MAX - packedSlicePitch) / effectiveDepthPitch){
             if(!operationName.empty())
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         outLayout.requiredSize = extent.depth > 1 ? static_cast<u64>(effectiveDepthPitch) * (extent.depth - 1) + packedSlicePitch : packedSlicePitch;
     }
@@ -275,21 +243,21 @@ bool BuildBufferImageCopyLayout(
         if(depthOffset > UINT64_MAX / effectiveDepthPitch){
             if(!operationName.empty())
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const u64 depthBytes = depthOffset * effectiveDepthPitch;
         const u64 rowBytes = static_cast<u64>(blockCountY - 1) * effectiveRowPitch;
         if(depthBytes > UINT64_MAX - rowBytes || depthBytes + rowBytes > UINT64_MAX - naturalRowPitch){
             if(!operationName.empty())
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: transfer size overflows"), operationName);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         outLayout.requiredSize = depthBytes + rowBytes + naturalRowPitch;
     }
 
     outLayout.bufferRowLength = pitchFields == BufferImageCopyPitchFields::EmitExplicit || rowPitch != 0 ? static_cast<u32>(bufferRowLength) : 0u;
     outLayout.bufferImageHeight = pitchFields == BufferImageCopyPitchFields::EmitExplicit || depthPitch != 0 ? static_cast<u32>(bufferImageHeight) : 0u;
-    return true;
+    return outLayout;
 }
 
 VkImageSubresourceLayers BuildImageSubresourceLayers(
@@ -316,33 +284,32 @@ VkImageSubresourceRange BuildImageSubresourceRange(const TextureSubresourceSet& 
     return range;
 }
 
-bool BuildTextureImageViewCreateInfo(
+Expected<VkImageViewCreateInfo> BuildTextureImageViewCreateInfo(
     Texture& texture,
     const TextureSubresourceSet& resolvedSubresources,
     const TextureDimension::Enum dimension,
     const Format::Enum format,
     TStringView operationName,
-    const bool assertFailure,
-    VkImageViewCreateInfo& outViewInfo
+    const bool assertFailure
 ){
+    VkImageViewCreateInfo outViewInfo{};
     const bool usesTextureFormat = format == texture.m_creationDesc.format;
     const VkFormat vkFormat = usesTextureFormat ? texture.m_imageInfo.format : ConvertFormat(format);
     if(vkFormat == VK_FORMAT_UNDEFINED){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: format is unsupported"), operationName);
         if(assertFailure)
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create {}: format is unsupported"), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     if(!VulkanTextureDetail::ValidateTextureViewShape(dimension, resolvedSubresources)){
         if(assertFailure)
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create {}: invalid view shape"), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const VkImageAspectFlags aspectMask = usesTextureFormat ? texture.m_aspectMask : GetImageAspectMask(GetFormatInfo(format));
 
-    outViewInfo = {};
     outViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     outViewInfo.image = texture.m_image;
     outViewInfo.viewType = VulkanTextureDetail::TextureDimensionToViewType(dimension);
@@ -352,7 +319,7 @@ bool BuildTextureImageViewCreateInfo(
     outViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
     outViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
     outViewInfo.subresourceRange = BuildImageSubresourceRange(resolvedSubresources, aspectMask);
-    return true;
+    return outViewInfo;
 }
 
 
@@ -560,20 +527,19 @@ VkImageView Texture::getView(const TextureSubresourceSet& subresources, TextureD
     if(it != m_views.end())
         return it.value();
 
-    VkImageViewCreateInfo viewInfo{};
-    if(!VulkanDetail::BuildTextureImageViewCreateInfo(
+    const auto viewInfo = VulkanDetail::BuildTextureImageViewCreateInfo(
         *this,
         resolvedSubresources,
         dimension,
         format,
         NWB_TEXT("image view"),
-        true,
-        viewInfo
-    ))
+        true
+    );
+    if(!viewInfo)
         return VK_NULL_HANDLE;
 
     VkImageView view = VK_NULL_HANDLE;
-    const VkResult res = m_context.deviceDispatch.vkCreateImageView(m_context.device, &viewInfo, m_context.allocationCallbacks, &view);
+    const VkResult res = m_context.deviceDispatch.vkCreateImageView(m_context.device, &*viewInfo, m_context.allocationCallbacks, &view);
     if(res != VK_SUCCESS){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create image view"));
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create image view: {}"), ResultToString(res));

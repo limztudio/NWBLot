@@ -25,10 +25,10 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ParseFontAtlasGlyphMetadata(
+[[nodiscard]] Expected<Core::Assets::AssetVector<FontAtlasGlyph>> ParseFontAtlasGlyphMetadata(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    FontAtlasPayload& outPayload
+    const FontAtlasPayload& payload
 );
 
 

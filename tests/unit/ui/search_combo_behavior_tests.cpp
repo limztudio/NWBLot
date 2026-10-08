@@ -52,18 +52,20 @@ public:
 
     [[nodiscard]] virtual u64 key(const u64 index)const override{ return index < count ? start + index + 1u : 0u; }
 
-    [[nodiscard]] virtual bool indexOf(const u64 keyValue, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const override{
+        u64 index = 0u;
         if(keyValue <= start || keyValue - start > count)
-            return false;
+            return MakeUnexpected(Failure{});
         index = keyValue - start - 1u;
-        return true;
+        return index;
     }
 
-    [[nodiscard]] virtual bool findEnabled(const u64 first, bool, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 first, bool)const override{
+        u64 index = 0u;
         if(first >= count)
-            return false;
+            return MakeUnexpected(Failure{});
         index = first;
-        return true;
+        return index;
     }
 
     [[nodiscard]] virtual StringView text(u64)const override{ return "match"; }
@@ -109,19 +111,21 @@ public:
         return index < count ? index + 1u : 0u;
     }
 
-    [[nodiscard]] virtual bool indexOf(const u64 keyValue, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const override{
+        u64 index = 0u;
         ++lookupCalls;
         if(keyValue == 0u || keyValue > count)
-            return false;
+            return MakeUnexpected(Failure{});
         index = keyValue - 1u;
-        return true;
+        return index;
     }
 
-    [[nodiscard]] virtual bool findEnabled(const u64 start, bool, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, bool)const override{
+        u64 index = 0u;
         if(start >= count)
-            return false;
+            return MakeUnexpected(Failure{});
         index = start;
-        return true;
+        return index;
     }
 
     [[nodiscard]] virtual StringView text(u64)const override{ return "full row"; }

@@ -23,93 +23,90 @@ namespace __hidden_vulkan_staging_texture{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline bool BuildStagingTextureMipLayout(
+struct StagingTextureMip{
+    VulkanDetail::StagingTextureMipLayout layout;
+    u64 byteSize = 0u;
+};
+
+struct StagingTextureLayout{
+    u64 arrayByteSize = 0u;
+    VulkanDetail::StagingTextureMipLayoutVector mipLayouts;
+};
+
+struct StagingTextureQueueFamilies{
+    VulkanDetail::StagingTextureQueueFamilyVector families;
+    VkSharingMode mode = VK_SHARING_MODE_EXCLUSIVE;
+};
+
+inline Expected<StagingTextureMip> BuildStagingTextureMipLayout(
     const TextureDesc& desc,
     const VulkanDetail::TextureFormatBlockLayout& formatLayout,
-    const u32 mip,
-    VulkanDetail::StagingTextureMipLayout& outLayout,
-    u64& outMipSize
+    const u32 mip
 ){
-    outLayout = {};
-    outMipSize = 0;
+    StagingTextureMip result{};
 
     const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(desc, mip);
 
     const u64 blocksX = Max<u64>(DivideUp(static_cast<u64>(mipExtent.width), static_cast<u64>(formatLayout.blockWidth)), 1ull);
     const u64 blocksY = Max<u64>(DivideUp(static_cast<u64>(mipExtent.height), static_cast<u64>(formatLayout.blockHeight)), 1ull);
     if(blocksX > UINT64_MAX / blocksY)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const u64 bufferRowLength = blocksX * formatLayout.blockWidth;
     const u64 bufferImageHeight = blocksY * formatLayout.blockHeight;
     if(bufferRowLength > UINT32_MAX || bufferImageHeight > UINT32_MAX)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const u64 blockCount = blocksX * blocksY;
     if(blockCount > UINT64_MAX / formatLayout.bytesPerBlock)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outLayout.rowPitch = blocksX * formatLayout.bytesPerBlock;
-    outLayout.slicePitch = blockCount * formatLayout.bytesPerBlock;
-    if(mipExtent.depth > UINT64_MAX / outLayout.slicePitch)
-        return false;
+    result.layout.rowPitch = blocksX * formatLayout.bytesPerBlock;
+    result.layout.slicePitch = blockCount * formatLayout.bytesPerBlock;
+    if(mipExtent.depth > UINT64_MAX / result.layout.slicePitch)
+        return MakeUnexpected(Failure{});
 
-    outMipSize = outLayout.slicePitch * mipExtent.depth;
-    outLayout.bufferRowLength = static_cast<u32>(bufferRowLength);
-    outLayout.bufferImageHeight = static_cast<u32>(bufferImageHeight);
-    return true;
+    result.byteSize = result.layout.slicePitch * mipExtent.depth;
+    result.layout.bufferRowLength = static_cast<u32>(bufferRowLength);
+    result.layout.bufferImageHeight = static_cast<u32>(bufferImageHeight);
+    return result;
 }
 
-inline bool AddAlignedStagingMipSize(u64& size, const u64 mipSize, const u32 alignment){
-    if(size > UINT64_MAX - mipSize)
-        return false;
-    return AlignUpU64Checked(size + mipSize, static_cast<u64>(alignment), size);
+inline Expected<u64> AddAlignedStagingMipSize(const u64 size, const u64 mipSize, const u32 alignment)noexcept{
+    const auto total = AddNoOverflow(size, mipSize);
+    if(!total)
+        return MakeUnexpected(total.error());
+    return AlignUpU64Checked(*total, static_cast<u64>(alignment));
 }
 
-inline bool BuildStagingTextureLayout(
+inline Expected<StagingTextureLayout> BuildStagingTextureLayout(
+    Alloc::GlobalArena& arena,
     const TextureDesc& desc,
     const VulkanDetail::TextureFormatBlockLayout& formatLayout,
-    const u32 bufferOffsetAlignment,
-    u64& outArrayByteSize,
-    VulkanDetail::StagingTextureMipLayoutVector& outMipLayouts
+    const u32 bufferOffsetAlignment
 ){
-    outArrayByteSize = 0;
-    outMipLayouts.clear();
-    if(desc.mipLevels == 0)
-        return false;
-
-    outMipLayouts.reserve(desc.mipLevels);
-
-    u64 arrayByteSize = 0;
+    if(desc.mipLevels == 0u)
+        return MakeUnexpected(Failure{});
+    StagingTextureLayout result{ 0u, VulkanDetail::StagingTextureMipLayoutVector(arena) };
+    result.mipLayouts.reserve(desc.mipLevels);
     for(u32 mip = 0u; mip < desc.mipLevels; ++mip){
-        VulkanDetail::StagingTextureMipLayout layout;
-        u64 mipSize = 0;
-        if(!BuildStagingTextureMipLayout(desc, formatLayout, mip, layout, mipSize)){
-            outMipLayouts.clear();
-            return false;
-        }
-
-        layout.byteOffset = arrayByteSize;
-        outMipLayouts.push_back(layout);
-
-        if(!AddAlignedStagingMipSize(arrayByteSize, mipSize, bufferOffsetAlignment)){
-            outMipLayouts.clear();
-            return false;
-        }
+        auto layout = BuildStagingTextureMipLayout(desc, formatLayout, mip);
+        if(!layout)
+            return MakeUnexpected(layout.error());
+        layout->layout.byteOffset = result.arrayByteSize;
+        result.mipLayouts.push_back(layout->layout);
+        const auto size = AddAlignedStagingMipSize(result.arrayByteSize, layout->byteSize, bufferOffsetAlignment);
+        if(!size)
+            return MakeUnexpected(size.error());
+        result.arrayByteSize = *size;
     }
-
-    outArrayByteSize = arrayByteSize;
-    return true;
+    return result;
 }
 
-inline bool BuildStagingTextureQueueFamilies(
-    Device& device,
-    const ResourceQueueSharing::Mask sharing,
-    VulkanDetail::StagingTextureQueueFamilyVector& outFamilies,
-    VkSharingMode& outMode
+inline Expected<StagingTextureQueueFamilies> BuildStagingTextureQueueFamilies(
+    Alloc::GlobalArena& arena, Device& device, const ResourceQueueSharing::Mask sharing
 ){
-    outFamilies.clear();
-    outMode = VK_SHARING_MODE_EXCLUSIVE;
+    StagingTextureQueueFamilies result{ VulkanDetail::StagingTextureQueueFamilyVector(arena) };
 
     NWB_ASSERT(ResourceQueueSharing::IsValid(sharing));
 
@@ -117,15 +114,15 @@ inline bool BuildStagingTextureQueueFamilies(
         const GpuPhysicalQueueId primaryGraphics = device.getPrimaryPhysicalQueue(CommandQueue::Graphics);
         const GpuPhysicalQueueInfo* const queueInfo = device.getPhysicalQueueInfo(primaryGraphics);
         if(!queueInfo || queueInfo->familyIndex == VK_QUEUE_FAMILY_IGNORED)
-            return false;
-        outFamilies.push_back(queueInfo->familyIndex);
-        return true;
+            return MakeUnexpected(Failure{});
+        result.families.push_back(queueInfo->familyIndex);
+        return result;
     }
 
     const GpuPhysicalQueueTopology topology = device.getPhysicalQueueTopology();
     if(!topology.queues || topology.queueCount == 0u || topology.queueCount > Limit<u32>::s_Max)
-        return false;
-    outFamilies.reserve(topology.queueCount);
+        return MakeUnexpected(Failure{});
+    result.families.reserve(topology.queueCount);
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueInfo& queue = topology.queues[queueIndex];
         if(
@@ -135,23 +132,23 @@ inline bool BuildStagingTextureQueueFamilies(
             continue;
 
         bool alreadyAdmitted = false;
-        for(const u32 familyIndex : outFamilies){
+        for(const u32 familyIndex : result.families){
             if(familyIndex == queue.familyIndex){
                 alreadyAdmitted = true;
                 break;
             }
         }
         if(!alreadyAdmitted)
-            outFamilies.push_back(queue.familyIndex);
+            result.families.push_back(queue.familyIndex);
     }
 
-    if(outFamilies.empty() || outFamilies.size() > Limit<u32>::s_Max){
-        outFamilies.clear();
-        return false;
+    if(result.families.empty() || result.families.size() > Limit<u32>::s_Max){
+        result.families.clear();
+        return MakeUnexpected(Failure{});
     }
-    if(outFamilies.size() >= 2u)
-        outMode = VK_SHARING_MODE_CONCURRENT;
-    return true;
+    if(result.families.size() >= 2u)
+        result.mode = VK_SHARING_MODE_CONCURRENT;
+    return result;
 }
 
 
@@ -170,48 +167,44 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool IsTextureSliceInBounds(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout, TextureSlice* outResolved){
+Expected<TextureSlice> ResolveTextureSlice(const TextureDesc& desc, const TextureSlice& slice, const TextureFormatBlockLayout& formatLayout)noexcept{
     if(desc.mipLevels == 0 || slice.mipLevel >= desc.mipLevels)
-        return false;
+        return MakeUnexpected(Failure{});
     if(desc.arraySize == 0 || slice.arraySlice >= desc.arraySize)
-        return false;
+        return MakeUnexpected(Failure{});
     if(formatLayout.blockWidth == 0 || formatLayout.blockHeight == 0 || formatLayout.bytesPerBlock == 0)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const VkExtent3D mipExtent = GetTextureMipExtent(desc, slice.mipLevel);
     const TextureSlice resolved = slice.resolve(mipExtent.width, mipExtent.height, mipExtent.depth);
     if(resolved.width == 0 || resolved.height == 0 || resolved.depth == 0)
-        return false;
+        return MakeUnexpected(Failure{});
     if(resolved.x > mipExtent.width || resolved.width > mipExtent.width - resolved.x)
-        return false;
+        return MakeUnexpected(Failure{});
     if(resolved.y > mipExtent.height || resolved.height > mipExtent.height - resolved.y)
-        return false;
+        return MakeUnexpected(Failure{});
     if(resolved.z > mipExtent.depth || resolved.depth > mipExtent.depth - resolved.z)
-        return false;
+        return MakeUnexpected(Failure{});
 
     if((resolved.x % formatLayout.blockWidth) != 0 || (resolved.y % formatLayout.blockHeight) != 0)
-        return false;
+        return MakeUnexpected(Failure{});
     if((resolved.width % formatLayout.blockWidth) != 0 && resolved.x + resolved.width != mipExtent.width)
-        return false;
+        return MakeUnexpected(Failure{});
     if((resolved.height % formatLayout.blockHeight) != 0 && resolved.y + resolved.height != mipExtent.height)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    if(outResolved)
-        *outResolved = resolved;
-    return true;
+    return resolved;
 }
 
-bool BuildStagingTextureRange(
+Expected<StagingTextureRange> BuildStagingTextureRange(
     const TextureSlice& resolvedSlice,
     const StagingTextureMipLayout& mipLayout,
     const TextureFormatBlockLayout& formatLayout,
     const u64 arrayByteSize,
     const u64 totalByteSize,
     const u32 requiredOffsetAlignment,
-    const bool requireHostPointerRange,
-    StagingTextureRange& outRange
+    const bool requireHostPointerRange
 )noexcept{
-    outRange = {};
     if(
         resolvedSlice.width == 0u
         || resolvedSlice.height == 0u
@@ -230,29 +223,26 @@ bool BuildStagingTextureRange(
         || (resolvedSlice.x % formatLayout.blockWidth) != 0u
         || (resolvedSlice.y % formatLayout.blockHeight) != 0u
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
-    u64 byteOffset = mipLayout.byteOffset;
-    u64 product = 0u;
-    if(
-        !TryMultiply<u64>(arrayByteSize, static_cast<u64>(resolvedSlice.arraySlice), product)
-        || !AddNoOverflow(byteOffset, product, byteOffset)
-        || !TryMultiply<u64>(mipLayout.slicePitch, static_cast<u64>(resolvedSlice.z), product)
-        || !AddNoOverflow(byteOffset, product, byteOffset)
-        || !TryMultiply<u64>(
-            mipLayout.rowPitch,
-            static_cast<u64>(resolvedSlice.y / formatLayout.blockHeight),
-            product
-        )
-        || !AddNoOverflow(byteOffset, product, byteOffset)
-        || !TryMultiply<u64>(
-            static_cast<u64>(formatLayout.bytesPerBlock),
-            static_cast<u64>(resolvedSlice.x / formatLayout.blockWidth),
-            product
-        )
-        || !AddNoOverflow(byteOffset, product, byteOffset)
-    )
-        return false;
+    const auto arrayOffset = TryMultiply<u64>(arrayByteSize, static_cast<u64>(resolvedSlice.arraySlice));
+    const auto depthOffset = TryMultiply<u64>(mipLayout.slicePitch, static_cast<u64>(resolvedSlice.z));
+    const auto rowOffset = TryMultiply<u64>(mipLayout.rowPitch, static_cast<u64>(resolvedSlice.y / formatLayout.blockHeight));
+    const auto columnOffset = TryMultiply<u64>(formatLayout.bytesPerBlock, static_cast<u64>(resolvedSlice.x / formatLayout.blockWidth));
+    if(!arrayOffset || !depthOffset || !rowOffset || !columnOffset)
+        return MakeUnexpected(Failure{});
+    auto byteOffset = AddNoOverflow(mipLayout.byteOffset, *arrayOffset);
+    if(!byteOffset)
+        return MakeUnexpected(byteOffset.error());
+    byteOffset = AddNoOverflow(*byteOffset, *depthOffset);
+    if(!byteOffset)
+        return MakeUnexpected(byteOffset.error());
+    byteOffset = AddNoOverflow(*byteOffset, *rowOffset);
+    if(!byteOffset)
+        return MakeUnexpected(byteOffset.error());
+    byteOffset = AddNoOverflow(*byteOffset, *columnOffset);
+    if(!byteOffset)
+        return MakeUnexpected(byteOffset.error());
 
     const u64 mappedBlocksX = Max<u64>(
         DivideUp(static_cast<u64>(resolvedSlice.width), static_cast<u64>(formatLayout.blockWidth)),
@@ -262,37 +252,36 @@ bool BuildStagingTextureRange(
         DivideUp(static_cast<u64>(resolvedSlice.height), static_cast<u64>(formatLayout.blockHeight)),
         1ull
     );
-    u64 byteSize = 0u;
+    const auto depthSize = TryMultiply<u64>(static_cast<u64>(resolvedSlice.depth - 1u), mipLayout.slicePitch);
+    const auto rowSize = TryMultiply<u64>(mappedBlocksY - 1u, mipLayout.rowPitch);
+    const auto columnSize = TryMultiply<u64>(mappedBlocksX, static_cast<u64>(formatLayout.bytesPerBlock));
+    if(!depthSize || !rowSize || !columnSize)
+        return MakeUnexpected(Failure{});
+    auto byteSize = AddNoOverflow(*depthSize, *rowSize);
+    if(!byteSize)
+        return MakeUnexpected(byteSize.error());
+    byteSize = AddNoOverflow(*byteSize, *columnSize);
     if(
-        !TryMultiply<u64>(static_cast<u64>(resolvedSlice.depth - 1u), mipLayout.slicePitch, byteSize)
-        || !TryMultiply<u64>(mappedBlocksY - 1u, mipLayout.rowPitch, product)
-        || !AddNoOverflow(byteSize, product, byteSize)
-        || !TryMultiply<u64>(mappedBlocksX, static_cast<u64>(formatLayout.bytesPerBlock), product)
-        || !AddNoOverflow(byteSize, product, byteSize)
-        || byteSize == 0u
-        || byteOffset > totalByteSize
-        || byteSize > totalByteSize - byteOffset
-        || (requiredOffsetAlignment != 0u && (byteOffset % requiredOffsetAlignment) != 0u)
+        !byteSize || *byteSize == 0u
+        || *byteOffset > totalByteSize || *byteSize > totalByteSize - *byteOffset
+        || (requiredOffsetAlignment != 0u && (*byteOffset % requiredOffsetAlignment) != 0u)
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     const u64 maximumHostRange = static_cast<u64>(Limit<usize>::s_Max);
     if(
         requireHostPointerRange
         && (
-            byteOffset > maximumHostRange
-            || byteSize > maximumHostRange - byteOffset
+            *byteOffset > maximumHostRange
+            || *byteSize > maximumHostRange - *byteOffset
             || mipLayout.rowPitch > maximumHostRange
         )
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outRange.byteOffset = byteOffset;
-    outRange.byteSize = byteSize;
-    outRange.rowPitch = mipLayout.rowPitch;
-    outRange.bufferRowLength = mipLayout.bufferRowLength;
-    outRange.bufferImageHeight = mipLayout.bufferImageHeight;
-    return true;
+    return StagingTextureRange{
+        *byteOffset, *byteSize, mipLayout.rowPitch, mipLayout.bufferRowLength, mipLayout.bufferImageHeight
+    };
 }
 
 
@@ -333,58 +322,38 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
     }
 
     const FormatInfo& formatInfo = GetFormatInfo(d.format);
-    VulkanDetail::TextureFormatBlockLayout formatLayout;
-    if(!VulkanDetail::GetTextureFormatBlockLayout(formatInfo, formatLayout)){
+    const auto formatLayout = VulkanDetail::GetTextureFormatBlockLayout(formatInfo);
+    if(!formatLayout){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture format"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid texture format"));
         return nullptr;
     }
-
-    u32 bufferOffsetAlignment = 0u;
-    if(!VulkanDetail::TryComputeCommonAlignment(
-        s_BufferAlignmentBytes,
-        formatLayout.bytesPerBlock,
-        bufferOffsetAlignment
-    )){
+    const auto bufferOffsetAlignment = VulkanDetail::TryComputeCommonAlignment(s_BufferAlignmentBytes, formatLayout->bytesPerBlock);
+    if(!bufferOffsetAlignment){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: invalid buffer offset alignment"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: invalid buffer offset alignment"));
         return nullptr;
     }
-
-    VulkanDetail::StagingTextureMipLayoutVector mipLayouts(m_context.objectArena);
-    u64 arrayByteSize = 0;
-    const bool layoutBuilt = __hidden_vulkan_staging_texture::BuildStagingTextureLayout(
-        d,
-        formatLayout,
-        bufferOffsetAlignment,
-        arrayByteSize,
-        mipLayouts
+    auto layout = __hidden_vulkan_staging_texture::BuildStagingTextureLayout(
+        m_context.objectArena, d, *formatLayout, *bufferOffsetAlignment
     );
-    u64 totalSize = 0u;
-    if(
-        !layoutBuilt
-        || arrayByteSize == 0u
-        || !TryMultiply<u64>(arrayByteSize, static_cast<u64>(d.arraySize), totalSize)
-        || totalSize == 0u
-    ){
+    if(!layout || layout->arrayByteSize == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
         return nullptr;
     }
-
-    VulkanDetail::StagingTextureQueueFamilyVector admittedFamilies(m_context.objectArena);
-    VkSharingMode sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    if(!__hidden_vulkan_staging_texture::BuildStagingTextureQueueFamilies(
-        *this,
-        d.queueSharing,
-        admittedFamilies,
-        sharingMode
-    )){
+    const auto totalSize = TryMultiply<u64>(layout->arrayByteSize, static_cast<u64>(d.arraySize));
+    if(!totalSize || *totalSize == 0u){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
+        NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: computed layout overflows"));
+        return nullptr;
+    }
+    auto queueFamilies = __hidden_vulkan_staging_texture::BuildStagingTextureQueueFamilies(m_context.objectArena, *this, d.queueSharing);
+    if(!queueFamilies){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create staging texture: requested queue sharing is unavailable"));
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create staging texture: unavailable queue sharing"));
         return nullptr;
     }
-
     auto* staging = NewArenaObject<StagingTexture>(m_context.objectArena, m_context, m_allocator);
     if(!staging){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to allocate staging texture wrapper"));
@@ -393,12 +362,12 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
 
     VkBufferCreateInfo bufferInfo{};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = totalSize;
+    bufferInfo.size = *totalSize;
     bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    bufferInfo.sharingMode = sharingMode;
-    if(sharingMode == VK_SHARING_MODE_CONCURRENT){
-        bufferInfo.queueFamilyIndexCount = static_cast<u32>(admittedFamilies.size());
-        bufferInfo.pQueueFamilyIndices = admittedFamilies.data();
+    bufferInfo.sharingMode = queueFamilies->mode;
+    if(queueFamilies->mode == VK_SHARING_MODE_CONCURRENT){
+        bufferInfo.queueFamilyIndexCount = static_cast<u32>(queueFamilies->families.size());
+        bufferInfo.pQueueFamilyIndices = queueFamilies->families.data();
     }
 
     const VkResult res = m_allocator.createStagingTexture(*staging, bufferInfo, cpuAccess);
@@ -410,64 +379,57 @@ StagingTextureHandle Device::createStagingTexture(const TextureDesc& d, CpuAcces
 
     staging->m_desc = d;
     staging->m_creationDesc = d;
-    staging->m_formatLayout = formatLayout;
+    staging->m_formatLayout = *formatLayout;
     staging->m_aspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
-    staging->m_arrayByteSize = arrayByteSize;
-    staging->m_totalByteSize = totalSize;
-    staging->m_bufferOffsetAlignment = bufferOffsetAlignment;
+    staging->m_arrayByteSize = layout->arrayByteSize;
+    staging->m_totalByteSize = *totalSize;
+    staging->m_bufferOffsetAlignment = *bufferOffsetAlignment;
     staging->m_creationQueueSharing = d.queueSharing;
-    staging->m_creationSharingMode = sharingMode;
-    staging->m_mipLayouts = Move(mipLayouts);
-    staging->m_admittedQueueFamilies = Move(admittedFamilies);
+    staging->m_creationSharingMode = queueFamilies->mode;
+    staging->m_mipLayouts = Move(layout->mipLayouts);
+    staging->m_admittedQueueFamilies = Move(queueFamilies->families);
     staging->m_cpuAccess = cpuAccess;
 
     return StagingTextureHandle(staging, StagingTextureHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
-void* Device::mapStagingTexture(
+Expected<StagingTextureMapping> Device::mapStagingTexture(
     StagingTexture& staging,
     const TextureSlice& slice,
-    const CpuAccessMode::Enum requestedAccess,
-    usize* outRowPitch
+    const CpuAccessMode::Enum requestedAccess
 ){
     if(requestedAccess != CpuAccessMode::Read && requestedAccess != CpuAccessMode::Write){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: invalid CPU access mode"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     if(&staging.m_context != &m_context || &staging.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: texture belongs to another device"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(staging.m_buffer == VK_NULL_HANDLE || !staging.m_allocation){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: native buffer or allocation is null"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(staging.m_cpuAccess != CpuAccessMode::Read && staging.m_cpuAccess != CpuAccessMode::Write){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: texture was created without valid CPU access"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
     if(requestedAccess != staging.m_cpuAccess){
         NWB_LOGGER_ERROR(
             NWB_TEXT("Vulkan: Failed to map staging texture: requested access does not match the texture CPU access")
         );
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
-    u64 expectedTotalByteSize = 0u;
+    const auto expectedTotalByteSize = TryMultiply<u64>(staging.m_arrayByteSize, static_cast<u64>(staging.m_creationDesc.arraySize));
     if(
-        staging.m_creationDesc.arraySize == 0u
-        || staging.m_creationDesc.mipLevels == 0u
+        staging.m_creationDesc.arraySize == 0u || staging.m_creationDesc.mipLevels == 0u
         || staging.m_mipLayouts.size() != staging.m_creationDesc.mipLevels
-        || !TryMultiply<u64>(
-            staging.m_arrayByteSize,
-            static_cast<u64>(staging.m_creationDesc.arraySize),
-            expectedTotalByteSize
-        )
-        || expectedTotalByteSize != staging.m_totalByteSize
+        || !expectedTotalByteSize || *expectedTotalByteSize != staging.m_totalByteSize
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: immutable layout provenance is invalid"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     if(
@@ -475,54 +437,48 @@ void* Device::mapStagingTexture(
         || slice.mipLevel >= staging.m_mipLayouts.size()
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: mip is outside the creation layout"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
-    TextureSlice resolvedSlice;
-    if(!VulkanDetail::IsTextureSliceInBounds(
-        staging.m_creationDesc,
-        slice,
-        staging.m_formatLayout,
-        &resolvedSlice
-    )){
+    const auto resolvedSlice = VulkanDetail::ResolveTextureSlice(staging.m_creationDesc, slice, staging.m_formatLayout);
+    if(!resolvedSlice){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: slice is outside the texture"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
-    VulkanDetail::StagingTextureRange range;
-    if(!VulkanDetail::BuildStagingTextureRange(
-        resolvedSlice,
-        staging.m_mipLayouts[resolvedSlice.mipLevel],
+    const auto range = VulkanDetail::BuildStagingTextureRange(
+        *resolvedSlice,
+        staging.m_mipLayouts[resolvedSlice->mipLevel],
         staging.m_formatLayout,
         staging.m_arrayByteSize,
         staging.m_totalByteSize,
         0u,
-        true,
-        range
-    )){
+        true
+    );
+    if(!range){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: mapped range is invalid"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     ScopedLock lock(staging.m_mappingMutex);
     if(!staging.m_mappedMemory){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map staging texture: persistent mapping pointer is null"));
-        return nullptr;
+        return MakeUnexpected(Failure{});
     }
 
     const bool needsInvalidate = requestedAccess == CpuAccessMode::Read && staging.m_requiresInvalidate;
     if(needsInvalidate){
-        const VkResult res = m_allocator.invalidateStagingTextureMemory(staging, range.byteOffset, range.byteSize);
+        const VkResult res = m_allocator.invalidateStagingTextureMemory(staging, range->byteOffset, range->byteSize);
         if(res != VK_SUCCESS){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to invalidate staging texture mapping: {}"), ResultToString(res));
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
     }
 
-    if(outRowPitch)
-        *outRowPitch = static_cast<usize>(range.rowPitch);
-
-    return static_cast<u8*>(staging.m_mappedMemory) + static_cast<usize>(range.byteOffset);
+    return StagingTextureMapping{
+        static_cast<u8*>(staging.m_mappedMemory) + static_cast<usize>(range->byteOffset),
+        static_cast<usize>(range->rowPitch)
+    };
 }
 
 void Device::unmapStagingTexture(StagingTexture& staging){

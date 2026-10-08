@@ -11,6 +11,15 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct FileRemovalFailure{
+    ErrorCode code;
+    u64 removedCount;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 namespace GlobalFilesystemDetail{
 
 
@@ -18,107 +27,86 @@ namespace GlobalFilesystemDetail{
 
 
 template<typename ArenaT>
-[[nodiscard]] inline u64 RemoveAllImpl(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
+[[nodiscard]] inline Expected<u64, FileRemovalFailure> RemoveAllImpl(const Path<ArenaT>& path){
 #if defined(NWB_PLATFORM_WINDOWS)
-    const DWORD attributes = FileAttributes(path, outError);
-    if(outError)
+    const auto attributes = FileAttributes(path);
+    if(!attributes)
+        return MakeUnexpected(FileRemovalFailure{ attributes.error(), 0u });
+    if(*attributes == INVALID_FILE_ATTRIBUTES)
         return 0u;
-    if(attributes == INVALID_FILE_ATTRIBUTES)
-        return 0u;
-
-    if((attributes & FILE_ATTRIBUTE_DIRECTORY) == 0u){
-        return RemoveFile(path, outError) ? 1u : 0u;
+    if((*attributes & FILE_ATTRIBUTE_DIRECTORY) == 0u){
+        const auto removed = RemoveFile(path);
+        if(!removed)
+            return MakeUnexpected(FileRemovalFailure{ removed.error(), 0u });
+        return *removed ? 1u : 0u;
     }
-
     u64 removedCount = 0u;
-    Path<ArenaT> pattern = path / NWB_TEXT("*");
+    const Path<ArenaT> pattern = path / NWB_TEXT("*");
     WIN32_FIND_DATA data = {};
-    HANDLE findHandle = FindFirstFile(pattern.c_str(), &data);
+    const HANDLE findHandle = FindFirstFile(pattern.c_str(), &data);
     if(findHandle != INVALID_HANDLE_VALUE){
+        ErrorCode iterationError;
+        ScopeExit close([&]()noexcept{ CloseDirectory(findHandle, iterationError); });
         for(;;){
             const TStringView fileName(data.cFileName);
             if(fileName != NWB_TEXT(".") && fileName != NWB_TEXT("..")){
-                const Path<ArenaT> child = path / fileName;
-                removedCount += RemoveAllImpl(child, outError);
-                if(outError){
-                    CloseDirectory(findHandle, outError);
-                    return removedCount;
-                }
+                const auto removed = RemoveAllImpl(path / fileName);
+                if(!removed)
+                    return MakeUnexpected(FileRemovalFailure{ removed.error().code, removedCount + removed.error().removedCount });
+                removedCount += *removed;
             }
-
             if(FindNextFile(findHandle, &data))
                 continue;
-            CaptureDirectoryIterationError(outError);
+            CaptureDirectoryIterationError(iterationError);
             break;
         }
-        CloseDirectory(findHandle, outError);
-        if(outError)
-            return removedCount;
+        CloseDirectory(findHandle, iterationError);
+        close.release();
+        if(iterationError)
+            return MakeUnexpected(FileRemovalFailure{ iterationError, removedCount });
     }
-
-    if(RemoveDirectory(path.c_str())){
-        ClearError(outError);
+    if(RemoveDirectory(path.c_str()))
         return removedCount + 1u;
-    }
-
-    SetLastSystemError(outError);
-    return removedCount;
+    return MakeUnexpected(FileRemovalFailure{ LastSystemError(), removedCount });
 #else
-    struct stat pathStat;
-    if(lstat(path.c_str(), &pathStat) != 0){
-        if(errno == ENOENT || errno == ENOTDIR){
-            ClearError(outError);
+    const auto pathStat = LStatPath(path);
+    if(!pathStat){
+        if(IsMissingPathError(pathStat.error()))
             return 0u;
-        }
-        SetLastSystemError(outError);
-        return 0u;
+        return MakeUnexpected(FileRemovalFailure{ pathStat.error(), 0u });
     }
-
-    if(!S_ISDIR(pathStat.st_mode)){
-        if(std::remove(path.c_str()) == 0){
-            ClearError(outError);
+    if(!S_ISDIR(pathStat->st_mode)){
+        if(std::remove(path.c_str()) == 0)
             return 1u;
-        }
-        SetLastSystemError(outError);
-        return 0u;
+        return MakeUnexpected(FileRemovalFailure{ LastSystemError(), 0u });
     }
-
+    DIR* const directory = opendir(path.c_str());
+    if(directory == nullptr)
+        return MakeUnexpected(FileRemovalFailure{ LastSystemError(), 0u });
+    ErrorCode iterationError;
+    ScopeExit close([&]()noexcept{ CloseDirectory(directory, iterationError); });
     u64 removedCount = 0u;
-    DIR* directory = opendir(path.c_str());
-    if(directory == nullptr){
-        SetLastSystemError(outError);
-        return 0u;
-    }
-
     for(;;){
         errno = 0;
-        dirent* entry = readdir(directory);
+        dirent* const entry = readdir(directory);
         if(entry == nullptr){
-            CaptureDirectoryIterationError(outError);
+            CaptureDirectoryIterationError(iterationError);
             break;
         }
-
         const AStringView name(entry->d_name);
         if(GlobalFilesystemPathDetail::IsDot(name) || GlobalFilesystemPathDetail::IsDotDot(name))
             continue;
-
-        const Path<ArenaT> child = path / name;
-        removedCount += RemoveAllImpl(child, outError);
-        if(outError){
-            CloseDirectory(directory, outError);
-            return removedCount;
-        }
+        const auto removed = RemoveAllImpl(path / name);
+        if(!removed)
+            return MakeUnexpected(FileRemovalFailure{ removed.error().code, removedCount + removed.error().removedCount });
+        removedCount += *removed;
     }
-    CloseDirectory(directory, outError);
-    if(outError)
-        return removedCount;
-
-    if(rmdir(path.c_str()) != 0){
-        SetLastSystemError(outError);
-        return removedCount;
-    }
-
-    ClearError(outError);
+    CloseDirectory(directory, iterationError);
+    close.release();
+    if(iterationError)
+        return MakeUnexpected(FileRemovalFailure{ iterationError, removedCount });
+    if(rmdir(path.c_str()) != 0)
+        return MakeUnexpected(FileRemovalFailure{ LastSystemError(), removedCount });
     return removedCount + 1u;
 #endif
 }
@@ -134,23 +122,19 @@ template<typename ArenaT>
 
 
 template<typename ArenaT>
-[[nodiscard]] inline u64 RemoveAll(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
-    return GlobalFilesystemDetail::RemoveAllImpl(path, outError);
+[[nodiscard]] inline Expected<u64, FileRemovalFailure> RemoveAll(const Path<ArenaT>& path){
+    return GlobalFilesystemDetail::RemoveAllImpl(path);
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline bool RenamePath(const Path<ArenaT>& from, const Path<ArenaT>& to, ErrorCode& outError)noexcept{
+[[nodiscard]] inline Expected<void, ErrorCode> RenamePath(const Path<ArenaT>& from, const Path<ArenaT>& to)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
-    if(MoveFileEx(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING)){
+    if(MoveFileEx(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING))
 #else
-    if(std::rename(from.c_str(), to.c_str()) == 0){
+    if(std::rename(from.c_str(), to.c_str()) == 0)
 #endif
-        GlobalFilesystemDetail::ClearError(outError);
-        return true;
-    }
-
-    GlobalFilesystemDetail::SetLastSystemError(outError);
-    return false;
+        return {};
+    return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
 }
 
 
@@ -158,58 +142,49 @@ template<typename ArenaT>
 
 
 template<typename ArenaT>
-[[nodiscard]] inline bool RemoveAllIfExists(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
-    outError.clear();
-
-    const bool exists = FileExists(path, outError);
-    if(outError || !exists)
-        return !outError;
-
-    outError.clear();
-    const u64 removedCount = RemoveAll(path, outError);
-    if(outError)
-        return false;
-    if(removedCount != 0u)
-        return true;
-
-    const bool stillExists = FileExists(path, outError);
-    return !outError && !stillExists;
+[[nodiscard]] inline Expected<void, ErrorCode> RemoveAllIfExists(const Path<ArenaT>& path){
+    const auto exists = FileExists(path);
+    if(!exists)
+        return MakeUnexpected(exists.error());
+    if(!*exists)
+        return {};
+    const auto removedCount = RemoveAll(path);
+    if(!removedCount)
+        return MakeUnexpected(removedCount.error().code);
+    if(*removedCount != 0u)
+        return {};
+    const auto stillExists = FileExists(path);
+    if(!stillExists)
+        return MakeUnexpected(stillExists.error());
+    if(*stillExists)
+        return MakeUnexpected(std::make_error_code(std::errc::io_error));
+    return {};
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline bool EnsureEmptyDirectory(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
-    if(!RemoveAllIfExists(path, outError))
-        return false;
-
-    outError.clear();
-    return EnsureDirectories(path, outError);
+[[nodiscard]] inline Expected<void, ErrorCode> EnsureEmptyDirectory(const Path<ArenaT>& path){
+    const auto removed = RemoveAllIfExists(path);
+    if(!removed)
+        return MakeUnexpected(removed.error());
+    return EnsureDirectories(path);
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline bool MovePathToDirectory(const Path<ArenaT>& sourcePath, const Path<ArenaT>& destinationDirectory, Path<ArenaT>& outPath){
-    outPath.clear();
-
-    ErrorCode error;
-    if(!EnsureDirectories(destinationDirectory, error))
-        return false;
-
+[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> MovePathToDirectory(
+    const Path<ArenaT>& sourcePath,
+    const Path<ArenaT>& destinationDirectory
+){
+    const auto ensured = EnsureDirectories(destinationDirectory);
+    if(!ensured)
+        return MakeUnexpected(ensured.error());
     const Path<ArenaT> destination = destinationDirectory / sourcePath.filename();
-    error.clear();
-    if(!RemoveAllIfExists(destination, error))
-        return false;
-
-    error.clear();
-    if(!RenamePath(sourcePath, destination, error))
-        return false;
-
-    outPath = destination;
-    return true;
-}
-
-template<typename ArenaT>
-[[nodiscard]] inline bool MovePathToDirectory(const Path<ArenaT>& sourcePath, const Path<ArenaT>& destinationDirectory){
-    Path<ArenaT> movedPath(sourcePath.arena());
-    return MovePathToDirectory(sourcePath, destinationDirectory, movedPath);
+    const auto removed = RemoveAllIfExists(destination);
+    if(!removed)
+        return MakeUnexpected(removed.error());
+    const auto renamed = RenamePath(sourcePath, destination);
+    if(!renamed)
+        return MakeUnexpected(renamed.error());
+    return destination;
 }
 
 template<typename TempArenaT, typename PathArenaT>

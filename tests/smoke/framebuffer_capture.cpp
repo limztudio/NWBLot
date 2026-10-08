@@ -217,21 +217,15 @@ void FramebufferCapture::update(){
         return;
     }
 
-    usize rowPitch = 0u;
-    const auto* const sourceBytes = static_cast<const u8*>(device.mapStagingTexture(
-        *m_readback,
-        Core::TextureSlice{},
-        Core::CpuAccessMode::Read,
-        &rowPitch
-    ));
-    if(!sourceBytes){
+    const auto mapping = device.mapStagingTexture(*m_readback, Core::TextureSlice{}, Core::CpuAccessMode::Read);
+    if(!mapping){
         markFailed(NWB_TEXT("failed to map the completed readback staging texture"));
         requestTerminalQuit();
         return;
     }
 
     Core::Alloc::ScratchArena scratchArena(__hidden_framebuffer_capture::s_BitmapScratchArena);
-    const bool captureWritten = writeCapture(sourceBytes, rowPitch, scratchArena);
+    const bool captureWritten = writeCapture(static_cast<const u8*>(mapping->data), mapping->rowPitch, scratchArena);
     device.unmapStagingTexture(*m_readback);
     if(!captureWritten){
         markFailed(NWB_TEXT("failed to write the framebuffer capture atomically"));
@@ -513,25 +507,22 @@ bool FramebufferCapture::writeCapture(
     if(width > static_cast<u32>(Limit<i32>::s_Max) || height > static_cast<u32>(Limit<i32>::s_Max))
         return false;
 
-    usize sourceRowBytes = 0u;
-    usize bitmapRowBytes = 0u;
-    if(
-        !TryMultiply<usize>(static_cast<usize>(width), __hidden_framebuffer_capture::s_SourceBytesPerPixel, sourceRowBytes)
-        || !TryMultiply<usize>(static_cast<usize>(width), __hidden_framebuffer_capture::s_BitmapBytesPerPixel, bitmapRowBytes)
-        || sourceRowPitch < sourceRowBytes
-        || AddOverflows<usize>(bitmapRowBytes, 3u)
-    )
+    const auto sourceRowBytes = TryMultiply<usize>(static_cast<usize>(width), __hidden_framebuffer_capture::s_SourceBytesPerPixel);
+    if(!sourceRowBytes)
+        return false;
+    const auto bitmapRowBytes = TryMultiply<usize>(static_cast<usize>(width), __hidden_framebuffer_capture::s_BitmapBytesPerPixel);
+    if(!bitmapRowBytes || sourceRowPitch < *sourceRowBytes || AddOverflows<usize>(*bitmapRowBytes, 3u))
         return false;
 
-    const usize bitmapRowPitch = (bitmapRowBytes + 3u) & ~usize(3u);
-    usize bitmapPixelBytes = 0u;
-    if(!TryMultiply<usize>(bitmapRowPitch, static_cast<usize>(height), bitmapPixelBytes))
+    const usize bitmapRowPitch = (*bitmapRowBytes + 3u) & ~usize(3u);
+    const auto bitmapPixelBytes = TryMultiply<usize>(bitmapRowPitch, static_cast<usize>(height));
+    if(!bitmapPixelBytes)
         return false;
-    if(AddOverflows<usize>(__hidden_framebuffer_capture::s_BitmapPixelOffset, bitmapPixelBytes))
+    if(AddOverflows<usize>(__hidden_framebuffer_capture::s_BitmapPixelOffset, *bitmapPixelBytes))
         return false;
 
-    const usize bitmapFileBytes = __hidden_framebuffer_capture::s_BitmapPixelOffset + bitmapPixelBytes;
-    if(bitmapPixelBytes > static_cast<usize>(Limit<u32>::s_Max) || bitmapFileBytes > static_cast<usize>(Limit<u32>::s_Max))
+    const usize bitmapFileBytes = __hidden_framebuffer_capture::s_BitmapPixelOffset + *bitmapPixelBytes;
+    if(*bitmapPixelBytes > static_cast<usize>(Limit<u32>::s_Max) || bitmapFileBytes > static_cast<usize>(Limit<u32>::s_Max))
         return false;
 
     Vector<u8, Core::Alloc::ScratchArena> bitmapBytes(bitmapFileBytes, 0u, scratchArena);
@@ -550,15 +541,15 @@ bool FramebufferCapture::writeCapture(
     __hidden_framebuffer_capture::WriteU32LE(bitmapBytes.data() + 22u, height);
     __hidden_framebuffer_capture::WriteU16LE(bitmapBytes.data() + 26u, 1u);
     __hidden_framebuffer_capture::WriteU16LE(bitmapBytes.data() + 28u, 24u);
-    __hidden_framebuffer_capture::WriteU32LE(bitmapBytes.data() + 34u, static_cast<u32>(bitmapPixelBytes));
+    __hidden_framebuffer_capture::WriteU32LE(bitmapBytes.data() + 34u, static_cast<u32>(*bitmapPixelBytes));
 
     const bool sourceIsBgra = __hidden_framebuffer_capture::IsBgraFormat(m_captureDescription.format);
     for(u32 bitmapY = 0u; bitmapY < height; ++bitmapY){
         const usize sourceY = static_cast<usize>(height - 1u - bitmapY);
-        usize sourceRowOffset = 0u;
-        if(!TryMultiply<usize>(sourceY, sourceRowPitch, sourceRowOffset))
+        const auto sourceRowOffset = TryMultiply<usize>(sourceY, sourceRowPitch);
+        if(!sourceRowOffset)
             return false;
-        const u8* const sourceRow = sourceBytes + sourceRowOffset;
+        const u8* const sourceRow = sourceBytes + *sourceRowOffset;
         u8* const bitmapRow = bitmapBytes.data()
             + __hidden_framebuffer_capture::s_BitmapPixelOffset
             + static_cast<usize>(bitmapY) * bitmapRowPitch
@@ -573,23 +564,20 @@ bool FramebufferCapture::writeCapture(
     }
 
     const ::Path<Core::Alloc::GlobalArena> outputDirectory = m_outputPath.parentPath();
-    ErrorCode filesystemError;
-    if(!outputDirectory.empty() && !EnsureDirectories(outputDirectory, filesystemError))
+    if(!outputDirectory.empty() && !EnsureDirectories(outputDirectory))
         return false;
 
     ::Path<Core::Alloc::GlobalArena> partialPath(m_outputPath);
     partialPath += NWB_TEXT(".partial");
     if(!WriteBinaryFile(partialPath, bitmapBytes)){
-        ErrorCode cleanupError;
-        const bool removed = RemoveFile(partialPath, cleanupError);
-        if(!removed && cleanupError)
+        const auto removed = RemoveFile(partialPath);
+        if(!removed)
             NWB_LOGGER_WARNING(NWB_TEXT("FramebufferCapture: failed to remove an incomplete partial capture"));
         return false;
     }
-    if(!RenamePath(partialPath, m_outputPath, filesystemError)){
-        ErrorCode cleanupError;
-        const bool removed = RemoveFile(partialPath, cleanupError);
-        if(!removed && cleanupError)
+    if(!RenamePath(partialPath, m_outputPath)){
+        const auto removed = RemoveFile(partialPath);
+        if(!removed)
             NWB_LOGGER_WARNING(NWB_TEXT("FramebufferCapture: failed to remove an uncommitted partial capture"));
         return false;
     }

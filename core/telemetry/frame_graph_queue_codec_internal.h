@@ -25,7 +25,7 @@ namespace FrameGraphQueueCodecDetail{
 
 [[nodiscard]] EncodedFrameGraphQueueAssignment EncodeQueueAssignment(u32 nodeIndex, const FrameGraphQueueAssignment& assignment)noexcept;
 
-[[nodiscard]] bool DecodeQueueAssignment(const EncodedFrameGraphQueueAssignment& encoded, FrameGraphQueueAssignment& outAssignment)noexcept;
+[[nodiscard]] Expected<FrameGraphQueueAssignment> DecodeQueueAssignment(const EncodedFrameGraphQueueAssignment& encoded)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -167,7 +167,7 @@ SceneLight BuildDefaultSceneLight(const SIMDVector forward)noexcept{
     return light;
 }
 
-bool TryBuildSceneLight(
+Expected<SceneLight> TryBuildSceneLight(
     const SIMDVector position,
     const SIMDVector rotation,
     const SIMDVector colorIntensity,
@@ -177,64 +177,63 @@ bool TryBuildSceneLight(
     const f32 angularRadius,
     const f32 sourceRadius,
     const LightType::Enum type,
-    const bool enableCaustics,
-    SceneLight& outLight
+    const bool enableCaustics
 )noexcept{
-    outLight = SceneLight{};
+    SceneLight light;
     if(!__hidden_lighting::IsValidLightColorIntensity(colorIntensity))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    StoreFloat(colorIntensity, outLight.colorIntensity);
-    outLight.type = type;
-    outLight.enableCaustics = enableCaustics;
-    outLight.angularRadius = angularRadius;
-    outLight.sourceRadius = sourceRadius;
+    StoreFloat(colorIntensity, light.colorIntensity);
+    light.type = type;
+    light.enableCaustics = enableCaustics;
+    light.angularRadius = angularRadius;
+    light.sourceRadius = sourceRadius;
 
     switch(type){
     case LightType::Directional:{
         if(!__hidden_lighting::IsValidLightRotation(rotation))
-            return false;
+            return MakeUnexpected(Failure{});
 
         StoreFloat(
             __hidden_lighting::BuildDirectionalLightDirectionVector(Vector3Rotate(s_SIMDIdentityR2, rotation)),
-            outLight.direction
+            light.direction
         );
-        return true;
+        return light;
     }
     case LightType::Point:{
         if(Vector3IsNaN(position) || Vector3IsInfinite(position))
-            return false;
+            return MakeUnexpected(Failure{});
         if(!IsFinite(range) || range <= 0.0f)
-            return false;
+            return MakeUnexpected(Failure{});
 
-        StoreFloat(VectorSetW(position, 1.0f), outLight.position);
-        outLight.range = range;
-        return true;
+        StoreFloat(VectorSetW(position, 1.0f), light.position);
+        light.range = range;
+        return light;
     }
     case LightType::Spot:{
         if(!__hidden_lighting::IsValidLightRotation(rotation))
-            return false;
+            return MakeUnexpected(Failure{});
 
         if(Vector3IsNaN(position) || Vector3IsInfinite(position))
-            return false;
+            return MakeUnexpected(Failure{});
         if(!IsFinite(range) || range <= 0.0f)
-            return false;
+            return MakeUnexpected(Failure{});
         if(!__hidden_lighting::IsValidLightCone(innerConeCos, outerConeCos))
-            return false;
+            return MakeUnexpected(Failure{});
 
-        StoreFloat(VectorSetW(position, innerConeCos), outLight.position);
+        StoreFloat(VectorSetW(position, innerConeCos), light.position);
         StoreFloat(
             VectorSetW(
                 __hidden_lighting::BuildLightEmissionVector(Vector3Rotate(s_SIMDIdentityR2, rotation)),
                 outerConeCos
             ),
-            outLight.direction
+            light.direction
         );
-        outLight.range = range;
-        return true;
+        light.range = range;
+        return light;
     }
     default:
-        return false;
+        return MakeUnexpected(Failure{});
     }
 }
 
@@ -252,11 +251,10 @@ usize GatherSceneLights(Core::ECS::World& world, const SIMDVector defaultForward
         static_cast<void>(entity);
 
         const SIMDVector colorIntensity = LoadFloat(light.colorIntensity);
-        SceneLight resolvedLight;
-        bool builtLight = false;
+        Expected<SceneLight> resolvedLight = MakeUnexpected(Failure{});
         switch(light.type){
         case LightType::Directional:
-            builtLight = TryBuildSceneLight(
+            resolvedLight = TryBuildSceneLight(
                 s_SIMDZero,
                 LoadFloat(transform.rotation),
                 colorIntensity,
@@ -266,12 +264,11 @@ usize GatherSceneLights(Core::ECS::World& world, const SIMDVector defaultForward
                 light.angularRadius,
                 light.sourceRadius,
                 light.type,
-                light.enableCaustics,
-                resolvedLight
+                light.enableCaustics
             );
             break;
         case LightType::Point:
-            builtLight = TryBuildSceneLight(
+            resolvedLight = TryBuildSceneLight(
                 LoadFloat(transform.position),
                 s_SIMDIdentityR3,
                 colorIntensity,
@@ -281,12 +278,11 @@ usize GatherSceneLights(Core::ECS::World& world, const SIMDVector defaultForward
                 light.angularRadius,
                 light.sourceRadius,
                 light.type,
-                light.enableCaustics,
-                resolvedLight
+                light.enableCaustics
             );
             break;
         case LightType::Spot:
-            builtLight = TryBuildSceneLight(
+            resolvedLight = TryBuildSceneLight(
                 LoadFloat(transform.position),
                 LoadFloat(transform.rotation),
                 colorIntensity,
@@ -296,15 +292,14 @@ usize GatherSceneLights(Core::ECS::World& world, const SIMDVector defaultForward
                 light.angularRadius,
                 light.sourceRadius,
                 light.type,
-                light.enableCaustics,
-                resolvedLight
+                light.enableCaustics
             );
             break;
         default:
             break;
         }
-        if(builtLight){
-            outLights[count] = resolvedLight;
+        if(resolvedLight){
+            outLights[count] = *resolvedLight;
             ++count;
         }
     }

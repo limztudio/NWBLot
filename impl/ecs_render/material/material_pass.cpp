@@ -76,6 +76,11 @@ inline constexpr f32 s_MeshletConeCullUniformScaleEpsilon = 0.0001f;
     };
 }
 
+struct MaterialInstanceAppend{
+    u32 instanceIndex = 0u;
+    ECSRenderDetail::MaterialTypedInstanceRanges typedRanges;
+};
+
 struct MaterialTypedByteRangeKey{
     Name materialName = s_NameNone;
     u64 typedLayoutHash = 0u;
@@ -377,9 +382,8 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
     }
 
     auto appendConstantMaterialTypedBytes = [&](
-        const MaterialSurfaceInfo& materialInfo,
-        ECSRenderDetail::MaterialTypedByteRange& outRange
-    ) -> bool{
+        const MaterialSurfaceInfo& materialInfo
+    ) -> Expected<ECSRenderDetail::MaterialTypedByteRange>{
         const __hidden_material_pass::MaterialTypedByteRangeKey rangeKey{
             materialInfo.materialName,
             materialInfo.typedLayoutHash
@@ -387,22 +391,21 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         auto cacheIt = materialTypedRangeCache.try_emplace(rangeKey).first;
         __hidden_material_pass::MaterialTypedByteRangeCache& cache = cacheIt.value();
         if(cache.constantRangeCached){
-            outRange = cache.constantRange;
-            return true;
+            return cache.constantRange;
         }
 
-        if(!ECSRenderDetail::AppendMaterialTypedByteRange(materialTypedBytes, materialInfo.constantTypedBytes, outRange))
-            return false;
+        const auto range = ECSRenderDetail::AppendMaterialTypedByteRange(materialTypedBytes, materialInfo.constantTypedBytes);
+        if(!range)
+            return MakeUnexpected(Failure{});
 
-        cache.constantRange = outRange;
+        cache.constantRange = *range;
         cache.constantRangeCached = true;
-        return true;
+        return range;
     };
 
     auto appendDefaultMutableMaterialTypedBytes = [&](
-        const MaterialSurfaceInfo& materialInfo,
-        ECSRenderDetail::MaterialTypedByteRange& outRange
-    ) -> bool{
+        const MaterialSurfaceInfo& materialInfo
+    ) -> Expected<ECSRenderDetail::MaterialTypedByteRange>{
         const __hidden_material_pass::MaterialTypedByteRangeKey rangeKey{
             materialInfo.materialName,
             materialInfo.typedLayoutHash
@@ -410,46 +413,42 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         auto cacheIt = materialTypedRangeCache.try_emplace(rangeKey).first;
         __hidden_material_pass::MaterialTypedByteRangeCache& cache = cacheIt.value();
         if(cache.defaultMutableRangeCached){
-            outRange = cache.defaultMutableRange;
-            return true;
+            return cache.defaultMutableRange;
         }
 
-        if(!ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
+        const auto range = ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
             materialTypedBytes,
             mutableMaterialTypedRanges,
-            materialInfo.mutableDefaultTypedBytes,
-            outRange
-        ))
-            return false;
+            materialInfo.mutableDefaultTypedBytes
+        );
+        if(!range)
+            return MakeUnexpected(Failure{});
 
-        cache.defaultMutableRange = outRange;
+        cache.defaultMutableRange = *range;
         cache.defaultMutableRangeCached = true;
-        return true;
+        return range;
     };
 
     auto appendMutableInstanceTypedBytes = [&](
         const Core::ECS::EntityID entity,
-        const MaterialSurfaceInfo& materialInfo,
-        ECSRenderDetail::MaterialTypedByteRange& outRange
-    ) -> bool{
+        const MaterialSurfaceInfo& materialInfo
+    ) -> Expected<ECSRenderDetail::MaterialTypedByteRange>{
         const MaterialInstanceComponent* materialInstance = m_world.tryGetComponent<MaterialInstanceComponent>(entity);
         if(!materialInstance || materialInstance->overrides.empty())
-            return appendDefaultMutableMaterialTypedBytes(materialInfo, outRange);
+            return appendDefaultMutableMaterialTypedBytes(materialInfo);
 
-        const MaterialTypedByteVector* mutableTypedBytes = nullptr;
         // Prepared-only gathers must never populate the persistent override cache.
-        const bool mutableTypedBytesReady = lookupMode == RendererResourceLookupMode::CreateMissing
-            ? prepareMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance, mutableTypedBytes)
-            : findPreparedMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance, mutableTypedBytes)
+        const auto mutableTypedBytes = lookupMode == RendererResourceLookupMode::CreateMissing
+            ? prepareMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance)
+            : findPreparedMaterialInstanceMutableTypedBytes(entity, materialInfo, materialInstance)
         ;
-        if(!mutableTypedBytesReady)
-            return false;
+        if(!mutableTypedBytes)
+            return MakeUnexpected(Failure{});
 
         return ECSRenderDetail::FindOrAppendMaterialTypedByteRange(
             materialTypedBytes,
             mutableMaterialTypedRanges,
-            *mutableTypedBytes,
-            outRange
+            **mutableTypedBytes
         );
     };
 
@@ -467,13 +466,13 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 
         const NWB::Impl::Scene::TransformComponent* transform = m_world.tryGetComponent<NWB::Impl::Scene::TransformComponent>(entity);
 
-        MaterialSurfaceInfo* materialInfo = nullptr;
-        const bool materialInfoReady = lookupMode == RendererResourceLookupMode::CreateMissing
-            ? createMaterialSurfaceInfo(material, materialInfo)
-            : findMaterialSurfaceInfo(material, materialInfo)
+        const auto materialInfoResult = lookupMode == RendererResourceLookupMode::CreateMissing
+            ? createMaterialSurfaceInfo(material)
+            : findMaterialSurfaceInfo(material)
         ;
-        if(!materialInfoReady)
+        if(!materialInfoResult)
             return false;
+        MaterialSurfaceInfo* const materialInfo = *materialInfoResult;
         if(materialInfo->transparent != transparent)
             return false;
 
@@ -494,31 +493,27 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             }
         }
         const bool csgClipCandidate = csgClipRequested && materialInfo->csgCapSurfaceDispatchAvailable;
-        CsgReceiverClipDrawInfo csgClipInfo;
-        const bool csgClipInfoReady =
-            csgClipCandidate
-            && m_csgSystem.resolveCsgReceiverClipDrawInfo(
-                *csgReceiverLookupPtr,
-                csgReceiverState,
-                mesh.csgLocalBounds,
-                transform,
-                csgClipInfo
-            )
+        const auto csgClipInfo = csgClipCandidate
+            ? m_csgSystem.resolveCsgReceiverClipDrawInfo(*csgReceiverLookupPtr, csgReceiverState, mesh.csgLocalBounds, transform)
+            : Expected<CsgReceiverClipDrawInfo>(MakeUnexpected(Failure{}))
         ;
-        const bool csgClipActive = csgClipInfoReady && csgClipInfo.cutterCount > 0u;
+        const bool csgClipActive = csgClipInfo && csgClipInfo->cutterCount > 0u;
         if(csgClipActive){
             pipelineKey.csgMode = MaterialPipelineCsgMode::ClipOnly;
-            pipelineKey.csgEvaluatorVariant = csgClipInfo.evaluatorVariant;
+            pipelineKey.csgEvaluatorVariant = csgClipInfo->evaluatorVariant;
             pipelineKey.twoSided = true;
         }
 
-        auto appendInstance = [&](ECSRenderDetail::MaterialTypedInstanceRanges& typedRanges) -> u32{
+        auto appendInstance = [&]() -> Expected<__hidden_material_pass::MaterialInstanceAppend>{
             NWB_ASSERT(instanceData.size() < static_cast<usize>(Limit<u32>::s_Max));
 
-            if(!appendConstantMaterialTypedBytes(*materialInfo, typedRanges.constantRange))
-                return Limit<u32>::s_Max;
-            if(!appendMutableInstanceTypedBytes(entity, *materialInfo, typedRanges.mutableRange))
-                return Limit<u32>::s_Max;
+            const auto constantRange = appendConstantMaterialTypedBytes(*materialInfo);
+            if(!constantRange)
+                return MakeUnexpected(Failure{});
+            const auto mutableRange = appendMutableInstanceTypedBytes(entity, *materialInfo);
+            if(!mutableRange)
+                return MakeUnexpected(Failure{});
+            const ECSRenderDetail::MaterialTypedInstanceRanges typedRanges{ *constantRange, *mutableRange };
 
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
             InstanceGpuData instance = ECSRenderDetail::BuildInstanceGpuData(transform, typedRanges);
@@ -529,24 +524,23 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
 #if defined(NWB_DEBUG)
             materialTypedRanges.push_back(typedRanges);
 #endif
-            return instanceIndex;
+            return __hidden_material_pass::MaterialInstanceAppend{ instanceIndex, typedRanges };
         };
 
         if(pass == MaterialPipelinePass::CsgReceiverSurface && !csgClipActive){
             if(!csgReceiverLookupPtr)
                 return false;
 
-            ECSRenderDetail::MaterialTypedInstanceRanges typedRanges;
-            return appendInstance(typedRanges) != Limit<u32>::s_Max;
+            return appendInstance().has_value();
         }
 
-        MaterialPipelineResources* pipelineResources = nullptr;
-        const bool pipelineReady = lookupMode == RendererResourceLookupMode::CreateMissing
-            ? createRendererPipeline(*materialInfo, pipelineKey, *framebuffer, pipelineResources)
-            : findRendererPipeline(pipelineKey, pipelineResources)
+        const auto pipelineResult = lookupMode == RendererResourceLookupMode::CreateMissing
+            ? createRendererPipeline(*materialInfo, pipelineKey, *framebuffer)
+            : findRendererPipeline(pipelineKey)
         ;
-        if(!pipelineReady)
+        if(!pipelineResult)
             return false;
+        MaterialPipelineResources* const pipelineResources = *pipelineResult;
         const auto prepareGeometryResources = [&](const MaterialPipelineResources& resources){
             switch(resources.renderPath){
             case RenderPath::MeshShader:
@@ -598,12 +592,13 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 csgReceiverSurfacePipelineResources = pipelineResources;
             }
             else{
-                const bool csgReceiverSurfacePipelineReady = lookupMode == RendererResourceLookupMode::CreateMissing
-                    ? createRendererPipeline(*materialInfo, csgReceiverSurfacePipelineKey, *framebuffer, csgReceiverSurfacePipelineResources)
-                    : findRendererPipeline(csgReceiverSurfacePipelineKey, csgReceiverSurfacePipelineResources)
+                const auto csgReceiverSurfacePipeline = lookupMode == RendererResourceLookupMode::CreateMissing
+                    ? createRendererPipeline(*materialInfo, csgReceiverSurfacePipelineKey, *framebuffer)
+                    : findRendererPipeline(csgReceiverSurfacePipelineKey)
                 ;
-                if(!csgReceiverSurfacePipelineReady)
+                if(!csgReceiverSurfacePipeline)
                     return false;
+                csgReceiverSurfacePipelineResources = *csgReceiverSurfacePipeline;
             }
             if(!prepareGeometryResources(*csgReceiverSurfacePipelineResources))
                 return false;
@@ -634,14 +629,14 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             }
         };
 
-        ECSRenderDetail::MaterialTypedInstanceRanges typedRanges;
-        const u32 instanceIndex = appendInstance(typedRanges);
-        if(instanceIndex == Limit<u32>::s_Max)
+        const auto appendedInstance = appendInstance();
+        if(!appendedInstance)
             return false;
+        const u32 instanceIndex = appendedInstance->instanceIndex;
+        const auto& typedRanges = appendedInstance->typedRanges;
 
-        CsgReceiverRangeGpuData csgRange;
         if(csgClipActive){
-            if(!m_csgSystem.appendCsgReceiverClipData(
+            auto csgRange = m_csgSystem.appendCsgReceiverClipData(
                 *csgReceiverLookupPtr,
                 csgReceiverState,
                 mesh.csgLocalBounds,
@@ -649,17 +644,17 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
                 framebufferInfo.width,
                 framebufferInfo.height,
                 csgFrameData,
-                csgRange,
                 csgWorkRegionMeshViewState
-            ))
+            );
+            if(!csgRange)
                 return false;
             // Cap shader shares the receiver surface hook; rangeInfo.w carries the BXDF id.
-            csgRange.shadingModelId = materialInfo->shadingModelId;
-            csgRange.surfaceDispatchId = materialInfo->surfaceDispatchId;
-            csgRange.materialConstantByteOffset = typedRanges.constantRange.byteOffset;
-            csgRange.meshInstanceIndex = instanceIndex;
+            csgRange->shadingModelId = materialInfo->shadingModelId;
+            csgRange->surfaceDispatchId = materialInfo->surfaceDispatchId;
+            csgRange->materialConstantByteOffset = typedRanges.constantRange.byteOffset;
+            csgRange->meshInstanceIndex = instanceIndex;
             NWB_ASSERT(instanceIndex < csgFrameData.receiverRanges.size());
-            csgFrameData.receiverRanges[instanceIndex] = csgRange;
+            csgFrameData.receiverRanges[instanceIndex] = *csgRange;
         }
 
         MaterialPassDrawItem drawItem;
@@ -701,31 +696,28 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
         if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
             continue;
 
-        RenderableMeshDesc resolvedMesh;
-        if(!ecsMeshSystem.resolveRenderableMesh(entity, resolvedMesh))
+        const auto resolvedMeshResult = ecsMeshSystem.resolveRenderableMeshStatus(entity);
+        if(!resolvedMeshResult)
             continue;
+        const auto& resolvedMesh = *resolvedMeshResult;
 
-        MeshResources* mesh = nullptr;
-        if(resolvedMesh.runtime){
-            const bool meshReady = lookupMode == RendererResourceLookupMode::CreateMissing
-                ? m_meshSystem.createRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
-                : m_meshSystem.findRuntimeMeshResources(resolvedMesh.runtimeMesh, mesh)
-            ;
-            if(!meshReady)
-                continue;
-        }
-        else{
-            const bool meshReady = lookupMode == RendererResourceLookupMode::CreateMissing
-                ? m_meshSystem.createMeshResources(resolvedMesh.mesh, mesh)
-                : m_meshSystem.findMeshResources(resolvedMesh.mesh, mesh)
-            ;
-            if(!meshReady)
-                continue;
-        }
+        const auto meshResult = resolvedMesh.runtime
+            ? (lookupMode == RendererResourceLookupMode::CreateMissing
+                ? m_meshSystem.createRuntimeMeshResources(resolvedMesh.runtimeMesh)
+                : m_meshSystem.findRuntimeMeshResources(resolvedMesh.runtimeMesh))
+            : (lookupMode == RendererResourceLookupMode::CreateMissing
+                ? m_meshSystem.createMeshResources(resolvedMesh.mesh)
+                : m_meshSystem.findMeshResources(resolvedMesh.mesh))
+        ;
+        if(!meshResult)
+            continue;
+        MeshResources* const mesh = *meshResult;
 
         CsgReceiverDrawState csgReceiverState;
-        if(csgReceiverLookupPtr && !csgReceiverLookupPtr->resolveReceiverDrawState(entity, csgReceiverPass, csgReceiverState))
-            csgReceiverState = CsgReceiverDrawState{};
+        if(csgReceiverLookupPtr){
+            if(const auto resolvedState = csgReceiverLookupPtr->resolveReceiverDrawState(entity, csgReceiverPass))
+                csgReceiverState = *resolvedState;
+        }
 
         appendDrawForMesh(entity, renderer.material, *mesh, csgReceiverState);
     }

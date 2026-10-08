@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "../expected.h"
 #include "matrix.h"
 #include "collision_detail.h"
 #include "collision_plane.h"
@@ -366,23 +367,22 @@ inline void BoundingBox::getCorners(Float3U* corners)const noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool NWB_SIMD_CALL BoundingBox::IntersectsRayValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector origin, SIMDVector direction, f32& outDistance)noexcept{
+[[nodiscard]] inline Expected<f32> NWB_SIMD_CALL BoundingBox::IntersectsRayValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector origin, SIMDVector direction)noexcept{
     SIMDVector minBounds{};
     SIMDVector maxBounds{};
     CollisionDetail::MinMaxFromCenterExtents(boxCenter, boxExtents, minBounds, maxBounds);
-    return CollisionDetail::RayIntersectsMinMax(origin, direction, minBounds, maxBounds, outDistance);
+    return CollisionDetail::RayIntersectsMinMax(origin, direction, minBounds, maxBounds);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool NWB_SIMD_CALL BoundingBox::intersects(
+[[nodiscard]] inline Expected<f32> NWB_SIMD_CALL BoundingBox::intersects(
     SIMDVector origin,
-    SIMDVector direction,
-    f32& outDistance
+    SIMDVector direction
 )const noexcept{
-    return IntersectsRayValue(LoadFloat(center), LoadFloat(extents), origin, direction, outDistance);
+    return IntersectsRayValue(LoadFloat(center), LoadFloat(extents), origin, direction);
 }
 
 

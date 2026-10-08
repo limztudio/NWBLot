@@ -342,10 +342,10 @@ void CommandList::bindDescriptorBufferHeapNative(
     ScopedLock lifecycleLock(manager->m_lifecycleMutex);
     ScopedLock resourceStorageLock(manager->m_resourceSegment.mutex);
     ScopedLock samplerStorageLock(manager->m_samplerSegment.mutex);
-    DescriptorBufferManager::BindingSnapshot managerSnapshot;
+    const auto managerSnapshot = manager->captureBindingSnapshotLocked();
     if(
-        !manager->captureBindingSnapshotLocked(managerSnapshot)
-        || managerSnapshot.generation != heap.m_descriptorBufferGeneration
+        !managerSnapshot
+        || managerSnapshot->generation != heap.m_descriptorBufferGeneration
     ){
         rejectCommandRecording(operationName, NWB_TEXT("descriptor-buffer manager generation is unavailable or stale"));
         return;
@@ -364,8 +364,8 @@ void CommandList::bindDescriptorBufferHeapNative(
             samplerBlock,
             DescriptorBufferSegmentKind::Sampler
         )
-        || resourceBlock.storageIdentity != managerSnapshot.resourceStorageIdentity
-        || samplerBlock.storageIdentity != managerSnapshot.samplerStorageIdentity
+        || resourceBlock.storageIdentity != managerSnapshot->resourceStorageIdentity
+        || samplerBlock.storageIdentity != managerSnapshot->samplerStorageIdentity
         || resourceBlock.sizeBytes != resourceLayout->m_descriptorBufferSetSizeBytes
         || samplerBlock.sizeBytes != samplerLayout->m_descriptorBufferSetSizeBytes
     ){
@@ -405,7 +405,7 @@ void CommandList::bindDescriptorBufferHeapNative(
                 accelStructBlock,
                 DescriptorBufferSegmentKind::Resource
             )
-            || accelStructBlock.storageIdentity != managerSnapshot.resourceStorageIdentity
+            || accelStructBlock.storageIdentity != managerSnapshot->resourceStorageIdentity
             || accelStructBlock.sizeBytes != accelStructLayout->m_descriptorBufferSetSizeBytes
             || !m_device.isAccelStructReadyForGpuUse(accelStruct)
             || !backingBuffer
@@ -422,9 +422,9 @@ void CommandList::bindDescriptorBufferHeapNative(
     }
 
     if(
-        (resourceBlock.offsetBytes % managerSnapshot.offsetAlignmentBytes) != 0u
-        || (samplerBlock.offsetBytes % managerSnapshot.offsetAlignmentBytes) != 0u
-        || (bindAccelStruct && (accelStructBlock.offsetBytes % managerSnapshot.offsetAlignmentBytes) != 0u)
+        (resourceBlock.offsetBytes % managerSnapshot->offsetAlignmentBytes) != 0u
+        || (samplerBlock.offsetBytes % managerSnapshot->offsetAlignmentBytes) != 0u
+        || (bindAccelStruct && (accelStructBlock.offsetBytes % managerSnapshot->offsetAlignmentBytes) != 0u)
     ){
         rejectCommandRecording(operationName, NWB_TEXT("a descriptor-buffer set block offset is misaligned"));
         return;
@@ -435,11 +435,11 @@ void CommandList::bindDescriptorBufferHeapNative(
         (trackedCommandBuffer.m_descriptorBufferManager
             && trackedCommandBuffer.m_descriptorBufferManager != manager)
         || (trackedCommandBuffer.m_descriptorBufferGeneration != 0u
-            && trackedCommandBuffer.m_descriptorBufferGeneration != managerSnapshot.generation)
+            && trackedCommandBuffer.m_descriptorBufferGeneration != managerSnapshot->generation)
         || (m_descriptorBuffersBound
             && (
                 trackedCommandBuffer.m_descriptorBufferManager != manager
-                || trackedCommandBuffer.m_descriptorBufferGeneration != managerSnapshot.generation
+                || trackedCommandBuffer.m_descriptorBufferGeneration != managerSnapshot->generation
             ))
     ){
         rejectCommandRecording(operationName, NWB_TEXT("command buffer already references another descriptor generation"));
@@ -460,7 +460,7 @@ void CommandList::bindDescriptorBufferHeapNative(
             trackedCommandBuffer.m_resourceReferences.trackRetainedTexture(*retainedTexture);
     }
 
-    ensureDescriptorBuffersBound(*manager, managerSnapshot);
+    ensureDescriptorBuffersBound(*manager, *managerSnapshot);
 
     // Resource, sampler, and TLAS heap sets are contiguous at 0/1/2.
     const u32 bufferIndices[DescriptorBufferManager::s_DescriptorBufferCountWithAccelStruct] = {

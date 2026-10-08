@@ -37,27 +37,26 @@ inline constexpr AStringView s_NwbOutputExtension = ".nwb";
 
 
 bool CheckOutputPath(const Path& path, const bool force, const bool temporary){
-    ErrorCode errorCode;
-    const bool exists = FileExistsNoFollow(path, errorCode);
-    if(errorCode){
+    const auto exists = FileExistsNoFollow(path);
+    if(!exists){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to query output path '{}': {}")
             , PathToString<tchar>(path)
-            , StringConvert(errorCode.message())
+            , StringConvert(exists.error().message())
         );
         return false;
     }
-    if(!exists)
+    if(!*exists)
         return true;
 
-    const bool regular = IsRegularFile(path, errorCode);
-    if(errorCode){
+    const auto regular = IsRegularFile(path);
+    if(!regular){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect output path '{}': {}")
             , PathToString<tchar>(path)
-            , StringConvert(errorCode.message())
+            , StringConvert(regular.error().message())
         );
         return false;
     }
-    if(!regular){
+    if(!*regular){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: output path is not a regular file: '{}'"), PathToString<tchar>(path));
         return false;
     }
@@ -184,32 +183,33 @@ void CaptureCleanupFailure(const Path& path, const ErrorCode& error)noexcept{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ResolveOutputPaths(const Path& inputPath, const AStringView outputArgument, OutputPaths& outOutputPaths){
+Expected<OutputPaths> ResolveOutputPaths(const Path& inputPath, const AStringView outputArgument){
+    OutputPaths paths;
     if(outputArgument.empty()){
-        outOutputPaths.metadata = inputPath;
-        outOutputPaths.metadata.replaceExtension(__hidden_output::s_NwbOutputExtension);
+        paths.metadata = inputPath;
+        paths.metadata.replaceExtension(__hidden_output::s_NwbOutputExtension);
     }
     else{
         const Path outputBase(UtilityDetail::Arena(), outputArgument);
         const AString extension = LowerPathExtension<AString>(outputBase);
         if(extension.empty())
-            outOutputPaths.metadata = outputBase;
+            paths.metadata = outputBase;
         else if(extension == __hidden_output::s_NwbOutputExtension)
-            outOutputPaths.metadata = outputBase;
+            paths.metadata = outputBase;
         else{
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: --output must be an output base name or a .nwb filename."));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outOutputPaths.metadata.replaceExtension(__hidden_output::s_NwbOutputExtension);
+        paths.metadata.replaceExtension(__hidden_output::s_NwbOutputExtension);
     }
 
-    outOutputPaths.data = outOutputPaths.metadata;
-    outOutputPaths.data.replaceExtension(TextureFormat::s_TextureDataExtension);
-    outOutputPaths.metadataTemporary = outOutputPaths.metadata;
-    outOutputPaths.metadataTemporary += s_TemporaryOutputSuffix;
-    outOutputPaths.dataTemporary = outOutputPaths.data;
-    outOutputPaths.dataTemporary += s_TemporaryOutputSuffix;
-    return true;
+    paths.data = paths.metadata;
+    paths.data.replaceExtension(TextureFormat::s_TextureDataExtension);
+    paths.metadataTemporary = paths.metadata;
+    paths.metadataTemporary += s_TemporaryOutputSuffix;
+    paths.dataTemporary = paths.data;
+    paths.dataTemporary += s_TemporaryOutputSuffix;
+    return paths;
 }
 
 bool ValidateOutputPaths(const OutputPaths& outputPaths, const bool force){
@@ -257,16 +257,25 @@ bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload,
         for(u32 index = 2u; index > 0u; --index){
             const u32 current = index - 1u;
             if(published[current]){
-                if(!RemoveFile(*outputs[current], removalErrors[current]) && removalErrors[current])
+                const auto removed = RemoveFile(*outputs[current]);
+                if(!removed){
+                    removalErrors[current] = removed.error();
                     __hidden_output::CaptureCleanupFailure(*outputs[current], removalErrors[current]);
+                }
             }
             if(backedUp[current] && !removalErrors[current]){
-                if(!RenamePath(backups[current], *outputs[current], restorationErrors[current]))
+                const auto restored = RenamePath(backups[current], *outputs[current]);
+                if(!restored){
+                    restorationErrors[current] = restored.error();
                     __hidden_output::CaptureCleanupFailure(backups[current], restorationErrors[current]);
+                }
             }
             if(ownedTemporary[current]){
-                if(!RemoveFile(*temporaries[current], temporaryErrors[current]) && temporaryErrors[current])
+                const auto removed = RemoveFile(*temporaries[current]);
+                if(!removed){
+                    temporaryErrors[current] = removed.error();
                     __hidden_output::CaptureCleanupFailure(*temporaries[current], temporaryErrors[current]);
+                }
             }
         }
     };
@@ -297,33 +306,33 @@ bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload,
         }
 
         for(u32 index = 0u; index < 2u; ++index){
-            ErrorCode error;
-            const bool present = FileExistsNoFollow(*outputs[index], error);
-            if(error){
+            const auto present = FileExistsNoFollow(*outputs[index]);
+            if(!present){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect existing output '{}'"), PathToString<tchar>(*outputs[index]));
                 return false;
             }
-            if(!present)
+            if(!*present)
                 continue;
             if(!__hidden_output::CheckOutputPath(*outputs[index], force, false))
                 return false;
             if(!__hidden_output::CheckOutputPath(backups[index], false, true))
                 return false;
-            if(!RenamePath(*outputs[index], backups[index], error)){
+            const auto preserved = RenamePath(*outputs[index], backups[index]);
+            if(!preserved){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to preserve existing output '{}': {}")
                     , PathToString<tchar>(*outputs[index])
-                    , StringConvert(error.message())
+                    , StringConvert(preserved.error().message())
                 );
                 return false;
             }
             backedUp[index] = true;
         }
         for(u32 index = 0u; index < 2u; ++index){
-            ErrorCode error;
-            if(!RenamePath(*temporaries[index], *outputs[index], error)){
+            const auto finalized = RenamePath(*temporaries[index], *outputs[index]);
+            if(!finalized){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to finalize output '{}': {}")
                     , PathToString<tchar>(*outputs[index])
-                    , StringConvert(error.message())
+                    , StringConvert(finalized.error().message())
                 );
                 return false;
             }
@@ -364,11 +373,11 @@ bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload,
     for(u32 index = 0u; index < 2u; ++index){
         if(!backedUp[index])
             continue;
-        ErrorCode error;
-        if(!RemoveFile(backups[index], error) && error){
+        const auto removed = RemoveFile(backups[index]);
+        if(!removed){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("tex_conv: published output pair but could not remove previous backup '{}': {}")
                 , PathToString<tchar>(backups[index])
-                , StringConvert(error.message())
+                , StringConvert(removed.error().message())
             );
         }
     }

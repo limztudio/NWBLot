@@ -68,8 +68,8 @@ bool TextService::setFonts(const FontSource* sources, usize count){
     return true;
 }
 
-TextLayoutStatus::Enum TextService::layout(const ShapeRequest& request, TextLayout& output){
-    return m_layoutBuilder.layout(request, output);
+Expected<TextLayout, TextLayoutStatus::Enum> TextService::layout(const ShapeRequest& request){
+    return m_layoutBuilder.layout(request);
 }
 
 

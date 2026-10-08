@@ -144,7 +144,7 @@ public:
     virtual ~IRuntimeMeshProvider() = default;
 
 public:
-    [[nodiscard]] virtual bool resolveRuntimeMesh(Core::ECS::EntityID entity, RuntimeMeshDesc& outMesh) = 0;
+    [[nodiscard]] virtual Expected<RuntimeMeshDesc> resolveRuntimeMesh(Core::ECS::EntityID entity) = 0;
     // Attachment identity remains available when buffers or an evaluated pose are not ready yet.
     [[nodiscard]] virtual bool hasRuntimeMeshBinding(Core::ECS::EntityID entity)const = 0;
     virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests) = 0;
@@ -158,7 +158,6 @@ namespace RenderableMeshResolution{
     enum Enum : u8{
         Absent,
         Unavailable,
-        Ready,
     };
 };
 

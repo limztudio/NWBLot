@@ -178,17 +178,12 @@ bool RendererRayTracingSystem::capturePreparedShadowMaterialContextCacheReuse(
     return true;
 }
 
-bool RendererRayTracingSystem::retainPreparedShadowMaterialContextUploads(
-    Core::GpuTaskGraph& graph,
-    Core::GpuUploadBlobId& outInstanceMaterialBlob,
-    Core::GpuUploadBlobId& outInstanceBlob,
-    Core::GpuUploadBlobId& outMaterialTypedBlob
+Expected<PreparedShadowMaterialContextUploads> RendererRayTracingSystem::retainPreparedShadowMaterialContextUploads(
+    Core::GpuTaskGraph& graph
 )const{
-    outInstanceMaterialBlob = {};
-    outInstanceBlob = {};
-    outMaterialTypedBlob = {};
+    PreparedShadowMaterialContextUploads result;
     if(!m_preparedShadowMaterialContextReady)
-        return true;
+        return result;
 
     const auto& state = m_rayTracingState;
     if(
@@ -216,7 +211,7 @@ bool RendererRayTracingSystem::retainPreparedShadowMaterialContextUploads(
         || state.m_shadowMaterialTypedHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen shadow material-context identity no longer matches preflight storage"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!m_preparedShadowMaterialContextUploadRequired){
         if(
@@ -231,9 +226,9 @@ bool RendererRayTracingSystem::retainPreparedShadowMaterialContextUploads(
             || !m_preparedShadowMaterialTypedBytes.empty()
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen software material-context cache identity is no longer accepted"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        return true;
+        return result;
     }
     if(
         m_preparedShadowInstanceMaterialBytes.empty()
@@ -245,25 +240,27 @@ bool RendererRayTracingSystem::retainPreparedShadowMaterialContextUploads(
         || m_preparedShadowMaterialTypedBytes.size() != m_preparedShadowMaterialTypedUploadBytes
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: frozen shadow material-context payload is incomplete"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outInstanceMaterialBlob = graph.copyUploadData(
+    result.instanceMaterial = graph.copyUploadData(
         m_preparedShadowInstanceMaterialBytes.data(),
         m_preparedShadowInstanceMaterialBytes.size(),
         alignof(NwbRtInstanceMaterialGpu)
     );
-    outInstanceBlob = graph.copyUploadData(
+    result.instance = graph.copyUploadData(
         m_preparedShadowInstanceBytes.data(),
         m_preparedShadowInstanceBytes.size(),
         alignof(InstanceGpuData)
     );
-    outMaterialTypedBlob = graph.copyUploadData(
+    result.materialTyped = graph.copyUploadData(
         m_preparedShadowMaterialTypedBytes.data(),
         m_preparedShadowMaterialTypedBytes.size(),
         alignof(u32)
     );
-    return outInstanceMaterialBlob.valid() && outInstanceBlob.valid() && outMaterialTypedBlob.valid();
+    if(!(result.instanceMaterial.valid() && result.instance.valid() && result.materialTyped.valid()))
+        return MakeUnexpected(Failure{});
+    return result;
 }
 
 void RendererRayTracingSystem::confirmPreparedShadowMaterialContextUploads()noexcept{

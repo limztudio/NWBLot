@@ -91,13 +91,17 @@ struct RayTracingOpticalSceneGather{
     [[nodiscard]] u64 contentHash()const noexcept;
 };
 
+struct OpticalWorldBounds{
+    Float3U minimum;
+    Float3U maximum;
+};
+
+
 // Enclose the frozen float affine transform, including its finite-precision evaluation on CPU/GPU.
-[[nodiscard]] bool ComputeOpticalWorldBounds(
+[[nodiscard]] Expected<OpticalWorldBounds> ComputeOpticalWorldBounds(
     const Float34U& objectToWorld,
     const Float3U& localMin,
-    const Float3U& localMax,
-    Float3U& outMin,
-    Float3U& outMax
+    const Float3U& localMax
 )noexcept;
 
 

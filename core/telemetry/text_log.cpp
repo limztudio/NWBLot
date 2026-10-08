@@ -101,35 +101,35 @@ bool BuildTextLogPayload(
     return true;
 }
 
-bool ParseTextLogPayload(
+Expected<TextLogPayload> ParseTextLogPayload(
     TelemetryArena& arena,
     const void* const payload,
-    const usize payloadBytes,
-    TextLogPayload& outPayload
+    const usize payloadBytes
 ){
-    outPayload = TextLogPayload(arena);
+    TextLogPayload parsedPayload(arena);
 
     if(payloadBytes < sizeof(EncodedTextLogPayloadHeader) || !payload)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const BinaryByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
     usize cursor = 0u;
 
-    EncodedTextLogPayloadHeader header;
-    if(!ReadPOD(encoded, cursor, header))
-        return false;
+    const auto decodedHeader = ReadPOD<EncodedTextLogPayloadHeader>(encoded, cursor);
+    if(!decodedHeader)
+        return MakeUnexpected(Failure{});
+    const EncodedTextLogPayloadHeader& header = *decodedHeader;
     if(!__hidden_telemetry_text_log::ValidatePayloadHeader(header))
-        return false;
+        return MakeUnexpected(Failure{});
     if(header.messageBytes > static_cast<u64>(Limit<usize>::s_Max))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const usize messageBytes = static_cast<usize>(header.messageBytes);
     if(payloadBytes - cursor != messageBytes)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outPayload.type = static_cast<Common::LogType::Enum>(header.type);
-    outPayload.messageUtf8.assign(reinterpret_cast<const char*>(encoded.data() + cursor), messageBytes);
-    return true;
+    parsedPayload.type = static_cast<Common::LogType::Enum>(header.type);
+    parsedPayload.messageUtf8.assign(reinterpret_cast<const char*>(encoded.data() + cursor), messageBytes);
+    return parsedPayload;
 }
 
 bool RecordTextLog(

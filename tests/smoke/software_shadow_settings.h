@@ -26,9 +26,8 @@ namespace NWB::Tests::Smoke{
     const Impl::SoftwareShadowSettings& baseSettings = {}
 ){
     Impl::SoftwareShadowSettings settings = baseSettings;
-    SmokeEnvironmentString value(arena);
-    if(ReadSmokeEnvironmentText("NWB_SOFTWARE_SHADOW_BACKEND", value)){
-        const AStringView mode(value.data(), value.size());
+    if(const auto value = ReadSmokeEnvironmentText(arena, "NWB_SOFTWARE_SHADOW_BACKEND")){
+        const AStringView mode(value->data(), value->size());
         if(mode == "automatic")
             settings.backend = Impl::SoftwareShadowBackend::Automatic;
         else if(mode == "trace")
@@ -38,8 +37,8 @@ namespace NWB::Tests::Smoke{
         else
             return false;
     }
-    if(ReadSmokeEnvironmentText("NWB_SOFTWARE_SHADOW_COVERAGE", value)){
-        const AStringView coverage(value.data(), value.size());
+    if(const auto value = ReadSmokeEnvironmentText(arena, "NWB_SOFTWARE_SHADOW_COVERAGE")){
+        const AStringView coverage(value->data(), value->size());
         if(coverage == "reference")
             settings.coverage = Impl::SoftwareShadowCoverage::Reference;
         else if(coverage == "fitted_volume")
@@ -47,8 +46,8 @@ namespace NWB::Tests::Smoke{
         else
             return false;
     }
-    if(ReadSmokeEnvironmentText("NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH", value)){
-        const AStringView search(value.data(), value.size());
+    if(const auto value = ReadSmokeEnvironmentText(arena, "NWB_SOFTWARE_SHADOW_BLOCKER_SEARCH")){
+        const AStringView search(value->data(), value->size());
         if(search == "reference_grid9")
             settings.blockerSearch = Impl::SoftwareShadowBlockerSearch::ReferenceGrid9;
         else if(search == "compact_cross5")
@@ -58,8 +57,8 @@ namespace NWB::Tests::Smoke{
         else
             return false;
     }
-    if(ReadSmokeEnvironmentText("NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE", value)){
-        const AStringView cadence(value.data(), value.size());
+    if(const auto value = ReadSmokeEnvironmentText(arena, "NWB_SOFTWARE_SHADOW_CAPTURE_CADENCE")){
+        const AStringView cadence(value->data(), value->size());
         if(cadence == "every_frame")
             settings.captureCadence = Impl::SoftwareShadowCaptureCadence::EveryFrame;
         else if(cadence == "reuse_one_frame")
@@ -75,18 +74,19 @@ namespace NWB::Tests::Smoke{
         { "NWB_SOFTWARE_SHADOW_POINT_RESOLUTION", &settings.pointResolution },
     };
     for(const auto& setting : overrides){
-        if(!ReadSmokeEnvironmentText(setting.name, value))
+        const auto value = ReadSmokeEnvironmentText(arena, setting.name);
+        if(!value)
             continue;
-        u64 parsed = 0u;
-        if(!ParseU64FromChars(AStringView(value.data(), value.size()), parsed) || parsed > Limit<u32>::s_Max)
+        const auto parsed = ParseU64FromChars(AStringView(value->data(), value->size()));
+        if(!parsed || *parsed > Limit<u32>::s_Max)
             return false;
-        *setting.destination = static_cast<u32>(parsed);
+        *setting.destination = static_cast<u32>(*parsed);
     }
-    if(ReadSmokeEnvironmentText("NWB_SOFTWARE_SHADOW_BUDGET_MIB", value)){
-        u64 parsed = 0u;
-        if(!ParseU64FromChars(AStringView(value.data(), value.size()), parsed) || parsed > Limit<u32>::s_Max / (1024u * 1024u))
+    if(const auto value = ReadSmokeEnvironmentText(arena, "NWB_SOFTWARE_SHADOW_BUDGET_MIB")){
+        const auto parsed = ParseU64FromChars(AStringView(value->data(), value->size()));
+        if(!parsed || *parsed > Limit<u32>::s_Max / (1024u * 1024u))
             return false;
-        settings.memoryBudgetBytes = parsed * 1024u * 1024u;
+        settings.memoryBudgetBytes = *parsed * 1024u * 1024u;
     }
     if(!renderer.setSoftwareShadowSettings(settings))
         return false;

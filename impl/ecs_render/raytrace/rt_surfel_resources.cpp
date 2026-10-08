@@ -140,26 +140,27 @@ bool RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targ
     return true;
 }
 
-bool RendererRayTracingSystem::retainPreparedSurfelFrameConstantsUpload(
+Expected<Core::GpuUploadBlobId> RendererRayTracingSystem::retainPreparedSurfelFrameConstantsUpload(
     Core::GpuTaskGraph& graph,
-    const DeferredFrameTargets& targets,
-    Core::GpuUploadBlobId& outBlob
+    const DeferredFrameTargets& targets
 )const{
-    outBlob = {};
+    Core::GpuUploadBlobId blob;
     if(!hasSurfelWork())
-        return true;
+        return blob;
     if(!m_rayTracingState.m_surfelConstants){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: active surfel GI has no preflighted constant buffer"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const NwbSurfelConstantsGpu params = BuildSurfelFrameConstants(m_rayTracingState, targets);
-    outBlob = graph.copyUploadData(
+    blob = graph.copyUploadData(
         &params,
         sizeof(params),
         alignof(NwbSurfelConstantsGpu)
     );
-    return outBlob.valid();
+    if(!(blob.valid()))
+        return MakeUnexpected(Failure{});
+    return blob;
 }
 
 void RendererRayTracingSystem::finalizeSurfelResourceInitialization()noexcept{

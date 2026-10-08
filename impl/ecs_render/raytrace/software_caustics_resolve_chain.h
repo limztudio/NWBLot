@@ -62,9 +62,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
+    [[nodiscard]] Expected<SoftwareCausticsResolveChainResult> declare(
         const SoftwareCausticsResolveChainInputs& inputs,
-        SoftwareCausticsResolveChainResult& outResult,
         Core::Alloc::ScratchArena& scratchArena
     );
 

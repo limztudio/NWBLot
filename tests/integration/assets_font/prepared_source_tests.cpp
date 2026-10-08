@@ -87,18 +87,15 @@ static void WriteLittleU32(Core::Assets::AssetBytes& bytes, const usize offset, 
         bytes[offset + index] = static_cast<u8>(value >> (index * 8u));
 }
 
-[[nodiscard]] static bool WriteCase(
+[[nodiscard]] static Expected<Path> WriteCase(
     SourceTestArena& testArena,
     const AStringView filename,
-    const Core::Assets::AssetBytes& binary,
-    Path& outPath
+    const Core::Assets::AssetBytes& binary
 ){
     Path candidate = Path(testArena.arena, NWB_REPO_ROOT) / "__artifacts" / "font_source_tests" / filename;
-    ErrorCode error;
-    if(!EnsureDirectories(candidate.parentPath(), error) || error || !WriteBinaryFile(candidate, binary))
-        return false;
-    outPath = Move(candidate);
-    return true;
+    if(!EnsureDirectories(candidate.parentPath()) || !WriteBinaryFile(candidate, binary))
+        return MakeUnexpected(Failure{});
+    return candidate;
 }
 
 static void ExpectSourceUnchanged(const PreparedFontSource& source, const PreparedFontSource& original){
@@ -133,27 +130,37 @@ TEST(PreparedFontSource, ImageCorruptionRejectsFullReadWhileFontOnlySkipsCompact
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SourceTestArena testArena;
     SourceFixture fixture(testArena.arena);
-    Core::Assets::AssetBytes binary(testArena.arena);
-    ASSERT_TRUE(SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, binary));
+    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, testArena.arena);
+    ASSERT_TRUE(binaryResult);
+    Core::Assets::AssetBytes& binary = *binaryResult;
     ASSERT_EQ(binary.size(), s_PixelOffset + 150u);
-    Path path(testArena.arena);
-    ASSERT_TRUE(WriteCase(testArena, "image_integrity_control.font", binary, path));
+    auto pathResult = WriteCase(testArena, "image_integrity_control.font", binary);
+    ASSERT_TRUE(pathResult);
+    Path path = Move(*pathResult);
     PreparedFontSource original(testArena.arena);
-    ASSERT_TRUE(ReadPreparedFontSource(path, original, true));
+    auto originalResult = ReadPreparedFontSource(path, original.fontBytes.get_allocator().arena(), true);
+    ASSERT_TRUE(originalResult);
+    original = Move(*originalResult);
     ASSERT_EQ(original.groups.size(), s_GroupCount);
     PreparedFontSource output(testArena.arena);
-    ASSERT_TRUE(ReadPreparedFontSource(path, output, true));
+    auto outputResult = ReadPreparedFontSource(path, output.fontBytes.get_allocator().arena(), true);
+    ASSERT_TRUE(outputResult);
+    output = Move(*outputResult);
     static constexpr AStringView s_Filenames[] = { "image_r.font", "image_rg.font", "image_rgb.font", "image_rgba.font", "image_hash.font" };
     usize imageOffset = s_PixelOffset;
     for(usize index = 0u; index < LengthOf(s_Filenames); ++index){
         Core::Assets::AssetBytes corrupted(binary.begin(), binary.end(), testArena.arena);
         const usize corruptionOffset = index < s_GroupCount ? imageOffset : s_HeaderBytes + 16u;
         corrupted[corruptionOffset] ^= 0x80u;
-        ASSERT_TRUE(WriteCase(testArena, s_Filenames[index], corrupted, path));
-        EXPECT_FALSE(ReadPreparedFontSource(path, output, true)) << index;
+        auto corruptedPathResult = WriteCase(testArena, s_Filenames[index], corrupted);
+        ASSERT_TRUE(corruptedPathResult);
+        path = Move(*corruptedPathResult);
+        EXPECT_FALSE(ReadPreparedFontSource(path, output.fontBytes.get_allocator().arena(), true)) << index;
         ExpectSourceUnchanged(output, original);
         PreparedFontSource fontOnly(testArena.arena);
-        ASSERT_TRUE(ReadPreparedFontSource(path, fontOnly, false)) << index;
+        auto fontOnlyResult = ReadPreparedFontSource(path, fontOnly.fontBytes.get_allocator().arena(), false);
+        ASSERT_TRUE(fontOnlyResult) << index;
+        fontOnly = Move(*fontOnlyResult);
         EXPECT_EQ(fontOnly.fontBytes, original.fontBytes);
         EXPECT_TRUE(fontOnly.fontSha256 == original.fontSha256);
         ASSERT_EQ(fontOnly.groups.size(), s_GroupCount);
@@ -176,22 +183,30 @@ TEST(PreparedFontSource, SfntByteAndDigestCorruptionRejectBothReadModesWithoutRe
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SourceTestArena testArena;
     SourceFixture fixture(testArena.arena);
-    Core::Assets::AssetBytes binary(testArena.arena);
-    ASSERT_TRUE(SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, binary));
-    Path path(testArena.arena);
-    ASSERT_TRUE(WriteCase(testArena, "font_integrity_control.font", binary, path));
+    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, testArena.arena);
+    ASSERT_TRUE(binaryResult);
+    Core::Assets::AssetBytes& binary = *binaryResult;
+    auto pathResult = WriteCase(testArena, "font_integrity_control.font", binary);
+    ASSERT_TRUE(pathResult);
+    Path path = Move(*pathResult);
     PreparedFontSource original(testArena.arena);
     PreparedFontSource output(testArena.arena);
-    ASSERT_TRUE(ReadPreparedFontSource(path, original, true));
-    ASSERT_TRUE(ReadPreparedFontSource(path, output, true));
+    auto originalResult = ReadPreparedFontSource(path, original.fontBytes.get_allocator().arena(), true);
+    ASSERT_TRUE(originalResult);
+    original = Move(*originalResult);
+    auto outputResult = ReadPreparedFontSource(path, output.fontBytes.get_allocator().arena(), true);
+    ASSERT_TRUE(outputResult);
+    output = Move(*outputResult);
     static constexpr AStringView s_Filenames[] = { "font_corrupt_bytes.font", "font_corrupt_hash.font" };
     static constexpr usize s_Offsets[] = { s_FontOffset, 24u };
     for(usize index = 0u; index < LengthOf(s_Filenames); ++index){
         Core::Assets::AssetBytes corrupted(binary.begin(), binary.end(), testArena.arena);
         corrupted[s_Offsets[index]] ^= 0x40u;
-        ASSERT_TRUE(WriteCase(testArena, s_Filenames[index], corrupted, path));
+        auto corruptedPathResult = WriteCase(testArena, s_Filenames[index], corrupted);
+        ASSERT_TRUE(corruptedPathResult);
+        path = Move(*corruptedPathResult);
         for(const bool includePixels : { false, true }){
-            EXPECT_FALSE(ReadPreparedFontSource(path, output, includePixels));
+            EXPECT_FALSE(ReadPreparedFontSource(path, output.fontBytes.get_allocator().arena(), includePixels));
             ExpectSourceUnchanged(output, original);
         }
     }
@@ -206,14 +221,20 @@ TEST(PreparedFontSource, MalformedDirectoryCountsAndOverflowRejectBeforePayloadA
     SourceTestArena testArena;
     Core::Alloc::GlobalArena outputArena(Name("tests/integration/assets_font/prepared_output"));
     SourceFixture fixture(testArena.arena);
-    Core::Assets::AssetBytes binary(testArena.arena);
-    ASSERT_TRUE(SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, binary));
-    Path path(testArena.arena);
-    ASSERT_TRUE(WriteCase(testArena, "directory_control.font", binary, path));
+    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, testArena.arena);
+    ASSERT_TRUE(binaryResult);
+    Core::Assets::AssetBytes& binary = *binaryResult;
+    auto pathResult = WriteCase(testArena, "directory_control.font", binary);
+    ASSERT_TRUE(pathResult);
+    Path path = Move(*pathResult);
     PreparedFontSource original(testArena.arena);
     PreparedFontSource output(outputArena);
-    ASSERT_TRUE(ReadPreparedFontSource(path, original, true));
-    ASSERT_TRUE(ReadPreparedFontSource(path, output, true));
+    auto originalResult = ReadPreparedFontSource(path, original.fontBytes.get_allocator().arena(), true);
+    ASSERT_TRUE(originalResult);
+    original = Move(*originalResult);
+    auto outputResult = ReadPreparedFontSource(path, output.fontBytes.get_allocator().arena(), true);
+    ASSERT_TRUE(outputResult);
+    output = Move(*outputResult);
     static constexpr MalformedField s_Fields[] = {
         { "magic.font", 0u, 0u, true },
         { "retired_fon1.font", 0u, 0x464f4e31u, true },
@@ -246,10 +267,12 @@ TEST(PreparedFontSource, MalformedDirectoryCountsAndOverflowRejectBeforePayloadA
     for(const MalformedField& field : s_Fields){
         Core::Assets::AssetBytes malformed(binary.begin(), binary.end(), testArena.arena);
         WriteLittleU32(malformed, field.offset, field.value);
-        ASSERT_TRUE(WriteCase(testArena, field.filename, malformed, path));
+        auto malformedPathResult = WriteCase(testArena, field.filename, malformed);
+        ASSERT_TRUE(malformedPathResult);
+        path = Move(*malformedPathResult);
         for(const bool includePixels : { false, true }){
             const ArenaMemoryStats before = outputArena.memoryStats();
-            EXPECT_FALSE(ReadPreparedFontSource(path, output, includePixels)) << field.filename;
+            EXPECT_FALSE(ReadPreparedFontSource(path, output.fontBytes.get_allocator().arena(), includePixels)) << field.filename;
             const ArenaMemoryStats after = outputArena.memoryStats();
             ExpectSourceUnchanged(output, original);
             EXPECT_EQ(after.usedBytes, before.usedBytes);
@@ -264,10 +287,12 @@ TEST(PreparedFontSource, MalformedDirectoryCountsAndOverflowRejectBeforePayloadA
     WriteLittleU32(oversized, s_HeaderBytes + 4u, 2048u);
     WriteLittleU32(oversized, s_HeaderBytes + 8u, 4u);
     WriteLittleU32(oversized, s_HeaderBytes + 12u, 2048u * 2048u * 4u);
-    ASSERT_TRUE(WriteCase(testArena, "missing_large_image.font", oversized, path));
+    auto oversizedPathResult = WriteCase(testArena, "missing_large_image.font", oversized);
+    ASSERT_TRUE(oversizedPathResult);
+    path = Move(*oversizedPathResult);
     for(const bool includePixels : { false, true }){
         const ArenaMemoryStats before = outputArena.memoryStats();
-        EXPECT_FALSE(ReadPreparedFontSource(path, output, includePixels));
+        EXPECT_FALSE(ReadPreparedFontSource(path, output.fontBytes.get_allocator().arena(), includePixels));
         ExpectSourceUnchanged(output, original);
         EXPECT_LE(outputArena.memoryStats().peakUsedBytes, before.usedBytes + 8u * sizeof(PreparedFontImageGroup));
     }
@@ -280,14 +305,20 @@ TEST(PreparedFontSource, TruncatedSectionsAndTrailingBytesRejectBothReadModesAto
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SourceTestArena testArena;
     SourceFixture fixture(testArena.arena);
-    Core::Assets::AssetBytes binary(testArena.arena);
-    ASSERT_TRUE(SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, binary));
-    Path path(testArena.arena);
-    ASSERT_TRUE(WriteCase(testArena, "length_control.font", binary, path));
+    auto binaryResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, testArena.arena);
+    ASSERT_TRUE(binaryResult);
+    Core::Assets::AssetBytes& binary = *binaryResult;
+    auto pathResult = WriteCase(testArena, "length_control.font", binary);
+    ASSERT_TRUE(pathResult);
+    Path path = Move(*pathResult);
     PreparedFontSource original(testArena.arena);
     PreparedFontSource output(testArena.arena);
-    ASSERT_TRUE(ReadPreparedFontSource(path, original, true));
-    ASSERT_TRUE(ReadPreparedFontSource(path, output, true));
+    auto originalResult = ReadPreparedFontSource(path, original.fontBytes.get_allocator().arena(), true);
+    ASSERT_TRUE(originalResult);
+    original = Move(*originalResult);
+    auto outputResult = ReadPreparedFontSource(path, output.fontBytes.get_allocator().arena(), true);
+    ASSERT_TRUE(outputResult);
+    output = Move(*outputResult);
     struct Cut{
         AStringView filename;
         usize byteCount;
@@ -304,9 +335,11 @@ TEST(PreparedFontSource, TruncatedSectionsAndTrailingBytesRejectBothReadModesAto
     for(const Cut& cut : cuts){
         Core::Assets::AssetBytes malformed(binary.begin(), binary.end(), testArena.arena);
         malformed.resize(cut.byteCount);
-        ASSERT_TRUE(WriteCase(testArena, cut.filename, malformed, path));
+        auto malformedPathResult = WriteCase(testArena, cut.filename, malformed);
+        ASSERT_TRUE(malformedPathResult);
+        path = Move(*malformedPathResult);
         for(const bool includePixels : { false, true }){
-            EXPECT_FALSE(ReadPreparedFontSource(path, output, includePixels)) << cut.filename;
+            EXPECT_FALSE(ReadPreparedFontSource(path, output.fontBytes.get_allocator().arena(), includePixels)) << cut.filename;
             ExpectSourceUnchanged(output, original);
         }
     }
@@ -320,8 +353,9 @@ TEST(PreparedFontSource, InvalidSerializationInputsPreservePreviouslyPreparedByt
     SourceTestArena testArena;
     Core::Alloc::GlobalArena outputArena(Name("tests/integration/assets_font/prepared_serialize_output"));
     SourceFixture fixture(testArena.arena);
-    Core::Assets::AssetBytes output(outputArena);
-    ASSERT_TRUE(SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, output));
+    auto outputResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, outputArena);
+    ASSERT_TRUE(outputResult);
+    Core::Assets::AssetBytes& output = *outputResult;
     const Core::Assets::AssetBytes original(output.begin(), output.end(), testArena.arena);
     constexpr u32 s_InvalidCaseCount = 20u;
     for(u32 variant = 0u; variant < s_InvalidCaseCount; ++variant){
@@ -355,7 +389,7 @@ TEST(PreparedFontSource, InvalidSerializationInputsPreservePreviouslyPreparedByt
         case 19u: ++views[0u].pixels.byteCount; break;
         }
         const ArenaMemoryStats before = outputArena.memoryStats();
-        EXPECT_FALSE(SerializePreparedFontSource(sfnt, faceIndex, groups, groupCount, output)) << variant;
+        EXPECT_FALSE(SerializePreparedFontSource(sfnt, faceIndex, groups, groupCount, outputArena)) << variant;
         EXPECT_EQ(output, original);
         EXPECT_EQ(outputArena.memoryStats().allocationCount, before.allocationCount);
     }
@@ -368,8 +402,9 @@ TEST(PreparedFontSource, SerializerConsumesAliasedSfntAndCompactPixelsBeforeRepl
     Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     SourceTestArena testArena;
     SourceFixture fixture(testArena.arena);
-    Core::Assets::AssetBytes output(testArena.arena);
-    ASSERT_TRUE(SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, output));
+    auto outputResult = SerializePreparedFontSource({ fixture.sfnt, sizeof(fixture.sfnt) }, 0u, fixture.views, s_GroupCount, testArena.arena);
+    ASSERT_TRUE(outputResult);
+    Core::Assets::AssetBytes& output = *outputResult;
     const Core::Assets::AssetBytes original(output.begin(), output.end(), testArena.arena);
     PreparedFontImageView views[s_GroupCount];
     usize imageOffset = s_PixelOffset;
@@ -378,7 +413,9 @@ TEST(PreparedFontSource, SerializerConsumesAliasedSfntAndCompactPixelsBeforeRepl
         views[index].pixels.bytes = output.data() + imageOffset;
         imageOffset += views[index].pixels.size();
     }
-    ASSERT_TRUE(SerializePreparedFontSource({ output.data() + s_FontOffset, s_FontBytes }, 0u, views, s_GroupCount, output));
+    auto aliasedResult = SerializePreparedFontSource({ output.data() + s_FontOffset, s_FontBytes }, 0u, views, s_GroupCount, testArena.arena);
+    ASSERT_TRUE(aliasedResult);
+    output = Move(*aliasedResult);
     EXPECT_EQ(output, original);
     EXPECT_EQ(logger.errorCount(), 0u);
 }

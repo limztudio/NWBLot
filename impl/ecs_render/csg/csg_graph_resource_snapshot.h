@@ -37,7 +37,7 @@ namespace ECSRenderDetail{
 
         [[nodiscard]] bool bindingValid()const noexcept;
         [[nodiscard]] bool frameReady(const CsgFrameGpuData& csgFrameData)const noexcept;
-        [[nodiscard]] bool findClipContextHeapSlot(u32& outHeapSlot)const noexcept;
+        [[nodiscard]] Expected<u32> findClipContextHeapSlot()const noexcept;
     };
 };
 

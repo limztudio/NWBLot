@@ -27,7 +27,7 @@ frame only when a slot is free. If all slots remain in flight, preparation succe
 with no declared layer and keeps the pending snapshot. No frame waits for GPU idle.
 
 `prepareTaskGraphOutputLayer(acquired)` captures the exact acquired frame.
-`declareTaskGraphOutputLayer(graph, layer)` declares graph-owned geometry uploads,
+`declareTaskGraphOutputLayer(graph)` declares graph-owned geometry uploads,
 a transparent target clear, and `ui.raster` for a painted frame. The raster produces
 an explicit color resource version. It has no scene dependency, so the graph can
 schedule it alongside scene work. The final output consumer depends on `readyTask`,

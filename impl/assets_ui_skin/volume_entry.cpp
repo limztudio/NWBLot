@@ -28,15 +28,14 @@ namespace __hidden_ui_skin_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseUiSkinDocument(
+static Expected<UiSkinCookEntry> ParseUiSkinDocument(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    UiSkinCookEntry& outEntry,
     Core::Assets::CookEntryParseContext& context
 ){
-    return ParseUiSkinCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, outEntry, context.scratchArena);
+    return ParseUiSkinCookMetadata(assetRoot, virtualRoot, nwbFilePath, doc, context.cookArena, context.scratchArena);
 }
 
 static bool RegisterUiSkinCookEntry(Core::Assets::CookEntryRegistry& registry){
@@ -44,7 +43,7 @@ static bool RegisterUiSkinCookEntry(Core::Assets::CookEntryRegistry& registry){
         registry,
         NWB_TEXT("UI skin"),
         &ParseUiSkinDocument,
-        [](UiSkinCookEntry& entry, UiSkin& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildUiSkinAsset); },
+        [](UiSkinCookEntry& entry, Core::Assets::AssetArena& arena){ return Core::Assets::ForwardCookBuild(entry, arena, &BuildUiSkinAsset); },
         false
     );
 }

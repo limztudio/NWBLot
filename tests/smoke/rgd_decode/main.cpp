@@ -32,8 +32,9 @@ TEST(RgdDecode, GarbageInputFailsGracefully){
 
     NWB::Tests::TestArena<> testArena;
     Path<NWB::Core::Alloc::GlobalArena> inputPath(testArena.arena, s_Path);
-    ErrorCode error;
-    EXPECT_TRUE(RemoveFile(inputPath, error));
+    const auto removed = RemoveFile(inputPath);
+    ASSERT_TRUE(removed);
+    EXPECT_TRUE(*removed);
 }
 
 

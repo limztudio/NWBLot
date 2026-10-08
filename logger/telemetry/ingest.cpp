@@ -35,9 +35,10 @@ inline constexpr StringView s_GraphFileExtension = ".graph.dot";
 static Atomic<u64> s_TelemetryUploadCounter{ 1u };
 
 [[nodiscard]] Path MakeTelemetryUploadStem(LogArena& arena){
-    LocalTime localTime = {};
-    if(!GetLocalTime(localTime))
+    const auto timeResult = GetLocalTime();
+    if(!timeResult)
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to read local time for telemetry upload name"));
+    const LocalTime localTime = timeResult ? *timeResult : LocalTime{};
 
     const u64 counter = s_TelemetryUploadCounter.fetch_add(1u, MemoryOrder::relaxed);
     const auto fileName = StringFormat(
@@ -61,8 +62,7 @@ void SetResultMessage(TelemetryIngestResult& result, AStringView message, const 
 }
 
 [[nodiscard]] bool EnsureDirectory(const Path& directory){
-    ErrorCode error;
-    return EnsureDirectories(directory, error);
+    return EnsureDirectories(directory).has_value();
 }
 
 [[nodiscard]] bool StoreRawTelemetry(const Path& rawPath, const void* bytes, const usize byteCount){
@@ -71,9 +71,9 @@ void SetResultMessage(TelemetryIngestResult& result, AStringView message, const 
 }
 
 [[nodiscard]] Path DefaultRootDirectory(LogArena& arena){
-    Path executableDirectory(arena);
-    if(GetExecutableDirectory(executableDirectory))
-        return executableDirectory / s_StorageDirectoryName;
+    const auto executableDirectory = GetExecutableDirectory(arena);
+    if(executableDirectory)
+        return *executableDirectory / s_StorageDirectoryName;
 
     return Path(arena, s_StorageDirectoryName);
 }
@@ -139,7 +139,11 @@ TelemetryIngestResult ProcessTelemetryUpload(
     }
 
     Telemetry::Recorder recorder(arena);
-    result.decode = Telemetry::DecodeEventStream(arena, bytes, byteCount, recorder);
+    const auto decoded = Telemetry::DecodeEventStream(arena, bytes, byteCount, recorder);
+    result.decode = decoded
+        ? Telemetry::DecodeResult{ *decoded, Telemetry::DecodeStatus::Ok }
+        : decoded.error()
+    ;
     if(!result.decode.ok()){
         result.message = StringFormat(
             arena,
@@ -152,18 +156,18 @@ TelemetryIngestResult ProcessTelemetryUpload(
         return result;
     }
 
-    TelemetryReport report(arena);
-    if(!BuildTelemetryReport(arena, recorder.view(), report)){
+    auto report = BuildTelemetryReport(arena, recorder.view());
+    if(!report){
         result.message = StringFormat(arena, NWB_TEXT("Telemetry upload stored but report build failed: raw='{}'"), PathToString<tchar>(result.rawPath));
         result.type = Core::Common::LogType::Error;
         return result;
     }
 
-    result.summary = report.summary;
-    result.wroteJson = WriteTextFile(result.jsonPath, AStringView(report.json.data(), report.json.size()));
-    result.wrotePerfCsv = WriteTextFile(result.perfCsvPath, AStringView(report.perfCsv.data(), report.perfCsv.size()));
-    if(!report.graph.empty())
-        result.wroteGraph = WriteTextFile(result.graphPath, AStringView(report.graph.data(), report.graph.size()));
+    result.summary = report->summary;
+    result.wroteJson = WriteTextFile(result.jsonPath, AStringView(report->json.data(), report->json.size()));
+    result.wrotePerfCsv = WriteTextFile(result.perfCsvPath, AStringView(report->perfCsv.data(), report->perfCsv.size()));
+    if(!report->graph.empty())
+        result.wroteGraph = WriteTextFile(result.graphPath, AStringView(report->graph.data(), report->graph.size()));
     if(!result.wroteJson || !result.wrotePerfCsv){
         result.message = StringFormat(
             arena,

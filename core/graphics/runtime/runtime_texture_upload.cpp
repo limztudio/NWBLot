@@ -38,26 +38,25 @@ inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_textur
 }
 
 
-[[nodiscard]] static bool ValidateTextureUploadBatch(
-    const GraphicsRuntime::TextureUploadBatchDesc& desc,
-    usize& outTotalByteCount
+[[nodiscard]] static Expected<usize> ValidateTextureUploadBatch(
+    const GraphicsRuntime::TextureUploadBatchDesc& desc
 ){
-    outTotalByteCount = 0u;
+    usize totalByteCount = 0u;
     if(!desc.destination){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch: destination texture is null"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!desc.regions || desc.regionCount == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': regions are empty")
             , StringConvert(desc.destination->getCreationDescription().name.resolvedText())
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(desc.finalState == ResourceStates::Unknown){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': final state is unknown")
             , StringConvert(desc.destination->getCreationDescription().name.resolvedText())
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const TextureDesc& textureDesc = desc.destination->getCreationDescription();
@@ -65,20 +64,20 @@ inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_textur
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': keep-initial-state uploads require a concrete initial state")
             , StringConvert(textureDesc.name.resolvedText())
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(static_cast<usize>(textureDesc.format) >= static_cast<usize>(Format::kCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': texture format is invalid")
             , StringConvert(textureDesc.name.resolvedText())
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(textureDesc.keepInitialState && desc.finalState != textureDesc.initialState){
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': keep-initial-state requires final state {}")
             , StringConvert(textureDesc.name.resolvedText())
             , static_cast<u32>(textureDesc.initialState)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(
         textureDesc.keepInitialState
@@ -89,7 +88,7 @@ inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_textur
         NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': retained textures require their declared physical initial state to match initialState")
             , StringConvert(textureDesc.name.resolvedText())
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     for(usize regionIndex = 0u; regionIndex < desc.regionCount; ++regionIndex){
@@ -104,18 +103,18 @@ inline constexpr Name s_UploadTextureBatchUploadIdentity("graphics.upload_textur
         regionDesc.mipLevel = region.mipLevel;
         regionDesc.aspect = region.aspect;
         if(!GraphicsModuleDetail::ValidateTextureSetupUpload(regionDesc))
-            return false;
-        if(AddOverflows<usize>(outTotalByteCount, region.dataSize)){
+            return MakeUnexpected(Failure{});
+        if(AddOverflows<usize>(totalByteCount, region.dataSize)){
             NWB_LOGGER_ERROR(NWB_TEXT("GraphicsRuntime: failed to upload texture batch '{}': byte count overflows")
                 , StringConvert(textureDesc.name.resolvedText())
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outTotalByteCount += region.dataSize;
+        totalByteCount += region.dataSize;
     }
     // Retained subresources publish their state only after this batch is accepted. A partial fresh upload leaves
     // the texture mixed, so later unspecified typed imports resolve to Unknown until every subresource is known.
-    return true;
+    return totalByteCount;
 }
 
 [[nodiscard]] static CommandQueue::Enum ResolveTextureUploadBatchConsumerQueue(
@@ -251,8 +250,8 @@ bool GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)cons
     if(desc.acceptedToken)
         *desc.acceptedToken = {};
 
-    usize totalByteCount = 0u;
-    if(!__hidden_graphics_texture_upload::ValidateTextureUploadBatch(desc, totalByteCount))
+    const auto totalByteCount = __hidden_graphics_texture_upload::ValidateTextureUploadBatch(desc);
+    if(!totalByteCount)
         return false;
 
     const TextureDesc& textureDesc = desc.destination->getCreationDescription();
@@ -263,11 +262,11 @@ bool GraphicsRuntime::uploadTextureBatch(const TextureUploadBatchDesc& desc)cons
     const CommandQueue::Enum consumerQueue = __hidden_graphics_texture_upload::ResolveTextureUploadBatchConsumerQueue(
         device,
         desc.queue,
-        totalByteCount,
+        *totalByteCount,
         textureDesc
     );
     GraphicsModuleDetail::SetupUploadSameClassRouting sameClassRouting =
-        GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, consumerQueue, totalByteCount)
+        GraphicsModuleDetail::ResolveSetupUploadSameClassRouting(device, consumerQueue, *totalByteCount)
     ;
     // Existing batch destinations cannot be recreated with a wider sharing contract. A cross-family producer is
     // therefore valid only when the texture was already created for that broad queue class; same-family offload

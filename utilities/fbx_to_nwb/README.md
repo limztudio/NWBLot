@@ -182,3 +182,7 @@ mesh fields rather than silently dropping them.
 | `--force` | Allow replacement of an existing primary output file. |
 | `-y, --yes` | Use defaults for omitted import options and disable prompts. |
 | `-h, --help` | Show the executable's generated help text. |
+
+## Library result contracts
+
+Scene, mesh, skin and canonical-stream producers return values through global `Expected<T, E>`. Checked enum parsers return the selected enum. Callers check success before moving candidates or writing assets; instance append, stream/index remapping, SDK triangulation scratch and interactive session state retain actual in/out contracts. Diagnostics remain at the owning logger/CLI boundary, and invalid CLI explanations reach stderr in `fin`. See [produced values and expected failures](../../docs/expected_results.md).

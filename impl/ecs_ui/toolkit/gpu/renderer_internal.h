@@ -276,26 +276,23 @@ struct GpuRendererState final : NoCopy{
     [[nodiscard]] GpuVersion<GpuTargetVersion> createTarget(u32 width, u32 height);
     [[nodiscard]] GpuVersion<GpuGlyphVersion> prepareGlyphPage(const SharedGlyphPage& page);
     [[nodiscard]] bool prepareGlyphPages(GpuFrameData& frame);
-    [[nodiscard]] bool declareGlyphPages(
+    [[nodiscard]] Expected<GpuGlyphGraphResources> declareGlyphPages(
         Core::GpuTaskGraph& graph,
         const GpuFrame& frame,
-        GpuGlyphGraphResources& resources,
         GpuRasterResourceUses& uses
     );
     [[nodiscard]] GpuVersion<GpuSdfAtlasVersion> prepareSdfPage(const SharedSdfAtlasPage& page);
     [[nodiscard]] bool prepareSdfPages(GpuFrameData& frame);
-    [[nodiscard]] bool declareSdfPages(
+    [[nodiscard]] Expected<GpuSdfGraphResources> declareSdfPages(
         Core::GpuTaskGraph& graph,
         const GpuFrame& frame,
-        GpuSdfGraphResources& resources,
         GpuRasterResourceUses& uses
     );
     [[nodiscard]] GpuVersion<GpuTextureImageVersion> prepareTextureImage(const SharedImageSource& source);
     [[nodiscard]] bool prepareTextureImages(GpuFrameData& frame);
-    [[nodiscard]] bool declareTextureImages(
+    [[nodiscard]] Expected<GpuTextureGraphResources> declareTextureImages(
         Core::GpuTaskGraph& graph,
         const GpuFrame& frame,
-        GpuTextureGraphResources& resources,
         GpuRasterResourceUses& uses
     );
     void trimImageCache(const DrawSnapshot& snapshot);
@@ -303,7 +300,7 @@ struct GpuRendererState final : NoCopy{
     [[nodiscard]] bool prepareBuffers(GpuFrameSlot& slot, const DrawSnapshot& snapshot);
     [[nodiscard]] bool prepareOutputPipeline(const Core::AcquiredPresentationFrame& acquired);
     [[nodiscard]] bool prepare(const Core::AcquiredPresentationFrame& acquired);
-    [[nodiscard]] bool declare(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutputLayer& outLayer, bool allowEmptySceneLayer);
+    [[nodiscard]] Expected<Core::GpuTaskGraphOutputLayer> declare(Core::GpuTaskGraph& graph, bool allowEmptySceneLayer);
     [[nodiscard]] Core::GpuTaskId declareStandalone(
         Core::GpuTaskGraph& graph,
         Core::GpuTimingFrameTransaction& frameTimingTransaction

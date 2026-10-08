@@ -45,18 +45,20 @@ private:
 };
 
 
-struct X11Property{
+struct X11Property final : NoCopy{
     Atom type = 0u;
     int format = 0;
     unsigned long count = 0u;
     unsigned long remaining = 0u;
     unsigned char* bytes = nullptr;
 
+    X11Property()noexcept = default;
+    X11Property(X11Property&& other)noexcept;
     ~X11Property()noexcept;
 };
 
 
-[[nodiscard]] bool ReadX11Property(Display& display, Window window, Atom property, bool remove, usize maxBytes, X11Property& result);
+[[nodiscard]] Expected<X11Property> ReadX11Property(Display& display, Window window, Atom property, bool remove, usize maxBytes);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

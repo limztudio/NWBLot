@@ -49,8 +49,10 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
     const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena;
     Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    Path root(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "object_geometry_metadata", root));
+    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "object_geometry_metadata");
+    ASSERT_TRUE(rootResult);
+    Path root = Move(*rootResult);
+
     const Path metadataPath = root / "shader.nwb";
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(root / "shader.slang", "void main(){}\n"));
     struct MetadataCase{
@@ -79,13 +81,7 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
         ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(metadataPath, AStringView(metadata.data(), metadata.size())));
         const u32 priorErrors = logger.errorCount();
         EXPECT_EQ(
-            AssetsGraphicsFixture::ParseShaderMetadataFile(
-                testArena,
-                shaderCook,
-                metadataPath,
-                entry,
-                scratchArena
-            ),
+            AssetsGraphicsFixture::ParseShaderMetadataFile<NWB::Impl::ShaderCook::ShaderEntry>(testArena, shaderCook, metadataPath, scratchArena).has_value(),
             testCase.accepted
         );
         if(testCase.accepted){
@@ -95,8 +91,7 @@ TEST(AssetsGraphics, ObjectGeometryMetadataRejectsRetiredVertexSourceSelectors){
             EXPECT_GT(logger.errorCount(), priorErrors);
         }
     }
-    ErrorCode error;
-    EXPECT_TRUE(RemoveAllIfExists(root, error));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
 TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliaryStagesIndependent){
@@ -104,8 +99,10 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena;
     Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    Path root(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "object_geometry_plan", root));
+    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "object_geometry_plan");
+    ASSERT_TRUE(rootResult);
+    Path root = Move(*rootResult);
+
     const Path meshRoot = root / "impl" / "assets" / "graphics" / "mesh";
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "shared_ms.slang", "void main(){}\n"));
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(meshRoot / "object_shared.slangi", "static const uint NWB_TEST_OBJECT_SHARED_VALUE = 1u;\n"));
@@ -172,16 +169,15 @@ TEST(AssetsGraphics, ObjectGeometryCookPlanRestrictsIdentityAndKeepsAuxiliarySta
     ASSERT_TRUE(Plan::AppendMeshObjectShaderEntries(testArena.arena, shaderCook, paths, mesh, changedPlan, scratchArena));
     ASSERT_EQ(changedPlan.preparedEntries.size(), 1u);
     EXPECT_NE(changedPlan.preparedEntries[0].dependencyChecksum, oldChecksum);
-    ErrorCode removeError;
-    ASSERT_TRUE(RemoveFile(meshRoot / "object_vs.slang", removeError));
-    ASSERT_FALSE(removeError);
+    const auto removedShader = RemoveFile(meshRoot / "object_vs.slang");
+    ASSERT_TRUE(removedShader);
+    ASSERT_TRUE(*removedShader);
     Plan::PreparedShaderPlan missingSourcePlan(testArena.arena);
     missingSourcePlan.plannedFileCount = 7u;
     EXPECT_FALSE(Plan::AppendMeshObjectShaderEntries(testArena.arena, shaderCook, paths, mesh, missingSourcePlan, scratchArena));
     EXPECT_TRUE(missingSourcePlan.preparedEntries.empty());
     EXPECT_EQ(missingSourcePlan.plannedFileCount, 7u);
-    ErrorCode error;
-    EXPECT_TRUE(RemoveAllIfExists(root, error));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
 

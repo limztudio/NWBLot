@@ -326,16 +326,16 @@ bool TextureAssetLoader::Create(
     Vector<TextureDecodedMipUpload, Core::Alloc::ScratchArena> decodedMips{scratchArena};
     decodedMips.reserve(textureAsset.mipLevels().size());
     for(usize mipIndex = 0u; mipIndex < textureAsset.mipLevels().size(); ++mipIndex){
-        decodedMips.emplace_back(scratchArena);
-        if(!mipDecoder.decode(
+        auto decoded = mipDecoder.decode(
             textureAsset,
             textureAsset.mipLevels()[mipIndex],
             static_cast<u32>(mipIndex),
             format,
-            decodedMips.back()
-        )){
+            scratchArena
+        );
+        if(!decoded)
             return false;
-        }
+        decodedMips.push_back(Move(*decoded));
     }
 
     Vector<Core::GraphicsRuntime::TextureUploadRegion, Core::Alloc::ScratchArena> uploadRegions{scratchArena};
@@ -441,13 +441,12 @@ bool TextureAssetLoader::Load(
 
     const Name& textureVirtualPath = textureAsset.name();
 
-    UniquePtr<Core::Assets::IAsset> loadedAsset;
-    const Texture* loadedTexture = assetManager.loadTypedSync<Texture>(
+    auto loadedAsset = assetManager.loadTypedSync<Texture>(
         textureVirtualPath,
-        loadedAsset,
         owner,
         Texture::s_AssetTypeText
     );
+    const Texture* loadedTexture = loadedAsset ? loadedAsset->get() : nullptr;
     if(!loadedTexture)
         return false;
 

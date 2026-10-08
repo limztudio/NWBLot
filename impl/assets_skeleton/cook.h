@@ -45,21 +45,21 @@ struct SkeletonCookEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ParseSkeletonCookMetadata(
+[[nodiscard]] Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(
     const Path& assetRoot,
     AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    SkeletonCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] bool ParseSkeletonCookMetadata(
+[[nodiscard]] Expected<SkeletonCookEntry> ParseSkeletonCookMetadata(
     Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    SkeletonCookEntry& outEntry
+    Core::Assets::AssetArena& arena
 );
-[[nodiscard]] bool BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Skeleton& outSkeleton);
+[[nodiscard]] Expected<Skeleton> BuildSkeletonAsset(const SkeletonCookEntry& skeletonEntry, Core::Assets::AssetArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -51,29 +51,26 @@ protected:
     [[nodiscard]] static bool Prepare(
         Core::Alloc::GlobalArena& arena, Texture& texture, const TextureDescription& description = {}
     ){
-        u32 count = 0u;
-        if(!TextureFormat::ComputeCompleteMipCount(
-            description.dimension, description.width, description.height, description.depth, count
-        ))
+        const auto count = TextureFormat::ComputeCompleteMipCount(
+            description.dimension, description.width, description.height, description.depth
+        );
+        if(!count)
             return false;
         Texture::MipLevelVector mips(arena);
-        mips.reserve(count);
+        mips.reserve(*count);
         u32 width = description.width;
         u32 height = description.height;
         u32 depth = description.depth;
         u64 offset = 0u;
-        for(u32 index = 0u; index < count; ++index){
-            u32 blockX = 0u;
-            u32 blockY = 0u;
-            u64 planeBytes = 0u;
-            u32 slices = 0u;
-            if(
-                !TextureFormat::ComputeMipPlaneBlockLayout(description.format, width, height, blockX, blockY, planeBytes)
-                || !TextureFormat::ComputeMipSliceCount(description.dimension, depth, slices)
-            )
+        for(u32 index = 0u; index < *count; ++index){
+            const auto plane = TextureFormat::ComputeMipPlaneBlockLayout(description.format, width, height);
+            if(!plane)
                 return false;
-            const u64 size = planeBytes * slices;
-            mips.push_back({ width, height, blockX, blockY, offset, size, slices });
+            const auto slices = TextureFormat::ComputeMipSliceCount(description.dimension, depth);
+            if(!slices)
+                return false;
+            const u64 size = plane->planeByteCount * *slices;
+            mips.push_back({ width, height, plane->blocksX, plane->blocksY, offset, size, *slices });
             offset += size;
             width = width > 1u ? width >> 1u : 1u;
             height = height > 1u ? height >> 1u : 1u;

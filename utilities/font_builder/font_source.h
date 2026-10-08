@@ -46,7 +46,7 @@ private:
     FT_Face m_face = nullptr;
 };
 
-[[nodiscard]] bool Rasterize(FontSource& font, const BakeOptions& options, RasterGlyphs& outGlyphs);
+[[nodiscard]] Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options);
 [[nodiscard]] bool ExportPositioning(const FontSource& font, Impl::FontAtlasPayload& payload);
 
 

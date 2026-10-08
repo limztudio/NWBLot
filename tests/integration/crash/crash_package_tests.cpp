@@ -54,9 +54,9 @@ inline constexpr Name s_SignalChildInstallArena("tests/integration/crash/signal_
 
 
 [[nodiscard]] static CrashTestPath CrashRootDirectory(NWB::Core::Alloc::GlobalArena& arena){
-    CrashTestPath executableDirectory(arena);
-    if(GetExecutableDirectory(executableDirectory))
-        return executableDirectory / CrashNames::s_DefaultRootDirectoryName;
+    const auto executableDirectory = GetExecutableDirectory(arena);
+    if(executableDirectory)
+        return *executableDirectory / CrashNames::s_DefaultRootDirectoryName;
 
     return CrashTestPath(arena, CrashNames::s_DefaultRootDirectoryName);
 }
@@ -87,9 +87,7 @@ inline constexpr Name s_SignalChildInstallArena("tests/integration/crash/signal_
 }
 
 static void RemoveTestArtifacts(NWB::Core::Alloc::GlobalArena& arena, const AStringView testGroup){
-    ErrorCode error;
-    if(!RemoveAllIfExists(TestCaseDirectory(arena, testGroup), error))
-        EXPECT_FALSE(error);
+    EXPECT_TRUE(RemoveAllIfExists(TestCaseDirectory(arena, testGroup)));
 }
 
 [[nodiscard]] static bool CreatePackageDirectory(
@@ -99,8 +97,7 @@ static void RemoveTestArtifacts(NWB::Core::Alloc::GlobalArena& arena, const AStr
     const AStringView packageName
 ){
     const CrashTestPath packageDirectory = PackageDirectory(arena, testGroup, bucketName, packageName);
-    ErrorCode error;
-    if(!EnsureDirectories(packageDirectory, error))
+    if(!EnsureDirectories(packageDirectory))
         return false;
 
     return WriteTextFile(packageDirectory / "marker.txt", AStringView("package"));
@@ -161,8 +158,7 @@ TEST(Crash, WriteCrashPackageFailsWhenSpoolPathIsFile){
     constexpr AStringView s_Group("crash_package_bad_spool_test");
     RemoveTestArtifacts(arena, s_Group);
 
-    ErrorCode error;
-    EXPECT_TRUE(EnsureDirectories(TestCaseDirectory(arena, s_Group), error));
+    EXPECT_TRUE(EnsureDirectories(TestCaseDirectory(arena, s_Group)));
     const CrashTestPath spoolPath = SpoolDirectory(arena, s_Group);
     EXPECT_TRUE(WriteTextFile(spoolPath, AStringView("not a directory")));
 
@@ -299,8 +295,7 @@ TEST(Crash, DesktopHandlerDoesNotRetainUnrelatedInheritableHandles){
     RemoveTestArtifacts(arena, s_Group);
 
     const CrashTestPath testDirectory = TestCaseDirectory(arena, s_Group);
-    ErrorCode error;
-    ASSERT_TRUE(EnsureDirectories(testDirectory, error));
+    ASSERT_TRUE(EnsureDirectories(testDirectory));
 
     const CrashTestPath sentinelPath = testDirectory / "inheritable_handle_sentinel.tmp";
     SECURITY_ATTRIBUTES securityAttributes = {};

@@ -45,7 +45,11 @@ protected:
         ASSERT_TRUE(loadFont(m_font, "latin.font"));
         const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_font, 1u };
         ASSERT_TRUE(m_text.setFonts(&source, 1u));
-        ASSERT_EQ(m_text.layout({ .text = "A ", .fontSize = 24.f }, m_layout), TextLayoutStatus::Success);
+        {
+            auto layoutResult = m_text.layout({ .text = "A ", .fontSize = 24.f });
+            ASSERT_TRUE(layoutResult);
+            m_layout = Move(*layoutResult);
+        }
         FontAtlasPayload payload(m_arena);
         payload.font = source.identity;
         payload.fontSha256 = ComputeSha256({ m_font.fontBytes().data(), m_font.fontBytes().size() });
@@ -106,8 +110,10 @@ protected:
     [[nodiscard]] bool loadFont(Font& font, StringView filename){
         const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY) / filename;
         Core::Assets::AssetBytes bytes(m_arena);
-        if(!Tests::ReadBundledFontBytes(path, bytes))
+        auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
+        if(!bytesResult)
             return false;
+        bytes = Move(*bytesResult);
         font.setFontBytes(Move(bytes));
         return font.validatePayload();
     }
@@ -142,14 +148,18 @@ protected:
 
 
 TEST_F(TextBakedTests, FontHashMismatchUsesCoverageForTheAlreadySelectedFace){
-    FontAtlasPayload payload(m_arena);
-    Core::Assets::AssetBytes binary(m_arena);
-    ASSERT_TRUE(SerializeFontAtlasPayload(m_atlas.payload(), binary));
-    ASSERT_TRUE(DeserializeFontAtlasPayload(binary, payload));
-    payload.fontSha256.bytes[0u] ^= 1u;
-    m_atlas.setPayload(Move(payload));
+    const auto binary = SerializeFontAtlasPayload(m_atlas.payload(), m_arena);
+    ASSERT_TRUE(binary);
+    auto payload = DeserializeFontAtlasPayload(*binary, m_arena);
+    ASSERT_TRUE(payload);
+    payload->fontSha256.bytes[0u] ^= 1u;
+    m_atlas.setPayload(Move(*payload));
     ASSERT_TRUE(installAtlas());
-    ASSERT_EQ(m_text.layout({ "A" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ "A" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     EXPECT_FALSE(m_layout.glyphs()[0u].face->bakedAtlas());
     const DrawSnapshot snapshot = paint();
     EXPECT_TRUE(snapshot.sdfPages().empty());
@@ -158,21 +168,29 @@ TEST_F(TextBakedTests, FontHashMismatchUsesCoverageForTheAlreadySelectedFace){
 }
 
 TEST_F(TextBakedTests, LogicalFontIdentityMustMatchEvenWhenTheBytesMatch){
-    FontAtlasPayload payload(m_arena);
-    Core::Assets::AssetBytes binary(m_arena);
-    ASSERT_TRUE(SerializeFontAtlasPayload(m_atlas.payload(), binary));
-    ASSERT_TRUE(DeserializeFontAtlasPayload(binary, payload));
-    payload.font = Core::Assets::AssetRef<Font>("tests/ui/fonts/other");
-    m_atlas.setPayload(Move(payload));
+    const auto binary = SerializeFontAtlasPayload(m_atlas.payload(), m_arena);
+    ASSERT_TRUE(binary);
+    auto payload = DeserializeFontAtlasPayload(*binary, m_arena);
+    ASSERT_TRUE(payload);
+    payload->font = Core::Assets::AssetRef<Font>("tests/ui/fonts/other");
+    m_atlas.setPayload(Move(*payload));
     ASSERT_TRUE(installAtlas());
-    ASSERT_EQ(m_text.layout({ .text = "A", .fontSize = 24.f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "A", .fontSize = 24.f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     EXPECT_FALSE(m_layout.glyphs()[0u].face->bakedAtlas());
     EXPECT_TRUE(paint().sdfPages().empty());
 }
 
 TEST_F(TextBakedTests, OldLayoutAndSnapshotOwnTheirAtlasAfterFontReplacementAndAssetRelease){
     ASSERT_TRUE(installAtlas());
-    ASSERT_EQ(m_text.layout({ .text = "A", .fontSize = 24.f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "A", .fontSize = 24.f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     const SharedBakedFontAtlas retained = m_layout.glyphs()[0u].face->bakedAtlas();
     const DrawSnapshot first = paint();
     ASSERT_EQ(first.sdfPages().size(), 1u);
@@ -189,20 +207,36 @@ TEST_F(TextBakedTests, OldLayoutAndSnapshotOwnTheirAtlasAfterFontReplacementAndA
 
 TEST_F(TextBakedTests, OutsideBakedSizeRangeUsesCoverageWithLowerThresholdControl){
     ASSERT_TRUE(installAtlas());
-    ASSERT_EQ(m_text.layout({ .text = "A", .fontSize = 24.f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "A", .fontSize = 24.f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     const DrawSnapshot first = paint();
     ASSERT_EQ(first.sdfPages().size(), 1u);
-    ASSERT_EQ(m_text.layout({ .text = "A", .fontSize = 8.f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "A", .fontSize = 8.f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     const DrawSnapshot small = paint();
     EXPECT_TRUE(small.sdfPages().empty());
     EXPECT_FALSE(small.glyphPages().empty());
-    ASSERT_EQ(m_text.layout({ .text = "A", .fontSize = 129.f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "A", .fontSize = 129.f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     EXPECT_TRUE(paint().sdfPages().empty());
 }
 
 TEST_F(TextBakedTests, TextBelowThreeQuarterBakeSizeUsesCoverageAtNormalDpi){
     ASSERT_TRUE(installAtlas());
-    ASSERT_EQ(m_text.layout({ .text = "A", .fontSize = 22.f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "A", .fontSize = 22.f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_TRUE(m_layout.glyphs()[0u].face->bakedAtlas());
     const DrawSnapshot small = paint();
     EXPECT_TRUE(small.sdfPages().empty());
@@ -210,7 +244,11 @@ TEST_F(TextBakedTests, TextBelowThreeQuarterBakeSizeUsesCoverageAtNormalDpi){
     ASSERT_EQ(small.commands().size(), 1u);
     EXPECT_EQ(small.commands()[0u].material, PaintMaterial::Glyph);
 
-    ASSERT_EQ(m_text.layout({ .text = "A", .fontSize = 24.f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "A", .fontSize = 24.f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     const DrawSnapshot threshold = paint();
     EXPECT_TRUE(threshold.glyphPages().empty());
     ASSERT_EQ(threshold.sdfPages().size(), 1u);
@@ -220,14 +258,22 @@ TEST_F(TextBakedTests, TextBelowThreeQuarterBakeSizeUsesCoverageAtNormalDpi){
 
 TEST_F(TextBakedTests, FractionalPhysicalSizeBelowSdfThresholdUsesCoverage){
     ASSERT_TRUE(installAtlas());
-    ASSERT_EQ(m_text.layout({ .text = "A", .fontSize = 23.5f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "A", .fontSize = 23.5f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     const DrawSnapshot fractionalFont = paint();
     EXPECT_TRUE(fractionalFont.sdfPages().empty());
     ASSERT_EQ(fractionalFont.glyphPages().size(), 1u);
     ASSERT_EQ(fractionalFont.commands().size(), 1u);
     EXPECT_EQ(fractionalFont.commands()[0u].material, PaintMaterial::Glyph);
 
-    ASSERT_EQ(m_text.layout({ .text = "A", .fontSize = 16.0f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "A", .fontSize = 16.0f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     const DrawSnapshot fractionalDpi = paint(1.49f);
     EXPECT_TRUE(fractionalDpi.sdfPages().empty());
     ASSERT_EQ(fractionalDpi.glyphPages().size(), 1u);
@@ -243,7 +289,11 @@ TEST_F(TextBakedTests, FractionalPhysicalSizeBelowSdfThresholdUsesCoverage){
 
 TEST_F(TextBakedTests, WhitespaceKeepsItsAdvanceWithoutAdmittingAnImage){
     ASSERT_TRUE(installAtlas());
-    ASSERT_EQ(m_text.layout({ .text = "   ", .fontSize = 24.f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "   ", .fontSize = 24.f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     EXPECT_GT(m_layout.measure().x, 0.f);
     const DrawSnapshot snapshot = paint();
     EXPECT_TRUE(snapshot.sdfPages().empty());

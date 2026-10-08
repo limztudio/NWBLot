@@ -84,8 +84,8 @@ public:
 
 
 public:
-    // The optional output copies the resolved intent admitted with this event; failures preserve it.
-    [[nodiscard]] bool queue(const InputEvent& event, InputEvent* resolved = nullptr);
+    // Return the resolved intent admitted with this queued event.
+    [[nodiscard]] Expected<InputEvent> queue(const InputEvent& event);
     [[nodiscard]] bool setBindings(const InputKeyBinding* bindings, usize count);
     void restoreDefaultBindings();
     [[nodiscard]] const InputBindings& bindings()const noexcept{ return m_bindings; }
@@ -97,7 +97,7 @@ public:
         const HitTarget* targets, usize count, u64 layoutGeneration,
         const PopupScope* popups = nullptr, usize popupCount = 0u, u64 expectedFocusLossGeneration = Limit<u64>::s_Max
     );
-    [[nodiscard]] bool consumePopupDismissal(const PopupToken& token, PopupDismissReason::Enum& reason);
+    [[nodiscard]] Expected<PopupDismissReason::Enum> consumePopupDismissal(const PopupToken& token);
     [[nodiscard]] bool dismissPopup(PopupDismissReason::Enum reason);
     void closePopup(const PopupToken& token);
     void fencePopup(const PopupToken& token);
@@ -115,14 +115,14 @@ public:
     // Invalidate interaction and layout after resize/device/root changes; action sequences never restart.
     void reset();
     [[nodiscard]] bool consumeActivation(WidgetId id);
-    [[nodiscard]] bool consumeContextMenu(WidgetId id, u64 declarationGeneration, ContextMenuAction& action);
-    [[nodiscard]] bool consumeControlAction(
-        WidgetId host, u64 declarationGeneration, const ControlToken& token, ControlAction& action
+    [[nodiscard]] Expected<ContextMenuAction> consumeContextMenu(WidgetId id, u64 declarationGeneration);
+    [[nodiscard]] Expected<ControlAction> consumeControlAction(
+        WidgetId host, u64 declarationGeneration, const ControlToken& token
     );
     // A replaced borrowed model cannot receive input from its still displayed earlier lifetime.
     void fenceControl(WidgetId host, u64 declarationGeneration, const ControlToken& token);
     // Active updates are consumed once while retaining their press baseline; terminal updates survive until consumed.
-    [[nodiscard]] bool consumePointerGesture(WidgetId id, u64 declarationGeneration, PointerGesture& gesture);
+    [[nodiscard]] Expected<PointerGesture> consumePointerGesture(WidgetId id, u64 declarationGeneration);
     [[nodiscard]] WidgetId hitTest(const Point& position)const;
     [[nodiscard]] bool wouldConsumePointer(const Point& position)const;
     [[nodiscard]] u64 layoutGeneration()const noexcept{ return m_layoutGeneration; }
@@ -153,7 +153,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool resolveSourceEvent(const InputEvent& event, InputEvent& resolved);
+    [[nodiscard]] Expected<InputEvent> resolveSourceEvent(const InputEvent& event);
     [[nodiscard]] CommandSource* findCommandSource(const InputSource& source)noexcept;
     [[nodiscard]] const CommandSource* findCommandSource(const InputSource& source)const noexcept;
     [[nodiscard]] const HitTarget* findHitTarget(const Point& position)const;

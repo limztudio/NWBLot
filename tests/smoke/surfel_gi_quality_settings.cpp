@@ -24,9 +24,9 @@ bool ApplySurfelGiQualitySmokeSettings(
     const Impl::SurfelGiQualitySettings& baseSettings
 ){
     Impl::SurfelGiQualitySettings settings = baseSettings;
-    SmokeEnvironmentString value(arena);
-    if(ReadSmokeEnvironmentText("NWB_SURFEL_GI_RESOLVE_RESOLUTION", value)){
-        const AStringView resolution(value.data(), value.size());
+    const auto value = ReadSmokeEnvironmentText(arena, "NWB_SURFEL_GI_RESOLVE_RESOLUTION");
+    if(value){
+        const AStringView resolution(value->data(), value->size());
         if(resolution == "half")
             settings.resolveResolution = Impl::SurfelGiResolveResolution::Half;
         else if(resolution == "quarter")

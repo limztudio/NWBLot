@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <global/expected.h>
 #include "recorder.h"
 
 #include <core/perf/memory.h>
@@ -148,7 +149,7 @@ struct PerfSessionRecordResult{
     const Perf::TimingStats& stats,
     TelemetryBytes& outPayload
 );
-[[nodiscard]] bool ParsePerfTimingPayload(TelemetryArena& arena, const void* payload, usize payloadBytes, PerfTimingPayload& outPayload);
+[[nodiscard]] Expected<PerfTimingPayload> ParsePerfTimingPayload(TelemetryArena& arena, const void* payload, usize payloadBytes);
 [[nodiscard]] bool RecordPerfTiming(
     Recorder& recorder,
     PerfTimingSource::Enum source,
@@ -179,7 +180,7 @@ struct PerfSessionRecordResult{
     const Perf::MemoryDelta& delta,
     TelemetryBytes& outPayload
 );
-[[nodiscard]] bool ParsePerfMemoryPayload(TelemetryArena& arena, const void* payload, usize payloadBytes, PerfMemoryPayload& outPayload);
+[[nodiscard]] Expected<PerfMemoryPayload> ParsePerfMemoryPayload(TelemetryArena& arena, const void* payload, usize payloadBytes);
 [[nodiscard]] bool RecordPerfMemory(
     Recorder& recorder,
     const Name& scopeName,

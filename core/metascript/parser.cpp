@@ -551,23 +551,23 @@ private:
             const auto text = m_current.text;
             advance();
 
-            i64 result = 0;
-            if(!ParseI64FromChars(text, result)){
+            const auto result = ParseI64FromChars(text);
+            if(!result){
                 error("invalid integer literal");
                 return Value(m_arena);
             }
-            return Value(result, m_arena);
+            return Value(*result, m_arena);
         }
         case TokenType::DoubleLiteral:{
             const auto text = m_current.text;
             advance();
 
-            f64 result = 0.0;
-            if(!ParseF64FromChars(text, result)){
+            const auto result = ParseF64FromChars(text);
+            if(!result){
                 error("invalid double literal");
                 return Value(m_arena);
             }
-            return Value(result, m_arena);
+            return Value(*result, m_arena);
         }
         case TokenType::StringLiteral:{
             const auto text = m_current.text;

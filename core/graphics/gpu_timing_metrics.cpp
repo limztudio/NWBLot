@@ -62,28 +62,26 @@ using TimestampEventVector = Vector<TimestampEvent, Alloc::ScratchArena>;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TryAggregateGpuPacketEnvelopeMetrics(
+Expected<GpuPacketEnvelopeMetrics> TryAggregateGpuPacketEnvelopeMetrics(
     const GpuComparableTimestampRange* const packetEnvelopes,
     const usize packetEnvelopeCount,
-    GpuPacketEnvelopeMetrics& outMetrics,
     GpuQueuePacketEnvelopeMetricsVector& outQueueMetrics,
     Alloc::ScratchArena& scratchArena
 ){
     using namespace __hidden_gpu_timing_metrics;
 
     const auto reject = [&](){
-        outMetrics = {};
         outQueueMetrics.clear();
-        return false;
+        return MakeUnexpected(Failure{});
     };
-    outMetrics = {};
+    GpuPacketEnvelopeMetrics metrics;
     outQueueMetrics.clear();
 
-    usize eventCapacity = 0u;
-    if(!TryMultiply<usize>(packetEnvelopeCount, usize{ 2u }, eventCapacity))
-        return false;
+    const auto eventCapacity = TryMultiply<usize>(packetEnvelopeCount, usize{ 2u });
+    if(!eventCapacity)
+        return MakeUnexpected(Failure{});
     if(packetEnvelopeCount == 0u || !packetEnvelopes)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const usize queueCapacity = Min(packetEnvelopeCount, static_cast<usize>(Limit<u16>::s_Max));
     TimestampRangeVector sortedRanges{scratchArena};
@@ -91,15 +89,15 @@ bool TryAggregateGpuPacketEnvelopeMetrics(
     if(
         packetEnvelopeCount > sortedRanges.max_size()
         || queueCapacity > outQueueMetrics.max_size()
-        || eventCapacity > events.max_size()
+        || *eventCapacity > events.max_size()
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     // Reserve escaping output first. When all vectors share one LIFO scratch arena, the temporary buffers can then
     // pop cleanly in reverse construction order instead of remaining pinned below the caller-owned output.
     outQueueMetrics.reserve(queueCapacity);
     sortedRanges.reserve(packetEnvelopeCount);
-    events.reserve(eventCapacity);
+    events.reserve(*eventCapacity);
 
     const f64 secondsPerTick = packetEnvelopes[0u].secondsPerTick;
     const u16 deviceGeneration = packetEnvelopes[0u].physicalQueue.deviceGeneration;
@@ -198,9 +196,9 @@ bool TryAggregateGpuPacketEnvelopeMetrics(
     if(activeQueueCount != 0u)
         return reject();
 
-    outMetrics.secondsPerTick = secondsPerTick;
-    outMetrics.queueOverlapTicks = overlapTicks;
-    return true;
+    metrics.secondsPerTick = secondsPerTick;
+    metrics.queueOverlapTicks = overlapTicks;
+    return metrics;
 }
 
 

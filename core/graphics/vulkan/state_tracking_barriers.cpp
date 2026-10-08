@@ -576,17 +576,10 @@ void CommandList::setTextureState(
 
     for(ArraySlice arraySlice = resolvedSubresources.baseArraySlice; arraySlice < arrayEnd; ++arraySlice){
         for(MipLevel mipLevel = resolvedSubresources.baseMipLevel; mipLevel < mipEnd; ++mipLevel){
-            ResourceStates::Mask subresourceOldState = permanentState;
-            if(
-                permanentState == ResourceStates::Unknown
-                && !m_stateTracker.getResolvedTransientTextureState(texture, arraySlice, mipLevel, subresourceOldState)
-            ){
-                rejectCommandRecording(
-                    NWB_TEXT("set texture state"),
-                    NWB_TEXT("tracked texture subresource state could not be resolved")
-                );
-                return;
-            }
+            const ResourceStates::Mask subresourceOldState = permanentState == ResourceStates::Unknown
+                ? m_stateTracker.getResolvedTransientTextureState(texture, arraySlice, mipLevel)
+                : permanentState
+            ;
 
             if(firstSubresource){
                 oldState = subresourceOldState;

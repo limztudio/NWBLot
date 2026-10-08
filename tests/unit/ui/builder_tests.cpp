@@ -43,7 +43,9 @@ protected:
         const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY)
             / "latin.font";
         Core::Assets::AssetBytes bytes(m_arena);
-        ASSERT_TRUE(Tests::ReadBundledFontBytes(path, bytes));
+        auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
+        ASSERT_TRUE(bytesResult);
+        bytes = Move(*bytesResult);
         m_font.setFontBytes(Move(bytes));
         ASSERT_TRUE(m_font.validatePayload());
         const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_font, 1u };
@@ -102,7 +104,7 @@ protected:
         return nullptr;
     }
 
-    [[nodiscard]] bool regionQuad(const DrawSnapshot& snapshot, const u32 slot, Rect& rectangle)const{
+    [[nodiscard]] Expected<Rect> regionQuad(const DrawSnapshot& snapshot, const u32 slot)const noexcept{
         const f32 left = static_cast<f32>(slot) / 16.0f;
         const f32 right = static_cast<f32>(slot + 1u) / 16.0f;
         for(const DrawCommand& command : snapshot.commands()){
@@ -115,13 +117,12 @@ protected:
                     Abs(first.texCoord.x - left) < 1e-6f && Abs(last.texCoord.x - right) < 1e-6f
                     && Abs(first.texCoord.y) < 1e-6f && Abs(last.texCoord.y - 0.5f) < 1e-6f
                 ){
-                    rectangle = { first.position.x, first.position.y,
+                    return Rect{ first.position.x, first.position.y,
                         last.position.x - first.position.x, last.position.y - first.position.y };
-                    return true;
                 }
             }
         }
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     InputRoutingResult send(const InputEvent& event){
@@ -275,8 +276,7 @@ TEST_F(UiBuilderTests, MissingBaseControlRegionRejectsFrameAndKeepsAcceptedHitLa
     EXPECT_FALSE(m_context.commitFrame(2u));
     EXPECT_EQ(m_context.input().layoutGeneration(), 1u);
     EXPECT_EQ(m_context.input().hitTest({ 15.0f, 15.0f }), id("apply"));
-    Rect originalImage;
-    EXPECT_TRUE(regionQuad(first, 1u, originalImage));
+    EXPECT_TRUE(regionQuad(first, 1u));
 }
 
 TEST_F(UiBuilderTests, RowUsesSkinMetricsPaddingAndClipsOverflowingControlHits){
@@ -372,9 +372,9 @@ TEST_F(UiBuilderTests, FrozenPaintRetainsValuesAndFontPagesAfterModelChangeAndBu
     ASSERT_TRUE(m_builder.label("caption", { caption.data(), caption.size() }));
     ASSERT_TRUE(finish());
     const DrawSnapshot first = m_paint.freeze();
-    Rect originalMarker;
-    ASSERT_TRUE(regionQuad(first, 9u, originalMarker));
-    EXPECT_FLOAT_EQ(originalMarker.width, 20.4f);
+    const auto originalMarker = regionQuad(first, 9u);
+    ASSERT_TRUE(originalMarker);
+    EXPECT_FLOAT_EQ(originalMarker->width, 20.4f);
     ASSERT_FALSE(first.glyphPages().empty());
     const SharedGlyphPage page = first.glyphPages().front();
     const Sha256Digest pixelHash = ComputeSha256({ page->pixels().data(), page->pixels().size() });
@@ -389,10 +389,10 @@ TEST_F(UiBuilderTests, FrozenPaintRetainsValuesAndFontPagesAfterModelChangeAndBu
     ASSERT_TRUE(m_builder.label("caption", { caption.data(), caption.size() }));
     ASSERT_TRUE(finish());
     const DrawSnapshot second = m_paint.freeze();
-    Rect changedMarker;
-    EXPECT_FALSE(regionQuad(second, 9u, changedMarker));
-    EXPECT_TRUE(regionQuad(first, 9u, changedMarker));
-    EXPECT_FLOAT_EQ(changedMarker.width, originalMarker.width);
+    EXPECT_FALSE(regionQuad(second, 9u));
+    const auto retainedMarker = regionQuad(first, 9u);
+    ASSERT_TRUE(retainedMarker);
+    EXPECT_FLOAT_EQ(retainedMarker->width, originalMarker->width);
     ASSERT_EQ(first.vertices().size(), saved.size());
     EXPECT_EQ(NWB_MEMCMP(first.vertices().data(), saved.data(), saved.size() * sizeof(Vertex)), 0);
     EXPECT_EQ(ComputeSha256({ page->pixels().data(), page->pixels().size() }), pixelHash);

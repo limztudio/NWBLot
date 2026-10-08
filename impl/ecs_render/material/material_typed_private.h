@@ -115,110 +115,97 @@ struct MaterialTypedByteContentKeyEqual{
 // Used by the material draw pass and the shadow occluder packing alike.
 using MaterialTypedByteContentRangeMap = HashMap<MaterialTypedByteContentKey, MaterialTypedByteRange, Core::Alloc::ScratchArena, MaterialTypedByteContentKeyHasher, MaterialTypedByteContentKeyEqual>;
 
-[[nodiscard]] inline bool TryBuildMaterialTypedByteAppendRange(
+[[nodiscard]] inline Expected<MaterialTypedByteAppendRange> TryBuildMaterialTypedByteAppendRange(
     const usize currentByteCount,
-    const usize appendByteCount,
-    MaterialTypedByteAppendRange& outAppendRange
+    const usize appendByteCount
 ){
-    outAppendRange = {};
+    MaterialTypedByteAppendRange appendRange;
     if(appendByteCount == 0u)
-        return true;
+        return appendRange;
 
     if(appendByteCount > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte count exceeds u32 limits"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    usize alignedByteBegin = 0u;
-    if(!AlignUpChecked(currentByteCount, s_MaterialTypedWordBytes, alignedByteBegin)){
+    const auto alignedByteBeginResult = AlignUpChecked(currentByteCount, s_MaterialTypedWordBytes);
+    if(!alignedByteBeginResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte offset overflows alignment"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
+    const usize alignedByteBegin = *alignedByteBeginResult;
     if(appendByteCount > Limit<usize>::s_Max - alignedByteBegin){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count overflows"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const usize byteEnd = alignedByteBegin + appendByteCount;
-    usize alignedByteEnd = 0u;
-    if(!AlignUpChecked(byteEnd, s_MaterialTypedWordBytes, alignedByteEnd)){
+    const auto alignedByteEndResult = AlignUpChecked(byteEnd, s_MaterialTypedWordBytes);
+    if(!alignedByteEndResult){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: material typed byte end overflows alignment"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
+    const usize alignedByteEnd = *alignedByteEndResult;
     if(alignedByteBegin > static_cast<usize>(Limit<u32>::s_Max) || alignedByteEnd > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: gathered material typed byte count exceeds u32 limits"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outAppendRange.byteRange.byteOffset = static_cast<u32>(alignedByteBegin);
-    outAppendRange.byteRange.byteCount = static_cast<u32>(appendByteCount);
-    outAppendRange.alignedByteEnd = alignedByteEnd;
-    return true;
+    appendRange.byteRange.byteOffset = static_cast<u32>(alignedByteBegin);
+    appendRange.byteRange.byteCount = static_cast<u32>(appendByteCount);
+    appendRange.alignedByteEnd = alignedByteEnd;
+    return appendRange;
 }
 
 template<typename DestinationByteVector, typename SourceByteVector>
-[[nodiscard]] inline bool AppendMaterialTypedByteRange(
+[[nodiscard]] inline Expected<MaterialTypedByteRange> AppendMaterialTypedByteRange(
     DestinationByteVector& materialTypedBytes,
-    const SourceByteVector& typedBytes,
-    MaterialTypedByteRange& outRange
+    const SourceByteVector& typedBytes
 ){
-    MaterialTypedByteAppendRange appendRange;
-    if(!TryBuildMaterialTypedByteAppendRange(
-        materialTypedBytes.size(),
-        typedBytes.size(),
-        appendRange
-    ))
-        return false;
-
-    outRange = appendRange.byteRange;
+    const auto appendRange = TryBuildMaterialTypedByteAppendRange(materialTypedBytes.size(), typedBytes.size());
+    if(!appendRange)
+        return MakeUnexpected(Failure{});
     if(typedBytes.empty())
-        return true;
+        return appendRange->byteRange;
 
-    const usize requiredTypedByteCapacity = appendRange.alignedByteEnd;
+    const usize requiredTypedByteCapacity = appendRange->alignedByteEnd;
     if(requiredTypedByteCapacity > materialTypedBytes.capacity())
-        materialTypedBytes.reserve(::NextGrowingCapacity(
-            materialTypedBytes.capacity(),
-            requiredTypedByteCapacity
-        ));
-    materialTypedBytes.resize(outRange.byteOffset, 0u);
+        materialTypedBytes.reserve(::NextGrowingCapacity(materialTypedBytes.capacity(), requiredTypedByteCapacity));
+    materialTypedBytes.resize(appendRange->byteRange.byteOffset, 0u);
     AppendTriviallyCopyableVector(materialTypedBytes, typedBytes);
-    materialTypedBytes.resize(appendRange.alignedByteEnd, 0u);
-
-    return true;
+    materialTypedBytes.resize(appendRange->alignedByteEnd, 0u);
+    return appendRange->byteRange;
 }
 
 template<typename DestinationByteVector, typename SourceByteVector, typename MaterialTypedByteRangeMap>
-[[nodiscard]] inline bool FindOrAppendMaterialTypedByteRange(
+[[nodiscard]] inline Expected<MaterialTypedByteRange> FindOrAppendMaterialTypedByteRange(
     DestinationByteVector& materialTypedBytes,
     MaterialTypedByteRangeMap& rangeMap,
-    const SourceByteVector& typedBytes,
-    MaterialTypedByteRange& outRange
+    const SourceByteVector& typedBytes
 ){
-    outRange = {};
     if(typedBytes.empty())
-        return true;
+        return MaterialTypedByteRange{};
 
     const MaterialTypedByteContentLookup lookup{
         ComputeFnv64Bytes(typedBytes.data(), typedBytes.size()), Span<const u8>(typedBytes.data(), typedBytes.size())
     };
     const auto foundRange = rangeMap.find(lookup);
-    if(foundRange != rangeMap.end()){
-        outRange = foundRange.value();
-        return true;
-    }
+    if(foundRange != rangeMap.end())
+        return foundRange.value();
 
     // Copy before growing the upload vector: typedBytes may alias its existing storage.
     MaterialTypedByteContentKey rangeKey(materialTypedBytes.get_allocator().arena(), lookup);
     const Span<const u8> ownedBytes(rangeKey.bytes.data(), rangeKey.bytes.size());
-    if(!AppendMaterialTypedByteRange(materialTypedBytes, ownedBytes, outRange))
-        return false;
+    const auto range = AppendMaterialTypedByteRange(materialTypedBytes, ownedBytes);
+    if(!range)
+        return MakeUnexpected(Failure{});
 
-    const auto insertedRange = rangeMap.emplace(Move(rangeKey), outRange);
+    const auto insertedRange = rangeMap.emplace(Move(rangeKey), *range);
     if(!insertedRange.second){
         NWB_ASSERT_MSG(false, NWB_TEXT("RendererSystem: material typed range insertion duplicated a missing key"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    return true;
+    return range;
 }
 
 [[nodiscard]] inline bool MaterialTypedByteRangeEmptyOffsetValid(const MaterialTypedByteRange& range)noexcept{
@@ -249,21 +236,20 @@ inline InstanceGpuData BuildInstanceGpuData(
 }
 
 template<typename MaterialTypedByteVector>
-[[nodiscard]] inline bool ResolveMaterialTypedUploadByteCount(
-    const MaterialTypedByteVector& materialTypedBytes,
-    usize& outUploadByteCount
+[[nodiscard]] inline usize ResolveMaterialTypedUploadByteCount(
+    const MaterialTypedByteVector& materialTypedBytes
 ){
-    outUploadByteCount = materialTypedBytes.size();
+    const usize uploadByteCount = materialTypedBytes.size();
     NWB_ASSERT_MSG(
-        outUploadByteCount != 0u,
+        uploadByteCount != 0u,
         NWB_TEXT("RendererSystem: material typed data upload is empty")
     );
     NWB_ASSERT_MSG(
-        (outUploadByteCount & (s_MaterialTypedWordBytes - 1u)) == 0u,
+        (uploadByteCount & (s_MaterialTypedWordBytes - 1u)) == 0u,
         NWB_TEXT("RendererSystem: material typed data upload is not word-aligned")
     );
 
-    return true;
+    return uploadByteCount;
 }
 
 

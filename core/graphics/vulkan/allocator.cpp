@@ -192,10 +192,17 @@ inline VulkanAllocationHandle ToVulkanAllocationHandle(const VmaAllocation alloc
     return reinterpret_cast<VulkanAllocationHandle>(allocation);
 }
 
-inline VkResult MapAllocation(const VulkanAllocatorHandle allocator, const VulkanAllocationHandle allocation, void** outData){
-    if(!outData || !allocation)
-        return VK_ERROR_MEMORY_MAP_FAILED;
-    return vmaMapMemory(ToVmaAllocator(allocator), ToVmaAllocation(allocation), outData);
+[[nodiscard]] inline Expected<void*, VkResult> MapAllocation(
+    const VulkanAllocatorHandle allocator,
+    const VulkanAllocationHandle allocation
+){
+    if(!allocation)
+        return MakeUnexpected(VK_ERROR_MEMORY_MAP_FAILED);
+    void* data = nullptr;
+    const VkResult result = vmaMapMemory(ToVmaAllocator(allocator), ToVmaAllocation(allocation), &data);
+    if(result != VK_SUCCESS)
+        return MakeUnexpected(result);
+    return data;
 }
 
 inline VkResult InvalidateAllocation(
@@ -226,33 +233,30 @@ inline void UnmapTransientAllocation(
     }
 }
 
-inline VkResult CreateBufferAllocation(
+[[nodiscard]] inline Expected<BufferAllocation, VkResult> CreateBufferAllocation(
     const VulkanAllocatorHandle allocator,
     const VkPhysicalDeviceMemoryProperties& memoryProperties,
     const VkBufferCreateInfo& bufferInfo,
-    const VmaAllocationCreateInfo& allocInfo,
-    VkBuffer& buffer,
-    VulkanAllocationHandle& allocation,
-    void*& mappedMemory,
-    bool* outRequiresInvalidate
+    const VmaAllocationCreateInfo& allocInfo
 ){
+    BufferAllocation result;
     VmaAllocationInfo allocationInfo{};
     VmaAllocation vmaAllocation = nullptr;
     const VkResult res = vmaCreateBuffer(
         ToVmaAllocator(allocator),
         &bufferInfo,
         &allocInfo,
-        &buffer,
+        &result.buffer,
         &vmaAllocation,
         &allocationInfo
     );
-    if(res == VK_SUCCESS){
-        allocation = ToVulkanAllocationHandle(vmaAllocation);
-        mappedMemory = allocationInfo.pMappedData;
-        if(outRequiresInvalidate)
-            *outRequiresInvalidate = BuildRequiresInvalidate(memoryProperties, allocationInfo.memoryType);
-    }
-    return res;
+    if(res != VK_SUCCESS)
+        return MakeUnexpected(res);
+
+    result.allocation = ToVulkanAllocationHandle(vmaAllocation);
+    result.mappedMemory = allocationInfo.pMappedData;
+    result.requiresInvalidate = BuildRequiresInvalidate(memoryProperties, allocationInfo.memoryType);
+    return result;
 }
 
 inline void DestroyBufferAllocation(
@@ -329,24 +333,25 @@ VkResult VulkanAllocator::createBuffer(Buffer& buffer, const VkBufferCreateInfo&
         return VK_ERROR_INITIALIZATION_FAILED;
 
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildBufferAllocationInfo(buffer.m_creationDesc, bufferInfo.size);
-    const VkResult res = __hidden_vulkan_allocator::CreateBufferAllocation(
+    const auto allocation = __hidden_vulkan_allocator::CreateBufferAllocation(
         m_allocator,
         m_context.memoryProperties,
         bufferInfo,
-        allocInfo,
-        buffer.m_buffer,
-        buffer.m_allocation,
-        buffer.m_mappedMemory,
-        &buffer.m_requiresInvalidate
+        allocInfo
     );
-    if(res == VK_SUCCESS){
-        buffer.m_persistentlyMapped = buffer.m_mappedMemory != nullptr;
+    if(!allocation)
+        return allocation.error();
+
+    buffer.m_buffer = allocation->buffer;
+    buffer.m_allocation = allocation->allocation;
+    buffer.m_mappedMemory = allocation->mappedMemory;
+    buffer.m_requiresInvalidate = allocation->requiresInvalidate;
+    buffer.m_persistentlyMapped = buffer.m_mappedMemory != nullptr;
 #if defined(NWB_DEBUG)
-        if(buffer.m_creationDesc.debugName)
-            vmaSetAllocationName(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), __hidden_vulkan_allocator::ToVmaAllocation(buffer.m_allocation), buffer.m_creationDesc.debugName.logText().data());
+    if(buffer.m_creationDesc.debugName)
+        vmaSetAllocationName(__hidden_vulkan_allocator::ToVmaAllocator(m_allocator), __hidden_vulkan_allocator::ToVmaAllocation(buffer.m_allocation), buffer.m_creationDesc.debugName.logText().data());
 #endif
-    }
-    return res;
+    return VK_SUCCESS;
 }
 
 void VulkanAllocator::destroyBuffer(Buffer& buffer){
@@ -361,8 +366,8 @@ void VulkanAllocator::destroyBuffer(Buffer& buffer){
     buffer.m_requiresInvalidate = false;
 }
 
-VkResult VulkanAllocator::mapBufferMemory(Buffer& buffer, void** outData){
-    return __hidden_vulkan_allocator::MapAllocation(m_allocator, buffer.m_allocation, outData);
+Expected<void*, VkResult> VulkanAllocator::mapBufferMemory(Buffer& buffer){
+    return __hidden_vulkan_allocator::MapAllocation(m_allocator, buffer.m_allocation);
 }
 
 void VulkanAllocator::unmapBufferMemory(Buffer& buffer){
@@ -428,18 +433,19 @@ VkResult VulkanAllocator::createStagingTexture(
         return VK_ERROR_INITIALIZATION_FAILED;
 
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildStagingTextureAllocationInfo(cpuAccess);
-    const VkResult res = __hidden_vulkan_allocator::CreateBufferAllocation(
+    const auto allocation = __hidden_vulkan_allocator::CreateBufferAllocation(
         m_allocator,
         m_context.memoryProperties,
         bufferInfo,
-        allocInfo,
-        texture.m_buffer,
-        texture.m_allocation,
-        texture.m_mappedMemory,
-        &texture.m_requiresInvalidate
+        allocInfo
     );
-    if(res != VK_SUCCESS)
-        return res;
+    if(!allocation)
+        return allocation.error();
+
+    texture.m_buffer = allocation->buffer;
+    texture.m_allocation = allocation->allocation;
+    texture.m_mappedMemory = allocation->mappedMemory;
+    texture.m_requiresInvalidate = allocation->requiresInvalidate;
     if(texture.m_mappedMemory)
         return VK_SUCCESS;
 
@@ -558,25 +564,16 @@ VkResult VulkanAllocator::bindHeapTextureMemory(Texture& texture, Heap& heap, co
     );
 }
 
-VkResult VulkanAllocator::createHostMappedBuffer(
-    VkBuffer& buffer,
-    VulkanAllocationHandle& allocation,
-    void*& mappedMemory,
-    const VkBufferCreateInfo& bufferInfo
-){
+Expected<BufferAllocation, VkResult> VulkanAllocator::createHostMappedBuffer(const VkBufferCreateInfo& bufferInfo){
     if(!m_allocator)
-        return VK_ERROR_INITIALIZATION_FAILED;
+        return MakeUnexpected(VK_ERROR_INITIALIZATION_FAILED);
 
     VmaAllocationCreateInfo allocInfo = __hidden_vulkan_allocator::BuildHostMappedBufferAllocationInfo();
     return __hidden_vulkan_allocator::CreateBufferAllocation(
         m_allocator,
         m_context.memoryProperties,
         bufferInfo,
-        allocInfo,
-        buffer,
-        allocation,
-        mappedMemory,
-        nullptr
+        allocInfo
     );
 }
 

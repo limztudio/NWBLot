@@ -36,7 +36,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     , m_outputLayerContributor(outputLayerContributor){
 }
 
-[[nodiscard]] bool DeferredGraphSuffixBuilder::declare(
+[[nodiscard]] Expected<DeferredGraphSuffixResult> DeferredGraphSuffixBuilder::declare(
     const DeferredGraphSuffixInputs& inputs,
     DeferredFrameTargets& targets,
     const ReflectionCompositeInputs& compositeInputs,
@@ -44,11 +44,10 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     Core::GpuTimingSubmissionTicket& presentTimingTicket,
     Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
     const Core::GpuTaskId& shadowVisibilityTask,
-    Core::GpuTimingFrameTransaction& frameTimingTransaction,
-    DeferredGraphSuffixResult& outResult
+    Core::GpuTimingFrameTransaction& frameTimingTransaction
 ){
     using namespace RendererTaskGraphDetail;
-    outResult = DeferredGraphSuffixResult{};
+    DeferredGraphSuffixResult result{};
     if(
         !inputs.targets
         || !inputs.presentationFrame
@@ -64,12 +63,16 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         || !inputs.reflectionGraph.valid()
         || !inputs.presentationFrame->valid()
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     Core::GpuTaskGraphOutputLayer outputLayer;
-    if(m_outputLayerContributor && !m_outputLayerContributor->declareTaskGraphOutputLayer(m_graph, outputLayer)){
-        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: output layer did not declare its graph work"));
-        return false;
+    if(m_outputLayerContributor){
+        const auto declaredLayer = m_outputLayerContributor->declareTaskGraphOutputLayer(m_graph);
+        if(!declaredLayer){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: output layer did not declare its graph work"));
+            return MakeUnexpected(Failure{});
+        }
+        outputLayer = *declaredLayer;
     }
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(m_graph);
@@ -79,14 +82,14 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
             || !outputLayer.validShape()
             || (outputLayer.readyTask.valid() && !declarations.validTask(outputLayer.readyTask))
         )
-            return false;
+            return MakeUnexpected(Failure{});
         if(hasColor){
             if(!declarations.validResource(outputLayer.color) || !declarations.validResourceVersion(outputLayer.colorVersion))
-                return false;
+                return MakeUnexpected(Failure{});
             const Core::GpuTaskGraphResourceVersionView version = declarations.resourceVersionAt(outputLayer.colorVersion.index);
             const Core::Texture* const texture = declarations.textureForResource(outputLayer.color);
             if(!texture || version.resource != outputLayer.color || version.origin != Core::GpuGraphResourceVersionOrigin::TaskProduced)
-                return false;
+                return MakeUnexpected(Failure{});
             const Core::TextureDesc& desc = texture->getDescription();
             const Core::TextureDesc& outputDesc = inputs.presentationFrame->backBuffer.texture->getDescription();
             if(
@@ -100,7 +103,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
                 || desc.arraySize != 1u
                 || !version.range.textureSubresources.isEntireTexture(desc)
             )
-                return false;
+                return MakeUnexpected(Failure{});
         }
     }
 
@@ -120,7 +123,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         || !compositeBindlessSlots.valid()
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-composite graph resources"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const Core::GpuTaskResourceUse compositeResourceUses[] = {
@@ -159,16 +162,16 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         .setResourceUses(compositeResourceUses, LengthOf(compositeResourceUses))
     ;
     // Composite may share its compatible serial predecessor while retaining all graph-owned joins.
-    outResult.compositeTask = m_deferredSystem.declareDeferredCompositeTask(
+    result.compositeTask = m_deferredSystem.declareDeferredCompositeTask(
         m_graph,
         compositeDesc,
         targets,
         compositeTimingTicket,
         compositeInputs
     );
-    if(!outResult.compositeTask.valid()){
+    if(!result.compositeTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-composite graph task"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const Core::AcquiredPresentationFrame& presentationFrame = *inputs.presentationFrame;
@@ -183,7 +186,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     ;
     if(!backBufferAvailability.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import presentation back-buffer availability"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     Core::GpuGraphResourceDesc backBufferDesc = TextureResourceDesc(
@@ -201,7 +204,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     );
     if(!backbuffer.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred-present graph resources"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     Core::GpuTaskResourceUse presentResourceUses[4u] = {
@@ -226,7 +229,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
     presentScheduling.avoidQueueCrossing = inputs.useLaggedLightingHistory;
     presentScheduling.forceSubmissionBoundary = true;
     presentScheduling.allowPacketMerge = false;
-    Core::GpuTaskId presentDependencies[3u] = { outResult.compositeTask };
+    Core::GpuTaskId presentDependencies[3u] = { result.compositeTask };
     usize presentDependencyCount = 1u;
     if(inputs.useLaggedLightingHistory)
         presentDependencies[presentDependencyCount++] = inputs.surfelGiTask;
@@ -241,7 +244,7 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         .setResourceUses(presentResourceUses, presentResourceUseCount)
         .setResourceVersionUses(&outputLayerVersionUse, outputLayer.color.valid() ? 1u : 0u)
     ;
-    outResult.presentTask = m_graph.addTask<DeferredPresentGraphTask>(
+    result.presentTask = m_graph.addTask<DeferredPresentGraphTask>(
         presentDesc,
         DeferredPresentGraphTask::Payload{
             .deferredSystem = m_deferredSystem,
@@ -256,32 +259,32 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
             .shadowVisibilityTask = shadowVisibilityTask,
         }
     );
-    if(!outResult.presentTask.valid()){
+    if(!result.presentTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-present graph task"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     // UI/overlay declares before diagnostic tails so timing follows the final contributor.
-    outResult.overlayRequired =
+    result.overlayRequired =
         m_presentationContributor
         && m_presentationContributor->hasTaskGraphPresentationWork()
     ;
-    if(outResult.overlayRequired){
-        outResult.overlayTask = m_presentationContributor->declareTaskGraphPresentation(
+    if(result.overlayRequired){
+        result.overlayTask = m_presentationContributor->declareTaskGraphPresentation(
             m_graph,
             presentationFrame,
             backbuffer,
-            outResult.presentTask
+            result.presentTask
         );
-        if(!outResult.overlayTask.valid()){
+        if(!result.overlayTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: presentation contributor did not declare its final graph task"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
-    const Core::GpuTaskId frameTimingEndDependency = outResult.overlayTask.valid()
-        ? outResult.overlayTask
-        : outResult.presentTask
+    const Core::GpuTaskId frameTimingEndDependency = result.overlayTask.valid()
+        ? result.overlayTask
+        : result.presentTask
     ;
     Core::GpuTaskSchedulingHint frameTimingEndScheduling;
     frameTimingEndScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -294,28 +297,28 @@ DeferredGraphSuffixBuilder::DeferredGraphSuffixBuilder(
         .setScheduling(frameTimingEndScheduling)
         .setDependencies(&frameTimingEndDependency, 1u)
     ;
-    outResult.frameTimingEndTask = m_graph.addTask<FrameTimingEndGraphTask>(
+    result.frameTimingEndTask = m_graph.addTask<FrameTimingEndGraphTask>(
         frameTimingEndDesc,
         FrameTimingEndGraphTask::Payload{
             .frameTimingTransaction = frameTimingTransaction,
         }
     );
-    if(!outResult.frameTimingEndTask.valid()){
+    if(!result.frameTimingEndTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred frame-timing endpoint graph task"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!m_graph.declarePresentEndpoint(Core::GpuPresentEndpoint{
-        .producer = outResult.frameTimingEndTask,
+        .producer = result.frameTimingEndTask,
         .backBuffer = backbuffer,
     })){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred graph presentation endpoint"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outResult.compositeColor = compositeColor;
-    outResult.compositeBindlessSlots = compositeBindlessSlots;
-    outResult.backbuffer = backbuffer;
-    return true;
+    result.compositeColor = compositeColor;
+    result.compositeBindlessSlots = compositeBindlessSlots;
+    result.backbuffer = backbuffer;
+    return result;
 }
 
 

@@ -127,7 +127,7 @@ public:
     void invalidateResources();
     [[nodiscard]] bool prepareResources(u32 width, u32 height, bool prepareHardware, const ReflectionSettings& settings);
     void pollStatistics();
-    [[nodiscard]] bool tryGetLatestStatistics(ReflectionStatistics& outStatistics)const;
+    [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestStatistics()const noexcept;
     [[nodiscard]] ReflectionFrameSnapshot snapshotFrameResources(
         const DeferredFrameTargets& targets,
         const ECSRenderDetail::MeshViewBufferSnapshot& view,

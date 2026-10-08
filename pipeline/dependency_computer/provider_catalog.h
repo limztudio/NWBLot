@@ -13,6 +13,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct DependencyInputSelection{
+    Vector<u8, NWB::Core::Alloc::ScratchArena> selected;
+    Vector<usize, NWB::Core::Alloc::ScratchArena> order;
+
+    explicit DependencyInputSelection(NWB::Core::Alloc::ScratchArena& arena)
+        : selected(arena)
+        , order(arena)
+    {}
+};
+
 // First discovery retains the same physical provider and root ownership as AssetBuilder.
 class DependencyProviderCatalog final : NoCopy{
 public:
@@ -22,21 +32,17 @@ public:
 
 public:
     [[nodiscard]] bool discover(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena);
-    [[nodiscard]] bool selectInputs(
+    [[nodiscard]] Expected<DependencyInputSelection> selectInputs(
         const PipelineOptions& options,
-        Vector<u8, NWB::Core::Alloc::ScratchArena>& outSelected,
-        Vector<usize, NWB::Core::Alloc::ScratchArena>& outOrder,
         NWB::Core::Alloc::ScratchArena& scratchArena
     )const;
-    [[nodiscard]] bool read(
+    [[nodiscard]] Expected<NWB::Core::Metascript::Document> read(
         usize index,
-        NWB::Core::Metascript::Document& outDocument,
         NWB::Core::Alloc::ScratchArena& scratchArena
     )const;
-    [[nodiscard]] bool resolve(
+    [[nodiscard]] Expected<usize> resolve(
         const Name& virtualPath,
         const Name& assetType,
-        usize& outIndex,
         NWB::Core::Alloc::ScratchArena& scratchArena
     )const;
     [[nodiscard]] const NWB::Core::Assets::DiscoveredNwbFileVector& files()const noexcept{ return m_files; }

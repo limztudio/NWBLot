@@ -52,24 +52,23 @@ bool ValidateOptions(const BakeOptions& options){
     return true;
 }
 
-bool Bake(const BakeOptions& options, Impl::FontAtlasPayload& outPayload, Core::Alloc::ScratchArena& scratch){
+Expected<Impl::FontAtlasPayload> Bake(const BakeOptions& options, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratch){
     if(!ValidateOptions(options))
-        return false;
-    Impl::FontAtlasPayload candidate(outPayload.glyphs.get_allocator().arena());
+        return MakeUnexpected(Failure{});
+    Impl::FontAtlasPayload candidate(arena);
     FontSource source(candidate.glyphs.get_allocator().arena());
     if(!source.open(options, candidate))
-        return false;
-    RasterGlyphs glyphs(candidate.glyphs.get_allocator().arena());
+        return MakeUnexpected(Failure{});
+    auto glyphs = Rasterize(source, options);
     if(
-        !Rasterize(source, options, glyphs)
-        || !PackGlyphs(options, glyphs, candidate, scratch)
+        !glyphs
+        || !PackGlyphs(options, *glyphs, candidate, scratch)
         || !ExportPositioning(source, candidate)
     )
-        return false;
+        return MakeUnexpected(Failure{});
     if(!Impl::ValidateFontAtlasPayload(candidate))
-        return false;
-    outPayload = Move(candidate);
-    return true;
+        return MakeUnexpected(Failure{});
+    return candidate;
 }
 
 

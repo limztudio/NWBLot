@@ -109,11 +109,10 @@ TEST(ReflectionStatistics, DiscardedReservationCanBeReusedWithoutStaleCallbackMu
     context.control->discard(previous);
     context.control->accept(previous, Token(), true);
     context.control->accept(current, Token(21u), false);
-    ReflectionStatisticsReservationKey pending;
-    Core::QueueSubmissionToken accepted;
-    ASSERT_TRUE(context.control->pending(current.slot, pending, accepted));
-    EXPECT_EQ(pending.sequence, current.sequence);
-    EXPECT_EQ(accepted.value, 21u);
+    const auto pending = context.control->pending(current.slot);
+    ASSERT_TRUE(pending);
+    EXPECT_EQ(pending->key.sequence, current.sequence);
+    EXPECT_EQ(pending->token.value, 21u);
 }
 
 TEST(ReflectionStatistics, PublishesFrozenMetadataAndNonzeroCountersOnlyAtCompletion){
@@ -124,20 +123,21 @@ TEST(ReflectionStatistics, PublishesFrozenMetadataAndNonzeroCountersOnlyAtComple
     metadata.width = 1u;
     context.control->accept(key, Token(), true);
     context.control->discard(key);
-    ReflectionStatistics statistics;
-    EXPECT_FALSE(context.control->tryGetLatestStatistics(statistics));
+    Expected<ReflectionStatistics> statistics;
+    EXPECT_FALSE(context.control->tryGetLatestStatistics());
     const u32 counters[] = {
         100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, s_ExpectedDualCount, 1u, 3u, 4u, 5u,
         123u, 25u, 70u, s_ExpectedDualCount, 17u, 3u, 6u, 19u,
     };
     static_assert(sizeof(counters) == NWB_REFLECTION_COUNTER_SIZE);
     context.control->complete(key, Token(), counters);
-    ASSERT_TRUE(context.control->tryGetLatestStatistics(statistics));
+    statistics = context.control->tryGetLatestStatistics();
+    ASSERT_TRUE(statistics);
 
-    EXPECT_EQ(statistics.frameIndex, 9u);
-    EXPECT_EQ(statistics.width, 320u);
+    EXPECT_EQ(statistics->frameIndex, 9u);
+    EXPECT_EQ(statistics->width, 320u);
 
-    EXPECT_EQ(statistics.candidates, 100u);
+    EXPECT_EQ(statistics->candidates, 100u);
 
 }
 
@@ -158,10 +158,11 @@ TEST(ReflectionStatistics, FeedbackEpochSurvivesAcceptedInputMutation){
     feedback.epoch = 999u;
     const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
     context.control->complete(key, Token(), counters);
-    ReflectionStatistics statistics;
-    ASSERT_TRUE(context.control->tryGetLatestStatistics(statistics));
+    Expected<ReflectionStatistics> statistics;
+    statistics = context.control->tryGetLatestStatistics();
+    ASSERT_TRUE(statistics);
 
-    EXPECT_EQ(statistics.feedbackEpoch, 4u);
+    EXPECT_EQ(statistics->feedbackEpoch, 4u);
 
 }
 
@@ -174,11 +175,12 @@ TEST(ReflectionStatistics, OlderCompletionsCannotReplaceNewerPublishedWork){
     const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
     context.control->complete(newer, Token(21u), counters);
     context.control->complete(older, Token(20u), counters);
-    ReflectionStatistics statistics;
-    ASSERT_TRUE(context.control->tryGetLatestStatistics(statistics));
-    EXPECT_EQ(statistics.sequence, newer.sequence);
-    EXPECT_EQ(statistics.frameIndex, 11u);
-    EXPECT_FALSE(statistics.hardwareReady);
+    Expected<ReflectionStatistics> statistics;
+    statistics = context.control->tryGetLatestStatistics();
+    ASSERT_TRUE(statistics);
+    EXPECT_EQ(statistics->sequence, newer.sequence);
+    EXPECT_EQ(statistics->frameIndex, 11u);
+    EXPECT_FALSE(statistics->hardwareReady);
     EXPECT_EQ(context.control->reserve(Metadata()).slot, older.slot);
 }
 
@@ -194,10 +196,11 @@ TEST(ReflectionStatistics, CompletionRequiresExactAcceptedPhysicalToken){
     wrong.deviceGeneration = 8u;
     context.control->complete(key, wrong, counters);
     context.control->complete(key, Token(19u), counters);
-    ReflectionStatistics statistics;
-    EXPECT_FALSE(context.control->tryGetLatestStatistics(statistics));
+    Expected<ReflectionStatistics> statistics;
+    EXPECT_FALSE(context.control->tryGetLatestStatistics());
     context.control->complete(key, Token(), counters);
-    EXPECT_TRUE(context.control->tryGetLatestStatistics(statistics));
+    statistics = context.control->tryGetLatestStatistics();
+    ASSERT_TRUE(statistics);
 }
 
 TEST(ReflectionStatistics, ResetRejectsOldCallbacksAndClearsPublication){
@@ -207,8 +210,8 @@ TEST(ReflectionStatistics, ResetRejectsOldCallbacksAndClearsPublication){
     const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
     context.control->complete(previous, Token(), counters);
     context.control->reset(8u);
-    ReflectionStatistics statistics;
-    EXPECT_FALSE(context.control->tryGetLatestStatistics(statistics));
+    Expected<ReflectionStatistics> statistics;
+    EXPECT_FALSE(context.control->tryGetLatestStatistics());
     const auto current = context.control->reserve(Metadata(12u));
     EXPECT_GT(current.generation, previous.generation);
     context.control->accept(previous, Token(), true);
@@ -218,9 +221,10 @@ TEST(ReflectionStatistics, ResetRejectsOldCallbacksAndClearsPublication){
     next.deviceGeneration = 8u;
     context.control->accept(current, next, false);
     context.control->complete(current, next, counters);
-    ASSERT_TRUE(context.control->tryGetLatestStatistics(statistics));
-    EXPECT_EQ(statistics.frameIndex, 12u);
-    EXPECT_EQ(statistics.acceptedToken.deviceGeneration, 8u);
+    statistics = context.control->tryGetLatestStatistics();
+    ASSERT_TRUE(statistics);
+    EXPECT_EQ(statistics->frameIndex, 12u);
+    EXPECT_EQ(statistics->acceptedToken.deviceGeneration, 8u);
 }
 
 TEST(ReflectionStatistics, FailedMappingRetiresSlotWithoutPublishingZeros){
@@ -228,8 +232,7 @@ TEST(ReflectionStatistics, FailedMappingRetiresSlotWithoutPublishingZeros){
     const auto key = context.control->reserve(Metadata());
     context.control->accept(key, Token(), true);
     context.control->complete(key, Token(), nullptr);
-    ReflectionStatistics statistics;
-    EXPECT_FALSE(context.control->tryGetLatestStatistics(statistics));
+    EXPECT_FALSE(context.control->tryGetLatestStatistics());
     EXPECT_EQ(context.control->reserve(Metadata()).slot, key.slot);
 }
 
@@ -238,9 +241,9 @@ TEST(ReflectionStatistics, InvalidAcceptedTokenQuarantinesSlotUntilReset){
     const auto key = context.control->reserve(Metadata());
     context.control->accept(key, {}, true);
     context.control->discard(key);
-    ReflectionStatisticsReservationKey pending;
-    Core::QueueSubmissionToken token;
-    EXPECT_FALSE(context.control->pending(key.slot, pending, token));
+    EXPECT_FALSE(context.control->pending(key.slot));
+    EXPECT_FALSE(context.control->pending(ReflectionStatisticsState::s_SlotCount));
+    EXPECT_FALSE(context.control->pending(Limit<u32>::s_Max));
     EXPECT_NE(context.control->reserve(Metadata()).slot, key.slot);
     context.control->reset(7u);
     EXPECT_EQ(context.control->reserve(Metadata()).slot, key.slot);
@@ -281,11 +284,10 @@ TEST(ReflectionStatistics, AcceptedLeaseRemainsInFlightAfterPayloadDestruction){
         lease.accept(Token(), true);
     }
     EXPECT_NE(context.control->reserve(Metadata()).slot, index);
-    ReflectionStatisticsReservationKey key;
-    Core::QueueSubmissionToken token;
-    ASSERT_TRUE(context.control->pending(index, key, token));
+    const auto pending = context.control->pending(index);
+    ASSERT_TRUE(pending);
     const u32 counters[NWB_REFLECTION_COUNTER_SIZE / sizeof(u32)] = {};
-    context.control->complete(key, token, counters);
+    context.control->complete(pending->key, pending->token, counters);
     EXPECT_EQ(context.control->reserve(Metadata()).slot, index);
 }
 

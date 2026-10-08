@@ -30,7 +30,7 @@ struct ParseCase{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(UiNumericParseTests, IntegerPrefixesAndMalformedSyntaxLeaveOutputUntouched){
+TEST(UiNumericParseTests, IntegerPrefixesAndMalformedSyntaxRetainErrorClassification){
     const ParseCase cases[]{
         { "", NumericParseStatus::Incomplete }, { "  ", NumericParseStatus::Incomplete },
         { "+", NumericParseStatus::Incomplete }, { "-", NumericParseStatus::Incomplete },
@@ -43,9 +43,9 @@ TEST(UiNumericParseTests, IntegerPrefixesAndMalformedSyntaxLeaveOutputUntouched)
     };
     for(const ParseCase& test : cases){
         SCOPED_TRACE(test.text);
-        i64 output = -13579;
-        EXPECT_EQ(ParseIntegerDraft(test.text, output), test.status);
-        EXPECT_EQ(output, -13579);
+        const auto parsed = ParseIntegerDraft(test.text);
+        ASSERT_FALSE(parsed);
+        EXPECT_EQ(parsed.error(), test.status);
     }
 }
 
@@ -62,9 +62,9 @@ TEST(UiNumericParseTests, IntegerConversionPreservesFullSignedRangeAndLargeExact
     };
     for(const CompleteCase& test : cases){
         SCOPED_TRACE(test.text);
-        i64 output = 13;
-        ASSERT_EQ(ParseIntegerDraft(test.text, output), NumericParseStatus::Complete);
-        EXPECT_EQ(output, test.value);
+        const auto parsed = ParseIntegerDraft(test.text);
+        ASSERT_TRUE(parsed);
+        EXPECT_EQ(*parsed, test.value);
     }
 }
 
@@ -83,9 +83,9 @@ TEST(UiNumericParseTests, FloatPrefixesAndMalformedSyntaxAreClassifiedBeforeConv
     };
     for(const ParseCase& test : cases){
         SCOPED_TRACE(test.text);
-        f64 output = -13.5;
-        EXPECT_EQ(ParseFloatDraft(test.text, output), test.status);
-        EXPECT_EQ(BitCast<u64>(output), BitCast<u64>(-13.5));
+        const auto parsed = ParseFloatDraft(test.text);
+        ASSERT_FALSE(parsed);
+        EXPECT_EQ(parsed.error(), test.status);
     }
 }
 
@@ -99,9 +99,9 @@ TEST(UiNumericParseTests, SignedZeroDraftSpellingsPreserveTheSignBit){
     };
     for(const CompleteCase& test : cases){
         SCOPED_TRACE(test.text);
-        f64 output = 17.0;
-        ASSERT_EQ(ParseFloatDraft(test.text, output), NumericParseStatus::Complete);
-        EXPECT_EQ(BitCast<u64>(output), BitCast<u64>(test.value));
+        const auto parsed = ParseFloatDraft(test.text);
+        ASSERT_TRUE(parsed);
+        EXPECT_EQ(BitCast<u64>(*parsed), BitCast<u64>(test.value));
     }
 }
 
@@ -109,17 +109,19 @@ TEST(UiNumericParseTests, EveryAsciiEdgeWhitespaceIsAcceptedButInteriorWhitespac
     const char whitespace[]{ ' ', '\t', '\n', '\r', '\f', '\v' };
     for(const char edge : whitespace){
         const char trimmed[]{ edge, '+', '7', edge };
-        i64 integer = 0;
-        f64 floating = 0.0;
-        EXPECT_EQ(ParseIntegerDraft({ trimmed, 4u }, integer), NumericParseStatus::Complete);
-        EXPECT_EQ(ParseFloatDraft({ trimmed, 4u }, floating), NumericParseStatus::Complete);
-        EXPECT_EQ(integer, 7);
-        EXPECT_EQ(floating, 7.0);
+        const auto integer = ParseIntegerDraft({ trimmed, 4u });
+        const auto floating = ParseFloatDraft({ trimmed, 4u });
+        ASSERT_TRUE(integer);
+        ASSERT_TRUE(floating);
+        EXPECT_EQ(*integer, 7);
+        EXPECT_EQ(*floating, 7.0);
         const char interior[]{ '1', edge, '2' };
-        EXPECT_EQ(ParseIntegerDraft({ interior, 3u }, integer), NumericParseStatus::Invalid);
-        EXPECT_EQ(ParseFloatDraft({ interior, 3u }, floating), NumericParseStatus::Invalid);
-        EXPECT_EQ(integer, 7);
-        EXPECT_EQ(floating, 7.0);
+        const auto invalidInteger = ParseIntegerDraft({ interior, 3u });
+        const auto invalidFloat = ParseFloatDraft({ interior, 3u });
+        ASSERT_FALSE(invalidInteger);
+        ASSERT_FALSE(invalidFloat);
+        EXPECT_EQ(invalidInteger.error(), NumericParseStatus::Invalid);
+        EXPECT_EQ(invalidFloat.error(), NumericParseStatus::Invalid);
     }
 }
 

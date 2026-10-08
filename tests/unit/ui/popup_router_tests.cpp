@@ -169,9 +169,11 @@ TEST_F(UiPopupRouterTests, OptedInSingleStopPopupTabsToTheNextParentStopAfterAcc
     EXPECT_FALSE(m_router.focus().valid());
     EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Tab, .repeat = true }).keyboardConsumed);
     PopupDismissReason::Enum reason = PopupDismissReason::None;
-    EXPECT_TRUE(m_router.consumePopupDismissal(scope.token, reason));
+    const auto reasonResult = m_router.consumePopupDismissal(scope.token);
+    ASSERT_TRUE(reasonResult);
+    reason = *reasonResult;
     EXPECT_EQ(reason, PopupDismissReason::FocusTraversal);
-    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token, reason));
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token));
     const auto base = BaseTargets();
     ASSERT_TRUE(m_router.commitTargets(base.data(), base.size(), 3u));
     EXPECT_EQ(m_router.focus().value, 2u);
@@ -190,7 +192,9 @@ TEST_F(UiPopupRouterTests, OptedInPopupReverseTabsToThePreviousParentStop){
     ASSERT_EQ(m_router.focus().value, 101u);
     key(Core::Key::Tab, true);
     PopupDismissReason::Enum reason = PopupDismissReason::None;
-    EXPECT_TRUE(m_router.consumePopupDismissal(scope.token, reason));
+    const auto reasonResult = m_router.consumePopupDismissal(scope.token);
+    ASSERT_TRUE(reasonResult);
+    reason = *reasonResult;
     EXPECT_EQ(reason, PopupDismissReason::FocusTraversal);
     const auto base = BaseTargets();
     ASSERT_TRUE(m_router.commitTargets(base.data(), base.size(), 3u));
@@ -208,13 +212,15 @@ TEST_F(UiPopupRouterTests, OptedInTwoStopPopupMovesInsideBeforeLeaving){
     key(Core::Key::Tab);
     EXPECT_EQ(m_router.focus().value, 102u);
     PopupDismissReason::Enum reason = PopupDismissReason::None;
-    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token, reason));
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token));
     key(Core::Key::Tab, true);
     EXPECT_EQ(m_router.focus().value, 101u);
-    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token, reason));
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token));
     key(Core::Key::Tab);
     key(Core::Key::Tab);
-    EXPECT_TRUE(m_router.consumePopupDismissal(scope.token, reason));
+    const auto reasonResult = m_router.consumePopupDismissal(scope.token);
+    ASSERT_TRUE(reasonResult);
+    reason = *reasonResult;
     EXPECT_EQ(reason, PopupDismissReason::FocusTraversal);
 }
 
@@ -232,7 +238,9 @@ TEST_F(UiPopupRouterTests, EmptyPopupStillOwnsKeysAndOutsidePointerInput){
     EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = { 15.0f, 15.0f } }).pointerConsumed);
     key(Core::Key::Escape);
     PopupDismissReason::Enum reason = PopupDismissReason::None;
-    EXPECT_TRUE(m_router.consumePopupDismissal(scope.token, reason));
+    const auto reasonResult = m_router.consumePopupDismissal(scope.token);
+    ASSERT_TRUE(reasonResult);
+    reason = *reasonResult;
     EXPECT_EQ(reason, PopupDismissReason::Cancel);
 }
 
@@ -258,9 +266,11 @@ TEST_F(UiPopupRouterTests, OutsideDismissalConsumesItsEntirePressAcrossAcceptedR
     EXPECT_TRUE(m_router.hasPopup());
     EXPECT_TRUE(m_router.wantsPointer());
     PopupDismissReason::Enum reason = PopupDismissReason::None;
-    EXPECT_TRUE(m_router.consumePopupDismissal(scope.token, reason));
+    const auto reasonResult = m_router.consumePopupDismissal(scope.token);
+    ASSERT_TRUE(reasonResult);
+    reason = *reasonResult;
     EXPECT_EQ(reason, PopupDismissReason::OutsideClick);
-    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token, reason));
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token));
     const auto base = BaseTargets();
     ASSERT_TRUE(m_router.commitTargets(base.data(), base.size(), 3u));
     EXPECT_FALSE(m_router.hasPopup());
@@ -279,7 +289,9 @@ TEST_F(UiPopupRouterTests, EscapeDismissalPreservesHeldKeyOwnershipAcrossAccepte
     EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Escape }).keyboardConsumed);
     EXPECT_TRUE(m_router.ownsKey(Core::Key::Escape));
     PopupDismissReason::Enum reason = PopupDismissReason::None;
-    EXPECT_TRUE(m_router.consumePopupDismissal(scope.token, reason));
+    const auto reasonResult = m_router.consumePopupDismissal(scope.token);
+    ASSERT_TRUE(reasonResult);
+    reason = *reasonResult;
     EXPECT_EQ(reason, PopupDismissReason::Cancel);
     const auto base = BaseTargets();
     ASSERT_TRUE(m_router.commitTargets(base.data(), base.size(), 3u));
@@ -302,8 +314,7 @@ TEST_F(UiPopupRouterTests, NonDismissibleModalBlocksOutsideAndEscapeWithoutPubli
     EXPECT_FALSE(m_router.dismissPopup(PopupDismissReason::OutsideClick));
     EXPECT_FALSE(m_router.dismissPopup(PopupDismissReason::Cancel));
     EXPECT_FALSE(m_router.dismissPopup(PopupDismissReason::None));
-    PopupDismissReason::Enum reason = PopupDismissReason::None;
-    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token, reason));
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token));
     EXPECT_TRUE(m_router.actions().empty());
 }
 
@@ -322,8 +333,7 @@ TEST_F(UiPopupRouterTests, ClosingTokenSuppressesActionsUntilItsAcceptedRemovalA
     EXPECT_TRUE(send({ .type = InputEventType::PointerMove, .position = { 15.0f, 15.0f } }).pointerConsumed);
     key(Core::Key::Enter);
     EXPECT_TRUE(m_router.actions().empty());
-    PopupDismissReason::Enum reason = PopupDismissReason::None;
-    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token, reason));
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token));
     const auto base = BaseTargets();
     ASSERT_TRUE(m_router.commitTargets(base.data(), base.size(), 3u));
     EXPECT_FALSE(m_router.hasPopup());
@@ -361,8 +371,7 @@ TEST_F(UiPopupRouterTests, ReopenedEpochFencesOldCloseAndDismissalTokens){
     m_router.closePopup(original.token);
     EXPECT_EQ(m_router.focus().value, 101u);
     EXPECT_EQ(m_router.hitTest({ 55.0f, 55.0f }).value, 101u);
-    PopupDismissReason::Enum reason = PopupDismissReason::None;
-    EXPECT_FALSE(m_router.consumePopupDismissal(reopened.token, reason));
+    EXPECT_FALSE(m_router.consumePopupDismissal(reopened.token));
     m_router.closePopup(reopened.token);
     const auto base = BaseTargets();
     ASSERT_TRUE(m_router.commitTargets(base.data(), base.size(), 4u));
@@ -412,19 +421,23 @@ TEST_F(UiPopupRouterTests, HeldEscapeDoesNotDismissTheNewlyAcceptedLowerScopeOnR
     ASSERT_TRUE(m_router.commitTargets(targets, 7u, 2u, scopes, 2u));
     EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Escape }).keyboardConsumed);
     PopupDismissReason::Enum reason = PopupDismissReason::None;
-    EXPECT_TRUE(m_router.consumePopupDismissal(higher.token, reason));
+    const auto reasonResult1 = m_router.consumePopupDismissal(higher.token);
+    ASSERT_TRUE(reasonResult1);
+    reason = *reasonResult1;
     EXPECT_EQ(reason, PopupDismissReason::Cancel);
     ASSERT_TRUE(install(lower, 3u));
     EXPECT_EQ(m_router.focus().value, 101u);
     EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Escape, .repeat = true }).keyboardConsumed);
-    EXPECT_FALSE(m_router.consumePopupDismissal(lower.token, reason));
+    EXPECT_FALSE(m_router.consumePopupDismissal(lower.token));
     EXPECT_EQ(m_router.focus().value, 101u);
     EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Escape }).keyboardConsumed);
-    EXPECT_FALSE(m_router.consumePopupDismissal(lower.token, reason));
+    EXPECT_FALSE(m_router.consumePopupDismissal(lower.token));
     EXPECT_EQ(m_router.focus().value, 101u);
     EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Escape }).keyboardConsumed);
     EXPECT_TRUE(send({ .type = InputEventType::KeyDown, .position = {}, .key = Core::Key::Escape }).keyboardConsumed);
-    EXPECT_TRUE(m_router.consumePopupDismissal(lower.token, reason));
+    const auto reasonResult2 = m_router.consumePopupDismissal(lower.token);
+    ASSERT_TRUE(reasonResult2);
+    reason = *reasonResult2;
     EXPECT_EQ(reason, PopupDismissReason::Cancel);
     EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Escape }).keyboardConsumed);
 }
@@ -550,9 +563,13 @@ TEST_F(UiPopupRouterTests, FocusLossDismissesAllScopesWithoutRestoringUnderlying
     EXPECT_TRUE(send({ .type = InputEventType::FocusLost, .position = {} }).keyboardConsumed);
     EXPECT_FALSE(m_router.focus().valid());
     PopupDismissReason::Enum reason = PopupDismissReason::None;
-    EXPECT_TRUE(m_router.consumePopupDismissal(lower.token, reason));
+    const auto reasonResult1 = m_router.consumePopupDismissal(lower.token);
+    ASSERT_TRUE(reasonResult1);
+    reason = *reasonResult1;
     EXPECT_EQ(reason, PopupDismissReason::FocusLost);
-    EXPECT_TRUE(m_router.consumePopupDismissal(higher.token, reason));
+    const auto reasonResult2 = m_router.consumePopupDismissal(higher.token);
+    ASSERT_TRUE(reasonResult2);
+    reason = *reasonResult2;
     EXPECT_EQ(reason, PopupDismissReason::FocusLost);
     const auto base = BaseTargets();
     ASSERT_TRUE(m_router.commitTargets(base.data(), base.size(), 4u));
@@ -680,8 +697,7 @@ TEST_F(UiPopupRouterTests, ResetDropsOwnedScopesDismissalsAndInteractionBeforeLa
     EXPECT_FALSE(m_router.capture().valid());
     EXPECT_TRUE(m_router.actions().empty());
     EXPECT_EQ(m_router.layoutGeneration(), 0u);
-    PopupDismissReason::Enum reason = PopupDismissReason::None;
-    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token, reason));
+    EXPECT_FALSE(m_router.consumePopupDismissal(scope.token));
     const auto base = BaseTargets();
     ASSERT_TRUE(m_router.commitTargets(base.data(), base.size(), 1u));
     EXPECT_EQ(m_router.hitTest({ 15.0f, 15.0f }).value, 1u);

@@ -6,6 +6,7 @@
 
 
 #include "compile.h"
+#include "expected.h"
 #include "text_utils.h"
 #include "type.h"
 #include "type_borrow.h"
@@ -133,57 +134,54 @@ template<typename StringT>
 
 
 template<typename CharT>
-[[nodiscard]] inline bool ParseHexDigit(const CharT ch, u8& outValue)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline Expected<u8> ParseHexDigit(const CharT ch)noexcept(IsArithmetic_V<CharT>){
     if(ch >= static_cast<CharT>('0') && ch <= static_cast<CharT>('9')){
-        outValue = static_cast<u8>(ch - static_cast<CharT>('0'));
-        return true;
+        return static_cast<u8>(ch - static_cast<CharT>('0'));
     }
     if(ch >= static_cast<CharT>('a') && ch <= static_cast<CharT>('f')){
-        outValue = static_cast<u8>(ch - static_cast<CharT>('a') + s_HexDecimalDigitCount);
-        return true;
+        return static_cast<u8>(ch - static_cast<CharT>('a') + s_HexDecimalDigitCount);
     }
     if(ch >= static_cast<CharT>('A') && ch <= static_cast<CharT>('F')){
-        outValue = static_cast<u8>(ch - static_cast<CharT>('A') + s_HexDecimalDigitCount);
-        return true;
+        return static_cast<u8>(ch - static_cast<CharT>('A') + s_HexDecimalDigitCount);
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 
 template<typename CharT>
-[[nodiscard]] inline bool ParseHexU64(const BasicStringView<CharT> text, u64& outValue)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline Expected<u64> ParseHexU64(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
     if(text.size() != s_HexU64DigitCount)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outValue = 0;
+    u64 value = 0u;
     for(const CharT ch : text){
-        u8 nibble = 0;
-        if(!ParseHexDigit(ch, nibble))
-            return false;
+        const auto nibble = ParseHexDigit(ch);
+        if(!nibble)
+            return MakeUnexpected(Failure{});
 
-        outValue = (outValue << s_HexNibbleBits) | static_cast<u64>(nibble);
+        value = (value << s_HexNibbleBits) | static_cast<u64>(*nibble);
     }
 
-    return true;
+    return value;
 }
 
 
 template<typename CharT>
-[[nodiscard]] inline bool ParseVariableHexU64(BasicStringView<CharT> text, u64& outValue)noexcept(IsArithmetic_V<CharT>){
-    outValue = 0u;
+[[nodiscard]] inline Expected<u64> ParseVariableHexU64(BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+    u64 value = 0u;
     if(text.size() >= s_HexPrefixLength && text[0u] == static_cast<CharT>('0') && (text[1u] == static_cast<CharT>('x') || text[1u] == static_cast<CharT>('X')))
         text.remove_prefix(s_HexPrefixLength);
     if(text.empty() || text.size() > s_HexU64DigitCount)
-        return false;
+        return MakeUnexpected(Failure{});
 
     for(const CharT ch : text){
-        u8 nibble = 0u;
-        if(!ParseHexDigit(ch, nibble))
-            return false;
+        const auto nibble = ParseHexDigit(ch);
+        if(!nibble)
+            return MakeUnexpected(Failure{});
 
-        outValue = (outValue << s_HexNibbleBits) | static_cast<u64>(nibble);
+        value = (value << s_HexNibbleBits) | static_cast<u64>(*nibble);
     }
-    return true;
+    return value;
 }
 
 

@@ -129,16 +129,15 @@ int Run(const int argc, char** argv){
             }
 
             for(const Path& inputPath : inputPaths){
-                ErrorCode errorCode;
-                const bool inputIsRegularFile = IsRegularFile(inputPath, errorCode);
-                if(errorCode && !IsMissingPathError(errorCode)){
+                const auto inputIsRegularFile = IsRegularFile(inputPath);
+                if(!inputIsRegularFile && !IsMissingPathError(inputIsRegularFile.error())){
                     NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect input '{}': {}")
                         , PathToString<tchar>(inputPath)
-                        , StringConvert(errorCode.message())
+                        , StringConvert(inputIsRegularFile.error().message())
                     );
                     return TexConvCliDetail::s_TexConvExitFailure;
                 }
-                if(!inputIsRegularFile){
+                if(!inputIsRegularFile || !*inputIsRegularFile){
                     NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: input image was not found or is not a regular file: '{}'")
                         , PathToString<tchar>(inputPath)
                     );
@@ -154,16 +153,15 @@ int Run(const int argc, char** argv){
             }
 
             if(alphaSource.mode == AlphaSourceMode::Image){
-                ErrorCode errorCode;
-                const bool alphaIsRegularFile = IsRegularFile(alphaSource.path, errorCode);
-                if(errorCode && !IsMissingPathError(errorCode)){
+                const auto alphaIsRegularFile = IsRegularFile(alphaSource.path);
+                if(!alphaIsRegularFile && !IsMissingPathError(alphaIsRegularFile.error())){
                     NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to inspect alpha image '{}': {}")
                         , PathToString<tchar>(alphaSource.path)
-                        , StringConvert(errorCode.message())
+                        , StringConvert(alphaIsRegularFile.error().message())
                     );
                     return TexConvCliDetail::s_TexConvExitFailure;
                 }
-                if(!alphaIsRegularFile){
+                if(!alphaIsRegularFile || !*alphaIsRegularFile){
                     NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image was not found or is not a regular file: '{}'")
                         , PathToString<tchar>(alphaSource.path)
                     );
@@ -178,29 +176,29 @@ int Run(const int argc, char** argv){
                 }
             }
 
-            OutputPaths outputPaths;
-            if(!ResolveOutputPaths(inputPaths.front(), outputPathText, outputPaths) || !ValidateOutputPaths(outputPaths, force))
+            const auto outputPaths = ResolveOutputPaths(inputPaths.front(), outputPathText);
+            if(!outputPaths || !ValidateOutputPaths(*outputPaths, force))
                 return TexConvCliDetail::s_TexConvExitFailure;
 
-            TexturePayload payload;
-            if(!EncodeTexture(inputPaths, dimension, !linear, alphaSource, payload))
+            const auto payload = EncodeTexture(inputPaths, dimension, !linear, alphaSource);
+            if(!payload)
                 return TexConvCliDetail::s_TexConvExitFailure;
-            if(!WriteOutputs(outputPaths, payload, force))
+            if(!WriteOutputs(*outputPaths, *payload, force))
                 return TexConvCliDetail::s_TexConvExitFailure;
 
             AStringStream report;
             report
-                << "Wrote " << PathToGenericString<AString>(outputPaths.metadata) << "\n"
-                << "Wrote " << PathToGenericString<AString>(outputPaths.data) << "\n"
-                << "  " << payload.width << "x" << payload.height
+                << "Wrote " << PathToGenericString<AString>(outputPaths->metadata) << "\n"
+                << "Wrote " << PathToGenericString<AString>(outputPaths->data) << "\n"
+                << "  " << payload->width << "x" << payload->height
             ;
-            if(payload.dimension == TextureDimension::TextureCube)
+            if(payload->dimension == TextureDimension::TextureCube)
                 report << " cube";
-            else if(payload.dimension == TextureDimension::Texture3D)
-                report << "x" << payload.depth;
-            const usize totalPayloadBytes = payload.bytes.size() + payload.alphaBytes.size();
+            else if(payload->dimension == TextureDimension::Texture3D)
+                report << "x" << payload->depth;
+            const usize totalPayloadBytes = payload->bytes.size() + payload->alphaBytes.size();
             report
-                << ", " << payload.mips.size() << " mips, " << totalPayloadBytes << " bytes\n"
+                << ", " << payload->mips.size() << " mips, " << totalPayloadBytes << " bytes\n"
             ;
             NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
             return TexConvCliDetail::s_TexConvExitSuccess;

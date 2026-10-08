@@ -79,9 +79,10 @@ Bool X11TextInputService::OnPreeditCaret(XIC context, const XPointer data, const
     usize position = 0u;
     usize current = 0u;
     while(position < service.m_preedit.caretByte()){
-        u32 codePoint = 0u;
-        const i32 bytes = DecodeUtf8CodePoint(text.substr(position), codePoint);
-        position += static_cast<usize>(bytes);
+        const auto decoded = DecodeUtf8CodePoint(text.substr(position));
+        if(!decoded)
+            return 0;
+        position += static_cast<usize>(decoded->byteCount);
         ++current;
     }
     switch(caret.direction){
@@ -137,9 +138,10 @@ bool X11TextInputService::convertPreeditText(const XIMText& text){
             codePoint = static_cast<u32>(wide);
         }
         char bytes[4]{};
-        usize count = 0u;
-        if(EncodeTextInputCodePoint(codePoint, bytes, count) != TextInputAdmission::Accepted)
+        const auto encoded = EncodeTextInputCodePoint(codePoint, bytes);
+        if(!encoded)
             return false;
+        const usize count = *encoded;
         if(count > s_TextInputMaxEventTextBytes - m_insertion.size())
             return false;
         m_insertion.append(bytes, count);

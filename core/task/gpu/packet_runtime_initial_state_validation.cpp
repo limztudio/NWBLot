@@ -71,12 +71,11 @@ template<typename States, typename ResourceGetter>
 }
 
 template<typename States, typename Resource, typename ResourceGetter>
-static void FindPermanentState(
+[[nodiscard]] static ResourceStates::Mask FindPermanentState(
     const States& states,
     const Vector<usize, Alloc::ScratchArena>& index,
     Resource* const resource,
-    const ResourceGetter resourceGetter,
-    ResourceStates::Mask& outState
+    const ResourceGetter resourceGetter
 )noexcept{
     usize begin = 0u;
     usize end = index.size();
@@ -88,7 +87,8 @@ static void FindPermanentState(
             end = middle;
     }
     if(begin < index.size() && resourceGetter(states[index[begin]]) == resource)
-        outState = states[index[begin]].state;
+        return states[index[begin]].state;
+    return ResourceStates::Unknown;
 }
 
 
@@ -131,8 +131,7 @@ bool GpuInitialStateHandoffValidation::validate(){
     }
     else{
         for(const auto& state : m_states.m_permanentTextureStates){
-            ResourceStates::Mask permanentState = ResourceStates::Unknown;
-            if(state.texture && !permanentTextureState(state.texture, permanentState))
+            if(state.texture && !permanentTextureState(state.texture))
                 return false;
         }
     }
@@ -151,8 +150,7 @@ bool GpuInitialStateHandoffValidation::validate(){
     }
     else{
         for(const auto& state : m_states.m_permanentBufferStates){
-            ResourceStates::Mask permanentState = ResourceStates::Unknown;
-            if(state.buffer && !permanentBufferState(state.buffer, permanentState))
+            if(state.buffer && !permanentBufferState(state.buffer))
                 return false;
         }
     }
@@ -200,10 +198,10 @@ bool GpuInitialStateHandoffValidation::validate(){
                     return false;
             }
         }
-        ResourceStates::Mask permanentState = ResourceStates::Unknown;
-        if(!permanentTextureState(state.texture, permanentState))
+        const auto permanentState = permanentTextureState(state.texture);
+        if(!permanentState)
             return false;
-        if(permanentState != ResourceStates::Unknown && permanentState != state.state)
+        if(*permanentState != ResourceStates::Unknown && *permanentState != state.state)
             return false;
     }
     for(const auto& state : m_states.m_bufferStates){
@@ -241,55 +239,53 @@ bool GpuInitialStateHandoffValidation::validate(){
                     return false;
             }
         }
-        ResourceStates::Mask permanentState = ResourceStates::Unknown;
-        if(!permanentBufferState(state.buffer, permanentState))
+        const auto permanentState = permanentBufferState(state.buffer);
+        if(!permanentState)
             return false;
-        if(permanentState != ResourceStates::Unknown && permanentState != state.state)
+        if(*permanentState != ResourceStates::Unknown && *permanentState != state.state)
             return false;
     }
     return true;
 }
 
-bool GpuInitialStateHandoffValidation::permanentTextureState(Texture* const texture, ResourceStates::Mask& outState)const noexcept{
-    outState = ResourceStates::Unknown;
+Expected<ResourceStates::Mask> GpuInitialStateHandoffValidation::permanentTextureState(Texture* const texture)const noexcept{
+    ResourceStates::Mask result = ResourceStates::Unknown;
     if(m_permanentTexturesIndexed && texture){
-        __hidden_gpu_initial_state_handoff_validation::FindPermanentState(
+        return __hidden_gpu_initial_state_handoff_validation::FindPermanentState(
             m_states.m_permanentTextureStates, *m_permanentTextureIndex, texture,
-            [](const auto& state){ return state.texture; }, outState
+            [](const auto& state){ return state.texture; }
         );
-        return true;
     }
     for(const auto& state : m_states.m_permanentTextureStates){
         if(state.texture != texture)
             continue;
         if(state.state == ResourceStates::Unknown)
-            return false;
-        if(outState != ResourceStates::Unknown && outState != state.state)
-            return false;
-        outState = state.state;
+            return MakeUnexpected(Failure{});
+        if(result != ResourceStates::Unknown && result != state.state)
+            return MakeUnexpected(Failure{});
+        result = state.state;
     }
-    return true;
+    return result;
 }
 
-bool GpuInitialStateHandoffValidation::permanentBufferState(Buffer* const buffer, ResourceStates::Mask& outState)const noexcept{
-    outState = ResourceStates::Unknown;
+Expected<ResourceStates::Mask> GpuInitialStateHandoffValidation::permanentBufferState(Buffer* const buffer)const noexcept{
+    ResourceStates::Mask result = ResourceStates::Unknown;
     if(m_permanentBuffersIndexed && buffer){
-        __hidden_gpu_initial_state_handoff_validation::FindPermanentState(
+        return __hidden_gpu_initial_state_handoff_validation::FindPermanentState(
             m_states.m_permanentBufferStates, *m_permanentBufferIndex, buffer,
-            [](const auto& state){ return state.buffer; }, outState
+            [](const auto& state){ return state.buffer; }
         );
-        return true;
     }
     for(const auto& state : m_states.m_permanentBufferStates){
         if(state.buffer != buffer)
             continue;
         if(state.state == ResourceStates::Unknown)
-            return false;
-        if(outState != ResourceStates::Unknown && outState != state.state)
-            return false;
-        outState = state.state;
+            return MakeUnexpected(Failure{});
+        if(result != ResourceStates::Unknown && result != state.state)
+            return MakeUnexpected(Failure{});
+        result = state.state;
     }
-    return true;
+    return result;
 }
 
 

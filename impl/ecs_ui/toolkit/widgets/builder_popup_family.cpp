@@ -115,14 +115,14 @@ void Builder::releasePopupFamily(){
 bool Builder::reserveCompoundPopup(const WidgetState& widget, const PopupToken& token){
     PopupOptions options;
     options.size = { 1.0f, 1.0f };
-    PopupPlacement placement;
-    if(!PopupLayout::Place(options, m_paint.displayMetrics(), placement))
+    const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
+    if(!placement)
         return false;
     PopupScope scope;
     scope.token = token;
     scope.parent = m_context.popupToken();
-    scope.bounds = placement.bounds;
-    scope.viewport = placement.viewport;
+    scope.bounds = placement->bounds;
+    scope.viewport = placement->viewport;
     return m_context.registerPopupScope(widget, scope);
 }
 

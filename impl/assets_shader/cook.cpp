@@ -61,29 +61,16 @@ using ScratchHashSet = HashSet<T, Alloc::ScratchArena, Hasher<T>, EqualTo<T>>;
 static constexpr AStringView s_AssetTypeInclude = "include";
 static constexpr AStringView s_SlangSourceExtension = ".slang";
 static constexpr AStringView s_SlangIncludeExtension = ".slangi";
-static bool TryParseShaderOptimizationLevel(
-    const AStringView text,
-    ShaderOptimizationLevel::Enum& outOptimizationLevel
-)noexcept{
-    if(text == ::__hidden_shader_cook::s_NoneOptText){
-        outOptimizationLevel = ShaderOptimizationLevel::None;
-        return true;
-    }
-    if(text == ::__hidden_shader_cook::s_DefaultVariantText){
-        outOptimizationLevel = ShaderOptimizationLevel::Default;
-        return true;
-    }
-    if(text == "high"){
-        outOptimizationLevel = ShaderOptimizationLevel::High;
-        return true;
-    }
-    if(text == "maximal"){
-        outOptimizationLevel = ShaderOptimizationLevel::Maximal;
-        return true;
-    }
-
-    outOptimizationLevel = ShaderOptimizationLevel::kCount;
-    return false;
+static Expected<ShaderOptimizationLevel::Enum> TryParseShaderOptimizationLevel(const AStringView text)noexcept{
+    if(text == ::__hidden_shader_cook::s_NoneOptText)
+        return ShaderOptimizationLevel::None;
+    if(text == ::__hidden_shader_cook::s_DefaultVariantText)
+        return ShaderOptimizationLevel::Default;
+    if(text == "high")
+        return ShaderOptimizationLevel::High;
+    if(text == "maximal")
+        return ShaderOptimizationLevel::Maximal;
+    return MakeUnexpected(Failure{});
 }
 
 
@@ -101,25 +88,24 @@ static ACompactString CanonicalAssetType(const Metascript::Document& doc){
 
 template <typename VisitedSet>
 static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVector<Path>& includeDirectories, const Span<const AStringView> externallyPlannedMacroIncludes, VisitedSet& inOutVisitedPaths, ShaderCook::CookVector<Path>& inOutDependencies, Alloc::ScratchArena& scratchArena){
-    ErrorCode errorCode;
 
     Deque<Path, Alloc::ScratchArena> pending{scratchArena};
     pending.push_back(startPath);
     ScratchString sourceText{scratchArena};
-    Path includePath(inOutDependencies.get_allocator().arena());
 
     while(!pending.empty()){
         Path dependencyPath = Move(pending.back());
         pending.pop_back();
 
-        const Path absolutePath = AbsolutePath(dependencyPath, errorCode).lexicallyNormal();
-        if(errorCode){
+        auto absolutePathResult = AbsolutePath(dependencyPath);
+        if(!absolutePathResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}")
                 , PathToString<tchar>(dependencyPath)
-                , StringConvert(errorCode.message())
+                , StringConvert(absolutePathResult.error().message())
             );
             return false;
         }
+        const Path absolutePath = absolutePathResult->lexicallyNormal();
 
         ScratchString canonicalPathKey = PathToString(scratchArena, absolutePath);
         CanonicalizeTextInPlace(canonicalPathKey);
@@ -148,9 +134,9 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
             if(!line.empty() && line.back() == '\r')
                 line.remove_suffix(1);
 
-            AStringView includeName;
-            ShaderSourceDependencies::IncludeKind::Enum includeKind = ShaderSourceDependencies::IncludeKind::Relative;
-            if(ShaderSourceDependencies::ExtractIncludeDirective(line, includeName, includeKind)){
+            if(const auto include = ShaderSourceDependencies::ExtractIncludeDirective(line)){
+                const AStringView includeName = include->name;
+                const auto includeKind = include->kind;
                 if(includeKind == ShaderSourceDependencies::IncludeKind::Macro || includeKind == ShaderSourceDependencies::IncludeKind::Unsupported){
                     const bool plannedMacro = includeKind == ShaderSourceDependencies::IncludeKind::Macro
                         && FindIf(externallyPlannedMacroIncludes.begin(), externallyPlannedMacroIncludes.end(), [includeName](const AStringView name)noexcept{
@@ -166,7 +152,8 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
                     );
                     return false;
                 }
-                if(!ShaderSourceDependencies::ResolveIncludeFile(includeName, includeKind, absolutePath.parentPath(), includeDirectories, includePath)){
+                auto includePath = ShaderSourceDependencies::ResolveIncludeFile(includeName, includeKind, absolutePath.parentPath(), includeDirectories);
+                if(!includePath){
                     NWB_LOGGER_ERROR(NWB_TEXT("Unable to resolve include '{}' from '{}'")
                         , StringConvert(includeName)
                         , PathToString<tchar>(absolutePath)
@@ -174,7 +161,7 @@ static bool CollectDependencies(const Path& startPath, const ShaderCook::CookVec
                     return false;
                 }
 
-                pending.push_back(Move(includePath));
+                pending.push_back(Move(*includePath));
             }
 
             lineBegin = lineEnd + 1;
@@ -302,22 +289,22 @@ static bool ValidateVariantSignature(const AStringView contextLabel, const AStri
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseOptionalIntegerFlagField(
+static Expected<bool> ParseOptionalIntegerFlagField(
     const Path& nwbFilePath,
     const Metascript::Value& asset,
     const AStringView fieldName,
-    bool& inOutValue
+    const bool defaultValue
 ){
     const Metascript::Value* fieldValue = asset.findField(fieldName);
     if(!fieldValue)
-        return true;
+        return defaultValue;
 
     if(!fieldValue->isInteger()){
         NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': field '{}' must be 0 or 1")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const i64 value = fieldValue->asInteger();
@@ -326,33 +313,32 @@ static bool ParseOptionalIntegerFlagField(
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    inOutValue = value != 0;
-    return true;
+    return value != 0;
 }
 
-static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset, ShaderCook::CookArena& arena, ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>& outDefineValues){
-    outDefineValues.clear();
+static Expected<ShaderCook::CookMap<CookString, ShaderCook::DefineEntry>> ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset, ShaderCook::CookArena& arena){
+    ShaderCook::CookMap<CookString, ShaderCook::DefineEntry> defines{0, Hasher<CookString>(), EqualTo<CookString>(), arena};
 
     const auto* definesVal = asset.findField("defines");
     if(!definesVal)
-        return true;
+        return defines;
 
     if(!definesVal->isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': defines must be a map"), PathToString<tchar>(nwbFilePath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const auto& definesMap = definesVal->asMap();
-    outDefineValues.reserve(definesMap.size());
+    defines.reserve(definesMap.size());
     for(const auto& [key, val] : definesMap){
         if(AStringView(key.data(), key.size()) == "NWB_BINDLESS_TLAS"){
             NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define 'NWB_BINDLESS_TLAS' is an engine transport feature selected in shader source")
                 , PathToString<tchar>(nwbFilePath)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         CookString defineName(key.data(), key.size(), arena);
         const AStringView defineNameView(defineName);
@@ -366,20 +352,20 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(defineName)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         ShaderCook::CookVector<CookString> defineValues(arena);
         if(!val.copyStringList(defineValues)){
             NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' values must be a list of strings"), PathToString<tchar>(nwbFilePath), StringConvert(defineName));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(defineValues.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Meta '{}': define '{}' must provide at least one value")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(defineName)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         for(const CookString& defineValue : defineValues){
             const AStringView valueView(defineValue);
@@ -394,14 +380,14 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
                     , PathToString<tchar>(nwbFilePath)
                     , StringConvert(defineName)
                 );
-                return false;
+                return MakeUnexpected(Failure{});
             }
         }
 
         ShaderCook::DefineEntry defineEntry(Move(defineValues));
-        outDefineValues.insert_or_assign(Move(defineName), Move(defineEntry));
+        defines.insert_or_assign(Move(defineName), Move(defineEntry));
     }
-    return true;
+    return defines;
 }
 
 
@@ -414,13 +400,12 @@ static bool ParseDefines(const Path& nwbFilePath, const Metascript::Value& asset
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShaderCook::parseShaderMeta(
+Expected<ShaderCook::ShaderEntry> ShaderCook::parseShaderMeta(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
-    ShaderEntry& outEntry,
     Alloc::ScratchArena& scratchArena
 ){
-    outEntry = ShaderEntry(m_memoryArena);
+    ShaderEntry entry(m_memoryArena);
 
     const auto declaredAssetType = doc.assetType();
     const AStringView assetTypeText(declaredAssetType.data(), declaredAssetType.size());
@@ -430,30 +415,32 @@ bool ShaderCook::parseShaderMeta(
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(assetTypeText)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const Metascript::Value* assetValue = Assets::FindMetadataAssetMapValue<Metascript::Document, Metascript::Value>(nwbFilePath, doc, "Shader");
     if(!assetValue)
-        return false;
+        return MakeUnexpected(Failure{});
     const Metascript::Value& asset = *assetValue;
 
-    if(!Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, outEntry.source))
-        return false;
+    auto pairedSource = Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, m_memoryArena);
+    if(!pairedSource)
+        return MakeUnexpected(Failure{});
+    entry.source = Move(*pairedSource);
     if(!Assets::CheckPairedSourceExtension(
         nwbFilePath,
-        outEntry.source,
+        entry.source,
         __hidden_shader_cook::s_SlangSourceExtension,
         "Shader",
         scratchArena
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    if(!outEntry.stage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(shaderType))){
+    if(!entry.stage.assign(Core::ShaderStageNames::ArchiveStageTextFromShaderType(shaderType))){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': failed to derive shader stage"), PathToString<tchar>(nwbFilePath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outEntry.archiveStage = outEntry.stage;
+    entry.archiveStage = entry.stage;
     if(!Assets::ValidateMetadataAssetFields(
         nwbFilePath,
         asset,
@@ -465,98 +452,98 @@ bool ShaderCook::parseShaderMeta(
             ;
         }
     ))
-        return false;
-    if(!__hidden_shader_cook::ParseOptionalIntegerFlagField(nwbFilePath, asset, "ray_query", outEntry.rayQuery))
-        return false;
-    AStringView optimizationLevelText;
-    bool optimizationLevelPresent = false;
-    if(!Assets::ReadMetadataStringField(
-        nwbFilePath,
-        asset,
-        "Shader meta",
-        "optimization_level",
-        false,
-        optimizationLevelText,
-        &optimizationLevelPresent
-    ))
-        return false;
-    if(
-        optimizationLevelPresent
-        && !__hidden_shader_cook::TryParseShaderOptimizationLevel(
-            optimizationLevelText,
-            outEntry.optimizationLevel
-        )
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported optimization_level '{}'"),
-            PathToString<tchar>(nwbFilePath),
-            StringConvert(optimizationLevelText)
-        );
-        return false;
+        return MakeUnexpected(Failure{});
+    const auto rayQuery = __hidden_shader_cook::ParseOptionalIntegerFlagField(nwbFilePath, asset, "ray_query", entry.rayQuery);
+    if(!rayQuery)
+        return MakeUnexpected(Failure{});
+    entry.rayQuery = *rayQuery;
+    const auto optimizationLevelText = Assets::ReadMetadataStringField(nwbFilePath, asset, "Shader meta", "optimization_level", false);
+    if(!optimizationLevelText)
+        return MakeUnexpected(Failure{});
+    if(optimizationLevelText->present){
+        const auto optimizationLevel = __hidden_shader_cook::TryParseShaderOptimizationLevel(optimizationLevelText->text);
+        if(!optimizationLevel){
+            NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': unsupported optimization_level '{}'"),
+                PathToString<tchar>(nwbFilePath),
+                StringConvert(optimizationLevelText->text)
+            );
+            return MakeUnexpected(Failure{});
+        }
+        entry.optimizationLevel = *optimizationLevel;
     }
     AStringView entryPointText;
-    if(!Assets::ReadMetadataStringField(nwbFilePath, asset, "Shader meta", "entry_point", false, entryPointText))
-        return false;
-    outEntry.entryPoint.assign(entryPointText.data(), entryPointText.size());
-    if(outEntry.entryPoint.empty()){
+    auto entryPointTextResult = Assets::ReadMetadataStringField(nwbFilePath, asset, "Shader meta", "entry_point", false);
+    if(!entryPointTextResult)
+        return MakeUnexpected(Failure{});
+    entryPointText = entryPointTextResult->text;
+    entry.entryPoint.assign(entryPointText.data(), entryPointText.size());
+    if(entry.entryPoint.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': entry_point must not be empty"), PathToString<tchar>(nwbFilePath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    if(!__hidden_shader_cook::ParseOptionalIntegerFlagField(nwbFilePath, asset, "emit_mesh_compute_shadow", outEntry.emitMeshComputeShadow))
-        return false;
+    const auto emitMeshComputeShadow = __hidden_shader_cook::ParseOptionalIntegerFlagField(nwbFilePath, asset, "emit_mesh_compute_shadow", entry.emitMeshComputeShadow);
+    if(!emitMeshComputeShadow)
+        return MakeUnexpected(Failure{});
+    entry.emitMeshComputeShadow = *emitMeshComputeShadow;
 
     if(const auto* includeRootsVal = asset.findField("include_roots")){
-        if(!includeRootsVal->copyStringList(outEntry.includeRoots)){
+        if(!includeRootsVal->copyStringList(entry.includeRoots)){
             NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': include_roots must be a list of strings"), PathToString<tchar>(nwbFilePath));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        for(const CookString& includeRoot : outEntry.includeRoots){
+        for(const CookString& includeRoot : entry.includeRoots){
             if(!includeRoot.empty())
                 continue;
 
             NWB_LOGGER_ERROR(NWB_TEXT("Shader meta '{}': include_roots entries must not be empty"), PathToString<tchar>(nwbFilePath));
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
-    if(!__hidden_shader_cook::ParseDefines(nwbFilePath, asset, m_memoryArena, outEntry.defineValues))
-        return false;
+    auto defines = __hidden_shader_cook::ParseDefines(nwbFilePath, asset, m_memoryArena);
+    if(!defines)
+        return MakeUnexpected(Failure{});
+    entry.defineValues = Move(*defines);
 
-    return true;
+    return entry;
 }
 
-bool ShaderCook::parseIncludeMeta(
+Expected<ShaderCook::IncludeEntry> ShaderCook::parseIncludeMeta(
     const Path& nwbFilePath,
     const Metascript::Document& doc,
-    IncludeEntry& outEntry,
     Alloc::ScratchArena& scratchArena
 ){
-    outEntry = IncludeEntry(m_memoryArena);
+    IncludeEntry entry(m_memoryArena);
 
     if(__hidden_shader_cook::CanonicalAssetType(doc).view() != __hidden_shader_cook::s_AssetTypeInclude)
-        return true;
+        return entry;
 
-    if(!Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, outEntry.source))
-        return false;
+    auto pairedSource = Assets::ResolvePairedSourcePathFromMetadata(nwbFilePath, m_memoryArena);
+    if(!pairedSource)
+        return MakeUnexpected(Failure{});
+    entry.source = Move(*pairedSource);
     if(!Assets::CheckPairedSourceExtension(
         nwbFilePath,
-        outEntry.source,
+        entry.source,
         __hidden_shader_cook::s_SlangIncludeExtension,
         "Include",
         scratchArena
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const Metascript::Value* assetValue = Assets::FindMetadataAssetMapValue<Metascript::Document, Metascript::Value>(nwbFilePath, doc, "Include");
     if(!assetValue)
-        return false;
+        return MakeUnexpected(Failure{});
     const Metascript::Value& asset = *assetValue;
 
     if(!Assets::ValidateMetadataAssetFields(nwbFilePath, asset, "Include meta", { "defines" }))
-        return false;
-    if(!__hidden_shader_cook::ParseDefines(nwbFilePath, asset, m_memoryArena, outEntry.defineValues))
-        return false;
+        return MakeUnexpected(Failure{});
+    auto defines = __hidden_shader_cook::ParseDefines(nwbFilePath, asset, m_memoryArena);
+    if(!defines)
+        return MakeUnexpected(Failure{});
+    entry.defineValues = Move(*defines);
 
-    return true;
+    return entry;
 }
 
 bool ShaderCook::validateVariantSignature(

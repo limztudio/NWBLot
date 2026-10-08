@@ -138,14 +138,10 @@ RayTracingAccelStruct* GpuTaskGraphDeclarationReadView::accelStructForResource(
     return m_graph ? m_graph->accelStructForResource(resource) : nullptr;
 }
 
-const void* GpuTaskGraphDeclarationReadView::uploadBlobData(
-    const GpuUploadBlobId& blob,
-    usize& outByteSize
-)const & noexcept{
+Expected<BinaryByteView> GpuTaskGraphDeclarationReadView::uploadBlobData(const GpuUploadBlobId& blob)const & noexcept{
     if(m_graph)
-        return m_graph->uploadBlobData(blob, outByteSize);
-    outByteSize = 0u;
-    return nullptr;
+        return m_graph->uploadBlobData(blob);
+    return MakeUnexpected(Failure{});
 }
 
 GraphicsPipeline* GpuTaskGraphDeclarationReadView::graphicsPipelineFor(

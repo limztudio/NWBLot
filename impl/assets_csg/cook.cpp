@@ -62,63 +62,48 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     ;
 }
 
-[[nodiscard]] static bool ParseOptionalStringField(
+[[nodiscard]] static Expected<AStringView> ParseOptionalStringField(
     const Path& nwbFilePath,
     const Metascript::Value& asset,
-    const AStringView fieldName,
-    CookString& outText
+    const AStringView fieldName
 ){
-    outText.clear();
     AStringView text;
     bool present = false;
-    if(!Core::Assets::ReadMetadataStringField(
-        nwbFilePath,
-        asset,
-        s_CsgShapeMetaDiagnosticPrefix,
-        fieldName,
-        false,
-        text,
-        &present
-    ))
-        return false;
+    auto textResult = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, fieldName, false);
+    if(!textResult)
+        return MakeUnexpected(Failure{});
+    text = textResult->text;
+    present = textResult->present;
     if(!present)
-        return true;
+        return AStringView{};
     if(TrimView(text).empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must not be empty")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outText.assign(text.data(), text.size());
-    return true;
+    return text;
 }
 
-[[nodiscard]] static bool ParseRequiredStringField(
+[[nodiscard]] static Expected<AStringView> ParseRequiredStringField(
     const Path& nwbFilePath,
     const Metascript::Value& asset,
-    const AStringView fieldName,
-    CookString& outText
+    const AStringView fieldName
 ){
     AStringView text;
-    if(!Core::Assets::ReadMetadataStringField(
-        nwbFilePath,
-        asset,
-        s_CsgShapeMetaDiagnosticPrefix,
-        fieldName,
-        true,
-        text
-    ))
-        return false;
+    auto textResultValue = Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, fieldName, true);
+    if(!textResultValue)
+        return MakeUnexpected(Failure{});
+    text = textResultValue->text;
     if(TrimView(text).empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must not be empty")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outText.assign(text.data(), text.size());
-    return true;
+    return text;
 }
 
 [[nodiscard]] static bool ValidateIncludePath(
@@ -203,18 +188,19 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     return lhs.shapeName.resolvedText() < rhs.shapeName.resolvedText();
 }
 
-[[nodiscard]] static bool MakeShapeIdDefineValue(
+[[nodiscard]] static Expected<ScratchString> MakeShapeIdDefineValue(
     const u32 shapeTypeId,
-    ScratchString& outValue
+    ScratchArena& arena
 ){
     char shapeTypeIdText[TextDetail::s_DecimalTextBufferBytes] = {};
     const AStringView shapeTypeIdView = FormatDecimal(shapeTypeId, shapeTypeIdText);
     if(shapeTypeIdView.empty())
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outValue.assign(shapeTypeIdView);
-    outValue += 'u';
-    return true;
+    ScratchString value(arena);
+    value.assign(shapeTypeIdView);
+    value += 'u';
+    return value;
 }
 
 [[nodiscard]] static bool WriteModuleInclude(
@@ -232,14 +218,14 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
         if(!SameModule(entry, shaderModule))
             continue;
 
-        ScratchString shapeTypeIdValue(scratchSource.get_allocator().arena());
-        if(!MakeShapeIdDefineValue(entry.shapeTypeId, shapeTypeIdValue))
+        const auto shapeTypeIdValue = MakeShapeIdDefineValue(entry.shapeTypeId, scratchSource.get_allocator().arena());
+        if(!shapeTypeIdValue)
             return false;
 
         scratchSource += "#define ";
         scratchSource += s_EvalShapeIdDefineName;
         scratchSource += ' ';
-        scratchSource += shapeTypeIdValue;
+        scratchSource += *shapeTypeIdValue;
         scratchSource += "\n";
         scratchSource += "#include \"";
         scratchSource += entry.evalInclude;
@@ -251,10 +237,11 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
 
     const Path outputPath = includeRoot / moduleInclude;
     ErrorCode errorCode;
-    if(!EnsureDirectories(outputPath.parentPath(), errorCode)){
+    auto ensureDirectoriesResult = EnsureDirectories(outputPath.parentPath());
+    if(!ensureDirectoriesResult){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: failed to create generated include parent '{}': {}")
             , PathToString<tchar>(outputPath.parentPath())
-            , StringConvert(errorCode.message())
+            , StringConvert(ensureDirectoriesResult.error().message())
         );
         return false;
     }
@@ -271,10 +258,11 @@ static constexpr AStringView s_CsgShapeMetaDiagnosticPrefix = "CSG shape meta";
     const Path outputPath = includeRoot / "engine" / "csg" / "generated" / "built_in.slangi";
 
     ErrorCode errorCode;
-    if(!EnsureDirectories(outputPath.parentPath(), errorCode)){
+    auto ensureDirectoriesResult2 = EnsureDirectories(outputPath.parentPath());
+    if(!ensureDirectoriesResult2){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: failed to create generated include parent '{}': {}")
             , PathToString<tchar>(outputPath.parentPath())
-            , StringConvert(errorCode.message())
+            , StringConvert(ensureDirectoriesResult2.error().message())
         );
         return false;
     }
@@ -307,92 +295,102 @@ namespace AssetsCsgCook{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool BuildDefaultCsgShapeModuleInclude(
+[[nodiscard]] static Expected<CookString> BuildDefaultCsgShapeModuleInclude(
     CookArena& arena,
-    const Name shaderModule,
-    CookString& outInclude
+    const Name shaderModule
 ){
-    outInclude.clear();
+    CookString include(arena);
     if(!shaderModule)
-        return false;
+        return MakeUnexpected(Failure{});
 
     CookString safeModuleName = BuildCanonicalSafeCacheName(arena, shaderModule.resolvedText());
     if(safeModuleName.empty())
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outInclude.reserve(
+    include.reserve(
         s_DefaultGeneratedIncludeDirectory.size()
         + __hidden_assets_csg_cook::s_GeneratedIncludePathSeparator.size()
         + safeModuleName.size()
         + __hidden_assets_csg_cook::s_SlangIncludeExtension.size()
     );
-    outInclude += s_DefaultGeneratedIncludeDirectory;
-    outInclude += __hidden_assets_csg_cook::s_GeneratedIncludePathSeparator;
-    outInclude += safeModuleName;
-    outInclude += __hidden_assets_csg_cook::s_SlangIncludeExtension;
-    return true;
+    include += s_DefaultGeneratedIncludeDirectory;
+    include += __hidden_assets_csg_cook::s_GeneratedIncludePathSeparator;
+    include += safeModuleName;
+    include += __hidden_assets_csg_cook::s_SlangIncludeExtension;
+    return include;
 }
 
-bool ParseCsgShapeCookMetadata(
+Expected<CsgShapeCookEntry> ParseCsgShapeCookMetadata(
     CookArena& cookArena,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    CsgShapeCookEntry& outEntry,
     ScratchArena& scratchArena
 ){
     using namespace __hidden_assets_csg_cook;
 
-    outEntry = CsgShapeCookEntry(cookArena);
+    CsgShapeCookEntry entry(cookArena);
 
     const Core::Metascript::Value& asset = doc.asset();
     if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, "CSG shape meta"))
-        return false;
+        return MakeUnexpected(Failure{});
     if(!Core::Assets::ValidateMetadataAssetFields(
         nwbFilePath,
         asset,
         "CSG shape meta",
         &IsAllowedCsgShapeAssetField
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    if(!Core::Assets::ReadMetadataNameField(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, s_ShapeField, true, outEntry.shapeName))
-        return false;
-    if(!Core::Assets::ReadMetadataNameField(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, s_ModuleField, true, outEntry.shaderModule))
-        return false;
-    if(!ParseRequiredStringField(nwbFilePath, asset, s_EvalField, outEntry.evalInclude))
-        return false;
-    if(!ParseOptionalStringField(nwbFilePath, asset, s_ModuleIncludeField, outEntry.moduleInclude))
-        return false;
-    if(outEntry.moduleInclude.empty() && !BuildDefaultCsgShapeModuleInclude(cookArena, outEntry.shaderModule, outEntry.moduleInclude)){
-        NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': failed to build generated module include for '{}'")
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(outEntry.shaderModule.resolvedText())
-        );
-        return false;
+    auto shapeNameResult = Core::Assets::ReadMetadataNameField(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, s_ShapeField, true);
+    if(!shapeNameResult)
+        return MakeUnexpected(Failure{});
+    entry.shapeName = *shapeNameResult;
+    auto shaderModuleResult = Core::Assets::ReadMetadataNameField(nwbFilePath, asset, s_CsgShapeMetaDiagnosticPrefix, s_ModuleField, true);
+    if(!shaderModuleResult)
+        return MakeUnexpected(Failure{});
+    entry.shaderModule = *shaderModuleResult;
+    const auto evalInclude = ParseRequiredStringField(nwbFilePath, asset, s_EvalField);
+    if(!evalInclude)
+        return MakeUnexpected(Failure{});
+    entry.evalInclude = *evalInclude;
+    const auto moduleInclude = ParseOptionalStringField(nwbFilePath, asset, s_ModuleIncludeField);
+    if(!moduleInclude)
+        return MakeUnexpected(Failure{});
+    entry.moduleInclude = *moduleInclude;
+    if(entry.moduleInclude.empty()){
+        auto generatedInclude = BuildDefaultCsgShapeModuleInclude(cookArena, entry.shaderModule);
+        if(!generatedInclude){
+            NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': failed to build generated module include for '{}'")
+                , PathToString<tchar>(nwbFilePath)
+                , StringConvert(entry.shaderModule.resolvedText())
+            );
+            return MakeUnexpected(Failure{});
+        }
+        entry.moduleInclude = Move(*generatedInclude);
     }
-    if(!ValidateIncludePath(nwbFilePath, s_EvalField, AStringView(outEntry.evalInclude), scratchArena))
-        return false;
-    if(!ValidateIncludePath(nwbFilePath, s_ModuleIncludeField, AStringView(outEntry.moduleInclude), scratchArena))
-        return false;
-    if(!HasSlangIncludeExtension(AStringView(outEntry.evalInclude), scratchArena)){
+    if(!ValidateIncludePath(nwbFilePath, s_EvalField, AStringView(entry.evalInclude), scratchArena))
+        return MakeUnexpected(Failure{});
+    if(!ValidateIncludePath(nwbFilePath, s_ModuleIncludeField, AStringView(entry.moduleInclude), scratchArena))
+        return MakeUnexpected(Failure{});
+    if(!HasSlangIncludeExtension(AStringView(entry.evalInclude), scratchArena)){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must reference a .slangi file")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(s_EvalField)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    if(!HasSlangIncludeExtension(AStringView(outEntry.moduleInclude), scratchArena)){
+    if(!HasSlangIncludeExtension(AStringView(entry.moduleInclude), scratchArena)){
         NWB_LOGGER_ERROR(NWB_TEXT("CSG shape meta '{}': field '{}' must reference a .slangi file")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(s_ModuleIncludeField)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    if(!ValidateReservedVirtualRoot(nwbFilePath, s_EvalField, AStringView(outEntry.evalInclude), scratchArena))
-        return false;
-    if(!ValidateReservedVirtualRoot(nwbFilePath, s_ModuleIncludeField, AStringView(outEntry.moduleInclude), scratchArena))
-        return false;
-    return true;
+    if(!ValidateReservedVirtualRoot(nwbFilePath, s_EvalField, AStringView(entry.evalInclude), scratchArena))
+        return MakeUnexpected(Failure{});
+    if(!ValidateReservedVirtualRoot(nwbFilePath, s_ModuleIncludeField, AStringView(entry.moduleInclude), scratchArena))
+        return MakeUnexpected(Failure{});
+    return entry;
 }
 
 bool AssignCsgShapeCookIds(CsgShapeCookEntryVector& csgShapeEntries){
@@ -435,21 +433,21 @@ bool AssignCsgShapeCookIds(CsgShapeCookEntryVector& csgShapeEntries){
     return true;
 }
 
-bool EmitCsgShapeModuleIncludes(
+Expected<Path> EmitCsgShapeModuleIncludes(
     const Path& cacheDirectory,
     const AStringView configurationSafeName,
     const CsgShapeCookEntryVector& csgShapeEntries,
-    Path& outIncludeRoot,
     ScratchArena& scratchArena
 ){
     using namespace __hidden_assets_csg_cook;
 
-    outIncludeRoot.clear();
-    outIncludeRoot = BuildCsgShapeIncludeRoot(cacheDirectory, configurationSafeName);
+    Path includeRoot = BuildCsgShapeIncludeRoot(cacheDirectory, configurationSafeName);
     if(csgShapeEntries.empty()){
-        if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "CSG shape include generation"))
-            return false;
-        return WriteEmptyDefaultModuleInclude(outIncludeRoot);
+        if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "CSG shape include generation"))
+            return MakeUnexpected(Failure{});
+        if(!WriteEmptyDefaultModuleInclude(includeRoot))
+            return MakeUnexpected(Failure{});
+        return includeRoot;
     }
 
     HashSet<NameHash, ScratchArena, Hasher<NameHash>, EqualTo<NameHash>> seenShapeNames(
@@ -462,7 +460,7 @@ bool EmitCsgShapeModuleIncludes(
     for(const CsgShapeCookEntry& entry : csgShapeEntries){
         if(!seenShapeNames.insert(entry.shapeName.hash()).second){
             NWB_LOGGER_ERROR(NWB_TEXT("CSG shape include generation: duplicate shape '{}'"), StringConvert(entry.shapeName.resolvedText()));
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
@@ -495,7 +493,7 @@ bool EmitCsgShapeModuleIncludes(
                 , StringConvert(moduleEntry.moduleInclude)
                 , StringConvert(entry.moduleInclude)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         ScratchString canonicalModuleInclude(moduleEntry.moduleInclude, scratchArena);
@@ -510,12 +508,12 @@ bool EmitCsgShapeModuleIncludes(
                 , StringConvert(generatedIncludeOwner.first.value().resolvedText())
                 , StringConvert(moduleEntry.shaderModule.resolvedText())
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
-    if(!Core::Assets::PrepareGeneratedIncludeRoot(outIncludeRoot, "CSG shape include generation"))
-        return false;
+    if(!Core::Assets::PrepareGeneratedIncludeRoot(includeRoot, "CSG shape include generation"))
+        return MakeUnexpected(Failure{});
 
     HashSet<NameHash, ScratchArena, Hasher<NameHash>, EqualTo<NameHash>> emittedModules(
         0,
@@ -530,11 +528,11 @@ bool EmitCsgShapeModuleIncludes(
         if(!emittedModules.insert(moduleEntry.shaderModule.hash()).second)
             continue;
 
-        if(!WriteModuleInclude(csgShapeEntries, moduleEntry.shaderModule, moduleEntry.moduleInclude, outIncludeRoot, scratchSource))
-            return false;
+        if(!WriteModuleInclude(csgShapeEntries, moduleEntry.shaderModule, moduleEntry.moduleInclude, includeRoot, scratchSource))
+            return MakeUnexpected(Failure{});
     }
 
-    return true;
+    return includeRoot;
 }
 
 

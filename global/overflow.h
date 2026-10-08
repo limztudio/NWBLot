@@ -6,6 +6,7 @@
 
 
 #include "type.h"
+#include "expected.h"
 #include "limit.h"
 #include "type_borrow.h"
 
@@ -69,13 +70,22 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] constexpr bool TryMultiply(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs, T& outValue)noexcept(IsArithmetic_V<T>){
-    outValue = T(0);
-    if(MultiplyOverflows<T>(lhs, rhs))
-        return false;
+[[nodiscard]] constexpr Expected<T> TryMultiply(const TypeIdentity<T> lhs, const TypeIdentity<T> rhs)noexcept(IsArithmetic_V<T>){
+#if __has_builtin(__builtin_mul_overflow)
+    if constexpr(IsIntegral_V<T> && !IsSame_V<T, bool>){
+        T value;
+        if(__builtin_mul_overflow(lhs, rhs, &value))
+            return MakeUnexpected(Failure{});
+        return value;
+    }
+    else
+#endif
+    {
+        if(MultiplyOverflows<T>(lhs, rhs))
+            return MakeUnexpected(Failure{});
 
-    outValue = static_cast<T>(lhs * rhs);
-    return true;
+        return static_cast<T>(lhs * rhs);
+    }
 }
 
 template<typename T>

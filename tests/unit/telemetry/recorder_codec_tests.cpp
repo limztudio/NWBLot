@@ -71,12 +71,13 @@ TEST(Telemetry, EventCodecRejectsInvalidInput){
     EXPECT_TRUE(Telemetry::EncodeEvent(validHeader, nullptr, 0u, encoded));
     encoded[0u] = 0u;
 
-    Telemetry::EventRecord decoded(testArena.arena);
-    Telemetry::DecodeResult result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size(), decoded);
-    EXPECT_EQ(result.status, Telemetry::DecodeStatus::InvalidHeader);
+    auto result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size());
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error().status, Telemetry::DecodeStatus::InvalidHeader);
 
-    result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), sizeof(Telemetry::EncodedEventHeader) - 1u, decoded);
-    EXPECT_EQ(result.status, Telemetry::DecodeStatus::TruncatedHeader);
+    result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), sizeof(Telemetry::EncodedEventHeader) - 1u);
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error().status, Telemetry::DecodeStatus::TruncatedHeader);
 }
 
 TEST(Telemetry, EventCodecReportsTruncatedPayload){
@@ -89,9 +90,9 @@ TEST(Telemetry, EventCodecReportsTruncatedPayload){
     header.payloadBytes = sizeof(payload);
     EXPECT_TRUE(Telemetry::EncodeEvent(header, payload, sizeof(payload), encoded));
 
-    Telemetry::EventRecord decoded(testArena.arena);
-    const Telemetry::DecodeResult result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size() - 1u, decoded);
-    EXPECT_EQ(result.status, Telemetry::DecodeStatus::TruncatedPayload);
+    const auto result = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size() - 1u);
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error().status, Telemetry::DecodeStatus::TruncatedPayload);
 }
 
 TEST(Telemetry, EventStreamCodecHandlesEmptyStreams){
@@ -103,9 +104,9 @@ TEST(Telemetry, EventStreamCodecHandlesEmptyStreams){
     EXPECT_EQ(encoded.size(), sizeof(Telemetry::EncodedStreamHeader));
 
     Telemetry::Recorder decoded(testArena.arena);
-    const Telemetry::DecodeResult result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size(), decoded);
-    EXPECT_TRUE(result.ok());
-    EXPECT_EQ(result.bytesRead, encoded.size());
+    const auto result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size(), decoded);
+    ASSERT_TRUE(result);
+    EXPECT_EQ(*result, encoded.size());
     EXPECT_EQ(decoded.eventCount(), 0u);
 }
 
@@ -121,17 +122,20 @@ TEST(Telemetry, EventStreamCodecRejectsInvalidInput){
     EXPECT_TRUE(Telemetry::EncodeEventStream(recorder.view(), encoded));
 
     Telemetry::Recorder decoded(testArena.arena);
-    Telemetry::DecodeResult result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), sizeof(Telemetry::EncodedStreamHeader) - 1u, decoded);
-    EXPECT_EQ(result.status, Telemetry::DecodeStatus::TruncatedHeader);
+    auto result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), sizeof(Telemetry::EncodedStreamHeader) - 1u, decoded);
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error().status, Telemetry::DecodeStatus::TruncatedHeader);
 
     Telemetry::TelemetryBytes corrupted(testArena.arena);
     corrupted = encoded;
     corrupted[0u] = 0u;
     result = Telemetry::DecodeEventStream(testArena.arena, corrupted.data(), corrupted.size(), decoded);
-    EXPECT_EQ(result.status, Telemetry::DecodeStatus::InvalidHeader);
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error().status, Telemetry::DecodeStatus::InvalidHeader);
 
     result = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size() - 1u, decoded);
-    EXPECT_EQ(result.status, Telemetry::DecodeStatus::TruncatedPayload);
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error().status, Telemetry::DecodeStatus::TruncatedPayload);
 
     corrupted = encoded;
     Telemetry::EncodedStreamHeader streamHeader;
@@ -139,7 +143,8 @@ TEST(Telemetry, EventStreamCodecRejectsInvalidInput){
     streamHeader.eventCount = 0u;
     NWB_MEMCPY(corrupted.data(), corrupted.size(), &streamHeader, sizeof(streamHeader));
     result = Telemetry::DecodeEventStream(testArena.arena, corrupted.data(), corrupted.size(), decoded);
-    EXPECT_EQ(result.status, Telemetry::DecodeStatus::InvalidHeader);
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error().status, Telemetry::DecodeStatus::InvalidHeader);
 }
 
 TEST(Telemetry, EventCodecRejectsNonCurrentVersionsAndRecovers){
@@ -157,7 +162,7 @@ TEST(Telemetry, EventCodecRejectsNonCurrentVersionsAndRecovers){
         static_cast<u16>(Telemetry::s_TelemetryFormatVersion + 1u),
         Limit<u16>::s_Max,
     };
-    Telemetry::EventRecord decoded(testArena.arena);
+    Expected<Telemetry::DecodedEvent, Telemetry::DecodeResult> decoded = MakeUnexpected(Telemetry::DecodeResult{});
     Telemetry::Recorder recorder(testArena.arena);
     for(const u16 version : unsupportedVersions){
         SCOPED_TRACE(version);
@@ -167,20 +172,19 @@ TEST(Telemetry, EventCodecRejectsNonCurrentVersionsAndRecovers){
         EXPECT_FALSE(recorder.append(header, payload, sizeof(payload)));
         EXPECT_EQ(recorder.eventCount(), 0u);
 
-        Telemetry::EncodedEventHeader encodedHeader;
         usize cursor = 0u;
-        ASSERT_TRUE(ReadPOD(current, cursor, encodedHeader));
+        const auto readEncodedHeader = ReadPOD<Telemetry::EncodedEventHeader>(current, cursor);
+        ASSERT_TRUE(readEncodedHeader);
+        Telemetry::EncodedEventHeader encodedHeader = *readEncodedHeader;
         encodedHeader.version = version;
         NWB_MEMCPY(encoded.data(), encoded.size(), &encodedHeader, sizeof(encodedHeader));
-        EXPECT_EQ(
-            Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size(), decoded).status,
-            Telemetry::DecodeStatus::InvalidHeader
-        );
-        EXPECT_TRUE(decoded.payload.empty());
+        decoded = Telemetry::DecodeEvent(testArena.arena, encoded.data(), encoded.size());
+        ASSERT_FALSE(decoded);
+        EXPECT_EQ(decoded.error().status, Telemetry::DecodeStatus::InvalidHeader);
         encoded = current;
-        ASSERT_TRUE(Telemetry::DecodeEvent(testArena.arena, current.data(), current.size(), decoded).ok());
-        ASSERT_EQ(decoded.payload.size(), sizeof(payload));
-        EXPECT_EQ(decoded.payload[0u], payload[0u]);
+        ASSERT_TRUE((decoded = Telemetry::DecodeEvent(testArena.arena, current.data(), current.size())));
+        ASSERT_EQ(decoded->event.payload.size(), sizeof(payload));
+        EXPECT_EQ(decoded->event.payload[0u], payload[0u]);
     }
     header.version = Telemetry::s_TelemetryFormatVersion;
     ASSERT_TRUE(recorder.append(header, payload, sizeof(payload)));
@@ -205,31 +209,31 @@ TEST(Telemetry, EventStreamRejectsNonCurrentStreamAndNestedEventVersionsAndRecov
     Telemetry::Recorder decoded(testArena.arena);
     for(const u16 version : unsupportedVersions){
         SCOPED_TRACE(version);
-        Telemetry::EncodedStreamHeader streamHeader;
         usize cursor = 0u;
-        ASSERT_TRUE(ReadPOD(current, cursor, streamHeader));
+        const auto readStreamHeader = ReadPOD<Telemetry::EncodedStreamHeader>(current, cursor);
+        ASSERT_TRUE(readStreamHeader);
+        Telemetry::EncodedStreamHeader streamHeader = *readStreamHeader;
         streamHeader.version = version;
         NWB_MEMCPY(encoded.data(), encoded.size(), &streamHeader, sizeof(streamHeader));
-        EXPECT_EQ(
-            Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size(), decoded).status,
-            Telemetry::DecodeStatus::InvalidHeader
-        );
+        const auto invalidStream = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size(), decoded);
+        ASSERT_FALSE(invalidStream);
+        EXPECT_EQ(invalidStream.error().status, Telemetry::DecodeStatus::InvalidHeader);
         EXPECT_EQ(decoded.eventCount(), 0u);
 
         encoded = current;
-        Telemetry::EncodedEventHeader eventHeader;
-        ASSERT_TRUE(ReadPOD(current, cursor, eventHeader));
+        const auto readEventHeader = ReadPOD<Telemetry::EncodedEventHeader>(current, cursor);
+        ASSERT_TRUE(readEventHeader);
+        Telemetry::EncodedEventHeader eventHeader = *readEventHeader;
         eventHeader.version = version;
         NWB_MEMCPY(
             encoded.data() + sizeof(streamHeader), encoded.size() - sizeof(streamHeader), &eventHeader, sizeof(eventHeader)
         );
-        EXPECT_EQ(
-            Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size(), decoded).status,
-            Telemetry::DecodeStatus::InvalidHeader
-        );
+        const auto invalidEvent = Telemetry::DecodeEventStream(testArena.arena, encoded.data(), encoded.size(), decoded);
+        ASSERT_FALSE(invalidEvent);
+        EXPECT_EQ(invalidEvent.error().status, Telemetry::DecodeStatus::InvalidHeader);
         EXPECT_EQ(decoded.eventCount(), 0u);
         encoded = current;
-        ASSERT_TRUE(Telemetry::DecodeEventStream(testArena.arena, current.data(), current.size(), decoded).ok());
+        ASSERT_TRUE(Telemetry::DecodeEventStream(testArena.arena, current.data(), current.size(), decoded));
         ASSERT_EQ(decoded.eventCount(), 1u);
         const Telemetry::EventRecord* record = decoded.view().eventAt(0u);
         ASSERT_NE(record, nullptr);
@@ -250,19 +254,19 @@ TEST(Telemetry, DiagnosticPayloadRejectsNonCurrentVersionsAndRecovers){
         static_cast<u16>(Telemetry::s_DiagnosticPayloadVersion + 1u),
         Limit<u16>::s_Max,
     };
-    Telemetry::DiagnosticPayload parsed(testArena.arena);
+    Expected<Telemetry::DiagnosticPayload> parsed = MakeUnexpected(Failure{});
     for(const u16 version : unsupportedVersions){
         SCOPED_TRACE(version);
-        ASSERT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, current.data(), current.size(), parsed));
-        Telemetry::EncodedDiagnosticPayloadHeader header;
+        ASSERT_TRUE((parsed = Telemetry::ParseDiagnosticPayload(testArena.arena, current.data(), current.size())));
         usize cursor = 0u;
-        ASSERT_TRUE(ReadPOD(current, cursor, header));
+        const auto readHeader = ReadPOD<Telemetry::EncodedDiagnosticPayloadHeader>(current, cursor);
+        ASSERT_TRUE(readHeader);
+        Telemetry::EncodedDiagnosticPayloadHeader header = *readHeader;
         header.version = version;
         NWB_MEMCPY(encoded.data(), encoded.size(), &header, sizeof(header));
-        EXPECT_FALSE(Telemetry::ParseDiagnosticPayload(testArena.arena, encoded.data(), encoded.size(), parsed));
-        EXPECT_TRUE(parsed.message.empty());
-        ASSERT_TRUE(Telemetry::ParseDiagnosticPayload(testArena.arena, current.data(), current.size(), parsed));
-        EXPECT_EQ(AStringView(parsed.message), record.message);
+        EXPECT_FALSE((parsed = Telemetry::ParseDiagnosticPayload(testArena.arena, encoded.data(), encoded.size())));
+        ASSERT_TRUE((parsed = Telemetry::ParseDiagnosticPayload(testArena.arena, current.data(), current.size())));
+        EXPECT_EQ(AStringView(parsed->message), record.message);
     }
 }
 

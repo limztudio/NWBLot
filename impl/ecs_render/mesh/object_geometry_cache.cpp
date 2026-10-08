@@ -40,29 +40,26 @@ bool ObjectGeometryCacheSnapshot::valid()const noexcept{
     ;
 }
 
-bool ResolveObjectGeometryCacheLayout(
+Expected<ObjectGeometryCacheLayout> ResolveObjectGeometryCacheLayout(
     const u64 localVertexRefByteSize,
-    const u32 primitiveIndexCount,
-    ObjectGeometryCacheLayout& outLayout
+    const u32 primitiveIndexCount
 )noexcept{
-    outLayout = {};
     if(localVertexRefByteSize == 0u || localVertexRefByteSize % sizeof(MeshletLocalVertexRef) != 0u || primitiveIndexCount == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
     constexpr u64 s_Stride = NWB_MESH_OBJECT_VERTEX_BYTE_SIZE;
     constexpr u64 s_AddressableBytes = static_cast<u64>(Limit<u32>::s_Max) + 1u;
     const u64 vertexCount = localVertexRefByteSize / sizeof(MeshletLocalVertexRef) + NWB_MESH_OBJECT_FIRST_VERTEX_INDEX;
     if(vertexCount > static_cast<u64>(Limit<u32>::s_Max) / s_Stride)
-        return false;
+        return MakeUnexpected(Failure{});
     const u64 indexByteOffset = vertexCount * s_Stride;
     const u64 indexedByteSize = indexByteOffset + static_cast<u64>(primitiveIndexCount) * sizeof(u32);
     if(indexedByteSize > s_AddressableBytes)
-        return false;
+        return MakeUnexpected(Failure{});
     // The structured vertex view includes the allocation; raw index stores address the disjoint trailing region.
     const u64 bufferByteSize = AlignUp(indexedByteSize, s_Stride);
     if(bufferByteSize > s_AddressableBytes)
-        return false;
-    outLayout = { bufferByteSize, static_cast<u32>(indexByteOffset), primitiveIndexCount };
-    return true;
+        return MakeUnexpected(Failure{});
+    return ObjectGeometryCacheLayout{ bufferByteSize, static_cast<u32>(indexByteOffset), primitiveIndexCount };
 }
 
 bool AcceptObjectGeometryCacheWrite(
@@ -123,21 +120,20 @@ bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const C
     if(cache.buffer && cache.heapHandle.valid())
         return true;
     if(!cache.buffer){
-        ECSRenderDetail::ObjectGeometryCacheLayout layout;
         if(!mesh.meshletLocalVertexRefBuffer)
             return false;
-        if(!ECSRenderDetail::ResolveObjectGeometryCacheLayout(
+        const auto layout = ECSRenderDetail::ResolveObjectGeometryCacheLayout(
             mesh.meshletLocalVertexRefBuffer->getDescription().byteSize,
-            mesh.meshletPrimitiveIndexCount,
-            layout
-        ))
+            mesh.meshletPrimitiveIndexCount
+        );
+        if(!layout)
             return false;
         const Name bufferName = DeriveName(mesh.meshName, AStringView(":object_geometry"));
         if(!bufferName)
             return false;
         Core::BufferDesc desc;
         desc
-            .setByteSize(layout.bufferByteSize)
+            .setByteSize(layout->bufferByteSize)
             .setStructStride(NWB_MESH_OBJECT_VERTEX_BYTE_SIZE)
             .setCanHaveRawViews(true)
             .setCanHaveUAVs(true)
@@ -151,8 +147,8 @@ bool RendererMeshSystem::prepareObjectGeometryCache(MeshResources& mesh, const C
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create object geometry cache for mesh '{}'"), StringConvert(mesh.meshName.resolvedText()));
             return false;
         }
-        cache.indexByteOffset = layout.indexByteOffset;
-        cache.indexCount = layout.indexCount;
+        cache.indexByteOffset = layout->indexByteOffset;
+        cache.indexCount = layout->indexCount;
         cache.acceptedContent = false;
         cache.initialized = false;
     }
@@ -190,10 +186,10 @@ bool RendererMeshSystem::confirmObjectGeometryCache(
     const ECSRenderDetail::ObjectGeometryCacheSnapshot& expected,
     const bool runtimeMesh
 ){
-    MeshResources* mesh = nullptr;
-    if(!findMeshResources(meshKey, mesh))
+    const auto mesh = findMeshResources(meshKey);
+    if(!mesh)
         return false;
-    return ECSRenderDetail::AcceptObjectGeometryCacheWrite(*mesh, sourceBuffers, expected, runtimeMesh);
+    return ECSRenderDetail::AcceptObjectGeometryCacheWrite(**mesh, sourceBuffers, expected, runtimeMesh);
 }
 
 

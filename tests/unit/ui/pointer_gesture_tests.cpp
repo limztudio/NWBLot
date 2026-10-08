@@ -92,8 +92,7 @@ TEST_F(UiPointerGestureTests, BarrierCaptureDoesNotImplicitlyCreateAGesture){
     target.pointerGesture = false;
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     complete();
-    PointerGesture gesture;
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, target.declarationGeneration, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, target.declarationGeneration));
     EXPECT_TRUE(m_router.actions().empty());
     EXPECT_FALSE(m_router.primaryDown());
 }
@@ -108,13 +107,15 @@ TEST_F(UiPointerGestureTests, QuickPressMoveReleaseRetainsCommittedBaselineAndFi
     EXPECT_TRUE(m_router.process().pointerConsumed);
     EXPECT_FALSE(m_router.process().pointerConsumed);
     PointerGesture gesture;
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 13u, gesture));
+    const auto gestureResult = m_router.consumePointerGesture(target.id, 13u);
+    ASSERT_TRUE(gestureResult);
+    gesture = *gestureResult;
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
     EXPECT_FLOAT_EQ(gesture.origin.x, 15.0f);
     EXPECT_FLOAT_EQ(gesture.origin.y, 25.0f);
     EXPECT_FLOAT_EQ(gesture.position.x, 110.0f);
     EXPECT_FLOAT_EQ(gesture.position.y, 120.0f);
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 13u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 13u));
     EXPECT_TRUE(m_router.actions().empty());
 }
 
@@ -123,27 +124,33 @@ TEST_F(UiPointerGestureTests, ActiveUpdateConsumesOnceAndPreservesProgressAcross
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     PointerGesture gesture;
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult1 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult1);
+    gesture = *gestureResult1;
     const InputActionId press = gesture.id;
     EXPECT_EQ(gesture.state, PointerGestureState::Active);
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PointerMove)).pointerConsumed);
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PointerMove, { 40.0f, 50.0f })).pointerConsumed);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PointerMove, { 70.0f, 90.0f })).pointerConsumed);
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult2 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult2);
+    gesture = *gestureResult2;
     EXPECT_EQ(gesture.id.sequence, press.sequence);
     EXPECT_EQ(gesture.id.layoutGeneration, press.layoutGeneration);
     EXPECT_FLOAT_EQ(gesture.origin.x, 15.0f);
     EXPECT_FLOAT_EQ(gesture.position.x, 70.0f);
     EXPECT_FLOAT_EQ(gesture.position.y, 90.0f);
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, { 70.0f, 90.0f })).pointerConsumed);
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult3 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult3);
+    gesture = *gestureResult3;
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
     EXPECT_EQ(gesture.id.sequence, press.sequence);
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u));
 }
 
 TEST_F(UiPointerGestureTests, SeveralPressSequencesRemainOrderedWithSeparateOrigins){
@@ -156,9 +163,15 @@ TEST_F(UiPointerGestureTests, SeveralPressSequencesRemainOrderedWithSeparateOrig
     PointerGesture first;
     PointerGesture second;
     PointerGesture third;
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, first));
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, second));
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, third));
+    const auto firstResult = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(firstResult);
+    first = *firstResult;
+    const auto secondResult = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(secondResult);
+    second = *secondResult;
+    const auto thirdResult1 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(thirdResult1);
+    third = *thirdResult1;
     EXPECT_EQ(first.state, PointerGestureState::Completed);
     EXPECT_EQ(second.state, PointerGestureState::Completed);
     EXPECT_EQ(third.state, PointerGestureState::Active);
@@ -167,9 +180,11 @@ TEST_F(UiPointerGestureTests, SeveralPressSequencesRemainOrderedWithSeparateOrig
     EXPECT_FLOAT_EQ(first.origin.x, 15.0f);
     EXPECT_FLOAT_EQ(second.origin.x, 25.0f);
     EXPECT_FLOAT_EQ(third.origin.x, 35.0f);
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u, third));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, { 130.0f, 160.0f })).pointerConsumed);
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, third));
+    const auto thirdResult2 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(thirdResult2);
+    third = *thirdResult2;
     EXPECT_EQ(third.state, PointerGestureState::Completed);
     EXPECT_FLOAT_EQ(third.position.x, 130.0f);
 }
@@ -182,12 +197,16 @@ TEST_F(UiPointerGestureTests, ActiveGestureKeepsOriginalLayoutWhenNewGeometryIsP
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 9u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, { 110.0f, 120.0f })).pointerConsumed);
     PointerGesture gesture;
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult1 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult1);
+    gesture = *gestureResult1;
     EXPECT_EQ(gesture.id.layoutGeneration, 7u);
     EXPECT_FLOAT_EQ(gesture.targetRectangle.x, 10.0f);
     EXPECT_FLOAT_EQ(gesture.targetRectangle.width, 80.0f);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown, { 100.0f, 130.0f })).pointerConsumed);
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult2 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult2);
+    gesture = *gestureResult2;
     EXPECT_EQ(gesture.id.layoutGeneration, 9u);
     EXPECT_FLOAT_EQ(gesture.targetRectangle.x, 80.0f);
     EXPECT_FLOAT_EQ(gesture.origin.x, 100.0f);
@@ -199,19 +218,25 @@ TEST_F(UiPointerGestureTests, FullReferenceGeometryIsCopiedAtPressAndRemainsImmu
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 7u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     PointerGesture gesture;
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult1 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult1);
+    gesture = *gestureResult1;
     const u64 sequence = gesture.id.sequence;
     EXPECT_FLOAT_EQ(gesture.targetRectangle.height, 30.0f);
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.height, 130.0f);
     target.rectangle = { 70.0f, 90.0f, 100.0f, 40.0f };
     target.gestureReference = { 70.0f, 90.0f, 100.0f, 180.0f };
     EXPECT_TRUE(send(PointerEvent(InputEventType::PointerMove, { 30.0f, 40.0f })).pointerConsumed);
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult2 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult2);
+    gesture = *gestureResult2;
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.x, 10.0f);
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.height, 130.0f);
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 9u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, { 110.0f, 120.0f })).pointerConsumed);
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult3 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult3);
+    gesture = *gestureResult3;
     EXPECT_EQ(gesture.id.sequence, sequence);
     EXPECT_EQ(gesture.id.layoutGeneration, 7u);
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
@@ -221,7 +246,9 @@ TEST_F(UiPointerGestureTests, FullReferenceGeometryIsCopiedAtPressAndRemainsImmu
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.width, 80.0f);
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.height, 130.0f);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown, { 80.0f, 100.0f })).pointerConsumed);
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult4 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult4);
+    gesture = *gestureResult4;
     EXPECT_GT(gesture.id.sequence, sequence);
     EXPECT_EQ(gesture.id.layoutGeneration, 9u);
     EXPECT_FLOAT_EQ(gesture.targetRectangle.height, 40.0f);
@@ -253,13 +280,17 @@ TEST_F(UiPointerGestureTests, MalformedReferenceRejectsPublicationAtomicallyAndE
     }
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, { 60.0f, 70.0f })).pointerConsumed);
     PointerGesture gesture;
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult1 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult1);
+    gesture = *gestureResult1;
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.height, 130.0f);
     target.gestureReference = { 42.0f, 44.0f, 0.0f, 0.0f };
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 2u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult2 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult2);
+    gesture = *gestureResult2;
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.x, target.rectangle.x);
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.y, target.rectangle.y);
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.width, target.rectangle.width);
@@ -271,7 +302,9 @@ TEST_F(UiPointerGestureTests, LifetimeRemovalCancelsGestureWhileReleaseOwnership
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     PointerGesture gesture;
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult1 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult1);
+    gesture = *gestureResult1;
     const u64 firstSequence = gesture.id.sequence;
     m_router.invalidateTarget(target.id);
     EXPECT_FALSE(m_router.capture().valid());
@@ -280,10 +313,12 @@ TEST_F(UiPointerGestureTests, LifetimeRemovalCancelsGestureWhileReleaseOwnership
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, { 110.0f, 120.0f })).pointerConsumed);
     target.declarationGeneration = 2u;
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 2u));
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u, gesture));
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 2u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 2u));
     complete();
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 2u, gesture));
+    const auto gestureResult2 = m_router.consumePointerGesture(target.id, 2u);
+    ASSERT_TRUE(gestureResult2);
+    gesture = *gestureResult2;
     EXPECT_GT(gesture.id.sequence, firstSequence);
     EXPECT_EQ(gesture.id.declarationGeneration, 2u);
 }
@@ -294,14 +329,13 @@ TEST_F(UiPointerGestureTests, NewLifetimeDisabledAndNonGestureDeclarationsDiscar
     complete();
     target.declarationGeneration = 2u;
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 2u));
-    PointerGesture gesture;
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 2u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 2u));
     complete();
     target.pointerGesture = false;
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 3u));
     target.pointerGesture = true;
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 4u));
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 2u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 2u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     target.enabled = false;
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 5u));
@@ -309,7 +343,7 @@ TEST_F(UiPointerGestureTests, NewLifetimeDisabledAndNonGestureDeclarationsDiscar
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp)).pointerConsumed);
     target.enabled = true;
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 6u));
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 2u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 2u));
 }
 
 TEST_F(UiPointerGestureTests, PointerLeaveRetainsCaptureAndFinalOutsideRelease){
@@ -323,7 +357,9 @@ TEST_F(UiPointerGestureTests, PointerLeaveRetainsCaptureAndFinalOutsideRelease){
     EXPECT_EQ(left.capture, target.id);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, { -50.0f, 300.0f })).pointerConsumed);
     PointerGesture gesture;
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult);
+    gesture = *gestureResult;
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
     EXPECT_FLOAT_EQ(gesture.position.x, -50.0f);
     EXPECT_FLOAT_EQ(gesture.position.y, 300.0f);
@@ -335,7 +371,9 @@ TEST_F(UiPointerGestureTests, FocusLossCancelsActiveAndCompletedGesturesWithoutR
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     complete();
     PointerGesture gesture;
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult1 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult1);
+    gesture = *gestureResult1;
     const u64 firstSequence = gesture.id.sequence;
     complete();
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
@@ -345,15 +383,19 @@ TEST_F(UiPointerGestureTests, FocusLossCancelsActiveAndCompletedGesturesWithoutR
     EXPECT_FALSE(lost.capture.valid());
     EXPECT_FALSE(lost.focus.valid());
     EXPECT_FALSE(m_router.primaryDown());
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u));
     complete();
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult2 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult2);
+    gesture = *gestureResult2;
     EXPECT_GT(gesture.id.sequence, firstSequence);
     m_router.reset();
     ASSERT_TRUE(m_router.commitTargets(&target, 1u, 1u));
     complete();
     PointerGesture afterReset;
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, afterReset));
+    const auto afterResetResult = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(afterResetResult);
+    afterReset = *afterResetResult;
     EXPECT_GT(afterReset.id.sequence, gesture.id.sequence);
 }
 
@@ -370,14 +412,16 @@ TEST_F(UiPointerGestureTests, EscapeCancelsOnlyTheActiveGestureAndRetainsHeldRel
     EXPECT_FALSE(escaped.focus.valid());
     EXPECT_TRUE(m_router.primaryDown());
     PointerGesture gesture;
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, target.declarationGeneration, gesture));
+    const auto gestureResult = m_router.consumePointerGesture(target.id, target.declarationGeneration);
+    ASSERT_TRUE(gestureResult);
+    gesture = *gestureResult;
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
     EXPECT_FLOAT_EQ(gesture.position.x, 40.0f);
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, target.declarationGeneration, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, target.declarationGeneration));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PointerMove, { 180.0f, 180.0f })).pointerConsumed);
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, target.declarationGeneration, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, target.declarationGeneration));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp)).pointerConsumed);
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, target.declarationGeneration, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, target.declarationGeneration));
     EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Escape }).keyboardConsumed);
     EXPECT_TRUE(m_router.consumeActivation(target.id));
     EXPECT_FALSE(m_router.consumeActivation(target.id));
@@ -402,10 +446,12 @@ TEST_F(UiPointerGestureTests, ActiveCaptureLossPreservesCompletedGesturesActions
     EXPECT_TRUE(m_router.ownsKey(Core::Key::Space));
     EXPECT_FALSE(m_router.primaryDown());
     PointerGesture gesture;
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult);
+    gesture = *gestureResult;
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
     EXPECT_FLOAT_EQ(gesture.position.x, 40.0f);
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u));
     EXPECT_TRUE(m_router.consumeActivation(target.id));
     EXPECT_TRUE(m_router.consumeActivation(target.id));
     EXPECT_TRUE(send({ .type = InputEventType::KeyUp, .position = {}, .key = Core::Key::Space }).keyboardConsumed);
@@ -425,7 +471,9 @@ TEST_F(UiPointerGestureTests, CaptureLossAfterOrdinaryReleaseCannotEraseAComplet
     EXPECT_EQ(lost.focus, target.id);
     EXPECT_EQ(lost.hover, target.id);
     PointerGesture gesture;
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult);
+    gesture = *gestureResult;
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
     EXPECT_TRUE(m_router.consumeActivation(target.id));
 }
@@ -439,12 +487,16 @@ TEST_F(UiPointerGestureTests, LargeMoveBurstCoalescesWithoutExhaustingGestureCap
         EXPECT_FALSE(send(PointerEvent(InputEventType::PointerMove, position)).gestureOverflow);
     }
     PointerGesture gesture;
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult1 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult1);
+    gesture = *gestureResult1;
     EXPECT_FLOAT_EQ(gesture.position.x, static_cast<f32>(s_InputMaxPointerGestures * 4u - 1u));
     EXPECT_EQ(gesture.state, PointerGestureState::Active);
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u));
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, { 110.0f, 120.0f })).pointerConsumed);
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult2 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult2);
+    gesture = *gestureResult2;
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
 }
 
@@ -463,15 +515,19 @@ TEST_F(UiPointerGestureTests, FullGestureQueueDropsNewPressAndReportsOverflowWit
     PointerGesture gesture;
     u64 previousSequence = 0u;
     for(usize index = 0u; index < s_InputMaxPointerGestures; ++index){
-        ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+        const auto gestureResult1 = m_router.consumePointerGesture(target.id, 1u);
+        ASSERT_TRUE(gestureResult1);
+        gesture = *gestureResult1;
         EXPECT_GT(gesture.id.sequence, previousSequence);
         previousSequence = gesture.id.sequence;
         EXPECT_EQ(gesture.state, PointerGestureState::Completed);
         EXPECT_FLOAT_EQ(gesture.position.x, 15.0f);
     }
-    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(target.id, 1u));
     complete();
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult2 = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult2);
+    gesture = *gestureResult2;
     EXPECT_GT(gesture.id.sequence, previousSequence);
     EXPECT_FLOAT_EQ(gesture.position.x, 45.0f);
 }
@@ -483,16 +539,18 @@ TEST_F(UiPointerGestureTests, GestureAdmissionUsesTheTopClippedTargetAndLifetime
     ASSERT_TRUE(m_router.commitTargets(targets, 2u, 1u));
     complete();
     PointerGesture gesture;
-    gesture.id.sequence = 99u;
-    EXPECT_FALSE(m_router.consumePointerGesture(targets[0].id, 1u, gesture));
-    EXPECT_FALSE(m_router.consumePointerGesture(targets[1].id, 0u, gesture));
-    EXPECT_FALSE(m_router.consumePointerGesture(targets[1].id, 2u, gesture));
-    EXPECT_EQ(gesture.id.sequence, 99u);
-    ASSERT_TRUE(m_router.consumePointerGesture(targets[1].id, 1u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(targets[0].id, 1u));
+    EXPECT_FALSE(m_router.consumePointerGesture(targets[1].id, 0u));
+    EXPECT_FALSE(m_router.consumePointerGesture(targets[1].id, 2u));
+    const auto gestureResult1 = m_router.consumePointerGesture(targets[1].id, 1u);
+    ASSERT_TRUE(gestureResult1);
+    gesture = *gestureResult1;
     EXPECT_EQ(gesture.id.target, targets[1].id);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryDown, { 25.0f, 25.0f })).pointerConsumed);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, { 30.0f, 30.0f })).pointerConsumed);
-    ASSERT_TRUE(m_router.consumePointerGesture(targets[0].id, 1u, gesture));
+    const auto gestureResult2 = m_router.consumePointerGesture(targets[0].id, 1u);
+    ASSERT_TRUE(gestureResult2);
+    gesture = *gestureResult2;
     EXPECT_EQ(gesture.id.target, targets[0].id);
 }
 
@@ -506,7 +564,9 @@ TEST_F(UiPointerGestureTests, InvalidLayoutPublicationPreservesTheActiveGesture)
     EXPECT_EQ(m_router.capture(), target.id);
     EXPECT_TRUE(send(PointerEvent(InputEventType::PrimaryUp, { 90.0f, 100.0f })).pointerConsumed);
     PointerGesture gesture;
-    ASSERT_TRUE(m_router.consumePointerGesture(target.id, 1u, gesture));
+    const auto gestureResult = m_router.consumePointerGesture(target.id, 1u);
+    ASSERT_TRUE(gestureResult);
+    gesture = *gestureResult;
     EXPECT_EQ(gesture.id.layoutGeneration, 7u);
     EXPECT_FLOAT_EQ(gesture.position.x, 90.0f);
 }
@@ -517,26 +577,28 @@ TEST_F(UiPointerGestureTests, ContextRejectsStaleForeignAndWrongKindDeclarations
     EXPECT_TRUE(sendToContext(PointerEvent(InputEventType::PrimaryDown)).pointerConsumed);
     EXPECT_TRUE(sendToContext(PointerEvent(InputEventType::PrimaryUp, { 90.0f, 100.0f })).pointerConsumed);
     PointerGesture gesture;
-    EXPECT_FALSE(m_context.takePointerGesture(original, true, gesture));
+    EXPECT_FALSE(m_context.takePointerGesture(original, true));
     ASSERT_TRUE(m_context.beginFrame(2u));
     ASSERT_TRUE(m_context.beginRoot(original.root));
     const WidgetState* current = m_context.declare("title", WidgetKind::Panel);
     ASSERT_NE(current, nullptr);
-    EXPECT_FALSE(m_context.takePointerGesture(original, true, gesture));
+    EXPECT_FALSE(m_context.takePointerGesture(original, true));
     WidgetState invalid = *current;
     ++invalid.root.generation;
-    EXPECT_FALSE(m_context.takePointerGesture(invalid, true, gesture));
+    EXPECT_FALSE(m_context.takePointerGesture(invalid, true));
     invalid = *current;
     ++invalid.declarationGeneration;
-    EXPECT_FALSE(m_context.takePointerGesture(invalid, true, gesture));
+    EXPECT_FALSE(m_context.takePointerGesture(invalid, true));
     invalid = *current;
     invalid.kind = WidgetKind::Button;
-    EXPECT_FALSE(m_context.takePointerGesture(invalid, true, gesture));
-    ASSERT_TRUE(m_context.takePointerGesture(*current, true, gesture));
+    EXPECT_FALSE(m_context.takePointerGesture(invalid, true));
+    const auto gestureResult = m_context.takePointerGesture(*current, true);
+    ASSERT_TRUE(gestureResult);
+    gesture = *gestureResult;
     EXPECT_EQ(gesture.id.target, current->id);
     EXPECT_EQ(gesture.id.declarationGeneration, current->declarationGeneration);
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
-    EXPECT_FALSE(m_context.takePointerGesture(*current, true, gesture));
+    EXPECT_FALSE(m_context.takePointerGesture(*current, true));
 }
 
 TEST_F(UiPointerGestureTests, ContextRetainsTheFinalGestureWhileItsGpuCandidateIsPending){
@@ -548,7 +610,9 @@ TEST_F(UiPointerGestureTests, ContextRetainsTheFinalGestureWhileItsGpuCandidateI
     const WidgetState* state = m_context.declare("title", WidgetKind::Panel);
     ASSERT_NE(state, nullptr);
     PointerGesture gesture;
-    ASSERT_TRUE(m_context.takePointerGesture(*state, true, gesture));
+    const auto gestureResult1 = m_context.takePointerGesture(*state, true);
+    ASSERT_TRUE(gestureResult1);
+    gesture = *gestureResult1;
     const u64 sequence = gesture.id.sequence;
     HitTarget candidate = GestureTarget();
     candidate.rectangle.x = 100.0f;
@@ -563,13 +627,15 @@ TEST_F(UiPointerGestureTests, ContextRetainsTheFinalGestureWhileItsGpuCandidateI
     ASSERT_TRUE(m_context.beginRoot(original.root));
     state = m_context.declare("title", WidgetKind::Panel);
     ASSERT_NE(state, nullptr);
-    ASSERT_TRUE(m_context.takePointerGesture(*state, true, gesture));
+    const auto gestureResult2 = m_context.takePointerGesture(*state, true);
+    ASSERT_TRUE(gestureResult2);
+    gesture = *gestureResult2;
     EXPECT_EQ(gesture.id.sequence, sequence);
     EXPECT_EQ(gesture.id.layoutGeneration, 1u);
     EXPECT_EQ(gesture.state, PointerGestureState::Completed);
     EXPECT_FLOAT_EQ(gesture.targetRectangle.x, 10.0f);
     EXPECT_FLOAT_EQ(gesture.position.x, 150.0f);
-    EXPECT_FALSE(m_context.takePointerGesture(*state, true, gesture));
+    EXPECT_FALSE(m_context.takePointerGesture(*state, true));
 }
 
 TEST_F(UiPointerGestureTests, ContextDisablingTheCurrentDeclarationCancelsItsHeldGesture){
@@ -580,12 +646,11 @@ TEST_F(UiPointerGestureTests, ContextDisablingTheCurrentDeclarationCancelsItsHel
     ASSERT_TRUE(m_context.beginRoot(original.root));
     const WidgetState* state = m_context.declare("title", WidgetKind::Panel);
     ASSERT_NE(state, nullptr);
-    PointerGesture gesture;
-    EXPECT_FALSE(m_context.takePointerGesture(*state, false, gesture));
+    EXPECT_FALSE(m_context.takePointerGesture(*state, false));
     EXPECT_FALSE(m_context.input().capture().valid());
     EXPECT_TRUE(m_context.input().primaryDown());
     EXPECT_TRUE(sendToContext(PointerEvent(InputEventType::PrimaryUp)).pointerConsumed);
-    EXPECT_FALSE(m_context.takePointerGesture(*state, true, gesture));
+    EXPECT_FALSE(m_context.takePointerGesture(*state, true));
 }
 
 TEST_F(UiPointerGestureTests, ContextRootRetirementCancelsPendingGestureAndReplacementCannotReplayIt){
@@ -603,8 +668,7 @@ TEST_F(UiPointerGestureTests, ContextRootRetirementCancelsPendingGestureAndRepla
     ASSERT_TRUE(m_context.beginRoot(replacement.root));
     const WidgetState* current = m_context.declare("title", WidgetKind::Panel);
     ASSERT_NE(current, nullptr);
-    PointerGesture gesture;
-    EXPECT_FALSE(m_context.takePointerGesture(*current, true, gesture));
+    EXPECT_FALSE(m_context.takePointerGesture(*current, true));
 }
 
 

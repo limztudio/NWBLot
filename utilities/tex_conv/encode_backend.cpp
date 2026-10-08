@@ -94,20 +94,14 @@ void ResetPayload(
     if(planeCount == 0u || backendOutput.m_slice_desc.size() != backendOutput.m_slice_image_data.size())
         return false;
 
-    u32 blocksX = 0u;
-    u32 blocksY = 0u;
-    u64 planeByteCount = 0u;
-    if(!TextureFormat::ComputeMipPlaneBlockLayout(
-        inOutPayload.format,
-        width,
-        height,
-        blocksX,
-        blocksY,
-        planeByteCount
-    ) || planeByteCount > Limit<usize>::s_Max){
+    const auto layout = TextureFormat::ComputeMipPlaneBlockLayout(inOutPayload.format, width, height);
+    if(!layout || layout->planeByteCount > Limit<usize>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: UASTC mip block layout exceeds supported limits."));
         return false;
     }
+    const u32 blocksX = layout->blocksX;
+    const u32 blocksY = layout->blocksY;
+    const u64 planeByteCount = layout->planeByteCount;
     if(planeByteCount > Limit<u64>::s_Max / planeCount){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: UASTC mip payload size overflowed."));
         return false;
@@ -171,91 +165,93 @@ void ResetPayload(
 
 
 
-[[nodiscard]] bool LoadAlphaMask(
+[[nodiscard]] Expected<basisu::imagef> LoadAlphaMask(
     const AlphaSource& alphaSource,
     const u32 expectedWidth,
-    const u32 expectedHeight,
-    basisu::imagef& outMask
+    const u32 expectedHeight
 ){
+    basisu::imagef mask;
     if(alphaSource.mode != AlphaSourceMode::Image)
-        return true;
+        return mask;
 
     const AString alphaPathText = PathToGenericString<AString>(alphaSource.path);
     if(IsHdrInputPath(alphaSource.path)){
-        if(!basisu::load_image_hdr(alphaPathText.c_str(), outMask, false)){
+        if(!basisu::load_image_hdr(alphaPathText.c_str(), mask, false)){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to decode alpha image '{}'."), PathToString<tchar>(alphaSource.path));
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
     else{
         basisu::image sourceMask;
         if(!basisu::load_image(alphaPathText.c_str(), sourceMask)){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to decode alpha image '{}'."), PathToString<tchar>(alphaSource.path));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outMask.resize(sourceMask.get_width(), sourceMask.get_height());
+        mask.resize(sourceMask.get_width(), sourceMask.get_height());
         for(u32 y = 0u; y < sourceMask.get_height(); ++y){
             for(u32 x = 0u; x < sourceMask.get_width(); ++x)
-                outMask(x, y)[0u] = static_cast<f32>(sourceMask(x, y).r) / s_BasisColorChannelMax;
+                mask(x, y)[0u] = static_cast<f32>(sourceMask(x, y).r) / s_BasisColorChannelMax;
         }
     }
-    if(outMask.get_width() != expectedWidth || outMask.get_height() != expectedHeight){
+    if(mask.get_width() != expectedWidth || mask.get_height() != expectedHeight){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image resolution must match the texture input resolution."));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     for(u32 y = 0u; y < expectedHeight; ++y){
         u32 x = 0u;
         const u32 chunkEndX = expectedWidth & ~3u;
         for(; x < chunkEndX; x += 4u){
-            const f32 alpha0 = outMask(x, y)[0u];
-            const f32 alpha1 = outMask(x + 1u, y)[0u];
-            const f32 alpha2 = outMask(x + 2u, y)[0u];
-            const f32 alpha3 = outMask(x + 3u, y)[0u];
+            const f32 alpha0 = mask(x, y)[0u];
+            const f32 alpha1 = mask(x + 1u, y)[0u];
+            const f32 alpha2 = mask(x + 2u, y)[0u];
+            const f32 alpha3 = mask(x + 3u, y)[0u];
             if(!IsFinite(alpha0) || !IsFinite(alpha1) || !IsFinite(alpha2) || !IsFinite(alpha3)){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image contains a non-finite red-channel value."));
-                return false;
+                return MakeUnexpected(Failure{});
             }
             const SIMDVector saturatedLanes = VectorSaturate(VectorSet(alpha0, alpha1, alpha2, alpha3));
-            outMask(x, y)[0u] = VectorGetX(saturatedLanes);
-            outMask(x + 1u, y)[0u] = VectorGetY(saturatedLanes);
-            outMask(x + 2u, y)[0u] = VectorGetZ(saturatedLanes);
-            outMask(x + 3u, y)[0u] = VectorGetW(saturatedLanes);
+            mask(x, y)[0u] = VectorGetX(saturatedLanes);
+            mask(x + 1u, y)[0u] = VectorGetY(saturatedLanes);
+            mask(x + 2u, y)[0u] = VectorGetZ(saturatedLanes);
+            mask(x + 3u, y)[0u] = VectorGetW(saturatedLanes);
         }
         for(; x < expectedWidth; ++x){
-            f32& alpha = outMask(x, y)[0u];
+            f32& alpha = mask(x, y)[0u];
             if(!IsFinite(alpha)){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha image contains a non-finite red-channel value."));
-                return false;
+                return MakeUnexpected(Failure{});
             }
             alpha = VectorGetX(VectorSaturate(VectorReplicate(alpha)));
         }
     }
-    return true;
+    return mask;
 }
 
-[[nodiscard]] bool ComputeVolumeMipDims(u32 sourceWidth, u32 sourceHeight, u32 sourceDepth, VolumeMipDims& outDims){
+[[nodiscard]] Expected<VolumeMipDims> ComputeVolumeMipDims(u32 sourceWidth, u32 sourceHeight, u32 sourceDepth)noexcept{
+    VolumeMipDims dims;
     if(sourceWidth == 0u || sourceHeight == 0u || sourceDepth == 0u)
-        return false;
-    outDims.sourceWidth = sourceWidth;
-    outDims.sourceHeight = sourceHeight;
-    outDims.sourceDepth = sourceDepth;
-    outDims.targetWidth = sourceWidth > 1u ? sourceWidth >> 1u : 1u;
-    outDims.targetHeight = sourceHeight > 1u ? sourceHeight >> 1u : 1u;
-    outDims.targetDepth = sourceDepth > 1u ? sourceDepth >> 1u : 1u;
-    return true;
+        return MakeUnexpected(Failure{});
+    dims.sourceWidth = sourceWidth;
+    dims.sourceHeight = sourceHeight;
+    dims.sourceDepth = sourceDepth;
+    dims.targetWidth = sourceWidth > 1u ? sourceWidth >> 1u : 1u;
+    dims.targetHeight = sourceHeight > 1u ? sourceHeight >> 1u : 1u;
+    dims.targetDepth = sourceDepth > 1u ? sourceDepth >> 1u : 1u;
+    return dims;
 }
 
-[[nodiscard]] bool ComputeVolumeMipSliceRange(u32 sourceDepth, u32 targetDepth, u32 targetZ, u32& outFirst, u32& outEnd){
+[[nodiscard]] Expected<VolumeMipSliceRange> ComputeVolumeMipSliceRange(u32 sourceDepth, u32 targetDepth, u32 targetZ)noexcept{
     if(sourceDepth == 0u || targetDepth == 0u || targetZ >= targetDepth)
-        return false;
+        return MakeUnexpected(Failure{});
     const u32 sourceFirst = static_cast<u32>((static_cast<u64>(targetZ) * sourceDepth) / targetDepth);
     u32 sourceEnd = static_cast<u32>((static_cast<u64>(targetZ + 1u) * sourceDepth) / targetDepth);
     if(sourceEnd <= sourceFirst)
         sourceEnd = sourceFirst + 1u;
-    outFirst = sourceFirst;
-    outEnd = Min(sourceEnd, sourceDepth);
-    return outFirst < outEnd;
+    const u32 end = Min(sourceEnd, sourceDepth);
+    if(sourceFirst >= end)
+        return MakeUnexpected(Failure{});
+    return VolumeMipSliceRange{ sourceFirst, end };
 }
 
 

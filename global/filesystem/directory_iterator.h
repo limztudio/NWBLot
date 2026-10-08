@@ -24,7 +24,7 @@ public:
 
 public:
     [[nodiscard]] const Path<ArenaT>& path()const noexcept{ return m_path; }
-    [[nodiscard]] bool isRegularFile(ErrorCode& outError)const{ return IsRegularFile(m_path, outError); }
+    [[nodiscard]] Expected<bool, ErrorCode> isRegularFile()const noexcept{ return IsRegularFile(m_path); }
 
 
 private:
@@ -67,65 +67,62 @@ public:
 
 
 public:
-    DirectoryIterator(const Path<ArenaT>& path, ErrorCode& outError)
-        : BaseType(path)
-    {
-        collect(path, outError);
+    [[nodiscard]] static Expected<DirectoryIterator, ErrorCode> Create(const Path<ArenaT>& path){
+        DirectoryIterator result(path);
+        const auto collected = result.collect(path);
+        if(!collected)
+            return MakeUnexpected(collected.error());
+        return result;
     }
 
 
 private:
-    void collect(const Path<ArenaT>& path, ErrorCode& outError){
-#if defined(NWB_PLATFORM_WINDOWS)
-        Path<ArenaT> pattern = path / NWB_TEXT("*");
-        WIN32_FIND_DATA data = {};
-        HANDLE findHandle = FindFirstFile(pattern.c_str(), &data);
-        if(findHandle == INVALID_HANDLE_VALUE){
-            GlobalFilesystemDetail::SetLastSystemError(outError);
-            return;
-        }
+    explicit DirectoryIterator(const Path<ArenaT>& path)
+        : BaseType(path)
+    {}
 
+    [[nodiscard]] Expected<void, ErrorCode> collect(const Path<ArenaT>& path){
+        ErrorCode iterationError;
+#if defined(NWB_PLATFORM_WINDOWS)
+        const Path<ArenaT> pattern = path / NWB_TEXT("*");
+        WIN32_FIND_DATA data = {};
+        const HANDLE findHandle = FindFirstFile(pattern.c_str(), &data);
+        if(findHandle == INVALID_HANDLE_VALUE)
+            return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+        ScopeExit close([&]()noexcept{ GlobalFilesystemDetail::CloseDirectory(findHandle, iterationError); });
         for(;;){
             const TStringView fileName(data.cFileName);
             if(fileName != NWB_TEXT(".") && fileName != NWB_TEXT(".."))
                 this->m_entries.emplace_back(path / fileName);
-
             if(FindNextFile(findHandle, &data))
                 continue;
-            GlobalFilesystemDetail::CaptureDirectoryIterationError(outError);
+            GlobalFilesystemDetail::CaptureDirectoryIterationError(iterationError);
             break;
         }
-
-        GlobalFilesystemDetail::CloseDirectory(findHandle, outError);
-        if(outError)
-            return;
-        GlobalFilesystemDetail::ClearError(outError);
+        GlobalFilesystemDetail::CloseDirectory(findHandle, iterationError);
 #else
-        DIR* directory = opendir(path.c_str());
-        if(directory == nullptr){
-            GlobalFilesystemDetail::SetLastSystemError(outError);
-            return;
-        }
-
+        DIR* const directory = opendir(path.c_str());
+        if(directory == nullptr)
+            return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+        ScopeExit close([&]()noexcept{ GlobalFilesystemDetail::CloseDirectory(directory, iterationError); });
         for(;;){
             errno = 0;
-            dirent* entry = readdir(directory);
+            dirent* const entry = readdir(directory);
             if(entry == nullptr){
-                GlobalFilesystemDetail::CaptureDirectoryIterationError(outError);
+                GlobalFilesystemDetail::CaptureDirectoryIterationError(iterationError);
                 break;
             }
-
             const AStringView fileName(entry->d_name);
             if(GlobalFilesystemPathDetail::IsDot(fileName) || GlobalFilesystemPathDetail::IsDotDot(fileName))
                 continue;
             this->m_entries.emplace_back(path / fileName);
         }
-
-        GlobalFilesystemDetail::CloseDirectory(directory, outError);
-        if(outError)
-            return;
-        GlobalFilesystemDetail::ClearError(outError);
+        GlobalFilesystemDetail::CloseDirectory(directory, iterationError);
 #endif
+        close.release();
+        if(iterationError)
+            return MakeUnexpected(iterationError);
+        return {};
     }
 };
 
@@ -142,34 +139,36 @@ public:
 
 
 public:
-    RecursiveDirectoryIterator(const Path<ArenaT>& path, ErrorCode& outError)
-        : BaseType(path)
-    {
-        collect(path, outError);
+    [[nodiscard]] static Expected<RecursiveDirectoryIterator, ErrorCode> Create(const Path<ArenaT>& path){
+        RecursiveDirectoryIterator result(path);
+        const auto collected = result.collect(path);
+        if(!collected)
+            return MakeUnexpected(collected.error());
+        return result;
     }
 
 
 private:
-    void collect(const Path<ArenaT>& path, ErrorCode& outError){
-        DirectoryIterator directory(path, outError);
-        if(outError)
-            return;
+    explicit RecursiveDirectoryIterator(const Path<ArenaT>& path)
+        : BaseType(path)
+    {}
 
-        for(const Entry& entry : directory){
+    [[nodiscard]] Expected<void, ErrorCode> collect(const Path<ArenaT>& path){
+        const auto directory = DirectoryIterator<ArenaT>::Create(path);
+        if(!directory)
+            return MakeUnexpected(directory.error());
+        for(const Entry& entry : *directory){
             this->m_entries.push_back(entry);
-            ErrorCode directoryError;
-            const bool isDirectory = IsDirectoryNoFollow(entry.path(), directoryError);
-            if(directoryError){
-                outError = directoryError;
-                return;
-            }
-            if(isDirectory){
-                collect(entry.path(), outError);
-                if(outError)
-                    return;
+            const auto isDirectory = IsDirectoryNoFollow(entry.path());
+            if(!isDirectory)
+                return MakeUnexpected(isDirectory.error());
+            if(*isDirectory){
+                const auto collected = collect(entry.path());
+                if(!collected)
+                    return MakeUnexpected(collected.error());
             }
         }
-        GlobalFilesystemDetail::ClearError(outError);
+        return {};
     }
 };
 

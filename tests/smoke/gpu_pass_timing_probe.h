@@ -55,11 +55,11 @@ private:
 private:
     static void OpenTimingFile(OutputFileStream& timingFile){
         Core::Alloc::GlobalArena arena(s_SmokeEnvironmentArena);
-        SmokeEnvironmentString timingPath(arena);
-        if(!ReadSmokeEnvironmentText("NWB_GPU_TIMING_FILE", timingPath))
+        const auto timingPath = ReadSmokeEnvironmentText(arena, "NWB_GPU_TIMING_FILE");
+        if(!timingPath)
             return;
 
-        timingFile.open(timingPath.c_str(), s_FileOpenAppend);
+        timingFile.open(timingPath->c_str(), s_FileOpenAppend);
     }
 
 

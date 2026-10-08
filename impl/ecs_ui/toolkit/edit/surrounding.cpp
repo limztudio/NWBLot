@@ -32,23 +32,23 @@ bool EditModel::eraseAroundSelection(const usize beforeBytes, const usize afterB
     candidate.append(m_text.data(), prefixEnd);
     candidate.append(m_text.data() + start, end - start);
     candidate.append(m_text.data() + suffixStart, m_text.size() - suffixStart);
-    EditBoundaryVector boundaries(m_arena);
     const AStringView after(candidate.data(), candidate.size());
-    if(!buildBoundaries(after, boundaries))
+    auto boundaries = buildBoundaries(after);
+    if(!boundaries)
         return false;
     const usize anchor = m_anchor - beforeBytes;
     const usize caret = m_caret - beforeBytes;
-    const auto anchorBoundary = LowerBound(boundaries.begin(), boundaries.end(), anchor);
-    const auto caretBoundary = LowerBound(boundaries.begin(), boundaries.end(), caret);
+    const auto anchorBoundary = LowerBound(boundaries->begin(), boundaries->end(), anchor);
+    const auto caretBoundary = LowerBound(boundaries->begin(), boundaries->end(), caret);
     if(
-        anchorBoundary == boundaries.end() || *anchorBoundary != anchor
-        || caretBoundary == boundaries.end() || *caretBoundary != caret
+        anchorBoundary == boundaries->end() || *anchorBoundary != anchor
+        || caretBoundary == boundaries->end() || *caretBoundary != caret
     )
         return false;
 
     recordHistory(text(), m_anchor, m_caret, after, anchor, caret);
     m_text = Move(candidate);
-    m_boundaries = Move(boundaries);
+    m_boundaries = Move(*boundaries);
     m_anchor = anchor;
     m_caret = caret;
     advanceSelectionGeneration();

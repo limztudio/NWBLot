@@ -52,12 +52,11 @@ struct SourceMeshStreams{
 
 class MeshCookSourceStreams final : NoCopy{
 public:
-    static bool ParseSourceVertexRefs(
+    static Expected<ScratchVector<MeshVertexRef>> ParseSourceVertexRefs(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const TStringView metaKind,
     const bool includeSkin,
-    ScratchVector<MeshVertexRef>& outVertexRefs,
     Core::Alloc::ScratchArena& scratchArena
     );
     static bool ValidateSourceStreamIndex(
@@ -82,12 +81,12 @@ public:
     );
     template<typename CookEntryT>
     static void CopySourceStreams(SourceMeshStreams& streams, CookEntryT& outEntry);
-    static bool ParseCommonSourceMeshStreams(
+    static Expected<SourceMeshStreams> ParseCommonSourceMeshStreams(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset,
     const TStringView metaKind,
     const bool includeSkin,
-    SourceMeshStreams& streams,
+    Core::Assets::AssetArena& assetArena,
     const usize skinCount,
     Core::Alloc::ScratchArena& scratchArena
     );

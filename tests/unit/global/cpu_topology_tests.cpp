@@ -28,22 +28,25 @@ TEST(CpuTopologyTests, InvalidPlacementFailsWithoutMutatingTheCallingThread){
 #if defined(NWB_PLATFORM_WINDOWS)
 TEST(CpuTopologyTests, DiscoveryHonorsAProcessAffinityRestriction){
     ASSERT_EXIT({
-        InteropVector<CpuWorkerPlacement> placements;
+        auto placements = QueryCpuWorkerPlacements();
         GROUP_AFFINITY original{};
-        if(!QueryCpuWorkerPlacements(placements) || !GetThreadGroupAffinity(GetCurrentThread(), &original))
+        if(!placements || !GetThreadGroupAffinity(GetCurrentThread(), &original))
             ExitProcess(1u);
-        const auto selected = FindIf(placements.begin(), placements.end(), [&original](const CpuWorkerPlacement& placement){
+        const auto selected = FindIf(placements->begin(), placements->end(), [&original](const CpuWorkerPlacement& placement){
             return placement.processorGroup == original.Group;
         });
-        if(selected == placements.end())
+        if(selected == placements->end())
             ExitProcess(2u);
         const u32 processorIndex = selected->logicalProcessorIndex;
         const DWORD_PTR mask = static_cast<DWORD_PTR>(1u) << processorIndex;
-        if(!SetProcessAffinityMask(GetCurrentProcess(), mask) || !QueryCpuWorkerPlacements(placements))
+        if(!SetProcessAffinityMask(GetCurrentProcess(), mask))
+            ExitProcess(3u);
+        placements = QueryCpuWorkerPlacements();
+        if(!placements)
             ExitProcess(3u);
         if(
-            placements.size() != 1u || placements.front().processorGroup != original.Group
-            || placements.front().logicalProcessorIndex != processorIndex || QueryCpuCoreCount(CpuAffinity::Any) != 1u
+            placements->size() != 1u || placements->front().processorGroup != original.Group
+            || placements->front().logicalProcessorIndex != processorIndex || QueryCpuCoreCount(CpuAffinity::Any) != 1u
         )
             ExitProcess(4u);
         ExitProcess(0u);
@@ -53,10 +56,10 @@ TEST(CpuTopologyTests, DiscoveryHonorsAProcessAffinityRestriction){
 
 TEST(CpuTopologyTests, DiscoveryHonorsProcessDefaultCpuSets){
     ASSERT_EXIT({
-        InteropVector<CpuWorkerPlacement> placements;
-        if(!QueryCpuWorkerPlacements(placements) || placements.empty())
+        auto placements = QueryCpuWorkerPlacements();
+        if(!placements || placements->empty())
             ExitProcess(1u);
-        const CpuWorkerPlacement selected = placements.back();
+        const CpuWorkerPlacement selected = placements->back();
         ULONG byteCount = 0u;
         if(
             !GetSystemCpuSetInformation(nullptr, 0u, &byteCount, GetCurrentProcess(), 0u)
@@ -82,10 +85,11 @@ TEST(CpuTopologyTests, DiscoveryHonorsProcessDefaultCpuSets){
         }
         if(selectedId == Limit<ULONG>::s_Max || !SetProcessDefaultCpuSets(GetCurrentProcess(), &selectedId, 1u))
             ExitProcess(5u);
+        placements = QueryCpuWorkerPlacements();
         if(
-            !QueryCpuWorkerPlacements(placements) || placements.size() != 1u
-            || placements.front().processorGroup != selected.processorGroup
-            || placements.front().logicalProcessorIndex != selected.logicalProcessorIndex
+            !placements || placements->size() != 1u
+            || placements->front().processorGroup != selected.processorGroup
+            || placements->front().logicalProcessorIndex != selected.logicalProcessorIndex
             || QueryCpuCoreCount(CpuAffinity::Any) != 1u
         )
             ExitProcess(6u);
@@ -97,28 +101,27 @@ TEST(CpuTopologyTests, DiscoveryHonorsProcessDefaultCpuSets){
 
 #if defined(NWB_PLATFORM_LINUX)
 TEST(CpuTopologyTests, DiscoveryHonorsInheritedLinuxAffinityIncludingHighProcessorIndices){
-    InteropVector<CpuWorkerPlacement> placements;
-    ASSERT_TRUE(QueryCpuWorkerPlacements(placements));
-    ASSERT_FALSE(placements.empty());
-    const CpuWorkerPlacement placement = placements.back();
+    auto placements = QueryCpuWorkerPlacements();
+    ASSERT_TRUE(placements);
+    ASSERT_FALSE(placements->empty());
+    const CpuWorkerPlacement placement = placements->back();
     bool applied = false;
-    bool queried = false;
     u32 usableCount = 0u;
-    InteropVector<CpuWorkerPlacement> restrictedPlacements;
+    Expected<InteropVector<CpuWorkerPlacement>> restrictedPlacements = MakeUnexpected(Failure{});
     JoiningThread worker([&](){
         applied = SetCurrentThreadCpuPlacement(placement);
         if(!applied)
             return;
-        queried = QueryCpuWorkerPlacements(restrictedPlacements);
+        restrictedPlacements = QueryCpuWorkerPlacements();
         usableCount = QueryCpuCoreCount(CpuAffinity::Any);
     });
     worker.join();
     ASSERT_TRUE(applied);
-    ASSERT_TRUE(queried);
-    ASSERT_EQ(restrictedPlacements.size(), 1u);
-    EXPECT_EQ(restrictedPlacements.front().logicalProcessorIndex, placement.logicalProcessorIndex);
+    ASSERT_TRUE(restrictedPlacements);
+    ASSERT_EQ(restrictedPlacements->size(), 1u);
+    EXPECT_EQ(restrictedPlacements->front().logicalProcessorIndex, placement.logicalProcessorIndex);
     EXPECT_EQ(usableCount, 1u);
-    EXPECT_EQ(restrictedPlacements.front().affinity, CpuAffinity::Any);
+    EXPECT_EQ(restrictedPlacements->front().affinity, CpuAffinity::Any);
 }
 #endif
 

@@ -285,8 +285,7 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to create buffer: invalid initial state"));
         return nullptr;
     }
-    CpuAccessMode::Enum effectiveCpuAccess = CpuAccessMode::None;
-    if(!VulkanDetail::TryResolveBufferCpuAccess(d.cpuAccess, d.isVolatile, effectiveCpuAccess)){
+    if(!VulkanDetail::TryResolveBufferCpuAccess(d.cpuAccess, d.isVolatile)){
         if(d.isVolatile && d.cpuAccess == CpuAccessMode::Read){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create buffer: a volatile buffer cannot request CPU read access"));
             NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Volatile buffer CPU access contradicts its write-only contract"));
@@ -322,16 +321,16 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
 
     if(d.isVolatile){
         const u64 alignment = Max<u64>(m_context.physicalDeviceProperties.limits.minUniformBufferOffsetAlignment, 1u);
-        u64 alignedSize = 0;
-        if(!AlignUpU64Checked(size, alignment, alignedSize)){
+        const auto alignedSize = AlignUpU64Checked(size, alignment);
+        if(!alignedSize){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: aligned size overflows"));
             return nullptr;
         }
-        if(alignedSize > Limit<u64>::s_Max / d.maxVersions){
+        if(*alignedSize > Limit<u64>::s_Max / d.maxVersions){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create volatile buffer: versioned size overflows"));
             return nullptr;
         }
-        size = alignedSize * d.maxVersions;
+        size = *alignedSize * d.maxVersions;
     }
 
     VkBufferCreateInfo bufferInfo{};
@@ -376,54 +375,43 @@ BufferHandle Device::createBuffer(const BufferDesc& d){
     return BufferHandle(buffer, BufferHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
-bool CommandList::prepareUploadStaging(
+Expected<BufferSuballocation> CommandList::prepareUploadStaging(
     const usize dataSize,
     TStringView operationName,
-    Buffer*& outStagingBuffer,
-    u64& outStagingOffset,
-    void*& outCpuVA,
     const u32 alignment
 ){
-    outStagingBuffer = nullptr;
-    outStagingOffset = 0;
-    outCpuVA = nullptr;
-
     UploadManager& uploadMgr = m_device.m_uploadManager;
 
     const u64 completedUploadVersion = m_device.queueGetCompletedInstance(m_creationDesc.physicalQueue);
-    if(!uploadMgr.suballocateBuffer(
+    const auto staging = uploadMgr.suballocateBuffer(
         static_cast<u64>(dataSize),
-        &outStagingBuffer,
-        &outStagingOffset,
-        &outCpuVA,
         m_currentCmdBuf.get(),
         m_nativeRecordingID,
         m_creationDesc.physicalQueue,
         completedUploadVersion,
         alignment
-    )){
+    );
+    if(!staging){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to suballocate staging buffer for {}"), operationName);
         NWB_ASSERT_MSG(false, NWB_TEXT("Vulkan: Failed to suballocate staging buffer"));
-        return false;
+        return MakeUnexpected(staging.error());
     }
 
-    return true;
+    return staging;
 }
 
-bool CommandList::prepareUploadStaging(
+Expected<BufferSuballocation> CommandList::prepareUploadStaging(
     const void* data,
     const usize dataSize,
     TStringView operationName,
-    Buffer*& outStagingBuffer,
-    u64& outStagingOffset,
     const u32 alignment
 ){
-    void* cpuVA = nullptr;
-    if(!prepareUploadStaging(dataSize, operationName, outStagingBuffer, outStagingOffset, cpuVA, alignment))
-        return false;
+    const auto staging = prepareUploadStaging(dataSize, operationName, alignment);
+    if(!staging)
+        return MakeUnexpected(staging.error());
 
-    VulkanDetail::CopyHostMemory(taskScheduler(), cpuVA, data, dataSize);
-    return true;
+    VulkanDetail::CopyHostMemory(taskScheduler(), staging->cpuAddress, data, dataSize);
+    return staging;
 }
 
 bool CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes){
@@ -454,9 +442,8 @@ bool CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSiz
     ))
         return false;
 
-    Buffer* stagingBuffer = nullptr;
-    u64 stagingOffset = 0;
-    if(!prepareUploadStaging(data, dataSize, NWB_TEXT("writeBuffer"), stagingBuffer, stagingOffset)){
+    const auto staging = prepareUploadStaging(data, dataSize, NWB_TEXT("writeBuffer"));
+    if(!staging){
         rejectCommandRecording(VulkanArenaScope::s_WriteBufferCommandLabel, NWB_TEXT("staging allocation failed"));
         return false;
     }
@@ -467,14 +454,14 @@ bool CommandList::tryWriteBuffer(Buffer& buffer, const void* data, usize dataSiz
         return false;
 
     VkBufferCopy region{};
-    region.srcOffset = stagingOffset;
+    region.srcOffset = staging->offset;
     region.dstOffset = destOffsetBytes;
     region.size = dataSize;
 
-    m_context.deviceDispatch.vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, stagingBuffer->m_buffer, buffer.m_buffer, 1, &region);
+    m_context.deviceDispatch.vkCmdCopyBuffer(m_currentCmdBuf->m_cmdBuf, staging->buffer->m_buffer, buffer.m_buffer, 1, &region);
 
     retainResource(&buffer);
-    retainStagingBuffer(*stagingBuffer);
+    retainStagingBuffer(*staging->buffer);
     return true;
 }
 

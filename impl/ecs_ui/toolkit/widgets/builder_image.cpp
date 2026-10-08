@@ -32,13 +32,16 @@ bool Builder::image(const AStringView stableKey, const Name& regionName, const I
     const UiSkinRegion* skinRegion = m_skin->findRegion(regionName);
     ImageFrame frame;
     frame.options = options;
-    if(
-        !widget || !skinRegion
-        || !ImageLayout::Measure(options, *skinRegion, m_skin->referenceDensity(), frame.metrics)
-    ){
+    if(!widget || !skinRegion){
         m_context.fail();
         return false;
     }
+    const auto metrics = ImageLayout::Measure(options, *skinRegion, m_skin->referenceDensity());
+    if(!metrics){
+        m_context.fail();
+        return false;
+    }
+    frame.metrics = *metrics;
     frame.region = skinRegion->name;
     return publishImageFrame(*widget, Move(frame));
 }
@@ -51,10 +54,12 @@ bool Builder::publishImageFrame(const WidgetState& widget, ImageFrame&& frame){
     description.width = frame.options.width;
     description.height = frame.options.height;
     description.intrinsicSize = frame.metrics.contentSize;
-    if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, item.node)){
+    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
+    if(!admittedNode){
         m_context.fail();
         return false;
     }
+    item.node = *admittedNode;
     m_scope->m_images.push_back(Move(frame));
     m_scope->m_items.push_back(Move(item));
     return true;

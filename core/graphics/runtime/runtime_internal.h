@@ -66,12 +66,11 @@ using GraphTaskDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
 )noexcept;
 [[nodiscard]] ResourceStates::Mask SetupUploadGraphFinalState(ResourceStates::Mask declaredInitialState)noexcept;
 
-[[nodiscard]] bool SubmitGraphOwnedStandaloneTask(
+[[nodiscard]] Expected<QueueSubmissionToken> SubmitGraphOwnedStandaloneTask(
     const GraphicsRuntime& graphics,
     GraphicsArena& graphArena,
     void* userData,
     GraphTaskDeclaration declareTask,
-    QueueSubmissionToken& outSubmissionToken,
     GpuPhysicalQueueId requiredTerminalQueue = {},
     CpuTaskScheduler* readyFrontierScheduler = nullptr,
     GpuTimingRecorder* timingRecorder = nullptr,
@@ -84,7 +83,7 @@ using GraphTaskDeclaration = GpuTaskId(*)(void* userData, GpuTaskGraph& graph);
     CommandQueue::Enum consumerQueue,
     void* userData,
     GraphTaskDeclaration declareTask,
-    QueueSubmissionToken& outUploadToken,
+    QueueSubmissionToken& inOutUploadToken,
     GpuPhysicalQueueId requiredTerminalQueue = {}
 );
 [[nodiscard]] bool SubmitGraphOwnedFrameTimingReset(

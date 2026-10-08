@@ -6,6 +6,7 @@
 
 
 #include "limit.h"
+#include "expected.h"
 #include "type_properties.h"
 
 #include <algorithm>
@@ -97,45 +98,39 @@ constexpr T DivideUp(const T value, const T divisor)noexcept(IsArithmetic_V<T>){
 }
 
 template<typename T>
-constexpr bool DivideUpChecked(const T value, const T divisor, T& outValue)noexcept(IsArithmetic_V<T>){
+[[nodiscard]] constexpr Expected<T> DivideUpChecked(const T value, const T divisor)noexcept(IsArithmetic_V<T>){
     if(divisor == 0)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outValue = DivideUp(value, divisor);
-    return true;
+    return DivideUp(value, divisor);
 }
 
 template<typename T>
-constexpr bool AlignUpChecked(const T value, const T alignment, T& outValue)noexcept(IsArithmetic_V<T>){
-    if(alignment == 0){
-        outValue = value;
-        return true;
-    }
+[[nodiscard]] constexpr Expected<T> AlignUpChecked(const T value, const T alignment)noexcept(IsArithmetic_V<T>){
+    if(alignment == 0)
+        return value;
 
     const T remainder = value % alignment;
-    if(remainder == 0){
-        outValue = value;
-        return true;
-    }
+    if(remainder == 0)
+        return value;
 
     const T addend = alignment - remainder;
     if(value > Limit<T>::s_Max - addend)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outValue = value + addend;
-    return true;
+    return value + addend;
 }
 
 constexpr u32 AlignUpU32(const u32 value, const u32 alignment)noexcept{
     return AlignUp(value, alignment);
 }
 
-constexpr bool AlignUpU32Checked(const u32 value, const u32 alignment, u32& outValue)noexcept{
-    return AlignUpChecked(value, alignment, outValue);
+[[nodiscard]] constexpr Expected<u32> AlignUpU32Checked(const u32 value, const u32 alignment)noexcept{
+    return AlignUpChecked(value, alignment);
 }
 
-constexpr bool AlignUpU64Checked(const u64 value, const u64 alignment, u64& outValue)noexcept{
-    return AlignUpChecked(value, alignment, outValue);
+[[nodiscard]] constexpr Expected<u64> AlignUpU64Checked(const u64 value, const u64 alignment)noexcept{
+    return AlignUpChecked(value, alignment);
 }
 
 

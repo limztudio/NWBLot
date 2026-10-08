@@ -77,18 +77,15 @@ bool Queue::coversTimerQueryPrerequisite(
     return false;
 }
 
-u64 Queue::submit(
+Expected<Queue::SubmissionReceipt, Queue::SubmissionFailure> Queue::submit(
     CommandList* const* ppCmd,
     const usize numCmd,
     const SubmissionCommandListIdentity* const expectedCommandLists,
     const SubmissionWait* const localWaits,
     const usize localWaitCount,
-    bool* const outSubmissionAccepted,
-    VkResult* const outNativeResult,
     const SubmissionSignal* const localSignals,
     const usize localSignalCount,
-    const bool forceNativeSubmission,
-    usize* const outTimelineWaitCount
+    const bool forceNativeSubmission
 ){
     ScopedLock lock(m_mutex);
     DescriptorBufferManager* const descriptorBufferManager = m_context.descriptorBufferManager;
@@ -109,33 +106,27 @@ u64 Queue::submit(
     signalInfos.clear();
     cmdBufInfos.clear();
     preparedCommandBuffers.clear();
-    if(outSubmissionAccepted)
-        *outSubmissionAccepted = false;
-    if(outNativeResult)
-        *outNativeResult = VK_SUCCESS;
-    if(outTimelineWaitCount)
-        *outTimelineWaitCount = 0u;
     if(m_device.submissionsBlocked())
-        return m_lastSubmittedID;
+        return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
 
     if(numCmd > 0u && !ppCmd){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list array is null"));
-        return m_lastSubmittedID;
+        return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
     const bool hasCommands = numCmd > 0u;
     if(hasCommands && !expectedCommandLists){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: expected command-list identity array is null"));
-        return m_lastSubmittedID;
+        return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
     // Queue-global synchronization belongs to the next accepted native submission. Validation and injected
     // pre-driver rejection must leave it pending, especially when it contains the acquired swap-chain semaphore.
     if(localWaitCount > 0u && !localWaits){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait array is null"));
-        return m_lastSubmittedID;
+        return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
     if(localSignalCount > 0u && !localSignals){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local signal array is null"));
-        return m_lastSubmittedID;
+        return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
 
     const bool hasPendingSemaphores = localWaitCount > 0u
@@ -147,7 +138,7 @@ u64 Queue::submit(
 
     if(hasCommands && numCmd > UINT32_MAX){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: command list count exceeds Vulkan limit"));
-        return m_lastSubmittedID;
+        return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
     if(
         localWaitCount > static_cast<usize>(Limit<u32>::s_Max)
@@ -156,11 +147,11 @@ u64 Queue::submit(
         || m_signalSemaphores.size() >= static_cast<usize>(Limit<u32>::s_Max) - localSignalCount
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queued semaphore count exceeds Vulkan limit"));
-        return m_lastSubmittedID;
+        return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
     if(requiresNativeSubmission && m_lastSubmittedID == Limit<u64>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: queue submission ID exhausted"));
-        return m_lastSubmittedID;
+        return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
     if(hasCommands){
         for(usize i = 0u; i < numCmd; ++i){
@@ -169,28 +160,28 @@ u64 Queue::submit(
             for(usize previous = 0u; previous < i; ++previous){
                 if(ppCmd[previous] == cmdList){
                     NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is duplicated"), i);
-                    return m_lastSubmittedID;
+                    return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
                 }
             }
             if(!cmdList || &cmdList->m_device != &m_device){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is null or foreign"), i);
-                return m_lastSubmittedID;
+                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
             }
             if(!cmdList->matchesSubmissionLease(m_physicalQueue, m_queueID, expected.graphSubmissionAuthorized)){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command-list lease provenance does not match execution queue"));
-                return m_lastSubmittedID;
+                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
             }
             if(!cmdList->m_currentCmdBuf || cmdList->m_currentCmdBuf->m_cmdBuf == VK_NULL_HANDLE){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} has no native command buffer"), i);
-                return m_lastSubmittedID;
+                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
             }
             if(cmdList->m_commandRecordingFailed){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: a command list has a sticky native recording failure"));
-                return m_lastSubmittedID;
+                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
             }
             if(cmdList->m_isRecording){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} is still recording"), i);
-                return m_lastSubmittedID;
+                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
             }
             if(
                 !expected.owner
@@ -208,10 +199,10 @@ u64 Queue::submit(
                 || expected.recordingWorkerIndex != cmdList->m_currentCmdBuf->m_recordingWorkerIndex
             ){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: command list {} replaced its validated native recording lease"), i);
-                return m_lastSubmittedID;
+                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
             }
             if(!cmdList->validateTrackedResourcesReadyForSubmission())
-                return m_lastSubmittedID;
+                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         }
     }
 
@@ -227,7 +218,7 @@ u64 Queue::submit(
                 validatedTimerQueryCommandBuffers.size()
             )){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to submit command lists: timer-query recording order is stale or unresolved"));
-                return m_lastSubmittedID;
+                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
             }
             validatedTimerQueryCommandBuffers.push_back(tracked);
         }
@@ -243,7 +234,7 @@ u64 Queue::submit(
                     continue;
                 if(heap != &m_device.m_gpuDescriptorHeap){
                     NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command buffer references a foreign descriptor heap."));
-                    return m_lastSubmittedID;
+                    return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
                 }
                 submissionDescriptorHeap = heap;
             }
@@ -279,23 +270,23 @@ u64 Queue::submit(
                 NWB_LOGGER_CRITICAL_WARNING(
                     NWB_TEXT("Vulkan: Failed to submit command lists: descriptor-buffer binding generation is stale")
                 );
-                return m_lastSubmittedID;
+                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
             }
         }
     }
     for(usize i = 0u; i < localSignalCount; ++i){
         if(localSignals[i].semaphore == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local signal semaphore is null"));
-            return m_lastSubmittedID;
+            return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         }
     }
 
     if(!requiresNativeSubmission)
-        return m_lastSubmittedID;
+        return SubmissionReceipt{ m_lastSubmittedID, 0u, false };
 
     if(m_trackingSemaphore == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Queue submission skipped because timeline semaphore is unavailable."));
-        return m_lastSubmittedID;
+        return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
     }
 
     const u64 submissionID = m_lastSubmittedID + 1u;
@@ -317,7 +308,7 @@ u64 Queue::submit(
         const SubmissionWait& wait = localWaits[i];
         if(wait.semaphore == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command lists: local wait semaphore is null"));
-            return m_lastSubmittedID;
+            return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         }
 
         SubmissionWait* acceptedWait = nullptr;
@@ -394,30 +385,30 @@ u64 Queue::submit(
     for(usize i = 0u; i < numCmd; ++i){
         TrackedCommandBuffer* const tracked = ppCmd[i]->m_currentCmdBuf.get();
         if(!tracked || !validateCommandBufferSubmissionState(*tracked))
-            return m_lastSubmittedID;
+            return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         if(!tracked->validatePendingAccelStructBuildCommits()){
             NWB_LOGGER_CRITICAL_WARNING(
                 NWB_TEXT("Vulkan: Native submission cannot publish acceleration-structure signatures across allocator domains")
             );
-            return m_lastSubmittedID;
+            return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
         }
         for(GpuDescriptorHeap* const heap : tracked->m_referencedDescriptorHeaps){
             if(!heap)
                 continue;
 
-            usize heapUseIndex = Limit<usize>::s_Max;
-            if(!heap->validateCommandBufferUseSubmissionLocked(*tracked, submissionToken, heapUseIndex))
-                return m_lastSubmittedID;
+            const auto heapUseIndex = heap->validateCommandBufferUseSubmissionLocked(*tracked, submissionToken);
+            if(!heapUseIndex)
+                return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
             for(const DescriptorHeapUseCommitTicket& ticket : descriptorHeapUseCommitTickets){
-                if(ticket.heap == heap && ticket.heapUseIndex == heapUseIndex){
+                if(ticket.heap == heap && ticket.heapUseIndex == *heapUseIndex){
                     NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Native submission contains a duplicate descriptor-heap use."));
-                    return m_lastSubmittedID;
+                    return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, VK_SUCCESS });
                 }
             }
             descriptorHeapUseCommitTickets.push_back(DescriptorHeapUseCommitTicket{
                 .heap = heap,
                 .commandBuffer = tracked,
-                .heapUseIndex = heapUseIndex,
+                .heapUseIndex = *heapUseIndex,
             });
         }
     }
@@ -483,8 +474,6 @@ u64 Queue::submit(
         if(!submissionSuppressed)
             res = m_context.deviceDispatch.vkQueueSubmit2(m_nativeQueue.queue, 1, &submitInfo, VK_NULL_HANDLE);
     }
-    if(outNativeResult)
-        *outNativeResult = res;
 
     if(submissionSuppressed || res != VK_SUCCESS){
         releaseDescriptorBufferLifecycle();
@@ -508,7 +497,7 @@ u64 Queue::submit(
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to submit command buffers to queue: {}"), ResultToString(res));
         }
 
-        return m_lastSubmittedID;
+        return MakeUnexpected(SubmissionFailure{ m_lastSubmittedID, res });
     }
 
     m_lastSubmittedID = submissionID;
@@ -541,12 +530,7 @@ u64 Queue::submit(
         tracked->commitPendingOpacityMicromapBuildCommits();
         commitCommandBufferStateTransition(*tracked, TrackedCommandBufferArenaState::Pending);
     }
-    if(outSubmissionAccepted)
-        *outSubmissionAccepted = true;
-    if(outTimelineWaitCount)
-        *outTimelineWaitCount = emittedTimelineWaitCount;
-
-    return submissionID;
+    return SubmissionReceipt{ submissionID, emittedTimelineWaitCount, true };
 }
 
 VkResult Queue::updateLastFinishedID(){

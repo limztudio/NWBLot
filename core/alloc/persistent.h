@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <global/expected.h>
 #include "global.h"
 #include "core.h"
 
@@ -49,7 +50,12 @@ public:
 
 
 private:
-    [[nodiscard]] void* allocateLocked(usize align, usize size, void*& outBlock)noexcept;
+    struct Allocation{
+        void* pointer = nullptr;
+        void* block = nullptr;
+    };
+
+    [[nodiscard]] Expected<Allocation> allocateLocked(usize align, usize size)noexcept;
     void deallocateBlockLocked(void* block)noexcept;
 
 

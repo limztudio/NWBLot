@@ -14,13 +14,16 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CopyFontAtlasPositioningTables(const Font& font, FontAtlasPayload& outPayload){
+Expected<Core::Assets::AssetVector<FontAtlasPositioningTable>> CopyFontAtlasPositioningTables(
+    const Font& font,
+    const u32 sourceGlyphCount,
+    Core::Assets::AssetArena& arena
+){
     if(!font.validatePayload())
-        return false;
+        return MakeUnexpected(Failure{});
     const Core::Assets::AssetBytes& source = font.fontBytes();
     const u32 tableCount = (static_cast<u32>(source[4u]) << 8u) | source[5u];
     static constexpr u32 s_Tags[] = { s_FontAtlasGdefTag, s_FontAtlasGposTag, s_FontAtlasKernTag };
-    Core::Assets::AssetArena& arena = outPayload.positioningTables.get_allocator().arena();
     Core::Assets::AssetVector<FontAtlasPositioningTable> tables(arena);
     tables.reserve(3u);
     u64 totalBytes = 0u;
@@ -35,21 +38,20 @@ bool CopyFontAtlasPositioningTables(const Font& font, FontAtlasPayload& outPaylo
                 break;
             if(totalBytes + length > s_FontAtlasMaxPositioningBytes){
                 NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas positioning export failed: source table byte budget exceeded"));
-                return false;
+                return MakeUnexpected(Failure{});
             }
             FontAtlasPositioningTable table(arena);
             table.tag = tag;
             table.bytes.assign(source.begin() + offset, source.begin() + offset + length);
             table.sha256 = ComputeSha256({ table.bytes.data(), table.bytes.size() });
-            if(!ValidateFontAtlasPositioningTable(table, outPayload.sourceGlyphCount))
-                return false;
+            if(!ValidateFontAtlasPositioningTable(table, sourceGlyphCount))
+                return MakeUnexpected(Failure{});
             tables.push_back(Move(table));
             totalBytes += length;
             break;
         }
     }
-    outPayload.positioningTables = Move(tables);
-    return true;
+    return tables;
 }
 
 

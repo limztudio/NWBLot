@@ -130,6 +130,16 @@ struct SourceTangentReport{
     u32 fallbackTangentVertexCount = 0u;
 };
 
+struct MeshBuildResult{
+    SourceMeshStreams mesh;
+    UtilityVector<ufbx_node*> skeletonJoints;
+    UtilityVector<JointMatrix> skeletonBindPoseMatrices;
+    UtilityVector<JointMatrix> inverseBindMatrices;
+    bool sawVertexColors = false;
+    bool sawVertexUvs = false;
+    SourceTangentReport tangentReport;
+};
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -203,7 +213,8 @@ struct SceneHandle{
     ufbx_scene* scene = nullptr;
 
     SceneHandle() = default;
-    ~SceneHandle();
+    ~SceneHandle()noexcept;
+    SceneHandle(SceneHandle&& other)noexcept;
     SceneHandle(const SceneHandle&) = delete;
     SceneHandle& operator=(const SceneHandle&) = delete;
 };
@@ -214,43 +225,34 @@ struct SceneHandle{
 
 AString OutputAssetTypeOptionsText();
 AString OutputAssetTypeErrorText();
-bool ParseAssetTypeText(const AStringView value, OutputAssetType::Enum& outAssetType);
+Expected<OutputAssetType::Enum> ParseAssetTypeText(const AStringView value);
 bool ValidateAssetTypeText(AString& inOutValue);
 AString NormalModeOptionsText();
 AString NormalModeErrorText();
-bool ParseNormalModeText(const AStringView value, NormalMode::Enum& outNormalMode);
+Expected<NormalMode::Enum> ParseNormalModeText(const AStringView value);
 bool ValidateNormalModeText(AString& inOutValue);
 AStringView SourceTangentModeText(SourceTangentMode::Enum mode);
-bool ParseColorText(const AStringView text, Vec4& outColor);
+Expected<Vec4> ParseColorText(const AStringView text);
 Path DefaultOutputPath(const AStringView inputPath);
 
-bool LoadScene(const ImportOptions& options, SceneHandle& outScene);
+Expected<SceneHandle> LoadScene(const ImportOptions& options);
 UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, bool includeHidden);
 void PrintMeshInstances(const UtilityVector<MeshInstance>& instances);
-bool SelectMeshInstances(
+Expected<UtilityVector<usize>> SelectMeshInstances(
     const UtilityVector<MeshInstance>& instances,
-    const AStringView selector,
-    UtilityVector<usize>& outSelection
-);
-bool BuildMesh(
+    const AStringView selector);
+Expected<MeshBuildResult> BuildMesh(
     const UtilityVector<MeshInstance>& instances,
     const UtilityVector<usize>& selection,
     const ImportOptions& options,
     bool wantsSkinning,
     const Vec4& defaultColor,
-    Core::CpuTaskScheduler& cpuScheduler,
-    SourceMeshStreams& outMesh,
-    UtilityVector<ufbx_node*>& outSkeletonJoints,
-    UtilityVector<JointMatrix>& outSkeletonBindPoseMatrices,
-    UtilityVector<JointMatrix>& outInverseBindMatrices,
-    bool& outSawVertexColors,
-    bool& outSawVertexUvs,
-    SourceTangentReport& outTangentReport
+    Core::CpuTaskScheduler& cpuScheduler
 );
 
 [[nodiscard]] SourceMeshStreamCounts CountSourceMeshStreams(const SourceMeshStreams& mesh);
-[[nodiscard]] bool CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::CpuTaskScheduler& cpuScheduler, SourceMeshCanonicalizeReport* outReport);
-[[nodiscard]] bool RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::CpuTaskScheduler& cpuScheduler, SourceMeshCanonicalizeReport& outReport);
+[[nodiscard]] Expected<SourceMeshCanonicalizeReport> CanonicalizeSourceMeshStreams(SourceMeshStreams& mesh, Core::CpuTaskScheduler& cpuScheduler);
+[[nodiscard]] Expected<SourceMeshCanonicalizeReport> RefreshNwbMeshAsset(const Path& inputPath, const Path& outputPath, Core::CpuTaskScheduler& cpuScheduler);
 
 bool WriteNwbAsset(
     const Path& outputPath,

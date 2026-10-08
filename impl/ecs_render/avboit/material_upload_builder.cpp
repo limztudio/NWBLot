@@ -106,30 +106,28 @@ struct UploadIdentities{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AvboitMaterialUploadBuilder::declare(
+[[nodiscard]] Expected<bool> AvboitMaterialUploadBuilder::declare(
     const AvboitMaterialUploadInputs& inputs,
     const InstanceGpuDataVector& instanceData,
     const MaterialTypedByteDataVector& materialTypedBytes,
     const CsgFrameGpuData& csgFrameData,
     bool hasCsgDrawItems,
-    Core::GpuTaskId& inOutUploadTask,
-    bool& outCsgStreamsUploaded
+    Core::GpuTaskId& inOutUploadTask
 ){
-    outCsgStreamsUploaded = false;
     if(
         !inputs.targets
         || !inputs.csgResources
         || !inputs.frameBindings
         || !inOutUploadTask.valid()
     )
-        return false;
+        return MakeUnexpected(Failure{});
     if(
         instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData)
         || csgFrameData.receiverRanges.size() > Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData)
         || csgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: AVBOIT upload size overflows graph blob capacity"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const __hidden_material_upload::UploadIdentities identities = __hidden_material_upload::IdentitiesForPhase(inputs.phase);
@@ -145,7 +143,7 @@ struct UploadIdentities{
     );
     if(!instanceBlob.valid() || !materialTypedBlob.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT material upload data"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     Core::GpuTaskSchedulingHint uploadScheduling;
@@ -171,7 +169,7 @@ struct UploadIdentities{
     );
     if(!inOutUploadTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT material instance upload"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     Core::GpuTaskDesc materialTypedUploadDesc;
@@ -191,22 +189,21 @@ struct UploadIdentities{
     );
     if(!inOutUploadTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT material typed upload"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     if(!hasCsgDrawItems)
-        return true;
+        return false;
 
-    CsgClipContextSlots clipContextSlotData;
-    if(!m_csgSystem.prepareCsgClipContextSlotData(
+    const auto clipContextSlotData = m_csgSystem.prepareCsgClipContextSlotData(
         *inputs.targets,
         csgFrameData,
         *inputs.csgResources,
-        *inputs.frameBindings,
-        clipContextSlotData
-    )){
+        *inputs.frameBindings
+    );
+    if(!clipContextSlotData){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not snapshot AVBOIT CSG context data"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     const Core::GpuUploadBlobId receiverRangesBlob = m_graph.copyUploadData(
         csgFrameData.receiverRanges.data(),
@@ -219,8 +216,8 @@ struct UploadIdentities{
         alignof(CsgCutterGpuData)
     );
     const Core::GpuUploadBlobId clipContextSlotsBlob = m_graph.copyUploadData(
-        &clipContextSlotData,
-        sizeof(clipContextSlotData),
+        &*clipContextSlotData,
+        sizeof(*clipContextSlotData),
         alignof(CsgClipContextSlots)
     );
     if(
@@ -229,7 +226,7 @@ struct UploadIdentities{
         || !clipContextSlotsBlob.valid()
     ){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not retain immutable AVBOIT CSG upload data"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     Core::GpuTaskDesc receiverRangesUploadDesc;
@@ -249,7 +246,7 @@ struct UploadIdentities{
     );
     if(!inOutUploadTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT CSG receiver-range upload"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     Core::GpuTaskDesc cuttersUploadDesc;
@@ -269,7 +266,7 @@ struct UploadIdentities{
     );
     if(!inOutUploadTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT CSG cutter upload"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     Core::GpuTaskDesc clipContextSlotsUploadDesc;
@@ -289,9 +286,8 @@ struct UploadIdentities{
     );
     if(!inOutUploadTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare AVBOIT CSG clip-context upload"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outCsgStreamsUploaded = true;
     return true;
 }
 

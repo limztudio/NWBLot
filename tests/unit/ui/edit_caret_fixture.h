@@ -42,7 +42,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual TextLayoutStatus::Enum shape(const ShapeRequest& request, ShapedRun& output)override{
+    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override{
         ShapedRun run(m_arena);
         run.metrics = variedHeight && request.text == "TALL" ? FontMetrics{ 10.0f, 4.0f, 6.0f } : FontMetrics{ 8.0f, 2.0f, 2.0f };
         if(fault == ShaperFault::Overlap){
@@ -86,8 +86,7 @@ public:
             for(usize index = 0u; index < run.glyphs.size() / 2u; ++index)
                 Swap(run.glyphs[index], run.glyphs[run.glyphs.size() - index - 1u]);
         }
-        output = Move(run);
-        return TextLayoutStatus::Success;
+        return run;
     }
 
 
@@ -115,15 +114,17 @@ public:
 
 
 protected:
-    [[nodiscard]] bool layout(const StringView text, TextLayout& output,
+    [[nodiscard]] Expected<TextLayout, TextLayoutStatus::Enum> layout(const StringView text,
         const TextDirection::Enum direction = TextDirection::LeftToRight
     ){
-        return m_builder.layout({ text, 16.0f, direction }, output) == TextLayoutStatus::Success;
+        return m_builder.layout({ text, 16.0f, direction });
     }
 
     [[nodiscard]] bool identityMapping(const StringView text){
-        if(!GraphemeSegmentation::Build(text, m_boundaries))
+        auto boundaries = GraphemeSegmentation::Build(m_arena, text);
+        if(!boundaries)
             return false;
+        m_boundaries = Move(*boundaries);
         m_mapping.clear();
         m_mapping.reserve(m_boundaries.size());
         for(const usize boundary : m_boundaries)
@@ -134,8 +135,8 @@ protected:
     [[nodiscard]] bool adopt(const StringView text, const usize committedBytes,
         const EditTextMode::Enum mode = EditTextMode::Multiline
     ){
-        TextLayout candidate(m_arena);
-        return layout(text, candidate) && m_geometry.adoptLayout(Move(candidate), text, m_mapping, committedBytes, mode);
+        auto candidate = layout(text);
+        return candidate && m_geometry.adoptLayout(Move(*candidate), text, m_mapping, committedBytes, mode);
     }
 
     [[nodiscard]] bool adoptText(const StringView text, const EditTextMode::Enum mode = EditTextMode::Multiline){
@@ -143,21 +144,21 @@ protected:
     }
 
     void expectCaret(const usize byte, const f32 x, const f32 y, const f32 height = 12.0f)const{
-        Rect rectangle;
-        ASSERT_TRUE(m_geometry.caretRect(byte, rectangle));
-        EXPECT_FLOAT_EQ(rectangle.x, x);
-        EXPECT_FLOAT_EQ(rectangle.y, y);
-        EXPECT_FLOAT_EQ(rectangle.width, 0.0f);
-        EXPECT_FLOAT_EQ(rectangle.height, height);
+        const auto rectangle = m_geometry.caretRect(byte);
+        ASSERT_TRUE(rectangle);
+        EXPECT_FLOAT_EQ(rectangle->x, x);
+        EXPECT_FLOAT_EQ(rectangle->y, y);
+        EXPECT_FLOAT_EQ(rectangle->width, 0.0f);
+        EXPECT_FLOAT_EQ(rectangle->height, height);
     }
 
     void expectRange(const EditBoxRange range, const u32 line, const Rect expected, const f32 cap = 1.0f)const{
-        Rect rectangle{ 999.0f, 999.0f, 999.0f, 999.0f };
-        ASSERT_TRUE(m_geometry.rangeOnLine(range, line, cap, rectangle));
-        EXPECT_FLOAT_EQ(rectangle.x, expected.x);
-        EXPECT_FLOAT_EQ(rectangle.y, expected.y);
-        EXPECT_FLOAT_EQ(rectangle.width, expected.width);
-        EXPECT_FLOAT_EQ(rectangle.height, expected.height);
+        const auto rectangle = m_geometry.rangeOnLine(range, line, cap);
+        ASSERT_TRUE(rectangle);
+        EXPECT_FLOAT_EQ(rectangle->x, expected.x);
+        EXPECT_FLOAT_EQ(rectangle->y, expected.y);
+        EXPECT_FLOAT_EQ(rectangle->width, expected.width);
+        EXPECT_FLOAT_EQ(rectangle->height, expected.height);
     }
 
 

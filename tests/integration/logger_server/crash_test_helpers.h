@@ -92,17 +92,16 @@ void BeginArchiveWithManifest(
 );
 [[nodiscard]] bool WriteArchive(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, const CrashTestText& archive);
 [[nodiscard]] bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, const CrashTestBytes& archive);
-[[nodiscard]] bool BuildArchiveFromPackageDirectory(Core::Alloc::GlobalArena& arena, const CrashTestPath& packageDirectory, CrashTestBytes& outArchive);
-[[nodiscard]] bool ReadServerSymbolication(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem, CrashTestText& outReport);
+[[nodiscard]] Expected<CrashTestBytes> BuildArchiveFromPackageDirectory(Core::Alloc::GlobalArena& arena, const CrashTestPath& packageDirectory);
+[[nodiscard]] Expected<CrashTestText, ErrorCode> ReadServerSymbolication(Core::Alloc::GlobalArena& arena, AStringView testGroup, AStringView stem);
 [[nodiscard]] Log::CrashIngestConfig MakeIngestConfig(Core::Alloc::GlobalArena& arena, AStringView testGroup);
-[[nodiscard]] bool WaitForTriggerPackage(
+[[nodiscard]] Expected<CrashTestPath> WaitForTriggerPackage(
     Core::Alloc::GlobalArena& arena,
     const CrashTestPath& pendingDirectory,
     AStringView category,
     AStringView expression,
     AStringView message,
-    AStringView file,
-    CrashTestPath& outPackageDirectory
+    AStringView file
 );
 void BuildLinuxCrashArchive(Core::Alloc::GlobalArena& arena, CrashTestText& archive, AStringView crashId);
 [[nodiscard]] bool Contains(const CrashTestText& text, AStringView needle)noexcept;

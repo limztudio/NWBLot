@@ -108,8 +108,8 @@ private:
 class SliderBehavior final{
 public:
     [[nodiscard]] static bool Validate(const SliderOptions& options)noexcept;
-    [[nodiscard]] static bool Normalize(f64 minimum, f64 maximum, f64 value, f64& out)noexcept;
-    [[nodiscard]] static bool Interpolate(f64 minimum, f64 maximum, f64 normalized, f64& out)noexcept;
+    [[nodiscard]] static Expected<f64> Normalize(f64 minimum, f64 maximum, f64 value)noexcept;
+    [[nodiscard]] static Expected<f64> Interpolate(f64 minimum, f64 maximum, f64 normalized)noexcept;
     // Admission includes stable geometry and policy, while thumb position and repaint-only value changes preserve its token.
     [[nodiscard]] static bool Admit(SliderState& state, const SliderOptions& options, const SliderPlacement& placement)noexcept;
     [[nodiscard]] static bool Apply(

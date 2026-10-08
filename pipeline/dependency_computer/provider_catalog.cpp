@@ -48,25 +48,26 @@ static void AddRoot(const NWB::Path& path, Assets::CookVector<Assets::ResolvedAs
     roots.emplace_back(NWB::Path(path), virtualRoot);
 }
 
-[[nodiscard]] static bool ResolveRoots(const PipelineOptions& options, const NWB::Path& repoRoot,
-    Assets::CookVector<Assets::ResolvedAssetRoot>& roots, Assets::ScratchArena& scratchArena
+[[nodiscard]] static Expected<Assets::CookVector<Assets::ResolvedAssetRoot>> ResolveRoots(const PipelineOptions& options, const NWB::Path& repoRoot,
+    Assets::ScratchArena& scratchArena
 ){
+    Assets::CookVector<Assets::ResolvedAssetRoot> roots(repoRoot.arena());
     const auto& sources = options.assetRoots.empty() ? options.inputs : options.assetRoots;
     roots.reserve(sources.size());
     for(const auto& source : sources){
-        ErrorCode error;
-        NWB::Path path(repoRoot.arena());
-        if(!ResolveAbsolutePath(repoRoot, AStringView(source), path, error)){
+        auto resolved = ResolveAbsolutePath(repoRoot.arena(), repoRoot, AStringView(source));
+        if(!resolved){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve asset root from '{}'"), StringConvert(source));
-            return false;
+            return MakeUnexpected(Failure{});
         }
+        NWB::Path path = Move(*resolved);
         if(options.assetRoots.empty()){
-            const bool directory = IsDirectory(path, error);
-            if(error){
+            const auto directory = IsDirectory(path);
+            if(!directory){
                 NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to inspect input '{}'"), PathToString<tchar>(path));
-                return false;
+                return MakeUnexpected(Failure{});
             }
-            if(!directory)
+            if(!*directory)
                 path = path.parentPath();
             NWB::Path ancestor = path;
             while(!ancestor.empty()){
@@ -86,9 +87,9 @@ static void AddRoot(const NWB::Path& path, Assets::CookVector<Assets::ResolvedAs
     }
     if(roots.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no asset roots available for skin dependencies"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    return true;
+    return roots;
 }
 
 [[nodiscard]] static bool SelectInput(const NWB::Path& path, const bool directory,
@@ -145,56 +146,57 @@ DependencyProviderCatalog::DependencyProviderCatalog(NWB::Core::Assets::AssetAre
 
 bool DependencyProviderCatalog::discover(const PipelineOptions& options, NWB::Core::Alloc::ScratchArena& scratchArena){
     using namespace __hidden_dependency_provider_catalog;
-    ErrorCode error;
     const AStringView repoText = options.repoRoot.empty() ? AStringView(".") : AStringView(options.repoRoot);
-    NWB::Path repoRoot = AbsolutePath(NWB::Path(m_arena, repoText), error);
-    if(error){
+    const auto absoluteRoot = AbsolutePath(NWB::Path(m_arena, repoText));
+    if(!absoluteRoot){
         NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve repository root"));
         return false;
     }
-    repoRoot = repoRoot.lexicallyNormal();
-    Assets::CookVector<Assets::ResolvedAssetRoot> roots(m_arena);
-    if(!ResolveRoots(options, repoRoot, roots, scratchArena))
+    NWB::Path repoRoot = absoluteRoot->lexicallyNormal();
+    auto roots = ResolveRoots(options, repoRoot, scratchArena);
+    if(!roots)
         return false;
-    Assets::DiscoveredNwbFileVector files(m_arena);
-    if(!Assets::DiscoverFilesWithExtension(roots, Assets::s_NwbExtension, files, scratchArena))
+    auto files = Assets::DiscoverFilesWithExtension(m_arena, *roots, Assets::s_NwbExtension, scratchArena);
+    if(!files)
         return false;
     Assets::AssetVector<Name> virtualPaths(m_arena);
-    virtualPaths.reserve(files.size());
-    for(const auto& file : files){
-        Name virtualPath;
-        if(!Assets::BuildDerivedAssetVirtualPath(file.assetRoot, file.virtualRoot, file.filePath, virtualPath, scratchArena))
+    virtualPaths.reserve(files->size());
+    for(const auto& file : *files){
+        const auto virtualPath = Assets::BuildDerivedAssetVirtualPath(file.assetRoot, file.virtualRoot, file.filePath, scratchArena);
+        if(!virtualPath)
             return false;
-        virtualPaths.push_back(virtualPath);
+        virtualPaths.push_back(*virtualPath);
     }
     m_repoRoot = Move(repoRoot);
-    m_roots = Move(roots);
-    m_files = Move(files);
+    m_roots = Move(*roots);
+    m_files = Move(*files);
     m_virtualPaths = Move(virtualPaths);
     return true;
 }
 
-bool DependencyProviderCatalog::selectInputs(const PipelineOptions& options,
-    Vector<u8, NWB::Core::Alloc::ScratchArena>& outSelected,
-    Vector<usize, NWB::Core::Alloc::ScratchArena>& outOrder,
+Expected<DependencyInputSelection> DependencyProviderCatalog::selectInputs(const PipelineOptions& options,
     NWB::Core::Alloc::ScratchArena& scratchArena
 )const{
     using namespace __hidden_dependency_provider_catalog;
-    Vector<u8, Assets::ScratchArena> selected(m_files.size(), u8(0), outSelected.get_allocator().arena());
-    Vector<usize, Assets::ScratchArena> order(outOrder.get_allocator().arena());
+    DependencyInputSelection selection(scratchArena);
+    auto& selected = selection.selected;
+    auto& order = selection.order;
+    selected.resize(m_files.size(), u8(0));
     order.reserve(m_files.size());
     for(const auto& input : options.inputs){
-        ErrorCode error;
-        NWB::Path path(m_arena);
-        if(!ResolveAbsolutePath(m_repoRoot, AStringView(input), path, error)){
+        const auto resolved = ResolveAbsolutePath(m_arena, m_repoRoot, AStringView(input));
+        if(!resolved){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve input '{}'"), StringConvert(input));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        const bool directory = IsDirectory(path, error);
-        if(error || (!directory && !IsRegularFile(path, error))){
+        const NWB::Path& path = *resolved;
+        const auto directoryResult = IsDirectory(path);
+        const auto regular = directoryResult && *directoryResult ? Expected<bool, ErrorCode>(true) : IsRegularFile(path);
+        if(!directoryResult || (!*directoryResult && (!regular || !*regular))){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: input is not a file or directory '{}'"), PathToString<tchar>(path));
-            return false;
+            return MakeUnexpected(Failure{});
         }
+        const bool directory = *directoryResult;
         bool contained = !directory;
         if(directory){
             Assets::ScratchString inputPath = PathToString(scratchArena, path);
@@ -216,55 +218,56 @@ bool DependencyProviderCatalog::selectInputs(const PipelineOptions& options,
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: input selects no .nwb asset within the asset roots '{}'")
                 , PathToString<tchar>(path)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
-    outSelected.swap(selected);
-    outOrder.swap(order);
-    return true;
+    return selection;
 }
 
-bool DependencyProviderCatalog::read(const usize index, NWB::Core::Metascript::Document& outDocument,
+Expected<NWB::Core::Metascript::Document> DependencyProviderCatalog::read(const usize index,
     NWB::Core::Alloc::ScratchArena& scratchArena
 )const{
     using namespace __hidden_dependency_provider_catalog;
     if(index >= m_files.size())
-        return false;
+        return MakeUnexpected(Failure{});
     Assets::ScratchString text(scratchArena);
-    return Assets::ParseMetadataDocumentText(
+    Core::Metascript::Document document(m_arena);
+    if(!Assets::ParseMetadataDocumentText(
         m_files[index].filePath,
         s_DiagnosticPrefix,
         text,
-        outDocument,
-        [&](const AStringView source){ return outDocument.parse(source); }
-    );
+        document,
+        [&](const AStringView source){ return document.parse(source); }
+    ))
+        return MakeUnexpected(Failure{});
+    return document;
 }
 
-bool DependencyProviderCatalog::resolve(const Name& virtualPath, const Name& assetType, usize& outIndex,
+Expected<usize> DependencyProviderCatalog::resolve(const Name& virtualPath, const Name& assetType,
     NWB::Core::Alloc::ScratchArena& scratchArena
 )const{
     using namespace __hidden_dependency_provider_catalog;
     if(!virtualPath || !assetType)
-        return false;
+        return MakeUnexpected(Failure{});
     usize matched = Limit<usize>::s_Max;
     for(usize index = 0u; index < m_files.size(); ++index){
         if(m_virtualPaths[index] != virtualPath)
             continue;
-        Core::Metascript::Document document(m_arena);
-        if(!read(index, document, scratchArena))
-            return false;
-        if(Name(document.assetType()) != assetType)
+        const auto document = read(index, scratchArena);
+        if(!document)
+            return MakeUnexpected(Failure{});
+        if(Name(document->assetType()) != assetType)
             continue;
-        if(document.declarations().size() != 1u){
+        if(document->declarations().size() != 1u){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: provider '{}' declares multiple assets for '{}'")
                 , PathToString<tchar>(m_files[index].filePath)
                 , StringConvert(virtualPath)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(matched != Limit<usize>::s_Max){
             NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: multiple physical providers for '{}'"), StringConvert(virtualPath));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         matched = index;
     }
@@ -273,10 +276,9 @@ bool DependencyProviderCatalog::resolve(const Name& virtualPath, const Name& ass
             , StringConvert(assetType)
             , StringConvert(virtualPath)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outIndex = matched;
-    return true;
+    return matched;
 }
 
 

@@ -78,7 +78,7 @@ struct ProjectStartupContext{
 
 
 struct ProjectRuntimeContext{
-    using ShaderPathResolveCallback = Function<bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)>;
+    using ShaderPathResolveCallback = Function<Expected<Name>(const Name& shaderName, AStringView variantName, const Name& stageName)>;
     using TelemetryCaptureCallback = Function<void(const Core::Telemetry::CaptureOptions& options)>;
     using TelemetryUploadFlushCallback = Function<bool(bool clearAfterUpload)>;
     using PerfCaptureCallback = Function<void(const Core::Perf::CaptureOptions& options)>;
@@ -135,7 +135,7 @@ TStringView QueryProjectWindowTitle();
 bool ConfigureProjectRuntime(ProjectStartupContext& context);
 UniquePtr<IProjectEntryCallbacks> CreateProjectEntryCallbacks(ProjectRuntimeContext& context);
 
-bool CreateInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& outWorld);
+Expected<UniquePtr<Core::ECS::World>, TStringView> CreateInitialProjectWorld(ProjectRuntimeContext& context);
 void DestroyInitialProjectWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& world);
 
 

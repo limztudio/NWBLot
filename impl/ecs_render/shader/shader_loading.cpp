@@ -43,8 +43,7 @@ bool RendererShaderSystem::loadShaderForStage(
 
 
 bool RendererShaderSystem::hasShaderArchiveStage(const Name& shaderName, const AStringView variantName, const Name& stageName)const{
-    Name virtualPath;
-    return m_shaderPathResolver(shaderName, variantName, stageName, virtualPath);
+    return m_shaderPathResolver(shaderName, variantName, stageName).has_value();
 }
 
 

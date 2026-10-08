@@ -202,16 +202,16 @@ bool Skeleton::loadBinary(const Core::Assets::AssetBytes& binary){
     m_jointIndices.clear();
 
     usize cursor = 0u;
-    SkeletonBinaryPayload::HeaderBinary header;
-    if(!Core::Assets::ReadMagicHeaderPayload(
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<SkeletonBinaryPayload::HeaderBinary>(
         binary,
         cursor,
-        header,
         SkeletonBinaryPayload::s_SkeletonMagic,
         NWB_TEXT("Skeleton::loadBinary"),
         NWB_TEXT("skeleton")
-    ))
+    );
+    if(!headerResult)
         return false;
+    const SkeletonBinaryPayload::HeaderBinary& header = *headerResult;
 
     Core::Assets::AssetVector<SkeletonBinaryPayload::JointBinary> jointBinaries(m_joints.get_allocator().arena());
     if(!Core::Assets::ReadVectorPayload(

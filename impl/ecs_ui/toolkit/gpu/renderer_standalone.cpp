@@ -61,8 +61,8 @@ Core::GpuTaskId GpuRendererState::declareStandalone(
     );
     if(!begin.valid() || !graph.setNormalExecutionPrelude(begin))
         return {};
-    Core::GpuTaskGraphOutputLayer layer;
-    if(!declare(graph, layer, false) || !layer.color.valid())
+    const auto layer = declare(graph, false);
+    if(!layer || !layer->color.valid())
         return {};
     const GpuFrame frame = m_pending;
     const Core::GpuExternalCompletionId acquired = graph.importExternalCompletion(
@@ -85,18 +85,18 @@ Core::GpuTaskId GpuRendererState::declareStandalone(
     if(!backBuffer.valid() || !pipeline.valid())
         return {};
     const Core::GpuTaskResourceUse uses[]{
-        { layer.color, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read },
+        { layer->color, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read },
         { backBuffer, {}, Core::ResourceStates::RenderTarget, Core::GpuTaskResourceAccess::Write },
     };
-    const Core::GpuTaskResourceVersionUse consume{ layer.colorVersion, Core::GpuTaskResourceVersionRole::Consume };
+    const Core::GpuTaskResourceVersionUse consume{ layer->colorVersion, Core::GpuTaskResourceVersionRole::Consume };
     Core::GpuTaskSchedulingHint scheduling;
     scheduling.cost = Core::GpuTaskCostHint::Small;
     scheduling.avoidQueueCrossing = true;
     const Core::GpuTaskId output = graph.addTask<GpuOutputTask>(
         Core::GpuTaskDesc().setIdentity(Name("ui.output")).setMarkerLabel("UI Standalone Output").setScheduling(scheduling)
-            .setDependencies(&layer.readyTask, 1u).setResourceUses(uses, 2u).setResourceVersionUses(&consume, 1u)
+            .setDependencies(&layer->readyTask, 1u).setResourceUses(uses, 2u).setResourceVersionUses(&consume, 1u)
             .setTimingMetadata({ 0u, m_width ^ (m_height << 16u), Core::GpuTaskTimingPolicy::Task }),
-        GpuOutputTask::Payload{ frame, backBuffer, layer.color, pipeline, frame->m_acquired, frame->m_outputPipeline, frame->m_presentationMode }
+        GpuOutputTask::Payload{ frame, backBuffer, layer->color, pipeline, frame->m_acquired, frame->m_outputPipeline, frame->m_presentationMode }
     );
     if(!output.valid())
         return {};
@@ -159,14 +159,12 @@ bool GpuRenderer::renderStandalone(const Core::AcquiredPresentationFrame& frame)
     const GpuFrame pending = m_state->m_pending;
     Core::GpuTimingFrameTransaction frameTimingTransaction(m_state->m_graphics.gpuTiming());
     __hidden_ui_gpu_standalone::StandaloneDeclarationContext declarationContext{ *m_state, frameTimingTransaction };
-    Core::QueueSubmissionToken submission;
-    const bool submitted = m_state->m_graphics.submitStandaloneTaskGraph(
+    const auto submitted = m_state->m_graphics.submitStandaloneTaskGraph(
         &declarationContext,
         [](void* context, Core::GpuTaskGraph& graph){
             auto& declaration = *static_cast<__hidden_ui_gpu_standalone::StandaloneDeclarationContext*>(context);
             return declaration.state.declareStandalone(graph, declaration.frameTimingTransaction);
         },
-        submission,
         queue,
         &m_state->m_graphics.gpuTiming(),
         &frameTimingTransaction
@@ -174,7 +172,7 @@ bool GpuRenderer::renderStandalone(const Core::AcquiredPresentationFrame& frame)
     m_state->m_presentationContributor = nullptr;
     if(pending->m_finalConsumer.valid())
         acceptTaskGraphOutputLayer(pending->m_snapshot.generation(), pending->m_finalConsumer);
-    if(!submitted || !submission.valid()){
+    if(!submitted || !submitted->valid()){
         // Retain immutable inputs and accepted-prefix tokens; a later acquired frame can retry after completion.
         m_state->m_claimed = false;
         m_state->m_declaredGraph = nullptr;

@@ -161,6 +161,11 @@ typedef GraphicsBackend::Handle<EventQuery> EventQueryHandle;
 typedef GraphicsBackend::Handle<TimerQuery> TimerQueryHandle;
 
 // One recorded begin/end cycle. Query, queue, generation, and reset authorization together stop a stale command buffer from closing or revoking another cycle after reuse.
+struct TimerQueryRecordingEndpoints{
+    bool recordsBegin = false;
+    bool recordsEnd = false;
+};
+
 struct TimerQueryRecordingToken{
     TimerQuery* query = nullptr;
     u64 queryIncarnation = 0u;

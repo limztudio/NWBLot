@@ -41,16 +41,16 @@ EncodedFrameGraphQueueAssignment EncodeQueueAssignment(const u32 nodeIndex, cons
     };
 }
 
-bool DecodeQueueAssignment(const EncodedFrameGraphQueueAssignment& encoded, FrameGraphQueueAssignment& outAssignment)noexcept{
+Expected<FrameGraphQueueAssignment> DecodeQueueAssignment(const EncodedFrameGraphQueueAssignment& encoded)noexcept{
     if(
         encoded.dedicated > 1u
         || encoded.reserved[0u] != 0u
         || encoded.reserved[1u] != 0u
         || encoded.reserved[2u] != 0u
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outAssignment = {
+    const FrameGraphQueueAssignment assignment{
         .initialQueue = { .index = encoded.initialQueue.index, .deviceGeneration = encoded.initialQueue.deviceGeneration },
         .plannedQueue = { .index = encoded.plannedQueue.index, .deviceGeneration = encoded.plannedQueue.deviceGeneration },
         .acceptedQueue = { .index = encoded.acceptedQueue.index, .deviceGeneration = encoded.acceptedQueue.deviceGeneration },
@@ -70,7 +70,9 @@ bool DecodeQueueAssignment(const EncodedFrameGraphQueueAssignment& encoded, Fram
         .dedicated = encoded.dedicated != 0u,
         .present = true,
     };
-    return IsValidFrameGraphQueueAssignment(outAssignment);
+    if(!IsValidFrameGraphQueueAssignment(assignment))
+        return MakeUnexpected(Failure{});
+    return assignment;
 }
 
 

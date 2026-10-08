@@ -147,19 +147,20 @@ TEST(SkinningPayload, RuntimePayloadFollowsReplacementMeshAndJointCounts){
     EXPECT_FLOAT_EQ(payload.jointMatrices[0].rows[0].w, 11.0f);
 }
 
-TEST(SkinningPayload, EmptySkinClearsPreviousInfluencePayload){
+TEST(SkinningPayload, EmptySkinProducesEmptyInfluencePayload){
     auto& arena = NWB::Tests::TestDetail::Arena();
     NWB::Impl::MeshSkinningRuntimeInstance instance(arena);
     instance.skeletonJointCount = 5u;
     instance.skin.assign(s_ExpectedDualCount, MakeSkinInfluence(0u));
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    Vector<NWB::Impl::MeshSkinningInfluenceGpu, NWB::Core::Alloc::ScratchArena> influences(scratchArena);
-    ASSERT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, influences));
-    ASSERT_EQ(influences.size(), s_ExpectedDualCount);
+    auto influences = NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
+    ASSERT_TRUE(influences);
+    ASSERT_EQ(influences->size(), s_ExpectedDualCount);
 
     instance.skin.clear();
-    ASSERT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, influences));
-    EXPECT_TRUE(influences.empty());
+    influences = NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
+    ASSERT_TRUE(influences);
+    EXPECT_TRUE(influences->empty());
 }
 
 TEST(SkinningPayload, PaletteCanExceedSkeletonWithoutInverseBindMatrices){
@@ -362,42 +363,43 @@ TEST(SkinningPayload, StaticInfluenceEncodingRejectsInvalidMeshEditsAndRecovers)
     instance.skeletonJointCount = s_ExpectedDualCount;
     instance.skin.assign(s_ExpectedDualCount, MakeSkinInfluence(1u));
     NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    Vector<NWB::Impl::MeshSkinningInfluenceGpu, NWB::Core::Alloc::ScratchArena> influences(scratchArena);
-    ASSERT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, influences));
-    ASSERT_EQ(influences.size(), s_ExpectedDualCount);
+    auto influences = NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
+    ASSERT_TRUE(influences);
+    ASSERT_EQ(influences->size(), s_ExpectedDualCount);
 
     ++instance.editRevision;
     instance.skin[1].weight.x = 0.5f;
-    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, influences));
-    EXPECT_TRUE(influences.empty());
+    influences = NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
+    EXPECT_FALSE(influences);
 
     instance.skin[1].weight = Float4U(-0.5f, 1.5f, 0.0f, 0.0f);
-    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, influences));
-    EXPECT_TRUE(influences.empty());
+    influences = NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
+    EXPECT_FALSE(influences);
 
     instance.skin[1].weight = Float4U(Limit<f32>::s_QuietNaN, 0.0f, 0.0f, 0.0f);
-    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, influences));
-    EXPECT_TRUE(influences.empty());
+    influences = NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
+    EXPECT_FALSE(influences);
 
     instance.skin[1] = MakeSkinInfluence(1u);
     instance.skin[1].joint[3] = s_ExpectedDualCount;
-    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, influences));
-    EXPECT_TRUE(influences.empty());
+    influences = NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
+    EXPECT_FALSE(influences);
 
     instance.skin[1] = MakeSkinInfluence(1u);
     instance.skeletonJointCount = 0u;
-    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, influences));
-    EXPECT_TRUE(influences.empty());
+    influences = NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
+    EXPECT_FALSE(influences);
 
     instance.skeletonJointCount = static_cast<u32>(Limit<u16>::s_Max) + s_ExpectedDualCount;
-    EXPECT_FALSE(NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, influences));
-    EXPECT_TRUE(influences.empty());
+    influences = NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
+    EXPECT_FALSE(influences);
 
     instance.skeletonJointCount = s_ExpectedDualCount;
-    ASSERT_TRUE(NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, influences));
-    ASSERT_EQ(influences.size(), s_ExpectedDualCount);
-    EXPECT_EQ(influences[1].joint[0], 1u);
-    EXPECT_FLOAT_EQ(influences[1].weight.x, 1.0f);
+    influences = NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
+    ASSERT_TRUE(influences);
+    ASSERT_EQ(influences->size(), s_ExpectedDualCount);
+    EXPECT_EQ((*influences)[1].joint[0], 1u);
+    EXPECT_FLOAT_EQ((*influences)[1].weight.x, 1.0f);
     EXPECT_EQ(logger.errorCount(), 6u);
 }
 #endif

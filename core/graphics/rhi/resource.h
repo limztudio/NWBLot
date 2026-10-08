@@ -65,6 +65,12 @@ namespace CpuAccessMode{
     };
 };
 
+struct StagingTextureMapping{
+    void* data = nullptr;
+    usize rowPitch = 0u;
+};
+
+
 // Sharing intent for multi-transport resources. Never exposes queue-family indices; a requested set becomes concurrent Vulkan sharing only for the distinct families the device created.
 namespace ResourceQueueSharing{
     static constexpr u8 s_ResourceQueueSharingExclusiveBase = 0;

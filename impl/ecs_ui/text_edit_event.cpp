@@ -33,10 +33,12 @@ UiTextEditStatus::Enum ApplyUiTextEditEvent(
                 : model.selectionEnd() - model.selectionStart()
             ;
             const usize retainedBytes = model.text().size() - replaced;
-            AString<Core::Alloc::GlobalArena> normalized(event.text.get_allocator());
-            if(Ui::NormalizeMultilineText(event.text, normalized, model.limits().maxBytes - retainedBytes) != Ui::EditTextStatus::Accepted)
+            const auto normalized = Ui::NormalizeMultilineText(
+                event.text.get_allocator().arena(), event.text, model.limits().maxBytes - retainedBytes
+            );
+            if(!normalized)
                 return UiTextEditStatus::ModelRejected;
-            return (composition.active ? model.commitComposition(normalized) : model.replaceSelection(normalized))
+            return (composition.active ? model.commitComposition(*normalized) : model.replaceSelection(*normalized))
                 ? UiTextEditStatus::Applied : UiTextEditStatus::ModelRejected
             ;
         }

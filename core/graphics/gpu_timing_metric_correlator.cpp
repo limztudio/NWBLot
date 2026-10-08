@@ -353,9 +353,8 @@ void GpuTimingMetricCorrelator::recordTimestampRange(
         if(!frame->hasFirst || !frame->hasSecond)
             continue;
 
-        u64 overlapTicks = 0u;
-        if(TryComputeGpuTimestampOverlap(frame->first, frame->second, overlapTicks)){
-            const f64 overlapSeconds = static_cast<f64>(overlapTicks) * frame->first.secondsPerTick;
+        if(const auto overlapTicks = TryComputeGpuTimestampOverlap(frame->first, frame->second)){
+            const f64 overlapSeconds = static_cast<f64>(*overlapTicks) * frame->first.secondsPerTick;
             performanceSamples.reserve(performanceSamples.size() + 1u);
             performanceSamples.push_back(GpuTimingSinkSample{
                 .scope = record.outputScope,
@@ -409,16 +408,14 @@ void GpuTimingMetricCorrelator::recordTimestampRange(
         for(const PacketEnvelopeMetricScopeRecord& scope : it->scopes)
             packetRanges.push_back(scope.range);
 
-        GpuPacketEnvelopeMetrics envelopeMetrics;
         GpuQueuePacketEnvelopeMetricsVector queueMetrics{scratchArena};
-        bool aggregated = TryAggregateGpuPacketEnvelopeMetrics(
+        const auto envelopeMetrics = TryAggregateGpuPacketEnvelopeMetrics(
             packetRanges.data(),
             packetRanges.size(),
-            envelopeMetrics,
             queueMetrics,
             scratchArena
         );
-        aggregated = aggregated && queueMetrics.size() == it->queueOutputs.size();
+        bool aggregated = envelopeMetrics && queueMetrics.size() == it->queueOutputs.size();
         for(const GpuQueuePacketEnvelopeMetrics& queueMetric : queueMetrics){
             bool hasOutput = false;
             for(const PacketEnvelopeMetricQueueOutputRecord& output : it->queueOutputs)
@@ -427,8 +424,8 @@ void GpuTimingMetricCorrelator::recordTimestampRange(
         }
 
         if(aggregated){
-            const f64 secondsPerTick = envelopeMetrics.secondsPerTick;
-            const f64 overlapSeconds = static_cast<f64>(envelopeMetrics.queueOverlapTicks) * secondsPerTick;
+            const f64 secondsPerTick = envelopeMetrics->secondsPerTick;
+            const f64 overlapSeconds = static_cast<f64>(envelopeMetrics->queueOverlapTicks) * secondsPerTick;
             performanceSamples.push_back(GpuTimingSinkSample{
                 .scope = it->queueOverlapScope,
                 .durationSeconds = overlapSeconds,

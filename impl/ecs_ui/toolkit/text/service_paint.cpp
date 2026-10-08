@@ -95,8 +95,10 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
         const PlacedGlyph& glyph = layout.glyphs()[index];
         __hidden_ui_text_paint::PreparedGlyph item;
         if(const BakedFontAtlas* atlas = TextGlyphVisibility::SelectAtlas(glyph, physicalSize)){
-            if(!TextGlyphVisibility::AtlasRectangle(glyph, *atlas, layout.fontSize(), topLeft, item.rectangle))
+            const auto rectangle = TextGlyphVisibility::AtlasRectangle(glyph, *atlas, layout.fontSize(), topLeft);
+            if(!rectangle)
                 return false;
+            item.rectangle = *rectangle;
             if(item.rectangle.width > 0.0f && item.rectangle.height > 0.0f){
                 const FontAtlasGlyph& record = *atlas->glyph(glyph.glyphId);
                 item.sdfPage = &atlas->page(record.group);
@@ -112,8 +114,10 @@ bool TextService::paint(PaintBuilder& paint, const TextLayout& layout, Point top
                 NWB_FATAL_ASSERT_MSG(false, NWB_TEXT("Prepared UI glyph must be present"));
                 return false;
             }
-            if(!TextGlyphVisibility::CoverageRectangle(glyph, *record, rasterScale, topLeft, item.rectangle, deviceScale))
+            const auto rectangle = TextGlyphVisibility::CoverageRectangle(glyph, *record, rasterScale, topLeft, deviceScale);
+            if(!rectangle)
                 return false;
+            item.rectangle = *rectangle;
             item.pageIndex = record->pageIndex;
             item.uv = { record->pixels.x / s_GlyphAtlasPageExtent, record->pixels.y / s_GlyphAtlasPageExtent,
                 record->pixels.width / s_GlyphAtlasPageExtent, record->pixels.height / s_GlyphAtlasPageExtent };

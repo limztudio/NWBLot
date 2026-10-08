@@ -48,8 +48,13 @@ namespace __hidden_ui_edit_box_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EditBoxView::arrange(const Rect& bounds, const Insets& padding, const Rect& clip,
-    const Point previousScroll, EditBoxPlacement& output, const f32 caretWidth, const bool revealCaret
+Expected<EditBoxPlacement> EditBoxView::arrange(
+    const Rect& bounds,
+    const Insets& padding,
+    const Rect& clip,
+    const Point previousScroll,
+    const f32 caretWidth,
+    const bool revealCaret
 )const noexcept{
     if(
         !m_ready || !__hidden_ui_edit_box_layout::ValidRect(bounds) || !__hidden_ui_edit_box_layout::ValidRect(clip)
@@ -58,16 +63,21 @@ bool EditBoxView::arrange(const Rect& bounds, const Insets& padding, const Rect&
         || !IsFinite(previousScroll.x) || previousScroll.x < 0.0f || !IsFinite(previousScroll.y) || previousScroll.y < 0.0f
         || !IsFinite(caretWidth) || caretWidth <= 0.0f
     )
-        return false;
+        return MakeUnexpected(Failure{});
     const f32 left = bounds.x + Min(padding.left, bounds.width);
     const f32 top = bounds.y + Min(padding.top, bounds.height);
     const f32 right = Max(left, bounds.x + bounds.width - Min(padding.right, bounds.width));
     const f32 bottom = Max(top, bounds.y + bounds.height - Min(padding.bottom, bounds.height));
-    return arrangeViewport(bounds, { left, top, right - left, bottom - top }, clip, previousScroll, output, caretWidth, revealCaret);
+    return arrangeViewport(bounds, { left, top, right - left, bottom - top }, clip, previousScroll, caretWidth, revealCaret);
 }
 
-bool EditBoxView::arrangeViewport(const Rect& bounds, const Rect& viewport, const Rect& clip,
-    const Point previousScroll, EditBoxPlacement& output, const f32 caretWidth, const bool revealCaret
+Expected<EditBoxPlacement> EditBoxView::arrangeViewport(
+    const Rect& bounds,
+    const Rect& viewport,
+    const Rect& clip,
+    const Point previousScroll,
+    const f32 caretWidth,
+    const bool revealCaret
 )const noexcept{
     if(
         !m_ready || !__hidden_ui_edit_box_layout::ValidRect(bounds) || !__hidden_ui_edit_box_layout::ValidRect(viewport)
@@ -76,7 +86,7 @@ bool EditBoxView::arrangeViewport(const Rect& bounds, const Rect& viewport, cons
         || !IsFinite(previousScroll.x) || previousScroll.x < 0.0f || !IsFinite(previousScroll.y) || previousScroll.y < 0.0f
         || !IsFinite(caretWidth) || caretWidth <= 0.0f
     )
-        return false;
+        return MakeUnexpected(Failure{});
     EditBoxPlacement placement;
     placement.bounds = bounds;
     placement.frameClip = __hidden_ui_edit_box_layout::Intersection(bounds, clip);
@@ -84,44 +94,46 @@ bool EditBoxView::arrangeViewport(const Rect& bounds, const Rect& viewport, cons
     placement.clip = __hidden_ui_edit_box_layout::Intersection(viewport, clip);
     const f32 left = viewport.x;
     const f32 top = viewport.y;
-    Rect caret;
-    if(!m_geometry.caretRect(m_caret, caret))
-        return false;
+    const auto caret = m_geometry.caretRect(m_caret);
+    if(!caret)
+        return MakeUnexpected(Failure{});
     const f32 maximumScroll = Max(0.0f, layout().measure().x + caretWidth - placement.content.width);
     if(!IsFinite(maximumScroll))
-        return false;
+        return MakeUnexpected(Failure{});
     placement.scroll = Clamp(previousScroll.x, 0.0f, maximumScroll);
-    if(revealCaret && caret.x < placement.scroll)
-        placement.scroll = caret.x;
-    if(revealCaret && caret.x + caretWidth > placement.scroll + placement.content.width)
-        placement.scroll = caret.x + caretWidth - placement.content.width;
+    if(revealCaret && caret->x < placement.scroll)
+        placement.scroll = caret->x;
+    if(revealCaret && caret->x + caretWidth > placement.scroll + placement.content.width)
+        placement.scroll = caret->x + caretWidth - placement.content.width;
     placement.scroll = Clamp(placement.scroll, 0.0f, maximumScroll);
     if(m_textMode == EditTextMode::Multiline){
         const f32 maximumScrollY = Max(0.0f, layout().measure().y - placement.content.height);
         if(!IsFinite(maximumScrollY))
-            return false;
+            return MakeUnexpected(Failure{});
         placement.scrollY = Clamp(previousScroll.y, 0.0f, maximumScrollY);
-        if(revealCaret && caret.y < placement.scrollY)
-            placement.scrollY = caret.y;
-        if(revealCaret && caret.y + caret.height > placement.scrollY + placement.content.height)
-            placement.scrollY = caret.y + caret.height - placement.content.height;
+        if(revealCaret && caret->y < placement.scrollY)
+            placement.scrollY = caret->y;
+        if(revealCaret && caret->y + caret->height > placement.scrollY + placement.content.height)
+            placement.scrollY = caret->y + caret->height - placement.content.height;
         placement.scrollY = Clamp(placement.scrollY, 0.0f, maximumScrollY);
         placement.textOrigin = { left - placement.scroll, top - placement.scrollY };
     }
     else
-        placement.textOrigin = { left - placement.scroll, top + Max(0.0f, (placement.content.height - caret.height) * 0.5f) };
-    placement.caret = { placement.textOrigin.x + caret.x, placement.textOrigin.y + caret.y, caretWidth, caret.height };
-    Rect selection;
-    if(!m_geometry.rangeOnLine(m_selection, 0u, caretWidth, selection))
-        return false;
-    if(selection.width > 0.0f){
-        selection.x += placement.textOrigin.x;
-        selection.y += placement.textOrigin.y;
+        placement.textOrigin = { left - placement.scroll, top + Max(0.0f, (placement.content.height - caret->height) * 0.5f) };
+    placement.caret = { placement.textOrigin.x + caret->x, placement.textOrigin.y + caret->y, caretWidth, caret->height };
+    auto selection = m_geometry.rangeOnLine(m_selection, 0u, caretWidth);
+    if(!selection)
+        return MakeUnexpected(Failure{});
+    if(selection->width > 0.0f){
+        selection->x += placement.textOrigin.x;
+        selection->y += placement.textOrigin.y;
     }
     Rect preeditUnderline;
     if(m_composing){
-        if(!m_geometry.rangeOnLine(m_preedit, 0u, caretWidth, preeditUnderline))
-            return false;
+        const auto underline = m_geometry.rangeOnLine(m_preedit, 0u, caretWidth);
+        if(!underline)
+            return MakeUnexpected(underline.error());
+        preeditUnderline = *underline;
         if(preeditUnderline.width > 0.0f){
             const f32 thickness = Min(caretWidth, preeditUnderline.height);
             preeditUnderline.x += placement.textOrigin.x;
@@ -130,19 +142,18 @@ bool EditBoxView::arrangeViewport(const Rect& bounds, const Rect& viewport, cons
         }
     }
     if(
-        !__hidden_ui_edit_box_layout::ValidRect(placement.caret) || !__hidden_ui_edit_box_layout::ValidRect(selection)
+        !__hidden_ui_edit_box_layout::ValidRect(placement.caret) || !__hidden_ui_edit_box_layout::ValidRect(*selection)
         || !__hidden_ui_edit_box_layout::ValidRect(preeditUnderline)
         || !IsFinite(placement.textOrigin.x) || !IsFinite(placement.textOrigin.y)
     )
-        return false;
-    output = placement;
-    return true;
+        return MakeUnexpected(Failure{});
+    return placement;
 }
 
-bool EditBoxView::hitTest(const Point point, const EditBoxPlacement& placement, usize& committedByte)const noexcept{
+Expected<usize> EditBoxView::hitTest(const Point point, const EditBoxPlacement& placement)const noexcept{
     if(!m_ready || !IsFinite(point.x) || !IsFinite(point.y) || !IsFinite(placement.textOrigin.x) || !IsFinite(placement.textOrigin.y))
-        return false;
-    return m_geometry.hitTest({ point.x - placement.textOrigin.x, point.y - placement.textOrigin.y }, committedByte);
+        return MakeUnexpected(Failure{});
+    return m_geometry.hitTest({ point.x - placement.textOrigin.x, point.y - placement.textOrigin.y });
 }
 
 

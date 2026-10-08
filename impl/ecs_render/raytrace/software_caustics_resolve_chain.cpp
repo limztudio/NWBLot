@@ -32,11 +32,11 @@ SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool SoftwareCausticsResolveChainBuilder::declare(
+[[nodiscard]] Expected<SoftwareCausticsResolveChainResult> SoftwareCausticsResolveChainBuilder::declare(
     const SoftwareCausticsResolveChainInputs& inputs,
-    SoftwareCausticsResolveChainResult& outResult,
     Core::Alloc::ScratchArena& scratchArena
 ){
+    SoftwareCausticsResolveChainResult result{};
     CausticsResolveChainInputs sharedInputs;
     sharedInputs.targets = inputs.targets;
     sharedInputs.geometryTask = inputs.geometryTask;
@@ -64,18 +64,18 @@ SoftwareCausticsResolveChainBuilder::SoftwareCausticsResolveChainBuilder(
         {Name("render.software_caustics.resolve_timing_close"), "Software Caustics Resolve Timing Close", NWB_TEXT("RendererSystem: could not declare deferred software-caustics resolve graph task")},
     };
     CausticsResolveChainBuilder sharedBuilder(m_graph, m_raytracingSystem);
-    CausticsResolveChainResult sharedResult;
-    if(!sharedBuilder.declare(sharedInputs, naming, sharedResult, scratchArena))
-        return false;
-    outResult.causticResolvePrepareTask = sharedResult.causticResolvePrepareTask;
-    outResult.causticResolveWaveletTask = sharedResult.causticResolveWaveletTask;
-    outResult.causticResolveSecondWaveletTask = sharedResult.causticResolveSecondWaveletTask;
-    outResult.causticResolveThirdWaveletTask = sharedResult.causticResolveThirdWaveletTask;
-    outResult.causticResolveFourthWaveletTask = sharedResult.causticResolveFourthWaveletTask;
-    outResult.causticResolveFifthWaveletTask = sharedResult.causticResolveFifthWaveletTask;
-    outResult.causticResolveUpsampleTask = sharedResult.causticResolveUpsampleTask;
-    outResult.softwareCausticsTask = sharedResult.causticsTask;
-    return true;
+    auto sharedResult = sharedBuilder.declare(sharedInputs, naming, scratchArena);
+    if(!sharedResult)
+        return MakeUnexpected(Failure{});
+    result.causticResolvePrepareTask = sharedResult->causticResolvePrepareTask;
+    result.causticResolveWaveletTask = sharedResult->causticResolveWaveletTask;
+    result.causticResolveSecondWaveletTask = sharedResult->causticResolveSecondWaveletTask;
+    result.causticResolveThirdWaveletTask = sharedResult->causticResolveThirdWaveletTask;
+    result.causticResolveFourthWaveletTask = sharedResult->causticResolveFourthWaveletTask;
+    result.causticResolveFifthWaveletTask = sharedResult->causticResolveFifthWaveletTask;
+    result.causticResolveUpsampleTask = sharedResult->causticResolveUpsampleTask;
+    result.softwareCausticsTask = sharedResult->causticsTask;
+    return result;
 }
 
 

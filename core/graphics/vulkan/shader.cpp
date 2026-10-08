@@ -28,23 +28,21 @@ namespace __hidden_vulkan_shader{
     return binary && binarySize != 0u && (binarySize & s_SpirvWordAlignmentMask) == 0u;
 }
 
-template<typename WordVector>
-[[nodiscard]] bool AssignValidatedSpirvWords(const void* binary, const usize binarySize, WordVector& outWords){
-    outWords.clear();
+[[nodiscard]] Expected<Vector<u32, Alloc::GlobalArena>> BuildValidatedSpirvWords(const void* binary, const usize binarySize, Alloc::GlobalArena& arena){
+    Vector<u32, Alloc::GlobalArena> words(arena);
 
     if(!IsValidSpirvBytecodeShape(binary, binarySize))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const usize wordCount = binarySize / sizeof(u32);
-    outWords.resize(wordCount);
-    NWB_MEMCPY(outWords.data(), binarySize, binary, binarySize);
+    words.resize(wordCount);
+    NWB_MEMCPY(words.data(), binarySize, binary, binarySize);
 
-    if(!IsValidSpirvModuleWords(outWords.data(), outWords.size())){
-        outWords.clear();
-        return false;
+    if(!IsValidSpirvModuleWords(words.data(), words.size())){
+        return MakeUnexpected(Failure{});
     }
 
-    return true;
+    return words;
 }
 
 template<typename WordVector>
@@ -52,40 +50,39 @@ template<typename WordVector>
     return words.size() * sizeof(u32);
 }
 
-inline bool ComputeVertexAttributeBytes(const VertexAttributeDesc& attr, const u32 attributeIndex, u64& outBytes){
-    outBytes = 0;
+inline Expected<u64> ComputeVertexAttributeBytes(const VertexAttributeDesc& attr, const u32 attributeIndex){
 
     const FormatInfo& formatInfo = GetFormatInfo(attr.format);
     if(formatInfo.bytesPerBlock == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} has a zero-size vertex format"), attributeIndex);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(attr.arraySize > Limit<u64>::s_Max / static_cast<u64>(formatInfo.bytesPerBlock)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} byte size overflows"), attributeIndex);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outBytes = static_cast<u64>(formatInfo.bytesPerBlock) * static_cast<u64>(attr.arraySize);
-    if(outBytes == 0){
+    const u64 attributeBytes = static_cast<u64>(formatInfo.bytesPerBlock) * static_cast<u64>(attr.arraySize);
+    if(attributeBytes == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} has zero byte size"), attributeIndex);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    return true;
+    return attributeBytes;
 }
 
-inline bool ResolveShaderEntryPoint(
+inline Expected<AStringView, SpirvEntryPointLookupResult::Enum> ResolveShaderEntryPoint(
     const u32* words,
     const usize wordCount,
     const AStringView entryName,
     const ShaderType::Mask shaderType,
-    const AStringView errorContext,
-    AStringView& outEntryPointName
+    const AStringView errorContext
 ){
-    const SpirvEntryPointLookupResult::Enum lookupResult = ResolveSpirvEntryPointName(words, wordCount, entryName, shaderType, outEntryPointName);
-    switch(lookupResult){
-    case SpirvEntryPointLookupResult::Found:
-        return true;
+    const auto lookupResult = ResolveSpirvEntryPointName(words, wordCount, entryName, shaderType);
+    if(lookupResult)
+        return lookupResult;
+
+    switch(lookupResult.error()){
 
     case SpirvEntryPointLookupResult::NotFound:
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Shader entry point '{}' (stage=0x{:x}) was not found in SPIR-V for {}")
@@ -93,7 +90,7 @@ inline bool ResolveShaderEntryPoint(
             , static_cast<u32>(shaderType)
             , StringConvert(errorContext)
         );
-        return false;
+        return MakeUnexpected(lookupResult.error());
 
     case SpirvEntryPointLookupResult::InvalidSpirv:
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid SPIR-V while resolving shader entry point '{}' (stage=0x{:x}) for {}")
@@ -101,11 +98,11 @@ inline bool ResolveShaderEntryPoint(
             , static_cast<u32>(shaderType)
             , StringConvert(errorContext)
         );
-        return false;
+        return MakeUnexpected(lookupResult.error());
 
     }
 
-    return false;
+    return MakeUnexpected(lookupResult.error());
 }
 
 
@@ -186,10 +183,14 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
     NWB_ASSERT(!m_spirvWords.empty());
     shader->m_spirvWords = m_spirvWords;
 
-    if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_spirvWords.data(), shader->m_spirvWords.size(), entryName, shaderType, "shader library", shader->m_entryPointName)){
+    const auto entryPointName = __hidden_vulkan_shader::ResolveShaderEntryPoint(
+        shader->m_spirvWords.data(), shader->m_spirvWords.size(), entryName, shaderType, "shader library"
+    );
+    if(!entryPointName){
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
+    shader->m_entryPointName = *entryPointName;
 
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -219,16 +220,22 @@ ShaderHandle ShaderLibrary::getShader(const AStringView entryName, ShaderType::M
 ShaderHandle Device::createShader(const ShaderDesc& d, const void* binary, usize binarySize){
     auto* shader = NewArenaObject<Shader>(m_context.objectArena, m_context);
     shader->m_desc = d;
-    if(!__hidden_vulkan_shader::AssignValidatedSpirvWords(binary, binarySize, shader->m_spirvWords)){
+    auto words = __hidden_vulkan_shader::BuildValidatedSpirvWords(binary, binarySize, m_context.objectArena);
+    if(!words){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader bytecode payload"));
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
+    shader->m_spirvWords = Move(*words);
 
-    if(!__hidden_vulkan_shader::ResolveShaderEntryPoint(shader->m_spirvWords.data(), shader->m_spirvWords.size(), d.entryName, d.shaderType, "standalone shader", shader->m_entryPointName)){
+    const auto entryPointName = __hidden_vulkan_shader::ResolveShaderEntryPoint(
+        shader->m_spirvWords.data(), shader->m_spirvWords.size(), d.entryName, d.shaderType, "standalone shader"
+    );
+    if(!entryPointName){
         DestroyArenaObject(m_context.objectArena, shader);
         return nullptr;
     }
+    shader->m_entryPointName = *entryPointName;
 
     shader->m_desc.entryName = shader->m_entryPointName;
 
@@ -309,11 +316,13 @@ ShaderHandle Device::createShaderSpecialization(Shader& baseShader, const Shader
 
 ShaderLibraryHandle Device::createShaderLibrary(const void* binary, usize binarySize){
     auto* lib = NewArenaObject<ShaderLibrary>(m_context.objectArena, m_context);
-    if(!__hidden_vulkan_shader::AssignValidatedSpirvWords(binary, binarySize, lib->m_spirvWords)){
+    auto words = __hidden_vulkan_shader::BuildValidatedSpirvWords(binary, binarySize, m_context.objectArena);
+    if(!words){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Invalid shader library bytecode payload"));
         DestroyArenaObject(m_context.objectArena, lib);
         return nullptr;
     }
+    lib->m_spirvWords = Move(*words);
 
     return ShaderLibraryHandle(lib, ShaderLibraryHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
@@ -391,15 +400,15 @@ InputLayoutHandle Device::createInputLayout(const VertexAttributeDesc* d, u32 at
             return nullptr;
         }
 
-        u64 attributeBytes = 0;
-        if(!__hidden_vulkan_shader::ComputeVertexAttributeBytes(attr, i, attributeBytes))
+        const auto attributeBytes = __hidden_vulkan_shader::ComputeVertexAttributeBytes(attr, i);
+        if(!attributeBytes)
             return nullptr;
-        if(static_cast<u64>(attr.offset) > Limit<u64>::s_Max - attributeBytes){
+        if(static_cast<u64>(attr.offset) > Limit<u64>::s_Max - *attributeBytes){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} offset plus size overflows"), i);
             return nullptr;
         }
 
-        const u64 attributeEnd = static_cast<u64>(attr.offset) + attributeBytes;
+        const u64 attributeEnd = static_cast<u64>(attr.offset) + *attributeBytes;
         if(attr.elementStride != 0 && attributeEnd > static_cast<u64>(attr.elementStride)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create input layout: attribute {} extent {} exceeds explicit stride {}")
                 , i

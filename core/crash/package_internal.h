@@ -38,10 +38,9 @@ struct CrashUploadSnapshot{
 [[nodiscard]] bool WriteCrashPackage(const CrashRequest& request);
 [[nodiscard]] bool FlushCrashReportsForRequest(const CrashRequest& request);
 template<typename ArenaT>
-[[nodiscard]] bool BuildPackageArchive(
+[[nodiscard]] Expected<CrashBytesT<ArenaT>> BuildPackageArchive(
     ArenaT& arena,
-    const ::Path<ArenaT>& packageDirectory,
-    CrashBytesT<ArenaT>& outArchive
+    const ::Path<ArenaT>& packageDirectory
 );
 template<typename ArenaT>
 [[nodiscard]] bool ApplyCrashSpoolRetention(

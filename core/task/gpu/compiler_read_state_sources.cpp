@@ -122,10 +122,10 @@ bool TaskPreservesReadState(
         return false;
     for(usize nextUseIndex = useHistory.next(useIndex); nextUseIndex != Limit<usize>::s_Max; nextUseIndex = useHistory.next(nextUseIndex)){
         const GpuTaskResourceUse& laterUse = task.resourceUses[nextUseIndex];
-        GpuTaskResourceRange laterRange;
-        if(!ResolveResourceRangeForPlanning(graph, resource, laterUse.range, laterRange))
+        const auto laterRange = ResolveResourceRangeForPlanning(graph, resource, laterUse.range);
+        if(!laterRange)
             return false;
-        if(!RangesOverlap(resource, laterRange, range))
+        if(!RangesOverlap(resource, (*laterRange), range))
             continue;
         if(laterUse.access != GpuTaskResourceAccess::Read
             || !__hidden_gpu_task_graph_compiler_read_state_sources::ReadStatesCompatible(resource, entryUse.requiredState, laterUse.requiredState))

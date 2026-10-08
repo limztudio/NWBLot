@@ -29,7 +29,7 @@ AvboitPassUploadHelper::AvboitPassUploadHelper(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AvboitPassUploadHelper::gather(
+[[nodiscard]] Expected<AvboitPassUploadResult> AvboitPassUploadHelper::gather(
     const AvboitPassUploadInputs& inputs,
     MaterialPassDrawItemPartitions& drawItems,
     InstanceGpuDataVector& instanceData,
@@ -37,10 +37,9 @@ AvboitPassUploadHelper::AvboitPassUploadHelper(
 #if defined(NWB_DEBUG)
     ECSRenderDetail::MaterialTypedInstanceRangeVector& materialTypedRanges,
 #endif
-    MaterialTypedByteDataVector& materialTypedBytes,
-    AvboitPassUploadResult& outResult
+    MaterialTypedByteDataVector& materialTypedBytes
 ){
-    outResult = AvboitPassUploadResult{};
+    AvboitPassUploadResult result{};
     if(
         !inputs.framebuffer
         || !inputs.csgFrameState
@@ -48,7 +47,7 @@ AvboitPassUploadHelper::AvboitPassUploadHelper(
         || !inputs.csgResources
         || !inputs.meshViewState
     )
-        return false;
+        return MakeUnexpected(Failure{});
     m_materialSystem.gatherMaterialPassDrawItems(
         inputs.framebuffer,
         inputs.pass,
@@ -65,13 +64,13 @@ AvboitPassUploadHelper::AvboitPassUploadHelper(
         inputs.meshViewState
     );
 
-    outResult.hasDrawItems = !drawItems.empty();
-    outResult.hasCsgDrawItems = !drawItems.csg.empty();
-    if(!outResult.hasDrawItems){
-        outResult.ready = true;
-        return true;
+    result.hasDrawItems = !drawItems.empty();
+    result.hasCsgDrawItems = !drawItems.csg.empty();
+    if(!result.hasDrawItems){
+        result.ready = true;
+        return result;
     }
-    const bool csgReady = !outResult.hasCsgDrawItems || (
+    const bool csgReady = !result.hasCsgDrawItems || (
         csgFrameData.hasWork()
         && inputs.csgReceiverRanges.valid()
         && inputs.csgCutters.valid()
@@ -87,9 +86,9 @@ AvboitPassUploadHelper::AvboitPassUploadHelper(
         || !m_materialSystem.materialPassDrawResourcesReady(drawItems.regular, (*inputs.frameBindings))
         || !csgReady
     )
-        return false;
-    outResult.ready = true;
-    return true;
+        return MakeUnexpected(Failure{});
+    result.ready = true;
+    return result;
 }
 
 

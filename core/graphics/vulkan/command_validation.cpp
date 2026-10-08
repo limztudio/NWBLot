@@ -163,16 +163,15 @@ bool CommandList::validateFramebufferForRendering(
             rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment texture dimension is unsupported"));
             return false;
         }
-        VkImageViewCreateInfo viewInfo{};
-        if(!VulkanDetail::BuildTextureImageViewCreateInfo(
+        const auto viewInfo = VulkanDetail::BuildTextureImageViewCreateInfo(
             *texture,
             resolved,
             viewDimension,
             format,
             NWB_TEXT("framebuffer attachment image view"),
-            false,
-            viewInfo
-        )){
+            false
+        );
+        if(!viewInfo){
             rejectCommandRecording(operationName, NWB_TEXT("framebuffer attachment view description is invalid"));
             return false;
         }

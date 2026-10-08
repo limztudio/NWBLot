@@ -447,15 +447,15 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
     surfelGiLifecycleInputs.computeStateSource = surfelGiComputeStateSource;
     surfelGiLifecycleInputs.counterStateSource = surfelGiCounterStateSource;
     surfelGiLifecycleInputs.hasWork = hasSurfelWork;
-    SurfelGiLifecycleResult surfelGiLifecycleResult;
-    if(!surfelGiLifecycleBuilder.declare(surfelGiLifecycleInputs, surfelGiLifecycleResult)){
+    auto surfelGiLifecycleResult = surfelGiLifecycleBuilder.declare(surfelGiLifecycleInputs);
+    if(!surfelGiLifecycleResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred surfel-GI lifecycle"));
         return false;
     }
-    m_deferredSurfelGiPreparationTask = surfelGiLifecycleResult.preparationTask;
-    m_deferredSurfelGiInitializationLifecycleTask = surfelGiLifecycleResult.initializationLifecycleTask;
-    m_deferredSurfelGiSnapshotCopyTask = surfelGiLifecycleResult.snapshotCopyTask;
-    Core::GpuTaskId surfelGiDependency = surfelGiLifecycleResult.dependency;
+    m_deferredSurfelGiPreparationTask = surfelGiLifecycleResult->preparationTask;
+    m_deferredSurfelGiInitializationLifecycleTask = surfelGiLifecycleResult->initializationLifecycleTask;
+    m_deferredSurfelGiSnapshotCopyTask = surfelGiLifecycleResult->snapshotCopyTask;
+    Core::GpuTaskId surfelGiDependency = surfelGiLifecycleResult->dependency;
 
 
 // Zero coverage is the no-op; keep its clear at the front of the GI packet.

@@ -43,9 +43,9 @@ namespace CrashNames = Core::Crash::PackageNames;
 
 
 CrashTestPath CrashRootDirectory(Core::Alloc::GlobalArena& arena){
-    CrashTestPath executableDirectory(arena);
-    if(GetExecutableDirectory(executableDirectory))
-        return executableDirectory / CrashNames::s_DefaultRootDirectoryName;
+    const auto executableDirectory = GetExecutableDirectory(arena);
+    if(executableDirectory)
+        return *executableDirectory / CrashNames::s_DefaultRootDirectoryName;
 
     return CrashTestPath(arena, CrashNames::s_DefaultRootDirectoryName);
 }
@@ -93,9 +93,7 @@ CrashTestPath InvalidArchivePath(Core::Alloc::GlobalArena& arena, const AStringV
 }
 
 void RemoveTestArtifacts(Core::Alloc::GlobalArena& arena, const AStringView testGroup){
-    ErrorCode error;
-    if(!RemoveAllIfExists(TestCaseDirectory(arena, testGroup), error))
-        EXPECT_FALSE(error);
+    EXPECT_TRUE(RemoveAllIfExists(TestCaseDirectory(arena, testGroup)));
 }
 
 void AppendArchiveFile(CrashTestText& archive, const AStringView relativePath, const AStringView content){
@@ -189,27 +187,29 @@ CrashTestText BuildManifest(
 }
 
 bool WriteArchive(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestText& archive){
-    ErrorCode error;
-    if(!EnsureDirectories(ArchiveInputDirectory(arena, testGroup), error))
+    if(!EnsureDirectories(ArchiveInputDirectory(arena, testGroup)))
         return false;
 
     return WriteTextFile(ArchivePath(arena, testGroup, stem), AStringView(archive.data(), archive.size()));
 }
 
 bool WriteArchiveBytes(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, const CrashTestBytes& archive){
-    ErrorCode error;
-    if(!EnsureDirectories(ArchiveInputDirectory(arena, testGroup), error))
+    if(!EnsureDirectories(ArchiveInputDirectory(arena, testGroup)))
         return false;
 
     return WriteBinaryFile(ArchivePath(arena, testGroup, stem), archive);
 }
 
-bool BuildArchiveFromPackageDirectory(Core::Alloc::GlobalArena& arena, const CrashTestPath& packageDirectory, CrashTestBytes& outArchive){
-    return Core::Crash::Detail::BuildPackageArchive(arena, packageDirectory, outArchive);
+Expected<CrashTestBytes> BuildArchiveFromPackageDirectory(Core::Alloc::GlobalArena& arena, const CrashTestPath& packageDirectory){
+    return Core::Crash::Detail::BuildPackageArchive(arena, packageDirectory);
 }
 
-bool ReadServerSymbolication(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem, CrashTestText& outReport){
-    return ReadTextFile(ExtractedPackageDirectory(arena, testGroup, stem) / Log::s_ServerSymbolicationFileName, outReport);
+Expected<CrashTestText, ErrorCode> ReadServerSymbolication(Core::Alloc::GlobalArena& arena, const AStringView testGroup, const AStringView stem){
+    CrashTestText report(arena);
+    const auto result = ReadTextFile(ExtractedPackageDirectory(arena, testGroup, stem) / Log::s_ServerSymbolicationFileName, report);
+    if(!result)
+        return MakeUnexpected(result.error());
+    return report;
 }
 
 Log::CrashIngestConfig MakeIngestConfig(Core::Alloc::GlobalArena& arena, const AStringView testGroup){
@@ -255,55 +255,48 @@ static bool TriggerPackageContains(
     return true;
 }
 
-static bool FindTriggerPackage(
+static Expected<CrashTestPath> FindTriggerPackage(
     Core::Alloc::GlobalArena& arena,
     const CrashTestPath& pendingDirectory,
     const AStringView category,
     const AStringView expression,
     const AStringView message,
-    const AStringView file,
-    CrashTestPath& outPackageDirectory
+    const AStringView file
 ){
-    ErrorCode error;
-    DirectoryIterator directory(pendingDirectory, error);
-    if(error)
-        return false;
+    const auto directory = DirectoryIterator<Core::Alloc::GlobalArena>::Create(pendingDirectory);
+    if(!directory)
+        return MakeUnexpected(Failure{});
 
-    for(const auto& entry : directory){
-        ErrorCode entryError;
-        if(!IsDirectory(entry.path(), entryError) || entryError)
+    for(const auto& entry : *directory){
+        const auto isDirectory = IsDirectory(entry.path());
+        if(!isDirectory || !*isDirectory)
             continue;
         if(!TriggerPackageContains(arena, entry.path(), category, expression, message, file))
             continue;
-
-        outPackageDirectory = entry.path();
-        return true;
+        return entry.path();
     }
-
-    static_cast<void>(arena);
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
-bool WaitForTriggerPackage(
+Expected<CrashTestPath> WaitForTriggerPackage(
     Core::Alloc::GlobalArena& arena,
     const CrashTestPath& pendingDirectory,
     const AStringView category,
     const AStringView expression,
     const AStringView message,
-    const AStringView file,
-    CrashTestPath& outPackageDirectory
+    const AStringView file
 ){
     constexpr u32 s_TimeoutMilliseconds = 3000u;
     constexpr u32 s_PollMilliseconds = 10u;
     for(u32 elapsedMilliseconds = 0u; elapsedMilliseconds <= s_TimeoutMilliseconds; elapsedMilliseconds += s_PollMilliseconds){
-        if(
-            PathIsDirectory(pendingDirectory)
-            && FindTriggerPackage(arena, pendingDirectory, category, expression, message, file, outPackageDirectory)
-        )
-            return true;
+        if(PathIsDirectory(pendingDirectory)){
+            auto packageDirectory = FindTriggerPackage(arena, pendingDirectory, category, expression, message, file);
+            if(packageDirectory)
+                return Move(*packageDirectory);
+        }
         SleepMS(s_PollMilliseconds);
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 void BuildLinuxCrashArchive(Core::Alloc::GlobalArena& arena, CrashTestText& archive, const AStringView crashId){
@@ -336,14 +329,13 @@ static CrashTestPath ObservedReportPath(Core::Alloc::GlobalArena& arena, const C
 }
 
 void PreserveObservedReport(Core::Alloc::GlobalArena& arena, const CrashTestText& report, const AStringView suffix){
-    CrashTestText outputPathText(arena);
-    if(!ReadEnvironmentVariable("NWB_LOGSERVER_CRASH_TEST_OBSERVE_PATH", outputPathText) || outputPathText.empty())
+    const auto outputPathText = ReadEnvironmentVariable(arena, "NWB_LOGSERVER_CRASH_TEST_OBSERVE_PATH");
+    if(!outputPathText || outputPathText->empty())
         return;
 
-    const CrashTestPath baseOutputPath(arena, AStringView(outputPathText.data(), outputPathText.size()));
+    const CrashTestPath baseOutputPath(arena, AStringView(outputPathText->data(), outputPathText->size()));
     const CrashTestPath outputPath = ObservedReportPath(arena, baseOutputPath, suffix);
-    ErrorCode error;
-    EXPECT_TRUE(EnsureDirectories(outputPath.parentPath(), error));
+    EXPECT_TRUE(EnsureDirectories(outputPath.parentPath()));
     EXPECT_TRUE(WriteTextFile(outputPath, AStringView(report.data(), report.size())));
 }
 

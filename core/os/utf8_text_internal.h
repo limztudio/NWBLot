@@ -18,12 +18,13 @@ NWB_CORE_BEGIN
 
 
 namespace Utf8TextDetail{
-[[nodiscard]] inline bool DecodeCodePoint(const AStringView text, usize& offset, u32& codePoint)noexcept{
+[[nodiscard]] inline Expected<u32> DecodeCodePoint(const AStringView text, usize& offset)noexcept{
+    u32 codePoint = 0u;
     const u8 first = static_cast<u8>(text[offset]);
     ++offset;
     if(first < 0x80u){
         codePoint = first;
-        return first != 0u;
+        return first != 0u ? Expected<u32>(first) : MakeUnexpected(Failure{});
     }
     usize continuation = 0u;
     u32 minimum = 0u;
@@ -43,17 +44,19 @@ namespace Utf8TextDetail{
         minimum = 0x10000u;
     }
     else
-        return false;
+        return MakeUnexpected(Failure{});
     if(continuation > text.size() - offset)
-        return false;
+        return MakeUnexpected(Failure{});
     for(usize index = 0u; index < continuation; ++index){
         const u8 byte = static_cast<u8>(text[offset]);
         if((byte & 0xc0u) != 0x80u)
-            return false;
+            return MakeUnexpected(Failure{});
         codePoint = (codePoint << 6u) | (byte & 0x3fu);
         ++offset;
     }
-    return codePoint >= minimum && codePoint <= 0x10ffffu && (codePoint < 0xd800u || codePoint > 0xdfffu);
+    if(codePoint < minimum || codePoint > 0x10ffffu || (codePoint >= 0xd800u && codePoint <= 0xdfffu))
+        return MakeUnexpected(Failure{});
+    return codePoint;
 }
 };
 

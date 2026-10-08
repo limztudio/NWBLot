@@ -19,22 +19,21 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace SampledTextureImportResult{
+namespace SampledTextureImportFailure{
     enum Enum : u8{
-        Success,
         GraphUnavailable,
         MissingIdentity,
         ImportFailed
     };
 };
 
-// Append in texture order; retain the imported prefix on failure; views never escape.
-[[nodiscard]] SampledTextureImportResult::Enum ImportMaterialSampledTextureResources(
+// The result preserves texture order; imports already published to the graph remain on failure.
+[[nodiscard]] Expected<Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>, SampledTextureImportFailure::Enum> ImportMaterialSampledTextureResources(
     Core::GpuTaskGraph& graph,
     const Core::TextureHandle* textures,
     usize textureCount,
     AStringView markerLabel,
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena>& outResources
+    Core::Alloc::ScratchArena& scratchArena
 );
 
 

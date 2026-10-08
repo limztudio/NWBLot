@@ -118,10 +118,9 @@ public:
 public:
     [[nodiscard]] bool empty()const noexcept{ return m_cutterRanges.empty(); }
     [[nodiscard]] u32 cutterCount()const noexcept{ return static_cast<u32>(m_cutterRefs.size()); }
-    [[nodiscard]] bool resolveReceiverDrawState(
+    [[nodiscard]] Expected<CsgReceiverDrawState> resolveReceiverDrawState(
         Core::ECS::EntityID entity,
-        CsgReceiverPass::Enum receiverPass,
-        CsgReceiverDrawState& outState
+        CsgReceiverPass::Enum receiverPass
     )const;
     template<typename CutterHandler>
     void forEachReceiverCutter(const CsgReceiverDrawState& drawState, CutterHandler&& handler)const{
@@ -148,20 +147,20 @@ public:
     }
     template<typename CutterHandler>
     void forEachReceiverCutter(const Core::ECS::EntityID entity, CutterHandler&& handler)const{
-        CsgFrameCutterRange range;
-        if(!resolveReceiverCutterRange(entity, range))
+        const auto range = resolveReceiverCutterRange(entity);
+        if(!range)
             return;
 
         CsgReceiverDrawState drawState;
         drawState.active = true;
-        drawState.firstCutter = range.firstCutter;
-        drawState.cutterCount = range.cutterCount;
+        drawState.firstCutter = range->firstCutter;
+        drawState.cutterCount = range->cutterCount;
         forEachReceiverCutter(drawState, handler);
     }
 
 
 private:
-    [[nodiscard]] bool resolveReceiverCutterRange(Core::ECS::EntityID entity, CsgFrameCutterRange& outRange)const;
+    [[nodiscard]] Expected<CsgFrameCutterRange> resolveReceiverCutterRange(Core::ECS::EntityID entity)const;
 
 
 private:
@@ -175,11 +174,12 @@ private:
 
 
 [[nodiscard]] bool HasCsgFrameCandidates(Core::ECS::World& world);
-[[nodiscard]] const CsgReceiverComponent* ResolveCsgReceiverComponent(
-    Core::ECS::World& world,
-    Core::ECS::EntityID entity,
-    CsgReceiverKind::Enum& outReceiverKind
-);
+struct CsgResolvedReceiver{
+    const CsgReceiverComponent* receiver = nullptr;
+    CsgReceiverKind::Enum receiverKind = CsgReceiverKind::Static;
+};
+
+[[nodiscard]] Expected<CsgResolvedReceiver> ResolveCsgReceiverComponent(Core::ECS::World& world, Core::ECS::EntityID entity);
 void AddCsgFrameReceiverWork(
     CsgFrameState& inOutState,
     CsgReceiverKind::Enum receiverKind,

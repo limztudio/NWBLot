@@ -118,8 +118,7 @@ TEST_F(UiPopupInputTests, FirstEscapeCancelsTransientPreeditAndSecondDismissesBe
     EXPECT_FALSE(m_popupModel.canUndo());
     EXPECT_TRUE(m_popupState.isOpen());
     EXPECT_EQ(m_context.input().focus(), m_popupWidget.id);
-    Ui::PopupDismissReason::Enum reason = Ui::PopupDismissReason::None;
-    EXPECT_FALSE(m_context.input().consumePopupDismissal(m_token, reason));
+    EXPECT_FALSE(m_context.input().consumePopupDismissal(m_token));
     key(Core::Key::Escape);
     ASSERT_TRUE(frame());
     EXPECT_TRUE(m_popupResult.cancelled);

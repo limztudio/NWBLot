@@ -303,85 +303,7 @@ CommandListHandle Device::createCommandList(const CommandListParameters& params)
     return CommandListHandle(cmdList, CommandListHandle::deleter_type(&m_context.objectArena), s_AdoptRef);
 }
 
-u64 Device::executeCommandLists(
-    CommandList* const* pCommandLists,
-    const usize numCommandLists,
-    const CommandQueue::Enum executionQueue,
-    bool* const outCommandListsSubmitted
-){
-    return executeCommandLists(
-        pCommandLists,
-        numCommandLists,
-        getPrimaryPhysicalQueue(executionQueue),
-        outCommandListsSubmitted
-    );
-}
-
-u64 Device::executeCommandLists(
-    CommandList* const* pCommandLists,
-    const usize numCommandLists,
-    const GpuPhysicalQueueId& executionQueue,
-    bool* const outCommandListsSubmitted
-){
-    SubmissionOperationLease submissionOperation(*this);
-    if(outCommandListsSubmitted)
-        *outCommandListsSubmitted = false;
-
-    if(!submissionOperation.valid())
-        return 0u;
-
-    Queue* queue = getQueue(executionQueue);
-    if(!queue){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: requested queue is not available"));
-        return 0;
-    }
-
-    UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);
-    auto& expectedCommandLists = queue->m_executeExpectedCommandLists;
-    bool hasSubmittedOwner = false;
-    if(!prepareSubmissionCommandListWorkspaceLocked(
-        *queue,
-        pCommandLists,
-        numCommandLists,
-        executionQueue,
-        false,
-        SubmissionCommandListValidationPolicy::ValidateWithinWorkspace,
-        &hasSubmittedOwner
-    ))
-        return 0u;
-
-    bool submissionAccepted = false;
-    VkResult nativeSubmissionResult = VK_SUCCESS;
-    const u64 submittedID = queue->submit(
-        pCommandLists,
-        numCommandLists,
-        expectedCommandLists.empty() ? nullptr : expectedCommandLists.data(),
-        nullptr,
-        0u,
-        &submissionAccepted,
-        &nativeSubmissionResult
-    );
-
-    finalizeSubmissionCommandListResourcesLocked(
-        *queue,
-        pCommandLists,
-        numCommandLists,
-        executionQueue,
-        submittedID,
-        submissionAccepted
-    );
-
-    if(outCommandListsSubmitted)
-        *outCommandListsSubmitted = submissionAccepted && hasSubmittedOwner;
-
-    submissionWorkspaceLock.unlock();
-    if(nativeSubmissionResult == VK_ERROR_DEVICE_LOST)
-        captureDeviceLoss(VulkanArenaScope::s_QueueSubmitContext);
-
-    return submittedID;
-}
-
-QueueSubmissionToken Device::executeCommandLists(
+Expected<QueueSubmissionReceipt> Device::executeCommandLists(
     CommandList* const* pCommandLists,
     const usize numCommandLists,
     const CommandQueue::Enum executionQueue,
@@ -395,7 +317,7 @@ QueueSubmissionToken Device::executeCommandLists(
     );
 }
 
-QueueSubmissionToken Device::executeCommandLists(
+Expected<QueueSubmissionReceipt> Device::executeCommandLists(
     CommandList* const* pCommandLists,
     const usize numCommandLists,
     const GpuPhysicalQueueId& executionQueue,
@@ -404,37 +326,20 @@ QueueSubmissionToken Device::executeCommandLists(
     return executeCommandListsInternal(pCommandLists, numCommandLists, executionQueue, submitDesc, false);
 }
 
-bool Device::prepareSubmissionCommandListWorkspaceLocked(
+void Device::prepareSubmissionCommandListWorkspaceLocked(
     Queue& queue,
     CommandList* const* pCommandLists,
     const usize numCommandLists,
-    const GpuPhysicalQueueId& executionQueue,
-    const bool graphSubmissionAuthorized,
-    const SubmissionCommandListValidationPolicy validationPolicy,
-    bool* const outHasSubmittedOwner
+    const bool graphSubmissionAuthorized
 ){
     auto& expectedCommandLists = queue.m_executeExpectedCommandLists;
     auto& submittedOwners = queue.m_executeSubmittedOwners;
     expectedCommandLists.clear();
-    if(outHasSubmittedOwner)
-        *outHasSubmittedOwner = false;
 
     if(pCommandLists && numCommandLists > 0u){
         expectedCommandLists.reserve(numCommandLists);
         for(usize i = 0u; i < numCommandLists; ++i){
             CommandList* const commandList = pCommandLists[i];
-            if(
-                validationPolicy == SubmissionCommandListValidationPolicy::ValidateWithinWorkspace
-                && (
-                    !commandList
-                    || &commandList->m_device != this
-                    || !commandList->matchesSubmissionLease(executionQueue, queue.m_queueID, graphSubmissionAuthorized)
-                )
-            ){
-                NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command-list submission capability is invalid"));
-                return false;
-            }
-
             TrackedCommandBuffer* const owner = commandList->m_currentCmdBuf.get();
             expectedCommandLists.push_back(Queue::SubmissionCommandListIdentity{
                 .owner = owner,
@@ -447,8 +352,6 @@ bool Device::prepareSubmissionCommandListWorkspaceLocked(
                 .recordingWorkerIndex = commandList->m_creationDesc.recordingWorkerIndex,
                 .graphSubmissionAuthorized = graphSubmissionAuthorized,
             });
-            if(owner && outHasSubmittedOwner)
-                *outHasSubmittedOwner = true;
         }
     }
 
@@ -460,7 +363,6 @@ bool Device::prepareSubmissionCommandListWorkspaceLocked(
         }
     }
 
-    return true;
 }
 
 void Device::finalizeSubmissionCommandListResourcesLocked(
@@ -527,7 +429,7 @@ void Device::finalizeSubmissionCommandListResourcesLocked(
     }
 }
 
-QueueSubmissionToken Device::executeGraphCommandLists(
+Expected<QueueSubmissionReceipt> Device::executeGraphCommandLists(
     CommandList* const* pCommandLists,
     const usize numCommandLists,
     const GpuPhysicalQueueId& executionQueue,
@@ -536,7 +438,7 @@ QueueSubmissionToken Device::executeGraphCommandLists(
     return executeCommandListsInternal(pCommandLists, numCommandLists, executionQueue, submitDesc, true);
 }
 
-QueueSubmissionToken Device::executeCommandListsInternal(
+Expected<QueueSubmissionReceipt> Device::executeCommandListsInternal(
     CommandList* const* pCommandLists,
     const usize numCommandLists,
     const GpuPhysicalQueueId& executionQueue,
@@ -544,65 +446,63 @@ QueueSubmissionToken Device::executeCommandListsInternal(
     const bool graphSubmissionAuthorized,
     const DeviceLossDiagnosticPolicy deviceLossDiagnosticPolicy
 ){
-    if(submitDesc.outTimelineWaitCount)
-        *submitDesc.outTimelineWaitCount = 0u;
     SubmissionOperationLease submissionOperation(*this);
     if(!submissionOperation.valid())
-        return {};
+        return MakeUnexpected(Failure{});
 
     Queue* const queue = getQueue(executionQueue);
     if(!queue){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: requested queue is not available"));
-        return {};
+        return MakeUnexpected(Failure{});
     }
 
     if(numCommandLists > 0u && !pCommandLists){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list array is null"));
-        return {};
+        return MakeUnexpected(Failure{});
     }
     if(numCommandLists > static_cast<usize>(Limit<u32>::s_Max)){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list count exceeds Vulkan limit"));
-        return {};
+        return MakeUnexpected(Failure{});
     }
     for(usize i = 0u; i < numCommandLists; ++i){
         CommandList* const commandList = pCommandLists[i];
         for(usize previous = 0u; previous < i; ++previous){
             if(pCommandLists[previous] == commandList){
                 NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} is duplicated"), i);
-                return {};
+                return MakeUnexpected(Failure{});
             }
         }
         if(!commandList || &commandList->m_device != this){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} is null or foreign"), i);
-            return {};
+            return MakeUnexpected(Failure{});
         }
         if(!commandList->matchesSubmissionLease(executionQueue, queue->m_queueID, graphSubmissionAuthorized)){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Command list {} lease provenance does not match execution queue")
                 , i
             );
-            return {};
+            return MakeUnexpected(Failure{});
         }
         if(!commandList->hasCommandBufferUnchecked()){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} has no native command buffer"), i);
-            return {};
+            return MakeUnexpected(Failure{});
         }
         if(commandList->m_commandRecordingFailed){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} has a sticky native recording failure"), i);
-            return {};
+            return MakeUnexpected(Failure{});
         }
         if(commandList->m_isRecording){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to execute command lists: command list {} is still recording"), i);
-            return {};
+            return MakeUnexpected(Failure{});
         }
     }
     for(usize i = 0u; i < numCommandLists; ++i){
         if(!pCommandLists[i]->validateTrackedResourcesReadyForSubmission())
-            return {};
+            return MakeUnexpected(Failure{});
     }
 
     if(submitDesc.waitTokenCount > 0u && !submitDesc.waitTokens){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: submission wait token array is null"));
-        return {};
+        return MakeUnexpected(Failure{});
     }
 
     UniqueLock<Futex> submissionWorkspaceLock(queue->m_submissionWorkspaceMutex);
@@ -616,7 +516,7 @@ QueueSubmissionToken Device::executeCommandListsInternal(
             const QueueSubmissionToken& token = submitDesc.waitTokens[i];
             if(!validateSubmissionWaitToken(token)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to execute command lists: dependency token is invalid, unavailable, or unsignalled"));
-                return {};
+                return MakeUnexpected(Failure{});
             }
 
             Queue* const producerQueue = m_physicalQueues[token.physicalQueueIndex];
@@ -640,15 +540,12 @@ QueueSubmissionToken Device::executeCommandListsInternal(
         }
     }
 
-    if(!prepareSubmissionCommandListWorkspaceLocked(
+    prepareSubmissionCommandListWorkspaceLocked(
         *queue,
         pCommandLists,
         numCommandLists,
-        executionQueue,
-        graphSubmissionAuthorized,
-        SubmissionCommandListValidationPolicy::Prevalidated
-    ))
-        return {};
+        graphSubmissionAuthorized
+    );
 
     // Hook runs after waits validate; its signal stays submission-local.
     Queue::SubmissionSignal hookSignal = {};
@@ -656,45 +553,41 @@ QueueSubmissionToken Device::executeCommandListsInternal(
     usize localSignalCount = 0u;
     __hidden_vulkan_device_queue::ScopedSubmissionHookResolution hookResolution(submitDesc.preSubmitHook);
     if(submitDesc.preSubmitHook.valid()){
-        QueueSubmissionNativeSignal nativeSignal;
-        const bool hookPrepared = submitDesc.preSubmitHook.invoke(
+        const auto nativeSignal = submitDesc.preSubmitHook.invoke(
             submitDesc.preSubmitHook.context,
             submitDesc.preSubmitHook.identity,
-            executionQueue,
-            nativeSignal
+            executionQueue
         );
-        if(hookPrepared)
+        if(nativeSignal)
             hookResolution.arm();
-        if(!hookPrepared || !nativeSignal.valid()){
+        if(!nativeSignal || !nativeSignal->valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to prepare exact queue submission hook"));
-            return {};
+            return MakeUnexpected(Failure{});
         }
 
-        hookSignal.semaphore = __hidden_vulkan_device_queue::DecodeSubmissionNativeSemaphore(nativeSignal.semaphore);
-        hookSignal.value = nativeSignal.value;
+        hookSignal.semaphore = __hidden_vulkan_device_queue::DecodeSubmissionNativeSemaphore(nativeSignal->semaphore);
+        hookSignal.value = nativeSignal->value;
         if(hookSignal.semaphore == VK_NULL_HANDLE){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Exact queue submission hook returned an invalid native semaphore"));
-            return {};
+            return MakeUnexpected(Failure{});
         }
         localSignals = &hookSignal;
         localSignalCount = 1u;
     }
 
-    bool submissionAccepted = false;
-    VkResult nativeSubmissionResult = VK_SUCCESS;
-    const u64 submittedID = queue->submit(
+    const auto submission = queue->submit(
         pCommandLists,
         numCommandLists,
         expectedCommandLists.empty() ? nullptr : expectedCommandLists.data(),
         localWaits.empty() ? nullptr : localWaits.data(),
         localWaits.size(),
-        &submissionAccepted,
-        &nativeSubmissionResult,
         localSignals,
         localSignalCount,
-        submitDesc.forceNativeSubmission,
-        submitDesc.outTimelineWaitCount
+        submitDesc.forceNativeSubmission
     );
+    const bool submissionAccepted = submission && submission->accepted;
+    const u64 submittedID = submission ? submission->submittedID : submission.error().lastSubmittedID;
+    const VkResult nativeSubmissionResult = submission ? VK_SUCCESS : submission.error().nativeResult;
     const QueueSubmissionToken submissionToken = submissionAccepted
         ? QueueSubmissionToken{
             .value = submittedID,
@@ -720,9 +613,9 @@ QueueSubmissionToken Device::executeCommandListsInternal(
         captureDeviceLoss(VulkanArenaScope::s_QueueSubmitContext);
 
     if(!submissionAccepted)
-        return {};
+        return MakeUnexpected(Failure{});
 
-    return submissionToken;
+    return QueueSubmissionReceipt{ submissionToken, submission->timelineWaitCount };
 }
 
 u32 Device::getQueueFamilyIndex(const CommandQueue::Enum queueType)const noexcept{

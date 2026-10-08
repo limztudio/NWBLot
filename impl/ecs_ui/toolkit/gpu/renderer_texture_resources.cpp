@@ -167,15 +167,15 @@ bool GpuRendererState::prepareTextureImages(GpuFrameData& frame){
     return true;
 }
 
-bool GpuRendererState::declareTextureImages(
+Expected<GpuTextureGraphResources> GpuRendererState::declareTextureImages(
     Core::GpuTaskGraph& graph,
     const GpuFrame& frame,
-    GpuTextureGraphResources& resources,
     GpuRasterResourceUses& uses
 ){
+    Expected<GpuTextureGraphResources> resources{s_InPlace};
     if(frame->m_textureImages.size() != frame->m_snapshot.textureImages().size()){
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared texture image count does not match the immutable snapshot"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     for(usize index = 0u; index < frame->m_textureImages.size(); ++index){
         const auto& image = frame->m_textureImages[index];
@@ -184,7 +184,7 @@ bool GpuRendererState::declareTextureImages(
             !image || !source || !image->m_source || image->m_source->generation() != source->generation()
             || image->m_source->identity() != source->identity() || !__hidden_ui_gpu_texture_images::ValidVersion(*image)
         )
-            return false;
+            return MakeUnexpected(Failure{});
         char identityText[32u] = {};
         const AStringView suffix = FormatDecimal(index, identityText);
         const Name readyIdentity = DeriveName(Name("ui.texture_image_ready/"), suffix);
@@ -198,7 +198,7 @@ bool GpuRendererState::declareTextureImages(
             NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture {} completion import failed (queue={}, generation={}, value={})")
                 , index, readiness.physicalQueueIndex, readiness.deviceGeneration, readiness.value
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const Core::GpuGraphResourceId texture = graph.importTexture(
             image->m_texture.texture,
@@ -210,12 +210,12 @@ bool GpuRendererState::declareTextureImages(
             NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: texture image {} import failed (source generation={})")
                 , index, source->generation()
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        resources.push_back(texture);
+        resources->push_back(texture);
         uses.push_back({ texture, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read });
     }
-    return true;
+    return resources;
 }
 
 

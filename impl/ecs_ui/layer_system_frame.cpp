@@ -31,13 +31,13 @@ void UiLayerSystem::update(Core::ECS::World& world, const f32 delta){
         m_renderer.hasPendingFrame(),
         m_context.ready(),
         [this](const Core::Assets::AssetRef<UiSkin>& ref, const u64 generation){
-            UniquePtr<Core::Assets::IAsset> candidateAsset;
-            const UiSkin* skin = m_assetManager.loadTypedSync<UiSkin>(
-                ref.name(), candidateAsset, NWB_TEXT("UiLayerSystem"), "UI skin"
+            auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(
+                ref.name(), NWB_TEXT("UiLayerSystem"), "UI skin"
             );
+            const UiSkin* skin = candidateAsset ? candidateAsset->get() : nullptr;
             if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(ref, *skin, generation))
                 return false;
-            m_skinAsset = Move(candidateAsset);
+            m_skinAsset = Move(*candidateAsset);
             return true;
         }
     );

@@ -63,37 +63,33 @@ bool AssetRegistry::unregisterCodec(const Name& assetType){
     return m_codecs.erase(assetType) != 0;
 }
 
-bool AssetRegistry::deserializeAsset(
+Expected<UniquePtr<IAsset>> AssetRegistry::deserializeAsset(
     const Name& assetType,
     const Name& virtualPath,
-    const AssetBytes& binary,
-    UniquePtr<IAsset>& outAsset
+    const AssetBytes& binary
 )const{
-    outAsset.reset();
-
     if(!assetType){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: asset type is empty"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    return deserializeAssetByName(assetType, virtualPath, binary, outAsset);
+    return deserializeAssetByName(assetType, virtualPath, binary);
 }
 
-bool AssetRegistry::deserializeAssetByName(
+Expected<UniquePtr<IAsset>> AssetRegistry::deserializeAssetByName(
     const Name& assetType,
     const Name& virtualPath,
-    const AssetBytes& binary,
-    UniquePtr<IAsset>& outAsset
+    const AssetBytes& binary
 )const{
     ScopedLock lock(m_mutex);
     const auto found = m_codecs.find(assetType);
     if(found == m_codecs.end()){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetRegistry: no codec for type '{}'"), StringConvert(assetType.resolvedText()));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     const NotNull<IAssetCodec*> codec(found.value().get());
 
-    return codec->deserialize(m_arena, virtualPath, binary, outAsset);
+    return codec->deserialize(m_arena, virtualPath, binary);
 }
 
 

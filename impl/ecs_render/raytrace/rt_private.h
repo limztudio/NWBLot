@@ -493,20 +493,22 @@ namespace RayTracingDetail{
 
 
 void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noexcept;
-[[nodiscard]] RenderableMeshResolution::Enum ResolveRenderableMeshResources(
+struct RenderableRayTracingMeshResources{
+    RenderableMeshDesc resolvedMesh;
+    ECSRenderDetail::MeshRayTracingResourceSnapshot meshResources;
+};
+
+[[nodiscard]] Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> ResolveRenderableMeshResources(
     MeshSystem& meshSystem,
     RendererMeshSystem& rendererMeshSystem,
-    const Core::ECS::EntityID entity,
-    RenderableMeshDesc& outResolvedMesh,
-    ECSRenderDetail::MeshRayTracingResourceSnapshot& outMesh
+    Core::ECS::EntityID entity
 );
 [[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass);
-[[nodiscard]] bool RegisterHeapBuffer(
+[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterHeapBuffer(
     Core::GpuDescriptorHeap& heap,
     Core::Buffer& buffer,
     Core::GpuDescriptorClass::Enum descriptorClass,
-    bool writable,
-    Core::GpuDescriptorHandle& outHandle
+    bool writable
 );
 [[nodiscard]] bool EnsureHeapBuffer(
     Core::GpuDescriptorHeap& heap,

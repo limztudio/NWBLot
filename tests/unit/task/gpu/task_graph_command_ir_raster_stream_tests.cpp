@@ -57,7 +57,6 @@ Graphics::GpuCommandIrRasterStateDesc RasterState(){
 TEST(GpuCommandIrRasterStream, PreservesCapturedPushBytesAfterCallerMutationAcrossRasterRecords){
     TaskGraphTestUtils::TestArena testArena;
     Graphics::GpuCommandIrCapture capture(testArena.arena);
-    Graphics::GpuCommandIrOwnedStream owned(testArena.arena);
     const Graphics::GpuCommandIrRasterStateDesc state = RasterState();
     u8 pushBytes[] = { 0x11u, 0x22u, 0x33u, 0x44u, 0x55u, 0x66u, 0x77u, 0x88u };
     const u8 expectedPush[] = { 0x11u, 0x22u, 0x33u, 0x44u, 0x55u, 0x66u, 0x77u, 0x88u };
@@ -71,20 +70,21 @@ TEST(GpuCommandIrRasterStream, PreservesCapturedPushBytesAfterCallerMutationAcro
         value = 0u;
     ASSERT_TRUE(capture.captureDraw(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue, draw, true));
     ASSERT_TRUE(capture.captureEndRenderPass(s_CommandIrTask, s_CommandIrPacket, s_CommandIrQueue));
-    ASSERT_TRUE(capture.exportOwned(owned));
+    const auto owned = capture.exportOwned(testArena.arena);
+    ASSERT_TRUE(owned);
 
-    const BinaryByteView bytes = owned.bytes();
+    const BinaryByteView bytes = owned->bytes();
     EXPECT_TRUE(Graphics::ValidateGpuCommandIrStream(bytes).valid());
 
     Graphics::GpuCommandIrStreamReader reader(bytes);
-    Graphics::GpuCommandIrDecodedRecord decoded;
-    ASSERT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::Record);
-    ASSERT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::Record);
-    ASSERT_EQ(decoded.raster.blobSizeBytes, sizeof(expectedPush));
+    Expected<Graphics::GpuCommandIrDecodedRecord, Graphics::GpuCommandIrStreamReadStatus::Enum> decoded = MakeUnexpected(Graphics::GpuCommandIrStreamReadStatus::End);
+    ASSERT_TRUE((decoded = reader.next()));
+    ASSERT_TRUE((decoded = reader.next()));
+    ASSERT_EQ(decoded->raster.blobSizeBytes, sizeof(expectedPush));
     const BinaryByteView blob = reader.blobBytes();
-    ASSERT_LE(decoded.raster.blobOffsetBytes, blob.size());
-    ASSERT_LE(decoded.raster.blobSizeBytes, blob.size() - decoded.raster.blobOffsetBytes);
-    EXPECT_EQ(NWB_MEMCMP(blob.data() + decoded.raster.blobOffsetBytes, expectedPush, sizeof(expectedPush)), 0);
+    ASSERT_LE(decoded->raster.blobOffsetBytes, blob.size());
+    ASSERT_LE(decoded->raster.blobSizeBytes, blob.size() - decoded->raster.blobOffsetBytes);
+    EXPECT_EQ(NWB_MEMCMP(blob.data() + decoded->raster.blobOffsetBytes, expectedPush, sizeof(expectedPush)), 0);
 
 }
 
@@ -125,10 +125,10 @@ TEST(GpuCommandIrRasterStream, RejectsCorruptedViewportBeforeExposingRasterRecor
         + offsetof(Graphics::GpuCommandIrSetGraphicsStateRecord, viewportMaxX);
     WriteCommandIrPod(malformed, maxXOffset, 0.f);
     Graphics::GpuCommandIrStreamReader reader(BinaryByteView{ malformed.data(), malformed.size() });
-    Graphics::GpuCommandIrDecodedRecord decoded;
-    decoded.opcode = Graphics::GpuCommandIrWireOpcode::Draw;
-    EXPECT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::Error);
-    EXPECT_EQ(decoded.opcode, Graphics::GpuCommandIrWireOpcode::Draw);
+
+    const auto terminal1 = reader.next();
+    ASSERT_FALSE(terminal1);
+    EXPECT_EQ(terminal1.error(), Graphics::GpuCommandIrStreamReadStatus::Error);
     EXPECT_EQ(reader.validation().error, Graphics::GpuCommandIrStreamValidationError::InvalidRecord);
     EXPECT_EQ(reader.validation().recordIndex, 0u);
 }

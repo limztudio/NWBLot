@@ -98,7 +98,9 @@ TEST_F(UiWheelInputTests, DiagonalWheelCopiesBothAcceptedAxesIntoOneAction){
     m_targets[0u].gestureMaximum = 999.0;
     m_targets[0u].gestureMaximumX = 1001.0;
     ControlAction action;
-    ASSERT_TRUE(m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control, action));
+    const auto actionResult = m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control);
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_DOUBLE_EQ(action.delta, -0.5);
     EXPECT_DOUBLE_EQ(action.deltaX, 0.25);
     EXPECT_DOUBLE_EQ(action.step, 48.0);
@@ -116,8 +118,12 @@ TEST_F(UiWheelInputTests, RightUpAndLeftDownKeepTheirNativeSignsAndSequence){
     ASSERT_EQ(m_router.controlActions().size(), 2u);
     ControlAction rightUp;
     ControlAction leftDown;
-    ASSERT_TRUE(m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control, rightUp));
-    ASSERT_TRUE(m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control, leftDown));
+    const auto rightUpResult = m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control);
+    ASSERT_TRUE(rightUpResult);
+    rightUp = *rightUpResult;
+    const auto leftDownResult = m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control);
+    ASSERT_TRUE(leftDownResult);
+    leftDown = *leftDownResult;
     EXPECT_DOUBLE_EQ(rightUp.deltaX, 1.0);
     EXPECT_DOUBLE_EQ(rightUp.delta, 2.0);
     EXPECT_DOUBLE_EQ(leftDown.deltaX, -3.0);
@@ -141,7 +147,9 @@ TEST_F(UiWheelInputTests, VerticalOnlyListDiagonalStillDeliversItsExactVerticalS
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     EXPECT_TRUE(wheel(2.0, 0.5).pointerConsumed);
     ControlAction action;
-    ASSERT_TRUE(m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control, action));
+    const auto actionResult = m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control);
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_DOUBLE_EQ(action.delta, 0.5);
     EXPECT_DOUBLE_EQ(action.step, 48.0);
     EXPECT_DOUBLE_EQ(action.maximum, 360.0);
@@ -156,16 +164,22 @@ TEST_F(UiWheelInputTests, DiagonalWheelOccupiesOnePositionBetweenGestureUpdates)
     ASSERT_TRUE(m_router.queue({ .type = InputEventType::PrimaryDown, .position = { 95.0f, 25.0f } }));
     EXPECT_TRUE(m_router.process().pointerConsumed);
     PointerGesture first;
-    ASSERT_TRUE(m_router.consumePointerGesture(m_targets[1u].id, 7u, first));
+    const auto firstResult = m_router.consumePointerGesture(m_targets[1u].id, 7u);
+    ASSERT_TRUE(firstResult);
+    first = *firstResult;
     EXPECT_TRUE(wheel(1.0, -1.0, { 95.0f, 25.0f }).pointerConsumed);
     ASSERT_EQ(m_router.controlActions().size(), 1u);
     ControlAction action;
-    ASSERT_TRUE(m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control, action));
+    const auto actionResult = m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control);
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_EQ(action.id.sequence, first.updateSequence + 1u);
     ASSERT_TRUE(m_router.queue({ .type = InputEventType::PointerMove, .position = { 95.0f, 60.0f } }));
     EXPECT_TRUE(m_router.process().pointerConsumed);
     PointerGesture moved;
-    ASSERT_TRUE(m_router.consumePointerGesture(m_targets[1u].id, 7u, moved));
+    const auto movedResult = m_router.consumePointerGesture(m_targets[1u].id, 7u);
+    ASSERT_TRUE(movedResult);
+    moved = *movedResult;
     EXPECT_EQ(moved.updateSequence, action.id.sequence + 1u);
     EXPECT_EQ(moved.id.sequence, first.id.sequence);
 }
@@ -186,7 +200,9 @@ TEST_F(UiWheelInputTests, InvalidHorizontalMetadataRejectsPublicationAndPreserve
     EXPECT_EQ(m_router.layoutGeneration(), 1u);
     ASSERT_EQ(m_router.controlActions().size(), 1u);
     ControlAction action;
-    ASSERT_TRUE(m_router.consumeControlAction(accepted.id, 7u, accepted.control, action));
+    const auto actionResult = m_router.consumeControlAction(accepted.id, 7u, accepted.control);
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_DOUBLE_EQ(action.deltaX, 1.0);
     EXPECT_DOUBLE_EQ(action.maximumX, 180.0);
 }

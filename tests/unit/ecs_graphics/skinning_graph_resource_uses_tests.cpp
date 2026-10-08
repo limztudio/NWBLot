@@ -60,60 +60,65 @@ using namespace NWB::Impl;
 
 TEST(SkinningGraphResourceUses, DeduplicatesRepeatedAndPermutedInputsWithoutChangingFirstOccurrence){
     Core::Alloc::ScratchArena scratch(Name("tests/skinning_graph_uses/repeated"));
-    MeshSkinningGraphResourceUses uses(scratch);
+    Expected<MeshSkinningGraphResourceUses> uses = MakeUnexpected(Failure{});
     MeshSkinningGraphDispatchPlan plans[] = { Plan(), Plan(), Plan(100u) };
     Swap(plans[1u].restPositionResource, plans[1u].restNormalResource);
     plans[s_ThirdElementIndex].meshletDescResource = plans[0u].meshletDescResource;
-    ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(plans, LengthOf(plans), scratch, uses));
-    ASSERT_EQ(uses.deformation.size(), 25u);
-    ASSERT_EQ(uses.postDispatch.size(), 21u);
-    ASSERT_EQ(uses.localBounds.size(), 6u);
-    ASSERT_EQ(uses.finalizer.size(), 12u);
-    EXPECT_EQ(uses.deformation[1u].resource, plans[0u].restPositionResource);
-    EXPECT_EQ(uses.deformation[s_ThirdElementIndex].resource, plans[0u].restNormalResource);
-    EXPECT_EQ(uses.deformation[13u].resource, plans[s_ThirdElementIndex].bindlessResourceSlotsResource);
-    EXPECT_EQ(uses.postDispatch[11u].resource, plans[s_ThirdElementIndex].bindlessResourceSlotsResource);
-    EXPECT_EQ(uses.finalizer[6u].resource, plans[s_ThirdElementIndex].skinnedPositionResource);
+    uses = BuildMeshSkinningGraphResourceUses(plans, LengthOf(plans), scratch);
+    ASSERT_TRUE(uses);
+    ASSERT_EQ(uses->deformation.size(), 25u);
+    ASSERT_EQ(uses->postDispatch.size(), 21u);
+    ASSERT_EQ(uses->localBounds.size(), 6u);
+    ASSERT_EQ(uses->finalizer.size(), 12u);
+    EXPECT_EQ(uses->deformation[1u].resource, plans[0u].restPositionResource);
+    EXPECT_EQ(uses->deformation[s_ThirdElementIndex].resource, plans[0u].restNormalResource);
+    EXPECT_EQ(uses->deformation[13u].resource, plans[s_ThirdElementIndex].bindlessResourceSlotsResource);
+    EXPECT_EQ(uses->postDispatch[11u].resource, plans[s_ThirdElementIndex].bindlessResourceSlotsResource);
+    EXPECT_EQ(uses->finalizer[6u].resource, plans[s_ThirdElementIndex].skinnedPositionResource);
 }
 
 TEST(SkinningGraphResourceUses, PreservesFullResourceGenerationAndRebuildsChangedFlags){
     Core::Alloc::ScratchArena scratch(Name("tests/skinning_graph_uses/generation"));
-    MeshSkinningGraphResourceUses uses(scratch);
+    Expected<MeshSkinningGraphResourceUses> uses = MakeUnexpected(Failure{});
     MeshSkinningGraphDispatchPlan plans[] = { Plan(), Plan(0u, 1ull << 40u) };
-    ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(plans, LengthOf(plans), scratch, uses));
-    ASSERT_EQ(uses.deformation.size(), 26u);
-    ASSERT_EQ(uses.postDispatch.size(), 22u);
-    ASSERT_EQ(uses.localBounds.size(), 6u);
-    ASSERT_EQ(uses.finalizer.size(), 12u);
-    EXPECT_EQ(uses.deformation[13u].resource, plans[1u].bindlessResourceSlotsResource);
-    EXPECT_EQ(uses.finalizer[6u].resource, plans[1u].skinnedPositionResource);
+    uses = BuildMeshSkinningGraphResourceUses(plans, LengthOf(plans), scratch);
+    ASSERT_TRUE(uses);
+    ASSERT_EQ(uses->deformation.size(), 26u);
+    ASSERT_EQ(uses->postDispatch.size(), 22u);
+    ASSERT_EQ(uses->localBounds.size(), 6u);
+    ASSERT_EQ(uses->finalizer.size(), 12u);
+    EXPECT_EQ(uses->deformation[13u].resource, plans[1u].bindlessResourceSlotsResource);
+    EXPECT_EQ(uses->finalizer[6u].resource, plans[1u].skinnedPositionResource);
 
     plans[0u].hasActiveSkin = false;
     plans[0u].repacksNormals = false;
     plans[0u].updatesMeshletBounds = false;
-    ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(plans, 1u, scratch, uses));
-    EXPECT_TRUE(uses.deformation.empty());
-    EXPECT_EQ(uses.postDispatch.size(), 7u);
-    EXPECT_TRUE(uses.localBounds.empty());
-    EXPECT_EQ(uses.finalizer.size(), 3u);
+    uses = BuildMeshSkinningGraphResourceUses(plans, 1u, scratch);
+    ASSERT_TRUE(uses);
+    EXPECT_TRUE(uses->deformation.empty());
+    EXPECT_EQ(uses->postDispatch.size(), 7u);
+    EXPECT_TRUE(uses->localBounds.empty());
+    EXPECT_EQ(uses->finalizer.size(), 3u);
     plans[0u].copiedRestStreams = false;
     plans[0u].updatesMeshletBounds = true;
-    ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(plans, 1u, scratch, uses));
-    ASSERT_EQ(uses.localBounds.size(), 3u);
-    ASSERT_EQ(uses.finalizer.size(), s_ExpectedDualCount);
-    EXPECT_EQ(uses.finalizer[0u].resource, plans[0u].meshletBoundsResource);
-    ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(nullptr, 0u, scratch, uses));
-    EXPECT_TRUE(uses.deformation.empty());
-    EXPECT_TRUE(uses.postDispatch.empty());
-    EXPECT_TRUE(uses.localBounds.empty());
-    EXPECT_TRUE(uses.finalizer.empty());
+    uses = BuildMeshSkinningGraphResourceUses(plans, 1u, scratch);
+    ASSERT_TRUE(uses);
+    ASSERT_EQ(uses->localBounds.size(), 3u);
+    ASSERT_EQ(uses->finalizer.size(), s_ExpectedDualCount);
+    EXPECT_EQ(uses->finalizer[0u].resource, plans[0u].meshletBoundsResource);
+    uses = BuildMeshSkinningGraphResourceUses(nullptr, 0u, scratch);
+    ASSERT_TRUE(uses);
+    EXPECT_TRUE(uses->deformation.empty());
+    EXPECT_TRUE(uses->postDispatch.empty());
+    EXPECT_TRUE(uses->localBounds.empty());
+    EXPECT_TRUE(uses->finalizer.empty());
 }
 
 TEST(SkinningGraphResourceUses, RejectsEveryPhaseConflictOrMissingResourceAndRecovers){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     Core::Alloc::ScratchArena scratch(Name("tests/skinning_graph_uses/rejections"));
-    MeshSkinningGraphResourceUses uses(scratch);
+    Expected<MeshSkinningGraphResourceUses> uses = MakeUnexpected(Failure{});
     for(u32 failure = 0u; failure < 10u; ++failure){
         MeshSkinningGraphDispatchPlan plan = Plan();
         switch(failure){
@@ -154,17 +159,15 @@ TEST(SkinningGraphResourceUses, RejectsEveryPhaseConflictOrMissingResourceAndRec
             plan.localBoundsResource = plan.bindlessResourceSlotsResource;
             break;
         }
-        EXPECT_FALSE(BuildMeshSkinningGraphResourceUses(&plan, 1u, scratch, uses));
-        EXPECT_TRUE(uses.deformation.empty());
-        EXPECT_TRUE(uses.postDispatch.empty());
-        EXPECT_TRUE(uses.localBounds.empty());
-        EXPECT_TRUE(uses.finalizer.empty());
+        uses = BuildMeshSkinningGraphResourceUses(&plan, 1u, scratch);
+        EXPECT_FALSE(uses);
         plan = Plan();
-        ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(&plan, 1u, scratch, uses));
-        EXPECT_EQ(uses.deformation.size(), 13u);
-        EXPECT_EQ(uses.postDispatch.size(), 11u);
-        EXPECT_EQ(uses.localBounds.size(), 3u);
-        EXPECT_EQ(uses.finalizer.size(), 6u);
+        uses = BuildMeshSkinningGraphResourceUses(&plan, 1u, scratch);
+        ASSERT_TRUE(uses);
+        EXPECT_EQ(uses->deformation.size(), 13u);
+        EXPECT_EQ(uses->postDispatch.size(), 11u);
+        EXPECT_EQ(uses->localBounds.size(), 3u);
+        EXPECT_EQ(uses->finalizer.size(), 6u);
     }
     EXPECT_EQ(logger.errorCount(), 10u);
 }
@@ -173,10 +176,11 @@ TEST(SkinningGraphResourceUses, PromotedCollectionsRejectLaterPhaseConflictsAndR
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     Core::Alloc::ScratchArena scratch(Name("tests/skinning_graph_uses/promoted_failures"));
-    MeshSkinningGraphResourceUses uses(scratch);
+    Expected<MeshSkinningGraphResourceUses> uses = MakeUnexpected(Failure{});
     for(u32 failure = 0u; failure < 3u; ++failure){
         MeshSkinningGraphDispatchPlan plans[] = { Plan(), Plan(100u), Plan(200u) };
-        ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(plans, LengthOf(plans), scratch, uses));
+        uses = BuildMeshSkinningGraphResourceUses(plans, LengthOf(plans), scratch);
+        ASSERT_TRUE(uses);
         if(failure == 0u)
             plans[s_ThirdElementIndex].restPositionResource = plans[1u].skinnedPositionResource;
         else if(failure == 1u)
@@ -186,17 +190,15 @@ TEST(SkinningGraphResourceUses, PromotedCollectionsRejectLaterPhaseConflictsAndR
             plans[s_ThirdElementIndex].repacksNormals = false;
             plans[s_ThirdElementIndex].skinnedNormalResource = {};
         }
-        EXPECT_FALSE(BuildMeshSkinningGraphResourceUses(plans, LengthOf(plans), scratch, uses));
-        EXPECT_TRUE(uses.deformation.empty());
-        EXPECT_TRUE(uses.postDispatch.empty());
-        EXPECT_TRUE(uses.localBounds.empty());
-        EXPECT_TRUE(uses.finalizer.empty());
+        uses = BuildMeshSkinningGraphResourceUses(plans, LengthOf(plans), scratch);
+        EXPECT_FALSE(uses);
         plans[s_ThirdElementIndex] = Plan(200u);
-        ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(plans, LengthOf(plans), scratch, uses));
-        EXPECT_EQ(uses.deformation.size(), 39u);
-        EXPECT_EQ(uses.postDispatch.size(), 33u);
-        EXPECT_EQ(uses.localBounds.size(), 9u);
-        EXPECT_EQ(uses.finalizer.size(), 18u);
+        uses = BuildMeshSkinningGraphResourceUses(plans, LengthOf(plans), scratch);
+        ASSERT_TRUE(uses);
+        EXPECT_EQ(uses->deformation.size(), 39u);
+        EXPECT_EQ(uses->postDispatch.size(), 33u);
+        EXPECT_EQ(uses->localBounds.size(), 9u);
+        EXPECT_EQ(uses->finalizer.size(), 18u);
     }
     EXPECT_EQ(logger.errorCount(), 3u);
 }
@@ -204,13 +206,15 @@ TEST(SkinningGraphResourceUses, PromotedCollectionsRejectLaterPhaseConflictsAndR
 TEST(SkinningGraphResourceUses, RepeatedPlansUseTheSameScratchCapacityAsOnePlan){
     Core::Alloc::ScratchArena singleScratch(Name("tests/skinning_graph_uses/single_storage"));
     Core::Alloc::ScratchArena repeatedScratch(Name("tests/skinning_graph_uses/repeated_storage"));
-    MeshSkinningGraphResourceUses singleUses(singleScratch);
-    MeshSkinningGraphResourceUses repeatedUses(repeatedScratch);
+    Expected<MeshSkinningGraphResourceUses> singleUses = MakeUnexpected(Failure{});
+    Expected<MeshSkinningGraphResourceUses> repeatedUses = MakeUnexpected(Failure{});
     MeshSkinningGraphDispatchPlan plans[64u];
     for(MeshSkinningGraphDispatchPlan& plan : plans)
         plan = Plan();
-    ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(plans, 1u, singleScratch, singleUses));
-    ASSERT_TRUE(BuildMeshSkinningGraphResourceUses(plans, LengthOf(plans), repeatedScratch, repeatedUses));
+    singleUses = BuildMeshSkinningGraphResourceUses(plans, 1u, singleScratch);
+    ASSERT_TRUE(singleUses);
+    repeatedUses = BuildMeshSkinningGraphResourceUses(plans, LengthOf(plans), repeatedScratch);
+    ASSERT_TRUE(repeatedUses);
     const ArenaMemoryStats single = singleScratch.memoryStats();
     const ArenaMemoryStats repeated = repeatedScratch.memoryStats();
     EXPECT_EQ(repeated.allocationCount, single.allocationCount);
@@ -235,9 +239,10 @@ void BenchmarkGather(const u32 planCount, const u32 iterations, const bool share
         {
             Core::Alloc::ScratchArena scratch(Name("tests/skinning_graph_uses/benchmark"));
             {
-                MeshSkinningGraphResourceUses uses(scratch);
-                succeeded = BuildMeshSkinningGraphResourceUses(plans.data(), plans.size(), scratch, uses) && succeeded;
-                outputCount += uses.deformation.size() + uses.postDispatch.size() + uses.localBounds.size() + uses.finalizer.size();
+                const auto uses = BuildMeshSkinningGraphResourceUses(plans.data(), plans.size(), scratch);
+                succeeded = uses.has_value() && succeeded;
+                if(uses)
+                    outputCount += uses->deformation.size() + uses->postDispatch.size() + uses->localBounds.size() + uses->finalizer.size();
             }
             const ArenaMemoryStats stats = scratch.memoryStats();
             peakBytes = Max(peakBytes, stats.peakUsedBytes);

@@ -74,7 +74,7 @@ int ExitValidation(const CLI::App& app, const AStringView option, const AStringV
     );
 }
 
-bool PromptString(const AStringView label, const AStringView defaultValue, AString& outValue, bool& prompted){
+Expected<AString> PromptString(const AStringView label, const AStringView defaultValue, bool& prompted){
     prompted = true;
     NWB_COUT << label;
     if(!defaultValue.empty())
@@ -82,77 +82,67 @@ bool PromptString(const AStringView label, const AStringView defaultValue, AStri
     NWB_COUT << ": ";
 
     AString line;
-    if(!ReadTextLine(NWB_CIN, line)){
-        outValue = defaultValue;
-        return !outValue.empty();
-    }
-
-    line = TrimCopy(Move(line));
+    if(ReadTextLine(NWB_CIN, line))
+        line = TrimCopy(Move(line));
     if(line.empty())
-        outValue = defaultValue;
-    else
-        outValue = Move(line);
-    return !outValue.empty();
+        line = defaultValue;
+    if(line.empty())
+        return MakeUnexpected(Failure{});
+    return line;
 }
 
-bool PromptBool(const AStringView label, const bool defaultValue, bool& outValue, bool& prompted){
+bool PromptBool(const AStringView label, const bool defaultValue, bool& prompted){
     prompted = true;
     for(;;){
         NWB_COUT << label << (defaultValue ? " [Y/n]: " : " [y/N]: ");
 
         AString line;
         if(!ReadTextLine(NWB_CIN, line)){
-            outValue = defaultValue;
-            return true;
+            return defaultValue;
         }
 
         line = NormalizeOptionText(Move(line));
         if(line.empty()){
-            outValue = defaultValue;
-            return true;
+            return defaultValue;
         }
-        if(ParseConfirmText(AStringView(line.data(), line.size()), outValue))
-            return true;
+        const auto value = ParseConfirmText(AStringView(line.data(), line.size()));
+        if(value)
+            return *value;
 
         NWB_COUT << "Please answer y or n.\n";
     }
 }
 
-bool PromptDouble(const AStringView label, const f64 defaultValue, f64& outValue, bool& prompted){
+f64 PromptDouble(const AStringView label, const f64 defaultValue, bool& prompted){
     prompted = true;
     for(;;){
         NWB_COUT << label << " [" << defaultValue << "]: ";
 
         AString line;
         if(!ReadTextLine(NWB_CIN, line)){
-            outValue = defaultValue;
-            return true;
+            return defaultValue;
         }
 
         line = TrimCopy(Move(line));
         if(line.empty()){
-            outValue = defaultValue;
-            return true;
+            return defaultValue;
         }
 
-        f64 parsed = 0.0;
-        if(ParseF64FromChars(AStringView(line.data(), line.size()), parsed) && IsFinite(parsed) && parsed > 0.0){
-            outValue = parsed;
-            return true;
-        }
+        const auto parsed = ParseF64FromChars(AStringView(line.data(), line.size()));
+        if(parsed && IsFinite(*parsed) && *parsed > 0.0)
+            return *parsed;
 
         NWB_COUT << "Please enter a positive finite number.\n";
     }
 }
 
 bool ValidateOutputOverwrite(const Path& outputPath, const ImportOptions& options, bool& prompted){
-    ErrorCode errorCode;
-    const bool exists = FileExists(outputPath, errorCode);
-    if(errorCode){
-        NWB_LOGGER_WARNING(NWB_TEXT("Failed to query output path: {}"), StringConvert(errorCode.message()));
+    const auto exists = FileExists(outputPath);
+    if(!exists){
+        NWB_LOGGER_WARNING(NWB_TEXT("Failed to query output path: {}"), StringConvert(exists.error().message()));
         return false;
     }
-    if(!exists)
+    if(!*exists)
         return true;
     if(options.forceOverwrite)
         return true;
@@ -161,10 +151,7 @@ bool ValidateOutputOverwrite(const Path& outputPath, const ImportOptions& option
         return false;
     }
 
-    bool overwrite = false;
-    if(!PromptBool("Output already exists. Overwrite it?", false, overwrite, prompted))
-        return false;
-    return overwrite;
+    return PromptBool("Output already exists. Overwrite it?", false, prompted);
 }
 
 bool ConfigurePromptsBeforeLoad(ImportOptions& options, const OptionPresence& presence, bool& prompted){
@@ -174,18 +161,17 @@ bool ConfigurePromptsBeforeLoad(ImportOptions& options, const OptionPresence& pr
             return false;
         }
 
-        AString input;
-        if(!PromptString("Input FBX or NWB path", {}, input, prompted)){
+        auto input = PromptString("Input FBX or NWB path", {}, prompted);
+        if(!input){
             NWB_LOGGER_WARNING(NWB_TEXT("Input FBX or NWB path is required."));
             return false;
         }
-        options.inputPath = input;
+        options.inputPath = Move(*input);
     }
     options.inputPath = UnquoteMatchingAsciiQuotes(Move(options.inputPath));
 
     if(!presence.preserveSpace && !options.acceptDefaults && !options.listMeshes){
-        bool convertSpace = true;
-        PromptBool("Convert axes/units to NWB space (+X right, +Y up, +Z forward, 1 unit = 1 meter)?", true, convertSpace, prompted);
+        const bool convertSpace = PromptBool("Convert axes/units to NWB space (+X right, +Y up, +Z forward, 1 unit = 1 meter)?", true, prompted);
         options.preserveSpace = !convertSpace;
     }
 
@@ -199,73 +185,76 @@ bool ConfigurePromptsAfterLoad(
     bool& prompted
 ){
     if(!presence.assetType && !options.acceptDefaults){
-        AString assetType;
         AString prompt = "Asset type (";
         prompt += OutputAssetTypeOptionsText();
         prompt += ")";
-        PromptString(prompt, options.assetType, assetType, prompted);
-        options.assetType = assetType;
+        auto assetType = PromptString(prompt, options.assetType, prompted);
+        if(!assetType)
+            return false;
+        options.assetType = Move(*assetType);
     }
 
     if(!presence.mesh && !options.acceptDefaults){
         PrintMeshInstances(visibleInstances);
-        AString selector;
-        PromptString("Mesh selector (all, first, index, node name, or mesh name)", options.meshSelector, selector, prompted);
-        options.meshSelector = selector;
+        auto selector = PromptString("Mesh selector (all, first, index, node name, or mesh name)", options.meshSelector, prompted);
+        if(!selector)
+            return false;
+        options.meshSelector = Move(*selector);
     }
 
     if(!presence.output && !options.acceptDefaults){
-        AString output;
         const AString defaultOutput = PathToGenericString<AString>(DefaultOutputPath(options.inputPath));
-        PromptString("Output .nwb path", defaultOutput, output, prompted);
-        options.outputPath = output;
+        auto output = PromptString("Output .nwb path", defaultOutput, prompted);
+        if(!output)
+            return false;
+        options.outputPath = Move(*output);
     }
     if(options.outputPath.empty())
         options.outputPath = PathToGenericString<AString>(DefaultOutputPath(options.inputPath));
     options.outputPath = UnquoteMatchingAsciiQuotes(Move(options.outputPath));
 
     if(!presence.normalMode && !options.acceptDefaults){
-        AString normalMode;
         AString prompt = "Normal mode (";
         prompt += NormalModeOptionsText();
         prompt += ")";
-        PromptString(prompt, options.normalMode, normalMode, prompted);
-        options.normalMode = normalMode;
+        auto normalMode = PromptString(prompt, options.normalMode, prompted);
+        if(!normalMode)
+            return false;
+        options.normalMode = Move(*normalMode);
     }
 
     if(!presence.scale && !options.acceptDefaults)
-        PromptDouble("Additional uniform scale", options.scale, options.scale, prompted);
+        options.scale = PromptDouble("Additional uniform scale", options.scale, prompted);
 
     if(!presence.local && !options.acceptDefaults)
-        PromptBool("Bake node transforms into the mesh?", options.bakeTransforms, options.bakeTransforms, prompted);
+        options.bakeTransforms = PromptBool("Bake node transforms into the mesh?", options.bakeTransforms, prompted);
 
     if(!presence.ignoreColors && !options.acceptDefaults)
-        PromptBool("Import FBX vertex colors when present?", options.importColors, options.importColors, prompted);
+        options.importColors = PromptBool("Import FBX vertex colors when present?", options.importColors, prompted);
 
     if(!presence.defaultColor && !options.acceptDefaults){
-        AString colorText;
-        PromptString("Default RGBA color for vertices without FBX color", options.defaultColorText, colorText, prompted);
-        options.defaultColorText = colorText;
+        auto colorText = PromptString("Default RGBA color for vertices without FBX color", options.defaultColorText, prompted);
+        if(!colorText)
+            return false;
+        options.defaultColorText = Move(*colorText);
     }
 
     if(!presence.flipWinding && !options.acceptDefaults)
-        PromptBool("Flip triangle winding?", options.flipWinding, options.flipWinding, prompted);
+        options.flipWinding = PromptBool("Flip triangle winding?", options.flipWinding, prompted);
 
     return true;
 }
 
-bool SelectedMeshesUseSkinning(
+Expected<bool> SelectedMeshesUseSkinning(
     const UtilityVector<MeshInstance>& instances,
-    const UtilityVector<usize>& selection,
-    bool& outUsesSkinning
+    const UtilityVector<usize>& selection
 ){
-    outUsesSkinning = false;
     bool sawStatic = false;
     bool sawSkinned = false;
     for(const usize instanceIndex : selection){
         if(instanceIndex >= instances.size()){
             NWB_LOGGER_WARNING(NWB_TEXT("Selected mesh index is out of range"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         const MeshInstance& instance = instances[instanceIndex];
@@ -276,11 +265,10 @@ bool SelectedMeshesUseSkinning(
 
     if(sawStatic && sawSkinned){
         NWB_LOGGER_WARNING(NWB_TEXT("Model export does not support mixed static and skinned source meshes yet"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outUsesSkinning = sawSkinned;
-    return true;
+    return sawSkinned;
 }
 
 bool AssetTypeRequiresSkinning(const OutputAssetType::Enum assetType)noexcept{
@@ -324,9 +312,10 @@ int RunNwbRefresh(
         return ExitValidation(app, "--list-meshes", "Only valid for FBX input.");
 
     if(!presence.output && !options.acceptDefaults){
-        AString output;
-        PromptString("Output .nwb path", options.inputPath, output, prompted);
-        options.outputPath = output;
+        auto output = PromptString("Output .nwb path", options.inputPath, prompted);
+        if(!output)
+            return s_FbxToNwbExitFailure;
+        options.outputPath = Move(*output);
     }
     if(options.outputPath.empty())
         options.outputPath = options.inputPath;
@@ -338,9 +327,9 @@ int RunNwbRefresh(
     if(!ValidateOutputOverwrite(outputPath, options, prompted))
         return s_FbxToNwbExitFailure;
 
-    SourceMeshCanonicalizeReport canonicalizeReport;
     const Path inputPath(UtilityDetail::Arena(), options.inputPath);
-    if(!RefreshNwbMeshAsset(inputPath, outputPath, cpuScheduler, canonicalizeReport))
+    const auto canonicalizeReport = RefreshNwbMeshAsset(inputPath, outputPath, cpuScheduler);
+    if(!canonicalizeReport)
         return s_FbxToNwbExitFailure;
 
     AStringStream report;
@@ -348,7 +337,7 @@ int RunNwbRefresh(
         << "Refreshed " << PathToGenericString<AString>(outputPath) << "\n"
         << "  input: " << PathToGenericString<AString>(inputPath) << "\n"
     ;
-    WriteCanonicalizeReport(report, canonicalizeReport);
+    WriteCanonicalizeReport(report, *canonicalizeReport);
     NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
     return s_FbxToNwbExitSuccess;
 }
@@ -460,13 +449,12 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
                 "Must be a finite non-negative number."
             );
 
-        ErrorCode errorCode;
-        const bool inputIsRegularFile = IsRegularFile(Path(UtilityDetail::Arena(), options.inputPath), errorCode);
-        if(errorCode && !IsMissingPathError(errorCode)){
-            NWB_LOGGER_WARNING(NWB_TEXT("Failed to query input FBX path: {}"), StringConvert(errorCode.message()));
+        const auto inputIsRegularFile = IsRegularFile(Path(UtilityDetail::Arena(), options.inputPath));
+        if(!inputIsRegularFile && !IsMissingPathError(inputIsRegularFile.error())){
+            NWB_LOGGER_WARNING(NWB_TEXT("Failed to query input FBX path: {}"), StringConvert(inputIsRegularFile.error().message()));
             return __hidden_command_line::s_FbxToNwbExitFailure;
         }
-        if(!inputIsRegularFile)
+        if(!inputIsRegularFile || !*inputIsRegularFile)
             return __hidden_command_line::ExitValidation(
                 app,
                 __hidden_command_line::s_FbxToNwbInputOption,
@@ -476,14 +464,14 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         if(__hidden_command_line::IsNwbRefreshMode(options))
             return __hidden_command_line::RunNwbRefresh(app, options, presence, cpuScheduler, prompted);
 
-        SceneHandle scene;
-        if(!LoadScene(options, scene))
+        auto scene = LoadScene(options);
+        if(!scene)
             return __hidden_command_line::s_FbxToNwbExitFailure;
 
         if(!presence.includeHidden && !options.acceptDefaults && !options.listMeshes)
-            __hidden_command_line::PromptBool("Include hidden mesh nodes?", options.includeHidden, options.includeHidden, prompted);
+            options.includeHidden = __hidden_command_line::PromptBool("Include hidden mesh nodes?", options.includeHidden, prompted);
 
-        UtilityVector<MeshInstance> instances = CollectMeshInstances(scene.scene, options.includeHidden);
+        UtilityVector<MeshInstance> instances = CollectMeshInstances(scene->scene, options.includeHidden);
         if(options.listMeshes){
             PrintMeshInstances(instances);
             return __hidden_command_line::s_FbxToNwbExitSuccess;
@@ -512,29 +500,31 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
                 NormalModeErrorText()
             );
 
-        Vec4 defaultColor;
-        if(!ParseColorText(options.defaultColorText, defaultColor))
+        const auto defaultColor = ParseColorText(options.defaultColorText);
+        if(!defaultColor)
             return __hidden_command_line::ExitValidation(
                 app,
                 __hidden_command_line::s_FbxToNwbDefaultColorOption,
                 "Must contain four finite numbers, for example 1,1,1,1."
             );
 
-        UtilityVector<usize> selection;
-        if(!SelectMeshInstances(instances, options.meshSelector, selection))
+        auto selectionResult = SelectMeshInstances(instances, options.meshSelector);
+        if(!selectionResult)
             return __hidden_command_line::ExitValidation(
                 app,
                 __hidden_command_line::s_FbxToNwbMeshOption,
                 "Must select an available zero-based index, node name, or mesh name."
             );
 
-        OutputAssetType::Enum assetTypeValue = OutputAssetType::Mesh;
-        if(!ParseAssetTypeText(options.assetType, assetTypeValue))
+        const UtilityVector<usize>& selection = *selectionResult;
+        const auto assetTypeResult = ParseAssetTypeText(options.assetType);
+        if(!assetTypeResult)
             return __hidden_command_line::ExitValidation(
                 app,
                 __hidden_command_line::s_FbxToNwbAssetTypeOption,
                 OutputAssetTypeErrorText()
             );
+        const OutputAssetType::Enum assetTypeValue = *assetTypeResult;
         if(options.separateAssets && assetTypeValue != OutputAssetType::Bunch)
             return __hidden_command_line::ExitValidation(
                 app,
@@ -544,9 +534,10 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         bool usesSkinning = false;
         bool wantsSkinning = false;
         if(__hidden_command_line::AssetTypeCanUseSkinning(assetTypeValue)){
-            if(!__hidden_command_line::SelectedMeshesUseSkinning(instances, selection, wantsSkinning))
+            const auto selectedUsesSkinning = __hidden_command_line::SelectedMeshesUseSkinning(instances, selection);
+            if(!selectedUsesSkinning)
                 return __hidden_command_line::s_FbxToNwbExitFailure;
-            usesSkinning = wantsSkinning;
+            usesSkinning = wantsSkinning = *selectedUsesSkinning;
         }
         if(__hidden_command_line::AssetTypeRequiresSkinning(assetTypeValue) && !usesSkinning)
             return __hidden_command_line::ExitValidation(
@@ -565,29 +556,16 @@ int Run(int argc, char** argv, Core::CpuTaskScheduler& cpuScheduler, bool& promp
         if(!__hidden_command_line::ValidateOutputOverwrite(outputPath, options, prompted))
             return __hidden_command_line::s_FbxToNwbExitFailure;
 
-        SourceMeshStreams mesh;
-        UtilityVector<ufbx_node*> skeletonJoints;
-        UtilityVector<JointMatrix> skeletonBindPoseMatrices;
-        UtilityVector<JointMatrix> inverseBindMatrices;
-        bool sawVertexColors = false;
-        bool sawVertexUvs = false;
-        SourceTangentReport tangentReport;
-        if(!BuildMesh(
-            instances,
-            selection,
-            options,
-            wantsSkinning,
-            defaultColor,
-            cpuScheduler,
-            mesh,
-            skeletonJoints,
-            skeletonBindPoseMatrices,
-            inverseBindMatrices,
-            sawVertexColors,
-            sawVertexUvs,
-            tangentReport
-        ))
+        auto built = BuildMesh(instances, selection, options, wantsSkinning, *defaultColor, cpuScheduler);
+        if(!built)
             return __hidden_command_line::s_FbxToNwbExitFailure;
+        const SourceMeshStreams& mesh = built->mesh;
+        const UtilityVector<ufbx_node*>& skeletonJoints = built->skeletonJoints;
+        const UtilityVector<JointMatrix>& skeletonBindPoseMatrices = built->skeletonBindPoseMatrices;
+        const UtilityVector<JointMatrix>& inverseBindMatrices = built->inverseBindMatrices;
+        const bool sawVertexColors = built->sawVertexColors;
+        const bool sawVertexUvs = built->sawVertexUvs;
+        const SourceTangentReport& tangentReport = built->tangentReport;
 
         if(!WriteNwbAsset(
             outputPath,

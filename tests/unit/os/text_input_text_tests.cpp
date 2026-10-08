@@ -52,15 +52,20 @@ TEST(TextInputText, CaretBoundsRejectEmptyAndOverflowWhileAllowingClippedOrigins
     EXPECT_FALSE(IsTextInputCaretRectValid({ 0, Limit<i32>::s_Max - 10, 1, 11 }));
 }
 
-TEST(TextInputText, InvalidScalarsClearThePreviouslyEncodedLength){
+TEST(TextInputText, RejectsInvalidScalarsWithoutPublishingAnEncodedLength){
     char bytes[4] = {};
-    usize length = 0u;
-    ASSERT_EQ(EncodeTextInputCodePoint(0x1f600u, bytes, length), TextInputAdmission::Accepted);
-    EXPECT_EQ(AStringView(bytes, length), "\xF0\x9F\x98\x80");
-    EXPECT_EQ(EncodeTextInputCodePoint(0u, bytes, length), TextInputAdmission::InvalidText);
-    EXPECT_EQ(EncodeTextInputCodePoint(0xd800u, bytes, length), TextInputAdmission::InvalidText);
-    EXPECT_EQ(EncodeTextInputCodePoint(0x110000u, bytes, length), TextInputAdmission::InvalidText);
-    EXPECT_EQ(length, 0u);
+    const auto length = EncodeTextInputCodePoint(0x1f600u, bytes);
+    ASSERT_TRUE(length);
+    EXPECT_EQ(AStringView(bytes, *length), "\xF0\x9F\x98\x80");
+    const auto invalid0 = EncodeTextInputCodePoint(0u, bytes);
+    ASSERT_FALSE(invalid0);
+    EXPECT_EQ(invalid0.error(), TextInputAdmission::InvalidText);
+    const auto invalidd800 = EncodeTextInputCodePoint(0xd800u, bytes);
+    ASSERT_FALSE(invalidd800);
+    EXPECT_EQ(invalidd800.error(), TextInputAdmission::InvalidText);
+    const auto invalid110000 = EncodeTextInputCodePoint(0x110000u, bytes);
+    ASSERT_FALSE(invalid110000);
+    EXPECT_EQ(invalid110000.error(), TextInputAdmission::InvalidText);
 }
 
 

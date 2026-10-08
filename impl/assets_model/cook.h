@@ -43,23 +43,23 @@ struct ModelCookEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ParseModelCookMetadata(
+[[nodiscard]] Expected<ModelCookEntry> ParseModelCookMetadata(
     const Path& assetRoot,
     AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    ModelCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] bool ParseModelCookMetadata(
+[[nodiscard]] Expected<ModelCookEntry> ParseModelCookMetadata(
     Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    ModelCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
 
-[[nodiscard]] bool BuildModelAsset(ModelCookEntry& modelEntry, Model& outModel, Core::Alloc::ScratchArena& scratchArena);
+[[nodiscard]] Expected<Model> BuildModelAsset(ModelCookEntry& modelEntry, Core::Assets::AssetArena& arena, Core::Alloc::ScratchArena& scratchArena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

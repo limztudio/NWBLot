@@ -42,22 +42,22 @@ struct ResolvedCookPaths{
 
 
 [[nodiscard]] inline bool PrepareGeneratedIncludeRoot(const Path& includeRoot, const AStringView generatorName){
-    ErrorCode errorCode;
-    if(!RemoveAllIfExists(includeRoot, errorCode)){
+    const auto removed = RemoveAllIfExists(includeRoot);
+    if(!removed){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to clear generated include directory '{}': {}")
             , StringConvert(generatorName)
             , PathToString<tchar>(includeRoot)
-            , StringConvert(errorCode.message())
+            , StringConvert(removed.error().message())
         );
         return false;
     }
 
-    errorCode.clear();
-    if(!EnsureDirectories(includeRoot, errorCode)){
+    const auto ensured = EnsureDirectories(includeRoot);
+    if(!ensured){
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create generated include directory '{}': {}")
             , StringConvert(generatorName)
             , PathToString<tchar>(includeRoot)
-            , StringConvert(errorCode.message())
+            , StringConvert(ensured.error().message())
         );
         return false;
     }

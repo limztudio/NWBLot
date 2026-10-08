@@ -126,10 +126,10 @@ private:
     // Angular radius is in radians; larger sources soften the penumbra.
     static f32 ConfiguredAngularRadius(){
         static const f32 s_angle = [](){
-            f32 parsed = s_DefaultAngularRadius;
-            if(!ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE", parsed))
+            const auto parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_ANGLE");
+            if(!parsed)
                 return s_DefaultAngularRadius;
-            return Clamp(parsed, 0.0f, 0.2f);
+            return Clamp(*parsed, 0.0f, 0.2f);
         }();
         return s_angle;
     }
@@ -137,10 +137,10 @@ private:
     // Point/spot softness depends on source radius in world units and light distance: asin(radius / distance).
     static f32 ConfiguredSourceRadius(){
         static const f32 s_radius = [](){
-            f32 parsed = s_DefaultSourceRadius;
-            if(!ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS", parsed))
+            const auto parsed = ReadSmokeEnvironmentF32("NWB_SOFT_SHADOW_TEST_SOURCE_RADIUS");
+            if(!parsed)
                 return s_DefaultSourceRadius;
-            return Clamp(parsed, 0.0f, 1.0f);
+            return Clamp(*parsed, 0.0f, 1.0f);
         }();
         return s_radius;
     }

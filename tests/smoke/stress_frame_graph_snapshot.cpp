@@ -253,12 +253,12 @@ bool CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AStri
         return false;
     }
     const auto* const event = session.view().eventAt(0u);
-    Core::Telemetry::FrameGraphPayload payload(arena);
-    if(
-        !event || event->header.kind != Core::Telemetry::EventKind::FrameGraphFrame || event->header.frameIndex != sourceFrame
-        || !Core::Telemetry::ParseFrameGraphPayload(arena, event->payload.data(), event->payload.size(), payload)
-        || !__hidden_stress_frame_graph_snapshot::ValidateSnapshot(payload, sourceFrame)
-    ){
+    if(!event || event->header.kind != Core::Telemetry::EventKind::FrameGraphFrame || event->header.frameIndex != sourceFrame){
+        NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: missing runtime data or inconsistent completed-frame identity"));
+        return false;
+    }
+    const auto payload = Core::Telemetry::ParseFrameGraphPayload(arena, event->payload.data(), event->payload.size());
+    if(!payload || !__hidden_stress_frame_graph_snapshot::ValidateSnapshot(*payload, sourceFrame)){
         NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: missing runtime data or inconsistent completed-frame identity"));
         return false;
     }
@@ -287,16 +287,16 @@ bool CaptureStressFrameGraphSnapshot(ProjectRuntimeContext& context, const AStri
     AString<Core::Telemetry::TelemetryArena> jsonPath(arena);
     jsonPath.assign(outputPath);
     OutputFileStream output(jsonPath.c_str(), s_FileOpenTruncate);
-    if(!output.is_open() || !__hidden_stress_frame_graph_snapshot::WriteSnapshot(output, payload, graphicsFrame, completedFrames)){
+    if(!output.is_open() || !__hidden_stress_frame_graph_snapshot::WriteSnapshot(output, *payload, graphicsFrame, completedFrames)){
         NWB_LOGGER_ERROR(NWB_TEXT("StressFrameGraphSnapshot: readable snapshot output failed"));
         return false;
     }
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressFrameGraphSnapshot: complete source_frame={} completed_frames={} nodes={} edges={} packets={}")
         , sourceFrame
         , completedFrames
-        , payload.nodes.size()
-        , payload.edges.size()
-        , payload.packetSubmissionStatistics.size()
+        , payload->nodes.size()
+        , payload->edges.size()
+        , payload->packetSubmissionStatistics.size()
     );
     return true;
 }

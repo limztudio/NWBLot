@@ -30,6 +30,12 @@ NWB_VULKAN_BEGIN
 using PipelineShaderStageVector = Vector<VkPipelineShaderStageCreateInfo, Alloc::ScratchArena>;
 using PipelineSpecializationInfoVector = Vector<VkSpecializationInfo, Alloc::ScratchArena>;
 
+struct CreatedPipelineLayout{
+    VkPipelineLayout layout = VK_NULL_HANDLE;
+    u32 pushConstantByteSize = 0u;
+    bool ownsLayout = false;
+};
+
 struct PipelineBindingState{
     BindingLayoutVector m_bindingLayoutsAtCreation;
     Array<u32, s_MaxBindingLayouts> m_bindingLayoutSetIndicesAtCreation{};
@@ -183,7 +189,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool shutdownForLifecycleOperation(VkResult& outIdleResult);
+    [[nodiscard]] Expected<VkResult, VkResult> shutdownForLifecycleOperation();
     void shutdownForDeviceTeardown()noexcept;
 
 
@@ -228,7 +234,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool captureBindingSnapshotLocked(BindingSnapshot& outSnapshot)const;
+    [[nodiscard]] Expected<BindingSnapshot> captureBindingSnapshotLocked()const;
     [[nodiscard]] bool isLiveSegmentLocked(
         const SegmentStorage& storage,
         const DescriptorBufferSegment& segment,
@@ -431,10 +437,9 @@ private:
         TrackedCommandBuffer& commandBuffer,
         const GpuPhysicalQueueId& physicalQueue
     );
-    [[nodiscard]] bool validateCommandBufferUseSubmissionLocked(
+    [[nodiscard]] Expected<usize> validateCommandBufferUseSubmissionLocked(
         TrackedCommandBuffer& commandBuffer,
-        const QueueSubmissionToken& submissionToken,
-        usize& outHeapUseIndex
+        const QueueSubmissionToken& submissionToken
     );
     void commitCommandBufferUseSubmissionLocked(
         TrackedCommandBuffer& commandBuffer,
@@ -663,6 +668,11 @@ private:
         DispatchRegionSnapshot callable;
     };
 
+    struct ShaderTableAllocation{
+        BufferHandle buffer;
+        u64 offset = 0u;
+    };
+
     struct ShaderRecordPreflight{
         usize handleOffset = 0u;
         u64 recordByteSize = 0u;
@@ -692,26 +702,22 @@ public:
 
 
 private:
-    void captureDispatchSnapshot(DispatchSnapshot& outSnapshot)const;
-    [[nodiscard]] bool findGroupIndex(
+    [[nodiscard]] DispatchSnapshot captureDispatchSnapshot()const;
+    [[nodiscard]] Expected<u32> findGroupIndex(
         AStringView exportName,
         ShaderTableRecordKind::Enum expectedKind,
-        u32& outGroupIndex,
         TStringView operationName,
         TStringView exportKind
     )const;
-    [[nodiscard]] bool preflightShaderRecord(
+    [[nodiscard]] Expected<ShaderRecordPreflight> preflightShaderRecord(
         AStringView exportName,
         ShaderTableRecordKind::Enum expectedKind,
         u32 recordCount,
-        ShaderRecordPreflight& outPreflight,
         TStringView operationName,
         TStringView exportKind
     )const;
-    [[nodiscard]] bool allocateSBTBuffer(
+    [[nodiscard]] Expected<ShaderTableAllocation> allocateSBTBuffer(
         const ShaderRecordPreflight& preflight,
-        BufferHandle& outBuffer,
-        u64& outOffset,
         TStringView operationName,
         TStringView recordName
     );

@@ -66,16 +66,17 @@ public:
 
 
 public:
-    [[nodiscard]] bool parse(int argc, char** argv, PipelineOptions& options);
+    [[nodiscard]] Expected<PipelineOptions> parse(int argc, char** argv, NWB::Core::Assets::AssetArena& arena);
     [[nodiscard]] int exit(const CLI::ParseError& error)const;
 
 public:
     template<typename ToolBody>
-    [[nodiscard]] int run(const int argc, char** argv, PipelineOptions& options, ToolBody&& body){
+    [[nodiscard]] int run(const int argc, char** argv, NWB::Core::Assets::AssetArena& arena, ToolBody&& body){
         return ::InvokeTerminalEntry<CLI::ParseError>([&](){
-            if(!parse(argc, argv, options))
+            auto options = parse(argc, argv, arena);
+            if(!options)
                 return s_PipelineExitFailure;
-            return body(options);
+            return body(*options);
         }, [&](const CLI::ParseError& error){ return exit(error); }, [](){ return s_PipelineExitFatal; });
     }
 

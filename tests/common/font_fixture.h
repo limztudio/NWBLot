@@ -29,12 +29,11 @@ namespace Tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ReadBundledFontBytes(const Path& fontPath, Core::Assets::AssetBytes& outSfntBytes){
-    Impl::PreparedFontSource source(outSfntBytes.get_allocator().arena());
-    if(!Impl::ReadPreparedFontSource(fontPath, source, false))
-        return false;
-    outSfntBytes = Move(source.fontBytes);
-    return true;
+[[nodiscard]] inline Expected<Core::Assets::AssetBytes, AStringView> ReadBundledFontBytes(const Path& fontPath, Core::Assets::AssetArena& arena){
+    auto source = Impl::ReadPreparedFontSource(fontPath, arena, false);
+    if(!source)
+        return MakeUnexpected(source.error());
+    return Move(source->fontBytes);
 }
 
 

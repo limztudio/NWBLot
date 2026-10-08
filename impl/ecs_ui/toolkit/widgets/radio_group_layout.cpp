@@ -47,7 +47,7 @@ namespace __hidden_ui_radio_group_layout{
     ;
 }
 
-[[nodiscard]] static bool MakeRect(const f64 x, const f64 y, const f64 width, const f64 height, Rect& out)noexcept{
+[[nodiscard]] static Expected<Rect> MakeRect(const f64 x, const f64 y, const f64 width, const f64 height)noexcept{
     if(
         !IsFinite(x) || x < -Limit<f32>::s_Max || x > Limit<f32>::s_Max
         || !IsFinite(y) || y < -Limit<f32>::s_Max || y > Limit<f32>::s_Max
@@ -56,23 +56,22 @@ namespace __hidden_ui_radio_group_layout{
         || x + width < -Limit<f32>::s_Max || x + width > Limit<f32>::s_Max
         || y + height < -Limit<f32>::s_Max || y + height > Limit<f32>::s_Max
     )
-        return false;
+        return MakeUnexpected(Failure{});
     const Rect candidate{ static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(width), static_cast<f32>(height) };
     if(
         !IsValidUiRect(candidate) || (width > 0.0 && candidate.x + candidate.width <= candidate.x)
         || (height > 0.0 && candidate.y + candidate.height <= candidate.y)
     )
-        return false;
-    out = candidate;
-    return true;
+        return MakeUnexpected(Failure{});
+    return candidate;
 }
 
-[[nodiscard]] static bool Intersect(const Rect& lhs, const Rect& rhs, Rect& out)noexcept{
+[[nodiscard]] static Expected<Rect> Intersect(const Rect& lhs, const Rect& rhs)noexcept{
     const f64 left = Max(static_cast<f64>(lhs.x), static_cast<f64>(rhs.x));
     const f64 top = Max(static_cast<f64>(lhs.y), static_cast<f64>(rhs.y));
     const f64 right = Min(static_cast<f64>(lhs.x) + lhs.width, static_cast<f64>(rhs.x) + rhs.width);
     const f64 bottom = Min(static_cast<f64>(lhs.y) + lhs.height, static_cast<f64>(rhs.y) + rhs.height);
-    return MakeRect(left, top, Max(0.0, right - left), Max(0.0, bottom - top), out);
+    return MakeRect(left, top, Max(0.0, right - left), Max(0.0, bottom - top));
 }
 
 
@@ -85,12 +84,11 @@ namespace __hidden_ui_radio_group_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RadioGroupLayout::Measure(
+Expected<RadioGroupMetrics> RadioGroupLayout::Measure(
     const u32 count,
     const Point& maximumLabel,
     const RadioGroupOptions& options,
-    const RadioGroupStyle& style,
-    RadioGroupMetrics& out
+    const RadioGroupStyle& style
 )noexcept{
     using namespace __hidden_ui_radio_group_layout;
     if(
@@ -103,7 +101,7 @@ bool RadioGroupLayout::Measure(
         || !IsFinite(style.markInset) || style.markInset < 0.0f || style.markInset > 0.5f
         || !IsValidUiColor(style.hoverTint) || !IsValidUiColor(style.pressedTint) || !IsValidUiColor(style.disabledTint)
     )
-        return false;
+        return MakeUnexpected(Failure{});
     RadioGroupMetrics candidate;
     candidate.rowHeight = Max(options.rowHeight, Max(maximumLabel.y, style.indicatorExtent));
     candidate.indicatorExtent = style.indicatorExtent;
@@ -117,29 +115,29 @@ bool RadioGroupLayout::Measure(
     const f64 height = static_cast<f64>(style.padding.top) + style.padding.bottom
         + static_cast<f64>(count) * candidate.rowHeight + static_cast<f64>(count == 0u ? 0u : count - 1u) * style.rowGap;
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
-        return false;
+        return MakeUnexpected(Failure{});
     candidate.contentSize = { static_cast<f32>(width), static_cast<f32>(height) };
     if(!ValidMetrics(candidate))
-        return false;
-    out = candidate;
-    return true;
+        return MakeUnexpected(Failure{});
+    return candidate;
 }
 
-bool RadioGroupLayout::Place(
+Expected<RadioGroupPlacement> RadioGroupLayout::Place(
     const Rect& bounds,
     const Rect& clip,
     const RadioGroupChoices& choices,
-    const RadioGroupMetrics& metrics,
-    RadioGroupPlacement& out
+    const RadioGroupMetrics& metrics
 )noexcept{
     using namespace __hidden_ui_radio_group_layout;
     if(!IsValidUiRect(bounds) || !IsValidUiRect(clip) || !ValidMetrics(metrics) || choices.count != metrics.count)
-        return false;
+        return MakeUnexpected(Failure{});
     RadioGroupPlacement candidate;
     candidate.bounds = bounds;
     candidate.count = choices.count;
-    if(!Intersect(bounds, clip, candidate.clip))
-        return false;
+    const auto intersection = Intersect(bounds, clip);
+    if(!intersection)
+        return MakeUnexpected(Failure{});
+    candidate.clip = *intersection;
     const f64 left = Min(static_cast<f64>(metrics.padding.left), static_cast<f64>(bounds.width));
     const f64 top = Min(static_cast<f64>(metrics.padding.top), static_cast<f64>(bounds.height));
     const f64 right = Min(static_cast<f64>(metrics.padding.right), static_cast<f64>(bounds.width) - left);
@@ -147,38 +145,50 @@ bool RadioGroupLayout::Place(
     const f64 x = static_cast<f64>(bounds.x) + left;
     const f64 y = static_cast<f64>(bounds.y) + top;
     const f64 width = static_cast<f64>(bounds.width) - left - right;
-    if(!MakeRect(x, y, width, static_cast<f64>(bounds.height) - top - bottom, candidate.content))
-        return false;
+    const auto content = MakeRect(x, y, width, static_cast<f64>(bounds.height) - top - bottom);
+    if(!content)
+        return MakeUnexpected(Failure{});
+    candidate.content = *content;
     const f64 extent = Min(static_cast<f64>(metrics.indicatorExtent), width);
     const f64 labelStart = Min(width, extent + metrics.gap);
     const f64 markInset = extent * metrics.markInset;
     for(u32 index = 0u; index < candidate.count; ++index){
         if(choices.rows[index].key == 0u)
-            return false;
+            return MakeUnexpected(Failure{});
         for(u32 previous = 0u; previous < index; ++previous){
             if(choices.rows[previous].key == choices.rows[index].key)
-                return false;
+                return MakeUnexpected(Failure{});
         }
         RadioGroupChoicePlacement& row = candidate.rows[index];
         row.key = choices.rows[index].key;
         row.enabled = choices.rows[index].enabled;
         const f64 rowY = y + static_cast<f64>(index) * (static_cast<f64>(metrics.rowHeight) + metrics.rowGap);
         const f64 indicatorY = rowY + (static_cast<f64>(metrics.rowHeight) - extent) * 0.5;
-        if(
-            !MakeRect(x, rowY, width, metrics.rowHeight, row.rectangle) || !Intersect(row.rectangle, candidate.clip, row.clip)
-            || !MakeRect(x, indicatorY, extent, extent, row.indicator)
-            || !MakeRect(x + markInset, indicatorY + markInset, extent - 2.0 * markInset, extent - 2.0 * markInset, row.mark)
-        )
-            return false;
-        Rect label;
-        if(
-            !MakeRect(x + labelStart, rowY, width - labelStart, metrics.rowHeight, label)
-            || !Intersect(label, row.clip, row.textClip)
-        )
-            return false;
+        const auto rectangle = MakeRect(x, rowY, width, metrics.rowHeight);
+        if(!rectangle)
+            return MakeUnexpected(Failure{});
+        const auto rowClip = Intersect(*rectangle, candidate.clip);
+        if(!rowClip)
+            return MakeUnexpected(Failure{});
+        const auto indicator = MakeRect(x, indicatorY, extent, extent);
+        if(!indicator)
+            return MakeUnexpected(Failure{});
+        const auto mark = MakeRect(x + markInset, indicatorY + markInset, extent - 2.0 * markInset, extent - 2.0 * markInset);
+        if(!mark)
+            return MakeUnexpected(Failure{});
+        const auto label = MakeRect(x + labelStart, rowY, width - labelStart, metrics.rowHeight);
+        if(!label)
+            return MakeUnexpected(Failure{});
+        const auto textClip = Intersect(*label, *rowClip);
+        if(!textClip)
+            return MakeUnexpected(Failure{});
+        row.rectangle = *rectangle;
+        row.clip = *rowClip;
+        row.indicator = *indicator;
+        row.mark = *mark;
+        row.textClip = *textClip;
     }
-    out = candidate;
-    return true;
+    return candidate;
 }
 
 

@@ -36,14 +36,13 @@ Impl::Ui::Rect CaptureEditSelection(
         return {};
     const bool shaped = view.shape(text, { {}, fontSize }) == TextLayoutStatus::Success;
     NWB_FATAL_ASSERT(shaped);
-    Rect selection;
-    const bool resolved = view.caretGeometry().rangeOnLine(range, 0u, placement.caret.width, selection);
-    NWB_FATAL_ASSERT(resolved);
-    if(selection.width > 0.0f){
-        selection.x += placement.textOrigin.x;
-        selection.y += placement.textOrigin.y;
+    auto selection = view.caretGeometry().rangeOnLine(range, 0u, placement.caret.width);
+    NWB_FATAL_ASSERT(selection.has_value());
+    if(selection->width > 0.0f){
+        selection->x += placement.textOrigin.x;
+        selection->y += placement.textOrigin.y;
     }
-    return selection;
+    return *selection;
 }
 
 

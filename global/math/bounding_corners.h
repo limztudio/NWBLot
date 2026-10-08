@@ -101,13 +101,11 @@ inline void FrustumCorners(
 
 
 [[nodiscard]] inline SIMDVector NWB_SIMD_CALL BoundingSphere::TransformSphereValue(SIMDVector sphereValue, const SIMDMatrix& matrix)noexcept{
-    SIMDVector scale{};
-    SIMDVector rotation{};
-    SIMDVector translation{};
     const SIMDVector centerVector = CollisionDetail::SphereCenter(sphereValue);
     const SIMDVector sphereRadius = VectorSplatW(sphereValue);
-    if(MatrixDecompose(scale, rotation, translation, matrix)){
-        const SIMDVector absScale = VectorAbs(scale);
+    const auto decomposition = MatrixDecompose(matrix);
+    if(decomposition){
+        const SIMDVector absScale = VectorAbs(decomposition->scale);
         const SIMDVector maxScale = CollisionDetail::Vector3MaxComponent(absScale);
         return CollisionDetail::SphereCenterRadius(Vector3Transform(centerVector, matrix), VectorMultiply(sphereRadius, maxScale));
     }

@@ -99,8 +99,10 @@ bool TextVisibleFixture::loadFont(Font& font, const StringView filename){
     const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY)
         / filename;
     Core::Assets::AssetBytes bytes(m_arena);
-    if(!Tests::ReadBundledFontBytes(path, bytes))
+    auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
+    if(!bytesResult)
         return false;
+    bytes = Move(*bytesResult);
     font.setFontBytes(Move(bytes));
     return font.validatePayload();
 }

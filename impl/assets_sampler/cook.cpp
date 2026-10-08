@@ -51,11 +51,10 @@ static constexpr ::NamedEnumCase<bool> s_FilterCases[] = {
     { "linear", true },
 };
 
-[[nodiscard]] static bool ParseFilter(
+[[nodiscard]] static Expected<bool> ParseFilter(
     const Path& nwbFilePath,
     const Value& asset,
-    const AStringView fieldName,
-    bool& outLinear
+    const AStringView fieldName
 ){
     return Core::Assets::ParseNamedMetadataEnumField<bool>(
         nwbFilePath,
@@ -64,7 +63,6 @@ static constexpr ::NamedEnumCase<bool> s_FilterCases[] = {
         fieldName,
         s_FilterCases,
         LengthOf(s_FilterCases),
-        outLinear,
         "must be 'nearest' or 'linear'"
     );
 }
@@ -82,11 +80,10 @@ static constexpr ::NamedEnumCase<Core::SamplerReductionType::Enum> s_ReductionTy
     { "comparison", Core::SamplerReductionType::Comparison },
 };
 
-[[nodiscard]] static bool ParseAddressMode(
+[[nodiscard]] static Expected<Core::SamplerAddressMode::Enum> ParseAddressMode(
     const Path& nwbFilePath,
     const Value& asset,
-    const AStringView fieldName,
-    Core::SamplerAddressMode::Enum& outAddressMode
+    const AStringView fieldName
 ){
     return Core::Assets::ParseNamedMetadataEnumField<Core::SamplerAddressMode::Enum>(
         nwbFilePath,
@@ -95,15 +92,13 @@ static constexpr ::NamedEnumCase<Core::SamplerReductionType::Enum> s_ReductionTy
         fieldName,
         s_AddressModeCases,
         LengthOf(s_AddressModeCases),
-        outAddressMode,
         "has an unsupported address mode"
     );
 }
 
-[[nodiscard]] static bool ParseReductionType(
+[[nodiscard]] static Expected<Core::SamplerReductionType::Enum> ParseReductionType(
     const Path& nwbFilePath,
-    const Value& asset,
-    Core::SamplerReductionType::Enum& outReductionType
+    const Value& asset
 ){
     return Core::Assets::ParseNamedMetadataEnumField<Core::SamplerReductionType::Enum>(
         nwbFilePath,
@@ -112,7 +107,6 @@ static constexpr ::NamedEnumCase<Core::SamplerReductionType::Enum> s_ReductionTy
         s_ReductionField,
         s_ReductionTypeCases,
         LengthOf(s_ReductionTypeCases),
-        outReductionType,
         "has an unsupported reduction type"
     );
 }
@@ -157,20 +151,20 @@ bool SamplerAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
     return true;
 }
 
-bool ParseSamplerCookMetadata(
+Expected<SamplerCookEntry> ParseSamplerCookMetadata(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    SamplerCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace __hidden_sampler_cook;
 
-    outEntry = SamplerCookEntry(*outEntry.arena);
+    SamplerCookEntry entry(arena);
     const Value& asset = doc.asset();
     if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_DiagnosticPrefix))
-        return false;
+        return MakeUnexpected(Failure{});
     if(!Core::Assets::ValidateMetadataAssetFields(
         nwbFilePath,
         asset,
@@ -187,46 +181,74 @@ bool ParseSamplerCookMetadata(
             s_MipBiasField,
         }
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, outEntry.virtualPath, scratchArena))
-        return false;
+    auto virtualPathResult = Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
+    if(!virtualPathResult)
+        return MakeUnexpected(Failure{});
+    entry.virtualPath = *virtualPathResult;
 
     Core::SamplerDesc description;
     description.borderColor = Core::Color(0.0f, 0.0f, 0.0f, 0.0f);
-    if(
-        !ParseFilter(nwbFilePath, asset, s_MinFilterField, description.minFilter)
-        || !ParseFilter(nwbFilePath, asset, s_MagFilterField, description.magFilter)
-        || !ParseFilter(nwbFilePath, asset, s_MipFilterField, description.mipFilter)
-        || !ParseAddressMode(nwbFilePath, asset, s_AddressUField, description.addressU)
-        || !ParseAddressMode(nwbFilePath, asset, s_AddressVField, description.addressV)
-        || !ParseAddressMode(nwbFilePath, asset, s_AddressWField, description.addressW)
-        || !ParseReductionType(nwbFilePath, asset, description.reductionType)
-        || !Core::Assets::ReadMetadataFiniteF32Field(nwbFilePath, asset, s_DiagnosticPrefix, s_MaxAnisotropyField, true, description.maxAnisotropy)
-        || !Core::Assets::ReadMetadataFiniteF32Field(nwbFilePath, asset, s_DiagnosticPrefix, s_MipBiasField, true, description.mipBias)
-    )
-        return false;
+    auto minFilterResult = ParseFilter(nwbFilePath, asset, s_MinFilterField);
+    if(!minFilterResult)
+        return MakeUnexpected(Failure{});
+    description.minFilter = *minFilterResult;
+    auto magFilterResult = ParseFilter(nwbFilePath, asset, s_MagFilterField);
+    if(!magFilterResult)
+        return MakeUnexpected(Failure{});
+    description.magFilter = *magFilterResult;
+    auto mipFilterResult = ParseFilter(nwbFilePath, asset, s_MipFilterField);
+    if(!mipFilterResult)
+        return MakeUnexpected(Failure{});
+    description.mipFilter = *mipFilterResult;
+    auto addressUResult = ParseAddressMode(nwbFilePath, asset, s_AddressUField);
+    if(!addressUResult)
+        return MakeUnexpected(Failure{});
+    description.addressU = *addressUResult;
+    auto addressVResult = ParseAddressMode(nwbFilePath, asset, s_AddressVField);
+    if(!addressVResult)
+        return MakeUnexpected(Failure{});
+    description.addressV = *addressVResult;
+    auto addressWResult = ParseAddressMode(nwbFilePath, asset, s_AddressWField);
+    if(!addressWResult)
+        return MakeUnexpected(Failure{});
+    description.addressW = *addressWResult;
+    auto reductionTypeResult = ParseReductionType(nwbFilePath, asset);
+    if(!reductionTypeResult)
+        return MakeUnexpected(Failure{});
+    description.reductionType = *reductionTypeResult;
+    auto maxAnisotropyResult = Core::Assets::ReadMetadataFiniteF32Field(nwbFilePath, asset, s_DiagnosticPrefix, s_MaxAnisotropyField, true);
+    if(!maxAnisotropyResult)
+        return MakeUnexpected(Failure{});
+    description.maxAnisotropy = *maxAnisotropyResult;
+    auto mipBiasResult = Core::Assets::ReadMetadataFiniteF32Field(nwbFilePath, asset, s_DiagnosticPrefix, s_MipBiasField, true);
+    if(!mipBiasResult)
+        return MakeUnexpected(Failure{});
+    description.mipBias = *mipBiasResult;
     if(!IsValidSamplerDescription(description)){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': sampler description is invalid")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outEntry.description = description;
-    return true;
+    entry.description = description;
+    return entry;
 }
 
-bool BuildSamplerAsset(const SamplerCookEntry& samplerEntry, Sampler& outSampler){
+Expected<Sampler> BuildSamplerAsset(const SamplerCookEntry& samplerEntry, Core::Assets::AssetArena& arena){
     if(!samplerEntry.arena || !samplerEntry.virtualPath){
         NWB_LOGGER_ERROR(NWB_TEXT("Sampler cook: sampler entry is invalid"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outSampler = Sampler(*samplerEntry.arena, samplerEntry.virtualPath);
-    outSampler.setDescription(samplerEntry.description);
-    return outSampler.validatePayload();
+    Sampler asset(arena, samplerEntry.virtualPath);
+    asset.setDescription(samplerEntry.description);
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure{});
+    return asset;
 }
 
 

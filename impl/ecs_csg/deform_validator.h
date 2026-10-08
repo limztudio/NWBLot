@@ -32,10 +32,9 @@ public:
         const usize triangleCount,
         const usize vertexCount
     )noexcept;
-    [[nodiscard]] static bool FiniteInput(
+    [[nodiscard]] static Expected<void, CsgDeformViabilityReason::Enum> FiniteInput(
         NotNull<const CsgDeformVertex*> vertices,
-        const usize vertexCount,
-        CsgDeformViabilityReason::Enum& outReason
+        const usize vertexCount
     )noexcept;
 
 

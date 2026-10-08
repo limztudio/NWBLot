@@ -110,8 +110,8 @@ void GpuTimingAccumulator::collect(
             continue;
         }
 
-        TimerQueryResult result;
-        if(!device.getTimerQueryResult(*record.query, result))
+        const auto result = device.getTimerQueryResult(*record.query);
+        if(!result)
             continue;
 
         const bool publishSample = record.epoch == epoch
@@ -123,15 +123,15 @@ void GpuTimingAccumulator::collect(
             && record.performanceCaptureEpoch == performanceCaptureEpoch
         ;
         const u64 sourceFrameIndex = record.frameIndex;
-        const f64 durationSeconds = result.durationSeconds();
+        const f64 durationSeconds = result->durationSeconds();
         GpuComparableTimestampRange comparableRange;
         if(publishSample){
-            if(result.hasComparableRange()){
+            if(result->hasComparableRange()){
                 comparableRange = GpuComparableTimestampRange{
-                    result.beginTicks,
-                    result.endTicks,
-                    result.secondsPerTick,
-                    result.physicalQueue,
+                    result->beginTicks,
+                    result->endTicks,
+                    result->secondsPerTick,
+                    result->physicalQueue,
                 };
             }
         }
@@ -245,26 +245,22 @@ bool GpuTimingAccumulator::materializeRequestedQueries(Device& device){
     return !m_captureEnabled || m_requestedQueryCount == 0u || reserveQueries(device, m_requestedQueryCount);
 }
 
-bool GpuTimingAccumulator::beginQuery(
+Expected<GpuTimingAccumulator::QueryBegin> GpuTimingAccumulator::beginQuery(
     CommandList& commandList,
     const u64 frameIndex,
     const u32 epoch,
     const u64 performanceCaptureEpoch,
-    const GpuTimingSampleAttribution attribution,
-    GpuTimingScope& outScope,
-    QueueSubmissionToken& outResetSubmission
+    const GpuTimingSampleAttribution attribution
 ){
-    outScope = {};
-    outResetSubmission = {};
     if(!m_captureEnabled){
         ++m_skippedScopeCountByReason[GpuTimingScopeSkipReason::CollectionInactive];
-        return true;
+        return QueryBegin{};
     }
 
     const u32 index = findAvailableQuery();
     if(index == Limit<u32>::s_Max){
         ++m_skippedScopeCountByReason[GpuTimingScopeSkipReason::QueryCapacityUnavailable];
-        return true;
+        return QueryBegin{};
     }
 
     QueryRecord& record = m_queries[index];
@@ -272,21 +268,21 @@ bool GpuTimingAccumulator::beginQuery(
     // reset. Render-pass and transfer-only timestamp scopes consume a reset accepted from recordFrameReset().
     // Under-reserved or undeclared scopes skip instead of allocating persistent query pools from a recording path.
     if(!commandList.isRecording() || !commandList.hasCommandBuffer() || commandList.commandRecordingFailed())
-        return false;
+        return MakeUnexpected(Failure{});
     if(!commandList.canRecordTimerQueryHere()){
         ++m_skippedScopeCountByReason[GpuTimingScopeSkipReason::RecordingPositionUnavailable];
-        return true;
+        return QueryBegin{};
     }
     if(!commandList.canResetTimerQueryHere() && !record.deviceReady){
         ++m_skippedScopeCountByReason[GpuTimingScopeSkipReason::RecordingPositionUnavailable];
-        return true;
+        return QueryBegin{};
     }
 
     // A device-timeline reset authorizes exactly one timestamp pair. Consume it as soon as the reservation records
     // its begin endpoint, even if that command buffer is later discarded before submission.
-    TimerQueryRecordingToken timerQueryRecording;
-    if(!commandList.beginTimerQuery(*record.query, timerQueryRecording))
-        return false;
+    const auto timerQueryRecording = commandList.beginTimerQuery(*record.query);
+    if(!timerQueryRecording)
+        return MakeUnexpected(Failure{});
 
     const CommandListParameters commandListDescription = commandList.getResolvedDescription();
     record.physicalQueue = commandListDescription.physicalQueue;
@@ -302,20 +298,22 @@ bool GpuTimingAccumulator::beginQuery(
     record.publicationGeneration = m_publicationGeneration;
     record.performanceCaptureEpoch = performanceCaptureEpoch;
     record.retirementNotificationPending = false;
-    outResetSubmission = record.frameResetSubmission;
     ++m_nextReservation;
     if(m_nextReservation == 0u)
         ++m_nextReservation;
     record.reservation = m_nextReservation;
-    outScope = GpuTimingScope{
-        .scopeName = m_scopeName,
-        .reservation = record.reservation,
-        .timerQueryRecording = timerQueryRecording,
-        .index = index,
-        .epoch = epoch,
+    const QueryBegin result{
+        .scope = GpuTimingScope{
+            .scopeName = m_scopeName,
+            .reservation = record.reservation,
+            .timerQueryRecording = *timerQueryRecording,
+            .index = index,
+            .epoch = epoch,
+        },
+        .resetSubmission = record.frameResetSubmission,
     };
     ++m_recordedScopeCount;
-    return true;
+    return result;
 }
 
 GpuTimingAccumulator::QueryEndResult GpuTimingAccumulator::endQuery(
@@ -655,12 +653,12 @@ bool GpuTimingAccumulator::markAttributionsForRetirement(const u64 subscriptionI
     return retirementPending;
 }
 
-bool GpuTimingAccumulator::retireMarkedAttribution(SampleDispatch& outDispatch)noexcept{
+Expected<GpuTimingAccumulator::SampleDispatch> GpuTimingAccumulator::retireMarkedAttribution()noexcept{
     for(QueryRecord& record : m_queries){
         if(!record.retirementNotificationPending || record.attribution == s_NoGpuTimingSampleAttribution)
             continue;
 
-        outDispatch = SampleDispatch{
+        const SampleDispatch dispatch{
             .sample = GpuTimingSample{
                 .sourceFrameIndex = record.frameIndex,
                 .scopeName = m_scopeName,
@@ -677,9 +675,9 @@ bool GpuTimingAccumulator::retireMarkedAttribution(SampleDispatch& outDispatch)n
             record.physicalQueue = {};
             record.frameIndex = 0u;
         }
-        return true;
+        return dispatch;
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 void GpuTimingAccumulator::discardMarkedAttributions()noexcept{

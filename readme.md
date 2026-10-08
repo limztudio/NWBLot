@@ -17,7 +17,7 @@ Common tools:
 - Git with Git LFS
 - CMake 3.25 or newer
 - Ninja
-- LLVM/Clang, including the LLVM linker and archive tools
+- LLVM/Clang, including the LLVM linker and archive tools, with a C++23-or-newer standard library providing `std::expected`
 - Python 3.8 or newer for the launcher and string-literal compiler pipeline
 - The compiler host's LLVM C API shared library matching the C and C++ Clang version exactly
 - `slangc` for the asset pipeline, which is enabled by default
@@ -26,6 +26,8 @@ Common tools:
 Windows hosts require Windows 10 version 1709 or newer. The launcher requires [IsWow64Process2](https://learn.microsoft.com/en-us/windows/win32/api/wow64apiset/nf-wow64apiset-iswow64process2) for native architecture discovery; frame creation uses current Per-Monitor v2 DPI APIs, including [SetProcessDpiAwarenessContext](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setprocessdpiawarenesscontext).
 
 Windows builds also need Visual Studio 2022 Build Tools or Visual Studio 2022 with the C++ workload and a Windows SDK. Install the ARM64 C++ tools when building the ARM64 presets. CMake, Ninja, and LLVM may come from Visual Studio or standalone installations. Compilation requires Clang; the Microsoft tools provide the target ABI, runtime, headers, and libraries. Compiler frontend support retains GNU-style Clang/AppleClang and clang-cl; native `cl.exe` compilation is unsupported.
+
+Configuration selects a supported C++23-or-newer frontend mode and compiles a real `std::expected` probe. The compiler and target standard library must provide `__cpp_lib_expected >= 202202L`; older language/library combinations fail configuration. Current result contracts use global `Expected<T, E>`, `Unexpected<E>` and `MakeUnexpected(error)` from `global/expected.h`. See [produced values and expected failures](docs/expected_results.md) for admission, ownership and mutation rules.
 
 The Vulkan SDK is optional. The repository vendors Vulkan headers and Volk; the SDK is a convenient source for `slangc`, validation layers, and Vulkan diagnostics.
 
@@ -126,7 +128,7 @@ NWBLot-owned utility, configuration, diagnostic, namespace, and shader feature m
 
 Root `engine_namespace.h` owns the engine namespace wrappers. Engine domains reach them through their own umbrella headers. Testbed owns `CoolStuff/Testbed/namespace.h` for `namespace Testbed`; its classes and helpers belong there, while the required loader entry adapter functions remain in `NWB`. Projects include the engine APIs they use and receive engine namespace definitions transitively. See [Architecture](https://github.com/limztudio/NWBLot/wiki/Architecture#namespace-ownership) and [Project API](https://github.com/limztudio/NWBLot/wiki/Project-API#namespace-ownership) for the ownership boundaries.
 
-Project-owned interface declarations use plain C++ `struct`. Their virtual methods retain the declared ownership, lifetime, and exception contracts.
+Project-owned abstract interfaces retain the lowercase `interface` annotation supplied by `global/compile.h`, which expands portably to `struct` when an external SDK has not defined it. Their virtual methods retain the declared ownership, lifetime, and exception contracts.
 
 ## Source and dependency registration
 

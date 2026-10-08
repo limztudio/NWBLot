@@ -33,11 +33,11 @@ struct PreparedMeshSwBvhGraphResources{
 using PreparedMeshSwBvhGraphResourceVector = Vector<PreparedMeshSwBvhGraphResources, Core::Alloc::ScratchArena>;
 
 
-// Caller reserves output at its phase boundary; a missing identity clears every row.
-[[nodiscard]] bool ResolvePreparedSoftwareBvhGraphResources(
+// A missing graph identity rejects the complete returned resource list.
+[[nodiscard]] Expected<PreparedMeshSwBvhGraphResourceVector> ResolvePreparedSoftwareBvhGraphResources(
+    Core::Alloc::ScratchArena& scratchArena,
     const Core::GpuTaskGraph& graph,
-    const PreparedMeshSwBvhBuildVector& builds,
-    PreparedMeshSwBvhGraphResourceVector& outResources
+    const PreparedMeshSwBvhBuildVector& builds
 );
 
 

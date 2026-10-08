@@ -28,50 +28,29 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ResizeFile(const Path& path, const u64 byteCount, ErrorCode& outError){
+static Expected<void, ErrorCode> ResizeFile(const Path& path, const u64 byteCount){
 #if defined(NWB_PLATFORM_WINDOWS)
-    if(byteCount > static_cast<u64>(Limit<LONGLONG>::s_Max)){
-        GlobalFilesystemDetail::SetValueTooLargeError(outError);
-        return false;
-    }
-
-    HANDLE file = CreateFile(
-        path.c_str(),
-        GENERIC_WRITE,
-        FILE_SHARE_READ,
-        nullptr,
-        OPEN_EXISTING,
-        FILE_ATTRIBUTE_NORMAL,
-        nullptr
-    );
-    if(file == INVALID_HANDLE_VALUE){
-        GlobalFilesystemDetail::SetLastSystemError(outError);
-        return false;
-    }
+    if(byteCount > static_cast<u64>(Limit<LONGLONG>::s_Max))
+        return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
+    HANDLE file = CreateFile(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if(file == INVALID_HANDLE_VALUE)
+        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
 
     LARGE_INTEGER offset{};
     offset.QuadPart = static_cast<LONGLONG>(byteCount);
     const bool seekSucceeded = SetFilePointerEx(file, offset, nullptr, FILE_BEGIN) != 0;
     const bool resizeSucceeded = seekSucceeded && SetEndOfFile(file) != 0;
-    if(resizeSucceeded)
-        GlobalFilesystemDetail::ClearError(outError);
-    else
-        GlobalFilesystemDetail::SetLastSystemError(outError);
+    const ErrorCode errorCode = resizeSucceeded ? ErrorCode{} : GlobalFilesystemDetail::LastSystemError();
     CloseHandle(file);
-    return resizeSucceeded;
+    if(errorCode)
+        return MakeUnexpected(errorCode);
+    return {};
 #else
-    if(!CanRepresentU64<off_t>(byteCount)){
-        GlobalFilesystemDetail::SetValueTooLargeError(outError);
-        return false;
-    }
-
-    if(::truncate(path.c_str(), static_cast<off_t>(byteCount)) == 0){
-        GlobalFilesystemDetail::ClearError(outError);
-        return true;
-    }
-
-    GlobalFilesystemDetail::SetLastSystemError(outError);
-    return false;
+    if(!CanRepresentU64<off_t>(byteCount))
+        return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
+    if(::truncate(path.c_str(), static_cast<off_t>(byteCount)) != 0)
+        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
+    return {};
 #endif
 }
 
@@ -84,16 +63,19 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
     }
 
     u64 sourceEndOffset = 0;
-    if(!FilesystemVolumeDetail::AddNoOverflow(sourceOffset, byteCount, sourceEndOffset)){
+    const auto sourceEndOffsetResult = FilesystemVolumeDetail::AddNoOverflow(sourceOffset, byteCount);
+    if(!sourceEndOffsetResult){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "source range overflow");
         return false;
     }
+    sourceEndOffset = *sourceEndOffsetResult;
 
-    u64 capacityBytes = 0;
-    if(!computeLogicalCapacityLocked(capacityBytes)){
+    const auto capacity = computeLogicalCapacityLocked();
+    if(!capacity){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "capacity overflow");
         return false;
     }
+    const u64 capacityBytes = *capacity;
     if(sourceEndOffset > capacityBytes){
         NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): moveBytes failed: source range [{}..{}) exceeds capacity {}")
             , StringConvert(m_volumeName)
@@ -105,10 +87,12 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
     }
 
     u64 destinationEndOffset = 0;
-    if(!FilesystemVolumeDetail::AddNoOverflow(destinationOffset, byteCount, destinationEndOffset)){
+    const auto destinationEndOffsetResult = FilesystemVolumeDetail::AddNoOverflow(destinationOffset, byteCount);
+    if(!destinationEndOffsetResult){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "destination range overflow");
         return false;
     }
+    destinationEndOffset = *destinationEndOffsetResult;
     if(!ensureCapacityLocked(destinationEndOffset)){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpMoveBytes, "failed to ensure destination capacity");
         return false;
@@ -164,7 +148,6 @@ bool VolumeFileSystem::moveBytesLocked(const u64 destinationOffset, const u64 so
 }
 
 bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
-    ErrorCode errorCode;
 
     if(!m_writable || m_segmentSize == 0){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegments, FilesystemVolumeDetail::s_VolumeDetailNotWritableOrSizeZero);
@@ -190,9 +173,10 @@ bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
 
     while(m_segmentPaths.size() > static_cast<usize>(requiredSegments)){
         const Path removePath = m_segmentPaths.back();
-        if(!RemoveFile(removePath, errorCode)){
-            if(errorCode){
-                FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegmentsRemove, removePath, errorCode);
+        const auto removed = RemoveFile(removePath);
+        if(!removed || !*removed){
+            if(!removed){
+                FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegmentsRemove, removePath, removed.error());
             }
             else{
                 FilesystemVolumeDetail::LogFailureWithPath(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegmentsRemove, removePath, "segment was not present");
@@ -207,16 +191,17 @@ bool VolumeFileSystem::trimSegmentsForNextFreeOffsetLocked(){
         requiredLastSegmentBytes = m_segmentSize;
 
     const Path& lastSegmentPath = m_segmentPaths.back();
-    const u64 currentLastSegmentBytes = FileSize(lastSegmentPath, errorCode);
-    if(errorCode){
-        FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegmentsFileSize, lastSegmentPath, errorCode);
+    const auto currentLastSegmentBytes = FileSize(lastSegmentPath);
+    if(!currentLastSegmentBytes){
+        FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegmentsFileSize, lastSegmentPath, currentLastSegmentBytes.error());
         return false;
     }
-    if(currentLastSegmentBytes == requiredLastSegmentBytes)
+    if(*currentLastSegmentBytes == requiredLastSegmentBytes)
         return true;
 
-    if(!ResizeFile(lastSegmentPath, requiredLastSegmentBytes, errorCode)){
-        FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegmentsResize, lastSegmentPath, errorCode);
+    const auto resized = ResizeFile(lastSegmentPath, requiredLastSegmentBytes);
+    if(!resized){
+        FilesystemVolumeDetail::LogFailureWithFsError(m_volumeName, FilesystemVolumeDetail::s_VolumeOpTrimSegmentsResize, lastSegmentPath, resized.error());
         return false;
     }
 

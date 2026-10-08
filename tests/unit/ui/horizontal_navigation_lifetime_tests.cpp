@@ -36,21 +36,29 @@ TEST_F(HorizontalNavigationFixture, CapabilityRemovalRetiresHorizontalIntentions
     EXPECT_TRUE(keyDown(Core::Key::Up, true).keyboardConsumed);
     ASSERT_EQ(m_router.controlActions().size(), 2u);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult1 = take();
+    ASSERT_TRUE(actionResult1);
+    action = *actionResult1;
     EXPECT_EQ(action.kind, ControlActionKind::Up);
-    ASSERT_TRUE(take(action));
+    const auto actionResult2 = take();
+    ASSERT_TRUE(actionResult2);
+    action = *actionResult2;
     EXPECT_EQ(action.kind, ControlActionKind::Up);
     m_targets[0u].horizontalNavigation = true;
     ASSERT_TRUE(publish());
     EXPECT_TRUE(keyDown(Core::Key::Left, true).keyboardConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_TRUE(keyDown(Core::Key::Up, true).keyboardConsumed);
-    ASSERT_TRUE(take(action));
+    const auto actionResult3 = take();
+    ASSERT_TRUE(actionResult3);
+    action = *actionResult3;
     EXPECT_EQ(action.kind, ControlActionKind::Up);
     EXPECT_TRUE(keyUp(Core::Key::Left).keyboardConsumed);
     EXPECT_TRUE(keyUp(Core::Key::Up).keyboardConsumed);
     press(Core::Key::Left);
-    ASSERT_TRUE(take(action));
+    const auto actionResult4 = take();
+    ASSERT_TRUE(actionResult4);
+    action = *actionResult4;
     EXPECT_EQ(action.kind, ControlActionKind::Left);
 }
 
@@ -68,7 +76,9 @@ TEST_F(HorizontalNavigationFixture, EnablingCapabilityCannotAdoptAnAlreadyHeldLo
     EXPECT_TRUE(keyUp(Core::Key::Right).keyboardConsumed);
     press(Core::Key::Right);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_EQ(action.kind, ControlActionKind::Right);
 }
 
@@ -77,14 +87,18 @@ TEST_F(HorizontalNavigationFixture, FocusTransferCannotRedirectHeldHorizontalKey
     focusTarget();
     EXPECT_TRUE(keyDown(Core::Key::Right).keyboardConsumed);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult1 = take();
+    ASSERT_TRUE(actionResult1);
+    action = *actionResult1;
     EXPECT_EQ(action.id.target, m_targets[0u].id);
     focusTarget(1u);
     EXPECT_TRUE(keyDown(Core::Key::Right, true).keyboardConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_TRUE(keyUp(Core::Key::Right).keyboardConsumed);
     press(Core::Key::Right);
-    ASSERT_TRUE(take(action, 1u));
+    const auto actionResult2 = take(1u);
+    ASSERT_TRUE(actionResult2);
+    action = *actionResult2;
     EXPECT_EQ(action.kind, ControlActionKind::Right);
     EXPECT_EQ(action.id.target, m_targets[1u].id);
     EXPECT_EQ(action.source, m_targets[1u].id);
@@ -110,7 +124,9 @@ TEST_F(HorizontalNavigationFixture, RestoringOriginalControlTokenCannotReviveRet
     EXPECT_TRUE(keyUp(Core::Key::Left).keyboardConsumed);
     press(Core::Key::Left);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_EQ(action.kind, ControlActionKind::Left);
     EXPECT_EQ(action.control, original);
 }
@@ -135,7 +151,9 @@ TEST_F(HorizontalNavigationFixture, RestoringOriginalDeclarationCannotReviveReti
     EXPECT_TRUE(keyUp(Core::Key::Right).keyboardConsumed);
     press(Core::Key::Right);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_EQ(action.kind, ControlActionKind::Right);
     EXPECT_EQ(action.id.declarationGeneration, original);
 }
@@ -163,7 +181,9 @@ TEST_F(HorizontalNavigationFixture, DisabledClippedOrOmittedHostCannotResumeItsP
         EXPECT_TRUE(keyUp(Core::Key::Left).keyboardConsumed);
         press(Core::Key::Left);
         ControlAction action;
-        ASSERT_TRUE(take(action));
+        const auto actionResult = take();
+        ASSERT_TRUE(actionResult);
+        action = *actionResult;
         EXPECT_EQ(action.kind, ControlActionKind::Left);
     }
 }
@@ -190,7 +210,9 @@ TEST_F(HorizontalNavigationFixture, ClosingAndReopeningPopupRequiresFreshHorizon
     EXPECT_TRUE(keyUp(Core::Key::Right).keyboardConsumed);
     press(Core::Key::Right);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_EQ(action.kind, ControlActionKind::Right);
     EXPECT_EQ(action.popup, popup.token);
 }
@@ -216,7 +238,9 @@ TEST_F(HorizontalNavigationFixture, PopupMaskCannotRedirectOrReviveLowerHostHori
     EXPECT_TRUE(keyUp(Core::Key::Left).keyboardConsumed);
     press(Core::Key::Left);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_EQ(action.kind, ControlActionKind::Left);
     EXPECT_TRUE(action.popup.empty());
 }
@@ -254,7 +278,9 @@ TEST_F(HorizontalNavigationFixture, PreservedTextFenceClearsHorizontalCapability
     EXPECT_TRUE(keyUp(Core::Key::Left).keyboardConsumed);
     press(Core::Key::Right);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_EQ(action.kind, ControlActionKind::Right);
     EXPECT_EQ(action.control, m_targets[0u].control);
     EXPECT_TRUE(send({ .type = InputEventType::PrimaryUp, .position = { 10.0f, 10.0f } }).pointerConsumed);

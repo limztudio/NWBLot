@@ -26,13 +26,12 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Reuses complete skin metadata admission and leaves the output unchanged on failure; no texture is loaded or cooked.
-[[nodiscard]] bool ExtractUiSkinTextureDependency(
+// Reuses complete skin metadata admission without loading or cooking a texture.
+[[nodiscard]] Expected<Core::Assets::AssetRef<Texture>> ExtractUiSkinTextureDependency(
     const Path& assetRoot,
     AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    Core::Assets::AssetRef<Texture>& out,
     Core::Alloc::ScratchArena& scratchArena
 );
 

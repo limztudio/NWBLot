@@ -417,13 +417,11 @@ TEST(GpuTaskGraphAnalysis, ResourceVersionPreBirthReachabilityHandlesFrozenSeman
     }
     Core::Alloc::ScratchArena scratchArena(Name("tests/analysis_optimization/semantic_cycle_scratch"));
     Vector<Graphics::GpuTaskDependencyEdge, Core::Alloc::ScratchArena> edges(scratchArena);
-    Graphics::GpuTaskGraphAnalysisDiagnostic diagnostic;
     {
         const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
         ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildResourceVersionDependencyEdges(
             declarations,
             edges,
-            diagnostic,
             scratchArena
         ));
     }
@@ -499,13 +497,11 @@ TEST(GpuTaskGraphAnalysis, VersionLifetimeEdgesPreserveDistinctTaskAndVersionOrd
         }
         Core::Alloc::ScratchArena scratchArena(Name("tests/analysis_optimization/lifetime_edge_scratch"));
         Vector<Graphics::GpuTaskDependencyEdge, Core::Alloc::ScratchArena> edges(scratchArena);
-        Graphics::GpuTaskGraphAnalysisDiagnostic diagnostic;
         {
             const Graphics::GpuTaskGraph::DeclarationReadView declarations(graph);
             ASSERT_TRUE(Graphics::GpuTaskGraphCompilerDetail::BuildResourceVersionDependencyEdges(
                 declarations,
                 edges,
-                diagnostic,
                 scratchArena
             ));
         }

@@ -32,15 +32,14 @@ FrameGraphTransparentCsgTasks::FrameGraphTransparentCsgTasks(
 }
 
 
-bool FrameGraphTransparentCsgTasks::declare(
+Expected<FrameGraphTransparentCsgTaskResult> FrameGraphTransparentCsgTasks::declare(
     const FrameGraphTransparentCsgTaskInputs& inputs,
     ObjectGeometryCacheGraph& objectGeometry,
     RendererTaskGraphDetail::AvboitPreGraphTask::Payload& prePayload,
     ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload& receiverSpanPayload,
-    ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload& intervalCombinePayload,
-    FrameGraphTransparentCsgTaskResult& outResult
+    ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload& intervalCombinePayload
 ){
-    outResult = FrameGraphTransparentCsgTaskResult{};
+    FrameGraphTransparentCsgTaskResult result{};
     using namespace RendererTaskGraphDetail;
     DeferredFrameTargets& deferredTargets = *inputs.targets;
     const Core::GpuGraphResourceId depth = inputs.depth;
@@ -163,7 +162,7 @@ bool FrameGraphTransparentCsgTasks::declare(
         avboitPrePayload.frameBindings, deferredTargets, intervalDependency, avboitIntervalResourceUses,
         avboitIntervalResourceScratch, inputs.timingTicket
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
     Core::GpuTaskSchedulingHint avboitIntervalScheduling;
     avboitIntervalScheduling.cost = Core::GpuTaskCostHint::Large;
@@ -295,7 +294,7 @@ bool FrameGraphTransparentCsgTasks::declare(
     );
     if(!m_avboitSystem.taskGraphStage().m_preTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG interval graph task"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     Core::GpuTaskId avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_preTask;
@@ -325,7 +324,7 @@ bool FrameGraphTransparentCsgTasks::declare(
         );
         if(!m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG receiver-span graph task"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_csgReceiverSpanTask;
     }
@@ -354,15 +353,15 @@ bool FrameGraphTransparentCsgTasks::declare(
         );
         if(!m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare transparent CSG interval-combine graph task"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         avboitIntervalCompletionTask = m_avboitSystem.taskGraphStage().m_csgIntervalCombineTask;
         avboitIntervalOutputsGraphOwned = true;
     }
-    outResult.intervalCompletionTask = avboitIntervalCompletionTask;
-    outResult.intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned;
-    outResult.declared = true;
-    return true;
+    result.intervalCompletionTask = avboitIntervalCompletionTask;
+    result.intervalOutputsGraphOwned = avboitIntervalOutputsGraphOwned;
+    result.declared = true;
+    return result;
 }
 
 

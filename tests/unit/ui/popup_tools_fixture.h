@@ -44,30 +44,32 @@ public:
     [[nodiscard]] virtual u64 rowCount()const override{ return count; }
     [[nodiscard]] virtual u64 key(const u64 index)const override{ return index < count ? index + 1u : 0u; }
 
-    [[nodiscard]] virtual bool indexOf(const u64 value, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const override{
+        u64 index = 0u;
         if(value == 0u || value > count)
-            return false;
+            return MakeUnexpected(Failure{});
         index = value - 1u;
-        return true;
+        return index;
     }
 
-    [[nodiscard]] virtual bool findEnabled(const u64 start, const bool reverse, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const override{
+        u64 index = 0u;
         if(start >= count)
-            return false;
+            return MakeUnexpected(Failure{});
         index = start;
         if(index + 1u != 3u)
-            return true;
+            return index;
         if(reverse){
             if(index == 0u)
-                return false;
+                return MakeUnexpected(Failure{});
             --index;
         }
         else{
             ++index;
             if(index >= count)
-                return false;
+                return MakeUnexpected(Failure{});
         }
-        return true;
+        return index;
     }
 
     [[nodiscard]] virtual StringView text(const u64 index)const override{

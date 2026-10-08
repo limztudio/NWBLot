@@ -20,22 +20,24 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct SkinnedRuntimeMeshIdentity{
+    Name meshKey = s_NameNone;
+    u64 version = 0u;
+};
+
 // Caller resolves instances from binding handles; queries retain no GPU buffers.
-[[nodiscard]] bool ResolveSkinnedRuntimeMeshIdentity(
+[[nodiscard]] Expected<SkinnedRuntimeMeshIdentity> ResolveSkinnedRuntimeMeshIdentity(
     Core::ECS::EntityID entity,
     RuntimeMeshHandle runtimeMesh,
-    const MeshSkinningRuntimeInstance* instance,
-    Name& outMeshKey,
-    u64& outVersion
+    const MeshSkinningRuntimeInstance* instance
 );
-// Rejection clears outputs; success retains raster and optional RT roles.
-[[nodiscard]] bool BuildSkinnedRuntimeMeshDesc(
+// Success retains raster and optional RT roles.
+[[nodiscard]] Expected<RuntimeMeshDesc> BuildSkinnedRuntimeMeshDesc(
     Core::ECS::EntityID entity,
     RuntimeMeshHandle runtimeMesh,
     const MeshSkinningRuntimeInstance* instance,
     bool boundsFresh,
-    bool conesFresh,
-    RuntimeMeshDesc& outMesh
+    bool conesFresh
 );
 
 template<typename ResolveIdentity>
@@ -47,10 +49,8 @@ void MarkLiveSkinnedRuntimeMeshes(
     if(requests.complete())
         return;
     for(auto&& [entity, binding] : world.view<SkinnedMeshBindingComponent>()){
-        Name meshKey = s_NameNone;
-        u64 version = 0u;
-        if(resolveIdentity(entity, binding, meshKey, version))
-            requests.markLive(meshKey, version);
+        if(const auto identity = resolveIdentity(entity, binding))
+            requests.markLive(identity->meshKey, identity->version);
         if(requests.complete())
             return;
     }

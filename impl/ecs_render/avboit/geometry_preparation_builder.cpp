@@ -84,47 +84,50 @@ struct PhaseIdentities{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AvboitGeometryPreparationBuilder::declare(
-    const AvboitGeometryPreparationInputs& inputs,
-    AvboitGeometryPreparationResult& outResult
+[[nodiscard]] Expected<AvboitGeometryPreparationResult> AvboitGeometryPreparationBuilder::declare(
+    const AvboitGeometryPreparationInputs& inputs
 ){
-    outResult = AvboitGeometryPreparationResult{};
+    AvboitGeometryPreparationResult result{};
     if(!inputs.drawItemSets || inputs.drawItemSetCount == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
     const __hidden_geometry_preparation::PhaseIdentities identities =
         __hidden_geometry_preparation::IdentitiesForPhase(inputs.phase)
     ;
-    outResult.geometryOwned = RendererTaskGraphDetail::GatherPreparedMaterialGeometryResourceSet(
+    const auto materialGeometrySetResult = RendererTaskGraphDetail::GatherPreparedMaterialGeometryResourceSet(
         m_graph,
         inputs.drawItemSets,
         inputs.drawItemSetCount,
         m_scratchArena,
         Name(identities.geometryIdentity),
-        identities.geometryLabel,
-        outResult.materialGeometrySet
+        identities.geometryLabel
     );
-    if(!outResult.geometryOwned){
+    result.geometryOwned = materialGeometrySetResult.has_value();
+    if(materialGeometrySetResult)
+        result.materialGeometrySet = *materialGeometrySetResult;
+    if(!result.geometryOwned){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT material geometry states"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outResult.sampledTexturesCollected =
-        outResult.geometryOwned
-        && RendererTaskGraphDetail::GatherPreparedMaterialSampledTextureResourceSet(
-            m_materialSystem,
-            m_graph,
-            inputs.drawItemSets,
-            inputs.drawItemSetCount,
-            m_scratchArena,
-            Name(identities.sampledIdentity),
-            identities.sampledLabel,
-            outResult.materialSampledTextureSet
-        )
-    ;
-    if(!outResult.sampledTexturesCollected){
+    result.sampledTexturesCollected = false;
+    if(result.geometryOwned){
+        const auto materialSampledTextureSetResult = RendererTaskGraphDetail::GatherPreparedMaterialSampledTextureResourceSet(
+                m_materialSystem,
+                m_graph,
+                inputs.drawItemSets,
+                inputs.drawItemSetCount,
+                m_scratchArena,
+                Name(identities.sampledIdentity),
+                identities.sampledLabel
+            );
+        result.sampledTexturesCollected = materialSampledTextureSetResult.has_value();
+        if(materialSampledTextureSetResult)
+            result.materialSampledTextureSet = *materialSampledTextureSetResult;
+    }
+    if(!result.sampledTexturesCollected){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared AVBOIT material sampled textures"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    return true;
+    return result;
 }
 
 

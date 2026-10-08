@@ -23,7 +23,7 @@ namespace TextGlyphIntersection{
     enum Enum : u8{ Invalid, Invisible, Visible };
 };
 
-// Stateless queries borrow immutable layout/atlas metadata; rejected exact rectangles preserve the caller's output.
+// Stateless queries borrow immutable layout and atlas metadata.
 class TextGlyphVisibility final{
 public:
     [[nodiscard]] static const BakedFontAtlas* SelectAtlas(const PlacedGlyph& glyph, f32 physicalSize);
@@ -37,21 +37,19 @@ public:
         const Rect& clip,
         Point pixelScale = { 1.0f, 1.0f }
     );
-    [[nodiscard]] static bool AtlasRectangle(
+    [[nodiscard]] static Expected<Rect> AtlasRectangle(
         const PlacedGlyph& glyph,
         const BakedFontAtlas& atlas,
         f32 fontSize,
-        const Point& topLeft,
-        Rect& out
-    );
-    [[nodiscard]] static bool CoverageRectangle(
+        const Point& topLeft
+    )noexcept;
+    [[nodiscard]] static Expected<Rect> CoverageRectangle(
         const PlacedGlyph& glyph,
         const AtlasGlyph& record,
         f32 rasterScale,
         const Point& topLeft,
-        Rect& out,
         Point pixelScale = { 1.0f, 1.0f }
-    );
+    )noexcept;
     [[nodiscard]] static TextGlyphIntersection::Enum Intersect(const Rect& rectangle, const Rect& clip);
 };
 

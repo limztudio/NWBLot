@@ -103,7 +103,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Ui::TextLayoutStatus::Enum shape(const Ui::ShapeRequest& request, Ui::ShapedRun& output)override{
+    [[nodiscard]] virtual Expected<Ui::ShapedRun, Ui::TextLayoutStatus::Enum> shape(const Ui::ShapeRequest& request)override{
         Ui::ShapedRun run(m_arena);
         run.metrics = { 8.0f, 2.0f, 2.0f };
         usize begin = 0u;
@@ -114,8 +114,7 @@ public:
             run.glyphs.push_back({ {}, 1u, static_cast<u32>(begin), static_cast<u32>(end), {}, { 10.0f, 0.0f }, {} });
             begin = end;
         }
-        output = Move(run);
-        return Ui::TextLayoutStatus::Success;
+        return run;
     }
 
 
@@ -157,11 +156,17 @@ protected:
         if(!m_result.valid)
             return false;
         Ui::EditBoxView view(m_arena);
-        Ui::TextLayout layout(m_arena);
-        if(!view.snapshot(model) || m_layoutBuilder.layout({ view.displayText() }, layout) != Ui::TextLayoutStatus::Success)
+        if(!view.snapshot(model))
             return false;
-        if(!view.adoptLayout(Move(layout)) || !view.arrange(bounds, {}, { 0.0f, 0.0f, 500.0f, 200.0f }, {}, m_placement))
+        auto layout = m_layoutBuilder.layout({ view.displayText() });
+        if(!layout)
             return false;
+        if(!view.adoptLayout(Move(*layout)))
+            return false;
+        const auto placement = view.arrange(bounds, {}, { 0.0f, 0.0f, 500.0f, 200.0f }, {});
+        if(!placement)
+            return false;
+        m_placement = *placement;
         if(!m_host.publish(m_widget, view, m_placement, options))
             return false;
         Ui::HitTarget target;
@@ -206,11 +211,11 @@ protected:
     [[nodiscard]] bool dispatch(const Ui::InputEvent& event){
         m_host.collectNative();
         const Ui::WidgetId previousCapture = m_context.input().capture();
-        Ui::InputEvent normalized;
-        if(!m_context.input().queue(event, &normalized))
+        const auto normalized = m_context.input().queue(event);
+        if(!normalized)
             return false;
         const Ui::InputRoutingResult result = m_context.input().process();
-        m_host.input(normalized, previousCapture);
+        m_host.input(*normalized, previousCapture);
         m_host.synchronizeFocus();
         return !result.activationOverflow && !result.gestureOverflow;
     }

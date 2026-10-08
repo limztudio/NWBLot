@@ -30,32 +30,34 @@ u64 UiListSmokeSource::key(const u64 index)const{
     return value;
 }
 
-bool UiListSmokeSource::indexOf(const u64 keyValue, u64& index)const{
+Expected<u64> UiListSmokeSource::indexOf(const u64 keyValue)const{
+    u64 index = 0u;
     if(keyValue == 0u || keyValue > 100000u || keyValue == m_removed)
-        return false;
+        return MakeUnexpected(Failure{});
     const u64 natural = keyValue - 1u - static_cast<u64>(m_removed != 0u && m_removed < keyValue);
     index = m_reversed ? rowCount() - 1u - natural : natural;
-    return true;
+    return index;
 }
 
-bool UiListSmokeSource::findEnabled(const u64 start, const bool reverse, u64& index)const{
+Expected<u64> UiListSmokeSource::findEnabled(const u64 start, const bool reverse)const{
+    u64 index = 0u;
     if(start >= rowCount())
-        return false;
+        return MakeUnexpected(Failure{});
     if(enabled(start)){
         index = start;
-        return true;
+        return index;
     }
     if(reverse){
         if(start == 0u)
-            return false;
+            return MakeUnexpected(Failure{});
         index = start - 1u;
     }
     else{
         if(start + 1u >= rowCount())
-            return false;
+            return MakeUnexpected(Failure{});
         index = start + 1u;
     }
-    return enabled(index);
+    return enabled(index) ? Expected<u64>{ index } : MakeUnexpected(Failure{});
 }
 
 StringView UiListSmokeSource::text(const u64 index)const{

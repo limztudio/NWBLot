@@ -27,18 +27,16 @@ template<typename T>
 concept BackendApi = requires(
     T& backend,
     const T& constBackend,
-    GraphicsVector<AdapterInfo>& adapters,
     const Common::FrameParam& frameParam,
     const QueueSubmissionToken& submissionToken,
     const QueueSubmissionPreSubmitHook& presentationClaim,
-    SwapChainTransitionTicket& transitionTicket,
-    bool& presentationAccepted
+    SwapChainTransitionTicket& transitionTicket
 ){
     { constBackend.getDevice() }->SameAs<GraphicsBackend::Device*>;
     { constBackend.getRendererString() }->SameAs<TStringView>;
 
-    { backend.enumerateAdapters(adapters) }->SameAs<bool>;
-    { constBackend.getSelectedAdapterInfo(adapters[0]) }->SameAs<bool>;
+    { backend.enumerateAdapters() }->SameAs<Expected<GraphicsVector<AdapterInfo>>>;
+    { constBackend.getSelectedAdapterInfo() }->SameAs<Expected<AdapterInfo>>;
     { backend.getBackBuffer(u32{}) }->SameAs<Texture*>;
     { backend.getBackBufferCount() }->SameAs<u32>;
 
@@ -47,7 +45,7 @@ concept BackendApi = requires(
     { backend.createDevice() }->SameAs<bool>;
     { backend.createSwapChain() }->SameAs<bool>;
     { backend.destroy() }->SameAs<bool>;
-    { backend.prepareSwapChainTransition(SwapChainTransitionKind::Resize, transitionTicket) }->SameAs<bool>;
+    { backend.prepareSwapChainTransition(SwapChainTransitionKind::Resize) }->SameAs<Expected<SwapChainTransitionTicket>>;
     { backend.commitSwapChainResize(Move(transitionTicket)) }->SameAs<bool>;
     { backend.commitDestroy(Move(transitionTicket)) }->SameAs<bool>;
     { backend.beginFrame() }->SameAs<BeginFrameResult>;
@@ -55,19 +53,19 @@ concept BackendApi = requires(
     { backend.claimFramePresentationSignal() }->SameAs<QueueSubmissionPreSubmitHook>;
     { backend.confirmFramePresentationSignal(presentationClaim, submissionToken) }->SameAs<bool>;
     { backend.cancelFramePresentationSignal(presentationClaim) }->SameAs<bool>;
-    { backend.present(presentationAccepted) }->SameAs<bool>;
+    { backend.present() }->SameAs<Expected<bool, PresentationFailure>>;
 };
 
 template<typename T>
 concept DeviceApi = requires(
     T& device,
+    const T& constDevice,
     const HeapDesc& heapDesc,
     const TextureDesc& textureDesc,
     Texture& texture,
     StagingTexture& stagingTexture,
     Heap& heap,
     const TextureSlice& textureSlice,
-    usize* rowPitch,
     const BufferDesc& bufferDesc,
     Buffer& buffer,
     const ShaderDesc& shaderDesc,
@@ -78,7 +76,6 @@ concept DeviceApi = requires(
     Shader* shader,
     EventQuery& eventQuery,
     TimerQuery& timerQuery,
-    TimerQueryResult& timerQueryResult,
     const FramebufferDesc& framebufferDesc,
     const GraphicsPipelineDesc& graphicsPipelineDesc,
     const FramebufferInfo& framebufferInfo,
@@ -93,9 +90,7 @@ concept DeviceApi = requires(
     const RayTracingClusterOperationParams& clusterOperationParams,
     const CommandListParameters& commandListParams,
     CommandList* const* commandLists,
-    bool* outSubmitted,
     const QueueSubmissionDesc& submissionDesc,
-    void* featureInfo,
     Object nativeObject
 ){
     { device.createHeap(heapDesc) }->SameAs<HeapHandle>;
@@ -105,7 +100,7 @@ concept DeviceApi = requires(
     { device.createHandleForNativeTexture(ObjectType{}, nativeObject, textureDesc, {}) }->SameAs<TextureHandle>;
     requires (!requires{ device.createHandleForNativeTexture(ObjectType{}, nativeObject, textureDesc); });
     { device.createStagingTexture(textureDesc, CpuAccessMode::Read) }->SameAs<StagingTextureHandle>;
-    { device.mapStagingTexture(stagingTexture, textureSlice, CpuAccessMode::Read, rowPitch) }->SameAs<void*>;
+    { device.mapStagingTexture(stagingTexture, textureSlice, CpuAccessMode::Read) }->SameAs<Expected<StagingTextureMapping>>;
     device.unmapStagingTexture(stagingTexture);
 
     { device.createBuffer(bufferDesc) }->SameAs<BufferHandle>;
@@ -128,7 +123,7 @@ concept DeviceApi = requires(
     { device.waitEventQuery(eventQuery) }->SameAs<bool>;
     { device.createTimerQuery() }->SameAs<TimerQueryHandle>;
     { device.pollTimerQuery(timerQuery) }->SameAs<bool>;
-    { device.getTimerQueryResult(timerQuery, timerQueryResult) }->SameAs<bool>;
+    { device.getTimerQueryResult(timerQuery) }->SameAs<Expected<TimerQueryResult>>;
     { device.getTimerQueryTime(timerQuery) }->SameAs<f32>;
     { device.resetTimerQuery(timerQuery) }->SameAs<bool>;
 
@@ -147,11 +142,8 @@ concept DeviceApi = requires(
     { device.bindAccelStructMemory(*accelStruct, heap, u64{}) }->SameAs<bool>;
 
     { device.createCommandList(commandListParams) }->SameAs<CommandListHandle>;
-    { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics) }->SameAs<u64>;
-    { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics, outSubmitted) }->SameAs<u64>;
-    { device.executeCommandLists(commandLists, usize{}, GpuPhysicalQueueId{}, outSubmitted) }->SameAs<u64>;
-    { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics, submissionDesc) }->SameAs<QueueSubmissionToken>;
-    { device.executeCommandLists(commandLists, usize{}, GpuPhysicalQueueId{}, submissionDesc) }->SameAs<QueueSubmissionToken>;
+    { device.executeCommandLists(commandLists, usize{}, CommandQueue::Graphics, submissionDesc) }->SameAs<Expected<QueueSubmissionReceipt>>;
+    { device.executeCommandLists(commandLists, usize{}, GpuPhysicalQueueId{}, submissionDesc) }->SameAs<Expected<QueueSubmissionReceipt>>;
     device.queueWaitForCommandList(CommandQueue::Graphics, CommandQueue::Graphics, u64{});
     { device.getDeviceGeneration() }->SameAs<u16>;
     { device.getPhysicalQueueIndex(CommandQueue::Graphics) }->SameAs<u16>;
@@ -168,7 +160,8 @@ concept DeviceApi = requires(
     { device.requiresRecreation() }->SameAs<bool>;
     { device.waitForIdle() }->SameAs<bool>;
     device.runGarbageCollection();
-    { device.queryFeatureSupport(Feature::Meshlets, featureInfo, usize{}) }->SameAs<bool>;
+    { constDevice.queryFeatureSupport(Feature::Meshlets) }noexcept->SameAs<bool>;
+    { constDevice.getWaveLaneCounts() }noexcept->SameAs<WaveLaneCountRange>;
     { device.queryFormatSupport(Format::RGBA8_UNORM) }->SameAs<FormatSupport::Mask>;
     { device.queryCoopVecFeatures() }->SameAs<CooperativeVectorDeviceFeatures>;
     { device.getCoopVecMatrixSize(CooperativeVectorDataType::Float16, CooperativeVectorMatrixLayout::RowMajor, i32{}, i32{}) }->SameAs<usize>;
@@ -274,7 +267,7 @@ concept CommandListApi = requires(
     commandList.buildTopLevelAccelStructFromBuffer(accelStruct, &buffer, u64{}, usize{}, RayTracingAccelStructBuildFlags::None);
     commandList.convertCoopVecMatrices(coopVecConvertDescs, usize{});
     { commandList.resetTimerQuery(timerQuery) }->SameAs<bool>;
-    { commandList.beginTimerQuery(timerQuery, timerQueryRecordingToken) }->SameAs<bool>;
+    { commandList.beginTimerQuery(timerQuery) }->SameAs<Expected<TimerQueryRecordingToken>>;
     { commandList.endTimerQuery(timerQuery, timerQueryRecordingToken) }->SameAs<bool>;
     { commandList.endTimerQueryFromExistingClaim(timerQuery, timerQueryRecordingToken) } noexcept -> SameAs<bool>;
     commandList.beginMarker(markerName);

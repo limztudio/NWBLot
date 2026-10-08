@@ -4,6 +4,8 @@
 
 #include <impl/ecs_render/avboit/avboit_private.h>
 
+#include <global/scope_exit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -20,40 +22,39 @@ namespace __hidden_avboit_target_bindings{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool RegisterWorkBuffer(
+static Expected<Core::GpuDescriptorHandle> RegisterWorkBuffer(
     Core::GpuDescriptorHeap& heap,
-    Core::GpuDescriptorHandle& outHandle,
     Core::Buffer* buffer
 ){
-    outHandle = Core::GpuDescriptorHandle::Invalid();
     if(!buffer)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageBuffer);
     if(!handle.valid())
-        return false;
+        return MakeUnexpected(Failure{});
+    ScopeExit retireUnpublished([&]()noexcept{ heap.free(handle); });
+
     if(!heap.write(handle, Core::DescriptorWriteItem::StructuredBufferUav(0u, buffer))){
-        heap.free(handle);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outHandle = handle;
-    return true;
+    retireUnpublished.release();
+    return handle;
 }
 
-static bool RegisterTransmittanceStorageTexture(
+static Expected<Core::GpuDescriptorHandle> RegisterTransmittanceStorageTexture(
     Core::GpuDescriptorHeap& heap,
-    Core::GpuDescriptorHandle& outHandle,
     Core::Texture* texture,
     const Core::Format::Enum format
 ){
-    outHandle = Core::GpuDescriptorHandle::Invalid();
     if(!texture)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const Core::GpuDescriptorHandle handle = heap.allocate(Core::GpuDescriptorClass::StorageImage);
     if(!handle.valid())
-        return false;
+        return MakeUnexpected(Failure{});
+    ScopeExit retireUnpublished([&]()noexcept{ heap.free(handle); });
+
     if(!heap.write(handle, Core::DescriptorWriteItem::TextureUav(
         0u,
         texture,
@@ -61,12 +62,11 @@ static bool RegisterTransmittanceStorageTexture(
         ECSRenderDetail::s_FramebufferSubresources,
         Core::TextureDimension::Texture3D
     ))){
-        heap.free(handle);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outHandle = handle;
-    return true;
+    retireUnpublished.release();
+    return handle;
 }
 
 static void RetireTargetDescriptors(Core::GpuDescriptorHeap& heap, AvboitFrameTargets& targets){
@@ -120,20 +120,53 @@ bool RendererAvboitSystem::registerAvboitFrameTargetDescriptors(
     NWB_ASSERT(!avboitTargets.extinctionOverflowBufferDescriptor.valid());
     NWB_ASSERT(!avboitTargets.transmittanceTextureStorageDescriptor.valid());
 
-    const bool targetResourcesRegistered =
-        __hidden_avboit_target_bindings::RegisterWorkBuffer(heap, avboitTargets.coverageBufferDescriptor, avboitTargets.coverageBuffer.get())
-        && __hidden_avboit_target_bindings::RegisterWorkBuffer(heap, avboitTargets.depthWarpBufferDescriptor, avboitTargets.depthWarpBuffer.get())
-        && __hidden_avboit_target_bindings::RegisterWorkBuffer(heap, avboitTargets.controlBufferDescriptor, avboitTargets.controlBuffer.get())
-        && __hidden_avboit_target_bindings::RegisterWorkBuffer(heap, avboitTargets.extinctionBufferDescriptor, avboitTargets.extinctionBuffer.get())
-        && __hidden_avboit_target_bindings::RegisterWorkBuffer(heap, avboitTargets.extinctionOverflowBufferDescriptor, avboitTargets.extinctionOverflowBuffer.get())
-        && __hidden_avboit_target_bindings::RegisterTransmittanceStorageTexture(
+    const auto targetResourcesRegistered = [&]() -> Expected<void>{
+        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(
             heap,
-            avboitTargets.transmittanceTextureStorageDescriptor,
+            avboitTargets.coverageBuffer.get()
+        ); descriptor)
+            avboitTargets.coverageBufferDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(
+            heap,
+            avboitTargets.depthWarpBuffer.get()
+        ); descriptor)
+            avboitTargets.depthWarpBufferDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(
+            heap,
+            avboitTargets.controlBuffer.get()
+        ); descriptor)
+            avboitTargets.controlBufferDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(
+            heap,
+            avboitTargets.extinctionBuffer.get()
+        ); descriptor)
+            avboitTargets.extinctionBufferDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterWorkBuffer(
+            heap,
+            avboitTargets.extinctionOverflowBuffer.get()
+        ); descriptor)
+            avboitTargets.extinctionOverflowBufferDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        if(const auto descriptor = __hidden_avboit_target_bindings::RegisterTransmittanceStorageTexture(
+            heap,
             avboitTargets.transmittanceTexture.get(),
             avboitTargets.transmittanceFormat
-        )
-    ;
-    if(!targetResourcesRegistered){
+        ); descriptor)
+            avboitTargets.transmittanceTextureStorageDescriptor = *descriptor;
+        else
+            return MakeUnexpected(Failure{});
+        return {};
+    };
+    if(!targetResourcesRegistered()){
         __hidden_avboit_target_bindings::RetireTargetDescriptors(heap, avboitTargets);
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register AVBOIT work resources in the descriptor heap"));
         return false;

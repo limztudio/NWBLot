@@ -43,6 +43,7 @@ NWB_IMPL_BEGIN
 
 namespace ECSRenderDetail{
     struct MeshViewGpuData;
+    struct MeshViewBufferUpload;
     struct MeshSoftwareBvhParentBuildState{
         Core::BufferHandle buffer;
         Name identity = s_NameNone;
@@ -174,12 +175,12 @@ public:
 
 public:
     void invalidateResources();
-    [[nodiscard]] bool createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
-    [[nodiscard]] bool findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset, MeshResources*& outMesh);
+    [[nodiscard]] Expected<MeshResources*> createMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset);
+    [[nodiscard]] Expected<MeshResources*> findMeshResources(const Core::Assets::AssetRef<Mesh>& meshAsset);
     // Graph declaration resolves prepared keys without touching assets or mesh state.
-    [[nodiscard]] bool findMeshResources(const Name& meshKey, MeshResources*& outMesh);
-    [[nodiscard]] bool createRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
-    [[nodiscard]] bool findRuntimeMeshResources(const RuntimeMeshDesc& desc, MeshResources*& outMesh);
+    [[nodiscard]] Expected<MeshResources*> findMeshResources(const Name& meshKey);
+    [[nodiscard]] Expected<MeshResources*> createRuntimeMeshResources(const RuntimeMeshDesc& desc);
+    [[nodiscard]] Expected<MeshResources*> findRuntimeMeshResources(const RuntimeMeshDesc& desc);
     [[nodiscard]] bool prepareComputeEmulationResources(MeshResources& mesh);
     [[nodiscard]] bool prepareObjectGeometryCache(MeshResources& mesh, const Core::ComputePipelineHandle& decoderPipeline);
     [[nodiscard]] static ECSRenderDetail::ObjectGeometryCacheSnapshot ObjectGeometryCacheSnapshot(const MeshResources& mesh)noexcept;
@@ -191,34 +192,29 @@ public:
     );
     void pruneRuntimeMeshResources();
     void collectRayTracingResourceSnapshots(ECSRenderDetail::MeshRayTracingResourceSnapshotVector& outSnapshots)const;
-    [[nodiscard]] bool findRayTracingResourceSnapshot(
-        const Name& meshName,
-        ECSRenderDetail::MeshRayTracingResourceSnapshot& outSnapshot
+    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRayTracingResourceSnapshot(
+        const Name& meshName
     )const;
-    [[nodiscard]] bool findRenderableRayTracingResourceSnapshot(
-        const RenderableMeshDesc& mesh,
-        ECSRenderDetail::MeshRayTracingResourceSnapshot& outSnapshot
+    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> findRenderableRayTracingResourceSnapshot(
+        const RenderableMeshDesc& mesh
     )const;
     [[nodiscard]] bool commitRayTracingResourceSnapshot(
         const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected,
         ECSRenderDetail::MeshRayTracingResourceSnapshot& desired
     );
-    [[nodiscard]] bool ensureRayTracingInputHeapHandles(
-        const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected,
-        ECSRenderDetail::MeshRayTracingResourceSnapshot& outSnapshot
+    [[nodiscard]] Expected<ECSRenderDetail::MeshRayTracingResourceSnapshot> ensureRayTracingInputHeapHandles(
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot& expected
     );
     void discardRayTracingBuildState()noexcept;
-    [[nodiscard]] bool collectSoftwareBvhParentBuildStates(ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector& outStates)const;
+    [[nodiscard]] Expected<ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector> collectSoftwareBvhParentBuildStates(Core::Alloc::ScratchArena& arena)const;
     void collectRetainedAccelerationStateBuffers(ECSRenderDetail::MeshRetainedAccelerationStateBufferVector& outBuffers)const;
     void collectBlasGraphStates(ECSRenderDetail::MeshBlasGraphStateVector& outStates)const;
     [[nodiscard]] bool createMeshViewBuffer();
     [[nodiscard]] ECSRenderDetail::MeshViewBufferSnapshot meshViewBufferSnapshot()const noexcept;
-    [[nodiscard]] bool snapshotAcceptedMeshViewWorldToClip(Float44& outWorldToClip)const noexcept;
+    [[nodiscard]] Expected<Float44> snapshotAcceptedMeshViewWorldToClip()const noexcept;
     // Resolve the per-frame view payload; confirm the CPU mirror after packet accepts.
-    [[nodiscard]] bool prepareMeshViewBufferUpload(
-        f32 fallbackAspectRatio,
-        ECSRenderDetail::MeshViewGpuData& outViewState,
-        bool& outUploadRequired
+    [[nodiscard]] ECSRenderDetail::MeshViewBufferUpload prepareMeshViewBufferUpload(
+        f32 fallbackAspectRatio
     )const;
     void confirmMeshViewBufferUpload(const ECSRenderDetail::MeshViewGpuData& viewState);
     void invalidateMeshViewBufferUploadMirror()noexcept;

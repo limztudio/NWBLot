@@ -30,12 +30,11 @@ namespace AssetsVolumeCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool WriteAssetVolume(
+[[nodiscard]] Expected<AssetVolumeWriteResult> WriteAssetVolume(
     Core::Alloc::GlobalArena& arena,
     const ResolvedCookPaths& resolvedPaths,
     AStringView configurationSafeName,
     const AssetVolumePackManifest& manifest,
-    AssetVolumeWriteResult& outResult,
     ScratchArena& scratchArena
 );
 

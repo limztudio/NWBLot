@@ -34,15 +34,19 @@ UiLayerSmokeProject::~UiLayerSmokeProject(){
 }
 
 bool UiLayerSmokeProject::onStartup(){
-    if(!CreateUiLayerSmokeWorld(m_context, m_world))
+    auto world = CreateUiLayerSmokeWorld(m_context);
+    if(!world)
         return false;
+    m_world = Move(*world);
     FramebufferCaptureOptions captureOptions;
     if(ReadSmokeEnvironmentFlag("NWB_UI_LAYER_RESIZE_CAPTURE")){
         captureOptions.requiredWidth = 800u;
         captureOptions.requiredHeight = 600u;
     }
-    if(!ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("UiLayerSmokeProject"), 60u, m_framebufferCapture, captureOptions))
+    auto capture = ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("UiLayerSmokeProject"), 60u, captureOptions);
+    if(!capture)
         return false;
+    m_framebufferCapture = Move(*capture);
 
     NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: standalone layer ready; default atlas; SDR; empty startup frames=2"));
     return true;

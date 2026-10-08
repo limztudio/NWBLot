@@ -44,6 +44,23 @@ struct VulkanContext;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct BufferAllocation{
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VulkanAllocationHandle allocation = nullptr;
+    void* mappedMemory = nullptr;
+    bool requiresInvalidate = false;
+};
+
+struct BufferSuballocation{
+    Buffer* buffer = nullptr;
+    u64 offset = 0u;
+    void* cpuAddress = nullptr;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 class VulkanAllocator final : NoCopy{
     friend class Buffer;
     friend class Device;
@@ -60,7 +77,7 @@ public:
 
     VkResult createBuffer(Buffer& buffer, const VkBufferCreateInfo& bufferInfo);
     void destroyBuffer(Buffer& buffer);
-    VkResult mapBufferMemory(Buffer& buffer, void** outData);
+    [[nodiscard]] Expected<void*, VkResult> mapBufferMemory(Buffer& buffer);
     void unmapBufferMemory(Buffer& buffer);
     VkResult invalidateBufferMemory(Buffer& buffer);
 
@@ -75,12 +92,7 @@ public:
     VkResult invalidateHeapMemory(Heap& heap, u64 offset, u64 size);
     VkResult bindHeapBufferMemory(Buffer& buffer, Heap& heap, u64 offset);
     VkResult bindHeapTextureMemory(Texture& texture, Heap& heap, u64 offset);
-    VkResult createHostMappedBuffer(
-        VkBuffer& buffer,
-        VulkanAllocationHandle& allocation,
-        void*& mappedMemory,
-        const VkBufferCreateInfo& bufferInfo
-    );
+    [[nodiscard]] Expected<BufferAllocation, VkResult> createHostMappedBuffer(const VkBufferCreateInfo& bufferInfo);
     void destroyHostMappedBuffer(VkBuffer& buffer, VulkanAllocationHandle& allocation, void*& mappedMemory)noexcept;
 
 
@@ -206,11 +218,8 @@ public:
 
 public:
     void clear()noexcept;
-    bool suballocateBuffer(
+    [[nodiscard]] Expected<BufferSuballocation> suballocateBuffer(
         u64 size,
-        Buffer** pBuffer,
-        u64* pOffset,
-        void** pCpuVA,
         TrackedCommandBuffer* owner,
         u64 nativeRecordingID,
         GpuPhysicalQueueId queue,
@@ -413,19 +422,13 @@ struct TextureViewKeyHasher{
 
 
 class Texture final : public RefCounter<GraphicsResource>, NoCopy{
-    friend bool VulkanDetail::BuildTextureImageViewCreateInfo(
+    friend Expected<VkImageViewCreateInfo> VulkanDetail::BuildTextureImageViewCreateInfo(
         Texture& texture,
         const TextureSubresourceSet& resolvedSubresources,
         TextureDimension::Enum dimension,
         Format::Enum format,
         TStringView operationName,
-        bool assertFailure,
-        VkImageViewCreateInfo& outViewInfo
-    );
-    friend bool VulkanDetail::BuildImageViewCreateInfo(
-        Texture& texture,
-        const DescriptorWriteItem& item,
-        VkImageViewCreateInfo& outViewInfo
+        bool assertFailure
     );
 
     friend class BackendContext;

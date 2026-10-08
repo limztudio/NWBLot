@@ -47,7 +47,6 @@ TEST(OpaqueCsgIntervalClearBuilder, NoOpaqueWorkDoesNotPublishDependencyAsClear)
     Impl::DeferredFrameTargets targets;
     Impl::CsgFrameGpuData csgFrameData(scratchArena);
     Impl::GraphClearTimingRecordState clearTimingState;
-    Impl::OpaqueCsgIntervalClearResult result{ .clearTask = dependency, .clearFirstTask = dependency };
     const Impl::OpaqueCsgIntervalClearInputs inputs{
         .targets = &targets,
         .csgFrameData = &csgFrameData,
@@ -59,9 +58,10 @@ TEST(OpaqueCsgIntervalClearBuilder, NoOpaqueWorkDoesNotPublishDependencyAsClear)
         .hasOpaqueCsgFrameWork = false,
     };
     Impl::OpaqueCsgIntervalClearBuilder builder(graph);
-    ASSERT_TRUE(builder.declare(inputs, clearTimingState, result));
-    EXPECT_FALSE(result.clearTask.valid());
-    EXPECT_FALSE(result.clearFirstTask.valid());
+    const auto result = builder.declare(inputs, clearTimingState);
+    ASSERT_TRUE(result);
+    EXPECT_FALSE(result->clearTask.valid());
+    EXPECT_FALSE(result->clearFirstTask.valid());
 
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
     ASSERT_EQ(declarations.taskCount(), initialTaskCount);

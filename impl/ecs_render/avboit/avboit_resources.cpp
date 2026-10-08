@@ -94,8 +94,8 @@ bool RendererAvboitSystem::createAvboitPipelines(){
         return false;
 
     auto& device = m_graphics.getDevice();
-    Core::BindingLayoutHandle materialPassBindingLayout;
-    if(!m_materialSystem.prepareMaterialPassBindingLayout(materialPassBindingLayout)){
+    const auto materialPassBindingLayout = m_materialSystem.prepareMaterialPassBindingLayout();
+    if(!materialPassBindingLayout){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: AVBOIT requires the shared material-pass push-constant layout"));
         return false;
     }
@@ -104,7 +104,7 @@ bool RendererAvboitSystem::createAvboitPipelines(){
         device,
         m_avboitState.m_depthWarpPipeline,
         m_avboitState.m_depthWarpComputeShader,
-        materialPassBindingLayout
+        *materialPassBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT depth-warp pipeline"));
         return false;
@@ -114,7 +114,7 @@ bool RendererAvboitSystem::createAvboitPipelines(){
         device,
         m_avboitState.m_integratePipeline,
         m_avboitState.m_integrateComputeShader,
-        materialPassBindingLayout
+        *materialPassBindingLayout
     )){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to create AVBOIT integration pipeline"));
         return false;

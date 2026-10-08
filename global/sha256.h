@@ -6,6 +6,7 @@
 
 
 #include "binary.h"
+#include "expected.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -115,9 +116,9 @@ inline void Compress(u32 (&state)[8u], const u8 (&block)[64u])noexcept{
     return digest;
 }
 
-[[nodiscard]] inline bool ParseSha256(const AStringView text, Sha256Digest& outDigest)noexcept{
+[[nodiscard]] inline Expected<Sha256Digest> ParseSha256(const AStringView text)noexcept{
     if(text.size() != 64u)
-        return false;
+        return MakeUnexpected(Failure{});
     Sha256Digest parsed;
     for(u32 index = 0u; index < 32u; ++index){
         u32 value = 0u;
@@ -128,12 +129,11 @@ inline void Compress(u32 (&state)[8u], const u8 (&block)[64u])noexcept{
             else if(character >= 'a' && character <= 'f')
                 value = value * 16u + static_cast<u32>(character - 'a') + 10u;
             else
-                return false;
+                return MakeUnexpected(Failure{});
         }
         parsed.bytes[index] = static_cast<u8>(value);
     }
-    outDigest = parsed;
-    return true;
+    return parsed;
 }
 
 

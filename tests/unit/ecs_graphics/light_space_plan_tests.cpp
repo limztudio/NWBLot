@@ -32,58 +32,60 @@ TEST(LightSpacePlan, RejectsUnknownCoverage){
         { 63u, 0u, Scene::LightType::Point },
     };
     SoftwareShadowSettings settings;
-    LightSpacePlan fitted;
     settings.coverage = static_cast<SoftwareShadowCoverage::Enum>(2u);
     EXPECT_FALSE(ValidateSoftwareShadowSettings(settings));
-    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, fitted));
+    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u));
 }
 
 
-TEST(LightSpacePlan, RejectsUnknownBlockerPolicyWithoutReplacingTheCurrentPlan){
+TEST(LightSpacePlan, RejectsUnknownBlockerPolicy){
     SoftwareShadowSettings settings;
     settings.blockerSearch = static_cast<SoftwareShadowBlockerSearch::Enum>(3u);
     EXPECT_FALSE(ValidateSoftwareShadowSettings(settings));
     const LightSpaceLightRequest light{};
-    LightSpacePlan plan;
-    plan.totalByteSize = 123u;
-    EXPECT_FALSE(BuildLightSpacePlan(settings, &light, 1u, Limit<u32>::s_Max, 20u, plan));
-    EXPECT_EQ(plan.totalByteSize, 123u);
+    EXPECT_FALSE(BuildLightSpacePlan(settings, &light, 1u, Limit<u32>::s_Max, 20u));
 }
 
 TEST(LightSpacePlan, ChargesLargerDepthExtentToPreviouslyAdmittedPointFaces){
     const LightSpaceLightRequest point{ 0u, 0u, Scene::LightType::Point };
     const LightSpaceLightRequest directional{ 1u, 1u, Scene::LightType::Directional };
     SoftwareShadowSettings settings;
-    LightSpacePlan pointOnly;
-    LightSpacePlan directionalOnly;
-    ASSERT_TRUE(BuildLightSpacePlan(settings, &point, 1u, Limit<u32>::s_Max, 20u, pointOnly));
-    ASSERT_TRUE(BuildLightSpacePlan(settings, &directional, 1u, Limit<u32>::s_Max, 20u, directionalOnly));
-    settings.memoryBudgetBytes = pointOnly.totalByteSize + directionalOnly.totalByteSize;
+    Expected<LightSpacePlan> pointOnly;
+    Expected<LightSpacePlan> directionalOnly;
+    pointOnly = BuildLightSpacePlan(settings, &point, 1u, Limit<u32>::s_Max, 20u);
+    ASSERT_TRUE(pointOnly);
+    directionalOnly = BuildLightSpacePlan(settings, &directional, 1u, Limit<u32>::s_Max, 20u);
+    ASSERT_TRUE(directionalOnly);
+    settings.memoryBudgetBytes = pointOnly->totalByteSize + directionalOnly->totalByteSize;
     const LightSpaceLightRequest requests[] = { point, directional };
-    LightSpacePlan plan;
-    ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, plan));
-    ASSERT_EQ(plan.lightCount, 1u);
-    EXPECT_EQ(plan.lights[0].lightIndex, 0u);
-    EXPECT_EQ(plan.viewCount, 6u);
-    EXPECT_EQ(plan.textureResolution, 256u);
-    EXPECT_EQ(plan.totalByteSize, pointOnly.totalByteSize);
+    Expected<LightSpacePlan> plan;
+    plan = BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u);
+    ASSERT_TRUE(plan);
+    ASSERT_EQ(plan->lightCount, 1u);
+    EXPECT_EQ(plan->lights[0].lightIndex, 0u);
+    EXPECT_EQ(plan->viewCount, 6u);
+    EXPECT_EQ(plan->textureResolution, 256u);
+    EXPECT_EQ(plan->totalByteSize, pointOnly->totalByteSize);
 }
 
 TEST(LightSpacePlan, BudgetBoundaryAdmitsWholeLightsAndLeavesOthersForTracing){
     SoftwareShadowSettings settings;
     const LightSpaceLightRequest light{};
-    LightSpacePlan expected;
-    ASSERT_TRUE(BuildLightSpacePlan(settings, &light, 1u, Limit<u32>::s_Max, 20u, expected));
-    ASSERT_EQ(expected.lightCount, 1u);
-    settings.memoryBudgetBytes = expected.totalByteSize;
-    LightSpacePlan exact;
-    ASSERT_TRUE(BuildLightSpacePlan(settings, &light, 1u, Limit<u32>::s_Max, 20u, exact));
-    EXPECT_EQ(exact.lightCount, 1u);
+    Expected<LightSpacePlan> expected;
+    expected = BuildLightSpacePlan(settings, &light, 1u, Limit<u32>::s_Max, 20u);
+    ASSERT_TRUE(expected);
+    ASSERT_EQ(expected->lightCount, 1u);
+    settings.memoryBudgetBytes = expected->totalByteSize;
+    Expected<LightSpacePlan> exact;
+    exact = BuildLightSpacePlan(settings, &light, 1u, Limit<u32>::s_Max, 20u);
+    ASSERT_TRUE(exact);
+    EXPECT_EQ(exact->lightCount, 1u);
     --settings.memoryBudgetBytes;
-    ASSERT_TRUE(BuildLightSpacePlan(settings, &light, 1u, Limit<u32>::s_Max, 20u, exact));
-    EXPECT_EQ(exact.lightCount, 0u);
-    EXPECT_EQ(exact.viewCount, 0u);
-    EXPECT_EQ(exact.totalByteSize, 0u);
+    exact = BuildLightSpacePlan(settings, &light, 1u, Limit<u32>::s_Max, 20u);
+    ASSERT_TRUE(exact);
+    EXPECT_EQ(exact->lightCount, 0u);
+    EXPECT_EQ(exact->viewCount, 0u);
+    EXPECT_EQ(exact->totalByteSize, 0u);
 }
 
 TEST(LightSpacePlan, SkipsUnsupportedAndIneligibleCastersWithoutDroppingLaterEligibleLights){
@@ -92,38 +94,38 @@ TEST(LightSpacePlan, SkipsUnsupportedAndIneligibleCastersWithoutDroppingLaterEli
         { 1u, 1u, Scene::LightType::Directional, false },
         { s_ExpectedDualCount, s_ExpectedDualCount, Scene::LightType::Point },
     };
-    LightSpacePlan plan;
+    Expected<LightSpacePlan> plan;
     SoftwareShadowSettings settings;
     settings.backend = SoftwareShadowBackend::LightSpace;
-    ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, plan));
-    ASSERT_EQ(plan.lightCount, 1u);
-    EXPECT_EQ(plan.lights[0].lightIndex, s_ExpectedDualCount);
-    EXPECT_EQ(plan.viewCount, 6u);
+    plan = BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u);
+    ASSERT_TRUE(plan);
+    ASSERT_EQ(plan->lightCount, 1u);
+    EXPECT_EQ(plan->lights[0].lightIndex, s_ExpectedDualCount);
+    EXPECT_EQ(plan->viewCount, 6u);
 }
 
 TEST(LightSpacePlan, RejectsInvalidIdentityWithoutPublishingPartialPlan){
-    LightSpacePlan plan;
-    plan.totalByteSize = 123u;
+    Expected<LightSpacePlan> plan;
     SoftwareShadowSettings settings;
     LightSpaceLightRequest requests[] = { { 0u, 0u }, { 1u, 1u } };
-    EXPECT_FALSE(BuildLightSpacePlan(settings, nullptr, 1u, Limit<u32>::s_Max, 20u, plan));
-    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, 9u, Limit<u32>::s_Max, 20u, plan));
+    EXPECT_FALSE(BuildLightSpacePlan(settings, nullptr, 1u, Limit<u32>::s_Max, 20u));
+    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, 9u, Limit<u32>::s_Max, 20u));
     requests[1].shadowSlot = 0u;
-    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, s_ExpectedDualCount, Limit<u32>::s_Max, 20u, plan));
+    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, s_ExpectedDualCount, Limit<u32>::s_Max, 20u));
     requests[1].shadowSlot = 1u;
     requests[1].lightIndex = 0u;
-    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, s_ExpectedDualCount, Limit<u32>::s_Max, 20u, plan));
+    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, s_ExpectedDualCount, Limit<u32>::s_Max, 20u));
     requests[1].lightIndex = 64u;
-    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, s_ExpectedDualCount, Limit<u32>::s_Max, 20u, plan));
+    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, s_ExpectedDualCount, Limit<u32>::s_Max, 20u));
     requests[1].lightIndex = 1u;
     requests[1].shadowSlot = 8u;
-    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, s_ExpectedDualCount, Limit<u32>::s_Max, 20u, plan));
+    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, s_ExpectedDualCount, Limit<u32>::s_Max, 20u));
     requests[1].shadowSlot = 1u;
     requests[1].type = Scene::LightType::kCount;
-    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, s_ExpectedDualCount, Limit<u32>::s_Max, 20u, plan));
-    EXPECT_EQ(plan.totalByteSize, 123u);
-    EXPECT_TRUE(BuildLightSpacePlan(settings, nullptr, 0u, Limit<u32>::s_Max, 0u, plan));
-    EXPECT_EQ(plan.totalByteSize, 0u);
+    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, s_ExpectedDualCount, Limit<u32>::s_Max, 20u));
+    plan = BuildLightSpacePlan(settings, nullptr, 0u, Limit<u32>::s_Max, 0u);
+    ASSERT_TRUE(plan);
+    EXPECT_EQ(plan->totalByteSize, 0u);
 }
 
 TEST(LightSpacePlan, RespectsDeviceDescriptorRangeAndRetainsLaterFittingLights){
@@ -134,20 +136,20 @@ TEST(LightSpacePlan, RespectsDeviceDescriptorRangeAndRetainsLaterFittingLights){
         { 0u, 0u, Scene::LightType::Point },
         { 1u, 1u, Scene::LightType::Directional },
     };
-    LightSpacePlan plan;
+    Expected<LightSpacePlan> plan;
     const u64 directionalEventBytes = 512ull * 512ull * NWB_LIGHT_SPACE_EVENTS_PER_TEXEL * NWB_LIGHT_SPACE_EVENT_BYTES;
-    ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), directionalEventBytes, 20u, plan));
-    ASSERT_EQ(plan.lightCount, 1u);
-    EXPECT_EQ(plan.lights[0].lightIndex, 1u);
-    EXPECT_EQ(plan.eventByteSize, directionalEventBytes);
-    EXPECT_LE(plan.countByteSize, directionalEventBytes);
-    EXPECT_LE(plan.viewByteSize, directionalEventBytes);
-    EXPECT_LE(plan.drawArgumentByteSize, directionalEventBytes);
-    ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), directionalEventBytes - 1u, 20u, plan));
-    EXPECT_EQ(plan.lightCount, 0u);
-    plan.totalByteSize = 123u;
-    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, LengthOf(requests), 0u, 20u, plan));
-    EXPECT_EQ(plan.totalByteSize, 123u);
+    plan = BuildLightSpacePlan(settings, requests, LengthOf(requests), directionalEventBytes, 20u);
+    ASSERT_TRUE(plan);
+    ASSERT_EQ(plan->lightCount, 1u);
+    EXPECT_EQ(plan->lights[0].lightIndex, 1u);
+    EXPECT_EQ(plan->eventByteSize, directionalEventBytes);
+    EXPECT_LE(plan->countByteSize, directionalEventBytes);
+    EXPECT_LE(plan->viewByteSize, directionalEventBytes);
+    EXPECT_LE(plan->drawArgumentByteSize, directionalEventBytes);
+    plan = BuildLightSpacePlan(settings, requests, LengthOf(requests), directionalEventBytes - 1u, 20u);
+    ASSERT_TRUE(plan);
+    EXPECT_EQ(plan->lightCount, 0u);
+    EXPECT_FALSE(BuildLightSpacePlan(settings, requests, LengthOf(requests), 0u, 20u));
 }
 
 TEST(LightSpacePlan, BoundsExternalSettingsAndShaderAddressSpace){
@@ -164,14 +166,16 @@ TEST(LightSpacePlan, BoundsExternalSettingsAndShaderAddressSpace){
     LightSpaceLightRequest requests[NWB_SCENE_SHADOW_SLOT_COUNT];
     for(u32 index = 0u; index < LengthOf(requests); ++index)
         requests[index] = { index, index, Scene::LightType::Point };
-    LightSpacePlan plan;
-    ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, plan));
-    EXPECT_EQ(plan.lightCount, 0u); // One six-face 2048 map exceeds the shader address range.
+    Expected<LightSpacePlan> plan;
+    plan = BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u);
+    ASSERT_TRUE(plan);
+    EXPECT_EQ(plan->lightCount, 0u); // One six-face 2048 map exceeds the shader address range.
     settings.pointResolution = 1024u;
-    ASSERT_TRUE(BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u, plan));
-    ASSERT_EQ(plan.lightCount, s_ExpectedDualCount);
-    EXPECT_LE(plan.eventByteSize, Limit<u32>::s_Max);
-    EXPECT_LE(plan.totalByteSize, settings.memoryBudgetBytes);
+    plan = BuildLightSpacePlan(settings, requests, LengthOf(requests), Limit<u32>::s_Max, 20u);
+    ASSERT_TRUE(plan);
+    ASSERT_EQ(plan->lightCount, s_ExpectedDualCount);
+    EXPECT_LE(plan->eventByteSize, Limit<u32>::s_Max);
+    EXPECT_LE(plan->totalByteSize, settings.memoryBudgetBytes);
     settings.memoryBudgetBytes = 0u;
     EXPECT_FALSE(ValidateSoftwareShadowSettings(settings));
     settings = SoftwareShadowSettings{};
@@ -187,20 +191,22 @@ TEST(LightSpacePlan, ChargesActualDrawArgumentsAndEnforcesTheirDescriptorRange){
     const LightSpaceLightRequest light{};
     constexpr u32 s_DrawCount = 65536u;
     constexpr u64 s_ArgumentBytes = static_cast<u64>(s_DrawCount) * NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES;
-    LightSpacePlan plan;
-    ASSERT_TRUE(BuildLightSpacePlan(settings, &light, 1u, s_ArgumentBytes, s_DrawCount, plan));
-    ASSERT_EQ(plan.lightCount, 1u);
-    EXPECT_EQ(plan.drawArgumentByteSize, s_ArgumentBytes);
-    EXPECT_EQ(plan.totalByteSize, plan.eventByteSize + plan.countByteSize + plan.viewByteSize + plan.depthByteSize + s_ArgumentBytes);
-    ASSERT_TRUE(BuildLightSpacePlan(settings, &light, 1u, s_ArgumentBytes - 1u, s_DrawCount, plan));
-    EXPECT_EQ(plan.lightCount, 0u);
-    plan.totalByteSize = 123u;
-    EXPECT_FALSE(BuildLightSpacePlan(settings, &light, 1u, Limit<u32>::s_Max, 0u, plan));
-    EXPECT_EQ(plan.totalByteSize, 123u);
-    ASSERT_TRUE(BuildLightSpacePlan(settings, nullptr, 0u, Limit<u32>::s_Max, 0u, plan));
-    EXPECT_EQ(plan.totalByteSize, 0u);
-    ASSERT_TRUE(BuildLightSpacePlan(settings, &light, 1u, Limit<u32>::s_Max, Limit<u32>::s_Max, plan));
-    EXPECT_EQ(plan.lightCount, 0u);
+    Expected<LightSpacePlan> plan;
+    plan = BuildLightSpacePlan(settings, &light, 1u, s_ArgumentBytes, s_DrawCount);
+    ASSERT_TRUE(plan);
+    ASSERT_EQ(plan->lightCount, 1u);
+    EXPECT_EQ(plan->drawArgumentByteSize, s_ArgumentBytes);
+    EXPECT_EQ(plan->totalByteSize, plan->eventByteSize + plan->countByteSize + plan->viewByteSize + plan->depthByteSize + s_ArgumentBytes);
+    plan = BuildLightSpacePlan(settings, &light, 1u, s_ArgumentBytes - 1u, s_DrawCount);
+    ASSERT_TRUE(plan);
+    EXPECT_EQ(plan->lightCount, 0u);
+    EXPECT_FALSE(BuildLightSpacePlan(settings, &light, 1u, Limit<u32>::s_Max, 0u));
+    plan = BuildLightSpacePlan(settings, nullptr, 0u, Limit<u32>::s_Max, 0u);
+    ASSERT_TRUE(plan);
+    EXPECT_EQ(plan->totalByteSize, 0u);
+    plan = BuildLightSpacePlan(settings, &light, 1u, Limit<u32>::s_Max, Limit<u32>::s_Max);
+    ASSERT_TRUE(plan);
+    EXPECT_EQ(plan->lightCount, 0u);
 }
 
 

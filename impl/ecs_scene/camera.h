@@ -36,16 +36,15 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool TryComputeCameraTanHalfVerticalFov(const SIMDVector verticalFovRadians, SIMDVector& outTanHalfFov)noexcept{
+[[nodiscard]] inline Expected<SIMDVector> TryComputeCameraTanHalfVerticalFov(const SIMDVector verticalFovRadians)noexcept{
     constexpr f32 s_CameraFovCosEpsilon = 0.000001f;
 
-    outTanHalfFov = s_SIMDZero;
     if(
         !VectorIsFinite(verticalFovRadians, VectorComponentMask::s_XYZW)
         || !Vector4Greater(verticalFovRadians, s_SIMDZero)
         || !Vector4Less(verticalFovRadians, VectorReplicate(s_PI))
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     SIMDVector sinHalfFovVector;
     SIMDVector cosHalfFovVector;
@@ -59,14 +58,13 @@ static_assert(alignof(CameraProjection) >= alignof(Float4), "CameraProjection mu
             VectorReplicate(s_CameraFovCosEpsilon)
         )
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     const SIMDVector tanHalfFovVector = VectorDivide(sinHalfFovVector, cosHalfFovVector);
     if(!VectorIsFinite(tanHalfFovVector, VectorComponentMask::s_XYZW) || !Vector4Greater(tanHalfFovVector, VectorZero()))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outTanHalfFov = tanHalfFovVector;
-    return true;
+    return tanHalfFovVector;
 }
 
 [[nodiscard]] inline bool CameraClipRangeValid(const SIMDVector nearPlane, const SIMDVector farPlane)noexcept{
@@ -138,36 +136,22 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
     return CameraProjectionValuesValid(projectionParams, aspectRatio, tanHalfVerticalFov, nearPlane, farPlane);
 }
 
-[[nodiscard]] inline bool TryBuildCameraProjectionValues(
+[[nodiscard]] inline Expected<CameraProjection> TryBuildCameraProjection(
     const SIMDVector verticalFovRadians,
     const SIMDVector nearPlane,
     const SIMDVector farPlane,
     const SIMDVector cameraAspectRatio,
-    const SIMDVector fallbackAspectRatio,
-    SIMDVector& outProjectionParams,
-    SIMDVector& outAspectRatio,
-    SIMDVector& outTanHalfVerticalFov,
-    SIMDVector& outNearPlane,
-    SIMDVector& outFarPlane
+    const SIMDVector fallbackAspectRatio
 )noexcept{
-    outProjectionParams = s_SIMDZero;
-    outAspectRatio = s_SIMDZero;
-    outTanHalfVerticalFov = s_SIMDZero;
-    outNearPlane = s_SIMDZero;
-    outFarPlane = s_SIMDZero;
-
-    SIMDVector tanHalfFov;
-    if(
-        !TryComputeCameraTanHalfVerticalFov(verticalFovRadians, tanHalfFov)
-        || !CameraClipRangeValid(nearPlane, farPlane)
-    )
-        return false;
+    const auto tanHalfFov = TryComputeCameraTanHalfVerticalFov(verticalFovRadians);
+    if(!tanHalfFov || !CameraClipRangeValid(nearPlane, farPlane))
+        return MakeUnexpected(Failure{});
 
     const SIMDVector aspectRatio = ResolveCameraAspectRatio(cameraAspectRatio, fallbackAspectRatio);
     const SIMDVector depthRange = VectorSubtract(farPlane, nearPlane);
     const SIMDVector selectZW = VectorOrInt(s_SIMDMaskZ, s_SIMDMaskW);
     const SIMDVector projectionDenominators = VectorMultiply(
-        VectorSelect(tanHalfFov, depthRange, selectZW),
+        VectorSelect(*tanHalfFov, depthRange, selectZW),
         VectorSelect(s_SIMDOne, aspectRatio, s_SIMDMaskX)
     );
     const SIMDVector projectionNumerators = VectorMultiply(
@@ -175,66 +159,30 @@ inline void LoadCameraProjectionValues(const CameraProjection& projection, SIMDV
         VectorSelect(s_SIMDOne, VectorNegate(farPlane), s_SIMDMaskW)
     );
     const SIMDVector projectionParams = VectorDivide(projectionNumerators, projectionDenominators);
-    if(!CameraProjectionValuesValid(projectionParams, aspectRatio, tanHalfFov, nearPlane, farPlane))
-        return false;
+    if(!CameraProjectionValuesValid(projectionParams, aspectRatio, *tanHalfFov, nearPlane, farPlane))
+        return MakeUnexpected(Failure{});
 
-    outProjectionParams = projectionParams;
-    outAspectRatio = aspectRatio;
-    outTanHalfVerticalFov = tanHalfFov;
-    outNearPlane = nearPlane;
-    outFarPlane = farPlane;
-    return true;
-}
-
-[[nodiscard]] inline bool TryBuildCameraProjection(
-    const SIMDVector verticalFovRadians,
-    const SIMDVector nearPlane,
-    const SIMDVector farPlane,
-    const SIMDVector cameraAspectRatio,
-    const SIMDVector fallbackAspectRatio,
-    CameraProjection& outProjection
-)noexcept{
-    outProjection = CameraProjection{};
-
-    SIMDVector projectionParams;
-    SIMDVector aspectRatio;
-    SIMDVector tanHalfVerticalFov;
-    SIMDVector resolvedNearPlane;
-    SIMDVector resolvedFarPlane;
-    if(!TryBuildCameraProjectionValues(
-        verticalFovRadians,
-        nearPlane,
-        farPlane,
-        cameraAspectRatio,
-        fallbackAspectRatio,
-        projectionParams,
-        aspectRatio,
-        tanHalfVerticalFov,
-        resolvedNearPlane,
-        resolvedFarPlane
-    ))
-        return false;
-
-    StoreFloat(projectionParams, outProjection.projectionParams);
-    outProjection.aspectRatio = VectorGetX(aspectRatio);
-    outProjection.tanHalfVerticalFov = VectorGetX(tanHalfVerticalFov);
-    outProjection.nearPlane = VectorGetX(resolvedNearPlane);
-    outProjection.farPlane = VectorGetX(resolvedFarPlane);
-    return true;
+    CameraProjection projection;
+    StoreFloat(projectionParams, projection.projectionParams);
+    projection.aspectRatio = VectorGetX(aspectRatio);
+    projection.tanHalfVerticalFov = VectorGetX(*tanHalfFov);
+    projection.nearPlane = VectorGetX(nearPlane);
+    projection.farPlane = VectorGetX(farPlane);
+    return projection;
 }
 
 [[nodiscard]] inline CameraProjection BuildDefaultCameraProjection(const f32 fallbackAspectRatio = CameraDefaults::s_FallbackAspectRatio)noexcept{
-    CameraProjection projection;
-    if(TryBuildCameraProjection(
+    const auto defaultProjection = TryBuildCameraProjection(
         VectorReplicate(CameraDefaults::s_VerticalFovRadians),
         VectorReplicate(CameraDefaults::s_NearPlane),
         VectorReplicate(CameraDefaults::s_FarPlane),
         VectorReplicate(CameraDefaults::s_AutoAspectRatio),
-        VectorReplicate(fallbackAspectRatio),
-        projection
-    ))
-        return projection;
+        VectorReplicate(fallbackAspectRatio)
+    );
+    if(defaultProjection)
+        return *defaultProjection;
 
+    CameraProjection projection;
     projection.projectionParams = Float4(1.0f, 1.0f, 1.0f, 0.0f);
     projection.aspectRatio = 1.0f;
     projection.tanHalfVerticalFov = 1.0f;

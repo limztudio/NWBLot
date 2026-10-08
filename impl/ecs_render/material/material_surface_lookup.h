@@ -32,9 +32,8 @@ public:
 
 
 public:
-    [[nodiscard]] virtual bool findMaterialSurfaceInfo(
-        const Core::Assets::AssetRef<Material>& materialAsset,
-        MaterialSurfaceInfo*& outInfo
+    [[nodiscard]] virtual Expected<MaterialSurfaceInfo*> findMaterialSurfaceInfo(
+        const Core::Assets::AssetRef<Material>& materialAsset
     ) = 0;
 };
 

@@ -35,16 +35,15 @@ struct ImagePlacement{
 class ImageLayout final{
 public:
     // Natural atlas extent uses reference density and logical minima; region padding does not inset images.
-    [[nodiscard]] static bool Measure(
+    [[nodiscard]] static Expected<ImageMetrics> Measure(
         const ImageOptions& options,
         const UiSkinRegion& region,
-        f32 density,
-        ImageMetrics& out
+        f32 density
     )noexcept;
     // Engine images use one logical unit per texel without atlas density, slices or control padding.
-    [[nodiscard]] static bool Measure(const ImageOptions& options, const ImageSource& source, ImageMetrics& out)noexcept;
-    // Invalid inputs preserve the previous output; empty visibility remains valid.
-    [[nodiscard]] static bool Place(const Rect& bounds, const Rect& clip, ImagePlacement& out)noexcept;
+    [[nodiscard]] static Expected<ImageMetrics> Measure(const ImageOptions& options, const ImageSource& source)noexcept;
+    // Empty visibility remains a valid placement.
+    [[nodiscard]] static Expected<ImagePlacement> Place(const Rect& bounds, const Rect& clip)noexcept;
 };
 
 

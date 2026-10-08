@@ -149,11 +149,11 @@ static constexpr usize s_BenchmarkCaseCount = sizeof(s_BenchmarkCases) / sizeof(
 
 [[nodiscard]] static bool EnvironmentFlagEnabled(const AStringView name){
     NWB::Core::Alloc::GlobalArena arena(s_EnvironmentFlagArena);
-    AString<NWB::Core::Alloc::GlobalArena> value(arena);
-    if(!ReadEnvironmentVariable(name, value))
+    const auto value = ReadEnvironmentVariable(arena, name);
+    if(!value)
         return false;
 
-    return !value.empty() && value[0] != '\0' && value[0] != '0';
+    return !value->empty() && (*value)[0] != '\0' && (*value)[0] != '0';
 }
 
 [[nodiscard]] static bool StaticPreviewEnabled(){
@@ -254,24 +254,27 @@ public:
         m_mode = mode;
     }
 
-    virtual bool resolveRuntimeMesh(const NWB::Core::ECS::EntityID entity, NWB::Impl::RuntimeMeshDesc& outMesh)override{
-        if(!m_meshSkinningSystem || !m_meshSkinningSystem->resolveRuntimeMesh(entity, outMesh))
-            return false;
+    virtual Expected<NWB::Impl::RuntimeMeshDesc> resolveRuntimeMesh(const NWB::Core::ECS::EntityID entity)override{
+        if(!m_meshSkinningSystem)
+            return MakeUnexpected(Failure{});
+        auto mesh = m_meshSkinningSystem->resolveRuntimeMesh(entity);
+        if(!mesh)
+            return MakeUnexpected(Failure{});
 
         switch(m_mode){
         case BenchmarkMode::NoCulling:
-            outMesh.dynamicMeshletBoundsFresh = false;
-            outMesh.dynamicMeshletConesFresh = false;
-            return true;
+            mesh->dynamicMeshletBoundsFresh = false;
+            mesh->dynamicMeshletConesFresh = false;
+            return Move(*mesh);
         case BenchmarkMode::FrustumOnly:
-            outMesh.dynamicMeshletBoundsFresh = true;
-            outMesh.dynamicMeshletConesFresh = false;
-            return true;
+            mesh->dynamicMeshletBoundsFresh = true;
+            mesh->dynamicMeshletConesFresh = false;
+            return Move(*mesh);
         case BenchmarkMode::FrustumCone:
         default:
-            outMesh.dynamicMeshletBoundsFresh = true;
-            outMesh.dynamicMeshletConesFresh = true;
-            return true;
+            mesh->dynamicMeshletBoundsFresh = true;
+            mesh->dynamicMeshletConesFresh = true;
+            return Move(*mesh);
         }
     }
 
@@ -323,13 +326,13 @@ private:
     }
 
     [[nodiscard]] bool loadSkeletonBindJoints(){
-        UniquePtr<NWB::Core::Assets::IAsset> loadedModelAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_BenchmarkModel.name(), loadedModelAsset)){
+        const auto loadedModelAsset = m_context.assetManager.loadSync(NWB::Impl::Model::AssetTypeName(), s_BenchmarkModel.name());
+        if(!loadedModelAsset){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to load benchmark model"));
             return false;
         }
-        NWB_ASSERT(loadedModelAsset);
-        const auto* model = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(loadedModelAsset.get());
+        NWB_ASSERT(*loadedModelAsset);
+        const auto* model = NWB::Core::Assets::CastAsset<NWB::Impl::Model>(loadedModelAsset->get());
         if(!model){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark model has unexpected type"));
             return false;
@@ -348,13 +351,13 @@ private:
             return false;
         }
 
-        UniquePtr<NWB::Core::Assets::IAsset> loadedSkeletonAsset;
-        if(!m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), skeletonObject->skeleton.name(), loadedSkeletonAsset)){
+        const auto loadedSkeletonAsset = m_context.assetManager.loadSync(NWB::Impl::Skeleton::AssetTypeName(), skeletonObject->skeleton.name());
+        if(!loadedSkeletonAsset){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: failed to load benchmark skeleton"));
             return false;
         }
-        NWB_ASSERT(loadedSkeletonAsset);
-        const auto* skeleton = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(loadedSkeletonAsset.get());
+        NWB_ASSERT(*loadedSkeletonAsset);
+        const auto* skeleton = NWB::Core::Assets::CastAsset<NWB::Impl::Skeleton>(loadedSkeletonAsset->get());
         if(!skeleton){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark skeleton has unexpected type"));
             return false;

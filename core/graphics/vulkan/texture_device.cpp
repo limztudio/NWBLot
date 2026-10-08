@@ -53,11 +53,11 @@ namespace __hidden_texture_device{
 
 
 TextureHandle Device::createTexture(const TextureDesc& d){
-    VulkanTextureDetail::TextureCreateMetadata metadata;
-    if(!VulkanTextureDetail::ValidateTextureCreateDesc(d, NWB_TEXT("create texture"), true, metadata))
+    const auto metadata = VulkanTextureDetail::ValidateTextureCreateDesc(d, NWB_TEXT("create texture"), true);
+    if(!metadata)
         return nullptr;
 
-    VkImageCreateInfo imageInfo = VulkanTextureDetail::BuildTextureImageCreateInfo(d, metadata);
+    VkImageCreateInfo imageInfo = VulkanTextureDetail::BuildTextureImageCreateInfo(d, *metadata);
     const QueueFamilySharingInfo sharingInfo = ResolveQueueFamilySharing(d.queueSharing, m_context);
     imageInfo.sharingMode = sharingInfo.mode;
     imageInfo.queueFamilyIndexCount = sharingInfo.familyIndexCount;
@@ -71,8 +71,8 @@ TextureHandle Device::createTexture(const TextureDesc& d){
         imageInfo,
         false
     );
-    texture->m_formatLayout = metadata.formatLayout;
-    texture->m_aspectMask = metadata.aspectMask;
+    texture->m_formatLayout = metadata->formatLayout;
+    texture->m_aspectMask = metadata->aspectMask;
 
     VkResult res;
     if(d.isVirtual)
@@ -165,23 +165,22 @@ bool Device::bindTextureMemory(Texture& texture, Heap& heap, u64 offset){
     m_context.deviceDispatch.vkGetImageMemoryRequirements2(m_context.device, &requirementsInfo, &memoryRequirements);
 
     ScopedLock heapLock(memoryHeap.m_bindingMutex);
-    VulkanDetail::HeapBindingRange bindingRange;
-    if(!validateHeapMemoryBinding(
+    const auto bindingRange = validateHeapMemoryBinding(
         memoryHeap,
         memoryRequirements.memoryRequirements,
         dedicatedRequirements,
         offset,
         VulkanDetail::HeapBindingResourceClass::OptimalImage,
         NWB_TEXT("bind texture memory"),
-        VulkanArenaScope::s_TextureResourceLabel,
-        bindingRange
-    ))
+        VulkanArenaScope::s_TextureResourceLabel
+    );
+    if(!bindingRange)
         return false;
 
     Heap::BindingReservation reservation;
     reservation.owner = &texture;
     reservation.resourceClass = VulkanDetail::HeapBindingResourceClass::OptimalImage;
-    reservation.range = bindingRange;
+    reservation.range = *bindingRange;
     memoryHeap.m_bindingReservations.push_back(reservation);
 
     const VkResult res = m_allocator.bindHeapTextureMemory(texture, memoryHeap, offset);
@@ -190,7 +189,7 @@ bool Device::bindTextureMemory(Texture& texture, Heap& heap, u64 offset){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind texture memory: {}"), ResultToString(res));
         return false;
     }
-    texture.m_heapBindingRange = bindingRange;
+    texture.m_heapBindingRange = *bindingRange;
     texture.m_boundHeap = Move(retainedHeap);
 
     return true;
@@ -246,8 +245,8 @@ TextureHandle Device::createHandleForNativeTexture(
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: image handle is null"));
         return nullptr;
     }
-    VulkanTextureDetail::TextureCreateMetadata metadata;
-    if(!VulkanTextureDetail::ValidateTextureCreateDesc(desc, NWB_TEXT("create texture handle for native texture"), false, metadata))
+    const auto metadata = VulkanTextureDetail::ValidateTextureCreateDesc(desc, NWB_TEXT("create texture handle for native texture"), false);
+    if(!metadata)
         return nullptr;
     if(nativeProvenance.usage == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create texture handle for native texture: native usage is zero"));
@@ -262,7 +261,7 @@ TextureHandle Device::createHandleForNativeTexture(
     ))
         return nullptr;
 
-    VkImageCreateInfo imageInfo = VulkanTextureDetail::BuildTextureImageCreateInfo(desc, metadata);
+    VkImageCreateInfo imageInfo = VulkanTextureDetail::BuildTextureImageCreateInfo(desc, *metadata);
     imageInfo.usage = nativeProvenance.usage;
     imageInfo.flags = nativeProvenance.flags;
     imageInfo.sharingMode = nativeProvenance.sharingMode;
@@ -283,8 +282,8 @@ TextureHandle Device::createHandleForNativeTexture(
         imageInfo,
         nativeProvenance.initialStateKnown
     );
-    texture->m_formatLayout = metadata.formatLayout;
-    texture->m_aspectMask = metadata.aspectMask;
+    texture->m_formatLayout = metadata->formatLayout;
+    texture->m_aspectMask = metadata->aspectMask;
     texture->m_image = nativeImage;
     texture->m_managed = false;
 

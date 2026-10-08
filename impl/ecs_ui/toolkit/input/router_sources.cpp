@@ -56,23 +56,23 @@ bool InputRouter::canEditCommand(const InputEvent& event)const{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputRouter::resolveSourceEvent(const InputEvent& event, InputEvent& resolved){
-    resolved = event;
+Expected<InputEvent> InputRouter::resolveSourceEvent(const InputEvent& event){
+    InputEvent resolved = event;
     const bool physical = event.type == InputEventType::KeyDown || event.type == InputEventType::KeyUp;
     const bool command = event.type == InputEventType::CommandDown || event.type == InputEventType::CommandUp;
     if(!physical && !command){
         if(event.type == InputEventType::FocusLost)
             m_boundSources.clear();
-        return true;
+        return resolved;
     }
     if(physical){
         if(!InputBindings::ValidKey(event.key))
-            return false;
+            return MakeUnexpected(Failure{});
         resolved.type = event.type == InputEventType::KeyDown ? InputEventType::CommandDown : InputEventType::CommandUp;
         resolved.source = { 0u, static_cast<u64>(event.key) + 1u };
     }
     else if(!event.source.valid() || event.source.device == 0u || event.command > InputCommand::ContextMenu)
-        return false;
+        return MakeUnexpected(Failure{});
     auto held = FindIf(m_boundSources.begin(), m_boundSources.end(), [&resolved](const BoundSource& source)noexcept{
         return source.source == resolved.source;
     });
@@ -88,7 +88,7 @@ bool InputRouter::resolveSourceEvent(const InputEvent& event, InputEvent& resolv
     }
     else if(resolved.type == InputEventType::CommandDown){
         if(m_boundSources.size() == s_InputMaxSources)
-            return false;
+            return MakeUnexpected(Failure{});
         if(physical){
             const i32 modifiers = (event.shift ? Core::InputModifier::Shift : 0)
                 | (event.control ? Core::InputModifier::Control : 0) | (event.alt ? Core::InputModifier::Alt : 0)
@@ -107,7 +107,7 @@ bool InputRouter::resolveSourceEvent(const InputEvent& event, InputEvent& resolv
         resolved.edit = false;
         resolved.allowText = false;
     }
-    return true;
+    return resolved;
 }
 
 InputRouter::CommandSource* InputRouter::findCommandSource(const InputSource& source)noexcept{

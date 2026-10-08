@@ -33,12 +33,11 @@ struct MeshSkinningGraphResourceUses{
     {}
 };
 
-// Each call rebuilds ordered uses from immutable plans; rejection empties outputs.
-[[nodiscard]] bool BuildMeshSkinningGraphResourceUses(
+// The result owns ordered uses built from immutable plans.
+[[nodiscard]] Expected<MeshSkinningGraphResourceUses> BuildMeshSkinningGraphResourceUses(
     const MeshSkinningGraphDispatchPlan* plans,
     usize planCount,
-    Core::Alloc::ScratchArena& scratchArena,
-    MeshSkinningGraphResourceUses& outUses
+    Core::Alloc::ScratchArena& scratchArena
 );
 
 

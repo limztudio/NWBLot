@@ -110,14 +110,13 @@ bool FbxSourceMeshStreams::EnsureTriangleIndexScratchCapacity(
 }
 
 
-bool FbxSourceMeshStreams::GenerateSourceMeshTangents(
+Expected<SourceTangentReport> FbxSourceMeshStreams::GenerateSourceMeshTangents(
     SourceMeshStreams& mesh,
-    const bool usedDefaultUvs,
-    SourceTangentReport& outTangentReport
+    const bool usedDefaultUvs
 ){
     using RebuildVertex = ::TangentFrameRebuildVertex;
 
-    outTangentReport = SourceTangentReport{};
+    SourceTangentReport outTangentReport;
     NWB_ASSERT(!mesh.vertexRefs.empty());
     NWB_ASSERT(!mesh.indices.empty());
     NWB_ASSERT((mesh.indices.size() % s_TriangleIndexCount) == 0u);
@@ -165,14 +164,14 @@ bool FbxSourceMeshStreams::GenerateSourceMeshTangents(
     }
     if(rebuildIndices.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: mesh has no valid triangles for tangent generation"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     Core::Alloc::ScratchArena scratchArena(UtilityDetail::s_SourceTangentRebuildScratch);
-    TangentFrameRebuildResult rebuildResult;
-    if(!::RebuildTangentFrames(scratchArena, rebuildVertices, rebuildIndices, &rebuildResult)){
+    const auto rebuildResult = ::RebuildTangentFrames(scratchArena, rebuildVertices, rebuildIndices);
+    if(!rebuildResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to generate source tangent stream"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     Vec4IndexMap tangentLookup;
@@ -193,51 +192,64 @@ bool FbxSourceMeshStreams::GenerateSourceMeshTangents(
         );
         if(!::FrameValidDirection(tangent)){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to build mesh: failed to resolve generated source tangent"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         const f32 handedness = ::FrameTangentHandedness(rebuildVertices[vertexRefIndex].tangent.w, 1.0f);
         Vec4 generatedTangent;
         StoreFloat(VectorSetW(tangent, handedness), generatedTangent);
-        if(!InternSourceValue(mesh.tangents, tangentLookup, generatedTangent, s_SourceTangentLabel, ref.tangent))
-            return false;
+        const auto tangentIndex = InternSourceValue(mesh.tangents, tangentLookup, generatedTangent, s_SourceTangentLabel);
+        if(!tangentIndex)
+            return MakeUnexpected(tangentIndex.error());
+        ref.tangent = *tangentIndex;
     }
-    outTangentReport.degenerateUvTriangleCount = rebuildResult.degenerateUvTriangleCount;
-    outTangentReport.fallbackTangentVertexCount = rebuildResult.fallbackTangentVertexCount;
+    outTangentReport.degenerateUvTriangleCount = rebuildResult->degenerateUvTriangleCount;
+    outTangentReport.fallbackTangentVertexCount = rebuildResult->fallbackTangentVertexCount;
     outTangentReport.mode =
-        usedDefaultUvs || rebuildResult.degenerateUvTriangleCount != 0u || rebuildResult.fallbackTangentVertexCount != 0u
+        usedDefaultUvs || rebuildResult->degenerateUvTriangleCount != 0u || rebuildResult->fallbackTangentVertexCount != 0u
         ? SourceTangentMode::GeneratedFallback
         : SourceTangentMode::GeneratedUv
     ;
-    return true;
+    return outTangentReport;
 }
 
 
-bool FbxSourceMeshStreams::InternSourceCorner(
+Expected<u32> FbxSourceMeshStreams::InternSourceCorner(
     SourceMeshBuildContext& context,
     const SourceTriangleCorner& corner,
-    const bool wantsSkinning,
-    u32& outVertexRefIndex
+    const bool wantsSkinning
 ){
     SourceVertexRef ref;
-    if(!InternSourceValue(context.mesh.positions, context.positions, corner.position, s_SourcePositionLabel, ref.position))
-        return false;
-    if(!InternSourceValue(context.mesh.normals, context.normals, corner.normal, s_SourceNormalLabel, ref.normal))
-        return false;
+    const auto positionIndex = InternSourceValue(context.mesh.positions, context.positions, corner.position, s_SourcePositionLabel);
+    if(!positionIndex)
+        return MakeUnexpected(positionIndex.error());
+    ref.position = *positionIndex;
+    const auto normalIndex = InternSourceValue(context.mesh.normals, context.normals, corner.normal, s_SourceNormalLabel);
+    if(!normalIndex)
+        return MakeUnexpected(normalIndex.error());
+    ref.normal = *normalIndex;
     if(corner.hasTangent){
-        if(!InternSourceValue(context.mesh.tangents, context.tangents, corner.tangent, s_SourceTangentLabel, ref.tangent))
-            return false;
+        const auto tangentIndex = InternSourceValue(context.mesh.tangents, context.tangents, corner.tangent, s_SourceTangentLabel);
+        if(!tangentIndex)
+            return MakeUnexpected(tangentIndex.error());
+        ref.tangent = *tangentIndex;
     }
-    if(!InternSourceValue(context.mesh.uv0, context.uv0, corner.uv0, s_SourceUv0Label, ref.uv0))
-        return false;
-    if(!InternSourceValue(context.mesh.colors, context.colors, corner.color, s_SourceColorLabel, ref.color))
-        return false;
+    const auto uv0Index = InternSourceValue(context.mesh.uv0, context.uv0, corner.uv0, s_SourceUv0Label);
+    if(!uv0Index)
+        return MakeUnexpected(uv0Index.error());
+    ref.uv0 = *uv0Index;
+    const auto colorIndex = InternSourceValue(context.mesh.colors, context.colors, corner.color, s_SourceColorLabel);
+    if(!colorIndex)
+        return MakeUnexpected(colorIndex.error());
+    ref.color = *colorIndex;
     if(wantsSkinning){
-        if(!InternSourceValue(context.mesh.skin, context.skin, corner.skin, s_SkinAssetTypeText, ref.skin))
-            return false;
+        const auto skinIndex = InternSourceValue(context.mesh.skin, context.skin, corner.skin, s_SkinAssetTypeText);
+        if(!skinIndex)
+            return MakeUnexpected(skinIndex.error());
+        ref.skin = *skinIndex;
     }
 
-    return InternSourceValue(context.mesh.vertexRefs, context.vertexRefs, ref, s_SourceVertexRefLabel, outVertexRefIndex);
+    return InternSourceValue(context.mesh.vertexRefs, context.vertexRefs, ref, s_SourceVertexRefLabel);
 }
 
 

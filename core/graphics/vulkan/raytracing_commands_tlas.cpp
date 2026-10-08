@@ -49,9 +49,10 @@ void CommandList::buildTopLevelAccelStructFromBuffer(
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS from buffer: acceleration structure is not top-level"));
         return;
     }
-    VkBuildAccelerationStructureFlagsKHR vkBuildFlags = 0u;
-    if(!VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, vkBuildFlags, NWB_TEXT("build TLAS from buffer")))
+    const auto vkBuildFlagsResult = VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, NWB_TEXT("build TLAS from buffer"));
+    if(!vkBuildFlagsResult)
         return;
+    const VkBuildAccelerationStructureFlagsKHR vkBuildFlags = *vkBuildFlagsResult;
 
     auto* instanceBufferImpl = instanceBuffer;
     if(!instanceBufferImpl){
@@ -117,9 +118,10 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: acceleration structure is not top-level"));
         return;
     }
-    VkBuildAccelerationStructureFlagsKHR vkBuildFlags = 0u;
-    if(!VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, vkBuildFlags, NWB_TEXT("build TLAS")))
+    const auto vkBuildFlagsResult = VulkanDetail::ConvertAccelStructBuildFlags(buildFlags, NWB_TEXT("build TLAS"));
+    if(!vkBuildFlagsResult)
         return;
+    const VkBuildAccelerationStructureFlagsKHR vkBuildFlags = *vkBuildFlagsResult;
     const bool allowEmptyInstances = (buildFlags & RayTracingAccelStructBuildFlags::AllowEmptyInstances) != 0u;
     for(usize i = 0u; i < numInstances; ++i){
         auto* blas = pInstances[i].bottomLevelAS;
@@ -147,14 +149,15 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
     }
 
     constexpr u64 s_InstanceDataPadding = s_TlasInstanceDataAlignment - 1u;
-    u64 instanceDataSize = 0u;
+    const auto instanceDataSizeResult = TryMultiply<u64>(static_cast<u64>(numInstances), sizeof(VkAccelerationStructureInstanceKHR));
     if(
-        !TryMultiply<u64>(static_cast<u64>(numInstances), sizeof(VkAccelerationStructureInstanceKHR), instanceDataSize)
-        || instanceDataSize > Limit<u64>::s_Max - s_InstanceDataPadding
+        !instanceDataSizeResult
+        || *instanceDataSizeResult > Limit<u64>::s_Max - s_InstanceDataPadding
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: instance buffer size overflows"));
         return;
     }
+    const u64 instanceDataSize = *instanceDataSizeResult;
     const u64 instanceBufferSize = instanceDataSize + s_InstanceDataPadding;
     BufferDesc instanceBufferDesc;
     instanceBufferDesc.byteSize = instanceBufferSize;
@@ -176,14 +179,15 @@ void CommandList::buildTopLevelAccelStruct(RayTracingAccelStruct* accelStructRes
     }
 
     const VkDeviceAddress instanceBufferAddress = VulkanDetail::GetBufferDeviceAddress(instanceBuffer.get());
-    VkDeviceAddress instanceDataAddress = 0u;
+    const auto instanceDataAddressResult = AlignUpChecked(instanceBufferAddress, s_TlasInstanceDataAlignment);
     if(
         instanceBufferAddress == 0u
-        || !AlignUpChecked(instanceBufferAddress, s_TlasInstanceDataAlignment, instanceDataAddress)
+        || !instanceDataAddressResult
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build TLAS: instance buffer device address is null or cannot be aligned"));
         return;
     }
+    const VkDeviceAddress instanceDataAddress = *instanceDataAddressResult;
     const u64 instanceBufferOffset = instanceDataAddress - instanceBufferAddress;
     const u64 actualInstanceBufferSize = instanceBuffer->getCreationDescription().byteSize;
     if(

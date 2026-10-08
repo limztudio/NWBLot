@@ -53,28 +53,28 @@ ListResult Builder::virtualList(
     result.selectionChanged = previousSelection != state.selectedKey();
     result.focused = options.enabled && m_context.input().focus() == widget->id;
     const WidgetId thumb = MakeWidgetId(widget->id, "scrollbar");
-    PointerGesture gesture;
-    bool haveGesture = m_context.takePartPointerGesture(*widget, thumb, options.enabled, gesture)
-        && gesture.control == token;
-    ControlAction action;
-    bool haveAction = m_context.takeControlAction(*widget, options.enabled, token, action);
+    auto gesture = m_context.takePartPointerGesture(*widget, thumb, options.enabled);
+    bool haveGesture = gesture && gesture->control == token;
+    auto action = m_context.takeControlAction(*widget, options.enabled, token);
+    bool haveAction = action.has_value();
     while(haveGesture || haveAction){
-        if(haveGesture && (!haveAction || gesture.updateSequence < action.id.sequence)){
-            if(!applyListGesture(state, gesture)){
+        if(haveGesture && (!haveAction || gesture->updateSequence < action->id.sequence)){
+            if(!applyListGesture(state, *gesture)){
                 m_context.fail();
                 result.valid = false;
                 return result;
             }
-            haveGesture = m_context.takePartPointerGesture(*widget, thumb, options.enabled, gesture)
-                && gesture.control == token;
+            gesture = m_context.takePartPointerGesture(*widget, thumb, options.enabled);
+            haveGesture = gesture && gesture->control == token;
         }
         else{
-            if(!ListBehavior::Apply(state, source, options, action, result)){
+            if(!ListBehavior::Apply(state, source, options, *action, result)){
                 m_context.fail();
                 result.valid = false;
                 return result;
             }
-            haveAction = m_context.takeControlAction(*widget, options.enabled, token, action);
+            action = m_context.takeControlAction(*widget, options.enabled, token);
+            haveAction = action.has_value();
         }
     }
     ListFrame frame;
@@ -106,11 +106,13 @@ ListResult Builder::virtualList(
     description.height = options.height;
     description.intrinsicSize = { Max(120.0f, background->minimumWidth),
         Max(options.rowHeight + frame.padding.top + frame.padding.bottom, background->minimumHeight) };
-    if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, item.node)){
+    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
+    if(!admittedNode){
         m_context.fail();
         result.valid = false;
         return result;
     }
+    item.node = *admittedNode;
     m_scope->m_lists.push_back(frame);
     m_scope->m_items.push_back(Move(item));
     return result;

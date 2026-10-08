@@ -315,10 +315,12 @@ bool BuildGpuTaskSchedulingReachability(
         return true;
     }
     const usize wordsPerRow = taskCount == 0u ? 0u : (taskCount - 1u) / s_BitsPerWord + 1u;
-    usize totalWordCount = 0u;
+    const auto totalWordCountResult = TryMultiply<usize>(taskCount, wordsPerRow);
+    if(!totalWordCountResult)
+        return fail();
+    const usize totalWordCount = *totalWordCountResult;
     if(
-        !TryMultiply<usize>(taskCount, wordsPerRow, totalWordCount)
-        || totalWordCount > Limit<usize>::s_Max / sizeof(u64)
+        totalWordCount > Limit<usize>::s_Max / sizeof(u64)
         || totalWordCount > outReachability.m_words.max_size()
     )
         return fail();
@@ -376,11 +378,11 @@ bool BuildGpuTaskSchedulingReachability(
         // Include temporary bounds and retained offsets so compact rows reduce peak scratch use.
         const usize compactBudget = (totalWordCount - totalWordCount / 4u) * sizeof(u64);
         const usize compactBytes = compactWordCount * sizeof(u64);
-        usize metadataBytes = 0u;
+        const auto metadataBytes = TryMultiply<usize>(taskCount, sizeof(usize) + sizeof(GpuTaskSchedulingReachability::WordRange));
         const bool compactRows =
-            TryMultiply<usize>(taskCount, sizeof(usize) + sizeof(GpuTaskSchedulingReachability::WordRange), metadataBytes)
+            metadataBytes
             && compactBytes <= compactBudget
-            && metadataBytes <= compactBudget - compactBytes
+            && *metadataBytes <= compactBudget - compactBytes
         ;
         // Retaining the bounds costs at most 1/32 of a dense matrix at this width; smaller dense rows release them.
         constexpr usize s_MinDenseBoundsReuseWordsPerRow = 64u;

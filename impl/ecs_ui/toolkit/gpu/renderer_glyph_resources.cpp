@@ -204,15 +204,15 @@ bool GpuRendererState::prepareGlyphPages(GpuFrameData& frame){
     return true;
 }
 
-bool GpuRendererState::declareGlyphPages(
+Expected<GpuGlyphGraphResources> GpuRendererState::declareGlyphPages(
     Core::GpuTaskGraph& graph,
     const GpuFrame& frame,
-    GpuGlyphGraphResources& resources,
     GpuRasterResourceUses& uses
 ){
+    Expected<GpuGlyphGraphResources> resources{s_InPlace};
     if(frame->m_glyphPages.size() != frame->m_snapshot.glyphPages().size()){
         NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: prepared glyph page count does not match the immutable snapshot"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     for(usize index = 0u; index < frame->m_glyphPages.size(); ++index){
         const auto& page = frame->m_glyphPages[index];
@@ -229,7 +229,7 @@ bool GpuRendererState::declareGlyphPages(
             NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: glyph page {} upload completion import failed (queue={}, generation={}, value={})")
                 , index, page->m_readinessToken.physicalQueueIndex, page->m_readinessToken.deviceGeneration, page->m_readinessToken.value
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const Core::GpuGraphResourceId texture = graph.importTexture(
             page->m_texture,
@@ -241,12 +241,12 @@ bool GpuRendererState::declareGlyphPages(
             NWB_LOGGER_ERROR(NWB_TEXT("GpuRenderer: glyph page {} texture import failed (atlas={}, page={}, generation={})")
                 , index, page->m_page->binding().atlasIdentity, page->m_page->binding().index, page->m_page->binding().generation
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        resources.push_back(texture);
+        resources->push_back(texture);
         uses.push_back({ texture, {}, Core::ResourceStates::ShaderResource, Core::GpuTaskResourceAccess::Read });
     }
-    return true;
+    return resources;
 }
 
 

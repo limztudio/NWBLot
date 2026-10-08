@@ -111,18 +111,19 @@ TEST(GpuCommandIrUploadStream, LateBadBlobOffsetRejectsWithoutOverwritingTheFail
     EXPECT_EQ(validation.byteOffset, s_SecondUploadOffset);
 
     Graphics::GpuCommandIrStreamReader reader(malformed);
-    Graphics::GpuCommandIrBuiltinTaskRecord output;
-    ASSERT_EQ(reader.next(output), Graphics::GpuCommandIrStreamReadStatus::Record);
-    EXPECT_EQ(output.opcode, Graphics::GpuCommandIrOpcode::UploadBuffer);
-    output.opcode = Graphics::GpuCommandIrOpcode::ClearTexture;
-    output.task = Graphics::GpuTaskId{ .generation = 92u, .index = 91u };
-    output.blobSizeBytes = 777u;
-    EXPECT_EQ(reader.next(output), Graphics::GpuCommandIrStreamReadStatus::Error);
-    EXPECT_EQ(output.opcode, Graphics::GpuCommandIrOpcode::ClearTexture);
-    EXPECT_EQ(output.task.index, 91u);
-    EXPECT_EQ(output.task.generation, 92u);
-    EXPECT_EQ(output.blobSizeBytes, 777u);
-    EXPECT_EQ(reader.next(output), Graphics::GpuCommandIrStreamReadStatus::Error);
+    Expected<Graphics::GpuCommandIrBuiltinTaskRecord, Graphics::GpuCommandIrStreamReadStatus::Enum> output = MakeUnexpected(Graphics::GpuCommandIrStreamReadStatus::End);
+    ASSERT_TRUE((output = reader.nextBuiltinTask()));
+    EXPECT_EQ(output->opcode, Graphics::GpuCommandIrOpcode::UploadBuffer);
+
+
+    const auto terminal1 = reader.nextBuiltinTask();
+    ASSERT_FALSE(terminal1);
+    EXPECT_EQ(terminal1.error(), Graphics::GpuCommandIrStreamReadStatus::Error);
+
+
+    const auto terminal2 = reader.nextBuiltinTask();
+    ASSERT_FALSE(terminal2);
+    EXPECT_EQ(terminal2.error(), Graphics::GpuCommandIrStreamReadStatus::Error);
     EXPECT_TRUE(reader.validation().failed());
 }
 
@@ -192,14 +193,16 @@ TEST(GpuCommandIrUploadStream, TruncatedLateRecordDoesNotPublishPartialOutput){
     EXPECT_EQ(validation.byteOffset, secondOffset);
 
     Graphics::GpuCommandIrStreamReader reader(malformed);
-    Graphics::GpuCommandIrBuiltinTaskRecord output;
-    ASSERT_EQ(reader.next(output), Graphics::GpuCommandIrStreamReadStatus::Record);
-    EXPECT_EQ(output.opcode, Graphics::GpuCommandIrOpcode::ClearBuffer);
-    output.opcode = Graphics::GpuCommandIrOpcode::ClearTexture;
-    output.blobSizeBytes = 777u;
-    EXPECT_EQ(reader.next(output), Graphics::GpuCommandIrStreamReadStatus::Error);
-    EXPECT_EQ(output.opcode, Graphics::GpuCommandIrOpcode::ClearTexture);
-    EXPECT_EQ(output.blobSizeBytes, 777u);
+    Expected<Graphics::GpuCommandIrBuiltinTaskRecord, Graphics::GpuCommandIrStreamReadStatus::Enum> output = MakeUnexpected(Graphics::GpuCommandIrStreamReadStatus::End);
+    ASSERT_TRUE((output = reader.nextBuiltinTask()));
+    EXPECT_EQ(output->opcode, Graphics::GpuCommandIrOpcode::ClearBuffer);
+
+
+    const auto terminal3 = reader.nextBuiltinTask();
+    ASSERT_FALSE(terminal3);
+    EXPECT_EQ(terminal3.error(), Graphics::GpuCommandIrStreamReadStatus::Error);
+
+
 }
 
 TEST(GpuCommandIrUploadStream, EarlierWireVersionRejectsBeforeAnyRecordOrBlobIsExposed){
@@ -222,12 +225,12 @@ TEST(GpuCommandIrUploadStream, EarlierWireVersionRejectsBeforeAnyRecordOrBlobIsE
     EXPECT_EQ(validation.recordIndex, Limit<u64>::s_Max);
 
     Graphics::GpuCommandIrStreamReader reader(oldVersion);
-    Graphics::GpuCommandIrBuiltinTaskRecord output;
-    output.opcode = Graphics::GpuCommandIrOpcode::ClearTexture;
-    output.blobSizeBytes = 777u;
-    EXPECT_EQ(reader.next(output), Graphics::GpuCommandIrStreamReadStatus::Error);
-    EXPECT_EQ(output.opcode, Graphics::GpuCommandIrOpcode::ClearTexture);
-    EXPECT_EQ(output.blobSizeBytes, 777u);
+
+
+    const auto terminal4 = reader.nextBuiltinTask();
+    ASSERT_FALSE(terminal4);
+    EXPECT_EQ(terminal4.error(), Graphics::GpuCommandIrStreamReadStatus::Error);
+
     EXPECT_TRUE(reader.blobBytes().empty());
 }
 

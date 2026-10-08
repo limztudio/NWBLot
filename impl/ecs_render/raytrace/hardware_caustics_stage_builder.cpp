@@ -37,14 +37,13 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool HardwareCausticsStageBuilder::declare(
-    const HardwareCausticsStageInputs& inputs,
-    HardwareCausticsStageResult& outResult
+[[nodiscard]] Expected<HardwareCausticsStageResult> HardwareCausticsStageBuilder::declare(
+    const HardwareCausticsStageInputs& inputs
 ){
     using namespace RendererTaskGraphDetail;
-    outResult = HardwareCausticsStageResult{};
+    HardwareCausticsStageResult result{};
     if(!inputs.declaresHardwareCaustics)
-        return true;
+        return result;
     if(
         !inputs.targets
         || !inputs.lightingResources
@@ -67,7 +66,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         || !inputs.graphicsPrefixTask.valid()
         || (inputs.hardwareTraceAttributeResourceCount != 0u && !inputs.hardwareTraceAttributeResources)
     )
-        return false;
+        return MakeUnexpected(Failure{});
     const auto importTexture = [&](const Core::TextureHandle& texture, const Name& identity, const AStringView label){
         return m_graph.importTexture(texture, TextureResourceDesc(identity, label));
     };
@@ -105,7 +104,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             || !sceneGeometryDomain.valid()
         ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import hardware-caustics graph resources"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         Core::Alloc::ScratchArena hardwareCausticsScratchArena(RendererArenaScope::s_TaskGraphArena);
@@ -430,7 +429,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             const Core::GpuGraphResourceId resource = inputs.hardwareTraceAttributeResources[resourceIndex];
             if(!resource.valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid prepared hardware-caustics attribute resource"));
-                return false;
+                return MakeUnexpected(Failure{});
             }
             if(!hardwareTraceAttributeStatesGraphOwned)
                 hardwarePhotonResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
@@ -448,7 +447,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         }
         if(!optionalResourcesImported){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import a hardware-caustics dynamic resource"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         const Core::GpuTaskId hardwareDependencies[] = { inputs.graphicsPrefixTask };
@@ -501,9 +500,9 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         );
         if(!irradianceClearTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics irradiance clear"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outResult.causticIrradianceClearTask = irradianceClearTask;
+        result.causticIrradianceClearTask = irradianceClearTask;
 
         Core::GpuTaskId causticsDependency = irradianceClearTask;
         const bool graphOwnsNonTemporalAccumulatorClear = inputs.rayTracingResources->causticTemporalDecay <= 0.f;
@@ -532,9 +531,9 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             );
             if(!accumulatorNonTemporalClearTask.valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics non-temporal accumulator clear"));
-                return false;
+                return MakeUnexpected(Failure{});
             }
-            outResult.causticAccumulatorNonTemporalClearTask = accumulatorNonTemporalClearTask;
+            result.causticAccumulatorNonTemporalClearTask = accumulatorNonTemporalClearTask;
             causticsDependency = accumulatorNonTemporalClearTask;
         }
         const bool graphOwnsAccumulatorBootstrapClear =
@@ -569,9 +568,9 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             );
             if(!accumulatorBootstrapClearTask.valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics accumulator bootstrap clear"));
-                return false;
+                return MakeUnexpected(Failure{});
             }
-            outResult.causticAccumulatorBootstrapClearTask = accumulatorBootstrapClearTask;
+            result.causticAccumulatorBootstrapClearTask = accumulatorBootstrapClearTask;
             causticsDependency = accumulatorBootstrapClearTask;
         }
 
@@ -617,9 +616,9 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             );
             if(!accumulatorDecayTask.valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graph-owned deferred hardware-caustics accumulator decay"));
-                return false;
+                return MakeUnexpected(Failure{});
             }
-            outResult.causticAccumulatorDecayTask = accumulatorDecayTask;
+            result.causticAccumulatorDecayTask = accumulatorDecayTask;
             causticsDependency = accumulatorDecayTask;
         }
 
@@ -641,7 +640,7 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
                 hardwarePhotonResourceSetUseCount
             )
         ;
-        outResult.causticPhotonTask = m_raytracingSystem.declareHardwareCausticsTask(
+        result.causticPhotonTask = m_raytracingSystem.declareHardwareCausticsTask(
             m_graph,
             hardwarePhotonDesc,
             (*inputs.targets),
@@ -654,9 +653,9 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             graphOwnsAccumulatorBootstrapClear,
             graphOwnsNonTemporalAccumulatorClear
         );
-        if(!outResult.causticPhotonTask.valid()){
+        if(!result.causticPhotonTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics photon graph task"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         Core::GpuTaskSchedulingHint hardwareGeometryScheduling = hardwareCausticsScheduling;
@@ -666,10 +665,10 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             .setIdentity(Name("render.hardware_caustics.geometry_downsample"))
             .setMarkerLabel("Hardware Caustics Geometry Downsample")
             .setScheduling(hardwareGeometryScheduling)
-            .setDependencies(&outResult.causticPhotonTask, 1u)
+            .setDependencies(&result.causticPhotonTask, 1u)
             .setResourceUses(hardwareGeometryResourceUses.data(), hardwareGeometryResourceUses.size())
         ;
-        outResult.causticGeometryTask = m_raytracingSystem.declareCausticGeometryDownsampleTask(
+        result.causticGeometryTask = m_raytracingSystem.declareCausticGeometryDownsampleTask(
             m_graph,
             hardwareGeometryDesc,
             (*inputs.targets),
@@ -677,15 +676,15 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
             *inputs.producerDispatched,
             *inputs.resolveTiming
         );
-        if(!outResult.causticGeometryTask.valid()){
+        if(!result.causticGeometryTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics geometry graph task"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         HardwareCausticsResolveChainBuilder resolveChainBuilder(m_graph, m_raytracingSystem);
         HardwareCausticsResolveChainInputs resolveChainInputs;
         resolveChainInputs.targets = inputs.targets;
-        resolveChainInputs.geometryTask = outResult.causticGeometryTask;
+        resolveChainInputs.geometryTask = result.causticGeometryTask;
         resolveChainInputs.baseScheduling = hardwareGeometryScheduling;
         resolveChainInputs.prepare = {hardwareResolvePrepareResourceUses.data(), hardwareResolvePrepareResourceUses.size()};
         resolveChainInputs.wavelet = {hardwareResolveWaveletResourceUses.data(), hardwareResolveWaveletResourceUses.size()};
@@ -697,21 +696,21 @@ HardwareCausticsStageBuilder::HardwareCausticsStageBuilder(
         resolveChainInputs.producerDispatched = inputs.producerDispatched;
         resolveChainInputs.timingTicket = inputs.timingTicket;
         resolveChainInputs.resolveTiming = inputs.resolveTiming;
-        HardwareCausticsResolveChainResult resolveChainResult;
-        if(!resolveChainBuilder.declare(resolveChainInputs, resolveChainResult, hardwareCausticsScratchArena)){
+        auto resolveChainResult = resolveChainBuilder.declare(resolveChainInputs, hardwareCausticsScratchArena);
+        if(!resolveChainResult){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare hardware-caustics resolve chain"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outResult.causticResolvePrepareTask = resolveChainResult.causticResolvePrepareTask;
-        outResult.causticResolveWaveletTask = resolveChainResult.causticResolveWaveletTask;
-        outResult.causticResolveSecondWaveletTask = resolveChainResult.causticResolveSecondWaveletTask;
-        outResult.causticResolveThirdWaveletTask = resolveChainResult.causticResolveThirdWaveletTask;
-        outResult.causticResolveFourthWaveletTask = resolveChainResult.causticResolveFourthWaveletTask;
-        outResult.causticResolveFifthWaveletTask = resolveChainResult.causticResolveFifthWaveletTask;
-        outResult.causticResolveUpsampleTask = resolveChainResult.causticResolveUpsampleTask;
-        outResult.hardwareCausticsTask = resolveChainResult.hardwareCausticsTask;
-    outResult.declared = true;
-    return true;
+        result.causticResolvePrepareTask = resolveChainResult->causticResolvePrepareTask;
+        result.causticResolveWaveletTask = resolveChainResult->causticResolveWaveletTask;
+        result.causticResolveSecondWaveletTask = resolveChainResult->causticResolveSecondWaveletTask;
+        result.causticResolveThirdWaveletTask = resolveChainResult->causticResolveThirdWaveletTask;
+        result.causticResolveFourthWaveletTask = resolveChainResult->causticResolveFourthWaveletTask;
+        result.causticResolveFifthWaveletTask = resolveChainResult->causticResolveFifthWaveletTask;
+        result.causticResolveUpsampleTask = resolveChainResult->causticResolveUpsampleTask;
+        result.hardwareCausticsTask = resolveChainResult->hardwareCausticsTask;
+    result.declared = true;
+    return result;
 }
 
 

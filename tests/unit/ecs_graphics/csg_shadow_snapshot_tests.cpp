@@ -74,15 +74,18 @@ void SetParameters(CsgCutterComponent& cutter, const Float4& parameter){
     NWB_MEMCPY(cutter.parameterBytes.data(), cutter.parameterBytes.size(), &parameter, sizeof(parameter));
 }
 
-[[nodiscard]] bool CustomBounds(
-    const SIMDMatrix& shapeToWorld, const u8* parameterBytes, const usize parameterByteSize,
-    SIMDVector& outMin, SIMDVector& outMax, bool& outFinite
-){
+[[nodiscard]] Expected<CsgShapeBounds> CustomBounds(
+    const SIMDMatrix& shapeToWorld,
+    const u8* parameterBytes,
+    const usize parameterByteSize
+)noexcept{
     static_cast<void>(parameterBytes);
     if(parameterByteSize != 0u)
-        return false;
-    outFinite = true;
-    return AabbTests::Transform(shapeToWorld, VectorReplicate(-1.f), VectorReplicate(1.f), outMin, outMax);
+        return MakeUnexpected(Failure{});
+    const auto bounds = AabbTests::Transform(shapeToWorld, VectorReplicate(-1.f), VectorReplicate(1.f));
+    if(!bounds)
+        return MakeUnexpected(Failure{});
+    return CsgShapeBounds{ bounds->minBounds, bounds->maxBounds, true };
 }
 
 [[nodiscard]] bool RegisterCustomShape(SnapshotContext& context, const Name name = s_CustomShape){
@@ -91,8 +94,7 @@ void SetParameters(CsgCutterComponent& cutter, const Float4& parameter){
     description.shaderModule = Name("tests/csg_shadow/evaluator");
     description.shaderModuleInclude = ACompactString("tests/csg_shadow/evaluator.slangi");
     description.boundsCallback = &CustomBounds;
-    CsgShapeTypeId typeId = s_InvalidCsgShapeTypeId;
-    return context.registry.registerShapeType(description, typeId);
+    return context.registry.registerShapeType(description).has_value();
 }
 
 

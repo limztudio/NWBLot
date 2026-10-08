@@ -23,14 +23,11 @@ namespace VulkanDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildClusterOperationInputInfo(
+Expected<ClusterOperationInput> BuildClusterOperationInputInfo(
     const RayTracingClusterOperationParams& params,
-    VkClusterAccelerationStructureInputInfoNV& outInputInfo,
-    VkClusterAccelerationStructureMoveObjectsInputNV& outMoveInput,
-    VkClusterAccelerationStructureTriangleClusterInputNV& outClusterInput,
-    VkClusterAccelerationStructureClustersBottomLevelInputNV& outBlasInput,
     TStringView operationName
 ){
+    ClusterOperationInput input;
     VkClusterAccelerationStructureOpTypeNV opType;
     switch(params.type){
     case RayTracingClusterOperationType::Move:
@@ -49,7 +46,7 @@ bool BuildClusterOperationInputInfo(
         opType = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_TYPE_BUILD_CLUSTERS_BOTTOM_LEVEL_NV;
         break;
     default:
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     VkClusterAccelerationStructureOpModeNV opMode;
@@ -64,7 +61,7 @@ bool BuildClusterOperationInputInfo(
         opMode = VK_CLUSTER_ACCELERATION_STRUCTURE_OP_MODE_COMPUTE_SIZES_NV;
         break;
     default:
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     VkBuildAccelerationStructureFlagsKHR opFlags = 0;
@@ -75,15 +72,15 @@ bool BuildClusterOperationInputInfo(
     if(params.flags & RayTracingClusterOperationFlags::AllowOMM)
         opFlags |= VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_CLUSTER_OPACITY_MICROMAPS_BIT_NV;
 
-    outInputInfo = MakeVkStruct<VkClusterAccelerationStructureInputInfoNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_INPUT_INFO_NV);
-    outInputInfo.maxAccelerationStructureCount = params.maxArgCount;
-    outInputInfo.flags = opFlags;
-    outInputInfo.opType = opType;
-    outInputInfo.opMode = opMode;
+    input.info = MakeVkStruct<VkClusterAccelerationStructureInputInfoNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_INPUT_INFO_NV);
+    input.info.maxAccelerationStructureCount = params.maxArgCount;
+    input.info.flags = opFlags;
+    input.info.opType = opType;
+    input.info.opMode = opMode;
 
-    outMoveInput = MakeVkStruct<VkClusterAccelerationStructureMoveObjectsInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_MOVE_OBJECTS_INPUT_NV);
-    outClusterInput = MakeVkStruct<VkClusterAccelerationStructureTriangleClusterInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_TRIANGLE_CLUSTER_INPUT_NV);
-    outBlasInput = MakeVkStruct<VkClusterAccelerationStructureClustersBottomLevelInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_CLUSTERS_BOTTOM_LEVEL_INPUT_NV);
+    input.move = MakeVkStruct<VkClusterAccelerationStructureMoveObjectsInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_MOVE_OBJECTS_INPUT_NV);
+    input.cluster = MakeVkStruct<VkClusterAccelerationStructureTriangleClusterInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_TRIANGLE_CLUSTER_INPUT_NV);
+    input.blas = MakeVkStruct<VkClusterAccelerationStructureClustersBottomLevelInputNV>(VK_STRUCTURE_TYPE_CLUSTER_ACCELERATION_STRUCTURE_CLUSTERS_BOTTOM_LEVEL_INPUT_NV);
 
     switch(params.type){
     case RayTracingClusterOperationType::Move:{
@@ -92,12 +89,11 @@ bool BuildClusterOperationInputInfo(
         case RayTracingClusterOperationMoveType::BottomLevel:  moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_CLUSTERS_BOTTOM_LEVEL_NV; break;
         case RayTracingClusterOperationMoveType::ClusterLevel: moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_TRIANGLE_CLUSTER_NV; break;
         case RayTracingClusterOperationMoveType::Template:     moveType = VK_CLUSTER_ACCELERATION_STRUCTURE_TYPE_TRIANGLE_CLUSTER_TEMPLATE_NV; break;
-        default: return false;
+        default: return MakeUnexpected(Failure{});
         }
-        outMoveInput.type = moveType;
-        outMoveInput.noMoveOverlap = (params.flags & RayTracingClusterOperationFlags::NoOverlap) ? VK_TRUE : VK_FALSE;
-        outMoveInput.maxMovedBytes = params.move.maxBytes;
-        outInputInfo.opInput.pMoveObjects = &outMoveInput;
+        input.move.type = moveType;
+        input.move.noMoveOverlap = (params.flags & RayTracingClusterOperationFlags::NoOverlap) ? VK_TRUE : VK_FALSE;
+        input.move.maxMovedBytes = params.move.maxBytes;
         break;
     }
     case RayTracingClusterOperationType::ClasBuild:
@@ -106,30 +102,28 @@ bool BuildClusterOperationInputInfo(
         const VkFormat vertexFormat = ConvertFormat(params.clas.vertexFormat);
         if(vertexFormat == VK_FORMAT_UNDEFINED){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: vertex format is unsupported"), operationName);
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outClusterInput.vertexFormat = vertexFormat;
-        outClusterInput.maxGeometryIndexValue = params.clas.maxGeometryIndex;
-        outClusterInput.maxClusterUniqueGeometryCount = params.clas.maxUniqueGeometryCount;
-        outClusterInput.maxClusterTriangleCount = params.clas.maxTriangleCount;
-        outClusterInput.maxClusterVertexCount = params.clas.maxVertexCount;
-        outClusterInput.maxTotalTriangleCount = params.clas.maxTotalTriangleCount;
-        outClusterInput.maxTotalVertexCount = params.clas.maxTotalVertexCount;
-        outClusterInput.minPositionTruncateBitCount = params.clas.minPositionTruncateBitCount;
-        outInputInfo.opInput.pTriangleClusters = &outClusterInput;
+        input.cluster.vertexFormat = vertexFormat;
+        input.cluster.maxGeometryIndexValue = params.clas.maxGeometryIndex;
+        input.cluster.maxClusterUniqueGeometryCount = params.clas.maxUniqueGeometryCount;
+        input.cluster.maxClusterTriangleCount = params.clas.maxTriangleCount;
+        input.cluster.maxClusterVertexCount = params.clas.maxVertexCount;
+        input.cluster.maxTotalTriangleCount = params.clas.maxTotalTriangleCount;
+        input.cluster.maxTotalVertexCount = params.clas.maxTotalVertexCount;
+        input.cluster.minPositionTruncateBitCount = params.clas.minPositionTruncateBitCount;
         break;
     }
     case RayTracingClusterOperationType::BlasBuild:{
-        outBlasInput.maxClusterCountPerAccelerationStructure = params.blas.maxClasPerBlasCount;
-        outBlasInput.maxTotalClusterCount = params.blas.maxTotalClasCount;
-        outInputInfo.opInput.pClustersBottomLevel = &outBlasInput;
+        input.blas.maxClusterCountPerAccelerationStructure = params.blas.maxClasPerBlasCount;
+        input.blas.maxTotalClusterCount = params.blas.maxTotalClasCount;
         break;
     }
     default:
         break;
     }
 
-    return true;
+    return input;
 }
 
 
@@ -212,13 +206,13 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         );
         return nullptr;
     }
-    VkBuildAccelerationStructureFlagsKHR vkBuildFlags = 0u;
-    if(!VulkanDetail::ConvertAccelStructBuildFlags(
+    const auto vkBuildFlagsResult = VulkanDetail::ConvertAccelStructBuildFlags(
         desc.buildFlags,
-        vkBuildFlags,
         NWB_TEXT("create acceleration structure")
-    ))
+    );
+    if(!vkBuildFlagsResult)
         return nullptr;
+    const VkBuildAccelerationStructureFlagsKHR vkBuildFlags = *vkBuildFlagsResult;
 
     auto* as = NewArenaObject<AccelStruct>(m_context.objectArena, m_context, desc.queueSharing);
     as->m_desc = desc;
@@ -374,21 +368,19 @@ RayTracingAccelStructHandle Device::createAccelStruct(const RayTracingAccelStruc
         opacityMicromapUsageCounts.resize(totalOpacityMicromapUsageCount);
 
         for(usize i = 0u; i < geometryCount; ++i){
-            if(
-                !VulkanDetail::FillBlasGeometryForSizeQuery(
-                    m_context,
-                    desc.bottomLevelGeometries[i],
-                    blasScratch.geometries[i],
-                    blasScratch.spheresData[i],
-                    blasScratch.lssData[i],
-                    blasScratch.primitiveCounts[i],
-                    NWB_TEXT("create BLAS"),
-                    false
-                )
-            ){
+            const auto geometry = VulkanDetail::FillBlasGeometryForSizeQuery(m_context, desc.bottomLevelGeometries[i], NWB_TEXT("create BLAS"), false);
+            if(!geometry){
                 DestroyArenaObject(m_context.objectArena, as);
                 return nullptr;
             }
+            blasScratch.geometries[i] = geometry->geometry;
+            blasScratch.spheresData[i] = geometry->spheresData;
+            blasScratch.lssData[i] = geometry->lssData;
+            blasScratch.primitiveCounts[i] = geometry->primitiveCount;
+            if(geometry->geometry.geometryType == VK_GEOMETRY_TYPE_SPHERES_NV)
+                blasScratch.geometries[i].pNext = &blasScratch.spheresData[i];
+            else if(geometry->geometry.geometryType == VK_GEOMETRY_TYPE_LINEAR_SWEPT_SPHERES_NV)
+                blasScratch.geometries[i].pNext = &blasScratch.lssData[i];
 
             if(opacityMicromapUsageOffsets[i] != Limit<usize>::s_Max){
                 const RayTracingGeometryTriangles& triangles = desc.bottomLevelGeometries[i].geometryData.triangles;
@@ -562,12 +554,10 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
     )
         return info;
 
-    VkClusterAccelerationStructureInputInfoNV inputInfo{};
-    VkClusterAccelerationStructureMoveObjectsInputNV moveInput{};
-    VkClusterAccelerationStructureTriangleClusterInputNV clusterInput{};
-    VkClusterAccelerationStructureClustersBottomLevelInputNV blasInput{};
-    if(!VulkanDetail::BuildClusterOperationInputInfo(params, inputInfo, moveInput, clusterInput, blasInput, NWB_TEXT("query cluster operation sizes")))
+    auto input = VulkanDetail::BuildClusterOperationInputInfo(params, NWB_TEXT("query cluster operation sizes"));
+    if(!input)
         return info;
+    const auto inputInfo = input->nativeInfo();
 
     if(
         params.type == RayTracingClusterOperationType::ClasBuild
@@ -584,7 +574,7 @@ RayTracingClusterOperationSizeInfo Device::getClusterOperationSizeInfo(const Ray
             return info;
 
         VkFormatProperties formatProperties{};
-        m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, clusterInput.vertexFormat, &formatProperties);
+        m_context.instanceDispatch.vkGetPhysicalDeviceFormatProperties(m_context.physicalDevice, input->cluster.vertexFormat, &formatProperties);
         if((formatProperties.bufferFeatures & VK_FORMAT_FEATURE_ACCELERATION_STRUCTURE_VERTEX_BUFFER_BIT_KHR) == 0u)
             return info;
     }

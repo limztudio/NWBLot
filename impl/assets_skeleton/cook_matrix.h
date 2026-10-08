@@ -33,14 +33,13 @@ namespace AssetsSkeletonCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ParseSkeletonJointMatrixValue(
+[[nodiscard]] inline Expected<SkeletonJointMatrix> ParseSkeletonJointMatrixValue(
     const Path& nwbFilePath,
     const Core::Metascript::Value& value,
     const AStringView metaKind,
-    const AStringView label,
-    SkeletonJointMatrix& outMatrix
+    const AStringView label
 ){
-    outMatrix = ::Float34Identity();
+    SkeletonJointMatrix matrix = ::Float34Identity();
 
     if(!value.isList() || value.asList().size() != 3u){
         NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' must be a 3x4 affine matrix")
@@ -48,7 +47,7 @@ namespace AssetsSkeletonCookDetail{
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(label)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const auto& rows = value.asList();
@@ -61,14 +60,15 @@ namespace AssetsSkeletonCookDetail{
                 , StringConvert(label)
                 , rowIndex
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         f32 rowValues[4u] = {};
         const auto& columns = row.asList();
         for(usize columnIndex = 0u; columnIndex < 4u; ++columnIndex){
             const Core::Metascript::Value& column = columns[columnIndex];
-            if(!Core::Assets::TryDecodeMetadataFiniteF32(column, rowValues[columnIndex])){
+            auto columnIndexResult = Core::Assets::TryDecodeMetadataFiniteF32(column);
+            if(!columnIndexResult){
                 if(!column.isNumeric()){
                     NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' row {} column {} must be numeric")
                         , StringConvert(metaKind)
@@ -77,7 +77,7 @@ namespace AssetsSkeletonCookDetail{
                         , rowIndex
                         , columnIndex
                     );
-                    return false;
+                    return MakeUnexpected(Failure{});
                 }
 
                 NWB_LOGGER_ERROR(NWB_TEXT("{} meta '{}': '{}' row {} column {} is non-finite or outside f32 range")
@@ -87,14 +87,15 @@ namespace AssetsSkeletonCookDetail{
                     , rowIndex
                     , columnIndex
                 );
-                return false;
+                return MakeUnexpected(Failure{});
             }
+            rowValues[columnIndex] = *columnIndexResult;
         }
 
-        outMatrix.rows[rowIndex] = Float4(rowValues[0u], rowValues[1u], rowValues[2u], rowValues[3u]);
+        matrix.rows[rowIndex] = Float4(rowValues[0u], rowValues[1u], rowValues[2u], rowValues[3u]);
     }
 
-    return true;
+    return matrix;
 }
 
 

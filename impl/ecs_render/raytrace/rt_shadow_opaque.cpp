@@ -90,27 +90,24 @@ Core::GpuTaskId RendererRayTracingSystem::declareShadowVisibilityOpaqueFirstWave
     );
 }
 
-bool RendererRayTracingSystem::renderShadowVisibilityOpaque(
+Expected<u32> RendererRayTracingSystem::renderShadowVisibilityOpaque(
     Core::CommandList& commandList,
     DeferredFrameTargets& targets,
     const DeferredLightingGraphResources& deferredLightingResources,
-    u32& outFrameIndex,
     const bool graphOwnsOpaqueTemporalMergeEntryStates,
     const LightSpaceShadowSnapshot* const lightSpace
 ){
-    outFrameIndex = 0u;
     if(
         !m_rayTracingState.m_softShadowReady
         || !m_rayTracingState.m_softTransparentReady
         || m_rayTracingState.m_softShadowSlotMask == 0u
     )
-        return false;
+        return MakeUnexpected(Failure{});
     return renderShadowVisibility(
         commandList,
         targets,
         deferredLightingResources,
         true,
-        &outFrameIndex,
         graphOwnsOpaqueTemporalMergeEntryStates,
         true,
         lightSpace

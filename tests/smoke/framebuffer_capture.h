@@ -129,43 +129,38 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Shared smoke framebuffer-capture prologue: reads the capture path + frame count, validates the count, and
-// constructs a started capture. Returns true when capture is disabled (outCapture stays null) or when a started
-// capture is published; false on config/startup failure. Projects with extra capture options pass them through.
-[[nodiscard]] inline bool ConfigureSmokeFramebufferCapture(
+// Missing capture configuration is a successful null result; a configured result owns a started observer.
+[[nodiscard]] inline Expected<UniquePtr<FramebufferCapture>> ConfigureSmokeFramebufferCapture(
     ProjectRuntimeContext& context,
     const TStringView projectName,
     const u32 defaultFrameCount,
-    UniquePtr<FramebufferCapture>& outCapture,
     const FramebufferCaptureOptions& options = {}
 ){
-    outCapture.reset();
-    SmokeEnvironmentString outputPath(context.objectArena);
-    if(!ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", outputPath))
-        return true;
+    const auto outputPath = ReadSmokeEnvironmentText(context.objectArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH");
+    if(!outputPath)
+        return UniquePtr<FramebufferCapture>{};
 
     u32 captureFrameCount = defaultFrameCount;
-    SmokeEnvironmentString frameCountText(context.objectArena);
-    if(ReadSmokeEnvironmentText("NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT", frameCountText)){
-        u64 parsedFrameCount = 0u;
+    const auto frameCountText = ReadSmokeEnvironmentText(context.objectArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT");
+    if(frameCountText){
+        const auto parsedFrameCount = ParseU64(AStringView(frameCountText->data(), frameCountText->size()));
         if(
-            !ParseU64(AStringView(frameCountText.data(), frameCountText.size()), parsedFrameCount)
-            || parsedFrameCount == 0u
-            || parsedFrameCount > static_cast<u64>(Limit<u32>::s_Max)
+            !parsedFrameCount
+            || *parsedFrameCount == 0u
+            || *parsedFrameCount > static_cast<u64>(Limit<u32>::s_Max)
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("{}: capture frame count must be a positive u32"), projectName);
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        captureFrameCount = static_cast<u32>(parsedFrameCount);
+        captureFrameCount = static_cast<u32>(*parsedFrameCount);
     }
 
     auto capture = MakeUnique<FramebufferCapture>(
-        context, AStringView(outputPath.data(), outputPath.size()), captureFrameCount, options
+        context, AStringView(outputPath->data(), outputPath->size()), captureFrameCount, options
     );
     if(!capture || !capture->start())
-        return false;
-    outCapture = Move(capture);
-    return true;
+        return MakeUnexpected(Failure{});
+    return capture;
 }
 
 

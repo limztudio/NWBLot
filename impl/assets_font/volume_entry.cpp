@@ -32,16 +32,16 @@ static bool RegisterFontCookEntry(Core::Assets::CookEntryRegistry& registry){
     return Core::Assets::RegisterDocumentValueCookEntry<FontCookEntry, Font, FontAssetCodec>(
         registry, NWB_TEXT("font"),
         [](const Path& root, AStringView virtualRoot, const Path& path, const Core::Metascript::Document& doc,
-            FontCookEntry& entry, Core::Assets::CookEntryParseContext& context
+            Core::Assets::CookEntryParseContext& context
         ){
-            return ParseFontCookMetadata(root, virtualRoot, path, doc, entry, context.scratchArena);
+            return ParseFontCookMetadata(root, virtualRoot, path, doc, context.cookArena, context.scratchArena);
         },
         [](Name virtualPath, const Path& path, const Core::Metascript::Value& asset,
-            FontCookEntry& entry, Core::Assets::CookEntryParseContext&
+            Core::Assets::CookEntryParseContext& context
         ){
-            return ParseFontCookMetadataValue(virtualPath, path, asset, entry);
+            return ParseFontCookMetadataValue(virtualPath, path, asset, context.cookArena);
         },
-        [](FontCookEntry& entry, Font& font){ return BuildFontAsset(entry, font); }, false
+        [](FontCookEntry& entry, Core::Assets::AssetArena& arena){ return Core::Assets::ForwardCookBuild(entry, arena, &BuildFontAsset); }, false
     );
 }
 

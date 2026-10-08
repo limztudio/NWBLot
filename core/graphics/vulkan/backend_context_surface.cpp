@@ -178,21 +178,20 @@ bool BackendContext::createVulkanSwapChain(){
         return false;
     }
 
-    VulkanDetail::SwapChainSurfaceFormatSelection surfaceFormatSelection;
-    if(!VulkanDetail::SelectSurfaceFormat(
+    const auto surfaceFormatSelection = VulkanDetail::SelectSurfaceFormat(
         surfaceFormats.data(),
         surfaceFormatCount,
         requestedSdrFormat,
-        hdr10Allowed,
-        surfaceFormatSelection
-    )){
+        hdr10Allowed
+    );
+    if(!surfaceFormatSelection){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Surface exposes neither HDR10 nor a compatible SDR swapchain format."));
         return false;
     }
 
-    m_swapChainFormat = surfaceFormatSelection.surfaceFormat;
-    m_swapChainState.backBufferFormat = surfaceFormatSelection.backBufferFormat;
-    m_swapChainState.outputMode = surfaceFormatSelection.outputMode;
+    m_swapChainFormat = surfaceFormatSelection->surfaceFormat;
+    m_swapChainState.backBufferFormat = surfaceFormatSelection->backBufferFormat;
+    m_swapChainState.outputMode = surfaceFormatSelection->outputMode;
     if(m_deviceParams.enableHDR10Output && m_swapChainState.outputMode != SwapChainOutputMode::HDR10){
         const TStringView reason = hdr10ExtensionEnabled
             ? NWB_TEXT("the active surface does not advertise a HDR10/PQ format")

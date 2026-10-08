@@ -33,25 +33,23 @@ using TextureFormat::ComputeCompleteMipCount;
 using TextureFormat::ComputeMipPlaneBlockLayout;
 using TextureFormat::ComputeMipSliceCount;
 
-[[nodiscard]] static bool ValidateTextureMipLevels(
+[[nodiscard]] static Expected<u64> ValidateTextureMipLevels(
     const Texture::MipLevelVector& mipLevels,
     const TexturePayloadFormat::Enum payloadFormat,
     const TextureDimension::Enum dimension,
     const u32 width,
     const u32 height,
     const u32 depth,
-    u64& outPrimaryPayloadByteCount,
     const TStringView failureContext
 ){
-    outPrimaryPayloadByteCount = 0u;
-    u32 expectedMipCount = 0u;
-    if(!ComputeCompleteMipCount(dimension, width, height, depth, expectedMipCount)){
+    const auto mipCountResult = ComputeCompleteMipCount(dimension, width, height, depth);
+    if(!mipCountResult){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: base resolution is invalid"), failureContext);
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    if(mipLevels.size() != expectedMipCount){
+    if(mipLevels.size() != *mipCountResult){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip count does not describe a complete chain"), failureContext);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     u32 expectedWidth = width;
@@ -60,50 +58,41 @@ using TextureFormat::ComputeMipSliceCount;
     u64 expectedOffsetBytes = 0u;
     for(usize mipIndex = 0u; mipIndex < mipLevels.size(); ++mipIndex){
         const TextureMipLevel& mip = mipLevels[mipIndex];
-        u32 expectedBlockCountX = 0u;
-        u32 expectedBlockCountY = 0u;
-        u64 expectedSliceSizeBytes = 0u;
-        if(!ComputeMipPlaneBlockLayout(
-            payloadFormat,
-            expectedWidth,
-            expectedHeight,
-            expectedBlockCountX,
-            expectedBlockCountY,
-            expectedSliceSizeBytes
-        )){
+        const auto planeLayoutResult = ComputeMipPlaneBlockLayout(payloadFormat, expectedWidth, expectedHeight);
+        if(!planeLayoutResult){
             NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} block layout exceeds runtime limits"), failureContext, mipIndex);
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        u32 expectedSliceCount = 0u;
-        if(!ComputeMipSliceCount(dimension, expectedDepth, expectedSliceCount)){
+        const auto sliceCountResult = ComputeMipSliceCount(dimension, expectedDepth);
+        if(!sliceCountResult){
             NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} slice count is invalid"), failureContext, mipIndex);
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        if(expectedSliceSizeBytes > Limit<u64>::s_Max / expectedSliceCount){
+        if(planeLayoutResult->planeByteCount > Limit<u64>::s_Max / *sliceCountResult){
             NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} byte size overflows"), failureContext, mipIndex);
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        const u64 expectedSizeBytes = expectedSliceSizeBytes * expectedSliceCount;
+        const u64 expectedSizeBytes = planeLayoutResult->planeByteCount * *sliceCountResult;
 
         if(mip.width != expectedWidth || mip.height != expectedHeight){
             NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} resolution is not a complete chain"), failureContext, mipIndex);
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        if(mip.blockCountX != expectedBlockCountX || mip.blockCountY != expectedBlockCountY){
+        if(mip.blockCountX != planeLayoutResult->blocksX || mip.blockCountY != planeLayoutResult->blocksY){
             NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} block grid is invalid"), failureContext, mipIndex);
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        if(mip.sliceCount != expectedSliceCount){
+        if(mip.sliceCount != *sliceCountResult){
             NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} slice count is invalid"), failureContext, mipIndex);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(mip.offsetBytes != expectedOffsetBytes || mip.sizeBytes != expectedSizeBytes){
             NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} is not a contiguous texture payload"), failureContext, mipIndex);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(expectedSizeBytes > Limit<u64>::s_Max - expectedOffsetBytes){
             NWB_LOGGER_ERROR(NWB_TEXT("{} failed: mip {} byte range overflows"), failureContext, mipIndex);
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         expectedOffsetBytes += expectedSizeBytes;
@@ -113,8 +102,7 @@ using TextureFormat::ComputeMipSliceCount;
             expectedDepth = expectedDepth > 1u ? expectedDepth >> 1u : 1u;
     }
 
-    outPrimaryPayloadByteCount = expectedOffsetBytes;
-    return true;
+    return expectedOffsetBytes;
 }
 
 
@@ -212,18 +200,18 @@ bool Texture::validatePayload()const{
         return false;
     }
 
-    u64 primaryPayloadByteCount = 0u;
-    if(!__hidden_texture_runtime::ValidateTextureMipLevels(
+    const auto primaryPayloadByteCountResult = __hidden_texture_runtime::ValidateTextureMipLevels(
         m_mipLevels,
         m_payloadFormat,
         m_dimension,
         m_width,
         m_height,
         m_depth,
-        primaryPayloadByteCount,
         NWB_TEXT("Texture::validatePayload")
-    ))
+    );
+    if(!primaryPayloadByteCountResult)
         return false;
+    const u64 primaryPayloadByteCount = *primaryPayloadByteCountResult;
 
     u64 expectedPayloadByteCount = primaryPayloadByteCount;
     if(m_alphaMode == TextureAlphaMode::SeparateUastcLdr4x4){
@@ -262,16 +250,16 @@ bool Texture::loadBinary(const Core::Assets::AssetBytes& binary){
         return false;
 
     usize cursor = 0u;
-    TextureBinaryPayload::HeaderBinary header;
-    if(!Core::Assets::ReadMagicHeaderPayload(
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<TextureBinaryPayload::HeaderBinary>(
         binary,
         cursor,
-        header,
         TextureBinaryPayload::s_TextureMagic,
         TextureBinaryPayload::s_TextureLoadBinaryContext,
         TextureBinaryPayload::s_TextureAssetKindLabel
-    ))
+    );
+    if(!headerResult)
         return false;
+    const TextureBinaryPayload::HeaderBinary& header = *headerResult;
     if(header.version != TextureBinaryPayload::s_TextureVersion){
         NWB_LOGGER_ERROR(NWB_TEXT("Texture::loadBinary failed: unsupported texture payload version; recook required"));
         return false;

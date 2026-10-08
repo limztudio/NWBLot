@@ -171,18 +171,24 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         return {};
     }
     frame.arrowExtent = Max(frame.style.arrowExtent, Max(arrow->minimumWidth, arrow->minimumHeight));
-    u64 index = 0u;
     const bool selected = state.selectedKey() != 0u;
+    const auto index = selected ? source.indexOf(state.selectedKey()) : Expected<u64>{ 0u };
     if(
-        selected && (!source.indexOf(state.selectedKey(), index) || index >= frame.rowCount
-            || source.key(index) != state.selectedKey() || !source.enabled(index))
+        selected && (!index || *index >= frame.rowCount
+            || source.key(*index) != state.selectedKey() || !source.enabled(*index))
     ){
         m_context.fail();
         return {};
     }
     // Text is shaped before another source callback can invalidate a temporary row label.
-    const ShapeRequest request = textShapeRequest(selected ? source.text(index) : options.placeholder, item.style.fontSize);
-    if(m_text.layout(request, item.text) != TextLayoutStatus::Success || !comboMatches(frame)){
+    const ShapeRequest request = textShapeRequest(selected ? source.text(*index) : options.placeholder, item.style.fontSize);
+    auto layout = m_text.layout(request);
+    if(!layout){
+        m_context.fail();
+        return {};
+    }
+    item.text = Move(*layout);
+    if(!comboMatches(frame)){
         m_context.fail();
         return {};
     }
@@ -218,10 +224,12 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
     description.intrinsicSize = { Max(minimum.x, measured.x + frame.arrowExtent + frame.style.arrowGap
         + item.padding.left + item.padding.right), Max(minimum.y, Max(measured.y, frame.arrowExtent)
         + item.padding.top + item.padding.bottom) };
-    if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, item.node)){
+    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
+    if(!admittedNode){
         m_context.fail();
         return {};
     }
+    item.node = *admittedNode;
     frame.list = static_cast<u32>(m_scope->m_lists.size());
     if(frame.open && !reserveCompoundPopup(frame.popup, frame.popupToken)){
         m_context.fail();

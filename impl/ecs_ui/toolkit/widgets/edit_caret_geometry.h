@@ -50,8 +50,11 @@ struct EditCaretLine{
 };
 
 // Queries owned projections of validated caret geometry; copied hosts share line, midpoint and preedit endpoint behavior.
-[[nodiscard]] bool HitEditCaretGeometry(const PaintVector<EditCaretLine>& lines, const PaintVector<EditBoxCaretStop>& stops,
-    Point localPoint, usize& committedByte)noexcept;
+[[nodiscard]] Expected<usize> HitEditCaretGeometry(
+    const PaintVector<EditCaretLine>& lines,
+    const PaintVector<EditBoxCaretStop>& stops,
+    Point localPoint
+)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -71,15 +74,15 @@ public:
 
 
 public:
-    // Mapping is supplied by the committed/preedit snapshot; adoption and failed query outputs are atomic.
+    // Mapping is supplied by the committed/preedit snapshot; adoption is atomic.
     [[nodiscard]] bool adoptLayout(TextLayout&& layout, StringView expectedText,
         const PaintVector<EditCaretMapping>& mapping, usize committedBytes, EditTextMode::Enum mode);
     // Native preedit can address scalar edges inside graphemes; rectangles are local and have zero width.
-    [[nodiscard]] bool caretRect(usize displayByte, Rect& output)const noexcept;
-    [[nodiscard]] bool hitTest(Point localPoint, usize& committedByte)const noexcept;
-    [[nodiscard]] bool verticalTarget(usize displayCaret, bool down, f32 preferredX, usize& committedByte)const noexcept;
+    [[nodiscard]] Expected<Rect> caretRect(usize displayByte)const noexcept;
+    [[nodiscard]] Expected<usize> hitTest(Point localPoint)const noexcept;
+    [[nodiscard]] Expected<usize> verticalTarget(usize displayCaret, bool down, f32 preferredX)const noexcept;
     // A valid nonintersecting range yields an empty rectangle. Selected LF bytes use the supplied trailing cap.
-    [[nodiscard]] bool rangeOnLine(EditBoxRange range, u32 lineIndex, f32 breakWidth, Rect& output)const noexcept;
+    [[nodiscard]] Expected<Rect> rangeOnLine(EditBoxRange range, u32 lineIndex, f32 breakWidth)const noexcept;
 
 
 public:
@@ -91,7 +94,7 @@ public:
 
 
 private:
-    [[nodiscard]] bool nearestStop(u32 lineIndex, Point point, usize& committedByte)const noexcept;
+    [[nodiscard]] Expected<usize> nearestStop(u32 lineIndex, Point point)const noexcept;
 
 
 private:

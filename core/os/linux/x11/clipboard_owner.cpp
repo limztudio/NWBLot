@@ -24,19 +24,19 @@ void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
     const bool validTime = selection && (event.time == CurrentTime || static_cast<i32>(static_cast<u32>(event.time) - static_cast<u32>(selection->timestamp)) >= 0);
     if(currentOwner && validTime && destination){
         if(event.target == m_multipleAtom && event.property){
-            X11Property property;
+            const auto property = ReadX11Property(m_display, event.requestor, event.property, false, 256u * 4u);
             if(
-                ReadX11Property(m_display, event.requestor, event.property, false, 256u * 4u, property)
-                && (property.type == m_atomPairAtom || property.type == XA_ATOM)
-                && property.format == 32
-                && property.count <= 256u
-                && (property.count % 2u) == 0u
-                && property.remaining == 0u
+                property.has_value()
+                && (property->type == m_atomPairAtom || property->type == XA_ATOM)
+                && property->format == 32
+                && property->count <= 256u
+                && (property->count % 2u) == 0u
+                && property->remaining == 0u
             ){
                 Array<Atom, 256u> pairs{};
-                if(property.count)
-                    NWB_MEMCPY(pairs.data(), pairs.size() * sizeof(Atom), property.bytes, property.count * sizeof(Atom));
-                for(usize index = 0u; index < property.count; index += 2u){
+                if(property->count)
+                    NWB_MEMCPY(pairs.data(), pairs.size() * sizeof(Atom), property->bytes, property->count * sizeof(Atom));
+                for(usize index = 0u; index < property->count; index += 2u){
                     bool usable = pairs[index] != m_multipleAtom && pairs[index + 1u] && pairs[index + 1u] != event.property;
                     for(usize previous = 0u; previous < index; previous += 2u){
                         if(pairs[previous + 1u] == pairs[index + 1u])
@@ -48,7 +48,7 @@ void X11ClipboardService::answerSelection(const XSelectionRequestEvent& event){
                 X11CheckedOperation checked(m_display);
                 XChangeProperty(
                     &m_display, event.requestor, event.property, m_atomPairAtom, 32, PropModeReplace,
-                    reinterpret_cast<const unsigned char*>(pairs.data()), static_cast<int>(property.count)
+                    reinterpret_cast<const unsigned char*>(pairs.data()), static_cast<int>(property->count)
                 );
                 converted = checked.succeeded();
             }

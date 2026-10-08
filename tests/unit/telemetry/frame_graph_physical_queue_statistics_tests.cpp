@@ -149,16 +149,16 @@ TEST(Telemetry, PhysicalQueueDecodeShrinkingInputClearsPreviousRecords){
     Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords records(testArena.arena);
     BuildTestPhysicalQueueRuntimeStatistics(testArena.arena, records);
     Telemetry::TelemetryBytes payload(testArena.arena);
-    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    Expected<Telemetry::FrameGraphPayload> parsed = MakeUnexpected(Failure{});
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 916u, nodes, edges, records, payload));
-    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
-    ASSERT_EQ(parsed.physicalQueueRuntimeStatistics.size(), s_ExpectedDualCount);
+    ASSERT_TRUE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
+    ASSERT_EQ(parsed->physicalQueueRuntimeStatistics.size(), s_ExpectedDualCount);
 
     records.resize(1u);
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 916u, nodes, edges, records, payload));
-    ASSERT_TRUE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
-    ASSERT_EQ(parsed.physicalQueueRuntimeStatistics.size(), 1u);
-    EXPECT_EQ(parsed.physicalQueueRuntimeStatistics[0u].statistics.queue.index, 3u);
+    ASSERT_TRUE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
+    ASSERT_EQ(parsed->physicalQueueRuntimeStatistics.size(), 1u);
+    EXPECT_EQ(parsed->physicalQueueRuntimeStatistics[0u].statistics.queue.index, 3u);
 }
 
 TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedRecords){
@@ -252,7 +252,7 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedR
         + sizeof(Telemetry::EncodedFrameGraphCompiledTask) * s_ExpectedDualCount
         + sizeof(Telemetry::EncodedFrameGraphRuntimeStatistics) * s_ExpectedDualCount
     ;
-    Telemetry::FrameGraphPayload parsed(testArena.arena);
+    Expected<Telemetry::FrameGraphPayload> parsed = MakeUnexpected(Failure{});
     for(
         usize mutationIndex = 0u;
         mutationIndex < LengthOf(s_EncodedFrameGraphPhysicalQueueRuntimeStatisticsMutations);
@@ -274,7 +274,7 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedR
             &encodedStatistics,
             sizeof(encodedStatistics)
         );
-        EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+        EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
     }
 
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
@@ -295,17 +295,17 @@ TEST(Telemetry, FrameGraphPhysicalQueueRuntimeStatisticsPayloadRejectsMalformedR
         &encodedStatistics,
         sizeof(encodedStatistics)
     );
-    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
 
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
     Telemetry::EncodedFrameGraphPayloadHeader header;
     NWB_MEMCPY(&header, sizeof(header), payload.data(), sizeof(header));
     ++header.physicalQueueRuntimeStatisticsCount;
     NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size())));
 
     ASSERT_TRUE(Telemetry::BuildFrameGraphPayload(testArena.arena, 917u, nodes, edges, records, payload));
-    EXPECT_FALSE(Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size() - 1u, parsed));
+    EXPECT_FALSE((parsed = Telemetry::ParseFrameGraphPayload(testArena.arena, payload.data(), payload.size() - 1u)));
 }
 
 

@@ -61,24 +61,25 @@ void ClassifyPlacements(InteropVector<CpuWorkerPlacement>& placements){
 static constexpr u32 s_QueryRetryCount = 4u;
 
 
-[[nodiscard]] bool QueryWindowsPlacements(InteropVector<CpuWorkerPlacement>& placements){
+[[nodiscard]] Expected<InteropVector<CpuWorkerPlacement>> QueryWindowsPlacements(){
+    InteropVector<CpuWorkerPlacement> placements;
     const HANDLE process = GetCurrentProcess();
     GROUP_AFFINITY primaryAffinity{};
     if(!GetThreadGroupAffinity(GetCurrentThread(), &primaryAffinity))
-        return false;
+        return MakeUnexpected(Failure{});
 
     DWORD_PTR processMask = 0u;
     DWORD_PTR systemMask = 0u;
     if(!GetProcessAffinityMask(process, &processMask, &systemMask))
-        return false;
+        return MakeUnexpected(Failure{});
 
     // Windows 11 reports all default groups here. Earlier Windows versions report the groups assigned to this process.
     USHORT groupCount = GetActiveProcessorGroupCount();
     if(groupCount == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
     InteropVector<USHORT> processGroups(groupCount);
     if(!GetProcessGroupAffinity(process, &groupCount, processGroups.data()))
-        return false;
+        return MakeUnexpected(Failure{});
     processGroups.resize(groupCount);
 
     InteropVector<ULONG> defaultSets;
@@ -91,11 +92,11 @@ static constexpr u32 s_QueryRetryCount = 4u;
             break;
         }
         if(GetLastError() != ERROR_INSUFFICIENT_BUFFER || requiredCount == 0u)
-            return false;
+            return MakeUnexpected(Failure{});
         defaultSets.resize(requiredCount);
     }
     if(!defaultSetsReady)
-        return false;
+        return MakeUnexpected(Failure{});
 
     InteropVector<u64> informationStorage;
     ULONG informationBytes = 0u;
@@ -111,25 +112,25 @@ static constexpr u32 s_QueryRetryCount = 4u;
             break;
         }
         if(GetLastError() != ERROR_INSUFFICIENT_BUFFER || requiredBytes == 0u)
-            return false;
+            return MakeUnexpected(Failure{});
         informationStorage.resize((static_cast<usize>(requiredBytes) + sizeof(u64) - 1u) / sizeof(u64));
         informationBytes = requiredBytes;
     }
     if(!informationReady || informationBytes == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const auto* bytes = reinterpret_cast<const u8*>(informationStorage.data());
     usize offset = 0u;
     placements.reserve(informationBytes / sizeof(SYSTEM_CPU_SET_INFORMATION));
     while(offset < informationBytes){
         if(informationBytes - offset < sizeof(DWORD) + sizeof(CPU_SET_INFORMATION_TYPE))
-            return false;
+            return MakeUnexpected(Failure{});
         const auto* information = reinterpret_cast<const SYSTEM_CPU_SET_INFORMATION*>(bytes + offset);
         if(information->Size < sizeof(DWORD) + sizeof(CPU_SET_INFORMATION_TYPE) || information->Size > informationBytes - offset)
-            return false;
+            return MakeUnexpected(Failure{});
         if(information->Type == CpuSetInformation){
             if(information->Size < sizeof(SYSTEM_CPU_SET_INFORMATION))
-                return false;
+                return MakeUnexpected(Failure{});
             const auto& cpuSet = information->CpuSet;
             const bool permittedGroup = FindIf(
                 processGroups.begin(), processGroups.end(),
@@ -158,7 +159,9 @@ static constexpr u32 s_QueryRetryCount = 4u;
         }
         offset += information->Size;
     }
-    return !placements.empty();
+    if(placements.empty())
+        return MakeUnexpected(Failure{});
+    return placements;
 }
 
 
@@ -181,18 +184,19 @@ static constexpr usize s_SysfsCapacityPathCapacity = 128u;
 static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
 
 
-[[nodiscard]] bool QueryLinuxAffinity(InteropVector<usize>& affinityWords){
+[[nodiscard]] Expected<InteropVector<usize>> QueryLinuxAffinity(){
+    InteropVector<usize> affinityWords;
     usize byteCount = sizeof(cpu_set_t);
     while(byteCount <= s_MaxCpuAffinityBytes){
         affinityWords.assign((byteCount + sizeof(usize) - 1u) / sizeof(usize), 0u);
         const usize storageBytes = affinityWords.size() * sizeof(usize);
         if(::sched_getaffinity(0, storageBytes, reinterpret_cast<cpu_set_t*>(affinityWords.data())) == 0)
-            return true;
+            return affinityWords;
         if(errno != EINVAL)
-            return false;
+            return MakeUnexpected(Failure{});
         byteCount *= 2u;
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 
@@ -209,15 +213,16 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
 }
 
 
-[[nodiscard]] bool QueryLinuxPlacements(InteropVector<CpuWorkerPlacement>& placements){
-    InteropVector<usize> affinityWords;
-    if(!QueryLinuxAffinity(affinityWords))
-        return false;
-    const usize byteCount = affinityWords.size() * sizeof(usize);
-    const auto* affinity = reinterpret_cast<const cpu_set_t*>(affinityWords.data());
+[[nodiscard]] Expected<InteropVector<CpuWorkerPlacement>> QueryLinuxPlacements(){
+    InteropVector<CpuWorkerPlacement> placements;
+    const auto affinityWords = QueryLinuxAffinity();
+    if(!affinityWords)
+        return MakeUnexpected(affinityWords.error());
+    const usize byteCount = affinityWords->size() * sizeof(usize);
+    const auto* affinity = reinterpret_cast<const cpu_set_t*>(affinityWords->data());
     const int processorCount = CPU_COUNT_S(byteCount, affinity);
     if(processorCount <= 0)
-        return false;
+        return MakeUnexpected(Failure{});
     placements.reserve(static_cast<usize>(processorCount));
     bool allCapacitiesKnown = true;
     for(usize processorIndex = 0u; processorIndex < byteCount * __hidden_cpu_topology::s_BitsPerByte; ++processorIndex){
@@ -232,7 +237,9 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
         for(CpuWorkerPlacement& placement : placements)
             placement.performanceClass = 0u;
     }
-    return !placements.empty();
+    if(placements.empty())
+        return MakeUnexpected(Failure{});
+    return placements;
 }
 
 
@@ -251,21 +258,20 @@ static constexpr usize s_MaxCpuAffinityBytes = 1024u * 1024u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool QueryCpuWorkerPlacements(InteropVector<CpuWorkerPlacement>& outPlacements){
-    outPlacements.clear();
+Expected<InteropVector<CpuWorkerPlacement>> QueryCpuWorkerPlacements(){
 #if defined(NWB_PLATFORM_WINDOWS)
-    const bool queried = __hidden_cpu_topology::QueryWindowsPlacements(outPlacements);
+    auto placements = __hidden_cpu_topology::QueryWindowsPlacements();
 #elif defined(NWB_PLATFORM_LINUX)
-    const bool queried = __hidden_cpu_topology::QueryLinuxPlacements(outPlacements);
+    auto placements = __hidden_cpu_topology::QueryLinuxPlacements();
 #else
-    const bool queried = false;
+    return MakeUnexpected(Failure{});
 #endif
-    if(!queried){
-        outPlacements.clear();
-        return false;
-    }
-    __hidden_cpu_topology::ClassifyPlacements(outPlacements);
-    return true;
+#if defined(NWB_PLATFORM_WINDOWS) || defined(NWB_PLATFORM_LINUX)
+    if(!placements)
+        return MakeUnexpected(placements.error());
+    __hidden_cpu_topology::ClassifyPlacements(*placements);
+    return placements;
+#endif
 }
 
 
@@ -280,11 +286,13 @@ bool SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement){
     affinity.Mask = static_cast<KAFFINITY>(1u) << placement.logicalProcessorIndex;
     return SetThreadGroupAffinity(GetCurrentThread(), &affinity, nullptr) != FALSE;
 #elif defined(NWB_PLATFORM_LINUX)
-    InteropVector<usize> affinityWords;
-    if(placement.processorGroup != 0u || !__hidden_cpu_topology::QueryLinuxAffinity(affinityWords))
+    if(placement.processorGroup != 0u)
         return false;
-    const usize byteCount = affinityWords.size() * sizeof(usize);
-    auto* affinity = reinterpret_cast<cpu_set_t*>(affinityWords.data());
+    auto affinityWords = __hidden_cpu_topology::QueryLinuxAffinity();
+    if(!affinityWords)
+        return false;
+    const usize byteCount = affinityWords->size() * sizeof(usize);
+    auto* affinity = reinterpret_cast<cpu_set_t*>(affinityWords->data());
     if(placement.logicalProcessorIndex >= byteCount * __hidden_cpu_topology::s_BitsPerByte || !CPU_ISSET_S(placement.logicalProcessorIndex, byteCount, affinity))
         return false;
     CPU_ZERO_S(byteCount, affinity);
@@ -297,11 +305,11 @@ bool SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement){
 
 
 u32 QueryCpuCoreCount(CpuAffinity::Enum type){
-    InteropVector<CpuWorkerPlacement> placements;
-    if(!QueryCpuWorkerPlacements(placements))
+    const auto placements = QueryCpuWorkerPlacements();
+    if(!placements)
         return Max(1u, static_cast<u32>(Thread::hardware_concurrency()));
     u32 count = 0u;
-    for(const CpuWorkerPlacement& placement : placements){
+    for(const CpuWorkerPlacement& placement : *placements){
         if(type == CpuAffinity::Any || placement.affinity == type || placement.affinity == CpuAffinity::Any)
             ++count;
     }

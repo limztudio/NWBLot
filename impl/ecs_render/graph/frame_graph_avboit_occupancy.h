@@ -86,12 +86,11 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
+    [[nodiscard]] Expected<FrameGraphAvboitOccupancyUploadResult> declare(
         const FrameGraphAvboitOccupancyUploadInputs& inputs,
         RendererTaskGraphDetail::AvboitOccupancyGraphTask::Payload& occupancyPayload,
         RendererTaskGraphDetail::AvboitOccupancyComputeEmulationGraphTask::Payload& computeEmulationPayload,
-        AvboitGeneratedGeometryReuse& generatedGeometry,
-        FrameGraphAvboitOccupancyUploadResult& outResult
+        AvboitGeneratedGeometryReuse& generatedGeometry
     );
 
 

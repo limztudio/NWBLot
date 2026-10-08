@@ -74,19 +74,20 @@ inline constexpr AStringView s_OwnerSeparator = "_";
     if(ownerText.empty() || revisionText.empty())
         return s_NameNone;
 
-    NameHash derivedHash = {};
+    auto derivedHash = BeginDerivedNameHash(sourceName);
+    if(!derivedHash)
+        return s_NameNone;
     if(
-        !BeginDerivedNameHash(sourceName, derivedHash)
-        || !UpdateDerivedNameHashText(derivedHash, SkinningResourceNamesDetail::s_RuntimePrefix)
-        || !UpdateDerivedNameHashText(derivedHash, ownerText)
-        || !UpdateDerivedNameHashText(derivedHash, SkinningResourceNamesDetail::s_RevisionSeparator)
-        || !UpdateDerivedNameHashText(derivedHash, revisionText)
-        || !UpdateDerivedNameHashText(derivedHash, SkinningResourceNamesDetail::s_OwnerSeparator)
-        || !UpdateDerivedNameHashText(derivedHash, label)
+        !UpdateDerivedNameHashText(*derivedHash, SkinningResourceNamesDetail::s_RuntimePrefix)
+        || !UpdateDerivedNameHashText(*derivedHash, ownerText)
+        || !UpdateDerivedNameHashText(*derivedHash, SkinningResourceNamesDetail::s_RevisionSeparator)
+        || !UpdateDerivedNameHashText(*derivedHash, revisionText)
+        || !UpdateDerivedNameHashText(*derivedHash, SkinningResourceNamesDetail::s_OwnerSeparator)
+        || !UpdateDerivedNameHashText(*derivedHash, label)
     )
         return s_NameNone;
 
-    return FinishDerivedNameHash(derivedHash);
+    return FinishDerivedNameHash(*derivedHash);
 }
 
 

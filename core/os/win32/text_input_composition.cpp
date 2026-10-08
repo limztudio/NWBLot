@@ -51,20 +51,18 @@ TextInputAdmission::Enum Win32TextInputService::readCompositionText(const NotNul
     return converted == utf8Length ? TextInputAdmission::Accepted : TextInputAdmission::InvalidText;
 }
 
-TextInputAdmission::Enum Win32TextInputService::compositionCursor(const NotNull<void*> nativeContext, usize& byteOffset){
+Expected<usize, TextInputAdmission::Enum> Win32TextInputService::compositionCursor(const NotNull<void*> nativeContext){
     const LONG cursor = ImmGetCompositionStringW(static_cast<HIMC>(nativeContext.get()), GCS_CURSORPOS, nullptr, 0u);
     if(cursor < 0 || static_cast<usize>(cursor) > m_wideText.size())
-        return TextInputAdmission::InvalidRange;
-    byteOffset = 0u;
+        return MakeUnexpected(TextInputAdmission::InvalidRange);
     if(cursor == 0)
-        return TextInputAdmission::Accepted;
+        return 0u;
     const i32 prefixLength = WideCharToMultiByte(
         CP_UTF8, WC_ERR_INVALID_CHARS, m_wideText.data(), cursor, nullptr, 0, nullptr, nullptr
     );
     if(prefixLength == 0)
-        return TextInputAdmission::InvalidRange;
-    byteOffset = static_cast<usize>(prefixLength);
-    return TextInputAdmission::Accepted;
+        return MakeUnexpected(TextInputAdmission::InvalidRange);
+    return static_cast<usize>(prefixLength);
 }
 
 TextInputAdmission::Enum Win32TextInputService::acceptComposition(
@@ -102,11 +100,10 @@ TextInputAdmission::Enum Win32TextInputService::acceptComposition(
         const TextInputAdmission::Enum result = readCompositionText(MakeNotNull(static_cast<void*>(context)), GCS_COMPSTR);
         if(result != TextInputAdmission::Accepted)
             return result;
-        usize cursorByte = 0u;
-        const TextInputAdmission::Enum cursor = compositionCursor(MakeNotNull(static_cast<void*>(context)), cursorByte);
-        if(cursor != TextInputAdmission::Accepted)
-            return cursor;
-        return publishCompositionPreedit(token, m_utf8Text, cursorByte, cursorByte);
+        const auto cursorByte = compositionCursor(MakeNotNull(static_cast<void*>(context)));
+        if(!cursorByte)
+            return cursorByte.error();
+        return publishCompositionPreedit(token, m_utf8Text, *cursorByte, *cursorByte);
     }
     return TextInputAdmission::Accepted;
 }

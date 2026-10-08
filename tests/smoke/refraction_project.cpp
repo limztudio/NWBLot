@@ -46,15 +46,11 @@ private:
         NWB::Impl::ReflectionSettings reflection;
         reflection.traceMode = NWB::Impl::ReflectionTraceMode::Disabled;
         NWB_FATAL_ASSERT_MSG(renderer.setReflectionSettings(reflection), NWB_TEXT("RefractionSmokeProject: invalid reflection settings"));
-        f32 enabled = 1.0f;
-        const bool refractionEnabled = !ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_ENABLED", enabled)
-            || enabled != 0.0f
-        ;
+        const auto enabled = ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_ENABLED");
+        const bool refractionEnabled = !enabled || *enabled != 0.0f;
         renderer.setRefractionEnabled(refractionEnabled);
-        f32 hardware = 1.0f;
-        const bool hardwareEnabled = !ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_HARDWARE", hardware)
-            || hardware != 0.0f
-        ;
+        const auto hardware = ReadSmokeEnvironmentF32("NWB_REFRACTION_SMOKE_HARDWARE");
+        const bool hardwareEnabled = !hardware || *hardware != 0.0f;
         renderer.setRefractionHardwareTracingEnabled(hardwareEnabled);
         NWB_LOGGER_ESSENTIAL_INFO(
             NWB_TEXT("RefractionSmokeProject: refraction {}"), refractionEnabled ? NWB_TEXT("enabled") : NWB_TEXT("disabled")
@@ -63,7 +59,11 @@ private:
     }
 
     bool configureFramebufferCapture(){
-        return ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("RefractionSmokeProject"), 16u, m_framebufferCapture);
+        auto capture = ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("RefractionSmokeProject"), 16u);
+        if(!capture)
+            return false;
+        m_framebufferCapture = Move(*capture);
+        return true;
     }
 
     void destroyWorld(){
@@ -97,10 +97,10 @@ public:
         if(!configureFramebufferCapture())
             return false;
 
-        SmokeEnvironmentString galleryCase(m_context.objectArena);
-        if(ReadSmokeEnvironmentText("NWB_REFRACTION_SMOKE_CASE", galleryCase))
+        const auto galleryCase = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_REFRACTION_SMOKE_CASE");
+        if(galleryCase)
             return CreateRefractionGalleryScene(
-                m_context, *m_world, AStringView(galleryCase.data(), galleryCase.size()),
+                m_context, *m_world, AStringView(galleryCase->data(), galleryCase->size()),
                 ReadSmokeEnvironmentFlag("NWB_REFRACTION_SMOKE_GEOMETRY")
             );
 

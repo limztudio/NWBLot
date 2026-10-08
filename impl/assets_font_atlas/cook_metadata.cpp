@@ -38,18 +38,16 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ReadU32(
+[[nodiscard]] static Expected<u32> ReadU32(
     const Path& path,
     const Value& asset,
     const AStringView field,
     const u32 minimum,
-    const u32 maximum,
-    u32& outValue
+    const u32 maximum
 ){
     const Value* value = asset.findField(field);
     if(value && value->isInteger() && value->asInteger() >= minimum && static_cast<u64>(value->asInteger()) <= maximum){
-        outValue = static_cast<u32>(value->asInteger());
-        return true;
+        return static_cast<u32>(value->asInteger());
     }
     NWB_LOGGER_ERROR(NWB_TEXT("Font atlas meta '{}': field '{}' must be an integer in {}..{}")
         , PathToString<tchar>(path)
@@ -57,7 +55,7 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
         , minimum
         , maximum
     );
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 [[nodiscard]] static bool ReadSourceFaceMetrics(const Font& font, FontAtlasPayload& payload){
@@ -90,17 +88,31 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
 }
 
 [[nodiscard]] static bool ReadSettings(const Path& path, const Value& asset, FontAtlasPayload& payload){
-    if(
-        !ReadU32(path, asset, "bake_ppem", s_FontAtlasMinBakePpem, s_FontAtlasMaxBakePpem, payload.bakePpem)
-        || !ReadU32(path, asset, "spread_pixels", s_FontAtlasMinSpreadPixels, s_FontAtlasMaxSpreadPixels, payload.spreadPixels)
-        || !Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, "ascender_units", true, payload.ascenderUnits)
-        || !Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, "descender_units", true, payload.descenderUnits)
-        || !Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, "line_gap_units", true, payload.lineGapUnits)
-    )
+    auto bakePpemResult = ReadU32(path, asset, "bake_ppem", s_FontAtlasMinBakePpem, s_FontAtlasMaxBakePpem);
+    if(!bakePpemResult)
         return false;
+    payload.bakePpem = *bakePpemResult;
+    auto spreadPixelsResult = ReadU32(path, asset, "spread_pixels", s_FontAtlasMinSpreadPixels, s_FontAtlasMaxSpreadPixels);
+    if(!spreadPixelsResult)
+        return false;
+    payload.spreadPixels = *spreadPixelsResult;
+    auto ascenderUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, "ascender_units", true);
+    if(!ascenderUnitsResult)
+        return false;
+    payload.ascenderUnits = *ascenderUnitsResult;
+    auto descenderUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, "descender_units", true);
+    if(!descenderUnitsResult)
+        return false;
+    payload.descenderUnits = *descenderUnitsResult;
+    auto lineGapUnitsResult = Core::Assets::ReadMetadataFiniteF32Field(path, asset, s_DiagnosticPrefix, "line_gap_units", true);
+    if(!lineGapUnitsResult)
+        return false;
+    payload.lineGapUnits = *lineGapUnitsResult;
     AStringView rasterMode;
-    if(!Core::Assets::ReadMetadataStringField(path, asset, s_DiagnosticPrefix, "raster_mode", true, rasterMode))
+    auto rasterModeResult = Core::Assets::ReadMetadataStringField(path, asset, s_DiagnosticPrefix, "raster_mode", true);
+    if(!rasterModeResult)
         return false;
+    rasterMode = rasterModeResult->text;
     if(rasterMode == "bitmap")
         payload.rasterMode = FontAtlasRasterMode::Bitmap;
     else if(rasterMode == "outline")
@@ -135,25 +147,27 @@ static void CopySourceGroups(PreparedFontSource& source, FontAtlasPayload& paylo
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ParseFontAtlasCookMetadata(
+Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadata(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    FontAtlasCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 ){
     Name virtualPath = s_NameNone;
-    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, virtualPath, scratchArena))
-        return false;
-    return ParseFontAtlasCookMetadataValue(virtualPath, nwbFilePath, doc.asset(), outEntry, scratchArena);
+    auto virtualPathResult = Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
+    if(!virtualPathResult)
+        return MakeUnexpected(Failure{});
+    virtualPath = *virtualPathResult;
+    return ParseFontAtlasCookMetadataValue(virtualPath, nwbFilePath, doc.asset(), arena, scratchArena);
 }
 
-bool ParseFontAtlasCookMetadataValue(
+Expected<FontAtlasCookEntry> ParseFontAtlasCookMetadataValue(
     const Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    FontAtlasCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace __hidden_font_atlas_cook_metadata;
@@ -166,46 +180,51 @@ bool ParseFontAtlasCookMetadataValue(
                 "ascender_units", "descender_units", "line_gap_units", "glyphs" }
         )
     )
-        return false;
-    FontAtlasCookEntry candidate(outEntry.arena);
-    if(
-        !Core::Assets::ReadMetadataAssetRefField(nwbFilePath, asset, s_DiagnosticPrefix, "font", true, candidate.payload.font)
-        || !ReadSettings(nwbFilePath, asset, candidate.payload)
-    )
-        return false;
+        return MakeUnexpected(Failure{});
+    FontAtlasCookEntry candidate(arena);
+    auto fontResult = Core::Assets::ReadMetadataAssetRefField<Font>(nwbFilePath, asset, s_DiagnosticPrefix, "font", true);
+    if(!fontResult)
+        return MakeUnexpected(Failure{});
+    candidate.payload.font = *fontResult;
+    if(!ReadSettings(nwbFilePath, asset, candidate.payload))
+        return MakeUnexpected(Failure{});
     Path fontPath = nwbFilePath;
     fontPath.replaceExtension(".font");
-    PreparedFontSource source(outEntry.arena);
-    if(!ReadPreparedFontSource(fontPath, source, true))
-        return false;
+    auto sourceResult = ReadPreparedFontSource(fontPath, arena, true);
+    if(!sourceResult)
+        return MakeUnexpected(Failure{});
+    PreparedFontSource& source = *sourceResult;
     CopySourceGroups(source, candidate.payload);
     candidate.payload.fontSha256 = source.fontSha256;
-    Font font(outEntry.arena, candidate.payload.font.name());
+    Font font(arena, candidate.payload.font.name());
     font.setFontBytes(Move(source.fontBytes), source.faceIndex);
     if(!ReadSourceFaceMetrics(font, candidate.payload)){
         NWB_LOGGER_ERROR(NWB_TEXT("Font atlas meta '{}': paired font source has invalid face metrics"), PathToString<tchar>(nwbFilePath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    if(
-        !CopyFontAtlasPositioningTables(font, candidate.payload)
-        || !ValidateFontAtlasSourceMatch(candidate.payload, font)
-        || !ParseFontAtlasGlyphMetadata(nwbFilePath, asset, candidate.payload)
-        || !ValidateFontAtlasPayload(candidate.payload)
-    )
-        return false;
-    outEntry.payload = Move(candidate.payload);
-    outEntry.virtualPath = virtualPath;
-    return true;
+    auto positioningTablesResult = CopyFontAtlasPositioningTables(font, candidate.payload.sourceGlyphCount, arena);
+    if(!positioningTablesResult)
+        return MakeUnexpected(Failure{});
+    candidate.payload.positioningTables = Move(*positioningTablesResult);
+    if(!ValidateFontAtlasSourceMatch(candidate.payload, font))
+        return MakeUnexpected(Failure{});
+    auto glyphsResult = ParseFontAtlasGlyphMetadata(nwbFilePath, asset, candidate.payload);
+    if(!glyphsResult)
+        return MakeUnexpected(Failure{});
+    candidate.payload.glyphs = Move(*glyphsResult);
+    if(!ValidateFontAtlasPayload(candidate.payload))
+        return MakeUnexpected(Failure{});
+    candidate.virtualPath = virtualPath;
+    return candidate;
 }
 
-bool BuildFontAtlasAsset(const FontAtlasCookEntry& entry, FontAtlas& outAtlas){
-    FontAtlas candidate(entry.arena, entry.virtualPath);
+Expected<FontAtlas> BuildFontAtlasAsset(const FontAtlasCookEntry& entry, Core::Assets::AssetArena& arena){
+    FontAtlas candidate(arena, entry.virtualPath);
     FontAtlasPayload payload(entry.payload);
     candidate.setPayload(Move(payload));
     if(!candidate.validatePayload())
-        return false;
-    outAtlas = Move(candidate);
-    return true;
+        return MakeUnexpected(Failure{});
+    return candidate;
 }
 
 

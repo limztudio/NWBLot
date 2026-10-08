@@ -455,9 +455,10 @@ bool IsValidFrameGraphPhysicalQueueRuntimeStatisticsForOwner(const FrameGraphPhy
     )
         return false;
 
-    u64 ownerBarrierCount = 0u;
-    if(!FrameGraphStatisticsDetail::FrameGraphCompileBarrierCount(ownerCompile, ownerBarrierCount))
+    const auto barrierCount = FrameGraphStatisticsDetail::FrameGraphCompileBarrierCount(ownerCompile);
+    if(!barrierCount)
         return false;
+    const u64 ownerBarrierCount = *barrierCount;
     if(
         compile.prologueBarrierCount > ownerBarrierCount
         || compile.epilogueBarrierCount > ownerBarrierCount - compile.prologueBarrierCount

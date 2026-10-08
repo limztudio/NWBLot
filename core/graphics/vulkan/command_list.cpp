@@ -205,8 +205,7 @@ void CommandList::revokeGraphRecordingPublication(const u64 recordingLeaseSerial
     m_graphPublicationState.store(s_GraphPublicationUnowned, MemoryOrder::release);
 }
 
-bool CommandList::beginGraphSubmissionOwnership(u64& outRecordingLeaseSerial)noexcept{
-    outRecordingLeaseSerial = 0u;
+Expected<u64> CommandList::beginGraphSubmissionOwnership()noexcept{
     AtomicBackOff backoff;
     for(;;){
         u8 expectedState = s_GraphPublicationRecorded;
@@ -218,7 +217,7 @@ bool CommandList::beginGraphSubmissionOwnership(u64& outRecordingLeaseSerial)noe
         ))
             break;
         if(expectedState != s_GraphPublicationReading)
-            return false;
+            return MakeUnexpected(Failure{});
         backoff.pause();
     }
 
@@ -230,11 +229,10 @@ bool CommandList::beginGraphSubmissionOwnership(u64& outRecordingLeaseSerial)noe
     ;
     if(!ownershipValid){
         m_graphPublicationState.store(s_GraphPublicationRecorded, MemoryOrder::release);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outRecordingLeaseSerial = graphRecordingOwnershipSerial;
-    return true;
+    return graphRecordingOwnershipSerial;
 }
 
 void CommandList::acceptGraphSubmissionOwnership(const u64 recordingLeaseSerial)noexcept{

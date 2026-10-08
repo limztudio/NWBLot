@@ -37,14 +37,14 @@ public:
         return ComboSource::key(index);
     }
 
-    [[nodiscard]] virtual bool indexOf(const u64 value, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const override{
         observeCallback();
-        return ComboSource::indexOf(value, index);
+        return ComboSource::indexOf(value);
     }
 
-    [[nodiscard]] virtual bool findEnabled(const u64 start, const bool reverseSearch, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverseSearch)const override{
         observeCallback();
-        return ComboSource::findEnabled(start, reverseSearch, index);
+        return ComboSource::findEnabled(start, reverseSearch);
     }
 
     [[nodiscard]] virtual StringView text(const u64 index)const override{

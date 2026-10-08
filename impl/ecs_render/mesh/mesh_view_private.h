@@ -40,6 +40,11 @@ struct MeshViewGpuData{
     };
 };
 
+struct MeshViewBufferUpload{
+    MeshViewGpuData viewState;
+    bool uploadRequired = false;
+};
+
 static_assert(sizeof(MeshViewGpuData) == sizeof(f32) * NWB_MESH_VIEW_FLOAT_COUNT, "MeshViewGpuData layout must match the mesh shaders");
 static_assert(alignof(MeshViewGpuData) >= alignof(Float4), "MeshViewGpuData must stay SIMD-aligned");
 

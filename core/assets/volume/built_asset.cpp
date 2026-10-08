@@ -35,8 +35,7 @@ inline constexpr u64 s_TemporarySequenceStep = 1u;
 Atomic<u64> g_TemporarySequence{0u};
 
 static bool WriteIfChanged(const Path& path, const AssetBytes& bytes, AssetBytes& existing){
-    ErrorCode error;
-    if(ReadBinaryFile(path, existing, error) && existing == bytes)
+    if(ReadBinaryFile(path, existing) && existing == bytes)
         return true;
 
     AssetString temporaryName(s_TemporaryNamePrefix, path.arena());
@@ -45,10 +44,10 @@ static bool WriteIfChanged(const Path& path, const AssetBytes& bytes, AssetBytes
     AppendHexU64(g_TemporarySequence.fetch_add(s_TemporarySequenceStep, MemoryOrder::relaxed), temporaryName);
     temporaryName += s_TemporaryNameExtension;
     const Path temporary = path.parentPath() / temporaryName;
-    if(!WriteBinaryFile(temporary, bytes) || !ReadBinaryFile(temporary, existing, error)
-        || existing != bytes || !RenamePath(temporary, path, error)){
+    if(!WriteBinaryFile(temporary, bytes) || !ReadBinaryFile(temporary, existing)
+        || existing != bytes || !RenamePath(temporary, path)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to publish built asset '{}'"), PathToString<tchar>(path));
-        if(!RemoveFile(temporary, error) && error)
+        if(!RemoveFile(temporary))
             NWB_LOGGER_WARNING(NWB_TEXT("AssetBuilder: failed to remove temporary output '{}'"), PathToString<tchar>(temporary));
         return false;
     }
@@ -73,8 +72,7 @@ namespace BuiltAssetDetail{
 
 bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail::AssetVolumePackManifest& manifest){
     AssetArena& arena = outputDirectory.arena();
-    ErrorCode error;
-    if(manifest.entries.size() != manifest.plannedFileCount || !EnsureDirectories(outputDirectory, error)){
+    if(manifest.entries.size() != manifest.plannedFileCount || !EnsureDirectories(outputDirectory)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid build manifest or output directory '{}'"), PathToString<tchar>(outputDirectory));
         return false;
     }
@@ -87,11 +85,11 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
         const u8* payloadData = entry.payloadBytes.data();
         usize payloadSize = entry.payloadBytes.size();
         if(entry.source == AssetsVolumeCookDetail::AssetVolumePackEntrySource::ObjectFilePayload){
-            AssetsVolumeCookDetail::CookedObjectPayloadView payload;
-            if(!AssetsVolumeCookDetail::ReadCookedObjectPayload(entry.objectPath, entry.virtualPath, objectBytes, payload))
+            const auto payload = AssetsVolumeCookDetail::ReadCookedObjectPayload(entry.objectPath, entry.virtualPath, objectBytes);
+            if(!payload)
                 return false;
-            payloadData = payload.data;
-            payloadSize = payload.size;
+            payloadData = payload->data;
+            payloadSize = payload->size;
         }
         if(entry.identity.payloadSize != payloadSize || entry.identity.payloadHash != ComputeFnv64Bytes(payloadData, payloadSize)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: invalid payload identity '{}'"), StringConvert(entry.virtualPath.resolvedText()));
@@ -130,34 +128,29 @@ bool WriteBuiltAssets(const Path& outputDirectory, const AssetsVolumeCookDetail:
     return __hidden_built_asset::WriteIfChanged(outputDirectory / s_ManifestFilename, artifactBytes, existingBytes);
 }
 
-bool ReadBuiltAsset(const Path& path, AssetBytes& bytes, Name& outVirtualPath, usize& outPayloadOffset){
-    outVirtualPath = s_NameNone;
-    outPayloadOffset = 0u;
-    ErrorCode error;
-    u32 magic = 0u;
-    u32 version = 0u;
-    NameHash virtualPathHash = {};
-    u64 payloadSize = 0u;
-    u64 payloadHash = 0u;
-    usize cursor = 0u;
-    if(!ReadBinaryFile(path, bytes, error)
-        || !ReadPOD(bytes, cursor, magic)
-        || !ReadPOD(bytes, cursor, version)
-        || !ReadPOD(bytes, cursor, virtualPathHash)
-        || !ReadPOD(bytes, cursor, payloadSize)
-        || !ReadPOD(bytes, cursor, payloadHash)
-        || magic != __hidden_built_asset::s_Magic
-        || version != __hidden_built_asset::s_Version
-        || payloadSize != bytes.size() - cursor
-        || payloadHash != ComputeFnv64Bytes(bytes.data() + cursor, bytes.size() - cursor)
-        || !Name(virtualPathHash)){
+Expected<BuiltAssetPayload> ReadBuiltAsset(const Path& path, AssetBytes& inOutBytes){
+    if(!ReadBinaryFile(path, inOutBytes) || inOutBytes.size() < __hidden_built_asset::s_HeaderSize){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: invalid built asset '{}'"), PathToString<tchar>(path));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outVirtualPath = Name(virtualPathHash);
-    outPayloadOffset = cursor;
-    return true;
+    usize cursor = 0u;
+    const u32 magic = *ReadPOD<u32>(inOutBytes, cursor);
+    const u32 version = *ReadPOD<u32>(inOutBytes, cursor);
+    const NameHash virtualPathHash = *ReadPOD<NameHash>(inOutBytes, cursor);
+    const u64 payloadSize = *ReadPOD<u64>(inOutBytes, cursor);
+    const u64 payloadHash = *ReadPOD<u64>(inOutBytes, cursor);
+    if(
+        magic != __hidden_built_asset::s_Magic
+        || version != __hidden_built_asset::s_Version
+        || payloadSize != inOutBytes.size() - cursor
+        || payloadHash != ComputeFnv64Bytes(inOutBytes.data() + cursor, inOutBytes.size() - cursor)
+        || !Name(virtualPathHash)
+    ){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: invalid built asset '{}'"), PathToString<tchar>(path));
+        return MakeUnexpected(Failure{});
+    }
+    return BuiltAssetPayload{ .virtualPath = Name(virtualPathHash), .payloadOffset = cursor };
 }
 
 

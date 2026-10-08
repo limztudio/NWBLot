@@ -319,14 +319,13 @@ namespace __hidden_gpu_command_ir_replay_preflight{
 
     const TextureDesc& sourceDescription = source->getCreationDescription();
     const TextureDesc& destinationDescription = destination->getCreationDescription();
-    GraphicsBackend::TextureCopyContract contract;
-    if(!GraphicsBackend::ResolveTextureCopyContract(
+    Expected<GraphicsBackend::TextureCopyContract> contract = MakeUnexpected(Failure{});
+    if(!(contract = GraphicsBackend::ResolveTextureCopyContract(
         sourceDescription,
         record.sourceSlice,
         destinationDescription,
-        record.destinationSlice,
-        contract
-    ))
+        record.destinationSlice
+    )))
         return GpuCommandIrReplayError::InvalidTextureCopy;
     if(
         !TaskDeclaresTextureSlice(
@@ -335,7 +334,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
             ResourceStates::CopySource,
             GpuTaskResourceAccess::Read,
             sourceDescription,
-            contract.sourceSlice
+            contract->sourceSlice
         )
         || !TaskDeclaresTextureSlice(
             task,
@@ -343,7 +342,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
             ResourceStates::CopyDest,
             GpuTaskResourceAccess::Write,
             destinationDescription,
-            contract.destinationSlice
+            contract->destinationSlice
         )
     )
         return GpuCommandIrReplayError::InvalidTextureCopy;
@@ -362,12 +361,12 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     ) != 0u;
     if(
         (
-            contract.queueRequirement
+            contract->queueRequirement
             == GraphicsBackend::TextureCopyQueueRequirement::ComputeOrGraphics
             && !taskAndQueueShareComputeOrGraphics
         )
         || (
-            contract.queueRequirement
+            contract->queueRequirement
             == GraphicsBackend::TextureCopyQueueRequirement::Graphics
             && (!taskHasGraphics || !queueHasGraphics)
         )
@@ -438,8 +437,8 @@ namespace __hidden_gpu_command_ir_replay_preflight{
         return GpuCommandIrReplayError::ResourceUseMismatch;
 
     const TextureDesc& description = destination->getCreationDescription();
-    GraphicsBackend::TextureClearValueKind::Enum valueKind;
-    GraphicsBackend::TextureClearContract clearContract;
+    const auto valueKind = GpuTaskGraphClearDetail::TryMapTextureClearValueKind(record.clearTextureValueType);
+    Expected<GraphicsBackend::TextureClearContract> clearContract = MakeUnexpected(Failure{});
     if(
         !TextureSubresourcesAreCanonical(description, record.destinationSubresources)
         || !TextureSubresourcesContain(
@@ -447,18 +446,17 @@ namespace __hidden_gpu_command_ir_replay_preflight{
             description,
             record.destinationSubresources
         )
-        || !GpuTaskGraphClearDetail::TryMapTextureClearValueKind(record.clearTextureValueType, valueKind)
-        || !GraphicsBackend::ResolveTextureClearContract(
+        || !valueKind
+        || !(clearContract = GraphicsBackend::ResolveTextureClearContract(
             description,
             record.destinationSubresources,
-            valueKind,
+            *valueKind,
             record.clearDepth,
-            record.clearStencil,
-            clearContract
-        )
-        || clearContract.subresources != record.destinationSubresources
+            record.clearStencil
+        ))
+        || clearContract->subresources != record.destinationSubresources
         || !GraphicsBackend::TextureClearQueueRequirementSatisfied(
-            clearContract.queueRequirement,
+            clearContract->queueRequirement,
             task.commands.allowedCapabilities(),
             queue.capabilities
         )
@@ -494,7 +492,7 @@ namespace __hidden_gpu_command_ir_replay_preflight{
         return GpuCommandIrReplayError::ResourceUseMismatch;
 
     const TextureDesc& description = destination->getCreationDescription();
-    GraphicsBackend::TextureClearContract clearContract;
+    Expected<GraphicsBackend::TextureClearContract> clearContract = MakeUnexpected(Failure{});
     const Box clearBox(record.clearRect, 0, Limit<i32>::s_Max);
     if(
         record.clearRect.maxX <= record.clearRect.minX
@@ -506,19 +504,18 @@ namespace __hidden_gpu_command_ir_replay_preflight{
             description,
             record.destinationSubresources
         )
-        || !GraphicsBackend::ResolveTextureClearContract(
+        || !(clearContract = GraphicsBackend::ResolveTextureClearContract(
             description,
             record.destinationSubresources,
             GraphicsBackend::TextureClearValueKind::UInt,
             false,
-            false,
-            clearContract
-        )
-        || clearContract.subresources != record.destinationSubresources
+            false
+        ))
+        || clearContract->subresources != record.destinationSubresources
         || !GraphicsBackend::TextureClearQueueRequirementSatisfied(
             GraphicsBackend::TextureClearBoxQueueRequirement(
                 description,
-                clearContract.subresources,
+                clearContract->subresources,
                 clearBox
             ),
             task.commands.allowedCapabilities(),
@@ -626,10 +623,9 @@ namespace __hidden_gpu_command_ir_replay_preflight{
     bool hasPreviousTask = false;
     u64 recordIndex = 0u;
     GpuCommandIrDetail::RasterReplayState rasterState;
-    GpuCommandIrDecodedRecord decoded;
     for(;;){
-        const GpuCommandIrStreamReadStatus::Enum status = reader.next(decoded);
-        if(status == GpuCommandIrStreamReadStatus::End){
+        const auto decodedResult = reader.next();
+        if(!decodedResult && decodedResult.error() == GpuCommandIrStreamReadStatus::End){
             if(rasterState.active){
                 return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(
                     GpuCommandIrReplayError::InvalidRasterState, streamValidation, recordIndex
@@ -640,13 +636,14 @@ namespace __hidden_gpu_command_ir_replay_preflight{
                 .recordIndex = recordIndex,
             };
         }
-        if(status == GpuCommandIrStreamReadStatus::Error){
+        if(!decodedResult){
             return __hidden_gpu_command_ir_replay_preflight::ReplayFailure(
                 GpuCommandIrReplayError::InvalidStream,
                 reader.validation(),
                 reader.validation().recordIndex
             );
         }
+        const auto& decoded = *decodedResult;
 
         const bool raster = GpuCommandIrDetail::IsRasterOpcode(decoded.opcode);
         if(raster && !ownedStream){

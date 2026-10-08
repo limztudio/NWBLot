@@ -29,7 +29,12 @@ StressCpuTimingProbe::StressCpuTimingProbe(Core::Alloc::GlobalArena& arena)
 {}
 
 bool StressCpuTimingProbe::initialize(const bool requested, const bool presentationTimingEnabled){
-    const bool hasOutput = ReadSmokeEnvironmentText("NWB_STRESS_CPU_TIMING_FILE", m_outputPath);
+    auto outputPath = ReadSmokeEnvironmentText(m_outputPath.get_allocator().arena(), "NWB_STRESS_CPU_TIMING_FILE");
+    const bool hasOutput = outputPath.has_value();
+    if(outputPath)
+        m_outputPath = Move(*outputPath);
+    else
+        m_outputPath.clear();
     if(hasOutput != requested || (requested && !presentationTimingEnabled)){
         NWB_LOGGER_ERROR(NWB_TEXT("StressCpuTimingProbe: diagnostics require presentation timing and an explicit output path"));
         return false;

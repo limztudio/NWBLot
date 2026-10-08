@@ -40,27 +40,29 @@ u64 UiRadioGroupSmokeSource::key(const u64 index)const{
     return rawKey(index);
 }
 
-bool UiRadioGroupSmokeSource::indexOf(const u64 keyValue, u64& index)const{
+Expected<u64> UiRadioGroupSmokeSource::indexOf(const u64 keyValue)const{
+    u64 index = 0u;
     invalidateText();
     if(keyValue < 10u || keyValue > 50u || keyValue % 10u != 0u || keyValue == m_removed)
-        return false;
+        return MakeUnexpected(Failure{});
     u64 forward = keyValue / 10u - 1u;
     if(m_removed != 0u && keyValue > m_removed)
         --forward;
     const u64 count = m_removed == 0u ? 5u : 4u;
     index = m_reversed ? count - 1u - forward : forward;
-    return index < count;
+    return index < count ? Expected<u64>{ index } : MakeUnexpected(Failure{});
 }
 
-bool UiRadioGroupSmokeSource::findEnabled(const u64 start, const bool reverseValue, u64& index)const{
+Expected<u64> UiRadioGroupSmokeSource::findEnabled(const u64 start, const bool reverseValue)const{
+    u64 index = 0u;
     invalidateText();
     const u64 count = m_removed == 0u ? 5u : 4u;
     if(start >= count)
-        return false;
+        return MakeUnexpected(Failure{});
     for(u64 cursor = start; cursor < count;){
         if(rawKey(cursor) != 30u){
             index = cursor;
-            return true;
+            return index;
         }
         if(reverseValue){
             if(cursor == 0u)
@@ -70,7 +72,7 @@ bool UiRadioGroupSmokeSource::findEnabled(const u64 start, const bool reverseVal
         else
             ++cursor;
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 StringView UiRadioGroupSmokeSource::text(const u64 index)const{

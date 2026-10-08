@@ -34,19 +34,23 @@ static Atomic<u64> s_NextAtlasIdentity{ 1u };
     return identity;
 }
 
-[[nodiscard]] static bool Place(const AtlasPage& page, u32 width, u32 height, u32& x, u32& y, u32& rowHeight)noexcept{
-    x = page.cursorX;
-    y = page.cursorY;
-    rowHeight = page.rowHeight;
-    if(x + width > s_GlyphAtlasPageExtent){
-        x = 0u;
-        y += rowHeight;
-        rowHeight = 0u;
+struct AtlasPlacement{
+    u32 x = 0u;
+    u32 y = 0u;
+    u32 rowHeight = 0u;
+};
+
+[[nodiscard]] static Expected<AtlasPlacement> Place(const AtlasPage& page, const u32 width, const u32 height)noexcept{
+    AtlasPlacement placement{ page.cursorX, page.cursorY, page.rowHeight };
+    if(placement.x + width > s_GlyphAtlasPageExtent){
+        placement.x = 0u;
+        placement.y += placement.rowHeight;
+        placement.rowHeight = 0u;
     }
-    if(y + height > s_GlyphAtlasPageExtent)
-        return false;
-    rowHeight = Max(rowHeight, height);
-    return true;
+    if(placement.y + height > s_GlyphAtlasPageExtent)
+        return MakeUnexpected(Failure{});
+    placement.rowHeight = Max(placement.rowHeight, height);
+    return placement;
 }
 
 
@@ -99,30 +103,31 @@ bool GlyphAtlas::prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize)
         return false;
     const u32 paddedWidth = m_bitmap.width + 2u;
     const u32 paddedHeight = m_bitmap.height + 2u;
-    u32 x = 0u;
-    u32 y = 0u;
-    u32 rowHeight = 0u;
+    __hidden_ui_text_atlas::AtlasPlacement placement;
     usize pageIndex = 0u;
     while(pageIndex < m_pages.size()){
         const AtlasPage& page = m_pages[pageIndex];
-        if(page.face.get() == face.get() && __hidden_ui_text_atlas::Place(page, paddedWidth, paddedHeight, x, y, rowHeight))
-            break;
+        if(page.face.get() == face.get()){
+            const auto prospective = __hidden_ui_text_atlas::Place(page, paddedWidth, paddedHeight);
+            if(prospective){
+                placement = *prospective;
+                break;
+            }
+        }
         ++pageIndex;
     }
     if(pageIndex == m_pages.size()){
         if(m_pages.size() >= s_GlyphAtlasMaxPages)
             return false;
         m_pages.emplace_back(m_arena, face);
-        x = 0u;
-        y = 0u;
-        rowHeight = paddedHeight;
+        placement = { 0u, 0u, paddedHeight };
     }
     AtlasPage& page = m_pages[pageIndex];
     record.pageIndex = static_cast<u32>(pageIndex);
-    record.pixels = { static_cast<f32>(x + 1u), static_cast<f32>(y + 1u),
+    record.pixels = { static_cast<f32>(placement.x + 1u), static_cast<f32>(placement.y + 1u),
         static_cast<f32>(m_bitmap.width), static_cast<f32>(m_bitmap.height) };
     for(u32 row = 0u; row < m_bitmap.height; ++row){
-        const usize destination = static_cast<usize>(y + row + 1u) * s_GlyphAtlasPageExtent + x + 1u;
+        const usize destination = static_cast<usize>(placement.y + row + 1u) * s_GlyphAtlasPageExtent + placement.x + 1u;
         NWB_MEMCPY(
             page.pixels.data() + destination,
             m_bitmap.width,
@@ -130,9 +135,9 @@ bool GlyphAtlas::prepare(const SharedFontFace& face, u32 glyphId, u32 pixelSize)
             m_bitmap.width
         );
     }
-    page.cursorX = x + paddedWidth;
-    page.cursorY = y;
-    page.rowHeight = rowHeight;
+    page.cursorX = placement.x + paddedWidth;
+    page.cursorY = placement.y;
+    page.rowHeight = placement.rowHeight;
     page.dirty = true;
     appendGlyph(Move(record));
     return true;

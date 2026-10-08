@@ -38,19 +38,17 @@ inline Atomic<DiagnosticCaptureGuard*> g_CaptureGuard{ nullptr };
     ;
 }
 
-template<typename StringT>
-[[nodiscard]] static bool ReadText(
+[[nodiscard]] static Expected<AStringView> ReadText(
     const BinaryByteView& payload,
     usize& inOutCursor,
-    const u32 byteCount,
-    StringT& outText
-){
+    const u32 byteCount
+)noexcept{
     if(!BinaryDetail::CanReadBytes(payload, inOutCursor, byteCount))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outText.assign(reinterpret_cast<const char*>(payload.data() + inOutCursor), byteCount);
+    const AStringView text(reinterpret_cast<const char*>(payload.data() + inOutCursor), byteCount);
     inOutCursor += byteCount;
-    return true;
+    return text;
 }
 
 static void CaptureCallback(const DiagnosticEventRecord& record)noexcept{
@@ -116,40 +114,51 @@ bool BuildDiagnosticPayload(
     return outPayload.size() == payloadBytes;
 }
 
-bool ParseDiagnosticPayload(
+Expected<DiagnosticPayload> ParseDiagnosticPayload(
     TelemetryArena& arena,
     const void* const payload,
-    const usize payloadBytes,
-    DiagnosticPayload& outPayload
+    const usize payloadBytes
 ){
-    outPayload = DiagnosticPayload(arena);
+    DiagnosticPayload parsedPayload(arena);
 
     if(payloadBytes < sizeof(EncodedDiagnosticPayloadHeader) || !payload)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const BinaryByteView encoded{ static_cast<const u8*>(payload), payloadBytes };
     usize cursor = 0u;
 
-    EncodedDiagnosticPayloadHeader header;
-    if(!ReadPOD(encoded, cursor, header))
-        return false;
+    const auto decodedHeader = ReadPOD<EncodedDiagnosticPayloadHeader>(encoded, cursor);
+    if(!decodedHeader)
+        return MakeUnexpected(Failure{});
+    const EncodedDiagnosticPayloadHeader& header = *decodedHeader;
     if(!__hidden_telemetry_diagnostic::ValidateHeader(header))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outPayload.instructionPointer = header.instructionPointer;
-    outPayload.line = header.line;
-    outPayload.terminatesProcess = (header.flags & DiagnosticPayloadFlag::TerminatesProcess) != 0u;
+    parsedPayload.instructionPointer = header.instructionPointer;
+    parsedPayload.line = header.line;
+    parsedPayload.terminatesProcess = (header.flags & DiagnosticPayloadFlag::TerminatesProcess) != 0u;
 
-    if(
-        !__hidden_telemetry_diagnostic::ReadText(encoded, cursor, header.eventBytes, outPayload.event)
-        || !__hidden_telemetry_diagnostic::ReadText(encoded, cursor, header.categoryBytes, outPayload.category)
-        || !__hidden_telemetry_diagnostic::ReadText(encoded, cursor, header.expressionBytes, outPayload.expression)
-        || !__hidden_telemetry_diagnostic::ReadText(encoded, cursor, header.messageBytes, outPayload.message)
-        || !__hidden_telemetry_diagnostic::ReadText(encoded, cursor, header.fileBytes, outPayload.file)
-    )
-        return false;
+    struct TextField{
+        u32 byteCount;
+        AString<TelemetryArena>* destination;
+    };
+    const Array<TextField, 5u> textFields{{
+        { header.eventBytes, &parsedPayload.event },
+        { header.categoryBytes, &parsedPayload.category },
+        { header.expressionBytes, &parsedPayload.expression },
+        { header.messageBytes, &parsedPayload.message },
+        { header.fileBytes, &parsedPayload.file },
+    }};
+    for(const TextField& field : textFields){
+        const auto text = __hidden_telemetry_diagnostic::ReadText(encoded, cursor, field.byteCount);
+        if(!text)
+            return MakeUnexpected(Failure{});
+        field.destination->assign(*text);
+    }
 
-    return cursor == payloadBytes;
+    if(cursor != payloadBytes)
+        return MakeUnexpected(Failure{});
+    return parsedPayload;
 }
 
 bool RecordDiagnostic(

@@ -183,22 +183,18 @@ void GpuTaskScheduler::SubmissionAttemptExceptionFinalizer::beginClosingWithinSu
     if(!owner || owner->m_armed)
         return;
 
-    u64 recordingAttemptGeneration = 0u;
-    GpuGraphSubmissionBinding submissionBinding;
-    if(!owner->m_transaction.beginSubmissionExceptionClosingWithinSubmissionOperation(
-        owner->m_graph,
-        owner->m_compiledGraph,
-        recordingAttemptGeneration,
-        submissionBinding
-    )){
+    const auto closing = owner->m_transaction.beginSubmissionExceptionClosingWithinSubmissionOperation(
+        owner->m_graph, owner->m_compiledGraph
+    );
+    if(!closing){
         if(owner->m_transaction.hasUnresolvedSubmissionBinding(owner->m_compiledGraph))
             TerminateInvariant();
         return;
     }
-    if(recordingAttemptGeneration == 0u || !submissionBinding.valid())
+    if(closing->recordingAttemptGeneration == 0u || !closing->submissionBinding.valid())
         TerminateInvariant();
-    owner->m_recordingAttemptGeneration = recordingAttemptGeneration;
-    owner->m_submissionBinding = submissionBinding;
+    owner->m_recordingAttemptGeneration = closing->recordingAttemptGeneration;
+    owner->m_submissionBinding = closing->submissionBinding;
     owner->m_armed = true;
 }
 

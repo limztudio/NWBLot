@@ -127,14 +127,16 @@ namespace __hidden_ui_edit_caret_geometry{
     return total == 0u ? 0.0f : static_cast<f32>(before) / static_cast<f32>(total);
 }
 
-[[nodiscard]] static bool CaretRect(const TextLayout& layout, const EditBoundaryVector& boundaries,
-    const usize byte, Rect& output
+[[nodiscard]] static Expected<Rect> CaretRect(
+    const TextLayout& layout,
+    const EditBoundaryVector& boundaries,
+    const usize byte
 )noexcept{
     if(layout.lines().empty() || !GraphemeSegmentation::IsScalarBoundary(layout.utf8(), byte))
-        return false;
+        return MakeUnexpected(Failure{});
     const TextLine& line = layout.lines()[LineForByte(layout, byte)];
     if(byte < line.byteBegin || byte > line.byteEnd)
-        return false;
+        return MakeUnexpected(Failure{});
     f32 x = 0.0f;
     if(line.clusterCount != 0u){
         const auto firstCluster = layout.clusters().begin() + line.firstCluster;
@@ -144,7 +146,7 @@ namespace __hidden_ui_edit_caret_geometry{
             [](const TextCluster& item, usize value)noexcept{ return item.byteEnd < value; }
         );
         if(cluster == lastCluster || byte < cluster->byteBegin)
-            return false;
+            return MakeUnexpected(Failure{});
         if(byte == cluster->byteBegin || byte == cluster->byteEnd)
             x = byte == cluster->byteBegin ? cluster->leadingX : cluster->trailingX;
         else{
@@ -166,30 +168,32 @@ namespace __hidden_ui_edit_caret_geometry{
         }
     }
     if(!IsFinite(x))
-        return false;
-    output = { x, line.top, 0.0f, line.height };
-    return true;
+        return MakeUnexpected(Failure{});
+    return Rect{ x, line.top, 0.0f, line.height };
 }
 
-[[nodiscard]] static bool NearestStop(const PaintVector<EditCaretLine>& lines, const PaintVector<EditBoxCaretStop>& stops,
-    const u32 lineIndex, const Point point, usize& committedByte
+[[nodiscard]] static Expected<usize> NearestStop(
+    const PaintVector<EditCaretLine>& lines,
+    const PaintVector<EditBoxCaretStop>& stops,
+    const u32 lineIndex,
+    const Point point
 )noexcept{
     if(stops.empty() || lineIndex >= lines.size() || !IsFinite(point.x) || !IsFinite(point.y))
-        return false;
+        return MakeUnexpected(Failure{});
     const EditCaretLine& line = lines[lineIndex];
     if(line.firstStop > stops.size() || line.stopCount > stops.size() - line.firstStop)
-        return false;
+        return MakeUnexpected(Failure{});
     if(line.stopCount == 0u && (line.firstStop == 0u || line.firstStop >= stops.size()))
-        return false;
+        return MakeUnexpected(Failure{});
     const usize first = line.stopCount == 0u ? line.firstStop - 1u : line.firstStop;
     const usize end = line.stopCount == 0u ? static_cast<usize>(line.firstStop) + 1u : first + line.stopCount;
     f32 minimumX = stops[first].x;
     if(!IsFinite(minimumX) || minimumX < 0.0f)
-        return false;
+        return MakeUnexpected(Failure{});
     f32 maximumX = minimumX;
     for(usize index = first + 1u; index < end; ++index){
         if(!IsFinite(stops[index].x) || stops[index].x < 0.0f)
-            return false;
+            return MakeUnexpected(Failure{});
         minimumX = Min(minimumX, stops[index].x);
         maximumX = Max(maximumX, stops[index].x);
     }
@@ -200,13 +204,13 @@ namespace __hidden_ui_edit_caret_geometry{
     for(usize index = first; index < end; ++index){
         const EditBoxCaretStop& stop = stops[index];
         if(stop.lineIndex >= lines.size() || (line.stopCount != 0u && stop.lineIndex != lineIndex))
-            return false;
+            return MakeUnexpected(Failure{});
         const EditCaretLine& stopLine = lines[stop.lineIndex];
         if(
             !IsFinite(stopLine.top) || !IsFinite(stopLine.height) || stopLine.height <= 0.0f
             || !IsFinite(stopLine.top + stopLine.height)
         )
-            return false;
+            return MakeUnexpected(Failure{});
         const f64 distanceY = line.stopCount == 0u
             ? Abs(static_cast<f64>(point.y) - (static_cast<f64>(stopLine.top) + static_cast<f64>(stopLine.height) * 0.5)) : 0.0;
         const f32 distanceX = Abs(queryX - stop.x);
@@ -216,8 +220,7 @@ namespace __hidden_ui_edit_caret_geometry{
             result = stop.committedByte;
         }
     }
-    committedByte = result;
-    return true;
+    return result;
 }
 
 
@@ -230,22 +233,24 @@ namespace __hidden_ui_edit_caret_geometry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool HitEditCaretGeometry(const PaintVector<EditCaretLine>& lines, const PaintVector<EditBoxCaretStop>& stops,
-    const Point localPoint, usize& committedByte
+Expected<usize> HitEditCaretGeometry(
+    const PaintVector<EditCaretLine>& lines,
+    const PaintVector<EditBoxCaretStop>& stops,
+    const Point localPoint
 )noexcept{
     if(lines.empty() || lines.size() > Limit<u32>::s_Max || stops.empty() || !IsFinite(localPoint.x) || !IsFinite(localPoint.y))
-        return false;
+        return MakeUnexpected(Failure{});
     u32 lineIndex = static_cast<u32>(lines.size() - 1u);
     for(u32 index = 0u; index < lines.size(); ++index){
         const EditCaretLine& line = lines[index];
         if(!IsFinite(line.top) || !IsFinite(line.height) || line.height <= 0.0f || !IsFinite(line.top + line.height))
-            return false;
+            return MakeUnexpected(Failure{});
         if(localPoint.y < line.top + line.height){
             lineIndex = index;
             break;
         }
     }
-    return __hidden_ui_edit_caret_geometry::NearestStop(lines, stops, lineIndex, localPoint, committedByte);
+    return __hidden_ui_edit_caret_geometry::NearestStop(lines, stops, lineIndex, localPoint);
 }
 
 
@@ -279,8 +284,8 @@ bool EditCaretGeometry::adoptLayout(TextLayout&& layout, const StringView expect
         || !__hidden_ui_edit_caret_geometry::ValidateLayout(layout, mode)
     )
         return false;
-    EditBoundaryVector boundaries(*m_arena);
-    if(!GraphemeSegmentation::Build(expectedText, boundaries, mode == EditTextMode::SingleLine))
+    auto boundaries = GraphemeSegmentation::Build(*m_arena, expectedText, mode == EditTextMode::SingleLine);
+    if(!boundaries)
         return false;
     PaintVector<EditBoxCaretStop> stops(*m_arena);
     PaintVector<EditCaretLine> lines(*m_arena);
@@ -296,11 +301,11 @@ bool EditCaretGeometry::adoptLayout(TextLayout&& layout, const StringView expect
             || item.displayByte < previousDisplay || item.displayByte > expectedText.size()
         )
             return false;
-        Rect caret;
-        if(!__hidden_ui_edit_caret_geometry::CaretRect(layout, boundaries, item.displayByte, caret))
+        const auto caret = __hidden_ui_edit_caret_geometry::CaretRect(layout, *boundaries, item.displayByte);
+        if(!caret)
             return false;
         const u32 lineIndex = __hidden_ui_edit_caret_geometry::LineForByte(layout, item.displayByte);
-        stops.push_back({ item.committedByte, item.displayByte, caret.x, lineIndex });
+        stops.push_back({ item.committedByte, item.displayByte, caret->x, lineIndex });
         ++lines[lineIndex].stopCount;
         previousCommitted = item.committedByte;
         previousDisplay = item.displayByte;
@@ -311,7 +316,7 @@ bool EditCaretGeometry::adoptLayout(TextLayout&& layout, const StringView expect
         firstStop += line.stopCount;
     }
     m_layout = Move(layout);
-    m_boundaries = Move(boundaries);
+    m_boundaries = Move(*boundaries);
     m_stops = Move(stops);
     m_lines = Move(lines);
     m_mode = mode;
@@ -319,37 +324,46 @@ bool EditCaretGeometry::adoptLayout(TextLayout&& layout, const StringView expect
     return true;
 }
 
-bool EditCaretGeometry::caretRect(const usize displayByte, Rect& output)const noexcept{
-    return m_ready && __hidden_ui_edit_caret_geometry::CaretRect(m_layout, m_boundaries, displayByte, output);
+Expected<Rect> EditCaretGeometry::caretRect(const usize displayByte)const noexcept{
+    if(!m_ready)
+        return MakeUnexpected(Failure{});
+    return __hidden_ui_edit_caret_geometry::CaretRect(m_layout, m_boundaries, displayByte);
 }
 
-bool EditCaretGeometry::hitTest(const Point localPoint, usize& committedByte)const noexcept{
-    return m_ready && HitEditCaretGeometry(m_lines, m_stops, localPoint, committedByte);
+Expected<usize> EditCaretGeometry::hitTest(const Point localPoint)const noexcept{
+    if(!m_ready)
+        return MakeUnexpected(Failure{});
+    return HitEditCaretGeometry(m_lines, m_stops, localPoint);
 }
 
-bool EditCaretGeometry::verticalTarget(const usize displayCaret, const bool down,
-    const f32 preferredX, usize& committedByte
+Expected<usize> EditCaretGeometry::verticalTarget(
+    const usize displayCaret,
+    const bool down,
+    const f32 preferredX
 )const noexcept{
-    Rect caret;
-    if(!m_ready || !IsFinite(preferredX) || !caretRect(displayCaret, caret))
-        return false;
+    if(!m_ready || !IsFinite(preferredX))
+        return MakeUnexpected(Failure{});
+    const auto caret = caretRect(displayCaret);
+    if(!caret)
+        return MakeUnexpected(caret.error());
     const u32 current = __hidden_ui_edit_caret_geometry::LineForByte(m_layout, displayCaret);
     const u32 target = down ? Min(current + 1u, static_cast<u32>(m_lines.size() - 1u)) : current == 0u ? 0u : current - 1u;
     if(target == current){
         for(const EditBoxCaretStop& stop : m_stops){
             if(stop.displayByte == displayCaret){
-                committedByte = stop.committedByte;
-                return true;
+                return stop.committedByte;
             }
         }
-        return nearestStop(current, { caret.x, caret.y + caret.height * 0.5f }, committedByte);
+        return nearestStop(current, { caret->x, caret->y + caret->height * 0.5f });
     }
     const EditCaretLine& line = m_lines[target];
-    return nearestStop(target, { preferredX, line.top + line.height * 0.5f }, committedByte);
+    return nearestStop(target, { preferredX, line.top + line.height * 0.5f });
 }
 
-bool EditCaretGeometry::rangeOnLine(const EditBoxRange range, const u32 lineIndex,
-    const f32 breakWidth, Rect& output
+Expected<Rect> EditCaretGeometry::rangeOnLine(
+    const EditBoxRange range,
+    const u32 lineIndex,
+    const f32 breakWidth
 )const noexcept{
     if(
         !m_ready || lineIndex >= m_lines.size() || range.begin > range.end || range.end > m_layout.utf8().size()
@@ -357,32 +371,31 @@ bool EditCaretGeometry::rangeOnLine(const EditBoxRange range, const u32 lineInde
         || !GraphemeSegmentation::IsScalarBoundary(m_layout.utf8(), range.begin)
         || !GraphemeSegmentation::IsScalarBoundary(m_layout.utf8(), range.end)
     )
-        return false;
+        return MakeUnexpected(Failure{});
     if(range.begin == range.end){
-        output = {};
-        return true;
+        return Rect{};
     }
     const EditCaretLine& line = m_lines[lineIndex];
     const usize begin = Max(range.begin, line.byteBegin);
     const usize end = Min(range.end, line.byteEnd);
     const bool selectedBreak = line.breakEnd != line.byteEnd && range.begin <= line.byteEnd && range.end > line.byteEnd;
     if(begin >= end && !selectedBreak){
-        output = {};
-        return true;
+        return Rect{};
     }
-    Rect first;
-    Rect last;
-    if(!caretRect(begin, first) || !caretRect(end, last))
-        return false;
-    const f32 width = Max(0.0f, last.x - first.x) + (selectedBreak ? breakWidth : 0.0f);
-    if(!IsFinite(width) || !IsFinite(first.x + width))
-        return false;
-    output = { first.x, line.top, width, line.height };
-    return true;
+    const auto first = caretRect(begin);
+    if(!first)
+        return MakeUnexpected(first.error());
+    const auto last = caretRect(end);
+    if(!last)
+        return MakeUnexpected(last.error());
+    const f32 width = Max(0.0f, last->x - first->x) + (selectedBreak ? breakWidth : 0.0f);
+    if(!IsFinite(width) || !IsFinite(first->x + width))
+        return MakeUnexpected(Failure{});
+    return Rect{ first->x, line.top, width, line.height };
 }
 
-bool EditCaretGeometry::nearestStop(const u32 lineIndex, const Point point, usize& committedByte)const noexcept{
-    return __hidden_ui_edit_caret_geometry::NearestStop(m_lines, m_stops, lineIndex, point, committedByte);
+Expected<usize> EditCaretGeometry::nearestStop(const u32 lineIndex, const Point point)const noexcept{
+    return __hidden_ui_edit_caret_geometry::NearestStop(m_lines, m_stops, lineIndex, point);
 }
 
 

@@ -43,9 +43,10 @@ u64 UiSearchComboSmokeSource::View::key(const u64 index)const{
     return 0u;
 }
 
-bool UiSearchComboSmokeSource::View::indexOf(const u64 keyValue, u64& index)const{
+Expected<u64> UiSearchComboSmokeSource::View::indexOf(const u64 keyValue)const{
+    u64 index = 0u;
     if(keyValue == 0u || keyValue > 100000u || keyValue == m_source.removedKey())
-        return false;
+        return MakeUnexpected(Failure{});
     u64 offset = 0u;
     const u64 removed = m_source.removedKey();
     for(usize rangeIndex = 0u; rangeIndex < m_source.m_rangeCount; ++rangeIndex){
@@ -54,38 +55,39 @@ bool UiSearchComboSmokeSource::View::indexOf(const u64 keyValue, u64& index)cons
         if(keyValue >= range.first && keyValue < range.past){
             const u64 natural = offset + keyValue - range.first - static_cast<u64>(excludes && removed < keyValue);
             index = m_source.reversed() ? rowCount() - 1u - natural : natural;
-            return true;
+            return index;
         }
         offset += range.past - range.first - static_cast<u64>(excludes);
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
-bool UiSearchComboSmokeSource::View::findEnabled(const u64 start, const bool reverse, u64& index)const{
+Expected<u64> UiSearchComboSmokeSource::View::findEnabled(const u64 start, const bool reverse)const{
+    u64 index = 0u;
     if(start >= rowCount())
-        return false;
+        return MakeUnexpected(Failure{});
     if(enabled(start)){
         index = start;
-        return true;
+        return index;
     }
     if(reverse){
         if(start == 0u)
-            return false;
+            return MakeUnexpected(Failure{});
         index = start - 1u;
     }
     else{
         if(start + 1u >= rowCount())
-            return false;
+            return MakeUnexpected(Failure{});
         index = start + 1u;
     }
-    return enabled(index);
+    return enabled(index) ? Expected<u64>{ index } : MakeUnexpected(Failure{});
 }
 
 StringView UiSearchComboSmokeSource::View::text(const u64 index)const{
-    u64 fullIndex = 0u;
-    if(!m_source.m_rows.indexOf(key(index), fullIndex))
+    const auto fullIndex = m_source.m_rows.indexOf(key(index));
+    if(!fullIndex)
         return {};
-    return m_source.m_rows.text(fullIndex);
+    return m_source.m_rows.text(*fullIndex);
 }
 
 bool UiSearchComboSmokeSource::View::enabled(const u64 index)const{
@@ -104,8 +106,8 @@ UiSearchComboSmokeSource::UiSearchComboSmokeSource(Core::Alloc::GlobalArena& are
     NWB_FATAL_ASSERT(initialized);
 }
 
-bool UiSearchComboSmokeSource::findEnabled(const u64 start, const bool reverse, u64& index)const{
-    return m_rows.findEnabled(start, reverse, index);
+Expected<u64> UiSearchComboSmokeSource::findEnabled(const u64 start, const bool reverse)const{
+    return m_rows.findEnabled(start, reverse);
 }
 
 bool UiSearchComboSmokeSource::filter(const AStringView query){

@@ -70,16 +70,14 @@ namespace __hidden_csg_resources{
     return true;
 }
 
-[[nodiscard]] static bool AcquireCsgBufferHeapHandle(
+[[nodiscard]] static Expected<Core::GpuDescriptorHandle> AcquireCsgBufferHeapHandle(
     Core::Device& device,
     Core::Buffer& buffer,
-    const Core::GpuDescriptorClass::Enum descriptorClass,
-    Core::GpuDescriptorHandle& outHandle
+    const Core::GpuDescriptorClass::Enum descriptorClass
 ){
-    outHandle = Core::GpuDescriptorHandle::Invalid();
     Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
     if(!heap.isInitialized())
-        return false;
+        return MakeUnexpected(Failure{});
 
     NWB_ASSERT(
         descriptorClass == Core::GpuDescriptorClass::StorageBuffer
@@ -89,7 +87,7 @@ namespace __hidden_csg_resources{
         descriptorClass != Core::GpuDescriptorClass::StorageBuffer
         && descriptorClass != Core::GpuDescriptorClass::UniformBuffer
     )
-        return false;
+        return MakeUnexpected(Failure{});
     const Core::DescriptorWriteItem descriptorWrite = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
         ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
         : Core::DescriptorWriteItem::StructuredBufferSrv(0u, &buffer)
@@ -98,11 +96,10 @@ namespace __hidden_csg_resources{
     if(!acquired.valid() || !heap.write(acquired, descriptorWrite)){
         if(acquired.valid())
             heap.free(acquired);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outHandle = acquired;
-    return true;
+    return acquired;
 }
 
 [[nodiscard]] static bool ReplaceCsgStorageBufferHeapHandle(
@@ -110,8 +107,8 @@ namespace __hidden_csg_resources{
     Core::Buffer& buffer,
     Core::GpuDescriptorHandle& inOutHandle
 ){
-    Core::GpuDescriptorHandle acquired;
-    if(!AcquireCsgBufferHeapHandle(device, buffer, Core::GpuDescriptorClass::StorageBuffer, acquired)){
+    const auto acquired = AcquireCsgBufferHeapHandle(device, buffer, Core::GpuDescriptorClass::StorageBuffer);
+    if(!acquired){
         // The buffer was replaced; drop the stale handle for a later retry.
         Core::GpuDescriptorHeap& heap = device.getDescriptorHeap();
         if(inOutHandle.valid() && heap.isInitialized())
@@ -123,7 +120,7 @@ namespace __hidden_csg_resources{
     // Replacements take a fresh slot; the old one retires after quarantine.
     if(inOutHandle.valid())
         device.getDescriptorHeap().free(inOutHandle);
-    inOutHandle = acquired;
+    inOutHandle = *acquired;
     return true;
 }
 
@@ -135,7 +132,11 @@ namespace __hidden_csg_resources{
 ){
     if(inOutHandle.valid())
         return inOutHandle.descriptorClass() == descriptorClass;
-    return AcquireCsgBufferHeapHandle(device, buffer, descriptorClass, inOutHandle);
+    const auto acquired = AcquireCsgBufferHeapHandle(device, buffer, descriptorClass);
+    if(!acquired)
+        return false;
+    inOutHandle = *acquired;
+    return true;
 }
 
 
@@ -300,31 +301,30 @@ ECSRenderDetail::CsgGraphResourceSnapshot RendererCsgSystem::csgGraphResourceSna
     };
 }
 
-bool RendererCsgSystem::prepareCsgClipContextSlotData(
+Expected<CsgClipContextSlots> RendererCsgSystem::prepareCsgClipContextSlotData(
     const DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-    CsgClipContextSlots& outContextSlots
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
 )const{
-    outContextSlots = CsgClipContextSlots{};
+    CsgClipContextSlots contextSlots{};
     if(!csgFrameData.hasWork())
-        return true;
+        return contextSlots;
     if(
         !csgResources.frameReady(csgFrameData)
         || !frameBindings.bindingValid()
         || !targets.bindless.slotsBufferDescriptor.valid()
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     // Freeze indirections now; later records must not see another generation.
-    outContextSlots.receiverRanges = csgResources.receiverRangeHeapHandle.slot();
-    outContextSlots.cutters = csgResources.cutterHeapHandle.slot();
-    outContextSlots.materialTyped = frameBindings.materialTypedHeapHandle.slot();
-    outContextSlots.meshInstances = frameBindings.instanceHeapHandle.slot();
-    outContextSlots.deferredBindlessResources = targets.bindless.slotsBufferDescriptor.slot();
-    outContextSlots.intervalSampleState = csgResources.intervalSampleStateHeapHandle.slot();
-    return true;
+    contextSlots.receiverRanges = csgResources.receiverRangeHeapHandle.slot();
+    contextSlots.cutters = csgResources.cutterHeapHandle.slot();
+    contextSlots.materialTyped = frameBindings.materialTypedHeapHandle.slot();
+    contextSlots.meshInstances = frameBindings.instanceHeapHandle.slot();
+    contextSlots.deferredBindlessResources = targets.bindless.slotsBufferDescriptor.slot();
+    contextSlots.intervalSampleState = csgResources.intervalSampleStateHeapHandle.slot();
+    return contextSlots;
 }
 
 void RendererCsgSystem::releaseCsgClipContextHeapHandles(){

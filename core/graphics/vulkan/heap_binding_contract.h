@@ -41,30 +41,23 @@ struct HeapBindingRange{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool TryResolveBufferCpuAccess(
-    const CpuAccessMode::Enum declaredAccess,
-    const bool isVolatile,
-    CpuAccessMode::Enum& outAccess
+[[nodiscard]] inline Expected<CpuAccessMode::Enum> TryResolveBufferCpuAccess(
+    const CpuAccessMode::Enum declaredAccess, const bool isVolatile
 )noexcept{
-    outAccess = CpuAccessMode::None;
     switch(declaredAccess){
     case CpuAccessMode::None:
     case CpuAccessMode::Read:
     case CpuAccessMode::Write:
         break;
     default:
-        return false;
+        return MakeUnexpected(Failure{});
     }
-
     if(isVolatile){
         if(declaredAccess == CpuAccessMode::Read)
-            return false;
-        outAccess = CpuAccessMode::Write;
+            return MakeUnexpected(Failure{});
+        return CpuAccessMode::Write;
     }
-    else
-        outAccess = declaredAccess;
-
-    return true;
+    return declaredAccess;
 }
 
 [[nodiscard]] inline bool IsBufferHeapTypeCompatible(
@@ -72,11 +65,11 @@ struct HeapBindingRange{
     const bool isVolatile,
     const HeapType::Enum heapType
 )noexcept{
-    CpuAccessMode::Enum effectiveAccess = CpuAccessMode::None;
-    if(!TryResolveBufferCpuAccess(declaredAccess, isVolatile, effectiveAccess))
+    const auto effectiveAccess = TryResolveBufferCpuAccess(declaredAccess, isVolatile);
+    if(!effectiveAccess)
         return false;
 
-    switch(effectiveAccess){
+    switch(*effectiveAccess){
     case CpuAccessMode::None:
         return heapType == HeapType::DeviceLocal;
     case CpuAccessMode::Read:
@@ -88,61 +81,49 @@ struct HeapBindingRange{
     }
 }
 
-[[nodiscard]] inline bool TryBuildBufferHeapRequirements(
+[[nodiscard]] inline Expected<MemoryRequirements> TryBuildBufferHeapRequirements(
     const MemoryRequirements& nativeRequirements,
     const CpuAccessMode::Enum declaredAccess,
     const bool isVolatile,
-    const u64 nonCoherentAtomSize,
-    MemoryRequirements& outRequirements
+    const u64 nonCoherentAtomSize
 )noexcept{
-    outRequirements = {};
     if(nativeRequirements.size == 0u || nativeRequirements.alignment == 0u)
-        return false;
-
-    CpuAccessMode::Enum effectiveAccess = CpuAccessMode::None;
-    if(!TryResolveBufferCpuAccess(declaredAccess, isVolatile, effectiveAccess))
-        return false;
-
-    MemoryRequirements adjustedRequirements = nativeRequirements;
-    if(effectiveAccess == CpuAccessMode::Read){
+        return MakeUnexpected(Failure{});
+    const auto effectiveAccess = TryResolveBufferCpuAccess(declaredAccess, isVolatile);
+    if(!effectiveAccess)
+        return MakeUnexpected(effectiveAccess.error());
+    MemoryRequirements adjusted = nativeRequirements;
+    if(*effectiveAccess == CpuAccessMode::Read){
         const u64 atomSize = Max<u64>(nonCoherentAtomSize, 1u);
-        adjustedRequirements.alignment = Max<u64>(adjustedRequirements.alignment, atomSize);
-        if(!AlignUpChecked(adjustedRequirements.size, atomSize, adjustedRequirements.size))
-            return false;
+        adjusted.alignment = Max<u64>(adjusted.alignment, atomSize);
+        const auto size = AlignUpChecked(adjusted.size, atomSize);
+        if(!size)
+            return MakeUnexpected(size.error());
+        adjusted.size = *size;
     }
-
-    outRequirements = adjustedRequirements;
-    return true;
+    return adjusted;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool TryBuildHeapBindingRange(
+[[nodiscard]] inline Expected<HeapBindingRange> TryBuildHeapBindingRange(
     const u64 heapCapacity,
     const u64 heapMemoryOffset,
     const u64 localOffset,
     const u64 size,
-    const u64 alignment,
-    HeapBindingRange& outRange
+    const u64 alignment
 )noexcept{
-    outRange = {};
     if(size == 0u || localOffset > heapCapacity || size > heapCapacity - localOffset)
-        return false;
+        return MakeUnexpected(Failure{});
     if(localOffset > Limit<u64>::s_Max - heapMemoryOffset)
-        return false;
-
+        return MakeUnexpected(Failure{});
     const u64 absoluteBegin = heapMemoryOffset + localOffset;
     const u64 requiredAlignment = Max<u64>(alignment, 1u);
     if((absoluteBegin % requiredAlignment) != 0u || size > Limit<u64>::s_Max - absoluteBegin)
-        return false;
-
-    outRange.localOffset = localOffset;
-    outRange.size = size;
-    outRange.absoluteBegin = absoluteBegin;
-    outRange.absoluteEnd = absoluteBegin + size;
-    return true;
+        return MakeUnexpected(Failure{});
+    return HeapBindingRange{ localOffset, size, absoluteBegin, absoluteBegin + size };
 }
 
 [[nodiscard]] inline bool HeapBindingRangesConflict(

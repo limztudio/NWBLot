@@ -169,29 +169,29 @@ bool DescriptorBufferManager::writeDescriptor(
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: Buffer has no UAV capability."));
             return false;
         }
-        BufferRange range;
-        if(!VulkanDetail::ResolveDescriptorBufferRange(item, bufferDesc, range))
+        const auto range = VulkanDetail::ResolveDescriptorBufferRange(item, bufferDesc);
+        if(!range)
             return false;
         const VkDeviceAddress bufferAddress = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress());
-        if(bufferAddress == 0u || range.byteOffset > UINT64_MAX - bufferAddress){
+        if(bufferAddress == 0u || range->byteOffset > UINT64_MAX - bufferAddress){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: buffer has no valid device address."));
             return false;
         }
-        const VkDeviceAddress descriptorAddress = bufferAddress + range.byteOffset;
+        const VkDeviceAddress descriptorAddress = bufferAddress + range->byteOffset;
         const u64 requiredAlignment = isUniform
             ? getUniformBufferAddressAlignmentBytes()
             : getStorageBufferAddressAlignmentBytes()
         ;
         if(
             (descriptorAddress % requiredAlignment) != 0u
-            || range.byteSize > UINT64_MAX - descriptorAddress
+            || range->byteSize > UINT64_MAX - descriptorAddress
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: buffer address or range is invalid."));
             return false;
         }
         addressInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT;
         addressInfo.address = descriptorAddress;
-        addressInfo.range = range.byteSize;
+        addressInfo.range = range->byteSize;
         if(isUniform)
             getInfo.data.pUniformBuffer = &addressInfo;
         else
@@ -219,11 +219,11 @@ bool DescriptorBufferManager::writeDescriptor(
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: Buffer lacks typed-view capability."));
                 return false;
             }
-            BufferRange range;
-            if(!VulkanDetail::ResolveDescriptorBufferRange(item, bufferDesc, range))
+            const auto range = VulkanDetail::ResolveDescriptorBufferRange(item, bufferDesc);
+            if(!range)
                 return false;
             const VkDeviceAddress bufferAddress = static_cast<VkDeviceAddress>(buffer->getGpuVirtualAddress());
-            if(bufferAddress == 0u || range.byteOffset > UINT64_MAX - bufferAddress){
+            if(bufferAddress == 0u || range->byteOffset > UINT64_MAX - bufferAddress){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: typed buffer has no valid device address."));
                 return false;
             }
@@ -248,20 +248,20 @@ bool DescriptorBufferManager::writeDescriptor(
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: format lacks texel-buffer support."));
                 return false;
             }
-            const VkDeviceAddress descriptorAddress = bufferAddress + range.byteOffset;
+            const VkDeviceAddress descriptorAddress = bufferAddress + range->byteOffset;
             if(
                 (descriptorAddress % getTexelBufferAddressAlignmentBytes()) != 0u
-                || (range.byteOffset % formatInfo.bytesPerBlock) != 0u
-                || (range.byteSize % formatInfo.bytesPerBlock) != 0u
-                || (range.byteSize / formatInfo.bytesPerBlock) > getMaxTexelBufferElements()
-                || range.byteSize > UINT64_MAX - descriptorAddress
+                || (range->byteOffset % formatInfo.bytesPerBlock) != 0u
+                || (range->byteSize % formatInfo.bytesPerBlock) != 0u
+                || (range->byteSize / formatInfo.bytesPerBlock) > getMaxTexelBufferElements()
+                || range->byteSize > UINT64_MAX - descriptorAddress
             ){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Descriptor buffer write rejected: typed-buffer range is invalid."));
                 return false;
             }
             addressInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT;
             addressInfo.address = descriptorAddress;
-            addressInfo.range = range.byteSize;
+            addressInfo.range = range->byteSize;
             addressInfo.format = vkFormat;
             if(item.type == ResourceType::TypedBuffer_UAV)
                 getInfo.data.pStorageTexelBuffer = &addressInfo;

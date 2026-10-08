@@ -24,10 +24,9 @@ public:
         static_cast<void>(frame);
         return true;
     }
-    virtual bool declareTaskGraphOutputLayer(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutputLayer& layer)override{
+    virtual Expected<Core::GpuTaskGraphOutputLayer> declareTaskGraphOutputLayer(Core::GpuTaskGraph& graph)override{
         static_cast<void>(graph);
-        layer = {};
-        return true;
+        return Core::GpuTaskGraphOutputLayer{};
     }
     virtual void acceptTaskGraphOutputLayer(const u64 generation, const Core::QueueSubmissionToken& token)override{
         ++m_acceptanceCount;

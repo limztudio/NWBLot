@@ -201,28 +201,23 @@ struct MaterialBindTypedLayoutCache{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ParseMaterialBindSource(
+[[nodiscard]] Expected<MaterialBindEntry> ParseMaterialBindSource(
     const Path& bindFilePath,
-    MaterialBindEntry& outEntry,
+    MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] bool BuildMaterialBindParameterKey(
-    AStringView instanceName,
-    AStringView fieldName,
-    ACompactString& outKey
-);
+[[nodiscard]] Expected<ACompactString> BuildMaterialBindParameterKey(AStringView instanceName, AStringView fieldName);
 [[nodiscard]] u64 ComputeMaterialBindParameterKeyHash(AStringView parameterKey);
-[[nodiscard]] bool BuildMaterialBindTypedLayout(
+[[nodiscard]] Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayout(
     const MaterialBindEntry& bindEntry,
     const Name& contextName,
-    MaterialBindTypedLayout& outLayout,
+    MaterialCookArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] bool FindOrBuildMaterialBindTypedLayout(
+[[nodiscard]] Expected<const MaterialBindTypedLayout*> FindOrBuildMaterialBindTypedLayout(
     const Name& materialInterface,
     const MaterialBindEntry& bindEntry,
     MaterialBindTypedLayoutCache& inOutCache,
-    const MaterialBindTypedLayout*& outLayout,
     Core::Alloc::ScratchArena& scratchArena
 );
 void CopyMaterialBindTypedLayoutDefaults(

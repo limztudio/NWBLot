@@ -142,23 +142,22 @@ bool ProjectTickCallback(void* userData, f32 delta){
 }
 
 Path ResolveResourceMountDirectory(NWB::Core::Alloc::GlobalArena& arena){
-    ErrorCode errorCode;
-    Path currentDirectory(arena);
-    if(GetCurrentPath(currentDirectory, errorCode)){
-        const Path currentResDirectory = currentDirectory / s_ResourceDirectoryName;
+    const auto currentDirectory = GetCurrentPath(arena);
+    if(currentDirectory){
+        const Path currentResDirectory = *currentDirectory / s_ResourceDirectoryName;
         if(::VolumeSegmentExists(currentResDirectory, s_GraphicsVolumeName))
             return currentResDirectory;
     }
 
-    Path executableDirectory(arena);
-    if(!GetExecutableDirectory(executableDirectory))
+    const auto executableDirectory = GetExecutableDirectory(arena);
+    if(!executableDirectory)
         return Path(arena, s_ResourceDirectoryName);
 
-    const Path executableResDirectory = executableDirectory / s_ResourceDirectoryName;
+    const Path executableResDirectory = *executableDirectory / s_ResourceDirectoryName;
     if(::VolumeSegmentExists(executableResDirectory, s_GraphicsVolumeName))
         return executableResDirectory;
 
-    const Path parentDirectory = executableDirectory.parentPath();
+    const Path parentDirectory = executableDirectory->parentPath();
     if(parentDirectory.empty())
         return Path(arena, s_ResourceDirectoryName);
 
@@ -188,15 +187,14 @@ private:
 };
 
 
-bool LoadShaderArchiveRecords(
-    const NWB::Core::Assets::IAssetBinarySource& assetBinarySource,
-    NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& outRecords
+Expected<NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>> LoadShaderArchiveRecords(
+    NWB::Core::GraphicsArena& arena,
+    const NWB::Core::Assets::IAssetBinarySource& assetBinarySource
 ){
-    NWB::Core::Assets::AssetBytes indexBinary{outRecords.get_allocator().arena()};
+    NWB::Core::Assets::AssetBytes indexBinary{arena};
     if(!assetBinarySource.readAssetBinary(NWB::Core::ShaderArchive::IndexVirtualPathName(), indexBinary))
-        return false;
-
-    return NWB::Core::ShaderArchive::DeserializeIndex(indexBinary, outRecords);
+        return MakeUnexpected(Failure{});
+    return NWB::Core::ShaderArchive::DeserializeIndex(arena, indexBinary);
 }
 
 #if !defined(NWB_FINAL)
@@ -234,21 +232,21 @@ bool ApplyGraphicsOptions(NWB::Core::GraphicsRuntime& graphics, const LoaderOpti
 }
 
 bool InstallCrashCapture(CrashArena& crashArena){
-    ::Path<CrashArena> executableDirectory(crashArena);
-    if(!GetExecutableDirectory(executableDirectory))
+    auto executableDirectory = GetExecutableDirectory(crashArena);
+    if(!executableDirectory)
         executableDirectory = ::Path<CrashArena>(crashArena, s_FallbackExecutableDirectory);
 
-    ::Path<CrashArena> executableName(crashArena);
-    if(!GetExecutableName(executableName))
+    auto executableName = GetExecutableName(crashArena);
+    if(!executableName)
         executableName = ::Path<CrashArena>(crashArena, s_FallbackExecutableName);
 
-    AString<CrashArena> applicationName = PathToString<char>(crashArena, executableName);
+    AString<CrashArena> applicationName = PathToString<char>(crashArena, *executableName);
 
     NWB::Core::Crash::CrashConfig crashConfig(crashArena);
     crashConfig.applicationName = AStringView(applicationName.data(), applicationName.size());
     crashConfig.buildId = s_UnknownBuildLabel;
     crashConfig.version = s_UnknownBuildLabel;
-    crashConfig.spoolDirectory = executableDirectory / s_CrashSpoolDirectoryName;
+    crashConfig.spoolDirectory = *executableDirectory / s_CrashSpoolDirectoryName;
     crashConfig.dumpDetailMode = NWB::Core::Crash::DumpDetailMode::Small;
 
     if(!NWB::Core::Crash::InstallCrashHandler(crashArena, crashConfig))
@@ -374,14 +372,15 @@ static int RunProjectRuntime(
 
             NWB::Core::Assets::AssetManager assetManager(frame.projectObjectArena(), assetRegistry, assetBinarySource);
 
-            NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> shaderArchiveRecords{ frame.projectObjectArena() };
-            if(!__hidden_loader::LoadShaderArchiveRecords(assetBinarySource, shaderArchiveRecords)){
+            auto archiveRecords = __hidden_loader::LoadShaderArchiveRecords(frame.projectObjectArena(), assetBinarySource);
+            if(!archiveRecords){
                 NWB_LOGGER_FATAL(NWB_TEXT("Failed to load shader archive index '{}'")
                     , StringConvert(NWB::Core::ShaderArchive::s_IndexVirtualPath)
                 );
                 return __hidden_loader::s_LoaderExitFailure;
             }
 
+            const NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record>& shaderArchiveRecords = *archiveRecords;
             NWB::Core::CpuTaskScope projectTasks(
                 frame.cpuTasks(),
                 frame.cpuTasks().registerProfileLabel(NWB::LoaderProfileScope::s_ProjectTaskProfileName)
@@ -405,13 +404,12 @@ static int RunProjectRuntime(
                 {},
                 {},
             };
-            context.shaderPathResolver = [&shaderArchiveRecords](const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
+            context.shaderPathResolver = [&shaderArchiveRecords](const Name& shaderName, const AStringView variantName, const Name& stageName){
                 return NWB::Core::ShaderArchive::FindVirtualPath(
                     shaderArchiveRecords,
                     shaderName,
                     variantName,
-                    stageName,
-                    outVirtualPath
+                    stageName
                 );
             };
             context.telemetryCapture = [&frame](const NWB::Core::Telemetry::CaptureOptions& options){

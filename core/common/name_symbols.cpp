@@ -175,15 +175,15 @@ public:
     }
 
     [[nodiscard]] bool writeDefaultFile(){
-        ::Path<SymbolArena> executableDirectory(m_arena);
-        if(!::GetExecutableDirectory(executableDirectory))
+        const auto executableDirectory = ::GetExecutableDirectory(m_arena);
+        if(!executableDirectory)
             return false;
 
-        ::Path<SymbolArena> executableName(m_arena);
-        if(!::GetExecutableName(executableName))
+        const auto executableName = ::GetExecutableName(m_arena);
+        if(!executableName)
             return false;
 
-        ::Path<SymbolArena> outputPath = executableDirectory / executableName;
+        ::Path<SymbolArena> outputPath = *executableDirectory / *executableName;
         outputPath.replaceExtension(NameSymbols::s_FileExtension);
         return writeFile(outputPath);
     }
@@ -200,15 +200,15 @@ public:
         if(sourceEnd == AStringView::npos)
             return false;
 
-        NameHash hash = {};
-        if(!NameSymbols::DecodeDebugHashText(line.substr(0u, hashEnd), hash))
+        const auto hash = NameSymbols::DecodeDebugHashText(line.substr(0u, hashEnd));
+        if(!hash)
             return false;
 
-        SymbolString unescapedText(m_arena);
-        if(!unescapeNamesymText(unescapedText, line.substr(sourceEnd + 1u)))
+        const auto unescapedText = unescapeNamesymText(line.substr(sourceEnd + 1u));
+        if(!unescapedText)
             return false;
 
-        return insert(hash, AStringView(unescapedText.data(), unescapedText.size()));
+        return insert(*hash, AStringView(*unescapedText));
     }
 
 
@@ -235,40 +235,40 @@ private:
         return ::WriteTextFile(path, AStringView(fileText.data(), fileText.size()));
     }
 
-    [[nodiscard]] bool unescapeNamesymText(SymbolString& outText, const AStringView text){
-        outText.clear();
-        outText.reserve(text.size());
+    [[nodiscard]] Expected<SymbolString> unescapeNamesymText(const AStringView text){
+        SymbolString unescapedText(m_arena);
+        unescapedText.reserve(text.size());
 
         for(usize i = 0u; i < text.size(); ++i){
             const char ch = text[i];
             if(ch != '\\'){
-                outText += ch;
+                unescapedText += ch;
                 continue;
             }
 
             if((i + 1u) >= text.size())
-                return false;
+                return MakeUnexpected(Failure{});
 
             const char escaped = text[++i];
             switch(escaped){
             case '\\':
-                outText += '\\';
+                unescapedText += '\\';
                 break;
             case 'n':
-                outText += '\n';
+                unescapedText += '\n';
                 break;
             case 'r':
-                outText += '\r';
+                unescapedText += '\r';
                 break;
             case 't':
-                outText += '\t';
+                unescapedText += '\t';
                 break;
             default:
-                return false;
+                return MakeUnexpected(Failure{});
             }
         }
 
-        return true;
+        return unescapedText;
     }
 
 private:

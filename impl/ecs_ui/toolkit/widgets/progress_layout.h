@@ -40,22 +40,20 @@ struct ProgressPlacement{
 
 class ProgressLayout final{
 public:
-    // Invalid inputs preserve the output. Finite fractions clamp visually to the unit interval.
-    [[nodiscard]] static bool Measure(
+    // Finite fractions clamp visually to the unit interval.
+    [[nodiscard]] static Expected<ProgressMetrics> Measure(
         const ProgressOptions& options,
         const ProgressStyle& style,
         const UiSkinRegion& track,
         const UiSkinRegion& fill,
-        f32 density,
-        ProgressMetrics& out
+        f32 density
     )noexcept;
     // Paint fillCanvas under fillReveal intersected with clip to preserve small-fill skin borders.
-    [[nodiscard]] static bool Place(
+    [[nodiscard]] static Expected<ProgressPlacement> Place(
         const Rect& bounds,
         const Rect& clip,
         const ProgressMetrics& metrics,
-        f64 fraction,
-        ProgressPlacement& out
+        f64 fraction
     )noexcept;
 };
 

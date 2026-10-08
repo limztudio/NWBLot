@@ -32,13 +32,14 @@ struct BuildContext{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(PreparedSoftwareBvhGraphResources, EmptyBuildsClearReusedOutputAndSucceed){
+TEST(PreparedSoftwareBvhGraphResources, MissingImportedBuildBuffersCannotPublishResources){
     BuildContext context;
-    Core::Alloc::ScratchArena scratch(Name("tests/prepared_sw_bvh/empty"));
-    PreparedMeshSwBvhGraphResourceVector resources(scratch);
-    resources.emplace_back();
-    EXPECT_TRUE(ResolvePreparedSoftwareBvhGraphResources(context.graph, context.builds, resources));
-    EXPECT_TRUE(resources.empty());
+    Core::Alloc::ScratchArena scratch(Name("tests/prepared_sw_bvh/missing"));
+    const auto emptyResources = ResolvePreparedSoftwareBvhGraphResources(scratch, context.graph, context.builds);
+    ASSERT_TRUE(emptyResources);
+    EXPECT_TRUE(emptyResources->empty());
+    context.builds.emplace_back();
+    EXPECT_FALSE(ResolvePreparedSoftwareBvhGraphResources(scratch, context.graph, context.builds));
     const Core::GpuTaskGraph::DeclarationReadView view(context.graph);
     ASSERT_TRUE(view.valid());
     EXPECT_EQ(view.resourceCount(), 0u);

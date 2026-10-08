@@ -108,15 +108,15 @@ inline constexpr usize s_TypedLayoutFieldBytes = sizeof(MaterialTypedLayoutField
 inline constexpr usize s_ResourceReferenceBytes = sizeof(MaterialResourceReferenceBinary);
 
 template<typename BlockVector>
-[[nodiscard]] inline bool ComputeMaterialTypedBlockByteSize(const BlockVector& blocks, usize& outByteSize){
-    outByteSize = 0u;
+[[nodiscard]] inline Expected<usize> ComputeMaterialTypedBlockByteSize(const BlockVector& blocks){
+    usize byteSize = 0u;
     for(const MaterialTypedLayoutBlock& block : blocks){
-        if(static_cast<usize>(block.byteSize) > Limit<usize>::s_Max - outByteSize)
-            return false;
+        if(static_cast<usize>(block.byteSize) > Limit<usize>::s_Max - byteSize)
+            return MakeUnexpected(Failure{});
 
-        outByteSize += block.byteSize;
+        byteSize += block.byteSize;
     }
-    return true;
+    return byteSize;
 }
 
 template<typename BlockVector, typename FieldVector, typename ResourceReferenceVector>

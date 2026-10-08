@@ -275,18 +275,21 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
         return {};
 
     const MaterialPassDrawItems* const drawSets[] = {&drawItems.regular, &drawItems.csg};
-    Core::GpuGraphResourceSetId geometrySet;
-    Core::GpuGraphResourceSetId sampledTextureSet;
-    if(!GatherPreparedMaterialGeometryResourceSet(graph, drawSets, LengthOf(drawSets), scratch,
-            Name("render.refraction.capture.geometry"), "Refraction Capture Geometry", geometrySet)
-        || !GatherPreparedMaterialSampledTextureResourceSet(materialSystem, graph, drawSets, LengthOf(drawSets), scratch,
-            Name("render.refraction.capture.material_textures"), "Refraction Capture Material Textures", sampledTextureSet))
+    const auto geometrySet = GatherPreparedMaterialGeometryResourceSet(graph, drawSets, LengthOf(drawSets), scratch,
+        Name("render.refraction.capture.geometry"), "Refraction Capture Geometry"
+    );
+    if(!geometrySet)
+        return {};
+    const auto sampledTextureSet = GatherPreparedMaterialSampledTextureResourceSet(materialSystem, graph, drawSets, LengthOf(drawSets), scratch,
+        Name("render.refraction.capture.material_textures"), "Refraction Capture Material Textures"
+    );
+    if(!sampledTextureSet)
         return {};
     const Core::GpuTaskResourceSetUse setUses[] = {
-        {.resourceSet = geometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read},
-        {.resourceSet = sampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read},
+        {.resourceSet = *geometrySet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read},
+        {.resourceSet = *sampledTextureSet, .range = {}, .requiredState = Core::ResourceStates::ShaderResource, .access = Core::GpuTaskResourceAccess::Read},
     };
-    const usize setUseCount = sampledTextureSet.valid() ? 2u : 1u;
+    const usize setUseCount = sampledTextureSet->valid() ? 2u : 1u;
 
     materialSystem.prepareMaterialPassInstanceUploadData(instances, csgResources);
     const bool producesReusableGeometry = generatedGeometry.capture(
@@ -331,8 +334,8 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
     constexpr usize s_CsgUseCapacity = 8u;
     csgUses.reserve(s_CsgUseCapacity);
     if(hasCsg){
-        CsgClipContextSlots clipContext;
-        if(!csgSystem.prepareCsgClipContextSlotData(targets, csgFrameData, csgResources, frameBindings, clipContext))
+        const auto clipContext = csgSystem.prepareCsgClipContextSlotData(targets, csgFrameData, csgResources, frameBindings);
+        if(!clipContext)
             return {};
         const Core::GpuGraphResourceId ranges = ImportBuffer(graph, csgResources.receiverRanges);
         const Core::GpuGraphResourceId cutters = ImportBuffer(graph, csgResources.cutters);
@@ -343,7 +346,7 @@ Core::GpuTaskId DeclareAvboitRefractionCapture(
                 csgFrameData.receiverRanges.data(), csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData), alignof(CsgReceiverRangeGpuData))
             || !appendUpload(Name("render.refraction.capture.csg_cutters_upload"), cutters,
                 csgFrameData.cutters.data(), csgFrameData.cutters.size() * sizeof(CsgCutterGpuData), alignof(CsgCutterGpuData))
-            || !appendUpload(Name("render.refraction.capture.csg_context_upload"), clip, &clipContext, sizeof(clipContext), alignof(CsgClipContextSlots)))
+            || !appendUpload(Name("render.refraction.capture.csg_context_upload"), clip, &*clipContext, sizeof(*clipContext), alignof(CsgClipContextSlots)))
             return {};
         csgUses.push_back(ReadBufferUse(ranges, Core::BufferRange(0u, csgFrameData.receiverRanges.size() * sizeof(CsgReceiverRangeGpuData))));
         csgUses.push_back(ReadBufferUse(cutters, Core::BufferRange(0u, csgFrameData.cutters.size() * sizeof(CsgCutterGpuData))));

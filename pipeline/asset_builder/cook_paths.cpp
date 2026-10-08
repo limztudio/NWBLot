@@ -28,120 +28,83 @@ namespace Assets = Core::Assets;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ResolveCookPaths(
+Expected<Assets::ResolvedCookPaths> ResolveCookPaths(
     const AssetBuildOptions& options,
-    Assets::ResolvedCookPaths& outPaths,
+    Assets::AssetArena& arena,
     Assets::ScratchArena& scratchArena
 ){
-    ErrorCode errorCode;
-
-    outPaths.repoRoot.clear();
-    outPaths.assetRoots.clear();
-    outPaths.outputDirectory.clear();
-    outPaths.cacheDirectory.clear();
-
     if(options.assetRoots.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: no asset roots specified"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(options.outputDirectory.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: output directory is empty"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outPaths.repoRoot = options.repoRoot.empty() ? Path(outPaths.repoRoot.arena(), ".") : Path(outPaths.repoRoot.arena(), AStringView(options.repoRoot));
-    outPaths.repoRoot = AbsolutePath(outPaths.repoRoot, errorCode).lexicallyNormal();
-    if(errorCode){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve repo root: {}"), StringConvert(errorCode.message()));
-        return false;
+    Assets::ResolvedCookPaths paths(arena);
+    const Path requestedRepoRoot(arena, options.repoRoot.empty() ? AStringView(".") : AStringView(options.repoRoot));
+    auto repoRoot = AbsolutePath(requestedRepoRoot);
+    if(!repoRoot){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve repo root: {}"), StringConvert(repoRoot.error().message()));
+        return MakeUnexpected(Failure{});
     }
+    paths.repoRoot = repoRoot->lexicallyNormal();
 
-    outPaths.assetRoots.reserve(options.assetRoots.size());
+    paths.assetRoots.reserve(options.assetRoots.size());
     for(const AssetBuildRoot& assetRoot : options.assetRoots){
         if(assetRoot.virtualRoot.view() != Assets::s_EngineVirtualRoot && assetRoot.virtualRoot.view() != Assets::s_ProjectVirtualRoot){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: asset root '{}' uses unsupported virtual root '{}'")
                 , StringConvert(assetRoot.path)
                 , StringConvert(assetRoot.virtualRoot.view())
             );
-            outPaths.assetRoots.clear();
-            return false;
+            return MakeUnexpected(Failure{});
         }
-
-        Path resolvedAssetRoot(outPaths.repoRoot.arena());
-        errorCode.clear();
-        if(!ResolveAbsolutePath(outPaths.repoRoot, AStringView(assetRoot.path), resolvedAssetRoot, errorCode)){
-            if(errorCode){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve asset root '{}': {}")
-                    , StringConvert(assetRoot.path)
-                    , StringConvert(errorCode.message())
-                );
-            }
-            else{
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: asset root is empty or invalid: '{}'")
-                    , StringConvert(assetRoot.path)
-                );
-            }
-            outPaths.assetRoots.clear();
-            return false;
+        auto resolvedAssetRoot = ResolveAbsolutePath(arena, paths.repoRoot, AStringView(assetRoot.path));
+        if(!resolvedAssetRoot){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve asset root '{}': {}")
+                , StringConvert(assetRoot.path)
+                , StringConvert(resolvedAssetRoot.error().message())
+            );
+            return MakeUnexpected(Failure{});
         }
-
-        outPaths.assetRoots.emplace_back(Move(resolvedAssetRoot), assetRoot.virtualRoot);
+        paths.assetRoots.emplace_back(Move(*resolvedAssetRoot), assetRoot.virtualRoot);
     }
 
-    errorCode.clear();
-    {
-        if(!ResolveAbsolutePath(outPaths.repoRoot, AStringView(options.outputDirectory), outPaths.outputDirectory, errorCode)){
-            if(errorCode){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve output directory '{}': {}")
-                    , StringConvert(options.outputDirectory)
-                    , StringConvert(errorCode.message())
-                );
-            }
-            else{
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: output directory is empty or invalid: '{}'")
-                    , StringConvert(options.outputDirectory)
-                );
-            }
-            return false;
-        }
-    }
-
-    const Path defaultCacheDirectory = outPaths.repoRoot / "__build_obj/asset_cache";
-    const Assets::AssetString& requestedCacheDirectory = options.cacheDirectory;
-    errorCode.clear();
-    {
-        Assets::ScratchString defaultCacheDirectoryText(scratchArena);
-        if(requestedCacheDirectory.empty())
-            defaultCacheDirectoryText = PathToString(scratchArena, defaultCacheDirectory);
-        const AStringView requestedCacheDirectoryText = requestedCacheDirectory.empty()
-            ? AStringView(defaultCacheDirectoryText)
-            : AStringView(requestedCacheDirectory)
-        ;
-        if(!ResolveAbsolutePath(outPaths.repoRoot, requestedCacheDirectoryText, outPaths.cacheDirectory, errorCode)){
-            if(errorCode){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve cache directory '{}': {}")
-                    , StringConvert(requestedCacheDirectoryText)
-                    , StringConvert(errorCode.message())
-                );
-            }
-            else{
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: cache directory is empty or invalid: '{}'")
-                    , StringConvert(requestedCacheDirectoryText)
-                );
-            }
-            return false;
-        }
-    }
-
-    if(!EnsureDirectories(outPaths.cacheDirectory, errorCode)){
-        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create cache directory '{}': {}")
-            , PathToString<tchar>(outPaths.cacheDirectory)
-            , StringConvert(errorCode.message())
+    auto outputDirectory = ResolveAbsolutePath(arena, paths.repoRoot, AStringView(options.outputDirectory));
+    if(!outputDirectory){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve output directory '{}': {}")
+            , StringConvert(options.outputDirectory)
+            , StringConvert(outputDirectory.error().message())
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
+    paths.outputDirectory = Move(*outputDirectory);
 
-    return true;
+    const Path defaultCacheDirectory = paths.repoRoot / "__build_obj/asset_cache";
+    const Assets::AssetString& requestedCacheDirectory = options.cacheDirectory;
+    Assets::ScratchString defaultCacheDirectoryText(scratchArena);
+    if(requestedCacheDirectory.empty())
+        defaultCacheDirectoryText = PathToString(scratchArena, defaultCacheDirectory);
+    const AStringView cacheText = requestedCacheDirectory.empty() ? AStringView(defaultCacheDirectoryText) : AStringView(requestedCacheDirectory);
+    auto cacheDirectory = ResolveAbsolutePath(arena, paths.repoRoot, cacheText);
+    if(!cacheDirectory){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve cache directory '{}': {}")
+            , StringConvert(cacheText)
+            , StringConvert(cacheDirectory.error().message())
+        );
+        return MakeUnexpected(Failure{});
+    }
+    paths.cacheDirectory = Move(*cacheDirectory);
+    const auto created = EnsureDirectories(paths.cacheDirectory);
+    if(!created){
+        NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create cache directory '{}': {}")
+            , PathToString<tchar>(paths.cacheDirectory)
+            , StringConvert(created.error().message())
+        );
+        return MakeUnexpected(Failure{});
+    }
+    return paths;
 }
 
 

@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "../expected.h"
 #include "matrix.h"
 #include "collision_detail.h"
 #include "collision_plane.h"
@@ -39,7 +40,7 @@ struct BoundingSphere{
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsTriangleValue(SIMDVector sphereValue, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
     [[nodiscard]] static bool NWB_SIMD_CALL IntersectsTriangleValue(SIMDVector sphereValue, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
     [[nodiscard]] static PlaneIntersectionType::Enum NWB_SIMD_CALL IntersectsPlaneValue(SIMDVector sphereValue, SIMDVector plane)noexcept;
-    [[nodiscard]] static bool NWB_SIMD_CALL IntersectsRayValue(SIMDVector sphereValue, SIMDVector origin, SIMDVector direction, f32& outDistance)noexcept;
+    [[nodiscard]] static Expected<f32> NWB_SIMD_CALL IntersectsRayValue(SIMDVector sphereValue, SIMDVector origin, SIMDVector direction)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainedByValue(SIMDVector sphereValue, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept;
     [[nodiscard]] static SIMDVector NWB_SIMD_CALL MergeSphereValues(SIMDVector sphereValue0, SIMDVector sphereValue1, bool& outDirectCopy, bool& outCopyFirst)noexcept;
     [[nodiscard]] static SIMDVector NWB_SIMD_CALL SphereFromCenterExtentsValue(SIMDVector centerValue, SIMDVector extentsValue)noexcept;
@@ -69,7 +70,7 @@ struct BoundingSphere{
     [[nodiscard]] bool NWB_SIMD_CALL intersectsOrientedBoxValues(SIMDVector sphereValue, SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation)const noexcept;
     [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVector v0, SIMDVector v1, SIMDVector v2)const noexcept;
     [[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL intersects(SIMDVector plane)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVector origin, SIMDVector direction, f32& outDistance)const noexcept;
+    [[nodiscard]] Expected<f32> NWB_SIMD_CALL intersects(SIMDVector origin, SIMDVector direction)const noexcept;
 
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(
         SIMDVector plane0,
@@ -112,7 +113,7 @@ struct BoundingBox{
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsTriangleValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
     [[nodiscard]] static bool NWB_SIMD_CALL IntersectsTriangleValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
     [[nodiscard]] static PlaneIntersectionType::Enum NWB_SIMD_CALL IntersectsPlaneValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector plane)noexcept;
-    [[nodiscard]] static bool NWB_SIMD_CALL IntersectsRayValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector origin, SIMDVector direction, f32& outDistance)noexcept;
+    [[nodiscard]] static Expected<f32> NWB_SIMD_CALL IntersectsRayValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector origin, SIMDVector direction)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainedByValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept;
     static void NWB_SIMD_CALL MergeBoxValues(SIMDVector boxCenter0, SIMDVector boxExtents0, SIMDVector boxCenter1, SIMDVector boxExtents1, SIMDVector& outCenter, SIMDVector& outExtents)noexcept;
     static void NWB_SIMD_CALL CornersValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector* outCorners)noexcept;
@@ -141,7 +142,7 @@ struct BoundingBox{
     [[nodiscard]] bool NWB_SIMD_CALL intersectsOrientedBoxValues(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector otherBoxCenter, SIMDVector otherBoxExtents, SIMDVector otherBoxOrientation)const noexcept;
     [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVector v0, SIMDVector v1, SIMDVector v2)const noexcept;
     [[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL intersects(SIMDVector plane)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVector origin, SIMDVector direction, f32& outDistance)const noexcept;
+    [[nodiscard]] Expected<f32> NWB_SIMD_CALL intersects(SIMDVector origin, SIMDVector direction)const noexcept;
 
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(
         SIMDVector plane0,
@@ -195,7 +196,7 @@ struct BoundingOrientedBox{
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsTriangleValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
     [[nodiscard]] static bool NWB_SIMD_CALL IntersectsTriangleValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
     [[nodiscard]] static PlaneIntersectionType::Enum NWB_SIMD_CALL IntersectsPlaneValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector plane)noexcept;
-    [[nodiscard]] static bool NWB_SIMD_CALL IntersectsRayValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector origin, SIMDVector direction, f32& outDistance)noexcept;
+    [[nodiscard]] static Expected<f32> NWB_SIMD_CALL IntersectsRayValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector origin, SIMDVector direction)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainedByValue(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept;
 
     void NWB_SIMD_CALL transform(BoundingOrientedBox& outBox, const SIMDMatrix& matrix)const noexcept;
@@ -222,7 +223,7 @@ struct BoundingOrientedBox{
     [[nodiscard]] bool NWB_SIMD_CALL intersectsOrientedBoxValues(SIMDVector boxCenter, SIMDVector boxExtents, SIMDVector boxOrientation, SIMDVector otherBoxCenter, SIMDVector otherBoxExtents, SIMDVector otherBoxOrientation)const noexcept;
     [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVector v0, SIMDVector v1, SIMDVector v2)const noexcept;
     [[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL intersects(SIMDVector plane)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVector origin, SIMDVector direction, f32& outDistance)const noexcept;
+    [[nodiscard]] Expected<f32> NWB_SIMD_CALL intersects(SIMDVector origin, SIMDVector direction)const noexcept;
 
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(
         SIMDVector plane0,
@@ -299,7 +300,7 @@ struct BoundingFrustum{
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsPointValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector point)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainsTriangleValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept;
     [[nodiscard]] static PlaneIntersectionType::Enum NWB_SIMD_CALL IntersectsPlaneValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector plane)noexcept;
-    [[nodiscard]] static bool NWB_SIMD_CALL IntersectsRayValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector rayOrigin, SIMDVector direction, f32& outDistance)noexcept;
+    [[nodiscard]] static Expected<f32> NWB_SIMD_CALL IntersectsRayValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector rayOrigin, SIMDVector direction)noexcept;
     [[nodiscard]] static ContainmentType::Enum NWB_SIMD_CALL ContainedByValue(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector plane0, SIMDVector plane1, SIMDVector plane2, SIMDVector plane3, SIMDVector plane4, SIMDVector plane5)noexcept;
 
     void NWB_SIMD_CALL transform(BoundingFrustum& outFrustum, const SIMDMatrix& matrix)const noexcept;
@@ -328,7 +329,7 @@ struct BoundingFrustum{
     [[nodiscard]] bool NWB_SIMD_CALL intersectsFrustumValues(SIMDVector frustumOrigin, SIMDVector frustumOrientation, f32 rightSlopeValue, f32 leftSlopeValue, f32 topSlopeValue, f32 bottomSlopeValue, f32 nearPlaneValue, f32 farPlaneValue, SIMDVector otherFrustumOrigin, SIMDVector otherFrustumOrientation, f32 otherRightSlope, f32 otherLeftSlope, f32 otherTopSlope, f32 otherBottomSlope, f32 otherNearPlane, f32 otherFarPlane)const noexcept;
     [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVector v0, SIMDVector v1, SIMDVector v2)const noexcept;
     [[nodiscard]] PlaneIntersectionType::Enum NWB_SIMD_CALL intersects(SIMDVector plane)const noexcept;
-    [[nodiscard]] bool NWB_SIMD_CALL intersects(SIMDVector rayOrigin, SIMDVector direction, f32& outDistance)const noexcept;
+    [[nodiscard]] Expected<f32> NWB_SIMD_CALL intersects(SIMDVector rayOrigin, SIMDVector direction)const noexcept;
 
     [[nodiscard]] ContainmentType::Enum NWB_SIMD_CALL containedBy(
         SIMDVector plane0,

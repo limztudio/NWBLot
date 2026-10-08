@@ -34,7 +34,9 @@ TEST_F(HorizontalNavigationFixture, HeldHorizontalNavigationRepeatsWhileSubmitIs
     u64 previous = 0u;
     for(const auto kind : kinds){
         ControlAction action;
-        ASSERT_TRUE(take(action));
+        const auto actionResult = take();
+        ASSERT_TRUE(actionResult);
+        action = *actionResult;
         EXPECT_EQ(action.kind, kind);
         EXPECT_GT(action.id.sequence, previous);
         previous = action.id.sequence;
@@ -61,11 +63,15 @@ TEST_F(HorizontalNavigationFixture, VerticalOnlyNavigableHostKeepsHorizontalKeys
     press(Core::Key::Up);
     press(Core::Key::Down);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult1 = take();
+    ASSERT_TRUE(actionResult1);
+    action = *actionResult1;
     EXPECT_EQ(action.kind, ControlActionKind::Up);
-    ASSERT_TRUE(take(action));
+    const auto actionResult2 = take();
+    ASSERT_TRUE(actionResult2);
+    action = *actionResult2;
     EXPECT_EQ(action.kind, ControlActionKind::Down);
-    EXPECT_FALSE(take(action));
+    EXPECT_FALSE(take());
 }
 
 TEST_F(HorizontalNavigationFixture, CapabilityUsesAcceptedCopiedTargetsUntilSuccessfulPublication){
@@ -85,7 +91,9 @@ TEST_F(HorizontalNavigationFixture, CapabilityUsesAcceptedCopiedTargetsUntilSucc
     ASSERT_TRUE(publish());
     press(Core::Key::Right);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_EQ(action.kind, ControlActionKind::Right);
     EXPECT_EQ(action.id.layoutGeneration, 3u);
     EXPECT_GT(action.id.sequence, sequence);
@@ -109,7 +117,9 @@ TEST_F(HorizontalNavigationFixture, DelegatedEditorKeepsCaretKeysLocalToAvoidMov
     EXPECT_TRUE(keyUp(Core::Key::Left).keyboardConsumed);
     press(Core::Key::Down);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_EQ(action.kind, ControlActionKind::Down);
     EXPECT_EQ(action.id.target, m_targets[0u].id);
     EXPECT_EQ(action.source, m_targets[2u].id);
@@ -142,11 +152,15 @@ TEST_F(HorizontalNavigationFixture, InvalidHorizontalHostPublicationPreservesAcc
     }
     m_targets[0u] = accepted;
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult1 = take();
+    ASSERT_TRUE(actionResult1);
+    action = *actionResult1;
     EXPECT_EQ(action.kind, ControlActionKind::Right);
     EXPECT_EQ(action.control, accepted.control);
     EXPECT_TRUE(keyDown(Core::Key::Right, true).keyboardConsumed);
-    ASSERT_TRUE(take(action));
+    const auto actionResult2 = take();
+    ASSERT_TRUE(actionResult2);
+    action = *actionResult2;
     EXPECT_EQ(action.kind, ControlActionKind::Right);
     EXPECT_TRUE(keyUp(Core::Key::Right).keyboardConsumed);
 }
@@ -164,7 +178,9 @@ TEST_F(HorizontalNavigationFixture, OwnedPartsRejectHorizontalCapabilityWithoutR
     m_targets[2u].horizontalNavigation = false;
     ASSERT_TRUE(publish(3u));
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_EQ(action.kind, ControlActionKind::Right);
 }
 

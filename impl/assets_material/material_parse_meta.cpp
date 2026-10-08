@@ -27,34 +27,31 @@ namespace MaterialCookDetail{
 
 
 static bool HasProjectAssetVirtualRoot(const AStringView virtualPath, ScratchArena& scratchArena){
-    ACompactString virtualRoot;
-    if(!Core::Assets::AssetPathsDetail::ExtractAssetVirtualRoot(virtualPath, virtualRoot, scratchArena))
+    const auto virtualRoot = Core::Assets::AssetPathsDetail::ExtractAssetVirtualRoot(virtualPath, scratchArena);
+    if(!virtualRoot)
         return false;
 
-    return virtualRoot.view() == Core::Assets::s_ProjectVirtualRoot;
+    return virtualRoot->view() == Core::Assets::s_ProjectVirtualRoot;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseVariantField(
+static Expected<CookString> ParseVariantField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const AStringView fieldName,
-    CookString& outVariant,
+    CookArena& arena,
     ScratchArena& scratchArena
 ){
-    auto& arena = outVariant.get_allocator().arena();
-    outVariant.clear();
-
     const auto* variantValue = asset.findField(fieldName);
     if(!variantValue){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' is required")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     CookString rawVariant{arena};
@@ -68,7 +65,7 @@ static bool ParseVariantField(
                     , PathToString<tchar>(nwbFilePath)
                     , StringConvert(fieldName)
                 );
-                return false;
+                return MakeUnexpected(Failure{});
             }
             rawVariantSize += list[i].asString().size();
         }
@@ -91,7 +88,7 @@ static bool ParseVariantField(
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     rawVariantView = TrimView(rawVariantView);
@@ -100,11 +97,10 @@ static bool ParseVariantField(
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(rawVariantView == Core::ShaderArchive::s_DefaultVariant){
-        outVariant = Core::ShaderArchive::s_DefaultVariant;
-        return true;
+        return CookString(Core::ShaderArchive::s_DefaultVariant, arena);
     }
 
     using ScratchDefineCombo = HashMap<AStringView, AStringView, ScratchArena, Hasher<AStringView>, EqualTo<AStringView>>;
@@ -127,7 +123,7 @@ static bool ParseVariantField(
             , StringConvert(fieldName)
             , StringConvert(rawVariantView)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     };
 
     usize begin = 0u;
@@ -192,31 +188,30 @@ static bool ParseVariantField(
         }
     }
 
-    outVariant = Move(canonicalVariant);
-    return true;
+    return canonicalVariant;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseMaterialStageShaders(
+static Expected<MaterialCookEntry::StageShaderMap> ParseMaterialStageShaders(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    MaterialCookEntry::StageShaderMap& outStageShaders,
+    CookArena& arena,
     ScratchArena& scratchArena
 ){
-    outStageShaders.clear();
+    MaterialCookEntry::StageShaderMap stageShaders(0u, Hasher<Core::ShaderType::Enum>(), EqualTo<Core::ShaderType::Enum>(), arena);
 
     const auto* shadersValue = asset.findField(MaterialAssetMetadataSchema::s_ShadersField);
+    // Omitted shaders are generated from the surface hook during cross-asset preparation.
     if(!shadersValue)
-        return true;  // optional: when omitted, the cross-asset phase generates the pixel shader from `surface`
-                      // and assigns the shared engine mesh shader.
+        return stageShaders;
     if(!shadersValue->isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shaders must be a map"), PathToString<tchar>(nwbFilePath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outStageShaders.reserve(shadersValue->asMap().size());
+    stageShaders.reserve(shadersValue->asMap().size());
 
     for(const auto& [stageKey, shaderValue] : shadersValue->asMap()){
         const AStringView stageKeyText(stageKey.data(), stageKey.size());
@@ -225,7 +220,7 @@ static bool ParseMaterialStageShaders(
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(stageKeyText)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         const Core::Metascript::MStringView shaderText = shaderValue.asString();
@@ -235,7 +230,7 @@ static bool ParseMaterialStageShaders(
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(stageKeyText)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         const Core::ShaderType::Enum shaderType =
@@ -245,31 +240,31 @@ static bool ParseMaterialStageShaders(
         shaderAsset.virtualPath = shaderName;
         if(!Core::ShaderType::IsValid(shaderType) || !shaderAsset.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage entries must not be empty"), PathToString<tchar>(nwbFilePath));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(shaderType != Core::ShaderType::PixelStage && shaderType != Core::ShaderType::MeshStage){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shader stage '{}' is not supported by the ECS renderer material contract; only 'mesh' and 'ps' are allowed")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(stageKeyText)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
-        if(!outStageShaders.emplace(shaderType, shaderAsset).second){
+        if(!stageShaders.emplace(shaderType, shaderAsset).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': duplicate shader stage '{}'")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(stageKeyText)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
-    if(outStageShaders.empty()){
+    if(stageShaders.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': shaders must not be empty"), PathToString<tchar>(nwbFilePath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    return true;
+    return stageShaders;
 }
 
 
@@ -293,21 +288,21 @@ static bool ValidateMaterialOpticalStageContract(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseMaterialParameters(
+static Expected<MaterialCookEntry::ParameterMap> ParseMaterialParameters(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    MaterialCookEntry::ParameterMap& outParameters
+    CookArena& arena
 ){
-    outParameters.clear();
+    MaterialCookEntry::ParameterMap parameters(0u, Hasher<ACompactString>(), EqualTo<ACompactString>(), arena);
 
     const auto* parametersValue = asset.findField(MaterialAssetMetadataSchema::s_ParametersField);
     if(!parametersValue)
-        return true;
+        return parameters;
     if(!parametersValue->isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameters must be a map"), PathToString<tchar>(nwbFilePath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outParameters.reserve(parametersValue->asMap().size());
+    parameters.reserve(parametersValue->asMap().size());
 
     auto appendParameter = [&](
         const AStringView paramKeyText,
@@ -336,7 +331,7 @@ static bool ParseMaterialParameters(
             return false;
         }
 
-        if(!outParameters.emplace(key, value).second){
+        if(!parameters.emplace(key, value).second){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': duplicate parameter '{}'")
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(key.view())
@@ -354,7 +349,7 @@ static bool ParseMaterialParameters(
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(paramKeyText)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         if(!paramValue.isMap()){
@@ -362,11 +357,11 @@ static bool ParseMaterialParameters(
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(paramKeyText)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(paramKeyText.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': parameter block names must not be empty"), PathToString<tchar>(nwbFilePath));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         for(const auto& [blockParamKey, blockParamValue] : paramValue.asMap()){
@@ -376,7 +371,7 @@ static bool ParseMaterialParameters(
                     , PathToString<tchar>(nwbFilePath)
                     , StringConvert(paramKeyText)
                 );
-                return false;
+                return MakeUnexpected(Failure{});
             }
 
             ACompactString flattenedKey;
@@ -386,44 +381,42 @@ static bool ParseMaterialParameters(
                     , StringConvert(paramKeyText)
                     , StringConvert(blockParamKeyText)
                 );
-                return false;
+                return MakeUnexpected(Failure{});
             }
 
             if(!appendParameter(flattenedKey.view(), blockParamValue))
-                return false;
+                return MakeUnexpected(Failure{});
         }
     }
 
-    return true;
+    return parameters;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseMaterialInterface(
+static Expected<CookString> ParseMaterialInterface(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    MaterialCookString& outMaterialInterface,
+    CookArena& arena,
     ScratchArena& scratchArena
 ){
-    outMaterialInterface.clear();
-
     const auto* interfaceValue = asset.findField(MaterialAssetMetadataSchema::s_InterfaceField);
     if(!interfaceValue){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface is required"), PathToString<tchar>(nwbFilePath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!interfaceValue->isString()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must be a string"), PathToString<tchar>(nwbFilePath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const Core::Metascript::MStringView interfaceText = interfaceValue->asString();
     const AStringView interfacePath = TrimView(AStringView(interfaceText.data(), interfaceText.size()));
     if(interfacePath.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must not be empty"), PathToString<tchar>(nwbFilePath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     if(!HasProjectAssetVirtualRoot(interfacePath, scratchArena)){
@@ -431,7 +424,7 @@ static bool ParseMaterialInterface(
             "(e.g. 'project/shaders/surface.bind')")
             , PathToString<tchar>(nwbFilePath)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     // The interface names a `.bind`; strip the extension to match the discovered virtual path.
@@ -440,7 +433,7 @@ static bool ParseMaterialInterface(
     CanonicalizeTextInPlace(extension);
     if(AStringView(extension) != AStringView(".bind")){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': interface must reference a .bind file"), PathToString<tchar>(nwbFilePath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     interfacePathPath.replaceExtension();
@@ -456,11 +449,9 @@ static bool ParseMaterialInterface(
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(interfacePath)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outMaterialInterface.assign(AStringView(strippedInterface));
-
-    return true;
+    return CookString(AStringView(strippedInterface), arena);
 }
 
 
@@ -468,25 +459,23 @@ static bool ParseMaterialInterface(
 
 
 // Parses a `project/`-rooted virtual path field; the cross-asset phase resolves it.
-static bool ParseMaterialVirtualAssetField(
+static Expected<CookString> ParseMaterialVirtualAssetField(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
     const AStringView fieldName,
     const AStringView requiredExtension,
-    CookString& outVirtualPath,
+    CookArena& arena,
     ScratchArena& scratchArena
 ){
-    outVirtualPath.clear();
-
     const auto* fieldValue = asset.findField(fieldName);
     if(!fieldValue)
-        return true;
+        return CookString(arena);
     if(!fieldValue->isString()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': field '{}' must be a string")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const Core::Metascript::MStringView fieldText = fieldValue->asString();
@@ -496,7 +485,7 @@ static bool ParseMaterialVirtualAssetField(
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     if(!HasProjectAssetVirtualRoot(virtualPath, scratchArena)){
@@ -506,7 +495,7 @@ static bool ParseMaterialVirtualAssetField(
             , StringConvert(fieldName)
             , StringConvert(requiredExtension)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const ::Path<ScratchArena> virtualPathPath(scratchArena, virtualPath);
@@ -518,7 +507,7 @@ static bool ParseMaterialVirtualAssetField(
             , StringConvert(fieldName)
             , StringConvert(requiredExtension)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     ScratchString normalized(virtualPath, scratchArena);
@@ -526,68 +515,32 @@ static bool ParseMaterialVirtualAssetField(
         if(ch == '\\')
             ch = '/';
     }
-    outVirtualPath.assign(AStringView(normalized));
-    return true;
+    return CookString(AStringView(normalized), arena);
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Optional at parse; required at cook.
-static bool ParseMaterialBxdf(
+static Expected<bool> ParseMaterialBoolProperty(
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    CookString& outBxdfSource,
-    ScratchArena& scratchArena
+    const AStringView fieldName
 ){
-    return ParseMaterialVirtualAssetField(
-        nwbFilePath, asset, MaterialAssetMetadataSchema::s_BxdfField, ".bxdf", outBxdfSource, scratchArena
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Optional; generates the G-buffer PS when `shaders` is omitted.
-static bool ParseMaterialSurface(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    CookString& outSurfaceSource,
-    ScratchArena& scratchArena
-){
-    return ParseMaterialVirtualAssetField(
-        nwbFilePath, asset, MaterialAssetMetadataSchema::s_SurfaceField, ".surface", outSurfaceSource, scratchArena
-    );
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-static bool ParseMaterialBoolProperty(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    const AStringView fieldName,
-    bool& outValue
-){
-    outValue = false;
-
     const auto* propertyValue = asset.findField(fieldName);
     if(!propertyValue){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': '{}' is required and must be 0 or 1")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!propertyValue->isInteger()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': '{}' must be 0 or 1")
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const i64 propertyInt = propertyValue->asInteger();
@@ -596,91 +549,87 @@ static bool ParseMaterialBoolProperty(
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outValue = propertyInt != 0;
-    return true;
+    return propertyInt != 0;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseMaterialRenderProperties(
-    const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    MaterialCookEntry& outEntry
-){
-    if(!ParseMaterialBoolProperty(nwbFilePath, asset, MaterialAssetMetadataSchema::s_TransparentField, outEntry.transparent))
-        return false;
-    if(!ParseMaterialBoolProperty(nwbFilePath, asset, MaterialAssetMetadataSchema::s_TwoSidedField, outEntry.twoSided))
-        return false;
-    if(!ParseMaterialBoolProperty(nwbFilePath, asset, MaterialAssetMetadataSchema::s_RefractiveField, outEntry.refractive))
-        return false;
-
-    return true;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-bool ParseMaterialMeta(
+Expected<MaterialCookEntry> ParseMaterialMeta(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    MaterialCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     ScratchArena& scratchArena
 ){
-    outEntry.reset();
+    MaterialCookEntry entry(arena);
 
     const Core::Metascript::Value& asset = doc.asset();
     if(!Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, "Material meta"))
-        return false;
+        return MakeUnexpected(Failure{});
 
     // Keep the material path as readable text for generated shader paths; validate its Name identity before storage.
-    ScratchString derivedVirtualPath(scratchArena);
-    if(!Core::Assets::BuildDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, derivedVirtualPath))
-        return false;
-    if(!Name(AStringView(derivedVirtualPath))){
+    auto derivedVirtualPath = Core::Assets::BuildDerivedAssetVirtualPath(arena, assetRoot, virtualRoot, nwbFilePath);
+    if(!derivedVirtualPath)
+        return MakeUnexpected(Failure{});
+    if(!Name(AStringView(*derivedVirtualPath))){
         NWB_LOGGER_ERROR(NWB_TEXT("Material meta '{}': failed to derive a valid virtual path"), PathToString<tchar>(nwbFilePath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outEntry.virtualPath.assign(AStringView(derivedVirtualPath));
+    entry.virtualPath = Move(*derivedVirtualPath);
     if(!Core::Assets::ValidateMetadataAssetFields(
         nwbFilePath,
         asset,
         "Material meta",
         MaterialAssetMetadataSchema::IsAllowedAssetField
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    if(!ParseVariantField(
-        nwbFilePath,
-        asset,
-        MaterialAssetMetadataSchema::s_ShaderVariantField,
-        outEntry.shaderVariant,
-        scratchArena
-    ))
-        return false;
-    if(!ParseMaterialInterface(nwbFilePath, asset, outEntry.materialInterface, scratchArena))
-        return false;
-    if(!ParseMaterialBxdf(nwbFilePath, asset, outEntry.bxdfSource, scratchArena))
-        return false;
-    if(!ParseMaterialSurface(nwbFilePath, asset, outEntry.surfaceSource, scratchArena))
-        return false;
-    if(!ParseMaterialRenderProperties(nwbFilePath, asset, outEntry))
-        return false;
-    if(!ParseMaterialStageShaders(nwbFilePath, asset, outEntry.stageShaders, scratchArena))
-        return false;
-    if(!ValidateMaterialOpticalStageContract(nwbFilePath, outEntry))
-        return false;
-    if(!ParseMaterialParameters(nwbFilePath, asset, outEntry.parameters))
-        return false;
+    auto shaderVariant = ParseVariantField(nwbFilePath, asset, MaterialAssetMetadataSchema::s_ShaderVariantField, arena, scratchArena);
+    if(!shaderVariant)
+        return MakeUnexpected(Failure{});
+    entry.shaderVariant = Move(*shaderVariant);
+    auto materialInterface = ParseMaterialInterface(nwbFilePath, asset, arena, scratchArena);
+    if(!materialInterface)
+        return MakeUnexpected(Failure{});
+    entry.materialInterface = Move(*materialInterface);
+    auto bxdfSource = ParseMaterialVirtualAssetField(nwbFilePath, asset, MaterialAssetMetadataSchema::s_BxdfField, ".bxdf", arena, scratchArena);
+    if(!bxdfSource)
+        return MakeUnexpected(Failure{});
+    entry.bxdfSource = Move(*bxdfSource);
+    auto surfaceSource = ParseMaterialVirtualAssetField(nwbFilePath, asset, MaterialAssetMetadataSchema::s_SurfaceField, ".surface", arena, scratchArena);
+    if(!surfaceSource)
+        return MakeUnexpected(Failure{});
+    entry.surfaceSource = Move(*surfaceSource);
+    const auto transparent = ParseMaterialBoolProperty(nwbFilePath, asset, MaterialAssetMetadataSchema::s_TransparentField);
+    if(!transparent)
+        return MakeUnexpected(Failure{});
+    entry.transparent = *transparent;
+    const auto twoSided = ParseMaterialBoolProperty(nwbFilePath, asset, MaterialAssetMetadataSchema::s_TwoSidedField);
+    if(!twoSided)
+        return MakeUnexpected(Failure{});
+    entry.twoSided = *twoSided;
+    const auto refractive = ParseMaterialBoolProperty(nwbFilePath, asset, MaterialAssetMetadataSchema::s_RefractiveField);
+    if(!refractive)
+        return MakeUnexpected(Failure{});
+    entry.refractive = *refractive;
+    auto stageShaders = ParseMaterialStageShaders(nwbFilePath, asset, arena, scratchArena);
+    if(!stageShaders)
+        return MakeUnexpected(Failure{});
+    entry.stageShaders = Move(*stageShaders);
+    if(!ValidateMaterialOpticalStageContract(nwbFilePath, entry))
+        return MakeUnexpected(Failure{});
+    auto parameters = ParseMaterialParameters(nwbFilePath, asset, arena);
+    if(!parameters)
+        return MakeUnexpected(Failure{});
+    entry.parameters = Move(*parameters);
 
-    return true;
+    return entry;
 }
 
 

@@ -6,7 +6,9 @@
 
 
 #include "compile.h"
+#include "expected.h"
 #include "limit.h"
+#include "overflow.h"
 #include "type.h"
 
 #include <algorithm>
@@ -73,18 +75,15 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] constexpr bool AlignUpPowerOfTwoChecked(const T value, const T alignment, T& outValue)noexcept(IsArithmetic_V<T>){
-    if(alignment == 0){
-        outValue = value;
-        return true;
-    }
+[[nodiscard]] constexpr Expected<T> AlignUpPowerOfTwoChecked(const T value, const T alignment)noexcept(IsArithmetic_V<T>){
+    if(alignment == 0)
+        return value;
 
     const T mask = alignment - static_cast<T>(1);
     if(value > Limit<T>::s_Max - mask)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outValue = (value + mask) & ~mask;
-    return true;
+    return (value + mask) & ~mask;
 }
 
 template<typename T>
@@ -228,12 +227,11 @@ template<typename T>
 }
 
 template<typename T>
-[[nodiscard]] constexpr bool AddNoOverflow(const T lhs, const T rhs, T& outResult)noexcept(IsArithmetic_V<T>){
-    if(lhs > (Limit<T>::s_Max - rhs))
-        return false;
+[[nodiscard]] constexpr Expected<T> AddNoOverflow(const T lhs, const T rhs)noexcept(IsArithmetic_V<T>){
+    if(AddOverflows<T>(lhs, rhs))
+        return MakeUnexpected(Failure{});
 
-    outResult = lhs + rhs;
-    return true;
+    return static_cast<T>(lhs + rhs);
 }
 
 

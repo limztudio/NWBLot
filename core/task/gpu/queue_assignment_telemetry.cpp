@@ -74,31 +74,22 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
         return false;
 
     const bool currentMatchesPlan = validFor(declarations, assignments, compiledPlan);
-    Vector<QueueSubmissionToken, Alloc::ScratchArena> acceptedPacketTokens(
-        compiledPlan.packetCount(),
-        scratchArena
-    );
-    GpuGraphSubmissionAcceptanceSnapshot acceptanceSnapshot;
-    const bool sourcesValid = assignments.validFor(declarations, compiledPlan)
-        && compiledPlan.deviceGeneration() != 0u
-        && transaction.copyAcceptedPacketTokens(
-            compiledPlan,
-            acceptedPacketTokens.data(),
-            acceptedPacketTokens.size(),
-            acceptanceSnapshot
-        )
-    ;
+    Expected<GpuGraphSubmissionAcceptanceSnapshot> acceptanceSnapshot = MakeUnexpected(Failure{});
+    if(assignments.validFor(declarations, compiledPlan) && compiledPlan.deviceGeneration() != 0u)
+        acceptanceSnapshot = transaction.copyAcceptedPacketTokens(compiledPlan, scratchArena);
+    const bool sourcesValid = acceptanceSnapshot.has_value();
     if(
         sourcesValid
         && currentMatchesPlan
-        && m_recordingAttemptGeneration == acceptanceSnapshot.recordingAttemptGeneration
-        && m_acceptanceRevision == acceptanceSnapshot.acceptanceRevision
+        && m_recordingAttemptGeneration == acceptanceSnapshot->recordingAttemptGeneration
+        && m_acceptanceRevision == acceptanceSnapshot->acceptanceRevision
     )
         return true;
 
-    const bool sameAcceptanceAttempt = currentMatchesPlan
-        && m_recordingAttemptGeneration == acceptanceSnapshot.recordingAttemptGeneration
-        && acceptanceSnapshot.recordingAttemptGeneration != 0u
+    const bool sameAcceptanceAttempt = sourcesValid
+        && currentMatchesPlan
+        && m_recordingAttemptGeneration == acceptanceSnapshot->recordingAttemptGeneration
+        && acceptanceSnapshot->recordingAttemptGeneration != 0u
     ;
     m_generation = 0u;
     m_declarationRevision = 0u;
@@ -160,7 +151,7 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
         };
         const auto previous = hasCurrentGenerationHistory ? m_history.find(task.identity) : m_history.end();
         const bool hasPrevious = hasCurrentGenerationHistory && previous != m_history.end();
-        const QueueSubmissionToken& token = acceptedPacketTokens[packet.index];
+        const QueueSubmissionToken& token = acceptanceSnapshot->packetTokens[packet.index];
         if(!token.valid()){
             if(hasPrevious)
                 telemetry.previousAcceptedQueue = previous.value();
@@ -221,8 +212,8 @@ bool GpuTaskGraphQueueAssignmentTelemetryTracker::update(
     m_generation = declarations.generation();
     m_declarationRevision = declarations.declarationRevision();
     m_planGeneration = compiledPlan.planGeneration();
-    m_recordingAttemptGeneration = acceptanceSnapshot.recordingAttemptGeneration;
-    m_acceptanceRevision = acceptanceSnapshot.acceptanceRevision;
+    m_recordingAttemptGeneration = acceptanceSnapshot->recordingAttemptGeneration;
+    m_acceptanceRevision = acceptanceSnapshot->acceptanceRevision;
     m_valid = true;
     return true;
 }

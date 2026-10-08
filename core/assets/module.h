@@ -8,6 +8,7 @@
 #include "global.h"
 
 #include <core/common/log.h>
+#include <global/expected.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -130,7 +131,7 @@ public:
     [[nodiscard]] const Name& assetType()const noexcept{ return m_assetType; }
 
 public:
-    virtual bool deserialize(AssetArena& arena, const Name& virtualPath, const AssetBytes& binary, UniquePtr<IAsset>& outAsset)const = 0;
+    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, const AssetBytes& binary)const = 0;
 
 #if defined(NWB_COOK)
 public:
@@ -167,13 +168,12 @@ protected:
 
 
 public:
-    virtual bool deserialize(AssetArena& arena, const Name& virtualPath, const AssetBytes& binary, UniquePtr<IAsset>& outAsset)const final override{
+    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(AssetArena& arena, const Name& virtualPath, const AssetBytes& binary)const final override{
         auto asset = MakeUnique<AssetT>(arena, virtualPath);
         if(!asset->loadBinary(binary))
-            return false;
+            return MakeUnexpected(Failure{});
 
-        outAsset = Move(asset);
-        return true;
+        return UniquePtr<IAsset>(Move(asset));
     }
 };
 

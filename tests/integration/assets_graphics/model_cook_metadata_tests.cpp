@@ -68,7 +68,11 @@ struct ModelMetadata{
     }
 
     [[nodiscard]] bool parse(){
-        return ParseModelCookMetadata(Name("tests/model_cook_metadata/model"), path, asset, entry, scratchArena);
+        auto result = ParseModelCookMetadata(Name("tests/model_cook_metadata/model"), path, asset, outputArena, scratchArena);
+        if(!result)
+            return false;
+        entry = Move(*result);
+        return true;
     }
 
     void verifyObjectReferences()const{
@@ -144,12 +148,10 @@ TEST(ModelCookMetadata, UniqueAssetPathReferencesFailAndLocalObjectReferencesRec
         metadata.verifyObjectReferences();
         const AStringView assetPath = "tests/model_cook_metadata/skeleton_0";
         metadata.asset.field(s_SKINNED_MESHES).field("mesh_0").field(s_SKELETON).setString(assetPath);
-        metadata.expectedSkeletons.at(Name("mesh_0")) = Name(assetPath);
         EXPECT_FALSE(metadata.parse());
         metadata.verifyObjectReferences();
         EXPECT_EQ(metadata.asset.field(s_SKINNED_MESHES).field("mesh_0").field(s_SKELETON).asString(), assetPath);
         metadata.asset.field(s_SKINNED_MESHES).field("mesh_0").field(s_SKELETON).setString("rig_0");
-        metadata.expectedSkeletons.at(Name("mesh_0")) = Name("rig_0");
         ASSERT_TRUE(metadata.parse());
         metadata.verifyObjectReferences();
     }
@@ -165,7 +167,7 @@ TEST(ModelCookMetadata, SharedAssetPathCannotSelectAmongLocalSkeletonObjects){
     metadata.addSkeleton(s_RIG_B, "TESTS/MODEL_COOK_METADATA/SHARED");
     metadata.addSkinnedMesh(s_BODY, "tests/model_cook_metadata/shared", "tests/model_cook_metadata/shared");
     EXPECT_FALSE(metadata.parse());
-    metadata.verifyObjectReferences();
+    EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
     EXPECT_TRUE(logger.sawErrorContaining(s_TARGETS_A_MISSING_SKELETON_OBJECT));
     metadata.asset.field(s_SKINNED_MESHES).field(s_BODY).field(s_SKELETON).setString(s_RIG_A);
     metadata.expectedSkeletons.at(Name(s_BODY)) = Name(s_RIG_A);
@@ -181,7 +183,7 @@ TEST(ModelCookMetadata, UnknownObjectReferencesRemainValidatorErrors){
     metadata.addSkeleton(s_RIG, "tests/model_cook_metadata/known");
     metadata.addSkinnedMesh(s_BODY, "tests/model_cook_metadata/unknown", "tests/model_cook_metadata/unknown");
     EXPECT_FALSE(metadata.parse());
-    metadata.verifyObjectReferences();
+    EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
     EXPECT_EQ(logger.errorCount(), 1u);
     EXPECT_TRUE(logger.sawErrorContaining(s_TARGETS_A_MISSING_SKELETON_OBJECT));
 }
@@ -194,7 +196,7 @@ TEST(ModelCookMetadata, CanonicalDuplicateObjectNamesRemainValidatorErrors){
     metadata.addSkeleton("RIG", "tests/model_cook_metadata/second");
     metadata.addSkinnedMesh(s_BODY, "RiG", s_RIG);
     EXPECT_FALSE(metadata.parse());
-    metadata.verifyObjectReferences();
+    EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
     EXPECT_EQ(logger.errorCount(), 1u);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("name is duplicated in the model")));
 }
@@ -209,7 +211,7 @@ TEST(ModelCookMetadata, HandlesStaticOnlyAndMissingSkeletonCollections){
     EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
     metadata.addSkinnedMesh(s_BODY, "missing", "missing");
     EXPECT_FALSE(metadata.parse());
-    metadata.verifyObjectReferences();
+    EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
     EXPECT_EQ(logger.errorCount(), 1u);
     EXPECT_TRUE(logger.sawErrorContaining(s_TARGETS_A_MISSING_SKELETON_OBJECT));
 }
@@ -226,7 +228,7 @@ TEST(ModelCookMetadata, RedundantSkinnedMeshReferenceIsRejectedAndSkinOnlyRefere
     Value& object = metadata.asset.field(s_SKINNED_MESHES).field(s_BODY);
     object.field("mesh").setString(s_MeshVirtualPath);
     EXPECT_FALSE(metadata.parse());
-    EXPECT_TRUE(metadata.entry.skinnedMeshObjects.empty());
+    metadata.verifyObjectReferences();
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'mesh'")));
 
     ASSERT_EQ(object.asMap().erase(AStringView("mesh")), 1u);
@@ -235,7 +237,7 @@ TEST(ModelCookMetadata, RedundantSkinnedMeshReferenceIsRejectedAndSkinOnlyRefere
     EXPECT_EQ(logger.errorCount(), 1u);
 }
 
-TEST(ModelCookMetadata, FourRowTransformFailsWithoutRetainingPreviousOutputAndThreeRowsRecover){
+TEST(ModelCookMetadata, FourRowTransformFailsWithoutReplacingPreviousValueAndThreeRowsRecover){
     Tests::CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard registration(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     ModelMetadata metadata;
@@ -261,7 +263,8 @@ TEST(ModelCookMetadata, FourRowTransformFailsWithoutRetainingPreviousOutputAndTh
         homogeneousRow.append(Value(static_cast<i64>(columnIndex == 3u ? 1 : 0), metadata.metadataArena));
     transform.append(Move(homogeneousRow));
     EXPECT_FALSE(metadata.parse());
-    EXPECT_TRUE(metadata.entry.staticMeshObjects.empty());
+    ASSERT_EQ(metadata.entry.staticMeshObjects.size(), 1u);
+    EXPECT_EQ(metadata.entry.staticMeshObjects[0u].transform._14, 0.5f);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("must be a 3x4 affine matrix")));
 
     transform.asList().pop_back();

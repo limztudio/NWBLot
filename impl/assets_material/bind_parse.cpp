@@ -26,15 +26,18 @@ namespace MaterialBindDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena, Metascript::Document& outDoc){
+Expected<Metascript::Document> ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena){
+    Metascript::Document doc(arena);
     CookString bindText{arena};
-    return Core::Assets::ParseMetadataDocumentText(
+    if(!Core::Assets::ParseMetadataDocumentText(
         bindFilePath,
         "Material bind",
         bindText,
-        outDoc,
-        [&](const AStringView text){ return outDoc.parseWithImplicitAsset(text, s_AssetTypeMaterialBind, s_AssetVariableMaterialBind); }
-    );
+        doc,
+        [&](const AStringView text){ return doc.parseWithImplicitAsset(text, s_AssetTypeMaterialBind, s_AssetVariableMaterialBind); }
+    ))
+        return MakeUnexpected(Failure{});
+    return doc;
 }
 
 
@@ -69,88 +72,53 @@ static bool IsMaterialBindIdentifier(const AStringView text){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ParseMaterialParameterTypeText(
-    const AStringView typeText,
-    MaterialParameterValueType::Enum& outType,
-    u32& outComponentCount
-){
-    outType = MaterialParameterValueType::None;
-    outComponentCount = 0u;
-
-    const auto tryMatch = [&](
-        const AStringView baseName,
-        const MaterialParameterValueType::Enum type
-    ) -> bool{
-        if(typeText == baseName){
-            outType = type;
-            outComponentCount = 1u;
-            return true;
-        }
-
-        const auto parseSuffix = [&](const AStringView prefix) -> bool{
-            if(typeText.size() != prefix.size() + 1u)
-                return false;
-            if(typeText.substr(0u, prefix.size()) != prefix)
-                return false;
-
-            const char suffix = typeText[prefix.size()];
-            if(suffix < '2' || suffix > '4')
-                return false;
-
-            outType = type;
-            outComponentCount = static_cast<u32>(suffix - '0');
-            return true;
-        };
-
-        return parseSuffix(baseName);
+Expected<MaterialParameterType> ParseMaterialParameterTypeText(const AStringView typeText)noexcept{
+    static constexpr NamedEnumCase<MaterialParameterValueType::Enum> s_Types[] = {
+        { "bool", MaterialParameterValueType::Bool },
+        { "char", MaterialParameterValueType::Char },
+        { "uchar", MaterialParameterValueType::UChar },
+        { "short", MaterialParameterValueType::Short },
+        { "ushort", MaterialParameterValueType::UShort },
+        { "int", MaterialParameterValueType::Int },
+        { "uint", MaterialParameterValueType::UInt },
+        { "half", MaterialParameterValueType::Half },
+        { "float", MaterialParameterValueType::Float }
     };
-
-    return
-        tryMatch(AStringView("bool"), MaterialParameterValueType::Bool)
-        || tryMatch(AStringView("char"), MaterialParameterValueType::Char)
-        || tryMatch(AStringView("uchar"), MaterialParameterValueType::UChar)
-        || tryMatch(AStringView("short"), MaterialParameterValueType::Short)
-        || tryMatch(AStringView("ushort"), MaterialParameterValueType::UShort)
-        || tryMatch(AStringView("int"), MaterialParameterValueType::Int)
-        || tryMatch(AStringView("uint"), MaterialParameterValueType::UInt)
-        || tryMatch(AStringView("half"), MaterialParameterValueType::Half)
-        || tryMatch(AStringView("float"), MaterialParameterValueType::Float)
-    ;
+    for(const auto& type : s_Types){
+        const AStringView baseName = type.text;
+        if(typeText == baseName)
+            return MaterialParameterType{ type.value, 1u };
+        if(typeText.size() == baseName.size() + 1u && typeText.substr(0u, baseName.size()) == baseName){
+            const char suffix = typeText[baseName.size()];
+            if(suffix >= '2' && suffix <= '4')
+                return MaterialParameterType{ type.value, static_cast<u32>(suffix - '0') };
+        }
+    }
+    return MakeUnexpected(Failure{});
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ParseMaterialBindResourceFieldTypeText(
-    const AStringView typeText,
-    MaterialLayoutFieldType::Enum& outFieldType
-)noexcept{
-    outFieldType = MaterialLayoutFieldType::None;
-    if(typeText == s_BindFieldTypeTexture2D){
-        outFieldType = MaterialLayoutFieldType::SampledImage2D;
-        return true;
-    }
-    if(typeText == s_BindFieldTypeSampler){
-        outFieldType = MaterialLayoutFieldType::Sampler;
-        return true;
-    }
-    return false;
+Expected<MaterialLayoutFieldType::Enum> ParseMaterialBindResourceFieldTypeText(const AStringView typeText)noexcept{
+    if(typeText == s_BindFieldTypeTexture2D)
+        return MaterialLayoutFieldType::SampledImage2D;
+    if(typeText == s_BindFieldTypeSampler)
+        return MaterialLayoutFieldType::Sampler;
+    return MakeUnexpected(Failure{});
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseMaterialBindStringField(
+static Expected<AStringView> ParseMaterialBindStringField(
     const Path& bindFilePath,
     const Metascript::Value& map,
     const AStringView fieldName,
-    const AStringView contextLabel,
-    CookString& outValue
+    const AStringView contextLabel
 ){
-    outValue.clear();
-
     const Metascript::Value* value = map.findField(fieldName);
     if(!value || !value->isString()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} field '{}' must be a string")
@@ -158,58 +126,58 @@ static bool ParseMaterialBindStringField(
             , StringConvert(contextLabel)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const Metascript::MStringView text = value->asString();
-    outValue.assign(text.data(), text.size());
-    return true;
+    return AStringView(text.data(), text.size());
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseMaterialBindAttributeList(
+static Expected<MaterialCookVector<MaterialBindAttribute>> ParseMaterialBindAttributeList(
     const Path& bindFilePath,
     const Metascript::Value* attributesValue,
     const AStringView contextLabel,
-    MaterialCookArena& arena,
-    MaterialCookVector<MaterialBindAttribute>& outAttributes
+    MaterialCookArena& arena
 ){
-    outAttributes.clear();
+    MaterialCookVector<MaterialBindAttribute> attributes(arena);
     if(!attributesValue)
-        return true;
+        return attributes;
 
     if(!attributesValue->isList()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} attributes must be a list")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(contextLabel)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const auto& attributeList = attributesValue->asList();
-    outAttributes.reserve(attributeList.size());
+    attributes.reserve(attributeList.size());
     for(const Metascript::Value& attributeValue : attributeList){
         if(!attributeValue.isMap()){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': {} attribute entries must be maps")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(contextLabel)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         MaterialBindAttribute attribute(arena);
-        if(!ParseMaterialBindStringField(bindFilePath, attributeValue, "name", contextLabel, attribute.name))
-            return false;
+        const auto parsedName = ParseMaterialBindStringField(bindFilePath, attributeValue, "name", contextLabel);
+        if(!parsedName)
+            return MakeUnexpected(Failure{});
+        attribute.name = *parsedName;
         if(!IsMaterialBindIdentifier(attribute.name)){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid attribute name '{}' in {}")
                 , PathToString<tchar>(bindFilePath)
                 , StringConvert(attribute.name)
                 , StringConvert(contextLabel)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         const Metascript::Value* argumentsValue = attributeValue.findField("arguments");
@@ -219,7 +187,7 @@ static bool ParseMaterialBindAttributeList(
                     , PathToString<tchar>(bindFilePath)
                     , StringConvert(attribute.name)
                 );
-                return false;
+                return MakeUnexpected(Failure{});
             }
 
             const auto& argumentList = argumentsValue->asList();
@@ -230,7 +198,7 @@ static bool ParseMaterialBindAttributeList(
                         , PathToString<tchar>(bindFilePath)
                         , StringConvert(attribute.name)
                     );
-                    return false;
+                    return MakeUnexpected(Failure{});
                 }
 
                 const Metascript::MStringView argumentText = argumentValue.asString();
@@ -238,10 +206,10 @@ static bool ParseMaterialBindAttributeList(
             }
         }
 
-        outAttributes.push_back(Move(attribute));
+        attributes.push_back(Move(attribute));
     }
 
-    return true;
+    return attributes;
 }
 
 
@@ -297,8 +265,7 @@ static bool ValidateMaterialBindStructAttributes(
 
 
 static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const MaterialBindStruct& bindStruct, const MaterialBindField& field){
-    MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
-    const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type), resourceFieldType);
+    const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type)).has_value();
     if(isResourceField && field.attributes.empty())
         return true;
     bool foundRequiredAttribute = false;
@@ -351,164 +318,169 @@ static bool ValidateMaterialBindFieldAttributes(const Path& bindFilePath, const 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseMaterialBindField(
+static Expected<MaterialBindField> ParseMaterialBindField(
     const Path& bindFilePath,
     const Metascript::Value& fieldValue,
     const MaterialBindStruct& bindStruct,
-    MaterialCookArena& arena,
-    MaterialBindField& outField
+    MaterialCookArena& arena
 ){
+    MaterialBindField field(arena);
     if(!fieldValue.isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' field entries must be maps")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(bindStruct.name)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    if(!ParseMaterialBindStringField(bindFilePath, fieldValue, "type", bindStruct.name, outField.type))
-        return false;
-    if(!ParseMaterialBindStringField(bindFilePath, fieldValue, "name", bindStruct.name, outField.name))
-        return false;
-    MaterialParameterValueType::Enum fieldType = MaterialParameterValueType::None;
-    u32 fieldComponentCount = 0u;
-    MaterialLayoutFieldType::Enum resourceFieldType = MaterialLayoutFieldType::None;
-    const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(outField.type), resourceFieldType);
-    if(!IsMaterialBindIdentifier(outField.type)
-        || (!isResourceField && !ParseMaterialParameterTypeText(AStringView(outField.type), fieldType, fieldComponentCount))
+    const auto parsedType = ParseMaterialBindStringField(bindFilePath, fieldValue, "type", bindStruct.name);
+    if(!parsedType)
+        return MakeUnexpected(Failure{});
+    field.type = *parsedType;
+    const auto parsedName = ParseMaterialBindStringField(bindFilePath, fieldValue, "name", bindStruct.name);
+    if(!parsedName)
+        return MakeUnexpected(Failure{});
+    field.name = *parsedName;
+    const bool isResourceField = ParseMaterialBindResourceFieldTypeText(AStringView(field.type)).has_value();
+    if(!IsMaterialBindIdentifier(field.type)
+        || (!isResourceField && !ParseMaterialParameterTypeText(AStringView(field.type)))
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has unsupported type '{}'")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(bindStruct.name)
-            , StringConvert(outField.name)
-            , StringConvert(outField.type)
+            , StringConvert(field.name)
+            , StringConvert(field.type)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(isResourceField && bindStruct.findAttribute(s_MaterialMutableAttribute)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': resource field '{}.{}' must use material_constant storage")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(bindStruct.name)
-            , StringConvert(outField.name)
+            , StringConvert(field.name)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    if(!IsMaterialBindIdentifier(outField.name)){
+    if(!IsMaterialBindIdentifier(field.name)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': field '{}.{}' has invalid name")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(bindStruct.name)
-            , StringConvert(outField.name)
+            , StringConvert(field.name)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    if(!ParseMaterialBindAttributeList(bindFilePath, fieldValue.findField("attributes"), outField.name, arena, outField.attributes))
-        return false;
-    if(!ValidateMaterialBindFieldAttributes(bindFilePath, bindStruct, outField))
-        return false;
+    auto attributes = ParseMaterialBindAttributeList(bindFilePath, fieldValue.findField("attributes"), field.name, arena);
+    if(!attributes)
+        return MakeUnexpected(Failure{});
+    field.attributes = Move(*attributes);
+    if(!ValidateMaterialBindFieldAttributes(bindFilePath, bindStruct, field))
+        return MakeUnexpected(Failure{});
 
-    return true;
+    return field;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseMaterialBindStruct(
+static Expected<MaterialBindStruct> ParseMaterialBindStruct(
     const Path& bindFilePath,
     const Metascript::MStringView structName,
     const Metascript::Value& structValue,
-    MaterialCookArena& arena,
-    MaterialBindStruct& outStruct
+    MaterialCookArena& arena
 ){
+    MaterialBindStruct bindStruct(arena);
     if(!structValue.isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must be a map")
             , PathToString<tchar>(bindFilePath)
             , StringConvert(AStringView(structName.data(), structName.size()))
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outStruct.name.assign(structName.data(), structName.size());
-    if(!IsMaterialBindIdentifier(outStruct.name)){
+    bindStruct.name.assign(structName.data(), structName.size());
+    if(!IsMaterialBindIdentifier(bindStruct.name)){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': invalid struct name '{}'")
             , PathToString<tchar>(bindFilePath)
-            , StringConvert(outStruct.name)
+            , StringConvert(bindStruct.name)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    if(!ParseMaterialBindAttributeList(bindFilePath, structValue.findField("attributes"), outStruct.name, arena, outStruct.attributes))
-        return false;
-    if(!ValidateMaterialBindStructAttributes(bindFilePath, outStruct))
-        return false;
+    auto attributes = ParseMaterialBindAttributeList(bindFilePath, structValue.findField("attributes"), bindStruct.name, arena);
+    if(!attributes)
+        return MakeUnexpected(Failure{});
+    bindStruct.attributes = Move(*attributes);
+    if(!ValidateMaterialBindStructAttributes(bindFilePath, bindStruct))
+        return MakeUnexpected(Failure{});
 
     const Metascript::Value* fieldsValue = structValue.findField("fields");
     if(!fieldsValue || !fieldsValue->isList()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' fields must be a list")
             , PathToString<tchar>(bindFilePath)
-            , StringConvert(outStruct.name)
+            , StringConvert(bindStruct.name)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(fieldsValue->asList().empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': struct '{}' must declare at least one field")
             , PathToString<tchar>(bindFilePath)
-            , StringConvert(outStruct.name)
+            , StringConvert(bindStruct.name)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outStruct.fields.reserve(fieldsValue->asList().size());
+    bindStruct.fields.reserve(fieldsValue->asList().size());
     for(const Metascript::Value& fieldValue : fieldsValue->asList()){
-        MaterialBindField field(arena);
-        if(!ParseMaterialBindField(bindFilePath, fieldValue, outStruct, arena, field))
-            return false;
+        auto field = ParseMaterialBindField(bindFilePath, fieldValue, bindStruct, arena);
+        if(!field)
+            return MakeUnexpected(Failure{});
 
-        if(outStruct.findField(AStringView(field.name))){
+        if(bindStruct.findField(AStringView(field->name))){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': duplicate field '{}.{}'")
                 , PathToString<tchar>(bindFilePath)
-                , StringConvert(outStruct.name)
-                , StringConvert(field.name)
+                , StringConvert(bindStruct.name)
+                , StringConvert(field->name)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
-        outStruct.fields.push_back(Move(field));
+        bindStruct.fields.push_back(Move(*field));
     }
 
-    return true;
+    return bindStruct;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseMaterialBindStructs(const Path& bindFilePath, const Metascript::Value& asset, MaterialCookArena& arena, MaterialCookVector<MaterialBindStruct>& outStructs){
-    outStructs.clear();
+static Expected<MaterialCookVector<MaterialBindStruct>> ParseMaterialBindStructs(const Path& bindFilePath, const Metascript::Value& asset, MaterialCookArena& arena){
+    MaterialCookVector<MaterialBindStruct> structs(arena);
 
     const Metascript::Value* structsValue = asset.findField("structs");
     if(!structsValue || !structsValue->isMap()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset.structs must be a map"), PathToString<tchar>(bindFilePath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const auto& structsMap = structsValue->asMap();
     if(structsMap.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': asset.structs must not be empty"), PathToString<tchar>(bindFilePath));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outStructs.reserve(structsMap.size());
+    structs.reserve(structsMap.size());
     for(const auto& [structName, structValue] : structsMap){
-        MaterialBindStruct bindStruct(arena);
-        if(!ParseMaterialBindStruct(bindFilePath, Metascript::MStringView(structName.data(), structName.size()), structValue, arena, bindStruct))
-            return false;
-        outStructs.push_back(Move(bindStruct));
+        auto bindStruct = ParseMaterialBindStruct(bindFilePath, Metascript::MStringView(structName.data(), structName.size()), structValue, arena);
+        if(!bindStruct)
+            return MakeUnexpected(Failure{});
+        structs.push_back(Move(*bindStruct));
     }
 
-    Sort(outStructs.begin(), outStructs.end(), [](const MaterialBindStruct& lhs, const MaterialBindStruct& rhs){
+    Sort(structs.begin(), structs.end(), [](const MaterialBindStruct& lhs, const MaterialBindStruct& rhs){
         return lhs.name < rhs.name;
     });
-    return true;
+    return structs;
 }
 
 
@@ -536,10 +508,14 @@ static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascrip
         }
 
         MaterialBindInstance instance(arena);
-        if(!ParseMaterialBindStringField(bindFilePath, instanceValue, "type", "instance", instance.type))
+        const auto parsedType = ParseMaterialBindStringField(bindFilePath, instanceValue, "type", "instance");
+        if(!parsedType)
             return false;
-        if(!ParseMaterialBindStringField(bindFilePath, instanceValue, "name", "instance", instance.name))
+        instance.type = *parsedType;
+        const auto parsedName = ParseMaterialBindStringField(bindFilePath, instanceValue, "name", "instance");
+        if(!parsedName)
             return false;
+        instance.name = *parsedName;
         if(!IsMaterialBindIdentifier(instance.type) || !outEntry.findStruct(AStringView(instance.type))){
             NWB_LOGGER_ERROR(NWB_TEXT("Material bind '{}': instance '{}' references unknown struct type '{}'")
                 , PathToString<tchar>(bindFilePath)
@@ -573,37 +549,38 @@ static bool ParseMaterialBindInstances(const Path& bindFilePath, const Metascrip
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ParseMaterialBindSource(
+Expected<MaterialBindEntry> ParseMaterialBindSource(
     const Path& bindFilePath,
     const Metascript::Document& doc,
     MaterialCookArena& arena,
-    MaterialBindEntry& outEntry,
     ScratchArena& scratchArena
 ){
-    outEntry.reset();
+    MaterialBindEntry entry(arena);
 
-    outEntry.source = PathToString(arena, bindFilePath);
+    entry.source = PathToString(arena, bindFilePath);
     if(!Core::Assets::CheckPairedSourceExtension(
         bindFilePath,
-        outEntry.source,
+        entry.source,
         MaterialBindNames::SourceExtensionText(),
         "Material bind",
         scratchArena
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const Metascript::Value* assetValue = Core::Assets::FindMetadataAssetMapValue<Metascript::Document, Metascript::Value>(bindFilePath, doc, "Material bind");
     if(!assetValue)
-        return false;
+        return MakeUnexpected(Failure{});
     if(!Core::Assets::ValidateMetadataAssetFields(bindFilePath, *assetValue, "Material bind", { "structs", "instances" }))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    if(!ParseMaterialBindStructs(bindFilePath, *assetValue, arena, outEntry.structs))
-        return false;
-    if(!ParseMaterialBindInstances(bindFilePath, *assetValue, arena, outEntry))
-        return false;
+    auto structs = ParseMaterialBindStructs(bindFilePath, *assetValue, arena);
+    if(!structs)
+        return MakeUnexpected(Failure{});
+    entry.structs = Move(*structs);
+    if(!ParseMaterialBindInstances(bindFilePath, *assetValue, arena, entry))
+        return MakeUnexpected(Failure{});
 
-    return true;
+    return entry;
 }
 
 

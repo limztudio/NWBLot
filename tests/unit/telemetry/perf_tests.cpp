@@ -45,8 +45,8 @@ TEST(Telemetry, PerfTimingPayloadRejectsNonCurrentVersionsAndCorruptMagicAfterVa
         payload
     ));
 
-    Telemetry::PerfTimingPayload parsed(testArena.arena);
-    ASSERT_TRUE(Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    Expected<Telemetry::PerfTimingPayload> parsed = MakeUnexpected(Failure{});
+    ASSERT_TRUE((parsed = Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size())));
 
     const Telemetry::TelemetryBytes current = payload;
     const u16 unsupportedVersions[] = {
@@ -56,19 +56,19 @@ TEST(Telemetry, PerfTimingPayloadRejectsNonCurrentVersionsAndCorruptMagicAfterVa
     };
     for(const u16 version : unsupportedVersions){
         SCOPED_TRACE(version);
-        Telemetry::EncodedPerfTimingPayloadHeader header;
         usize cursor = 0u;
-        ASSERT_TRUE(ReadPOD(current, cursor, header));
+        const auto readHeader = ReadPOD<Telemetry::EncodedPerfTimingPayloadHeader>(current, cursor);
+        ASSERT_TRUE(readHeader);
+        Telemetry::EncodedPerfTimingPayloadHeader header = *readHeader;
         header.version = version;
         NWB_MEMCPY(payload.data(), payload.size(), &header, sizeof(header));
-        EXPECT_FALSE(Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size(), parsed));
-        EXPECT_TRUE(parsed.scopeText.empty());
-        ASSERT_TRUE(Telemetry::ParsePerfTimingPayload(testArena.arena, current.data(), current.size(), parsed));
-        EXPECT_EQ(parsed.scopeName, scopeName);
+        EXPECT_FALSE((parsed = Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size())));
+        ASSERT_TRUE((parsed = Telemetry::ParsePerfTimingPayload(testArena.arena, current.data(), current.size())));
+        EXPECT_EQ(parsed->scopeName, scopeName);
     }
     payload = current;
     payload[0u] = 0u;
-    EXPECT_FALSE(Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_FALSE((parsed = Telemetry::ParsePerfTimingPayload(testArena.arena, payload.data(), payload.size())));
 }
 
 TEST(Telemetry, PerfTimingPayloadRejectsInvalidInput){
@@ -112,11 +112,11 @@ TEST(Telemetry, PerfMemoryPayloadRejectsCorruptedHeaderAfterValidParse){
         payload
     ));
 
-    Telemetry::PerfMemoryPayload parsed(testArena.arena);
-    ASSERT_TRUE(Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    Expected<Telemetry::PerfMemoryPayload> parsed = MakeUnexpected(Failure{});
+    ASSERT_TRUE((parsed = Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size())));
 
     payload[0u] = 0u;
-    EXPECT_FALSE(Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size(), parsed));
+    EXPECT_FALSE((parsed = Telemetry::ParsePerfMemoryPayload(testArena.arena, payload.data(), payload.size())));
 }
 
 TEST(Telemetry, PerfMemoryPayloadRejectsInvalidInput){

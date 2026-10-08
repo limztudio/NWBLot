@@ -188,9 +188,10 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
 [[nodiscard]] static Path MakeCrashPackagePath(Server& server){
     static Atomic<u64> s_CrashPackageCounter{ 1u };
 
-    LocalTime localTime = {};
-    if(!GetLocalTime(localTime))
+    const auto timeResult = GetLocalTime();
+    if(!timeResult)
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to read local time for crash package name"));
+    const LocalTime localTime = timeResult ? *timeResult : LocalTime{};
 
     const u64 counter = s_CrashPackageCounter.fetch_add(1u, MemoryOrder::relaxed);
     const auto fileName = StringFormat(
@@ -220,9 +221,8 @@ static void EnqueueServerMessage(Server& server, const TStringView message, cons
 }
 
 [[nodiscard]] static bool OpenCrashUploadStream(Server& server, ConnectionInfo& info){
-    ErrorCode error;
     const Path inboxDirectory = CrashInboxDirectory(server);
-    if(!EnsureDirectories(inboxDirectory, error))
+    if(!EnsureDirectories(inboxDirectory))
         return false;
 
     const Path path = MakeCrashPackagePath(server);
@@ -240,8 +240,7 @@ static void DiscardStoredCrashUpload(Server& server, ConnectionInfo& info){
     if(!info.closeCrashUploadStream())
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to close discarded crash upload stream"));
 
-    ErrorCode error;
-    if(!RemoveFile(Path(server.arena(), AStringView(info.crashUploadPath)), error))
+    if(const auto removed = RemoveFile(Path(server.arena(), AStringView(info.crashUploadPath))); !removed || !*removed)
         NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove discarded crash upload file"));
 }
 
@@ -306,8 +305,7 @@ void Server::CrashIngestUpdate(Server* self){
     for(;;){
         self->m_crashIngestSemaphore.acquire();
 
-        PendingCrashUpload crashUpload;
-        while(self->tryDequeueCrashUpload(crashUpload)){
+        while(const auto crashUpload = self->tryDequeueCrashUpload()){
             LogArena ingestArena(__hidden_logger_server::s_CrashIngestArena);
 
             CrashIngestConfig ingestConfig(ingestArena);
@@ -315,7 +313,7 @@ void Server::CrashIngestUpdate(Server* self){
             ingestConfig.symbolication.symbolStoreDirectory = self->m_crashIngestConfig.symbolication.symbolStoreDirectory;
             ingestConfig.retention = self->m_crashIngestConfig.retention;
 
-            const Path archivePath(ingestArena, AStringView(crashUpload.path));
+            const Path archivePath(ingestArena, AStringView(crashUpload->path));
             CrashIngestResult ingestResult = ProcessCrashUpload(ingestArena, archivePath, ingestConfig);
             self->enqueue(Move(ingestResult.message), ingestResult.type);
         }
@@ -421,8 +419,7 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
                 );
             }
             else{
-                ErrorCode error;
-                if(!RemoveFile(storedPath, error))
+                if(const auto removed = RemoveFile(storedPath); !removed || !*removed)
                     NWB_LOGGER_WARNING(NWB_TEXT("Failed to remove unqueued crash upload file"));
                 __hidden_logger_server::EnqueueServerMessage(*thisPtr, NWB_TEXT("Discarded crash upload that could not be queued"), Core::Common::LogType::Error);
             }
@@ -442,14 +439,13 @@ MHD_Result Server::RequestCallback(void* serverContext, MHD_Connection* connecti
         thisPtr->enqueue(Move(result.message), result.type);
     }
     else{
-        MessageType message = MakeMessageType(thisPtr->arena());
-        TStringView error;
-        if(ParseMessagePayload(thisPtr->arena(), info->buffer, info->size, message, error))
-            thisPtr->enqueue(Move(message));
+        auto message = ParseMessagePayload(thisPtr->arena(), info->buffer, info->size);
+        if(message)
+            thisPtr->enqueue(Move(*message));
         else{
             __hidden_logger_server::EnqueueServerMessage(
                 *thisPtr,
-                error.empty() ? TStringView(NWB_TEXT("Received a malformed message")) : error,
+                message.error(),
                 Core::Common::LogType::Error
             );
         }
@@ -562,8 +558,11 @@ bool Server::crashUploadAuthorized(MHD_Connection& connection)const{
     return CrashUploadAuthorizationMatches(AStringView(m_crashUploadToken.data(), m_crashUploadToken.size()), authorizationHeader ? AStringView(authorizationHeader) : AStringView{});
 }
 
-bool Server::tryDequeueCrashUpload(PendingCrashUpload& outUpload){
-    return m_crashUploads.try_pop(outUpload);
+Expected<PendingCrashUpload> Server::tryDequeueCrashUpload(){
+    PendingCrashUpload upload;
+    if(!m_crashUploads.try_pop(upload))
+        return MakeUnexpected(Failure{});
+    return upload;
 }
 
 bool Server::internalUpdate(){

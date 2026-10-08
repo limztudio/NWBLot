@@ -200,15 +200,14 @@ public:
         m_coverageViewEnabled = NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_GI_SMOKE_COVERAGE_VIEW");
         m_complexSceneEnabled = m_coverageViewEnabled || NWB::Tests::Smoke::ReadSmokeEnvironmentFlag("NWB_GI_SMOKE_COMPLEX_SCENE");
         if(m_complexSceneEnabled){
-            NWB::Tests::Smoke::SmokeEnvironmentString settleValue(m_context.objectArena);
-            if(NWB::Tests::Smoke::ReadSmokeEnvironmentText("NWB_GI_SMOKE_MIN_SETTLE_SECONDS", settleValue)){
-                f32 requestedSettleSeconds = 0.0f;
-                if(!ParseF32FromChars(AStringView(settleValue.data(), settleValue.size()), requestedSettleSeconds)
-                    || !IsFinite(requestedSettleSeconds) || requestedSettleSeconds < 0.0f){
+            const auto settleValue = NWB::Tests::Smoke::ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GI_SMOKE_MIN_SETTLE_SECONDS");
+            if(settleValue){
+                const auto requestedSettleSeconds = ParseF32FromChars(AStringView(settleValue->data(), settleValue->size()));
+                if(!requestedSettleSeconds || !IsFinite(*requestedSettleSeconds) || *requestedSettleSeconds < 0.0f){
                     NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: invalid NWB_GI_SMOKE_MIN_SETTLE_SECONDS"));
                     return false;
                 }
-                m_complexMinSettleSeconds = requestedSettleSeconds;
+                m_complexMinSettleSeconds = *requestedSettleSeconds;
             }
         }
         if(m_resolveSwitchEnabled){

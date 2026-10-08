@@ -8,6 +8,8 @@
 #include "entity_id.h"
 #include "type_id.h"
 
+#include <global/expected.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -77,18 +79,17 @@ class ComponentPool final : public IComponentPool{
 
 
 private:
-    [[nodiscard]] inline bool findDenseIndex(EntityID entityId, u32& outDenseIndex)const noexcept{
+    [[nodiscard]] inline Expected<u32> findDenseIndex(EntityID entityId)const noexcept{
         const u32 index = entityId.index();
         if(index >= static_cast<u32>(m_sparse.size()))
-            return false;
+            return MakeUnexpected(Failure{});
         const u32 denseIndex = m_sparse[index];
         if(denseIndex >= static_cast<u32>(m_dense.size()))
-            return false;
+            return MakeUnexpected(Failure{});
         if(m_dense[denseIndex] != entityId)
-            return false;
+            return MakeUnexpected(Failure{});
 
-        outDenseIndex = denseIndex;
-        return true;
+        return denseIndex;
     }
 
     [[nodiscard]] inline u32 requireDenseIndex(EntityID entityId)const{
@@ -114,9 +115,8 @@ public:
 public:
     template<typename... Args>
     T& add(EntityID entityId, Args&&... args){
-        u32 existingDenseIndex = 0u;
-        if(findDenseIndex(entityId, existingDenseIndex))
-            return m_components[existingDenseIndex];
+        if(const auto existingDenseIndex = findDenseIndex(entityId))
+            return m_components[*existingDenseIndex];
 
         const u32 index = entityId.index();
 
@@ -139,27 +139,27 @@ public:
         return m_components[requireDenseIndex(entityId)];
     }
     inline T* tryGet(EntityID entityId)noexcept{
-        u32 denseIndex = 0;
-        if(!findDenseIndex(entityId, denseIndex))
+        const auto denseIndex = findDenseIndex(entityId);
+        if(!denseIndex)
             return nullptr;
-        return &m_components[denseIndex];
+        return &m_components[*denseIndex];
     }
     inline const T* tryGet(EntityID entityId)const noexcept{
-        u32 denseIndex = 0;
-        if(!findDenseIndex(entityId, denseIndex))
+        const auto denseIndex = findDenseIndex(entityId);
+        if(!denseIndex)
             return nullptr;
-        return &m_components[denseIndex];
+        return &m_components[*denseIndex];
     }
 
     inline virtual bool has(EntityID entityId)const override{
-        u32 denseIndex = 0;
-        return findDenseIndex(entityId, denseIndex);
+        return findDenseIndex(entityId).has_value();
     }
 
     virtual bool remove(EntityID entityId)override{
-        u32 denseIndex = 0;
-        if(!findDenseIndex(entityId, denseIndex))
+        const auto resolvedDenseIndex = findDenseIndex(entityId);
+        if(!resolvedDenseIndex)
             return false;
+        const u32 denseIndex = *resolvedDenseIndex;
 
         const u32 index = entityId.index();
         const u32 lastDense = static_cast<u32>(m_dense.size()) - 1;

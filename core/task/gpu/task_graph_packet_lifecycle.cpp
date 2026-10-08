@@ -385,11 +385,11 @@ bool GpuTaskGraph::beginPacketRecording(
     const u64 recordingAttemptGeneration,
     PacketRecordingLease& outLease
 )const noexcept{
-    GpuCompiledPacketView packetView;
-    if(!ResolveAttemptPacketView(compiledGraph, planAccess, packet, recordingAttemptGeneration, outLease.valid(), packetView))
+    const auto packetView = ResolveAttemptPacketView(compiledGraph, planAccess, packet, recordingAttemptGeneration, outLease.valid());
+    if(!packetView)
         return false;
-    const GpuSubmissionPacket& packetPlan = *packetView.plan;
-    const GpuTaskId* const tasks = packetView.tasks;
+    const GpuSubmissionPacket& packetPlan = *packetView->plan;
+    const GpuTaskId* const tasks = packetView->tasks;
 
     NothrowScopedLock lock(m_lifecycleMutex);
     if(
@@ -441,11 +441,11 @@ bool GpuTaskGraph::completePacketRecording(
     const GpuSubmissionPacketId packet,
     PacketRecordingLease& lease
 )const noexcept{
-    GpuCompiledPacketView packetView;
-    if(!ResolveLeasedPacketView(compiledGraph, planAccess, packet, lease, packetView))
+    const auto packetView = ResolveLeasedPacketView(compiledGraph, planAccess, packet, lease);
+    if(!packetView)
         return false;
-    const GpuSubmissionPacket& packetPlan = *packetView.plan;
-    const GpuTaskId* const tasks = packetView.tasks;
+    const GpuSubmissionPacket& packetPlan = *packetView->plan;
+    const GpuTaskId* const tasks = packetView->tasks;
 
     NothrowScopedLock lock(m_lifecycleMutex);
     if(

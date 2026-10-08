@@ -35,15 +35,25 @@ bool Builder::beginWindow(
     if(
         !frame || !header || (options.collapsible && !collapse)
         || (options.resizable && !resize && !region(m_style.white, m_style.white)) || !window
-        || m_text.layout(request, m_scope->m_window.title) != TextLayoutStatus::Success
-        || !WindowLayout::Measure(
-            *frame, *header, collapse, resize, m_style, options,
-            m_scope->m_window.title.measure(), m_skin->referenceDensity(), m_scope->m_window.metrics
-        )
     ){
         m_context.fail();
         return false;
     }
+    auto titleLayout = m_text.layout(request);
+    if(!titleLayout){
+        m_context.fail();
+        return false;
+    }
+    m_scope->m_window.title = Move(*titleLayout);
+    const auto metrics = WindowLayout::Measure(
+        *frame, *header, collapse, resize, m_style, options,
+        m_scope->m_window.title.measure(), m_skin->referenceDensity()
+    );
+    if(!metrics){
+        m_context.fail();
+        return false;
+    }
+    m_scope->m_window.metrics = *metrics;
     m_scope->m_panelState = *window;
     m_scope->m_window.state = &state;
     m_scope->m_window.options = options;
@@ -68,15 +78,14 @@ bool Builder::beginWindow(
         candidate.collapsed = false;
     if(m_context.takeActivation(m_scope->m_window.collapseState, options.collapsible))
         candidate.collapsed = !candidate.collapsed;
-    PointerGesture gesture;
-    while(m_context.takePointerGesture(m_scope->m_window.titleState, options.movable, gesture)){
-        if(!WindowBehavior::ApplyMove(candidate, gesture)){
+    while(auto gesture = m_context.takePointerGesture(m_scope->m_window.titleState, options.movable)){
+        if(!WindowBehavior::ApplyMove(candidate, *gesture)){
             m_context.fail();
             return false;
         }
     }
-    while(m_context.takePointerGesture(m_scope->m_window.resizeState, options.resizable && !candidate.collapsed, gesture)){
-        if(!WindowBehavior::ApplyResize(candidate, gesture, m_scope->m_window.metrics.minimumSize)){
+    while(auto gesture = m_context.takePointerGesture(m_scope->m_window.resizeState, options.resizable && !candidate.collapsed)){
+        if(!WindowBehavior::ApplyResize(candidate, *gesture, m_scope->m_window.metrics.minimumSize)){
             m_context.fail();
             return false;
         }
@@ -100,10 +109,12 @@ bool Builder::beginWindow(
             - description.padding.top - description.padding.bottom)
     };
     u32 node = 0u;
-    if(!m_scope->m_layout.addNode(s_LayoutNoParent, description, node)){
+    const auto admittedNode = m_scope->m_layout.addNode(s_LayoutNoParent, description);
+    if(!admittedNode){
         m_context.fail();
         return false;
     }
+    node = *admittedNode;
     m_scope->m_stack.push_back(node);
     m_scope->m_panelActive = true;
     m_scope->m_windowActive = true;

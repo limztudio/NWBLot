@@ -72,9 +72,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
-        const OpaqueUploadChainInputs& inputs,
-        OpaqueUploadChainResult& outResult
+    [[nodiscard]] Expected<OpaqueUploadChainResult> declare(
+        const OpaqueUploadChainInputs& inputs
     );
 
 

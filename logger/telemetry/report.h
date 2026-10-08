@@ -87,7 +87,7 @@ struct TelemetryReport{
 
 [[nodiscard]] AStringView EventKindText(Telemetry::EventKind::Enum kind)noexcept;
 [[nodiscard]] AStringView PerfTimingSourceText(Telemetry::PerfTimingSource::Enum source)noexcept;
-[[nodiscard]] bool BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& events, TelemetryReport& outReport);
+[[nodiscard]] Expected<TelemetryReport> BuildTelemetryReport(TelemetryArena& arena, const Telemetry::EventView& events);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

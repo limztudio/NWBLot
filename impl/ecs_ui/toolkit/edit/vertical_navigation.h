@@ -79,7 +79,7 @@ public:
         const EditNavigationSnapshot& preferred, f32 viewportHeight) = 0;
 };
 
-[[nodiscard]] bool TranslateEditNavigation(const InputCommandIntent& intent, EditNavigationDirection::Enum& output)noexcept;
+[[nodiscard]] Expected<EditNavigationDirection::Enum> TranslateEditNavigation(const InputCommandIntent& intent)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

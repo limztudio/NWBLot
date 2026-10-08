@@ -24,17 +24,15 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ResolveCausticActivityLayout(const u32 halfWidth, const u32 halfHeight, CausticResolveActivityLayout& output)noexcept{
-    output = {};
+Expected<CausticResolveActivityLayout> ResolveCausticActivityLayout(const u32 halfWidth, const u32 halfHeight)noexcept{
     if(halfWidth == 0u || halfHeight == 0u || halfWidth > Limit<i32>::s_Max || halfHeight > Limit<i32>::s_Max)
-        return false;
+        return MakeUnexpected(Failure{});
     const u32 tilesX = DivideUp(halfWidth, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const u32 tilesY = DivideUp(halfHeight, static_cast<u32>(NWB_CAUSTIC_RESOLVE_GROUP_SIZE));
     const u64 byteSize = static_cast<u64>(tilesX) * tilesY * sizeof(u32);
     if(byteSize > static_cast<u64>(Limit<u32>::s_Max) + 1u)
-        return false;
-    output = { byteSize, tilesX, tilesY };
-    return true;
+        return MakeUnexpected(Failure{});
+    return CausticResolveActivityLayout{ byteSize, tilesX, tilesY };
 }
 
 
@@ -85,8 +83,8 @@ bool RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth
     if(current.valid() && current.halfWidth == halfWidth && current.halfHeight == halfHeight)
         return true;
     releaseCausticResolveActivity();
-    CausticResolveActivityLayout layout;
-    if(!ResolveCausticActivityLayout(halfWidth, halfHeight, layout))
+    auto layout = ResolveCausticActivityLayout(halfWidth, halfHeight);
+    if(!layout)
         return false;
     auto& heap = m_graphics.getDevice().getDescriptorHeap();
     if(!heap.isInitialized())
@@ -96,7 +94,7 @@ bool RendererRayTracingSystem::prepareCausticResolveActivity(const u32 halfWidth
     for(u32 index = 0u; index < LengthOf(activity.buffers); ++index){
         Core::BufferDesc desc;
         desc
-            .setByteSize(layout.bufferByteSize)
+            .setByteSize(layout->bufferByteSize)
             .setCanHaveRawViews(true)
             .setCanHaveUAVs(true)
             .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)

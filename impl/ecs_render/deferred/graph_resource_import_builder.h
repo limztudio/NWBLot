@@ -119,9 +119,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
-        const DeferredGraphResourceImportInputs& inputs,
-        DeferredGraphResourceImportResult& outResult
+    [[nodiscard]] Expected<DeferredGraphResourceImportResult> declare(
+        const DeferredGraphResourceImportInputs& inputs
     )const;
 
 private:

@@ -58,10 +58,9 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
+    [[nodiscard]] Expected<AvboitClearChainResult> declare(
         const AvboitClearChainInputs& inputs,
-        GraphClearTimingRecordState& clearTimingState,
-        AvboitClearChainResult& outResult
+        GraphClearTimingRecordState& clearTimingState
     );
 
 

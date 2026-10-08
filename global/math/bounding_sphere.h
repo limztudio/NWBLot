@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "../expected.h"
 #include "matrix.h"
 #include "collision_detail.h"
 #include "collision_plane.h"
@@ -314,33 +315,31 @@ inline void NWB_SIMD_CALL BoundingSphere::transform(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool NWB_SIMD_CALL BoundingSphere::IntersectsRayValue(SIMDVector sphereValue, SIMDVector origin, SIMDVector direction, f32& outDistance)noexcept{
+[[nodiscard]] inline Expected<f32> NWB_SIMD_CALL BoundingSphere::IntersectsRayValue(SIMDVector sphereValue, SIMDVector origin, SIMDVector direction)noexcept{
     const SIMDVector sphereRadius = CollisionDetail::SphereRadius(sphereValue);
     const SIMDVector localOrigin = VectorSubtract(origin, CollisionDetail::SphereCenter(sphereValue));
     const SIMDVector bVector = Vector3Dot(localOrigin, direction);
     const SIMDVector cVector = VectorSubtract(Vector3LengthSq(localOrigin), VectorMultiply(sphereRadius, sphereRadius));
     if(Vector4Greater(cVector, VectorZero()) && Vector4Greater(bVector, VectorZero()))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const SIMDVector discriminantVector = VectorSubtract(VectorMultiply(bVector, bVector), cVector);
     if(Vector4Less(discriminantVector, VectorZero()))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const SIMDVector distance = VectorSubtract(VectorNegate(bVector), VectorSqrt(discriminantVector));
-    outDistance = Max(0.0f, VectorGetX(distance));
-    return true;
+    return Max(0.0f, VectorGetX(distance));
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool NWB_SIMD_CALL BoundingSphere::intersects(
+[[nodiscard]] inline Expected<f32> NWB_SIMD_CALL BoundingSphere::intersects(
     SIMDVector origin,
-    SIMDVector direction,
-    f32& outDistance
+    SIMDVector direction
 )const noexcept{
-    return IntersectsRayValue(LoadFloat(centerRadius), origin, direction, outDistance);
+    return IntersectsRayValue(LoadFloat(centerRadius), origin, direction);
 }
 
 

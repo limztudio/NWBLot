@@ -39,39 +39,41 @@ public:
         return rawKey(index);
     }
 
-    [[nodiscard]] virtual bool indexOf(const u64 value, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const override{
+        u64 index = 0u;
         invalidateText();
         ++lookupCalls;
         if(malformedLookup){
             index = count;
-            return true;
+            return index;
         }
         if(value == 0u || value == removed || value > count + (removed != 0u ? 1u : 0u))
-            return false;
+            return MakeUnexpected(Failure{});
         const u64 forward = value - 1u - (removed != 0u && value > removed ? 1u : 0u);
         index = reverse ? count - 1u - forward : forward;
-        return index < count;
+        return index < count ? Expected<u64>{ index } : MakeUnexpected(Failure{});
     }
 
-    [[nodiscard]] virtual bool findEnabled(const u64 start, const bool backwards, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool backwards)const override{
+        u64 index = 0u;
         invalidateText();
         ++searchCalls;
         if(start >= count)
-            return false;
+            return MakeUnexpected(Failure{});
         index = start;
         if(rawKey(index) != disabled)
-            return true;
+            return index;
         if(backwards){
             if(index == 0u)
-                return false;
+                return MakeUnexpected(Failure{});
             --index;
         }
         else{
             if(index + 1u == count)
-                return false;
+                return MakeUnexpected(Failure{});
             ++index;
         }
-        return true;
+        return index;
     }
 
     [[nodiscard]] virtual StringView text(const u64 index)const override{
@@ -236,11 +238,11 @@ TEST_F(UiListBuilderTests, SiblingListsPaintTheirOwnDeferredBackgroundStyles){
     ASSERT_TRUE(m_builder.virtualList("second", m_source, secondState, Options()).valid);
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    Rect first;
-    Rect second;
-    ASSERT_TRUE(skinQuad(snapshot, 6u, first));
-    ASSERT_TRUE(skinQuad(snapshot, 7u, second));
-    EXPECT_LT(first.y, second.y);
+    const auto first = skinQuad(snapshot, 6u);
+    ASSERT_TRUE(first);
+    const auto second = skinQuad(snapshot, 7u);
+    ASSERT_TRUE(second);
+    EXPECT_LT(first->y, second->y);
 }
 
 TEST_F(UiListBuilderTests, HundredThousandRowsBuildOnlyVisibleTextTargetsAndGlyphs){
@@ -577,8 +579,7 @@ TEST_F(UiListBuilderTests, TwoCompletedThumbDragsAreConsumedInOneDeclarationUsin
     ASSERT_TRUE(prepare(2u));
     const f64 travel = static_cast<f64>(accepted.gestureReference.height) - accepted.rectangle.height;
     EXPECT_DOUBLE_EQ(m_state.scrollOffset(), 20.0 / travel * accepted.gestureMaximum);
-    PointerGesture pending;
-    EXPECT_FALSE(m_context.input().consumePointerGesture(thumb, accepted.declarationGeneration, pending));
+    EXPECT_FALSE(m_context.input().consumePointerGesture(thumb, accepted.declarationGeneration));
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_EQ(m_context.input().focus(), host());
 }
@@ -594,8 +595,7 @@ TEST_F(UiListBuilderTests, FullHeightMinimumThumbFocusesItsHostWithoutStartingAn
     EXPECT_FALSE(accepted.pointerGesture);
     click(Center(accepted.rectangle));
     EXPECT_EQ(m_context.input().focus(), host());
-    PointerGesture pending;
-    EXPECT_FALSE(m_context.input().consumePointerGesture(thumb, accepted.declarationGeneration, pending));
+    EXPECT_FALSE(m_context.input().consumePointerGesture(thumb, accepted.declarationGeneration));
     ASSERT_TRUE(prepare(2u, options));
     EXPECT_TRUE(m_result.valid);
     EXPECT_TRUE(m_result.focused);

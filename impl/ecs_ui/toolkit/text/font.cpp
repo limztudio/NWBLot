@@ -264,17 +264,20 @@ bool FontFace::coverageInkReliable()const noexcept{ return m_state->m_coverageIn
 
 const SharedBakedFontAtlas& FontFace::bakedAtlas()const noexcept{ return m_state->m_bakedAtlas; }
 
-bool FontFace::metrics(f32 fontSize, FontMetrics& output)const{
+Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
+    FontMetrics metrics{};
     if(!valid() || !IsFinite(fontSize) || fontSize < 1.0f / 64.0f || fontSize > 2048.0f)
-        return false;
+        return MakeUnexpected(Failure{});
     __hidden_ui_text_font::ScaledFont scaled(*m_state->m_hbFace, fontSize);
     hb_font_extents_t extents{};
     if(!scaled.valid() || !hb_font_get_h_extents(&scaled.get(), &extents))
-        return false;
-    output.ascender = Max(0.0f, static_cast<f32>(extents.ascender) / 64.0f);
-    output.descender = Max(0.0f, -static_cast<f32>(extents.descender) / 64.0f);
-    output.lineGap = Max(0.0f, static_cast<f32>(extents.line_gap) / 64.0f);
-    return output.ascender + output.descender > 0.0f;
+        return MakeUnexpected(Failure{});
+    metrics.ascender = Max(0.0f, static_cast<f32>(extents.ascender) / 64.0f);
+    metrics.descender = Max(0.0f, -static_cast<f32>(extents.descender) / 64.0f);
+    metrics.lineGap = Max(0.0f, static_cast<f32>(extents.line_gap) / 64.0f);
+    if(!(metrics.ascender + metrics.descender > 0.0f))
+        return MakeUnexpected(Failure{});
+    return metrics;
 }
 
 bool FontFace::shape(

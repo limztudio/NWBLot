@@ -46,7 +46,6 @@ struct PrefixSceneUploadInputs{
     const Core::GpuTaskId* shadowVisibilityTask = nullptr;
     bool* meshViewSetupReady = nullptr;
     bool* sceneShadingSetupReady = nullptr;
-    u64* outSceneLightingContentHash = nullptr;
 };
 
 struct PrefixSceneUploadResult{
@@ -56,6 +55,7 @@ struct PrefixSceneUploadResult{
     RayTracingLightingClassification lightingClassification;
     ECSRenderDetail::SceneLightGpuData lightData[NWB_SCENE_MAX_LIGHTS] = {};
     u32 lightCount = 0u;
+    u64 sceneLightingContentHash = 0u;
 };
 
 
@@ -73,9 +73,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
-        const PrefixSceneUploadInputs& inputs,
-        PrefixSceneUploadResult& outResult
+    [[nodiscard]] Expected<PrefixSceneUploadResult> declare(
+        const PrefixSceneUploadInputs& inputs
     );
 
 

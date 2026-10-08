@@ -68,19 +68,16 @@ bool CsgDeformValidator::ValidTopology(
     return true;
 }
 
-bool CsgDeformValidator::FiniteInput(
+Expected<void, CsgDeformViabilityReason::Enum> CsgDeformValidator::FiniteInput(
     NotNull<const CsgDeformVertex*> vertices,
-    const usize vertexCount,
-    CsgDeformViabilityReason::Enum& outReason
+    const usize vertexCount
 )noexcept{
-    outReason = CsgDeformViabilityReason::Ok;
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         if(!CsgDeformValidator::FiniteVertex(vertices.get()[vertexIndex])){
-            outReason = CsgDeformViabilityReason::NonFiniteInput;
-            return false;
+            return MakeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
         }
     }
-    return true;
+    return {};
 }
 
 

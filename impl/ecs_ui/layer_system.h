@@ -51,7 +51,7 @@ private:
 
 
 public:
-    using ShaderPathResolveCallback = Function<bool(const Name&, AStringView, const Name&, Name&)>;
+    using ShaderPathResolveCallback = Function<Expected<Name>(const Name&, AStringView, const Name&)>;
     using FontReferences = Vector<UiFontBinding, Core::Alloc::GlobalArena>;
 
 

@@ -60,6 +60,11 @@ private:
         u64 subscriptionIdentityLimit = 0u;
     };
 
+    struct QueryBegin{
+        GpuTimingScope scope;
+        QueueSubmissionToken resetSubmission;
+    };
+
     struct QueryRecord{
         TimerQueryHandle query;
         QueueSubmissionToken acceptedSubmission;
@@ -122,14 +127,12 @@ public:
     void discardFrameReset()noexcept;
     void requestQueries(u32 queryCount)noexcept;
     [[nodiscard]] bool materializeRequestedQueries(Device& device);
-    [[nodiscard]] bool beginQuery(
+    [[nodiscard]] Expected<QueryBegin> beginQuery(
         CommandList& commandList,
         u64 frameIndex,
         u32 epoch,
         u64 performanceCaptureEpoch,
-        GpuTimingSampleAttribution attribution,
-        GpuTimingScope& outScope,
-        QueueSubmissionToken& outResetSubmission
+        GpuTimingSampleAttribution attribution
     );
     [[nodiscard]] QueryEndResult endQuery(CommandList& commandList, const GpuTimingScope& scope);
     [[nodiscard]] QueryEndResult endQueryFromExistingClaim(
@@ -158,7 +161,7 @@ private:
     void releaseUnacceptedQuery(QueryRecord& record)noexcept;
     [[nodiscard]] usize pendingAttributionCount()const noexcept;
     [[nodiscard]] bool markAttributionsForRetirement(u64 subscriptionIdentityLimit)noexcept;
-    [[nodiscard]] bool retireMarkedAttribution(SampleDispatch& outDispatch)noexcept;
+    [[nodiscard]] Expected<SampleDispatch> retireMarkedAttribution()noexcept;
     void discardMarkedAttributions()noexcept;
     void retireAttributions(SampleDispatchVector& outSamples, u64 subscriptionIdentityLimit);
     void appendStatistics(GpuTimingRecorderStatistics& outStatistics)const noexcept;
@@ -318,20 +321,18 @@ private:
     [[nodiscard]] bool feedbackScopeDemandedLocked(const Name& scopeName)const noexcept;
     void addFeedbackScopeDemandsLocked(const Vector<Name, Alloc::GlobalArena>& scopeNames)noexcept;
     void removeFeedbackScopeDemandsLocked(const Vector<Name, Alloc::GlobalArena>& scopeNames)noexcept;
-    [[nodiscard]] bool beginScope(
+    [[nodiscard]] Expected<GpuTimingScope> beginScope(
         const Name& scopeName,
         Device& device,
         CommandList& commandList,
         GpuTimingSampleAttribution attribution,
-        bool requiresComparableTimestamps,
-        GpuTimingScope& outScope
+        bool requiresComparableTimestamps
     );
-    [[nodiscard]] bool beginDeferredScope(
+    [[nodiscard]] Expected<GpuTimingScope> beginDeferredScope(
         const Name& scopeName,
         Device& device,
         CommandList& commandList,
-        GpuTimingSampleAttribution attribution,
-        GpuTimingScope& outScope
+        GpuTimingSampleAttribution attribution
     );
     void endScope(CommandList& commandList, GpuTimingScope& scope);
     void endScopeFromOpeningCommandList(CommandList& commandList, GpuTimingScope& scope)noexcept;
@@ -366,7 +367,7 @@ private:
     void dispatchCompletedSample(const GpuTimingSample& sample, u64 subscriptionIdentityLimit);
     void dispatchCompletedSamples(const SampleDispatchVector& samples);
     void reservePendingAttributionSamplesLocked(SampleDispatchVector& outSamples)const;
-    [[nodiscard]] bool retireMarkedPendingAttributionLocked(SampleDispatch& outDispatch)noexcept;
+    [[nodiscard]] Expected<SampleDispatch> retireMarkedPendingAttributionLocked()noexcept;
     void retireMarkedPendingAttributionsLocked(SampleDispatchVector& outSamples);
     void discardMarkedPendingAttributionsLocked()noexcept;
     void retirePendingAttributionsLocked(SampleDispatchVector& outSamples, u64 subscriptionIdentityLimit);
@@ -435,6 +436,10 @@ private:
         Valid,
         RetryableBatchMismatch,
         InvalidEndpoint,
+    };
+
+    struct ActivationFailure{
+        GpuTimingSubmissionTicket* previousTicket = nullptr;
     };
 
     struct CommandListRecordingEndpoint{
@@ -545,7 +550,7 @@ private:
     void cancelScopePublication(usize publicationIndex)noexcept;
     [[nodiscard]] bool publishScope(const GpuTimingScope& scope, const CommandList& commandList)noexcept;
     [[nodiscard]] bool trackSubmissionPrerequisite(const QueueSubmissionToken& token);
-    [[nodiscard]] bool activateOnCurrentThread(GpuTimingSubmissionTicket*& outPreviousTicket)noexcept;
+    [[nodiscard]] Expected<GpuTimingSubmissionTicket*, ActivationFailure> activateOnCurrentThread()noexcept;
     void deactivateOnCurrentThread(GpuTimingSubmissionTicket* previousTicket, bool activated)noexcept;
     [[nodiscard]] bool confirm(const QueueSubmissionToken& token)noexcept;
 

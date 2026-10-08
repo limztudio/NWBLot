@@ -17,22 +17,9 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Applies sequential cuts in order (one wall rebuild plus cap fill per active cut) through the shared validator, cutter-field, wall, and cap classes, so preview and commit viability always agree.
-struct CsgDeformPipelineResult{
-    CsgDeformViability viability;
-    CsgDeformStats stats;
-};
-
-static_assert(IsStandardLayout_V<CsgDeformPipelineResult>, "CsgDeformPipelineResult must stay layout-stable");
-static_assert(IsTriviallyCopyable_V<CsgDeformPipelineResult>, "CsgDeformPipelineResult must stay cheap to pass by value");
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
 class CsgDeformPipeline final : NoCopy{
 public:
-    [[nodiscard]] static bool RebuildSequentialCuts(
+    [[nodiscard]] static Expected<CsgDeformStats, CsgDeformFailure> RebuildSequentialCuts(
         Core::Alloc::ScratchArena& scratchArena,
         NotNull<const CsgDeformVertex*> inputVertices,
         const usize inputVertexCount,
@@ -42,8 +29,7 @@ public:
         const usize cutCount,
         const CsgDeformBuildOptions& options,
         CsgDeformVertexVector<Core::Alloc::ScratchArena>& outVertices,
-        CsgDeformTriangleVector<Core::Alloc::ScratchArena>& outTriangles,
-        CsgDeformPipelineResult& outResult
+        CsgDeformTriangleVector<Core::Alloc::ScratchArena>& outTriangles
     );
 
 

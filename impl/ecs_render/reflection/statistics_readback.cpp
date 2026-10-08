@@ -102,24 +102,21 @@ void ReflectionStatisticsState::accept(
     // Never recycle memory whose GPU completion is unproved.
 }
 
-bool ReflectionStatisticsState::pending(
-    const u32 index,
-    ReflectionStatisticsReservationKey& outKey,
-    Core::QueueSubmissionToken& outToken
+Expected<ReflectionStatisticsPendingReadback> ReflectionStatisticsState::pending(
+    const u32 index
 )const noexcept{
     NothrowScopedLock lock(m_mutex);
 
-    outKey = {};
-    outToken = {};
     if(index >= s_SlotCount)
-        return false;
+        return MakeUnexpected(Failure{});
     const Slot& slot = m_slots[index];
     const Core::QueueSubmissionToken& token = slot.metadata.acceptedToken;
     if(!slot.inFlight || !token.valid() || !token.hasPhysicalQueueIdentity() || token.deviceGeneration != m_deviceGeneration)
-        return false;
-    outKey = ReflectionStatisticsReservationKey{slot.metadata.sequence, slot.metadata.generation, index};
-    outToken = token;
-    return true;
+        return MakeUnexpected(Failure{});
+    return ReflectionStatisticsPendingReadback{
+        .key = {slot.metadata.sequence, slot.metadata.generation, index},
+        .token = token,
+    };
 }
 
 void ReflectionStatisticsState::complete(
@@ -171,13 +168,12 @@ void ReflectionStatisticsState::complete(
     *slot = {};
 }
 
-bool ReflectionStatisticsState::tryGetLatestStatistics(ReflectionStatistics& outStatistics)const noexcept{
+Expected<ReflectionStatistics> ReflectionStatisticsState::tryGetLatestStatistics()const noexcept{
     NothrowScopedLock lock(m_mutex);
 
     if(m_latest.sequence == 0u)
-        return false;
-    outStatistics = m_latest;
-    return true;
+        return MakeUnexpected(Failure{});
+    return m_latest;
 }
 
 ReflectionStatisticsState::Slot* ReflectionStatisticsState::matchingSlot(const ReflectionStatisticsReservationKey& key)noexcept{
@@ -309,10 +305,13 @@ void ReflectionStatisticsReadback::pollCompleted(){
         return;
     auto& device = m_graphics.getDevice();
     for(u32 index = 0u; index < ReflectionStatisticsState::s_SlotCount; ++index){
-        ReflectionStatisticsReservationKey key;
-        Core::QueueSubmissionToken token;
-        if(!m_buffers[index] || !m_control->pending(index, key, token) || token.deviceGeneration != device.getDeviceGeneration())
+        if(!m_buffers[index])
             continue;
+        const auto pending = m_control->pending(index);
+        if(!pending || pending->token.deviceGeneration != device.getDeviceGeneration())
+            continue;
+        const auto& key = pending->key;
+        const auto& token = pending->token;
         const Core::GpuPhysicalQueueId physicalQueue{.index = token.physicalQueueIndex, .deviceGeneration = token.deviceGeneration};
         if(device.queueGetCompletedInstance(physicalQueue) < token.value)
             continue;
@@ -329,8 +328,10 @@ void ReflectionStatisticsReadback::pollCompleted(){
     }
 }
 
-bool ReflectionStatisticsReadback::tryGetLatestStatistics(ReflectionStatistics& outStatistics)const{
-    return m_control && m_control->tryGetLatestStatistics(outStatistics);
+Expected<ReflectionStatistics> ReflectionStatisticsReadback::tryGetLatestStatistics()const noexcept{
+    if(!m_control)
+        return MakeUnexpected(Failure{});
+    return m_control->tryGetLatestStatistics();
 }
 
 ReflectionStatisticsReadbackSnapshot ReflectionStatisticsReadback::snapshot(const ReflectionStatistics& metadata)const noexcept{

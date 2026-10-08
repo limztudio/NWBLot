@@ -44,13 +44,14 @@ static constexpr u64 s_SegmentGrowthFactor = 2ull;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static u64 EstimateRequiredMetadataBytes(const u64 fileCount){
+static Expected<u64> EstimateRequiredMetadataBytes(const u64 fileCount){
     if(fileCount == 0)
         return s_DefaultMetadataSize;
 
-    u64 totalBytes = 0;
-    if(!Core::Filesystem::ComputeVolumeMetadataRequirement(fileCount, totalBytes))
-        return Limit<u64>::s_Max;
+    const auto metadataBytes = Core::Filesystem::ComputeVolumeMetadataRequirement(fileCount);
+    if(!metadataBytes)
+        return MakeUnexpected(Failure{});
+    u64 totalBytes = *metadataBytes;
 
     constexpr u64 s_MetadataPaddingBytes = 4ull * 1024ull;
     if(totalBytes <= Limit<u64>::s_Max - s_MetadataPaddingBytes)
@@ -59,27 +60,29 @@ static u64 EstimateRequiredMetadataBytes(const u64 fileCount){
     return Max(totalBytes, s_DefaultMetadataSize);
 }
 
-static bool ConfigureVolumeSizing(const u64 plannedFileCount, Core::Filesystem::VolumeBuildConfig& outConfig){
-    if(!outConfig.volumeName.assign(AssetsVolumeCookDetail::s_AssetVolumeName)){
+static Expected<Core::Filesystem::VolumeBuildConfig> ConfigureVolumeSizing(const u64 plannedFileCount){
+    Core::Filesystem::VolumeBuildConfig config;
+    if(!config.volumeName.assign(AssetsVolumeCookDetail::s_AssetVolumeName)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: volume name '{}' exceeds ACompactString capacity"), StringConvert(AssetsVolumeCookDetail::s_AssetVolumeName));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outConfig.metadataSize = EstimateRequiredMetadataBytes(plannedFileCount);
-    if(outConfig.metadataSize == Limit<u64>::s_Max){
+    const auto metadataSize = EstimateRequiredMetadataBytes(plannedFileCount);
+    if(!metadataSize || *metadataSize == Limit<u64>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: metadata size overflow while planning volume"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outConfig.segmentSize = s_DefaultSegmentSize;
-    while(outConfig.segmentSize <= outConfig.metadataSize){
-        if(outConfig.segmentSize > Limit<u64>::s_Max / s_SegmentGrowthFactor){
+    config.metadataSize = *metadataSize;
+    config.segmentSize = s_DefaultSegmentSize;
+    while(config.segmentSize <= config.metadataSize){
+        if(config.segmentSize > Limit<u64>::s_Max / s_SegmentGrowthFactor){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: segment size overflow while planning volume"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outConfig.segmentSize *= s_SegmentGrowthFactor;
+        config.segmentSize *= s_SegmentGrowthFactor;
     }
 
-    return true;
+    return config;
 }
 
 static bool PushManifestObjectFilePayloadToVolume(
@@ -87,13 +90,13 @@ static bool PushManifestObjectFilePayloadToVolume(
     Core::Assets::AssetBytes& objectBytes,
     Core::Filesystem::IFilesystem& filesystem
 ){
-    AssetsVolumeCookDetail::CookedObjectPayloadView payload;
-    if(!AssetsVolumeCookDetail::ReadCookedObjectPayload(entry.objectPath, entry.virtualPath, objectBytes, payload))
+    const auto payload = AssetsVolumeCookDetail::ReadCookedObjectPayload(entry.objectPath, entry.virtualPath, objectBytes);
+    if(!payload)
         return false;
     if(
-        payload.identity.payloadSize != entry.identity.payloadSize
-        || payload.identity.payloadHash != entry.identity.payloadHash
-        || payload.identity.cookKeyHash != entry.identity.cookKeyHash
+        payload->identity.payloadSize != entry.identity.payloadSize
+        || payload->identity.payloadHash != entry.identity.payloadHash
+        || payload->identity.cookKeyHash != entry.identity.cookKeyHash
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: object cache identity mismatch '{}' for '{}'")
             , PathToString<tchar>(entry.objectPath)
@@ -102,7 +105,7 @@ static bool PushManifestObjectFilePayloadToVolume(
         return false;
     }
 
-    if(filesystem.writeFileDeferred(entry.virtualPath, payload.data, payload.size))
+    if(filesystem.writeFileDeferred(entry.virtualPath, payload->data, payload->size))
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to push cached asset '{}'"), StringConvert(entry.virtualPath.resolvedText()));
@@ -179,26 +182,25 @@ namespace AssetsVolumeCookDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool WriteAssetVolume(
+Expected<AssetVolumeWriteResult> WriteAssetVolume(
     Core::Alloc::GlobalArena& arena,
     const ResolvedCookPaths& resolvedPaths,
     const AStringView configurationSafeName,
     const AssetVolumePackManifest& manifest,
-    AssetVolumeWriteResult& outResult,
     ScratchArena& scratchArena
 ){
-    outResult = {};
+    AssetVolumeWriteResult result;
 
     if(!__hidden_asset_volume_writer::ValidateManifestEntryCount(manifest))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    Core::Filesystem::VolumeBuildConfig volumeConfig;
-    if(!__hidden_asset_volume_writer::ConfigureVolumeSizing(manifest.plannedFileCount, volumeConfig))
-        return false;
+    const auto volumeConfig = __hidden_asset_volume_writer::ConfigureVolumeSizing(manifest.plannedFileCount);
+    if(!volumeConfig)
+        return MakeUnexpected(Failure{});
 
     const StagedVolumePaths stagedVolumePaths = BuildStagedVolumePaths(
         resolvedPaths.outputDirectory,
-        volumeConfig.volumeName,
+        volumeConfig->volumeName,
         configurationSafeName,
         scratchArena
     );
@@ -207,7 +209,7 @@ bool WriteAssetVolume(
         s_AssetGathererLogPrefix,
         "stage directory"
     ))
-        return false;
+        return MakeUnexpected(Failure{});
     Core::Filesystem::StagedDirectoryCleanupGuard stageDirectoryCleanup(
         stagedVolumePaths.stageDirectory,
         s_AssetGathererLogPrefix
@@ -217,7 +219,7 @@ bool WriteAssetVolume(
         s_AssetGathererLogPrefix,
         "backup directory"
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
     u64 stagedFileCount = 0;
     usize stagedSegmentCount = 0;
@@ -225,41 +227,41 @@ bool WriteAssetVolume(
         Core::Filesystem::VolumeFileSystem volumeStorage(arena);
         Core::Filesystem::IFilesystem& filesystem = volumeStorage;
         Core::Filesystem::VolumeMountDesc mountDesc(arena);
-        mountDesc.volumeName = volumeConfig.volumeName;
+        mountDesc.volumeName = volumeConfig->volumeName;
         mountDesc.mountDirectory = stagedVolumePaths.stageDirectory;
-        mountDesc.segmentSize = volumeConfig.segmentSize;
-        mountDesc.metadataSize = volumeConfig.metadataSize;
+        mountDesc.segmentSize = volumeConfig->segmentSize;
+        mountDesc.metadataSize = volumeConfig->metadataSize;
         mountDesc.createIfMissing = true;
         mountDesc.usage = Core::Filesystem::VolumeUsage::CookWrite;
         if(!filesystem.mount(mountDesc)){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to mount staged volume filesystem"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         if(!__hidden_asset_volume_writer::PushManifestToVolume(arena, manifest, filesystem))
-            return false;
+            return MakeUnexpected(Failure{});
         if(!filesystem.flush()){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to flush staged volume metadata"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         stagedFileCount = filesystem.fileCount();
         stagedSegmentCount = volumeStorage.segmentCount();
         if(!filesystem.unmount())
-            return false;
+            return MakeUnexpected(Failure{});
     }
 
-    if(!Core::Filesystem::PublishStagedVolume(stagedVolumePaths, resolvedPaths.outputDirectory, volumeConfig.volumeName, stagedSegmentCount))
-        return false;
+    if(!Core::Filesystem::PublishStagedVolume(stagedVolumePaths, resolvedPaths.outputDirectory, volumeConfig->volumeName, stagedSegmentCount))
+        return MakeUnexpected(Failure{});
     stageDirectoryCleanup.dismiss();
 
-    if(!outResult.volumeName.assign(s_AssetVolumeName)){
+    if(!result.volumeName.assign(s_AssetVolumeName)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: volume name exceeds ACompactString capacity"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outResult.fileCount = stagedFileCount;
-    outResult.segmentCount = static_cast<u64>(stagedSegmentCount);
-    return true;
+    result.fileCount = stagedFileCount;
+    result.segmentCount = static_cast<u64>(stagedSegmentCount);
+    return result;
 }
 
 

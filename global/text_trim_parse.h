@@ -6,6 +6,7 @@
 
 
 #include "basic_string.h"
+#include "expected.h"
 #include "limit.h"
 
 #include <cctype>
@@ -253,55 +254,65 @@ inline void StripUtf8Bom(StringT& inOutText){
     return (value & TextDetail::s_Utf8ContinuationMask) == TextDetail::s_Utf8ContinuationMarker;
 }
 
-[[nodiscard]] inline i32 DecodeUtf8CodePoint(const AStringView bytes, u32& unicode)noexcept{
+struct DecodedUtf8CodePoint{
+    u32 codePoint;
+    i32 byteCount;
+};
+
+[[nodiscard]] inline Expected<DecodedUtf8CodePoint> DecodeUtf8CodePoint(const AStringView bytes)noexcept{
+    u32 unicode = 0u;
     if(bytes.empty())
-        return 0;
+        return MakeUnexpected(Failure{});
 
     const u8 c0 = static_cast<u8>(bytes[0]);
     if(c0 < TextDetail::s_Utf8OneByteMaxExclusive){
         unicode = c0;
-        return 1;
+        return DecodedUtf8CodePoint{ unicode, 1 };
     }
 
     if((c0 & TextDetail::s_Utf8TwoByteMask) == TextDetail::s_Utf8TwoByteMarker){
         if(bytes.size() < TextDetail::s_Utf8TwoByteLength)
-            return 0;
+            return MakeUnexpected(Failure{});
 
         const u8 c1 = static_cast<u8>(bytes[1]);
         if(!IsUtf8Continuation(c1))
-            return 0;
+            return MakeUnexpected(Failure{});
 
         unicode = (static_cast<u32>(c0 & TextDetail::s_Utf8TwoBytePayloadMask) << TextDetail::s_Utf8ContinuationPayloadBits)
             | static_cast<u32>(c1 & TextDetail::s_Utf8ContinuationPayloadMask);
-        return unicode >= TextDetail::s_Utf8TwoByteMinCodePoint ? TextDetail::s_Utf8TwoByteLength : 0;
+        if(unicode < TextDetail::s_Utf8TwoByteMinCodePoint)
+            return MakeUnexpected(Failure{});
+        return DecodedUtf8CodePoint{ unicode, TextDetail::s_Utf8TwoByteLength };
     }
 
     if((c0 & TextDetail::s_Utf8ThreeByteMask) == TextDetail::s_Utf8ThreeByteMarker){
         if(bytes.size() < TextDetail::s_Utf8ThreeByteLength)
-            return 0;
+            return MakeUnexpected(Failure{});
 
         const u8 c1 = static_cast<u8>(bytes[1]);
         const u8 c2 = static_cast<u8>(bytes[2]);
         if(!IsUtf8Continuation(c1) || !IsUtf8Continuation(c2))
-            return 0;
+            return MakeUnexpected(Failure{});
 
         unicode =
             (static_cast<u32>(c0 & TextDetail::s_Utf8ThreeBytePayloadMask) << (TextDetail::s_Utf8ContinuationPayloadBits * 2u))
             | (static_cast<u32>(c1 & TextDetail::s_Utf8ContinuationPayloadMask) << TextDetail::s_Utf8ContinuationPayloadBits)
             | static_cast<u32>(c2 & TextDetail::s_Utf8ContinuationPayloadMask)
         ;
-        return unicode >= TextDetail::s_Utf8ThreeByteMinCodePoint ? TextDetail::s_Utf8ThreeByteLength : 0;
+        if(unicode < TextDetail::s_Utf8ThreeByteMinCodePoint)
+            return MakeUnexpected(Failure{});
+        return DecodedUtf8CodePoint{ unicode, TextDetail::s_Utf8ThreeByteLength };
     }
 
     if((c0 & TextDetail::s_Utf8FourByteMask) == TextDetail::s_Utf8FourByteMarker){
         if(bytes.size() < TextDetail::s_Utf8FourByteLength)
-            return 0;
+            return MakeUnexpected(Failure{});
 
         const u8 c1 = static_cast<u8>(bytes[1]);
         const u8 c2 = static_cast<u8>(bytes[2]);
         const u8 c3 = static_cast<u8>(bytes[3]);
         if(!IsUtf8Continuation(c1) || !IsUtf8Continuation(c2) || !IsUtf8Continuation(c3))
-            return 0;
+            return MakeUnexpected(Failure{});
 
         unicode =
             (static_cast<u32>(c0 & TextDetail::s_Utf8FourBytePayloadMask) << (TextDetail::s_Utf8ContinuationPayloadBits * 3u))
@@ -309,10 +320,12 @@ inline void StripUtf8Bom(StringT& inOutText){
             | (static_cast<u32>(c2 & TextDetail::s_Utf8ContinuationPayloadMask) << TextDetail::s_Utf8ContinuationPayloadBits)
             | static_cast<u32>(c3 & TextDetail::s_Utf8ContinuationPayloadMask)
         ;
-        return unicode >= TextDetail::s_Utf8FourByteMinCodePoint && unicode <= TextDetail::s_UnicodeMaxCodePoint ? TextDetail::s_Utf8FourByteLength : 0;
+        if(unicode < TextDetail::s_Utf8FourByteMinCodePoint || unicode > TextDetail::s_UnicodeMaxCodePoint)
+            return MakeUnexpected(Failure{});
+        return DecodedUtf8CodePoint{ unicode, TextDetail::s_Utf8FourByteLength };
     }
 
-    return 0;
+    return MakeUnexpected(Failure{});
 }
 
 [[nodiscard]] inline bool IsTextInputCodePoint(const u32 unicode)noexcept{
@@ -440,76 +453,74 @@ template<usize N>
 inline constexpr int s_DecimalParseBase = 10;
 
 
-[[nodiscard]] inline bool ParseI64FromChars(const AStringView text, i64& outValue)noexcept{
-    if(text.empty())
-        return false;
-    const char* begin = text.data();
-    const char* end = begin + text.size();
-    const auto parseResult = std::from_chars(begin, end, outValue, s_DecimalParseBase);
-    return parseResult.ec == std::errc() && parseResult.ptr == end;
-}
+namespace TextParseDetail{
 
-[[nodiscard]] inline bool ParseU64FromChars(const AStringView text, u64& outValue)noexcept{
-    if(text.empty())
-        return false;
-    const char* begin = text.data();
-    const char* end = begin + text.size();
-    const auto parseResult = std::from_chars(begin, end, outValue, s_DecimalParseBase);
-    return parseResult.ec == std::errc() && parseResult.ptr == end;
-}
 
-[[nodiscard]] inline bool ParseF64FromChars(const AStringView text, f64& outValue)noexcept{
+template<typename NumberT>
+[[nodiscard]] inline Expected<NumberT> ParseNumber(const AStringView text)noexcept{
     if(text.empty())
-        return false;
-    const char* begin = text.data();
-    const char* end = begin + text.size();
-    const auto parseResult = std::from_chars(begin, end, outValue);
-    return parseResult.ec == std::errc() && parseResult.ptr == end;
-}
+        return MakeUnexpected(Failure{});
 
-[[nodiscard]] inline bool ParseF32FromChars(const AStringView text, f32& outValue)noexcept{
-    if(text.empty())
-        return false;
-    const char* begin = text.data();
-    const char* end = begin + text.size();
-    const auto parseResult = std::from_chars(begin, end, outValue);
-    return parseResult.ec == std::errc() && parseResult.ptr == end;
+    NumberT value = NumberT(0);
+    const char* const begin = text.data();
+    const char* const end = begin + text.size();
+    const auto parsed = [&]()noexcept{
+        if constexpr(IsIntegral_V<NumberT>)
+            return std::from_chars(begin, end, value, s_DecimalParseBase);
+        else
+            return std::from_chars(begin, end, value);
+    }();
+    if(parsed.ec != std::errc() || parsed.ptr != end)
+        return MakeUnexpected(Failure{});
+    return value;
 }
 
 
-[[nodiscard]] inline bool ParseU64(const AStringView text, u64& outValue)noexcept{
-    outValue = 0;
-    if(text.empty())
-        return false;
+};
 
-    return ParseU64FromChars(text, outValue);
+
+[[nodiscard]] inline Expected<i64> ParseI64FromChars(const AStringView text)noexcept{
+    return TextParseDetail::ParseNumber<i64>(text);
 }
 
-[[nodiscard]] inline bool ParseI64(const AStringView text, i64& outValue)noexcept{
-    outValue = 0;
-    if(text.empty())
-        return false;
-
-    return ParseI64FromChars(text, outValue);
+[[nodiscard]] inline Expected<u64> ParseU64FromChars(const AStringView text)noexcept{
+    return TextParseDetail::ParseNumber<u64>(text);
 }
+
+[[nodiscard]] inline Expected<f64> ParseF64FromChars(const AStringView text)noexcept{
+    return TextParseDetail::ParseNumber<f64>(text);
+}
+
+[[nodiscard]] inline Expected<f32> ParseF32FromChars(const AStringView text)noexcept{
+    return TextParseDetail::ParseNumber<f32>(text);
+}
+
+[[nodiscard]] inline Expected<u64> ParseU64(const AStringView text)noexcept{
+    return TextParseDetail::ParseNumber<u64>(text);
+}
+
+[[nodiscard]] inline Expected<i64> ParseI64(const AStringView text)noexcept{
+    return TextParseDetail::ParseNumber<i64>(text);
+}
+
 
 template<typename CharT>
-[[nodiscard]] inline bool NextTextLine(const BasicStringView<CharT> text, usize& inOutCursor, BasicStringView<CharT>& outLine)noexcept(IsArithmetic_V<CharT>){
+[[nodiscard]] inline Expected<BasicStringView<CharT>> NextTextLine(const BasicStringView<CharT> text, usize& inOutCursor)noexcept(IsArithmetic_V<CharT>){
     if(inOutCursor >= text.size())
-        return false;
+        return MakeUnexpected(Failure{});
 
     const usize begin = inOutCursor;
     while(inOutCursor < text.size() && text[inOutCursor] != CharT('\n') && text[inOutCursor] != CharT('\r'))
         ++inOutCursor;
 
-    outLine = BasicStringView<CharT>(text.data() + begin, inOutCursor - begin);
+    const BasicStringView<CharT> line(text.data() + begin, inOutCursor - begin);
     while(inOutCursor < text.size() && (text[inOutCursor] == CharT('\n') || text[inOutCursor] == CharT('\r')))
         ++inOutCursor;
-    return true;
+    return line;
 }
 
 template<typename ByteContainer>
-[[nodiscard]] inline bool NextLfByteLine(const ByteContainer& bytes, usize& inOutCursor, AStringView& outLine)noexcept(
+[[nodiscard]] inline Expected<AStringView> NextLfByteLine(const ByteContainer& bytes, usize& inOutCursor)noexcept(
     IsArithmetic_V<typename ByteContainer::value_type>
     && IsSame_V<decltype(bytes.size()), usize>
     && IsArithmetic_V<RemoveCVRef_T<decltype(bytes[inOutCursor])>>
@@ -519,70 +530,50 @@ template<typename ByteContainer>
     && noexcept(bytes.data())
 ){
     using ByteType = typename ByteContainer::value_type;
-static constexpr usize s_ByteTypeByteSize = 1u;
+    static constexpr usize s_ByteTypeByteSize = 1u;
     static_assert(sizeof(ByteType) == s_ByteTypeByteSize, "NextLfByteLine requires a byte-sized container");
 
-    outLine = AStringView();
     if(inOutCursor >= bytes.size())
-        return false;
+        return MakeUnexpected(Failure{});
 
     const usize begin = inOutCursor;
     while(inOutCursor < bytes.size() && bytes[inOutCursor] != static_cast<ByteType>('\n'))
         ++inOutCursor;
     if(inOutCursor >= bytes.size())
-        return false;
+        return MakeUnexpected(Failure{});
 
     usize end = inOutCursor;
     ++inOutCursor;
     if(end > begin && bytes[end - 1u] == static_cast<ByteType>('\r'))
         --end;
 
-    outLine = AStringView(reinterpret_cast<const char*>(bytes.data() + begin), end - begin);
-    return true;
+    return AStringView(reinterpret_cast<const char*>(bytes.data() + begin), end - begin);
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool NextTrimmedTextLine(const BasicStringView<CharT> text, usize& inOutCursor, BasicStringView<CharT>& outLine)noexcept(IsArithmetic_V<CharT>){
-    if(!NextTextLine(text, inOutCursor, outLine))
-        return false;
-
-    outLine = TrimView(outLine);
-    return true;
+[[nodiscard]] inline Expected<BasicStringView<CharT>> NextTrimmedTextLine(const BasicStringView<CharT> text, usize& inOutCursor)noexcept(IsArithmetic_V<CharT>){
+    const auto line = NextTextLine(text, inOutCursor);
+    if(!line)
+        return MakeUnexpected(line.error());
+    return TrimView(*line);
 }
 
-[[nodiscard]] inline bool FindLineKeyValue(const AStringView text, const AStringView key, AStringView& outValue)noexcept{
-    outValue = AStringView();
-
+[[nodiscard]] inline Expected<AStringView> FindLineKeyValue(const AStringView text, const AStringView key)noexcept{
     usize cursor = 0u;
-    AStringView line;
-    while(NextTextLine(text, cursor, line)){
-        if(line.size() <= key.size() || !StartsWith(line, key) || line[key.size()] != '=')
+    while(const auto line = NextTextLine(text, cursor)){
+        if(line->size() <= key.size() || !StartsWith(*line, key) || (*line)[key.size()] != '=')
             continue;
-
-        outValue = AStringView(line.data() + key.size() + 1u, line.size() - key.size() - 1u);
-        return true;
+        return AStringView(line->data() + key.size() + 1u, line->size() - key.size() - 1u);
     }
-
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
-template<typename ArenaT>
-[[nodiscard]] inline bool FindLineKeyValue(const AStringView text, const AStringView key, AString<ArenaT>& outValue){
-    AStringView value;
-    if(!FindLineKeyValue(text, key, value)){
-        outValue.clear();
-        return false;
-    }
-
-    outValue.assign(value.data(), value.size());
-    return true;
+[[nodiscard]] inline Expected<u64> FindLineKeyValueU64(const AStringView text, const AStringView key)noexcept{
+    const auto value = FindLineKeyValue(text, key);
+    if(!value)
+        return MakeUnexpected(value.error());
+    return ParseU64(*value);
 }
-
-[[nodiscard]] inline bool FindLineKeyValueU64(const AStringView text, const AStringView key, u64& outValue)noexcept{
-    AStringView value;
-    return FindLineKeyValue(text, key, value) && ParseU64(value, outValue);
-}
-
 
 template<typename ArenaT>
 [[nodiscard]] inline i32 Stoi(const AString<ArenaT>& str, usize* pos = nullptr, i32 base = TextDetail::s_DefaultNumericTextBase){ return std::stoi(str, pos, base); }

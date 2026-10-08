@@ -30,45 +30,42 @@ static_assert(static_cast<u8>(TextureCopyQueueRequirement::Graphics) == static_c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Inline native validation at these provider calls to avoid an additional resolver frame.
-bool ResolveTextureClearContract(
+Expected<TextureClearContract> ResolveTextureClearContract(
     const TextureDesc& description,
     const TextureSubresourceSet& subresources,
     const TextureClearValueKind::Enum valueKind,
     const bool clearDepth,
-    const bool clearStencil,
-    TextureClearContract& outContract
+    const bool clearStencil
 )noexcept{
-    VulkanTextureDetail::TextureClearContract nativeContract;
-    bool valid = false;
-    [[clang::always_inline]] valid = VulkanTextureDetail::ResolveTextureClearContract(
+    const auto nativeContract = VulkanTextureDetail::ResolveTextureClearContract(
         description, subresources,
         static_cast<VulkanTextureDetail::TextureClearValueKind::Enum>(valueKind),
-        clearDepth, clearStencil, nativeContract
+        clearDepth, clearStencil
     );
-    outContract = {
-        .subresources = nativeContract.subresources,
-        .queueRequirement = static_cast<TextureClearQueueRequirement::Enum>(nativeContract.queueRequirement),
+    if(!nativeContract)
+        return MakeUnexpected(nativeContract.error());
+    return TextureClearContract{
+        .subresources = nativeContract->subresources,
+        .queueRequirement = static_cast<TextureClearQueueRequirement::Enum>(nativeContract->queueRequirement),
     };
-    return valid;
 }
 
-bool ResolveTextureCopyContract(
+Expected<TextureCopyContract> ResolveTextureCopyContract(
     const TextureDesc& sourceDescription,
     const TextureSlice& sourceSlice,
     const TextureDesc& destinationDescription,
-    const TextureSlice& destinationSlice,
-    TextureCopyContract& outContract
+    const TextureSlice& destinationSlice
 )noexcept{
-    VulkanDetail::TextureFormatBlockLayout formatLayout;
-    VkImageType imageType = VK_IMAGE_TYPE_MAX_ENUM;
-    VkImageAspectFlags aspectMask = 0u;
-    bool valid = false;
-    [[clang::always_inline]] valid = VulkanTextureDetail::ResolveTextureCopyContractWithMetadata(
-        sourceDescription, sourceSlice, destinationDescription, destinationSlice,
-        outContract, formatLayout, imageType, aspectMask
+    const auto nativeContract = VulkanTextureDetail::ResolveTextureCopyContract(
+        sourceDescription, sourceSlice, destinationDescription, destinationSlice
     );
-    return valid;
+    if(!nativeContract)
+        return MakeUnexpected(nativeContract.error());
+    return TextureCopyContract{
+        .sourceSlice = nativeContract->sourceSlice,
+        .destinationSlice = nativeContract->destinationSlice,
+        .queueRequirement = static_cast<TextureCopyQueueRequirement::Enum>(nativeContract->queueRequirement),
+    };
 }
 
 

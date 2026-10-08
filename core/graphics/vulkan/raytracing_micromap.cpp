@@ -35,9 +35,8 @@ VkOpacityMicromapFormatEXT ConvertOpacityMicromapFormat(const OpacityMicromapFor
     }
 }
 
-bool ConvertOpacityMicromapBuildFlags(
+Expected<VkBuildMicromapFlagsEXT> ConvertOpacityMicromapBuildFlags(
     const RayTracingOpacityMicromapBuildFlags::Mask flags,
-    VkBuildMicromapFlagsEXT& outFlags,
     TStringView operation
 ){
     constexpr u8 s_KnownFlags = RayTracingOpacityMicromapBuildFlags::FastTrace
@@ -46,35 +45,35 @@ bool ConvertOpacityMicromapBuildFlags(
     ;
     if((static_cast<u8>(flags) & static_cast<u8>(~s_KnownFlags)) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: opacity micromap build flags contain unknown bits"), operation);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(
         (flags & RayTracingOpacityMicromapBuildFlags::FastTrace)
         && (flags & RayTracingOpacityMicromapBuildFlags::FastBuild)
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: fast-trace and fast-build flags are mutually exclusive"), operation);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outFlags = 0u;
+    VkBuildMicromapFlagsEXT nativeFlags = 0u;
     if(flags & RayTracingOpacityMicromapBuildFlags::FastTrace)
-        outFlags |= VK_BUILD_MICROMAP_PREFER_FAST_TRACE_BIT_EXT;
+        nativeFlags |= VK_BUILD_MICROMAP_PREFER_FAST_TRACE_BIT_EXT;
     if(flags & RayTracingOpacityMicromapBuildFlags::FastBuild)
-        outFlags |= VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
+        nativeFlags |= VK_BUILD_MICROMAP_PREFER_FAST_BUILD_BIT_EXT;
     if(flags & RayTracingOpacityMicromapBuildFlags::AllowCompaction)
-        outFlags |= VK_BUILD_MICROMAP_ALLOW_COMPACTION_BIT_EXT;
-    return true;
+        nativeFlags |= VK_BUILD_MICROMAP_ALLOW_COMPACTION_BIT_EXT;
+    return nativeFlags;
 }
 
-bool BuildOpacityMicromapUsageCounts(
+Expected<MicromapUsageVector> BuildOpacityMicromapUsageCounts(
     const GraphicsVector<RayTracingOpacityMicromapUsageCount>& counts,
     const u32 maxOpacity2StateSubdivisionLevel,
     const u32 maxOpacity4StateSubdivisionLevel,
-    MicromapUsageVector& outUsageCounts,
+    Alloc::ScratchArena& scratchArena,
     TStringView operation
 ){
-    outUsageCounts.clear();
-    outUsageCounts.reserve(counts.size());
+    MicromapUsageVector usageCounts(scratchArena);
+    usageCounts.reserve(counts.size());
 
     for(usize i = 0u; i < counts.size(); ++i){
         const RayTracingOpacityMicromapUsageCount& count = counts[i];
@@ -85,8 +84,7 @@ bool BuildOpacityMicromapUsageCounts(
                 , i
                 , static_cast<u32>(count.format)
             );
-            outUsageCounts.clear();
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const u32 maxSubdivisionLevel = format == VK_OPACITY_MICROMAP_FORMAT_2_STATE_EXT
             ? maxOpacity2StateSubdivisionLevel
@@ -100,45 +98,43 @@ bool BuildOpacityMicromapUsageCounts(
                 , count.subdivisionLevel
                 , maxSubdivisionLevel
             );
-            outUsageCounts.clear();
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         VkMicromapUsageEXT usageCount = {};
         usageCount.count = count.count;
         usageCount.subdivisionLevel = count.subdivisionLevel;
         usageCount.format = static_cast<u32>(format);
-        outUsageCounts.push_back(usageCount);
+        usageCounts.push_back(usageCount);
     }
 
-    return true;
+    return usageCounts;
 }
 
-bool ResolveOpacityMicromapBuildInputAddress(
+Expected<VkDeviceAddress> ResolveOpacityMicromapBuildInputAddress(
     Buffer& buffer,
     const u64 offset,
     const u64 byteSize,
-    TStringView resourceName,
-    VkDeviceAddress& outAddress
+    TStringView resourceName
 ){
     constexpr u64 s_DeviceAddressAlignment = 256u;
     const u64 validatedByteSize = byteSize != 0u ? byteSize : 1u;
     if(!IsBufferRangeInBounds(buffer.getCreationDescription(), offset, validatedByteSize)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: {} range is outside the buffer"), resourceName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outAddress = GetBufferDeviceAddress(&buffer, offset);
-    if(outAddress == 0u){
+    const VkDeviceAddress address = GetBufferDeviceAddress(&buffer, offset);
+    if(address == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: {} device address is null or overflows"), resourceName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    if((outAddress % s_DeviceAddressAlignment) != 0u){
+    if((address % s_DeviceAddressAlignment) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: {} device address is not 256-byte aligned"), resourceName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    return true;
+    return address;
 }
 
 VkMemoryBarrier2 BuildOpacityMicromapWriteAfterWriteBarrier()noexcept{
@@ -185,8 +181,8 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
         return nullptr;
     }
 
-    VkBuildMicromapFlagsEXT buildFlags = 0u;
-    if(!VulkanDetail::ConvertOpacityMicromapBuildFlags(desc.flags, buildFlags, NWB_TEXT("create opacity micromap")))
+    const auto buildFlags = VulkanDetail::ConvertOpacityMicromapBuildFlags(desc.flags, NWB_TEXT("create opacity micromap"));
+    if(!buildFlags)
         return nullptr;
 
     auto opacityMicromapProperties = VulkanDetail::MakeVkStruct<VkPhysicalDeviceOpacityMicromapPropertiesEXT>(
@@ -197,22 +193,22 @@ RayTracingOpacityMicromapHandle Device::createOpacityMicromap(const RayTracingOp
     m_context.instanceDispatch.vkGetPhysicalDeviceProperties2(m_context.physicalDevice, &physicalDeviceProperties);
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena);
-    VulkanDetail::MicromapUsageVector usageCounts{ scratchArena };
-    if(!VulkanDetail::BuildOpacityMicromapUsageCounts(
+    const auto usageCounts = VulkanDetail::BuildOpacityMicromapUsageCounts(
         desc.counts,
         opacityMicromapProperties.maxOpacity2StateSubdivisionLevel,
         opacityMicromapProperties.maxOpacity4StateSubdivisionLevel,
-        usageCounts,
+        scratchArena,
         NWB_TEXT("create opacity micromap")
-    ))
+    );
+    if(!usageCounts)
         return nullptr;
 
     auto buildInfo = VulkanDetail::MakeVkStruct<VkMicromapBuildInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT);
     buildInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
-    buildInfo.flags = buildFlags;
+    buildInfo.flags = *buildFlags;
     buildInfo.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
-    buildInfo.usageCountsCount = static_cast<u32>(usageCounts.size());
-    buildInfo.pUsageCounts = usageCounts.empty() ? nullptr : usageCounts.data();
+    buildInfo.usageCountsCount = static_cast<u32>(usageCounts->size());
+    buildInfo.pUsageCounts = usageCounts->empty() ? nullptr : usageCounts->data();
 
     auto buildSize = VulkanDetail::MakeVkStruct<VkMicromapBuildSizesInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT);
     m_context.deviceDispatch.vkGetMicromapBuildSizesEXT(m_context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &buildInfo, &buildSize);
@@ -289,30 +285,30 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
 
     u64 triangleDescBytes = 0;
     for(const RayTracingOpacityMicromapUsageCount& count : ommDesc.counts){
-        u64 countBytes = 0u;
+        const auto countBytes = TryMultiply<u64>(static_cast<u64>(count.count), sizeof(VkMicromapTriangleEXT));
         if(
-            !TryMultiply<u64>(static_cast<u64>(count.count), sizeof(VkMicromapTriangleEXT), countBytes)
-            || triangleDescBytes > Limit<u64>::s_Max - countBytes
+            !countBytes
+            || triangleDescBytes > Limit<u64>::s_Max - *countBytes
         ){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to build opacity micromap: per-OMM descriptor size overflows"));
             return;
         }
-        triangleDescBytes += countBytes;
+        triangleDescBytes += *countBytes;
     }
 
-    VkBuildMicromapFlagsEXT buildFlags = 0u;
-    if(!VulkanDetail::ConvertOpacityMicromapBuildFlags(ommDesc.flags, buildFlags, NWB_TEXT("build opacity micromap")))
+    const auto buildFlags = VulkanDetail::ConvertOpacityMicromapBuildFlags(ommDesc.flags, NWB_TEXT("build opacity micromap"));
+    if(!buildFlags)
         return;
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_RayTracingArena);
-    VulkanDetail::MicromapUsageVector usageCounts{ scratchArena };
-    if(!VulkanDetail::BuildOpacityMicromapUsageCounts(
+    const auto usageCounts = VulkanDetail::BuildOpacityMicromapUsageCounts(
         ommDesc.counts,
         omm->m_maxOpacity2StateSubdivisionLevel,
         omm->m_maxOpacity4StateSubdivisionLevel,
-        usageCounts,
+        scratchArena,
         NWB_TEXT("build opacity micromap")
-    ))
+    );
+    if(!usageCounts)
         return;
 
     auto* inputBuffer = ommDesc.inputBuffer;
@@ -357,35 +353,22 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
     ))
         return;
 
-    VkDeviceAddress inputAddress = 0u;
-    VkDeviceAddress triangleDescAddress = 0u;
-    if(
-        !VulkanDetail::ResolveOpacityMicromapBuildInputAddress(
-            *inputBuffer,
-            ommDesc.inputBufferOffset,
-            1u,
-            NWB_TEXT("input data"),
-            inputAddress
-        )
-        || !VulkanDetail::ResolveOpacityMicromapBuildInputAddress(
-            *perOmmDescs,
-            ommDesc.perOmmDescsOffset,
-            triangleDescBytes,
-            NWB_TEXT("per-OMM descriptor"),
-            triangleDescAddress
-        )
-    )
+    const auto inputAddress = VulkanDetail::ResolveOpacityMicromapBuildInputAddress(*inputBuffer, ommDesc.inputBufferOffset, 1u, NWB_TEXT("input data"));
+    if(!inputAddress)
+        return;
+    const auto triangleDescAddress = VulkanDetail::ResolveOpacityMicromapBuildInputAddress(*perOmmDescs, ommDesc.perOmmDescsOffset, triangleDescBytes, NWB_TEXT("per-OMM descriptor"));
+    if(!triangleDescAddress)
         return;
 
     auto buildInfo = VulkanDetail::MakeVkStruct<VkMicromapBuildInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_INFO_EXT);
     buildInfo.type = VK_MICROMAP_TYPE_OPACITY_MICROMAP_EXT;
-    buildInfo.flags = buildFlags;
+    buildInfo.flags = *buildFlags;
     buildInfo.mode = VK_BUILD_MICROMAP_MODE_BUILD_EXT;
     buildInfo.dstMicromap = omm->m_micromap;
-    buildInfo.usageCountsCount = static_cast<u32>(usageCounts.size());
-    buildInfo.pUsageCounts = usageCounts.empty() ? nullptr : usageCounts.data();
-    buildInfo.data.deviceAddress = inputAddress;
-    buildInfo.triangleArray.deviceAddress = triangleDescAddress;
+    buildInfo.usageCountsCount = static_cast<u32>(usageCounts->size());
+    buildInfo.pUsageCounts = usageCounts->empty() ? nullptr : usageCounts->data();
+    buildInfo.data.deviceAddress = *inputAddress;
+    buildInfo.triangleArray.deviceAddress = *triangleDescAddress;
     buildInfo.triangleArrayStride = sizeof(VkMicromapTriangleEXT);
 
     auto buildSize = VulkanDetail::MakeVkStruct<VkMicromapBuildSizesInfoEXT>(VK_STRUCTURE_TYPE_MICROMAP_BUILD_SIZES_INFO_EXT);
@@ -401,13 +384,10 @@ void CommandList::buildOpacityMicromap(RayTracingOpacityMicromap* opacityMicroma
             static_cast<u64>(m_context.accelStructProperties.minAccelerationStructureScratchOffsetAlignment),
             1u
         );
-        if(!suballocateBuildScratchAddress(
-            buildSize.buildScratchSize,
-            scratchAlignment,
-            buildInfo.scratchData.deviceAddress,
-            NWB_TEXT("build opacity micromap")
-        ))
+        const auto scratchAddressResult = suballocateBuildScratchAddress(buildSize.buildScratchSize, scratchAlignment, NWB_TEXT("build opacity micromap"));
+        if(!scratchAddressResult)
             return;
+        buildInfo.scratchData.deviceAddress = *scratchAddressResult;
     }
 
     if(m_enableAutomaticBarriers){

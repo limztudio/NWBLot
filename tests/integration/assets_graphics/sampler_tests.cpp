@@ -85,7 +85,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
             sizeof(reductionValue)
         );
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        EXPECT_FALSE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary, loadedAsset));
+        EXPECT_FALSE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary));
         EXPECT_EQ(loadedAsset.get(), nullptr);
 
         description.reductionType = reduction;
@@ -103,7 +103,7 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
         const f32 nonblack = 1.0f;
         NWB_MEMCPY(binary.data() + borderOffset, sizeof(nonblack), &nonblack, sizeof(nonblack));
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        EXPECT_FALSE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary, loadedAsset));
+        EXPECT_FALSE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary));
         EXPECT_EQ(loadedAsset.get(), nullptr);
     }
 
@@ -117,7 +117,9 @@ TEST(AssetsGraphics, SamplerCodecRejectsUnsupportedReductionAndFixedBorderColor)
     sampler.setDescription(description);
     ASSERT_TRUE(codec.serialize(sampler, binary));
     UniquePtr<NWB::Core::Assets::IAsset> recoveredAsset;
-    ASSERT_TRUE(codec.deserialize(testArena.arena, sampler.virtualPath(), binary, recoveredAsset));
+    auto recoveredResult = codec.deserialize(testArena.arena, sampler.virtualPath(), binary);
+    ASSERT_TRUE(recoveredResult);
+    recoveredAsset = Move(*recoveredResult);
     ASSERT_NE(recoveredAsset.get(), nullptr);
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("sampler description is invalid")));
 }
@@ -152,14 +154,7 @@ TEST(AssetsGraphics, SamplerCookerRejectsFixedBorderColorAndUnsupportedReduction
         const Path metadataPath = assetRoot / "samplers" / "linear_clamp.nwb";
         NWB::Impl::SamplerCookEntry entry(testArena.arena);
         NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-        EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(
-            assetRoot,
-            "project",
-            metadataPath,
-            document,
-            entry,
-            scratchArena
-        )) << assignment;
+        EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, *entry.arena, scratchArena)) << assignment;
         const TStringView expectedDiagnostic = assignment.starts_with("asset.reduction")
             ? NWB_TEXT("unsupported reduction type")
             : NWB_TEXT("unsupported asset field 'border_color'")
@@ -186,14 +181,7 @@ TEST(AssetsGraphics, SamplerCookerRejectsDeprecatedVersionMetadata){
     const Path metadataPath = assetRoot / "samplers" / "linear_clamp.nwb";
     NWB::Impl::SamplerCookEntry entry(testArena.arena);
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_CodecScratchArena);
-    EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(
-        assetRoot,
-        "project",
-        metadataPath,
-        document,
-        entry,
-        scratchArena
-    ));
+    EXPECT_FALSE(NWB::Impl::ParseSamplerCookMetadata(assetRoot, "project", metadataPath, document, *entry.arena, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'version'")));
 #else
 #endif

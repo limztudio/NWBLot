@@ -62,8 +62,7 @@ public:
     {}
     ~TemporaryFile(){
         if(m_owned){
-            ErrorCode error;
-            if(!RemoveFile(m_path, error) && error)
+            if(!RemoveFile(m_path))
                 NWB_LOGGER_WARNING(NWB_TEXT("font_builder: cannot remove unpublished temporary '{}'"), PathToString<tchar>(m_path));
         }
     }
@@ -115,20 +114,23 @@ private:
     bool m_owned = false;
 };
 
-[[nodiscard]] static bool CheckOutputs(const OutputPaths& paths, const bool overwrite, bool& outPresent){
+[[nodiscard]] static Expected<bool> CheckOutputs(const OutputPaths& paths, const bool overwrite){
     const Path* files[] = { &paths.metadata, &paths.font };
     u32 presentCount = 0u;
     for(const Path* file : files){
-        ErrorCode error;
-        const bool exists = FileExists(*file, error);
-        if(error || (exists && !IsRegularFile(*file, error)) || error)
-            return false;
-        presentCount += exists ? 1u : 0u;
+        const auto exists = FileExists(*file);
+        if(!exists)
+            return MakeUnexpected(Failure{});
+        if(*exists){
+            const auto regular = IsRegularFile(*file);
+            if(!regular || !*regular)
+                return MakeUnexpected(Failure{});
+            ++presentCount;
+        }
     }
     if(presentCount != 0u && (presentCount != 2u || !overwrite))
-        return false;
-    outPresent = presentCount == 2u;
-    return true;
+        return MakeUnexpected(Failure{});
+    return presentCount == 2u;
 }
 
 [[nodiscard]] static bool CheckWorkPaths(const OutputPaths& paths){
@@ -137,8 +139,8 @@ private:
         &paths.metadataBackup, &paths.fontBackup,
     };
     for(const Path* file : files){
-        ErrorCode error;
-        if(FileExists(*file, error) || error)
+        const auto exists = FileExists(*file);
+        if(!exists || *exists)
             return false;
     }
     return true;
@@ -146,15 +148,14 @@ private:
 
 static void RestoreBackups(const Path* const outputs[2u], const Path* const backups[2u], const u32 count){
     for(u32 index = count; index > 0u; --index){
-        ErrorCode error;
-        if(!RenamePath(*backups[index - 1u], *outputs[index - 1u], error))
+        if(!RenamePath(*backups[index - 1u], *outputs[index - 1u]))
             NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not restore previous '{}'"), PathToString<tchar>(*outputs[index - 1u]));
     }
 }
 
 [[nodiscard]] static bool Publish(const OutputPaths& paths, TemporaryFile& font, TemporaryFile& metadata, const bool overwrite){
-    bool present = false;
-    if(!CheckOutputs(paths, overwrite, present))
+    const auto present = CheckOutputs(paths, overwrite);
+    if(!present)
         return false;
     const Path* outputs[] = { &paths.font, &paths.metadata };
     const Path* backups[] = { &paths.fontBackup, &paths.metadataBackup };
@@ -162,10 +163,9 @@ static void RestoreBackups(const Path* const outputs[2u], const Path* const back
     TemporaryFile* staged[] = { &font, &metadata };
 
     u32 backedUp = 0u;
-    if(present){
+    if(*present){
         for(; backedUp < 2u; ++backedUp){
-            ErrorCode error;
-            if(!RenamePath(*outputs[backedUp], *backups[backedUp], error)){
+            if(!RenamePath(*outputs[backedUp], *backups[backedUp])){
                 RestoreBackups(outputs, backups, backedUp);
                 return false;
             }
@@ -173,11 +173,10 @@ static void RestoreBackups(const Path* const outputs[2u], const Path* const back
     }
     u32 published = 0u;
     for(; published < 2u; ++published){
-        ErrorCode error;
-        if(!RenamePath(*temporaries[published], *outputs[published], error)){
+        if(!RenamePath(*temporaries[published], *outputs[published])){
             for(u32 index = published; index > 0u; --index){
-                ErrorCode removalError;
-                if(!RemoveFile(*outputs[index - 1u], removalError))
+                const auto removed = RemoveFile(*outputs[index - 1u]);
+                if(!removed || !*removed)
                     NWB_LOGGER_ERROR(NWB_TEXT("font_builder: could not remove failed new '{}'"), PathToString<tchar>(*outputs[index - 1u]));
             }
             RestoreBackups(outputs, backups, backedUp);
@@ -186,8 +185,8 @@ static void RestoreBackups(const Path* const outputs[2u], const Path* const back
         staged[published]->published();
     }
     for(u32 index = 0u; index < backedUp; ++index){
-        ErrorCode error;
-        if(!RemoveFile(*backups[index], error))
+        const auto removed = RemoveFile(*backups[index]);
+        if(!removed || !*removed)
             NWB_LOGGER_WARNING(NWB_TEXT("font_builder: published pair but could not remove backup '{}'"), PathToString<tchar>(*backups[index]));
     }
     return true;
@@ -205,31 +204,31 @@ static void RestoreBackups(const Path* const outputs[2u], const Path* const back
 
 bool WriteOutputs(const BakeOptions& options, const Impl::FontAtlasPayload& payload){
     Core::Assets::AssetArena& arena = payload.glyphs.get_allocator().arena();
-    Core::Assets::AssetBytes fontBinary(arena);
+    auto fontBinary = BuildPreparedFont(options, payload);
     MetadataString metadata(arena);
-    if(!BuildPreparedFont(options, payload, fontBinary))
+    if(!fontBinary){
+        NWB_LOGGER_ERROR(NWB_TEXT("font_builder: prepared font failed: {}"), StringConvert(fontBinary.error()));
         return false;
+    }
     BuildFontMetadata(payload, metadata);
 
     const __hidden_font_builder_writer::OutputPaths paths(options.output);
-    bool present = false;
-    if(!__hidden_font_builder_writer::CheckOutputs(paths, options.overwrite, present)
+    if(!__hidden_font_builder_writer::CheckOutputs(paths, options.overwrite)
         || !__hidden_font_builder_writer::CheckWorkPaths(paths)){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: output pair unavailable; use --overwrite for complete regular .nwb and .font files"));
         return false;
     }
-    ErrorCode error;
     const Path directory = options.output.parentPath();
-    if(!directory.empty() && !EnsureDirectories(directory, error))
+    if(!directory.empty() && !EnsureDirectories(directory))
         return false;
 
     __hidden_font_builder_writer::TemporaryFile stagedFont(paths.fontTemporary);
     __hidden_font_builder_writer::TemporaryFile stagedMetadata(paths.metadataTemporary);
     const u8* metadataBytes = reinterpret_cast<const u8*>(metadata.data());
     if(
-        !stagedFont.stage(fontBinary.data(), fontBinary.size())
+        !stagedFont.stage(fontBinary->data(), fontBinary->size())
         || !stagedMetadata.stage(metadataBytes, metadata.size())
-        || !stagedFont.verify(fontBinary.data(), fontBinary.size())
+        || !stagedFont.verify(fontBinary->data(), fontBinary->size())
         || !stagedMetadata.verify(metadataBytes, metadata.size())
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: staging or verification failed; previous pair remains in place"));

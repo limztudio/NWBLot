@@ -29,11 +29,11 @@ template<typename ValueContainer>
     const TStringView failureContext,
     const TStringView label
 ){
-    const BinaryVectorPayloadFailure::Enum failure = ::ReadBinaryVectorPayload(binary, inOutCursor, count, outValues);
-    if(failure == BinaryVectorPayloadFailure::None)
+    const auto result = ::ReadBinaryVectorPayload(binary, inOutCursor, count, outValues);
+    if(result)
         return true;
 
-    if(failure == BinaryVectorPayloadFailure::CountOverflow){
+    if(result.error() == BinaryVectorPayloadFailure::CountOverflow){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
     }
     else{
@@ -44,25 +44,25 @@ template<typename ValueContainer>
 }
 
 template<typename HeaderT>
-[[nodiscard]] bool ReadMagicHeaderPayload(
+[[nodiscard]] Expected<HeaderT> ReadMagicHeaderPayload(
     const AssetBytes& binary,
     usize& inOutCursor,
-    HeaderT& outHeader,
     const u32 expectedMagic,
     const TStringView failureContext,
     const TStringView assetType
 ){
-    if(!ReadPOD(binary, inOutCursor, outHeader)){
+    const auto header = ReadPOD<HeaderT>(binary, inOutCursor);
+    if(!header){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: malformed header"), failureContext);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    if(outHeader.magic != expectedMagic){
+    if(header->magic != expectedMagic){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: invalid {} asset format; recook required"), failureContext, assetType);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    return true;
+    return header;
 }
 
 [[nodiscard]] inline bool ReadCompletePayload(
@@ -95,11 +95,11 @@ template<typename ValueContainer>
     const TStringView failureContext,
     const TStringView label
 ){
-    const BinaryVectorPayloadFailure::Enum failure = ::AppendBinaryVectorPayload(outBinary, values);
-    if(failure == BinaryVectorPayloadFailure::None)
+    const auto result = ::AppendBinaryVectorPayload(outBinary, values);
+    if(result)
         return true;
 
-    if(failure == BinaryVectorPayloadFailure::CountOverflow){
+    if(result.error() == BinaryVectorPayloadFailure::CountOverflow){
         NWB_LOGGER_ERROR(NWB_TEXT("{} failed: '{}' payload byte size overflows"), failureContext, label);
     }
     else{

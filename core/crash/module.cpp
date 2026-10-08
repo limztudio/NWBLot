@@ -28,14 +28,13 @@ inline constexpr u32 s_DiagnosticCaptureCallstackFramesToSkip = 5u;
 
 template<typename ArenaT>
 [[nodiscard]] static ::Path<ArenaT> DefaultCrashRootDirectory(ArenaT& arena){
-    ::Path<ArenaT> executableDirectory(arena);
-    if(GetExecutableDirectory(executableDirectory))
-        return executableDirectory / PackageNames::s_DefaultRootDirectoryName;
+    const auto executableDirectory = GetExecutableDirectory(arena);
+    if(executableDirectory)
+        return *executableDirectory / PackageNames::s_DefaultRootDirectoryName;
 
-    ErrorCode error;
-    ::Path<ArenaT> currentDirectory(arena);
-    if(GetCurrentPath(currentDirectory, error) && !currentDirectory.empty())
-        return currentDirectory / PackageNames::s_DefaultRootDirectoryName;
+    const auto currentDirectory = GetCurrentPath(arena);
+    if(currentDirectory && !currentDirectory->empty())
+        return *currentDirectory / PackageNames::s_DefaultRootDirectoryName;
 
     return ::Path<ArenaT>(arena, PackageNames::s_DefaultRootDirectoryName);
 }
@@ -188,11 +187,11 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 ::Path<ArenaT> DefaultCrashHandlerExecutablePath(ArenaT& arena){
-    ::Path<ArenaT> executableDirectory(arena);
-    if(!GetExecutableDirectory(executableDirectory))
+    const auto executableDirectory = GetExecutableDirectory(arena);
+    if(!executableDirectory)
         return ::Path<ArenaT>(arena);
 
-    return executableDirectory / Detail::s_HandlerExecutableFileName;
+    return *executableDirectory / Detail::s_HandlerExecutableFileName;
 }
 
 template<typename ArenaT>

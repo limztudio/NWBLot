@@ -33,21 +33,22 @@ bool ShadowPrepareGraphTask::Record(
     Core::GpuTimingSubmissionTicket::RecordingScope timingRecording(payload.timingTicket);
     payload.outcome.ready = false;
     // The graph establishes the selector ConstantBuffer state before recording.
-    const bool shadowResourcesPrepared = payload.targets.bindless.valid()
-        && payload.raytracingSystem.recordPreflightShadowVisibilityResources(
+    if(!payload.targets.bindless.valid())
+        return false;
+    const auto shadowResourcesPrepared = payload.raytracingSystem.recordPreflightShadowVisibilityResources(
             commandList,
             payload.targets,
-            payload.outcome.ready,
             payload.sceneTlasBuildGraphOwned,
             payload.meshBlasBuildsGraphOwned,
             payload.meshBlasGeometryBuildInputStatesGraphOwned,
             payload.meshSwBvhBuildsGraphOwned,
             payload.preparedMeshSwBvhBuildsRecordedByGraph
-        )
-    ;
+        );
+
     // Selector upload precedes this task; compiler establishes ConstantBuffer state first.
     if(!shadowResourcesPrepared)
         return false;
+    payload.outcome.ready = *shadowResourcesPrepared;
 
     // These declarations export BLAS/SW-BVH boundary states before the Prefix packet seeds.
     return true;

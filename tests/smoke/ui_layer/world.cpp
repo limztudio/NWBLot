@@ -69,16 +69,15 @@ static constexpr Core::Assets::AssetRef<Impl::FontAtlas> s_DefaultKoreanAtlas{"e
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& outWorld){
-    outWorld.reset();
+Expected<UniquePtr<Core::ECS::World>> CreateUiLayerSmokeWorld(ProjectRuntimeContext& context){
     if(!context.shaderPathResolver){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: shader path resolver is unavailable"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     auto world = MakeUnique<Core::ECS::World>(context.objectArena, context.cpuTasks);
     if(!world){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: ECS world allocation failed"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const Impl::UiLayerSystem::FontReferences fonts{
@@ -170,7 +169,7 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
         bindings.push_back({ .key = Core::Key::T, .command = Impl::Ui::InputCommand::FocusPrevious });
         if(!layer.setInputBindings(bindings.data(), bindings.size())){
             NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSmokeProject: configured input profile was rejected"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("UiLayerSmokeProject: custom input profile Q=Activate W=Left R=FocusNext T=FocusPrevious Tab=unbound"));
     }
@@ -302,8 +301,7 @@ bool CreateUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS
     }
 
     context.graphics.addRenderPassToBack(layer);
-    outWorld = Move(world);
-    return true;
+    return world;
 }
 
 void DestroyUiLayerSmokeWorld(ProjectRuntimeContext& context, UniquePtr<Core::ECS::World>& world){

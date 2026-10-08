@@ -26,14 +26,13 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool DeferredFrameTailBuilder::declare(
-    const DeferredFrameTailInputs& inputs,
-    DeferredFrameTailResult& outResult
+[[nodiscard]] Expected<DeferredFrameTailResult> DeferredFrameTailBuilder::declare(
+    const DeferredFrameTailInputs& inputs
 ){
     using namespace RendererTaskGraphDetail;
-    outResult = DeferredFrameTailResult{};
+    DeferredFrameTailResult result{};
     if(!inputs.terminalPresentationTask.valid())
-        return false;
+        return MakeUnexpected(Failure{});
 
     if(inputs.capturesLaggedLightingHistory){
         // The core built-in derives whole-resource CopySource/CopyDest declarations for these regions and retains
@@ -62,7 +61,7 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)
             .setScheduling(historyCopyScheduling)
             .setDependencies(historyCopyDependencies, LengthOf(historyCopyDependencies))
         ;
-        outResult.historyCopyTask = m_graph.addCopyTextureTask(
+        result.historyCopyTask = m_graph.addCopyTextureTask(
             historyCopyDesc,
             Core::GpuCopyTextureTaskDesc{
                 .regions = historyCopyRegions,
@@ -70,9 +69,9 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)
                 .acceptedToken = &inputs.historyCopySubmissionToken,
             }
         );
-        if(!outResult.historyCopyTask.valid()){
+        if(!result.historyCopyTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred lagged-lighting history-copy task"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
@@ -84,7 +83,7 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)
     );
     if(!recoveryDomain.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import deferred frame-recovery graph resources"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const Core::GpuTaskResourceUse recoveryResourceUses[] = {
@@ -103,7 +102,7 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)
         .setScheduling(recoveryScheduling)
         .setResourceUses(recoveryResourceUses, LengthOf(recoveryResourceUses))
     ;
-    outResult.recoveryTask = m_graph.addTask<ECSRenderDetail::FrameRecoveryGraphTask>(
+    result.recoveryTask = m_graph.addTask<ECSRenderDetail::FrameRecoveryGraphTask>(
         recoveryDesc,
         ECSRenderDetail::FrameRecoveryGraphTask::Payload{
             .frameTimingTransaction = inputs.frameTimingTransaction,
@@ -111,12 +110,12 @@ DeferredFrameTailBuilder::DeferredFrameTailBuilder(Core::GpuTaskGraph& graph)
             .retiresFrameTiming = inputs.recoveryRetiresFrameTiming,
         }
     );
-    if(!outResult.recoveryTask.valid()){
+    if(!result.recoveryTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred frame-recovery graph task"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    return true;
+    return result;
 }
 
 

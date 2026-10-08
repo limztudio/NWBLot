@@ -7,6 +7,8 @@
 
 #include "primitives.h"
 
+#include <global/expected.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -276,15 +278,13 @@ struct TextureUploadAspectLayout{
     u32 bytesPerBlock = 0u;
 };
 
-[[nodiscard]] bool ResolveTextureUploadAspect(
+[[nodiscard]] Expected<TextureUploadAspect::Enum> ResolveTextureUploadAspect(
     const FormatInfo& formatInfo,
-    TextureUploadAspect::Enum requestedAspect,
-    TextureUploadAspect::Enum& outAspect
+    TextureUploadAspect::Enum requestedAspect
 )noexcept;
-[[nodiscard]] bool GetTextureUploadAspectLayout(
+[[nodiscard]] Expected<TextureUploadAspectLayout> GetTextureUploadAspectLayout(
     const FormatInfo& formatInfo,
-    TextureUploadAspect::Enum requestedAspect,
-    TextureUploadAspectLayout& outLayout
+    TextureUploadAspect::Enum requestedAspect
 )noexcept;
 
 namespace FormatSupport{

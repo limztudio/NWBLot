@@ -23,12 +23,12 @@ bool ApplyReflectionQualitySmokeSettings(
     Impl::RendererSystem& renderer, const Impl::ReflectionSettings& baseSettings, Core::Alloc::GlobalArena& arena
 ){
     Impl::ReflectionSettings settings = baseSettings;
-    SmokeEnvironmentString value(arena);
-    if(ReadSmokeEnvironmentText("NWB_REFLECTION_SCREEN_STEPS", value)){
-        u64 parsed = 0u;
-        if(!ParseU64FromChars(AStringView(value.data(), value.size()), parsed) || parsed > Limit<u32>::s_Max)
+    const auto value = ReadSmokeEnvironmentText(arena, "NWB_REFLECTION_SCREEN_STEPS");
+    if(value){
+        const auto parsed = ParseU64FromChars(AStringView(value->data(), value->size()));
+        if(!parsed || *parsed > Limit<u32>::s_Max)
             return false;
-        settings.screenMaxSteps = static_cast<u32>(parsed);
+        settings.screenMaxSteps = static_cast<u32>(*parsed);
     }
     if(!renderer.setReflectionSettings(settings))
         return false;

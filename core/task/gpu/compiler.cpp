@@ -279,13 +279,13 @@ bool GpuTaskGraphCompiler::compile(
                 const GpuTaskGraphInitialOwnerHandoffSourceView& source =
                     resource.initialOwnerHandoffSources[sourceIndex]
                 ;
-                GpuTaskResourceRange plannedSourceRange;
+                Expected<GpuTaskResourceRange> plannedSourceRange = MakeUnexpected(Failure{});
                 const GpuPhysicalQueueInfo* const sourceQueueInfo = FindCompiledQueueInfo(
                     compiledPlan,
                     source.sourceQueue
                 );
                 if(
-                    !ResolveResourceRangeForPlanning(graph, resource, source.range, plannedSourceRange)
+                    !(plannedSourceRange = ResolveResourceRangeForPlanning(graph, resource, source.range))
                     || !source.sourceQueue.valid()
                     || !source.destinationQueue.valid()
                     || !sourceQueueInfo
@@ -345,17 +345,17 @@ bool GpuTaskGraphCompiler::compile(
     }
 
     const Timer packetizationBegin = TimerNow();
-    if(!BuildSubmissionPackets(
+    const auto timingEnvelope = BuildSubmissionPackets(
         graph,
         outAnalysis,
         outAssignments,
         options.packetizationPolicy,
         options.packetTimingEnvelope,
-        compiledPlan,
-        outCompiledGraph.m_packetTimingEnvelopeRange
-    )){
+        compiledPlan
+    );
+    if(!timingEnvelope)
         return false;
-    }
+    outCompiledGraph.m_packetTimingEnvelopeRange = *timingEnvelope;
     const f64 packetizationSeconds = DurationInSeconds<f64>(TimerNow(), packetizationBegin);
 
     const Timer resourceStatePlanningBegin = TimerNow();
@@ -523,13 +523,12 @@ bool GpuTaskGraphCompiler::compile(
         statistics.resourceSetMemberCount += graph.resourceSetAt(resourceSetIndex).memberCount;
     statistics.uploadBlobCount = graph.uploadBlobCount();
     for(usize uploadBlobIndex = 0u; uploadBlobIndex < graph.uploadBlobCount(); ++uploadBlobIndex){
-        usize byteSize = 0u;
-        if(!graph.uploadBlobData(
-            GpuUploadBlobId{ .generation = graph.generation(), .index = static_cast<u32>(uploadBlobIndex) },
-            byteSize
-        ))
+        const auto bytes = graph.uploadBlobData(
+            GpuUploadBlobId{ .generation = graph.generation(), .index = static_cast<u32>(uploadBlobIndex) }
+        );
+        if(!bytes)
             return false;
-        statistics.uploadBlobBytes += byteSize;
+        statistics.uploadBlobBytes += bytes->size();
     }
     statistics.explicitDependencyCount = outAnalysis.explicitEdgeCount();
     statistics.inferredDependencyCount = outAnalysis.inferredEdgeCount();

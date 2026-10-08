@@ -18,7 +18,7 @@ NWB_IMPL_BEGIN
 
 
 using RendererShaderPathResolveCallback = Function<
-    bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)
+    Expected<Name>(const Name& shaderName, AStringView variantName, const Name& stageName)
 >;
 
 

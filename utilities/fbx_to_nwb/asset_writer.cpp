@@ -162,18 +162,18 @@ void WriteVertexRef(Stream& out, const SourceVertexRef& ref){
 }
 
 bool EnsureOutputDirectory(const Path& outputPath, const AStringView assetKind){
-    ErrorCode errorCode;
     const Path parentPath = outputPath.parentPath();
     if(parentPath.empty())
         return true;
 
-    if(EnsureDirectories(parentPath, errorCode))
+    const auto created = EnsureDirectories(parentPath);
+    if(created)
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB {}: failed to create output directory '{}': {}")
         , StringConvert(assetKind)
         , PathToString<tchar>(parentPath)
-        , StringConvert(errorCode.message())
+        , StringConvert(created.error().message())
     );
     return false;
 }
@@ -620,12 +620,13 @@ bool WriteNwbAsset(
     const UtilityVector<JointMatrix>& skeletonBindPoseMatrices,
     const UtilityVector<JointMatrix>& inverseBindMatrices
 ){
-    OutputAssetType::Enum assetType = OutputAssetType::Mesh;
-    if(!ParseAssetTypeText(assetTypeText, assetType)){
+    const auto assetTypeResult = ParseAssetTypeText(assetTypeText);
+    if(!assetTypeResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset: {}"), StringConvert(OutputAssetTypeErrorText()));
         return false;
     }
 
+    const OutputAssetType::Enum assetType = *assetTypeResult;
     if(separateAssets && assetType != OutputAssetType::Bunch){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB asset: --separate-assets is only valid with asset type 'bunch'"));
         return false;
@@ -679,19 +680,20 @@ bool WriteNwbAsset(
     if(!AssetWriterSkeletonDetail::ValidateSplitSkinSource(mesh, skeletonJoints, skeletonBindPoseMatrices, inverseBindMatrices))
         return false;
 
-    AssetWriterSkeletonDetail::SkeletonOutputData skeletonOutput;
-    if(!AssetWriterSkeletonDetail::BuildSkeletonOutputData(
+    auto skeletonResult = AssetWriterSkeletonDetail::BuildSkeletonOutputData(
         skeletonJoints,
         skeletonBindPoseMatrices,
-        inverseBindMatrices,
-        skeletonOutput
-    ))
+        inverseBindMatrices
+    );
+    if(!skeletonResult)
         return false;
+    AssetWriterSkeletonDetail::SkeletonOutputData& skeletonOutput = *skeletonResult;
 
-    SourceMeshStreams splitMesh;
-    UtilityVector<MeshSkinInfluence> positionSkin;
-    if(!AssetWriterSkeletonDetail::BuildPositionAlignedSkinnedMesh(mesh, splitMesh, positionSkin))
+    auto alignedMesh = AssetWriterSkeletonDetail::BuildPositionAlignedSkinnedMesh(mesh);
+    if(!alignedMesh)
         return false;
+    SourceMeshStreams& splitMesh = alignedMesh->mesh;
+    UtilityVector<MeshSkinInfluence>& positionSkin = alignedMesh->skin;
     if(!AssetWriterSkeletonDetail::RemapSkinInfluences(positionSkin, skeletonOutput.oldToNewJointIndices))
         return false;
 

@@ -74,10 +74,10 @@ protected:
         return begin(generation) && m_builder.beginPanel("panel", { 10.0f, 10.0f, 360.0f, 400.0f });
     }
 
-    [[nodiscard]] bool sample(const DrawSnapshot& snapshot, const Name& name, ProgressPaintSample& out)const{
+    [[nodiscard]] Expected<ProgressPaintSample> sample(const DrawSnapshot& snapshot, const Name& name)const noexcept{
         const UiSkinRegion* region = m_skin.findRegion(name);
         if(!region)
-            return false;
+            return MakeUnexpected(Failure{});
         const f32 leftU = static_cast<f32>(region->rectangle.x) / m_skin.atlasWidth();
         const f32 rightU = static_cast<f32>(region->rectangle.x + region->rectangle.width) / m_skin.atlasWidth();
         const f32 topV = static_cast<f32>(region->rectangle.y) / m_skin.atlasHeight();
@@ -112,11 +112,10 @@ protected:
             }
         }
         if(candidate.quads == 0u)
-            return false;
+            return MakeUnexpected(Failure{});
         candidate.bounds.width = right - candidate.bounds.x;
         candidate.bounds.height = bottom - candidate.bounds.y;
-        out = candidate;
-        return true;
+        return candidate;
     }
 };
 
@@ -140,17 +139,17 @@ TEST_F(UiProgressBuilderTests, DeclarationCopiesFractionOptionsStyleAndResolvedN
     style.fillTint = {};
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    ProgressPaintSample track;
-    ProgressPaintSample fill;
-    ASSERT_TRUE(sample(snapshot, Name("progress.track"), track));
-    ASSERT_TRUE(sample(snapshot, Name("progress.fill"), fill));
-    EXPECT_FLOAT_EQ(track.bounds.width, 240.0f);
-    EXPECT_FLOAT_EQ(track.bounds.height, 32.0f);
-    EXPECT_FLOAT_EQ(fill.bounds.x - track.bounds.x, 4.0f);
-    EXPECT_FLOAT_EQ(fill.bounds.width, 58.0f);
-    EXPECT_FLOAT_EQ(fill.bounds.height, 24.0f);
-    EXPECT_FLOAT_EQ(fill.color.r, 0.4f);
-    EXPECT_FLOAT_EQ(fill.color.a, 0.5f);
+    const auto track = sample(snapshot, Name("progress.track"));
+    ASSERT_TRUE(track);
+    const auto fill = sample(snapshot, Name("progress.fill"));
+    ASSERT_TRUE(fill);
+    EXPECT_FLOAT_EQ(track->bounds.width, 240.0f);
+    EXPECT_FLOAT_EQ(track->bounds.height, 32.0f);
+    EXPECT_FLOAT_EQ(fill->bounds.x - track->bounds.x, 4.0f);
+    EXPECT_FLOAT_EQ(fill->bounds.width, 58.0f);
+    EXPECT_FLOAT_EQ(fill->bounds.height, 24.0f);
+    EXPECT_FLOAT_EQ(fill->color.r, 0.4f);
+    EXPECT_FLOAT_EQ(fill->color.a, 0.5f);
 }
 
 TEST_F(UiProgressBuilderTests, ExplicitFallbackRegionsResolveBeforeDeferredPaint){
@@ -161,10 +160,10 @@ TEST_F(UiProgressBuilderTests, ExplicitFallbackRegionsResolveBeforeDeferredPaint
     m_builder.progressStyle().fillFallback = Name("missing.fill");
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    ProgressPaintSample track;
-    ProgressPaintSample fill;
-    ASSERT_TRUE(sample(snapshot, Name("scrollbar.track"), track));
-    ASSERT_TRUE(sample(snapshot, Name("scrollbar.thumb.normal"), fill));
+    const auto track = sample(snapshot, Name("scrollbar.track"));
+    ASSERT_TRUE(track);
+    const auto fill = sample(snapshot, Name("scrollbar.thumb.normal"));
+    ASSERT_TRUE(fill);
 }
 
 TEST_F(UiProgressBuilderTests, FiniteFractionsClampAtExactEmptyAndFullGeometry){
@@ -174,14 +173,15 @@ TEST_F(UiProgressBuilderTests, FiniteFractionsClampAtExactEmptyAndFullGeometry){
         ASSERT_TRUE(m_builder.progress("amount", fractions[index], MakeOptions()));
         ASSERT_TRUE(finishPanel());
         const DrawSnapshot snapshot = m_paint.freeze();
-        ProgressPaintSample track;
-        ProgressPaintSample fill;
-        ASSERT_TRUE(sample(snapshot, Name("progress.track"), track));
-        EXPECT_EQ(sample(snapshot, Name("progress.fill"), fill), index >= 2u);
+        const auto track = sample(snapshot, Name("progress.track"));
+        ASSERT_TRUE(track);
+        const auto fill = sample(snapshot, Name("progress.fill"));
+        EXPECT_EQ(fill.has_value(), index >= 2u);
         if(index >= 2u){
-            EXPECT_FLOAT_EQ(fill.bounds.x, track.bounds.x + 4.0f);
-            EXPECT_FLOAT_EQ(fill.bounds.width, track.bounds.width - 8.0f);
-            EXPECT_FLOAT_EQ(fill.bounds.height, track.bounds.height - 8.0f);
+            ASSERT_TRUE(fill);
+            EXPECT_FLOAT_EQ(fill->bounds.x, track->bounds.x + 4.0f);
+            EXPECT_FLOAT_EQ(fill->bounds.width, track->bounds.width - 8.0f);
+            EXPECT_FLOAT_EQ(fill->bounds.height, track->bounds.height - 8.0f);
         }
         m_context.abandonFrame();
     }
@@ -192,14 +192,14 @@ TEST_F(UiProgressBuilderTests, TinyFillClipsNaturalBorderTexelsWithoutCompressin
     ASSERT_TRUE(m_builder.progress("amount", 0.01, MakeOptions()));
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    ProgressPaintSample track;
-    ProgressPaintSample fill;
-    ASSERT_TRUE(sample(snapshot, Name("progress.track"), track));
-    ASSERT_TRUE(sample(snapshot, Name("progress.fill"), fill));
-    EXPECT_NEAR(fill.bounds.width, (track.bounds.width - 8.0f) * 0.01f, 0.000001f);
-    EXPECT_LT(fill.maximumU, 134.0f / 256.0f);
-    EXPECT_NEAR(fill.maximumU, (128.0f + fill.bounds.width) / 256.0f, 0.000001f);
-    EXPECT_EQ(fill.quads, 3u);
+    const auto track = sample(snapshot, Name("progress.track"));
+    ASSERT_TRUE(track);
+    const auto fill = sample(snapshot, Name("progress.fill"));
+    ASSERT_TRUE(fill);
+    EXPECT_NEAR(fill->bounds.width, (track->bounds.width - 8.0f) * 0.01f, 0.000001f);
+    EXPECT_LT(fill->maximumU, 134.0f / 256.0f);
+    EXPECT_NEAR(fill->maximumU, (128.0f + fill->bounds.width) / 256.0f, 0.000001f);
+    EXPECT_EQ(fill->quads, 3u);
 }
 
 TEST_F(UiProgressBuilderTests, SubresolutionPositiveFractionRemainsAValidEmptyFill){
@@ -207,9 +207,8 @@ TEST_F(UiProgressBuilderTests, SubresolutionPositiveFractionRemainsAValidEmptyFi
     ASSERT_TRUE(m_builder.progress("amount", BitCast<f64>(1ull), MakeOptions()));
     ASSERT_TRUE(finishPanel());
     const DrawSnapshot snapshot = m_paint.freeze();
-    ProgressPaintSample sampleOut;
-    EXPECT_TRUE(sample(snapshot, Name("progress.track"), sampleOut));
-    EXPECT_FALSE(sample(snapshot, Name("progress.fill"), sampleOut));
+    EXPECT_TRUE(sample(snapshot, Name("progress.track")));
+    EXPECT_FALSE(sample(snapshot, Name("progress.fill")));
 }
 
 TEST_F(UiProgressBuilderTests, ExternalClipConstrainsPaintAndBothNestedClipsAreRestored){
@@ -220,10 +219,10 @@ TEST_F(UiProgressBuilderTests, ExternalClipConstrainsPaintAndBothNestedClipsAreR
     ASSERT_TRUE(m_paint.popClip());
     m_paint.fillRect({ 60.0f, 80.0f, 8.0f, 8.0f }, { 1.0f, 0.0f, 0.0f, 1.0f });
     const DrawSnapshot snapshot = m_paint.freeze();
-    ProgressPaintSample fill;
-    ASSERT_TRUE(sample(snapshot, Name("progress.fill"), fill));
-    EXPECT_FLOAT_EQ(fill.bounds.x, 20.0f);
-    EXPECT_FLOAT_EQ(fill.bounds.width, 20.0f);
+    const auto fill = sample(snapshot, Name("progress.fill"));
+    ASSERT_TRUE(fill);
+    EXPECT_FLOAT_EQ(fill->bounds.x, 20.0f);
+    EXPECT_FLOAT_EQ(fill->bounds.width, 20.0f);
     bool sentinel = false;
     for(const DrawCommand& command : snapshot.commands()){
         if(command.material != PaintMaterial::Solid)

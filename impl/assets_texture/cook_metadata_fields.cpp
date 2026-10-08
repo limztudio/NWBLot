@@ -40,20 +40,21 @@ using TextureFormat::s_TextureDataExtension;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ReadTextureDimension(
+[[nodiscard]] Expected<TextureDimension::Enum> ReadTextureDimension(
     const Path& nwbFilePath,
-    const Value& asset,
-    TextureDimension::Enum& outDimension
+    const Value& asset
 ){
     AStringView text;
-    if(!::NWB::Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_DimensionField, true, text))
-        return false;
+    auto textResult = ::NWB::Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_DimensionField, true);
+    if(!textResult)
+        return MakeUnexpected(Failure{});
+    text = textResult->text;
     if(text == s_Texture2DDimension)
-        outDimension = TextureDimension::Texture2D;
+        return TextureDimension::Texture2D;
     else if(text == s_TextureCubeDimension)
-        outDimension = TextureDimension::TextureCube;
+        return TextureDimension::TextureCube;
     else if(text == s_Texture3DDimension)
-        outDimension = TextureDimension::Texture3D;
+        return TextureDimension::Texture3D;
     else{
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be '{}', '{}', or '{}'")
             , StringConvert(s_DiagnosticPrefix)
@@ -63,9 +64,8 @@ using TextureFormat::s_TextureDataExtension;
             , StringConvert(s_TextureCubeDimension)
             , StringConvert(s_Texture3DDimension)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    return true;
 }
 
 [[nodiscard]] bool ValidateTextureDataFileName(

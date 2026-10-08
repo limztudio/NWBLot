@@ -59,7 +59,6 @@ static constexpr AStringView s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_LIVE = "tests/n
 static constexpr AStringView s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE = "tests/namesymbols/before_registry_retired";
 static constexpr AStringView s_CORE_ALLOC_HEAP_BACKING = "core/alloc/heap_backing";
 static constexpr AStringView s_BETA = "beta";
-static constexpr AStringView s_UNCHANGED = "unchanged";
 static constexpr AStringView s_UNIT = "unit";
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
 static constexpr AStringView s_BIN_SH = "/bin/sh";
@@ -223,58 +222,70 @@ struct U32VectorView{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-TEST(Global, ExhaustedPodReadsPreserveCursorAndOutput){
+TEST(Global, ExhaustedPodReadsPreserveCursor){
     Vector<u8> binary;
     const u32 writtenValue = 0x11223344u;
     AppendPOD(binary, writtenValue);
 
     usize cursor = 0u;
-    u32 readValue = 0u;
-    EXPECT_TRUE(ReadPOD(binary, cursor, readValue));
-    EXPECT_EQ(readValue, writtenValue);
+    const auto readValue = ReadPOD<u32>(binary, cursor);
+    ASSERT_TRUE(readValue);
+    EXPECT_EQ(*readValue, writtenValue);
     EXPECT_EQ(cursor, sizeof(writtenValue));
 
     const usize failedCursor = cursor;
-    u32 unchangedValue = 0xAABBCCDDu;
-    EXPECT_FALSE(ReadPOD(binary, cursor, unchangedValue));
+    EXPECT_FALSE(ReadPOD<u32>(binary, cursor));
     EXPECT_EQ(cursor, failedCursor);
-    EXPECT_EQ(unchangedValue, 0xAABBCCDDu);
 }
 
-TEST(Global, MultiplicationOverflowClearsResult){
-    usize product = Limit<usize>::s_Max;
-    EXPECT_FALSE(::TryMultiply<usize>(Limit<usize>::s_Max, s_ExpectedDualCount, product));
-    EXPECT_EQ(product, 0u);
+TEST(Global, MultiplicationDistinguishesOverflowSignedBoundariesAndSuccessfulZero){
+    EXPECT_FALSE(::TryMultiply<usize>(Limit<usize>::s_Max, s_ExpectedDualCount));
+    EXPECT_FALSE(::TryMultiply<i64>(Limit<i64>::s_Min, -1));
+    EXPECT_FALSE(::TryMultiply<i64>(Limit<i64>::s_Max, 2));
+    constexpr auto s_Zero = ::TryMultiply<u64>(0u, Limit<u64>::s_Max);
+    static_assert(s_Zero && *s_Zero == 0u);
+    constexpr auto s_Minimum = ::TryMultiply<i64>(Limit<i64>::s_Min, 1);
+    static_assert(s_Minimum && *s_Minimum == Limit<i64>::s_Min);
+    constexpr auto s_Negative = ::TryMultiply<i64>(-3, -7);
+    static_assert(s_Negative && *s_Negative == 21);
+    EXPECT_EQ(*s_Zero, 0u);
+    EXPECT_EQ(*s_Minimum, Limit<i64>::s_Min);
+}
+
+TEST(Global, CheckedAdditionDistinguishesSignedLimitsAndSuccessfulZero){
+    EXPECT_FALSE(AddNoOverflow<i64>(Limit<i64>::s_Max, 1));
+    EXPECT_FALSE(AddNoOverflow<i64>(Limit<i64>::s_Min, -1));
+    const auto lower = AddNoOverflow<i64>(Limit<i64>::s_Min, 1);
+    ASSERT_TRUE(lower);
+    EXPECT_EQ(*lower, Limit<i64>::s_Min + 1);
+    const auto upper = AddNoOverflow<i64>(Limit<i64>::s_Max, -1);
+    ASSERT_TRUE(upper);
+    EXPECT_EQ(*upper, Limit<i64>::s_Max - 1);
+    const auto zero = AddNoOverflow<i64>(Limit<i64>::s_Max, -Limit<i64>::s_Max);
+    ASSERT_TRUE(zero);
+    EXPECT_EQ(*zero, 0);
+    EXPECT_FALSE(AddNoOverflow<u64>(Limit<u64>::s_Max, 1u));
 }
 
 TEST(Global, NumericParsersRespectViewBoundsAndRejectEmptyInput){
-    i64 signedValue = 0;
-    EXPECT_TRUE(ParseI64(AStringView("-42trailing").substr(0u, 3u), signedValue));
-    EXPECT_EQ(signedValue, -42);
-    EXPECT_FALSE(ParseI64("42x", signedValue));
-
-    u64 unsignedValue = 0u;
-    EXPECT_TRUE(ParseU64(AStringView("42trailing").substr(0u, 2u), unsignedValue));
-    EXPECT_EQ(unsignedValue, 42u);
-    EXPECT_FALSE(ParseU64("-1", unsignedValue));
-
-    signedValue = 99;
-    unsignedValue = 99u;
-    EXPECT_FALSE(ParseI64FromChars({}, signedValue));
-    EXPECT_FALSE(ParseU64FromChars({}, unsignedValue));
-    EXPECT_EQ(signedValue, 99);
-    EXPECT_EQ(unsignedValue, 99u);
-
-    f64 doubleValue = 99.0;
-    f32 floatValue = 99.0f;
-    EXPECT_FALSE(ParseF64FromChars({}, doubleValue));
-    EXPECT_FALSE(ParseF32FromChars({}, floatValue));
-    EXPECT_EQ(doubleValue, 99.0);
-    EXPECT_EQ(floatValue, 99.0f);
-    EXPECT_TRUE(ParseF64FromChars(AStringView("1.25trailing").substr(0u, 4u), doubleValue));
-    EXPECT_TRUE(ParseF32FromChars(AStringView("1.25trailing").substr(0u, 4u), floatValue));
-    EXPECT_EQ(doubleValue, 1.25);
-    EXPECT_EQ(floatValue, 1.25f);
+    const auto signedValue = ParseI64(AStringView("-42trailing").substr(0u, 3u));
+    ASSERT_TRUE(signedValue);
+    EXPECT_EQ(*signedValue, -42);
+    EXPECT_FALSE(ParseI64("42x"));
+    const auto unsignedValue = ParseU64(AStringView("42trailing").substr(0u, 2u));
+    ASSERT_TRUE(unsignedValue);
+    EXPECT_EQ(*unsignedValue, 42u);
+    EXPECT_FALSE(ParseU64("-1"));
+    EXPECT_FALSE(ParseI64FromChars({}));
+    EXPECT_FALSE(ParseU64FromChars({}));
+    EXPECT_FALSE(ParseF64FromChars({}));
+    EXPECT_FALSE(ParseF32FromChars({}));
+    const auto doubleValue = ParseF64FromChars(AStringView("1.25trailing").substr(0u, 4u));
+    const auto floatValue = ParseF32FromChars(AStringView("1.25trailing").substr(0u, 4u));
+    ASSERT_TRUE(doubleValue);
+    ASSERT_TRUE(floatValue);
+    EXPECT_EQ(*doubleValue, 1.25);
+    EXPECT_EQ(*floatValue, 1.25f);
 }
 
 TEST(Global, FixedBufferTextViewsTruncateAtCapacityWithoutReadingPastSlice){
@@ -314,38 +325,26 @@ TEST(Global, AutoRegistrationQueueDeduplicatesAndSnapshots){
 }
 
 TEST(Global, Vector3TryNormalizeRejectsInvalidValues){
-    SIMDVector normalized = VectorSet(9.0f, 8.0f, 7.0f, 6.0f);
-    const SIMDVector unchanged = normalized;
-
-
-    normalized = unchanged;
-    EXPECT_FALSE(Vector3TryNormalize(VectorZero(), normalized));
-    EXPECT_TRUE(Vector3Equal(normalized, unchanged));
-
-    EXPECT_FALSE(Vector3TryNormalize(s_SIMDQNaN, normalized));
-    EXPECT_TRUE(Vector3Equal(normalized, unchanged));
-
-    EXPECT_FALSE(Vector3TryNormalize(s_SIMDInfinity, normalized));
-    EXPECT_TRUE(Vector3Equal(normalized, unchanged));
+    EXPECT_FALSE(Vector3TryNormalize(VectorZero()));
+    EXPECT_FALSE(Vector3TryNormalize(s_SIMDQNaN));
+    EXPECT_FALSE(Vector3TryNormalize(s_SIMDInfinity));
 }
 
-TEST(Global, MemoryMapLookupUsesHalfOpenRangesAndClearsMissingOutput){
+TEST(Global, MemoryMapLookupUsesHalfOpenRangesAndRejectsMissingAddresses){
     constexpr AStringView s_Maps =
         "00001000-00002000 r-xp 00000020 00:00 0 /tmp/first.so\n"
         "00003000-00004000 r--p 00000000 00:00 0 /tmp/second.so\n"
     ;
-
     Vector<LinuxProcessMemoryMapEntry> entries;
     ParseLinuxProcessMemoryMaps(s_Maps, entries);
     ASSERT_EQ(entries.size(), s_ExpectedDualCount);
-
-    LinuxProcessMemoryMapEntry entry;
-    EXPECT_TRUE(FindLinuxProcessMemoryMapForAddress(entries, 0x1000u, entry));
-    EXPECT_EQ(entry.path, AStringView("/tmp/first.so"));
-    EXPECT_TRUE(FindLinuxProcessMemoryMapForAddress(entries, 0x3fffu, entry));
-    EXPECT_EQ(entry.path, AStringView("/tmp/second.so"));
-    EXPECT_FALSE(FindLinuxProcessMemoryMapForAddress(entries, 0x2000u, entry));
-    EXPECT_TRUE(entry.path.empty());
+    const auto first = FindLinuxProcessMemoryMapForAddress(entries, 0x1000u);
+    const auto last = FindLinuxProcessMemoryMapForAddress(entries, 0x3fffu);
+    ASSERT_TRUE(first);
+    ASSERT_TRUE(last);
+    EXPECT_EQ(first->path, AStringView("/tmp/first.so"));
+    EXPECT_EQ(last->path, AStringView("/tmp/second.so"));
+    EXPECT_FALSE(FindLinuxProcessMemoryMapForAddress(entries, 0x2000u));
 }
 
 TEST(Global, GrowingCapacitySaturatesAtSizeLimit){
@@ -353,8 +352,7 @@ TEST(Global, GrowingCapacitySaturatesAtSizeLimit){
 }
 
 TEST(Global, CheckedDivideUpRejectsZeroDivisor){
-    u32 result = 99u;
-    EXPECT_FALSE(::DivideUpChecked(17u, 0u, result));
+    EXPECT_FALSE(::DivideUpChecked(17u, 0u));
 }
 
 TEST(Global, TriangleAreaRejectsExactThreshold){
@@ -402,45 +400,44 @@ TEST(Global, ConstexprNameViewsPreserveBoundedIdentityAndSymbolCallbacks){
 TEST(Global, Utf8DecoderRespectsBoundedNonterminatedInput){
     const char bytes[]{ static_cast<char>(0xF0), static_cast<char>(0x9F), static_cast<char>(0x98), static_cast<char>(0x80) };
     const AStringView text(bytes, LengthOf(bytes));
-    u32 unicode = 0u;
-    EXPECT_EQ(DecodeUtf8CodePoint(text, unicode), 4);
-    EXPECT_EQ(unicode, 0x1F600u);
+    const auto decoded = DecodeUtf8CodePoint(text);
+    ASSERT_TRUE(decoded);
+    EXPECT_EQ(decoded->byteCount, 4);
+    EXPECT_EQ(decoded->codePoint, 0x1F600u);
     for(usize size = 0u; size < text.size(); ++size)
-        EXPECT_EQ(DecodeUtf8CodePoint(text.substr(0u, size), unicode), 0);
-
+        EXPECT_FALSE(DecodeUtf8CodePoint(text.substr(0u, size)));
     const char overlong[]{ static_cast<char>(0xC0), static_cast<char>(0x80) };
-    EXPECT_EQ(DecodeUtf8CodePoint(AStringView(overlong, LengthOf(overlong)), unicode), 0);
+    EXPECT_FALSE(DecodeUtf8CodePoint(AStringView(overlong, LengthOf(overlong))));
 }
 
 TEST(Global, EnvironmentVariableNamesSupportSlicesAndOutputAliasing){
     NWB::Tests::TestArena<> testArena;
-    ::AString<NWB::Core::Alloc::GlobalArena> expected(testArena.arena);
-    ASSERT_TRUE(ReadEnvironmentVariable(AStringView("PATH"), expected));
-    ::AString<NWB::Core::Alloc::GlobalArena> actual(testArena.arena);
-    ASSERT_TRUE(ReadEnvironmentVariable(AStringView("PATH.trailing").substr(0u, 4u), actual));
-    EXPECT_EQ(actual, expected);
-
-    actual.assign("PATH");
-    ASSERT_TRUE(ReadEnvironmentVariable(AStringView(actual), actual));
-    EXPECT_EQ(actual, expected);
+    const auto expected = ReadEnvironmentVariable(testArena.arena, AStringView("PATH"));
+    const auto actual = ReadEnvironmentVariable(testArena.arena, AStringView("PATH.trailing").substr(0u, 4u));
+    ASSERT_TRUE(expected);
+    ASSERT_TRUE(actual);
+    EXPECT_EQ(*actual, *expected);
+    ::AString<NWB::Core::Alloc::GlobalArena> name("PATH", testArena.arena);
+    auto aliased = ReadEnvironmentVariable(testArena.arena, AStringView(name));
+    ASSERT_TRUE(aliased);
+    name = Move(*aliased);
+    EXPECT_EQ(name, *expected);
     const char invalidName[]{ 'P', 'A', 'T', 'H', '\0', 'X' };
-    EXPECT_FALSE(ReadEnvironmentVariable(AStringView(invalidName, LengthOf(invalidName)), actual));
-    EXPECT_TRUE(actual.empty());
+    EXPECT_FALSE(ReadEnvironmentVariable(testArena.arena, AStringView(invalidName, LengthOf(invalidName))));
 }
 
 TEST(Global, FileWriteSizeRejectionPreservesExistingOutput){
     NWB::Tests::TestArena<> testArena;
     const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/oversized_file_write");
     const auto outputPath = root / "output.bin";
-    ErrorCode error;
-    ASSERT_TRUE(EnsureEmptyDirectory(root, error));
+    ASSERT_TRUE(EnsureEmptyDirectory(root));
     ASSERT_TRUE(WriteTextFile(outputPath, "retained"));
 
     EXPECT_FALSE(WriteBinaryFile(outputPath, OversizedBinarySource{}));
     AString retained(testArena.arena);
     ASSERT_TRUE(ReadTextFile(outputPath, retained));
     EXPECT_EQ(retained, "retained");
-    EXPECT_TRUE(RemoveAllIfExists(root, error));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
@@ -457,26 +454,26 @@ TEST(Global, ProcessArgumentValidationPreservesExistingOutput){
     NWB::Tests::TestArena<> testArena;
     const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/invalid_process_arguments");
     const auto outputPath = root / "output.txt";
-    ErrorCode error;
-    ASSERT_TRUE(EnsureEmptyDirectory(root, error));
+    ASSERT_TRUE(EnsureEmptyDirectory(root));
     ASSERT_TRUE(WriteTextFile(outputPath, AStringView("retained")));
     const auto outputPathText = PathToString<char>(testArena.arena, outputPath);
 
     const char invalidArgument[]{ 'a', '\0', 'b' };
     const AStringView arguments[]{ "unused_program", AStringView(invalidArgument, LengthOf(invalidArgument)) };
-    EXPECT_EQ(RunProcessRedirectedToFile(testArena.arena, arguments, AStringView(outputPathText)), -1);
-    EXPECT_EQ(RunProcessRedirectedToFile(testArena.arena, {}, AStringView(outputPathText)), -1);
+    EXPECT_FALSE(RunProcessRedirectedToFile(testArena.arena, arguments, AStringView(outputPathText)));
+    EXPECT_FALSE(RunProcessRedirectedToFile(testArena.arena, {}, AStringView(outputPathText)));
     AString output(testArena.arena);
     ASSERT_TRUE(ReadTextFile(outputPath, output));
     EXPECT_EQ(output, "retained");
-    EXPECT_TRUE(RemoveAllIfExists(root, error));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
 #if defined(NWB_PLATFORM_WINDOWS)
 TEST(Global, WindowsProcessInputsSupportBoundedViews){
     NWB::Tests::TestArena<> testArena;
-    ::AString<NWB::Core::Alloc::GlobalArena> executableText(testArena.arena);
-    ASSERT_TRUE(ReadEnvironmentVariable("ComSpec", executableText));
+    auto executableResult = ReadEnvironmentVariable(testArena.arena, "ComSpec");
+    ASSERT_TRUE(executableResult);
+    auto executableText = Move(*executableResult);
     const Path<NWB::Core::Alloc::GlobalArena> executablePath(testArena.arena, AStringView(executableText));
     ::AString<NWB::Core::Alloc::GlobalArena> searchPathText = PathToString<char>(testArena.arena, executablePath.parentPath());
     ::AString<NWB::Core::Alloc::GlobalArena> executableNameText = PathToString<char>(testArena.arena, executablePath.filename());
@@ -492,8 +489,7 @@ TEST(Global, WindowsProcessInputsSupportBoundedViews){
 
     const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/bounded_process");
     const auto outputPath = root / "combined output.txt";
-    ErrorCode error;
-    ASSERT_TRUE(EnsureEmptyDirectory(root, error));
+    ASSERT_TRUE(EnsureEmptyDirectory(root));
     ::AString<NWB::Core::Alloc::GlobalArena> outputPathText = PathToString<char>(testArena.arena, outputPath);
     const usize outputPathLength = outputPathText.size();
     const usize executableLength = executableText.size();
@@ -504,34 +500,32 @@ TEST(Global, WindowsProcessInputsSupportBoundedViews){
         "/c",
         "echo stdout&echo stderr 1>&2&exit /b 23"
     };
-    bool exitCodeQueryFailed = true;
-    EXPECT_EQ(RunProcessRedirectedToFile(
+    const auto exitCode = RunProcessRedirectedToFile(
         testArena.arena,
         arguments,
-        AStringView(outputPathText).substr(0u, outputPathLength),
-        &exitCodeQueryFailed
-    ), 23);
-    EXPECT_FALSE(exitCodeQueryFailed);
+        AStringView(outputPathText).substr(0u, outputPathLength)
+    );
+    ASSERT_TRUE(exitCode);
+    EXPECT_EQ(*exitCode, 23);
     ::AString<NWB::Core::Alloc::GlobalArena> output(testArena.arena);
     ASSERT_TRUE(ReadTextFile(outputPath, output));
     EXPECT_NE(AStringView(output).find("stdout"), AStringView::npos);
     EXPECT_NE(AStringView(output).find("stderr"), AStringView::npos);
-    EXPECT_TRUE(RemoveAllIfExists(root, error));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
-TEST(Global, SharedLibraryAcceptsBoundedNamesAndResetsFailedSymbols){
+TEST(Global, SharedLibraryAcceptsBoundedNamesAndRejectsInvalidSymbols){
     NWB::Tests::TestArena<> testArena;
     SharedLibrary library;
     constexpr TStringView s_LibraryName = NWB_TEXT("kernel32.dll.trailing");
     ASSERT_TRUE(library.open(testArena.arena, s_LibraryName.substr(0u, 12u)));
     using CurrentProcessIdFn = DWORD(WINAPI*)();
-    CurrentProcessIdFn currentProcessId = nullptr;
-    ASSERT_TRUE(library.resolve(testArena.arena, AStringView("GetCurrentProcessId.trailing").substr(0u, 19u), currentProcessId));
-    EXPECT_EQ(currentProcessId(), ::GetCurrentProcessId());
+    const auto currentProcessId = library.resolve<CurrentProcessIdFn>(testArena.arena, AStringView("GetCurrentProcessId.trailing").substr(0u, 19u));
+    ASSERT_TRUE(currentProcessId);
+    EXPECT_EQ((*currentProcessId)(), ::GetCurrentProcessId());
 
     const char invalidSymbol[]{ 'G', '\0', 'e' };
-    EXPECT_FALSE(library.resolve(testArena.arena, AStringView(invalidSymbol, LengthOf(invalidSymbol)), currentProcessId));
-    EXPECT_EQ(currentProcessId, nullptr);
+    EXPECT_FALSE(library.resolve<CurrentProcessIdFn>(testArena.arena, AStringView(invalidSymbol, LengthOf(invalidSymbol))));
 }
 #endif
 
@@ -651,8 +645,7 @@ TEST(Global, NameHashDebugTextRejectsInvalidHex){
     char hashText[NameDetail::s_DebugHashTextLength + 1u] = {};
     NameDetail::HashToDebugString(source, hashText, sizeof(hashText));
     hashText[0u] = 'g';
-    NameHash decoded = {};
-    EXPECT_FALSE(NameDetail::DecodeDebugHashText(AStringView(hashText), decoded));
+    EXPECT_FALSE(NameDetail::DecodeDebugHashText(AStringView(hashText)));
 }
 
 TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
@@ -694,11 +687,11 @@ TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
 #endif
 
     NameSymbols::ClearRuntimeSymbols();
-    NameSymbolTestPath executableDirectory(liveOwner);
-    ASSERT_TRUE(GetExecutableDirectory(executableDirectory));
-    NameSymbolTestPath executableName(liveOwner);
-    ASSERT_TRUE(GetExecutableName(executableName));
-    NameSymbolTestPath namesymPath = executableDirectory / executableName;
+    const auto executableDirectory = GetExecutableDirectory(liveOwner);
+    const auto executableName = GetExecutableName(liveOwner);
+    ASSERT_TRUE(executableDirectory);
+    ASSERT_TRUE(executableName);
+    NameSymbolTestPath namesymPath = *executableDirectory / *executableName;
     namesymPath.replaceExtension(NWB_TEXT(".namesym"));
     // The application exception path exports after its scoped runtime callbacks have already detached.
     NameSymbols::UninstallRuntimeRegistry();
@@ -715,30 +708,16 @@ TEST(Global, NameSymbolsCollectArenaOwnersWithoutPerformanceCapture){
     EXPECT_EQ(namesymText.find(s_TESTS_NAMESYMBOLS_BEFORE_REGISTRY_RETIRE.data()), decltype(namesymText)::npos);
     EXPECT_EQ(namesymText.find(s_CORE_ALLOC_HEAP_BACKING.data()), decltype(namesymText)::npos);
 #endif
-    ErrorCode removeError;
-    if(!RemoveFile(namesymPath, removeError))
-        EXPECT_FALSE(removeError);
+    EXPECT_TRUE(RemoveFile(namesymPath));
 }
 
-TEST(Global, RejectedStringReadsDoNotAdvanceCursor){
+TEST(Global, TruncatedStringReadsDoNotAdvanceCursor){
     Vector<u8> truncated;
     AppendPOD(truncated, static_cast<u32>(4u));
     truncated.push_back(static_cast<u8>('x'));
-
     usize cursor = 0u;
-    AString parsed(s_UNCHANGED);
-    EXPECT_FALSE(ReadString(truncated, cursor, parsed));
+    EXPECT_FALSE(ReadString(truncated, cursor));
     EXPECT_EQ(cursor, 0u);
-    EXPECT_EQ(parsed, s_UNCHANGED);
-
-    Vector<u8> embeddedNull;
-    const char textWithNull[] = { 'a', '\0', 'b' };
-    EXPECT_TRUE(AppendString(embeddedNull, AStringView(textWithNull, sizeof(textWithNull))));
-
-    ACompactString compact(s_UNCHANGED);
-    EXPECT_FALSE(ReadString(embeddedNull, cursor, compact));
-    EXPECT_EQ(cursor, 0u);
-    EXPECT_EQ(compact.view(), AStringView(s_UNCHANGED));
 }
 
 TEST(Global, RejectedACompactStringAssignResetsText){
@@ -841,19 +820,19 @@ TEST(Global, TextUtilitiesRejectNullShortAndOverflowingInput){
     EXPECT_FALSE(CanRepresentU64<i64>(static_cast<u64>(Limit<i64>::s_Max) + 1u));
     EXPECT_FALSE(StartsWith(AStringView("al"), s_ALPHA));
 
-    u64 value = 0u;
-    EXPECT_TRUE(ParseVariableHexU64(AStringView("FFFFFFFFFFFFFFFF"), value));
-    EXPECT_EQ(value, Limit<u64>::s_Max);
-    EXPECT_FALSE(ParseVariableHexU64(AStringView(), value));
-    EXPECT_FALSE(ParseVariableHexU64(AStringView("0x"), value));
-    EXPECT_FALSE(ParseVariableHexU64(AStringView("10000000000000000"), value));
-    EXPECT_FALSE(ParseVariableHexU64(AStringView("xyz"), value));
+    const auto value = ParseVariableHexU64(AStringView("FFFFFFFFFFFFFFFF"));
+    ASSERT_TRUE(value);
+    EXPECT_EQ(*value, Limit<u64>::s_Max);
+    EXPECT_FALSE(ParseVariableHexU64(AStringView()));
+    EXPECT_FALSE(ParseVariableHexU64(AStringView("0x")));
+    EXPECT_FALSE(ParseVariableHexU64(AStringView("10000000000000000")));
+    EXPECT_FALSE(ParseVariableHexU64(AStringView("xyz")));
 
     constexpr AStringView s_KeyValueText("alpha=one\r\nbeta=42\nempty=\n");
-    AStringView textValue;
-    EXPECT_TRUE(FindLineKeyValue(s_KeyValueText, "empty", textValue));
-    EXPECT_TRUE(textValue.empty());
-    EXPECT_FALSE(FindLineKeyValue(s_KeyValueText, "missing", textValue));
+    const auto textValue = FindLineKeyValue(s_KeyValueText, "empty");
+    ASSERT_TRUE(textValue);
+    EXPECT_TRUE(textValue->empty());
+    EXPECT_FALSE(FindLineKeyValue(s_KeyValueText, "missing"));
 }
 
 #if defined(NWB_PLATFORM_LINUX) && !defined(NWB_PLATFORM_ANDROID)
@@ -870,12 +849,12 @@ TEST(Global, CaptureProcessOutputReapsTruncatedChild){
     const usize lineEnd = output.find('\n');
     ASSERT_NE(lineEnd, AString::npos);
 
-    u64 childPidValue = 0u;
-    ASSERT_TRUE(ParseU64(AStringView(output.data(), lineEnd), childPidValue));
-    ASSERT_GT(childPidValue, 0u);
-    ASSERT_LE(childPidValue, static_cast<u64>(Limit<pid_t>::s_Max));
+    const auto childPidValue = ParseU64(AStringView(output.data(), lineEnd));
+    ASSERT_TRUE(childPidValue);
+    ASSERT_GT(*childPidValue, 0u);
+    ASSERT_LE(*childPidValue, static_cast<u64>(Limit<pid_t>::s_Max));
 
-    const pid_t childPid = static_cast<pid_t>(childPidValue);
+    const pid_t childPid = static_cast<pid_t>(*childPidValue);
     int status = 0;
     errno = 0;
     const pid_t waitResult = ::waitpid(childPid, &status, WNOHANG);
@@ -907,8 +886,7 @@ TEST(Global, RunProcessRedirectedToFileCapturesBothStreams){
     NWB::Tests::TestArena<> testArena;
     const Path<NWB::Core::Alloc::GlobalArena> root(testArena.arena, "global_test_artifacts/redirected_process");
     const Path<NWB::Core::Alloc::GlobalArena> outputPath = root / "combined output.txt";
-    ErrorCode error;
-    ASSERT_TRUE(EnsureEmptyDirectory(root, error));
+    ASSERT_TRUE(EnsureEmptyDirectory(root));
     ASSERT_TRUE(WriteTextFile(outputPath, AStringView("stale")));
 
     const AStringView argv[] = {
@@ -917,13 +895,15 @@ TEST(Global, RunProcessRedirectedToFileCapturesBothStreams){
         AStringView("printf stdout; printf stderr >&2; exit 23; printf ignored").substr(0u, 41u)
     };
     const auto outputPathText = PathToString<char>(testArena.arena, outputPath);
-    EXPECT_EQ(RunProcessRedirectedToFile(testArena.arena, argv, AStringView(outputPathText)), 23);
-    EXPECT_EQ(RunProcessRedirectedToFile(testArena.arena, {}, AStringView(outputPathText)), -1);
+    const auto exitCode = RunProcessRedirectedToFile(testArena.arena, argv, AStringView(outputPathText));
+    ASSERT_TRUE(exitCode);
+    EXPECT_EQ(*exitCode, 23);
+    EXPECT_FALSE(RunProcessRedirectedToFile(testArena.arena, {}, AStringView(outputPathText)));
 
     AString output;
     ASSERT_TRUE(ReadTextFile(outputPath, output));
     EXPECT_EQ(AStringView(output.data(), output.size()), AStringView("stdoutstderr"));
-    EXPECT_TRUE(RemoveAllIfExists(root, error));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 #endif
 
@@ -934,24 +914,23 @@ TEST(Global, FilesystemMovePathToDirectory){
     const Path<NWB::Core::Alloc::GlobalArena> destinationDirectory = root / "moved";
     const Path<NWB::Core::Alloc::GlobalArena> destination = destinationDirectory / "source.txt";
 
-    ErrorCode error;
-    EXPECT_TRUE(EnsureEmptyDirectory(root, error));
+    EXPECT_TRUE(EnsureEmptyDirectory(root));
     EXPECT_TRUE(WriteTextFile(source, AStringView("fresh")));
-    EXPECT_TRUE(EnsureDirectories(destinationDirectory, error));
-    EXPECT_FALSE(error);
+    EXPECT_TRUE(EnsureDirectories(destinationDirectory));
     EXPECT_TRUE(WriteTextFile(destination, AStringView("old")));
 
-    Path<NWB::Core::Alloc::GlobalArena> movedPath(testArena.arena);
-    EXPECT_TRUE(MovePathToDirectory(source, destinationDirectory, movedPath));
-    EXPECT_EQ(movedPath, destination);
+    const auto movedPath = MovePathToDirectory(source, destinationDirectory);
+    ASSERT_TRUE(movedPath);
+    EXPECT_EQ(*movedPath, destination);
 
     BasicString<char, NWB::Core::Alloc::GlobalArena> movedText{testArena.arena};
     EXPECT_TRUE(ReadTextFile(destination, movedText));
     EXPECT_EQ(AStringView(movedText.data(), movedText.size()), AStringView("fresh"));
-    EXPECT_FALSE(FileExists(source, error));
-    EXPECT_FALSE(error);
+    const auto sourceExists = FileExists(source);
+    ASSERT_TRUE(sourceExists);
+    EXPECT_FALSE(*sourceExists);
 
-    EXPECT_TRUE(RemoveAllIfExists(root, error));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
 #if defined(NWB_PLATFORM_LINUX)
@@ -961,27 +940,28 @@ TEST(Global, RecursiveDirectoryIteratorDoesNotFollowDirectorySymlinks){
     const Path<NWB::Core::Alloc::GlobalArena> regularFile = root / "regular.txt";
     const Path<NWB::Core::Alloc::GlobalArena> directoryLink = root / "self";
 
-    ErrorCode error;
-    ASSERT_TRUE(EnsureEmptyDirectory(root, error));
+    ASSERT_TRUE(EnsureEmptyDirectory(root));
     ASSERT_TRUE(WriteTextFile(regularFile, AStringView("regular")));
     ASSERT_EQ(::symlink(".", directoryLink.c_str()), 0);
 
-    EXPECT_TRUE(IsDirectory(directoryLink, error));
-    EXPECT_FALSE(error);
-    EXPECT_FALSE(IsDirectoryNoFollow(directoryLink, error));
-    EXPECT_FALSE(error);
+    const auto followed = IsDirectory(directoryLink);
+    const auto noFollow = IsDirectoryNoFollow(directoryLink);
+    ASSERT_TRUE(followed);
+    ASSERT_TRUE(noFollow);
+    EXPECT_TRUE(*followed);
+    EXPECT_FALSE(*noFollow);
 
-    RecursiveDirectoryIterator directory(root, error);
-    ASSERT_FALSE(error);
+    const auto directory = RecursiveDirectoryIterator<NWB::Core::Alloc::GlobalArena>::Create(root);
+    ASSERT_TRUE(directory);
 
     usize entryCount = 0u;
-    for(const auto& entry : directory){
+    for(const auto& entry : *directory){
         EXPECT_FALSE(entry.path().empty());
         ++entryCount;
     }
     EXPECT_EQ(entryCount, s_ExpectedDualCount);
 
-    EXPECT_TRUE(RemoveAllIfExists(root, error));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 #endif
 
@@ -993,37 +973,32 @@ TEST(Global, VolumeNamesRejectEmptySeparatorsAndWhitespace){
 
 TEST(Global, StringTableUsesPrefixedBoundsAndRejectsEmptyAppend){
     Vector<u8> stringTable;
-    u32 alphaOffset = Limit<u32>::s_Max;
-    u32 betaOffset = Limit<u32>::s_Max;
-
-    EXPECT_TRUE(AppendStringTableText(stringTable, s_ALPHA, alphaOffset));
-    EXPECT_TRUE(AppendStringTableText(stringTable, s_BETA, betaOffset));
-
-    ACompactString parsed;
+    const auto alphaOffset = AppendStringTableText(stringTable, s_ALPHA);
+    const auto betaOffset = AppendStringTableText(stringTable, s_BETA);
+    ASSERT_TRUE(alphaOffset);
+    ASSERT_TRUE(betaOffset);
 
     Vector<u8> prefixedBinary;
     prefixedBinary.push_back(0xFFu);
     prefixedBinary.insert(prefixedBinary.end(), stringTable.begin(), stringTable.end());
-    EXPECT_TRUE(ReadStringTableText(prefixedBinary, 1u, stringTable.size(), betaOffset, parsed));
-    EXPECT_EQ(parsed.view(), s_BETA);
+    const auto parsed = ReadStringTableText(prefixedBinary, 1u, stringTable.size(), *betaOffset);
+    ASSERT_TRUE(parsed);
+    EXPECT_EQ(parsed->view(), s_BETA);
 
-    u32 emptyOffset = 0u;
-    EXPECT_FALSE(AppendStringTableText(stringTable, AStringView(), emptyOffset));
-    EXPECT_EQ(emptyOffset, Limit<u32>::s_Max);
+    const usize previousSize = stringTable.size();
+    EXPECT_FALSE(AppendStringTableText(stringTable, AStringView()));
+    EXPECT_EQ(stringTable.size(), previousSize);
 }
 
 TEST(Global, InvalidStringTableReads){
     Vector<u8> unterminated;
     unterminated.push_back(static_cast<u8>('a'));
     unterminated.push_back(static_cast<u8>('b'));
-
-    ACompactString parsed(s_UNCHANGED);
-    EXPECT_FALSE(ReadStringTableText(unterminated, 0u, unterminated.size(), 0u, parsed));
-    EXPECT_TRUE(parsed.empty());
+    EXPECT_FALSE(ReadStringTableText(unterminated, 0u, unterminated.size(), 0u));
 
     Vector<u8> emptyText;
     emptyText.push_back(0u);
-    EXPECT_FALSE(ReadStringTableText(emptyText, 0u, emptyText.size(), 0u, parsed));
+    EXPECT_FALSE(ReadStringTableText(emptyText, 0u, emptyText.size(), 0u));
 }
 
 TEST(Global, EmptyBinaryVectorReadClearsReusedOutputWithoutAdvancing){
@@ -1033,15 +1008,15 @@ TEST(Global, EmptyBinaryVectorReadClearsReusedOutputWithoutAdvancing){
     source.push_back(s_ExpectedDualCount);
     source.push_back(static_cast<u16>(0xBEEFu));
 
-    EXPECT_EQ(AppendBinaryVectorPayload(binary, source), BinaryVectorPayloadFailure::None);
+    ASSERT_TRUE(AppendBinaryVectorPayload(binary, source));
 
     usize cursor = 0u;
     Vector<u16> parsed;
-    EXPECT_EQ(ReadBinaryVectorPayload(binary, cursor, static_cast<u64>(source.size()), parsed), BinaryVectorPayloadFailure::None);
+    ASSERT_TRUE(ReadBinaryVectorPayload(binary, cursor, static_cast<u64>(source.size()), parsed));
 
     cursor = 0u;
     parsed.push_back(7u);
-    EXPECT_EQ(ReadBinaryVectorPayload(binary, cursor, 0u, parsed), BinaryVectorPayloadFailure::None);
+    ASSERT_TRUE(ReadBinaryVectorPayload(binary, cursor, 0u, parsed));
     EXPECT_EQ(cursor, 0u);
     EXPECT_TRUE(parsed.empty());
 }
@@ -1054,7 +1029,7 @@ TEST(Global, FixedVectorOverflowDoesNotAdvanceBinaryCursor){
 
     usize vectorCursor = 0u;
     FixedVector<u16, s_ExpectedDualCount> tooSmall;
-    EXPECT_EQ(ReadBinaryVectorPayload(vectorBinary, vectorCursor, 3u, tooSmall), BinaryVectorPayloadFailure::OutputOverflow);
+    EXPECT_EQ(ReadBinaryVectorPayload(vectorBinary, vectorCursor, 3u, tooSmall), MakeUnexpected(BinaryVectorPayloadFailure::OutputOverflow));
     EXPECT_EQ(vectorCursor, 0u);
     EXPECT_TRUE(tooSmall.empty());
 }
@@ -1067,7 +1042,7 @@ TEST(Global, RejectedBinaryVectorPayloadReadsDoNotAdvanceCursor){
     usize cursor = 0u;
     Vector<u32> parsed;
     parsed.push_back(0xAABBCCDDu);
-    EXPECT_EQ(ReadBinaryVectorPayload(truncated, cursor, s_ExpectedDualCount, parsed), BinaryVectorPayloadFailure::SourceTruncated);
+    EXPECT_EQ(ReadBinaryVectorPayload(truncated, cursor, s_ExpectedDualCount, parsed), MakeUnexpected(BinaryVectorPayloadFailure::SourceTruncated));
     EXPECT_EQ(cursor, 0u);
     EXPECT_TRUE(parsed.empty());
 }

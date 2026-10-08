@@ -72,10 +72,12 @@ bool Builder::beginPanel(const AStringView stableKey, const Rect& bounds, const 
     description.padding = { panel->padding.left, panel->padding.top, panel->padding.right, panel->padding.bottom };
     description.gap = m_style.gap;
     u32 node = 0u;
-    if(!m_scope->m_layout.addNode(s_LayoutNoParent, description, node) || !m_context.pushScope(stableKey)){
+    const auto admittedNode = m_scope->m_layout.addNode(s_LayoutNoParent, description);
+    if(!admittedNode || !m_context.pushScope(stableKey)){
         m_context.fail();
         return false;
     }
+    node = *admittedNode;
     m_scope->m_stack.push_back(node);
     m_scope->m_panelActive = true;
     return true;
@@ -168,10 +170,12 @@ bool Builder::beginContainer(
     description.padding = options.padding;
     description.gap = options.gap;
     u32 node = 0u;
-    if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, node) || !m_context.pushScope(stableKey)){
+    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
+    if(!admittedNode || !m_context.pushScope(stableKey)){
         m_context.fail();
         return false;
     }
+    node = *admittedNode;
     m_scope->m_stack.push_back(node);
     return true;
 }
@@ -194,10 +198,12 @@ Builder::Item* Builder::addItem(
     item.state = *state;
     item.enabled = options.enabled && synchronizePopup();
     const ShapeRequest request = textShapeRequest(text, m_style.fontSize);
-    if(m_text.layout(request, item.text) != TextLayoutStatus::Success){
+    auto layout = m_text.layout(request);
+    if(!layout){
         m_context.fail();
         return nullptr;
     }
+    item.text = Move(*layout);
     Point minimum;
     Point measured = item.text.measure();
     if(kind == WidgetKind::Selectable){
@@ -238,10 +244,12 @@ Builder::Item* Builder::addItem(
     description.width = options.width;
     description.height = options.height;
     description.intrinsicSize = { Max(measured.x, minimum.x), Max(measured.y, minimum.y) };
-    if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, item.node)){
+    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
+    if(!admittedNode){
         m_context.fail();
         return nullptr;
     }
+    item.node = *admittedNode;
     m_scope->m_items.push_back(Move(item));
     return &m_scope->m_items.back();
 }

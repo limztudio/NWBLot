@@ -45,7 +45,11 @@ TEST_F(UiRadioGroupBuilderTests, TemporaryLabelsAreOwnedBeforeTheNextSourceCallb
     for(u32 index = 0u; index < 5u; ++index){
         const Array<char, 4u> bytes{ static_cast<char>('A' + index), 'b', 'c', 'd' };
         TextLayout layout(m_arena);
-        ASSERT_EQ(m_text.layout({ { bytes.data(), bytes.size() }, 14.0f }, layout), TextLayoutStatus::Success);
+        {
+            auto layoutResult = m_text.layout({ { bytes.data(), bytes.size() }, 14.0f });
+            ASSERT_TRUE(layoutResult);
+            layout = Move(*layoutResult);
+        }
         const RadioGroupChoicePlacement& row = m_state.placement().rows[index];
         const Point origin{ row.indicator.x + row.indicator.width + m_builder.radioGroupStyle().gap,
             row.rectangle.y + Max(0.0f, (row.rectangle.height - layout.measure().y) * 0.5f) };

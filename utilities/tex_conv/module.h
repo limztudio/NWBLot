@@ -93,14 +93,13 @@ struct OutputPaths{
 
 bool IsSupportedInputPath(const Path& path);
 bool IsHdrInputPath(const Path& path);
-bool ResolveOutputPaths(const Path& inputPath, const AStringView outputArgument, OutputPaths& outOutputPaths);
+Expected<OutputPaths> ResolveOutputPaths(const Path& inputPath, const AStringView outputArgument);
 bool ValidateOutputPaths(const OutputPaths& outputPaths, bool force);
-bool EncodeTexture(
+Expected<TexturePayload> EncodeTexture(
     const Vector<Path>& inputPaths,
     TextureDimension::Enum dimension,
     bool srgb,
-    const AlphaSource& alphaSource,
-    TexturePayload& outPayload
+    const AlphaSource& alphaSource
 );
 bool WriteOutputs(const OutputPaths& outputPaths, const TexturePayload& payload, bool force);
 

@@ -14,17 +14,18 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ResolvePreparedSoftwareBvhGraphResources(
+Expected<PreparedMeshSwBvhGraphResourceVector> ResolvePreparedSoftwareBvhGraphResources(
+    Core::Alloc::ScratchArena& scratchArena,
     const Core::GpuTaskGraph& graph,
-    const PreparedMeshSwBvhBuildVector& builds,
-    PreparedMeshSwBvhGraphResourceVector& outResources
+    const PreparedMeshSwBvhBuildVector& builds
 ){
-    outResources.clear();
+    PreparedMeshSwBvhGraphResourceVector result(scratchArena);
     if(builds.empty())
-        return true;
+        return result;
+    result.reserve(builds.size());
     const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
     if(!declarations.valid())
-        return false;
+        return MakeUnexpected(Failure{});
     for(const PreparedMeshSwBvhBuild& build : builds){
         const PreparedMeshSwBvhGraphResources resources{
             .build = build,
@@ -45,12 +46,11 @@ bool ResolvePreparedSoftwareBvhGraphResources(
             || !resources.sortPayload.valid()
             || !resources.visitCounter.valid()
         ){
-            outResources.clear();
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outResources.push_back(resources);
+        result.push_back(resources);
     }
-    return true;
+    return result;
 }
 
 

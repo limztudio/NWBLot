@@ -41,14 +41,13 @@ public:
         const bool wantsSkinning,
         const u32 cornerIndex
     );
-    [[nodiscard]] static bool BuildCornerOutputTangentVector(
+    [[nodiscard]] static Expected<SIMDVector> BuildCornerOutputTangentVector(
         const ufbx_mesh& mesh,
         const ufbx_matrix& normalToWorld,
         const ImportOptions& options,
         const bool wantsSkinning,
         const u32 cornerIndex,
-        const SIMDVector normal,
-        SIMDVector& outTangent
+        const SIMDVector normal
     );
     [[nodiscard]] static bool IsFiniteSkinInfluence(const SIMDVector weights);
     [[nodiscard]] static bool IsFiniteSourceTriangleCorner(
@@ -68,13 +67,12 @@ public:
         UtilityVector<u32>& inOutTriangleIndices,
         VisitTriangle&& visitTriangle
     );
-    [[nodiscard]] static bool BuildSmoothPositionNormals(
+    [[nodiscard]] static Expected<PositionNormalMap> BuildSmoothPositionNormals(
         const ufbx_mesh& mesh,
         const ufbx_node& node,
         const ImportOptions& options,
         const bool wantsSkinning,
-        UtilityVector<u32>& inOutTriangleIndices,
-        PositionNormalMap& outNormals
+        UtilityVector<u32>& inOutTriangleIndices
     );
     static bool AppendInstanceMesh(
         const MeshInstance& instance,
@@ -89,11 +87,9 @@ public:
         bool& inOutSawVertexUvs,
         bool& inOutUsedDefaultUvs
     );
-    static bool EstimateSelectedTriangleCorners(
+    static Expected<usize> EstimateSelectedTriangleCorners(
         const UtilityVector<MeshInstance>& instances,
-        const UtilityVector<usize>& selection,
-        usize& outTriangleCorners
-    );
+        const UtilityVector<usize>& selection);
 
 
 public:

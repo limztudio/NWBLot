@@ -42,7 +42,9 @@ TEST(UiPopupLayoutTests, BottomEdgeFlipsAboveAndClampsHorizontalOverflow){
     options.anchor = { 730.0f, 560.0f, 50.0f, 24.0f };
     options.size = { 220.0f, 160.0f };
     PopupPlacement placement;
-    ASSERT_TRUE(PopupLayout::Place(options, { 800.0f, 600.0f, 1.0f, 1.0f }, placement));
+    const auto placementResult = PopupLayout::Place(options, { 800.0f, 600.0f, 1.0f, 1.0f });
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     ExpectBounds(placement.bounds, { 580.0f, 396.0f, 220.0f, 160.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Above);
 }
@@ -53,7 +55,9 @@ TEST(UiPopupLayoutTests, AbovePreferenceFlipsBelowAtTopEdge){
     options.side = PopupPlacementSide::Above;
     options.size = { 140.0f, 90.0f };
     PopupPlacement placement;
-    ASSERT_TRUE(PopupLayout::Place(options, { 400.0f, 300.0f, 1.0f, 1.0f }, placement));
+    const auto placementResult = PopupLayout::Place(options, { 400.0f, 300.0f, 1.0f, 1.0f });
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     ExpectBounds(placement.bounds, { 40.0f, 46.0f, 140.0f, 90.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Below);
 }
@@ -64,7 +68,9 @@ TEST(UiPopupLayoutTests, RightPreferenceFlipsLeftAndClampsVerticalOverflow){
     options.side = PopupPlacementSide::Right;
     options.size = { 140.0f, 90.0f };
     PopupPlacement placement;
-    ASSERT_TRUE(PopupLayout::Place(options, { 400.0f, 300.0f, 1.0f, 1.0f }, placement));
+    const auto placementResult = PopupLayout::Place(options, { 400.0f, 300.0f, 1.0f, 1.0f });
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     ExpectBounds(placement.bounds, { 226.0f, 210.0f, 140.0f, 90.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Left);
 }
@@ -75,7 +81,9 @@ TEST(UiPopupLayoutTests, LeftPreferenceFlipsRightAtLeftEdge){
     options.side = PopupPlacementSide::Left;
     options.size = { 140.0f, 90.0f };
     PopupPlacement placement;
-    ASSERT_TRUE(PopupLayout::Place(options, { 400.0f, 300.0f, 1.0f, 1.0f }, placement));
+    const auto placementResult = PopupLayout::Place(options, { 400.0f, 300.0f, 1.0f, 1.0f });
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     ExpectBounds(placement.bounds, { 46.0f, 40.0f, 140.0f, 90.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Right);
 }
@@ -85,7 +93,9 @@ TEST(UiPopupLayoutTests, NeitherVerticalSideFitsUsesMoreRoomAndKeepsCompletePopu
     options.anchor = { 100.0f, 150.0f, 20.0f, 20.0f };
     options.size = { 80.0f, 200.0f };
     PopupPlacement placement;
-    ASSERT_TRUE(PopupLayout::Place(options, { 320.0f, 240.0f, 1.0f, 1.0f }, placement));
+    const auto placementResult = PopupLayout::Place(options, { 320.0f, 240.0f, 1.0f, 1.0f });
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     ExpectBounds(placement.bounds, { 100.0f, 0.0f, 80.0f, 200.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Above);
 }
@@ -97,7 +107,9 @@ TEST(UiPopupLayoutTests, EqualAvailableRoomPreservesTheRequestedSide){
     options.size = { 80.0f, 150.0f };
     options.gap = 0.0f;
     PopupPlacement placement;
-    ASSERT_TRUE(PopupLayout::Place(options, { 320.0f, 240.0f, 1.0f, 1.0f }, placement));
+    const auto placementResult = PopupLayout::Place(options, { 320.0f, 240.0f, 1.0f, 1.0f });
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     ExpectBounds(placement.bounds, { 100.0f, 0.0f, 80.0f, 150.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Above);
 }
@@ -107,7 +119,9 @@ TEST(UiPopupLayoutTests, OversizedPopupShrinksToTheViewportOnBothAxes){
     options.anchor = { 40.0f, 40.0f, 20.0f, 20.0f };
     options.size = { 1000.0f, 900.0f };
     PopupPlacement placement;
-    ASSERT_TRUE(PopupLayout::Place(options, { 100.0f, 80.0f, 2.0f, 1.25f }, placement));
+    const auto placementResult = PopupLayout::Place(options, { 100.0f, 80.0f, 2.0f, 1.25f });
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     ExpectBounds(placement.bounds, { 0.0f, 0.0f, 100.0f, 80.0f });
     ExpectBounds(placement.viewport, placement.bounds);
 }
@@ -118,11 +132,15 @@ TEST(UiPopupLayoutTests, OffscreenAnchorAndLargeGapStillProduceBoundedGeometry){
     options.size = { 100.0f, 100.0f };
     options.side = PopupPlacementSide::Right;
     PopupPlacement placement;
-    ASSERT_TRUE(PopupLayout::Place(options, { 320.0f, 240.0f, 1.0f, 1.0f }, placement));
+    const auto placementResult = PopupLayout::Place(options, { 320.0f, 240.0f, 1.0f, 1.0f });
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     ExpectBounds(placement.bounds, { 220.0f, 0.0f, 100.0f, 100.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Left);
     options.gap = Limit<f32>::s_Max;
-    ASSERT_TRUE(PopupLayout::Place(options, { 320.0f, 240.0f, 1.0f, 1.0f }, placement));
+    const auto placementResult2 = PopupLayout::Place(options, { 320.0f, 240.0f, 1.0f, 1.0f });
+    ASSERT_TRUE(placementResult2);
+    placement = *placementResult2;
     ExpectBounds(placement.bounds, { 220.0f, 0.0f, 100.0f, 100.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Right);
 }
@@ -132,7 +150,9 @@ TEST(UiPopupLayoutTests, EmptyAnchorCanRepresentPointPlacement){
     options.anchor = { 124.0f, 30.0f, 0.0f, 0.0f };
     options.size = { 80.0f, 60.0f };
     PopupPlacement placement;
-    ASSERT_TRUE(PopupLayout::Place(options, { 320.0f, 240.0f, 1.0f, 1.0f }, placement));
+    const auto placementResult = PopupLayout::Place(options, { 320.0f, 240.0f, 1.0f, 1.0f });
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     ExpectBounds(placement.bounds, { 124.0f, 34.0f, 80.0f, 60.0f });
     EXPECT_EQ(placement.side, PopupPlacementSide::Below);
 }
@@ -142,24 +162,22 @@ TEST(UiPopupLayoutTests, AsymmetricDpiChangesDoNotRescaleLogicalPlacement){
     options.anchor = { 610.0f, 410.0f, 50.0f, 30.0f };
     PopupPlacement first;
     PopupPlacement second;
-    ASSERT_TRUE(PopupLayout::Place(options, { 680.0f, 480.0f, 1.0f, 1.0f }, first));
-    ASSERT_TRUE(PopupLayout::Place(options, { 680.0f, 480.0f, 2.5f, 1.25f }, second));
+    const auto firstResult = PopupLayout::Place(options, { 680.0f, 480.0f, 1.0f, 1.0f });
+    ASSERT_TRUE(firstResult);
+    first = *firstResult;
+    const auto secondResult = PopupLayout::Place(options, { 680.0f, 480.0f, 2.5f, 1.25f });
+    ASSERT_TRUE(secondResult);
+    second = *secondResult;
     ExpectBounds(second.bounds, first.bounds);
     ExpectBounds(second.viewport, first.viewport);
     EXPECT_EQ(second.side, first.side);
 }
 
-TEST(UiPopupLayoutTests, InvalidInputsLeaveThePreviousPlacementUntouched){
-    const PopupPlacement previous{ { 11.0f, 12.0f, 13.0f, 14.0f }, { 21.0f, 22.0f, 23.0f, 24.0f },
-        PopupPlacementSide::Left };
+TEST(UiPopupLayoutTests, InvalidInputsRejectPlacement){
     const PopupOptions validOptions;
     const DisplayMetrics validDisplay{ 320.0f, 240.0f, 1.0f, 1.0f };
-    const auto reject = [&previous](const PopupOptions& options, const DisplayMetrics& display){
-        PopupPlacement placement = previous;
-        EXPECT_FALSE(PopupLayout::Place(options, display, placement));
-        ExpectBounds(placement.bounds, previous.bounds);
-        ExpectBounds(placement.viewport, previous.viewport);
-        EXPECT_EQ(placement.side, previous.side);
+    const auto reject = [](const PopupOptions& options, const DisplayMetrics& display){
+        EXPECT_FALSE(PopupLayout::Place(options, display));
     };
     PopupOptions options = validOptions;
     options.anchor.x = Limit<f32>::s_QuietNaN;

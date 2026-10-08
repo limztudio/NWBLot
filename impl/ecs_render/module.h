@@ -60,7 +60,7 @@ private:
 
 
 public:
-    using ShaderPathResolveCallback = Function<bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)>;
+    using ShaderPathResolveCallback = Function<Expected<Name>(const Name&, AStringView, const Name&)>;
 
 
 public:
@@ -91,7 +91,7 @@ public:
     [[nodiscard]] bool setSoftwareShadowSettings(const SoftwareShadowSettings& settings);
     [[nodiscard]] bool setShadowQualitySettings(const ShadowQualitySettings& settings);
     [[nodiscard]] bool setReflectionSettings(const ReflectionSettings& settings);
-    [[nodiscard]] bool tryGetLatestReflectionStatistics(ReflectionStatistics& statistics)const;
+    [[nodiscard]] Expected<ReflectionStatistics> tryGetLatestReflectionStatistics()const noexcept;
     [[nodiscard]] bool setPresentationSettings(const PresentationSettings& settings);
     void setFrameLaggedAsyncLightingEnabled(bool enabled)noexcept;
     [[nodiscard]] bool frameLaggedAsyncLightingEnabled()const noexcept;

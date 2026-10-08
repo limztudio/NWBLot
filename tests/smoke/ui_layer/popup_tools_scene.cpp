@@ -148,15 +148,16 @@ Array<u64, 15u> UiPopupToolsSmokeScene::values()const{
 }
 
 Impl::Ui::Rect UiPopupToolsSmokeScene::rowBounds(const u64 key)const{
-    Impl::Ui::Rect rectangle;
-    u64 index = 0u;
     const auto& placement = m_menu.listState().placement();
-    if(
-        !m_menu.isOpen() || !m_source.indexOf(key, index) || index < placement.firstRow || index >= placement.endRow
-        || !Impl::Ui::ScrollLayout::RowBounds(index, placement, __hidden_ui_popup_tools_smoke::s_RowHeight, rectangle)
-    )
+    if(!m_menu.isOpen())
         return {};
-    return rectangle;
+    const auto index = m_source.indexOf(key);
+    if(!index || *index < placement.firstRow || *index >= placement.endRow)
+        return {};
+    const auto rectangle = Impl::Ui::ScrollLayout::RowBounds(*index, placement, __hidden_ui_popup_tools_smoke::s_RowHeight);
+    if(!rectangle)
+        return {};
+    return *rectangle;
 }
 
 void UiPopupToolsSmokeScene::observeState(){

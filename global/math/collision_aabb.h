@@ -38,12 +38,15 @@ void NWB_SIMD_CALL ExpandTriangle(
 [[nodiscard]] SIMDVector NWB_SIMD_CALL Extents(SIMDVector minBounds, SIMDVector maxBounds)noexcept;
 [[nodiscard]] f32 NWB_SIMD_CALL SurfaceArea(SIMDVector minBounds, SIMDVector maxBounds)noexcept;
 [[nodiscard]] f32 NWB_SIMD_CALL Radius(SIMDVector minBounds, SIMDVector maxBounds)noexcept;
-[[nodiscard]] bool NWB_SIMD_CALL Transform(
+struct Bounds{
+    SIMDVector minBounds;
+    SIMDVector maxBounds;
+};
+
+[[nodiscard]] Expected<Bounds> NWB_SIMD_CALL Transform(
     const SIMDMatrix& localToWorld,
     SIMDVector localMinBounds,
-    SIMDVector localMaxBounds,
-    SIMDVector& outMinBounds,
-    SIMDVector& outMaxBounds
+    SIMDVector localMaxBounds
 )noexcept;
 
 
@@ -161,19 +164,18 @@ NWB_INLINE void NWB_SIMD_CALL AabbTests::ExpandTriangle(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool NWB_SIMD_CALL AabbTests::Transform(
+[[nodiscard]] inline Expected<AabbTests::Bounds> NWB_SIMD_CALL AabbTests::Transform(
     const SIMDMatrix& localToWorld,
     const SIMDVector localMinBounds,
-    const SIMDVector localMaxBounds,
-    SIMDVector& outMinBounds,
-    SIMDVector& outMaxBounds
+    const SIMDVector localMaxBounds
 )noexcept{
     if(!AabbTests::Valid(localMinBounds, localMaxBounds))
-        return false;
+        return MakeUnexpected(Failure{});
     if(MatrixIsNaN(localToWorld) || MatrixIsInfinite(localToWorld))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    AabbTests::Reset(outMinBounds, outMaxBounds);
+    Bounds bounds;
+    AabbTests::Reset(bounds.minBounds, bounds.maxBounds);
     for(u32 corner = 0u; corner < CollisionDetail::s_AabbCornerCount; ++corner){
         const SIMDVector cornerSelect = VectorSelectControl(
             corner & CollisionDetail::s_BoxCornerXSelectBit,
@@ -184,11 +186,13 @@ NWB_INLINE void NWB_SIMD_CALL AabbTests::ExpandTriangle(
         const SIMDVector localPoint = VectorSelect(localMinBounds, localMaxBounds, cornerSelect);
         const SIMDVector point = Vector3Transform(localPoint, localToWorld);
         if(Vector3IsNaN(point) || Vector3IsInfinite(point))
-            return false;
+            return MakeUnexpected(Failure{});
 
-        AabbTests::Expand(point, outMinBounds, outMaxBounds);
+        AabbTests::Expand(point, bounds.minBounds, bounds.maxBounds);
     }
-    return AabbTests::Valid(outMinBounds, outMaxBounds);
+    if(!AabbTests::Valid(bounds.minBounds, bounds.maxBounds))
+        return MakeUnexpected(Failure{});
+    return bounds;
 }
 
 

@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include <global/expected.h>
 #include "recorder.h"
 
 
@@ -127,7 +128,7 @@ using FrameGraphPacketSubmissionStatisticsRecords =
     const FrameGraphPacketSubmissionStatisticsRecords& packetSubmissionStatistics,
     TelemetryBytes& outPayload
 );
-[[nodiscard]] bool ParseFrameGraphPayload(TelemetryArena& arena, const void* payload, usize payloadBytes, FrameGraphPayload& outPayload);
+[[nodiscard]] Expected<FrameGraphPayload> ParseFrameGraphPayload(TelemetryArena& arena, const void* payload, usize payloadBytes);
 [[nodiscard]] bool RecordFrameGraph(
     Recorder& recorder,
     u64 frameIndex,

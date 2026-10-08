@@ -36,19 +36,15 @@ void* Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAcces
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: native buffer is null"));
         return nullptr;
     }
-    CpuAccessMode::Enum effectiveAccess = CpuAccessMode::None;
-    if(
-        !VulkanDetail::TryResolveBufferCpuAccess(
-            buffer.m_creationDesc.cpuAccess,
-            buffer.m_creationDesc.isVolatile,
-            effectiveAccess
-        )
-        || effectiveAccess == CpuAccessMode::None
-    ){
+    const auto effectiveAccess = VulkanDetail::TryResolveBufferCpuAccess(
+        buffer.m_creationDesc.cpuAccess,
+        buffer.m_creationDesc.isVolatile
+    );
+    if(!effectiveAccess || *effectiveAccess == CpuAccessMode::None){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: buffer was created without CPU access"));
         return nullptr;
     }
-    if(requestedAccess != effectiveAccess){
+    if(requestedAccess != *effectiveAccess){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer: requested access does not match the buffer CPU access"));
         return nullptr;
     }
@@ -77,7 +73,7 @@ void* Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAcces
             return nullptr;
         }
 
-        if(effectiveAccess == CpuAccessMode::Read){
+        if(*effectiveAccess == CpuAccessMode::Read){
             const VkResult res = m_allocator.invalidateHeapMemory(
                 heap,
                 buffer.m_heapBindingRange.localOffset,
@@ -97,7 +93,7 @@ void* Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAcces
     }
 
     auto invalidateReadRange = [&]() -> bool{
-        if(effectiveAccess != CpuAccessMode::Read)
+        if(*effectiveAccess != CpuAccessMode::Read)
             return true;
 
         const VkResult res = m_allocator.invalidateBufferMemory(buffer);
@@ -114,20 +110,19 @@ void* Device::mapBuffer(Buffer& buffer, const CpuAccessMode::Enum requestedAcces
         return buffer.m_mappedMemory;
     }
 
-    void* data = nullptr;
-    const VkResult res = m_allocator.mapBufferMemory(buffer, &data);
-    if(res != VK_SUCCESS){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer memory: {}"), ResultToString(res));
+    const auto data = m_allocator.mapBufferMemory(buffer);
+    if(!data){
+        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to map buffer memory: {}"), ResultToString(data.error()));
         return nullptr;
     }
 
-    buffer.m_mappedMemory = data;
+    buffer.m_mappedMemory = *data;
     if(!invalidateReadRange()){
         m_allocator.unmapBufferMemory(buffer);
         buffer.m_mappedMemory = nullptr;
         return nullptr;
     }
-    return data;
+    return *data;
 }
 
 void Device::unmapBuffer(Buffer& buffer){
@@ -143,15 +138,11 @@ void Device::unmapBuffer(Buffer& buffer){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unmap buffer: native buffer is null"));
         return;
     }
-    CpuAccessMode::Enum effectiveAccess = CpuAccessMode::None;
-    if(
-        !VulkanDetail::TryResolveBufferCpuAccess(
-            buffer.m_creationDesc.cpuAccess,
-            buffer.m_creationDesc.isVolatile,
-            effectiveAccess
-        )
-        || effectiveAccess == CpuAccessMode::None
-    ){
+    const auto effectiveAccess = VulkanDetail::TryResolveBufferCpuAccess(
+        buffer.m_creationDesc.cpuAccess,
+        buffer.m_creationDesc.isVolatile
+    );
+    if(!effectiveAccess || *effectiveAccess == CpuAccessMode::None){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to unmap buffer: buffer was created without CPU access"));
         return;
     }
@@ -220,18 +211,17 @@ MemoryRequirements Device::getBufferMemoryRequirements(Buffer& buffer){
         .size = memoryRequirements.memoryRequirements.size,
         .alignment = memoryRequirements.memoryRequirements.alignment,
     };
-    MemoryRequirements result;
-    if(!VulkanDetail::TryBuildBufferHeapRequirements(
+    const auto result = VulkanDetail::TryBuildBufferHeapRequirements(
         nativeRequirements,
         buffer.m_creationDesc.cpuAccess,
         buffer.m_creationDesc.isVolatile,
-        m_context.physicalDeviceProperties.limits.nonCoherentAtomSize,
-        result
-    )){
+        m_context.physicalDeviceProperties.limits.nonCoherentAtomSize
+    );
+    if(!result){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to get buffer memory requirements: padded requirements overflow"));
         return {};
     }
-    return result;
+    return *result;
 }
 
 bool Device::bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset){
@@ -286,42 +276,40 @@ bool Device::bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset){
         .size = memoryRequirements.memoryRequirements.size,
         .alignment = memoryRequirements.memoryRequirements.alignment,
     };
-    MemoryRequirements bindingRequirements;
-    if(!VulkanDetail::TryBuildBufferHeapRequirements(
+    const auto bindingRequirements = VulkanDetail::TryBuildBufferHeapRequirements(
         nativeRequirements,
         buffer.m_creationDesc.cpuAccess,
         buffer.m_creationDesc.isVolatile,
-        m_context.physicalDeviceProperties.limits.nonCoherentAtomSize,
-        bindingRequirements
-    )){
+        m_context.physicalDeviceProperties.limits.nonCoherentAtomSize
+    );
+    if(!bindingRequirements){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: padded requirements overflow"));
         return false;
     }
-    memoryRequirements.memoryRequirements.size = bindingRequirements.size;
-    memoryRequirements.memoryRequirements.alignment = bindingRequirements.alignment;
+    memoryRequirements.memoryRequirements.size = bindingRequirements->size;
+    memoryRequirements.memoryRequirements.alignment = bindingRequirements->alignment;
 
     ScopedLock heapLock(memoryHeap.m_bindingMutex);
     if(memoryHeap.m_desc.type != HeapType::DeviceLocal && !memoryHeap.m_mappedMemory){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to bind buffer memory: CPU-visible heap is not mapped"));
         return false;
     }
-    VulkanDetail::HeapBindingRange bindingRange;
-    if(!validateHeapMemoryBinding(
+    const auto bindingRange = validateHeapMemoryBinding(
         memoryHeap,
         memoryRequirements.memoryRequirements,
         dedicatedRequirements,
         offset,
         VulkanDetail::HeapBindingResourceClass::Buffer,
         NWB_TEXT("bind buffer memory"),
-        VulkanArenaScope::s_BufferResourceLabel,
-        bindingRange
-    ))
+        VulkanArenaScope::s_BufferResourceLabel
+    );
+    if(!bindingRange)
         return false;
 
     Heap::BindingReservation reservation;
     reservation.owner = &buffer;
     reservation.resourceClass = VulkanDetail::HeapBindingResourceClass::Buffer;
-    reservation.range = bindingRange;
+    reservation.range = *bindingRange;
     memoryHeap.m_bindingReservations.push_back(reservation);
 
     const VkResult res = m_allocator.bindHeapBufferMemory(buffer, memoryHeap, offset);
@@ -336,9 +324,9 @@ bool Device::bindBufferMemory(Buffer& buffer, Heap& heap, u64 offset){
         addressInfo.buffer = buffer.m_buffer;
         buffer.m_deviceAddress = m_context.deviceDispatch.vkGetBufferDeviceAddress(m_context.device, &addressInfo);
     }
-    buffer.m_heapBindingRange = bindingRange;
+    buffer.m_heapBindingRange = *bindingRange;
     if(memoryHeap.m_desc.type != HeapType::DeviceLocal){
-        buffer.m_mappedMemory = static_cast<u8*>(memoryHeap.m_mappedMemory) + bindingRange.localOffset;
+        buffer.m_mappedMemory = static_cast<u8*>(memoryHeap.m_mappedMemory) + bindingRange->localOffset;
         buffer.m_persistentlyMapped = true;
     }
     buffer.m_boundHeap = Move(retainedHeap);
@@ -391,31 +379,29 @@ bool Device::isBufferReadyForGpuUse(
     ;
 }
 
-bool Device::validateHeapMemoryBinding(
+Expected<VulkanDetail::HeapBindingRange> Device::validateHeapMemoryBinding(
     const Heap& heap,
     const VkMemoryRequirements& memoryRequirements,
     const VkMemoryDedicatedRequirements& dedicatedRequirements,
     const u64 offset,
     const VulkanDetail::HeapBindingResourceClass::Enum resourceClass,
     TStringView operationName,
-    TStringView resourceName,
-    VulkanDetail::HeapBindingRange& outRange
+    TStringView resourceName
 )const{
-    outRange = {};
     if(&heap.m_context != &m_context || &heap.m_allocator != &m_allocator){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: heap belongs to another device"), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(heap.m_allocation == nullptr || heap.m_memory == VK_NULL_HANDLE){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: heap is invalid"), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!VulkanDetail::AllowsGenericHeapBinding(dedicatedRequirements)){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: Failed to {}: the {} requires a dedicated allocation")
             , operationName
             , resourceName
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!VulkanDetail::IsHeapMemoryTypeCompatible(
         m_context.memoryProperties,
@@ -427,30 +413,30 @@ bool Device::validateHeapMemoryBinding(
             operationName,
             resourceName
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    if(!VulkanDetail::TryBuildHeapBindingRange(
+    const auto range = VulkanDetail::TryBuildHeapBindingRange(
         heap.m_desc.capacity,
         heap.m_memoryOffset,
         offset,
         memoryRequirements.size,
-        memoryRequirements.alignment,
-        outRange
-    )){
+        memoryRequirements.alignment
+    );
+    if(!range){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: offset {} size {} is misaligned or outside heap capacity {}")
             , operationName
             , offset
             , static_cast<u64>(memoryRequirements.size)
             , heap.m_desc.capacity
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
     const u64 granularity = Max<u64>(m_context.physicalDeviceProperties.limits.bufferImageGranularity, 1u);
     for(const Heap::BindingReservation& reservation : heap.m_bindingReservations){
         if(!VulkanDetail::HeapBindingRangesConflict(
             reservation.range,
             reservation.resourceClass,
-            outRange,
+            *range,
             resourceClass,
             granularity
         ))
@@ -460,11 +446,10 @@ bool Device::validateHeapMemoryBinding(
             , operationName
             , resourceName
         );
-        outRange = {};
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    return true;
+    return *range;
 }
 
 

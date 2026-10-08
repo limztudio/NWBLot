@@ -94,23 +94,20 @@ static Path NormalizeDependencyRootAliasPath(Path path){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShaderCook::computeDependencyChecksum(
+Expected<ShaderCook::DependencyChecksum> ShaderCook::computeDependencyChecksum(
     const CookVector<Path>& dependencies,
     const InitializerList<DependencyRootAlias> dependencyRootAliases,
-    u64& outChecksum,
-    bool& outCompilerInputsHaveBom,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    ErrorCode errorCode;
     static constexpr u8 s_NewlineByte = '\n';
     static constexpr u8 s_ZeroByte = 0;
 
-    outChecksum = s_Fnv64OffsetBasis;
-    outCompilerInputsHaveBom = false;
+    DependencyChecksum result;
+    result.checksum = s_Fnv64OffsetBasis;
 
     if(dependencyRootAliases.size() == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires at least one dependency root alias"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     CookVector<__hidden_cook_checksum::NormalizedDependencyRootAlias> normalizedRootAliases{m_memoryArena};
@@ -118,25 +115,25 @@ bool ShaderCook::computeDependencyChecksum(
     for(const DependencyRootAlias& rootAlias : dependencyRootAliases){
         if(rootAlias.root.empty() || rootAlias.key.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires non-empty dependency root aliases"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         __hidden_cook_checksum::NormalizedDependencyRootAlias normalizedAlias{m_memoryArena};
-        errorCode.clear();
-        normalizedAlias.root = __hidden_cook_checksum::NormalizeDependencyRootAliasPath(AbsolutePath(rootAlias.root, errorCode));
-        if(errorCode){
+        const auto rootPath = AbsolutePath(rootAlias.root);
+        if(!rootPath){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency root alias '{}' : {}")
                 , PathToString<tchar>(rootAlias.root)
-                , StringConvert(errorCode.message())
+                , StringConvert(rootPath.error().message())
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
+        normalizedAlias.root = __hidden_cook_checksum::NormalizeDependencyRootAliasPath(*rootPath);
         normalizedAlias.key = rootAlias.key;
         CanonicalizeTextInPlace(normalizedAlias.key);
         if(normalizedAlias.key.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum requires non-empty dependency root alias keys"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         normalizedAlias.depth = __hidden_cook_checksum::PathDepth(normalizedAlias.root);
         normalizedRootAliases.push_back(Move(normalizedAlias));
@@ -146,15 +143,15 @@ bool ShaderCook::computeDependencyChecksum(
     sortedDependencies.reserve(dependencies.size());
     for(const Path& dependency : dependencies){
         SortedDependencyItem item(m_memoryArena);
-        errorCode.clear();
-        Path normalizedDependency = AbsolutePath(dependency, errorCode).lexicallyNormal();
-        if(errorCode){
+        auto normalizedDependencyResult = AbsolutePath(dependency);
+        if(!normalizedDependencyResult){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to resolve dependency path '{}' : {}")
                 , PathToString<tchar>(dependency)
-                , StringConvert(errorCode.message())
+                , StringConvert(normalizedDependencyResult.error().message())
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
+        Path normalizedDependency = normalizedDependencyResult->lexicallyNormal();
 
         const __hidden_cook_checksum::NormalizedDependencyRootAlias* bestRootAlias = nullptr;
         for(const __hidden_cook_checksum::NormalizedDependencyRootAlias& rootAlias : normalizedRootAliases){
@@ -167,7 +164,7 @@ bool ShaderCook::computeDependencyChecksum(
             NWB_LOGGER_ERROR(NWB_TEXT("Dependency checksum path '{}' is outside the declared dependency root aliases")
                 , PathToString<tchar>(dependency)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         __hidden_cook_checksum::ScratchString relativePathText = PathToString(scratchArena, normalizedDependency.lexicallyRelative(bestRootAlias->root));
@@ -186,22 +183,22 @@ bool ShaderCook::computeDependencyChecksum(
 
     Vector<u8, Core::Alloc::ScratchArena> dependencyBytes{scratchArena};
     for(const SortedDependencyItem& item : sortedDependencies){
-        outChecksum = UpdateFnv64TextExact(outChecksum, AStringView(item.canonicalPath));
-        outChecksum = UpdateFnv64(outChecksum, &s_NewlineByte, 1);
+        result.checksum = UpdateFnv64TextExact(result.checksum, AStringView(item.canonicalPath));
+        result.checksum = UpdateFnv64(result.checksum, &s_NewlineByte, 1);
 
         dependencyBytes.clear();
-        errorCode.clear();
-        if(!ReadBinaryFile(item.path, dependencyBytes, errorCode)){
-            if(errorCode){
+        auto readBinaryFileResult = ReadBinaryFile(item.path, dependencyBytes);
+        if(!readBinaryFileResult){
+            if(readBinaryFileResult.error()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}' : {}")
                     , PathToString<tchar>(item.path)
-                    , StringConvert(errorCode.message())
+                    , StringConvert(readBinaryFileResult.error().message())
                 );
             }
             else{
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to read dependency file '{}'"), PathToString<tchar>(item.path));
             }
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(
             dependencyBytes.size() >= TextDetail::s_Utf8BomByteCount
@@ -209,19 +206,19 @@ bool ShaderCook::computeDependencyChecksum(
             && dependencyBytes[1u] == TextDetail::s_Utf8BomByte1
             && dependencyBytes[2u] == TextDetail::s_Utf8BomByte2
         )
-            outCompilerInputsHaveBom = true;
+            result.compilerInputsHaveBom = true;
         if(!dependencyBytes.empty()){
-            outChecksum = UpdateFnv64(
-                outChecksum,
+            result.checksum = UpdateFnv64(
+                result.checksum,
                 dependencyBytes.data(),
                 dependencyBytes.size()
             );
         }
 
-        outChecksum = UpdateFnv64(outChecksum, &s_ZeroByte, 1);
+        result.checksum = UpdateFnv64(result.checksum, &s_ZeroByte, 1);
     }
 
-    return true;
+    return result;
 }
 
 u64 ShaderCook::computeSourceChecksum(

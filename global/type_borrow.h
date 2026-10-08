@@ -152,6 +152,11 @@ template<class T>
 inline constexpr bool IsArithmetic_V = std::is_arithmetic_v<T>;
 
 template<class T>
+using IsIntegral = std::is_integral<T>;
+template<class T>
+inline constexpr bool IsIntegral_V = std::is_integral_v<T>;
+
+template<class T>
 using IsSigned = std::is_signed<T>;
 template<class T>
 inline constexpr bool IsSigned_V = std::is_signed_v<T>;
@@ -208,6 +213,9 @@ template<class Func, class... Args>
 using IsInvocable = std::is_invocable<Func, Args...>;
 template<class Func, class... Args>
 inline constexpr bool IsInvocable_V = std::is_invocable_v<Func, Args...>;
+
+template<typename Func, typename... Args>
+inline constexpr bool IsNothrowInvocable_V = std::is_nothrow_invocable_v<Func, Args...>;
 
 template<typename R, typename Func, typename... Args>
 using IsNothrowInvocableR = std::is_nothrow_invocable_r<R, Func, Args...>;

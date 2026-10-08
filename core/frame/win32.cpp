@@ -271,10 +271,10 @@ static void DispatchKeyEvent(Frame& frame, WPARAM wParam, LPARAM lParam, i32 act
 static void DispatchCharInput(Frame& frame, WPARAM wParam, LPARAM lParam){
 #if defined(NWB_UNICODE)
     if(auto* textInput = frame.tryTextInput()){
-        u32 unicode = 0u;
-        if(DecodeWin32FallbackCharInput(*textInput, static_cast<u32>(wParam), unicode)){
+        const auto unicode = DecodeWin32FallbackCharInput(*textInput, static_cast<u32>(wParam));
+        if(unicode){
             for(u32 index = 0u; index < Win32MessageRepeatCount(lParam); ++index)
-                DispatchUnicodeInput(frame, unicode);
+                DispatchUnicodeInput(frame, *unicode);
         }
     }
 #else
@@ -329,9 +329,9 @@ static LRESULT CALLBACK WinProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lPar
         }
 
         if(auto* textInput = frame->tryTextInput()){
-            isize forwardedLParam = lParam;
-            if(ResolveWin32TextInputContextMessage(*textInput, uMsg, wParam, lParam, forwardedLParam))
-                return DefWindowProc(hwnd, uMsg, wParam, static_cast<LPARAM>(forwardedLParam));
+            const auto forwardedLParam = ResolveWin32TextInputContextMessage(*textInput, uMsg, wParam, lParam);
+            if(forwardedLParam)
+                return DefWindowProc(hwnd, uMsg, wParam, static_cast<LPARAM>(*forwardedLParam));
             if(DispatchWin32TextInputMessage(*textInput, uMsg, wParam, lParam))
                 return 0;
         }

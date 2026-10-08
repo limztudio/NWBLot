@@ -33,55 +33,55 @@ namespace __hidden_gather{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool CollectBuiltFiles(const AssetGatherOptions& options, Assets::AssetVector<Assets::AssetString>& files){
-    Assets::AssetArena& arena = files.get_allocator().arena();
+static Expected<Assets::AssetVector<Assets::AssetString>> CollectBuiltFiles(const AssetGatherOptions& options){
+    Assets::AssetArena& arena = options.inputs.get_allocator().arena();
+    Assets::AssetVector<Assets::AssetString> files(arena);
     for(const Assets::AssetString& input : options.inputs){
-        ErrorCode error;
-        const Path path = AbsolutePath(Path(arena, input), error).lexicallyNormal();
-        if(error){
+        const auto absolutePath = AbsolutePath(Path(arena, input));
+        if(!absolutePath){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to resolve input '{}'"), StringConvert(input));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        const bool directory = IsDirectory(path, error);
-        if(error){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to inspect input '{}'"), StringConvert(input));
-            return false;
-        }
+        const Path path = absolutePath->lexicallyNormal();
+        const auto directory = IsDirectory(path);
         if(!directory){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to inspect input '{}'"), StringConvert(input));
+            return MakeUnexpected(Failure{});
+        }
+        if(!*directory){
             files.emplace_back(PathToString(arena, path));
             continue;
         }
 
         const Path manifest = path / Assets::BuiltAssetDetail::s_ManifestFilename;
-        if(FileExists(manifest, error)){
+        const auto manifestExists = FileExists(manifest);
+        if(!manifestExists){
+            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to inspect build manifest '{}'"), PathToString<tchar>(manifest));
+            return MakeUnexpected(Failure{});
+        }
+        if(*manifestExists){
             if(!Assets::ReadAssetInputList(manifest, files, true))
-                return false;
+                return MakeUnexpected(Failure{});
             continue;
         }
-        if(error){
-            NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to inspect build manifest '{}'"), PathToString<tchar>(manifest));
-            return false;
-        }
-        for(const auto& entry : RecursiveDirectoryIterator(path, error)){
-            if(error){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to scan input '{}'"), StringConvert(input));
-                return false;
-            }
-            if(entry.isRegularFile(error) && PathToString(arena, entry.path().extension()) == Assets::BuiltAssetDetail::s_Extension)
-                files.emplace_back(PathToString(arena, entry.path()));
-            if(error){
-                NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to inspect input entry '{}'"), PathToString<tchar>(entry.path()));
-                return false;
-            }
-        }
-        if(error){
+        const auto entries = RecursiveDirectoryIterator<Assets::AssetArena>::Create(path);
+        if(!entries){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to scan input '{}'"), StringConvert(input));
-            return false;
+            return MakeUnexpected(Failure{});
+        }
+        for(const auto& entry : *entries){
+            const auto regular = entry.isRegularFile();
+            if(!regular){
+                NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to inspect input entry '{}'"), PathToString<tchar>(entry.path()));
+                return MakeUnexpected(Failure{});
+            }
+            if(*regular && PathToString(arena, entry.path().extension()) == Assets::BuiltAssetDetail::s_Extension)
+                files.emplace_back(PathToString(arena, entry.path()));
         }
     }
     Sort(files.begin(), files.end());
     files.erase(Unique(files.begin(), files.end()), files.end());
-    return true;
+    return files;
 }
 
 
@@ -102,9 +102,10 @@ bool GatherAssets(const AssetGatherOptions& options){
         return false;
     }
 
-    Assets::AssetVector<Assets::AssetString> files(arena);
-    if(!__hidden_gather::CollectBuiltFiles(options, files))
+    const auto filesResult = __hidden_gather::CollectBuiltFiles(options);
+    if(!filesResult)
         return false;
+    const auto& files = *filesResult;
     Assets::AssetsVolumeCookDetail::AssetVolumePackManifest manifest(arena);
     if(!Assets::AssetsVolumeCookDetail::ReserveAssetVolumePackManifest(manifest, files.size()))
         return false;
@@ -113,10 +114,11 @@ bool GatherAssets(const AssetGatherOptions& options){
     entryIndices.reserve(files.size());
     Assets::AssetBytes bytes(arena);
     for(const Assets::AssetString& file : files){
-        Name virtualPath;
-        usize payloadOffset = 0u;
-        if(!Assets::BuiltAssetDetail::ReadBuiltAsset(Path(arena, file), bytes, virtualPath, payloadOffset))
+        const auto payload = Assets::BuiltAssetDetail::ReadBuiltAsset(Path(arena, file), bytes);
+        if(!payload)
             return false;
+        const Name& virtualPath = payload->virtualPath;
+        const usize payloadOffset = payload->payloadOffset;
         const auto inserted = entryIndices.try_emplace(virtualPath, manifest.entries.size());
         if(!inserted.second){
             auto& existing = manifest.entries[inserted.first.value()];
@@ -143,20 +145,20 @@ bool GatherAssets(const AssetGatherOptions& options){
     }
 
     Assets::ResolvedCookPaths paths(arena);
-    ErrorCode error;
-    paths.outputDirectory = AbsolutePath(Path(arena, options.outputDirectory), error).lexicallyNormal();
-    if(error){
+    const auto outputDirectory = AbsolutePath(Path(arena, options.outputDirectory));
+    if(!outputDirectory){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetGatherer: failed to resolve output '{}'"), StringConvert(options.outputDirectory));
         return false;
     }
+    paths.outputDirectory = outputDirectory->lexicallyNormal();
     Assets::CookString configuration = BuildCanonicalSafeCacheName(arena, options.configuration.view());
     if(configuration.empty())
         configuration = s_DefaultGatherConfig;
 
-    Assets::AssetsVolumeCookDetail::AssetVolumeWriteResult result;
-    if(!Assets::AssetsVolumeCookDetail::WriteAssetVolume(arena, paths, configuration, manifest, result, scratchArena))
+    const auto result = Assets::AssetsVolumeCookDetail::WriteAssetVolume(arena, paths, configuration, manifest, scratchArena);
+    if(!result)
         return false;
-    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AssetGatherer: gathered {} assets into '{}'"), result.fileCount, StringConvert(options.outputDirectory));
+    NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("AssetGatherer: gathered {} assets into '{}'"), result->fileCount, StringConvert(options.outputDirectory));
     return true;
 }
 

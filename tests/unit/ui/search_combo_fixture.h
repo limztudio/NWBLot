@@ -42,30 +42,32 @@ public:
         return mode == FilterMode::Second ? index * 2u + 2u : index + 1u;
     }
 
-    [[nodiscard]] virtual bool indexOf(const u64 value, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const override{
+        u64 index = 0u;
         if(value == 0u || value > full->count || mode == FilterMode::Empty || (mode == FilterMode::Second && value % 2u != 0u))
-            return false;
+            return MakeUnexpected(Failure{});
         index = mode == FilterMode::Second ? value / 2u - 1u : value - 1u;
-        return true;
+        return index;
     }
 
-    [[nodiscard]] virtual bool findEnabled(const u64 start, const bool reverse, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const override{
+        u64 index = 0u;
         if(start >= rowCount())
-            return false;
+            return MakeUnexpected(Failure{});
         index = start;
         if(enabled(index))
-            return true;
+            return index;
         if(reverse){
             if(index == 0u)
-                return false;
+                return MakeUnexpected(Failure{});
             --index;
         }
         else{
             if(index + 1u == rowCount())
-                return false;
+                return MakeUnexpected(Failure{});
             ++index;
         }
-        return enabled(index);
+        return enabled(index) ? Expected<u64>{ index } : MakeUnexpected(Failure{});
     }
 
     [[nodiscard]] virtual StringView text(const u64 index)const override{
@@ -113,9 +115,9 @@ public:
     [[nodiscard]] virtual u64 revision()const override{ return full.revision(); }
     [[nodiscard]] virtual u64 rowCount()const override{ return full.rowCount(); }
     [[nodiscard]] virtual u64 key(const u64 index)const override{ return full.key(index); }
-    [[nodiscard]] virtual bool indexOf(const u64 key, u64& index)const override{ return full.indexOf(key, index); }
-    [[nodiscard]] virtual bool findEnabled(const u64 start, const bool reverse, u64& index)const override{
-        return full.findEnabled(start, reverse, index);
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 key)const override{ return full.indexOf(key); }
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const override{
+        return full.findEnabled(start, reverse);
     }
     [[nodiscard]] virtual StringView text(const u64 index)const override{ return full.text(index); }
     [[nodiscard]] virtual bool enabled(const u64 index)const override{

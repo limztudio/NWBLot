@@ -23,13 +23,12 @@ SharedImageSource LoadImageSource(
         NWB_LOGGER_ERROR(NWB_TEXT("LoadImageSource: texture asset reference is empty"));
         return {};
     }
-    UniquePtr<Core::Assets::IAsset> loadedAsset;
-    const Texture* texture = assets.loadTypedSync<Texture>(
+    auto loadedAsset = assets.loadTypedSync<Texture>(
         identity.name(),
-        loadedAsset,
         NWB_TEXT("LoadImageSource"),
         Texture::s_AssetTypeText
     );
+    const Texture* texture = loadedAsset ? loadedAsset->get() : nullptr;
     if(!texture)
         return {};
     if(texture->virtualPath() != identity.name()){

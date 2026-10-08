@@ -28,23 +28,24 @@ namespace FilesystemVolumeDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ComputeVolumeIndexBytes(const u64 fileCount, u64& outIndexBytes)noexcept{
-    outIndexBytes = 0;
+static Expected<u64> ComputeVolumeIndexBytes(const u64 fileCount)noexcept{
     if(fileCount > Limit<u64>::s_Max / static_cast<u64>(sizeof(VolumeIndexEntryDisk)))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outIndexBytes = fileCount * static_cast<u64>(sizeof(VolumeIndexEntryDisk));
-    return true;
+    return fileCount * static_cast<u64>(sizeof(VolumeIndexEntryDisk));
 }
 
-static bool ComputeVolumeMetadataRequirement(const u64 fileCount, u64& outMetadataBytes)noexcept{
-    outMetadataBytes = 0;
+static Expected<u64> ComputeVolumeMetadataRequirement(const u64 fileCount)noexcept{
+    const auto indexBytes = ComputeVolumeIndexBytes(fileCount);
+    if(!indexBytes)
+        return indexBytes;
 
-    u64 indexBytes = 0;
-    if(!ComputeVolumeIndexBytes(fileCount, indexBytes))
-        return false;
-
-    return AddNoOverflow(static_cast<u64>(sizeof(VolumeHeaderDisk)), indexBytes, outMetadataBytes);
+    u64 metadataBytes = 0u;
+    const auto metadataBytesResult = AddNoOverflow(static_cast<u64>(sizeof(VolumeHeaderDisk)), *indexBytes);
+    if(!metadataBytesResult)
+        return MakeUnexpected(Failure{});
+    metadataBytes = *metadataBytesResult;
+    return metadataBytes;
 }
 
 
@@ -57,8 +58,8 @@ static bool ComputeVolumeMetadataRequirement(const u64 fileCount, u64& outMetada
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ComputeVolumeMetadataRequirement(const u64 fileCount, u64& outMetadataBytes)noexcept{
-    return FilesystemVolumeDetail::ComputeVolumeMetadataRequirement(fileCount, outMetadataBytes);
+Expected<u64> ComputeVolumeMetadataRequirement(const u64 fileCount)noexcept{
+    return FilesystemVolumeDetail::ComputeVolumeMetadataRequirement(fileCount);
 }
 
 bool VolumeFileSystem::loadMetadataLocked(){
@@ -86,10 +87,12 @@ bool VolumeFileSystem::loadMetadataLocked(){
     }
 
     u64 headerTotalBytes = 0;
-    if(!FilesystemVolumeDetail::AddNoOverflow(static_cast<u64>(sizeof(header)), header.indexBytes, headerTotalBytes)){
+    const auto headerTotalBytesResult = FilesystemVolumeDetail::AddNoOverflow(static_cast<u64>(sizeof(header)), header.indexBytes);
+    if(!headerTotalBytesResult){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "metadata byte overflow");
         return false;
     }
+    headerTotalBytes = *headerTotalBytesResult;
     if(headerTotalBytes > header.metadataBytes){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "metadata table exceeds reserved metadata area");
         return false;
@@ -100,18 +103,20 @@ bool VolumeFileSystem::loadMetadataLocked(){
         return false;
     }
 
-    u64 maxVolumeBytes = 0;
-    if(!computeLogicalCapacityLocked(maxVolumeBytes)){
+    const auto maxVolumeBytesResult = computeLogicalCapacityLocked();
+    if(!maxVolumeBytesResult){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "segment capacity overflow");
         return false;
     }
+    const u64 maxVolumeBytes = *maxVolumeBytesResult;
     if(header.nextFreeOffset > maxVolumeBytes){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "next free offset exceeds volume capacity");
         return false;
     }
-    u64 physicalCapacityBytes = 0;
-    if(!computePhysicalCapacityLocked(physicalCapacityBytes))
+    const auto physicalCapacity = computePhysicalCapacityLocked();
+    if(!physicalCapacity)
         return false;
+    const u64 physicalCapacityBytes = *physicalCapacity;
     if(header.nextFreeOffset > physicalCapacityBytes){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "next free offset exceeds physical volume bytes");
         return false;
@@ -120,17 +125,17 @@ bool VolumeFileSystem::loadMetadataLocked(){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "index byte count exceeds runtime addressable range");
         return false;
     }
-    u64 expectedIndexBytes = 0;
-    if(!FilesystemVolumeDetail::ComputeVolumeIndexBytes(header.fileCount, expectedIndexBytes)){
+    const auto expectedIndexBytes = FilesystemVolumeDetail::ComputeVolumeIndexBytes(header.fileCount);
+    if(!expectedIndexBytes){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "file count overflows index entry byte computation");
         return false;
     }
 
-    if(header.indexBytes != expectedIndexBytes){
+    if(header.indexBytes != *expectedIndexBytes){
         NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): loadMetadata failed: index byte count {} does not match expected {}")
             , StringConvert(m_volumeName)
             , header.indexBytes
-            , expectedIndexBytes
+            , *expectedIndexBytes
         );
         return false;
     }
@@ -160,10 +165,12 @@ bool VolumeFileSystem::loadMetadataLocked(){
         cursor += sizeof(entry);
 
         u64 endOffset = 0;
-        if(!FilesystemVolumeDetail::AddNoOverflow(entry.offset, entry.size, endOffset)){
+        const auto endOffsetResult = FilesystemVolumeDetail::AddNoOverflow(entry.offset, entry.size);
+        if(!endOffsetResult){
             FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "index entry offset overflow");
             return false;
         }
+        endOffset = *endOffsetResult;
         if(entry.offset < header.metadataBytes){
             FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpLoadMetadata, "index entry points inside metadata area");
             return false;
@@ -201,11 +208,12 @@ bool VolumeFileSystem::flushMetadataLocked(){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, "next free offset points inside metadata area");
         return false;
     }
-    u64 maxVolumeBytes = 0;
-    if(!computeLogicalCapacityLocked(maxVolumeBytes)){
+    const auto maxVolumeBytesResult = computeLogicalCapacityLocked();
+    if(!maxVolumeBytesResult){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, "segment capacity overflow");
         return false;
     }
+    const u64 maxVolumeBytes = *maxVolumeBytesResult;
     if(m_nextFreeOffset > maxVolumeBytes){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, "next free offset exceeds volume capacity");
         return false;
@@ -220,20 +228,24 @@ bool VolumeFileSystem::flushMetadataLocked(){
 
     using FilesystemVolumeDetail::VolumeIndexEntryDisk;
 
-    if(!FilesystemVolumeDetail::ComputeVolumeIndexBytes(header.fileCount, header.indexBytes)){
+    const auto indexBytes = FilesystemVolumeDetail::ComputeVolumeIndexBytes(header.fileCount);
+    if(!indexBytes){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, "file count overflows index size");
         return false;
     }
+    header.indexBytes = *indexBytes;
     if(header.indexBytes > static_cast<u64>(Limit<usize>::s_Max)){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, "metadata index exceeds runtime addressable range");
         return false;
     }
 
     u64 totalMetaBytes = 0;
-    if(!FilesystemVolumeDetail::AddNoOverflow(static_cast<u64>(sizeof(header)), header.indexBytes, totalMetaBytes)){
+    const auto totalMetaBytesResult = FilesystemVolumeDetail::AddNoOverflow(static_cast<u64>(sizeof(header)), header.indexBytes);
+    if(!totalMetaBytesResult){
         FilesystemVolumeDetail::LogFailure(m_volumeName, FilesystemVolumeDetail::s_VolumeOpFlushMetadata, "metadata byte overflow");
         return false;
     }
+    totalMetaBytes = *totalMetaBytesResult;
     if(totalMetaBytes > m_metadataBytes){
         NWB_LOGGER_WARNING(NWB_TEXT("Filesystem('{}'): flushMetadata failed: metadata requires {} bytes, reserved {} bytes")
             , StringConvert(m_volumeName)
@@ -266,11 +278,8 @@ bool VolumeFileSystem::flushMetadataLocked(){
 }
 
 bool VolumeFileSystem::canFitMetadataForFileCountLocked(const u64 fileCount)const noexcept{
-    u64 metadataBytes = 0;
-    if(!FilesystemVolumeDetail::ComputeVolumeMetadataRequirement(fileCount, metadataBytes))
-        return false;
-
-    return metadataBytes <= m_metadataBytes;
+    const auto metadataBytes = FilesystemVolumeDetail::ComputeVolumeMetadataRequirement(fileCount);
+    return metadataBytes && *metadataBytes <= m_metadataBytes;
 }
 
 

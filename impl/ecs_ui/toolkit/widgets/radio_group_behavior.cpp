@@ -37,16 +37,14 @@ namespace __hidden_ui_radio_group_behavior{
     return true;
 }
 
-[[nodiscard]] static bool FindChoice(const RadioGroupChoices& choices, const u64 key, u32& index)noexcept{
+[[nodiscard]] static Expected<u32> FindChoice(const RadioGroupChoices& choices, const u64 key)noexcept{
     if(key == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
     for(u32 candidate = 0u; candidate < choices.count; ++candidate){
-        if(choices.rows[candidate].key == key){
-            index = candidate;
-            return true;
-        }
+        if(choices.rows[candidate].key == key)
+            return candidate;
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 [[nodiscard]] static u64 FindEnabled(const RadioGroupChoices& choices, const u32 start, const bool reverse)noexcept{
@@ -113,11 +111,11 @@ namespace __hidden_ui_radio_group_behavior{
     if(kind == ControlActionKind::End)
         return FindEnabled(choices, choices.count - 1u, true);
     const bool reverse = kind == ControlActionKind::Up || kind == ControlActionKind::Left;
-    u32 current = 0u;
-    if(!FindChoice(choices, cursor, current))
+    const auto current = FindChoice(choices, cursor);
+    if(!current)
         return FindEnabled(choices, reverse ? choices.count - 1u : 0u, reverse);
-    const u32 start = reverse ? (current == 0u ? choices.count - 1u : current - 1u)
-        : (current + 1u == choices.count ? 0u : current + 1u);
+    const u32 start = reverse ? (*current == 0u ? choices.count - 1u : *current - 1u)
+        : (*current + 1u == choices.count ? 0u : *current + 1u);
     return FindEnabled(choices, start, reverse);
 }
 
@@ -131,17 +129,16 @@ namespace __hidden_ui_radio_group_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RadioGroupBehavior::Reconcile(
+Expected<RadioGroupChoices> RadioGroupBehavior::Reconcile(
     RadioGroupState& state,
     const IListDataSource& source,
-    RadioGroupChoices& choices,
     RadioGroupResult& result,
     const IRadioGroupReconcileGuard* const guard
 ){
     using namespace __hidden_ui_radio_group_behavior;
     if(state.m_reconciling){
         state.m_reentryObserved = true;
-        return false;
+        return MakeUnexpected(Failure{});
     }
     const RadioGroupSnapshot snapshot = state.snapshot();
     state.m_reconciling = true;
@@ -150,54 +147,53 @@ bool RadioGroupBehavior::Reconcile(
 
     RadioGroupChoices candidate;
     if(!StateCurrent(state, snapshot, state.m_reentryObserved, guard))
-        return false;
+        return MakeUnexpected(Failure{});
     candidate.sourceGeneration = source.instanceGeneration();
     if(!StateCurrent(state, snapshot, state.m_reentryObserved, guard) || candidate.sourceGeneration == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
     candidate.sourceRevision = source.revision();
     if(!StateCurrent(state, snapshot, state.m_reentryObserved, guard) || candidate.sourceRevision == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
     const u64 count = source.rowCount();
     if(!StateCurrent(state, snapshot, state.m_reentryObserved, guard) || count > s_RadioGroupMaxChoices)
-        return false;
+        return MakeUnexpected(Failure{});
     candidate.count = static_cast<u32>(count);
     if(!SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard))
-        return false;
+        return MakeUnexpected(Failure{});
     for(u32 index = 0u; index < candidate.count; ++index){
         if(!StateCurrent(state, snapshot, state.m_reentryObserved, guard))
-            return false;
+            return MakeUnexpected(Failure{});
         const u64 key = source.key(index);
         if(key == 0u || !SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard))
-            return false;
+            return MakeUnexpected(Failure{});
         for(u32 previous = 0u; previous < index; ++previous){
             if(candidate.rows[previous].key == key)
-                return false;
+                return MakeUnexpected(Failure{});
         }
-        u64 resolved = 0u;
-        const bool found = source.indexOf(key, resolved);
-        if(!SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard) || !found || resolved != index)
-            return false;
+        const auto resolved = source.indexOf(key);
+        if(!SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard) || !resolved || *resolved != index)
+            return MakeUnexpected(Failure{});
         const bool enabled = source.enabled(index);
         if(!SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard))
-            return false;
+            return MakeUnexpected(Failure{});
         candidate.rows[index] = { key, enabled };
     }
     const bool replacement = snapshot.sourceGeneration != 0u && snapshot.sourceGeneration != candidate.sourceGeneration;
     u64 selected = replacement ? 0u : snapshot.selectedKey;
     u64 cursor = replacement ? 0u : snapshot.cursorKey;
-    u32 index = 0u;
-    if(!FindChoice(candidate, selected, index))
+    if(!FindChoice(candidate, selected))
         selected = 0u;
-    if(!FindChoice(candidate, cursor, index))
+    const auto cursorIndex = FindChoice(candidate, cursor);
+    if(!cursorIndex)
         cursor = FindEnabled(candidate, 0u, false);
-    else if(!candidate.rows[index].enabled)
-        cursor = FindEnabled(candidate, index + 1u == candidate.count ? 0u : index + 1u, false);
+    else if(!candidate.rows[*cursorIndex].enabled)
+        cursor = FindEnabled(candidate, *cursorIndex + 1u == candidate.count ? 0u : *cursorIndex + 1u, false);
     // A second observation catches one-shot metadata mutation from the preceding final count callback.
     if(
         !SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard)
         || !SourceMatches(source, state, snapshot, state.m_reentryObserved, candidate, guard)
     )
-        return false;
+        return MakeUnexpected(Failure{});
     RadioGroupResult candidateResult = result;
     candidateResult.valid = true;
     candidateResult.selectionChanged |= snapshot.selectedKey != selected;
@@ -206,9 +202,8 @@ bool RadioGroupBehavior::Reconcile(
     state.m_cursor = cursor;
     state.m_sourceGeneration = candidate.sourceGeneration;
     state.m_sourceRevision = candidate.sourceRevision;
-    choices = candidate;
     result = candidateResult;
-    return true;
+    return candidate;
 }
 
 bool RadioGroupBehavior::Apply(
@@ -243,8 +238,8 @@ bool RadioGroupBehavior::Apply(
     case ControlActionKind::Submit:
     case ControlActionKind::Activate:{
         candidate = action.kind == ControlActionKind::Activate ? action.value : state.m_cursor;
-        u32 index = 0u;
-        if(!FindChoice(choices, candidate, index) || !choices.rows[index].enabled){
+        const auto index = FindChoice(choices, candidate);
+        if(!index || !choices.rows[*index].enabled){
             if(action.kind == ControlActionKind::Activate)
                 return false;
             candidate = 0u;

@@ -226,9 +226,8 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope resourceVersionUseRollback(m_resourceVersionUses);
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope taskRollback(m_tasks);
 
-    u32 markerLabelOffset = 0u;
-    u32 markerLabelSize = 0u;
-    if(!appendMarkerLabel(desc.markerLabel, markerLabelOffset, markerLabelSize))
+    const auto markerLabelRange = appendMarkerLabel(desc.markerLabel);
+    if(!markerLabelRange)
         return {};
 
     GpuTaskNode task;
@@ -236,8 +235,8 @@ GpuTaskId GpuTaskGraph::appendTaskWithinMutation(
     task.commands = commands;
     task.scheduling = desc.scheduling;
     task.timing = desc.timing;
-    task.markerLabelOffset = markerLabelOffset;
-    task.markerLabelSize = markerLabelSize;
+    task.markerLabelOffset = markerLabelRange->offset;
+    task.markerLabelSize = markerLabelRange->size;
     task.dependencyOffset = static_cast<u32>(m_dependencies.size());
     task.dependencyCount = static_cast<u32>(desc.dependencyCount + preludeDependencyCount);
     task.externalDependencyOffset = static_cast<u32>(m_externalDependencies.size());
@@ -506,9 +505,8 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope markerRollback(m_markerText);
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope resourceRollback(m_resources);
 
-    u32 markerLabelOffset = 0u;
-    u32 markerLabelSize = 0u;
-    if(!appendMarkerLabel(desc.markerLabel, markerLabelOffset, markerLabelSize))
+    const auto markerLabelRange = appendMarkerLabel(desc.markerLabel);
+    if(!markerLabelRange)
         return {};
 
     for(usize sourceIndex = 0u; sourceIndex < desc.initialOwnerHandoffSourceCount; ++sourceIndex){
@@ -543,8 +541,8 @@ GpuGraphResourceId GpuTaskGraph::appendResourceWithinMutation(
     resource.initialOwnerHandoffSourceOffset = static_cast<u32>(initialOwnerHandoffSourceOffset);
     resource.initialOwnerHandoffSourceCount = static_cast<u32>(desc.initialOwnerHandoffSourceCount);
     resource.queueSharing = desc.queueSharing;
-    resource.markerLabelOffset = markerLabelOffset;
-    resource.markerLabelSize = markerLabelSize;
+    resource.markerLabelOffset = markerLabelRange->offset;
+    resource.markerLabelSize = markerLabelRange->size;
     if(queueAdmission){
         resource.queueFamilyIndexOffset = static_cast<u32>(m_queueFamilyIndices.size());
         resource.queueFamilyIndexCount = queueAdmission->queueFamilyIndexCount;
@@ -662,15 +660,14 @@ GpuGraphResourceSetId GpuTaskGraph::appendResourceSet(const GpuGraphResourceSetD
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope memberRollback(m_resourceSetMembers);
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope setRollback(m_resourceSets);
 
-    u32 markerLabelOffset = 0u;
-    u32 markerLabelSize = 0u;
-    if(!appendMarkerLabel(desc.markerLabel, markerLabelOffset, markerLabelSize))
+    const auto markerLabelRange = appendMarkerLabel(desc.markerLabel);
+    if(!markerLabelRange)
         return {};
 
     GpuGraphResourceSetNode resourceSet;
     resourceSet.identity = desc.identity;
-    resourceSet.markerLabelOffset = markerLabelOffset;
-    resourceSet.markerLabelSize = markerLabelSize;
+    resourceSet.markerLabelOffset = markerLabelRange->offset;
+    resourceSet.markerLabelSize = markerLabelRange->size;
     resourceSet.memberOffset = static_cast<u32>(m_resourceSetMembers.size());
     resourceSet.memberCount = static_cast<u32>(desc.memberCount);
     for(usize memberIndex = 0u; memberIndex < desc.memberCount; ++memberIndex)
@@ -718,16 +715,15 @@ GpuExternalCompletionId GpuTaskGraph::appendExternalCompletion(const GpuExternal
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope markerRollback(m_markerText);
     __hidden_gpu_task_graph_storage::AppendedContainerRollbackScope completionRollback(m_externalCompletions);
 
-    u32 markerLabelOffset = 0u;
-    u32 markerLabelSize = 0u;
-    if(!appendMarkerLabel(desc.markerLabel, markerLabelOffset, markerLabelSize))
+    const auto markerLabelRange = appendMarkerLabel(desc.markerLabel);
+    if(!markerLabelRange)
         return {};
 
     GpuExternalCompletionNode completion;
     completion.identity = desc.identity;
     completion.token = desc.token;
-    completion.markerLabelOffset = markerLabelOffset;
-    completion.markerLabelSize = markerLabelSize;
+    completion.markerLabelOffset = markerLabelRange->offset;
+    completion.markerLabelSize = markerLabelRange->size;
     completion.hasToken = desc.token.valid() && desc.token.hasPhysicalQueueIdentity();
     const u16 tokenDeviceGeneration = completion.hasToken ? desc.token.deviceGeneration : 0u;
 

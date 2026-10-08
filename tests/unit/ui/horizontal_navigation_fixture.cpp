@@ -110,9 +110,9 @@ bool HorizontalNavigationFixture::publish(const usize count, const PopupScope* p
     return true;
 }
 
-bool HorizontalNavigationFixture::take(ControlAction& action, const usize index){
+Expected<ControlAction> HorizontalNavigationFixture::take(const usize index){
     const HitTarget& host = m_targets[index];
-    return m_router.consumeControlAction(host.id, host.declarationGeneration, host.control, action);
+    return m_router.consumeControlAction(host.id, host.declarationGeneration, host.control);
 }
 
 void HorizontalNavigationFixture::bindEditor(const usize hostIndex){

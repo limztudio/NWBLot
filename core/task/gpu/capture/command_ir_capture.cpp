@@ -225,6 +225,12 @@ GpuCommandIrOwnedStream::GpuCommandIrOwnedStream(GraphicsArena& arena)
     , m_bytes(arena)
 {}
 
+GpuCommandIrOwnedStream::GpuCommandIrOwnedStream(GpuCommandIrOwnedStream&& other)noexcept
+    : m_arena(other.m_arena)
+    , m_bytes(Move(other.m_bytes))
+    , m_rasterOwners(Exchange(other.m_rasterOwners, nullptr))
+{}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -266,11 +272,12 @@ BinaryByteView GpuCommandIrCapture::commandBytes()const{
     return BinaryByteView{ m_packedBytes.data(), m_packedBytes.size() };
 }
 
-bool GpuCommandIrCapture::exportOwned(GpuCommandIrOwnedStream& outStream)const{
+Expected<GpuCommandIrOwnedStream> GpuCommandIrCapture::exportOwned(GraphicsArena& arena)const{
+    GpuCommandIrOwnedStream stream(arena);
     if(m_commandBytes.size() > Limit<usize>::s_Max - m_blobBytes.size())
-        return false;
+        return MakeUnexpected(Failure{});
     const usize totalSize = m_commandBytes.size() + m_blobBytes.size();
-    GraphicsBytes candidate(outStream.m_arena);
+    GraphicsBytes candidate(arena);
     candidate.resize(totalSize);
     NWB_MEMCPY(candidate.data(), totalSize, m_commandBytes.data(), m_commandBytes.size());
     if(!m_blobBytes.empty()){
@@ -283,19 +290,16 @@ bool GpuCommandIrCapture::exportOwned(GpuCommandIrOwnedStream& outStream)const{
     }
     GpuCommandIrRasterOwnerTable* ownerCandidate = nullptr;
     if(m_rasterOwners && (!m_rasterOwners->stateOwners.empty() || !m_rasterOwners->heapOwners.empty())){
-        GpuCommandIrRasterOwnerTable staged(outStream.m_arena);
+        GpuCommandIrRasterOwnerTable staged(arena);
         staged.stateOwners = m_rasterOwners->stateOwners;
         staged.heapOwners = m_rasterOwners->heapOwners;
-        ownerCandidate = NewArenaObject<GpuCommandIrRasterOwnerTable>(outStream.m_arena, outStream.m_arena);
+        ownerCandidate = NewArenaObject<GpuCommandIrRasterOwnerTable>(arena, arena);
         ownerCandidate->stateOwners.swap(staged.stateOwners);
         ownerCandidate->heapOwners.swap(staged.heapOwners);
     }
-    outStream.m_bytes.swap(candidate);
-    GpuCommandIrRasterOwnerTable* const previousOwners = outStream.m_rasterOwners;
-    outStream.m_rasterOwners = ownerCandidate;
-    if(previousOwners)
-        DestroyArenaObjectNoexcept(outStream.m_arena, previousOwners);
-    return true;
+    stream.m_bytes.swap(candidate);
+    stream.m_rasterOwners = ownerCandidate;
+    return stream;
 }
 
 GpuCommandIrCaptureCheckpoint GpuCommandIrCapture::checkpoint()const noexcept{

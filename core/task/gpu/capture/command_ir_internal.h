@@ -26,6 +26,28 @@ namespace GpuCommandIrDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct DecodedRecordContext{
+    GpuTaskId task;
+    GpuSubmissionPacketId packet;
+    GpuPhysicalQueueId queue;
+};
+
+[[nodiscard]] inline Expected<DecodedRecordContext> DecodeRecordContext(
+    const GpuCommandIrRecordContext& context,
+    const u64 graphGeneration,
+    const u64 planGeneration
+)noexcept{
+    const DecodedRecordContext decoded{
+        .task = { .generation = graphGeneration, .index = context.taskIndex },
+        .packet = { .generation = planGeneration, .index = context.packetIndex },
+        .queue = { .index = context.queueIndex, .deviceGeneration = context.queueDeviceGeneration },
+    };
+    if(!decoded.task.valid() || !decoded.packet.valid() || !decoded.queue.valid())
+        return MakeUnexpected(Failure{});
+    return decoded;
+}
+
+
 [[nodiscard]] bool ValidateBuiltinRecord(const GpuCommandIrBuiltinTaskRecord& record)noexcept;
 [[nodiscard]] GpuCommandIrReplayError::Enum ValidateUploadOperation(
     const GpuCommandIrBuiltinTaskRecord& record,

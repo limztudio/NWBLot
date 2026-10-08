@@ -41,30 +41,30 @@ public:
 
 
 public:
-    [[nodiscard]] bool decode(
+    [[nodiscard]] Expected<TextureDecodedMipUpload> decode(
         const Texture& textureAsset,
         const TextureMipLevel& mip,
         u32 mipLevel,
         Core::Format::Enum format,
-        TextureDecodedMipUpload& outUpload
+        Core::Alloc::ScratchArena& arena
     );
 
 
 private:
-    [[nodiscard]] bool decodeLdr(
+    [[nodiscard]] Expected<TextureDecodedMipUpload> decodeLdr(
         const Texture& textureAsset,
         const TextureMipLevel& mip,
         u32 mipLevel,
         Core::Format::Enum format,
-        TextureDecodedMipUpload& outUpload
+        Core::Alloc::ScratchArena& arena
     );
 
-    [[nodiscard]] bool decodeHdr(
+    [[nodiscard]] Expected<TextureDecodedMipUpload> decodeHdr(
         const Texture& textureAsset,
         const TextureMipLevel& mip,
         u32 mipLevel,
         Core::Format::Enum format,
-        TextureDecodedMipUpload& outUpload
+        Core::Alloc::ScratchArena& arena
     );
 };
 

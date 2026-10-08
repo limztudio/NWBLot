@@ -65,9 +65,8 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
-        const SurfelGiLifecycleInputs& inputs,
-        SurfelGiLifecycleResult& outResult
+    [[nodiscard]] Expected<SurfelGiLifecycleResult> declare(
+        const SurfelGiLifecycleInputs& inputs
     );
 
 

@@ -47,18 +47,11 @@ static void ExpectCookFailure(
     const AStringView metaText,
     const AStringView caseName
 ){
-    Path root(testArena.arena);
-    Path outputDirectory(testArena.arena);
-    EXPECT_FALSE(cookSingleMeta(
-        metaText,
-        caseName,
-        testArena,
-        root,
-        outputDirectory
-    ));
+    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, caseName);
+    ASSERT_TRUE(cookCase);
+    EXPECT_FALSE(cookSingleMeta(metaText, testArena, *cookCase));
 
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(cookCase->root));
 }
 
 static void ExpectCookFailure(

@@ -154,8 +154,8 @@ public:
         // Keep caustics enabled for the repro; NWB_FLICKER_TEST_NO_CAUSTICS selects the control.
         static const bool s_disableCaustics = [](){
             NWB::Core::Alloc::GlobalArena arena(NWB::Tests::Smoke::s_SmokeEnvironmentArena);
-            SmokeEnvironmentString value(arena);
-            return ReadSmokeEnvironmentText("NWB_FLICKER_TEST_NO_CAUSTICS", value) && value[0] == '1';
+            const auto value = ReadSmokeEnvironmentText(arena, "NWB_FLICKER_TEST_NO_CAUSTICS");
+            return value && (*value)[0] == '1';
         }();
         if(s_disableCaustics){
             for(const NWB::Core::ECS::EntityID lightEntity : { directionalLight, pointLight }){

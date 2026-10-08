@@ -110,18 +110,16 @@ public:
 
 
 public:
-    virtual bool deserialize(
+    [[nodiscard]] virtual Expected<UniquePtr<IAsset>> deserialize(
         AssetArena& arena,
         const Name& virtualPath,
-        const AssetBytes& binary,
-        UniquePtr<IAsset>& outAsset
+        const AssetBytes& binary
     )const override{
         if(m_wrongType){
-            outAsset = MakeUnique<UiSkin>(arena, virtualPath);
-            return true;
+            return UniquePtr<IAsset>(MakeUnique<UiSkin>(arena, virtualPath));
         }
         TextureAssetCodec codec;
-        return codec.deserialize(arena, Name("tests/ui/image_loader/other_texture"), binary, outAsset);
+        return codec.deserialize(arena, Name("tests/ui/image_loader/other_texture"), binary);
     }
 
 

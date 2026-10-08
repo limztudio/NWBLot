@@ -48,51 +48,55 @@ inline constexpr u8 s_InvalidDigit = 255u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Canonical RFC 4648 alphabet and padding only. Failure preserves outSize; no allocation occurs here.
-[[nodiscard]] inline bool Base64DecodedSize(const AStringView source, const usize maxBytes, usize& outSize)noexcept{
+// Canonical RFC 4648 alphabet and padding only; size admission never allocates.
+[[nodiscard]] inline Expected<usize> Base64DecodedSize(const AStringView source, const usize maxBytes)noexcept{
     if(source.size() % 4u != 0u)
-        return false;
-    if(source.empty()){
-        outSize = 0u;
-        return true;
-    }
+        return MakeUnexpected(Failure{});
+    if(source.empty())
+        return 0u;
     const usize padding = source.back() == '=' ? (source[source.size() - 2u] == '=' ? 2u : 1u) : 0u;
     const usize byteCount = source.size() / 4u * 3u - padding;
     if(byteCount > maxBytes)
-        return false;
+        return MakeUnexpected(Failure{});
     for(usize offset = 0u; offset < source.size(); offset += 4u){
         const u8 first = Base64Detail::Digit(source[offset]);
         const u8 second = Base64Detail::Digit(source[offset + 1u]);
         if(first == Base64Detail::s_InvalidDigit || second == Base64Detail::s_InvalidDigit)
-            return false;
+            return MakeUnexpected(Failure{});
         const bool last = offset + 4u == source.size();
         if(source[offset + 2u] == '='){
             if(!last || source[offset + 3u] != '=' || (second & 15u) != 0u)
-                return false;
+                return MakeUnexpected(Failure{});
             continue;
         }
         const u8 third = Base64Detail::Digit(source[offset + 2u]);
         if(third == Base64Detail::s_InvalidDigit)
-            return false;
+            return MakeUnexpected(Failure{});
         if(source[offset + 3u] == '='){
             if(!last || (third & 3u) != 0u)
-                return false;
+                return MakeUnexpected(Failure{});
         }
         else if(Base64Detail::Digit(source[offset + 3u]) == Base64Detail::s_InvalidDigit)
-            return false;
+            return MakeUnexpected(Failure{});
     }
-    outSize = byteCount;
-    return true;
+    return byteCount;
 }
 
-// Candidate ownership makes successful replacement and aliased inputs safe. Failure preserves outBytes.
+// The returned candidate owns its bytes; borrowed input may alias a caller-owned destination.
 template<typename ByteContainer>
-[[nodiscard]] inline bool DecodeBase64(const AStringView source, ByteContainer& outBytes, const usize maxBytes){
+[[nodiscard]] inline Expected<ByteContainer> DecodeBase64(
+    const AStringView source,
+    const typename ByteContainer::allocator_type& allocator,
+    const usize maxBytes
+){
     BinaryDetail::RequireByteContainer<ByteContainer>();
-    usize byteCount = 0u;
-    if(!Base64DecodedSize(source, maxBytes, byteCount) || byteCount > outBytes.max_size())
-        return false;
-    ByteContainer candidate(outBytes.get_allocator());
+    const auto parsedSize = Base64DecodedSize(source, maxBytes);
+    if(!parsedSize)
+        return MakeUnexpected(parsedSize.error());
+    ByteContainer candidate(allocator);
+    const usize byteCount = *parsedSize;
+    if(byteCount > candidate.max_size())
+        return MakeUnexpected(Failure{});
     candidate.resize(byteCount);
     usize target = 0u;
     for(usize offset = 0u; offset < source.size(); offset += 4u){
@@ -112,19 +116,20 @@ template<typename ByteContainer>
             ++target;
         }
     }
-    outBytes = Move(candidate);
-    return true;
+    return candidate;
 }
 
 template<typename StringType>
-[[nodiscard]] inline bool EncodeBase64(const BinaryByteView source, StringType& outText){
+[[nodiscard]] inline Expected<StringType> EncodeBase64(const BinaryByteView source, const typename StringType::allocator_type& allocator){
     static_assert(sizeof(typename StringType::value_type) == 1u, "base64 output requires a byte-sized string");
     if(!source.data() && !source.empty())
-        return false;
+        return MakeUnexpected(Failure{});
     const usize quartets = source.size() / 3u + (source.size() % 3u != 0u ? 1u : 0u);
-    if(quartets > Limit<usize>::s_Max / 4u || quartets * 4u > outText.max_size())
-        return false;
-    StringType candidate(outText.get_allocator());
+    if(quartets > Limit<usize>::s_Max / 4u)
+        return MakeUnexpected(Failure{});
+    StringType candidate(allocator);
+    if(quartets * 4u > candidate.max_size())
+        return MakeUnexpected(Failure{});
     candidate.resize(quartets * 4u);
     usize target = 0u;
     for(usize offset = 0u; offset < source.size();){
@@ -140,8 +145,7 @@ template<typename StringType>
         target += 4u;
         offset += remaining >= 3u ? 3u : remaining;
     }
-    outText = Move(candidate);
-    return true;
+    return candidate;
 }
 
 

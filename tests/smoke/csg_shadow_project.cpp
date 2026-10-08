@@ -86,9 +86,8 @@ private:
     }
 
     bool readMode(){
-        SmokeEnvironmentString value(m_context.objectArena);
-        if(ReadSmokeEnvironmentText("NWB_CSG_SHADOW_ARM", value)){
-            const AStringView arm(value.data(), value.size());
+        if(const auto value = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_CSG_SHADOW_ARM")){
+            const AStringView arm(value->data(), value->size());
             if(arm == "reference")
                 m_arm = Arm::Reference;
             else if(arm == "cut")
@@ -102,20 +101,20 @@ private:
             else
                 return false;
         }
-        if(ReadSmokeEnvironmentText("NWB_CSG_SHADOW_LIGHT", value)){
-            const AStringView light(value.data(), value.size());
+        if(const auto value = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_CSG_SHADOW_LIGHT")){
+            const AStringView light(value->data(), value->size());
             if(light != s_DIRECTIONAL && light != s_POINT)
                 return false;
             m_pointLight = light == s_POINT;
         }
-        if(ReadSmokeEnvironmentText("NWB_CSG_SHADOW_LIGHT_SOURCE", value)){
-            const AStringView source(value.data(), value.size());
+        if(const auto value = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_CSG_SHADOW_LIGHT_SOURCE")){
+            const AStringView source(value->data(), value->size());
             if(source != s_HARD && source != s_FINITE)
                 return false;
             m_finiteLightSource = source == s_FINITE;
         }
-        if(ReadSmokeEnvironmentText("NWB_CSG_SHADOW_ATLAS", value)){
-            const AStringView atlas(value.data(), value.size());
+        if(const auto value = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_CSG_SHADOW_ATLAS")){
+            const AStringView atlas(value->data(), value->size());
             if(atlas != "boxes" && atlas != "analytic")
                 return false;
             m_analyticAtlas = atlas == "analytic";
@@ -332,7 +331,11 @@ public:
             , static_cast<u32>(m_arm), StringConvert(m_pointLight ? s_POINT : s_DIRECTIONAL), hardware ? 1u : 0u
             , static_cast<f64>(cameraX)
         );
-        return ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("CsgShadowSmokeProject"), 120u, m_capture);
+        auto capture = ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("CsgShadowSmokeProject"), 120u);
+        if(!capture)
+            return false;
+        m_capture = Move(*capture);
+        return true;
     }
 
     virtual void onShutdown()override{

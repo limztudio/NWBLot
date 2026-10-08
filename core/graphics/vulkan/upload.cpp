@@ -177,51 +177,50 @@ void UploadManager::retireOwnerChunksLocked(
     }
 }
 
-bool UploadManager::suballocateBuffer(
+Expected<BufferSuballocation> UploadManager::suballocateBuffer(
     const u64 size,
-    Buffer** const pBuffer,
-    u64* const pOffset,
-    void** const pCpuVA,
     TrackedCommandBuffer* const owner,
     const u64 nativeRecordingID,
     const GpuPhysicalQueueId queue,
     const u64 completedVersion,
     const u32 alignment
 ){
-    if(!pBuffer || !pOffset || !owner || nativeRecordingID == 0u)
-        return false;
+    if(!owner || nativeRecordingID == 0u)
+        return MakeUnexpected(Failure{});
     if(!m_device.matchesPhysicalQueueIdentity(queue))
-        return false;
+        return MakeUnexpected(Failure{});
 
     ScopedLock lock(m_mutex);
     QueueChunkLedger* const ledger = findOrCreateQueueLedgerLocked(queue);
     if(!ledger)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    const auto trySuballocateFromChunk = [&](BufferChunk& chunk) -> bool {
-        u64 alignedOffset = 0;
-        if(!AlignUpU64Checked(chunk.allocated, static_cast<u64>(alignment), alignedOffset))
-            return false;
-        if(alignedOffset > chunk.size || size > chunk.size - alignedOffset)
-            return false;
+    const auto trySuballocateFromChunk = [&](BufferChunk& chunk) -> Expected<BufferSuballocation>{
+        const auto alignedOffset = AlignUpU64Checked(chunk.allocated, static_cast<u64>(alignment));
+        if(!alignedOffset)
+            return MakeUnexpected(Failure{});
+        if(*alignedOffset > chunk.size || size > chunk.size - *alignedOffset)
+            return MakeUnexpected(Failure{});
 
         Buffer* buffer = chunk.buffer.get();
-        *pBuffer = buffer;
-        *pOffset = alignedOffset;
-        if(pCpuVA)
-            *pCpuVA = static_cast<u8*>(buffer->m_mappedMemory) + alignedOffset;
+        void* const cpuAddress = buffer->m_mappedMemory
+            ? static_cast<u8*>(buffer->m_mappedMemory) + *alignedOffset
+            : nullptr
+        ;
 
-        chunk.allocated = alignedOffset + size;
-        return true;
+        chunk.allocated = *alignedOffset + size;
+        return BufferSuballocation{ buffer, *alignedOffset, cpuAddress };
     };
 
     for(BufferChunk* chunk = ledger->firstActiveChunk; chunk; chunk = chunk->nextActiveChunk){
         if(
             chunk->owner == owner
             && chunk->nativeRecordingID == nativeRecordingID
-            && trySuballocateFromChunk(*chunk)
-        )
-            return true;
+        ){
+            const auto result = trySuballocateFromChunk(*chunk);
+            if(result)
+                return result;
+        }
     }
 
     for(BufferChunkPtr& retiredChunk : ledger->chunks){
@@ -261,7 +260,7 @@ bool UploadManager::suballocateBuffer(
 
     BufferHandle bufferHandle = m_device.createBuffer(bufferDesc);
     if(!bufferHandle)
-        return false;
+        return MakeUnexpected(Failure{});
 
     ledger->chunks.push_back(MakeRefCount<BufferChunk>(
         m_device.m_context.cpuScheduler,

@@ -50,10 +50,9 @@ struct ShaderVariantDefineAssignment{
     return equalPos == AStringView::npos ? AStringView{} : segment.substr(0u, equalPos);
 }
 
-[[nodiscard]] inline bool FindVariantDefineAssignment(const AStringView variant, const AStringView defineName, AStringView& outAssignment){
-    outAssignment = AStringView{};
+[[nodiscard]] inline Expected<AStringView> FindVariantDefineAssignment(const AStringView variant, const AStringView defineName)noexcept{
     if(variant.empty() || variant == Core::ShaderArchive::s_DefaultVariant)
-        return false;
+        return MakeUnexpected(Failure{});
 
     usize begin = 0u;
     while(begin < variant.size()){
@@ -63,26 +62,25 @@ struct ShaderVariantDefineAssignment{
 
         const AStringView segment = variant.substr(begin, segmentEnd - begin);
         if(VariantSegmentDefineName(segment) == defineName){
-            outAssignment = segment;
-            return true;
+            return segment;
         }
 
         begin = segmentEnd + 1u;
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] inline bool BuildCsgClipShaderVariantName(
+[[nodiscard]] inline Expected<Core::GraphicsString> BuildCsgClipShaderVariantName(
+    Core::GraphicsArena& arena,
     const AStringView baseVariant,
     const ShaderVariantDefineAssignment* defineAssignments,
-    const usize defineAssignmentCount,
-    Core::GraphicsString& outVariant
+    const usize defineAssignmentCount
 ){
-    outVariant.clear();
+    Core::GraphicsString variant(arena);
     if(baseVariant.empty() || !defineAssignments || defineAssignmentCount == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
     if(defineAssignmentCount > s_MaxCsgClipShaderVariantDefineAssignments)
-        return false;
+        return MakeUnexpected(Failure{});
     if(baseVariant == Core::ShaderArchive::s_DefaultVariant){
         bool insertedDefines[s_MaxCsgClipShaderVariantDefineAssignments] = {};
         for(usize outputIndex = 0u; outputIndex < defineAssignmentCount; ++outputIndex){
@@ -94,20 +92,20 @@ struct ShaderVariantDefineAssignment{
                     selectedIndex = i;
             }
             if(selectedIndex == defineAssignmentCount)
-                return false;
+                return MakeUnexpected(Failure{});
 
-            if(!outVariant.empty())
-                outVariant += ';';
-            outVariant += defineAssignments[selectedIndex].assignment;
+            if(!variant.empty())
+                variant += ';';
+            variant += defineAssignments[selectedIndex].assignment;
             insertedDefines[selectedIndex] = true;
         }
-        return true;
+        return variant;
     }
 
     usize reserveSize = baseVariant.size();
     for(usize i = 0u; i < defineAssignmentCount; ++i)
         reserveSize += 1u + defineAssignments[i].assignment.size();
-    outVariant.reserve(reserveSize);
+    variant.reserve(reserveSize);
 
     bool insertedDefines[s_MaxCsgClipShaderVariantDefineAssignments] = {};
     usize begin = 0u;
@@ -119,25 +117,25 @@ struct ShaderVariantDefineAssignment{
         const AStringView segment = baseVariant.substr(begin, segmentEnd - begin);
         const AStringView defineName = VariantSegmentDefineName(segment);
         if(defineName.empty())
-            return false;
+            return MakeUnexpected(Failure{});
 
         for(usize i = 0u; i < defineAssignmentCount; ++i){
             if(insertedDefines[i] || !(defineAssignments[i].name < defineName))
                 continue;
 
-            if(!outVariant.empty())
-                outVariant += ';';
-            outVariant += defineAssignments[i].assignment;
+            if(!variant.empty())
+                variant += ';';
+            variant += defineAssignments[i].assignment;
             insertedDefines[i] = true;
         }
         for(usize i = 0u; i < defineAssignmentCount; ++i){
             if(defineName == defineAssignments[i].name)
-                return false;
+                return MakeUnexpected(Failure{});
         }
 
-        if(!outVariant.empty())
-            outVariant += ';';
-        outVariant += segment;
+        if(!variant.empty())
+            variant += ';';
+        variant += segment;
         begin = segmentEnd + 1u;
     }
 
@@ -145,11 +143,11 @@ struct ShaderVariantDefineAssignment{
         if(insertedDefines[i])
             continue;
 
-        if(!outVariant.empty())
-            outVariant += ';';
-        outVariant += defineAssignments[i].assignment;
+        if(!variant.empty())
+            variant += ';';
+        variant += defineAssignments[i].assignment;
     }
-    return true;
+    return variant;
 }
 
 

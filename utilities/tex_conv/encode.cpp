@@ -73,9 +73,7 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool LoadLdrPlanes(const Vector<Path>& inputPaths, ImagePlanes& outPlanes){
-    return EncodeBackendDetail::LoadPlanesFromFiles<EncodeBackendDetail::LdrPlaneLoader>(inputPaths, outPlanes);
-}
+
 
 [[nodiscard]] static bool ApplyAlphaSource(const AlphaSource& alphaSource, ImagePlanes& inOutPlanes){
     if(alphaSource.mode == AlphaSourceMode::Original)
@@ -92,8 +90,8 @@ private:
         }
     }
 
-    basisu::imagef alphaMask;
-    if(!EncodeBackendDetail::LoadAlphaMask(alphaSource, width, height, alphaMask))
+    const auto alphaMask = EncodeBackendDetail::LoadAlphaMask(alphaSource, width, height);
+    if(!alphaMask)
         return false;
     if(alphaSource.mode == AlphaSourceMode::Constant && !IsFinite(alphaSource.constant)){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: alpha constant must be finite."));
@@ -113,7 +111,7 @@ private:
             for(; x < chunkEndX; x += 4u){
                 SIMDVector alphaLanes = (alphaSource.mode == AlphaSourceMode::Constant)
                     ? saturatedConstantAlpha
-                    : VectorSet(alphaMask(x, y)[0u], alphaMask(x + 1u, y)[0u], alphaMask(x + 2u, y)[0u], alphaMask(x + 3u, y)[0u]);
+                    : VectorSet((*alphaMask)(x, y)[0u], (*alphaMask)(x + 1u, y)[0u], (*alphaMask)(x + 2u, y)[0u], (*alphaMask)(x + 3u, y)[0u]);
                 const SIMDVector quantizedLanes = VectorTruncate(VectorAdd(VectorMultiply(VectorSaturate(alphaLanes), VectorReplicate(s_BasisColorChannelMax)), VectorReplicate(s_BasisColorChannelRoundingBias)));
                 plane(x, y).a = static_cast<u8>(VectorGetX(quantizedLanes));
                 plane(x + 1u, y).a = static_cast<u8>(VectorGetY(quantizedLanes));
@@ -123,7 +121,7 @@ private:
             for(; x < width; ++x){
                 const f32 alpha = (alphaSource.mode == AlphaSourceMode::Constant)
                     ? VectorGetX(saturatedConstantAlpha)
-                    : alphaMask(x, y)[0u];
+                    : (*alphaMask)(x, y)[0u];
                 plane(x, y).a = static_cast<u8>(VectorGetX(VectorTruncate(VectorAdd(VectorMultiply(VectorSaturate(VectorReplicate(alpha)), VectorReplicate(s_BasisColorChannelMax)), VectorReplicate(s_BasisColorChannelRoundingBias)))));
             }
         }
@@ -131,16 +129,16 @@ private:
     return true;
 }
 
-[[nodiscard]] static bool Encode2DOrCube(
+[[nodiscard]] static Expected<TexturePayload> Encode2DOrCube(
     const Vector<Path>& inputPaths,
     const TextureDimension::Enum dimension,
     const bool srgb,
-    const AlphaSource& alphaSource,
-    TexturePayload& outPayload
+    const AlphaSource& alphaSource
 ){
+    TexturePayload payload;
     const u32 planeCount = dimension == TextureDimension::TextureCube ? TextureFormat::s_TextureCubeFaceCount : 1u;
     if(inputPaths.size() != planeCount)
-        return false;
+        return MakeUnexpected(Failure{});
 
     basisu::job_pool jobPool(s_BasisEncoderWorkerCount);
     basisu::basis_compressor_params parameters;
@@ -157,11 +155,11 @@ private:
         }
     }
     else{
-        ImagePlanes sourcePlanes;
-        if(!LoadLdrPlanes(inputPaths, sourcePlanes) || !ApplyAlphaSource(alphaSource, sourcePlanes))
-            return false;
+        auto sourcePlanes = EncodeBackendDetail::LoadPlanesFromFiles<EncodeBackendDetail::LdrPlaneLoader>(inputPaths);
+        if(!sourcePlanes || !ApplyAlphaSource(alphaSource, *sourcePlanes))
+            return MakeUnexpected(Failure{});
         parameters.m_read_source_images = false;
-        parameters.m_source_images = Move(sourcePlanes);
+        parameters.m_source_images = Move(*sourcePlanes);
     }
     parameters.m_mip_gen = true;
     parameters.m_mip_smallest_dimension = 1u;
@@ -170,43 +168,44 @@ private:
     basisu::basis_compressor compressor;
     if(!compressor.init(parameters)){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal failed to initialize the texture encoder."));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     const basisu::basis_compressor::error_code encodeResult = compressor.process();
     if(encodeResult != basisu::basis_compressor::cECSuccess){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: UASTC encoding failed (Basis Universal error {}).")
             , static_cast<u32>(encodeResult)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const basisu::basisu_backend_output& backendOutput = compressor.get_uastc_backend_output();
     if(!EncodeBackendDetail::ValidateBackendOutput(backendOutput, basist::basis_tex_format::cUASTC_LDR_4x4))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const basisu::basisu_backend_slice_desc& firstDescriptor = backendOutput.m_slice_desc.front();
     if(firstDescriptor.m_orig_width == 0u || firstDescriptor.m_orig_height == 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal produced an invalid base resolution."));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(dimension == TextureDimension::TextureCube && firstDescriptor.m_orig_width != firstDescriptor.m_orig_height){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: cubemap faces must be square."));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    u32 mipCount = 0u;
-    if(!TextureFormat::ComputeCompleteMipCount(dimension, firstDescriptor.m_orig_width, firstDescriptor.m_orig_height, 1u, mipCount)){
+    const auto mipCountResult = TextureFormat::ComputeCompleteMipCount(dimension, firstDescriptor.m_orig_width, firstDescriptor.m_orig_height, 1u);
+    if(!mipCountResult){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal produced an invalid mip chain."));
-        return false;
+        return MakeUnexpected(Failure{});
     }
+    const u32 mipCount = *mipCountResult;
     const u64 expectedBackendSliceCount = static_cast<u64>(mipCount) * planeCount;
     if(backendOutput.m_slice_desc.size() != expectedBackendSliceCount){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: Basis Universal returned an incomplete UASTC mip chain."));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     EncodeBackendDetail::ResetPayload(
-        outPayload,
+        payload,
         dimension,
         firstDescriptor.m_orig_width,
         firstDescriptor.m_orig_height,
@@ -214,18 +213,18 @@ private:
         TexturePayloadFormat::UastcLdr4x4,
         srgb
     );
-    outPayload.mips.reserve(mipCount);
-    u32 mipWidth = outPayload.width;
-    u32 mipHeight = outPayload.height;
+    payload.mips.reserve(mipCount);
+    u32 mipWidth = payload.width;
+    u32 mipHeight = payload.height;
     for(u32 mipIndex = 0u; mipIndex < mipCount; ++mipIndex){
-        if(!EncodeBackendDetail::AppendCanonicalMip(backendOutput, mipIndex, planeCount, mipWidth, mipHeight, outPayload))
-            return false;
+        if(!EncodeBackendDetail::AppendCanonicalMip(backendOutput, mipIndex, planeCount, mipWidth, mipHeight, payload))
+            return MakeUnexpected(Failure{});
         mipWidth = mipWidth > 1u ? mipWidth >> 1u : 1u;
         mipHeight = mipHeight > 1u ? mipHeight >> 1u : 1u;
     }
 
-    outPayload.hasAlpha = compressor.get_any_source_image_has_alpha();
-    return true;
+    payload.hasAlpha = compressor.get_any_source_image_has_alpha();
+    return payload;
 }
 
 [[nodiscard]] static SIMDVector ConvertSrgbVolumeTexelToLinearRgb(const SIMDVector normalizedTexel){
@@ -265,24 +264,26 @@ private:
     return VectorSelect(VectorSet(VectorGetX(roundedRgb), VectorGetY(roundedRgb), VectorGetZ(roundedRgb), 0.0f), VectorTruncate(averagedAlpha), s_SIMDMaskW);
 }
 
-[[nodiscard]] static bool GenerateNextVolumeMip(
+[[nodiscard]] static Expected<ImagePlanes> GenerateNextVolumeMip(
     const ImagePlanes& sourcePlanes,
-    const bool srgb,
-    ImagePlanes& outPlanes
+    const bool srgb
 ){
-    EncodeBackendDetail::VolumeMipDims mipDims;
-    if(!EncodeBackendDetail::PrepareVolumeMipTargets(sourcePlanes, outPlanes, mipDims))
-        return false;
+    auto targets = EncodeBackendDetail::PrepareVolumeMipTargets(sourcePlanes);
+    if(!targets)
+        return MakeUnexpected(Failure{});
+    auto& outPlanes = targets->planes;
+    const auto& mipDims = targets->dims;
     const u32 sourceDepth = mipDims.sourceDepth;
     const u32 targetWidth = mipDims.targetWidth;
     const u32 targetHeight = mipDims.targetHeight;
     const u32 targetDepth = mipDims.targetDepth;
 
     for(u32 targetZ = 0u; targetZ < targetDepth; ++targetZ){
-        u32 sourceFirst = 0u;
-        u32 sourceEnd = 0u;
-        if(!EncodeBackendDetail::ComputeVolumeMipSliceRange(sourceDepth, targetDepth, targetZ, sourceFirst, sourceEnd))
-            return false;
+        const auto range = EncodeBackendDetail::ComputeVolumeMipSliceRange(sourceDepth, targetDepth, targetZ);
+        if(!range)
+            return MakeUnexpected(Failure{});
+        const u32 sourceFirst = range->first;
+        const u32 sourceEnd = range->end;
 
         basisu::vector<basisu::image> filteredPlanes;
         filteredPlanes.resize(sourceEnd - sourceFirst);
@@ -291,7 +292,7 @@ private:
             filteredPlane.resize(targetWidth, targetHeight);
             if(!basisu::image_resample(sourcePlanes[sourceZ], filteredPlane, srgb, s_BasisResampleBoxFilter.data(), s_BasisResampleFilterScale, false, s_BasisResampleFilterChannelStart, s_HdrChannelCount)){
                 NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: failed to generate a volume mip level."));
-                return false;
+                return MakeUnexpected(Failure{});
             }
         }
 
@@ -331,7 +332,7 @@ private:
             }
         }
     }
-    return true;
+    return Move(targets->planes);
 }
 
 [[nodiscard]] static bool EncodeVolumeMip(
@@ -388,35 +389,38 @@ private:
     return true;
 }
 
-[[nodiscard]] static bool EncodeVolume(
+[[nodiscard]] static Expected<TexturePayload> EncodeVolume(
     const Vector<Path>& inputPaths,
     const bool srgb,
-    const AlphaSource& alphaSource,
-    TexturePayload& outPayload
+    const AlphaSource& alphaSource
 ){
-    ImagePlanes sourcePlanes;
-    if(!LoadLdrPlanes(inputPaths, sourcePlanes) || !ApplyAlphaSource(alphaSource, sourcePlanes))
-        return false;
+    TexturePayload payload;
+    auto sourcePlanes = EncodeBackendDetail::LoadPlanesFromFiles<EncodeBackendDetail::LdrPlaneLoader>(inputPaths);
+    if(!sourcePlanes || !ApplyAlphaSource(alphaSource, *sourcePlanes))
+        return MakeUnexpected(Failure{});
 
-    const u32 width = sourcePlanes.front().get_width();
-    const u32 height = sourcePlanes.front().get_height();
-    const u32 depth = static_cast<u32>(sourcePlanes.size());
-    u32 mipCount = 0u;
-    if(!TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture3D, width, height, depth, mipCount)){
+    const u32 width = sourcePlanes->front().get_width();
+    const u32 height = sourcePlanes->front().get_height();
+    const u32 depth = static_cast<u32>(sourcePlanes->size());
+    const auto mipCountResult = TextureFormat::ComputeCompleteMipCount(TextureDimension::Texture3D, width, height, depth);
+    if(!mipCountResult){
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: volume dimensions cannot form a complete mip chain."));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
+    const u32 mipCount = *mipCountResult;
     VolumeMips mipVolumes;
     mipVolumes.resize(mipCount);
-    mipVolumes[0u] = Move(sourcePlanes);
+    mipVolumes[0u] = Move(*sourcePlanes);
     for(u32 mipIndex = 1u; mipIndex < mipCount; ++mipIndex){
-        if(!GenerateNextVolumeMip(mipVolumes[mipIndex - 1u], srgb, mipVolumes[mipIndex]))
-            return false;
+        auto mip = GenerateNextVolumeMip(mipVolumes[mipIndex - 1u], srgb);
+        if(!mip)
+            return MakeUnexpected(Failure{});
+        mipVolumes[mipIndex] = Move(*mip);
     }
 
     EncodeBackendDetail::ResetPayload(
-        outPayload,
+        payload,
         TextureDimension::Texture3D,
         width,
         height,
@@ -424,14 +428,14 @@ private:
         TexturePayloadFormat::UastcLdr4x4,
         srgb
     );
-    outPayload.mips.reserve(mipCount);
+    payload.mips.reserve(mipCount);
     bool hasAlpha = false;
     for(u32 mipIndex = 0u; mipIndex < mipCount; ++mipIndex){
-        if(!EncodeVolumeMip(mipVolumes[mipIndex], srgb, outPayload, hasAlpha))
-            return false;
+        if(!EncodeVolumeMip(mipVolumes[mipIndex], srgb, payload, hasAlpha))
+            return MakeUnexpected(Failure{});
     }
-    outPayload.hasAlpha = hasAlpha;
-    return true;
+    payload.hasAlpha = hasAlpha;
+    return payload;
 }
 
 
@@ -444,59 +448,58 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool EncodeTexture(
+Expected<TexturePayload> EncodeTexture(
     const Vector<Path>& inputPaths,
     const TextureDimension::Enum dimension,
     const bool srgb,
-    const AlphaSource& alphaSource,
-    TexturePayload& outPayload
+    const AlphaSource& alphaSource
 ){
     if(inputPaths.empty())
-        return false;
+        return MakeUnexpected(Failure{});
 
     const bool hdrInput = IsHdrInputPath(inputPaths.front());
     for(const Path& inputPath : inputPaths){
         if(IsHdrInputPath(inputPath) != hdrInput){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: an individual texture conversion cannot mix HDR and LDR source images."));
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
     __hidden_encode::BasisLibrary library;
     if(!library.initialize())
-        return false;
+        return MakeUnexpected(Failure{});
 
     switch(dimension){
     case TextureDimension::Texture2D:
         if(inputPaths.size() != 1u){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: a 2D texture requires exactly one input image."));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         return hdrInput
-            ? EncodeBackendDetail::EncodeHdr2DOrCube(inputPaths, dimension, alphaSource, outPayload)
-            : __hidden_encode::Encode2DOrCube(inputPaths, dimension, srgb, alphaSource, outPayload)
+            ? EncodeBackendDetail::EncodeHdr2DOrCube(inputPaths, dimension, alphaSource)
+            : __hidden_encode::Encode2DOrCube(inputPaths, dimension, srgb, alphaSource)
         ;
     case TextureDimension::TextureCube:
         if(inputPaths.size() != TextureFormat::s_TextureCubeFaceCount){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: a cubemap requires exactly six ordered face images."));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         return hdrInput
-            ? EncodeBackendDetail::EncodeHdr2DOrCube(inputPaths, dimension, alphaSource, outPayload)
-            : __hidden_encode::Encode2DOrCube(inputPaths, dimension, srgb, alphaSource, outPayload)
+            ? EncodeBackendDetail::EncodeHdr2DOrCube(inputPaths, dimension, alphaSource)
+            : __hidden_encode::Encode2DOrCube(inputPaths, dimension, srgb, alphaSource)
         ;
     case TextureDimension::Texture3D:
         if(inputPaths.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: a volume texture requires one or more ordered Z slices."));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         return hdrInput
-            ? EncodeBackendDetail::EncodeHdrVolume(inputPaths, alphaSource, outPayload)
-            : __hidden_encode::EncodeVolume(inputPaths, srgb, alphaSource, outPayload)
+            ? EncodeBackendDetail::EncodeHdrVolume(inputPaths, alphaSource)
+            : __hidden_encode::EncodeVolume(inputPaths, srgb, alphaSource)
         ;
     default:
         NWB_LOGGER_ERROR(NWB_TEXT("tex_conv: unsupported texture dimension."));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 }
 

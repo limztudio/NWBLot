@@ -139,12 +139,13 @@ UiEditClipboardResult UiEditClipboardController::applyCompletion(Ui::EditModel& 
             return { UiEditClipboardStatus::TooLarge };
         const auto source = AStringView(m_completion.text);
         const usize maxBytes = model.limits().maxBytes - retainedBytes;
-        const auto status = model.textMode() == Ui::EditTextMode::Multiline
-            ? Ui::NormalizeMultilineText(source, m_insertText, maxBytes)
-            : Ui::NormalizeSingleLineText(source, m_insertText, maxBytes)
+        auto normalized = model.textMode() == Ui::EditTextMode::Multiline
+            ? Ui::NormalizeMultilineText(m_insertText.get_allocator().arena(), source, maxBytes)
+            : Ui::NormalizeSingleLineText(m_insertText.get_allocator().arena(), source, maxBytes)
         ;
-        if(status != Ui::EditTextStatus::Accepted)
-            return { status == Ui::EditTextStatus::TooLarge ? UiEditClipboardStatus::TooLarge : UiEditClipboardStatus::InvalidText };
+        if(!normalized)
+            return { normalized.error() == Ui::EditTextStatus::TooLarge ? UiEditClipboardStatus::TooLarge : UiEditClipboardStatus::InvalidText };
+        m_insertText = Move(*normalized);
         if(m_insertText.empty())
             return { UiEditClipboardStatus::Applied };
     }

@@ -5,6 +5,8 @@
 #include "backend.h"
 
 #include <core/common/log.h>
+
+#include <global/scope_exit.h>
 #include <core/graphics/rhi/queue_sharing.h>
 
 
@@ -447,22 +449,22 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
     if(!m_context.descriptorBufferManager || !m_context.descriptorBufferManager->isEnabled())
         return false;
 
-    auto carve = [&](const BindingLayoutHandle& layout, DescriptorBufferSegment& outBlock, const GpuDescriptorClass::Enum* classes, const u32 classCount) -> bool{
+    auto carve = [&](const BindingLayoutHandle& layout, const GpuDescriptorClass::Enum* classes, const u32 classCount) -> Expected<DescriptorBufferSegment>{
         const auto* bindingLayout = layout.get();
         if(!bindingLayout || !bindingLayout->isDescriptorBufferCompatible()){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: bindless layout is not descriptor-buffer-compatible; cannot carve heap block."));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const u32 setSizeBytes = bindingLayout->getDescriptorBufferSetSizeBytes();
         if(setSizeBytes == 0u){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: descriptor-buffer layout reports a zero set size."));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const BindlessLayoutDesc* bindlessDesc = bindingLayout->getBindlessDesc();
         const u32 descriptorCount = bindlessDesc ? bindlessDesc->maxCapacity : 0u;
         if(descriptorCount == 0u){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: bindless layout has no descriptor capacity."));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const DescriptorBufferSegment block = m_context.descriptorBufferManager->allocateForBindingGeneration(
             bindingLayout->getDescriptorBufferSegmentKind(),
@@ -472,16 +474,20 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
         );
         if(!block.valid()){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: failed to carve {}-byte descriptor-buffer heap block."), setSizeBytes);
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outBlock = block;
+        bool admitted = false;
+        ScopeExit releaseBlock([&]()noexcept{
+            if(!admitted)
+                m_context.descriptorBufferManager->freeForBindingGeneration(block, m_descriptorBufferGeneration);
+        });
         const auto& bindingOffsets = bindingLayout->getDescriptorBufferBindingOffsets();
         for(u32 c = 0u; c < classCount; ++c){
             const GpuDescriptorClass::Enum cls = classes[c];
             const auto it = bindingOffsets.find(getRegisterSlot(cls));
             if(it == bindingOffsets.end()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: descriptor-buffer layout has no offset for class {}."), static_cast<u32>(cls));
-                return false;
+                return MakeUnexpected(Failure{});
             }
             const VkDescriptorType descriptorType = VulkanDetail::ConvertDescriptorType(__hidden_vulkan_descriptor_heap::ClassToResourceType(cls));
             const u32 descriptorSize = m_context.descriptorBufferManager->getDescriptorSize(descriptorType);
@@ -492,11 +498,12 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
                 || requiredBytes > static_cast<u64>(setSizeBytes - it->second)
             ){
                 NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: GpuDescriptorHeap: descriptor-buffer binding range is invalid for class {}."), static_cast<u32>(cls));
-                return false;
+                return MakeUnexpected(Failure{});
             }
             m_classBufferOffset[static_cast<u32>(cls)] = it->second;
         }
-        return true;
+        admitted = true;
+        return block;
     };
 
     static constexpr GpuDescriptorClass::Enum s_ResourceClasses[] = {
@@ -513,10 +520,14 @@ bool GpuDescriptorHeap::initializeDescriptorBufferBlocks(const u32 offsetAlignme
     static constexpr GpuDescriptorClass::Enum s_SamplerClasses[] = {
         GpuDescriptorClass::Sampler
     };
-    if(!carve(m_resourceLayout, m_resourceBufferBlock, s_ResourceClasses, static_cast<u32>(LengthOf(s_ResourceClasses))))
+    const auto resourceBlock = carve(m_resourceLayout, s_ResourceClasses, static_cast<u32>(LengthOf(s_ResourceClasses)));
+    if(!resourceBlock)
         return false;
-    if(!carve(m_samplerLayout, m_samplerBufferBlock, s_SamplerClasses, static_cast<u32>(LengthOf(s_SamplerClasses))))
+    m_resourceBufferBlock = *resourceBlock;
+    const auto samplerBlock = carve(m_samplerLayout, s_SamplerClasses, static_cast<u32>(LengthOf(s_SamplerClasses)));
+    if(!samplerBlock)
         return false;
+    m_samplerBufferBlock = *samplerBlock;
 
     return true;
 }

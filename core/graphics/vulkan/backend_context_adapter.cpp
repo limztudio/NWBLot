@@ -331,13 +331,11 @@ bool BackendContext::pickPhysicalDevice(){
                     deviceIsGood = false;
                 }
 
-                VulkanDetail::SwapChainSurfaceFormatSelection surfaceFormatSelection;
                 if(!VulkanDetail::SelectSurfaceFormat(
                     surfaceFmts.data(),
                     static_cast<u32>(surfaceFmts.size()),
                     requestedSdrFormat,
-                    hdr10Allowed,
-                    surfaceFormatSelection
+                    hdr10Allowed
                 )){
                     errorStream << "\n  - does not support HDR10 or the requested SDR swap chain format";
                     deviceIsGood = false;
@@ -375,24 +373,24 @@ bool BackendContext::pickPhysicalDevice(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters){
+Expected<GraphicsVector<AdapterInfo>> BackendContext::enumerateAdapters(){
+    GraphicsVector<AdapterInfo> adapters(m_arena);
     VkResult res = VK_SUCCESS;
 
     if(!m_vulkanInstance){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapters: instance is null"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     uint32_t deviceCount = 0;
     res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, nullptr);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapter count. {}"), ResultToString(res));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     if(deviceCount == 0){
-        outAdapters.clear();
-        return true;
+        return adapters;
     }
 
     Alloc::ScratchArena scratchArena(VulkanArenaScope::s_AdapterEnumerateArena);
@@ -401,18 +399,17 @@ bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters)
     res = m_instanceDispatch.vkEnumeratePhysicalDevices(m_vulkanInstance, &deviceCount, devices.data());
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to enumerate adapters. {}"), ResultToString(res));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outAdapters.clear();
-    outAdapters.reserve(deviceCount);
+    adapters.reserve(deviceCount);
     for(usize i = 0u; i < static_cast<usize>(deviceCount); ++i)
-        outAdapters.emplace_back(m_arena);
+        adapters.emplace_back(m_arena);
 
     auto fillAdapterInfo = [&](usize i){
         AdapterInfo adapterInfo(m_arena);
         VulkanDetail::PopulateAdapterInfo(m_instanceDispatch, devices[i], adapterInfo);
-        outAdapters[i] = Move(adapterInfo);
+        adapters[i] = Move(adapterInfo);
     };
 
     if(m_cpuScheduler.isParallelEnabled() && deviceCount >= s_ParallelAdapterThreshold)
@@ -422,15 +419,16 @@ bool BackendContext::enumerateAdapters(GraphicsVector<AdapterInfo>& outAdapters)
             fillAdapterInfo(i);
     }
 
-    return true;
+    return adapters;
 }
 
-bool BackendContext::getSelectedAdapterInfo(AdapterInfo& outAdapter)const{
+Expected<AdapterInfo> BackendContext::getSelectedAdapterInfo()const{
     if(!m_rhiDevice || !m_vulkanPhysicalDevice)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    VulkanDetail::PopulateAdapterInfo(m_instanceDispatch, m_vulkanPhysicalDevice, outAdapter);
-    return true;
+    AdapterInfo adapter(m_arena);
+    VulkanDetail::PopulateAdapterInfo(m_instanceDispatch, m_vulkanPhysicalDevice, adapter);
+    return adapter;
 }
 
 

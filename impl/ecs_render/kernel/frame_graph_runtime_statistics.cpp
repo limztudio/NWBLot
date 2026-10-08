@@ -20,22 +20,18 @@ namespace __hidden_frame_graph_runtime_statistics{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool TranslateQueueClass(
-    const Core::CommandQueue::Enum queueClass,
-    Core::Telemetry::FrameGraphQueueClass::Enum& outQueueClass
+[[nodiscard]] static Expected<Core::Telemetry::FrameGraphQueueClass::Enum> TranslateQueueClass(
+    const Core::CommandQueue::Enum queueClass
 )noexcept{
     switch(queueClass){
     case Core::CommandQueue::Graphics:
-        outQueueClass = Core::Telemetry::FrameGraphQueueClass::Graphics;
-        return true;
+        return Core::Telemetry::FrameGraphQueueClass::Graphics;
     case Core::CommandQueue::Compute:
-        outQueueClass = Core::Telemetry::FrameGraphQueueClass::Compute;
-        return true;
+        return Core::Telemetry::FrameGraphQueueClass::Compute;
     case Core::CommandQueue::Transfer:
-        outQueueClass = Core::Telemetry::FrameGraphQueueClass::Transfer;
-        return true;
+        return Core::Telemetry::FrameGraphQueueClass::Transfer;
     default:
-        return false;
+        return MakeUnexpected(Failure{});
     }
 }
 
@@ -181,8 +177,8 @@ ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(
     if(!statistics.valid() || ownerNodeIndex == Limit<u32>::s_Max)
         return {};
 
-    Core::Telemetry::FrameGraphQueueClass::Enum queueClass = Core::Telemetry::FrameGraphQueueClass::Unknown;
-    if(!__hidden_frame_graph_runtime_statistics::TranslateQueueClass(statistics.queueClass, queueClass))
+    const auto queueClass = __hidden_frame_graph_runtime_statistics::TranslateQueueClass(statistics.queueClass);
+    if(!queueClass)
         return {};
 
     const Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecord result{
@@ -195,7 +191,7 @@ ECSRenderDetail::BuildFrameGraphPacketSubmissionStatistics(
             .index = statistics.queue.index,
             .deviceGeneration = statistics.queue.deviceGeneration,
         },
-        .queueClass = queueClass,
+        .queueClass = *queueClass,
         .joinsAcceptedQueueFrontier = statistics.joinsAcceptedQueueFrontier,
         .recoverySubmission = statistics.isRecoverySubmission,
         .plannedWaitTokenCount = static_cast<u64>(statistics.plannedWaitTokenCount),
@@ -234,8 +230,8 @@ ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
     )
         return {};
 
-    Core::Telemetry::FrameGraphQueueClass::Enum queueClass = Core::Telemetry::FrameGraphQueueClass::Unknown;
-    if(!__hidden_frame_graph_runtime_statistics::TranslateQueueClass(compileStatistics.queueClass, queueClass))
+    const auto queueClass = __hidden_frame_graph_runtime_statistics::TranslateQueueClass(compileStatistics.queueClass);
+    if(!queueClass)
         return {};
 
     const Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatistics result{
@@ -247,7 +243,7 @@ ECSRenderDetail::BuildFrameGraphPhysicalQueueRuntimeStatistics(
             .deviceGeneration = compileStatistics.queue.deviceGeneration,
         },
         .deviceGeneration = compileStatistics.deviceGeneration,
-        .queueClass = queueClass,
+        .queueClass = *queueClass,
         .compile = {
             .taskCount = static_cast<u64>(compileStatistics.taskCount),
             .packetCount = static_cast<u64>(compileStatistics.packetCount),

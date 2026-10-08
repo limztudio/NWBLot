@@ -42,31 +42,33 @@ u64 UiPopupToolsSmokeSource::key(const u64 index)const{
     return index < rowCount() ? (m_reversed ? rowCount() - index : index + 1u) : 0u;
 }
 
-bool UiPopupToolsSmokeSource::indexOf(const u64 keyValue, u64& index)const{
+Expected<u64> UiPopupToolsSmokeSource::indexOf(const u64 keyValue)const{
+    u64 index = 0u;
     if(keyValue == 0u || keyValue > rowCount())
-        return false;
+        return MakeUnexpected(Failure{});
     index = m_reversed ? rowCount() - keyValue : keyValue - 1u;
-    return true;
+    return index;
 }
 
-bool UiPopupToolsSmokeSource::findEnabled(const u64 start, const bool reverse, u64& index)const{
+Expected<u64> UiPopupToolsSmokeSource::findEnabled(const u64 start, const bool reverse)const{
+    u64 index = 0u;
     if(start >= rowCount())
-        return false;
+        return MakeUnexpected(Failure{});
     if(enabled(start)){
         index = start;
-        return true;
+        return index;
     }
     if(reverse){
         if(start == 0u)
-            return false;
+            return MakeUnexpected(Failure{});
         index = start - 1u;
     }
     else{
         if(start + 1u >= rowCount())
-            return false;
+            return MakeUnexpected(Failure{});
         index = start + 1u;
     }
-    return enabled(index);
+    return enabled(index) ? Expected<u64>{ index } : MakeUnexpected(Failure{});
 }
 
 StringView UiPopupToolsSmokeSource::text(const u64 index)const{

@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "expected.h"
+
 
 #include <chrono>
 #include <ctime>
@@ -153,16 +155,19 @@ inline Timer s_VeryBegining = TimerNow();
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool GetLocalTime(LocalTime& outTime)noexcept{
+[[nodiscard]] inline Expected<LocalTime> GetLocalTime()noexcept{
     const auto now = std::time(nullptr);
     if(now == static_cast<std::time_t>(-1))
-        return false;
+        return MakeUnexpected(Failure{});
 
+    LocalTime local = {};
 #if defined(NWB_PLATFORM_WINDOWS)
-    return localtime_s(&outTime, &now) == 0;
+    if(localtime_s(&local, &now) != 0)
 #else
-    return localtime_r(&now, &outTime) != nullptr;
+    if(localtime_r(&now, &local) == nullptr)
 #endif
+        return MakeUnexpected(Failure{});
+    return local;
 }
 
 

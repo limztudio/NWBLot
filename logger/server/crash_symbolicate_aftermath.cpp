@@ -67,11 +67,17 @@ struct AftermathDecoder{
         if(!library.open(arena, Core::Common::s_AftermathRuntimeName))
             return false;
 
-        return library.resolve(arena, "GFSDK_Aftermath_GpuCrashDump_CreateDecoder", createDecoder)
-            && library.resolve(arena, "GFSDK_Aftermath_GpuCrashDump_GenerateJSON", generateJson)
-            && library.resolve(arena, "GFSDK_Aftermath_GpuCrashDump_GetJSON", getJson)
-            && library.resolve(arena, "GFSDK_Aftermath_GpuCrashDump_DestroyDecoder", destroyDecoder)
-        ;
+        const auto create = library.resolve<PFN_GFSDK_Aftermath_GpuCrashDump_CreateDecoder>(arena, "GFSDK_Aftermath_GpuCrashDump_CreateDecoder");
+        const auto generate = library.resolve<PFN_GFSDK_Aftermath_GpuCrashDump_GenerateJSON>(arena, "GFSDK_Aftermath_GpuCrashDump_GenerateJSON");
+        const auto get = library.resolve<PFN_GFSDK_Aftermath_GpuCrashDump_GetJSON>(arena, "GFSDK_Aftermath_GpuCrashDump_GetJSON");
+        const auto destroy = library.resolve<PFN_GFSDK_Aftermath_GpuCrashDump_DestroyDecoder>(arena, "GFSDK_Aftermath_GpuCrashDump_DestroyDecoder");
+        if(!create || !generate || !get || !destroy)
+            return false;
+        createDecoder = *create;
+        generateJson = *generate;
+        getJson = *get;
+        destroyDecoder = *destroy;
+        return true;
     }
 };
 
@@ -98,8 +104,7 @@ void AppendAftermathGpuDumpSummary(LogArena& arena, const Path& packageDirectory
     outReport += s_AftermathSkippedReport;
 #else
     Vector<u8, LogArena> dumpBytes(arena);
-    ErrorCode readError;
-    if(!ReadBinaryFile(dumpPath, dumpBytes, readError) || dumpBytes.empty()){
+    if(!ReadBinaryFile(dumpPath, dumpBytes) || dumpBytes.empty()){
         outReport += "\n[aftermath]\nstatus=read_failed\n";
         return;
     }

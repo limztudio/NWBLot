@@ -57,18 +57,24 @@ public:
 
         Ui::EditNavigationResult result;
         Ui::EditBoxView view(m_arena);
-        Ui::TextLayout layout(m_arena);
-        if(view.snapshot(model) && m_layoutBuilder.layout({ view.displayText() }, layout) == Ui::TextLayoutStatus::Success
-            && view.adoptLayout(Move(layout))){
-            Ui::Rect caret;
-            if(view.caretGeometry().caretRect(view.displayCaret(), caret)){
-                result.preferredX = navigation.valid ? navigation.preferredX : caret.x;
+        Expected<Ui::TextLayout, Ui::TextLayoutStatus::Enum> layout = MakeUnexpected(Ui::TextLayoutStatus::InvalidParameters);
+        if(view.snapshot(model))
+            layout = m_layoutBuilder.layout({ view.displayText() });
+        if(layout && view.adoptLayout(Move(*layout))){
+            const auto caret = view.caretGeometry().caretRect(view.displayCaret());
+            if(caret){
+                result.preferredX = navigation.valid ? navigation.preferredX : caret->x;
+                Expected<usize> target = MakeUnexpected(Failure{});
                 if(direction == Ui::EditNavigationDirection::Up || direction == Ui::EditNavigationDirection::Down)
-                    result.resolved = view.caretGeometry().verticalTarget(view.displayCaret(), direction == Ui::EditNavigationDirection::Down,
-                        result.preferredX, result.committedByte);
+                    target = view.caretGeometry().verticalTarget(view.displayCaret(), direction == Ui::EditNavigationDirection::Down,
+                        result.preferredX);
                 else{
                     const f32 distance = direction == Ui::EditNavigationDirection::PageDown ? viewportHeight : -viewportHeight;
-                    result.resolved = view.caretGeometry().hitTest({ result.preferredX, caret.y + caret.height * 0.5f + distance }, result.committedByte);
+                    target = view.caretGeometry().hitTest({ result.preferredX, caret->y + caret->height * 0.5f + distance });
+                }
+                if(target){
+                    result.resolved = true;
+                    result.committedByte = *target;
                 }
             }
         }
@@ -176,11 +182,17 @@ protected:
         if(!m_result.valid)
             return false;
         Ui::EditBoxView view(m_arena);
-        Ui::TextLayout layout(m_arena);
-        if(!view.snapshot(model) || m_layoutBuilder.layout({ view.displayText() }, layout) != Ui::TextLayoutStatus::Success)
+        if(!view.snapshot(model))
             return false;
-        if(!view.adoptLayout(Move(layout)) || !view.arrange(bounds, {}, { 0.0f, 0.0f, 500.0f, 200.0f }, previousScroll, m_placement))
+        auto layout = m_layoutBuilder.layout({ view.displayText() });
+        if(!layout)
             return false;
+        if(!view.adoptLayout(Move(*layout)))
+            return false;
+        const auto placement = view.arrange(bounds, {}, { 0.0f, 0.0f, 500.0f, 200.0f }, previousScroll);
+        if(!placement)
+            return false;
+        m_placement = *placement;
         if(!m_host.publish(m_widget, view, m_placement, options))
             return false;
         Ui::HitTarget target;

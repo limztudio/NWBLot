@@ -98,10 +98,7 @@ public:
 
 private:
     [[nodiscard]] bool ensureRuntimeMesh(Core::ECS::EntityID entity, SkinnedMeshBindingComponent& component);
-    [[nodiscard]] bool ensureSourceLoaded(
-        const Core::Assets::AssetRef<Skin>& skinAsset,
-        MeshSkinningSource*& outSource
-    );
+    [[nodiscard]] Expected<MeshSkinningSource*> ensureSourceLoaded(const Core::Assets::AssetRef<Skin>& skinAsset);
     [[nodiscard]] bool uploadRuntimeMeshBuffers(MeshSkinningRuntimeInstance& instance);
     [[nodiscard]] RuntimeMeshHandle allocateHandle();
     void releaseRuntimeMesh(Core::ECS::EntityID entity);

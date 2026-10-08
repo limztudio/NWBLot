@@ -76,30 +76,30 @@ TEST(GpuCommandIrRasterPreflight, DrawWithoutHeapBindingRejectsWholePacket){
     state.viewport = Graphics::Viewport(64.f, 48.f);
     const u8 pushBytes[] = { 0x11u, 0x22u, 0x33u, 0x44u };
     Graphics::GpuCommandIrCapture validCapture(testArena.arena);
-    Graphics::GpuCommandIrOwnedStream valid(testArena.arena);
     ASSERT_TRUE(validCapture.captureSetGraphicsState(task, packet, queue, state));
     ASSERT_TRUE(validCapture.captureEndRenderPass(task, packet, queue));
-    ASSERT_TRUE(validCapture.exportOwned(valid));
+    const auto valid = validCapture.exportOwned(testArena.arena);
+    ASSERT_TRUE(valid);
     const Graphics::GpuCommandIrReplayResult accepted = Graphics::PreflightGpuCommandIrPacket(
-        valid, declarations, plan, packet);
+        *valid, declarations, plan, packet);
     EXPECT_EQ(accepted.error, Graphics::GpuCommandIrReplayError::None);
     EXPECT_TRUE(accepted.streamValidation.valid());
 
     Graphics::GpuCommandIrCapture invalidCapture(testArena.arena);
-    Graphics::GpuCommandIrOwnedStream invalid(testArena.arena);
     ASSERT_TRUE(invalidCapture.captureSetGraphicsState(task, packet, queue, state));
     ASSERT_TRUE(invalidCapture.capturePushConstants(task, packet, queue, BinaryByteView{ pushBytes, sizeof(pushBytes) }));
     ASSERT_TRUE(invalidCapture.captureDraw(task, packet, queue, Graphics::DrawArguments().setVertexCount(3u), false));
     ASSERT_TRUE(invalidCapture.captureEndRenderPass(task, packet, queue));
-    ASSERT_TRUE(invalidCapture.exportOwned(invalid));
+    const auto invalid = invalidCapture.exportOwned(testArena.arena);
+    ASSERT_TRUE(invalid);
     const Graphics::GpuCommandIrReplayResult rejected = Graphics::PreflightGpuCommandIrPacket(
-        invalid, declarations, plan, packet);
+        *invalid, declarations, plan, packet);
     EXPECT_EQ(rejected.error, Graphics::GpuCommandIrReplayError::InvalidRasterDraw);
     EXPECT_EQ(rejected.recordIndex, 2u);
     EXPECT_TRUE(rejected.streamValidation.valid());
 
     const Graphics::GpuCommandIrReplayResult raw = Graphics::PreflightGpuCommandIrPacket(
-        valid.bytes(), declarations, plan, packet);
+        valid->bytes(), declarations, plan, packet);
     EXPECT_EQ(raw.error, Graphics::GpuCommandIrReplayError::MissingOwnedSidecar);
     EXPECT_TRUE(raw.streamValidation.valid());
 

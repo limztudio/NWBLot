@@ -43,23 +43,21 @@ struct FontCookEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Reads only the paired FON2 source SFNT and preserves outFont when source admission fails.
-[[nodiscard]] bool LoadPairedFontCookSource(const Path& nwbFilePath, Font& outFont);
-[[nodiscard]] bool ParseFontCookMetadata(
+[[nodiscard]] Expected<FontCookEntry> ParseFontCookMetadata(
     const Path& assetRoot,
     AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    FontCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] bool ParseFontCookMetadataValue(
+[[nodiscard]] Expected<FontCookEntry> ParseFontCookMetadataValue(
     Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    FontCookEntry& outEntry
+    Core::Assets::AssetArena& arena
 );
-[[nodiscard]] bool BuildFontAsset(const FontCookEntry& entry, Font& outFont);
+[[nodiscard]] Expected<Font> BuildFontAsset(const FontCookEntry& entry, Core::Assets::AssetArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

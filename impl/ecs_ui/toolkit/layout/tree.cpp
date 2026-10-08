@@ -81,14 +81,14 @@ void LayoutTree::reset()noexcept{
     m_buildFailed = false;
 }
 
-bool LayoutTree::addNode(const u32 parent, const LayoutNodeDesc& description, u32& outIndex){
+Expected<u32> LayoutTree::addNode(const u32 parent, const LayoutNodeDesc& description){
     if(
         m_buildFailed || m_nodes.size() >= m_maxNodes || !IsValidDescription(description)
         || (m_nodes.empty() ? parent != s_LayoutNoParent : parent >= m_nodes.size())
         || (parent != s_LayoutNoParent && m_nodes[parent].description.direction == LayoutDirection::Leaf)
     ){
         m_buildFailed = true;
-        return false;
+        return MakeUnexpected(Failure{});
     }
     const u32 index = static_cast<u32>(m_nodes.size());
     m_nodes.push_back({ description, parent });
@@ -100,8 +100,7 @@ bool LayoutTree::addNode(const u32 parent, const LayoutNodeDesc& description, u3
             m_nodes[parentNode.lastChild].nextSibling = index;
         parentNode.lastChild = index;
     }
-    outIndex = index;
-    return true;
+    return index;
 }
 
 

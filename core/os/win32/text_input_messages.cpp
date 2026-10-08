@@ -89,10 +89,10 @@ TextInputAdmission::Enum Win32TextInputService::acceptCodePoint(
     if(codePoint < 0x20u || codePoint == 0x7fu)
         return TextInputAdmission::Accepted;
     char bytes[4] = {};
-    usize length = 0u;
-    const TextInputAdmission::Enum encoded = EncodeTextInputCodePoint(codePoint, bytes, length);
-    if(encoded != TextInputAdmission::Accepted)
-        return encoded;
+    const auto encoded = EncodeTextInputCodePoint(codePoint, bytes);
+    if(!encoded)
+        return encoded.error();
+    const usize length = *encoded;
     if(repeatCount == 1u)
         return emitCommit(token, AStringView(bytes, length));
     const usize batchCount = Min<usize>(repeatCount, s_TextInputMaxEventTextBytes / length);

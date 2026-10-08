@@ -25,24 +25,16 @@ void Builder::snapshotContextMenu(ContextMenuFrame& frame)noexcept{
 
 bool Builder::contextMenuStateMatches(const ContextMenuFrame& frame)const{
     return
-        popupAncestorsVisible() && frame.state && frame.state->revision() == frame.revision && frame.state->isOpen() == frame.open
-        && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration
-        && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration
-        && frame.state->m_popup.m_parent == frame.parentToken
-        && frame.state->m_list.inputGeneration() == frame.listToken.instanceGeneration
-        && frame.state->m_owner == frame.widget.id && frame.state->m_ownerDeclaration == frame.widget.declarationGeneration
-        && frame.state->m_anchorWidget == frame.anchor.id && frame.state->m_anchorDeclaration == frame.anchor.declarationGeneration
+        popupAncestorsVisible() && frame.state && frame.state->revision() == frame.revision && frame.state->isOpen() == frame.open && frame.state->m_popup.instanceGeneration() == frame.popupToken.instanceGeneration && frame.state->m_popup.openGeneration() == frame.popupToken.openGeneration && frame.state->m_popup.m_parent == frame.parentToken && frame.state->m_list.inputGeneration() == frame.listToken.instanceGeneration && frame.state->m_owner == frame.widget.id && frame.state->m_ownerDeclaration == frame.widget.declarationGeneration && frame.state->m_anchorWidget == frame.anchor.id && frame.state->m_anchorDeclaration == frame.anchor.declarationGeneration
     ;
 }
 
 bool Builder::contextMenuMatches(const ContextMenuFrame& frame)const{
     return
         frame.source && contextMenuStateMatches(frame)
-        && frame.listToken.contentGeneration != 0u && frame.listToken.contentRevision != 0u
-        && frame.source->instanceGeneration() == frame.listToken.contentGeneration && contextMenuStateMatches(frame)
+        && frame.listToken.contentGeneration != 0u && frame.listToken.contentRevision != 0u && frame.source->instanceGeneration() == frame.listToken.contentGeneration && contextMenuStateMatches(frame)
         && frame.source->revision() == frame.listToken.contentRevision && contextMenuStateMatches(frame)
-        && frame.source->rowCount() == frame.rowCount
-        && contextMenuStateMatches(frame)
+        && frame.source->rowCount() == frame.rowCount && contextMenuStateMatches(frame)
     ;
 }
 
@@ -50,13 +42,11 @@ bool Builder::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& res
     InputRouter& input = m_context.input();
     ContextMenuState& state = *frame.state;
     input.fencePopup(frame.popupToken);
-    PopupDismissReason::Enum reason = PopupDismissReason::None;
-    if(input.consumePopupDismissal(frame.popupToken, reason))
+    if(input.consumePopupDismissal(frame.popupToken))
         state.close();
-    ContextMenuAction trigger;
-    while(input.consumeContextMenu(frame.anchor.id, frame.anchor.declarationGeneration, trigger)){
-        if(frame.options.enabled && trigger.popup == m_context.popupToken()
-            && !state.open({ trigger.position.x, trigger.position.y, 0.0f, 0.0f }))
+    while(auto trigger = input.consumeContextMenu(frame.anchor.id, frame.anchor.declarationGeneration)){
+        if(frame.options.enabled && trigger->popup == m_context.popupToken()
+            && !state.open({ trigger->position.x, trigger->position.y, 0.0f, 0.0f }))
             return false;
     }
     if(!frame.options.enabled)
@@ -88,12 +78,10 @@ bool Builder::prepareContextMenu(ContextMenuFrame& frame, ContextMenuResult& res
 bool Builder::applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& result){
     InputRouter& input = m_context.input();
     const WidgetId thumb = MakeWidgetId(frame.rows.id, "scrollbar");
-    PointerGesture gesture;
-    bool haveGesture = input.consumePointerGesture(thumb, frame.rows.declarationGeneration, gesture)
-        && gesture.popup == frame.popupToken && gesture.control == frame.listToken;
-    ControlAction action;
-    bool haveAction = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken, action)
-        && action.popup == frame.popupToken;
+    auto gesture = input.consumePointerGesture(thumb, frame.rows.declarationGeneration);
+    bool haveGesture = gesture && gesture->popup == frame.popupToken && gesture->control == frame.listToken;
+    auto action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
+    bool haveAction = action && action->popup == frame.popupToken;
     ListOptions options;
     options.rowHeight = frame.options.rowHeight;
     options.wheelRows = frame.options.wheelRows;
@@ -101,15 +89,15 @@ bool Builder::applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& 
     while(haveGesture || haveAction){
         if(!contextMenuMatches(frame))
             return false;
-        if(haveGesture && (!haveAction || gesture.updateSequence < action.id.sequence)){
-            if(!applyListGesture(frame.state->m_list, gesture))
+        if(haveGesture && (!haveAction || gesture->updateSequence < action->id.sequence)){
+            if(!applyListGesture(frame.state->m_list, *gesture))
                 return false;
-            haveGesture = input.consumePointerGesture(thumb, frame.rows.declarationGeneration, gesture)
-                && gesture.popup == frame.popupToken && gesture.control == frame.listToken;
+            gesture = input.consumePointerGesture(thumb, frame.rows.declarationGeneration);
+            haveGesture = gesture && gesture->popup == frame.popupToken && gesture->control == frame.listToken;
         }
         else{
             ListResult preview;
-            if(!ListBehavior::Apply(frame.state->m_list, *frame.source, options, action, preview) || !contextMenuMatches(frame))
+            if(!ListBehavior::Apply(frame.state->m_list, *frame.source, options, *action, preview) || !contextMenuMatches(frame))
                 return false;
             if(preview.activated){
                 result.activated = true;
@@ -119,8 +107,8 @@ bool Builder::applyContextMenuInput(ContextMenuFrame& frame, ContextMenuResult& 
                 snapshotContextMenu(frame);
                 return true;
             }
-            haveAction = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken, action)
-                && action.popup == frame.popupToken;
+            action = input.consumeControlAction(frame.rows.id, frame.rows.declarationGeneration, frame.listToken);
+            haveAction = action && action->popup == frame.popupToken;
         }
     }
     return contextMenuMatches(frame);

@@ -104,8 +104,8 @@ void RendererRayTracingSystem::invalidateLightSpaceShadowCapture()noexcept{
     m_lightSpaceShadow.m_captureHistory.invalidate();
 }
 
-bool RendererRayTracingSystem::buildLightSpaceShadowPlan(
-    const ECSRenderDetail::SceneLightGpuData* const lights, const u32 lightCount, LightSpacePlan& plan
+Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(
+    const ECSRenderDetail::SceneLightGpuData* const lights, const u32 lightCount
 )const{
     const auto& state = m_lightSpaceShadow;
     if(
@@ -114,7 +114,7 @@ bool RendererRayTracingSystem::buildLightSpaceShadowPlan(
         || !m_rayTracingState.m_softShadowReady || !m_rayTracingState.m_softTransparentReady
         || state.m_casters.empty() || !lights || lightCount > NWB_SCENE_MAX_LIGHTS
     )
-        return false;
+        return MakeUnexpected(Failure{});
     Array<LightSpaceLightRequest, NWB_SCENE_SHADOW_SLOT_COUNT> requests;
     usize requestCount = 0u;
     for(u32 index = 0u; index < lightCount; ++index){
@@ -122,7 +122,7 @@ bool RendererRayTracingSystem::buildLightSpaceShadowPlan(
         if(light.params.z < 0.f || light.params.z >= static_cast<f32>(NWB_SCENE_SHADOW_SLOT_COUNT))
             continue;
         if(requestCount == requests.size())
-            return false;
+            return MakeUnexpected(Failure{});
         const auto type = light.params.y < ECSRenderDetail::s_LightTypeDirectionalMax ? Scene::LightType::Directional
             : light.params.y < ECSRenderDetail::s_LightTypePointMax ? Scene::LightType::Point : Scene::LightType::Spot;
         requests[requestCount++] = { index, static_cast<u32>(light.params.z),
@@ -132,14 +132,16 @@ bool RendererRayTracingSystem::buildLightSpaceShadowPlan(
     if(state.m_csg.snapshot.hasCsg){
         settings.backend = SoftwareShadowBackend::Automatic;
         if(settings.memoryBudgetBytes <= state.m_csg.bytes.size())
-            return false;
+            return MakeUnexpected(Failure{});
         settings.memoryBudgetBytes -= state.m_csg.bytes.size();
     }
-    return
-        BuildLightSpacePlan(settings, requests.data(), requestCount, m_graphics.getDevice().getMaxStorageBufferRange(),
-            LightSpaceShadowDrawCount(state.m_casters.data(), state.m_casters.size()), plan, state.m_csg.snapshot.hasCsg)
-        && plan.viewCount != 0u
-    ;
+    auto plan = BuildLightSpacePlan(
+        settings, requests.data(), requestCount, m_graphics.getDevice().getMaxStorageBufferRange(),
+        LightSpaceShadowDrawCount(state.m_casters.data(), state.m_casters.size()), state.m_csg.snapshot.hasCsg
+    );
+    if(!plan || plan->viewCount == 0u)
+        return MakeUnexpected(Failure{});
+    return Move(*plan);
 }
 
 void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
@@ -155,9 +157,10 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
     const u32 lightCount = ECSRenderDetail::ResolveSceneLights(m_world, lights, causticImportance, NWB_SCENE_MAX_LIGHTS);
     for(u32 index = 0u; index < lightCount; ++index)
         state.m_csgRequired = state.m_csgRequired || (state.m_csg.snapshot.hasCsg && lights[index].params.z >= 0.f);
-    LightSpacePlan plan;
-    if(!buildLightSpaceShadowPlan(lights, lightCount, plan))
+    const auto planResult = buildLightSpaceShadowPlan(lights, lightCount);
+    if(!planResult)
         return;
+    const LightSpacePlan& plan = *planResult;
     state.m_resourcesPrepared = ensureLightSpaceShadowPipelines() && ensureLightSpaceShadowStorage(plan);
 }
 
@@ -173,9 +176,10 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
         || !snapshot.counts || !snapshot.events || !snapshot.views || !snapshot.drawArguments || !snapshot.depth
     )
         return;
-    LightSpacePlan plan;
-    if(!buildLightSpaceShadowPlan(lights, lightCount, plan))
+    const auto planResult = buildLightSpaceShadowPlan(lights, lightCount);
+    if(!planResult)
         return;
+    const LightSpacePlan& plan = *planResult;
     const LightSpaceShadowStorageCapacity capacity{
         snapshot.counts->getCreationDescription().byteSize, snapshot.events->getCreationDescription().byteSize,
         snapshot.views->getCreationDescription().byteSize, snapshot.drawArguments->getCreationDescription().byteSize,

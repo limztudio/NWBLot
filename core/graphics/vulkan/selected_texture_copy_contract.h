@@ -19,12 +19,11 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ResolveTextureCopyContract(
+[[nodiscard]] Expected<TextureCopyContract> ResolveTextureCopyContract(
     const TextureDesc& sourceDescription,
     const TextureSlice& sourceSlice,
     const TextureDesc& destinationDescription,
-    const TextureSlice& destinationSlice,
-    TextureCopyContract& outContract
+    const TextureSlice& destinationSlice
 )noexcept;
 
 [[nodiscard]] constexpr bool AreTextureCopyDimensionsCompatible(const TextureDimension::Enum source, const TextureDimension::Enum destination)noexcept{ return VulkanTextureDetail::GetTextureImageType(source) != VK_IMAGE_TYPE_MAX_ENUM && VulkanTextureDetail::GetTextureImageType(source) == VulkanTextureDetail::GetTextureImageType(destination); }

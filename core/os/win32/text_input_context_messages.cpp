@@ -18,19 +18,19 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Win32TextInputService::resolveContextMessage(
-    const u32 message, const usize wParam, const isize lParam, isize& forwardedLParam
+Expected<isize> Win32TextInputService::resolveContextMessage(
+    const u32 message, const usize wParam, const isize lParam
 ){
     if(!isOwnerThread() || message != WM_IME_SETCONTEXT)
-        return false;
+        return MakeUnexpected(Failure{});
     // Keep the native flags, not the filtered result: ending a custom edit restores the ordinary IME UI.
     m_nativeContextFlags = lParam;
     m_nativeContextKnown = true;
     m_nativeContextActive = wParam != FALSE;
-    forwardedLParam = lParam;
+    isize forwardedLParam = lParam;
     if(m_nativeContextActive && focused() && activeSession().valid())
         forwardedLParam &= ~static_cast<isize>(ISC_SHOWUICOMPOSITIONWINDOW);
-    return true;
+    return forwardedLParam;
 }
 
 void Win32TextInputService::replayContextVisibility(){
@@ -53,17 +53,16 @@ void Win32TextInputService::replayContextVisibility(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ResolveWin32TextInputContextMessage(
+Expected<isize> ResolveWin32TextInputContextMessage(
     ITextInputService& service,
     const u32 message,
     const usize wParam,
-    const isize lParam,
-    isize& forwardedLParam
+    const isize lParam
 ){
     if(!service.isOwnerThread() || service.capabilities().backend != TextInputBackend::Win32Imm32)
-        return false;
+        return MakeUnexpected(Failure{});
     return checked_cast<Win32TextInputService*>(&service)->resolveContextMessage(
-        message, wParam, lParam, forwardedLParam
+        message, wParam, lParam
     );
 }
 

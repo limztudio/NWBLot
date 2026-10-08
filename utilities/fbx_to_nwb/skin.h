@@ -34,20 +34,22 @@ struct ExportContext{
     HashMap<ufbx_node*, u16> jointLookup;
 };
 
-bool BuildClusterJointMap(
+struct SkinInfluenceResult{
+    MeshSkinInfluence influence;
+    SIMDVector weights;
+};
+
+Expected<UtilityVector<u16>> BuildClusterJointMap(
     const MeshInstance& instance,
     const ImportOptions& options,
     ufbx_skin_deformer* skin,
-    ExportContext& context,
-    UtilityVector<u16>& outClusterJoints
+    ExportContext& context
 );
 
-bool BuildInfluence(
+Expected<SkinInfluenceResult> BuildInfluence(
     ufbx_skin_deformer* skin,
     const UtilityVector<u16>& clusterJoints,
-    u32 logicalVertex,
-    MeshSkinInfluence& outInfluence,
-    SIMDVector& outWeights
+    u32 logicalVertex
 );
 
 

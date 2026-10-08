@@ -119,80 +119,82 @@ inline void StoreBlockForAllocation(void* const p, Block& block)noexcept{
     return !block->isFree;
 }
 
-[[nodiscard]] inline bool BuildAllocationLayout(
+[[nodiscard]] inline Expected<AllocationLayout> BuildAllocationLayout(
     const Block& block,
     const usize alignment,
-    const usize requestedBytes,
-    AllocationLayout& outLayout
+    const usize requestedBytes
 )noexcept{
     const usize dataAddress = reinterpret_cast<usize>(BlockData(block));
     if(AddOverflows<usize>(dataAddress, sizeof(Block*)))
-        return false;
+        return MakeUnexpected(Failure{});
 
     usize userAddress = 0u;
-    if(!::AlignUpPowerOfTwoChecked(dataAddress + sizeof(Block*), alignment, userAddress))
-        return false;
+    const auto userAddressResult = ::AlignUpPowerOfTwoChecked(dataAddress + sizeof(Block*), alignment);
+    if(!userAddressResult)
+        return MakeUnexpected(Failure{});
+    userAddress = *userAddressResult;
     if(userAddress < dataAddress)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const usize userOffset = userAddress - dataAddress;
     if(AddOverflows<usize>(userOffset, requestedBytes))
-        return false;
+        return MakeUnexpected(Failure{});
 
     usize spanBytes = 0u;
-    if(!::AlignUpPowerOfTwoChecked(userOffset + requestedBytes, s_BlockAlignment, spanBytes))
-        return false;
+    const auto spanBytesResult = ::AlignUpPowerOfTwoChecked(userOffset + requestedBytes, s_BlockAlignment);
+    if(!spanBytesResult)
+        return MakeUnexpected(Failure{});
+    spanBytes = *spanBytesResult;
 
-    outLayout = AllocationLayout{
+    return AllocationLayout{
         .userOffset = userOffset,
         .spanBytes = spanBytes,
     };
-    return true;
 }
 
-[[nodiscard]] inline bool BuildNormalAllocationLayout(
-    const usize requestedBytes,
-    AllocationLayout& outLayout
+[[nodiscard]] inline Expected<AllocationLayout> BuildNormalAllocationLayout(
+    const usize requestedBytes
 )noexcept{
     constexpr usize s_UserOffset = AlignUp(sizeof(Block*), s_BlockAlignment);
     if(AddOverflows<usize>(s_UserOffset, requestedBytes))
-        return false;
+        return MakeUnexpected(Failure{});
 
     usize spanBytes = 0u;
-    if(!::AlignUpPowerOfTwoChecked(s_UserOffset + requestedBytes, s_BlockAlignment, spanBytes))
-        return false;
+    const auto spanBytesResult = ::AlignUpPowerOfTwoChecked(s_UserOffset + requestedBytes, s_BlockAlignment);
+    if(!spanBytesResult)
+        return MakeUnexpected(Failure{});
+    spanBytes = *spanBytesResult;
 
-    outLayout = AllocationLayout{
+    return AllocationLayout{
         .userOffset = s_UserOffset,
         .spanBytes = spanBytes,
     };
-    return true;
 }
 
-[[nodiscard]] inline bool BuildExistingPointerLayout(
+[[nodiscard]] inline Expected<AllocationLayout> BuildExistingPointerLayout(
     const Block& block,
     void* const p,
-    const usize requestedBytes,
-    AllocationLayout& outLayout
+    const usize requestedBytes
 )noexcept{
     const usize dataAddress = reinterpret_cast<usize>(BlockData(block));
     const usize pointerAddress = reinterpret_cast<usize>(p);
     if(pointerAddress < dataAddress || pointerAddress - dataAddress < sizeof(Block*))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const usize userOffset = pointerAddress - dataAddress;
     if(AddOverflows<usize>(userOffset, requestedBytes))
-        return false;
+        return MakeUnexpected(Failure{});
 
     usize spanBytes = 0u;
-    if(!::AlignUpPowerOfTwoChecked(userOffset + requestedBytes, s_BlockAlignment, spanBytes))
-        return false;
+    const auto spanBytesResult = ::AlignUpPowerOfTwoChecked(userOffset + requestedBytes, s_BlockAlignment);
+    if(!spanBytesResult)
+        return MakeUnexpected(Failure{});
+    spanBytes = *spanBytesResult;
 
-    outLayout = AllocationLayout{
+    return AllocationLayout{
         .userOffset = userOffset,
         .spanBytes = spanBytes,
     };
-    return true;
 }
 
 [[nodiscard]] inline Block* CreateBlock(
@@ -297,38 +299,43 @@ inline void CoalesceFreeBlocks(void*& freeHead, Block* block)noexcept{
     }
 }
 
-[[nodiscard]] inline Block* FindFreeBlock(
+struct FreeBlockSelection{
+    Block* block = nullptr;
+    AllocationLayout layout;
+};
+
+[[nodiscard]] inline Expected<FreeBlockSelection> FindFreeBlock(
     void* const freeHead,
     const usize alignment,
-    const usize requestedBytes,
-    AllocationLayout& outLayout
+    const usize requestedBytes
 )noexcept{
     const bool normalAlignment = alignment == s_BlockAlignment;
-    AllocationLayout normalLayout;
-    if(normalAlignment && !BuildNormalAllocationLayout(requestedBytes, normalLayout))
-        return nullptr;
+    const auto normalLayout = normalAlignment ? BuildNormalAllocationLayout(requestedBytes) : Expected<AllocationLayout>(MakeUnexpected(Failure{}));
+    if(normalAlignment && !normalLayout)
+        return MakeUnexpected(Failure{});
 
-    Block* selected = nullptr;
+    FreeBlockSelection selection;
     usize selectedSlackBytes = 0u;
     for(Block* block = static_cast<Block*>(freeHead); block; block = Links(*block).next){
-        AllocationLayout layout;
-        if(normalAlignment)
-            layout = normalLayout;
-        else if(!BuildAllocationLayout(*block, alignment, requestedBytes, layout))
+        const auto candidateLayout = normalAlignment ? normalLayout : BuildAllocationLayout(*block, alignment, requestedBytes);
+        if(!candidateLayout)
             continue;
+        const AllocationLayout& layout = *candidateLayout;
         if(layout.spanBytes > block->spanBytes)
             continue;
 
         const usize slackBytes = block->spanBytes - layout.spanBytes;
-        if(!selected || slackBytes < selectedSlackBytes){
-            selected = block;
-            outLayout = layout;
+        if(!selection.block || slackBytes < selectedSlackBytes){
+            selection.block = block;
+            selection.layout = layout;
             selectedSlackBytes = slackBytes;
             if(slackBytes == 0u)
                 break;
         }
     }
-    return selected;
+    if(!selection.block)
+        return MakeUnexpected(Failure{});
+    return selection;
 }
 
 
@@ -405,13 +412,12 @@ void* PersistentArena::allocate(const usize align, usize size){
 
     __hidden_persistent::PersistentArenaScopedLock lock(m_mutex);
 
-    void* block = nullptr;
-    void* const p = allocateLocked(align, size, block);
-    if(p){
-        const auto* const allocatedBlock = static_cast<__hidden_persistent::Block*>(block);
-        m_memoryStats.recordAllocation(static_cast<u64>(allocatedBlock->spanBytes));
-    }
-    return p;
+    const auto allocation = allocateLocked(align, size);
+    if(!allocation)
+        return nullptr;
+    const auto* const allocatedBlock = static_cast<__hidden_persistent::Block*>(allocation->block);
+    m_memoryStats.recordAllocation(static_cast<u64>(allocatedBlock->spanBytes));
+    return allocation->pointer;
 }
 
 void* PersistentArena::reallocate(void* const p, const usize align, usize size){
@@ -439,32 +445,34 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
     }
 
     const usize alignment = __hidden_persistent::EffectiveAlignment(align);
-    __hidden_persistent::AllocationLayout layout;
     const usize pointerAddress = reinterpret_cast<usize>(p);
-    const bool keepsPointer = (pointerAddress % alignment == 0u) && __hidden_persistent::BuildExistingPointerLayout(*block, p, size, layout);
-    if(keepsPointer && layout.spanBytes <= block->spanBytes){
-        __hidden_persistent::SplitUsedBlock(m_freeHead, *block, layout.spanBytes);
+    const auto layout = (pointerAddress % alignment == 0u)
+        ? __hidden_persistent::BuildExistingPointerLayout(*block, p, size)
+        : Expected<__hidden_persistent::AllocationLayout>(MakeUnexpected(Failure{}))
+    ;
+    if(layout && layout->spanBytes <= block->spanBytes){
+        __hidden_persistent::SplitUsedBlock(m_freeHead, *block, layout->spanBytes);
         block->requestedBytes = size;
         m_memoryStats.recordReallocation(oldSpanBytes, static_cast<u64>(block->spanBytes));
         return p;
     }
 
-    if(keepsPointer && layout.spanBytes > block->spanBytes){
+    if(layout && layout->spanBytes > block->spanBytes){
         usize combinedSpanBytes = block->spanBytes;
-        for(__hidden_persistent::Block* next = block->next; next && next->isFree && combinedSpanBytes < layout.spanBytes; next = next->next){
+        for(__hidden_persistent::Block* next = block->next; next && next->isFree && combinedSpanBytes < layout->spanBytes; next = next->next){
             const usize nextTotalBytes = sizeof(__hidden_persistent::Block) + next->spanBytes;
             if(AddOverflows<usize>(combinedSpanBytes, nextTotalBytes))
                 break;
             combinedSpanBytes += nextTotalBytes;
         }
-        if(layout.spanBytes <= combinedSpanBytes){
-            while(layout.spanBytes > block->spanBytes){
+        if(layout->spanBytes <= combinedSpanBytes){
+            while(layout->spanBytes > block->spanBytes){
                 NWB_ASSERT(block->next && block->next->isFree);
                 __hidden_persistent::Block* const next = block->next;
                 __hidden_persistent::RemoveFreeBlock(m_freeHead, *next);
                 __hidden_persistent::MergeNextBlock(*block, *next);
             }
-            __hidden_persistent::SplitUsedBlock(m_freeHead, *block, layout.spanBytes);
+            __hidden_persistent::SplitUsedBlock(m_freeHead, *block, layout->spanBytes);
             block->requestedBytes = size;
             m_memoryStats.recordReallocation(oldSpanBytes, static_cast<u64>(block->spanBytes));
             return p;
@@ -472,16 +480,15 @@ void* PersistentArena::reallocate(void* const p, const usize align, usize size){
     }
 
     const usize copyBytes = Min(block->requestedBytes, size);
-    void* replacementBlockPointer = nullptr;
-    void* const replacement = allocateLocked(align, size, replacementBlockPointer);
+    const auto replacement = allocateLocked(align, size);
     if(!replacement)
         return nullptr;
 
-    auto* const replacementBlock = static_cast<__hidden_persistent::Block*>(replacementBlockPointer);
-    NWB_MEMCPY(replacement, replacementBlock->requestedBytes, p, copyBytes);
+    auto* const replacementBlock = static_cast<__hidden_persistent::Block*>(replacement->block);
+    NWB_MEMCPY(replacement->pointer, replacementBlock->requestedBytes, p, copyBytes);
     deallocateBlockLocked(block);
     m_memoryStats.recordReallocation(oldSpanBytes, static_cast<u64>(replacementBlock->spanBytes));
-    return replacement;
+    return replacement->pointer;
 }
 
 void PersistentArena::deallocate(void* const p, const usize align, const usize size){
@@ -506,28 +513,27 @@ void PersistentArena::deallocate(void* const p, const usize align, const usize s
 }
 
 
-void* PersistentArena::allocateLocked(const usize align, const usize size, void*& outBlock)noexcept{
-    outBlock = nullptr;
+Expected<PersistentArena::Allocation> PersistentArena::allocateLocked(const usize align, const usize size)noexcept{
     const usize alignment = __hidden_persistent::EffectiveAlignment(align);
-    __hidden_persistent::AllocationLayout selectedLayout;
-    auto* selected = __hidden_persistent::FindFreeBlock(m_freeHead, alignment, size, selectedLayout);
-    if(!selected && m_freeHead){
+    auto selection = __hidden_persistent::FindFreeBlock(m_freeHead, alignment, size);
+    if(!selection && m_freeHead){
         __hidden_persistent::CoalesceFreeBlocks(
             m_freeHead,
             static_cast<__hidden_persistent::Block*>(m_bucket)
         );
-        selected = __hidden_persistent::FindFreeBlock(m_freeHead, alignment, size, selectedLayout);
+        selection = __hidden_persistent::FindFreeBlock(m_freeHead, alignment, size);
     }
-    if(!selected)
-        return nullptr;
+    if(!selection)
+        return MakeUnexpected(Failure{});
+    auto* const selected = selection->block;
+    const auto& selectedLayout = selection->layout;
 
     __hidden_persistent::RemoveFreeBlock(m_freeHead, *selected);
     __hidden_persistent::SplitUsedBlock(m_freeHead, *selected, selectedLayout.spanBytes);
     selected->requestedBytes = size;
     void* const p = __hidden_persistent::BlockData(*selected) + selectedLayout.userOffset;
     __hidden_persistent::StoreBlockForAllocation(p, *selected);
-    outBlock = selected;
-    return p;
+    return Allocation{ .pointer = p, .block = selected };
 }
 
 void PersistentArena::deallocateBlockLocked(void* const blockPointer)noexcept{

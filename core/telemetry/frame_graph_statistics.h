@@ -6,6 +6,7 @@
 
 
 #include "recorder.h"
+#include <global/expected.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -76,11 +77,10 @@ namespace FrameGraphStatisticsDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool FrameGraphCompileBarrierCount(
-    const FrameGraphCompileRuntimeStatistics& statistics,
-    u64& outBarrierCount
+[[nodiscard]] inline Expected<u64> FrameGraphCompileBarrierCount(
+    const FrameGraphCompileRuntimeStatistics& statistics
 )noexcept{
-    outBarrierCount = statistics.transitionBarrierCount;
+    u64 barrierCountTotal = statistics.transitionBarrierCount;
     const u64 remainingBarrierCounts[] = {
         statistics.uavBarrierCount,
         statistics.ownershipReleaseBarrierCount,
@@ -88,11 +88,11 @@ namespace FrameGraphStatisticsDetail{
         statistics.stateExportBarrierCount,
     };
     for(const u64 barrierCount : remainingBarrierCounts){
-        if(barrierCount > Limit<u64>::s_Max - outBarrierCount)
-            return false;
-        outBarrierCount += barrierCount;
+        if(barrierCount > Limit<u64>::s_Max - barrierCountTotal)
+            return MakeUnexpected(Failure{});
+        barrierCountTotal += barrierCount;
     }
-    return true;
+    return barrierCountTotal;
 }
 
 

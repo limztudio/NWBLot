@@ -80,13 +80,12 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
+    [[nodiscard]] Expected<TransparentCsgIntervalProducerResult> declare(
         const TransparentCsgIntervalProducerInputs& inputs,
         RendererTaskGraphDetail::AvboitPreGraphTask::Payload& avboitPrePayload,
         ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload& receiverSpanPayload,
         ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload& intervalCombinePayload,
-        GraphClearTimingRecordState& intervalClearTimingState,
-        TransparentCsgIntervalProducerResult& outResult
+        GraphClearTimingRecordState& intervalClearTimingState
     );
 
 

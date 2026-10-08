@@ -82,6 +82,7 @@ namespace CsgDeformViabilityReason{
         CapLoopFailed,
         NoKeptGeometry,
         TooLarge,
+        InvalidOutputArena,
     };
 };
 
@@ -104,6 +105,14 @@ struct CsgDeformStats{
 
 static_assert(IsStandardLayout_V<CsgDeformStats>, "CsgDeformStats must stay layout-stable");
 static_assert(IsTriviallyCopyable_V<CsgDeformStats>, "CsgDeformStats must stay cheap to pass by value");
+
+struct CsgDeformFailure{
+    CsgDeformViabilityReason::Enum reason = CsgDeformViabilityReason::Ok;
+    CsgDeformStats stats;
+};
+
+static_assert(IsStandardLayout_V<CsgDeformFailure>, "CsgDeformFailure must stay layout-stable");
+static_assert(IsTriviallyCopyable_V<CsgDeformFailure>, "CsgDeformFailure must stay cheap to pass by value");
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

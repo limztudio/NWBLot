@@ -74,36 +74,37 @@ PipelineCommandLine::PipelineCommandLine(const PipelineTool::Enum inTool)
         m_app.add_option(s_PipelineConfigurationOption.data(), m_configuration, "Build configuration label");
 }
 
-bool PipelineCommandLine::parse(const int argc, char** argv, PipelineOptions& options){
+Expected<PipelineOptions> PipelineCommandLine::parse(const int argc, char** argv, NWB::Core::Assets::AssetArena& arena){
+    PipelineOptions options(arena);
     CommandLineParseApp(m_app, argc, argv);
 
     if(m_inputs.empty() && m_inputList.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: provide --input or --input-list"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!__hidden_command_line::AssignInputs(m_inputs, options.inputs)
         || !__hidden_command_line::AssignInputs(m_assetRoots, options.assetRoots)
         || !__hidden_command_line::AssignText(m_repoRoot, options.repoRoot)
         || !__hidden_command_line::AssignText(m_outputPath, options.outputPath)
         || !__hidden_command_line::AssignText(m_cacheDirectory, options.cacheDirectory))
-        return false;
+        return MakeUnexpected(Failure{});
     if(options.outputPath.empty()){
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: output path must not be empty"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!options.configuration.assign(AStringView(m_configuration.data(), m_configuration.size()))
         || !options.assetType.assign(AStringView(m_assetType.data(), m_assetType.size()))){
         NWB_LOGGER_ERROR(NWB_TEXT("Pipeline: configuration or asset type exceeds ACompactString capacity"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!m_inputList.empty()){
         NWB::Core::Assets::AssetString listPath(options.inputs.get_allocator().arena());
         if(!__hidden_command_line::AssignText(m_inputList, listPath)
             || !NWB::Core::Assets::ReadAssetInputList(Path(listPath.get_allocator().arena(), listPath), options.inputs, m_tool == PipelineTool::AssetGatherer))
-            return false;
+            return MakeUnexpected(Failure{});
     }
     options.includeSkinDependencies = m_includeSkinDependencies;
-    return true;
+    return options;
 }
 
 int PipelineCommandLine::exit(const CLI::ParseError& error)const{

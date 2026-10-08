@@ -93,10 +93,9 @@ bool TextureAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Asset
 }
 
 
-bool BuildTextureAsset(TextureCookEntry& textureEntry, Texture& outTexture){
-    Core::Assets::AssetArena& arena = textureEntry.mipLevels.get_allocator().arena();
-    outTexture = Texture(arena, textureEntry.virtualPath);
-    outTexture.setPayload(
+Expected<Texture> BuildTextureAsset(TextureCookEntry& textureEntry, Core::Assets::AssetArena& arena){
+    Texture asset(arena, textureEntry.virtualPath);
+    asset.setPayload(
         textureEntry.colorSpace,
         textureEntry.hasAlpha,
         textureEntry.width,
@@ -109,7 +108,9 @@ bool BuildTextureAsset(TextureCookEntry& textureEntry, Texture& outTexture){
         textureEntry.alphaMode,
         textureEntry.alphaConstantUnorm8
     );
-    return outTexture.validatePayload();
+    if(!asset.validatePayload())
+        return MakeUnexpected(Failure{});
+    return asset;
 }
 
 

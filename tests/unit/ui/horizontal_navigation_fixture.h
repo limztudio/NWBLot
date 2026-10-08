@@ -47,7 +47,7 @@ protected:
     void press(Core::Key::Enum key);
     void focusTarget(usize index = 0u);
     [[nodiscard]] bool publish(usize count = 2u, const PopupScope* popups = nullptr, usize popupCount = 0u);
-    [[nodiscard]] bool take(ControlAction& action, usize index = 0u);
+    [[nodiscard]] Expected<ControlAction> take(usize index = 0u);
     void bindEditor(usize hostIndex = 0u);
 
 

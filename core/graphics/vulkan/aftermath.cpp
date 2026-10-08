@@ -136,15 +136,24 @@ bool Initialize(){
         return false;
     }
 
-    if(
-        !state.library.resolve(arena, "GFSDK_Aftermath_EnableGpuCrashDumps", state.enable)
-        || !state.library.resolve(arena, "GFSDK_Aftermath_DisableGpuCrashDumps", state.disable)
-        || !state.library.resolve(arena, "GFSDK_Aftermath_GetCrashDumpStatus", state.getStatus)
-    ){
+    const auto enable = state.library.resolve<PFN_GFSDK_Aftermath_EnableGpuCrashDumps>(
+        arena, "GFSDK_Aftermath_EnableGpuCrashDumps"
+    );
+    const auto disable = state.library.resolve<PFN_GFSDK_Aftermath_DisableGpuCrashDumps>(
+        arena, "GFSDK_Aftermath_DisableGpuCrashDumps"
+    );
+    const auto getStatus = state.library.resolve<PFN_GFSDK_Aftermath_GetCrashDumpStatus>(
+        arena, "GFSDK_Aftermath_GetCrashDumpStatus"
+    );
+    if(!enable || !disable || !getStatus){
         NWB_LOGGER_WARNING(NWB_TEXT("Vulkan: NVIDIA Aftermath entry points could not be resolved; GPU crash dumps disabled."));
         state.library.close();
         return false;
     }
+
+    state.enable = *enable;
+    state.disable = *disable;
+    state.getStatus = *getStatus;
 
     const GFSDK_Aftermath_Result result = state.enable(
         GFSDK_Aftermath_Version_API,

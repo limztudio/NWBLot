@@ -186,15 +186,14 @@ TaskSubmissionBindings::TaskSubmissionBindings(Alloc::ScratchArena& scratchArena
     return true;
 }
 
-void TaskSubmissionBindings::collectPacket(
+const QueueSubmissionPreSubmitHook* TaskSubmissionBindings::collectPacket(
     const GpuSubmissionPacketId packet,
-    Vector<GpuTimingSubmissionTicket*, Alloc::ScratchArena>& outTimingTickets,
-    const QueueSubmissionPreSubmitHook*& outPreSubmitHook
+    Vector<GpuTimingSubmissionTicket*, Alloc::ScratchArena>& inOutTimingTickets
 )const{
-    outTimingTickets.clear();
-    outPreSubmitHook = nullptr;
+    inOutTimingTickets.clear();
+    const QueueSubmissionPreSubmitHook* preSubmitHook = nullptr;
     if(timingTickets.empty() && submissionHooks.empty())
-        return;
+        return nullptr;
 
     if(timingPacketChains){
         if(packet.generation == packetGeneration){
@@ -202,31 +201,32 @@ void TaskSubmissionBindings::collectPacket(
             if(it != timingPacketChains->end()){
                 // Links retain first authored occurrence, even when bindings interleave several packets.
                 for(usize index = it.value().first; index != Limit<usize>::s_Max; index = nextTimingTicket[index])
-                    outTimingTickets.push_back(timingTickets[index].timingTicket);
+                    inOutTimingTickets.push_back(timingTickets[index].timingTicket);
             }
         }
     }
     else{
         for(const ResolvedTimingTicket& ticket : timingTickets){
             if(ticket.packet == packet)
-                outTimingTickets.push_back(ticket.timingTicket);
+                inOutTimingTickets.push_back(ticket.timingTicket);
         }
     }
     if(submissionHookIndices){
         if(packet.generation == packetGeneration){
             const auto it = submissionHookIndices->find(packet.index);
             if(it != submissionHookIndices->end())
-                outPreSubmitHook = &submissionHooks[it.value()].hook;
+                preSubmitHook = &submissionHooks[it.value()].hook;
         }
     }
     else{
         for(const ResolvedSubmissionHook& hook : submissionHooks){
             if(hook.packet == packet){
-                outPreSubmitHook = &hook.hook;
+                preSubmitHook = &hook.hook;
                 break;
             }
         }
     }
+    return preSubmitHook;
 }
 
 

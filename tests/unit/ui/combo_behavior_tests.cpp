@@ -62,32 +62,34 @@ public:
         return reversed ? count - index : index + 1u;
     }
 
-    [[nodiscard]] virtual bool indexOf(const u64 keyValue, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 keyValue)const override{
+        u64 index = 0u;
         ++lookupCalls;
         mutate(CallbackStage::Lookup);
         if(keyValue == 0u || keyValue > count)
-            return false;
+            return MakeUnexpected(Failure{});
         index = badLookup ? count : wrongLookup ? 0u : reversed ? count - keyValue : keyValue - 1u;
-        return true;
+        return index;
     }
 
-    [[nodiscard]] virtual bool findEnabled(const u64 start, const bool reverse, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool reverse)const override{
+        u64 index = 0u;
         if(start >= count)
-            return false;
+            return MakeUnexpected(Failure{});
         index = start;
         if(index + 1u == disabledKey){
             if(reverse){
                 if(index == 0u)
-                    return false;
+                    return MakeUnexpected(Failure{});
                 --index;
             }
             else{
                 ++index;
                 if(index >= count)
-                    return false;
+                    return MakeUnexpected(Failure{});
             }
         }
-        return true;
+        return index;
     }
 
     [[nodiscard]] virtual StringView text(u64)const override{ return "row"; }

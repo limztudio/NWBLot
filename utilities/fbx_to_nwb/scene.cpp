@@ -57,19 +57,18 @@ AString FormatUfbxError(const ufbx_error& error){
     return buffer;
 }
 
-bool ParseIndexSelector(const AStringView text, usize& outIndex){
+Expected<usize> ParseIndexSelector(const AStringView text)noexcept{
     const AStringView trimmed = TrimView(text);
     if(trimmed.empty())
-        return false;
+        return MakeUnexpected(Failure{});
 
-    u64 parsed = 0u;
-    if(!ParseU64(trimmed, parsed))
-        return false;
-    if(parsed > static_cast<u64>(Limit<usize>::s_Max))
-        return false;
+    const auto parsed = ParseU64(trimmed);
+    if(!parsed)
+        return MakeUnexpected(Failure{});
+    if(*parsed > static_cast<u64>(Limit<usize>::s_Max))
+        return MakeUnexpected(Failure{});
 
-    outIndex = static_cast<usize>(parsed);
-    return true;
+    return static_cast<usize>(*parsed);
 }
 
 
@@ -82,18 +81,23 @@ bool ParseIndexSelector(const AStringView text, usize& outIndex){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-SceneHandle::~SceneHandle(){
+SceneHandle::~SceneHandle()noexcept{
     if(scene){
         ufbx_free_scene(scene);
         scene = nullptr;
     }
 }
 
+SceneHandle::SceneHandle(SceneHandle&& other)noexcept
+    : scene(Exchange(other.scene, nullptr))
+{}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool LoadScene(const ImportOptions& options, SceneHandle& outScene){
+Expected<SceneHandle> LoadScene(const ImportOptions& options){
+    SceneHandle outScene;
     ufbx_load_opts loadOptions = {};
     loadOptions.load_external_files = true;
     loadOptions.ignore_missing_external_files = true;
@@ -117,10 +121,10 @@ bool LoadScene(const ImportOptions& options, SceneHandle& outScene){
     outScene.scene = ufbx_load_file_len(inputPath.data(), inputPath.size(), &loadOptions, &error);
     if(!outScene.scene){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to load FBX: {}"), StringConvert(__hidden_scene::FormatUfbxError(error)));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    return true;
+    return outScene;
 }
 
 UtilityVector<MeshInstance> CollectMeshInstances(ufbx_scene* scene, const bool includeHidden){
@@ -160,37 +164,36 @@ void PrintMeshInstances(const UtilityVector<MeshInstance>& instances){
     NWB_LOGGER_ESSENTIAL_INFO(StringConvert(report.str()));
 }
 
-bool SelectMeshInstances(
+Expected<UtilityVector<usize>> SelectMeshInstances(
     const UtilityVector<MeshInstance>& instances,
-    const AStringView selector,
-    UtilityVector<usize>& outSelection
+    const AStringView selector
 ){
-    outSelection.clear();
+    UtilityVector<usize> outSelection;
 
     const AString normalized = NormalizeOptionText(AString(selector));
     if(normalized.empty() || normalized == s_DefaultMeshSelectorText){
         outSelection.reserve(instances.size());
         for(usize instanceIndex = 0u; instanceIndex < instances.size(); ++instanceIndex)
             outSelection.push_back(instanceIndex);
-        return true;
+        return outSelection;
     }
     if(normalized == s_FirstMeshSelectorText){
         if(instances.empty()){
             NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': no mesh instances are available"), StringConvert(selector));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         outSelection.push_back(0u);
-        return true;
+        return outSelection;
     }
 
-    usize parsedIndex = 0u;
-    if(__hidden_scene::ParseIndexSelector(normalized, parsedIndex)){
-        if(parsedIndex >= instances.size()){
+    const auto parsedIndex = __hidden_scene::ParseIndexSelector(normalized);
+    if(parsedIndex){
+        if(*parsedIndex >= instances.size()){
             NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': mesh index is out of range"), StringConvert(selector));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outSelection.push_back(parsedIndex);
-        return true;
+        outSelection.push_back(*parsedIndex);
+        return outSelection;
     }
 
     UtilityVector<usize> partialSelection;
@@ -215,14 +218,14 @@ bool SelectMeshInstances(
         }
     }
     if(!outSelection.empty())
-        return true;
+        return outSelection;
     if(!partialSelection.empty()){
         outSelection = Move(partialSelection);
-        return true;
+        return outSelection;
     }
 
     NWB_LOGGER_WARNING(NWB_TEXT("Invalid mesh selector '{}': did not match any node or mesh"), StringConvert(selector));
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 

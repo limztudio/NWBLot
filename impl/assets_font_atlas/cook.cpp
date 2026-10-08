@@ -24,10 +24,13 @@ bool FontAtlasAssetCodec::serialize(const Core::Assets::IAsset& asset, Core::Ass
     if(!checkSerializeAssetType(asset, NWB_TEXT("FontAtlasAssetCodec::serialize")))
         return false;
     const FontAtlas& atlas = *checked_cast<const FontAtlas*>(&asset);
-    return
-        atlas.checkVirtualPath(NWB_TEXT("FontAtlas::validatePayload"))
-        && SerializeFontAtlasPayload(atlas.payload(), outBinary)
-    ;
+    if(!atlas.checkVirtualPath(NWB_TEXT("FontAtlas::validatePayload")))
+        return false;
+    auto binary = SerializeFontAtlasPayload(atlas.payload(), outBinary.get_allocator().arena());
+    if(!binary)
+        return false;
+    outBinary = Move(*binary);
+    return true;
 }
 
 

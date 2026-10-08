@@ -109,52 +109,42 @@ bool AddClipVariantCount(const ShaderCook::ShaderEntry& entry, const u64 sourceV
     return false;
 }
 
-static bool BuildClipDefineComboImpl(
+Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(
     ShaderCook::CookArena& cookArena,
     const AStringView entryName,
-    const ShaderCook::DefineCombo& sourceCombo,
-    ShaderCook::DefineCombo& outDefineCombo
+    const ShaderCook::DefineCombo& sourceCombo
 ){
     constexpr usize addedDefineCount = 2u;
     if(sourceCombo.size() > Limit<usize>::s_Max - addedDefineCount){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: CSG shader define combo size overflow for entry '{}'"), StringConvert(entryName));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outDefineCombo.clear();
-    outDefineCombo.reserve(sourceCombo.size() + addedDefineCount);
+    ShaderCook::DefineCombo combo{0, Hasher<ShaderCook::CookString>(), EqualTo<ShaderCook::CookString>(), cookArena};
+    combo.reserve(sourceCombo.size() + addedDefineCount);
     for(const auto& [defineName, defineValue] : sourceCombo)
-        outDefineCombo.try_emplace(defineName, defineValue);
+        combo.try_emplace(defineName, defineValue);
 
     ShaderCook::CookString csgIntervalSampleEnabledDefineName(s_IntervalSampleEnabledImplicitDefineName, cookArena);
     ShaderCook::CookString csgIntervalSampleEnabledDefineValue(s_IntervalSampleEnabledImplicitDefineValue, cookArena);
-    if(!outDefineCombo.try_emplace(Move(csgIntervalSampleEnabledDefineName), Move(csgIntervalSampleEnabledDefineValue)).second){
+    if(!combo.try_emplace(Move(csgIntervalSampleEnabledDefineName), Move(csgIntervalSampleEnabledDefineValue)).second){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: reserved CSG shader define '{}' already exists for entry '{}'")
             , StringConvert(s_IntervalSampleEnabledImplicitDefineName)
             , StringConvert(entryName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     ShaderCook::CookString csgDefineName(s_ClipImplicitDefineName, cookArena);
     ShaderCook::CookString csgDefineValue(s_EnabledImplicitDefineValue, cookArena);
-    if(outDefineCombo.try_emplace(Move(csgDefineName), Move(csgDefineValue)).second)
-        return true;
+    if(combo.try_emplace(Move(csgDefineName), Move(csgDefineValue)).second)
+        return combo;
 
     NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: reserved CSG shader define '{}' already exists for entry '{}'")
         , StringConvert(s_ClipImplicitDefineName)
         , StringConvert(entryName)
     );
-    return false;
-}
-
-bool BuildClipDefineCombo(
-    ShaderCook::CookArena& cookArena,
-    const AStringView entryName,
-    const ShaderCook::DefineCombo& sourceCombo,
-    ShaderCook::DefineCombo& outDefineCombo
-){
-    return BuildClipDefineComboImpl(cookArena, entryName, sourceCombo, outDefineCombo);
+    return MakeUnexpected(Failure{});
 }
 
 

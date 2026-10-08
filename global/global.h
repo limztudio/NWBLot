@@ -10,6 +10,7 @@
 #include "compile.h"
 #include "platform.h"
 #include "type.h"
+#include "expected.h"
 #include "limit.h"
 #include "bit.h"
 #include "algorithm.h"

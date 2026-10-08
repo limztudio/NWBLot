@@ -94,15 +94,12 @@ void Device::captureDeviceLoss(const AStringView context){
                     ++queueIndex
                 ){
                     const GpuPhysicalQueueId& queue = m_physicalQueueInfos[queueIndex].id;
-                    usize queueFirstSlot = 0u;
-                    VkDeviceSize queueFirstOffset = 0u;
-                    if(!VulkanDetail::TryResolveAmdBreadcrumbRingSlot(
+                    const auto firstSlot = VulkanDetail::TryResolveAmdBreadcrumbRingSlot(
                         m_amdBreadcrumb.layout,
                         queue,
-                        0u,
-                        queueFirstSlot,
-                        queueFirstOffset
-                    ))
+                        0u
+                    );
+                    if(!firstSlot)
                         continue;
 
                     AmdBreadcrumbSlotRecord newestRecord;
@@ -111,7 +108,7 @@ void Device::captureDeviceLoss(const AStringView context){
                         // Lock with breadcrumb reservations to avoid pairing an observation with a torn record.
                         ScopedLock lock(m_amdBreadcrumb.slotMutex);
                         for(usize localSlot = 0u; localSlot < m_amdBreadcrumb.layout.slotsPerQueue; ++localSlot){
-                            const usize flatSlot = queueFirstSlot + localSlot;
+                            const usize flatSlot = firstSlot->flatSlot + localSlot;
                             const u32 observedMarker = breadcrumbSlots[flatSlot];
                             if(observedMarker == 0u)
                                 continue;
@@ -282,36 +279,33 @@ Device::AmdBreadcrumbWrite Device::reserveAmdBreadcrumb(
     )
         return write;
 
-    VulkanDetail::AmdBreadcrumbReservation reservation;
-    usize flatSlot = 0u;
-    VkDeviceSize byteOffset = 0u;
     {
         // Serialize the queue-local reservation and its paired CPU record.
         ScopedLock lock(m_amdBreadcrumb.slotMutex);
-        if(!VulkanDetail::TryBuildNextAmdBreadcrumbReservation(
+        const auto reservation = VulkanDetail::TryBuildNextAmdBreadcrumbReservation(
             m_amdBreadcrumb.metadata->nextSerials[queue.index],
-            m_amdBreadcrumb.layout.slotsPerQueue,
-            reservation
-        ))
+            m_amdBreadcrumb.layout.slotsPerQueue
+        );
+        if(!reservation)
             return write;
-        if(!VulkanDetail::TryResolveAmdBreadcrumbRingSlot(
+        const auto slot = VulkanDetail::TryResolveAmdBreadcrumbRingSlot(
             m_amdBreadcrumb.layout,
             queue,
-            reservation.localSlot,
-            flatSlot,
-            byteOffset
-        ))
+            reservation->localSlot
+        );
+        if(!slot)
             return write;
 
-        m_amdBreadcrumb.metadata->nextSerials[queue.index] = reservation.serial;
-        m_amdBreadcrumb.metadata->slotRecords[flatSlot].serial = reservation.serial;
-        m_amdBreadcrumb.metadata->slotRecords[flatSlot].markerHash = markerHash;
-        m_amdBreadcrumb.metadata->slotRecords[flatSlot].marker = reservation.marker;
+        m_amdBreadcrumb.metadata->nextSerials[queue.index] = reservation->serial;
+        m_amdBreadcrumb.metadata->slotRecords[slot->flatSlot].serial = reservation->serial;
+        m_amdBreadcrumb.metadata->slotRecords[slot->flatSlot].markerHash = markerHash;
+        m_amdBreadcrumb.metadata->slotRecords[slot->flatSlot].marker = reservation->marker;
+
+        write.offset = slot->byteOffset;
+        write.marker = reservation->marker;
     }
 
     write.buffer = m_amdBreadcrumb.buffer;
-    write.offset = byteOffset;
-    write.marker = reservation.marker;
     write.valid = true;
     return write;
 }

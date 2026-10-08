@@ -200,8 +200,7 @@ CrashDumpResult RequestCrashDump(const CrashReasonKind::Enum reasonKind, const u
     if(!options.gpuReport.empty() || !options.gpuDump.empty()){
         Alloc::PersistentArena& dumpArena = DumpArena();
         const ::Path<Alloc::PersistentArena> packageDirectory = RequestPendingDirectory(dumpArena, request);
-        ErrorCode error;
-        if(EnsureDirectories(packageDirectory, error)){
+        if(EnsureDirectories(packageDirectory)){
             if(!options.gpuReport.empty()){
                 if(!WriteTextFile(packageDirectory / PackageNames::s_GpuCrashReportFileName, options.gpuReport))
                     return CrashDumpResult{ CrashDumpStatus::PackageWriteFailed };

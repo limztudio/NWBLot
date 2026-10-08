@@ -7,6 +7,8 @@
 
 #include "global.h"
 
+#include <global/expected.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -86,10 +88,11 @@ inline constexpr AStringView s_UnknownMeshClassName = "unknown";
     return s_UnknownMeshClassName;
 }
 
-[[nodiscard]] inline bool ParseMeshClassText(const AStringView text, u32& outMeshClass)noexcept{
+[[nodiscard]] inline Expected<u32> ParseMeshClassText(const AStringView text)noexcept{
     const MeshClassInfo* info = FindMeshClassInfo(text);
-    outMeshClass = info ? info->meshClass : MeshClass::Invalid;
-    return info != nullptr;
+    if(!info)
+        return MakeUnexpected(Failure{});
+    return info->meshClass;
 }
 
 

@@ -43,4 +43,6 @@ That target runs the project's established symbol-collection workloads and bundl
 
 This collection identifies named allocation owners and their lifetime totals. It does not capture individual allocation addresses or call stacks. Name-symbol resolution stays outside allocator paths. The current memory payload uses version 1 with a 192-byte header. Readers accept only this version.
 
+Telemetry payload parsers return `Expected<Payload>` from their existing telemetry arena, and `BuildTelemetryReport(arena, events)` returns `Expected<TelemetryReport>`. Check each result before reading or moving it. `DecodeEvent` returns one `DecodedEvent` containing the event and consumed byte count; `DecodeEventStream` returns the consumed count while retaining the caller-owned `Recorder`. Failures retain decoder status and offset. Existing payload encoders keep reusable destination capacity. See [produced values and expected failures](expected_results.md).
+
 The allocator and telemetry regression suites exercise reallocation/failure accounting, bulk arena retirement, concurrent owners, source identity isolation, capture toggles, payload validation, and JSON export.

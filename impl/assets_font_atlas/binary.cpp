@@ -29,21 +29,21 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
     AppendU32(bytes, BitCast<u32>(value));
 }
 
-[[nodiscard]] static bool ReadU32(const Core::Assets::AssetBytes& bytes, usize& cursor, u32& outValue){
+[[nodiscard]] static Expected<u32> ReadU32(const Core::Assets::AssetBytes& bytes, usize& cursor)noexcept{
     if(cursor > bytes.size() || bytes.size() - cursor < 4u)
-        return false;
-    outValue = static_cast<u32>(bytes[cursor]) | (static_cast<u32>(bytes[cursor + 1u]) << 8u)
-        | (static_cast<u32>(bytes[cursor + 2u]) << 16u) | (static_cast<u32>(bytes[cursor + 3u]) << 24u);
+        return MakeUnexpected(Failure{});
+    const u32 value = static_cast<u32>(bytes[cursor]) | (static_cast<u32>(bytes[cursor + 1u]) << 8u)
+        | (static_cast<u32>(bytes[cursor + 2u]) << 16u) | (static_cast<u32>(bytes[cursor + 3u]) << 24u)
+    ;
     cursor += 4u;
-    return true;
+    return value;
 }
 
-[[nodiscard]] static bool ReadFloat(const Core::Assets::AssetBytes& bytes, usize& cursor, f32& outValue){
-    u32 value = 0u;
-    if(!ReadU32(bytes, cursor, value))
-        return false;
-    outValue = BitCast<f32>(value);
-    return true;
+[[nodiscard]] static Expected<f32> ReadFloat(const Core::Assets::AssetBytes& bytes, usize& cursor)noexcept{
+    const auto value = ReadU32(bytes, cursor);
+    if(!value)
+        return MakeUnexpected(value.error());
+    return BitCast<f32>(*value);
 }
 
 [[nodiscard]] static bool ReadBytes(const Core::Assets::AssetBytes& bytes, usize& cursor, const usize count, void* destination){
@@ -55,112 +55,232 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
     return true;
 }
 
-[[nodiscard]] static bool ReadGlyph(const Core::Assets::AssetBytes& bytes, usize& cursor, FontAtlasGlyph& glyph){
-    return
-        ReadU32(bytes, cursor, glyph.glyphId) && ReadU32(bytes, cursor, glyph.group)
-        && ReadU32(bytes, cursor, glyph.channel) && ReadU32(bytes, cursor, glyph.x) && ReadU32(bytes, cursor, glyph.y)
-        && ReadU32(bytes, cursor, glyph.width) && ReadU32(bytes, cursor, glyph.height)
-        && ReadFloat(bytes, cursor, glyph.planeLeft) && ReadFloat(bytes, cursor, glyph.planeTop)
-        && ReadFloat(bytes, cursor, glyph.planeRight) && ReadFloat(bytes, cursor, glyph.planeBottom)
-        && ReadFloat(bytes, cursor, glyph.advanceUnits) && ReadU32(bytes, cursor, glyph.drawable)
-    ;
+[[nodiscard]] static Expected<FontAtlasGlyph> ReadGlyph(const Core::Assets::AssetBytes& bytes, usize& cursor)noexcept{
+    FontAtlasGlyph glyph;
+    const auto glyphId = ReadU32(bytes, cursor);
+    if(!glyphId)
+        return MakeUnexpected(glyphId.error());
+    glyph.glyphId = *glyphId;
+    const auto group = ReadU32(bytes, cursor);
+    if(!group)
+        return MakeUnexpected(group.error());
+    glyph.group = *group;
+    const auto channel = ReadU32(bytes, cursor);
+    if(!channel)
+        return MakeUnexpected(channel.error());
+    glyph.channel = *channel;
+    const auto x = ReadU32(bytes, cursor);
+    if(!x)
+        return MakeUnexpected(x.error());
+    glyph.x = *x;
+    const auto y = ReadU32(bytes, cursor);
+    if(!y)
+        return MakeUnexpected(y.error());
+    glyph.y = *y;
+    const auto width = ReadU32(bytes, cursor);
+    if(!width)
+        return MakeUnexpected(width.error());
+    glyph.width = *width;
+    const auto height = ReadU32(bytes, cursor);
+    if(!height)
+        return MakeUnexpected(height.error());
+    glyph.height = *height;
+    const auto planeLeft = ReadFloat(bytes, cursor);
+    if(!planeLeft)
+        return MakeUnexpected(planeLeft.error());
+    glyph.planeLeft = *planeLeft;
+    const auto planeTop = ReadFloat(bytes, cursor);
+    if(!planeTop)
+        return MakeUnexpected(planeTop.error());
+    glyph.planeTop = *planeTop;
+    const auto planeRight = ReadFloat(bytes, cursor);
+    if(!planeRight)
+        return MakeUnexpected(planeRight.error());
+    glyph.planeRight = *planeRight;
+    const auto planeBottom = ReadFloat(bytes, cursor);
+    if(!planeBottom)
+        return MakeUnexpected(planeBottom.error());
+    glyph.planeBottom = *planeBottom;
+    const auto advanceUnits = ReadFloat(bytes, cursor);
+    if(!advanceUnits)
+        return MakeUnexpected(advanceUnits.error());
+    glyph.advanceUnits = *advanceUnits;
+    const auto drawable = ReadU32(bytes, cursor);
+    if(!drawable)
+        return MakeUnexpected(drawable.error());
+    glyph.drawable = *drawable;
+    return glyph;
 }
 
-[[nodiscard]] static bool Deserialize(const Core::Assets::AssetBytes& bytes, FontAtlasPayload& payload){
+[[nodiscard]] static Expected<FontAtlasPayload> Deserialize(
+    const Core::Assets::AssetBytes& bytes,
+    Core::Assets::AssetArena& arena
+){
     usize cursor = 0u;
-    u32 magic = 0u, version = 0u, encoding = 0u, reserved = 0u;
+    FontAtlasPayload payload(arena);
+    const auto magic = ReadU32(bytes, cursor);
+    if(!magic)
+        return MakeUnexpected(magic.error());
+    const auto version = ReadU32(bytes, cursor);
+    if(!version)
+        return MakeUnexpected(version.error());
+    const auto encoding = ReadU32(bytes, cursor);
+    if(!encoding)
+        return MakeUnexpected(encoding.error());
+    const auto reserved = ReadU32(bytes, cursor);
+    if(!reserved)
+        return MakeUnexpected(reserved.error());
     if(
-        !ReadU32(bytes, cursor, magic) || !ReadU32(bytes, cursor, version) || !ReadU32(bytes, cursor, encoding)
-        || !ReadU32(bytes, cursor, reserved) || magic != FontAtlasBinaryPayload::s_Magic
-        || version != FontAtlasBinaryPayload::s_Version || encoding != s_FontAtlasDistanceEncoding || reserved != 0u
+        *magic != FontAtlasBinaryPayload::s_Magic || *version != FontAtlasBinaryPayload::s_Version
+        || *encoding != s_FontAtlasDistanceEncoding || *reserved != 0u
     )
-        return false;
+        return MakeUnexpected(Failure{});
     NameHash identity = {};
     for(u64& lane : identity.qwords){
-        u32 low = 0u, high = 0u;
-        if(!ReadU32(bytes, cursor, low) || !ReadU32(bytes, cursor, high))
-            return false;
-        lane = static_cast<u64>(low) | (static_cast<u64>(high) << 32u);
+        const auto low = ReadU32(bytes, cursor);
+        if(!low)
+            return MakeUnexpected(low.error());
+        const auto high = ReadU32(bytes, cursor);
+        if(!high)
+            return MakeUnexpected(high.error());
+        lane = static_cast<u64>(*low) | (static_cast<u64>(*high) << 32u);
     }
     payload.font.virtualPath = Name(identity);
-    u32 raster = 0u, glyphCount = 0u, groupCount = 0u, tableCount = 0u;
+    if(!ReadBytes(bytes, cursor, sizeof(payload.fontSha256.bytes), payload.fontSha256.bytes))
+        return MakeUnexpected(Failure{});
+    const auto faceIndex = ReadU32(bytes, cursor);
+    if(!faceIndex)
+        return MakeUnexpected(faceIndex.error());
+    payload.faceIndex = *faceIndex;
+    const auto unitsPerEm = ReadU32(bytes, cursor);
+    if(!unitsPerEm)
+        return MakeUnexpected(unitsPerEm.error());
+    payload.unitsPerEm = *unitsPerEm;
+    const auto sourceGlyphCount = ReadU32(bytes, cursor);
+    if(!sourceGlyphCount)
+        return MakeUnexpected(sourceGlyphCount.error());
+    payload.sourceGlyphCount = *sourceGlyphCount;
+    const auto bakePpem = ReadU32(bytes, cursor);
+    if(!bakePpem)
+        return MakeUnexpected(bakePpem.error());
+    payload.bakePpem = *bakePpem;
+    const auto spreadPixels = ReadU32(bytes, cursor);
+    if(!spreadPixels)
+        return MakeUnexpected(spreadPixels.error());
+    payload.spreadPixels = *spreadPixels;
+    const auto guardTexels = ReadU32(bytes, cursor);
+    if(!guardTexels)
+        return MakeUnexpected(guardTexels.error());
+    payload.guardTexels = *guardTexels;
+    const auto raster = ReadU32(bytes, cursor);
+    if(!raster)
+        return MakeUnexpected(raster.error());
+    const auto ascenderUnits = ReadFloat(bytes, cursor);
+    if(!ascenderUnits)
+        return MakeUnexpected(ascenderUnits.error());
+    payload.ascenderUnits = *ascenderUnits;
+    const auto descenderUnits = ReadFloat(bytes, cursor);
+    if(!descenderUnits)
+        return MakeUnexpected(descenderUnits.error());
+    payload.descenderUnits = *descenderUnits;
+    const auto lineGapUnits = ReadFloat(bytes, cursor);
+    if(!lineGapUnits)
+        return MakeUnexpected(lineGapUnits.error());
+    payload.lineGapUnits = *lineGapUnits;
+    const auto glyphCount = ReadU32(bytes, cursor);
+    if(!glyphCount)
+        return MakeUnexpected(glyphCount.error());
+    const auto groupCount = ReadU32(bytes, cursor);
+    if(!groupCount)
+        return MakeUnexpected(groupCount.error());
+    const auto tableCount = ReadU32(bytes, cursor);
+    if(!tableCount)
+        return MakeUnexpected(tableCount.error());
     if(
-        !ReadBytes(bytes, cursor, sizeof(payload.fontSha256.bytes), payload.fontSha256.bytes)
-        || !ReadU32(bytes, cursor, payload.faceIndex) || !ReadU32(bytes, cursor, payload.unitsPerEm)
-        || !ReadU32(bytes, cursor, payload.sourceGlyphCount) || !ReadU32(bytes, cursor, payload.bakePpem)
-        || !ReadU32(bytes, cursor, payload.spreadPixels) || !ReadU32(bytes, cursor, payload.guardTexels)
-        || !ReadU32(bytes, cursor, raster) || !ReadFloat(bytes, cursor, payload.ascenderUnits)
-        || !ReadFloat(bytes, cursor, payload.descenderUnits) || !ReadFloat(bytes, cursor, payload.lineGapUnits)
-        || !ReadU32(bytes, cursor, glyphCount) || !ReadU32(bytes, cursor, groupCount) || !ReadU32(bytes, cursor, tableCount)
+        *glyphCount == 0u || *glyphCount > s_FontAtlasMaxGlyphCount || *glyphCount != payload.sourceGlyphCount
+        || *groupCount == 0u || *groupCount > s_FontAtlasMaxGroupCount || *tableCount > 3u
+        || *raster > FontAtlasRasterMode::Bitmap
     )
-        return false;
-    if(
-        glyphCount == 0u || glyphCount > s_FontAtlasMaxGlyphCount || glyphCount != payload.sourceGlyphCount
-        || groupCount == 0u || groupCount > s_FontAtlasMaxGroupCount || tableCount > 3u || raster > FontAtlasRasterMode::Bitmap
-    )
-        return false;
-    payload.rasterMode = static_cast<FontAtlasRasterMode::Enum>(raster);
-    const u64 minimumRemaining = static_cast<u64>(glyphCount) * FontAtlasBinaryPayload::s_GlyphBytes
-        + static_cast<u64>(groupCount) * FontAtlasBinaryPayload::s_GroupHeaderBytes
-        + static_cast<u64>(tableCount) * FontAtlasBinaryPayload::s_TableHeaderBytes;
+        return MakeUnexpected(Failure{});
+    payload.rasterMode = static_cast<FontAtlasRasterMode::Enum>(*raster);
+    const u64 minimumRemaining = static_cast<u64>(*glyphCount) * FontAtlasBinaryPayload::s_GlyphBytes
+        + static_cast<u64>(*groupCount) * FontAtlasBinaryPayload::s_GroupHeaderBytes
+        + static_cast<u64>(*tableCount) * FontAtlasBinaryPayload::s_TableHeaderBytes
+    ;
     if(cursor > bytes.size() || minimumRemaining > bytes.size() - cursor)
-        return false;
-    payload.glyphs.resize(glyphCount);
+        return MakeUnexpected(Failure{});
+    payload.glyphs.resize(*glyphCount);
     for(FontAtlasGlyph& glyph : payload.glyphs){
-        if(!ReadGlyph(bytes, cursor, glyph))
-            return false;
+        const auto decoded = ReadGlyph(bytes, cursor);
+        if(!decoded)
+            return MakeUnexpected(decoded.error());
+        glyph = *decoded;
     }
-    Core::Assets::AssetArena& arena = payload.glyphs.get_allocator().arena();
-    payload.groups.reserve(groupCount);
+    payload.groups.reserve(*groupCount);
     u64 pixelBytes = 0u;
-    for(u32 index = 0u; index < groupCount; ++index){
+    for(u32 index = 0u; index < *groupCount; ++index){
         FontAtlasGroup group(arena);
-        u32 byteCount = 0u;
-        if(
-            !ReadU32(bytes, cursor, group.width) || !ReadU32(bytes, cursor, group.height)
-            || !ReadU32(bytes, cursor, group.channelCount)
-            || !ReadU32(bytes, cursor, byteCount) || !ReadBytes(bytes, cursor, sizeof(group.sha256.bytes), group.sha256.bytes)
-        )
-            return false;
+        const auto width = ReadU32(bytes, cursor);
+        if(!width)
+            return MakeUnexpected(width.error());
+        group.width = *width;
+        const auto height = ReadU32(bytes, cursor);
+        if(!height)
+            return MakeUnexpected(height.error());
+        group.height = *height;
+        const auto channelCount = ReadU32(bytes, cursor);
+        if(!channelCount)
+            return MakeUnexpected(channelCount.error());
+        group.channelCount = *channelCount;
+        const auto byteCount = ReadU32(bytes, cursor);
+        if(!byteCount)
+            return MakeUnexpected(byteCount.error());
+        if(!ReadBytes(bytes, cursor, sizeof(group.sha256.bytes), group.sha256.bytes))
+            return MakeUnexpected(Failure{});
         if(
             group.width == 0u || group.height == 0u || group.width > s_FontAtlasMaxExtent || group.height > s_FontAtlasMaxExtent
             || group.channelCount == 0u || group.channelCount > 4u
         )
-            return false;
+            return MakeUnexpected(Failure{});
         const u64 expectedBytes = static_cast<u64>(group.width) * group.height * group.channelCount;
         if(
-            expectedBytes != byteCount || pixelBytes + byteCount > s_FontAtlasMaxPixelBytes
-            || cursor > bytes.size() || byteCount > bytes.size() - cursor
+            expectedBytes != *byteCount || pixelBytes + *byteCount > s_FontAtlasMaxPixelBytes
+            || cursor > bytes.size() || *byteCount > bytes.size() - cursor
         )
-            return false;
-        group.pixels.resize(byteCount);
-        if(!ReadBytes(bytes, cursor, byteCount, group.pixels.data()))
-            return false;
-        pixelBytes += byteCount;
+            return MakeUnexpected(Failure{});
+        group.pixels.resize(*byteCount);
+        if(!ReadBytes(bytes, cursor, *byteCount, group.pixels.data()))
+            return MakeUnexpected(Failure{});
+        pixelBytes += *byteCount;
         payload.groups.push_back(Move(group));
     }
-    payload.positioningTables.reserve(tableCount);
+    payload.positioningTables.reserve(*tableCount);
     u64 tableBytes = 0u;
-    for(u32 index = 0u; index < tableCount; ++index){
+    for(u32 index = 0u; index < *tableCount; ++index){
         FontAtlasPositioningTable table(arena);
-        u32 byteCount = 0u;
+        const auto tag = ReadU32(bytes, cursor);
+        if(!tag)
+            return MakeUnexpected(tag.error());
+        table.tag = *tag;
+        const auto byteCount = ReadU32(bytes, cursor);
+        if(!byteCount)
+            return MakeUnexpected(byteCount.error());
+        if(!ReadBytes(bytes, cursor, sizeof(table.sha256.bytes), table.sha256.bytes))
+            return MakeUnexpected(Failure{});
         if(
-            !ReadU32(bytes, cursor, table.tag) || !ReadU32(bytes, cursor, byteCount)
-            || !ReadBytes(bytes, cursor, sizeof(table.sha256.bytes), table.sha256.bytes)
+            *byteCount == 0u || tableBytes + *byteCount > s_FontAtlasMaxPositioningBytes
+            || cursor > bytes.size() || *byteCount > bytes.size() - cursor
         )
-            return false;
-        if(
-            byteCount == 0u || tableBytes + byteCount > s_FontAtlasMaxPositioningBytes
-            || cursor > bytes.size() || byteCount > bytes.size() - cursor
-        )
-            return false;
-        table.bytes.resize(byteCount);
-        if(!ReadBytes(bytes, cursor, byteCount, table.bytes.data()))
-            return false;
-        tableBytes += byteCount;
+            return MakeUnexpected(Failure{});
+        table.bytes.resize(*byteCount);
+        if(!ReadBytes(bytes, cursor, *byteCount, table.bytes.data()))
+            return MakeUnexpected(Failure{});
+        tableBytes += *byteCount;
         payload.positioningTables.push_back(Move(table));
     }
-    return cursor == bytes.size() && ValidateFontAtlasPayload(payload);
+    if(cursor != bytes.size() || !ValidateFontAtlasPayload(payload))
+        return MakeUnexpected(Failure{});
+    return payload;
 }
 
 
@@ -173,11 +293,14 @@ static void AppendFloat(Core::Assets::AssetBytes& bytes, const f32 value){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool SerializeFontAtlasPayload(const FontAtlasPayload& payload, Core::Assets::AssetBytes& outBinary){
+Expected<Core::Assets::AssetBytes> SerializeFontAtlasPayload(
+    const FontAtlasPayload& payload,
+    Core::Assets::AssetArena& arena
+){
     using namespace __hidden_font_atlas_binary;
     if(!ValidateFontAtlasPayload(payload))
-        return false;
-    Core::Assets::AssetBytes binary(outBinary.get_allocator().arena());
+        return MakeUnexpected(Failure{});
+    Core::Assets::AssetBytes binary(arena);
     usize size = FontAtlasBinaryPayload::s_HeaderBytes + payload.glyphs.size() * FontAtlasBinaryPayload::s_GlyphBytes;
     for(const FontAtlasGroup& group : payload.groups)
         size += FontAtlasBinaryPayload::s_GroupHeaderBytes + group.pixels.size();
@@ -224,18 +347,19 @@ bool SerializeFontAtlasPayload(const FontAtlasPayload& payload, Core::Assets::As
         binary.insert(binary.end(), table.sha256.bytes, table.sha256.bytes + sizeof(table.sha256.bytes));
         binary.insert(binary.end(), table.bytes.begin(), table.bytes.end());
     }
-    outBinary = Move(binary);
-    return true;
+    return binary;
 }
 
-bool DeserializeFontAtlasPayload(const Core::Assets::AssetBytes& binary, FontAtlasPayload& outPayload){
-    FontAtlasPayload candidate(outPayload.glyphs.get_allocator().arena());
-    if(!__hidden_font_atlas_binary::Deserialize(binary, candidate)){
+Expected<FontAtlasPayload> DeserializeFontAtlasPayload(
+    const Core::Assets::AssetBytes& binary,
+    Core::Assets::AssetArena& arena
+){
+    auto payload = __hidden_font_atlas_binary::Deserialize(binary, arena);
+    if(!payload){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas binary failed: malformed, noncanonical, unsupported, or invalid content"));
-        return false;
+        return MakeUnexpected(payload.error());
     }
-    outPayload = Move(candidate);
-    return true;
+    return payload;
 }
 
 

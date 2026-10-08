@@ -212,8 +212,8 @@ bool ApplyCrashSpoolRetention(
     const AStringView protectedPendingPackageName
 ){
     const auto isSafePackageDirectory = [&](const ::Path<ArenaT>& path){
-        ErrorCode entryError;
-        return IsDirectory(path, entryError) && !entryError && IsSafePackageName(arena, path);
+        const auto directory = IsDirectory(path);
+        return directory && *directory && IsSafePackageName(arena, path);
     };
 
     const auto shouldRetainPendingPackageDirectory = [&](const ::Path<ArenaT>& path){
@@ -273,17 +273,17 @@ static bool UploadPackageDirectory(
     if(!WriteUploadAttemptText(arena, uploadingPackageDirectory, PackageNames::s_UploadAttemptUploadingState))
         return false;
 
-    CrashBytesT<ArenaT> archiveBytes{arena};
-    if(!BuildPackageArchive(arena, uploadingPackageDirectory, archiveBytes)){
+    const auto archiveBytes = BuildPackageArchive(arena, uploadingPackageDirectory);
+    if(!archiveBytes){
         if(!::MovePathToDirectory(uploadingPackageDirectory, FailedDirectory(spoolDirectory)))
             return false;
         return false;
     }
 
-    if(UploadPackage(arena, url, archiveBytes, crashUploadToken)){
+    if(UploadPackage(arena, url, *archiveBytes, crashUploadToken)){
         if(!WriteUploadAttemptText(arena, uploadingPackageDirectory, PackageNames::s_UploadAttemptUploadedState))
             return false;
-        return ::MovePathToDirectory(uploadingPackageDirectory, UploadedDirectory(spoolDirectory));
+        return ::MovePathToDirectory(uploadingPackageDirectory, UploadedDirectory(spoolDirectory)).has_value();
     }
 
     if(!WriteUploadAttemptText(arena, uploadingPackageDirectory, PackageNames::s_UploadAttemptRetryPendingState))
@@ -296,18 +296,20 @@ static bool UploadPackageDirectory(
 template<typename ArenaT>
 static bool RecoverUploadingPackageDirectories(ArenaT& arena, const ::Path<ArenaT>& spoolDirectory){
     const ::Path<ArenaT> uploadingDirectory = UploadingDirectory(spoolDirectory);
-    ErrorCode error;
-    if(!IsDirectory(uploadingDirectory, error) || error)
-        return !error;
+    const auto uploadingIsDirectory = IsDirectory(uploadingDirectory);
+    if(!uploadingIsDirectory)
+        return false;
+    if(!*uploadingIsDirectory)
+        return true;
 
-    DirectoryIterator directory(uploadingDirectory, error);
-    if(error)
+    const auto directory = DirectoryIterator<ArenaT>::Create(uploadingDirectory);
+    if(!directory)
         return false;
 
     bool ok = true;
-    for(const auto& entry : directory){
-        ErrorCode entryError;
-        if(!IsDirectory(entry.path(), entryError) || entryError || !IsSafePackageName(arena, entry.path()))
+    for(const auto& entry : *directory){
+        const auto entryIsDirectory = IsDirectory(entry.path());
+        if(!entryIsDirectory || !*entryIsDirectory || !IsSafePackageName(arena, entry.path()))
             continue;
 
         if(!WriteUploadAttemptText(arena, entry.path(), PackageNames::s_UploadAttemptRetryInterruptedState))
@@ -335,8 +337,7 @@ static void CollectAndroidEmergencyRecord(const CrashUploadSnapshot& snapshot){
     ;
 
     CrashBytesT<Alloc::PersistentArena> bytes{dumpArena};
-    ErrorCode readError;
-    if(!ReadBinaryFile(recordPath, bytes, readError) || bytes.size() < sizeof(CrashRequest))
+    if(!ReadBinaryFile(recordPath, bytes) || bytes.size() < sizeof(CrashRequest))
         return;
 
     CrashRequest request;
@@ -382,17 +383,19 @@ bool FlushPendingCrashReportsImpl(ArenaT& arena, const CrashUploadSnapshot& snap
 
     bool allUploaded = true;
     const ::Path<ArenaT> pendingDirectory = PendingDirectory(spoolDirectory);
-    ErrorCode error;
-    if(!IsDirectory(pendingDirectory, error) || error)
-        return !error && recoveryOk && retentionOk;
+    const auto pendingIsDirectory = IsDirectory(pendingDirectory);
+    if(!pendingIsDirectory)
+        return false;
+    if(!*pendingIsDirectory)
+        return recoveryOk && retentionOk;
 
-    DirectoryIterator directory(pendingDirectory, error);
-    if(error)
+    const auto directory = DirectoryIterator<ArenaT>::Create(pendingDirectory);
+    if(!directory)
         return false;
 
-    for(const auto& entry : directory){
-        ErrorCode entryError;
-        if(!IsDirectory(entry.path(), entryError) || entryError || !IsSafePackageName(arena, entry.path()))
+    for(const auto& entry : *directory){
+        const auto entryIsDirectory = IsDirectory(entry.path());
+        if(!entryIsDirectory || !*entryIsDirectory || !IsSafePackageName(arena, entry.path()))
             continue;
 
         if(!UploadPackageDirectory(arena, spoolDirectory, entry.path(), url, AStringView(snapshot.crashUploadToken)))

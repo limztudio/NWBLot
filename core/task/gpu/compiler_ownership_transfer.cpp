@@ -111,20 +111,20 @@ namespace GpuTaskGraphCompilerDetail{
     )
         return false;
 
-    GpuTaskResourceRange transferRange;
+    Expected<GpuTaskResourceRange> transferRange = GpuTaskResourceRange{};
     switch(resource.type){
     case GpuGraphResourceType::Texture:
         if(
-            !ResolveTextureRangeForPlanning(plan.graph.textureForResource(resource.id), range, transferRange)
-            || !transferRange.textureSubresources.hasExtent()
+            !(transferRange = ResolveTextureRangeForPlanning(plan.graph.textureForResource(resource.id), range))
+            || !transferRange->textureSubresources.hasExtent()
         )
             return false;
-        transferRange.bufferRange = s_EntireBuffer;
+        transferRange->bufferRange = s_EntireBuffer;
         break;
     case GpuGraphResourceType::Buffer:
-        if(!ResolveResourceRangeForPlanning(plan.graph, resource, range, transferRange))
+        if(!(transferRange = ResolveResourceRangeForPlanning(plan.graph, resource, range)))
             return false;
-        transferRange.textureSubresources = s_AllSubresources;
+        transferRange->textureSubresources = s_AllSubresources;
         break;
     case GpuGraphResourceType::AccelStruct:
         break;
@@ -158,7 +158,7 @@ namespace GpuTaskGraphCompilerDetail{
 
     const GpuCompiledOwnershipTransfer transfer{
         .resource = resource.id,
-        .range = transferRange,
+        .range = (*transferRange),
         .sourceTask = compiledSourceTask ? sourceTask : GpuTaskId{},
         .destinationTask = compiledDestinationTask ? destinationTask : GpuTaskId{},
         .sourcePacket = sourcePacket,

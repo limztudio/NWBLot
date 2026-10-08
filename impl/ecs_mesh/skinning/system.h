@@ -199,6 +199,17 @@ private:
         }
     };
 
+    struct RuntimeResourcePreparation{
+        RuntimeResources* resources;
+        bool rebuilt;
+    };
+
+    struct RestToSkinnedCopyByteCounts{
+        usize positionBytes;
+        usize normalBytes;
+        usize tangentBytes;
+    };
+
     struct TaskGraphSkinningDeformationTask;
     struct TaskGraphSkinningPostDispatchTask;
     struct TaskGraphSkinningFinalizerTask;
@@ -206,17 +217,12 @@ private:
 
 public:
     using ShaderPathResolveCallback = Function<
-        bool(const Name& shaderName, AStringView variantName, const Name& stageName, Name& outVirtualPath)
+        Expected<Name>(const Name& shaderName, AStringView variantName, const Name& stageName)
     >;
 
 
 private:
-    [[nodiscard]] static bool ResolveRestToSkinnedCopyByteCounts(
-        const MeshSkinningRuntimeInstance& instance,
-        usize& outPositionBytes,
-        usize& outNormalBytes,
-        usize& outTangentBytes
-    );
+    [[nodiscard]] static Expected<RestToSkinnedCopyByteCounts> ResolveRestToSkinnedCopyByteCounts(const MeshSkinningRuntimeInstance& instance);
 
 
 public:
@@ -238,7 +244,7 @@ public:
     virtual void render(Core::Framebuffer* framebuffer)override;
     virtual void invalidateResources()override;
 
-    virtual bool resolveRuntimeMesh(Core::ECS::EntityID entity, RuntimeMeshDesc& outMesh)override;
+    virtual Expected<RuntimeMeshDesc> resolveRuntimeMesh(Core::ECS::EntityID entity)override;
     [[nodiscard]] virtual bool hasRuntimeMeshBinding(Core::ECS::EntityID entity)const override;
     virtual void markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)override;
 
@@ -279,12 +285,10 @@ private:
         const Core::CommandListResourceStateHandoff& state,
         Core::Alloc::ScratchArena& scratchArena
     );
-    [[nodiscard]] bool ensureRuntimeResources(
+    [[nodiscard]] Expected<RuntimeResourcePreparation> ensureRuntimeResources(
         MeshSkinningRuntimeInstance& instance,
         const RuntimeSkinPayloadScratch& payload,
-        Core::Alloc::ScratchArena& scratchArena,
-        RuntimeResources*& outResources,
-        bool& outResourcesRebuilt
+        Core::Alloc::ScratchArena& scratchArena
     );
     [[nodiscard]] bool createRuntimeResourceBindlessHeapHandles(MeshSkinningRuntimeInstance& instance, RuntimeResources& resources);
     void releaseRuntimeResourceBindlessHeapHandles(RuntimeResources& resources);

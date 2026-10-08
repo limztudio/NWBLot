@@ -211,16 +211,15 @@ bool GpuTaskGraphExternalResourceHandoffSnapshot::validFor(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuGraphSubmissionTransaction::copyAcceptedPacketTokens(
+Expected<GpuGraphSubmissionAcceptanceSnapshot> GpuGraphSubmissionTransaction::copyAcceptedPacketTokens(
     const GpuCompiledGraph::ReadView& compiledPlan,
-    QueueSubmissionToken* const outTokens,
-    const usize tokenCount,
-    GpuGraphSubmissionAcceptanceSnapshot& outSnapshot
-)const noexcept{
+    Alloc::ScratchArena& scratchArena
+)const{
     if(!compiledPlan.valid())
-        return false;
-    if((tokenCount != 0u && !outTokens) || tokenCount != compiledPlan.packetCount())
-        return false;
+        return MakeUnexpected(Failure{});
+    GpuGraphSubmissionAcceptanceSnapshot snapshot{
+        .packetTokens = Vector<QueueSubmissionToken, Alloc::ScratchArena>(compiledPlan.packetCount(), scratchArena),
+    };
 
     NothrowScopedLock lock(m_mutex);
     if(
@@ -229,23 +228,20 @@ bool GpuGraphSubmissionTransaction::copyAcceptedPacketTokens(
         || m_planGeneration != compiledPlan.planGeneration()
         || m_deviceGeneration != compiledPlan.deviceGeneration()
         || m_packets.size() != compiledPlan.packetCount()
-        || tokenCount != m_packets.size()
         || m_acceptanceRevision == 0u
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
-    for(usize packetIndex = 0u; packetIndex < tokenCount; ++packetIndex){
+    for(usize packetIndex = 0u; packetIndex < snapshot.packetTokens.size(); ++packetIndex){
         const PacketRuntime& runtime = m_packets[packetIndex];
-        outTokens[packetIndex] = runtime.state == PacketRuntimeState::Accepted
+        snapshot.packetTokens[packetIndex] = runtime.state == PacketRuntimeState::Accepted
             ? runtime.token
             : QueueSubmissionToken{}
         ;
     }
-    outSnapshot = GpuGraphSubmissionAcceptanceSnapshot{
-        .recordingAttemptGeneration = m_recordingAttemptGeneration,
-        .acceptanceRevision = m_acceptanceRevision,
-    };
-    return true;
+    snapshot.recordingAttemptGeneration = m_recordingAttemptGeneration;
+    snapshot.acceptanceRevision = m_acceptanceRevision;
+    return snapshot;
 }
 
 QueueSubmissionToken GpuGraphSubmissionTransaction::packetToken(const GpuSubmissionPacketId& packet)const noexcept{

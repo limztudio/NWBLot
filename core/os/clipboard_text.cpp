@@ -20,8 +20,8 @@ ClipboardStatus::Enum ValidateClipboardUtf8Text(const AStringView text)noexcept{
         return ClipboardStatus::TooLarge;
     usize offset = 0u;
     while(offset < text.size()){
-        u32 codePoint = 0u;
-        if(!Utf8TextDetail::DecodeCodePoint(text, offset, codePoint))
+        const auto codePoint = Utf8TextDetail::DecodeCodePoint(text, offset);
+        if(!codePoint)
             return ClipboardStatus::InvalidText;
     }
     return ClipboardStatus::Success;
@@ -60,14 +60,14 @@ ClipboardStatus::Enum EncodeClipboardLatin1(const AStringView text, AString<Allo
         return status;
     usize offset = 0u;
     while(offset < text.size()){
-        u32 codePoint = 0u;
-        if(!Utf8TextDetail::DecodeCodePoint(text, offset, codePoint))
+        const auto codePoint = Utf8TextDetail::DecodeCodePoint(text, offset);
+        if(!codePoint)
             return ClipboardStatus::InvalidText;
-        if(codePoint > 0xffu){
+        if(*codePoint > 0xffu){
             output.clear();
             return ClipboardStatus::Unsupported;
         }
-        output.push_back(static_cast<char>(codePoint));
+        output.push_back(static_cast<char>(*codePoint));
     }
     return ClipboardStatus::Success;
 }

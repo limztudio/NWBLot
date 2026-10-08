@@ -71,7 +71,7 @@ bool RendererRayTracingSystem::ensureRayTraceMaterialContextSlotsBuffer(){
     return true;
 }
 
-bool RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(RayTraceMaterialContextSlots& outSlots){
+Expected<RayTraceMaterialContextSlots> RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(){
     // The shared graph has already imported this constant buffer and its UniformBuffer descriptor by the time its
     // preparation packet records. Do not recreate either one here: a recording-time replacement would invalidate
     // the graph's frozen resource identity and the immutable selector snapshot it retains.
@@ -80,31 +80,47 @@ bool RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(RayTraceMate
         || !m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.valid()
         || m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     RayTraceMaterialContextSlots slots;
-    const auto resolveStorageSlot = [](const Core::Buffer* buffer, const Core::GpuDescriptorHandle handle, u32& outSlot) -> bool{
-        if(!buffer){
-            outSlot = 0u;
-            return true;
-        }
+    const auto resolveStorageSlot = [](const Core::Buffer* buffer, const Core::GpuDescriptorHandle handle) -> Expected<u32>{
+        if(!buffer)
+            return 0u;
         if(!handle.valid() || handle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer)
-            return false;
-        outSlot = handle.slot();
-        return true;
+            return MakeUnexpected(Failure{});
+        return handle.slot();
     };
 
-    const bool complete =
-        resolveStorageSlot(m_rayTracingState.m_sceneBvhNodeBuffer.get(), m_rayTracingState.m_sceneBvhNodeHeapHandle, slots.sceneBvhNodes)
-        && resolveStorageSlot(m_rayTracingState.m_sceneInstanceBuffer.get(), m_rayTracingState.m_sceneInstanceHeapHandle, slots.sceneInstances)
-        && resolveStorageSlot(m_rayTracingState.m_shadowInstanceMaterialBuffer.get(), m_rayTracingState.m_shadowInstanceMaterialHeapHandle, slots.instanceMaterial)
-        && resolveStorageSlot(m_rayTracingState.m_shadowMaterialTypedBuffer.get(), m_rayTracingState.m_shadowMaterialTypedHeapHandle, slots.materialTyped)
-        && resolveStorageSlot(m_rayTracingState.m_shadowInstanceBuffer.get(), m_rayTracingState.m_shadowInstanceHeapHandle, slots.meshInstances)
-    ;
-    if(!complete){
+    const auto sceneBvhNodes = resolveStorageSlot(m_rayTracingState.m_sceneBvhNodeBuffer.get(), m_rayTracingState.m_sceneBvhNodeHeapHandle);
+    if(!sceneBvhNodes){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
+    slots.sceneBvhNodes = *sceneBvhNodes;
+    const auto sceneInstances = resolveStorageSlot(m_rayTracingState.m_sceneInstanceBuffer.get(), m_rayTracingState.m_sceneInstanceHeapHandle);
+    if(!sceneInstances){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
+        return MakeUnexpected(Failure{});
+    }
+    slots.sceneInstances = *sceneInstances;
+    const auto instanceMaterial = resolveStorageSlot(m_rayTracingState.m_shadowInstanceMaterialBuffer.get(), m_rayTracingState.m_shadowInstanceMaterialHeapHandle);
+    if(!instanceMaterial){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
+        return MakeUnexpected(Failure{});
+    }
+    slots.instanceMaterial = *instanceMaterial;
+    const auto materialTyped = resolveStorageSlot(m_rayTracingState.m_shadowMaterialTypedBuffer.get(), m_rayTracingState.m_shadowMaterialTypedHeapHandle);
+    if(!materialTyped){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
+        return MakeUnexpected(Failure{});
+    }
+    slots.materialTyped = *materialTyped;
+    const auto meshInstances = resolveStorageSlot(m_rayTracingState.m_shadowInstanceBuffer.get(), m_rayTracingState.m_shadowInstanceHeapHandle);
+    if(!meshInstances){
+        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: ray-trace material-context heap registration is incomplete"));
+        return MakeUnexpected(Failure{});
+    }
+    slots.meshInstances = *meshInstances;
 
     // Optical metadata follows the selected backend's instance order and retains its preflighted descriptor.
     const RayTracingOpticalSceneSnapshot opticalScene = m_shadowVisibilityHardwareSupported
@@ -114,8 +130,7 @@ bool RendererRayTracingSystem::snapshotRayTraceMaterialContextSlots(RayTraceMate
         slots.opticalInstanceCount = opticalScene.upload->instanceCount;
     }
 
-    outSlots = slots;
-    return true;
+    return slots;
 }
 
 void RendererRayTracingSystem::releaseRayTraceMaterialContextHeapHandles(){

@@ -27,8 +27,8 @@ public:
 public:
     [[nodiscard]] virtual TextInputCapabilities capabilities()const noexcept override;
     [[nodiscard]] bool handleMessage(u32 message, usize wParam, isize lParam);
-    [[nodiscard]] bool resolveContextMessage(u32 message, usize wParam, isize lParam, isize& forwardedLParam);
-    [[nodiscard]] bool decodeFallbackCharInput(u32 unit, u32& codePoint)noexcept;
+    [[nodiscard]] Expected<isize> resolveContextMessage(u32 message, usize wParam, isize lParam);
+    [[nodiscard]] Expected<u32> decodeFallbackCharInput(u32 unit)noexcept;
     [[nodiscard]] bool resetFallbackCharInput()noexcept;
 
 
@@ -44,7 +44,7 @@ private:
     [[nodiscard]] TextInputAdmission::Enum acceptCodePoint(TextInputSessionToken token, u32 codePoint, u32 repeatCount);
     [[nodiscard]] TextInputAdmission::Enum acceptUtf16Unit(TextInputSessionToken token, u32 unit, u32 repeatCount);
     [[nodiscard]] TextInputAdmission::Enum readCompositionText(NotNull<void*> nativeContext, u32 index);
-    [[nodiscard]] TextInputAdmission::Enum compositionCursor(NotNull<void*> nativeContext, usize& byteOffset);
+    [[nodiscard]] Expected<usize, TextInputAdmission::Enum> compositionCursor(NotNull<void*> nativeContext);
     [[nodiscard]] TextInputAdmission::Enum acceptComposition(TextInputSessionToken token, usize wParam, isize flags);
     [[nodiscard]] TextInputAdmission::Enum acceptInsertedPreedit(TextInputSessionToken token, u32 unit, bool moveCaret);
     [[nodiscard]] TextInputAdmission::Enum publishCompositionPreedit(

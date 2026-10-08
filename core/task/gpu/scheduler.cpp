@@ -24,41 +24,35 @@ namespace __hidden_gpu_packet_runtime_execution{
 
 
 // A frontier packet is meaningful only as an explicit recovery/finalization tail. The compiler prevents it from merging with ordinary work, but does not force declaration order, so normal graph execution rejects one inside either its semantic endpoint prefix or its automatically derived ordinary prefix before recording begins.
-[[nodiscard]] bool FindNormalGraphPacketRange(
+[[nodiscard]] Expected<GpuSubmissionPacketRange, GpuSubmissionPacketId> FindNormalGraphPacketRange(
     const GpuTaskGraph::DeclarationReadView& declarations,
     const GpuCompiledGraph::ReadView& planAccess,
-    const GpuTaskId& terminalTask,
-    GpuSubmissionPacketRange& outRange,
-    GpuSubmissionPacketId* const outFailedPacket
+    const GpuTaskId& terminalTask
 ){
-    outRange = {};
-    if(outFailedPacket)
-        *outFailedPacket = {};
-
     const usize packetCount = planAccess.packetCount();
     if(packetCount == 0u)
-        return false;
+        return MakeUnexpected(GpuSubmissionPacketId{});
 
     if(terminalTask.valid()){
         if(!declarations.validTask(terminalTask) || !planAccess.findTask(terminalTask).valid())
-            return false;
+            return MakeUnexpected(GpuSubmissionPacketId{});
         const GpuSubmissionPacketId terminalPacket = planAccess.packetForTask(terminalTask);
         if(!terminalPacket.valid())
-            return false;
+            return MakeUnexpected(GpuSubmissionPacketId{});
         for(usize packetIndex = 0u; packetIndex <= terminalPacket.index; ++packetIndex){
             const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
             const GpuCompiledPacketView packetView = planAccess.packet(packet);
             if(!packetView.valid())
-                return false;
+                return MakeUnexpected(GpuSubmissionPacketId{});
             if(!packetView.plan->joinsAcceptedQueueFrontier)
                 continue;
-            if(outFailedPacket)
-                *outFailedPacket = packet;
-            return false;
+            return MakeUnexpected(packet);
         }
 
-        outRange = planAccess.packetRange(planAccess.packetIdAt(0u), terminalPacket);
-        return planAccess.validPacketRange(outRange);
+        const GpuSubmissionPacketRange range = planAccess.packetRange(planAccess.packetIdAt(0u), terminalPacket);
+        if(!planAccess.validPacketRange(range))
+            return MakeUnexpected(GpuSubmissionPacketId{});
+        return range;
     }
 
     usize firstFrontierPacketIndex = packetCount;
@@ -66,31 +60,29 @@ namespace __hidden_gpu_packet_runtime_execution{
         const GpuSubmissionPacketId packet = planAccess.packetIdAt(packetIndex);
         const GpuCompiledPacketView packetView = planAccess.packet(packet);
         if(!packetView.valid())
-            return false;
+            return MakeUnexpected(GpuSubmissionPacketId{});
         if(packetView.plan->joinsAcceptedQueueFrontier){
             if(firstFrontierPacketIndex == packetCount)
                 firstFrontierPacketIndex = packetIndex;
             continue;
         }
         if(firstFrontierPacketIndex != packetCount){
-            if(outFailedPacket)
-                *outFailedPacket = packet;
-            return false;
+            return MakeUnexpected(packet);
         }
     }
 
     if(firstFrontierPacketIndex == 0u){
-        if(outFailedPacket)
-            *outFailedPacket = planAccess.packetIdAt(0u);
-        return false;
+        return MakeUnexpected(planAccess.packetIdAt(0u));
     }
 
     const GpuSubmissionPacketId firstPacket = planAccess.packetIdAt(0u);
     const GpuSubmissionPacketId lastPacket = planAccess.packetIdAt(
         firstFrontierPacketIndex == packetCount ? packetCount - 1u : firstFrontierPacketIndex - 1u
     );
-    outRange = planAccess.packetRange(firstPacket, lastPacket);
-    return planAccess.validPacketRange(outRange);
+    const GpuSubmissionPacketRange range = planAccess.packetRange(firstPacket, lastPacket);
+    if(!planAccess.validPacketRange(range))
+        return MakeUnexpected(GpuSubmissionPacketId{});
+    return range;
 }
 
 
@@ -149,17 +141,15 @@ bool GpuTaskScheduler::submitGraph(
             || !transaction.validFor(planAccess)
         )
             return false;
-        if(!__hidden_gpu_packet_runtime_execution::FindNormalGraphPacketRange(
-            declarationAccess,
-            planAccess,
-            desc.terminalTask,
-            normalRange,
-            &failedPacket
-        )){
+        const auto range = __hidden_gpu_packet_runtime_execution::FindNormalGraphPacketRange(
+            declarationAccess, planAccess, desc.terminalTask
+        );
+        if(!range){
             if(outFailedPacket)
-                *outFailedPacket = failedPacket;
+                *outFailedPacket = range.error();
             return false;
         }
+        normalRange = *range;
         exceptionScope.setFailedPacket(normalRange.first);
         if(
             (desc.taskTimingTicketCount != 0u && !desc.taskTimingTickets)

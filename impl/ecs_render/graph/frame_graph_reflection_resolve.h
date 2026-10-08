@@ -102,11 +102,10 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
+    [[nodiscard]] Expected<FrameGraphReflectionResolveResult> declare(
         const FrameGraphReflectionResolveInputs& inputs,
         RayTracingSceneGraphReads& sceneReads,
-        Core::Alloc::ScratchArena& scratchArena,
-        FrameGraphReflectionResolveResult& outResult
+        Core::Alloc::ScratchArena& scratchArena
     );
 
 

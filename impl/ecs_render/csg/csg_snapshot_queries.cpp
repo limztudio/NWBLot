@@ -55,13 +55,11 @@ bool ECSRenderDetail::CsgGraphResourceSnapshot::frameReady(const CsgFrameGpuData
     ;
 }
 
-bool ECSRenderDetail::CsgGraphResourceSnapshot::findClipContextHeapSlot(u32& outHeapSlot)const noexcept{
-    outHeapSlot = 0u;
+Expected<u32> ECSRenderDetail::CsgGraphResourceSnapshot::findClipContextHeapSlot()const noexcept{
     if(!clipContextSlotsHeapHandle.valid())
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outHeapSlot = clipContextSlotsHeapHandle.slot();
-    return true;
+    return clipContextSlotsHeapHandle.slot();
 }
 
 

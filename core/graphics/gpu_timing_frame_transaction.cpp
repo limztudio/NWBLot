@@ -100,11 +100,13 @@ bool GpuTimingFrameTransaction::begin(
         m_state = State::Inactive;
         return true;
     }
-    if(!m_recorder.beginDeferredScope(scopeDefinition.identity, device, commandList, attribution, m_scope)){
+    const auto scope = m_recorder.beginDeferredScope(scopeDefinition.identity, device, commandList, attribution);
+    if(!scope){
         m_scope = {};
         m_state = State::Resolved;
         return false;
     }
+    m_scope = *scope;
     m_state = m_scope.valid() ? State::BeginRecorded : State::Inactive;
     return true;
 }
@@ -272,8 +274,8 @@ GpuTimingMeasure::GpuTimingMeasure(
 
     __hidden_gpu_timing_frame_transaction::GpuTimingMeasureConstructionUnwindScope constructionUnwind(*this);
     m_marker = m_commandList.beginMarkerLease(scopeDefinition.markerLabel);
-    if(!m_recorder.beginScope(scopeDefinition.identity, device, commandList, attribution, false, m_scope))
-        m_scope = {};
+    const auto scope = m_recorder.beginScope(scopeDefinition.identity, device, commandList, attribution, false);
+    m_scope = scope ? *scope : GpuTimingScope{};
     constructionUnwind.release();
 }
 

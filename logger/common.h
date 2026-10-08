@@ -121,51 +121,40 @@ template<typename PayloadContainer>
     return outPayload.size() == payloadBytes;
 }
 
-[[nodiscard]] inline bool ParseMessagePayload(
+[[nodiscard]] inline Expected<MessageType, TStringView> ParseMessagePayload(
     LogArena& arena,
     const void* contents,
-    const usize totalSize,
-    MessageType& outMessage,
-    TStringView& outError
+    const usize totalSize
 ){
-    outMessage = MakeMessageType(arena);
-    outError = {};
-
     if(totalSize < sizeof(Timer) + sizeof(Core::Common::LogType::Enum) + sizeof(tchar)){
-        outError = NWB_TEXT("Received a truncated message");
-        return false;
+        return MakeUnexpected(TStringView(NWB_TEXT("Received a truncated message")));
     }
     if(!contents){
-        outError = NWB_TEXT("Received a malformed message payload");
-        return false;
+        return MakeUnexpected(TStringView(NWB_TEXT("Received a malformed message payload")));
     }
 
     const BinaryByteView payload{ static_cast<const u8*>(contents), totalSize };
     usize cursor = 0u;
 
-    Timer time{};
-    Core::Common::LogType::Enum type{};
-    if(!ReadPOD(payload, cursor, time) || !ReadPOD(payload, cursor, type)){
-        outError = NWB_TEXT("Received a truncated message");
-        return false;
+    const auto time = ReadPOD<Timer>(payload, cursor);
+    const auto type = ReadPOD<Core::Common::LogType::Enum>(payload, cursor);
+    if(!time || !type){
+        return MakeUnexpected(TStringView(NWB_TEXT("Received a truncated message")));
     }
 
-    if(!IsValidMessageType(type)){
-        outError = NWB_TEXT("Received a message with an invalid type");
-        return false;
+    if(!IsValidMessageType(*type)){
+        return MakeUnexpected(TStringView(NWB_TEXT("Received a message with an invalid type")));
     }
 
     const usize textBytes = totalSize - cursor;
     if(textBytes < sizeof(tchar) || (textBytes % sizeof(tchar)) != 0u){
-        outError = NWB_TEXT("Received a malformed message payload");
-        return false;
+        return MakeUnexpected(TStringView(NWB_TEXT("Received a malformed message payload")));
     }
 
-    tchar terminator = 0;
     usize terminatorCursor = totalSize - sizeof(tchar);
-    if(!ReadPOD(payload, terminatorCursor, terminator) || terminator != 0){
-        outError = NWB_TEXT("Received a non-null-terminated message");
-        return false;
+    const auto terminator = ReadPOD<tchar>(payload, terminatorCursor);
+    if(!terminator || *terminator != 0){
+        return MakeUnexpected(TStringView(NWB_TEXT("Received a non-null-terminated message")));
     }
 
     // Serialized text can start at an unaligned byte offset; copy into aligned character storage before reading it.
@@ -174,8 +163,7 @@ template<typename PayloadContainer>
     message.resize(messageBytes / sizeof(tchar));
     if(messageBytes != 0u)
         NWB_MEMCPY(message.data(), messageBytes, payload.data() + cursor, messageBytes);
-    outMessage = MakeTuple(Move(time), type, Move(message));
-    return true;
+    return MakeTuple(*time, *type, Move(message));
 }
 
 
@@ -198,36 +186,36 @@ public:
         if(fileNameBase.empty())
             return false;
 
-        LocalTime localTime = {};
-        if(!GetLocalTime(localTime))
+        const auto localTime = GetLocalTime();
+        if(!localTime)
             return false;
 
-        Path executableDirectory(m_arena);
-        if(!GetExecutableDirectory(executableDirectory))
+        const auto executableDirectory = GetExecutableDirectory(m_arena);
+        if(!executableDirectory)
             return false;
 
         const LogString fileName = StringFormat(
             m_arena,
             NWB_TEXT("{}_{:04}{:02}{:02}_{:02}{:02}{:02}.log"),
             fileNameBase,
-            localTime.tm_year + s_LocalTimeYearBase,
-            localTime.tm_mon + s_LocalTimeMonthBase,
-            localTime.tm_mday,
-            localTime.tm_hour,
-            localTime.tm_min,
-            localTime.tm_sec
+            localTime->tm_year + s_LocalTimeYearBase,
+            localTime->tm_mon + s_LocalTimeMonthBase,
+            localTime->tm_mday,
+            localTime->tm_hour,
+            localTime->tm_min,
+            localTime->tm_sec
         );
-        m_filePath = executableDirectory / fileName;
+        m_filePath = *executableDirectory / fileName;
 
         m_stream.open(m_filePath, s_FileOpenWrite | s_FileOpenAppend);
         return m_stream.is_open();
     }
     bool openByExecutableName(){
-        Path executableName(m_arena);
-        if(!GetExecutableName(executableName))
+        const auto executableName = GetExecutableName(m_arena);
+        if(!executableName)
             return false;
 
-        const LogString executableNameString = PathToString<tchar>(m_arena, executableName);
+        const LogString executableNameString = PathToString<tchar>(m_arena, *executableName);
         return open(executableNameString);
     }
 

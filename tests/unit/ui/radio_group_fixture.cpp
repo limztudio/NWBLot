@@ -42,27 +42,29 @@ u64 RadioSource::key(const u64 index)const{
     return rawKey(index);
 }
 
-bool RadioSource::indexOf(const u64 value, u64& index)const{
+Expected<u64> RadioSource::indexOf(const u64 value)const{
+    u64 index = 0u;
     callback(RadioCallbackSite::None);
     const u64 count = rawCount();
     for(u64 cursor = 0u; cursor < count; ++cursor){
         if(value != 0u && rawKey(cursor) == value){
             index = cursor;
-            return true;
+            return index;
         }
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
-bool RadioSource::findEnabled(const u64 start, const bool reverse, u64& index)const{
+Expected<u64> RadioSource::findEnabled(const u64 start, const bool reverse)const{
+    u64 index = 0u;
     callback(RadioCallbackSite::None);
     const u64 count = rawCount();
     if(start >= count || m_allDisabled)
-        return false;
+        return MakeUnexpected(Failure{});
     for(u64 cursor = start; cursor < count;){
         if(rawKey(cursor) != m_disabled){
             index = cursor;
-            return true;
+            return index;
         }
         if(reverse){
             if(cursor == 0u)
@@ -72,7 +74,7 @@ bool RadioSource::findEnabled(const u64 start, const bool reverse, u64& index)co
         else
             ++cursor;
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 StringView RadioSource::text(const u64 index)const{

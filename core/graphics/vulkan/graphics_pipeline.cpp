@@ -94,14 +94,10 @@ void CommandList::setViewportState(const ViewportState& viewportState){
         m_context.deviceDispatch.vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &scissor);
     }
     else if(!viewportState.viewports.empty()){
-        VkRect2D scissor{};
-        const bool implicitScissorBuilt = VulkanDetail::BuildImplicitScissor(
-            viewportState.viewports[0u],
-            scissor
-        );
-        if(!implicitScissorBuilt)
+        const auto scissor = VulkanDetail::BuildImplicitScissor(viewportState.viewports[0u]);
+        if(!scissor)
             return;
-        m_context.deviceDispatch.vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &scissor);
+        m_context.deviceDispatch.vkCmdSetScissor(m_currentCmdBuf->m_cmdBuf, 0u, 1u, &*scissor);
     }
 }
 
@@ -396,19 +392,18 @@ void CommandList::drawIndirect(u32 offsetBytes, u32 drawCount){
         return;
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indirect")))
         return;
-    Buffer* indirectBuffer = nullptr;
-    if(!prepareDrawIndirect(
+    const auto indirectBuffer = prepareDrawIndirect(
         offsetBytes,
         drawCount,
         sizeof(DrawIndirectArguments),
         NWB_TEXT("draw indirect"),
         NWB_TEXT("drawIndirect"),
-        VulkanDetail::IndirectDrawIndexMode::NonIndexed,
-        indirectBuffer
-    ))
+        VulkanDetail::IndirectDrawIndexMode::NonIndexed
+    );
+    if(!indirectBuffer)
         return;
 
-    m_context.deviceDispatch.vkCmdDrawIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndirectArguments));
+    m_context.deviceDispatch.vkCmdDrawIndirect(m_currentCmdBuf->m_cmdBuf, (*indirectBuffer)->m_buffer, offsetBytes, drawCount, sizeof(DrawIndirectArguments));
     retainResource(m_currentGraphicsState.indirectParams);
 }
 
@@ -417,19 +412,18 @@ void CommandList::drawIndexedIndirect(u32 offsetBytes, u32 drawCount){
         return;
     if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, NWB_TEXT("draw indexed indirect")))
         return;
-    Buffer* indirectBuffer = nullptr;
-    if(!prepareDrawIndirect(
+    const auto indirectBuffer = prepareDrawIndirect(
         offsetBytes,
         drawCount,
         sizeof(DrawIndexedIndirectArguments),
         NWB_TEXT("draw indexed indirect"),
         NWB_TEXT("drawIndexedIndirect"),
-        VulkanDetail::IndirectDrawIndexMode::Indexed,
-        indirectBuffer
-    ))
+        VulkanDetail::IndirectDrawIndexMode::Indexed
+    );
+    if(!indirectBuffer)
         return;
 
-    m_context.deviceDispatch.vkCmdDrawIndexedIndirect(m_currentCmdBuf->m_cmdBuf, indirectBuffer->m_buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
+    m_context.deviceDispatch.vkCmdDrawIndexedIndirect(m_currentCmdBuf->m_cmdBuf, (*indirectBuffer)->m_buffer, offsetBytes, drawCount, sizeof(DrawIndexedIndirectArguments));
     retainResource(m_currentGraphicsState.indirectParams);
 }
 

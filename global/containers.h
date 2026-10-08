@@ -5,6 +5,8 @@
 #pragma once
 
 
+#include "array.h"
+#include "expected.h"
 #include "generic.h"
 #include "algorithm.h"
 #include "limit.h"
@@ -13,7 +15,6 @@
 #include <functional>
 #include <optional>
 #include <tuple>
-#include <array>
 #include <forward_list>
 #include <list>
 #include <vector>
@@ -133,9 +134,6 @@ using DefaultHashMap = tsl::robin_map<
     ContainerDetail::DefaultArenaAllocatorFor_T<Pair<K, V>, ArenaT, DefaultArena>
 >;
 
-template<typename T, usize N>
-using Array = std::array<T, N>;
-
 template<typename T, typename ArenaT>
 using ForwardList = std::forward_list<T, ContainerDetail::ArenaAllocatorFor_T<T, ArenaT>>;
 
@@ -174,41 +172,38 @@ namespace ContainerDetail{
 
 
 template<typename DestinationVector, typename SourceValue>
-[[nodiscard]] inline bool SourceAliasesDestination(
+[[nodiscard]] inline Expected<usize> SourceAliasesDestination(
     const DestinationVector& destination,
     const SourceValue* sourceData,
-    const usize sourceSize,
-    usize& outSourceOffset
+    const usize sourceSize
 ){
-    outSourceOffset = 0u;
     if(destination.empty() || sourceSize == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const auto* const destinationData = destination.data();
     if(destinationData == nullptr || sourceData == nullptr)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const usize destinationBegin = reinterpret_cast<usize>(destinationData);
     const usize sourceBegin = reinterpret_cast<usize>(sourceData);
     if(sourceBegin < destinationBegin)
-        return false;
+        return MakeUnexpected(Failure{});
 
     using DestinationValue = typename DestinationVector::value_type;
     const usize byteOffset = sourceBegin - destinationBegin;
     if((byteOffset % sizeof(DestinationValue)) != 0u)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const usize sourceOffset = byteOffset / sizeof(DestinationValue);
     if(sourceOffset >= destination.size())
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outSourceOffset = sourceOffset;
-    return true;
+    return sourceOffset;
 }
 
 template<typename DestinationVector, typename SourceVector>
-[[nodiscard]] inline bool SourceAliasesDestination(const DestinationVector& destination, const SourceVector& source, usize& outSourceOffset){
-    return SourceAliasesDestination(destination, source.data(), source.size(), outSourceOffset);
+[[nodiscard]] inline Expected<usize> SourceAliasesDestination(const DestinationVector& destination, const SourceVector& source){
+    return SourceAliasesDestination(destination, source.data(), source.size());
 }
 
 template<typename Container>
@@ -264,8 +259,9 @@ inline void AssignTriviallyCopyableVector(DestinationVector& destination, const 
         destination.clear();
         return;
     }
-    usize sourceOffset = 0u;
-    if(ContainerDetail::SourceAliasesDestination(destination, source, sourceOffset)){
+    const auto aliasOffset = ContainerDetail::SourceAliasesDestination(destination, source);
+    if(aliasOffset){
+        const usize sourceOffset = *aliasOffset;
         NWB_ASSERT(sourceSize <= destination.size() - sourceOffset);
         if(sourceSize > destination.size() - sourceOffset)
             return;
@@ -307,8 +303,9 @@ inline void AppendTriviallyCopyableVector(DestinationVector& destination, const 
     const usize destinationSize = destination.size();
     const usize sourceSize = source.size();
     NWB_ASSERT(sourceSize <= Limit<usize>::s_Max - destinationSize);
-    usize sourceOffset = 0u;
-    if(ContainerDetail::SourceAliasesDestination(destination, source, sourceOffset)){
+    const auto aliasOffset = ContainerDetail::SourceAliasesDestination(destination, source);
+    if(aliasOffset){
+        const usize sourceOffset = *aliasOffset;
         NWB_ASSERT(sourceSize <= destinationSize - sourceOffset);
         if(sourceSize > destinationSize - sourceOffset)
             return;

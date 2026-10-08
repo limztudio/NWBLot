@@ -140,18 +140,11 @@ template<typename MeshT, typename SkinStreamT>
         instance.meshlets.push_back(runtimeMeshlet);
 
         for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(sourceMeshlet); ++localPositionIndex){
-            MeshletPositionStreamRef sourceRef;
+            const auto sourceRef = DecodeMeshletPositionRef(mesh.meshletPositionRefDeltas().data(), mesh.meshletPositionRefDeltas().size(), sourceMeshlet, localPositionIndex, false);
             if(
-                !DecodeMeshletPositionRef(
-                    mesh.meshletPositionRefDeltas().data(),
-                    mesh.meshletPositionRefDeltas().size(),
-                    sourceMeshlet,
-                    localPositionIndex,
-                    false,
-                    sourceRef
-                )
-                || !MeshMeshletRefValidation::MeshletPositionRefInRange(sourceRef, mesh.positionStream().size(), skinStream.size(), false)
-                || sourceRef.position >= skinStream.size()
+                !sourceRef
+                || !MeshMeshletRefValidation::MeshletPositionRefInRange(*sourceRef, mesh.positionStream().size(), skinStream.size(), false)
+                || sourceRef->position >= skinStream.size()
             ){
                 NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: source meshlet {} position ref {} is invalid")
                     , meshletIndex
@@ -160,25 +153,19 @@ template<typename MeshT, typename SkinStreamT>
                 return false;
             }
 
-            MeshletPositionStreamRef runtimeRef = sourceRef;
+            MeshletPositionStreamRef runtimeRef = *sourceRef;
             runtimeRef.position = static_cast<u32>(runtimePositionRefs.size());
-            runtimeRef.skin = sourceRef.position;
-            instance.restPositions.push_back(mesh.positionStream()[sourceRef.position]);
+            runtimeRef.skin = sourceRef->position;
+            instance.restPositions.push_back(mesh.positionStream()[sourceRef->position]);
             runtimePositionRefs.push_back(runtimeRef);
         }
 
         for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(sourceMeshlet); ++localAttributeIndex){
-            MeshletAttributeStreamRef sourceRef;
+            const auto sourceRef = DecodeMeshletAttributeRef(mesh.meshletAttributeRefDeltas().data(), mesh.meshletAttributeRefDeltas().size(), sourceMeshlet, localAttributeIndex);
             if(
-                !DecodeMeshletAttributeRef(
-                    mesh.meshletAttributeRefDeltas().data(),
-                    mesh.meshletAttributeRefDeltas().size(),
-                    sourceMeshlet,
-                    localAttributeIndex,
-                    sourceRef
-                )
+                !sourceRef
                 || !MeshMeshletRefValidation::MeshletAttributeRefInRange(
-                    sourceRef,
+                    *sourceRef,
                     mesh.normalStream().size(),
                     mesh.tangentStream().size(),
                     mesh.uv0Stream().size(),
@@ -192,10 +179,10 @@ template<typename MeshT, typename SkinStreamT>
                 return false;
             }
 
-            instance.restNormals.push_back(mesh.normalStream()[sourceRef.normal]);
-            instance.restTangents.push_back(mesh.tangentStream()[sourceRef.tangent]);
+            instance.restNormals.push_back(mesh.normalStream()[sourceRef->normal]);
+            instance.restTangents.push_back(mesh.tangentStream()[sourceRef->tangent]);
 
-            MeshletAttributeStreamRef runtimeRef = sourceRef;
+            MeshletAttributeStreamRef runtimeRef = *sourceRef;
             runtimeRef.normal = static_cast<u32>(runtimeAttributeRefs.size());
             runtimeRef.tangent = static_cast<u32>(runtimeAttributeRefs.size());
             runtimeAttributeRefs.push_back(runtimeRef);
@@ -273,12 +260,10 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
         component.runtimeMesh.reset();
     }
 
-    MeshSkinningSource* sourcePtr = nullptr;
-    if(!ensureSourceLoaded(component.skin, sourcePtr))
+    const auto sourceResult = ensureSourceLoaded(component.skin);
+    if(!sourceResult)
         return false;
-    if(!sourcePtr)
-        return false;
-    MeshSkinningSource& source = *sourcePtr;
+    MeshSkinningSource& source = **sourceResult;
     const Mesh* mesh = source.mesh();
     const Skin* skin = source.skin();
     if(!mesh || !skin){
@@ -326,14 +311,10 @@ bool MeshSkinningRuntimeCache::ensureRuntimeMesh(Core::ECS::EntityID entity, Ski
     return it.value().valid();
 }
 
-bool MeshSkinningRuntimeCache::ensureSourceLoaded(
-    const Core::Assets::AssetRef<Skin>& skinAsset,
-    MeshSkinningSource*& outSource
-){
-    outSource = nullptr;
+Expected<MeshSkinningRuntimeCache::MeshSkinningSource*> MeshSkinningRuntimeCache::ensureSourceLoaded(const Core::Assets::AssetRef<Skin>& skinAsset){
     if(!skinAsset.valid()){
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningRuntimeCache: skinning binding source assets are incomplete"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const Name& sourceName = skinAsset.name();
@@ -341,42 +322,38 @@ bool MeshSkinningRuntimeCache::ensureSourceLoaded(
     if(foundSource != m_sources.end()){
         MeshSkinningSource& cachedSource = foundSource.value();
         if(!cachedSource.mesh() || !cachedSource.skin())
-            return false;
-        outSource = &cachedSource;
-        return true;
+            return MakeUnexpected(Failure{});
+        return &cachedSource;
     }
 
-    UniquePtr<Core::Assets::IAsset> loadedSkinAsset;
-    const Skin* loadedSkin = m_assetManager.loadTypedSync<Skin>(
+    auto loadedSkinAsset = m_assetManager.loadTypedSync<Skin>(
         skinAsset.name(),
-        loadedSkinAsset,
         NWB_TEXT("MeshSkinningRuntimeCache"),
         "skin"
     );
+    const Skin* loadedSkin = loadedSkinAsset ? loadedSkinAsset->get() : nullptr;
     if(!loadedSkin)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    UniquePtr<Core::Assets::IAsset> loadedMeshAsset;
-    const Mesh* loadedMesh = m_assetManager.loadTypedSync<Mesh>(
+    auto loadedMeshAsset = m_assetManager.loadTypedSync<Mesh>(
         loadedSkin->mesh().name(),
-        loadedMeshAsset,
         NWB_TEXT("MeshSkinningRuntimeCache"),
         Mesh::s_AssetTypeText
     );
+    const Mesh* loadedMesh = loadedMeshAsset ? loadedMeshAsset->get() : nullptr;
     if(!loadedMesh)
-        return false;
+        return MakeUnexpected(Failure{});
 
     MeshSkinningSource source;
-    source.meshAsset = Move(loadedMeshAsset);
-    source.skinAsset = Move(loadedSkinAsset);
+    source.meshAsset = Move(*loadedMeshAsset);
+    source.skinAsset = Move(*loadedSkinAsset);
 
     auto result = m_sources.try_emplace(sourceName, Move(source));
     auto it = result.first;
     MeshSkinningSource& storedSource = it.value();
     if(!storedSource.mesh() || !storedSource.skin())
-        return false;
-    outSource = &storedSource;
-    return true;
+        return MakeUnexpected(Failure{});
+    return &storedSource;
 }
 
 

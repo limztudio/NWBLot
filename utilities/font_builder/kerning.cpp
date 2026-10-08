@@ -20,7 +20,11 @@ bool ExportPositioning(const FontSource& font, Impl::FontAtlasPayload& payload){
     source.assign(font.bytes().begin(), font.bytes().end());
     Impl::Font prepared(arena, payload.font.name());
     prepared.setFontBytes(Move(source), payload.faceIndex);
-    return Impl::CopyFontAtlasPositioningTables(prepared, payload);
+    auto tables = Impl::CopyFontAtlasPositioningTables(prepared, payload.sourceGlyphCount, arena);
+    if(!tables)
+        return false;
+    payload.positioningTables = Move(*tables);
+    return true;
 }
 
 

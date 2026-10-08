@@ -17,15 +17,15 @@ NWB_FILESYSTEM_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, const VolumeBuildFileMap& files, VolumeBuildInfo& outBuildInfo){
-    outBuildInfo = {};
+Expected<VolumeBuildInfo> BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, const VolumeBuildFileMap& files){
+    VolumeBuildInfo buildInfo;
 
     const StagedDirectoryPaths stagedVolumePaths = FilesystemVolumeStagingDetail::BuildStagedVolumePaths(outputDirectory, config.volumeName.view());
     if(!EnsureEmptyStagedDirectory(stagedVolumePaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, "stage directory"))
-        return false;
+        return MakeUnexpected(Failure{});
     StagedDirectoryCleanupGuard stageDirectoryCleanup(stagedVolumePaths.stageDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix);
     if(!RemoveStagedDirectoryIfPresent(stagedVolumePaths.backupDirectory, FilesystemVolumeStagingDetail::s_VolumePublishLogPrefix, "backup directory"))
-        return false;
+        return MakeUnexpected(Failure{});
 
     Alloc::GlobalArena arena(FilesystemArenaScope::s_BuildVolumeArena);
 
@@ -40,24 +40,24 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
         mountDesc.createIfMissing = true;
         mountDesc.usage = VolumeUsage::CookWrite;
         if(!filesystem.mount(mountDesc))
-            return false;
+            return MakeUnexpected(Failure{});
         filesystem.reserveFileCapacity(files.size());
 
         for(const auto& [virtualPath, payloadBytes] : files){
             if(virtualPath.empty()){
                 NWB_LOGGER_ERROR(NWB_TEXT("BuildVolume: virtual path is empty"));
-                return false;
+                return MakeUnexpected(Failure{});
             }
             if(!filesystem.writeFileDeferred(Name(AStringView(virtualPath.data(), virtualPath.size())), payloadBytes))
-                return false;
+                return MakeUnexpected(Failure{});
         }
         if(!filesystem.flush())
-            return false;
+            return MakeUnexpected(Failure{});
 
-        outBuildInfo.fileCount = filesystem.fileCount();
-        outBuildInfo.segmentCount = static_cast<u64>(volumeStorage.segmentCount());
+        buildInfo.fileCount = filesystem.fileCount();
+        buildInfo.segmentCount = static_cast<u64>(volumeStorage.segmentCount());
         if(!filesystem.unmount())
-            return false;
+            return MakeUnexpected(Failure{});
     }
 
     if(
@@ -65,14 +65,14 @@ bool BuildVolume(const Path& outputDirectory, const VolumeBuildConfig& config, c
             stagedVolumePaths,
             outputDirectory,
             config.volumeName.view(),
-            static_cast<usize>(outBuildInfo.segmentCount)
+            static_cast<usize>(buildInfo.segmentCount)
         )
     ){
-        return false;
+        return MakeUnexpected(Failure{});
     }
     stageDirectoryCleanup.dismiss();
 
-    return true;
+    return buildInfo;
 }
 
 

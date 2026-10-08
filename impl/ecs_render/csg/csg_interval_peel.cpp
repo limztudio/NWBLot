@@ -113,29 +113,28 @@ static void DispatchCsgIntervalCompute(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererCsgSystem::prepareCsgIntervalSampleStateData(
+Expected<CsgIntervalSampleStateGpuData> RendererCsgSystem::prepareCsgIntervalSampleStateData(
     const DeferredFrameTargets& targets,
     const CsgFrameGpuData& csgFrameData,
     const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-    CsgIntervalSampleStateGpuData& outState
+    const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
 )const{
-    outState = CsgIntervalSampleStateGpuData{};
+    CsgIntervalSampleStateGpuData state{};
     if(!csgFrameData.hasWork())
-        return true;
+        return state;
     if(
         !csgResources.frameReady(csgFrameData)
         || !frameBindings.bindingValid()
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     // Freeze rect and slot before recording; later state must not leak in.
-    outState = CsgIntervalDetail::BuildCsgIntervalSampleState(
+    state = CsgIntervalDetail::BuildCsgIntervalSampleState(
         targets,
         csgFrameData,
         frameBindings.meshView.heapHandle.slot()
     );
-    return true;
+    return state;
 }
 
 void RendererCsgSystem::dispatchCsgIntervalPeels(

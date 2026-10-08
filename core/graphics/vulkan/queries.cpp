@@ -162,18 +162,15 @@ bool CommandList::canResetTimerQueryHereUnchecked()const noexcept{
     return (static_cast<u8>(queueInfo->capabilities) & s_ResetCapableBits) != 0u;
 }
 
-bool CommandList::inspectExactTimerQueryRecordingEndpoints(
+Expected<TimerQueryRecordingEndpoints> CommandList::inspectExactTimerQueryRecordingEndpoints(
     const TimerQueryRecordingToken& token,
-    const u64 recordingLeaseSerial,
-    bool& outRecordsBegin,
-    bool& outRecordsEnd
+    const u64 recordingLeaseSerial
 )const noexcept{
-    outRecordsBegin = false;
-    outRecordsEnd = false;
+    TimerQueryRecordingEndpoints endpoints{};
 
     const GraphPublicationReadOwnership ownership(*this);
     if(!ownership.m_readable)
-        return false;
+        return MakeUnexpected(Failure{});
     if(
         !token.valid()
         || recordingLeaseSerial == 0u
@@ -181,7 +178,7 @@ bool CommandList::inspectExactTimerQueryRecordingEndpoints(
         || !matchesNativeLeaseIdentity()
         || !m_currentCmdBuf
     )
-        return true;
+        return endpoints;
 
     for(const TrackedCommandBuffer::TimerQueryRecordingClaim& claim : m_currentCmdBuf->m_timerQueryRecordingClaims){
         if(
@@ -193,24 +190,24 @@ bool CommandList::inspectExactTimerQueryRecordingEndpoints(
         )
             continue;
 
-        outRecordsBegin = claim.recordsBegin;
-        outRecordsEnd = claim.recordsEnd;
+        endpoints.recordsBegin = claim.recordsBegin;
+        endpoints.recordsEnd = claim.recordsEnd;
         break;
     }
-    return true;
+    return endpoints;
 }
 
-bool CommandList::beginTimerQuery(TimerQuery& query, TimerQueryRecordingToken& outToken){
-    outToken = {};
+Expected<TimerQueryRecordingToken> CommandList::beginTimerQuery(TimerQuery& query){
+    TimerQueryRecordingToken token{};
     if(!publicCommandStateAccessible())
-        return false;
+        return MakeUnexpected(Failure{});
     if(query.m_queryPool == VK_NULL_HANDLE || &query.m_context != &m_context){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to begin an invalid or foreign timer query"));
         invalidateCommandRecording();
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!validateCommandRecordingScope(NWB_TEXT("begin timer query")))
-        return false;
+        return MakeUnexpected(Failure{});
     const bool recordsInlineReset = canResetTimerQueryHereUnchecked();
 
     const GpuPhysicalQueueInfo* const queueInfo = m_device.getPhysicalQueueInfo(m_creationDesc.physicalQueue);
@@ -218,7 +215,7 @@ bool CommandList::beginTimerQuery(TimerQuery& query, TimerQueryRecordingToken& o
     if(!queueInfo || queueInfo->timestampValidBits == 0u || queueInfo->timestampValidBits > s_CompleteTimestampValidBits){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Failed to begin timer query on a queue without timestamp support"));
         invalidateCommandRecording();
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     QueueSubmissionToken priorSubmission;
@@ -237,7 +234,7 @@ bool CommandList::beginTimerQuery(TimerQuery& query, TimerQueryRecordingToken& o
         ){
             NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Refusing a timer-query begin without an exclusive cycle and ordered reset"));
             invalidateCommandRecording();
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         if(!recordsInlineReset && !resetOwnedByCurrentCommandBuffer){
@@ -338,7 +335,7 @@ bool CommandList::beginTimerQuery(TimerQuery& query, TimerQueryRecordingToken& o
                     query.m_queryPool,
                     s_TimerQueryBeginIndex
                 );
-                outToken = TimerQueryRecordingToken{
+                token = TimerQueryRecordingToken{
                     .query = &query,
                     .queryIncarnation = query.m_incarnation,
                     .generation = query.m_cycleGeneration,
@@ -352,9 +349,9 @@ bool CommandList::beginTimerQuery(TimerQuery& query, TimerQueryRecordingToken& o
     if(!beginRecorded){
         NWB_LOGGER_CRITICAL_WARNING(NWB_TEXT("Vulkan: Refusing a timer-query begin while another recording cycle is active"));
         invalidateCommandRecording();
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    return true;
+    return token;
 }
 
 bool CommandList::endTimerQuery(TimerQuery& query, const TimerQueryRecordingToken& token){

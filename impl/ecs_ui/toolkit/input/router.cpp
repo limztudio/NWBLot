@@ -81,24 +81,22 @@ InputRouter::InputRouter(Core::Alloc::GlobalArena& arena)
     m_popupDismissals.reserve(s_InputMaxPopups);
 }
 
-bool InputRouter::queue(const InputEvent& event, InputEvent* const resolved){
+Expected<InputEvent> InputRouter::queue(const InputEvent& event){
     if(m_events.size() == s_InputMaxEvents || event.type > InputEventType::CommandUp)
-        return false;
+        return MakeUnexpected(Failure{});
     if(
         (event.type <= InputEventType::PrimaryUp || event.type == InputEventType::PointerWheel
             || event.type == InputEventType::SecondaryDown || event.type == InputEventType::SecondaryUp)
         && (!IsFinite(event.position.x) || !IsFinite(event.position.y))
     )
-        return false;
+        return MakeUnexpected(Failure{});
     if(event.type == InputEventType::PointerWheel && (!IsFinite(event.scrollX) || !IsFinite(event.scrollY)))
-        return false;
-    InputEvent candidate;
-    if(!resolveSourceEvent(event, candidate))
-        return false;
-    m_events.push_back(candidate);
-    if(resolved)
-        *resolved = candidate;
-    return true;
+        return MakeUnexpected(Failure{});
+    const auto candidate = resolveSourceEvent(event);
+    if(!candidate)
+        return MakeUnexpected(Failure{});
+    m_events.push_back(*candidate);
+    return *candidate;
 }
 
 InputRoutingResult InputRouter::process(){

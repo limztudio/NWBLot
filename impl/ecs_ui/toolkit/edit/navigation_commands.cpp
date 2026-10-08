@@ -14,19 +14,18 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool TranslateEditNavigation(const InputCommandIntent& intent, EditNavigationDirection::Enum& output)noexcept{
+Expected<EditNavigationDirection::Enum> TranslateEditNavigation(const InputCommandIntent& intent)noexcept{
     if(!intent.edit)
-        return false;
+        return MakeUnexpected(Failure{});
     EditNavigationDirection::Enum direction;
     switch(intent.command){
     case InputCommand::Up: direction = EditNavigationDirection::Up; break;
     case InputCommand::Down: direction = EditNavigationDirection::Down; break;
     case InputCommand::PageUp: direction = EditNavigationDirection::PageUp; break;
     case InputCommand::PageDown: direction = EditNavigationDirection::PageDown; break;
-    default: return false;
+    default: return MakeUnexpected(Failure{});
     }
-    output = direction;
-    return true;
+    return direction;
 }
 
 

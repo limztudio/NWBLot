@@ -35,13 +35,11 @@ FrameGraphSoftwareBvhBuildStateImporter::FrameGraphSoftwareBvhBuildStateImporter
 }
 
 
-bool FrameGraphSoftwareBvhBuildStateImporter::declare(
+Expected<FrameGraphSoftwareBvhBuildStateResult> FrameGraphSoftwareBvhBuildStateImporter::declare(
     const FrameGraphSoftwareBvhBuildStateInputs& inputs,
-    Core::Alloc::ScratchArena& scratchArena,
-    FrameGraphSoftwareBvhBuildStateResult& outResult
+    Core::Alloc::ScratchArena& scratchArena
 ){
-    outResult.buildStateResources.clear();
-    outResult.declared = false;
+    FrameGraphSoftwareBvhBuildStateResult result(scratchArena);
     using namespace RendererTaskGraphDetail;
     const RayTracingShadowPreparationResourceSnapshot& rayTracingShadowResources = *inputs.rayTracingShadowResources;
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> softwareBvhBuildStateResources{ scratchArena };
@@ -50,11 +48,11 @@ bool FrameGraphSoftwareBvhBuildStateImporter::declare(
         return m_graph.importBuffer(buffer, BufferResourceDesc(identity, label));
     };
     if(inputs.softwareTraceResourcesPrepared){
-        ECSRenderDetail::MeshSoftwareBvhParentBuildStateVector meshSoftwareBvhParentBuildStates{ scratchArena };
-        if(!m_meshSystem.collectSoftwareBvhParentBuildStates(meshSoftwareBvhParentBuildStates))
-            return false;
-        softwareBvhBuildStateResources.reserve(meshSoftwareBvhParentBuildStates.size() + 3u);
-        softwareBvhBuildStateBuffers.reserve(meshSoftwareBvhParentBuildStates.size() + 3u);
+        const auto meshSoftwareBvhParentBuildStates = m_meshSystem.collectSoftwareBvhParentBuildStates(scratchArena);
+        if(!meshSoftwareBvhParentBuildStates)
+            return MakeUnexpected(Failure{});
+        softwareBvhBuildStateResources.reserve(meshSoftwareBvhParentBuildStates->size() + 3u);
+        softwareBvhBuildStateBuffers.reserve(meshSoftwareBvhParentBuildStates->size() + 3u);
         const auto appendSoftwareBvhBuildState = [&](
             const Core::BufferHandle& buffer,
             const Name identity,
@@ -73,10 +71,10 @@ bool FrameGraphSoftwareBvhBuildStateImporter::declare(
             softwareBvhBuildStateResources.push_back(resource);
             return true;
         };
-        for(const ECSRenderDetail::MeshSoftwareBvhParentBuildState& state : meshSoftwareBvhParentBuildStates){
+        for(const ECSRenderDetail::MeshSoftwareBvhParentBuildState& state : *meshSoftwareBvhParentBuildStates){
             if(!appendSoftwareBvhBuildState(state.buffer, state.identity, "Software BVH Parent")){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import software BVH parent build state"));
-                return false;
+                return MakeUnexpected(Failure{});
             }
         }
         if(
@@ -100,12 +98,12 @@ bool FrameGraphSoftwareBvhBuildStateImporter::declare(
             )
         ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not import shared software BVH build state"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
-    outResult.buildStateResources = Move(softwareBvhBuildStateResources);
-    outResult.declared = true;
-    return true;
+    result.buildStateResources = Move(softwareBvhBuildStateResources);
+    result.declared = true;
+    return result;
 }
 
 

@@ -46,24 +46,21 @@ public:
         const Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& edges,
         Vector<u32, Core::Alloc::ScratchArena>& outLoop
     );
-    [[nodiscard]] static bool CapNormal(
+    [[nodiscard]] static Expected<Float4> CapNormal(
         const CsgDeformVertexVector<Core::Alloc::ScratchArena>& vertices,
-        const Vector<u32, Core::Alloc::ScratchArena>& loop,
-        Float4& outNormal
+        const Vector<u32, Core::Alloc::ScratchArena>& loop
     )noexcept;
-    [[nodiscard]] static bool FillCapLoop(
+    [[nodiscard]] static Expected<u32> FillCapLoop(
         const Float4& loopNormal,
         CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
         CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles,
-        const Vector<u32, Core::Alloc::ScratchArena>& loop,
-        u32& outCapTriangles
+        const Vector<u32, Core::Alloc::ScratchArena>& loop
     );
-    [[nodiscard]] static bool FillCutCaps(
+    [[nodiscard]] static Expected<u32> FillCutCaps(
         Core::Alloc::ScratchArena& scratchArena,
         CsgDeformVertexVector<Core::Alloc::ScratchArena>& inOutVertices,
         CsgDeformTriangleVector<Core::Alloc::ScratchArena>& inOutTriangles,
-        Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& scratchEdges,
-        u32& outCapTriangles
+        Vector<CsgDeformCutLoopEdge, Core::Alloc::ScratchArena>& scratchEdges
     );
 
 

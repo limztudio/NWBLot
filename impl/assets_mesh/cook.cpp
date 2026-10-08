@@ -53,18 +53,19 @@ static bool ParseSourceMeshMeta(
     Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    SourceMeshStreams streams(outEntry.positions.get_allocator().arena(), scratchArena);
-    if(!MeshCookSourceStreams::ParseCommonSourceMeshStreams(
+    auto streamsResult = MeshCookSourceStreams::ParseCommonSourceMeshStreams(
         discoveredFile,
         asset,
         s_MeshMetaKind,
         false,
-        streams,
+        outEntry.positions.get_allocator().arena(),
         0u,
         scratchArena
-    ))
+    );
+    if(!streamsResult)
         return false;
 
+    SourceMeshStreams& streams = *streamsResult;
     MeshCookSourceStreams::CopySourceStreams(streams, outEntry);
     return MeshCookMeshlets::BuildMeshlets(
         discoveredFile.filePath,
@@ -95,54 +96,52 @@ static bool ValidateMeshAssetFields(
     );
 }
 
-static bool ParseMeshMeta(
+static Expected<MeshCookEntry> ParseMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Value& asset,
     const Name& virtualPath,
-    MeshCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    outEntry = MeshCookEntry(outEntry.positions.get_allocator().arena());
+    MeshCookEntry entry(arena);
 
     if(!Core::Assets::CheckMetadataAssetMap(discoveredFile.filePath, asset, s_MeshMetaText))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    if(!Core::Assets::AssignCookEntryVirtualPath(outEntry, virtualPath, discoveredFile.filePath, s_MeshMetaText))
-        return false;
+    if(!Core::Assets::AssignCookEntryVirtualPath(entry, virtualPath, discoveredFile.filePath, s_MeshMetaText))
+        return MakeUnexpected(Failure{});
     if(!ValidateMeshAssetFields(discoveredFile, asset))
-        return false;
-    return ParseSourceMeshMeta(discoveredFile, asset, outEntry, cpuScheduler, scratchArena);
+        return MakeUnexpected(Failure{});
+    if(!ParseSourceMeshMeta(discoveredFile, asset, entry, cpuScheduler, scratchArena))
+        return MakeUnexpected(Failure{});
+    return entry;
 }
 
-static bool ParseMeshMeta(
+static Expected<MeshCookEntry> ParseMeshMeta(
     const DiscoveredNwbFile& discoveredFile,
     const Core::Metascript::Document& doc,
-    MeshCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
     Name virtualPath = s_NameNone;
-    if(!Core::Assets::BuildMetadataDerivedAssetVirtualPath(
-        discoveredFile.assetRoot,
-        discoveredFile.virtualRoot,
-        discoveredFile.filePath,
-        virtualPath,
-        scratchArena
-    ))
-        return false;
-    return ParseMeshMeta(discoveredFile, doc.asset(), virtualPath, outEntry, cpuScheduler, scratchArena);
+    auto virtualPathResult = Core::Assets::BuildMetadataDerivedAssetVirtualPath(discoveredFile.assetRoot, discoveredFile.virtualRoot, discoveredFile.filePath, scratchArena);
+    if(!virtualPathResult)
+        return MakeUnexpected(Failure{});
+    virtualPath = *virtualPathResult;
+    return ParseMeshMeta(discoveredFile, doc.asset(), virtualPath, arena, cpuScheduler, scratchArena);
 }
 
-static bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
+static Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena& arena){
     Core::Alloc::ScratchArena scratchArena(AssetsMeshArenaScope::s_BuildMeshAssetArena);
     if(!MeshCookStreamReorder::ReorderMeshStreamsByMeshletTraversal(meshEntry, scratchArena))
-        return false;
+        return MakeUnexpected(Failure{});
     if(!MeshCookRefEncoding::EncodeMeshletRefs(meshEntry, false, s_MeshMetaKind))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outMesh = Mesh(meshEntry.positions.get_allocator().arena(), meshEntry.virtualPath);
-    outMesh.setPayload(
+    Mesh mesh(arena, meshEntry.virtualPath);
+    mesh.setPayload(
         Move(meshEntry.positions),
         Move(meshEntry.normals),
         Move(meshEntry.tangents),
@@ -155,7 +154,9 @@ static bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
         Move(meshEntry.meshletLocalVertexRefs),
         Move(meshEntry.meshletPrimitiveIndices)
     );
-    return outMesh.validatePayload();
+    if(!mesh.validatePayload())
+        return MakeUnexpected(Failure{});
+    return mesh;
 }
 
 
@@ -168,36 +169,36 @@ static bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ParseMeshCookMetadata(
+Expected<MeshCookEntry> ParseMeshCookMetadata(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    MeshCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
-    DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
-    if(!MeshCookMetadata::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath, discoveredFile))
-        return false;
-    return __hidden_assets_mesh_cook::ParseMeshMeta(discoveredFile, doc, outEntry, cpuScheduler, scratchArena);
+    const auto discoveredFile = MeshCookMetadata::BuildDiscoveredNwbFile(assetRoot, virtualRoot, nwbFilePath);
+    if(!discoveredFile)
+        return MakeUnexpected(Failure{});
+    return __hidden_assets_mesh_cook::ParseMeshMeta(*discoveredFile, doc, arena, cpuScheduler, scratchArena);
 }
 
-bool ParseMeshCookMetadata(
+Expected<MeshCookEntry> ParseMeshCookMetadata(
     const Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    MeshCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::CpuTaskScheduler& cpuScheduler,
     Core::Alloc::ScratchArena& scratchArena
 ){
     DiscoveredNwbFile discoveredFile(nwbFilePath.arena());
     discoveredFile.filePath = nwbFilePath;
-    return __hidden_assets_mesh_cook::ParseMeshMeta(discoveredFile, asset, virtualPath, outEntry, cpuScheduler, scratchArena);
+    return __hidden_assets_mesh_cook::ParseMeshMeta(discoveredFile, asset, virtualPath, arena, cpuScheduler, scratchArena);
 }
 
-bool BuildMeshAsset(MeshCookEntry& meshEntry, Mesh& outMesh){
-    return __hidden_assets_mesh_cook::BuildMeshAsset(meshEntry, outMesh);
+Expected<Mesh> BuildMeshAsset(MeshCookEntry& meshEntry, Core::Assets::AssetArena& arena){
+    return __hidden_assets_mesh_cook::BuildMeshAsset(meshEntry, arena);
 }
 
 

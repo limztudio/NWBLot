@@ -17,29 +17,26 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Device::createPipelineLayoutForBindingLayouts(
+Expected<CreatedPipelineLayout> Device::createPipelineLayoutForBindingLayouts(
     const BindingLayoutVector& bindingLayouts,
     TStringView operationName,
-    VkPipelineLayout& outPipelineLayout,
-    u32& outPushConstantByteSize,
-    bool& outOwnsPipelineLayout,
     Alloc::ScratchArena& scratchArena
 )const{
-    outPipelineLayout = VK_NULL_HANDLE;
-    outPushConstantByteSize = 0;
-    outOwnsPipelineLayout = false;
+    CreatedPipelineLayout result;
 
     if(!VulkanDetail::IsDescriptorBufferBackendReady(m_context)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor-buffer backend is unavailable."), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     if(bindingLayouts.empty()){
-        if(!VulkanDetail::CreatePipelineLayout(m_context, nullptr, 0u, 0u, outPipelineLayout, operationName))
-            return false;
+        const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(m_context, nullptr, 0u, 0u, operationName);
+        if(!pipelineLayout)
+            return MakeUnexpected(Failure{});
+        result.layout = *pipelineLayout;
 
-        outOwnsPipelineLayout = true;
-        return true;
+        result.ownsLayout = true;
+        return result;
     }
 
     Vector<VkDescriptorSetLayout, Alloc::ScratchArena> descriptorSetLayouts{scratchArena};
@@ -50,7 +47,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
         auto* layout = bindingLayouts[i].get();
         if(!layout){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: binding layout {} is invalid"), operationName, i);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(&layout->m_context != &m_context){
             NWB_LOGGER_ERROR(
@@ -58,7 +55,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
                 operationName,
                 i
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         pushConstantByteSize = Max<u32>(pushConstantByteSize, layout->m_pushConstantByteSize);
@@ -66,7 +63,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor set layout count exceeds u32 limits")
                 , operationName
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         descriptorSetLayoutCount += layout->m_descriptorSetLayouts.size();
     }
@@ -75,26 +72,26 @@ bool Device::createPipelineLayoutForBindingLayouts(
         const auto* layout = bindingLayout.get();
         if(!layout || !layout->isDescriptorBufferCompatible()){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: every binding layout must be descriptor-buffer-compatible."), operationName);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const BindlessLayoutDesc* const bindlessDesc = layout->getBindlessDesc();
         if(!layout->m_descriptorSetLayouts.empty() && !bindlessDesc){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {} needs explicit set metadata for every descriptor layout.")
                 , operationName
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(bindlessDesc && layout->m_descriptorSetLayouts.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: a bindless layout owns no descriptor-set layout.")
                 , operationName
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(bindlessDesc && bindlessDesc->descriptorSetIndex == Limit<u32>::s_Max){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: {} bindless resource layouts require an explicit set index.")
                 , operationName
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
@@ -102,21 +99,23 @@ bool Device::createPipelineLayoutForBindingLayouts(
         auto* layoutPtr = bindingLayouts[0].get();
         if(!layoutPtr){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: binding layout 0 is invalid"), operationName);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const BindingLayout& layout = *layoutPtr;
-        outPipelineLayout = layout.m_pipelineLayout;
-        outPushConstantByteSize = layout.m_pushConstantByteSize;
-        return true;
+        result.layout = layout.m_pipelineLayout;
+        result.pushConstantByteSize = layout.m_pushConstantByteSize;
+        return result;
     }
 
     if(descriptorSetLayoutCount == 0u){
-        if(!VulkanDetail::CreatePipelineLayout(m_context, nullptr, 0u, pushConstantByteSize, outPipelineLayout, operationName))
-            return false;
+        const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(m_context, nullptr, 0u, pushConstantByteSize, operationName);
+        if(!pipelineLayout)
+            return MakeUnexpected(Failure{});
+        result.layout = *pipelineLayout;
 
-        outPushConstantByteSize = pushConstantByteSize;
-        outOwnsPipelineLayout = true;
-        return true;
+        result.pushConstantByteSize = pushConstantByteSize;
+        result.ownsLayout = true;
+        return result;
     }
 
     u32 maxSetIndex = 0;
@@ -128,12 +127,12 @@ bool Device::createPipelineLayoutForBindingLayouts(
         const BindlessLayoutDesc* const bindlessDesc = layout.getBindlessDesc();
         if(!bindlessDesc){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: bindless layout descriptor is missing"), operationName);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const u32 base = bindlessDesc->descriptorSetIndex;
         if(base > Limit<u32>::s_Max - static_cast<u32>(setCount - 1u)){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: descriptor set index overflow"), operationName);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         maxSetIndex = Max<u32>(maxSetIndex, base + static_cast<u32>(setCount) - 1u);
     }
@@ -145,7 +144,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
             , maxSetIndex
             , m_context.physicalDeviceProperties.limits.maxBoundDescriptorSets
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const u32 totalSets = maxSetIndex + 1u;
@@ -160,7 +159,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
         const BindlessLayoutDesc* const bindlessDesc = layout.getBindlessDesc();
         if(!bindlessDesc){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: bindless layout descriptor is missing"), operationName);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const u32 base = bindlessDesc->descriptorSetIndex;
         for(usize localSetIndex = 0u; localSetIndex < layout.m_descriptorSetLayouts.size(); ++localSetIndex){
@@ -170,7 +169,7 @@ bool Device::createPipelineLayoutForBindingLayouts(
                     , operationName
                     , setIndex
                 );
-                return false;
+                return MakeUnexpected(Failure{});
             }
             descriptorSetLayouts[setIndex] = layout.m_descriptorSetLayouts[localSetIndex];
         }
@@ -182,63 +181,56 @@ bool Device::createPipelineLayoutForBindingLayouts(
                 , operationName
                 , setIndex
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
-    if(!VulkanDetail::CreatePipelineLayout(
+    const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(
         m_context,
         descriptorSetLayouts.data(),
         static_cast<u32>(descriptorSetLayouts.size()),
         pushConstantByteSize,
-        outPipelineLayout,
         operationName
-    ))
-        return false;
+    );
+    if(!pipelineLayout)
+        return MakeUnexpected(Failure{});
+    result.layout = *pipelineLayout;
 
-    outPushConstantByteSize = pushConstantByteSize;
-    outOwnsPipelineLayout = true;
-    return true;
+    result.pushConstantByteSize = pushConstantByteSize;
+    result.ownsLayout = true;
+    return result;
 }
 
-bool Device::configurePipelineBindings(
+Expected<PipelineBindingState> Device::buildPipelineBindings(
     const BindingLayoutVector& bindingLayouts,
     TStringView operationName,
-    PipelineBindingState& outBindings,
     Alloc::ScratchArena& scratchArena
 )const{
-    outBindings.m_pipelineLayout = VK_NULL_HANDLE;
-    outBindings.m_ownsPipelineLayout = false;
-    outBindings.m_pushConstantByteSize = 0;
-    outBindings.m_bindingLayoutsAtCreation.clear();
-    outBindings.m_bindingLayoutSetIndicesAtCreation = {};
+    PipelineBindingState bindings;
 
     if(!VulkanDetail::IsDescriptorBufferBackendReady(m_context)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: required descriptor-buffer backend is unavailable."), operationName);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    if(!createPipelineLayoutForBindingLayouts(
-        bindingLayouts,
-        operationName,
-        outBindings.m_pipelineLayout,
-        outBindings.m_pushConstantByteSize,
-        outBindings.m_ownsPipelineLayout,
-        scratchArena
-    ))
-        return false;
+    const auto layout = createPipelineLayoutForBindingLayouts(bindingLayouts, operationName, scratchArena);
+    if(!layout)
+        return MakeUnexpected(Failure{});
+    bindings.m_pipelineLayout = layout->layout;
+    bindings.m_pushConstantByteSize = layout->pushConstantByteSize;
+    bindings.m_ownsPipelineLayout = layout->ownsLayout;
 
-    outBindings.m_bindingLayoutsAtCreation = bindingLayouts;
+    bindings.m_bindingLayoutsAtCreation = bindingLayouts;
     for(u32 layoutIndex = 0u; layoutIndex < static_cast<u32>(bindingLayouts.size()); ++layoutIndex){
         const BindingLayout* const layout = bindingLayouts[layoutIndex].get();
         NWB_ASSERT(layout != nullptr);
         const BindlessLayoutDesc* const bindlessDesc = layout->getBindlessDesc();
-        outBindings.m_bindingLayoutSetIndicesAtCreation[layoutIndex] = bindlessDesc
+        bindings.m_bindingLayoutSetIndicesAtCreation[layoutIndex] = bindlessDesc
             ? bindlessDesc->descriptorSetIndex
             : Limit<u32>::s_Max
         ;
     }
-    return true;
+    return bindings;
 }
 
 

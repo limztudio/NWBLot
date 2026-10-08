@@ -100,13 +100,13 @@ bool UiLayerSystem::validateResources(const u32 width, const u32 height, const u
             return skin && ValidateUiSkinToolkitContract(*skin)
                 && m_renderer.setSkin(ref, *skin, m_skinSelection.generation());
         }
-        UniquePtr<Core::Assets::IAsset> candidateAsset;
-        const UiSkin* skin = m_assetManager.loadTypedSync<UiSkin>(
-            ref.name(), candidateAsset, NWB_TEXT("UiLayerSystem"), "UI skin"
+        auto candidateAsset = m_assetManager.loadTypedSync<UiSkin>(
+            ref.name(), NWB_TEXT("UiLayerSystem"), "UI skin"
         );
+        const UiSkin* skin = candidateAsset ? candidateAsset->get() : nullptr;
         if(!skin || !ValidateUiSkinToolkitContract(*skin) || !m_renderer.setSkin(ref, *skin, m_skinSelection.generation()))
             return false;
-        m_skinAsset = Move(candidateAsset);
+        m_skinAsset = Move(*candidateAsset);
         return true;
     });
     if(selection == UiSkinSelectionResult::Failed)

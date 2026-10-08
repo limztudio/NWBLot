@@ -33,7 +33,7 @@ NWB_IMPL_BEGIN
 );
 
 // Preview rebuild into scratch storage. Same code path as commit.
-[[nodiscard]] bool PreviewCsgDeformCuts(
+[[nodiscard]] Expected<CsgDeformStats, CsgDeformFailure> PreviewCsgDeformCuts(
     Core::Alloc::ScratchArena& scratchArena,
     NotNull<const CsgDeformVertex*> inputVertices,
     usize inputVertexCount,
@@ -43,12 +43,11 @@ NWB_IMPL_BEGIN
     usize cutCount,
     const CsgDeformBuildOptions& options,
     CsgDeformVertexVector<Core::Alloc::ScratchArena>& outVertices,
-    CsgDeformTriangleVector<Core::Alloc::ScratchArena>& outTriangles,
-    CsgDeformStats& outStats
+    CsgDeformTriangleVector<Core::Alloc::ScratchArena>& outTriangles
 );
 
 // Rebuild in scratch, then copy into the commit arena; viability matches preview.
-[[nodiscard]] bool CommitCsgDeformCuts(
+[[nodiscard]] Expected<CsgDeformStats, CsgDeformFailure> CommitCsgDeformCuts(
     Core::Alloc::ScratchArena& scratchArena,
     Core::Alloc::GlobalArena& commitArena,
     NotNull<const CsgDeformVertex*> inputVertices,
@@ -59,8 +58,7 @@ NWB_IMPL_BEGIN
     usize cutCount,
     const CsgDeformBuildOptions& options,
     CsgDeformVertexVector<Core::Alloc::GlobalArena>& outVertices,
-    CsgDeformTriangleVector<Core::Alloc::GlobalArena>& outTriangles,
-    CsgDeformStats& outStats
+    CsgDeformTriangleVector<Core::Alloc::GlobalArena>& outTriangles
 );
 
 

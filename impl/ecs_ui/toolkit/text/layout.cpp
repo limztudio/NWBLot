@@ -28,16 +28,15 @@ namespace __hidden_ui_text_layout{
     return IsFinite(value) && value >= -static_cast<f64>(Limit<f32>::s_Max) && value <= static_cast<f64>(Limit<f32>::s_Max);
 }
 
-[[nodiscard]] static bool TranslateInk(const Point& position, const Rect& ink, Rect& output)noexcept{
+[[nodiscard]] static Expected<Rect> TranslateInk(const Point& position, const Rect& ink)noexcept{
     const f64 left = static_cast<f64>(position.x) + ink.x;
     const f64 top = static_cast<f64>(position.y) + ink.y;
     if(!FitsCoordinate(left) || !FitsCoordinate(top) || !FitsCoordinate(left + ink.width) || !FitsCoordinate(top + ink.height))
-        return false;
+        return MakeUnexpected(Failure{});
     const Rect rectangle{ static_cast<f32>(left), static_cast<f32>(top), ink.width, ink.height };
     if(!IsFinite(rectangle.x + rectangle.width) || !IsFinite(rectangle.y + rectangle.height))
-        return false;
-    output = rectangle;
-    return true;
+        return MakeUnexpected(Failure{});
+    return rectangle;
 }
 
 [[nodiscard]] static bool ValidateRun(const ShapedRun& run, StringView text, TextDirection::Enum direction)noexcept{
@@ -151,15 +150,14 @@ TextHit TextLayout::hitTest(Point point)const noexcept{
     return hit;
 }
 
-bool TextLayout::caretRect(u32 byteOffset, TextCaretEdge::Enum edge, Rect& output)const noexcept{
+Expected<Rect> TextLayout::caretRect(u32 byteOffset, TextCaretEdge::Enum edge)const noexcept{
     if(edge != TextCaretEdge::Leading && edge != TextCaretEdge::Trailing)
-        return false;
+        return MakeUnexpected(Failure{});
     const TextCluster* alternate = nullptr;
     for(const TextCluster& cluster : m_clusters){
         if(edge == TextCaretEdge::Leading ? cluster.byteBegin == byteOffset : cluster.byteEnd == byteOffset){
             const TextLine& line = m_lines[cluster.lineIndex];
-            output = { edge == TextCaretEdge::Leading ? cluster.leadingX : cluster.trailingX, line.top, 0.0f, line.height };
-            return true;
+            return Rect{ edge == TextCaretEdge::Leading ? cluster.leadingX : cluster.trailingX, line.top, 0.0f, line.height };
         }
         if(cluster.byteBegin == byteOffset || cluster.byteEnd == byteOffset)
             alternate = &cluster;
@@ -167,18 +165,16 @@ bool TextLayout::caretRect(u32 byteOffset, TextCaretEdge::Enum edge, Rect& outpu
     if(alternate){
         const TextLine& line = m_lines[alternate->lineIndex];
         const f32 x = alternate->byteBegin == byteOffset ? alternate->leadingX : alternate->trailingX;
-        output = { x, line.top, 0.0f, line.height };
-        return true;
+        return Rect{ x, line.top, 0.0f, line.height };
     }
     for(const TextLine& line : m_lines){
         if(byteOffset == line.byteBegin || byteOffset == line.byteEnd){
             const bool atBegin = byteOffset == line.byteBegin;
             const f32 x = (atBegin == (m_direction == TextDirection::LeftToRight)) ? 0.0f : line.advance;
-            output = { x, line.top, 0.0f, line.height };
-            return true;
+            return Rect{ x, line.top, 0.0f, line.height };
         }
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 
@@ -188,13 +184,12 @@ bool TextLayout::caretRect(u32 byteOffset, TextCaretEdge::Enum edge, Rect& outpu
 TextLayoutBuilder::TextLayoutBuilder(Core::Alloc::GlobalArena& arena, ITextShaper& shaper)noexcept
     : m_arena(arena)
     , m_shaper(shaper)
-    , m_run(arena)
 {}
 
-TextLayoutStatus::Enum TextLayoutBuilder::layout(const ShapeRequest& request, TextLayout& output){
+Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const ShapeRequest& request){
     const TextLayoutStatus::Enum validation = ValidateTextRequest(request, true);
     if(validation != TextLayoutStatus::Success)
-        return validation;
+        return MakeUnexpected(validation);
     TextLayout result(m_arena);
     if(!request.text.empty())
         result.m_text.assign(request.text.data(), request.text.size());
@@ -214,12 +209,12 @@ TextLayoutStatus::Enum TextLayoutBuilder::layout(const ShapeRequest& request, Te
             breakEnd += request.text[breakEnd] == '\r' ? 2u : 1u;
         ShapeRequest lineRequest = request;
         lineRequest.text = request.text.substr(byteBegin, byteEnd - byteBegin);
-        const TextLayoutStatus::Enum status = m_shaper.shape(lineRequest, m_run);
-        if(status != TextLayoutStatus::Success)
-            return status;
-        const ShapedRun& run = m_run;
+        const auto shapedRun = m_shaper.shape(lineRequest);
+        if(!shapedRun)
+            return MakeUnexpected(shapedRun.error());
+        const ShapedRun& run = *shapedRun;
         if(!__hidden_ui_text_layout::ValidateRun(run, lineRequest.text, request.direction))
-            return TextLayoutStatus::FontFailure;
+            return MakeUnexpected(TextLayoutStatus::FontFailure);
         TextLine line;
         line.byteBegin = static_cast<u32>(byteBegin);
         line.byteEnd = static_cast<u32>(byteEnd);
@@ -231,7 +226,7 @@ TextLayoutStatus::Enum TextLayoutBuilder::layout(const ShapeRequest& request, Te
         const f64 baseline = static_cast<f64>(line.top) + run.metrics.ascender;
         const f64 height = static_cast<f64>(run.metrics.ascender) + run.metrics.descender + run.metrics.lineGap;
         if(!__hidden_ui_text_layout::FitsCoordinate(baseline) || !__hidden_ui_text_layout::FitsCoordinate(line.top + height))
-            return TextLayoutStatus::InvalidParameters;
+            return MakeUnexpected(TextLayoutStatus::InvalidParameters);
         line.baseline = static_cast<f32>(baseline);
         line.height = static_cast<f32>(height);
         usize first = 0u;
@@ -251,16 +246,13 @@ TextLayoutStatus::Enum TextLayoutBuilder::layout(const ShapeRequest& request, Te
                     !__hidden_ui_text_layout::FitsCoordinate(x) || !__hidden_ui_text_layout::FitsCoordinate(y)
                     || !__hidden_ui_text_layout::FitsCoordinate(nextPen)
                 )
-                    return TextLayoutStatus::InvalidParameters;
+                    return MakeUnexpected(TextLayoutStatus::InvalidParameters);
                 const Point position{ static_cast<f32>(x), static_cast<f32>(y) };
-                Rect ink;
-                if(
-                    !__hidden_ui_text_layout::TranslateInk(position, glyph.ink, ink)
-                    || !__hidden_ui_text_layout::IncludeInk(result.m_inkBounds, hasInk, ink)
-                )
-                    return TextLayoutStatus::InvalidParameters;
-                if(glyph.coverage.known && !__hidden_ui_text_layout::TranslateInk(position, glyph.coverage.ink, ink))
-                    return TextLayoutStatus::InvalidParameters;
+                const auto ink = __hidden_ui_text_layout::TranslateInk(position, glyph.ink);
+                if(!ink || !__hidden_ui_text_layout::IncludeInk(result.m_inkBounds, hasInk, *ink))
+                    return MakeUnexpected(TextLayoutStatus::InvalidParameters);
+                if(glyph.coverage.known && !__hidden_ui_text_layout::TranslateInk(position, glyph.coverage.ink))
+                    return MakeUnexpected(TextLayoutStatus::InvalidParameters);
                 result.m_glyphs.push_back({ glyph.face, glyph.glyphId,
                     line.byteBegin + glyph.byteBegin, line.byteBegin + glyph.byteEnd, position, glyph.ink, glyph.coverage });
                 pen = static_cast<f32>(nextPen);
@@ -277,7 +269,7 @@ TextLayoutStatus::Enum TextLayoutBuilder::layout(const ShapeRequest& request, Te
             first = end;
         }
         if(!IsFinite(pen) || !IsFinite(line.top + line.height))
-            return TextLayoutStatus::InvalidParameters;
+            return MakeUnexpected(TextLayoutStatus::InvalidParameters);
         line.advance = pen;
         line.clusterCount = static_cast<u32>(result.m_clusters.size()) - line.firstCluster;
         result.m_lines.push_back(line);
@@ -287,8 +279,7 @@ TextLayoutStatus::Enum TextLayoutBuilder::layout(const ShapeRequest& request, Te
             break;
         byteBegin = breakEnd;
     }
-    output = Move(result);
-    return TextLayoutStatus::Success;
+    return result;
 }
 
 

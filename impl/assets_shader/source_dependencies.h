@@ -44,8 +44,13 @@ namespace IncludeKind{
 
 void SpliceSourceLines(AString<Core::Alloc::ScratchArena>& inOutSource)noexcept;
 void MaskSourceComments(AString<Core::Alloc::ScratchArena>& inOutSource)noexcept;
-[[nodiscard]] bool ExtractIncludeDirective(AStringView line, AStringView& outIncludeName, IncludeKind::Enum& outKind)noexcept;
-[[nodiscard]] bool ResolveIncludeFile(AStringView includeName, IncludeKind::Enum kind, const Path& sourceDirectory, const ShaderCook::CookVector<Path>& includeDirectories, Path& outPath);
+struct IncludeDirective{
+    AStringView name;
+    IncludeKind::Enum kind = IncludeKind::Relative;
+};
+
+[[nodiscard]] Expected<IncludeDirective> ExtractIncludeDirective(AStringView line)noexcept;
+[[nodiscard]] Expected<Path> ResolveIncludeFile(AStringView includeName, IncludeKind::Enum kind, const Path& sourceDirectory, const ShaderCook::CookVector<Path>& includeDirectories);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

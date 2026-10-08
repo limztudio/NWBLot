@@ -82,7 +82,7 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
+    [[nodiscard]] Expected<DeferredGraphSuffixResult> declare(
         const DeferredGraphSuffixInputs& inputs,
         DeferredFrameTargets& targets,
         const ReflectionCompositeInputs& compositeInputs,
@@ -90,8 +90,7 @@ public:
         Core::GpuTimingSubmissionTicket& presentTimingTicket,
         Optional<Core::GpuTimingMeasure>& asyncFinalTiming,
         const Core::GpuTaskId& shadowVisibilityTask,
-        Core::GpuTimingFrameTransaction& frameTimingTransaction,
-        DeferredGraphSuffixResult& outResult
+        Core::GpuTimingFrameTransaction& frameTimingTransaction
     );
 
 

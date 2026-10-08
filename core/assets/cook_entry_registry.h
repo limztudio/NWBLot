@@ -202,22 +202,20 @@ template<typename StringT>
 template<typename EntryT, typename AssetT, typename CodecT>
 class CookEntryBucket final : public CookEntryBucketTyped<EntryT>{
 public:
-    using DocumentParseFunction = bool (*)(
+    using DocumentParseFunction = Expected<EntryT> (*)(
         const Path& assetRoot,
         AStringView virtualRoot,
         const Path& nwbFilePath,
         const Core::Metascript::Document& doc,
-        EntryT& outEntry,
         CookEntryParseContext& context
     );
-    using ValueParseFunction = bool (*)(
+    using ValueParseFunction = Expected<EntryT> (*)(
         Name virtualPath,
         const Path& nwbFilePath,
         const Core::Metascript::Value& asset,
-        EntryT& outEntry,
         CookEntryParseContext& context
     );
-    using BuildAssetFunction = bool (*)(EntryT& entry, AssetT& outAsset);
+    using BuildAssetFunction = Expected<AssetT> (*)(EntryT& entry, AssetArena& arena);
 
 public:
     CookEntryBucket(
@@ -259,11 +257,11 @@ public:
             return false;
         }
 
-        EntryT entry(context.cookArena);
-        if(!m_parseDocument(assetRoot, virtualRoot, nwbFilePath, doc, entry, context))
+        auto entry = m_parseDocument(assetRoot, virtualRoot, nwbFilePath, doc, context);
+        if(!entry)
             return false;
 
-        return appendParsedEntry(Move(entry), context);
+        return appendParsedEntry(Move(*entry), context);
     }
 
     virtual bool parseValue(
@@ -280,11 +278,11 @@ public:
             return false;
         }
 
-        EntryT entry(context.cookArena);
-        if(!m_parseValue(virtualPath, nwbFilePath, asset, entry, context))
+        auto entry = m_parseValue(virtualPath, nwbFilePath, asset, context);
+        if(!entry)
             return false;
 
-        return appendParsedEntry(Move(entry), context);
+        return appendParsedEntry(Move(*entry), context);
     }
 
     virtual bool writeCookedAssets(CookEntryWriteContext& context)override{
@@ -299,8 +297,8 @@ public:
             ))
                 return false;
 
-            AssetT asset(assetArena);
-            if(!m_buildAsset(entry, asset)){
+            auto asset = m_buildAsset(entry, assetArena);
+            if(!asset){
                 if(m_logBuildFailure){
                     NWB_LOGGER_ERROR(NWB_TEXT("AssetCook: failed to build {} '{}'")
                         , m_assetKindText
@@ -313,7 +311,7 @@ public:
             if(!context.writer.writeCookedAsset(
                 m_assetKindText,
                 CookEntryRegistryDetail::ToCookEntryName(entry.virtualPath),
-                asset,
+                *asset,
                 codec
             ))
                 return false;
@@ -559,14 +557,23 @@ template<typename EntryT, typename AssetT, typename CodecT>
     );
 }
 
-template<typename EntryT, typename AssetT, typename BuildFunction>
-[[nodiscard]] inline bool ForwardCookBuild(EntryT& entry, AssetT& outAsset, BuildFunction buildAsset)noexcept(IsNothrowInvocableR_V<bool, BuildFunction&, EntryT&, AssetT&> && IsNothrowDestructible_V<BuildFunction>){
-    return buildAsset(entry, outAsset);
+template<typename EntryT, typename BuildFunction>
+[[nodiscard]] inline auto ForwardCookBuild(
+    EntryT& entry,
+    AssetArena& arena,
+    BuildFunction buildAsset
+)noexcept(IsNothrowInvocable_V<BuildFunction&, EntryT&, AssetArena&> && IsNothrowDestructible_V<BuildFunction>){
+    return buildAsset(entry, arena);
 }
 
-template<typename EntryT, typename AssetT, typename ScratchT, typename BuildFunction>
-[[nodiscard]] inline bool ForwardCookBuildWithScratch(EntryT& entry, AssetT& outAsset, ScratchT& scratch, BuildFunction buildAsset)noexcept(IsNothrowInvocableR_V<bool, BuildFunction&, EntryT&, AssetT&, ScratchT&> && IsNothrowDestructible_V<BuildFunction>){
-    return buildAsset(entry, outAsset, scratch);
+template<typename EntryT, typename ScratchT, typename BuildFunction>
+[[nodiscard]] inline auto ForwardCookBuildWithScratch(
+    EntryT& entry,
+    AssetArena& arena,
+    ScratchT& scratch,
+    BuildFunction buildAsset
+)noexcept(IsNothrowInvocable_V<BuildFunction&, EntryT&, AssetArena&, ScratchT&> && IsNothrowDestructible_V<BuildFunction>){
+    return buildAsset(entry, arena, scratch);
 }
 
 [[nodiscard]] bool RegisterAutoCollectedCookEntryTypes(CookEntryRegistry& registry);

@@ -123,21 +123,18 @@ void MeshCookMeshlets::UpdateMeshletScoreConeCutoff(
 }
 
 
-bool MeshCookMeshlets::FindNextUnvisitedMeshletTriangle(
+Expected<u32> MeshCookMeshlets::FindNextUnvisitedMeshletTriangle(
     const MeshletTrianglePrecompute& trianglePrecompute,
-    const usize searchOffset,
-    u32& outTriangleIndex
+    const usize searchOffset
 )noexcept{
-    outTriangleIndex = 0u;
     for(usize triangleIndex = searchOffset; triangleIndex < trianglePrecompute.triangles.size(); ++triangleIndex){
         if(trianglePrecompute.visitedTriangles[triangleIndex] != 0u)
             continue;
 
-        outTriangleIndex = static_cast<u32>(triangleIndex);
-        return true;
+        return static_cast<u32>(triangleIndex);
     }
 
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 
@@ -212,8 +209,7 @@ bool MeshCookMeshlets::GrowMeshletFromFrontier(
 ){
     while(MeshletPrimitiveCount(meshlet) < s_MeshMaxMeshletTriangles){
         if(frontier.empty()){
-            MeshletFrontierCandidate disconnectedCandidate;
-            if(!FindBestDisconnectedMeshletCandidate(
+            const auto disconnectedCandidate = FindBestDisconnectedMeshletCandidate(
                 trianglePrecompute,
                 seedSearchOffset + 1u,
                 localTriangleIndices,
@@ -221,16 +217,16 @@ bool MeshCookMeshlets::GrowMeshletFromFrontier(
                 meshlet,
                 localSourceVertexRefs,
                 cpuScheduler,
-                parallelCandidates,
-                disconnectedCandidate
-            ))
+                parallelCandidates
+            );
+            if(!disconnectedCandidate)
                 break;
 
             if(!AddVisitedMeshletTriangle(
                 nwbFilePath,
                 metaKind,
                 trianglePrecompute,
-                disconnectedCandidate.triangleIndex,
+                disconnectedCandidate->triangleIndex,
                 localSourceVertexRefs,
                 localTriangleIndices,
                 meshlet,
@@ -243,24 +239,23 @@ bool MeshCookMeshlets::GrowMeshletFromFrontier(
             continue;
         }
 
-        MeshletFrontierCandidate bestCandidate;
-        if(!FindBestMeshletFrontierCandidate(
+        const auto bestCandidate = FindBestMeshletFrontierCandidate(
             trianglePrecompute,
             frontier,
             localTriangleIndices,
             scoreState,
             meshlet,
-            localSourceVertexRefs,
-            bestCandidate
-        ))
+            localSourceVertexRefs
+        );
+        if(!bestCandidate)
             break;
 
-        RemoveMeshletFrontierCandidate(frontier, frontierFlags, bestCandidate.frontierOffset);
+        RemoveMeshletFrontierCandidate(frontier, frontierFlags, bestCandidate->frontierOffset);
         if(!AddVisitedMeshletTriangle(
             nwbFilePath,
             metaKind,
             trianglePrecompute,
-            bestCandidate.triangleIndex,
+            bestCandidate->triangleIndex,
             localSourceVertexRefs,
             localTriangleIndices,
             meshlet,

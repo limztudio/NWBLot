@@ -26,9 +26,8 @@ namespace DeferredDescriptorRegisterDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool RegisterSampledTexture(
+[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterSampledTexture(
     Core::GpuDescriptorHeap& heap,
-    Core::GpuDescriptorHandle& handle,
     Core::GpuDescriptorClass::Enum descriptorClass,
     Core::Texture* texture,
     Core::Format::Enum format,
@@ -36,19 +35,18 @@ namespace DeferredDescriptorRegisterDetail{
     Core::TextureDimension::Enum dimension
 );
 
-[[nodiscard]] bool RegisterStorageTexture(
+[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterStorageTexture(
     Core::GpuDescriptorHeap& heap,
-    Core::GpuDescriptorHandle& handle,
     Core::Texture* texture,
     Core::Format::Enum format,
     Core::TextureDimension::Enum dimension
 );
 
-[[nodiscard]] bool RegisterSampler(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle, Core::Sampler* sampler);
+[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterSampler(Core::GpuDescriptorHeap& heap, Core::Sampler* sampler);
 
-[[nodiscard]] bool RegisterStructuredBuffer(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle, Core::Buffer* buffer);
+[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterStructuredBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer* buffer);
 
-[[nodiscard]] bool RegisterConstantBuffer(Core::GpuDescriptorHeap& heap, Core::GpuDescriptorHandle& handle, Core::Buffer* buffer);
+[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterConstantBuffer(Core::GpuDescriptorHeap& heap, Core::Buffer* buffer);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

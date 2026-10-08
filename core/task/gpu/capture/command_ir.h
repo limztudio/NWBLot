@@ -326,7 +326,6 @@ class GpuCommandIrOwnerAnchor;
 // Reader validates only the wire contract; topology needs a later phase.
 namespace GpuCommandIrStreamReadStatus{
     enum Enum : u8{
-        Record,
         End,
         Error,
     };
@@ -374,8 +373,8 @@ public:
 
 
 public:
-    [[nodiscard]] GpuCommandIrStreamReadStatus::Enum next(GpuCommandIrBuiltinTaskRecord& outRecord)noexcept;
-    [[nodiscard]] GpuCommandIrStreamReadStatus::Enum next(GpuCommandIrDecodedRecord& outRecord)noexcept;
+    [[nodiscard]] Expected<GpuCommandIrBuiltinTaskRecord, GpuCommandIrStreamReadStatus::Enum> nextBuiltinTask()noexcept;
+    [[nodiscard]] Expected<GpuCommandIrDecodedRecord, GpuCommandIrStreamReadStatus::Enum> next()noexcept;
     [[nodiscard]] const GpuCommandIrStreamValidationResult& validation()const noexcept{ return m_validation; }
     [[nodiscard]] u64 graphGeneration()const noexcept{ return m_graphGeneration; }
     [[nodiscard]] u64 planGeneration()const noexcept{ return m_planGeneration; }
@@ -440,6 +439,7 @@ class GpuCommandIrOwnedStream final : NoCopy{
 
 public:
     explicit GpuCommandIrOwnedStream(GraphicsArena& arena);
+    GpuCommandIrOwnedStream(GpuCommandIrOwnedStream&& other)noexcept;
     ~GpuCommandIrOwnedStream()noexcept;
 
 
@@ -577,7 +577,7 @@ public:
     // remain unchanged across a rejected retry.
     [[nodiscard]] bool beginRecordingAttempt(u64 recordingAttemptGeneration)noexcept;
     [[nodiscard]] BinaryByteView commandBytes()const;
-    [[nodiscard]] bool exportOwned(GpuCommandIrOwnedStream& outStream)const;
+    [[nodiscard]] Expected<GpuCommandIrOwnedStream> exportOwned(GraphicsArena& arena)const;
     [[nodiscard]] GpuCommandIrCaptureCheckpoint checkpoint()const noexcept;
     [[nodiscard]] bool rollback(const GpuCommandIrCaptureCheckpoint& checkpoint)noexcept;
     [[nodiscard]] bool captureSetGraphicsState(

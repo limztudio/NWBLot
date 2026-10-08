@@ -61,7 +61,7 @@ namespace __hidden_device_query{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize featureInfoSize){
+bool Device::queryFeatureSupport(Feature::Enum feature)const noexcept{
     const VulkanDetail::RayTracingCapabilityInputs rayTracingCapabilities =
         __hidden_device_query::CollectRayTracingCapabilityInputs(m_context);
 
@@ -126,19 +126,16 @@ bool Device::queryFeatureSupport(Feature::Enum feature, void* featureInfo, usize
         return m_context.extensions.extMeshShader && m_context.meshShaderFeatures.meshShader == VK_TRUE && m_context.deviceDispatch.vkCmdDrawMeshTasksEXT;
     case Feature::VariableRateShading:
         return m_context.extensions.khrFragmentShadingRate;
-    case Feature::WaveLaneCountMinMax:{
-        auto* out = static_cast<WaveLaneCountMinMaxFeatureInfo*>(featureInfo);
-        if(out && featureInfoSize >= sizeof(WaveLaneCountMinMaxFeatureInfo)){
-            out->minWaveLaneCount = m_context.subgroupProperties.subgroupSize;
-            out->maxWaveLaneCount = m_context.subgroupProperties.subgroupSize;
-        }
-        return true;
-    }
     case Feature::ConstantBufferRanges:
         return true;
     default:
         return false;
     }
+}
+
+WaveLaneCountRange Device::getWaveLaneCounts()const noexcept{
+    const u32 count = m_context.subgroupProperties.subgroupSize;
+    return { count, count };
 }
 
 u64 Device::getMaxStorageBufferRange()const noexcept{
@@ -484,8 +481,8 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
     const usize dataTypeSize = GetCooperativeVectorDataTypeSize(type);
     const usize rowCount = static_cast<usize>(rows);
     const usize columnCount = static_cast<usize>(columns);
-    usize rowByteSize = 0u;
-    if(!TryMultiply<usize>(columnCount, dataTypeSize, rowByteSize))
+    const auto rowByteSize = TryMultiply<usize>(columnCount, dataTypeSize);
+    if(!rowByteSize)
         return 0;
 
     const usize srcStride = GetCooperativeVectorOptimalMatrixStride(
@@ -497,12 +494,12 @@ usize Device::getCoopVecMatrixSize(CooperativeVectorDataType::Enum type, Coopera
     if(srcStride == 0u)
         return 0;
 
-    usize precedingRowsByteSize = 0u;
-    if(!TryMultiply<usize>(rowCount - 1u, srcStride, precedingRowsByteSize))
+    const auto precedingRowsByteSize = TryMultiply<usize>(rowCount - 1u, srcStride);
+    if(!precedingRowsByteSize)
         return 0;
-    if(AddOverflows<usize>(precedingRowsByteSize, rowByteSize))
+    if(AddOverflows<usize>(*precedingRowsByteSize, *rowByteSize))
         return 0;
-    const usize srcSize = precedingRowsByteSize + rowByteSize;
+    const usize srcSize = *precedingRowsByteSize + *rowByteSize;
 
     const usize dstStride = GetCooperativeVectorOptimalMatrixStride(
         type,

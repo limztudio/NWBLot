@@ -108,15 +108,13 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
 
 
 // Cross-frame cache pins raw keys; failed registrations retry next gather.
-[[nodiscard]] inline bool AcquireMeshHeapHandle(
+[[nodiscard]] inline Expected<Core::GpuDescriptorHandle> AcquireMeshHeapHandle(
     Core::GpuDescriptorHeap& heap,
     RtMeshHeapHandleCache& cache,
-    const Core::BufferHandle& bufferHandle,
-    Core::GpuDescriptorHandle& outHandle
+    const Core::BufferHandle& bufferHandle
 ){
-    outHandle = Core::GpuDescriptorHandle::Invalid();
     if(!bufferHandle)
-        return false;
+        return MakeUnexpected(Failure{});
 
     Core::Buffer& buffer = *bufferHandle;
     const Core::Buffer* const bufferKey = &buffer;
@@ -124,25 +122,24 @@ inline void AppendTlasInstanceStaticCacheInput(u64& inOutHash, const Core::RayTr
     if(found != cache.end()){
         NWB_ASSERT(found.value().handle.valid());
         found.value().seenThisFrame = true;
-        outHandle = found.value().handle;
-        return true;
+        return found.value().handle;
     }
 
-    if(!RayTracingDetail::RegisterHeapBuffer(
+    const auto handle = RayTracingDetail::RegisterHeapBuffer(
         heap,
         buffer,
         Core::GpuDescriptorClass::StorageBuffer,
-        false,
-        outHandle
-    ))
-        return false;
+        false
+    );
+    if(!handle)
+        return MakeUnexpected(Failure{});
 
     RtMeshHeapHandleCacheEntry entry;
     entry.keepAlive = bufferHandle;
-    entry.handle = outHandle;
+    entry.handle = *handle;
     entry.seenThisFrame = true;
     cache.insert({bufferKey, Move(entry)});
-    return true;
+    return *handle;
 }
 
 // Evict unseen cache entries; heap quarantine protects in-flight work.
@@ -221,25 +218,22 @@ template<typename RayTracingState>
 }
 
 // Register writable scratch with its explicit owner.
-[[nodiscard]] inline bool RegisterWritableBvhBuffer(
+[[nodiscard]] inline Expected<Core::GpuDescriptorHandle> RegisterWritableBvhBuffer(
     Core::GpuDescriptorHeap& heap,
-    Core::Buffer& buffer,
-    Core::GpuDescriptorHandle& outHandle
+    Core::Buffer& buffer
 ){
     return RayTracingDetail::RegisterHeapBuffer(
         heap,
         buffer,
         Core::GpuDescriptorClass::StorageBuffer,
-        true,
-        outHandle
+        true
     );
 }
 
-[[nodiscard]] inline bool ResolvePreparedMeshBlasBuild(
-    const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources,
-    PreparedMeshBlasBuild& outBuild
+[[nodiscard]] inline Expected<PreparedMeshBlasBuild> ResolvePreparedMeshBlasBuild(
+    const ECSRenderDetail::MeshRayTracingResourceSnapshot& meshResources
 ){
-    outBuild = {};
+    PreparedMeshBlasBuild build;
     if(
         !meshResources.meshName
         || !meshResources.positionBuffer
@@ -247,11 +241,11 @@ template<typename RayTracingState>
         || !meshResources.blas
         || !meshResources.blas->getBackingBufferHandle()
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     const Core::BufferDesc& positionDesc = meshResources.positionBuffer->getCreationDescription();
     if(positionDesc.structStride == 0u || meshResources.meshletPrimitiveIndexCount == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const bool firstBuild = meshResources.blasBuildPending || !meshResources.blasBuildAccepted;
     const bool performRefit =
@@ -259,26 +253,26 @@ template<typename RayTracingState>
         && !firstBuild
         && meshResources.blasRefitsSinceRebuild < AdaptiveRefitsBeforeRebuild(meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount)
     ;
-    outBuild.meshName = meshResources.meshName;
-    outBuild.positionBuffer = meshResources.positionBuffer;
-    outBuild.triangleIndexBuffer = meshResources.triangleIndexBuffer;
-    outBuild.blas = meshResources.blas;
-    outBuild.blasBackingBuffer = meshResources.blas->getBackingBufferHandle();
-    outBuild.runtimeMeshVersion = meshResources.runtimeMeshVersion;
-    outBuild.geometryContentRevision = meshResources.runtimeGeometryContentRevision;
-    outBuild.acceptedGeometryContentRevision = meshResources.blasGeometryContentRevision;
-    outBuild.positionByteSize = positionDesc.byteSize;
-    outBuild.vertexStride = static_cast<u32>(positionDesc.structStride);
-    outBuild.vertexCount = static_cast<u32>(positionDesc.byteSize / positionDesc.structStride);
-    outBuild.indexCount = meshResources.meshletPrimitiveIndexCount;
-    outBuild.refitsBeforeBuild = meshResources.blasRefitsSinceRebuild;
-    outBuild.refitsAfterBuild = performRefit ? (meshResources.blasRefitsSinceRebuild + 1u) : 0u;
-    outBuild.runtimeMesh = meshResources.runtimeMesh;
-    outBuild.buildPending = meshResources.blasBuildPending;
-    outBuild.firstBuild = firstBuild;
-    outBuild.backingFresh = meshResources.blasBackingFresh;
-    outBuild.performRefit = performRefit;
-    return true;
+    build.meshName = meshResources.meshName;
+    build.positionBuffer = meshResources.positionBuffer;
+    build.triangleIndexBuffer = meshResources.triangleIndexBuffer;
+    build.blas = meshResources.blas;
+    build.blasBackingBuffer = meshResources.blas->getBackingBufferHandle();
+    build.runtimeMeshVersion = meshResources.runtimeMeshVersion;
+    build.geometryContentRevision = meshResources.runtimeGeometryContentRevision;
+    build.acceptedGeometryContentRevision = meshResources.blasGeometryContentRevision;
+    build.positionByteSize = positionDesc.byteSize;
+    build.vertexStride = static_cast<u32>(positionDesc.structStride);
+    build.vertexCount = static_cast<u32>(positionDesc.byteSize / positionDesc.structStride);
+    build.indexCount = meshResources.meshletPrimitiveIndexCount;
+    build.refitsBeforeBuild = meshResources.blasRefitsSinceRebuild;
+    build.refitsAfterBuild = performRefit ? (meshResources.blasRefitsSinceRebuild + 1u) : 0u;
+    build.runtimeMesh = meshResources.runtimeMesh;
+    build.buildPending = meshResources.blasBuildPending;
+    build.firstBuild = firstBuild;
+    build.backingFresh = meshResources.blasBackingFresh;
+    build.performRefit = performRefit;
+    return build;
 }
 
 [[nodiscard]] inline bool MatchesPreparedMeshBlasBuild(

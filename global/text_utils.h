@@ -6,6 +6,7 @@
 
 
 #include "basic_string.h"
+#include "expected.h"
 #include "limit.h"
 
 #include <cctype>
@@ -44,16 +45,12 @@ template<typename CharT>
 }
 
 template<typename CharT>
-[[nodiscard]] inline bool ParseConfirmText(const BasicStringView<CharT> text, bool& outValue)noexcept(IsArithmetic_V<CharT>){
-    if(IsConfirmYesText(text)){
-        outValue = true;
+[[nodiscard]] inline Expected<bool> ParseConfirmText(const BasicStringView<CharT> text)noexcept(IsArithmetic_V<CharT>){
+    if(IsConfirmYesText(text))
         return true;
-    }
-    if(IsConfirmNoText(text)){
-        outValue = false;
-        return true;
-    }
-    return false;
+    if(IsConfirmNoText(text))
+        return false;
+    return MakeUnexpected(Failure{});
 }
 
 template<typename CharT>
@@ -502,38 +499,30 @@ struct NamedEnumCase{
 };
 
 template<typename EnumT, typename ViewT = AStringView>
-[[nodiscard]] inline bool ParseNamedEnumText(
+[[nodiscard]] inline Expected<EnumT> ParseNamedEnumText(
     const ViewT value,
-    EnumT& outValue,
     const NamedEnumCase<EnumT>* cases,
     const usize caseCount
 ){
     for(usize i = 0u; i < caseCount; ++i){
-        if(value == ViewT(cases[i].text.data(), cases[i].text.size())){
-            outValue = cases[i].value;
-            return true;
-        }
+        if(value == ViewT(cases[i].text.data(), cases[i].text.size()))
+            return cases[i].value;
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 template<typename EnumT, typename TextFunction, typename ViewT = AStringView>
-[[nodiscard]] inline bool ParseNormalizedEnumText(
+[[nodiscard]] inline Expected<EnumT> ParseNormalizedEnumText(
     const ViewT value,
-    EnumT& outValue,
     TextFunction textFunction,
     const EnumT* values,
-    const usize valueCount,
-    const EnumT fallback
+    const usize valueCount
 ){
     for(usize i = 0u; i < valueCount; ++i){
-        if(value == textFunction(values[i])){
-            outValue = values[i];
-            return true;
-        }
+        if(value == textFunction(values[i]))
+            return values[i];
     }
-    outValue = fallback;
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 template<typename StringT, typename EnumT, typename TextFunction>

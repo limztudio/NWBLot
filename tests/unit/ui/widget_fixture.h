@@ -65,7 +65,9 @@ protected:
         const ::Path<Core::Alloc::GlobalArena> path = ::Path<Core::Alloc::GlobalArena>(m_arena, NWB_TEST_FONT_DIRECTORY)
             / "latin.font";
         Core::Assets::AssetBytes bytes(m_arena);
-        ASSERT_TRUE(Tests::ReadBundledFontBytes(path, bytes));
+        auto bytesResult = Tests::ReadBundledFontBytes(path, bytes.get_allocator().arena());
+        ASSERT_TRUE(bytesResult);
+        bytes = Move(*bytesResult);
         m_font.setFontBytes(Move(bytes));
         ASSERT_TRUE(m_font.validatePayload());
         const FontSource source{ Core::Assets::AssetRef<Font>("tests/ui/fonts/latin"), m_font, 1u };
@@ -151,7 +153,7 @@ protected:
         EXPECT_TRUE(send({ InputEventType::PrimaryUp, destination }).pointerConsumed);
     }
 
-    [[nodiscard]] bool skinQuad(const DrawSnapshot& snapshot, const u32 slot, Rect& rectangle)const{
+    [[nodiscard]] Expected<Rect> skinQuad(const DrawSnapshot& snapshot, const u32 slot)const noexcept{
         const f32 left = static_cast<f32>(slot) / 16.0f;
         const f32 right = static_cast<f32>(slot + 1u) / 16.0f;
         for(const DrawCommand& command : snapshot.commands()){
@@ -161,13 +163,12 @@ protected:
                 const Vertex& first = snapshot.vertices()[snapshot.indices()[index]];
                 const Vertex& opposite = snapshot.vertices()[snapshot.indices()[index + 2u]];
                 if(first.texCoord.x == left && opposite.texCoord.x == right){
-                    rectangle = { first.position.x, first.position.y,
+                    return Rect{ first.position.x, first.position.y,
                         opposite.position.x - first.position.x, opposite.position.y - first.position.y };
-                    return true;
                 }
             }
         }
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
 

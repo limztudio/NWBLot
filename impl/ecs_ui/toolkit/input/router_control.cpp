@@ -104,15 +104,15 @@ bool InputRouter::currentControlAction(const ControlAction& action)const{
     ;
 }
 
-bool InputRouter::consumeControlAction(
-    const WidgetId host, const u64 declarationGeneration, const ControlToken& token, ControlAction& action
+Expected<ControlAction> InputRouter::consumeControlAction(
+    const WidgetId host, const u64 declarationGeneration, const ControlToken& token
 ){
     const HitTarget* target = findTarget(host, declarationGeneration);
     if(
         declarationGeneration == 0u || !token.valid() || target == nullptr || !isInteractive(*target)
         || target->control != token || target->owner.valid() || !target->focusable
     )
-        return false;
+        return MakeUnexpected(Failure{});
     for(usize index = 0u; index < m_controlActions.size(); ++index){
         const auto& candidate = m_controlActions[index];
         if(
@@ -120,11 +120,11 @@ bool InputRouter::consumeControlAction(
             || candidate.control != token || !currentControlAction(candidate)
         )
             continue;
-        action = candidate;
+        const ControlAction action = candidate;
         m_controlActions.erase(m_controlActions.begin() + static_cast<isize>(index));
-        return true;
+        return action;
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 void InputRouter::fenceControl(const WidgetId host, const u64 declarationGeneration, const ControlToken& token){

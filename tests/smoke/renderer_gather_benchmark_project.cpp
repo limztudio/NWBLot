@@ -81,21 +81,24 @@ public:
     virtual ~RendererGatherBenchmarkProject()override{ destroyWorld(); }
 
     virtual bool onStartup()override{
-        if(
-            !ReadSmokeEnvironmentText("NWB_GATHER_BENCHMARK_WORKLOAD", m_workload)
-            || !ReadSmokeEnvironmentText("NWB_GATHER_BENCHMARK_OUTPUT", m_output)
-        )
+        auto requestedWorkload = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GATHER_BENCHMARK_WORKLOAD");
+        if(!requestedWorkload)
             return false;
+        auto requestedOutput = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GATHER_BENCHMARK_OUTPUT");
+        if(!requestedOutput)
+            return false;
+        m_workload = Move(*requestedWorkload);
+        m_output = Move(*requestedOutput);
         const AStringView workload(m_workload.data(), m_workload.size());
         if(
             workload != "opaque" && workload != "hybrid" && workload != "shared"
             && workload != "unique" && workload != "overrides" && workload != "runtime"
         )
             return false;
-        SmokeEnvironmentString mode(m_context.objectArena);
-        if(!ReadSmokeEnvironmentText("NWB_GATHER_BENCHMARK_MODE", mode) || (mode != "timing" && mode != "memory"))
+        const auto mode = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GATHER_BENCHMARK_MODE");
+        if(!mode || (*mode != "timing" && *mode != "memory"))
             return false;
-        m_memoryEnabled = mode == "memory";
+        m_memoryEnabled = *mode == "memory";
         m_runtime = workload == "runtime";
         if(
             !m_context.graphics.queryFeatureSupport(NWB::Core::Feature::RayTracingAccelStruct)
@@ -174,9 +177,9 @@ public:
             return false;
         m_context.graphics.addRenderPassToBack(m_timingPass);
         m_timingRegistered = true;
-        SmokeEnvironmentString compilerOutput(m_context.objectArena);
-        if(ReadSmokeEnvironmentText("NWB_GATHER_COMPILER_STATISTICS_FILE", compilerOutput)){
-            if(!m_compilerProbe.start(renderer, AStringView(compilerOutput)))
+        const auto compilerOutput = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_GATHER_COMPILER_STATISTICS_FILE");
+        if(compilerOutput){
+            if(!m_compilerProbe.start(renderer, AStringView(*compilerOutput)))
                 return false;
         }
         NWB::Core::Perf::CaptureOptions capture;
@@ -186,7 +189,7 @@ public:
         capture.memory = m_memoryEnabled;
         m_context.setPerfCapture(capture);
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: workload {} mode {} fixed objects 64")
-            , StringConvert(workload), StringConvert(mode)
+            , StringConvert(workload), StringConvert(*mode)
         );
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: hardware reflection 4096 queries 16 refraction 1 diagnostics 0 temporal 0 spatial 0 feedback 0"));
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RendererGatherBenchmark: fixed delta 0.016666667 extent 960x720 async compute requested 1"));
@@ -273,9 +276,10 @@ private:
         for(auto&& [entity, renderer] : view){
             if(!renderer.visible)
                 continue;
-            NWB::Impl::RenderableMeshDesc mesh;
-            if(!meshes.resolveRenderableMesh(entity, mesh))
+            const auto meshResult = meshes.resolveRenderableMeshStatus(entity);
+            if(!meshResult)
                 continue;
+            const auto& mesh = *meshResult;
             ++m_renderers;
             if(mesh.runtime)
                 ++m_runtimeRenderers;

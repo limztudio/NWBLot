@@ -30,34 +30,34 @@ bool Context::addPartTarget(const WidgetState& owner, const WidgetId part, HitTa
     return true;
 }
 
-bool Context::takeControlAction(
-    const WidgetState& state, const bool enabled, const ControlToken& token, ControlAction& action
+Expected<ControlAction> Context::takeControlAction(
+    const WidgetState& state, const bool enabled, const ControlToken& token
 ){
     if(m_failed || !currentDeclaration(state))
-        return false;
+        return MakeUnexpected(Failure{});
     if(!enabled){
         m_input.invalidateTarget(state.id);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     const HitTarget* target = m_input.findTarget(state.id);
     if(target && target->popup != m_currentPopup)
-        return false;
-    return m_input.consumeControlAction(state.id, state.declarationGeneration, token, action);
+        return MakeUnexpected(Failure{});
+    return m_input.consumeControlAction(state.id, state.declarationGeneration, token);
 }
 
-bool Context::takePartPointerGesture(
-    const WidgetState& owner, const WidgetId part, const bool enabled, PointerGesture& gesture
+Expected<PointerGesture> Context::takePartPointerGesture(
+    const WidgetState& owner, const WidgetId part, const bool enabled
 ){
     if(m_failed || !currentDeclaration(owner))
-        return false;
+        return MakeUnexpected(Failure{});
     if(!enabled){
         m_input.invalidateTarget(owner.id);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     const HitTarget* target = m_input.findTarget(part);
     if(target && (target->popup != m_currentPopup || target->owner != owner.id))
-        return false;
-    return m_input.consumePointerGesture(part, owner.declarationGeneration, gesture);
+        return MakeUnexpected(Failure{});
+    return m_input.consumePointerGesture(part, owner.declarationGeneration);
 }
 
 

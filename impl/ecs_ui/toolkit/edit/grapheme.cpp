@@ -21,12 +21,11 @@ namespace __hidden_ui_grapheme{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool Decode(const AStringView text, const usize offset, u32& scalar, usize& length){
-    const i32 decoded = DecodeUtf8CodePoint(text.substr(offset, 4u), scalar);
-    if(decoded <= 0 || (scalar >= 0xD800u && scalar <= 0xDFFFu))
-        return false;
-    length = static_cast<usize>(decoded);
-    return true;
+[[nodiscard]] static Expected<DecodedUtf8CodePoint> Decode(const AStringView text, const usize offset)noexcept{
+    const auto decoded = DecodeUtf8CodePoint(text.substr(offset, 4u));
+    if(!decoded || (decoded->codePoint >= 0xD800u && decoded->codePoint <= 0xDFFFu))
+        return MakeUnexpected(Failure{});
+    return *decoded;
 }
 
 static bool IsSingleLineScalar(const u32 scalar)noexcept{
@@ -115,43 +114,43 @@ struct BoundaryState{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GraphemeSegmentation::Build(const AStringView text, EditBoundaryVector& output, const bool singleLine){
+Expected<EditBoundaryVector> GraphemeSegmentation::Build(
+    Core::Alloc::GlobalArena& arena, const AStringView text, const bool singleLine
+){
     if(!Validate(text, singleLine))
-        return false;
-    EditBoundaryVector candidate(output.get_allocator());
+        return MakeUnexpected(Failure{});
+    EditBoundaryVector candidate(arena);
     candidate.reserve(text.size() + 1u);
     __hidden_ui_grapheme::BoundaryState state;
     usize offset = 0u;
     while(offset < text.size()){
-        u32 scalar = 0u;
-        usize length = 0u;
-        if(!__hidden_ui_grapheme::Decode(text, offset, scalar, length))
-            return false;
+        const auto decoded = __hidden_ui_grapheme::Decode(text, offset);
+        if(!decoded)
+            return MakeUnexpected(Failure{});
+        const u32 scalar = decoded->codePoint;
         const GraphemeBreak::Enum current = LookupGraphemeBreak(scalar);
         const IndicConjunct::Enum indic = LookupIndicConjunct(scalar);
         const bool pictograph = IsExtendedPictographic(scalar);
         if(state.breaksBefore(current, indic, pictograph))
             candidate.push_back(offset);
         state.advance(current, indic, pictograph);
-        offset += length;
+        offset += static_cast<usize>(decoded->byteCount);
     }
     candidate.push_back(text.size());
-    output = Move(candidate);
-    return true;
+    return candidate;
 }
 
-bool GraphemeSegmentation::Validate(const AStringView text, const bool singleLine){
+bool GraphemeSegmentation::Validate(const AStringView text, const bool singleLine)noexcept{
     if(text.size() > Limit<i32>::s_Max || (!text.empty() && text.data() == nullptr))
         return false;
     usize offset = 0u;
     while(offset < text.size()){
-        u32 scalar = 0u;
-        usize length = 0u;
-        if(!__hidden_ui_grapheme::Decode(text, offset, scalar, length))
+        const auto decoded = __hidden_ui_grapheme::Decode(text, offset);
+        if(!decoded)
             return false;
-        if(singleLine && !__hidden_ui_grapheme::IsSingleLineScalar(scalar))
+        if(singleLine && !__hidden_ui_grapheme::IsSingleLineScalar(decoded->codePoint))
             return false;
-        offset += length;
+        offset += static_cast<usize>(decoded->byteCount);
     }
     return true;
 }

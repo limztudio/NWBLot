@@ -38,20 +38,18 @@ static constexpr f32 s_SkinWeightSumEpsilon = 0.001f;
     return Vector4NearEqual(Vector4Dot(weights, s_SIMDOne), s_SIMDOne, VectorReplicate(s_SkinWeightSumEpsilon));
 }
 
-[[nodiscard]] inline bool SkinInfluenceFitsSkeleton(const SkinInfluence4& skin, const u32 skeletonJointCount, u32& outJoint)noexcept{
-    outJoint = 0u;
+[[nodiscard]] inline Expected<void, u32> SkinInfluenceFitsSkeleton(const SkinInfluence4& skin, const u32 skeletonJointCount)noexcept{
     if(skeletonJointCount == 0u)
-        return true;
+        return {};
 
     for(u32 influenceIndex = 0u; influenceIndex < s_SkinInfluenceJointCount; ++influenceIndex){
         const u32 joint = static_cast<u32>(skin.joint[influenceIndex]);
         if(joint < skeletonJointCount)
             continue;
 
-        outJoint = joint;
-        return false;
+        return MakeUnexpected(joint);
     }
-    return true;
+    return {};
 }
 
 [[nodiscard]] inline bool ValidInverseBindMatrixCount(

@@ -22,10 +22,10 @@ bool InputRouter::currentContextMenuOwner(const ContextMenuOwner& owner)const{
     ;
 }
 
-bool InputRouter::consumeContextMenu(const WidgetId id, const u64 declarationGeneration, ContextMenuAction& action){
+Expected<ContextMenuAction> InputRouter::consumeContextMenu(const WidgetId id, const u64 declarationGeneration){
     const HitTarget* target = findTarget(id, declarationGeneration);
     if(declarationGeneration == 0u || target == nullptr || !target->contextMenu || !m_windowFocused || !isInteractive(*target))
-        return false;
+        return MakeUnexpected(Failure{});
     for(usize index = 0u; index < m_contextMenuActions.size(); ++index){
         const auto& candidate = m_contextMenuActions[index];
         if(
@@ -33,11 +33,11 @@ bool InputRouter::consumeContextMenu(const WidgetId id, const u64 declarationGen
             || candidate.popup != target->popup || candidate.control != target->control
         )
             continue;
-        action = candidate;
+        const ContextMenuAction action = candidate;
         m_contextMenuActions.erase(m_contextMenuActions.begin() + static_cast<isize>(index));
-        return true;
+        return action;
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 void InputRouter::reconcileContextMenus(){

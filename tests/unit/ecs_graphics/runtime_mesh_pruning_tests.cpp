@@ -39,22 +39,23 @@ TEST(RenderableMeshResolution, StaticAttachmentWithoutAssetIsUnavailable){
     PruneContext context;
     auto entity = context.world.createEntity();
     auto& mesh = entity.addComponent<MeshComponent>();
-    RenderableMeshDesc description;
-    EXPECT_EQ(context.meshSystem.resolveRenderableMeshStatus(entity.id(), description), RenderableMeshResolution::Unavailable);
-    EXPECT_FALSE(description.valid());
+    const auto unavailable = context.meshSystem.resolveRenderableMeshStatus(entity.id());
+    ASSERT_FALSE(unavailable);
+    EXPECT_EQ(unavailable.error(), RenderableMeshResolution::Unavailable);
     mesh.mesh = Core::Assets::AssetRef<Mesh>("tests/runtime_mesh_pruning/static_attachment");
-    EXPECT_EQ(context.meshSystem.resolveRenderableMeshStatus(entity.id(), description), RenderableMeshResolution::Ready);
-    EXPECT_TRUE(description.valid());
-    EXPECT_FALSE(description.runtime);
+    const auto description = context.meshSystem.resolveRenderableMeshStatus(entity.id());
+    ASSERT_TRUE(description);
+    EXPECT_TRUE(description->valid());
+    EXPECT_FALSE(description->runtime);
 }
 
 TEST(RenderableMeshResolution, SkinnedAttachmentWithoutProviderIsUnavailable){
     PruneContext context;
     auto entity = context.world.createEntity();
     entity.addComponent<SkinnedMeshBindingComponent>();
-    RenderableMeshDesc description;
-    EXPECT_EQ(context.meshSystem.resolveRenderableMeshStatus(entity.id(), description), RenderableMeshResolution::Unavailable);
-    EXPECT_FALSE(description.valid());
+    const auto unavailable = context.meshSystem.resolveRenderableMeshStatus(entity.id());
+    ASSERT_FALSE(unavailable);
+    EXPECT_EQ(unavailable.error(), RenderableMeshResolution::Unavailable);
 }
 
 TEST(RuntimeMeshPruning, RequestedIdentitiesKeepFullNameAndVersionAcrossHintedAndGrowingIndices){

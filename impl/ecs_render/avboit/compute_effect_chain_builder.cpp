@@ -37,20 +37,19 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AvboitComputeEffectChainBuilder::declareDepthWarp(
-    const AvboitDepthWarpStageInputs& inputs,
-    AvboitDepthWarpStageResult& outResult
+[[nodiscard]] Expected<AvboitDepthWarpStageResult> AvboitComputeEffectChainBuilder::declareDepthWarp(
+    const AvboitDepthWarpStageInputs& inputs
 ){
     using namespace RendererTaskGraphDetail;
-    outResult = AvboitDepthWarpStageResult{};
+    AvboitDepthWarpStageResult result{};
     if(!inputs.targets)
-        return false;
+        return MakeUnexpected(Failure{});
     if(!inputs.timingFeedback)
-        return false;
+        return MakeUnexpected(Failure{});
     if(!inputs.depthWarpTimingTicket)
-        return false;
+        return MakeUnexpected(Failure{});
     if(!inputs.occupancyTask.valid())
-        return false;
+        return MakeUnexpected(Failure{});
 
     Core::GpuTaskSchedulingHint avboitComputeScheduling;
     avboitComputeScheduling.cost = Core::GpuTaskCostHint::Medium;
@@ -70,9 +69,9 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
     Core::GpuTaskId completionTask = inputs.occupancyTask;
     if(inputs.hasTransparentRenderers){
         if(!inputs.coverage.valid() || !inputs.depthWarp.valid() || !inputs.control.valid())
-            return false;
+            return MakeUnexpected(Failure{});
         if(!inputs.currentBindlessSlots.valid())
-            return false;
+            return MakeUnexpected(Failure{});
         const Core::GpuTaskResourceUse depthWarpResourceUses[] = {
             ReadUse(inputs.coverage, Core::ResourceStates::UnorderedAccess),
             ReadWriteUse(inputs.depthWarp, Core::ResourceStates::UnorderedAccess),
@@ -101,37 +100,36 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
         );
         if(!m_avboitSystem.taskGraphStage().m_depthWarpTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT depth-warp graph task"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         completionTask = m_avboitSystem.taskGraphStage().m_depthWarpTask;
     }
 
-    outResult.completionTask = completionTask;
-    return true;
+    result.completionTask = completionTask;
+    return result;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AvboitComputeEffectChainBuilder::declareIntegration(
-    const AvboitIntegrationStageInputs& inputs,
-    AvboitIntegrationStageResult& outResult
+[[nodiscard]] Expected<AvboitIntegrationStageResult> AvboitComputeEffectChainBuilder::declareIntegration(
+    const AvboitIntegrationStageInputs& inputs
 ){
     using namespace RendererTaskGraphDetail;
-    outResult = AvboitIntegrationStageResult{};
+    AvboitIntegrationStageResult result{};
     if(!inputs.targets)
-        return false;
+        return MakeUnexpected(Failure{});
     if(!inputs.timingFeedback)
-        return false;
+        return MakeUnexpected(Failure{});
     if(!inputs.integrationTimingTicket)
-        return false;
+        return MakeUnexpected(Failure{});
     if(!inputs.extinctionTask.valid())
-        return false;
+        return MakeUnexpected(Failure{});
     if(!inputs.extinction.valid() || !inputs.control.valid() || !inputs.extinctionOverflow.valid())
-        return false;
+        return MakeUnexpected(Failure{});
     if(!inputs.transmittance.valid() || !inputs.currentBindlessSlots.valid())
-        return false;
+        return MakeUnexpected(Failure{});
 
     Core::GpuTaskSchedulingHint avboitComputeScheduling;
     avboitComputeScheduling.cost = Core::GpuTaskCostHint::Medium;
@@ -178,11 +176,11 @@ AvboitComputeEffectChainBuilder::AvboitComputeEffectChainBuilder(
     );
     if(!m_avboitSystem.taskGraphStage().m_integrationTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred AVBOIT integration graph task"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outResult.integrationTask = m_avboitSystem.taskGraphStage().m_integrationTask;
-    return true;
+    result.integrationTask = m_avboitSystem.taskGraphStage().m_integrationTask;
+    return result;
 }
 
 

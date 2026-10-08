@@ -57,9 +57,9 @@ struct NumericEditResult{
 
 [[nodiscard]] bool ValidateIntegerBounds(const IntegerBounds& bounds)noexcept;
 [[nodiscard]] bool ValidateFloatBounds(const FloatBounds& bounds)noexcept;
-// ASCII edge whitespace is ignored. Conversion writes output only for a complete, representable value.
-[[nodiscard]] NumericParseStatus::Enum ParseIntegerDraft(AStringView text, i64& output)noexcept;
-[[nodiscard]] NumericParseStatus::Enum ParseFloatDraft(AStringView text, f64& output)noexcept;
+// ASCII edge whitespace is ignored; incomplete and malformed drafts retain their classification.
+[[nodiscard]] Expected<i64, NumericParseStatus::Enum> ParseIntegerDraft(AStringView text)noexcept;
+[[nodiscard]] Expected<f64, NumericParseStatus::Enum> ParseFloatDraft(AStringView text)noexcept;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

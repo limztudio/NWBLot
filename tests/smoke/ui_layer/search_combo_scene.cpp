@@ -160,17 +160,17 @@ Array<u64, 22u> UiSearchComboSmokeScene::values()const{
 }
 
 Impl::Ui::Rect UiSearchComboSmokeScene::cursorRow()const{
-    Impl::Ui::Rect rectangle;
-    u64 index = 0u;
     const auto& list = m_state.combo().listState();
     const auto& placement = list.placement();
-    if(
-        !m_state.combo().isOpen() || !m_source.filtered().indexOf(list.cursorKey(), index)
-        || index < placement.firstRow || index >= placement.endRow
-        || !Impl::Ui::ScrollLayout::RowBounds(index, placement, __hidden_ui_search_combo_smoke::s_RowHeight, rectangle)
-    )
+    if(!m_state.combo().isOpen())
         return {};
-    return rectangle;
+    const auto index = m_source.filtered().indexOf(list.cursorKey());
+    if(!index || *index < placement.firstRow || *index >= placement.endRow)
+        return {};
+    const auto rectangle = Impl::Ui::ScrollLayout::RowBounds(*index, placement, __hidden_ui_search_combo_smoke::s_RowHeight);
+    if(!rectangle)
+        return {};
+    return *rectangle;
 }
 
 void UiSearchComboSmokeScene::observeState(Impl::Ui::TextService& text){

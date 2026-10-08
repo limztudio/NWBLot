@@ -16,10 +16,10 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool WindowLayout::Measure(
+Expected<WindowMetrics> WindowLayout::Measure(
     const UiSkinRegion& frame, const UiSkinRegion& title, const UiSkinRegion* collapse,
     const UiSkinRegion* resize, const WidgetStyle& style, const WindowOptions& options,
-    const Point& titleSize, const f32 density, WindowMetrics& metrics
+    const Point& titleSize, const f32 density
 )noexcept{
     if(
         !IsFinite(style.windowCollapseExtent) || style.windowCollapseExtent <= 0.0f
@@ -28,7 +28,8 @@ bool WindowLayout::Measure(
         || !IsFinite(options.minimumSize.x) || options.minimumSize.x < 0.0f
         || !IsFinite(options.minimumSize.y) || options.minimumSize.y < 0.0f
     )
-        return false;
+        return MakeUnexpected(Failure{});
+    WindowMetrics metrics;
     metrics.contentPadding = { frame.padding.left, frame.padding.top, frame.padding.right, frame.padding.bottom };
     metrics.titlePadding = { title.padding.left, title.padding.top, title.padding.right, title.padding.bottom };
     metrics.collapseExtent = options.collapsible ? style.windowCollapseExtent : 0.0f;
@@ -52,8 +53,12 @@ bool WindowLayout::Measure(
     metrics.minimumSize.y = Max(options.minimumSize.y,
         Max(frame.minimumHeight, metrics.titleHeight + metrics.contentPadding.top + metrics.contentPadding.bottom)
     );
-    return IsFinite(metrics.titleHeight) && IsFinite(metrics.minimumSize.x) && IsFinite(metrics.minimumSize.y)
-        && metrics.titleHeight > 0.0f && metrics.minimumSize.x > 0.0f && metrics.minimumSize.y > 0.0f;
+    if(
+        !IsFinite(metrics.titleHeight) || !IsFinite(metrics.minimumSize.x) || !IsFinite(metrics.minimumSize.y)
+        || metrics.titleHeight <= 0.0f || metrics.minimumSize.x <= 0.0f || metrics.minimumSize.y <= 0.0f
+    )
+        return MakeUnexpected(Failure{});
+    return metrics;
 }
 
 Rect WindowLayout::Visible(const WindowState& state, const WindowMetrics& metrics)noexcept{

@@ -39,16 +39,16 @@ NWB_DEFINE_ASSET_CODEC_REGISTRAR(s_FontAssetCodecAutoRegistrar, FontAssetCodec);
 
 bool Font::loadBinary(const Core::Assets::AssetBytes& binary){
     usize cursor = 0u;
-    FontBinaryPayload::HeaderBinary header;
-    if(!Core::Assets::ReadMagicHeaderPayload(
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<FontBinaryPayload::HeaderBinary>(
         binary,
         cursor,
-        header,
         FontBinaryPayload::s_FontMagic,
         NWB_TEXT("Font::loadBinary"),
         NWB_TEXT("font")
-    ))
+    );
+    if(!headerResult)
         return false;
+    const FontBinaryPayload::HeaderBinary& header = *headerResult;
     if(header.version != FontBinaryPayload::s_FontVersion || header.reserved != 0u || header.faceIndex != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Font::loadBinary failed: unsupported version, flags, or face index; recook required"));
         return false;

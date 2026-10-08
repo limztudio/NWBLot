@@ -43,21 +43,21 @@ struct SkinCookEntry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ParseSkinCookMetadata(
+[[nodiscard]] Expected<SkinCookEntry> ParseSkinCookMetadata(
     const Path& assetRoot,
     AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    SkinCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] bool ParseSkinCookMetadata(
+[[nodiscard]] Expected<SkinCookEntry> ParseSkinCookMetadata(
     Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    SkinCookEntry& outEntry
+    Core::Assets::AssetArena& arena
 );
-[[nodiscard]] bool BuildSkinAsset(SkinCookEntry& skinEntry, Skin& outSkin);
+[[nodiscard]] Expected<Skin> BuildSkinAsset(SkinCookEntry& skinEntry, Core::Assets::AssetArena& arena);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

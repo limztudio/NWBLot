@@ -88,8 +88,8 @@ public:
 public:
     // Start a new build while retaining the last successful arranged output.
     void reset()noexcept;
-    // A failed admission poisons this build until reset(), and leaves outIndex unchanged.
-    [[nodiscard]] bool addNode(u32 parent, const LayoutNodeDesc& description, u32& outIndex);
+    // A failed admission poisons this build until reset().
+    [[nodiscard]] Expected<u32> addNode(u32 parent, const LayoutNodeDesc& description);
     // Root sizing follows its policies against the viewport. All geometry stays in logical units.
     [[nodiscard]] bool arrange(const Rect& viewport);
     [[nodiscard]] u32 nodeCount()const noexcept{ return static_cast<u32>(m_nodes.size()); }

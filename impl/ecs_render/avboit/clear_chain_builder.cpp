@@ -32,14 +32,13 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool AvboitClearChainBuilder::declare(
+[[nodiscard]] Expected<AvboitClearChainResult> AvboitClearChainBuilder::declare(
     const AvboitClearChainInputs& inputs,
-    GraphClearTimingRecordState& clearTimingState,
-    AvboitClearChainResult& outResult
+    GraphClearTimingRecordState& clearTimingState
 ){
-    outResult = AvboitClearChainResult{};
+    AvboitClearChainResult result{};
     if(!inputs.uploadTask.valid())
-        return false;
+        return MakeUnexpected(Failure{});
 
     // Keep native order: uploads, serial target clears, then occupancy; graph owns all CopyDest ops.
     Core::GpuTaskId avboitClearTask = inputs.uploadTask;
@@ -57,7 +56,7 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(
             || !inputs.extinction.valid()
             || !inputs.extinctionOverflow.valid()
         )
-            return false;
+            return MakeUnexpected(Failure{});
 
         Core::GpuTaskSchedulingHint avboitClearScheduling;
         avboitClearScheduling.cost = Core::GpuTaskCostHint::Tiny;
@@ -113,7 +112,7 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(
             makeAvboitFloatClearDesc(inputs.lowRaster, transparentBlack, avboitClearBeginHooks)
         );
         if(!avboitClearTask.valid())
-            return false;
+            return MakeUnexpected(Failure{});
         m_avboitSystem.taskGraphStage().m_clearFirstTask = avboitClearTask;
         avboitClearTask = m_graph.addClearTextureTask(
             makeAvboitClearTaskDesc(
@@ -124,7 +123,7 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(
             makeAvboitFloatClearDesc(inputs.accumColor, transparentBlack)
         );
         if(!avboitClearTask.valid())
-            return false;
+            return MakeUnexpected(Failure{});
         avboitClearTask = m_graph.addClearTextureTask(
             makeAvboitClearTaskDesc(
                 Name("render.avboit.clear.accum_extinction"),
@@ -134,7 +133,7 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(
             makeAvboitFloatClearDesc(inputs.accumExtinction, transparentBlack)
         );
         if(!avboitClearTask.valid())
-            return false;
+            return MakeUnexpected(Failure{});
         const Core::GpuGraphResourceId foregroundClearTargets[] = { inputs.foregroundColor, inputs.foregroundExtinction };
         for(const auto target : foregroundClearTargets){
             avboitClearTask = m_graph.addClearTextureTask(
@@ -143,7 +142,7 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(
                     "AVBOIT Clear Foreground", avboitClearTask),
                 makeAvboitFloatClearDesc(target, transparentBlack));
             if(!avboitClearTask.valid())
-                return false;
+                return MakeUnexpected(Failure{});
         }
         const auto appendAvboitBufferClear = [&](
             const Name identity,
@@ -192,7 +191,7 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(
                 NWB_AVBOIT_OVERFLOW_INVALID
             )
         )
-            return false;
+            return MakeUnexpected(Failure{});
         avboitClearTask = m_graph.addClearTextureTask(
             makeAvboitClearTaskDesc(
                 Name("render.avboit.clear.transmittance"),
@@ -206,15 +205,15 @@ AvboitClearChainBuilder::AvboitClearChainBuilder(
             )
         );
         if(!avboitClearTask.valid())
-            return false;
+            return MakeUnexpected(Failure{});
         m_avboitSystem.taskGraphStage().m_clearTask = avboitClearTask;
     }
-    outResult.clearTask = avboitClearTask;
-    outResult.clearFirstTask = inputs.clearTargets
+    result.clearTask = avboitClearTask;
+    result.clearFirstTask = inputs.clearTargets
         ? m_avboitSystem.taskGraphStage().m_clearFirstTask
         : Core::GpuTaskId{}
     ;
-    return true;
+    return result;
 }
 
 

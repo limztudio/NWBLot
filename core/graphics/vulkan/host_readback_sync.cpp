@@ -74,33 +74,33 @@ void CollectUniquePhysicalQueueFamilyIndices(
     }
 }
 
-bool TryBuildAmdBreadcrumbRingLayout(
+Expected<AmdBreadcrumbRingLayout> TryBuildAmdBreadcrumbRingLayout(
     const GpuPhysicalQueueTopology& topology,
-    const usize slotsPerQueue,
-    AmdBreadcrumbRingLayout& layout
+    const usize slotsPerQueue
 )noexcept{
-    layout = {};
+    AmdBreadcrumbRingLayout layout;
     if(
         !topology.queues
         || topology.queueCount == 0u
         || topology.queueCount > static_cast<usize>(Limit<u16>::s_Max)
         || slotsPerQueue == 0u
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
-    usize totalSlotCount = 0u;
-    usize totalByteSize = 0u;
+    const auto totalSlotCount = TryMultiply<usize>(topology.queueCount, slotsPerQueue);
+    if(!totalSlotCount)
+        return MakeUnexpected(Failure{});
+    const auto totalByteSize = TryMultiply<usize>(*totalSlotCount, sizeof(u32));
     if(
-        !TryMultiply<usize>(topology.queueCount, slotsPerQueue, totalSlotCount)
-        || !TryMultiply<usize>(totalSlotCount, sizeof(u32), totalByteSize)
+        !totalByteSize
         || slotsPerQueue > static_cast<usize>(Limit<u32>::s_Max)
-        || totalByteSize > static_cast<usize>(Limit<VkDeviceSize>::s_Max)
+        || *totalByteSize > static_cast<usize>(Limit<VkDeviceSize>::s_Max)
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     const u16 deviceGeneration = topology.queues[0u].id.deviceGeneration;
     if(deviceGeneration == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
     for(usize queueIndex = 0u; queueIndex < topology.queueCount; ++queueIndex){
         const GpuPhysicalQueueId& queue = topology.queues[queueIndex].id;
         if(
@@ -108,26 +108,22 @@ bool TryBuildAmdBreadcrumbRingLayout(
             || queue.deviceGeneration != deviceGeneration
             || queue.index != queueIndex
         )
-            return false;
+            return MakeUnexpected(Failure{});
     }
 
     layout.deviceGeneration = deviceGeneration;
     layout.physicalQueueCount = topology.queueCount;
     layout.slotsPerQueue = slotsPerQueue;
-    layout.totalSlotCount = totalSlotCount;
-    layout.totalByteSize = static_cast<VkDeviceSize>(totalByteSize);
-    return true;
+    layout.totalSlotCount = *totalSlotCount;
+    layout.totalByteSize = static_cast<VkDeviceSize>(*totalByteSize);
+    return layout;
 }
 
-bool TryResolveAmdBreadcrumbRingSlot(
+Expected<AmdBreadcrumbRingSlot> TryResolveAmdBreadcrumbRingSlot(
     const AmdBreadcrumbRingLayout& layout,
     const GpuPhysicalQueueId& queue,
-    const usize localSlot,
-    usize& flatSlot,
-    VkDeviceSize& byteOffset
+    const usize localSlot
 )noexcept{
-    flatSlot = 0u;
-    byteOffset = 0u;
     if(
         layout.deviceGeneration == 0u
         || layout.physicalQueueCount == 0u
@@ -138,49 +134,46 @@ bool TryResolveAmdBreadcrumbRingSlot(
         || queue.deviceGeneration != layout.deviceGeneration
         || static_cast<usize>(queue.index) >= layout.physicalQueueCount
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
-    usize queueFirstSlot = 0u;
-    if(!TryMultiply<usize>(static_cast<usize>(queue.index), layout.slotsPerQueue, queueFirstSlot))
-        return false;
-    if(AddOverflows<usize>(queueFirstSlot, localSlot))
-        return false;
+    const auto queueFirstSlot = TryMultiply<usize>(static_cast<usize>(queue.index), layout.slotsPerQueue);
+    if(!queueFirstSlot)
+        return MakeUnexpected(Failure{});
+    if(AddOverflows<usize>(*queueFirstSlot, localSlot))
+        return MakeUnexpected(Failure{});
 
-    const usize resolvedFlatSlot = queueFirstSlot + localSlot;
-    usize resolvedByteOffset = 0u;
+    const usize resolvedFlatSlot = *queueFirstSlot + localSlot;
+    const auto resolvedByteOffset = TryMultiply<usize>(resolvedFlatSlot, sizeof(u32));
     if(
         resolvedFlatSlot >= layout.totalSlotCount
-        || !TryMultiply<usize>(resolvedFlatSlot, sizeof(u32), resolvedByteOffset)
-        || resolvedByteOffset > static_cast<usize>(Limit<VkDeviceSize>::s_Max)
+        || !resolvedByteOffset
+        || *resolvedByteOffset > static_cast<usize>(Limit<VkDeviceSize>::s_Max)
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
-    flatSlot = resolvedFlatSlot;
-    byteOffset = static_cast<VkDeviceSize>(resolvedByteOffset);
-    return true;
+    return AmdBreadcrumbRingSlot{ resolvedFlatSlot, static_cast<VkDeviceSize>(*resolvedByteOffset) };
 }
 
-bool TryBuildNextAmdBreadcrumbReservation(
+Expected<AmdBreadcrumbReservation> TryBuildNextAmdBreadcrumbReservation(
     const u64 currentSerial,
-    const usize slotsPerQueue,
-    AmdBreadcrumbReservation& reservation
+    const usize slotsPerQueue
 )noexcept{
-    reservation = {};
+    AmdBreadcrumbReservation reservation;
     if(slotsPerQueue == 0u || slotsPerQueue > static_cast<usize>(Limit<u32>::s_Max))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    u64 maximumSerial = 0u;
-    if(!TryMultiply<u64>(static_cast<u64>(slotsPerQueue), Limit<u32>::s_Max, maximumSerial))
-        return false;
-    if(currentSerial >= maximumSerial)
-        return false;
+    const auto maximumSerial = TryMultiply<u64>(static_cast<u64>(slotsPerQueue), Limit<u32>::s_Max);
+    if(!maximumSerial)
+        return MakeUnexpected(Failure{});
+    if(currentSerial >= *maximumSerial)
+        return MakeUnexpected(Failure{});
 
     const u64 serial = currentSerial + 1u;
     const u64 zeroBasedSerial = serial - 1u;
     reservation.serial = serial;
     reservation.marker = static_cast<u32>(zeroBasedSerial / static_cast<u64>(slotsPerQueue)) + 1u;
     reservation.localSlot = static_cast<usize>(zeroBasedSerial % static_cast<u64>(slotsPerQueue));
-    return true;
+    return reservation;
 }
 
 bool MatchesAmdBreadcrumbObservation(const u32 observedMarker, const u32 reservedMarker)noexcept{

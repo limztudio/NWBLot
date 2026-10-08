@@ -137,9 +137,9 @@ TEST_F(FloatModelTests, ExtremeSubnormalAndAdjacentUlpValuesRoundtripWithExactBi
         EXPECT_EQ(BitCast<u64>(m_model.value()), bits);
         ASSERT_TRUE(m_model.setDraft("-"));
         ASSERT_TRUE(m_model.cancel().valid);
-        f64 parsed = 0.0;
-        ASSERT_EQ(ParseFloatDraft(m_model.draft().text(), parsed), NumericParseStatus::Complete);
-        EXPECT_EQ(BitCast<u64>(parsed), bits);
+        const auto parsed = ParseFloatDraft(m_model.draft().text());
+        ASSERT_TRUE(parsed);
+        EXPECT_EQ(BitCast<u64>(*parsed), bits);
     }
 }
 

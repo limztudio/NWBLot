@@ -46,11 +46,10 @@ void CollectMaterialClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntr
 void CollectAvboitClipShaderKeys(const ShaderCook::CookVector<MaterialCookEntry>& materialEntries, ShaderStageKeySet& outShaderKeys);
 [[nodiscard]] bool SupportsClipVariant(const ShaderStageKeySet& shaderKeys, const ShaderCook::ShaderEntry& shaderEntry);
 [[nodiscard]] bool AddClipVariantCount(const ShaderCook::ShaderEntry& entry, u64 sourceVariantCount, u64& inOutVariantCount);
-[[nodiscard]] bool BuildClipDefineCombo(
+[[nodiscard]] Expected<ShaderCook::DefineCombo> BuildClipDefineCombo(
     ShaderCook::CookArena& cookArena,
     AStringView entryName,
-    const ShaderCook::DefineCombo& sourceCombo,
-    ShaderCook::DefineCombo& outDefineCombo
+    const ShaderCook::DefineCombo& sourceCombo
 );
 
 

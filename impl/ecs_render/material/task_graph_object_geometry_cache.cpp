@@ -189,9 +189,10 @@ bool ObjectGeometryCacheGraph::prepare(
                 MaterialPassDrawItems sourceDraws{scratchArena};
                 sourceDraws.computeDrawItems.push_back(draw);
                 const MaterialPassDrawItems* const sets[] = {&sourceDraws};
-                Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> uses{scratchArena};
-                if(!GatherPreparedMaterialGeometryUses(m_graph, sets, LengthOf(sets), scratchArena, uses))
+                auto gatheredUses = GatherPreparedMaterialGeometryUses(m_graph, sets, LengthOf(sets), scratchArena);
+                if(!gatheredUses)
                     return false;
+                auto& uses = *gatheredUses;
                 uses.reserve(uses.size() + 3u);
                 Core::GpuGraphResourceId instances;
                 {

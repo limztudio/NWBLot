@@ -47,7 +47,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual TextLayoutStatus::Enum shape(const ShapeRequest& request, ShapedRun& output) = 0;
+    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request) = 0;
 };
 
 class TextShaper final : public ITextShaper{
@@ -68,7 +68,7 @@ public:
 
 public:
     [[nodiscard]] bool setFonts(const FontSource* sources, usize count);
-    [[nodiscard]] virtual TextLayoutStatus::Enum shape(const ShapeRequest& request, ShapedRun& output)override;
+    [[nodiscard]] virtual Expected<ShapedRun, TextLayoutStatus::Enum> shape(const ShapeRequest& request)override;
 
 
 private:

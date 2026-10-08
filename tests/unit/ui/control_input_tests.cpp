@@ -112,8 +112,8 @@ protected:
             ++target.control.contentRevision;
     }
 
-    [[nodiscard]] bool take(ControlAction& action){
-        return m_router.consumeControlAction(m_targets[0u].id, m_targets[0u].declarationGeneration, m_targets[0u].control, action);
+    [[nodiscard]] Expected<ControlAction> take(){
+        return m_router.consumeControlAction(m_targets[0u].id, m_targets[0u].declarationGeneration, m_targets[0u].control);
     }
 
 
@@ -141,7 +141,9 @@ TEST_F(UiControlInputTests, AcceptedWheelOwnsItsStepAfterCallerTargetMutation){
     EXPECT_FALSE(m_router.focus().valid());
     m_targets[0u].scrollStep = 120.0;
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_DOUBLE_EQ(action.delta, -0.25);
     EXPECT_DOUBLE_EQ(action.step, 72.0);
     EXPECT_TRUE(m_router.actions().empty());
@@ -189,14 +191,20 @@ TEST_F(UiControlInputTests, NavigationCopiesAcceptedPageSizeAndSubmissionDoesNot
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Enter, true)).keyboardConsumed);
     EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Enter)).keyboardConsumed);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult1 = take();
+    ASSERT_TRUE(actionResult1);
+    action = *actionResult1;
     EXPECT_EQ(action.kind, ControlActionKind::PageDown);
     EXPECT_EQ(action.pageRows, 4u);
-    ASSERT_TRUE(take(action));
+    const auto actionResult2 = take();
+    ASSERT_TRUE(actionResult2);
+    action = *actionResult2;
     EXPECT_EQ(action.kind, ControlActionKind::PageDown);
-    ASSERT_TRUE(take(action));
+    const auto actionResult3 = take();
+    ASSERT_TRUE(actionResult3);
+    action = *actionResult3;
     EXPECT_EQ(action.kind, ControlActionKind::Submit);
-    EXPECT_FALSE(take(action));
+    EXPECT_FALSE(take());
 }
 
 TEST_F(UiControlInputTests, HeldNavigationCannotRetargetAnotherFocusedList){
@@ -206,14 +214,18 @@ TEST_F(UiControlInputTests, HeldNavigationCannotRetargetAnotherFocusedList){
     focus();
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).keyboardConsumed);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult1 = take();
+    ASSERT_TRUE(actionResult1);
+    action = *actionResult1;
     focus();
     EXPECT_EQ(m_router.focus(), second.id);
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down, true)).keyboardConsumed);
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).keyboardConsumed);
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).keyboardConsumed);
-    ASSERT_TRUE(m_router.consumeControlAction(second.id, second.declarationGeneration, second.control, action));
+    const auto actionResult2 = m_router.consumeControlAction(second.id, second.declarationGeneration, second.control);
+    ASSERT_TRUE(actionResult2);
+    action = *actionResult2;
     EXPECT_EQ(action.kind, ControlActionKind::Down);
 }
 
@@ -239,7 +251,9 @@ TEST_F(UiControlInputTests, ReplacedContentFencesCaptureActionsAndFocusUntilAcce
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
     click();
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_EQ(action.control.contentRevision, 32u);
 }
 
@@ -260,14 +274,18 @@ TEST_F(UiControlInputTests, ReplacedRowDeclarationRejectsItsQueuedClickWhileHost
     ++m_targets[1u].declarationGeneration;
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult1 = take();
+    ASSERT_TRUE(actionResult1);
+    action = *actionResult1;
     EXPECT_EQ(action.kind, ControlActionKind::Wheel);
-    EXPECT_FALSE(take(action));
+    EXPECT_FALSE(take());
     click();
-    ASSERT_TRUE(take(action));
+    const auto actionResult2 = take();
+    ASSERT_TRUE(actionResult2);
+    action = *actionResult2;
     EXPECT_EQ(action.kind, ControlActionKind::Activate);
     EXPECT_EQ(action.sourceDeclarationGeneration, m_targets[1u].declarationGeneration);
-    EXPECT_FALSE(take(action));
+    EXPECT_FALSE(take());
 }
 
 TEST_F(UiControlInputTests, RemovedRowRejectsItsQueuedStableValueWhileHostWheelSurvives){
@@ -276,9 +294,11 @@ TEST_F(UiControlInputTests, RemovedRowRejectsItsQueuedStableValueWhileHostWheelS
     EXPECT_TRUE(wheel().pointerConsumed);
     m_router.invalidateTarget(m_targets[1u].id);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_EQ(action.kind, ControlActionKind::Wheel);
-    EXPECT_FALSE(take(action));
+    EXPECT_FALSE(take());
     EXPECT_EQ(m_router.targets().size(), 2u);
 }
 
@@ -290,8 +310,7 @@ TEST_F(UiControlInputTests, HostRetirementRemovesPartsAndGesturesButPreservesHel
     m_router.invalidateTarget(m_targets[0u].id);
     EXPECT_TRUE(m_router.targets().empty());
     EXPECT_TRUE(m_router.controlActions().empty());
-    PointerGesture gesture;
-    EXPECT_FALSE(m_router.consumePointerGesture(m_targets[2u].id, 7u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(m_targets[2u].id, 7u));
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp, { 95.0f, 25.0f })).pointerConsumed);
     EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).keyboardConsumed);
 }
@@ -300,7 +319,9 @@ TEST_F(UiControlInputTests, ThumbGestureRetainsAcceptedTrackAndMaximumAcrossResi
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown, { 95.0f, 25.0f })).pointerConsumed);
     PointerGesture gesture;
-    ASSERT_TRUE(m_router.consumePointerGesture(m_targets[2u].id, 7u, gesture));
+    const auto gestureResult1 = m_router.consumePointerGesture(m_targets[2u].id, 7u);
+    ASSERT_TRUE(gestureResult1);
+    gesture = *gestureResult1;
     EXPECT_EQ(gesture.control, m_targets[0u].control);
     EXPECT_DOUBLE_EQ(gesture.maximum, 2399900.0);
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.height, 100.0f);
@@ -308,7 +329,9 @@ TEST_F(UiControlInputTests, ThumbGestureRetainsAcceptedTrackAndMaximumAcrossResi
     m_targets[2u].gestureReference.height = 150.0f;
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
     EXPECT_TRUE(send(Pointer(InputEventType::PointerMove, { 95.0f, 50.0f })).pointerConsumed);
-    ASSERT_TRUE(m_router.consumePointerGesture(m_targets[2u].id, 7u, gesture));
+    const auto gestureResult2 = m_router.consumePointerGesture(m_targets[2u].id, 7u);
+    ASSERT_TRUE(gestureResult2);
+    gesture = *gestureResult2;
     EXPECT_DOUBLE_EQ(gesture.maximum, 2399900.0);
     EXPECT_FLOAT_EQ(gesture.referenceRectangle.height, 100.0f);
     EXPECT_EQ(gesture.id.layoutGeneration, 1u);
@@ -320,8 +343,7 @@ TEST_F(UiControlInputTests, ChangedThumbEpochRejectsAQueuedCompletedGesture){
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp, { 95.0f, 30.0f })).pointerConsumed);
     revise();
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
-    PointerGesture gesture;
-    EXPECT_FALSE(m_router.consumePointerGesture(m_targets[2u].id, 7u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(m_targets[2u].id, 7u));
 }
 
 TEST_F(UiControlInputTests, FocusHintRestoresReplacedHostOnlyAtMatchingAcceptance){
@@ -365,7 +387,9 @@ TEST_F(UiControlInputTests, RepeatedNavigationDoesNotJumpToAcceptedReplacementEp
     EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).keyboardConsumed);
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).keyboardConsumed);
     ControlAction action;
-    EXPECT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
 }
 
 TEST_F(UiControlInputTests, InvalidOwnerReferencesRejectAtomicPublicationAndPreserveActions){
@@ -376,7 +400,9 @@ TEST_F(UiControlInputTests, InvalidOwnerReferencesRejectAtomicPublicationAndPres
     EXPECT_EQ(m_router.layoutGeneration(), 1u);
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
     ControlAction action;
-    EXPECT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
 }
 
 TEST_F(UiControlInputTests, MalformedControlMetadataRejectsPublicationBeforeChangingFocus){
@@ -435,13 +461,17 @@ TEST_F(UiControlInputTests, BoundedControlActionsUseOneSharedSequenceAndOverflow
     u64 previousSequence = 0u;
     ControlAction action;
     for(usize index = 0u; index < s_InputMaxControlActions; ++index){
-        ASSERT_TRUE(take(action));
+        const auto actionResult1 = take();
+        ASSERT_TRUE(actionResult1);
+        action = *actionResult1;
         EXPECT_GT(action.id.sequence, previousSequence);
         previousSequence = action.id.sequence;
     }
-    EXPECT_FALSE(take(action));
+    EXPECT_FALSE(take());
     EXPECT_FALSE(wheel().activationOverflow);
-    ASSERT_TRUE(take(action));
+    const auto actionResult2 = take();
+    ASSERT_TRUE(actionResult2);
+    action = *actionResult2;
     EXPECT_GT(action.id.sequence, previousSequence);
 }
 
@@ -456,7 +486,9 @@ TEST_F(UiControlInputTests, FocusLossCancelsActionsAndResetDoesNotRestartTheirSe
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     EXPECT_TRUE(wheel().pointerConsumed);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_GT(action.id.sequence, previousSequence);
 }
 
@@ -484,7 +516,9 @@ TEST_F(UiControlInputTests, AcceptedPopupMaskOwnsWheelAndListFocusAboveLowerHost
     EXPECT_TRUE(m_router.controlActions().empty());
     EXPECT_TRUE(wheel(-1.0, { 150.0f, 20.0f }).pointerConsumed);
     ControlAction action;
-    ASSERT_TRUE(m_router.consumeControlAction(upper.id, upper.declarationGeneration, upper.control, action));
+    const auto actionResult = m_router.consumeControlAction(upper.id, upper.declarationGeneration, upper.control);
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_EQ(action.popup, popup.token);
     EXPECT_EQ(action.kind, ControlActionKind::Wheel);
 }
@@ -551,12 +585,16 @@ TEST_F(UiControlInputTests, ControlActivationAndGestureActionsShareOneMonotonicS
     const u64 activationSequence = m_router.actions()[0u].id.sequence;
     EXPECT_TRUE(wheel().pointerConsumed);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_GT(action.id.sequence, activationSequence);
     const u64 wheelSequence = action.id.sequence;
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown, { 95.0f, 25.0f })).pointerConsumed);
     PointerGesture gesture;
-    ASSERT_TRUE(m_router.consumePointerGesture(m_targets[2u].id, 7u, gesture));
+    const auto gestureResult = m_router.consumePointerGesture(m_targets[2u].id, 7u);
+    ASSERT_TRUE(gestureResult);
+    gesture = *gestureResult;
     EXPECT_GT(gesture.id.sequence, wheelSequence);
 }
 
@@ -585,27 +623,37 @@ TEST_F(UiControlInputTests, RetiredHeldKeyOwnerCannotReviveWhenItsOriginalTokenR
     EXPECT_TRUE(send(Key(InputEventType::KeyUp, Core::Key::Down)).keyboardConsumed);
     EXPECT_TRUE(send(Key(InputEventType::KeyDown, Core::Key::Down)).keyboardConsumed);
     ControlAction action;
-    EXPECT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
 }
 
 TEST_F(UiControlInputTests, GestureUpdateSequenceOrdersLatestMotionAfterAnInterveningWheel){
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 1u));
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryDown, { 95.0f, 25.0f })).pointerConsumed);
     PointerGesture initial;
-    ASSERT_TRUE(m_router.consumePointerGesture(m_targets[2u].id, 7u, initial));
+    const auto initialResult = m_router.consumePointerGesture(m_targets[2u].id, 7u);
+    ASSERT_TRUE(initialResult);
+    initial = *initialResult;
     EXPECT_EQ(initial.updateSequence, initial.id.sequence);
     EXPECT_TRUE(wheel(1.0, { 95.0f, 25.0f }).pointerConsumed);
     ControlAction action;
-    ASSERT_TRUE(take(action));
+    const auto actionResult = take();
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_GT(action.id.sequence, initial.updateSequence);
     EXPECT_TRUE(send(Pointer(InputEventType::PointerMove, { 95.0f, 70.0f })).pointerConsumed);
     PointerGesture moved;
-    ASSERT_TRUE(m_router.consumePointerGesture(m_targets[2u].id, 7u, moved));
+    const auto movedResult = m_router.consumePointerGesture(m_targets[2u].id, 7u);
+    ASSERT_TRUE(movedResult);
+    moved = *movedResult;
     EXPECT_EQ(moved.id.sequence, initial.id.sequence);
     EXPECT_GT(moved.updateSequence, action.id.sequence);
     EXPECT_TRUE(send(Pointer(InputEventType::PrimaryUp, { 95.0f, 70.0f })).pointerConsumed);
     PointerGesture completed;
-    ASSERT_TRUE(m_router.consumePointerGesture(m_targets[2u].id, 7u, completed));
+    const auto completedResult = m_router.consumePointerGesture(m_targets[2u].id, 7u);
+    ASSERT_TRUE(completedResult);
+    completed = *completedResult;
     EXPECT_GT(completed.updateSequence, moved.updateSequence);
     EXPECT_EQ(completed.id.sequence, initial.id.sequence);
     EXPECT_EQ(completed.state, PointerGestureState::Completed);

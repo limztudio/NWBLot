@@ -47,10 +47,6 @@ private:
         Capture,
         Defer,
     };
-    enum class SubmissionCommandListValidationPolicy : u8{
-        Prevalidated,
-        ValidateWithinWorkspace,
-    };
 
 
 private:
@@ -140,42 +136,23 @@ private:
             const VulkanDetail::AmdBreadcrumbRingLayout& newLayout,
             const Name& allocationLog
         ){
-            usize expectedSlotCount = 0u;
+            const auto expectedSlotCount = TryMultiply<usize>(newLayout.physicalQueueCount, newLayout.slotsPerQueue);
             if(
-                metadata
-                || newLayout.physicalQueueCount == 0u
-                || newLayout.slotsPerQueue == 0u
-                || !TryMultiply<usize>(
-                    newLayout.physicalQueueCount,
-                    newLayout.slotsPerQueue,
-                    expectedSlotCount
-                )
-                || expectedSlotCount != newLayout.totalSlotCount
+                metadata || newLayout.physicalQueueCount == 0u || newLayout.slotsPerQueue == 0u
+                || !expectedSlotCount || *expectedSlotCount != newLayout.totalSlotCount
             )
                 return false;
-
-            usize slotRecordBytes = 0u;
-            usize nextSerialBytes = 0u;
-            if(
-                !TryMultiply<usize>(
-                    newLayout.totalSlotCount,
-                    sizeof(AmdBreadcrumbSlotRecord),
-                    slotRecordBytes
-                )
-                || !TryMultiply<usize>(
-                    newLayout.physicalQueueCount,
-                    sizeof(u64),
-                    nextSerialBytes
-                )
-            )
+            const auto slotRecordBytes = TryMultiply<usize>(newLayout.totalSlotCount, sizeof(AmdBreadcrumbSlotRecord));
+            const auto nextSerialBytes = TryMultiply<usize>(newLayout.physicalQueueCount, sizeof(u64));
+            if(!slotRecordBytes || !nextSerialBytes)
                 return false;
 
             const usize slotRecordAllocationBytes = Alloc::PersistentArena::StructureAlignedSize(
-                slotRecordBytes,
+                *slotRecordBytes,
                 alignof(AmdBreadcrumbSlotRecord)
             );
             const usize nextSerialAllocationBytes = Alloc::PersistentArena::StructureAlignedSize(
-                nextSerialBytes,
+                *nextSerialBytes,
                 alignof(u64)
             );
             if(AddOverflows<usize>(slotRecordAllocationBytes, nextSerialAllocationBytes))
@@ -236,7 +213,7 @@ public:
         const NativeTextureProvenance& nativeProvenance
     );
     [[nodiscard]] StagingTextureHandle createStagingTexture(const TextureDesc& d, CpuAccessMode::Enum cpuAccess);
-    void* mapStagingTexture(StagingTexture& tex, const TextureSlice& slice, CpuAccessMode::Enum, usize* outRowPitch);
+    Expected<StagingTextureMapping> mapStagingTexture(StagingTexture& tex, const TextureSlice& slice, CpuAccessMode::Enum);
     void unmapStagingTexture(StagingTexture& tex);
     [[nodiscard]] BufferHandle createBuffer(const BufferDesc& d);
     void* mapBuffer(Buffer& buffer, CpuAccessMode::Enum);
@@ -266,7 +243,7 @@ public:
     [[nodiscard]] bool waitEventQuery(EventQuery& query);
     [[nodiscard]] TimerQueryHandle createTimerQuery();
     bool pollTimerQuery(TimerQuery& query);
-    [[nodiscard]] bool getTimerQueryResult(TimerQuery& query, TimerQueryResult& outResult);
+    [[nodiscard]] Expected<TimerQueryResult> getTimerQueryResult(TimerQuery& query);
     f32 getTimerQueryTime(TimerQuery& query);
     bool resetTimerQuery(TimerQuery& query);
     [[nodiscard]] FramebufferHandle createFramebuffer(const FramebufferDesc& desc);
@@ -284,27 +261,14 @@ public:
     // Structural readiness deliberately allows an unbuilt acceleration structure to remain a legal build target.
     [[nodiscard]] bool isAccelStructReadyForGpuUse(RayTracingAccelStruct* as)const noexcept;
     [[nodiscard]] CommandListHandle createCommandList(const CommandListParameters& params = CommandListParameters());
-    // outCommandListsSubmitted is true only for a new command-buffer submission.
-    u64 executeCommandLists(
-        CommandList* const* pCommandLists,
-        usize numCommandLists,
-        CommandQueue::Enum executionQueue = CommandQueue::Graphics,
-        bool* outCommandListsSubmitted = nullptr
-    );
-    u64 executeCommandLists(
-        CommandList* const* pCommandLists,
-        usize numCommandLists,
-        const GpuPhysicalQueueId& executionQueue,
-        bool* outCommandListsSubmitted = nullptr
-    );
     // Cross-queue dependencies are immutable submission-local token edges.
-    [[nodiscard]] QueueSubmissionToken executeCommandLists(
+    [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(
         CommandList* const* pCommandLists,
         usize numCommandLists,
         CommandQueue::Enum executionQueue,
         const QueueSubmissionDesc& submitDesc
     );
-    [[nodiscard]] QueueSubmissionToken executeCommandLists(
+    [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandLists(
         CommandList* const* pCommandLists,
         usize numCommandLists,
         const GpuPhysicalQueueId& executionQueue,
@@ -313,14 +277,11 @@ public:
 
 
 private:
-    [[nodiscard]] bool prepareSubmissionCommandListWorkspaceLocked(
+    void prepareSubmissionCommandListWorkspaceLocked(
         Queue& queue,
         CommandList* const* pCommandLists,
         usize numCommandLists,
-        const GpuPhysicalQueueId& executionQueue,
-        bool graphSubmissionAuthorized,
-        SubmissionCommandListValidationPolicy validationPolicy,
-        bool* outHasSubmittedOwner = nullptr
+        bool graphSubmissionAuthorized
     );
     void finalizeSubmissionCommandListResourcesLocked(
         Queue& queue,
@@ -330,13 +291,13 @@ private:
         u64 submittedID,
         bool submissionAccepted
     );
-    [[nodiscard]] QueueSubmissionToken executeGraphCommandLists(
+    [[nodiscard]] Expected<QueueSubmissionReceipt> executeGraphCommandLists(
         CommandList* const* pCommandLists,
         usize numCommandLists,
         const GpuPhysicalQueueId& executionQueue,
         const QueueSubmissionDesc& submitDesc
     );
-    [[nodiscard]] QueueSubmissionToken executeCommandListsInternal(
+    [[nodiscard]] Expected<QueueSubmissionReceipt> executeCommandListsInternal(
         CommandList* const* pCommandLists,
         usize numCommandLists,
         const GpuPhysicalQueueId& executionQueue,
@@ -394,7 +355,8 @@ public:
     }
     bool waitForIdle();
     void runGarbageCollection();
-    bool queryFeatureSupport(Feature::Enum feature, void* = nullptr, usize = 0);
+    [[nodiscard]] bool queryFeatureSupport(Feature::Enum feature)const noexcept;
+    [[nodiscard]] WaveLaneCountRange getWaveLaneCounts()const noexcept;
     // Maximum byte range represented by one storage-buffer descriptor; independent of allocation/VRAM budgets.
     [[nodiscard]] u64 getMaxStorageBufferRange()const noexcept;
     [[nodiscard]] FormatSupport::Mask queryFormatSupport(Format::Enum format);
@@ -463,10 +425,9 @@ private:
         return requiresRecreation() || (m_submissionOperationState.load(MemoryOrder::acquire) & s_SubmissionDrainBit) != 0u;
     }
     [[nodiscard]] QueueSubmissionToken consumeAcquiredImageSemaphore(VkSemaphore semaphore);
-    [[nodiscard]] bool presentNativeQueue(
+    [[nodiscard]] Expected<VkResult> presentNativeQueue(
         u32 nativeQueueIndex,
-        const VkPresentInfoKHR& presentInfo,
-        VkResult& outResult
+        const VkPresentInfoKHR& presentInfo
     );
     [[nodiscard]] bool registerPhysicalQueue(
         const VulkanPhysicalQueueDesc& desc,
@@ -478,30 +439,25 @@ private:
     void probeCompressedTextureFormats();
     [[nodiscard]] FormatSupport::Mask queryFormatSupportUncached(Format::Enum format)const;
     [[nodiscard]] bool canCreateSampledTextureFormat(Format::Enum format)const;
-    [[nodiscard]] bool loadPipelineCacheData(GraphicsBytes& outData);
+    [[nodiscard]] Expected<GraphicsBytes> loadPipelineCacheData();
     void savePipelineCacheData();
-    [[nodiscard]] bool createPipelineLayoutForBindingLayouts(
+    [[nodiscard]] Expected<CreatedPipelineLayout> createPipelineLayoutForBindingLayouts(
         const BindingLayoutVector& bindingLayouts,
         TStringView operationName,
-        VkPipelineLayout& outPipelineLayout,
-        u32& outPushConstantByteSize,
-        bool& outOwnsPipelineLayout,
         Alloc::ScratchArena& scratchArena
     )const;
-    [[nodiscard]] bool validateHeapMemoryBinding(
+    [[nodiscard]] Expected<VulkanDetail::HeapBindingRange> validateHeapMemoryBinding(
         const Heap& heap,
         const VkMemoryRequirements& memoryRequirements,
         const VkMemoryDedicatedRequirements& dedicatedRequirements,
         u64 offset,
         VulkanDetail::HeapBindingResourceClass::Enum resourceClass,
         TStringView operationName,
-        TStringView resourceName,
-        VulkanDetail::HeapBindingRange& outRange
+        TStringView resourceName
     )const;
-    [[nodiscard]] bool configurePipelineBindings(
+    [[nodiscard]] Expected<PipelineBindingState> buildPipelineBindings(
         const BindingLayoutVector& bindingLayouts,
         TStringView operationName,
-        PipelineBindingState& outBindings,
         Alloc::ScratchArena& scratchArena
     )const;
     template<typename PipelineT>
@@ -511,14 +467,17 @@ private:
         PipelineT& pipeline,
         Alloc::ScratchArena& scratchArena
     )const{
-        if(configurePipelineBindings(bindingLayouts, operationName, pipeline, scratchArena))
+        auto bindings = buildPipelineBindings(bindingLayouts, operationName, scratchArena);
+        if(bindings){
+            static_cast<PipelineBindingState&>(pipeline) = Move(*bindings);
             return true;
+        }
 
         DestroyArenaObject(m_context.objectArena, &pipeline);
         return false;
     }
     template<typename PipelineT>
-    [[nodiscard]] bool buildGraphicsPipelineFixedStateOrDestroy(
+    [[nodiscard]] Expected<VulkanDetail::GraphicsPipelineFixedState> buildGraphicsPipelineFixedStateOrDestroy(
         const FramebufferInfo& fbinfo,
         const RenderState& renderState,
         const VulkanDetail::PipelineStencilFaceMode::Enum stencilFaceMode,
@@ -526,21 +485,22 @@ private:
         const u32 dynamicStateCount,
         TStringView operationName,
         PipelineT& pipeline,
-        VulkanDetail::GraphicsPipelineFixedState& outState
+        Alloc::ScratchArena& scratchArena
     )const{
-        if(VulkanDetail::BuildGraphicsPipelineFixedState(
+        auto state = VulkanDetail::BuildGraphicsPipelineFixedState(
             fbinfo,
             renderState,
             stencilFaceMode,
             dynamicStates,
             dynamicStateCount,
             operationName,
-            outState
-        ))
-            return true;
+            scratchArena
+        );
+        if(state)
+            return state;
 
         DestroyArenaObject(m_context.objectArena, &pipeline);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     template<typename PipelineT>
     [[nodiscard]] bool createPipelineOrDestroy(

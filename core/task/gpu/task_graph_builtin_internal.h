@@ -145,14 +145,13 @@ template<typename Payload, typename ValidateCopyFn, typename CaptureCopyFn, type
     ResourceStates::Mask uploadFinalState
 )noexcept;
 
-[[nodiscard]] bool ComputeTextureUploadByteSize(
+[[nodiscard]] Expected<usize> ComputeTextureUploadByteSize(
     const TextureDesc& textureDesc,
     u32 arraySlice,
     u32 mipLevel,
     usize rowPitch,
     usize depthPitch,
-    TextureUploadAspect::Enum aspect,
-    usize& outRequiredBytes
+    TextureUploadAspect::Enum aspect
 )noexcept;
 
 [[nodiscard]] inline bool BuiltinDeclarationHasNoCallerResourceUses(const GpuTaskDesc& desc)noexcept{

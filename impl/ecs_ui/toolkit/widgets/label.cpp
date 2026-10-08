@@ -43,8 +43,10 @@ bool Label::paint(TextService& text, PaintBuilder& paint, const Point topLeft, c
         const ShapeRequest request{
             StringView(m_text.data(), m_text.size()), m_fontSize, m_direction, m_scriptTag, StringView(m_language.data(), m_language.size())
         };
-        if(text.layout(request, m_layout) != TextLayoutStatus::Success)
+        auto layout = text.layout(request);
+        if(!layout)
             return false;
+        m_layout = Move(*layout);
         m_serviceIdentity = text.identity();
         m_fontGeneration = text.generation();
         m_dirty = false;

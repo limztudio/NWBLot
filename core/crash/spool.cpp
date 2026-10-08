@@ -40,20 +40,16 @@ void InitializeDumpArena()noexcept{
 
 template<typename ArenaT>
 bool EnsureCrashSpoolDirectories(const ::Path<ArenaT>& spoolDirectory){
-    ErrorCode error;
-    if(!EnsureDirectories(PendingDirectory(spoolDirectory), error))
+    if(!EnsureDirectories(PendingDirectory(spoolDirectory)))
         return false;
 
-    error.clear();
-    if(!EnsureDirectories(UploadedDirectory(spoolDirectory), error))
+    if(!EnsureDirectories(UploadedDirectory(spoolDirectory)))
         return false;
 
-    error.clear();
-    if(!EnsureDirectories(UploadingDirectory(spoolDirectory), error))
+    if(!EnsureDirectories(UploadingDirectory(spoolDirectory)))
         return false;
 
-    error.clear();
-    return EnsureDirectories(FailedDirectory(spoolDirectory), error);
+    return EnsureDirectories(FailedDirectory(spoolDirectory)).has_value();
 }
 
 template bool EnsureCrashSpoolDirectories(const ::Path<Alloc::PersistentArena>& spoolDirectory);

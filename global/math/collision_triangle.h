@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "../expected.h"
 #include "matrix.h"
 #include "collision_detail.h"
 #include "collision_types.h"
@@ -30,13 +31,12 @@ namespace TriangleTests{
     SIMDVector tolerance
 )noexcept;
 
-[[nodiscard]] bool NWB_SIMD_CALL Intersects(
+[[nodiscard]] Expected<f32> NWB_SIMD_CALL Intersects(
     SIMDVector origin,
     SIMDVector direction,
     SIMDVector v0,
     SIMDVector v1,
-    SIMDVector v2,
-    f32& outDistance
+    SIMDVector v2
 )noexcept;
 
 [[nodiscard]] bool NWB_SIMD_CALL Intersects(
@@ -136,15 +136,14 @@ namespace TriangleTests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool NWB_SIMD_CALL TriangleTests::Intersects(
+[[nodiscard]] inline Expected<f32> NWB_SIMD_CALL TriangleTests::Intersects(
     const SIMDVector origin,
     const SIMDVector direction,
     const SIMDVector v0,
     const SIMDVector v1,
-    const SIMDVector v2,
-    f32& outDistance
+    const SIMDVector v2
 )noexcept{
-    return CollisionDetail::RayIntersectsTriangle(origin, direction, v0, v1, v2, outDistance);
+    return CollisionDetail::RayIntersectsTriangle(origin, direction, v0, v1, v2);
 }
 
 
@@ -160,9 +159,9 @@ namespace TriangleTests{
     const SIMDVector b2
 )noexcept{
     const auto segmentIntersectsTriangle = [](const SIMDVector p0, const SIMDVector p1, const SIMDVector t0, const SIMDVector t1, const SIMDVector t2)noexcept{
-        f32 distance = 0.0f;
         const SIMDVector direction = VectorSubtract(p1, p0);
-        return CollisionDetail::RayIntersectsTriangle(p0, direction, t0, t1, t2, distance) && distance >= 0.0f && distance <= 1.0f;
+        const auto distance = CollisionDetail::RayIntersectsTriangle(p0, direction, t0, t1, t2);
+        return distance && *distance >= 0.0f && *distance <= 1.0f;
     };
 
     if(segmentIntersectsTriangle(a0, a1, b0, b1, b2) || segmentIntersectsTriangle(a1, a2, b0, b1, b2) || segmentIntersectsTriangle(a2, a0, b0, b1, b2))

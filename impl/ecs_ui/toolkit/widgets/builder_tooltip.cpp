@@ -58,10 +58,12 @@ bool Builder::tooltip(const AStringView stableKey, const AStringView anchorKey, 
     frame.anchorIndex = static_cast<u32>(anchor - m_scope->m_items.data());
     frame.layer = m_context.popupLayer() + 1u;
     const ShapeRequest request = textShapeRequest(text, m_style.fontSize);
-    if(m_text.layout(request, frame.text) != TextLayoutStatus::Success){
+    auto layout = m_text.layout(request);
+    if(!layout){
         m_context.fail();
         return false;
     }
+    frame.text = Move(*layout);
     anchor->annotated = true;
     m_scope->m_tooltips.push_back(Move(frame));
     return true;
@@ -110,17 +112,17 @@ bool Builder::paintTooltips(){
             Max(background->minimumHeight, measured.y + padding.top + padding.bottom) };
         options.gap = frame.options.gap;
         options.side = frame.options.side;
-        PopupPlacement placement;
+            const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
         if(
-            !PopupLayout::Place(options, m_paint.displayMetrics(), placement)
+            !placement
             || !m_paint.beginOverlay(frame.layer)
         )
             return false;
-        m_paint.pushClip(placement.bounds);
-        const bool backgroundPainted = m_paint.drawRegion(background->name, placement.bounds);
-        const Rect content{ placement.bounds.x + padding.left, placement.bounds.y + padding.top,
-            Max(0.0f, placement.bounds.width - padding.left - padding.right),
-            Max(0.0f, placement.bounds.height - padding.top - padding.bottom) };
+        m_paint.pushClip(placement->bounds);
+        const bool backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
+        const Rect content{ placement->bounds.x + padding.left, placement->bounds.y + padding.top,
+            Max(0.0f, placement->bounds.width - padding.left - padding.right),
+            Max(0.0f, placement->bounds.height - padding.top - padding.bottom) };
         m_paint.pushClip(content);
         const bool painted = backgroundPainted
             && m_text.paint(m_paint, frame.text, { content.x, content.y }, frame.style.text);
@@ -129,7 +131,7 @@ bool Builder::paintTooltips(){
         const bool ended = m_paint.endOverlay();
         if(!painted || !contentPopped || !popped || !ended || frame.state->revision() != frame.revision)
             return false;
-        frame.state->m_placement = placement;
+        frame.state->m_placement = *placement;
     }
     return true;
 }

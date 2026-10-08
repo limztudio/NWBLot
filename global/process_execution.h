@@ -7,6 +7,7 @@
 
 #include "containers.h"
 #include "filesystem.h"
+#include "expected.h"
 #include "span.h"
 #include "platform.h"
 #include "text_utils.h"
@@ -30,6 +31,21 @@
 #if !defined(NWB_PLATFORM_WINDOWS)
 #include <unistd.h>
 #endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+namespace ProcessExecutionFailure{
+    enum Enum : u8{
+        InvalidArguments,
+        OutputOpenFailed,
+        CreateFailed,
+        ExitQueryFailed,
+        CloseFailed,
+        Unsupported,
+    };
+};
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -319,24 +335,21 @@ template<typename ArenaT>
 }
 
 template<typename ArenaT>
-[[nodiscard]] inline int RunProcessRedirectedToFile(
+[[nodiscard]] inline Expected<int, ProcessExecutionFailure::Enum> RunProcessRedirectedToFile(
     ArenaT& arena,
     const Span<const AStringView> arguments,
-    const AStringView outputPath,
-    bool* const outExitCodeQueryFailed = nullptr
+    const AStringView outputPath
 ){
-    if(outExitCodeQueryFailed)
-        *outExitCodeQueryFailed = false;
     if(outputPath.empty() || outputPath.find('\0') != AStringView::npos)
-        return -1;
+        return MakeUnexpected(ProcessExecutionFailure::InvalidArguments);
 #if defined(NWB_PLATFORM_WINDOWS)
     if(!ProcessExecutionDetail::AreProcessArgumentsValid(arguments))
-        return -1;
+        return MakeUnexpected(ProcessExecutionFailure::InvalidArguments);
     const AString<ArenaT> nativeExecutable(arguments.front(), arena);
 #else
     ProcessExecutionDetail::NativeProcessArguments<ArenaT> nativeArguments(arena);
     if(!nativeArguments.build(arguments))
-        return -1;
+        return MakeUnexpected(ProcessExecutionFailure::InvalidArguments);
     const auto& argv = nativeArguments.argv;
 #endif
     const AString<ArenaT> nativeOutputPath(outputPath, arena);
@@ -360,7 +373,7 @@ template<typename ArenaT>
         nullptr
     );
     if(outputHandle == INVALID_HANDLE_VALUE)
-        return -1;
+        return MakeUnexpected(ProcessExecutionFailure::OutputOpenFailed);
 
     STARTUPINFOA startupInfo = {};
     startupInfo.cb = sizeof(startupInfo);
@@ -384,16 +397,16 @@ template<typename ArenaT>
     );
     CloseHandle(outputHandle);
     if(!created)
-        return -1;
+        return MakeUnexpected(ProcessExecutionFailure::CreateFailed);
 
     const DWORD waitResult = WaitForSingleObject(processInfo.hProcess, INFINITE);
     DWORD exitCode = 1u;
     const bool queriedExitCode = waitResult == WAIT_OBJECT_0 && GetExitCodeProcess(processInfo.hProcess, &exitCode);
-    if(!queriedExitCode && outExitCodeQueryFailed)
-        *outExitCodeQueryFailed = true;
     CloseHandle(processInfo.hThread);
     CloseHandle(processInfo.hProcess);
-    return queriedExitCode ? static_cast<int>(exitCode) : -1;
+    if(!queriedExitCode)
+        return MakeUnexpected(ProcessExecutionFailure::ExitQueryFailed);
+    return static_cast<int>(exitCode);
 #elif defined(NWB_PLATFORM_LINUX) || defined(NWB_PLATFORM_ANDROID)
     static_cast<void>(arena);
 
@@ -403,14 +416,14 @@ template<typename ArenaT>
         ProcessExecutionDetail::s_RedirectedOutputFileMode
     );
     if(outputFileDescriptor < 0)
-        return -1;
+        return MakeUnexpected(ProcessExecutionFailure::OutputOpenFailed);
 
     const pid_t childPid = ::fork();
     if(childPid < 0){
         const int closeResult = ::close(outputFileDescriptor);
         if(closeResult != 0)
-            return -1;
-        return -1;
+            return MakeUnexpected(ProcessExecutionFailure::CloseFailed);
+        return MakeUnexpected(ProcessExecutionFailure::CreateFailed);
     }
 
     if(childPid == 0){
@@ -427,11 +440,13 @@ template<typename ArenaT>
     const int closeParentResult = ::close(outputFileDescriptor);
     const int exitCode = ProcessExecutionDetail::WaitForProcessExitCode(childPid);
     if(closeParentResult != 0)
-        return -1;
+        return MakeUnexpected(ProcessExecutionFailure::CloseFailed);
+    if(exitCode < 0)
+        return MakeUnexpected(ProcessExecutionFailure::ExitQueryFailed);
     return exitCode;
 #else
     static_cast<void>(arena);
-    return -1;
+    return MakeUnexpected(ProcessExecutionFailure::Unsupported);
 #endif
 }
 

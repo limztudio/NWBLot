@@ -474,22 +474,25 @@ bool CommandList::importResourceStateHandoff(const CommandListResourceStateHando
 
 void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& states)const{
     states.reset();
-    const auto getTextureOwnership = [&](const TextureSubresourceStateKey& key, GpuPhysicalQueueId& outOwner, GpuPhysicalQueueId& outReleaseDestination){
-        outOwner = {};
-        outReleaseDestination = {};
-        if(key.texture->m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT)
-            return;
-
-        outOwner = m_creationDesc.physicalQueue;
-        const auto releaseIt = m_textureOwnershipReleaseDestinations.find(key);
-        if(releaseIt != m_textureOwnershipReleaseDestinations.end())
-            outReleaseDestination = releaseIt.value();
+    struct QueueOwnership{
+        GpuPhysicalQueueId owner;
+        GpuPhysicalQueueId releaseDestination;
     };
-    const auto getBufferOwnership = [&](Buffer* buffer, GpuPhysicalQueueId& outOwner, GpuPhysicalQueueId& outReleaseDestination){
-        outOwner = {};
-        outReleaseDestination = {};
-        if(buffer && buffer->m_bufferInfo.sharingMode != VK_SHARING_MODE_CONCURRENT)
-            outOwner = m_creationDesc.physicalQueue;
+    const auto getTextureOwnership = [&](const TextureSubresourceStateKey& key) -> QueueOwnership{
+        if(key.texture->m_imageInfo.sharingMode == VK_SHARING_MODE_CONCURRENT)
+            return {};
+
+        const auto release = m_textureOwnershipReleaseDestinations.find(key);
+        return QueueOwnership{
+            m_creationDesc.physicalQueue,
+            release != m_textureOwnershipReleaseDestinations.end() ? release.value() : GpuPhysicalQueueId{}
+        };
+    };
+    const auto getBufferOwnership = [&](Buffer* buffer) -> GpuPhysicalQueueId{
+        return buffer && buffer->m_bufferInfo.sharingMode != VK_SHARING_MODE_CONCURRENT
+            ? m_creationDesc.physicalQueue
+            : GpuPhysicalQueueId{}
+        ;
     };
 
     states.m_textureStates.reserve(m_stateTracker.m_textureStates.size());
@@ -498,9 +501,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         if(!key.texture)
             continue;
 
-        GpuPhysicalQueueId ownerQueue;
-        GpuPhysicalQueueId releaseDestinationQueue;
-        getTextureOwnership(key, ownerQueue, releaseDestinationQueue);
+        const auto [ownerQueue, releaseDestinationQueue] = getTextureOwnership(key);
         states.m_textureStates.push_back(CommandListResourceStateHandoff::TextureState{
             key.texture,
             key.mipLevel,
@@ -517,9 +518,7 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         Buffer* const buffer = it->first;
         if(!buffer)
             continue;
-        GpuPhysicalQueueId ownerQueue;
-        GpuPhysicalQueueId unusedDestination;
-        getBufferOwnership(buffer, ownerQueue, unusedDestination);
+        const GpuPhysicalQueueId ownerQueue = getBufferOwnership(buffer);
         const auto releases = m_bufferOwnershipReleaseDestinations.find(buffer);
         const auto append = [&](const BufferRange range, const ResourceStates::Mask state, const GpuPhysicalQueueId destination){
             if(range.hasExtent()){
@@ -552,10 +551,8 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         if(!texture)
             continue;
 
-        GpuPhysicalQueueId ownerQueue;
-        GpuPhysicalQueueId releaseDestinationQueue;
         const TextureSubresourceStateKey key{ texture, 0u, 0u };
-        getTextureOwnership(key, ownerQueue, releaseDestinationQueue);
+        const auto [ownerQueue, releaseDestinationQueue] = getTextureOwnership(key);
         states.m_permanentTextureStates.push_back(CommandListResourceStateHandoff::PermanentTextureState{
             texture,
             it.value().state,
@@ -571,15 +568,13 @@ void CommandList::exportResourceStateHandoff(CommandListResourceStateHandoff& st
         if(!buffer)
             continue;
 
-        GpuPhysicalQueueId ownerQueue;
-        GpuPhysicalQueueId releaseDestinationQueue;
-        getBufferOwnership(buffer, ownerQueue, releaseDestinationQueue);
+        const GpuPhysicalQueueId ownerQueue = getBufferOwnership(buffer);
         states.m_permanentBufferStates.push_back(CommandListResourceStateHandoff::BufferState{
             buffer,
             it.value().state,
             buffer->m_creationDesc.queueSharing,
             ownerQueue,
-            releaseDestinationQueue
+            {}
         });
     }
 

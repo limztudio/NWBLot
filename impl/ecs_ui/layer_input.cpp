@@ -227,8 +227,8 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, bool* consumed, bool
         *blockText = false;
     m_editHost.collectNative();
     const Ui::WidgetId previousCapture = m_context.input().capture();
-    Ui::InputEvent normalized;
-    if(!m_context.input().queue(event, &normalized)){
+    const auto normalized = m_context.input().queue(event);
+    if(!normalized){
         NWB_LOGGER_ERROR(NWB_TEXT("UiLayerSystem: invalid or overflowing normalized input"));
         m_context.resetInput();
         m_editHost.reset();
@@ -236,14 +236,14 @@ void UiLayerSystem::routeInput(const Ui::InputEvent& event, bool* consumed, bool
         return;
     }
     const Ui::InputRoutingResult result = m_context.input().process();
-    m_editHost.input(normalized, previousCapture);
+    m_editHost.input(*normalized, previousCapture);
     m_editHost.synchronizeFocus();
     if(consumed)
         *consumed = result.keyboardConsumed;
     if(blockText){
         // Core captures this policy only if the native handler owns the physical sequence, including inert repeats.
-        *blockText = normalized.type == Ui::InputEventType::CommandDown && normalized.command != Ui::InputCommand::None
-            && !normalized.allowText;
+        *blockText = normalized->type == Ui::InputEventType::CommandDown && normalized->command != Ui::InputCommand::None
+            && !normalized->allowText;
     }
     if(result.activationOverflow)
         NWB_LOGGER_WARNING(NWB_TEXT("UiLayerSystem: bounded activation queue is full"));

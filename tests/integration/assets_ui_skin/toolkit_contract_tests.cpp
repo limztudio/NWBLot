@@ -45,26 +45,31 @@ static constexpr Name s_ScratchArena("tests/integration/assets_ui_skin/toolkit_c
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool LoadAuthoredSkin(
+struct AuthoredSkin{
+    UiSkin skin;
+    bool complete;
+};
+
+[[nodiscard]] static Expected<AuthoredSkin> LoadAuthoredSkin(
     ToolkitSkinArena& testArena,
     const Path& assetRoot,
     const Path& atlasPath,
-    const AStringView virtualRoot,
-    UiSkin& outSkin,
-    bool& outComplete
+    const AStringView virtualRoot
 ){
     Core::Assets::AssetString metadata(testArena.arena);
     if(!ReadTextFile(atlasPath, metadata))
-        return false;
+        return MakeUnexpected(Failure{});
     Core::Metascript::Document document(testArena.arena);
     if(!document.parse(metadata))
-        return false;
+        return MakeUnexpected(Failure{});
     Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    UiSkinCookEntry entry(testArena.arena);
-    if(!ParseUiSkinCookMetadata(assetRoot, virtualRoot, atlasPath, document, entry, scratchArena))
-        return false;
-    outComplete = entry.completeToolkitSkin;
-    return BuildUiSkinAsset(entry, outSkin);
+    auto entryResult = ParseUiSkinCookMetadata(assetRoot, virtualRoot, atlasPath, document, testArena.arena, scratchArena);
+    if(!entryResult)
+        return MakeUnexpected(Failure{});
+    auto skinResult = BuildUiSkinAsset(*entryResult, testArena.arena);
+    if(!skinResult)
+        return MakeUnexpected(Failure{});
+    return AuthoredSkin{ Move(*skinResult), entryResult->completeToolkitSkin };
 }
 
 static void CopyWithoutRegion(ToolkitSkinArena& testArena, const UiSkin& source, const Name& removed, UiSkin& outSkin){
@@ -86,10 +91,10 @@ TEST(AssetsUiSkinToolkitContract, RejectsMissingBasePartsButAcceptsDeclaredState
     ToolkitSkinArena testArena;
     const Path assetRoot = Path(testArena.arena, NWB_REPO_ROOT) / "impl" / "assets";
     const Path atlasPath = assetRoot / "ui" / "skins" / "default" / "atlas.nwb";
-    UiSkin source(testArena.arena);
-    bool complete = false;
-    ASSERT_TRUE(LoadAuthoredSkin(testArena, assetRoot, atlasPath, "engine", source, complete));
-    EXPECT_TRUE(complete);
+    auto sourceResult = LoadAuthoredSkin(testArena, assetRoot, atlasPath, "engine");
+    ASSERT_TRUE(sourceResult);
+    const UiSkin& source = sourceResult->skin;
+    EXPECT_TRUE(sourceResult->complete);
 
     const Name required[]{ Name("window.title"), Name("checkbox.mark"), Name("list.row.selected"),
         Name("combo.arrow"), Name("progress.fill"), Name("focus.overlay") };
@@ -143,17 +148,19 @@ TEST(AssetsUiSkinToolkitContract, CookOptInRejectsIncompleteMetadataWhileGeneric
     Core::Metascript::Document genericDocument(testArena.arena);
     ASSERT_TRUE(genericDocument.parse(genericMetadata));
     Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
-    UiSkinCookEntry genericEntry(testArena.arena);
-    ASSERT_TRUE(ParseUiSkinCookMetadata(assetRoot, "project", atlasPath, genericDocument, genericEntry, scratchArena));
+    auto genericEntryParseResult = ParseUiSkinCookMetadata(assetRoot, "project", atlasPath, genericDocument, testArena.arena, scratchArena);
+    ASSERT_TRUE(genericEntryParseResult);
+    const UiSkinCookEntry& genericEntry = *genericEntryParseResult;
     EXPECT_FALSE(genericEntry.completeToolkitSkin);
     UiSkin genericSkin(testArena.arena);
-    ASSERT_TRUE(BuildUiSkinAsset(genericEntry, genericSkin));
+    auto genericSkinBuildResult = BuildUiSkinAsset(genericEntry, genericEntry.arena);
+    ASSERT_TRUE(genericSkinBuildResult);
+    genericSkin = Move(*genericSkinBuildResult);
     EXPECT_FALSE(ValidateUiSkinToolkitContract(genericSkin));
 
     Core::Metascript::Document completeDocument(testArena.arena);
     ASSERT_TRUE(completeDocument.parse(completeMetadata));
-    UiSkinCookEntry completeEntry(testArena.arena);
-    EXPECT_FALSE(ParseUiSkinCookMetadata(assetRoot, "project", atlasPath, completeDocument, completeEntry, scratchArena));
+    EXPECT_FALSE(ParseUiSkinCookMetadata(assetRoot, "project", atlasPath, completeDocument, testArena.arena, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("missing required region 'window.normal'")));
 }
 

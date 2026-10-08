@@ -65,13 +65,13 @@ bool RendererRayTracingSystem::capturePreparedMeshBlasBuilds(Core::Alloc::Scratc
             continue;
         }
 
-        PreparedMeshBlasBuild build;
-        if(!RayTracingSoftwareBvhDetail::ResolvePreparedMeshBlasBuild(meshResources, build)){
+        auto build = RayTracingSoftwareBvhDetail::ResolvePreparedMeshBlasBuild(meshResources);
+        if(!build){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not freeze BLAS build for mesh '{}'"), StringConvert(meshResources.meshName.resolvedText()));
             clearPreparedMeshBlasBuilds();
             return false;
         }
-        m_preparedMeshBlasBuilds.push_back(Move(build));
+        m_preparedMeshBlasBuilds.push_back(Move(*build));
     }
     m_preparedMeshBlasBuildsReady = !m_preparedMeshBlasBuilds.empty();
     return true;
@@ -85,10 +85,10 @@ bool RendererRayTracingSystem::recordPreparedMeshBlasBuilds(
         return false;
 
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
-        ECSRenderDetail::MeshRayTracingResourceSnapshot meshResources;
+        auto meshResourcesResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
         if(
-            !m_meshSystem.findRayTracingResourceSnapshot(build.meshName, meshResources)
-            || !RayTracingSoftwareBvhDetail::MatchesPreparedMeshBlasBuild(meshResources, build)
+            !meshResourcesResult
+            || !RayTracingSoftwareBvhDetail::MatchesPreparedMeshBlasBuild((*meshResourcesResult), build)
         ){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: frozen BLAS build no longer matches mesh '{}'"), StringConvert(build.meshName.resolvedText()));
             return false;
@@ -121,23 +121,23 @@ void RendererRayTracingSystem::confirmPreparedMeshBlasBuilds(){
 
     bool allPlansCurrent = true;
     for(const PreparedMeshBlasBuild& build : m_preparedMeshBlasBuilds){
-        ECSRenderDetail::MeshRayTracingResourceSnapshot meshResources;
+        auto meshResourcesResult = m_meshSystem.findRayTracingResourceSnapshot(build.meshName);
         if(
-            !m_meshSystem.findRayTracingResourceSnapshot(build.meshName, meshResources)
-            || !RayTracingSoftwareBvhDetail::MatchesPreparedMeshBlasBuild(meshResources, build)
+            !meshResourcesResult
+            || !RayTracingSoftwareBvhDetail::MatchesPreparedMeshBlasBuild((*meshResourcesResult), build)
         ){
             allPlansCurrent = false;
             continue;
         }
 
-        const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = meshResources;
-        meshResources.blasBuildPending = false;
+        const ECSRenderDetail::MeshRayTracingResourceSnapshot expected = (*meshResourcesResult);
+        meshResourcesResult->blasBuildPending = false;
         // Accepted Shadow Preparation publishes this generation's native final state.
-        meshResources.blasBackingFresh = false;
-        meshResources.blasRefitsSinceRebuild = build.refitsAfterBuild;
-        meshResources.blasBuildAccepted = true;
-        meshResources.blasGeometryContentRevision = build.geometryContentRevision;
-        if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, meshResources)){
+        meshResourcesResult->blasBackingFresh = false;
+        meshResourcesResult->blasRefitsSinceRebuild = build.refitsAfterBuild;
+        meshResourcesResult->blasBuildAccepted = true;
+        meshResourcesResult->blasGeometryContentRevision = build.geometryContentRevision;
+        if(!m_meshSystem.commitRayTracingResourceSnapshot(expected, (*meshResourcesResult))){
             allPlansCurrent = false;
             continue;
         }

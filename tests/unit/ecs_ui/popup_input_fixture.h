@@ -102,7 +102,7 @@ public:
 
 
 public:
-    [[nodiscard]] virtual Ui::TextLayoutStatus::Enum shape(const Ui::ShapeRequest& request, Ui::ShapedRun& output)override{
+    [[nodiscard]] virtual Expected<Ui::ShapedRun, Ui::TextLayoutStatus::Enum> shape(const Ui::ShapeRequest& request)override{
         Ui::ShapedRun run(m_arena);
         run.metrics = { 8.0f, 2.0f, 2.0f };
         usize begin = 0u;
@@ -113,8 +113,7 @@ public:
             run.glyphs.push_back({ {}, 1u, static_cast<u32>(begin), static_cast<u32>(end), {}, { 10.0f, 0.0f }, {} });
             begin = end;
         }
-        output = Move(run);
-        return Ui::TextLayoutStatus::Success;
+        return run;
     }
 
 
@@ -146,32 +145,38 @@ protected:
         ASSERT_TRUE(m_childModel.setText("child"));
     }
 
-    [[nodiscard]] bool declareEdit(const AStringView key, Ui::EditModel& model, const Ui::Rect& bounds,
-        Ui::WidgetState& retained, Ui::EditBoxResult& result
-    ){
+    struct DeclaredEdit{
+        Ui::WidgetState widget;
+        Ui::EditBoxResult result;
+    };
+
+    [[nodiscard]] Expected<DeclaredEdit> declareEdit(const AStringView key, Ui::EditModel& model, const Ui::Rect& bounds){
         const Ui::WidgetState* widget = m_context.declare(key, Ui::WidgetKind::EditBox);
         if(!widget)
-            return false;
-        retained = *widget;
+            return MakeUnexpected(Failure{});
+        const Ui::WidgetState retained = *widget;
         const Ui::EditBoxOptions options;
-        result = m_host.edit(retained, model, options);
+        const Ui::EditBoxResult result = m_host.edit(retained, model, options);
         Ui::EditBoxView view(m_arena);
-        Ui::TextLayout layout(m_arena);
-        Ui::EditBoxPlacement placement;
-        if(!result.valid || !view.snapshot(model) || m_layoutBuilder.layout({ view.displayText() }, layout) != Ui::TextLayoutStatus::Success)
-            return false;
-        if(
-            !view.adoptLayout(Move(layout)) || !view.arrange(bounds, {}, m_viewport, {}, placement)
-            || !m_host.publish(retained, view, placement, options)
-        )
-            return false;
+        if(!result.valid || !view.snapshot(model))
+            return MakeUnexpected(Failure{});
+        auto layout = m_layoutBuilder.layout({ view.displayText() });
+        if(!layout)
+            return MakeUnexpected(Failure{});
+        if(!view.adoptLayout(Move(*layout)))
+            return MakeUnexpected(Failure{});
+        const auto placement = view.arrange(bounds, {}, m_viewport, {});
+        if(!placement || !m_host.publish(retained, view, *placement, options))
+            return MakeUnexpected(Failure{});
         Ui::HitTarget target;
         target.rectangle = bounds;
         target.clip = m_viewport;
         target.focusable = true;
         target.pointerGesture = true;
         target.textEditable = true;
-        return m_context.addTarget(retained, target);
+        if(!m_context.addTarget(retained, target))
+            return MakeUnexpected(Failure{});
+        return DeclaredEdit{ retained, result };
     }
 
     [[nodiscard]] bool prepare(){
@@ -181,16 +186,18 @@ protected:
         m_host.beginFrame(m_generation, { m_viewport.width, m_viewport.height, 1.0f, 1.0f });
         if(!m_context.beginRoot({ 17u, 1u }))
             return false;
-        if(!declareEdit("base", m_baseModel, { 10.0f, 20.0f, 180.0f, 30.0f }, m_baseWidget, m_baseResult))
+        const auto baseEdit = declareEdit("base", m_baseModel, { 10.0f, 20.0f, 180.0f, 30.0f });
+        if(!baseEdit)
             return false;
+        m_baseWidget = baseEdit->widget;
+        m_baseResult = baseEdit->result;
         const Ui::WidgetState* popup = m_context.declare("popup", Ui::WidgetKind::Popup);
         if(!popup)
             return false;
         const Ui::WidgetState owner = *popup;
         m_token = { owner.id, owner.declarationGeneration, m_popupState.instanceGeneration(), m_popupState.openGeneration() };
         m_context.input().fencePopup(m_token);
-        Ui::PopupDismissReason::Enum reason = Ui::PopupDismissReason::None;
-        if(m_context.input().consumePopupDismissal(m_token, reason))
+        if(m_context.input().consumePopupDismissal(m_token))
             m_popupState.close();
         if(m_popupState.isOpen()){
             Ui::PopupScope scope;
@@ -204,8 +211,11 @@ protected:
             barrier.clip = m_viewport;
             if(!m_context.addTarget(owner, barrier))
                 return false;
-            if(!declareEdit("edit", m_popupModel, { 250.0f, 60.0f, 180.0f, 30.0f }, m_popupWidget, m_popupResult))
+            const auto popupEdit = declareEdit("edit", m_popupModel, { 250.0f, 60.0f, 180.0f, 30.0f });
+            if(!popupEdit)
                 return false;
+            m_popupWidget = popupEdit->widget;
+            m_popupResult = popupEdit->result;
             if(!m_context.popScope() || !m_context.endPopupScope(true))
                 return false;
         }
@@ -239,17 +249,21 @@ protected:
             if(!m_popupResult.valid || m_context.popupToken().valid())
                 return false;
             Ui::EditBoxView view(m_arena);
-            Ui::TextLayout layout(m_arena);
-            Ui::EditBoxPlacement placement;
-            if(!view.snapshot(m_popupModel) || m_layoutBuilder.layout({ view.displayText() }, layout) != Ui::TextLayoutStatus::Success)
+            if(!view.snapshot(m_popupModel))
                 return false;
-            if(!view.adoptLayout(Move(layout)) || !view.arrange({ 250.0f, 60.0f, 180.0f, 30.0f }, {}, m_viewport, {}, placement))
+            auto layout = m_layoutBuilder.layout({ view.displayText() });
+            if(!layout)
+                return false;
+            if(!view.adoptLayout(Move(*layout)))
+                return false;
+            const auto placement = view.arrange({ 250.0f, 60.0f, 180.0f, 30.0f }, {}, m_viewport, {});
+            if(!placement)
                 return false;
             Ui::PopupScope scope;
             scope.token = m_token;
             scope.bounds = { 230.0f, 40.0f, 240.0f, 100.0f };
             scope.viewport = m_viewport;
-            if(!m_context.beginPopupScope(popup, scope) || !m_host.publish(m_popupWidget, view, placement, {}))
+            if(!m_context.beginPopupScope(popup, scope) || !m_host.publish(m_popupWidget, view, *placement, {}))
                 return false;
             Ui::HitTarget barrier;
             barrier.rectangle = scope.bounds;
@@ -257,7 +271,7 @@ protected:
             if(!m_context.addTarget(popup, barrier))
                 return false;
             Ui::HitTarget target;
-            target.rectangle = placement.bounds;
+            target.rectangle = placement->bounds;
             target.clip = m_viewport;
             target.focusable = true;
             target.textEditable = true;
@@ -279,16 +293,18 @@ protected:
         m_host.beginFrame(m_generation, { m_viewport.width, m_viewport.height, 1.0f, 1.0f });
         if(!m_context.beginRoot({ 17u, 1u }))
             return false;
-        if(!declareEdit("base", m_baseModel, { 10.0f, 20.0f, 180.0f, 30.0f }, m_baseWidget, m_baseResult))
+        const auto baseEdit = declareEdit("base", m_baseModel, { 10.0f, 20.0f, 180.0f, 30.0f });
+        if(!baseEdit)
             return false;
+        m_baseWidget = baseEdit->widget;
+        m_baseResult = baseEdit->result;
         const Ui::WidgetState* declared = m_context.declare("popup", Ui::WidgetKind::Popup);
         if(!declared)
             return false;
         const Ui::WidgetState parent = *declared;
         m_token = { parent.id, parent.declarationGeneration, m_popupState.instanceGeneration(), m_popupState.openGeneration() };
         m_context.input().fencePopup(m_token);
-        Ui::PopupDismissReason::Enum reason = Ui::PopupDismissReason::None;
-        if(m_context.input().consumePopupDismissal(m_token, reason))
+        if(m_context.input().consumePopupDismissal(m_token))
             m_popupState.close();
         if(m_nestedParentToken.valid() && m_nestedParentToken != m_token)
             m_childState.close();
@@ -305,15 +321,18 @@ protected:
             barrier.clip = m_viewport;
             if(!m_context.addTarget(parent, barrier))
                 return false;
-            if(!declareEdit("edit", m_popupModel, { 250.0f, 60.0f, 180.0f, 30.0f }, m_popupWidget, m_popupResult))
+            const auto popupEdit = declareEdit("edit", m_popupModel, { 250.0f, 60.0f, 180.0f, 30.0f });
+            if(!popupEdit)
                 return false;
+            m_popupWidget = popupEdit->widget;
+            m_popupResult = popupEdit->result;
             declared = m_context.declare("child", Ui::WidgetKind::Popup);
             if(!declared)
                 return false;
             const Ui::WidgetState child = *declared;
             m_childToken = { child.id, child.declarationGeneration, m_childState.instanceGeneration(), m_childState.openGeneration() };
             m_context.input().fencePopup(m_childToken);
-            if(m_context.input().consumePopupDismissal(m_childToken, reason))
+            if(m_context.input().consumePopupDismissal(m_childToken))
                 m_childState.close();
             if(m_childState.isOpen()){
                 scope.token = m_childToken;
@@ -324,8 +343,11 @@ protected:
                 barrier.rectangle = scope.bounds;
                 if(!m_context.addTarget(child, barrier))
                     return false;
-                if(!declareEdit("edit", m_childModel, { 80.0f, 100.0f, 180.0f, 30.0f }, m_childWidget, m_childResult))
+                const auto childEdit = declareEdit("edit", m_childModel, { 80.0f, 100.0f, 180.0f, 30.0f });
+                if(!childEdit)
                     return false;
+                m_childWidget = childEdit->widget;
+                m_childResult = childEdit->result;
                 if(!m_context.popScope() || !m_context.endPopupScope(true))
                     return false;
             }
@@ -356,13 +378,12 @@ protected:
     [[nodiscard]] Ui::InputRoutingResult dispatch(const Ui::InputEvent& event){
         m_host.collectNative();
         const Ui::WidgetId previousCapture = m_context.input().capture();
-        Ui::InputEvent normalized;
-        const bool queued = m_context.input().queue(event, &normalized);
-        EXPECT_TRUE(queued);
-        if(!queued)
+        const auto normalized = m_context.input().queue(event);
+        EXPECT_TRUE(normalized);
+        if(!normalized)
             return {};
         const Ui::InputRoutingResult result = m_context.input().process();
-        m_host.input(normalized, previousCapture);
+        m_host.input(*normalized, previousCapture);
         m_host.synchronizeFocus();
         return result;
     }

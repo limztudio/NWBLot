@@ -34,7 +34,7 @@ namespace __hidden_ui_glyph_visibility{
     return IsFinite(fontSize) && fontSize >= 1.0f / 64.0f && fontSize <= 2048.0f;
 }
 
-[[nodiscard]] static bool MakeRect(const f64 x, const f64 y, const f64 width, const f64 height, Rect& out)noexcept{
+[[nodiscard]] static Expected<Rect> MakeRect(const f64 x, const f64 y, const f64 width, const f64 height)noexcept{
     if(
         !IsFinite(x) || x < -Limit<f32>::s_Max || x > Limit<f32>::s_Max
         || !IsFinite(y) || y < -Limit<f32>::s_Max || y > Limit<f32>::s_Max
@@ -43,12 +43,11 @@ namespace __hidden_ui_glyph_visibility{
         || !IsFinite(x + width) || x + width < -Limit<f32>::s_Max || x + width > Limit<f32>::s_Max
         || !IsFinite(y + height) || y + height < -Limit<f32>::s_Max || y + height > Limit<f32>::s_Max
     )
-        return false;
+        return MakeUnexpected(Failure{});
     const Rect candidate{ static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(width), static_cast<f32>(height) };
     if(!IsValidUiRect(candidate))
-        return false;
-    out = candidate;
-    return true;
+        return MakeUnexpected(Failure{});
+    return candidate;
 }
 
 [[nodiscard]] static TextGlyphIntersection::Enum IntersectBounds(
@@ -116,10 +115,10 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(
     if(clip.width <= 0.0f || clip.height <= 0.0f)
         return TextGlyphIntersection::Invisible;
     if(selectedAtlas){
-        Rect rectangle;
-        if(!AtlasRectangle(glyph, *selectedAtlas, fontSize, topLeft, rectangle))
+        const auto rectangle = AtlasRectangle(glyph, *selectedAtlas, fontSize, topLeft);
+        if(!rectangle)
             return TextGlyphIntersection::Invalid;
-        return Intersect(rectangle, clip);
+        return Intersect(*rectangle, clip);
     }
     if(!IsValidUiRect(glyph.ink) || (glyph.coverage.known && !IsValidUiRect(glyph.coverage.ink)))
         return TextGlyphIntersection::Invalid;
@@ -151,54 +150,50 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(
     return IntersectBounds(left, top, right, bottom, clip);
 }
 
-bool TextGlyphVisibility::AtlasRectangle(
+Expected<Rect> TextGlyphVisibility::AtlasRectangle(
     const PlacedGlyph& glyph,
     const BakedFontAtlas& atlas,
     const f32 fontSize,
-    const Point& topLeft,
-    Rect& out
-){
+    const Point& topLeft
+)noexcept{
     using namespace __hidden_ui_glyph_visibility;
     if(!ValidLocation(glyph, topLeft) || !ValidFontSize(fontSize) || !atlas.valid() || atlas.unitsPerEm() == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
     const FontAtlasGlyph* record = atlas.glyph(glyph.glyphId);
     if(!record)
-        return false;
+        return MakeUnexpected(Failure{});
     if(record->drawable == 0u){
-        out = {};
-        return true;
+        return Rect{};
     }
     if(
         !IsFinite(record->planeLeft) || !IsFinite(record->planeTop)
         || !IsFinite(record->planeRight) || !IsFinite(record->planeBottom)
         || record->planeRight <= record->planeLeft || record->planeBottom <= record->planeTop
     )
-        return false;
+        return MakeUnexpected(Failure{});
     const f64 scale = static_cast<f64>(fontSize) / atlas.unitsPerEm();
     const f64 x = static_cast<f64>(topLeft.x) + glyph.position.x + record->planeLeft * scale;
     const f64 y = static_cast<f64>(topLeft.y) + glyph.position.y + record->planeTop * scale;
     const f64 width = (static_cast<f64>(record->planeRight) - record->planeLeft) * scale;
     const f64 height = (static_cast<f64>(record->planeBottom) - record->planeTop) * scale;
-    return MakeRect(x, y, width, height, out);
+    return MakeRect(x, y, width, height);
 }
 
-bool TextGlyphVisibility::CoverageRectangle(
+Expected<Rect> TextGlyphVisibility::CoverageRectangle(
     const PlacedGlyph& glyph,
     const AtlasGlyph& record,
     const f32 rasterScale,
     const Point& topLeft,
-    Rect& out,
     const Point pixelScale
-){
+)noexcept{
     using namespace __hidden_ui_glyph_visibility;
     if(
         !ValidLocation(glyph, topLeft) || !IsFinite(rasterScale) || rasterScale <= 0.0f || !IsValidUiRect(record.pixels)
         || !IsFinite(pixelScale.x) || !IsFinite(pixelScale.y) || pixelScale.x <= 0.0f || pixelScale.y <= 0.0f
     )
-        return false;
+        return MakeUnexpected(Failure{});
     if(record.pageIndex == s_GlyphAtlasNoPage){
-        out = {};
-        return true;
+        return Rect{};
     }
     const f64 x = static_cast<f64>(topLeft.x) + glyph.position.x + static_cast<f64>(record.bearingX) / rasterScale;
     const f64 y = static_cast<f64>(topLeft.y) + glyph.position.y - static_cast<f64>(record.bearingY) / rasterScale;
@@ -209,8 +204,7 @@ bool TextGlyphVisibility::CoverageRectangle(
         alignedX,
         alignedY,
         record.pixels.width / static_cast<f64>(rasterScale),
-        record.pixels.height / static_cast<f64>(rasterScale),
-        out
+        record.pixels.height / static_cast<f64>(rasterScale)
     );
 }
 

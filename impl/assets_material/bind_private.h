@@ -69,24 +69,21 @@ static constexpr AStringView s_BindFieldTypeSampler = "sampler";
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena, Metascript::Document& outDoc);
+Expected<Metascript::Document> ParseMaterialBindDocument(const Path& bindFilePath, MaterialCookArena& arena);
 
-bool ParseMaterialParameterTypeText(
-    const AStringView typeText,
-    MaterialParameterValueType::Enum& outType,
-    u32& outComponentCount
-);
+struct MaterialParameterType{
+    MaterialParameterValueType::Enum valueType = MaterialParameterValueType::None;
+    u32 componentCount = 0u;
+};
 
-bool ParseMaterialBindResourceFieldTypeText(
-    const AStringView typeText,
-    MaterialLayoutFieldType::Enum& outFieldType
-)noexcept;
+[[nodiscard]] Expected<MaterialParameterType> ParseMaterialParameterTypeText(AStringView typeText)noexcept;
 
-bool ParseMaterialBindSource(
+[[nodiscard]] Expected<MaterialLayoutFieldType::Enum> ParseMaterialBindResourceFieldTypeText(AStringView typeText)noexcept;
+
+Expected<MaterialBindEntry> ParseMaterialBindSource(
     const Path& bindFilePath,
     const Metascript::Document& doc,
     MaterialCookArena& arena,
-    MaterialBindEntry& outEntry,
     ScratchArena& scratchArena
 );
 
@@ -99,18 +96,17 @@ bool ApplyMaterialBindTypedLayoutParameterValue(
     Material::ResourceReferenceVector& outResourceReferences
 );
 
-bool BuildMaterialBindTypedLayoutImpl(
+Expected<MaterialBindTypedLayout> BuildMaterialBindTypedLayoutImpl(
     const MaterialBindEntry& bindEntry,
     const Name& contextName,
-    MaterialBindTypedLayout& outLayout,
+    MaterialCookArena& arena,
     ScratchArena& scratchArena
 );
 
-bool FindOrBuildMaterialBindTypedLayoutImpl(
+Expected<const MaterialBindTypedLayout*> FindOrBuildMaterialBindTypedLayoutImpl(
     const Name& materialInterface,
     const MaterialBindEntry& bindEntry,
     MaterialBindTypedLayoutCache& inOutCache,
-    const MaterialBindTypedLayout*& outLayout,
     ScratchArena& scratchArena
 );
 

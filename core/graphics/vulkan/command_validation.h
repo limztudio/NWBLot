@@ -108,18 +108,18 @@ namespace VulkanDetail{
     ;
 }
 
-[[nodiscard]] inline bool BuildImplicitScissor(const Viewport& viewport, VkRect2D& outScissor)noexcept{
+[[nodiscard]] inline Expected<VkRect2D> BuildImplicitScissor(const Viewport& viewport)noexcept{
     if(!IsImplicitScissorValid(viewport))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const Rect rect = Rect::FromViewport(viewport);
-    outScissor = {};
-    outScissor.offset = { rect.minX, rect.minY };
-    outScissor.extent = {
+    VkRect2D scissor{};
+    scissor.offset = { rect.minX, rect.minY };
+    scissor.extent = {
         static_cast<u32>(rect.maxX - rect.minX),
         static_cast<u32>(rect.maxY - rect.minY)
     };
-    return true;
+    return scissor;
 }
 
 [[nodiscard]] constexpr bool TextureSubresourceRangesOverlap(

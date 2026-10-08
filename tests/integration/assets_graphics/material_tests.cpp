@@ -68,78 +68,75 @@ using TestArena = AssetsGraphicsFixture::TestArena;
 
 
 #if defined(NWB_FINAL)
-static bool ParseMaterialEntryFromMetaText(
+static Expected<NWB::Impl::MaterialCookEntry> ParseMaterialEntryFromMetaText(
     const AStringView metaText,
     TestArena& testArena,
-    NWB::Impl::MaterialCookEntry& outEntry,
     NWB::Core::Alloc::ScratchArena& scratchArena
 ){
     NWB::Core::Metascript::Document doc(testArena.arena);
     if(!doc.parse(metaText))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const Path assetRoot = AssetsGraphicsFixture::AssetsGraphicsTestCaseRoot(testArena, "material_meta") / s_ASSETS_DIR;
     const Path nwbFilePath = assetRoot / s_MATERIALS / "test_material.nwb";
-    return NWB::Impl::ParseMaterialCookMetadata(assetRoot, s_PROJECT, nwbFilePath, doc, outEntry, scratchArena);
+    return NWB::Impl::ParseMaterialCookMetadata(assetRoot, s_PROJECT, nwbFilePath, doc, testArena.arena, scratchArena);
 }
 
-static bool BuildMaterialFromBindAndMeta(
+static Expected<NWB::Impl::Material> BuildMaterialFromBindAndMeta(
     const AStringView bindText,
     const AStringView materialText,
     const AStringView caseName,
     TestArena& testArena,
-    NWB::Impl::Material& outMaterial,
     NWB::Core::Alloc::ScratchArena& scratchArena
 ){
-    NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
-    if(!ParseMaterialEntryFromMetaText(materialText, testArena, materialEntry, scratchArena))
-        return false;
+    auto materialEntryResult = ParseMaterialEntryFromMetaText(materialText, testArena, scratchArena);
+    if(!materialEntryResult)
+        return MakeUnexpected(Failure{});
 
-    NWB::Impl::MaterialBindEntry bindEntry(testArena.arena);
-    Path bindRoot(testArena.arena);
-    bool built = false;
-    if(AssetsGraphicsFixture::ParseMaterialBindFromText(testArena, bindText, caseName, bindEntry, bindRoot, scratchArena)){
+    auto bindRootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, caseName);
+    if(!bindRootResult)
+        return MakeUnexpected(bindRootResult.error());
+    Path bindRoot = Move(*bindRootResult);
+    Expected<NWB::Impl::Material> built = MakeUnexpected(Failure{});
+    auto bindEntryResult = AssetsGraphicsFixture::ParseMaterialBindFromText(testArena, bindText, bindRoot, scratchArena);
+    if(bindEntryResult){
+        NWB::Impl::MaterialBindEntry& bindEntry = *bindEntryResult;
         bindEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
 
         NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialBindEntry> bindEntries(testArena.arena);
         bindEntries.push_back(Move(bindEntry));
         NWB::Impl::ShaderCook::CookVector<NWB::Impl::MaterialCookEntry> materialEntries(testArena.arena);
-        materialEntries.push_back(Move(materialEntry));
-        built =
-            NWB::Impl::ValidateMaterialCookInterfaces(bindEntries, materialEntries, scratchArena)
-            && NWB::Impl::BuildMaterialAsset(materialEntries[0u], outMaterial)
-        ;
+        materialEntries.push_back(Move(*materialEntryResult));
+        if(NWB::Impl::ValidateMaterialCookInterfaces(bindEntries, materialEntries, scratchArena))
+            built = NWB::Impl::BuildMaterialAsset(materialEntries[0u], testArena.arena);
     }
 
     if(!bindRoot.empty()){
-        ErrorCode errorCode;
-        built = RemoveAllIfExists(bindRoot, errorCode) && built;
+        if(!RemoveAllIfExists(bindRoot))
+            return MakeUnexpected(Failure{});
     }
     return built;
 }
 
-static bool RoundTripMaterialAssetCodec(
+static Expected<UniquePtr<NWB::Core::Assets::IAsset>> RoundTripMaterialAssetCodec(
     TestArena& testArena,
     NWB::Impl::MaterialAssetCodec& codec,
-    const NWB::Impl::Material& material,
-    UniquePtr<NWB::Core::Assets::IAsset>& outLoadedAsset
+    const NWB::Impl::Material& material
 ){
     NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
     const bool serialized = codec.serialize(material, binary);
     EXPECT_TRUE(serialized);
     EXPECT_FALSE(binary.empty());
     if(!serialized || binary.empty())
-        return false;
+        return MakeUnexpected(Failure{});
 
-    const bool deserialized = codec.deserialize(
+    auto deserialized = codec.deserialize(
         testArena.arena,
         material.virtualPath(),
-        binary,
-        outLoadedAsset
+        binary
     );
     EXPECT_TRUE(deserialized);
-    EXPECT_NE(outLoadedAsset.get(), nullptr);
-    return deserialized && static_cast<bool>(outLoadedAsset);
+    return deserialized;
 }
 
 static void SetGeneratedMaterialAvboitPixelShaders(NWB::Impl::Material& material){
@@ -172,7 +169,6 @@ TEST(AssetsGraphics, MaterialCookRejectsMissingAvboitPixelShaders){
         AssetsGraphicsFixture::s_TransparentMaterialMeta,
         "material_cook_missing_avboit_transparent",
         testArena,
-        transparentMaterial,
         scratchArena
     ));
 
@@ -182,7 +178,6 @@ TEST(AssetsGraphics, MaterialCookRejectsMissingAvboitPixelShaders){
         AssetsGraphicsFixture::s_RefractiveMaterialMeta,
         "material_cook_missing_avboit_refractive",
         testArena,
-        refractiveMaterial,
         scratchArena
     ));
 
@@ -216,7 +211,7 @@ asset.shaders = {
     TestArena testArena;
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_MaterialScratchArena);
     NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
-    EXPECT_FALSE(ParseMaterialEntryFromMetaText(s_MissingShaderVariantMaterialMeta, testArena, materialEntry, scratchArena));
+    EXPECT_FALSE(ParseMaterialEntryFromMetaText(s_MissingShaderVariantMaterialMeta, testArena, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("field 'shader_variant' is required")));
 #endif
 }
@@ -244,7 +239,7 @@ asset.shader_variant = "default";
     TestArena testArena;
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_MaterialScratchArena);
     NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
-    EXPECT_FALSE(ParseMaterialEntryFromMetaText(s_MissingRefractiveMaterialMeta, testArena, materialEntry, scratchArena));
+    EXPECT_FALSE(ParseMaterialEntryFromMetaText(s_MissingRefractiveMaterialMeta, testArena, scratchArena));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("'refractive' is required and must be 0 or 1")));
 #endif
 }
@@ -258,7 +253,7 @@ TEST(AssetsGraphics, MaterialMetadataRejectsExplicitOpticalStages){
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_MaterialScratchArena);
     const auto expectRejected = [&](const AStringView metaText){
         NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
-        EXPECT_FALSE(ParseMaterialEntryFromMetaText(metaText, testArena, materialEntry, scratchArena));
+        EXPECT_FALSE(ParseMaterialEntryFromMetaText(metaText, testArena, scratchArena));
         EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
             "explicit 'shaders' cannot be used with transparent/refractive materials"
         )));
@@ -338,7 +333,7 @@ asset.shader_variant = "default";
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_MaterialScratchArena);
     const auto expectRejected = [&](const AStringView metaText, const TStringView expectedError){
         NWB::Impl::MaterialCookEntry materialEntry(testArena.arena);
-        EXPECT_FALSE(ParseMaterialEntryFromMetaText(metaText, testArena, materialEntry, scratchArena));
+        EXPECT_FALSE(ParseMaterialEntryFromMetaText(metaText, testArena, scratchArena));
         EXPECT_TRUE(logger.sawErrorContaining(expectedError));
     };
 
@@ -360,17 +355,17 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
         CapturingLogger logger;
         NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
-        const bool built = BuildMaterialFromBindAndMeta(
+        auto built = BuildMaterialFromBindAndMeta(
             AssetsGraphicsFixture::s_MinimalMaterialBindSource,
             AssetsGraphicsFixture::s_BlockScopedMaterialMeta,
             "material_codec_typed_layout_boundary",
             testArena,
-            material,
             scratchArena
         );
         EXPECT_TRUE(built);
         if(!built)
             return;
+        material = Move(*built);
 
         NWB::Impl::MaterialAssetCodec codec;
         material.setTransparent(true);
@@ -386,7 +381,9 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
 
         SetGeneratedMaterialAvboitPixelShaders(material);
         UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-        ASSERT_TRUE(RoundTripMaterialAssetCodec(testArena, codec, material, loadedAsset));
+        auto loadedAssetResult = RoundTripMaterialAssetCodec(testArena, codec, material);
+        ASSERT_TRUE(loadedAssetResult);
+        loadedAsset = Move(*loadedAssetResult);
 #if defined(NWB_FINAL)
         EXPECT_EQ(logger.errorCount(), 1u);
 #else
@@ -403,13 +400,10 @@ TEST(AssetsGraphics, MaterialCodecTypedLayoutBoundary){
         NWB::Core::Assets::AssetBytes binary = AssetsGraphicsFixture::MakeAssetBytes(testArena);
         EXPECT_TRUE(codec.serialize(material, binary));
 
-        usize layoutHashOffset = 0u;
-        usize blockByteCountOffset = 0u;
-        EXPECT_TRUE(AssetsGraphicsFixture::FindMaterialBinaryTypedLayoutOffsets(
-            binary,
-            layoutHashOffset,
-            blockByteCountOffset
-        ));
+        const auto typedLayoutOffsets = AssetsGraphicsFixture::FindMaterialBinaryTypedLayoutOffsets(binary);
+        ASSERT_TRUE(typedLayoutOffsets);
+        const usize layoutHashOffset = typedLayoutOffsets->layoutHashOffset;
+        const usize blockByteCountOffset = typedLayoutOffsets->blockByteCountOffset;
 
         NWB::Core::Assets::AssetBytes retiredFixtureLayoutBinary = binary;
         EXPECT_TRUE(AssetsGraphicsFixture::OverwritePOD(retiredFixtureLayoutBinary, 0u, u32{ 0x4D544C39u }));
@@ -466,8 +460,9 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
     ){
         SCOPED_TRACE(caseName.data());
 
-        Path invalidRoot(testArena.arena);
-        NWB::Impl::MaterialBindEntry invalidEntry(testArena.arena);
+        auto invalidRootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, caseName);
+        ASSERT_TRUE(invalidRootResult);
+        Path invalidRoot = Move(*invalidRootResult);
         {
             CapturingLogger failureLogger;
             NWB::Core::Common::LoggerRegistrationGuard failureLoggerRegistrationGuard(
@@ -475,19 +470,11 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
                 NWB::Core::Common::LoggerBreakPolicy::ReportOnly
             );
 
-            EXPECT_FALSE(AssetsGraphicsFixture::ParseMaterialBindFromText(
-                testArena,
-                bindText,
-                caseName,
-                invalidEntry,
-                invalidRoot,
-                scratchArena
-            ));
+            EXPECT_FALSE(AssetsGraphicsFixture::ParseMaterialBindFromText(testArena, bindText, invalidRoot, scratchArena));
             EXPECT_TRUE(failureLogger.sawErrorContaining(expectedError));
         }
 
-        ErrorCode removeErrorCode;
-        EXPECT_TRUE(RemoveAllIfExists(invalidRoot, removeErrorCode));
+        EXPECT_TRUE(RemoveAllIfExists(invalidRoot));
     };
 
     expectParseFailure(
@@ -535,16 +522,12 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
         NWB_TEXT("unsupported asset field 'instance_override'")
     );
 
-    Path float1DefaultRoot(testArena.arena);
-    NWB::Impl::MaterialBindEntry float1DefaultEntry(testArena.arena);
-    EXPECT_TRUE(AssetsGraphicsFixture::ParseMaterialBindFromText(
-        testArena,
-        AssetsGraphicsFixture::s_Float1DefaultMaterialBindSource,
-        "material_bind_float1_default",
-        float1DefaultEntry,
-        float1DefaultRoot,
-        scratchArena
-    ));
+    auto float1DefaultRootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "material_bind_float1_default");
+    ASSERT_TRUE(float1DefaultRootResult);
+    Path float1DefaultRoot = Move(*float1DefaultRootResult);
+    auto float1DefaultEntryResult = AssetsGraphicsFixture::ParseMaterialBindFromText(testArena, AssetsGraphicsFixture::s_Float1DefaultMaterialBindSource, float1DefaultRoot, scratchArena);
+    ASSERT_TRUE(float1DefaultEntryResult);
+    NWB::Impl::MaterialBindEntry& float1DefaultEntry = *float1DefaultEntryResult;
     float1DefaultEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
     {
         SCOPED_TRACE("material_bind_float1_default_include");
@@ -555,11 +538,9 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
             NWB::Core::Common::LoggerBreakPolicy::ReportOnly
         );
 
-        NWB::Impl::ShaderCook::CookString generatedSource(testArena.arena);
         EXPECT_FALSE(NWB::Impl::BuildMaterialBindIncludeSource(
             testArena.arena,
             float1DefaultEntry,
-            generatedSource,
             scratchArena
         ));
         EXPECT_TRUE(failureLogger.sawErrorContaining(NWB_TEXT("default 'float1(1.0)'")));
@@ -567,7 +548,6 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
 
     const Name cacheInterface("project/material_interfaces/test_surface");
     NWB::Impl::MaterialBindTypedLayoutCache layoutCache(testArena.arena);
-    const NWB::Impl::MaterialBindTypedLayout* cachedLayout = nullptr;
     {
         SCOPED_TRACE("material_bind_float1_default_cache");
 
@@ -581,41 +561,34 @@ TEST(AssetsGraphics, MaterialBindSchemaValidation){
             cacheInterface,
             float1DefaultEntry,
             layoutCache,
-            cachedLayout,
             scratchArena
         ));
         EXPECT_TRUE(failureLogger.sawErrorContaining(NWB_TEXT("default 'float1(1.0)'")));
     }
-    EXPECT_EQ(cachedLayout, nullptr);
     EXPECT_TRUE(layoutCache.entries.empty());
     EXPECT_TRUE(layoutCache.lookup.empty());
 
-    Path validCacheRoot(testArena.arena);
-    NWB::Impl::MaterialBindEntry validCacheEntry(testArena.arena);
-    EXPECT_TRUE(AssetsGraphicsFixture::ParseMaterialBindFromText(
-        testArena,
-        AssetsGraphicsFixture::s_MinimalMaterialBindSource,
-        "material_bind_cache_valid_after_failed_layout",
-        validCacheEntry,
-        validCacheRoot,
-        scratchArena
-    ));
+    auto validCacheRootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "material_bind_cache_valid_after_failed_layout");
+    ASSERT_TRUE(validCacheRootResult);
+    Path validCacheRoot = Move(*validCacheRootResult);
+    auto validCacheEntryResult = AssetsGraphicsFixture::ParseMaterialBindFromText(testArena, AssetsGraphicsFixture::s_MinimalMaterialBindSource, validCacheRoot, scratchArena);
+    ASSERT_TRUE(validCacheEntryResult);
+    NWB::Impl::MaterialBindEntry& validCacheEntry = *validCacheEntryResult;
     validCacheEntry.virtualPath = s_PROJECT_MATERIAL_INTERFACES_TEST_SURFACE;
-    EXPECT_TRUE(NWB::Impl::FindOrBuildMaterialBindTypedLayout(
+    const auto cachedLayout = NWB::Impl::FindOrBuildMaterialBindTypedLayout(
         cacheInterface,
         validCacheEntry,
         layoutCache,
-        cachedLayout,
         scratchArena
-    ));
-    EXPECT_NE(cachedLayout, nullptr);
+    );
+    ASSERT_TRUE(cachedLayout);
+    EXPECT_NE(*cachedLayout, nullptr);
     EXPECT_EQ(layoutCache.entries.size(), 1u);
     EXPECT_EQ(layoutCache.lookup.size(), 1u);
     EXPECT_EQ(logger.errorCount(), 0u);
 
-    ErrorCode removeErrorCode;
-    EXPECT_TRUE(RemoveAllIfExists(float1DefaultRoot, removeErrorCode));
-    EXPECT_TRUE(RemoveAllIfExists(validCacheRoot, removeErrorCode));
+    EXPECT_TRUE(RemoveAllIfExists(float1DefaultRoot));
+    EXPECT_TRUE(RemoveAllIfExists(validCacheRoot));
 }
 
 
@@ -657,116 +630,100 @@ TEST(AssetsGraphics, MaterialBindCookRejectsMalformedParametersAndInterfaceMisma
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    ErrorCode errorCode;
 #if defined(NWB_FINAL)
-    Path invalidRoot(testArena.arena);
-    Path invalidOutputDirectory(testArena.arena);
+    auto invalidCookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "material_bind_unknown_interface_parameter");
+    ASSERT_TRUE(invalidCookCase);
+    Path& invalidRoot = invalidCookCase->root;
     EXPECT_FALSE(AssetsGraphicsFixture::CookMaterialBindMaterialIntegration(
         AssetsGraphicsFixture::s_MinimalMaterialBindSource,
         AssetsGraphicsFixture::s_UnknownInterfaceParameterMaterialMeta,
-        "material_bind_unknown_interface_parameter",
         testArena,
-        invalidRoot,
-        invalidOutputDirectory
+        *invalidCookCase
     ));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
         "parameter 'surface.missing' is not declared by interface"
     )));
 
-    errorCode.clear();
-    EXPECT_TRUE(RemoveAllIfExists(invalidRoot, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(invalidRoot));
 
-    Path flatRoot(testArena.arena);
-    Path flatOutputDirectory(testArena.arena);
+    auto flatCookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "material_bind_flat_interface_parameter");
+    ASSERT_TRUE(flatCookCase);
+    Path& flatRoot = flatCookCase->root;
     EXPECT_FALSE(AssetsGraphicsFixture::CookMaterialBindMaterialIntegration(
         AssetsGraphicsFixture::s_MinimalMaterialBindSource,
         AssetsGraphicsFixture::s_FlatInterfaceParameterMaterialMeta,
-        "material_bind_flat_interface_parameter",
         testArena,
-        flatRoot,
-        flatOutputDirectory
+        *flatCookCase
     ));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
         "interface parameter 'runtime.fade_alpha' must be declared inside a block map"
     )));
 
-    errorCode.clear();
-    EXPECT_TRUE(RemoveAllIfExists(flatRoot, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(flatRoot));
 
-    Path untypedParameterRoot(testArena.arena);
-    Path untypedParameterOutputDirectory(testArena.arena);
+    auto untypedParameterCookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "material_bind_untyped_material_parameter");
+    ASSERT_TRUE(untypedParameterCookCase);
+    Path& untypedParameterRoot = untypedParameterCookCase->root;
     EXPECT_FALSE(AssetsGraphicsFixture::CookMaterialBindMaterialIntegration(
         AssetsGraphicsFixture::s_MinimalMaterialBindSource,
         AssetsGraphicsFixture::s_UntypedMaterialParameterMeta,
-        "material_bind_untyped_material_parameter",
         testArena,
-        untypedParameterRoot,
-        untypedParameterOutputDirectory
+        *untypedParameterCookCase
     ));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
         "has invalid value '0.25, 0.5, 0.75, 1.0'"
     )));
 
-    errorCode.clear();
-    EXPECT_TRUE(RemoveAllIfExists(untypedParameterRoot, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(untypedParameterRoot));
 
-    Path vectorAliasParameterRoot(testArena.arena);
-    Path vectorAliasParameterOutputDirectory(testArena.arena);
+    auto vectorAliasParameterCookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "material_bind_vector_alias_material_parameter");
+    ASSERT_TRUE(vectorAliasParameterCookCase);
+    Path& vectorAliasParameterRoot = vectorAliasParameterCookCase->root;
     EXPECT_FALSE(AssetsGraphicsFixture::CookMaterialBindMaterialIntegration(
         AssetsGraphicsFixture::s_MinimalMaterialBindSource,
         AssetsGraphicsFixture::s_VectorAliasMaterialParameterMeta,
-        "material_bind_vector_alias_material_parameter",
         testArena,
-        vectorAliasParameterRoot,
-        vectorAliasParameterOutputDirectory
+        *vectorAliasParameterCookCase
     ));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
         "has invalid value 'vec4(0.25, 0.5, 0.75, 1.0)'"
     )));
 
-    errorCode.clear();
-    EXPECT_TRUE(RemoveAllIfExists(vectorAliasParameterRoot, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(vectorAliasParameterRoot));
 
-    Path unsupportedFieldRoot(testArena.arena);
-    Path unsupportedFieldOutputDirectory(testArena.arena);
+    auto unsupportedFieldCookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "material_bind_unsupported_material_field");
+    ASSERT_TRUE(unsupportedFieldCookCase);
+    Path& unsupportedFieldRoot = unsupportedFieldCookCase->root;
     EXPECT_FALSE(AssetsGraphicsFixture::CookMaterialBindMaterialIntegration(
         AssetsGraphicsFixture::s_MinimalMaterialBindSource,
         AssetsGraphicsFixture::s_UnsupportedMaterialFieldMeta,
-        "material_bind_unsupported_material_field",
         testArena,
-        unsupportedFieldRoot,
-        unsupportedFieldOutputDirectory
+        *unsupportedFieldCookCase
     ));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("unsupported asset field 'compiler'")));
 
-    errorCode.clear();
-    EXPECT_TRUE(RemoveAllIfExists(unsupportedFieldRoot, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(unsupportedFieldRoot));
 
-    Path incompleteBindRoot(testArena.arena);
-    Path incompleteBindOutputDirectory(testArena.arena);
+    auto incompleteBindCookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "material_bind_incomplete_block_scoped");
+    ASSERT_TRUE(incompleteBindCookCase);
+    Path& incompleteBindRoot = incompleteBindCookCase->root;
     EXPECT_FALSE(AssetsGraphicsFixture::CookMaterialBindMaterialIntegration(
         AssetsGraphicsFixture::s_SurfaceOnlyMaterialBindSource,
         AssetsGraphicsFixture::s_BlockScopedMaterialMeta,
-        "material_bind_incomplete_block_scoped",
         testArena,
-        incompleteBindRoot,
-        incompleteBindOutputDirectory
+        *incompleteBindCookCase
     ));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
         "typed parameter 'runtime.fade_alpha' is not declared by interface"
     )));
 
-    errorCode.clear();
-    EXPECT_TRUE(RemoveAllIfExists(incompleteBindRoot, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(incompleteBindRoot));
 
-    Path interfaceShaderMismatchRoot(testArena.arena);
-    Path interfaceShaderMismatchOutputDirectory(testArena.arena);
-    EXPECT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
-        testArena,
-        "material_bind_interface_without_bind_shader",
-        interfaceShaderMismatchRoot,
-        interfaceShaderMismatchOutputDirectory
-    ));
+    auto interfaceShaderMismatchCookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "material_bind_interface_without_bind_shader");
+    ASSERT_TRUE(interfaceShaderMismatchCookCase);
+    Path& interfaceShaderMismatchRoot = interfaceShaderMismatchCookCase->root;
+    Path& interfaceShaderMismatchOutputDirectory = interfaceShaderMismatchCookCase->outputDirectory;
+
     const Path interfaceShaderMismatchAssetRoot = interfaceShaderMismatchRoot / s_ASSETS_DIR;
     EXPECT_TRUE(AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
         testArena,
@@ -783,17 +740,13 @@ TEST(AssetsGraphics, MaterialBindCookRejectsMalformedParametersAndInterfaceMisma
     ));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("does not include a generated material bind")));
 
-    errorCode.clear();
-    EXPECT_TRUE(RemoveAllIfExists(interfaceShaderMismatchRoot, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(interfaceShaderMismatchRoot));
 
-    Path interfaceIdentityMismatchRoot(testArena.arena);
-    Path interfaceIdentityMismatchOutputDirectory(testArena.arena);
-    EXPECT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
-        testArena,
-        "material_bind_interface_identity_mismatch",
-        interfaceIdentityMismatchRoot,
-        interfaceIdentityMismatchOutputDirectory
-    ));
+    auto interfaceIdentityMismatchCookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "material_bind_interface_identity_mismatch");
+    ASSERT_TRUE(interfaceIdentityMismatchCookCase);
+    Path& interfaceIdentityMismatchRoot = interfaceIdentityMismatchCookCase->root;
+    Path& interfaceIdentityMismatchOutputDirectory = interfaceIdentityMismatchCookCase->outputDirectory;
+
     const Path interfaceIdentityMismatchAssetRoot = interfaceIdentityMismatchRoot / s_ASSETS_DIR;
     EXPECT_TRUE(AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
         testArena,
@@ -816,8 +769,7 @@ TEST(AssetsGraphics, MaterialBindCookRejectsMalformedParametersAndInterfaceMisma
         "includes generated material bind interface 'project/material_interfaces/other_surface'"
     )));
 
-    errorCode.clear();
-    EXPECT_TRUE(RemoveAllIfExists(interfaceIdentityMismatchRoot, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(interfaceIdentityMismatchRoot));
 #endif
 #endif
 }
@@ -828,14 +780,11 @@ TEST(AssetsGraphics, ShadowSurfaceDispatchIsolatesOverlappingBindApis){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root(testArena.arena);
-    Path outputDirectory(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
-        testArena,
-        "shadow_transmittance_dispatch_overlapping_bind_apis",
-        root,
-        outputDirectory
-    ));
+    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "shadow_transmittance_dispatch_overlapping_bind_apis");
+    ASSERT_TRUE(cookCase);
+    Path& root = cookCase->root;
+    Path& outputDirectory = cookCase->outputDirectory;
+
 
     const Path assetRoot = root / s_ASSETS_DIR;
     const bool assetsWritten =
@@ -881,8 +830,7 @@ TEST(AssetsGraphics, ShadowSurfaceDispatchIsolatesOverlappingBindApis){
     EXPECT_TRUE(cooked);
     EXPECT_EQ(logger.errorCount(), 0u);
 
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
 TEST(AssetsGraphics, MaterialRejectsMissingInterfaceCookIntegration){
@@ -891,14 +839,11 @@ TEST(AssetsGraphics, MaterialRejectsMissingInterfaceCookIntegration){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root(testArena.arena);
-    Path outputDirectory(testArena.arena);
-    EXPECT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
-        testArena,
-        "material_missing_interface_rejection",
-        root,
-        outputDirectory
-    ));
+    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "material_missing_interface_rejection");
+    ASSERT_TRUE(cookCase);
+    Path& root = cookCase->root;
+    Path& outputDirectory = cookCase->outputDirectory;
+
     const Path assetRoot = root / s_ASSETS_DIR;
     EXPECT_TRUE(AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssetsWithPixelSource(
         testArena,
@@ -915,8 +860,7 @@ TEST(AssetsGraphics, MaterialRejectsMissingInterfaceCookIntegration){
     ));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("interface is required")));
 
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 #endif
 }
 
@@ -925,14 +869,11 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root(testArena.arena);
-    Path outputDirectory(testArena.arena);
-    EXPECT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
-        testArena,
-        "material_bind_dependency_invalidation",
-        root,
-        outputDirectory
-    ));
+    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "material_bind_dependency_invalidation");
+    ASSERT_TRUE(cookCase);
+    Path& root = cookCase->root;
+    Path& outputDirectory = cookCase->outputDirectory;
+
     const Path assetRoot = root / s_ASSETS_DIR;
     if(!AssetsGraphicsFixture::WriteMaterialBindMaterialIntegrationAssets(
         testArena,
@@ -946,12 +887,9 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
 
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
-        testArena,
-        outputDirectory,
-        Name(s_PROJECT_MATERIALS_TEST_MATERIAL),
-        loadedAsset
-    ));
+    auto loadedAssetLoadResult = AssetsGraphicsFixture::LoadCookedMaterial(testArena, outputDirectory, Name(s_PROJECT_MATERIALS_TEST_MATERIAL));
+    ASSERT_TRUE(loadedAssetLoadResult);
+    loadedAsset = Move(*loadedAssetLoadResult);
     if(!loadedAsset)
         return;
 
@@ -959,14 +897,13 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     const u64 initialLayoutHash = material.typedLayoutHash();
 
     NWB::Core::GraphicsVector<NWB::Core::ShaderArchive::Record> records(testArena.arena);
-    EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory, records));
+    auto recordsLoadResult = AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory);
+    ASSERT_TRUE(recordsLoadResult);
+    records = Move(*recordsLoadResult);
     u64 initialPixelSourceChecksum = 0u;
-    EXPECT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(
-        records,
-        Name("project/shaders/material_ps"),
-        Name(s_PS),
-        initialPixelSourceChecksum
-    ));
+    auto initialPixelSourceChecksumLoadResult = AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, Name("project/shaders/material_ps"), Name(s_PS));
+    ASSERT_TRUE(initialPixelSourceChecksumLoadResult);
+    initialPixelSourceChecksum = *initialPixelSourceChecksumLoadResult;
 
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(
         assetRoot / s_MATERIAL_INTERFACES / s_TEST_SURFACE_BIND,
@@ -975,31 +912,26 @@ TEST(AssetsGraphics, MaterialBindDependencyInvalidation){
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
 
     loadedAsset.reset();
-    EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMaterial(
-        testArena,
-        outputDirectory,
-        Name(s_PROJECT_MATERIALS_TEST_MATERIAL),
-        loadedAsset
-    ));
+    auto loadedAssetLoadResult2 = AssetsGraphicsFixture::LoadCookedMaterial(testArena, outputDirectory, Name(s_PROJECT_MATERIALS_TEST_MATERIAL));
+    ASSERT_TRUE(loadedAssetLoadResult2);
+    loadedAsset = Move(*loadedAssetLoadResult2);
     if(loadedAsset){
         const NWB::Impl::Material& updatedMaterial = static_cast<const NWB::Impl::Material&>(*loadedAsset);
         EXPECT_NE(updatedMaterial.typedLayoutHash(), initialLayoutHash);
     }
 
     records.clear();
-    EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory, records));
+    auto recordsLoadResult2 = AssetsGraphicsFixture::LoadCookedShaderArchiveRecords(testArena, outputDirectory);
+    ASSERT_TRUE(recordsLoadResult2);
+    records = Move(*recordsLoadResult2);
     u64 updatedPixelSourceChecksum = 0u;
-    EXPECT_TRUE(AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(
-        records,
-        Name("project/shaders/material_ps"),
-        Name(s_PS),
-        updatedPixelSourceChecksum
-    ));
+    auto updatedPixelSourceChecksumLoadResult = AssetsGraphicsFixture::FindShaderArchiveSourceChecksum(records, Name("project/shaders/material_ps"), Name(s_PS));
+    ASSERT_TRUE(updatedPixelSourceChecksumLoadResult);
+    updatedPixelSourceChecksum = *updatedPixelSourceChecksumLoadResult;
     EXPECT_NE(updatedPixelSourceChecksum, initialPixelSourceChecksum);
     EXPECT_EQ(logger.errorCount(), 0u);
 
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
 TEST(AssetsGraphics, MaterialBindDiscoveryValidation){
@@ -1007,58 +939,53 @@ TEST(AssetsGraphics, MaterialBindDiscoveryValidation){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root(testArena.arena);
-    Path outputDirectory(testArena.arena);
+    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "material_bind_valid");
+    ASSERT_TRUE(cookCase);
+    Path& root = cookCase->root;
+    Path& outputDirectory = cookCase->outputDirectory;
     EXPECT_TRUE(AssetsGraphicsFixture::CookMinimalMeshWithMaterialBind(
         AssetsGraphicsFixture::s_MinimalMaterialBindSource,
-        "material_bind_valid",
         testArena,
-        root,
-        outputDirectory
+        *cookCase
     ));
 
     const Path generatedIncludePath = root / s_CACHE / s_TESTS / s_MATERIAL_BIND_INCLUDES / s_PROJECT / s_MATERIAL_INTERFACES / s_TEST_SURFACE_BIND;
     // Removing the last bind source must clear its generated include on a recook with the same cache.
     const Path assetRoot = root / "assets";
-    ErrorCode errorCode;
-    ASSERT_TRUE(RemoveFile(assetRoot / s_MATERIAL_INTERFACES / s_TEST_SURFACE_BIND, errorCode));
-    ASSERT_FALSE(errorCode);
+    const auto removedBind = RemoveFile(assetRoot / s_MATERIAL_INTERFACES / s_TEST_SURFACE_BIND);
+    ASSERT_TRUE(removedBind);
+    ASSERT_TRUE(*removedBind);
     ASSERT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }));
-    errorCode.clear();
-    EXPECT_FALSE(FileExists(generatedIncludePath, errorCode));
-    EXPECT_FALSE(errorCode);
+    const auto generatedIncludeExists = FileExists(generatedIncludePath);
+    ASSERT_TRUE(generatedIncludeExists);
+    EXPECT_FALSE(*generatedIncludeExists);
     EXPECT_EQ(logger.errorCount(), 0u);
-    errorCode.clear();
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 #if defined(NWB_FINAL)
-    Path duplicateIncludeRoot(testArena.arena);
-    Path duplicateIncludeOutputDirectory(testArena.arena);
+    auto duplicateIncludeCookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "material_bind_duplicate_include_path");
+    ASSERT_TRUE(duplicateIncludeCookCase);
+    Path& duplicateIncludeRoot = duplicateIncludeCookCase->root;
     EXPECT_FALSE(AssetsGraphicsFixture::CookDuplicateGeneratedMaterialBindIncludePath(
-        "material_bind_duplicate_include_path",
         testArena,
-        duplicateIncludeRoot,
-        duplicateIncludeOutputDirectory
+        *duplicateIncludeCookCase
     ));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT(
         "duplicate material bind include path 'project/material_interfaces/test_surface.bind'"
     )));
 
-    errorCode.clear();
-    EXPECT_TRUE(RemoveAllIfExists(duplicateIncludeRoot, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(duplicateIncludeRoot));
 
-    Path invalidRoot(testArena.arena);
-    Path invalidOutputDirectory(testArena.arena);
+    auto invalidCookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "material_bind_duplicate_field");
+    ASSERT_TRUE(invalidCookCase);
+    Path& invalidRoot = invalidCookCase->root;
     EXPECT_FALSE(AssetsGraphicsFixture::CookMinimalMeshWithMaterialBind(
         AssetsGraphicsFixture::s_DuplicateFieldMaterialBindSource,
-        "material_bind_duplicate_field",
         testArena,
-        invalidRoot,
-        invalidOutputDirectory
+        *invalidCookCase
     ));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("duplicate struct field declaration")));
 
-    errorCode.clear();
-    EXPECT_TRUE(RemoveAllIfExists(invalidRoot, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(invalidRoot));
 #endif
 }
 

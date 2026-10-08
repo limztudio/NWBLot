@@ -50,16 +50,13 @@ inline constexpr AStringView s_AlphaConstantUnorm8Field = "alpha_constant_unorm8
 inline constexpr AStringView s_DataField = "data";
 
 template<typename IntegerT>
-[[nodiscard]] inline bool ReadRequiredUnsignedField(
+[[nodiscard]] inline Expected<IntegerT> ReadRequiredUnsignedField(
     const Path& nwbFilePath,
     const Value& asset,
     const AStringView fieldName,
     const IntegerT minimum,
-    const IntegerT maximum,
-    IntegerT& outValue
+    const IntegerT maximum
 ){
-    outValue = 0u;
-
     const Value* const field = FindField(asset, fieldName);
     if(!field){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' is required")
@@ -67,7 +64,7 @@ template<typename IntegerT>
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!field->isInteger() || field->asInteger() < 0){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be a non-negative integer")
@@ -75,7 +72,7 @@ template<typename IntegerT>
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     const u64 value = static_cast<u64>(field->asInteger());
@@ -85,32 +82,29 @@ template<typename IntegerT>
             , PathToString<tchar>(nwbFilePath)
             , StringConvert(fieldName)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outValue = static_cast<IntegerT>(value);
-    return true;
+    return static_cast<IntegerT>(value);
 }
 
-[[nodiscard]] bool ReadTextureDimension(
+[[nodiscard]] Expected<TextureDimension::Enum> ReadTextureDimension(
     const Path& nwbFilePath,
-    const Core::Metascript::Value& asset,
-    TextureDimension::Enum& outDimension
+    const Core::Metascript::Value& asset
 );
 [[nodiscard]] bool ValidateTextureDataFileName(
     const Path& nwbFilePath,
     AStringView dataFileName,
     Core::Alloc::ScratchArena& scratchArena
 );
-[[nodiscard]] bool BuildMipLevels(
+[[nodiscard]] Expected<u64> BuildMipLevels(
     const Path& nwbFilePath,
     TexturePayloadFormat::Enum payloadFormat,
     TextureDimension::Enum dimension,
     u32 width,
     u32 height,
     u32 depth,
-    Texture::MipLevelVector& outMipLevels,
-    u64& outPayloadByteCount
+    Texture::MipLevelVector& outMipLevels
 );
 
 

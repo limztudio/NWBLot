@@ -113,28 +113,25 @@ public:
     [[nodiscard]] bool prepareCsgFrameResources(usize receiverRangeCount, usize cutterCount);
     [[nodiscard]] ECSRenderDetail::CsgGraphResourceSnapshot csgGraphResourceSnapshot()const noexcept;
     // Capture frozen CSG uniform bytes as immutable blobs before native recording.
-    [[nodiscard]] bool prepareCsgClipContextSlotData(
+    [[nodiscard]] Expected<CsgClipContextSlots> prepareCsgClipContextSlotData(
         const DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-        CsgClipContextSlots& outContextSlots
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
     )const;
-    [[nodiscard]] bool prepareCsgIntervalSampleStateData(
+    [[nodiscard]] Expected<CsgIntervalSampleStateGpuData> prepareCsgIntervalSampleStateData(
         const DeferredFrameTargets& targets,
         const CsgFrameGpuData& csgFrameData,
         const ECSRenderDetail::CsgGraphResourceSnapshot& csgResources,
-        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings,
-        CsgIntervalSampleStateGpuData& outState
+        const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings
     )const;
-    [[nodiscard]] bool resolveCsgReceiverClipDrawInfo(
+    [[nodiscard]] Expected<CsgReceiverClipDrawInfo> resolveCsgReceiverClipDrawInfo(
         const CsgFrameReceiverLookup& receiverLookup,
         const CsgReceiverDrawState& receiverDrawState,
         const CsgReceiverCpuBounds& receiverBounds,
-        const NWB::Impl::Scene::TransformComponent* transform,
-        CsgReceiverClipDrawInfo& outInfo
+        const NWB::Impl::Scene::TransformComponent* transform
     )const;
-    [[nodiscard]] bool appendCsgReceiverClipData(
+    [[nodiscard]] Expected<CsgReceiverRangeGpuData> appendCsgReceiverClipData(
         const CsgFrameReceiverLookup& receiverLookup,
         const CsgReceiverDrawState& receiverDrawState,
         const CsgReceiverCpuBounds& receiverBounds,
@@ -142,7 +139,6 @@ public:
         u32 frameWidth,
         u32 frameHeight,
         CsgFrameGpuData& csgFrameData,
-        CsgReceiverRangeGpuData& outRange,
         const ECSRenderDetail::MeshViewGpuData* csgWorkRegionMeshViewState
     )const;
 

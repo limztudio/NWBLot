@@ -156,8 +156,7 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         VK_DYNAMIC_STATE_BLEND_CONSTANTS,
         VK_DYNAMIC_STATE_STENCIL_REFERENCE,
     };
-    VulkanDetail::GraphicsPipelineFixedState fixedState{ scratchArena };
-    if(!buildGraphicsPipelineFixedStateOrDestroy(
+    const auto fixedState = buildGraphicsPipelineFixedStateOrDestroy(
         fbinfo,
         desc.renderState,
         VulkanDetail::PipelineStencilFaceMode::IncludeStencilFaces,
@@ -165,17 +164,18 @@ MeshletPipelineHandle Device::createMeshletPipeline(const MeshletPipelineDesc& d
         static_cast<u32>(LengthOf(dynamicStates)),
         NWB_TEXT("meshlet pipeline"),
         *pso,
-        fixedState
-    ))
+        scratchArena
+    );
+    if(!fixedState)
         return nullptr;
 
     auto pipelineInfo = VulkanDetail::MakeVkStruct<VkGraphicsPipelineCreateInfo>(VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO);
-    VulkanDetail::AttachPipelineBindingState(pipelineInfo, *pso, &fixedState.renderingInfo);
+    VulkanDetail::AttachPipelineBindingState(pipelineInfo, *pso, &fixedState->renderingInfo);
     pipelineInfo.stageCount = static_cast<u32>(shaderStages.size());
     pipelineInfo.pStages = shaderStages.data();
     pipelineInfo.pVertexInputState = nullptr; // Mesh shaders don't use vertex input
     pipelineInfo.pInputAssemblyState = nullptr; // Mesh shaders don't use input assembly
-    VulkanDetail::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, fixedState);
+    VulkanDetail::AttachGraphicsPipelineFixedState(pipelineInfo, rasterizer, *fixedState);
     pipelineInfo.renderPass = VK_NULL_HANDLE;
 
     if(!createPipelineOrDestroy(NWB_TEXT("meshlet pipeline"), *pso, pipelineInfo))

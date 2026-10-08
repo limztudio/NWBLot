@@ -32,24 +32,23 @@ bool Builder::beginPopup(const AStringView stableKey, PopupState& state, const P
     state.bindParent(m_context.popupToken());
     const PopupToken token{ widget->id, widget->declarationGeneration, state.instanceGeneration(), state.openGeneration() };
     m_context.input().fencePopup(token);
-    PopupDismissReason::Enum reason = PopupDismissReason::None;
-    if(m_context.input().consumePopupDismissal(token, reason))
+    if(m_context.input().consumePopupDismissal(token))
         state.close();
     if(!state.isOpen()){
         m_context.input().closePopup(token);
         return false;
     }
-    PopupPlacement placement;
     const UiSkinRegion* background = region(m_popupStyle.background, m_popupStyle.fallback);
-    if(!background || !PopupLayout::Place(options, m_paint.displayMetrics(), placement)){
+    const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
+    if(!background || !placement){
         m_context.fail();
         return false;
     }
     PopupScope scope;
     scope.token = token;
     scope.parent = m_context.popupToken();
-    scope.bounds = placement.bounds;
-    scope.viewport = placement.viewport;
+    scope.bounds = placement->bounds;
+    scope.viewport = placement->viewport;
     scope.modal = options.modal;
     scope.dismissOutside = options.dismissOutside;
     scope.dismissCancel = options.dismissCancel;
@@ -76,7 +75,7 @@ bool Builder::beginPopup(const AStringView stableKey, PopupState& state, const P
     m_scope = next;
     m_scope->m_panelState = declaration;
     m_scope->m_popupPaintStyle = m_popupStyle;
-    m_scope->m_bounds = placement.bounds;
+    m_scope->m_bounds = placement->bounds;
     LayoutNodeDesc description;
     description.direction = LayoutDirection::Column;
     description.width = { LayoutSizePolicy::Fixed, m_scope->m_bounds.width };
@@ -87,16 +86,18 @@ bool Builder::beginPopup(const AStringView stableKey, PopupState& state, const P
         Max(m_scope->m_popupPaintStyle.padding.bottom, background->padding.bottom) };
     description.gap = m_style.gap;
     u32 node = 0u;
-    if(!m_scope->m_layout.addNode(s_LayoutNoParent, description, node)){
+    const auto admittedNode = m_scope->m_layout.addNode(s_LayoutNoParent, description);
+    if(!admittedNode){
         m_context.fail();
         return false;
     }
+    node = *admittedNode;
     m_scope->m_stack.push_back(node);
     m_scope->m_popupState = &state;
     m_scope->m_popupToken = token;
     m_scope->m_popupOptions = options;
-    m_scope->m_popupPlacement = placement;
-    state.m_placement = placement;
+    m_scope->m_popupPlacement = *placement;
+    state.m_placement = *placement;
     m_scope->m_panelActive = true;
     return true;
 }

@@ -25,31 +25,35 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ParseTextureCookMetadata(
+Expected<TextureCookEntry> ParseTextureCookMetadata(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    TextureCookEntry& outEntry,
+    Core::Assets::AssetArena& arena,
     Core::Alloc::ScratchArena& scratchArena
 ){
     using namespace TextureCookDetail;
 
-    outEntry = TextureCookEntry(outEntry.mipLevels.get_allocator().arena());
+    TextureCookEntry entry(arena);
 
     const Value& asset = doc.asset();
     if(!::NWB::Core::Assets::CheckMetadataAssetMap(nwbFilePath, asset, s_DiagnosticPrefix))
-        return false;
-    if(!ReadTextureDimension(nwbFilePath, asset, outEntry.dimension))
-        return false;
+        return MakeUnexpected(Failure{});
+    auto dimensionResult = ReadTextureDimension(nwbFilePath, asset);
+    if(!dimensionResult)
+        return MakeUnexpected(Failure{});
+    entry.dimension = *dimensionResult;
 
     AStringView format;
-    if(!::NWB::Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_FormatField, true, format))
-        return false;
+    auto formatResult = ::NWB::Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_FormatField, true);
+    if(!formatResult)
+        return MakeUnexpected(Failure{});
+    format = formatResult->text;
     if(format == s_UastcLdr4x4Format)
-        outEntry.payloadFormat = TexturePayloadFormat::UastcLdr4x4;
+        entry.payloadFormat = TexturePayloadFormat::UastcLdr4x4;
     else if(format == s_UastcHdr4x4Format)
-        outEntry.payloadFormat = TexturePayloadFormat::UastcHdr4x4;
+        entry.payloadFormat = TexturePayloadFormat::UastcHdr4x4;
     else{
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be '{}' or '{}'")
             , StringConvert(s_DiagnosticPrefix)
@@ -58,34 +62,36 @@ bool ParseTextureCookMetadata(
             , StringConvert(s_UastcLdr4x4Format)
             , StringConvert(s_UastcHdr4x4Format)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    const bool isHdr = IsHdrTexturePayloadFormat(outEntry.payloadFormat);
+    const bool isHdr = IsHdrTexturePayloadFormat(entry.payloadFormat);
     if(isHdr){
         AStringView alphaModeText;
-        if(!::NWB::Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_AlphaModeField, true, alphaModeText))
-            return false;
+        auto alphaModeTextResult = ::NWB::Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_AlphaModeField, true);
+        if(!alphaModeTextResult)
+            return MakeUnexpected(Failure{});
+        alphaModeText = alphaModeTextResult->text;
         if(alphaModeText == s_AlphaOpaqueMode)
-            outEntry.alphaMode = TextureAlphaMode::Opaque;
+            entry.alphaMode = TextureAlphaMode::Opaque;
         else if(alphaModeText == s_AlphaConstantUnorm8Mode)
-            outEntry.alphaMode = TextureAlphaMode::ConstantUnorm8;
+            entry.alphaMode = TextureAlphaMode::ConstantUnorm8;
         else if(alphaModeText == s_AlphaUastcLdr4x4Mode)
-            outEntry.alphaMode = TextureAlphaMode::SeparateUastcLdr4x4;
+            entry.alphaMode = TextureAlphaMode::SeparateUastcLdr4x4;
         else{
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' has an unsupported HDR alpha mode")
                 , StringConvert(s_DiagnosticPrefix)
                 , PathToString<tchar>(nwbFilePath)
                 , StringConvert(s_AlphaModeField)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
     if(!::NWB::Core::Assets::ValidateMetadataAssetFields(
         nwbFilePath,
         asset,
         s_DiagnosticPrefix,
-        [isHdr, dimension = outEntry.dimension, alphaMode = outEntry.alphaMode](const AStringView fieldName){
+        [isHdr, dimension = entry.dimension, alphaMode = entry.alphaMode](const AStringView fieldName){
             return
                 fieldName == s_FormatField
                 || fieldName == s_DimensionField
@@ -99,43 +105,52 @@ bool ParseTextureCookMetadata(
             ;
         }
     ))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    if(
-        !ReadRequiredUnsignedField(nwbFilePath, asset, s_WidthField, 1u, Limit<u32>::s_Max, outEntry.width)
-        || !ReadRequiredUnsignedField(nwbFilePath, asset, s_HeightField, 1u, Limit<u32>::s_Max, outEntry.height)
-    )
-        return false;
-    if(outEntry.dimension == TextureDimension::Texture3D){
-        if(!ReadRequiredUnsignedField(nwbFilePath, asset, s_DepthField, 1u, Limit<u32>::s_Max, outEntry.depth))
-            return false;
+    auto widthResult = ReadRequiredUnsignedField(nwbFilePath, asset, s_WidthField, 1u, Limit<u32>::s_Max);
+    if(!widthResult)
+        return MakeUnexpected(Failure{});
+    entry.width = *widthResult;
+    auto heightResult = ReadRequiredUnsignedField(nwbFilePath, asset, s_HeightField, 1u, Limit<u32>::s_Max);
+    if(!heightResult)
+        return MakeUnexpected(Failure{});
+    entry.height = *heightResult;
+    if(entry.dimension == TextureDimension::Texture3D){
+        auto depthResult = ReadRequiredUnsignedField(nwbFilePath, asset, s_DepthField, 1u, Limit<u32>::s_Max);
+        if(!depthResult)
+            return MakeUnexpected(Failure{});
+        entry.depth = *depthResult;
     }
-    if(outEntry.dimension == TextureDimension::TextureCube && outEntry.width != outEntry.height){
+    if(entry.dimension == TextureDimension::TextureCube && entry.width != entry.height){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': cubemap faces must be square")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     if(isHdr){
-        outEntry.colorSpace = TextureColorSpace::Linear;
-        outEntry.hasAlpha = outEntry.alphaMode != TextureAlphaMode::Opaque;
-        if(outEntry.alphaMode == TextureAlphaMode::ConstantUnorm8){
+        entry.colorSpace = TextureColorSpace::Linear;
+        entry.hasAlpha = entry.alphaMode != TextureAlphaMode::Opaque;
+        if(entry.alphaMode == TextureAlphaMode::ConstantUnorm8){
             u32 alphaConstant = 0u;
-            if(!ReadRequiredUnsignedField(nwbFilePath, asset, s_AlphaConstantUnorm8Field, 0u, s_MaxConstantAlphaUnorm8, alphaConstant))
-                return false;
-            outEntry.alphaConstantUnorm8 = static_cast<u8>(alphaConstant);
+            auto alphaConstantResult = ReadRequiredUnsignedField(nwbFilePath, asset, s_AlphaConstantUnorm8Field, 0u, s_MaxConstantAlphaUnorm8);
+            if(!alphaConstantResult)
+                return MakeUnexpected(Failure{});
+            alphaConstant = *alphaConstantResult;
+            entry.alphaConstantUnorm8 = static_cast<u8>(alphaConstant);
         }
     }
     else{
         AStringView colorSpace;
-        if(!::NWB::Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_ColorSpaceField, true, colorSpace))
-            return false;
+        auto colorSpaceResult = ::NWB::Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_ColorSpaceField, true);
+        if(!colorSpaceResult)
+            return MakeUnexpected(Failure{});
+        colorSpace = colorSpaceResult->text;
         if(colorSpace == s_LinearColorSpace)
-            outEntry.colorSpace = TextureColorSpace::Linear;
+            entry.colorSpace = TextureColorSpace::Linear;
         else if(colorSpace == s_SrgbColorSpace)
-            outEntry.colorSpace = TextureColorSpace::Srgb;
+            entry.colorSpace = TextureColorSpace::Srgb;
         else{
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' must be '{}' or '{}'")
                 , StringConvert(s_DiagnosticPrefix)
@@ -144,68 +159,68 @@ bool ParseTextureCookMetadata(
                 , StringConvert(s_LinearColorSpace)
                 , StringConvert(s_SrgbColorSpace)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         u32 hasAlpha = 0u;
-        if(!ReadRequiredUnsignedField(nwbFilePath, asset, s_HasAlphaField, 0u, 1u, hasAlpha))
-            return false;
-        outEntry.hasAlpha = hasAlpha != 0u;
-        outEntry.alphaMode = outEntry.hasAlpha ? TextureAlphaMode::EmbeddedLdr : TextureAlphaMode::Opaque;
+        auto hasAlphaResult = ReadRequiredUnsignedField(nwbFilePath, asset, s_HasAlphaField, 0u, 1u);
+        if(!hasAlphaResult)
+            return MakeUnexpected(Failure{});
+        hasAlpha = *hasAlphaResult;
+        entry.hasAlpha = hasAlpha != 0u;
+        entry.alphaMode = entry.hasAlpha ? TextureAlphaMode::EmbeddedLdr : TextureAlphaMode::Opaque;
     }
 
-    if(!::NWB::Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, outEntry.virtualPath, scratchArena))
-        return false;
+    auto virtualPathResult = ::NWB::Core::Assets::BuildMetadataDerivedAssetVirtualPath(assetRoot, virtualRoot, nwbFilePath, scratchArena);
+    if(!virtualPathResult)
+        return MakeUnexpected(Failure{});
+    entry.virtualPath = *virtualPathResult;
 
-    u64 expectedPayloadBytes = 0u;
-    if(!BuildMipLevels(
-        nwbFilePath,
-        outEntry.payloadFormat,
-        outEntry.dimension,
-        outEntry.width,
-        outEntry.height,
-        outEntry.depth,
-        outEntry.mipLevels,
-        expectedPayloadBytes
-    ))
-        return false;
+    const auto payloadByteCountResult = BuildMipLevels(
+        nwbFilePath, entry.payloadFormat, entry.dimension, entry.width, entry.height, entry.depth, entry.mipLevels
+    );
+    if(!payloadByteCountResult)
+        return MakeUnexpected(Failure{});
+    const u64 expectedPayloadBytes = *payloadByteCountResult;
     u64 expectedTotalPayloadBytes = expectedPayloadBytes;
-    if(outEntry.alphaMode == TextureAlphaMode::SeparateUastcLdr4x4){
+    if(entry.alphaMode == TextureAlphaMode::SeparateUastcLdr4x4){
         if(expectedPayloadBytes > Limit<u64>::s_Max - expectedTotalPayloadBytes){
             NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': separate HDR alpha payload size overflows")
                 , StringConvert(s_DiagnosticPrefix)
                 , PathToString<tchar>(nwbFilePath)
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
         expectedTotalPayloadBytes += expectedPayloadBytes;
     }
 
     AStringView dataFileName;
-    if(!::NWB::Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_DataField, true, dataFileName))
-        return false;
+    auto dataFileNameResult = ::NWB::Core::Assets::ReadMetadataStringField(nwbFilePath, asset, s_DiagnosticPrefix, s_DataField, true);
+    if(!dataFileNameResult)
+        return MakeUnexpected(Failure{});
+    dataFileName = dataFileNameResult->text;
     if(!ValidateTextureDataFileName(nwbFilePath, dataFileName, scratchArena))
-        return false;
+        return MakeUnexpected(Failure{});
 
     Path dataPath(nwbFilePath.parentPath());
     dataPath /= dataFileName;
-    ErrorCode errorCode;
-    if(!ReadBinaryFile(dataPath, outEntry.payloadBytes, errorCode)){
+    auto readBinaryFileResult = ReadBinaryFile(dataPath, entry.payloadBytes);
+    if(!readBinaryFileResult){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': failed to read texture sidecar '{}': {}")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
             , PathToString<tchar>(dataPath)
-            , StringConvert(errorCode.message())
+            , StringConvert(readBinaryFileResult.error().message())
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    if(expectedTotalPayloadBytes != static_cast<u64>(outEntry.payloadBytes.size())){
+    if(expectedTotalPayloadBytes != static_cast<u64>(entry.payloadBytes.size())){
         NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': texture sidecar size does not match the derived mip and alpha layout")
             , StringConvert(s_DiagnosticPrefix)
             , PathToString<tchar>(nwbFilePath)
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    return true;
+    return entry;
 }
 
 

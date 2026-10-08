@@ -30,21 +30,18 @@ NWB_IMPL_BEGIN
     ;
 }
 
-[[nodiscard]] NWB_INLINE bool MeshletRefDeltaByteCount(
+[[nodiscard]] NWB_INLINE Expected<usize> MeshletRefDeltaByteCount(
     const u32 refCount,
-    const MeshletRefDeltaWidth::Enum width,
-    usize& outByteCount
+    const MeshletRefDeltaWidth::Enum width
 )noexcept{
-    outByteCount = 0u;
     if(!MeshletRefDeltaWidthValid(width))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const usize byteWidth = MeshletRefDeltaByteWidth(width);
     if(static_cast<usize>(refCount) > Limit<usize>::s_Max / byteWidth)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outByteCount = static_cast<usize>(refCount) * byteWidth;
-    return true;
+    return static_cast<usize>(refCount) * byteWidth;
 }
 
 [[nodiscard]] NWB_INLINE bool AddMeshletRefDeltaByteCount(
@@ -52,13 +49,13 @@ NWB_IMPL_BEGIN
     const u32 refCount,
     const MeshletRefDeltaWidth::Enum width
 )noexcept{
-    usize channelBytes = 0u;
-    if(!MeshletRefDeltaByteCount(refCount, width, channelBytes))
+    const auto channelBytes = MeshletRefDeltaByteCount(refCount, width);
+    if(!channelBytes)
         return false;
-    if(channelBytes > Limit<usize>::s_Max - inOutByteCount)
+    if(*channelBytes > Limit<usize>::s_Max - inOutByteCount)
         return false;
 
-    inOutByteCount += channelBytes;
+    inOutByteCount += *channelBytes;
     return true;
 }
 
@@ -82,158 +79,127 @@ struct MeshletAttributeRefEncodingLayout{
     usize byteCount = 0u;
 };
 
-[[nodiscard]] NWB_INLINE bool AddMeshletRefLayoutChannel(
+[[nodiscard]] NWB_INLINE Expected<usize> AddMeshletRefLayoutChannel(
     const usize baseOffset,
     const u32 refCount,
     const MeshletRefDeltaWidth::Enum width,
-    usize& inOutRelativeOffset,
-    usize& outChannelByteOffset
+    usize& inOutRelativeOffset
 )noexcept{
     if(baseOffset > Limit<usize>::s_Max - inOutRelativeOffset)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outChannelByteOffset = baseOffset + inOutRelativeOffset;
-    return AddMeshletRefDeltaByteCount(inOutRelativeOffset, refCount, width);
+    const usize channelByteOffset = baseOffset + inOutRelativeOffset;
+    if(!AddMeshletRefDeltaByteCount(inOutRelativeOffset, refCount, width))
+        return MakeUnexpected(Failure{});
+    return channelByteOffset;
 }
 
-[[nodiscard]] NWB_INLINE bool BuildMeshletPositionRefEncodingLayout(
+[[nodiscard]] NWB_INLINE Expected<MeshletPositionRefEncodingLayout> BuildMeshletPositionRefEncodingLayout(
     const MeshletDesc& meshlet,
-    const bool skinRequired,
-    MeshletPositionRefEncodingLayout& outLayout
-)noexcept{
-    outLayout = {};
-    const u32 positionCount = MeshletPositionCount(meshlet);
-    outLayout.positionWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingPositionShift);
-    outLayout.skinWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingSkinShift);
-    if(
-        !AddMeshletRefLayoutChannel(
-            meshlet.positionRefOffset,
-            positionCount,
-            outLayout.positionWidth,
-            outLayout.byteCount,
-            outLayout.positionByteOffset
-        )
-    )
-        return false;
-
-    if(!skinRequired)
-        return true;
-
-    return AddMeshletRefLayoutChannel(
-        meshlet.positionRefOffset,
-        positionCount,
-        outLayout.skinWidth,
-        outLayout.byteCount,
-        outLayout.skinByteOffset
-    );
-}
-
-[[nodiscard]] NWB_INLINE bool BuildMeshletAttributeRefEncodingLayout(
-    const MeshletDesc& meshlet,
-    MeshletAttributeRefEncodingLayout& outLayout
-)noexcept{
-    outLayout = {};
-    const u32 attributeCount = MeshletAttributeCount(meshlet);
-    outLayout.normalWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingNormalShift);
-    outLayout.tangentWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingTangentShift);
-    outLayout.uv0Width = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingUv0Shift);
-    outLayout.colorWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingColorShift);
-    return
-        AddMeshletRefLayoutChannel(
-            meshlet.attributeRefOffset,
-            attributeCount,
-            outLayout.normalWidth,
-            outLayout.byteCount,
-            outLayout.normalByteOffset
-        )
-        && AddMeshletRefLayoutChannel(
-            meshlet.attributeRefOffset,
-            attributeCount,
-            outLayout.tangentWidth,
-            outLayout.byteCount,
-            outLayout.tangentByteOffset
-        )
-        && AddMeshletRefLayoutChannel(
-            meshlet.attributeRefOffset,
-            attributeCount,
-            outLayout.uv0Width,
-            outLayout.byteCount,
-            outLayout.uv0ByteOffset
-        )
-        && AddMeshletRefLayoutChannel(
-            meshlet.attributeRefOffset,
-            attributeCount,
-            outLayout.colorWidth,
-            outLayout.byteCount,
-            outLayout.colorByteOffset
-        )
-    ;
-}
-
-[[nodiscard]] NWB_INLINE bool MeshletEncodedPositionRefByteCount(
-    const MeshletDesc& meshlet,
-    const bool skinRequired,
-    usize& outByteCount
+    const bool skinRequired
 )noexcept{
     MeshletPositionRefEncodingLayout layout;
-    if(!BuildMeshletPositionRefEncodingLayout(meshlet, skinRequired, layout))
-        return false;
-
-    outByteCount = layout.byteCount;
-    return true;
+    const u32 positionCount = MeshletPositionCount(meshlet);
+    layout.positionWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingPositionShift);
+    layout.skinWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingSkinShift);
+    const auto positionOffset = AddMeshletRefLayoutChannel(meshlet.positionRefOffset, positionCount, layout.positionWidth, layout.byteCount);
+    if(!positionOffset)
+        return MakeUnexpected(Failure{});
+    layout.positionByteOffset = *positionOffset;
+    if(!skinRequired)
+        return layout;
+    const auto skinOffset = AddMeshletRefLayoutChannel(meshlet.positionRefOffset, positionCount, layout.skinWidth, layout.byteCount);
+    if(!skinOffset)
+        return MakeUnexpected(Failure{});
+    layout.skinByteOffset = *skinOffset;
+    return layout;
 }
 
-[[nodiscard]] NWB_INLINE bool MeshletEncodedAttributeRefByteCount(const MeshletDesc& meshlet, usize& outByteCount)noexcept{
+[[nodiscard]] NWB_INLINE Expected<MeshletAttributeRefEncodingLayout> BuildMeshletAttributeRefEncodingLayout(
+    const MeshletDesc& meshlet
+)noexcept{
     MeshletAttributeRefEncodingLayout layout;
-    if(!BuildMeshletAttributeRefEncodingLayout(meshlet, layout))
-        return false;
-
-    outByteCount = layout.byteCount;
-    return true;
+    const u32 attributeCount = MeshletAttributeCount(meshlet);
+    layout.normalWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingNormalShift);
+    layout.tangentWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingTangentShift);
+    layout.uv0Width = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingUv0Shift);
+    layout.colorWidth = MeshletRefEncodingWidth(meshlet.encoding, s_MeshletRefEncodingColorShift);
+    const auto normalOffset = AddMeshletRefLayoutChannel(meshlet.attributeRefOffset, attributeCount, layout.normalWidth, layout.byteCount);
+    if(!normalOffset)
+        return MakeUnexpected(Failure{});
+    layout.normalByteOffset = *normalOffset;
+    const auto tangentOffset = AddMeshletRefLayoutChannel(meshlet.attributeRefOffset, attributeCount, layout.tangentWidth, layout.byteCount);
+    if(!tangentOffset)
+        return MakeUnexpected(Failure{});
+    layout.tangentByteOffset = *tangentOffset;
+    const auto uv0Offset = AddMeshletRefLayoutChannel(meshlet.attributeRefOffset, attributeCount, layout.uv0Width, layout.byteCount);
+    if(!uv0Offset)
+        return MakeUnexpected(Failure{});
+    layout.uv0ByteOffset = *uv0Offset;
+    const auto colorOffset = AddMeshletRefLayoutChannel(meshlet.attributeRefOffset, attributeCount, layout.colorWidth, layout.byteCount);
+    if(!colorOffset)
+        return MakeUnexpected(Failure{});
+    layout.colorByteOffset = *colorOffset;
+    return layout;
 }
 
-[[nodiscard]] NWB_INLINE bool DecodeMeshletRefDelta(
+[[nodiscard]] NWB_INLINE Expected<usize> MeshletEncodedPositionRefByteCount(
+    const MeshletDesc& meshlet,
+    const bool skinRequired
+)noexcept{
+    const auto layout = BuildMeshletPositionRefEncodingLayout(meshlet, skinRequired);
+    if(!layout)
+        return MakeUnexpected(Failure{});
+
+    return layout->byteCount;
+}
+
+[[nodiscard]] NWB_INLINE Expected<usize> MeshletEncodedAttributeRefByteCount(const MeshletDesc& meshlet)noexcept{
+    const auto layout = BuildMeshletAttributeRefEncodingLayout(meshlet);
+    if(!layout)
+        return MakeUnexpected(Failure{});
+
+    return layout->byteCount;
+}
+
+[[nodiscard]] NWB_INLINE Expected<u32> DecodeMeshletRefDelta(
     const u8* const bytes,
     const usize byteCount,
     const usize byteOffset,
-    const MeshletRefDeltaWidth::Enum width,
-    u32& outDelta
+    const MeshletRefDeltaWidth::Enum width
 )noexcept{
-    outDelta = 0u;
     if(!MeshletRefDeltaWidthValid(width))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const usize byteWidth = MeshletRefDeltaByteWidth(width);
     if(byteOffset > byteCount || byteWidth > byteCount - byteOffset)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outDelta = static_cast<u32>(bytes[byteOffset]);
+    u32 delta = static_cast<u32>(bytes[byteOffset]);
     if(width == MeshletRefDeltaWidth::U8)
-        return true;
+        return delta;
 
-    outDelta |= static_cast<u32>(bytes[byteOffset + 1u]) << s_MeshletPackedByteBits;
+    delta |= static_cast<u32>(bytes[byteOffset + 1u]) << s_MeshletPackedByteBits;
     if(width == MeshletRefDeltaWidth::U16)
-        return true;
+        return delta;
 
-    outDelta |= static_cast<u32>(bytes[byteOffset + 2u]) << (s_MeshletPackedByteBits * 2u);
-    outDelta |= static_cast<u32>(bytes[byteOffset + 3u]) << (s_MeshletPackedByteBits * 3u);
-    return true;
+    delta |= static_cast<u32>(bytes[byteOffset + 2u]) << (s_MeshletPackedByteBits * 2u);
+    delta |= static_cast<u32>(bytes[byteOffset + 3u]) << (s_MeshletPackedByteBits * 3u);
+    return delta;
 }
 
-[[nodiscard]] NWB_INLINE bool DecodeMeshletRefDeltaAtIndex(
+[[nodiscard]] NWB_INLINE Expected<u32> DecodeMeshletRefDeltaAtIndex(
     const u8* const bytes,
     const usize byteCount,
     const usize channelByteOffset,
     const u32 localIndex,
-    const MeshletRefDeltaWidth::Enum width,
-    u32& outDelta
+    const MeshletRefDeltaWidth::Enum width
 )noexcept{
     return DecodeMeshletRefDelta(
         bytes,
         byteCount,
         channelByteOffset + static_cast<usize>(localIndex) * MeshletRefDeltaByteWidth(width),
-        width,
-        outDelta
+        width
     );
 }
 
@@ -256,13 +222,13 @@ struct MeshletPositionRefDecodeChannel{
     const usize byteCount,
     const MeshletPositionRefDecodeChannel& channel,
     const u32 localPositionIndex,
-    MeshletPositionStreamRef& outRef
+    MeshletPositionStreamRef& inOutRef
 )noexcept{
-    u32 delta = 0u;
-    if(!DecodeMeshletRefDeltaAtIndex(bytes, byteCount, channel.byteOffset, localPositionIndex, channel.width, delta))
+    const auto delta = DecodeMeshletRefDeltaAtIndex(bytes, byteCount, channel.byteOffset, localPositionIndex, channel.width);
+    if(!delta)
         return false;
 
-    outRef.*(channel.indexMember) = channel.base + delta;
+    inOutRef.*(channel.indexMember) = channel.base + *delta;
     return true;
 }
 
@@ -271,82 +237,85 @@ struct MeshletPositionRefDecodeChannel{
     const usize byteCount,
     const MeshletAttributeRefDecodeChannel& channel,
     const u32 localAttributeIndex,
-    MeshletAttributeStreamRef& outRef
+    MeshletAttributeStreamRef& inOutRef
 )noexcept{
-    u32 delta = 0u;
-    if(!DecodeMeshletRefDeltaAtIndex(bytes, byteCount, channel.byteOffset, localAttributeIndex, channel.width, delta))
+    const auto delta = DecodeMeshletRefDeltaAtIndex(bytes, byteCount, channel.byteOffset, localAttributeIndex, channel.width);
+    if(!delta)
         return false;
 
-    outRef.*(channel.indexMember) = channel.base + delta;
+    inOutRef.*(channel.indexMember) = channel.base + *delta;
     return true;
 }
 
-[[nodiscard]] NWB_INLINE bool DecodeMeshletPositionRef(
+[[nodiscard]] NWB_INLINE Expected<MeshletPositionStreamRef> DecodeMeshletPositionRef(
     const u8* const bytes,
     const usize byteCount,
     const MeshletDesc& meshlet,
     const u32 localPositionIndex,
-    const bool skinRequired,
-    MeshletPositionStreamRef& outRef
+    const bool skinRequired
 )noexcept{
-    outRef = {};
+    MeshletPositionStreamRef ref;
     const u32 positionCount = MeshletPositionCount(meshlet);
     if(localPositionIndex >= positionCount)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    MeshletPositionRefEncodingLayout layout;
-    if(!BuildMeshletPositionRefEncodingLayout(meshlet, skinRequired, layout))
-        return false;
+    const auto layout = BuildMeshletPositionRefEncodingLayout(meshlet, skinRequired);
+    if(!layout)
+        return MakeUnexpected(Failure{});
 
     const MeshletPositionRefDecodeChannel positionChannel{
-        layout.positionByteOffset,
-        layout.positionWidth,
+        layout->positionByteOffset,
+        layout->positionWidth,
         meshlet.positionBase,
         &MeshletPositionStreamRef::position,
     };
-    if(!DecodeMeshletPositionRefChannel(bytes, byteCount, positionChannel, localPositionIndex, outRef))
-        return false;
+    if(!DecodeMeshletPositionRefChannel(bytes, byteCount, positionChannel, localPositionIndex, ref))
+        return MakeUnexpected(Failure{});
 
-    if(!skinRequired)
-        return meshlet.skinBase == s_MeshMissingStreamIndex;
+    if(!skinRequired){
+        if(meshlet.skinBase != s_MeshMissingStreamIndex)
+            return MakeUnexpected(Failure{});
+        return ref;
+    }
 
     const MeshletPositionRefDecodeChannel skinChannel{
-        layout.skinByteOffset,
-        layout.skinWidth,
+        layout->skinByteOffset,
+        layout->skinWidth,
         meshlet.skinBase,
         &MeshletPositionStreamRef::skin,
     };
-    return DecodeMeshletPositionRefChannel(bytes, byteCount, skinChannel, localPositionIndex, outRef);
+    if(!DecodeMeshletPositionRefChannel(bytes, byteCount, skinChannel, localPositionIndex, ref))
+        return MakeUnexpected(Failure{});
+    return ref;
 }
 
-[[nodiscard]] NWB_INLINE bool DecodeMeshletAttributeRef(
+[[nodiscard]] NWB_INLINE Expected<MeshletAttributeStreamRef> DecodeMeshletAttributeRef(
     const u8* const bytes,
     const usize byteCount,
     const MeshletDesc& meshlet,
-    const u32 localAttributeIndex,
-    MeshletAttributeStreamRef& outRef
+    const u32 localAttributeIndex
 )noexcept{
-    outRef = {};
+    MeshletAttributeStreamRef ref;
     const u32 attributeCount = MeshletAttributeCount(meshlet);
     if(localAttributeIndex >= attributeCount)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    MeshletAttributeRefEncodingLayout layout;
-    if(!BuildMeshletAttributeRefEncodingLayout(meshlet, layout))
-        return false;
+    const auto layout = BuildMeshletAttributeRefEncodingLayout(meshlet);
+    if(!layout)
+        return MakeUnexpected(Failure{});
 
     const MeshletAttributeRefDecodeChannel channels[] = {
-        { layout.normalByteOffset, layout.normalWidth, meshlet.normalBase, &MeshletAttributeStreamRef::normal },
-        { layout.tangentByteOffset, layout.tangentWidth, meshlet.tangentBase, &MeshletAttributeStreamRef::tangent },
-        { layout.uv0ByteOffset, layout.uv0Width, meshlet.uv0Base, &MeshletAttributeStreamRef::uv0 },
-        { layout.colorByteOffset, layout.colorWidth, meshlet.colorBase, &MeshletAttributeStreamRef::color },
+        { layout->normalByteOffset, layout->normalWidth, meshlet.normalBase, &MeshletAttributeStreamRef::normal },
+        { layout->tangentByteOffset, layout->tangentWidth, meshlet.tangentBase, &MeshletAttributeStreamRef::tangent },
+        { layout->uv0ByteOffset, layout->uv0Width, meshlet.uv0Base, &MeshletAttributeStreamRef::uv0 },
+        { layout->colorByteOffset, layout->colorWidth, meshlet.colorBase, &MeshletAttributeStreamRef::color },
     };
     for(const MeshletAttributeRefDecodeChannel& channel : channels){
-        if(!DecodeMeshletAttributeRefChannel(bytes, byteCount, channel, localAttributeIndex, outRef))
-            return false;
+        if(!DecodeMeshletAttributeRefChannel(bytes, byteCount, channel, localAttributeIndex, ref))
+            return MakeUnexpected(Failure{});
     }
 
-    return true;
+    return ref;
 }
 
 

@@ -35,7 +35,7 @@ namespace GpuCommandRecordingMode{
 // Main-thread owner. Resource invalidation follows the caller's joined GPU/graph teardown boundary.
 class GpuRenderer final : public Core::IGpuTaskGraphOutputLayerContributor, NoCopy{
 public:
-    using ShaderPathResolveCallback = Function<bool(const Name&, AStringView, const Name&, Name&)>;
+    using ShaderPathResolveCallback = Function<Expected<Name>(const Name&, AStringView, const Name&)>;
 
 
 public:
@@ -63,7 +63,7 @@ public:
 
 public:
     [[nodiscard]] virtual bool prepareTaskGraphOutputLayer(const Core::AcquiredPresentationFrame& frame)override;
-    [[nodiscard]] virtual bool declareTaskGraphOutputLayer(Core::GpuTaskGraph& graph, Core::GpuTaskGraphOutputLayer& outLayer)override;
+    [[nodiscard]] virtual Expected<Core::GpuTaskGraphOutputLayer> declareTaskGraphOutputLayer(Core::GpuTaskGraph& graph)override;
     virtual void acceptTaskGraphOutputLayer(u64 frameGeneration, const Core::QueueSubmissionToken& submissionToken)override;
 
 

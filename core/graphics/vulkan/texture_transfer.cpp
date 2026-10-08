@@ -50,48 +50,48 @@ namespace __hidden_texture_transfer{
 
 // Buffer-image copies address exactly one image aspect. Validate against the texture's full native metadata,
 // then lower the selected upload plane into its own Vulkan aspect and byte layout.
-[[nodiscard]] inline bool ResolveTextureUploadCopyAspect(
+struct TextureUploadCopyAspect{
+    VkImageAspectFlags aspectMask = 0u;
+    VulkanDetail::TextureFormatBlockLayout formatLayout;
+};
+
+[[nodiscard]] inline Expected<TextureUploadCopyAspect> ResolveTextureUploadCopyAspect(
     const TextureDesc& textureDesc,
     const VkImageAspectFlags textureAspectMask,
-    const TextureUploadAspect::Enum requestedAspect,
-    VkImageAspectFlags& outAspectMask,
-    VulkanDetail::TextureFormatBlockLayout& outFormatLayout
+    const TextureUploadAspect::Enum requestedAspect
 ){
-    outAspectMask = 0u;
-    outFormatLayout = {};
+    TextureUploadCopyAspect result{};
 
     const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
-    TextureUploadAspect::Enum resolvedAspect;
-    TextureUploadAspectLayout uploadLayout;
-    if(
-        !ResolveTextureUploadAspect(formatInfo, requestedAspect, resolvedAspect)
-        || !GetTextureUploadAspectLayout(formatInfo, requestedAspect, uploadLayout)
-    )
-        return false;
+    const auto resolvedAspect = ResolveTextureUploadAspect(formatInfo, requestedAspect);
+    if(!resolvedAspect)
+        return MakeUnexpected(Failure{});
+    const auto uploadLayout = GetTextureUploadAspectLayout(formatInfo, requestedAspect);
+    if(!uploadLayout)
+        return MakeUnexpected(Failure{});
 
-    switch(resolvedAspect){
+    switch(*resolvedAspect){
     case TextureUploadAspect::Color:
-        outAspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        result.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         break;
     case TextureUploadAspect::Depth:
-        outAspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        result.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
         break;
     case TextureUploadAspect::Stencil:
-        outAspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
+        result.aspectMask = VK_IMAGE_ASPECT_STENCIL_BIT;
         break;
     default:
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    if((textureAspectMask & outAspectMask) != outAspectMask)
-        return false;
+    if((textureAspectMask & result.aspectMask) != result.aspectMask)
+        return MakeUnexpected(Failure{});
 
-    outFormatLayout.blockWidth = uploadLayout.blockWidth;
-    outFormatLayout.blockHeight = uploadLayout.blockHeight;
-    outFormatLayout.bytesPerBlock = uploadLayout.bytesPerBlock;
-    return outFormatLayout.blockWidth != 0u
-        && outFormatLayout.blockHeight != 0u
-        && outFormatLayout.bytesPerBlock != 0u
-    ;
+    result.formatLayout.blockWidth = uploadLayout->blockWidth;
+    result.formatLayout.blockHeight = uploadLayout->blockHeight;
+    result.formatLayout.bytesPerBlock = uploadLayout->bytesPerBlock;
+    if(result.formatLayout.blockWidth == 0u || result.formatLayout.blockHeight == 0u || result.formatLayout.bytesPerBlock == 0u)
+        return MakeUnexpected(Failure{});
+    return result;
 }
 
 
@@ -133,26 +133,25 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
     ))
         return;
 
-    VulkanTextureDetail::TextureCopyContract contract;
-    if(!VulkanTextureDetail::ResolveTextureCopyContract(
+    const auto contract = VulkanTextureDetail::ResolveTextureCopyContract(
         src.m_creationDesc,
         srcSlice,
         dest.m_creationDesc,
-        destSlice,
-        contract
-    )){
+        destSlice
+    );
+    if(!contract){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination slices violate the image-copy contract"));
         return;
     }
     if(
-        src.m_aspectMask != contract.aspectMask
-        || dest.m_aspectMask != contract.aspectMask
-        || src.m_formatLayout.blockWidth != contract.formatLayout.blockWidth
-        || src.m_formatLayout.blockHeight != contract.formatLayout.blockHeight
-        || src.m_formatLayout.bytesPerBlock != contract.formatLayout.bytesPerBlock
-        || dest.m_formatLayout.blockWidth != contract.formatLayout.blockWidth
-        || dest.m_formatLayout.blockHeight != contract.formatLayout.blockHeight
-        || dest.m_formatLayout.bytesPerBlock != contract.formatLayout.bytesPerBlock
+        src.m_aspectMask != contract->aspectMask
+        || dest.m_aspectMask != contract->aspectMask
+        || src.m_formatLayout.blockWidth != contract->formatLayout.blockWidth
+        || src.m_formatLayout.blockHeight != contract->formatLayout.blockHeight
+        || src.m_formatLayout.bytesPerBlock != contract->formatLayout.bytesPerBlock
+        || dest.m_formatLayout.blockWidth != contract->formatLayout.blockWidth
+        || dest.m_formatLayout.blockHeight != contract->formatLayout.blockHeight
+        || dest.m_formatLayout.bytesPerBlock != contract->formatLayout.bytesPerBlock
     ){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture aspect or block metadata disagrees with its format"));
         return;
@@ -160,8 +159,8 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
     if(
         !VulkanTextureDetail::IsTextureImageInfoConsistent(src.m_creationDesc, src.m_imageInfo)
         || !VulkanTextureDetail::IsTextureImageInfoConsistent(dest.m_creationDesc, dest.m_imageInfo)
-        || src.m_imageInfo.imageType != contract.imageType
-        || dest.m_imageInfo.imageType != contract.imageType
+        || src.m_imageInfo.imageType != contract->imageType
+        || dest.m_imageInfo.imageType != contract->imageType
     ){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture descriptions and native image metadata must agree"));
         return;
@@ -216,32 +215,32 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
 
     VkImageCopy region{};
     region.srcSubresource = VulkanDetail::BuildImageSubresourceLayers(
-        contract.aspectMask,
-        contract.sourceSlice.mipLevel,
-        contract.sourceSlice.arraySlice
+        contract->aspectMask,
+        contract->sourceSlice.mipLevel,
+        contract->sourceSlice.arraySlice
     );
     region.srcOffset = {
-        static_cast<i32>(contract.sourceSlice.x),
-        static_cast<i32>(contract.sourceSlice.y),
-        static_cast<i32>(contract.sourceSlice.z),
+        static_cast<i32>(contract->sourceSlice.x),
+        static_cast<i32>(contract->sourceSlice.y),
+        static_cast<i32>(contract->sourceSlice.z),
     };
     region.dstSubresource = VulkanDetail::BuildImageSubresourceLayers(
-        contract.aspectMask,
-        contract.destinationSlice.mipLevel,
-        contract.destinationSlice.arraySlice
+        contract->aspectMask,
+        contract->destinationSlice.mipLevel,
+        contract->destinationSlice.arraySlice
     );
     region.dstOffset = {
-        static_cast<i32>(contract.destinationSlice.x),
-        static_cast<i32>(contract.destinationSlice.y),
-        static_cast<i32>(contract.destinationSlice.z),
+        static_cast<i32>(contract->destinationSlice.x),
+        static_cast<i32>(contract->destinationSlice.y),
+        static_cast<i32>(contract->destinationSlice.z),
     };
     region.extent = {
-        contract.destinationSlice.width,
-        contract.destinationSlice.height,
-        contract.destinationSlice.depth,
+        contract->destinationSlice.width,
+        contract->destinationSlice.height,
+        contract->destinationSlice.depth,
     };
 
-    switch(contract.queueRequirement){
+    switch(contract->queueRequirement){
     case VulkanTextureDetail::TextureCopyQueueRequirement::Graphics:
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
             return;
@@ -264,14 +263,14 @@ void CommandList::copyTexture(Texture& dest, const TextureSlice& destSlice, Text
         return;
     setTextureState(
         &src,
-        TextureSubresourceSet(contract.sourceSlice.mipLevel, 1u, contract.sourceSlice.arraySlice, 1u),
+        TextureSubresourceSet(contract->sourceSlice.mipLevel, 1u, contract->sourceSlice.arraySlice, 1u),
         ResourceStates::CopySource
     );
     if(m_commandRecordingFailed)
         return;
     setTextureState(
         &dest,
-        TextureSubresourceSet(contract.destinationSlice.mipLevel, 1u, contract.destinationSlice.arraySlice, 1u),
+        TextureSubresourceSet(contract->destinationSlice.mipLevel, 1u, contract->destinationSlice.arraySlice, 1u),
         ResourceStates::CopyDest
     );
     if(m_commandRecordingFailed)
@@ -322,15 +321,15 @@ bool CommandList::tryWriteTexture(
     }
 
     const FormatInfo& formatInfo = GetFormatInfo(texDesc.format);
-    VulkanDetail::TextureFormatBlockLayout expectedFormatLayout;
+    const auto expectedFormatLayout = VulkanDetail::GetTextureFormatBlockLayout(formatInfo);
     const VkImageAspectFlags expectedAspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
     if(
-        !VulkanDetail::GetTextureFormatBlockLayout(formatInfo, expectedFormatLayout)
+        !expectedFormatLayout
         || expectedAspectMask == 0u
         || dest.m_aspectMask != expectedAspectMask
-        || dest.m_formatLayout.blockWidth != expectedFormatLayout.blockWidth
-        || dest.m_formatLayout.blockHeight != expectedFormatLayout.blockHeight
-        || dest.m_formatLayout.bytesPerBlock != expectedFormatLayout.bytesPerBlock
+        || dest.m_formatLayout.blockWidth != expectedFormatLayout->blockWidth
+        || dest.m_formatLayout.blockHeight != expectedFormatLayout->blockHeight
+        || dest.m_formatLayout.bytesPerBlock != expectedFormatLayout->bytesPerBlock
     ){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture description and native format metadata must agree"));
         return false;
@@ -340,18 +339,13 @@ bool CommandList::tryWriteTexture(
         return false;
     }
 
-    VkImageAspectFlags copyAspectMask = 0u;
-    VulkanDetail::TextureFormatBlockLayout copyFormatLayout;
-    if(!__hidden_texture_transfer::ResolveTextureUploadCopyAspect(
-        texDesc,
-        dest.m_aspectMask,
-        aspect,
-        copyAspectMask,
-        copyFormatLayout
-    )){
+    const auto copyAspect = __hidden_texture_transfer::ResolveTextureUploadCopyAspect(texDesc, dest.m_aspectMask, aspect);
+    if(!copyAspect){
         rejectCommandRecording(s_OperationName, NWB_TEXT("upload aspect is not present in the destination format"));
         return false;
     }
+    const VkImageAspectFlags copyAspectMask = copyAspect->aspectMask;
+    const VulkanDetail::TextureFormatBlockLayout& copyFormatLayout = copyAspect->formatLayout;
 
     const VkExtent3D mipExtent = VulkanDetail::GetTextureMipExtent(texDesc, mipLevel);
 
@@ -360,31 +354,28 @@ bool CommandList::tryWriteTexture(
         return false;
     }
 
-    VulkanDetail::BufferImageCopyLayout copyLayout;
-    if(
-        !VulkanDetail::BuildBufferImageCopyLayout(
+    const auto copyLayout = VulkanDetail::BuildBufferImageCopyLayout(
             mipExtent,
             copyFormatLayout,
             static_cast<u64>(rowPitch),
             static_cast<u64>(depthPitch),
             VulkanDetail::BufferImageCopyRequiredSize::PaddedSlices,
-            VulkanDetail::BufferImageCopyPitchFields::EmitExplicit,
-            copyLayout
-        )
-    ){
+            VulkanDetail::BufferImageCopyPitchFields::EmitExplicit
+    );
+    if(!copyLayout){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source pitches do not define a valid buffer-image copy layout"));
         return false;
     }
-    if(copyLayout.requiredSize > static_cast<u64>(Limit<usize>::s_Max)){
+    if(copyLayout->requiredSize > static_cast<u64>(Limit<usize>::s_Max)){
         rejectCommandRecording(s_OperationName, NWB_TEXT("upload size exceeds addressable memory"));
         return false;
     }
-    u32 uploadAlignment = 0u;
     const u32 uploadAlignmentRequirement = copyAspectMask == VK_IMAGE_ASPECT_COLOR_BIT
         ? copyFormatLayout.bytesPerBlock
         : static_cast<u32>(sizeof(u32))
     ;
-    if(!VulkanDetail::TryComputeUploadSuballocationAlignment(uploadAlignmentRequirement, uploadAlignment)){
+    const auto uploadAlignment = VulkanDetail::TryComputeUploadSuballocationAlignment(uploadAlignmentRequirement);
+    if(!uploadAlignment){
         rejectCommandRecording(s_OperationName, NWB_TEXT("upload buffer offset alignment overflows"));
         return false;
     }
@@ -396,23 +387,22 @@ bool CommandList::tryWriteTexture(
     if(!recordAndValidateCommandCapability(requiredCapabilities, s_OperationName))
         return false;
 
-    Buffer* stagingBuffer = nullptr;
-    u64 stagingOffset = 0;
-    const usize uploadSize = static_cast<usize>(copyLayout.requiredSize);
-    if(!prepareUploadStaging(
+    const usize uploadSize = static_cast<usize>(copyLayout->requiredSize);
+    const auto staging = prepareUploadStaging(
         data,
         uploadSize,
         NWB_TEXT("writeTexture"),
-        stagingBuffer,
-        stagingOffset,
-        uploadAlignment
-    )){
+        *uploadAlignment
+    );
+    if(!staging){
         rejectCommandRecording(s_OperationName, NWB_TEXT("staging allocation failed"));
         return false;
     }
+    Buffer* const stagingBuffer = staging->buffer;
+    const u64 stagingOffset = staging->offset;
     if(
         !stagingBuffer
-        || (stagingOffset % uploadAlignment) != 0u
+        || (stagingOffset % *uploadAlignment) != 0u
         || (stagingOffset % uploadAlignmentRequirement) != 0u
         || stagingOffset > stagingBuffer->m_creationDesc.byteSize
         || static_cast<u64>(uploadSize) > stagingBuffer->m_creationDesc.byteSize - stagingOffset
@@ -428,8 +418,8 @@ bool CommandList::tryWriteTexture(
 
     VkBufferImageCopy region{};
     region.bufferOffset = stagingOffset;
-    region.bufferRowLength = copyLayout.bufferRowLength;
-    region.bufferImageHeight = copyLayout.bufferImageHeight;
+    region.bufferRowLength = copyLayout->bufferRowLength;
+    region.bufferImageHeight = copyLayout->bufferImageHeight;
     region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(copyAspectMask, mipLevel, arraySlice);
     region.imageExtent = mipExtent;
 
@@ -511,19 +501,19 @@ void CommandList::resolveTexture(Texture& dest, const TextureSubresourceSet& dst
     }
 
     const FormatInfo& formatInfo = GetFormatInfo(src.m_creationDesc.format);
-    VulkanDetail::TextureFormatBlockLayout expectedFormatLayout;
+    const auto expectedFormatLayout = VulkanDetail::GetTextureFormatBlockLayout(formatInfo);
     const VkImageAspectFlags expectedAspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
     if(
-        !VulkanDetail::GetTextureFormatBlockLayout(formatInfo, expectedFormatLayout)
+        !expectedFormatLayout
         || expectedAspectMask != VK_IMAGE_ASPECT_COLOR_BIT
         || src.m_aspectMask != expectedAspectMask
         || dest.m_aspectMask != expectedAspectMask
-        || src.m_formatLayout.blockWidth != expectedFormatLayout.blockWidth
-        || src.m_formatLayout.blockHeight != expectedFormatLayout.blockHeight
-        || src.m_formatLayout.bytesPerBlock != expectedFormatLayout.bytesPerBlock
-        || dest.m_formatLayout.blockWidth != expectedFormatLayout.blockWidth
-        || dest.m_formatLayout.blockHeight != expectedFormatLayout.blockHeight
-        || dest.m_formatLayout.bytesPerBlock != expectedFormatLayout.bytesPerBlock
+        || src.m_formatLayout.blockWidth != expectedFormatLayout->blockWidth
+        || src.m_formatLayout.blockHeight != expectedFormatLayout->blockHeight
+        || src.m_formatLayout.bytesPerBlock != expectedFormatLayout->bytesPerBlock
+        || dest.m_formatLayout.blockWidth != expectedFormatLayout->blockWidth
+        || dest.m_formatLayout.blockHeight != expectedFormatLayout->blockHeight
+        || dest.m_formatLayout.bytesPerBlock != expectedFormatLayout->bytesPerBlock
     ){
         rejectCommandRecording(s_OperationName, NWB_TEXT("texture aspect or block metadata disagrees with its format"));
         return;

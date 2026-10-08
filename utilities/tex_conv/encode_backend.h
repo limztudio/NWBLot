@@ -62,18 +62,26 @@ void ConfigureCompressor(basisu::basis_compressor_params& parameters, basisu::jo
 void ResetPayload(TexturePayload& outPayload, const TextureDimension::Enum dimension, const u32 width, const u32 height, const u32 depth, const TexturePayloadFormat::Enum format, const bool srgb);
 [[nodiscard]] bool ValidateBackendOutput(const basisu::basisu_backend_output& backendOutput, const basist::basis_tex_format expectedFormat);
 [[nodiscard]] bool AppendCanonicalMip(const basisu::basisu_backend_output& backendOutput, const u32 backendMipIndex, const u32 planeCount, const u32 width, const u32 height, TexturePayload& inOutPayload);
-[[nodiscard]] bool LoadAlphaMask(const AlphaSource& alphaSource, const u32 expectedWidth, const u32 expectedHeight, basisu::imagef& outMask);
-[[nodiscard]] bool EncodeHdr2DOrCube(const Vector<Path>& inputPaths, const TextureDimension::Enum dimension, const AlphaSource& alphaSource, TexturePayload& outPayload);
-[[nodiscard]] bool EncodeHdrVolume(const Vector<Path>& inputPaths, const AlphaSource& alphaSource, TexturePayload& outPayload);
-[[nodiscard]] bool ComputeVolumeMipDims(u32 sourceWidth, u32 sourceHeight, u32 sourceDepth, VolumeMipDims& outDims);
-[[nodiscard]] bool ComputeVolumeMipSliceRange(u32 sourceDepth, u32 targetDepth, u32 targetZ, u32& outFirst, u32& outEnd);
+[[nodiscard]] Expected<basisu::imagef> LoadAlphaMask(const AlphaSource& alphaSource, const u32 expectedWidth, const u32 expectedHeight);
+[[nodiscard]] Expected<TexturePayload> EncodeHdr2DOrCube(const Vector<Path>& inputPaths, const TextureDimension::Enum dimension, const AlphaSource& alphaSource);
+[[nodiscard]] Expected<TexturePayload> EncodeHdrVolume(const Vector<Path>& inputPaths, const AlphaSource& alphaSource);
+[[nodiscard]] Expected<VolumeMipDims> ComputeVolumeMipDims(u32 sourceWidth, u32 sourceHeight, u32 sourceDepth)noexcept;
+struct VolumeMipSliceRange{
+    u32 first = 0u;
+    u32 end = 0u;
+};
+
+[[nodiscard]] Expected<VolumeMipSliceRange> ComputeVolumeMipSliceRange(u32 sourceDepth, u32 targetDepth, u32 targetZ)noexcept;
 struct LdrPlaneLoader{
     using Plane = basisu::image;
     static constexpr TStringView s_DecodeFailureLabel = NWB_TEXT("tex_conv: failed to decode input image '{}'.");
     static constexpr TStringView s_ResolutionFailureLabel = NWB_TEXT("tex_conv: input image '{}' has an invalid resolution.");
     static constexpr TStringView s_MismatchFailureLabel = NWB_TEXT("tex_conv: all LDR texture inputs must have the same resolution.");
-    [[nodiscard]] static bool Decode(const AString& inputPathText, Plane& outPlane){
-        return basisu::load_image(inputPathText.c_str(), outPlane);
+    [[nodiscard]] static Expected<Plane> Decode(const AString& inputPathText){
+        Plane plane;
+        if(!basisu::load_image(inputPathText.c_str(), plane))
+            return MakeUnexpected(Failure{});
+        return plane;
     }
 };
 struct HdrPlaneLoader{
@@ -81,55 +89,62 @@ struct HdrPlaneLoader{
     static constexpr TStringView s_DecodeFailureLabel = NWB_TEXT("tex_conv: failed to decode HDR image '{}'.");
     static constexpr TStringView s_ResolutionFailureLabel = NWB_TEXT("tex_conv: HDR image '{}' has an invalid resolution.");
     static constexpr TStringView s_MismatchFailureLabel = NWB_TEXT("tex_conv: all HDR texture inputs must have the same resolution.");
-    [[nodiscard]] static bool Decode(const AString& inputPathText, Plane& outPlane){
-        return basisu::load_image_hdr(inputPathText.c_str(), outPlane, false);
+    [[nodiscard]] static Expected<Plane> Decode(const AString& inputPathText){
+        Plane plane;
+        if(!basisu::load_image_hdr(inputPathText.c_str(), plane, false))
+            return MakeUnexpected(Failure{});
+        return plane;
     }
 };
-template<typename PlaneLoader, typename PlaneVector>
-[[nodiscard]] bool LoadPlanesFromFiles(const Vector<Path>& inputPaths, PlaneVector& outPlanes){
+template<typename PlaneLoader>
+[[nodiscard]] Expected<basisu::vector<typename PlaneLoader::Plane>> LoadPlanesFromFiles(const Vector<Path>& inputPaths){
     using Plane = typename PlaneLoader::Plane;
-    outPlanes.clear();
+    basisu::vector<Plane> planes;
     if(inputPaths.empty())
-        return false;
+        return MakeUnexpected(Failure{});
     u32 width = 0u;
     u32 height = 0u;
-    outPlanes.reserve(inputPaths.size());
+    planes.reserve(inputPaths.size());
     for(const Path& inputPath : inputPaths){
         const AString inputPathText = PathToGenericString<AString>(inputPath);
-        Plane plane;
-        if(!PlaneLoader::Decode(inputPathText, plane)){
+        auto plane = PlaneLoader::Decode(inputPathText);
+        if(!plane){
             NWB_LOGGER_ERROR(PlaneLoader::s_DecodeFailureLabel, PathToString<tchar>(inputPath));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        if(plane.get_width() == 0u || plane.get_height() == 0u){
+        if(plane->get_width() == 0u || plane->get_height() == 0u){
             NWB_LOGGER_ERROR(PlaneLoader::s_ResolutionFailureLabel, PathToString<tchar>(inputPath));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        if(outPlanes.empty()){
-            width = plane.get_width();
-            height = plane.get_height();
+        if(planes.empty()){
+            width = plane->get_width();
+            height = plane->get_height();
         }
-        else if(plane.get_width() != width || plane.get_height() != height){
+        else if(plane->get_width() != width || plane->get_height() != height){
             NWB_LOGGER_ERROR(PlaneLoader::s_MismatchFailureLabel);
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outPlanes.push_back(Move(plane));
+        planes.push_back(Move(*plane));
     }
-    return true;
+    return planes;
 }
 template<typename PlaneVector>
-[[nodiscard]] bool PrepareVolumeMipTargets(
-    const PlaneVector& sourcePlanes,
-    PlaneVector& outPlanes,
-    VolumeMipDims& outDims
-){
+struct VolumeMipTargets{
+    PlaneVector planes;
+    VolumeMipDims dims;
+};
+
+template<typename PlaneVector>
+[[nodiscard]] Expected<VolumeMipTargets<PlaneVector>> PrepareVolumeMipTargets(const PlaneVector& sourcePlanes){
     if(sourcePlanes.empty() || sourcePlanes.size() > Limit<u32>::s_Max)
-        return false;
-    if(!ComputeVolumeMipDims(sourcePlanes.front().get_width(), sourcePlanes.front().get_height(), static_cast<u32>(sourcePlanes.size()), outDims))
-        return false;
-    outPlanes.clear();
-    outPlanes.resize(outDims.targetDepth);
-    return true;
+        return MakeUnexpected(Failure{});
+    const auto dims = ComputeVolumeMipDims(sourcePlanes.front().get_width(), sourcePlanes.front().get_height(), static_cast<u32>(sourcePlanes.size()));
+    if(!dims)
+        return MakeUnexpected(Failure{});
+    VolumeMipTargets<PlaneVector> targets;
+    targets.dims = *dims;
+    targets.planes.resize(dims->targetDepth);
+    return targets;
 }
 
 

@@ -79,18 +79,17 @@ bool TextShaper::setFonts(const FontSource* sources, usize count){
     return true;
 }
 
-TextLayoutStatus::Enum TextShaper::shape(const ShapeRequest& request, ShapedRun& output){
+Expected<ShapedRun, TextLayoutStatus::Enum> TextShaper::shape(const ShapeRequest& request){
     const TextLayoutStatus::Enum validation = ValidateTextRequest(request, false);
     if(validation != TextLayoutStatus::Success)
-        return validation;
+        return MakeUnexpected(validation);
     if(m_fonts.empty())
-        return TextLayoutStatus::FontFailure;
+        return MakeUnexpected(TextLayoutStatus::FontFailure);
     ShapedRun run(m_arena);
-    if(
-        !m_fonts[0]->metrics(request.fontSize, run.metrics)
-        || !m_fonts[0]->shape(request, 0u, static_cast<u32>(request.text.size()), m_primary)
-    )
-        return TextLayoutStatus::FontFailure;
+    const auto primaryMetrics = m_fonts[0]->metrics(request.fontSize);
+    if(!primaryMetrics || !m_fonts[0]->shape(request, 0u, static_cast<u32>(request.text.size()), m_primary))
+        return MakeUnexpected(TextLayoutStatus::FontFailure);
+    run.metrics = *primaryMetrics;
     run.glyphs.reserve(m_primary.size());
     m_spans.clear();
     m_spans.reserve(m_primary.size());
@@ -102,14 +101,14 @@ TextLayoutStatus::Enum TextShaper::shape(const ShapeRequest& request, ShapedRun&
             span.fontIndex = m_fonts.size();
             for(usize fontIndex = 1u; fontIndex < m_fonts.size(); ++fontIndex){
                 if(!m_fonts[fontIndex]->shape(request, span.byteBegin, span.byteEnd, m_fallback))
-                    return TextLayoutStatus::FontFailure;
+                    return MakeUnexpected(TextLayoutStatus::FontFailure);
                 if(__hidden_ui_text_shaper::HasMissing(m_fallback, 0u, m_fallback.size()))
                     continue;
                 span.fontIndex = fontIndex;
                 break;
             }
             if(span.fontIndex == m_fonts.size())
-                return TextLayoutStatus::MissingGlyph;
+                return MakeUnexpected(TextLayoutStatus::MissingGlyph);
         }
         if(!m_spans.empty() && m_spans.back().fontIndex == span.fontIndex){
             FontSpan& previous = m_spans.back();
@@ -127,20 +126,19 @@ TextLayoutStatus::Enum TextShaper::shape(const ShapeRequest& request, ShapedRun&
             __hidden_ui_text_shaper::Append(run, face, m_primary, span.glyphBegin, span.glyphEnd);
         else{
             if(!face->shape(request, span.byteBegin, span.byteEnd, m_fallback))
-                return TextLayoutStatus::FontFailure;
+                return MakeUnexpected(TextLayoutStatus::FontFailure);
             if(__hidden_ui_text_shaper::HasMissing(m_fallback, 0u, m_fallback.size()))
-                return TextLayoutStatus::MissingGlyph;
-            FontMetrics metrics;
-            if(!face->metrics(request.fontSize, metrics))
-                return TextLayoutStatus::FontFailure;
-            run.metrics.ascender = Max(run.metrics.ascender, metrics.ascender);
-            run.metrics.descender = Max(run.metrics.descender, metrics.descender);
-            run.metrics.lineGap = Max(run.metrics.lineGap, metrics.lineGap);
+                return MakeUnexpected(TextLayoutStatus::MissingGlyph);
+            const auto metrics = face->metrics(request.fontSize);
+            if(!metrics)
+                return MakeUnexpected(TextLayoutStatus::FontFailure);
+            run.metrics.ascender = Max(run.metrics.ascender, metrics->ascender);
+            run.metrics.descender = Max(run.metrics.descender, metrics->descender);
+            run.metrics.lineGap = Max(run.metrics.lineGap, metrics->lineGap);
             __hidden_ui_text_shaper::Append(run, face, m_fallback, 0u, m_fallback.size());
         }
     }
-    output = Move(run);
-    return TextLayoutStatus::Success;
+    return run;
 }
 
 

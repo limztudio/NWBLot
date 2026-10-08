@@ -17,36 +17,35 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool BuildLightSpacePlan(
+Expected<LightSpacePlan> BuildLightSpacePlan(
     const SoftwareShadowSettings& settings, const LightSpaceLightRequest* const requests, const usize requestCount,
-    const u64 maxStorageBufferRange, const u32 drawCount, LightSpacePlan& outPlan, const bool csgIntervalDepth
-){
+    const u64 maxStorageBufferRange, const u32 drawCount, const bool csgIntervalDepth
+)noexcept{
     if(maxStorageBufferRange == 0u || !ValidateSoftwareShadowSettings(settings) || requestCount > NWB_SCENE_SHADOW_SLOT_COUNT || (requestCount != 0u && !requests))
-        return false;
+        return MakeUnexpected(Failure{});
     u32 seenSlots = 0u;
     u64 seenLights = 0u;
     for(usize index = 0u; index < requestCount; ++index){
         const auto& request = requests[index];
         if(request.lightIndex >= NWB_SCENE_MAX_LIGHTS || request.shadowSlot >= NWB_SCENE_SHADOW_SLOT_COUNT || request.type >= Scene::LightType::kCount)
-            return false;
+            return MakeUnexpected(Failure{});
         const u32 slotBit = 1u << request.shadowSlot;
         const u64 lightBit = 1ull << request.lightIndex;
         if((seenSlots & slotBit) != 0u || (seenLights & lightBit) != 0u)
-            return false;
+            return MakeUnexpected(Failure{});
         seenSlots |= slotBit;
         seenLights |= lightBit;
     }
     LightSpacePlan plan;
     if(settings.backend == SoftwareShadowBackend::SoftwareTrace){
-        outPlan = plan;
-        return true;
+        return plan;
     }
     for(usize index = 0u; index < requestCount; ++index){
         const auto& request = requests[index];
         if(!request.eligible || request.type == Scene::LightType::Spot)
             continue;
         if(drawCount == 0u)
-            return false;
+            return MakeUnexpected(Failure{});
         const bool point = request.type == Scene::LightType::Point;
         const u32 resolution = point ? settings.pointResolution : settings.directionalResolution;
         const u32 viewCount = point ? 6u : 1u;
@@ -95,8 +94,7 @@ bool BuildLightSpacePlan(
         plan.drawArgumentByteSize = drawArgumentBytes;
         plan.totalByteSize = totalBytes;
     }
-    outPlan = plan;
-    return true;
+    return plan;
 }
 
 

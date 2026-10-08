@@ -63,19 +63,21 @@ protected:
         return painted && popped;
     }
 
-    [[nodiscard]] bool rasterRectangle(const PlacedGlyph& glyph, const f32 fontSize,
-        const DisplayMetrics& display, const Point origin, Rect& rectangle
+    [[nodiscard]] Expected<Rect> rasterRectangle(const PlacedGlyph& glyph, const f32 fontSize,
+        const DisplayMetrics& display, const Point origin
     ){
         const f32 physicalSize = Ceil(fontSize * Max(display.pixelScaleX, display.pixelScaleY));
         if(!glyph.face->rasterize(glyph.glyphId, static_cast<u32>(physicalSize), m_bitmap))
-            return false;
+            return MakeUnexpected(Failure{});
         const f32 scale = physicalSize / fontSize;
         const f64 unsnappedX = static_cast<f64>(origin.x) + glyph.position.x + static_cast<f64>(m_bitmap.bearingX) / scale;
         const f64 unsnappedY = static_cast<f64>(origin.y) + glyph.position.y - static_cast<f64>(m_bitmap.bearingY) / scale;
-        rectangle = { static_cast<f32>(Floor(unsnappedX * display.pixelScaleX + 0.5) / display.pixelScaleX),
+        const Rect rectangle{ static_cast<f32>(Floor(unsnappedX * display.pixelScaleX + 0.5) / display.pixelScaleX),
             static_cast<f32>(Floor(unsnappedY * display.pixelScaleY + 0.5) / display.pixelScaleY),
             static_cast<f32>(m_bitmap.width) / scale, static_cast<f32>(m_bitmap.height) / scale };
-        return rectangle.width > 0.0f && rectangle.height > 0.0f;
+        if(!(rectangle.width > 0.0f && rectangle.height > 0.0f))
+            return MakeUnexpected(Failure{});
+        return rectangle;
     }
 
 
@@ -97,7 +99,11 @@ TEST_F(TextVisibleCoverageTests, MoreThan4096DistinctHiddenHangulDoNotExhaustThe
         text.push_back(static_cast<char>(0x80u | ((scalar >> 6u) & 0x3fu)));
         text.push_back(static_cast<char>(0x80u | (scalar & 0x3fu)));
     }
-    ASSERT_EQ(m_text.layout({ text }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ text });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.lines().size(), 2u);
     ASSERT_EQ(m_layout.glyphs().size(), hiddenCount + 1u);
     Core::Alloc::ScratchArena scratch(Name("tests/ui/text/visible_hangul"));
@@ -141,7 +147,11 @@ TEST_F(TextVisibleCoverageTests, MoreThan4096DistinctHiddenHangulDoNotExhaustThe
 }
 
 TEST_F(TextVisibleCoverageTests, HiddenGlyphKeepsTheWarmPageExactUntilItIsRevealed){
-    ASSERT_EQ(m_text.layout({ "A\nB" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ "A\nB" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.lines().size(), 2u);
     const Rect clip{ 0.0f, 0.0f, 100.0f, 20.0f + m_layout.lines()[1u].top };
     beginPaint(1u);
@@ -169,9 +179,17 @@ TEST_F(TextVisibleCoverageTests, HiddenGlyphKeepsTheWarmPageExactUntilItIsReveal
 }
 
 TEST_F(TextVisibleCoverageTests, HiddenOversizedGlyphCannotRejectOrUpgradePriorVisibleCoverage){
-    ASSERT_EQ(m_text.layout({ "A" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ "A" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     TextLayout oversized(m_arena);
-    ASSERT_EQ(m_text.layout({ .text = "W", .fontSize = 1024.0f }, oversized), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "W", .fontSize = 1024.0f });
+        ASSERT_TRUE(layoutResult);
+        oversized = Move(*layoutResult);
+    }
     beginPaint(1u);
     ASSERT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }));
     const DrawSnapshot before = m_paint.freeze();
@@ -180,7 +198,11 @@ TEST_F(TextVisibleCoverageTests, HiddenOversizedGlyphCannotRejectOrUpgradePriorV
     ASSERT_TRUE(m_text.paint(m_paint, oversized, { 10000.0f, 10000.0f }));
     const DrawSnapshot hidden = m_paint.freeze();
     ExpectSamePaint(hidden, before);
-    ASSERT_EQ(m_text.layout({ "W" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ "W" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     beginPaint(3u);
     ASSERT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }));
     const DrawSnapshot ordinary = m_paint.freeze();
@@ -190,7 +212,11 @@ TEST_F(TextVisibleCoverageTests, HiddenOversizedGlyphCannotRejectOrUpgradePriorV
 }
 
 TEST_F(TextVisibleCoverageTests, EmptyIntersectedClipAndZeroAlphaNeverPrepareOversizedCoverage){
-    ASSERT_EQ(m_text.layout({ .text = "W", .fontSize = 1024.0f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "W", .fontSize = 1024.0f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     beginPaint(1u);
     m_paint.fillRect({ 1.0f, 1.0f, 4.0f, 4.0f });
     m_paint.pushClip({ 10.0f, 10.0f, 20.0f, 20.0f });
@@ -204,7 +230,11 @@ TEST_F(TextVisibleCoverageTests, EmptyIntersectedClipAndZeroAlphaNeverPrepareOve
     EXPECT_TRUE(snapshot.sdfPages().empty());
     EXPECT_EQ(snapshot.vertices().size(), 4u);
     EXPECT_EQ(snapshot.indices().size(), 6u);
-    ASSERT_EQ(m_text.layout({ "W" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ "W" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     beginPaint(2u);
     ASSERT_TRUE(m_text.paint(m_paint, m_layout, { 20.0f, 20.0f }));
     EXPECT_FALSE(m_paint.freeze().glyphPages().empty());
@@ -213,11 +243,15 @@ TEST_F(TextVisibleCoverageTests, EmptyIntersectedClipAndZeroAlphaNeverPrepareOve
 TEST_F(TextVisibleCoverageTests, FractionalUnequalDpiKeepsAHintedRasterSliverOutsideTheShapedOutline){
     const DisplayMetrics display{ 200.0f, 100.0f, 1.25f, 1.5f };
     const Point origin{ 40.375f, 20.125f };
-    ASSERT_EQ(m_text.layout({ .text = "W", .fontSize = 17.25f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "W", .fontSize = 17.25f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.glyphs().size(), 1u);
-    Rect raster;
-    ASSERT_TRUE(rasterRectangle(m_layout.glyphs()[0u], m_layout.fontSize(), display, origin, raster));
-    const Rect clip = RasterFringe(raster, OutlineRectangle(m_layout.glyphs()[0u], origin));
+    const auto raster = rasterRectangle(m_layout.glyphs()[0u], m_layout.fontSize(), display, origin);
+    ASSERT_TRUE(raster);
+    const Rect clip = RasterFringe(*raster, OutlineRectangle(m_layout.glyphs()[0u], origin));
     ASSERT_GT(clip.width, 0.0f);
     ASSERT_GT(clip.height, 0.0f);
     beginPaint(1u, display);
@@ -234,29 +268,37 @@ TEST_F(TextVisibleCoverageTests, FractionalUnequalDpiKeepsAHintedRasterSliverOut
 TEST_F(TextVisibleCoverageTests, FractionalOriginPlacesNativeCoverageOnThePhysicalPixelGrid){
     const DisplayMetrics display{ 200.0f, 100.0f, 1.25f, 1.5f };
     const Point origin{ 40.375f, 20.125f };
-    ASSERT_EQ(m_text.layout({ .text = "g", .fontSize = 17.25f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "g", .fontSize = 17.25f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.glyphs().size(), 1u);
-    Rect raster;
-    ASSERT_TRUE(rasterRectangle(m_layout.glyphs()[0u], m_layout.fontSize(), display, origin, raster));
+    const auto raster = rasterRectangle(m_layout.glyphs()[0u], m_layout.fontSize(), display, origin);
+    ASSERT_TRUE(raster);
     beginPaint(1u, display);
     ASSERT_TRUE(m_text.paint(m_paint, m_layout, origin));
     const DrawSnapshot snapshot = m_paint.freeze();
     ASSERT_EQ(snapshot.glyphPages().size(), 1u);
     ASSERT_EQ(snapshot.vertices().size(), 4u);
-    EXPECT_NEAR(snapshot.vertices()[0u].position.x, raster.x, 0.0001f);
-    EXPECT_NEAR(snapshot.vertices()[0u].position.y, raster.y, 0.0001f);
+    EXPECT_NEAR(snapshot.vertices()[0u].position.x, raster->x, 0.0001f);
+    EXPECT_NEAR(snapshot.vertices()[0u].position.y, raster->y, 0.0001f);
 }
 
 TEST_F(TextVisibleCoverageTests, NegativeBearingRemainsVisibleToTheLeftOfTheGlyphOrigin){
     const Point origin{ 50.0f, 20.0f };
     const DisplayMetrics display{ 200.0f, 100.0f, 1.25f, 1.25f };
-    ASSERT_EQ(m_text.layout({ .text = "j", .fontSize = 32.0f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "j", .fontSize = 32.0f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.glyphs().size(), 1u);
-    Rect raster;
-    ASSERT_TRUE(rasterRectangle(m_layout.glyphs()[0u], m_layout.fontSize(), display, origin, raster));
+    const auto raster = rasterRectangle(m_layout.glyphs()[0u], m_layout.fontSize(), display, origin);
+    ASSERT_TRUE(raster);
     const f32 glyphOrigin = origin.x + m_layout.glyphs()[0u].position.x;
-    ASSERT_LT(raster.x, glyphOrigin);
-    const Rect clip{ raster.x, raster.y, (glyphOrigin - raster.x) * 0.5f, raster.height };
+    ASSERT_LT(raster->x, glyphOrigin);
+    const Rect clip{ raster->x, raster->y, (glyphOrigin - raster->x) * 0.5f, raster->height };
     beginPaint(1u, display);
     ASSERT_TRUE(paintClipped(m_layout, clip, origin));
     const DrawSnapshot snapshot = m_paint.freeze();
@@ -268,26 +310,34 @@ TEST_F(TextVisibleCoverageTests, NegativeBearingRemainsVisibleToTheLeftOfTheGlyp
 TEST_F(TextVisibleCoverageTests, CombiningMarkOnlyClipKeepsItsOffsetGlyphAndExcludesTheBaseQuad){
     const Point origin{ 50.0f, 20.0f };
     const DisplayMetrics display{ 200.0f, 100.0f, 1.5f, 1.5f };
-    ASSERT_EQ(m_text.layout({ .text = "x\xcc\x81", .fontSize = 32.0f }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ .text = "x\xcc\x81", .fontSize = 32.0f });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.glyphs().size(), 2u);
     ASSERT_EQ(m_layout.clusters().size(), 1u);
-    Rect base;
-    Rect mark;
-    ASSERT_TRUE(rasterRectangle(m_layout.glyphs()[0u], m_layout.fontSize(), display, origin, base));
-    ASSERT_TRUE(rasterRectangle(m_layout.glyphs()[1u], m_layout.fontSize(), display, origin, mark));
-    ASSERT_LT(mark.y, base.y);
-    const Rect clip{ mark.x, mark.y, mark.width, Min(mark.height, base.y - mark.y) * 0.5f };
+    const auto base = rasterRectangle(m_layout.glyphs()[0u], m_layout.fontSize(), display, origin);
+    ASSERT_TRUE(base);
+    const auto mark = rasterRectangle(m_layout.glyphs()[1u], m_layout.fontSize(), display, origin);
+    ASSERT_TRUE(mark);
+    ASSERT_LT(mark->y, base->y);
+    const Rect clip{ mark->x, mark->y, mark->width, Min(mark->height, base->y - mark->y) * 0.5f };
     beginPaint(1u, display);
     ASSERT_TRUE(paintClipped(m_layout, clip, origin));
     const DrawSnapshot snapshot = m_paint.freeze();
     ASSERT_EQ(snapshot.vertices().size(), 4u);
     ASSERT_EQ(snapshot.indices().size(), 6u);
-    EXPECT_LT(snapshot.vertices()[2u].position.y, base.y);
+    EXPECT_LT(snapshot.vertices()[2u].position.y, base->y);
     EXPECT_EQ(snapshot.glyphPages().size(), 1u);
 }
 
 TEST_F(TextVisibleCoverageTests, SixtyThreePriorImagesLeaveRoomForOnlyTheVisibleCoverageFace){
-    ASSERT_EQ(m_text.layout({ "A\n\xed\x95\x9c" }, m_layout), TextLayoutStatus::Success);
+    {
+        auto layoutResult = m_text.layout({ "A\n\xed\x95\x9c" });
+        ASSERT_TRUE(layoutResult);
+        m_layout = Move(*layoutResult);
+    }
     ASSERT_EQ(m_layout.lines().size(), 2u);
     Array<SharedGlyphPage, s_PaintMaxImages - 1u> prior{};
     for(usize index = 0u; index < prior.size(); ++index){

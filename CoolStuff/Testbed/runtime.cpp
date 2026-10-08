@@ -83,12 +83,11 @@ static constexpr AStringView s_InitWorldFailedNarrow = "ProjectTestbed initializ
     return VectorGetX(VectorClamp(VectorReplicate(pitchRadians), VectorReplicate(-pitchLimitRadians), VectorReplicate(pitchLimitRadians)));
 }
 
-[[nodiscard]] static bool ResolveKeyIndex(const i32 key, usize& outIndex){
+[[nodiscard]] static Expected<usize> ResolveKeyIndex(const i32 key)noexcept{
     if(key < 0 || key > NWB::Core::Key::Menu)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outIndex = static_cast<usize>(key);
-    return true;
+    return static_cast<usize>(key);
 }
 
 [[nodiscard]] static bool UiWantsKeyboardCapture(NWB::Core::ECS::World& world){
@@ -257,12 +256,12 @@ static void CreateStaticGroundPlaneEntity(NWB::Core::ECS::World& world){
 
 
 NotNullUniquePtr<NWB::Core::ECS::World> Project::CreateInitialWorldOrDie(NWB::ProjectRuntimeContext& context){
-    UniquePtr<NWB::Core::ECS::World> world;
-    if(!NWB::CreateInitialProjectWorld(context, world)){
+    auto world = NWB::CreateInitialProjectWorld(context);
+    if(!world){
         NWB_LOGGER_FATAL(__hidden_runtime::s_InitWorldFailedText);
         throw RuntimeException(__hidden_runtime::s_InitWorldFailedNarrow.data());
     }
-    return MakeNotNullUnique(Move(world));
+    return MakeNotNullUnique(Move(*world));
 }
 
 Project::Project(NWB::ProjectRuntimeContext& context)
@@ -387,19 +386,19 @@ void Project::clearInputState(){
 }
 
 void Project::setKeyState(const i32 key, const bool pressed){
-    usize keyIndex = 0;
-    if(!__hidden_runtime::ResolveKeyIndex(key, keyIndex))
+    const auto keyIndex = __hidden_runtime::ResolveKeyIndex(key);
+    if(!keyIndex)
         return;
 
-    m_keyPressed[keyIndex] = pressed;
+    m_keyPressed[*keyIndex] = pressed;
 }
 
 bool Project::keyPressed(const i32 key)const{
-    usize keyIndex = 0;
-    if(!__hidden_runtime::ResolveKeyIndex(key, keyIndex))
+    const auto keyIndex = __hidden_runtime::ResolveKeyIndex(key);
+    if(!keyIndex)
         return false;
 
-    return m_keyPressed[keyIndex];
+    return m_keyPressed[*keyIndex];
 }
 
 void Project::updateMainCamera(const f32 delta){

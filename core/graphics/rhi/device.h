@@ -43,7 +43,6 @@ namespace Feature{
         SinglePassStereo,
         Spheres,
         VariableRateShading,
-        WaveLaneCountMinMax,
         CooperativeVectorInferencing,
         CooperativeVectorTraining,
 
@@ -59,12 +58,11 @@ struct QueueSubmissionNativeSignal{
     [[nodiscard]] constexpr bool valid()const noexcept{ return semaphore.integer != 0u; }
 };
 
-// Runs just before one validated submission reaches its queue. Returns a binary signal attached directly to that submission, never to a queue-global pending list. False is an expected atomic rejection; an exception unwinds to the application boundary, so preparation must also leave owner state unchanged.
-using QueueSubmissionPreSubmitCallback = bool(*) (
+// Prepares a submission-local binary signal atomically; exceptions unwind to the application boundary.
+using QueueSubmissionPreSubmitCallback = Expected<QueueSubmissionNativeSignal>(*) (
     void* context,
     u64 identity,
-    const GpuPhysicalQueueId& executionQueue,
-    QueueSubmissionNativeSignal& outSignal
+    const GpuPhysicalQueueId& executionQueue
 );
 
 // Called exactly once after successful hook preparation, with the accepted physical-queue timeline token or an invalid token when native submission was rejected. Callbacks must resolve one-shot state without throwing or synchronously draining Device.
@@ -93,8 +91,6 @@ struct QueueSubmissionDesc{
     const QueueSubmissionToken* waitTokens = nullptr;
     usize waitTokenCount = 0;
     QueueSubmissionPreSubmitHook preSubmitHook;
-    // Optional accepted native timeline-wait count for waitTokens, after same-queue, duplicate and inherited-wait elimination. Excludes synchronization supplied outside this descriptor; rejection/no-op writes zero.
-    usize* outTimelineWaitCount = nullptr;
     // Error-recovery paths may require an exact queue timeline submission even after earlier work consumed every pending wait. Normal empty submissions retain their no-op behavior unless this is explicit.
     bool forceNativeSubmission = false;
 
@@ -109,11 +105,17 @@ struct QueueSubmissionDesc{
     }
 };
 
+// Accepted submission and its emitted dependency waits, after redundant waits are eliminated.
+struct QueueSubmissionReceipt{
+    QueueSubmissionToken token;
+    usize timelineWaitCount = 0u;
+};
+
 struct VariableRateShadingFeatureInfo{
     u32 shadingRateImageTileSize;
 };
 
-struct WaveLaneCountMinMaxFeatureInfo{
+struct WaveLaneCountRange{
     u32 minWaveLaneCount;
     u32 maxWaveLaneCount;
 };

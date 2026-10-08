@@ -82,22 +82,21 @@ struct TextureClearContract{
     }
 }
 
-[[nodiscard]] inline bool ResolveTextureClearContract(
+[[nodiscard]] inline Expected<TextureClearContract> ResolveTextureClearContract(
     const TextureDesc& description,
     const TextureSubresourceSet& subresources,
     const TextureClearValueKind::Enum valueKind,
     const bool clearDepth,
-    const bool clearStencil,
-    TextureClearContract& outContract
+    const bool clearStencil
 )noexcept{
-    outContract = {};
+    TextureClearContract contract{};
     if(
         !IsTextureDescShapeValid(description)
         || description.sampleQuality != 0u
         || !VulkanDetail::IsSupportedSampleCount(description.sampleCount)
         || !TextureClearValueMatchesFormat(description, valueKind, clearDepth, clearStencil)
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     const bool blockCompressed = Format::IsBlockCompressedFormat(description.format);
     if(
@@ -107,19 +106,18 @@ struct TextureClearContract{
             || !TextureClearStagedEncodingSupportsFormat(description.format)
         )
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outContract.subresources = subresources.resolve(description, TextureSubresourceMipResolve::Range);
-    if(!VulkanDetail::IsTextureSubresourceRangeValid(outContract.subresources)){
-        outContract = {};
-        return false;
+    contract.subresources = subresources.resolve(description, TextureSubresourceMipResolve::Range);
+    if(!VulkanDetail::IsTextureSubresourceRangeValid(contract.subresources)){
+        return MakeUnexpected(Failure{});
     }
 
     if(valueKind == TextureClearValueKind::DepthStencil)
-        outContract.queueRequirement = TextureClearQueueRequirement::Graphics;
+        contract.queueRequirement = TextureClearQueueRequirement::Graphics;
     else if(!blockCompressed)
-        outContract.queueRequirement = TextureClearQueueRequirement::ComputeOrGraphics;
-    return true;
+        contract.queueRequirement = TextureClearQueueRequirement::ComputeOrGraphics;
+    return contract;
 }
 
 [[nodiscard]] inline bool TextureClearBoxEmpty(const Box& box)noexcept{

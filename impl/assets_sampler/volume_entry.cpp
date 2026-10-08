@@ -28,12 +28,11 @@ namespace __hidden_assets_sampler_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseSamplerDocument(
+static Expected<SamplerCookEntry> ParseSamplerDocument(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    SamplerCookEntry& outEntry,
     Core::Assets::CookEntryParseContext& context
 ){
     return ParseSamplerCookMetadata(
@@ -41,7 +40,7 @@ static bool ParseSamplerDocument(
         virtualRoot,
         nwbFilePath,
         doc,
-        outEntry,
+        context.cookArena,
         context.scratchArena
     );
 }
@@ -51,7 +50,7 @@ static bool RegisterSamplerCookEntry(Core::Assets::CookEntryRegistry& registry){
         registry,
         NWB_TEXT("sampler"),
         &ParseSamplerDocument,
-        [](SamplerCookEntry& entry, Sampler& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildSamplerAsset); },
+        [](SamplerCookEntry& entry, Core::Assets::AssetArena& arena){ return Core::Assets::ForwardCookBuild(entry, arena, &BuildSamplerAsset); },
         false
     );
 }

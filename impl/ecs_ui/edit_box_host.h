@@ -155,8 +155,8 @@ private:
     [[nodiscard]] u64 nextFocusGeneration()noexcept;
     void synchronizeSession(Entry& entry, Ui::EditModel& model, const Ui::EditBoxOptions& options, bool inputMethod);
     [[nodiscard]] Core::TextInputRect nativeCaret(const UiEditBoxGeometry& geometry)const noexcept;
-    [[nodiscard]] bool hit(const Entry& entry, Ui::Point position, usize& byte)const noexcept;
-    [[nodiscard]] bool hitWord(const Entry& entry, Ui::Point position, usize& byte)const noexcept;
+    [[nodiscard]] Expected<usize> hit(const Entry& entry, Ui::Point position)const noexcept;
+    [[nodiscard]] Expected<usize> hitWord(const Entry& entry, Ui::Point position)const noexcept;
     void cancelTransfers();
     void drainPublications();
 

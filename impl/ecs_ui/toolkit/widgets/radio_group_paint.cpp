@@ -20,15 +20,14 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
     if(item.radioGroup >= m_scope->m_radioGroups.size())
         return false;
     RadioGroupFrame& frame = *m_scope->m_radioGroups[item.radioGroup];
-    RadioGroupPlacement placement;
-    if(
-        !radioGroupMatches(frame) || frame.m_labels.size() != frame.m_choices.count
-        || !RadioGroupLayout::Place(box.rectangle, visibleClip(box.clip), frame.m_choices, frame.m_metrics, placement)
-    )
+    if(!radioGroupMatches(frame) || frame.m_labels.size() != frame.m_choices.count)
+        return false;
+    const auto placement = RadioGroupLayout::Place(box.rectangle, visibleClip(box.clip), frame.m_choices, frame.m_metrics);
+    if(!placement)
         return false;
     HitTarget host;
-    host.rectangle = placement.bounds;
-    host.clip = placement.clip;
+    host.rectangle = placement->bounds;
+    host.clip = placement->clip;
     host.enabled = item.enabled;
     host.focusable = item.enabled;
     host.navigable = item.enabled;
@@ -39,8 +38,8 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
     if(!m_context.addTarget(item.state, host))
         return false;
     const WidgetId choices = MakeWidgetId(item.state.id, "choices");
-    for(u32 index = 0u; index < placement.count; ++index){
-        const RadioGroupChoicePlacement& row = placement.rows[index];
+    for(u32 index = 0u; index < placement->count; ++index){
+        const RadioGroupChoicePlacement& row = placement->rows[index];
         const WidgetId part = MakeWidgetPartId(choices, row.key);
         const InputRouter& input = m_context.input();
         const bool enabled = frame.m_options.enabled && row.enabled;
@@ -89,7 +88,7 @@ bool Builder::paintRadioGroup(const Item& item, const LayoutBox& box){
     if(!radioGroupMatches(frame))
         return false;
     // Diagnostics describe prepared placement; input still uses the last published owned hit targets.
-    frame.m_state.m_placement = placement;
+    frame.m_state.m_placement = *placement;
     return true;
 }
 

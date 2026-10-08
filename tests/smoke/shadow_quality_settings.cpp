@@ -22,9 +22,8 @@ bool ApplyShadowQualitySmokeSettings(
     const Impl::ShadowQualitySettings& baseSettings
 ){
     Impl::ShadowQualitySettings settings = baseSettings;
-    SmokeEnvironmentString value(arena);
-    if(ReadSmokeEnvironmentText("NWB_SHADOW_TRANSPARENT_SAMPLING", value)){
-        const AStringView sampling(value.data(), value.size());
+    if(const auto value = ReadSmokeEnvironmentText(arena, "NWB_SHADOW_TRANSPARENT_SAMPLING")){
+        const AStringView sampling(value->data(), value->size());
         if(sampling == "reference_three")
             settings.transparentSampling = Impl::TransparentShadowSampling::ReferenceThree;
         else if(sampling == "temporal_one")
@@ -32,8 +31,8 @@ bool ApplyShadowQualitySmokeSettings(
         else
             return false;
     }
-    if(ReadSmokeEnvironmentText("NWB_SHADOW_RECEIVER_RESOLUTION", value)){
-        const AStringView resolution(value.data(), value.size());
+    if(const auto value = ReadSmokeEnvironmentText(arena, "NWB_SHADOW_RECEIVER_RESOLUTION")){
+        const AStringView resolution(value->data(), value->size());
         if(resolution == "half")
             settings.receiverResolution = Impl::ShadowReceiverResolution::Half;
         else if(resolution == "quarter")

@@ -19,13 +19,12 @@ NWB_VULKAN_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool ResolveTextureClearContract(
+[[nodiscard]] Expected<TextureClearContract> ResolveTextureClearContract(
     const TextureDesc& description,
     const TextureSubresourceSet& subresources,
     TextureClearValueKind::Enum valueKind,
     bool clearDepth,
-    bool clearStencil,
-    TextureClearContract& outContract
+    bool clearStencil
 )noexcept;
 
 [[nodiscard]] inline TextureClearQueueRequirement::Enum TextureClearBoxQueueRequirement(const TextureDesc& description, const TextureSubresourceSet& subresources, const Box& box)noexcept{ return static_cast<TextureClearQueueRequirement::Enum>(VulkanTextureDetail::TextureClearBoxQueueRequirement(description, subresources, box)); }

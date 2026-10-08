@@ -253,8 +253,8 @@ public:
 
 
 private:
-    [[nodiscard]] bool getTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel, ResourceStates::Mask& outState)const;
-    [[nodiscard]] bool getResolvedTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel, ResourceStates::Mask& outState)const;
+    [[nodiscard]] Expected<ResourceStates::Mask> getTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const;
+    [[nodiscard]] ResourceStates::Mask getResolvedTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel)const;
 
     void beginTrackingTransientTexture(Texture& texture, TextureSubresourceSet subresources, ResourceStates::Mask state);
     void beginTrackingResolvedTransientTexture(Texture& texture, const TextureSubresourceSet& resolvedSubresources, ResourceStates::Mask state);

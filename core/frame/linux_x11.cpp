@@ -173,12 +173,9 @@ static void DispatchTextInput(InputDispatcher& input, XKeyEvent keyEvent, i32 mo
         return;
 
     for(i32 i = 0; i < byteCount;){
-        u32 unicode = 0;
-        i32 consumed = DecodeUtf8CodePoint(AStringView(buffer + i, static_cast<usize>(byteCount - i)), unicode);
-        if(consumed <= 0){
-            unicode = static_cast<u8>(buffer[i]);
-            consumed = 1;
-        }
+        const auto decoded = DecodeUtf8CodePoint(AStringView(buffer + i, static_cast<usize>(byteCount - i)));
+        const u32 unicode = decoded ? decoded->codePoint : static_cast<u8>(buffer[i]);
+        const i32 consumed = decoded ? decoded->byteCount : 1;
 
         i += consumed;
 

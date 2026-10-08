@@ -90,13 +90,12 @@ public:
 
 
 public:
-    [[nodiscard]] bool declare(
+    [[nodiscard]] Expected<FrameGraphTransparentCsgTaskResult> declare(
         const FrameGraphTransparentCsgTaskInputs& inputs,
         ObjectGeometryCacheGraph& objectGeometry,
         RendererTaskGraphDetail::AvboitPreGraphTask::Payload& prePayload,
         ECSRenderDetail::AvboitCsgReceiverSpanGraphTask::Payload& receiverSpanPayload,
-        ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload& intervalCombinePayload,
-        FrameGraphTransparentCsgTaskResult& outResult
+        ECSRenderDetail::AvboitCsgIntervalCombineGraphTask::Payload& intervalCombinePayload
     );
 
 

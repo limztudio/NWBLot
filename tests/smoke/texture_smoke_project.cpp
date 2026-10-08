@@ -75,7 +75,11 @@ private:
     }
 
     bool configureFramebufferCapture(){
-        return ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("TextureSmokeProject"), s_FramebufferCaptureDefaultFrameCount, m_framebufferCapture);
+        auto capture = ConfigureSmokeFramebufferCapture(m_context, NWB_TEXT("TextureSmokeProject"), s_FramebufferCaptureDefaultFrameCount);
+        if(!capture)
+            return false;
+        m_framebufferCapture = Move(*capture);
+        return true;
     }
 
     void destroyWorld(){

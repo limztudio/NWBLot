@@ -38,11 +38,10 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool OpaqueUploadChainBuilder::declare(
-    const OpaqueUploadChainInputs& inputs,
-    OpaqueUploadChainResult& outResult
+[[nodiscard]] Expected<OpaqueUploadChainResult> OpaqueUploadChainBuilder::declare(
+    const OpaqueUploadChainInputs& inputs
 ){
-    outResult = OpaqueUploadChainResult{};
+    OpaqueUploadChainResult result{};
     if(
         !inputs.targets
         || !inputs.frameBindings
@@ -56,7 +55,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
         || !inputs.materialTypedBytes
         || !inputs.dependencyTask.valid()
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
     DeferredFrameTargets& deferredTargets = *inputs.targets;
     const ECSRenderDetail::MeshFrameBindingSnapshot& frameBindings = *inputs.frameBindings;
@@ -73,7 +72,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
     immutableUploadScheduling.mergeWithPrevious = true;
 
     const bool hasOpaqueDrawItems = !opaqueDrawItems.empty();
-    outResult.hasOpaqueDrawItems = hasOpaqueDrawItems;
+    result.hasOpaqueDrawItems = hasOpaqueDrawItems;
     Core::GpuTaskId materialDrawUploadTask = inputs.dependencyTask;
     if(hasOpaqueDrawItems){
         if(
@@ -81,11 +80,11 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
             || !inputs.materialTyped.valid()
             || !frameBindings.frameReady(instanceData.size(), materialTypedBytes.size())
         )
-            return false;
+            return MakeUnexpected(Failure{});
         m_materialSystem.prepareMaterialPassInstanceUploadData(instanceData, csgResources);
 #if defined(NWB_DEBUG)
         if(instanceData.size() > Limit<usize>::s_Max / sizeof(InstanceGpuData))
-            return false;
+            return MakeUnexpected(Failure{});
         NWB_ASSERT(instanceData.size() == inputs.materialTypedRanges->size());
         ECSRenderDetail::AssertMaterialTypedUploadRanges(*inputs.materialTypedRanges, materialTypedBytes);
 #endif
@@ -101,7 +100,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
             alignof(u32)
         );
         if(!instanceBlob.valid() || !materialTypedBlob.valid())
-            return false;
+            return MakeUnexpected(Failure{});
 
         Core::GpuTaskDesc instanceUploadDesc;
         instanceUploadDesc
@@ -121,7 +120,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
             }
         );
         if(!materialDrawUploadTask.valid())
-            return false;
+            return MakeUnexpected(Failure{});
 
         Core::GpuTaskDesc materialTypedUploadDesc;
         materialTypedUploadDesc
@@ -139,15 +138,15 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
             }
         );
         if(!materialDrawUploadTask.valid())
-            return false;
-        outResult.materialDrawBuffersUploaded = true;
+            return MakeUnexpected(Failure{});
+        result.materialDrawBuffersUploaded = true;
     }
-    outResult.materialUploadTask = materialDrawUploadTask;
+    result.materialUploadTask = materialDrawUploadTask;
 
     // Freeze every opaque CSG upload byte after preflight fixed the buffer, descriptor, and target generations.
     // Native G-buffer recording consumes these values without rebuilding either CSG uniform payload from live state.
     const bool hasCsgFrameGpuWork = csgFrameData.hasWork();
-    outResult.hasCsgFrameGpuWork = hasCsgFrameGpuWork;
+    result.hasCsgFrameGpuWork = hasCsgFrameGpuWork;
     Core::GpuTaskId csgFrameUploadTask = materialDrawUploadTask;
     if(hasCsgFrameGpuWork){
         if(
@@ -157,34 +156,21 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
             || !inputs.csgIntervalSampleState.valid()
             || !csgResources.frameReady(csgFrameData)
         )
-            return false;
+            return MakeUnexpected(Failure{});
 #if defined(NWB_DEBUG)
         if(
             csgFrameData.receiverRanges.size() > Limit<usize>::s_Max / sizeof(CsgReceiverRangeGpuData)
             || csgFrameData.cutters.size() > Limit<usize>::s_Max / sizeof(CsgCutterGpuData)
         )
-            return false;
+            return MakeUnexpected(Failure{});
 #endif
 
-        CsgClipContextSlots csgClipContextSlotData;
-        CsgIntervalSampleStateGpuData csgIntervalSampleStateData;
-        if(
-            !m_csgSystem.prepareCsgClipContextSlotData(
-                deferredTargets,
-                csgFrameData,
-                csgResources,
-                frameBindings,
-                csgClipContextSlotData
-            )
-            || !m_csgSystem.prepareCsgIntervalSampleStateData(
-                deferredTargets,
-                csgFrameData,
-                csgResources,
-                frameBindings,
-                csgIntervalSampleStateData
-            )
-        )
-            return false;
+        const auto csgClipContextSlotData = m_csgSystem.prepareCsgClipContextSlotData(deferredTargets, csgFrameData, csgResources, frameBindings);
+        if(!csgClipContextSlotData)
+            return MakeUnexpected(Failure{});
+        const auto csgIntervalSampleStateData = m_csgSystem.prepareCsgIntervalSampleStateData(deferredTargets, csgFrameData, csgResources, frameBindings);
+        if(!csgIntervalSampleStateData)
+            return MakeUnexpected(Failure{});
 
         const Core::GpuUploadBlobId receiverRangesBlob = m_graph.copyUploadData(
             csgFrameData.receiverRanges.data(),
@@ -197,13 +183,13 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
             alignof(CsgCutterGpuData)
         );
         const Core::GpuUploadBlobId clipContextSlotsBlob = m_graph.copyUploadData(
-            &csgClipContextSlotData,
-            sizeof(csgClipContextSlotData),
+            &*csgClipContextSlotData,
+            sizeof(*csgClipContextSlotData),
             alignof(CsgClipContextSlots)
         );
         const Core::GpuUploadBlobId intervalSampleStateBlob = m_graph.copyUploadData(
-            &csgIntervalSampleStateData,
-            sizeof(csgIntervalSampleStateData),
+            &*csgIntervalSampleStateData,
+            sizeof(*csgIntervalSampleStateData),
             alignof(CsgIntervalSampleStateGpuData)
         );
         if(
@@ -212,7 +198,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
             || !clipContextSlotsBlob.valid()
             || !intervalSampleStateBlob.valid()
         )
-            return false;
+            return MakeUnexpected(Failure{});
 
         Core::GpuTaskDesc receiverRangesUploadDesc;
         receiverRangesUploadDesc
@@ -232,7 +218,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
             }
         );
         if(!csgFrameUploadTask.valid())
-            return false;
+            return MakeUnexpected(Failure{});
 
         Core::GpuTaskDesc cuttersUploadDesc;
         cuttersUploadDesc
@@ -250,7 +236,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
             }
         );
         if(!csgFrameUploadTask.valid())
-            return false;
+            return MakeUnexpected(Failure{});
 
         Core::GpuTaskDesc clipContextSlotsUploadDesc;
         clipContextSlotsUploadDesc
@@ -268,7 +254,7 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
             }
         );
         if(!csgFrameUploadTask.valid())
-            return false;
+            return MakeUnexpected(Failure{});
 
         Core::GpuTaskDesc intervalSampleStateUploadDesc;
         intervalSampleStateUploadDesc
@@ -286,11 +272,11 @@ OpaqueUploadChainBuilder::OpaqueUploadChainBuilder(
             }
         );
         if(!csgFrameUploadTask.valid())
-            return false;
-        outResult.csgFrameBuffersUploaded = true;
+            return MakeUnexpected(Failure{});
+        result.csgFrameBuffersUploaded = true;
     }
-    outResult.csgUploadTask = csgFrameUploadTask;
-    return true;
+    result.csgUploadTask = csgFrameUploadTask;
+    return result;
 }
 
 

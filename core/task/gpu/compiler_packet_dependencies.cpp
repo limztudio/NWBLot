@@ -123,10 +123,12 @@ namespace GpuTaskGraphCompilerDetail{
     };
     const auto initializePacketReachability = [&](const usize currentConsumerIndex){
         packetReachabilityWordsPerPacket = (packetCount - 1u) / s_BitsPerPacketReachabilityWord + 1u;
-        usize packetReachabilityWordCount = 0u;
+        const auto wordCount = TryMultiply<usize>(packetCount, packetReachabilityWordsPerPacket);
+        if(!wordCount)
+            return false;
+        const usize packetReachabilityWordCount = *wordCount;
         if(
-            !TryMultiply<usize>(packetCount, packetReachabilityWordsPerPacket, packetReachabilityWordCount)
-            || packetReachabilityWordCount > Limit<usize>::s_Max / sizeof(u64)
+            packetReachabilityWordCount > Limit<usize>::s_Max / sizeof(u64)
             || packetReachabilityWordCount > packetReachability.max_size()
         )
             return false;

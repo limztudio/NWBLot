@@ -61,10 +61,12 @@ FontSource::~FontSource(){
 }
 
 bool FontSource::open(const BakeOptions& options, Impl::FontAtlasPayload& payload){
-    if(!ReadFontSourceInput(options.source, m_bytes) || !Impl::ValidateFontSource(m_bytes, 0u)){
+    auto bytes = ReadFontSourceInput(options.source, m_bytes.get_allocator().arena());
+    if(!bytes || !Impl::ValidateFontSource(*bytes, 0u)){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: source admission failed"));
         return false;
     }
+    m_bytes = Move(*bytes);
     if(FT_New_Library(&m_memory, &m_library) != 0){
         NWB_LOGGER_ERROR(NWB_TEXT("font_builder: FreeType initialization failed"));
         return false;

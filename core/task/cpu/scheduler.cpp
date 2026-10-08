@@ -109,9 +109,8 @@ CpuTaskScheduler::CpuTaskScheduler(const CpuTaskSchedulerConfig& config)
     , m_readyProfiles(m_arena)
     , m_workers(m_arena)
 {
-    InteropVector<CpuWorkerPlacement> topology;
-    if(!QueryCpuWorkerPlacements(topology))
-        topology.clear();
+    auto placementResult = QueryCpuWorkerPlacements();
+    InteropVector<CpuWorkerPlacement> topology = placementResult ? Move(*placementResult) : InteropVector<CpuWorkerPlacement>{};
     Sort(topology.begin(), topology.end(), [](const CpuWorkerPlacement& lhs, const CpuWorkerPlacement& rhs)noexcept{
         return lhs.performanceClass > rhs.performanceClass;
     });

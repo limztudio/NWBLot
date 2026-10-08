@@ -47,7 +47,7 @@ struct DumpImage{
     const u8* bytes = nullptr;
     usize byteCount = 0u;
 
-    [[nodiscard]] const void* rva(const RVA rvaValue, const u32 byteCountValue)const{
+    [[nodiscard]] const void* rva(const RVA rvaValue, const u32 byteCountValue)const noexcept{
         const u64 offset = static_cast<u64>(rvaValue);
         const u64 size = static_cast<u64>(byteCountValue);
         if(offset > static_cast<u64>(byteCount) || size > static_cast<u64>(byteCount) - offset)
@@ -89,20 +89,22 @@ static DumpMemoryReader* s_CurrentDumpMemoryReader = nullptr;
     return WStringView(dumpString->Buffer, static_cast<usize>(charCount));
 }
 
-[[nodiscard]] static bool ReadMinidumpStream(const DumpImage& dumpImage, const MINIDUMP_STREAM_TYPE streamType, void*& outStream, ULONG& outStreamBytes){
-    outStream = nullptr;
-    outStreamBytes = 0u;
+struct MinidumpStream{
+    void* contents = nullptr;
+    ULONG byteCount = 0u;
+};
 
+[[nodiscard]] static Expected<MinidumpStream> ReadMinidumpStream(const DumpImage& dumpImage, const MINIDUMP_STREAM_TYPE streamType)noexcept{
     PMINIDUMP_DIRECTORY directory = nullptr;
     PVOID stream = nullptr;
     ULONG streamBytes = 0u;
     if(!MiniDumpReadDumpStream(const_cast<u8*>(dumpImage.bytes), streamType, &directory, &stream, &streamBytes))
-        return false;
+        return MakeUnexpected(Failure{});
 
     static_cast<void>(directory);
-    outStream = stream;
-    outStreamBytes = streamBytes;
-    return stream != nullptr && streamBytes > 0u;
+    if(!stream || streamBytes == 0u)
+        return MakeUnexpected(Failure{});
+    return MinidumpStream{ stream, streamBytes };
 }
 
 static void AddMemoryRange(DumpMemoryReader& reader, const u64 begin, const u64 size, const u8* bytes){
@@ -118,26 +120,23 @@ static void AddLocationMemoryRange(const DumpImage& dumpImage, DumpMemoryReader&
 }
 
 static void BuildDumpMemoryReader(const DumpImage& dumpImage, DumpMemoryReader& outReader){
-    void* threadStream = nullptr;
-    ULONG threadStreamBytes = 0u;
-    if(ReadMinidumpStream(dumpImage, ThreadListStream, threadStream, threadStreamBytes)){
-        const auto* threadList = static_cast<const MINIDUMP_THREAD_LIST*>(threadStream);
+    const auto threadStream = ReadMinidumpStream(dumpImage, ThreadListStream);
+    if(threadStream){
+        const auto* threadList = static_cast<const MINIDUMP_THREAD_LIST*>(threadStream->contents);
         for(u32 i = 0u; i < threadList->NumberOfThreads; ++i)
             AddLocationMemoryRange(dumpImage, outReader, threadList->Threads[i].Stack.StartOfMemoryRange, threadList->Threads[i].Stack.Memory);
     }
 
-    void* memoryStream = nullptr;
-    ULONG memoryStreamBytes = 0u;
-    if(ReadMinidumpStream(dumpImage, MemoryListStream, memoryStream, memoryStreamBytes)){
-        const auto* memoryList = static_cast<const MINIDUMP_MEMORY_LIST*>(memoryStream);
+    const auto memoryStream = ReadMinidumpStream(dumpImage, MemoryListStream);
+    if(memoryStream){
+        const auto* memoryList = static_cast<const MINIDUMP_MEMORY_LIST*>(memoryStream->contents);
         for(u32 i = 0u; i < memoryList->NumberOfMemoryRanges; ++i)
             AddLocationMemoryRange(dumpImage, outReader, memoryList->MemoryRanges[i].StartOfMemoryRange, memoryList->MemoryRanges[i].Memory);
     }
 
-    void* memory64Stream = nullptr;
-    ULONG memory64StreamBytes = 0u;
-    if(ReadMinidumpStream(dumpImage, Memory64ListStream, memory64Stream, memory64StreamBytes)){
-        const auto* memoryList = static_cast<const MINIDUMP_MEMORY64_LIST*>(memory64Stream);
+    const auto memory64Stream = ReadMinidumpStream(dumpImage, Memory64ListStream);
+    if(memory64Stream){
+        const auto* memoryList = static_cast<const MINIDUMP_MEMORY64_LIST*>(memory64Stream->contents);
         u64 cursor = memoryList->BaseRva;
         for(u64 i = 0u; i < memoryList->NumberOfMemoryRanges; ++i){
             const MINIDUMP_MEMORY_DESCRIPTOR64& descriptor = memoryList->MemoryRanges[i];
@@ -174,33 +173,42 @@ static BOOL CALLBACK ReadProcessMemoryFromDump(HANDLE process, DWORD64 baseAddre
     return FALSE;
 }
 
-[[nodiscard]] static const CONTEXT* FindCrashContext(const DumpImage& dumpImage, const CrashPackageSummary& summary, DWORD& outThreadId){
-    outThreadId = static_cast<DWORD>(summary.threadId);
+struct CrashContext{
+    const CONTEXT* context = nullptr;
+    DWORD threadId = 0u;
+};
 
-    void* exceptionStream = nullptr;
-    ULONG exceptionStreamBytes = 0u;
-    if(ReadMinidumpStream(dumpImage, ExceptionStream, exceptionStream, exceptionStreamBytes)){
-        const auto* exceptionInfo = static_cast<const MINIDUMP_EXCEPTION_STREAM*>(exceptionStream);
-        outThreadId = exceptionInfo->ThreadId;
-        return static_cast<const CONTEXT*>(dumpImage.rva(exceptionInfo->ThreadContext.Rva, exceptionInfo->ThreadContext.DataSize));
+[[nodiscard]] static Expected<CrashContext> FindCrashContext(const DumpImage& dumpImage, const CrashPackageSummary& summary)noexcept{
+    DWORD threadId = static_cast<DWORD>(summary.threadId);
+
+    const auto exceptionStream = ReadMinidumpStream(dumpImage, ExceptionStream);
+    if(exceptionStream){
+        const auto* exceptionInfo = static_cast<const MINIDUMP_EXCEPTION_STREAM*>(exceptionStream->contents);
+        threadId = exceptionInfo->ThreadId;
+        const auto* context = static_cast<const CONTEXT*>(dumpImage.rva(exceptionInfo->ThreadContext.Rva, exceptionInfo->ThreadContext.DataSize));
+        if(!context)
+            return MakeUnexpected(Failure{});
+        return CrashContext{ context, threadId };
     }
 
-    void* threadStream = nullptr;
-    ULONG threadStreamBytes = 0u;
-    if(!ReadMinidumpStream(dumpImage, ThreadListStream, threadStream, threadStreamBytes))
-        return nullptr;
+    const auto threadStream = ReadMinidumpStream(dumpImage, ThreadListStream);
+    if(!threadStream)
+        return MakeUnexpected(Failure{});
 
-    const auto* threadList = static_cast<const MINIDUMP_THREAD_LIST*>(threadStream);
+    const auto* threadList = static_cast<const MINIDUMP_THREAD_LIST*>(threadStream->contents);
     for(u32 i = 0u; i < threadList->NumberOfThreads; ++i){
         const MINIDUMP_THREAD& thread = threadList->Threads[i];
-        if(outThreadId != 0u && thread.ThreadId != outThreadId)
+        if(threadId != 0u && thread.ThreadId != threadId)
             continue;
 
-        outThreadId = thread.ThreadId;
-        return static_cast<const CONTEXT*>(dumpImage.rva(thread.ThreadContext.Rva, thread.ThreadContext.DataSize));
+        threadId = thread.ThreadId;
+        const auto* context = static_cast<const CONTEXT*>(dumpImage.rva(thread.ThreadContext.Rva, thread.ThreadContext.DataSize));
+        if(!context)
+            return MakeUnexpected(Failure{});
+        return CrashContext{ context, threadId };
     }
 
-    return nullptr;
+    return MakeUnexpected(Failure{});
 }
 
 [[nodiscard]] static DWORD MachineTypeFromContext(const CONTEXT& context)noexcept{
@@ -245,14 +253,13 @@ static void InitializeStackFrameFromContext(STACKFRAME64& outFrame, const CONTEX
 }
 
 static void LoadDumpModules(LogArena& arena, const HANDLE symbolProcess, const DumpImage& dumpImage, CrashReportText& outReport){
-    void* moduleStream = nullptr;
-    ULONG moduleStreamBytes = 0u;
-    if(!ReadMinidumpStream(dumpImage, ModuleListStream, moduleStream, moduleStreamBytes)){
+    const auto moduleStream = ReadMinidumpStream(dumpImage, ModuleListStream);
+    if(!moduleStream){
         outReport += "module_load=missing_module_list\n";
         return;
     }
 
-    const auto* moduleList = static_cast<const MINIDUMP_MODULE_LIST*>(moduleStream);
+    const auto* moduleList = static_cast<const MINIDUMP_MODULE_LIST*>(moduleStream->contents);
     u32 loadedCount = 0u;
     for(u32 i = 0u; i < moduleList->NumberOfModules; ++i){
         const MINIDUMP_MODULE& module = moduleList->Modules[i];
@@ -371,8 +378,7 @@ static void AppendResolvedSymbol(LogArena& arena, const HANDLE symbolProcess, Cr
 bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, const CrashPackageSummary& summary, const CrashSymbolicationConfig& config, CrashReportText& outReport){
     const Path dumpPath = packageDirectory / CrashNames::s_ProcessDumpFileName;
     CrashBytes dumpBytes{arena};
-    ErrorCode readError;
-    if(!ReadBinaryFile(dumpPath, dumpBytes, readError) || dumpBytes.empty()){
+    if(!ReadBinaryFile(dumpPath, dumpBytes) || dumpBytes.empty()){
         outReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=";
         outReport += CrashNames::s_ProcessDumpFileName;
         outReport += " is missing or unreadable\n";
@@ -380,9 +386,8 @@ bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, c
     }
 
     const DumpImage dumpImage{ dumpBytes.data(), dumpBytes.size() };
-    DWORD threadId = 0u;
-    const CONTEXT* context = FindCrashContext(dumpImage, summary, threadId);
-    if(!context){
+    const auto crashContext = FindCrashContext(dumpImage, summary);
+    if(!crashContext){
         outReport += "status=not_decoded\nresolver=windows_pdb_minidump\ndetail=minidump has no usable thread context\n";
         return false;
     }
@@ -404,7 +409,7 @@ bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, c
     outReport += BasicStringDetail::WideToUtf8(arena, WStringView(symbolPath));
     outReport += "\nthread_id=";
     char threadBuffer[s_DecimalTextBufferCapacity] = {};
-    outReport += FormatDecimal(static_cast<usize>(threadId), threadBuffer);
+    outReport += FormatDecimal(static_cast<usize>(crashContext->threadId), threadBuffer);
     outReport += "\n";
     LoadDumpModules(arena, symbolProcess, dumpImage, outReport);
     outReport += "\n[callstack]\n";
@@ -416,7 +421,7 @@ bool AppendWindowsMinidumpStack(LogArena& arena, const Path& packageDirectory, c
         return true;
     }
 
-    CONTEXT walkContext = *context;
+    CONTEXT walkContext = *crashContext->context;
     STACKFRAME64 frame;
     InitializeStackFrameFromContext(frame, walkContext);
 

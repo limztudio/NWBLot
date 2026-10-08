@@ -110,18 +110,18 @@ template<
         for(u32 localVertexIndex = 0u; localVertexIndex < vertexCount; ++localVertexIndex){
             const MeshletLocalVertexRef& localVertexRef = localVertexRefs[meshlet.localVertexOffset + localVertexIndex];
             const usize attributeIndex = meshletAttributeBase + localVertexRef.localAttribute;
-            u32 skinIndex = s_MeshMissingStreamIndex;
-            if(!resolveSkin(meshletIndex, meshlet, meshletPositionBase, localVertexRef.localDeformedPosition, skinIndex))
+            const auto skinIndex = resolveSkin(meshletIndex, meshlet, meshletPositionBase, localVertexRef.localDeformedPosition);
+            if(!skinIndex)
                 return false;
 
             u32& attributeSkin = outAttributeSkins[attributeIndex];
             if(attributeSkin == s_MeshMissingStreamIndex){
-                attributeSkin = skinIndex;
+                attributeSkin = *skinIndex;
                 continue;
             }
-            if(attributeSkin == skinIndex)
+            if(attributeSkin == *skinIndex)
                 continue;
-            return onConflict(meshletIndex, attributeIndex, attributeSkin, skinIndex);
+            return onConflict(meshletIndex, attributeIndex, attributeSkin, *skinIndex);
         }
 
         meshletPositionBase += MeshletPositionCount(meshlet);
@@ -160,9 +160,8 @@ template<
         localVertexRefs,
         attributeCount,
         outAttributeSkins,
-        [&](const usize, const MeshletDesc&, const usize meshletPositionBase, const u32 localPositionIndex, u32& outSkin){
-            outSkin = positionRefs[meshletPositionBase + localPositionIndex].skin;
-            return true;
+        [&](const usize, const MeshletDesc&, const usize meshletPositionBase, const u32 localPositionIndex)->Expected<u32>{
+            return positionRefs[meshletPositionBase + localPositionIndex].skin;
         },
         onConflict,
         onUnreferenced

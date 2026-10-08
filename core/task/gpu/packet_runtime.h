@@ -580,6 +580,7 @@ struct GpuTaskGraphPhysicalQueueSubmissionStatistics{
 
 
 struct GpuGraphSubmissionAcceptanceSnapshot{
+    Vector<QueueSubmissionToken, Alloc::ScratchArena> packetTokens;
     u64 recordingAttemptGeneration = 0u;
     u64 acceptanceRevision = 0u;
 };
@@ -745,14 +746,11 @@ public:
         const GpuCompiledGraph::ReadView& planAccess,
         const GpuPhysicalQueueId& queue
     )const noexcept;
-    // Copies one packet-indexed acceptance snapshot while holding the transaction mutex once. The caller supplies exactly compiledPlan.packetCount() entries
-    // The accompanying recording attempt and process-unique acceptance revision are copied under that same lock. Invalid, stale, mismatched-plan, and wrong-sized requests leave both caller outputs untouched. The plan proof remains live for the complete packet-indexed copy.
-    [[nodiscard]] bool copyAcceptedPacketTokens(
+    // Packet tokens and acceptance revisions are copied under one transaction lock. Scratch storage is allocated before locking.
+    [[nodiscard]] Expected<GpuGraphSubmissionAcceptanceSnapshot> copyAcceptedPacketTokens(
         const GpuCompiledGraph::ReadView& compiledPlan,
-        QueueSubmissionToken* outTokens,
-        usize tokenCount,
-        GpuGraphSubmissionAcceptanceSnapshot& outSnapshot
-    )const noexcept;
+        Alloc::ScratchArena& scratchArena
+    )const;
     [[nodiscard]] QueueSubmissionToken packetToken(const GpuSubmissionPacketId& packet)const noexcept;
     // Resolves the current compiler packet for semantic graph work before returning its accepted submission token. This is generation-checked
     // renderer lifecycle code cannot treat a task from an older compiled graph as an accepted submission on a replacement device or packetization.
@@ -804,11 +802,14 @@ private:
         u64 recordingAttemptGeneration,
         const GpuGraphSubmissionBinding& submissionBinding
     )const noexcept;
-    [[nodiscard]] bool beginSubmissionExceptionClosingWithinSubmissionOperation(
+    struct SubmissionExceptionClosing{
+        u64 recordingAttemptGeneration = 0u;
+        GpuGraphSubmissionBinding submissionBinding;
+    };
+
+    [[nodiscard]] Expected<SubmissionExceptionClosing> beginSubmissionExceptionClosingWithinSubmissionOperation(
         GpuTaskGraph& graph,
-        const GpuCompiledGraph& compiledGraph,
-        u64& outRecordingAttemptGeneration,
-        GpuGraphSubmissionBinding& outSubmissionBinding
+        const GpuCompiledGraph& compiledGraph
     )noexcept;
     [[nodiscard]] bool submissionExceptionClosingResolved(
         const GpuCompiledGraph& compiledGraph,

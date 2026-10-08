@@ -28,12 +28,11 @@ namespace __hidden_assets_material_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseMaterialDocument(
+static Expected<MaterialCookEntry> ParseMaterialDocument(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    MaterialCookEntry& outEntry,
     Core::Assets::CookEntryParseContext& context
 ){
     return ParseMaterialCookMetadata(
@@ -41,7 +40,7 @@ static bool ParseMaterialDocument(
         virtualRoot,
         nwbFilePath,
         doc,
-        outEntry,
+        context.cookArena,
         context.scratchArena
     );
 }
@@ -51,7 +50,7 @@ static bool RegisterMaterialCookEntry(Core::Assets::CookEntryRegistry& registry)
         registry,
         NWB_TEXT("material"),
         &ParseMaterialDocument,
-        [](MaterialCookEntry& entry, Material& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildMaterialAsset); },
+        [](MaterialCookEntry& entry, Core::Assets::AssetArena& arena){ return Core::Assets::ForwardCookBuild(entry, arena, &BuildMaterialAsset); },
         false
     );
 }

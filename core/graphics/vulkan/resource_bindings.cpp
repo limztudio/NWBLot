@@ -98,21 +98,20 @@ u32 GetDescriptorBufferOffsetAlignmentBytes(const VulkanContext& context)noexcep
     return (alignment == 0 || alignment > UINT32_MAX) ? 1u : static_cast<u32>(alignment);
 }
 
-bool ConfigurePipelineMultisampleState(
+Expected<VkPipelineMultisampleStateCreateInfo> ConfigurePipelineMultisampleState(
     const u32 sampleCount,
     const bool alphaToCoverageEnable,
-    VkPipelineMultisampleStateCreateInfo& outState,
     TStringView operationName
 ){
-    outState = MakeVkStruct<VkPipelineMultisampleStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO);
+    auto state = MakeVkStruct<VkPipelineMultisampleStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO);
     if(!IsSupportedSampleCount(sampleCount)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: sample count {} is unsupported"), operationName, sampleCount);
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outState.rasterizationSamples = GetSampleCountFlagBits(sampleCount);
-    outState.sampleShadingEnable = VK_FALSE;
-    outState.alphaToCoverageEnable = alphaToCoverageEnable ? VK_TRUE : VK_FALSE;
-    return true;
+    state.rasterizationSamples = GetSampleCountFlagBits(sampleCount);
+    state.sampleShadingEnable = VK_FALSE;
+    state.alphaToCoverageEnable = alphaToCoverageEnable ? VK_TRUE : VK_FALSE;
+    return state;
 }
 
 void ConfigurePipelineDepthStencilState(
@@ -132,51 +131,57 @@ void ConfigurePipelineDepthStencilState(
     }
 }
 
-bool BuildGraphicsPipelineFixedState(
+Expected<GraphicsPipelineFixedState> BuildGraphicsPipelineFixedState(
     const FramebufferInfo& fbinfo,
     const RenderState& renderState,
     const PipelineStencilFaceMode::Enum stencilFaceMode,
     const VkDynamicState* dynamicStates,
     const u32 dynamicStateCount,
     TStringView operationName,
-    GraphicsPipelineFixedState& outState
+    Alloc::ScratchArena& scratchArena
 ){
-    outState.viewportState = MakeVkStruct<VkPipelineViewportStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO);
-    outState.viewportState.viewportCount = 1;
-    outState.viewportState.scissorCount = 1;
+    GraphicsPipelineFixedState state(scratchArena);
+    state.viewportState = MakeVkStruct<VkPipelineViewportStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO);
+    state.viewportState.viewportCount = 1;
+    state.viewportState.scissorCount = 1;
 
-    if(!ConfigurePipelineMultisampleState(
+    const auto multisampling = ConfigurePipelineMultisampleState(
         fbinfo.sampleCount,
         renderState.blendState.alphaToCoverageEnable,
-        outState.multisampling,
         operationName
-    ))
-        return false;
+    );
+    if(!multisampling)
+        return MakeUnexpected(Failure{});
+    state.multisampling = *multisampling;
 
-    ConfigurePipelineDepthStencilState(renderState.depthStencilState, stencilFaceMode, outState.depthStencil);
+    ConfigurePipelineDepthStencilState(renderState.depthStencilState, stencilFaceMode, state.depthStencil);
 
-    outState.colorBlending = BuildPipelineColorBlendState(fbinfo, renderState.blendState, outState.blendAttachments);
+    state.colorBlending = BuildPipelineColorBlendState(fbinfo, renderState.blendState, state.blendAttachments);
 
-    outState.dynamicState = MakeVkStruct<VkPipelineDynamicStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO);
-    outState.dynamicState.dynamicStateCount = dynamicStateCount;
-    outState.dynamicState.pDynamicStates = dynamicStates;
+    state.dynamicState = MakeVkStruct<VkPipelineDynamicStateCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO);
+    state.dynamicState.dynamicStateCount = dynamicStateCount;
+    state.dynamicState.pDynamicStates = dynamicStates;
 
-    return BuildPipelineRenderingInfo(fbinfo, operationName, outState.renderingInfo, outState.colorFormats);
+    auto rendering = BuildPipelineRenderingInfo(fbinfo, operationName, scratchArena);
+    if(!rendering)
+        return MakeUnexpected(Failure{});
+    state.renderingInfo = rendering->info;
+    state.colorFormats = Move(rendering->colorFormats);
+    return state;
 }
 
-bool BuildPipelineRenderingInfo(
+Expected<PipelineRenderingInfo> BuildPipelineRenderingInfo(
     const FramebufferInfo& fbinfo,
     TStringView operationName,
-    VkPipelineRenderingCreateInfo& outRenderingInfo,
-    PipelineRenderingFormatVector& outColorFormats
+    Alloc::ScratchArena& scratchArena
 ){
-    outColorFormats.clear();
-    outColorFormats.reserve(fbinfo.colorFormats.size());
+    PipelineRenderingInfo rendering(scratchArena);
+    rendering.colorFormats.reserve(fbinfo.colorFormats.size());
     for(u32 i = 0u; i < static_cast<u32>(fbinfo.colorFormats.size()); ++i){
         const VkFormat vkFormat = ConvertFormat(fbinfo.colorFormats[i]);
         if(vkFormat == VK_FORMAT_UNDEFINED){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: color attachment format {} is unsupported"), operationName, i);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(!VulkanDetail::IsPipelineColorAttachmentFormatClassValid(fbinfo.colorFormats[i])){
             NWB_LOGGER_ERROR(
@@ -184,32 +189,32 @@ bool BuildPipelineRenderingInfo(
                 operationName,
                 i
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outColorFormats.push_back(vkFormat);
+        rendering.colorFormats.push_back(vkFormat);
     }
 
-    outRenderingInfo = MakeVkStruct<VkPipelineRenderingCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO);
-    outRenderingInfo.colorAttachmentCount = static_cast<u32>(outColorFormats.size());
-    outRenderingInfo.pColorAttachmentFormats = outColorFormats.data();
+    rendering.info = MakeVkStruct<VkPipelineRenderingCreateInfo>(VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO);
+    rendering.info.colorAttachmentCount = static_cast<u32>(rendering.colorFormats.size());
+    rendering.info.pColorAttachmentFormats = rendering.colorFormats.data();
     if(fbinfo.depthFormat != Format::UNKNOWN){
         const VkFormat vkDepthFormat = ConvertFormat(fbinfo.depthFormat);
         if(vkDepthFormat == VK_FORMAT_UNDEFINED){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: depth/stencil attachment format is unsupported"), operationName);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const FormatInfo& depthFormatInfo = GetFormatInfo(fbinfo.depthFormat);
         if(!depthFormatInfo.hasDepth && !depthFormatInfo.hasStencil){
             NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create {}: depth/stencil attachment format has no depth or stencil aspect"), operationName);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(depthFormatInfo.hasDepth)
-            outRenderingInfo.depthAttachmentFormat = vkDepthFormat;
+            rendering.info.depthAttachmentFormat = vkDepthFormat;
         if(depthFormatInfo.hasStencil)
-            outRenderingInfo.stencilAttachmentFormat = vkDepthFormat;
+            rendering.info.stencilAttachmentFormat = vkDepthFormat;
     }
 
-    return true;
+    return rendering;
 }
 
 void DestroyPipelineAndOwnedLayout(
@@ -241,27 +246,28 @@ bool IsDescriptorBufferBackendReady(const VulkanContext& context){
     ;
 }
 
-bool TryResolveBindlessDescriptorBufferLayout(
-    const BindlessLayoutDesc& desc,
-    DescriptorBufferSegmentKind::Enum& outSegmentKind
+Expected<DescriptorBufferSegmentKind::Enum> TryResolveBindlessDescriptorBufferLayout(
+    const BindlessLayoutDesc& desc
 )noexcept{
-    outSegmentKind = DescriptorBufferSegmentKind::None;
+    auto segmentKind = DescriptorBufferSegmentKind::None;
     bool hasDescriptors = false;
 
     for(const auto& item : desc.registerSpaces){
         if(!IsSupportedDescriptorBindingType(item.type))
-            return false;
+            return MakeUnexpected(Failure{});
 
         const DescriptorBufferSegmentKind::Enum itemSegmentKind = GetDescriptorBufferSegmentKind(item.type);
         if(!hasDescriptors){
-            outSegmentKind = itemSegmentKind;
+            segmentKind = itemSegmentKind;
             hasDescriptors = true;
         }
-        else if(outSegmentKind != itemSegmentKind)
-            return false;
+        else if(segmentKind != itemSegmentKind)
+            return MakeUnexpected(Failure{});
     }
 
-    return hasDescriptors;
+    if(!hasDescriptors)
+        return MakeUnexpected(Failure{});
+    return segmentKind;
 }
 
 bool ValidateDescriptorBufferBindingFootprint(
@@ -336,22 +342,21 @@ bool ValidatePushConstantByteSize(const VulkanContext& context, const u32 byteSi
     return true;
 }
 
-bool CreatePipelineLayout(
+Expected<VkPipelineLayout> CreatePipelineLayout(
     const VulkanContext& context,
     const VkDescriptorSetLayout* setLayouts,
     const u32 setLayoutCount,
     const u32 pushConstantByteSize,
-    VkPipelineLayout& outLayout,
     TStringView operationName
 ){
     VkResult res = VK_SUCCESS;
 
-    outLayout = VK_NULL_HANDLE;
+    VkPipelineLayout layout = VK_NULL_HANDLE;
 
     VkPushConstantRange pushConstantRange = {};
     if(pushConstantByteSize > 0){
         if(!ValidatePushConstantByteSize(context, pushConstantByteSize, operationName))
-            return false;
+            return MakeUnexpected(Failure{});
 
         pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
         pushConstantRange.offset = 0;
@@ -364,14 +369,14 @@ bool CreatePipelineLayout(
     layoutInfo.pushConstantRangeCount = pushConstantByteSize > 0 ? 1u : 0u;
     layoutInfo.pPushConstantRanges = pushConstantByteSize > 0 ? &pushConstantRange : nullptr;
 
-    res = context.deviceDispatch.vkCreatePipelineLayout(context.device, &layoutInfo, context.allocationCallbacks, &outLayout);
+    res = context.deviceDispatch.vkCreatePipelineLayout(context.device, &layoutInfo, context.allocationCallbacks, &layout);
     if(res != VK_SUCCESS){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create pipeline layout for {}: {}"), operationName, ResultToString(res));
-        outLayout = VK_NULL_HANDLE;
-        return false;
+        layout = VK_NULL_HANDLE;
+        return MakeUnexpected(Failure{});
     }
 
-    return true;
+    return layout;
 }
 
 VkSamplerAddressMode ConvertSamplerAddressMode(const SamplerAddressMode::Enum mode)noexcept{
@@ -407,26 +412,6 @@ VkSamplerCreateInfo BuildSamplerCreateInfo(const SamplerDesc& desc)noexcept{
     return samplerInfo;
 }
 
-bool BuildImageViewCreateInfo(Texture& texture, const DescriptorWriteItem& item, VkImageViewCreateInfo& outViewInfo){
-    const TextureDesc& textureDesc = texture.m_creationDesc;
-    TextureDimension::Enum dimension = item.dimension != TextureDimension::Unknown ? item.dimension : textureDesc.dimension;
-    Format::Enum format = item.format != Format::UNKNOWN ? item.format : textureDesc.format;
-    TextureSubresourceSet subresources = item.subresources.resolve(textureDesc, TextureSubresourceMipResolve::Range);
-    if(subresources.numMipLevels == 0 || subresources.numArraySlices == 0){
-        NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create descriptor image view: subresource range is invalid"));
-        return false;
-    }
-
-    return BuildTextureImageViewCreateInfo(
-        texture,
-        subresources,
-        dimension,
-        format,
-        NWB_TEXT("descriptor image view"),
-        false,
-        outViewInfo
-    );
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -496,19 +481,19 @@ BindingLayoutHandle Device::createBindingLayout(const BindingLayoutDesc& desc){
     const u32 pushConstantByteSize = VulkanDetail::GetPushConstantByteSize(desc);
     layout->m_pushConstantByteSize = pushConstantByteSize;
 
-    if(
-        !VulkanDetail::CreatePipelineLayout(
+    const auto pipelineLayout = VulkanDetail::CreatePipelineLayout(
             m_context,
             nullptr,
             0u,
             pushConstantByteSize,
-            layout->m_pipelineLayout,
             NWB_TEXT("create binding layout")
-        )
-    ){
+        );
+    if(!pipelineLayout){
         DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
     }
+
+    layout->m_pipelineLayout = *pipelineLayout;
 
     // Push constants are pipeline-layout state, not descriptor-set state.
     layout->m_descriptorBufferCompatible = true;
@@ -575,13 +560,13 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
 
     }
 
-    DescriptorBufferSegmentKind::Enum descriptorBufferSegmentKind = DescriptorBufferSegmentKind::None;
     if(!VulkanDetail::IsDescriptorBufferBackendReady(m_context)){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: descriptor-buffer backend is unavailable."));
         DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
     }
-    if(!VulkanDetail::TryResolveBindlessDescriptorBufferLayout(desc, descriptorBufferSegmentKind)){
+    const auto descriptorBufferSegmentKind = VulkanDetail::TryResolveBindlessDescriptorBufferLayout(desc);
+    if(!descriptorBufferSegmentKind){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to create bindless layout: descriptor-buffer layouts cannot mix sampler and resource bindings."));
         DestroyArenaObject(m_context.objectArena, layout);
         return nullptr;
@@ -601,7 +586,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
     }
     layout->m_descriptorSetLayouts.push_back(setLayout);
 
-    NWB_ASSERT(descriptorBufferSegmentKind != DescriptorBufferSegmentKind::None);
+    NWB_ASSERT(*descriptorBufferSegmentKind != DescriptorBufferSegmentKind::None);
 
     const VkDescriptorSetLayout descriptorSetLayout = layout->m_descriptorSetLayouts[0];
     VkDeviceSize setSizeBytes = 0;
@@ -631,7 +616,7 @@ BindingLayoutHandle Device::createBindlessLayout(const BindlessLayoutDesc& desc)
         layout->m_descriptorBufferBindingOffsets.insert_or_assign(item.slot, static_cast<u32>(bindingOffsetBytes));
     }
     layout->m_descriptorBufferSetSizeBytes = static_cast<u32>(setSizeBytes);
-    layout->m_descriptorBufferSegmentKind = descriptorBufferSegmentKind;
+    layout->m_descriptorBufferSegmentKind = *descriptorBufferSegmentKind;
     layout->m_descriptorBufferCompatible = true;
 
     return BindingLayoutHandle(layout, BindingLayoutHandle::deleter_type(&m_context.objectArena), s_AdoptRef);

@@ -52,14 +52,13 @@ public:
 
 
 public:
-    [[nodiscard]] bool capture(
+    [[nodiscard]] Expected<AvboitComputeEmulationCaptureResult> capture(
         const AvboitComputeEmulationCaptureInputs& inputs,
         ECSRenderDetail::AvboitAliasFreeComputeEmulationGraphPlan& plan,
         ECSRenderDetail::OpaqueCsgIntervalSampleComputeEmulationGraphPlan& csgPlan,
         Core::Alloc::ScratchArena& scratchArena,
         usize instanceCount,
-        usize materialTypedByteCount,
-        AvboitComputeEmulationCaptureResult& outResult
+        usize materialTypedByteCount
     );
 };
 

@@ -33,25 +33,25 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool MeshSkinningSystem::ResolveRestToSkinnedCopyByteCounts(
-    const MeshSkinningRuntimeInstance& instance,
-    usize& outPositionBytes,
-    usize& outNormalBytes,
-    usize& outTangentBytes
-){
-    const auto resolvePayloadBytes = [](const usize count, const usize stride, usize& outBytes, const TStringView label){
-        outBytes = 0u;
-        if(stride != 0u && TryMultiply<usize>(count, stride, outBytes))
-            return true;
+Expected<MeshSkinningSystem::RestToSkinnedCopyByteCounts> MeshSkinningSystem::ResolveRestToSkinnedCopyByteCounts(const MeshSkinningRuntimeInstance& instance){
+    const auto resolvePayloadBytes = [](const usize count, const usize stride, const TStringView label)->Expected<usize>{
+        const auto bytes = TryMultiply<usize>(count, stride);
+        if(stride != 0u && bytes)
+            return *bytes;
 
         NWB_LOGGER_ERROR(NWB_TEXT("MeshSkinningSystem: {} payload byte size overflows"), label);
-        return false;
+        return MakeUnexpected(Failure{});
     };
-    return
-        resolvePayloadBytes(instance.restPositions.size(), sizeof(Float3U), outPositionBytes, NWB_TEXT("rest position"))
-        && resolvePayloadBytes(instance.restNormals.size(), sizeof(Half4U), outNormalBytes, NWB_TEXT("rest normal"))
-        && resolvePayloadBytes(instance.restTangents.size(), sizeof(Half4U), outTangentBytes, NWB_TEXT("rest tangent"))
-    ;
+    const auto positionBytes = resolvePayloadBytes(instance.restPositions.size(), sizeof(Float3U), NWB_TEXT("rest position"));
+    if(!positionBytes)
+        return MakeUnexpected(Failure{});
+    const auto normalBytes = resolvePayloadBytes(instance.restNormals.size(), sizeof(Half4U), NWB_TEXT("rest normal"));
+    if(!normalBytes)
+        return MakeUnexpected(Failure{});
+    const auto tangentBytes = resolvePayloadBytes(instance.restTangents.size(), sizeof(Half4U), NWB_TEXT("rest tangent"));
+    if(!tangentBytes)
+        return MakeUnexpected(Failure{});
+    return RestToSkinnedCopyByteCounts{ *positionBytes, *normalBytes, *tangentBytes };
 }
 
 void MeshSkinningSystem::collectLiveSkinningStateBuffers(

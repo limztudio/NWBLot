@@ -58,25 +58,35 @@ bool X11CheckedOperation::succeeded(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+X11Property::X11Property(X11Property&& other)noexcept
+    : type(other.type)
+    , format(other.format)
+    , count(other.count)
+    , remaining(other.remaining)
+    , bytes(Exchange(other.bytes, nullptr))
+{}
+
 X11Property::~X11Property()noexcept{
     if(bytes && XFree(bytes) == 0)
         TerminateInvariant();
 }
 
-bool ReadX11Property(
+Expected<X11Property> ReadX11Property(
     Display& display,
     const Window window,
     const Atom property,
     const bool remove,
-    const usize maxBytes,
-    X11Property& result
+    const usize maxBytes
 ){
+    X11Property result;
     X11CheckedOperation operation(display);
     const int status = XGetWindowProperty(
         &display, window, property, 0, static_cast<long>((maxBytes + 3u) / 4u), remove ? True : False,
         AnyPropertyType, &result.type, &result.format, &result.count, &result.remaining, &result.bytes
     );
-    return operation.succeeded() && status == 0;
+    if(!operation.succeeded() || status != 0)
+        return MakeUnexpected(Failure{});
+    return result;
 }
 
 

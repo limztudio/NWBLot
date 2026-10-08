@@ -32,33 +32,30 @@ VkPipelineCreateFlags2 ComputeRayTracingPipelineCreateFlags(const RayTracingPipe
     return flags;
 }
 
-bool ComputeRayTracingHandleLayout(const VulkanContext& context, u32& outHandleSize, u32& outHandleSizeAligned, u32& outBaseAlignment, TStringView operation){
+Expected<RayTracingHandleLayout> ComputeRayTracingHandleLayout(const VulkanContext& context, TStringView operation){
     const u32 handleSize = context.rayTracingPipelineProperties.shaderGroupHandleSize;
     const u32 handleAlignment = context.rayTracingPipelineProperties.shaderGroupHandleAlignment;
     const u32 baseAlignment = context.rayTracingPipelineProperties.shaderGroupBaseAlignment;
 
     if(handleAlignment == 0 || (handleAlignment & (handleAlignment - 1u)) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group handle alignment is invalid"), operation);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(baseAlignment == 0 || (baseAlignment & (baseAlignment - 1u)) != 0u){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group base alignment is invalid"), operation);
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    u32 handleSizeAligned = 0;
-    if(!AlignUpU32Checked(handleSize, handleAlignment, handleSizeAligned)){
+    const auto handleSizeAligned = AlignUpU32Checked(handleSize, handleAlignment);
+    if(!handleSizeAligned){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group handle size alignment overflows"), operation);
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    if(handleSizeAligned == 0){
+    if(*handleSizeAligned == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Failed to {}: shader group handle size is invalid"), operation);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outHandleSize = handleSize;
-    outHandleSizeAligned = handleSizeAligned;
-    outBaseAlignment = baseAlignment;
-    return true;
+    return RayTracingHandleLayout{ handleSize, *handleSizeAligned, baseAlignment };
 }
 
 
@@ -372,13 +369,12 @@ RayTracingPipelineHandle Device::createRayTracingPipeline(const RayTracingPipeli
         return nullptr;
     }
 
-    u32 handleSize = 0;
-    u32 handleSizeAligned = 0;
-    u32 baseAlignment = 0;
-    if(!VulkanDetail::ComputeRayTracingHandleLayout(m_context, handleSize, handleSizeAligned, baseAlignment, NWB_TEXT("create ray tracing pipeline"))){
+    const auto handleLayout = VulkanDetail::ComputeRayTracingHandleLayout(m_context, NWB_TEXT("create ray tracing pipeline"));
+    if(!handleLayout){
         DestroyArenaObject(m_context.objectArena, pso);
         return nullptr;
     }
+    const u32 handleSize = handleLayout->handleSize;
 
     u32 groupCount = static_cast<u32>(groups.size());
     if(handleSize == 0 || static_cast<usize>(groupCount) > Limit<usize>::s_Max / static_cast<usize>(handleSize)){

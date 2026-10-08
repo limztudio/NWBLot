@@ -77,10 +77,18 @@ static void ExpectReservedGeometry(const ScrollViewportPlacement& actual, const 
 TEST(UiScrollbarLayoutTests, FittingContentKeepsPaddedViewportAndClampsStoredOffsets){
     const Rect bounds{ 10.0f, 20.0f, 200.0f, 120.0f };
     ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, { 8.0f, 6.0f, 4.0f, 14.0f },
-        { 100.0f, 80.0f }, 2.0f, { 40.0f, 60.0f }, 12.0f, 16.0f, placement
-    ));
+    const auto placementResult = ScrollbarLayout::Calculate(
+        bounds,
+        bounds,
+        { 8.0f, 6.0f, 4.0f, 14.0f },
+        { 100.0f, 80.0f },
+        2.0f,
+        { 40.0f, 60.0f },
+        12.0f,
+        16.0f
+    );
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     UiWidgetTests::ExpectRect(placement.viewport, { 18.0f, 26.0f, 188.0f, 100.0f });
     UiWidgetTests::ExpectRect(placement.contentClip, placement.viewport);
     UiWidgetTests::ExpectRect(placement.corner, {});
@@ -95,7 +103,9 @@ TEST(UiScrollbarLayoutTests, FittingContentKeepsPaddedViewportAndClampsStoredOff
 TEST(UiScrollbarLayoutTests, ExactContentFitDoesNotReserveEitherBar){
     const Rect bounds{ 0.0f, 0.0f, 100.0f, 80.0f };
     ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 99.0f, 80.0f }, 1.0f, {}, 12.0f, 16.0f, placement));
+    const auto placementResult = ScrollbarLayout::Calculate(bounds, bounds, {}, { 99.0f, 80.0f }, 1.0f, {}, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     UiWidgetTests::ExpectRect(placement.viewport, bounds);
     EXPECT_FALSE(placement.horizontal.visible);
     EXPECT_FALSE(placement.vertical.visible);
@@ -106,7 +116,9 @@ TEST(UiScrollbarLayoutTests, ExactContentFitDoesNotReserveEitherBar){
 TEST(UiScrollbarLayoutTests, HorizontalExtentIncludesCaretWidth){
     const Rect bounds{ 0.0f, 0.0f, 100.0f, 80.0f };
     ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 100.0f, 40.0f }, 1.0f, {}, 12.0f, 16.0f, placement));
+    const auto placementResult = ScrollbarLayout::Calculate(bounds, bounds, {}, { 100.0f, 40.0f }, 1.0f, {}, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     UiWidgetTests::ExpectRect(placement.viewport, { 0.0f, 0.0f, 100.0f, 68.0f });
     EXPECT_TRUE(placement.horizontal.visible);
     EXPECT_FALSE(placement.vertical.visible);
@@ -116,7 +128,9 @@ TEST(UiScrollbarLayoutTests, HorizontalExtentIncludesCaretWidth){
 TEST(UiScrollbarLayoutTests, VerticalReservationCanRequireHorizontalBar){
     const Rect bounds{ 0.0f, 0.0f, 100.0f, 100.0f };
     ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 89.0f, 200.0f }, 1.0f, {}, 12.0f, 16.0f, placement));
+    const auto placementResult = ScrollbarLayout::Calculate(bounds, bounds, {}, { 89.0f, 200.0f }, 1.0f, {}, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     UiWidgetTests::ExpectRect(placement.viewport, { 0.0f, 0.0f, 88.0f, 88.0f });
     UiWidgetTests::ExpectRect(placement.horizontal.track, { 0.0f, 88.0f, 88.0f, 12.0f });
     UiWidgetTests::ExpectRect(placement.vertical.track, { 88.0f, 0.0f, 12.0f, 88.0f });
@@ -130,7 +144,9 @@ TEST(UiScrollbarLayoutTests, VerticalReservationCanRequireHorizontalBar){
 TEST(UiScrollbarLayoutTests, HorizontalReservationCanRequireVerticalBar){
     const Rect bounds{ 0.0f, 0.0f, 100.0f, 100.0f };
     ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 199.0f, 90.0f }, 1.0f, {}, 12.0f, 16.0f, placement));
+    const auto placementResult = ScrollbarLayout::Calculate(bounds, bounds, {}, { 199.0f, 90.0f }, 1.0f, {}, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     UiWidgetTests::ExpectRect(placement.viewport, { 0.0f, 0.0f, 88.0f, 88.0f });
     EXPECT_TRUE(placement.horizontal.visible);
     EXPECT_TRUE(placement.vertical.visible);
@@ -141,11 +157,15 @@ TEST(UiScrollbarLayoutTests, HorizontalReservationCanRequireVerticalBar){
 TEST(UiScrollbarLayoutTests, ExactFitAfterOtherAxisReservationDoesNotAddBar){
     const Rect bounds{ 0.0f, 0.0f, 100.0f, 100.0f };
     ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 87.0f, 200.0f }, 1.0f, {}, 12.0f, 16.0f, placement));
+    const auto placementResult = ScrollbarLayout::Calculate(bounds, bounds, {}, { 87.0f, 200.0f }, 1.0f, {}, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     UiWidgetTests::ExpectRect(placement.viewport, { 0.0f, 0.0f, 88.0f, 100.0f });
     EXPECT_FALSE(placement.horizontal.visible);
     EXPECT_TRUE(placement.vertical.visible);
-    ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 199.0f, 88.0f }, 1.0f, {}, 12.0f, 16.0f, placement));
+    const auto placementResult2 = ScrollbarLayout::Calculate(bounds, bounds, {}, { 199.0f, 88.0f }, 1.0f, {}, 12.0f, 16.0f);
+    ASSERT_TRUE(placementResult2);
+    placement = *placementResult2;
     UiWidgetTests::ExpectRect(placement.viewport, { 0.0f, 0.0f, 100.0f, 88.0f });
     EXPECT_TRUE(placement.horizontal.visible);
     EXPECT_FALSE(placement.vertical.visible);
@@ -154,14 +174,30 @@ TEST(UiScrollbarLayoutTests, ExactFitAfterOtherAxisReservationDoesNotAddBar){
 TEST(UiScrollbarLayoutTests, SmallerContentRemovesReservationsAndClampsBothAxes){
     const Rect bounds{ 0.0f, 0.0f, 100.0f, 100.0f };
     ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, {}, { 399.0f, 300.0f }, 1.0f,
-        { 200.0f, 150.0f }, 12.0f, 16.0f, placement
-    ));
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, {}, { 49.0f, 40.0f }, 1.0f,
-        { 200.0f, 150.0f }, 12.0f, 16.0f, placement
-    ));
+    const auto placementResult = ScrollbarLayout::Calculate(
+        bounds,
+        bounds,
+        {},
+        { 399.0f, 300.0f },
+        1.0f,
+        { 200.0f, 150.0f },
+        12.0f,
+        16.0f
+    );
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
+    const auto placementResult2 = ScrollbarLayout::Calculate(
+        bounds,
+        bounds,
+        {},
+        { 49.0f, 40.0f },
+        1.0f,
+        { 200.0f, 150.0f },
+        12.0f,
+        16.0f
+    );
+    ASSERT_TRUE(placementResult2);
+    placement = *placementResult2;
     UiWidgetTests::ExpectRect(placement.viewport, bounds);
     UiWidgetTests::ExpectRect(placement.corner, {});
     EXPECT_FALSE(placement.horizontal.visible);
@@ -173,10 +209,18 @@ TEST(UiScrollbarLayoutTests, SmallerContentRemovesReservationsAndClampsBothAxes)
 TEST(UiScrollbarLayoutTests, MinimumThumbIsClampedToEachTrackEvenWithRemainingScrollRange){
     const Rect bounds{ 10.0f, 20.0f, 100.0f, 80.0f };
     ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, {}, { 999.0f, 900.0f }, 1.0f,
-        { 400.0f, 300.0f }, 12.0f, 1000.0f, placement
-    ));
+    const auto placementResult = ScrollbarLayout::Calculate(
+        bounds,
+        bounds,
+        {},
+        { 999.0f, 900.0f },
+        1.0f,
+        { 400.0f, 300.0f },
+        12.0f,
+        1000.0f
+    );
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     UiWidgetTests::ExpectRect(placement.horizontal.thumb, placement.horizontal.track);
     UiWidgetTests::ExpectRect(placement.vertical.thumb, placement.vertical.track);
     EXPECT_GT(placement.horizontal.maximum, 0.0);
@@ -191,7 +235,9 @@ TEST(UiScrollbarLayoutTests, MinimumThumbIsClampedToEachTrackEvenWithRemainingSc
 TEST(UiScrollbarLayoutTests, ZeroMinimumThumbUsesViewportToContentRatio){
     const Rect bounds{ 0.0f, 0.0f, 200.0f, 100.0f };
     ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 399.0f, 200.0f }, 1.0f, {}, 12.0f, 0.0f, placement));
+    const auto placementResult = ScrollbarLayout::Calculate(bounds, bounds, {}, { 399.0f, 200.0f }, 1.0f, {}, 12.0f, 0.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     EXPECT_FLOAT_EQ(
         placement.horizontal.thumb.width, 88.36f);
         EXPECT_FLOAT_EQ(placement.vertical.thumb.height, 38.72f
@@ -201,10 +247,18 @@ TEST(UiScrollbarLayoutTests, ZeroMinimumThumbUsesViewportToContentRatio){
 TEST(UiScrollbarLayoutTests, ZeroThicknessKeepsFullViewportWhileRetainingScrollableExtents){
     const Rect bounds{ 10.0f, 20.0f, 100.0f, 80.0f };
     ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, {}, { 399.0f, 200.0f }, 1.0f,
-        { 350.0f, 100.0f }, 0.0f, 16.0f, placement
-    ));
+    const auto placementResult = ScrollbarLayout::Calculate(
+        bounds,
+        bounds,
+        {},
+        { 399.0f, 200.0f },
+        1.0f,
+        { 350.0f, 100.0f },
+        0.0f,
+        16.0f
+    );
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     UiWidgetTests::ExpectRect(placement.viewport, bounds);
     EXPECT_FALSE(placement.horizontal.visible);
     EXPECT_FALSE(placement.vertical.visible);
@@ -222,15 +276,31 @@ TEST(UiScrollbarLayoutTests, ZeroThicknessKeepsFullViewportWhileRetainingScrolla
 TEST(UiScrollbarLayoutTests, InheritedClipChangesOnlyContentClip){
     const Rect bounds{ 10.0f, 20.0f, 200.0f, 100.0f };
     ScrollViewportPlacement reference;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, {}, { 399.0f, 300.0f }, 1.0f,
-        { 60.0f, 70.0f }, 12.0f, 16.0f, reference
-    ));
+    const auto referenceResult = ScrollbarLayout::Calculate(
+        bounds,
+        bounds,
+        {},
+        { 399.0f, 300.0f },
+        1.0f,
+        { 60.0f, 70.0f },
+        12.0f,
+        16.0f
+    );
+    ASSERT_TRUE(referenceResult);
+    reference = *referenceResult;
     ScrollViewportPlacement clipped;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, { 50.0f, 60.0f, 40.0f, 20.0f }, {},
-        { 399.0f, 300.0f }, 1.0f, { 60.0f, 70.0f }, 12.0f, 16.0f, clipped
-    ));
+    const auto clippedResult = ScrollbarLayout::Calculate(
+        bounds,
+        { 50.0f, 60.0f, 40.0f, 20.0f },
+        {},
+        { 399.0f, 300.0f },
+        1.0f,
+        { 60.0f, 70.0f },
+        12.0f,
+        16.0f
+    );
+    ASSERT_TRUE(clippedResult);
+    clipped = *clippedResult;
     UiWidgetTests::ExpectRect(clipped.contentClip, { 50.0f, 60.0f, 40.0f, 20.0f });
     reference.contentClip = clipped.contentClip;
     ExpectPlacement(clipped, reference);
@@ -242,10 +312,18 @@ TEST(UiScrollbarLayoutTests, DisjointAndZeroAreaClipsKeepOffsetsAndLogicalBars){
         { 10.0f, 20.0f, 0.0f, 100.0f }, { 10.0f, 20.0f, 200.0f, 0.0f } };
     for(const Rect& clip : clips){
         ScrollViewportPlacement placement;
-        ASSERT_TRUE(ScrollbarLayout::Calculate(
-            bounds, clip, {}, { 399.0f, 300.0f }, 1.0f,
-            { 60.0f, 70.0f }, 12.0f, 16.0f, placement
-        ));
+        const auto placementResult = ScrollbarLayout::Calculate(
+            bounds,
+            clip,
+            {},
+            { 399.0f, 300.0f },
+            1.0f,
+            { 60.0f, 70.0f },
+            12.0f,
+            16.0f
+        );
+        ASSERT_TRUE(placementResult);
+        placement = *placementResult;
         EXPECT_TRUE(placement.contentClip.width == 0.0f || placement.contentClip.height == 0.0f);
         EXPECT_TRUE(placement.horizontal.visible);
         EXPECT_TRUE(placement.vertical.visible);
@@ -257,10 +335,18 @@ TEST(UiScrollbarLayoutTests, DisjointAndZeroAreaClipsKeepOffsetsAndLogicalBars){
 TEST(UiScrollbarLayoutTests, ExcessivePaddingCollapsesViewportWithoutNegativeTracks){
     const Rect bounds{ 10.0f, 20.0f, 100.0f, 80.0f };
     ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, { 200.0f, 120.0f, 200.0f, 120.0f },
-        { 399.0f, 300.0f }, 1.0f, { 60.0f, 70.0f }, 12.0f, 16.0f, placement
-    ));
+    const auto placementResult = ScrollbarLayout::Calculate(
+        bounds,
+        bounds,
+        { 200.0f, 120.0f, 200.0f, 120.0f },
+        { 399.0f, 300.0f },
+        1.0f,
+        { 60.0f, 70.0f },
+        12.0f,
+        16.0f
+    );
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     UiWidgetTests::ExpectRect(placement.viewport, { 110.0f, 100.0f, 0.0f, 0.0f });
     UiWidgetTests::ExpectRect(placement.corner, {});
     EXPECT_FALSE(placement.horizontal.visible);
@@ -274,10 +360,18 @@ TEST(UiScrollbarLayoutTests, ExcessivePaddingCollapsesViewportWithoutNegativeTra
 TEST(UiScrollbarLayoutTests, TinyBoundsClampBarThicknessAndKeepZeroLengthTracksHidden){
     const Rect bounds{ 10.0f, 20.0f, 2.0f, 3.0f };
     ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, {}, { 99.0f, 100.0f }, 1.0f,
-        { 10.0f, 20.0f }, Limit<f32>::s_Max, Limit<f32>::s_Max, placement
-    ));
+    const auto placementResult = ScrollbarLayout::Calculate(
+        bounds,
+        bounds,
+        {},
+        { 99.0f, 100.0f },
+        1.0f,
+        { 10.0f, 20.0f },
+        Limit<f32>::s_Max,
+        Limit<f32>::s_Max
+    );
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     UiWidgetTests::ExpectRect(placement.viewport, { 10.0f, 20.0f, 0.0f, 0.0f });
     UiWidgetTests::ExpectRect(placement.corner, bounds);
     UiWidgetTests::ExpectRect(placement.horizontal.track, {});
@@ -294,10 +388,18 @@ TEST(UiScrollbarLayoutTests, TinyBoundsClampBarThicknessAndKeepZeroLengthTracksH
 TEST(UiScrollbarLayoutTests, OneCollapsedAxisKeepsOtherAxisExtentWithoutVisibleTrack){
     const Rect bounds{ 10.0f, 20.0f, 0.0f, 80.0f };
     ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, {}, { 99.0f, 200.0f }, 1.0f,
-        { 10.0f, 20.0f }, 12.0f, 16.0f, placement
-    ));
+    const auto placementResult = ScrollbarLayout::Calculate(
+        bounds,
+        bounds,
+        {},
+        { 99.0f, 200.0f },
+        1.0f,
+        { 10.0f, 20.0f },
+        12.0f,
+        16.0f
+    );
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     UiWidgetTests::ExpectRect(placement.viewport, bounds);
     EXPECT_FALSE(placement.horizontal.visible);
     EXPECT_FALSE(placement.vertical.visible);
@@ -308,10 +410,18 @@ TEST(UiScrollbarLayoutTests, OneCollapsedAxisKeepsOtherAxisExtentWithoutVisibleT
 TEST(UiScrollbarLayoutTests, ExtremeFiniteStoredOffsetsClampBeforeThumbArithmetic){
     const Rect bounds{ 10.0f, 20.0f, 100.0f, 80.0f };
     ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, {}, { 399.0f, 200.0f }, 1.0f,
-        { Limit<f32>::s_Max, Limit<f32>::s_Max }, 12.0f, 16.0f, placement
-    ));
+    const auto placementResult = ScrollbarLayout::Calculate(
+        bounds,
+        bounds,
+        {},
+        { 399.0f, 200.0f },
+        1.0f,
+        { Limit<f32>::s_Max, Limit<f32>::s_Max },
+        12.0f,
+        16.0f
+    );
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     EXPECT_DOUBLE_EQ(placement.horizontal.offset, 312.0);
     EXPECT_DOUBLE_EQ(placement.vertical.offset, 132.0);
     EXPECT_FLOAT_EQ(
@@ -327,7 +437,9 @@ TEST(UiScrollbarLayoutTests, ExtremeFiniteStoredOffsetsClampBeforeThumbArithmeti
 TEST(UiScrollbarLayoutTests, OverscrollUpdatesClampBothThumbsAndRestoreExactStartGeometry){
     const Rect bounds{ 10.0f, 20.0f, 112.0f, 112.0f };
     ScrollViewportPlacement placement;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 0.0f, placement));
+    const auto placementResult = ScrollbarLayout::Calculate(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 0.0f);
+    ASSERT_TRUE(placementResult);
+    placement = *placementResult;
     const ScrollViewportPlacement initial = placement;
     ASSERT_TRUE(ScrollbarLayout::UpdateOffsets({ 1000.0f, 1000.0f }, placement));
     ExpectReservedGeometry(placement, initial);
@@ -337,20 +449,24 @@ TEST(UiScrollbarLayoutTests, OverscrollUpdatesClampBothThumbsAndRestoreExactStar
     ExpectPlacement(placement, initial);
 }
 
-TEST(UiScrollbarLayoutTests, InvalidCalculationInputsPreserveCompletePreviousPlacement){
+TEST(UiScrollbarLayoutTests, InvalidCalculationInputsRejectPlacement){
     const Rect bounds{ 10.0f, 20.0f, 112.0f, 112.0f };
     const Insets padding{ 1.0f, 2.0f, 3.0f, 4.0f };
-    ScrollViewportPlacement previous;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, padding, { 399.0f, 400.0f }, 1.0f,
-        { 40.0f, 50.0f }, 12.0f, 16.0f, previous
-    ));
-    const auto reject = [&previous](const Rect& valueBounds, const Rect& clip, const Insets& valuePadding,
+    const auto previousResult = ScrollbarLayout::Calculate(
+        bounds,
+        bounds,
+        padding,
+        { 399.0f, 400.0f },
+        1.0f,
+        { 40.0f, 50.0f },
+        12.0f,
+        16.0f
+    );
+    ASSERT_TRUE(previousResult);
+    const auto reject = [](const Rect& valueBounds, const Rect& clip, const Insets& valuePadding,
         const Point& measure, const f32 caret, const Point& scroll, const f32 thickness, const f32 minimum
     ){
-        ScrollViewportPlacement placement = previous;
-        EXPECT_FALSE(ScrollbarLayout::Calculate(valueBounds, clip, valuePadding, measure, caret, scroll, thickness, minimum, placement));
-        ExpectPlacement(placement, previous);
+        EXPECT_FALSE(ScrollbarLayout::Calculate(valueBounds, clip, valuePadding, measure, caret, scroll, thickness, minimum));
     };
     const f32 nan = Limit<f32>::s_QuietNaN;
     const f32 infinity = Limit<f32>::s_Infinity;
@@ -379,36 +495,45 @@ TEST(UiScrollbarLayoutTests, InvalidCalculationInputsPreserveCompletePreviousPla
     reject(bounds, bounds, padding, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, nan);
 }
 
-TEST(UiScrollbarLayoutTests, UnrepresentableFinalViewportRejectsExtremeContentAtomically){
+TEST(UiScrollbarLayoutTests, UnrepresentableFinalViewportRejectsExtremeContent){
     const Rect bounds{ 0.0f, 0.0f, 112.0f, 112.0f };
-    ScrollViewportPlacement previous;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f, previous));
-    ScrollViewportPlacement placement = previous;
+    const auto previousResult = ScrollbarLayout::Calculate(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
+    ASSERT_TRUE(previousResult);
     EXPECT_FALSE(ScrollbarLayout::Calculate(
-        bounds, bounds, {}, { Limit<f32>::s_Max, Limit<f32>::s_Max },
-        Limit<f32>::s_Max, { Limit<f32>::s_Max, Limit<f32>::s_Max }, 12.0f, 16.0f, placement
+        bounds,
+        bounds,
+        {},
+        { Limit<f32>::s_Max, Limit<f32>::s_Max },
+        Limit<f32>::s_Max,
+        { Limit<f32>::s_Max, Limit<f32>::s_Max },
+        12.0f,
+        16.0f
     ));
-    ExpectPlacement(placement, previous);
-    EXPECT_FALSE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 1.0e30f, 1.0e30f }, 1.0f, {}, 0.0f, 16.0f, placement));
-    ExpectPlacement(placement, previous);
+    EXPECT_FALSE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 1.0e30f, 1.0e30f }, 1.0f, {}, 0.0f, 16.0f));
 }
 
-TEST(UiScrollbarLayoutTests, UnrepresentableBarReservationRejectsAtomically){
+TEST(UiScrollbarLayoutTests, UnrepresentableBarReservationRejectsCalculation){
     const Rect bounds{ 0.0f, 0.0f, 112.0f, 112.0f };
-    ScrollViewportPlacement previous;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f, previous));
-    ScrollViewportPlacement placement = previous;
-    EXPECT_FALSE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 1.0e-30f, 0.0f, placement));
-    ExpectPlacement(placement, previous);
+    const auto previousResult = ScrollbarLayout::Calculate(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
+    ASSERT_TRUE(previousResult);
+    EXPECT_FALSE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 1.0e-30f, 0.0f));
 }
 
 TEST(UiScrollbarLayoutTests, InvalidOffsetRequestsPreserveBothAxesAndGeometry){
     const Rect bounds{ 0.0f, 0.0f, 112.0f, 112.0f };
     ScrollViewportPlacement previous;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(
-        bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f,
-        { 40.0f, 50.0f }, 12.0f, 16.0f, previous
-    ));
+    const auto previousResult = ScrollbarLayout::Calculate(
+        bounds,
+        bounds,
+        {},
+        { 399.0f, 400.0f },
+        1.0f,
+        { 40.0f, 50.0f },
+        12.0f,
+        16.0f
+    );
+    ASSERT_TRUE(previousResult);
+    previous = *previousResult;
     const Point inputs[] = { { -1.0f, 0.0f }, { 0.0f, -1.0f }, { Limit<f32>::s_QuietNaN, 0.0f },
         { 0.0f, Limit<f32>::s_Infinity } };
     for(const Point& input : inputs){
@@ -421,7 +546,9 @@ TEST(UiScrollbarLayoutTests, InvalidOffsetRequestsPreserveBothAxesAndGeometry){
 TEST(UiScrollbarLayoutTests, InvalidOwnedProjectionRejectsOffsetUpdateAtomically){
     const Rect bounds{ 0.0f, 0.0f, 112.0f, 112.0f };
     ScrollViewportPlacement previous;
-    ASSERT_TRUE(ScrollbarLayout::Calculate(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f, previous));
+    const auto previousResult = ScrollbarLayout::Calculate(bounds, bounds, {}, { 399.0f, 400.0f }, 1.0f, {}, 12.0f, 16.0f);
+    ASSERT_TRUE(previousResult);
+    previous = *previousResult;
     const auto reject = [](ScrollViewportPlacement& placement){
         const ScrollViewportPlacement expected = placement;
         EXPECT_FALSE(ScrollbarLayout::UpdateOffsets({ 40.0f, 50.0f }, placement));

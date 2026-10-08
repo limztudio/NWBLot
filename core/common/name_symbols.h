@@ -69,20 +69,19 @@ template<typename ArenaT>
 
 template<typename ArenaT>
 [[nodiscard]] inline bool LoadDefaultFile(ArenaT& arena){
-    ::Path<ArenaT> executableDirectory(arena);
-    if(!::GetExecutableDirectory(executableDirectory))
+    const auto executableDirectory = ::GetExecutableDirectory(arena);
+    if(!executableDirectory)
         return false;
 
     bool loadedAny = false;
 
-    ErrorCode error;
-    ::DirectoryIterator directory(executableDirectory, error);
-    if(error)
+    const auto directory = ::DirectoryIterator<ArenaT>::Create(*executableDirectory);
+    if(!directory)
         return loadedAny;
 
-    for(const ::DirectoryEntry<ArenaT>& entry : directory){
-        ErrorCode fileError;
-        if(!entry.isRegularFile(fileError) || fileError)
+    for(const ::DirectoryEntry<ArenaT>& entry : *directory){
+        const auto isRegularFile = entry.isRegularFile();
+        if(!isRegularFile || !*isRegularFile)
             continue;
 
         const ::Path<ArenaT> extensionPath = entry.path().extension();
@@ -115,14 +114,13 @@ inline void DecodeHashTokens(ArenaT& arena, BasicString<CharT, ArenaT>& inOutTex
     usize copiedUntil = 0u;
     const usize lastTokenOffset = inOutText.size() - s_DebugHashTextLength;
     for(usize i = 0u; i <= lastTokenOffset;){
-        char hashText[s_DebugHashTextLength + 1u] = {};
-        NameHash hash = {};
+        const auto hashText = CopyDebugHashToken<CharT>(BasicStringView<CharT>(inOutText.data(), inOutText.size()), i);
+        const auto hash = hashText
+            ? DecodeDebugHashText(AStringView(hashText->data(), s_DebugHashTextLength))
+            : Expected<NameHash>(MakeUnexpected(Failure{}))
+        ;
         char resolvedText[s_MaxResolvedTextLength] = {};
-        if(
-            CopyDebugHashToken<CharT>(BasicStringView<CharT>(inOutText.data(), inOutText.size()), i, hashText)
-            && DecodeDebugHashText(AStringView(hashText, s_DebugHashTextLength), hash)
-            && Resolve(hash, resolvedText, sizeof(resolvedText))
-        ){
+        if(hash && Resolve(*hash, resolvedText, sizeof(resolvedText))){
             if(!decoded){
                 decoded.emplace(arena);
                 decoded->reserve(inOutText.size());

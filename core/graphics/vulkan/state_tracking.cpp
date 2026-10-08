@@ -156,8 +156,8 @@ ResourceStates::Mask StateTracker::getTextureState(Texture* texture, ArraySlice 
     if(permIt != m_permanentTextureStates.end())
         return permIt.value().state;
 
-    ResourceStates::Mask state = ResourceStates::Unknown;
-    return getTransientTextureState(*texture, arraySlice, mipLevel, state) ? state : ResourceStates::Unknown;
+    const auto state = getTransientTextureState(*texture, arraySlice, mipLevel);
+    return state ? *state : ResourceStates::Unknown;
 }
 
 bool StateTracker::hasExplicitTextureSubresourceState(
@@ -172,30 +172,32 @@ bool StateTracker::hasExplicitTextureSubresourceState(
     return m_textureStates.find(TextureSubresourceStateKey{ texture, mipLevel, arraySlice }) != m_textureStates.end();
 }
 
-bool StateTracker::getTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel, ResourceStates::Mask& outState)const{
-    outState = ResourceStates::Unknown;
-
+Expected<ResourceStates::Mask> StateTracker::getTransientTextureState(
+    Texture& texture,
+    ArraySlice arraySlice,
+    MipLevel mipLevel
+)const{
     const TextureDesc& desc = texture.getCreationDescription();
     if(mipLevel >= desc.mipLevels || arraySlice >= desc.arraySize)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    return getResolvedTransientTextureState(texture, arraySlice, mipLevel, outState);
+    return getResolvedTransientTextureState(texture, arraySlice, mipLevel);
 }
 
-bool StateTracker::getResolvedTransientTextureState(Texture& texture, ArraySlice arraySlice, MipLevel mipLevel, ResourceStates::Mask& outState)const{
-    outState = ResourceStates::Unknown;
-
+ResourceStates::Mask StateTracker::getResolvedTransientTextureState(
+    Texture& texture,
+    ArraySlice arraySlice,
+    MipLevel mipLevel
+)const{
     const TextureSubresourceStateKey key{ &texture, mipLevel, arraySlice };
-    auto it = m_textureStates.find(key);
-    if(it != m_textureStates.end()){
-        outState = it.value();
-        return true;
-    }
+    const auto existing = m_textureStates.find(key);
+    if(existing != m_textureStates.end())
+        return existing.value();
 
-    if(texture.isRetainedSubresourceStateKnown(arraySlice, mipLevel))
-        outState = texture.m_creationDesc.initialState;
-
-    return true;
+    return texture.isRetainedSubresourceStateKnown(arraySlice, mipLevel)
+        ? texture.m_creationDesc.initialState
+        : ResourceStates::Unknown
+    ;
 }
 
 void StateTracker::beginTrackingTexture(Texture* texture, TextureSubresourceSet subresources, ResourceStates::Mask state){

@@ -93,30 +93,28 @@ bool ValidateFloatBounds(const FloatBounds& bounds)noexcept{
     ;
 }
 
-NumericParseStatus::Enum ParseIntegerDraft(const AStringView text, i64& output)noexcept{
+Expected<i64, NumericParseStatus::Enum> ParseIntegerDraft(const AStringView text)noexcept{
     const AStringView trimmed = TrimView(text);
     const NumericParseStatus::Enum status = __hidden_ui_numeric_parse::IntegerGrammar(trimmed);
     if(status != NumericParseStatus::Complete)
-        return status;
+        return MakeUnexpected(status);
     const AStringView number = trimmed.front() == '+' ? trimmed.substr(1u) : trimmed;
-    i64 value = 0;
-    if(!ParseI64FromChars(number, value))
-        return NumericParseStatus::OutOfRange;
-    output = value;
-    return NumericParseStatus::Complete;
+    const auto value = ParseI64FromChars(number);
+    if(!value)
+        return MakeUnexpected(NumericParseStatus::OutOfRange);
+    return *value;
 }
 
-NumericParseStatus::Enum ParseFloatDraft(const AStringView text, f64& output)noexcept{
+Expected<f64, NumericParseStatus::Enum> ParseFloatDraft(const AStringView text)noexcept{
     const AStringView trimmed = TrimView(text);
     const NumericParseStatus::Enum status = __hidden_ui_numeric_parse::FloatGrammar(trimmed);
     if(status != NumericParseStatus::Complete)
-        return status;
+        return MakeUnexpected(status);
     const AStringView number = trimmed.front() == '+' ? trimmed.substr(1u) : trimmed;
-    f64 value = 0.0;
-    if(!ParseF64FromChars(number, value) || !IsFinite(value))
-        return NumericParseStatus::OutOfRange;
-    output = value;
-    return NumericParseStatus::Complete;
+    const auto value = ParseF64FromChars(number);
+    if(!value || !IsFinite(*value))
+        return MakeUnexpected(NumericParseStatus::OutOfRange);
+    return *value;
 }
 
 

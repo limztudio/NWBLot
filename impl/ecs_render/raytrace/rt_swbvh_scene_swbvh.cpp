@@ -100,94 +100,96 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         if(!renderer.visible || m_opticalVolumes.isSuppressed(entity))
             continue;
 
-        ECSRenderDetail::MeshRayTracingResourceSnapshot mesh;
-        RenderableMeshDesc resolvedMesh;
-        const RenderableMeshResolution::Enum meshResolution = RayTracingDetail::ResolveRenderableMeshResources(
+        const auto meshResult = RayTracingDetail::ResolveRenderableMeshResources(
             *meshSystemPtr,
             m_meshSystem,
-            entity,
-            resolvedMesh,
-            mesh
+            entity
         );
-        if(meshResolution == RenderableMeshResolution::Absent)
+        if(!meshResult && meshResult.error() == RenderableMeshResolution::Absent)
             continue;
-        const bool meshReady = meshResolution == RenderableMeshResolution::Ready;
+        const bool meshReady = meshResult.has_value();
         // Preflight selects pending mesh storage; the prepared build and traversal validate topology before use.
-        const bool topologyReady = meshReady && (mesh.swBvhTopologyBuilt || mesh.runtimeMesh || mesh.swBvhBuildPending);
+        const bool topologyReady = meshReady && (meshResult->meshResources.swBvhTopologyBuilt || meshResult->meshResources.runtimeMesh || meshResult->meshResources.swBvhBuildPending);
         if(
             !meshReady
             || !topologyReady
-            || !mesh.swBvhNodeBuffer
-            || !RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(mesh.swBvhNodeHeapHandle)
-            || !mesh.positionBuffer
-            || !mesh.triangleIndexBuffer
-            || !mesh.attributeBuffer
-            || !mesh.csgLocalBounds.valid()
+            || !meshResult->meshResources.swBvhNodeBuffer
+            || !RayTracingSoftwareBvhDetail::IsStorageBufferHeapHandle(meshResult->meshResources.swBvhNodeHeapHandle)
+            || !meshResult->meshResources.positionBuffer
+            || !meshResult->meshResources.triangleIndexBuffer
+            || !meshResult->meshResources.attributeBuffer
+            || !meshResult->meshResources.csgLocalBounds.valid()
         ){
             contentComplete = false;
             opticalScene.markIncomplete();
             continue;
         }
         // Runtime mesh updates disable static scene-BVH reuse.
-        if(resolvedMesh.runtime || mesh.runtimeMesh)
+        if(meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh)
             staticScene = false;
 
         // Reuse one table slot for instances sharing geometry.
-        Core::Buffer* meshNodeBuffer = mesh.swBvhNodeBuffer.get();
+        Core::Buffer* meshNodeBuffer = meshResult->meshResources.swBvhNodeBuffer.get();
         u32 meshSlot = 0u;
         const auto foundMeshSlot = meshSlotLookup.find(meshNodeBuffer);
         if(foundMeshSlot != meshSlotLookup.end())
             meshSlot = foundMeshSlot.value();
         else{
-            const Core::GpuDescriptorHandle nodeHandle = mesh.swBvhNodeHeapHandle;
-            Core::GpuDescriptorHandle attributeHandle;
-            const Core::GpuDescriptorHandle positionHandle = mesh.swBvhPositionHeapHandle;
-            const Core::GpuDescriptorHandle indexHandle = mesh.swBvhTriangleIndexHeapHandle;
+            const Core::GpuDescriptorHandle nodeHandle = meshResult->meshResources.swBvhNodeHeapHandle;
+            const Core::GpuDescriptorHandle positionHandle = meshResult->meshResources.swBvhPositionHeapHandle;
+            const Core::GpuDescriptorHandle indexHandle = meshResult->meshResources.swBvhTriangleIndexHeapHandle;
             if(
                 !positionHandle.valid()
                 || positionHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
                 || !indexHandle.valid()
                 || indexHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-                || !AcquireMeshHeapHandle(heap, m_rayTracingState.m_swMeshHeapHandleCache, mesh.attributeBuffer, attributeHandle)
+
             ){
                 SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_swMeshHeapHandleCache);
                 NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap"));
                 return false;
             }
 
-            const Core::BufferDesc& nodeDesc = mesh.swBvhNodeBuffer->getCreationDescription();
-            const Core::BufferDesc& positionDesc = mesh.positionBuffer->getCreationDescription();
-            const Core::BufferDesc& indexDesc = mesh.triangleIndexBuffer->getCreationDescription();
-            const Core::BufferDesc& attributeDesc = mesh.attributeBuffer->getCreationDescription();
+            const auto attributeHandle = AcquireMeshHeapHandle(heap, m_rayTracingState.m_swMeshHeapHandleCache, meshResult->meshResources.attributeBuffer);
+            if(!attributeHandle){
+                SweepUnseenMeshHeapHandles(heap, m_rayTracingState.m_swMeshHeapHandleCache);
+                NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: failed to register SW scene mesh buffers in the global descriptor heap"));
+                return false;
+            }
+
+            const Core::BufferDesc& nodeDesc = meshResult->meshResources.swBvhNodeBuffer->getCreationDescription();
+            const Core::BufferDesc& positionDesc = meshResult->meshResources.positionBuffer->getCreationDescription();
+            const Core::BufferDesc& indexDesc = meshResult->meshResources.triangleIndexBuffer->getCreationDescription();
+            const Core::BufferDesc& attributeDesc = meshResult->meshResources.attributeBuffer->getCreationDescription();
             preparedMeshes.push_back(PreparedSceneSwBvhMesh{
-                .meshName = mesh.meshName,
-                .nodeBuffer = mesh.swBvhNodeBuffer,
-                .positionBuffer = mesh.positionBuffer,
-                .triangleIndexBuffer = mesh.triangleIndexBuffer,
-                .attributeBuffer = mesh.attributeBuffer,
+                .meshName = meshResult->meshResources.meshName,
+                .nodeBuffer = meshResult->meshResources.swBvhNodeBuffer,
+                .positionBuffer = meshResult->meshResources.positionBuffer,
+                .triangleIndexBuffer = meshResult->meshResources.triangleIndexBuffer,
+                .attributeBuffer = meshResult->meshResources.attributeBuffer,
                 .nodeHeapHandle = nodeHandle,
                 .positionHeapHandle = positionHandle,
                 .triangleIndexHeapHandle = indexHandle,
-                .attributeHeapHandle = attributeHandle,
-                .runtimeMeshVersion = mesh.runtimeMeshVersion,
-                .geometryContentRevision = mesh.runtimeGeometryContentRevision,
+                .attributeHeapHandle = *attributeHandle,
+                .runtimeMeshVersion = meshResult->meshResources.runtimeMeshVersion,
+                .geometryContentRevision = meshResult->meshResources.runtimeGeometryContentRevision,
                 .nodeByteSize = nodeDesc.byteSize,
                 .positionByteSize = positionDesc.byteSize,
                 .triangleIndexByteSize = indexDesc.byteSize,
                 .attributeByteSize = attributeDesc.byteSize,
-                .primitiveCount = mesh.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount,
-                .runtimeMesh = mesh.runtimeMesh,
+                .primitiveCount = meshResult->meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount,
+                .runtimeMesh = meshResult->meshResources.runtimeMesh,
             });
 
             meshSlot = m_rayTracingState.m_swShadowMeshCount;
             m_rayTracingState.m_swShadowMeshNodeBuffers.push_back(meshNodeBuffer);
-            m_rayTracingState.m_swShadowMeshPositionBuffers.push_back(mesh.positionBuffer.get());
-            m_rayTracingState.m_swShadowMeshIndexBuffers.push_back(mesh.triangleIndexBuffer.get());
-            m_rayTracingState.m_swShadowMeshAttributeBuffers.push_back(mesh.attributeBuffer.get());
+            m_rayTracingState.m_swShadowMeshPositionBuffers.push_back(meshResult->meshResources.positionBuffer.get());
+            m_rayTracingState.m_swShadowMeshIndexBuffers.push_back(meshResult->meshResources.triangleIndexBuffer.get());
+            m_rayTracingState.m_swShadowMeshAttributeBuffers.push_back(meshResult->meshResources.attributeBuffer.get());
             m_rayTracingState.m_swShadowMeshNodeHandles.push_back(nodeHandle);
             m_rayTracingState.m_swShadowMeshPositionHandles.push_back(positionHandle);
             m_rayTracingState.m_swShadowMeshIndexHandles.push_back(indexHandle);
-            m_rayTracingState.m_swShadowMeshAttributeHandles.push_back(attributeHandle);
+            m_rayTracingState.m_swShadowMeshAttributeHandles.push_back(*attributeHandle);
             meshSlotLookup.emplace(meshNodeBuffer, meshSlot);
             ++m_rayTracingState.m_swShadowMeshCount;
         }
@@ -205,45 +207,46 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         SIMDVector determinant;
         const SIMDMatrix worldToObject = MatrixInverse(&determinant, objectToWorld);
 
-        const SIMDVector localMin = LoadFloatInt(mesh.csgLocalBounds.minBounds);
-        const SIMDVector localMax = LoadFloatInt(mesh.csgLocalBounds.maxBounds);
-        SIMDVector worldMin{};
-        SIMDVector worldMax{};
-        if(!AabbTests::Transform(objectToWorld, localMin, localMax, worldMin, worldMax)){
+        const SIMDVector localMin = LoadFloatInt(meshResult->meshResources.csgLocalBounds.minBounds);
+        const SIMDVector localMax = LoadFloatInt(meshResult->meshResources.csgLocalBounds.maxBounds);
+        const auto worldBounds = AabbTests::Transform(objectToWorld, localMin, localMax);
+        if(!worldBounds){
             contentComplete = false;
             opticalScene.markIncomplete();
             continue;
         }
+        SIMDVector worldMin = worldBounds->minBounds;
+        SIMDVector worldMax = worldBounds->maxBounds;
         RayTracingDetail::InflateSwShadowSceneBounds(worldMin, worldMax);
 
         SceneSwBvhInstanceGpu instance;
         StoreFloat(worldToObject, instance.worldToObject);
-        instance.primitiveCount = mesh.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
+        instance.primitiveCount = meshResult->meshResources.meshletPrimitiveIndexCount / s_RayTracingTriangleIndexCount;
 
         // Build material context in scene-BVH leaf order; unresolved materials remain opaque.
         const u32 meshInstanceIndex = static_cast<u32>(instances.size());
         NwbRtInstanceMaterialGpu instanceMaterial;
         InstanceGpuData shadowInstance;
         MaterialSurfaceInfo* materialInfo = nullptr;
-        if(m_materialSystem.findMaterialSurfaceInfo(renderer.material, materialInfo)){
+        if(const auto materialInfoResult = m_materialSystem.findMaterialSurfaceInfo(renderer.material); materialInfoResult){
+            materialInfo = *materialInfoResult;
             // Software shadow, caustic, and surfel traversal evaluate the same material surface dispatcher as the hardware path. Freeze its sampled textures alongside the scene-BVH material context.
             if(
                 materialInfo->surfaceDispatchId != Limit<u32>::s_Max
                 && !appendPreparedShadowTraceMaterialSampledTextures(*materialInfo, sampledTextureCollector)
             )
                 return false;
-            u32 materialConstantByteOffset = 0u;
-            if(!m_materialSystem.appendShadowOccluderMaterialContext(
+            const auto materialContext = m_materialSystem.appendShadowOccluderMaterialContext(
                 entity,
                 *materialInfo,
                 objectTransformPtr,
                 shadowMaterialTypedBytes,
-                shadowMutableTypedRanges,
-                shadowInstance,
-                materialConstantByteOffset
-            ))
+                shadowMutableTypedRanges
+            );
+            if(!materialContext)
                 return false;
-            instanceMaterial = RayTracingDetail::ResolveInstanceShadowMaterial(*materialInfo, materialConstantByteOffset, meshInstanceIndex);
+            shadowInstance = materialContext->instance;
+            instanceMaterial = RayTracingDetail::ResolveInstanceShadowMaterial(*materialInfo, materialContext->constantByteOffset, meshInstanceIndex);
         }
         if(!materialInfo || materialInfo->surfaceDispatchId == Limit<u32>::s_Max)
             contentComplete = false;
@@ -268,58 +271,65 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
         StoreFloat(objectToWorld, opticalWorld);
         Float3U opticalMin{};
         Float3U opticalMax{};
-        const bool opticalBoundsValid =
-            bvhPrimitive.transparentOccluder && !resolvedMesh.runtime && !mesh.runtimeMesh
+        bool opticalBoundsValid = false;
+        if(
+            bvhPrimitive.transparentOccluder && !meshResult->resolvedMesh.runtime && !meshResult->meshResources.runtimeMesh
             && !m_world.tryGetComponent<StaticCsgMeshComponent>(entity)
             && !m_world.tryGetComponent<SkinnedCsgMeshComponent>(entity)
             && !m_world.tryGetComponent<CsgReceiverComponent>(entity)
-            && ComputeOpticalWorldBounds(opticalWorld, opticalLocalMin, opticalLocalMax, opticalMin, opticalMax)
-        ;
+        ){
+            const auto bounds = ComputeOpticalWorldBounds(opticalWorld, opticalLocalMin, opticalLocalMax);
+            if(bounds){
+                opticalMin = bounds->minimum;
+                opticalMax = bounds->maximum;
+                opticalBoundsValid = true;
+            }
+        }
         opticalScene.append(entity, renderer, bvhPrimitive.transparentOccluder, opticalMin, opticalMax, opticalBoundsValid);
 
         // Preserve the exact emitted instance/boundary ordering, while allowing only world transforms to lag one frame.
         Fnv64AppendValue(captureSceneIdentity, entity.id);
-        Fnv64AppendValue(captureSceneIdentity, mesh.positionBuffer.get());
-        Fnv64AppendValue(captureSceneIdentity, mesh.triangleIndexBuffer.get());
-        Fnv64AppendValue(captureSceneIdentity, mesh.attributeBuffer.get());
-        Fnv64AppendValue(captureSceneIdentity, mesh.meshletCount);
-        Fnv64AppendValue(captureSceneIdentity, mesh.meshletDescBuffer.get());
-        Fnv64AppendValue(captureSceneIdentity, mesh.meshletLocalBoundsBuffer.get());
-        Fnv64AppendValue(captureSceneIdentity, mesh.meshletDescHeapHandle.value);
-        Fnv64AppendValue(captureSceneIdentity, mesh.meshletLocalBoundsHeapHandle.value);
-        Fnv64AppendValue(captureSceneIdentity, mesh.meshletPrimitiveIndexCount);
-        Fnv64AppendValue(captureSceneIdentity, mesh.runtimeMeshVersion);
-        Fnv64AppendValue(captureSceneIdentity, mesh.runtimeGeometryContentRevision);
+        Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.positionBuffer.get());
+        Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.triangleIndexBuffer.get());
+        Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.attributeBuffer.get());
+        Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.meshletCount);
+        Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.meshletDescBuffer.get());
+        Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.meshletLocalBoundsBuffer.get());
+        Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.meshletDescHeapHandle.value);
+        Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.meshletLocalBoundsHeapHandle.value);
+        Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.meshletPrimitiveIndexCount);
+        Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.runtimeMeshVersion);
+        Fnv64AppendValue(captureSceneIdentity, meshResult->meshResources.runtimeGeometryContentRevision);
         Fnv64AppendValue(captureSceneIdentity, instanceMaterial);
         Fnv64AppendValue(captureSceneIdentity, shadowInstance.translation.w);
         Fnv64AppendValue(captureSceneIdentity, shadowInstance.geometryHeapSlots);
         Fnv64AppendValue(captureSceneIdentity, opticalScene.instances.back());
-        if((resolvedMesh.runtime || mesh.runtimeMesh) && mesh.runtimeGeometryContentRevision == 0u)
+        if((meshResult->resolvedMesh.runtime || meshResult->meshResources.runtimeMesh) && meshResult->meshResources.runtimeGeometryContentRevision == 0u)
             captureSceneTrusted = false;
-        m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.positionBuffer);
-        m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.triangleIndexBuffer);
-        m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.attributeBuffer);
-        if(mesh.meshletCount != 0u){
-            m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.meshletDescBuffer);
-            m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.meshletLocalBoundsBuffer);
+        m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.positionBuffer);
+        m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.triangleIndexBuffer);
+        m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.attributeBuffer);
+        if(meshResult->meshResources.meshletCount != 0u){
+            m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.meshletDescBuffer);
+            m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.meshletLocalBoundsBuffer);
         }
         if(m_lightSpaceShadow.m_csg.gathering){
-            if(mesh.runtimeLocalBoundsBuffer)
-                m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.runtimeLocalBoundsBuffer);
-            if(mesh.swBvhNodeBuffer)
-                m_lightSpaceShadow.m_sceneBuffers.push_back(mesh.swBvhNodeBuffer);
+            if(meshResult->meshResources.runtimeLocalBoundsBuffer)
+                m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.runtimeLocalBoundsBuffer);
+            if(meshResult->meshResources.swBvhNodeBuffer)
+                m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.swBvhNodeBuffer);
         }
 
-        AppendLightSpaceCsgReceiver(m_lightSpaceShadow.m_csg, entity, bvhPrimitive.transparentOccluder, objectToWorld, mesh);
+        AppendLightSpaceCsgReceiver(m_lightSpaceShadow.m_csg, entity, bvhPrimitive.transparentOccluder, objectToWorld, meshResult->meshResources);
         sceneRefitInputs.push_back({ opticalWorld, instanceMaterial.nodeSlot, {} });
-        sceneRefitRoots.push_back(mesh.swBvhNodeBuffer);
+        sceneRefitRoots.push_back(meshResult->meshResources.swBvhNodeBuffer);
         lightSpaceCasters.push_back({
-            .triangleIndexBuffer = mesh.triangleIndexBuffer,
-            .meshletDescBuffer = mesh.meshletDescBuffer,
-            .meshletBoundsBuffer = mesh.meshletLocalBoundsBuffer,
-            .meshletCount = mesh.meshletCount,
-            .meshletDescSlot = mesh.meshletCount != 0u ? mesh.meshletDescHeapHandle.slot() : 0u,
-            .meshletBoundsSlot = mesh.meshletCount != 0u ? mesh.meshletLocalBoundsHeapHandle.slot() : 0u,
+            .triangleIndexBuffer = meshResult->meshResources.triangleIndexBuffer,
+            .meshletDescBuffer = meshResult->meshResources.meshletDescBuffer,
+            .meshletBoundsBuffer = meshResult->meshResources.meshletLocalBoundsBuffer,
+            .meshletCount = meshResult->meshResources.meshletCount,
+            .meshletDescSlot = meshResult->meshResources.meshletCount != 0u ? meshResult->meshResources.meshletDescHeapHandle.slot() : 0u,
+            .meshletBoundsSlot = meshResult->meshResources.meshletCount != 0u ? meshResult->meshResources.meshletLocalBoundsHeapHandle.slot() : 0u,
         });
         instances.push_back(instance);
         instanceBvhPrimitives.push_back(bvhPrimitive);
@@ -465,9 +475,7 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
     // Preserve a valid typed buffer and refresh SW node-slot context independently.
     if(shadowMaterialTypedBytes.empty())
         shadowMaterialTypedBytes.resize(sizeof(u32), 0u);
-    usize materialTypedUploadBytes = 0u;
-    if(!ECSRenderDetail::ResolveMaterialTypedUploadByteCount(shadowMaterialTypedBytes, materialTypedUploadBytes))
-        return false;
+    const usize materialTypedUploadBytes = ECSRenderDetail::ResolveMaterialTypedUploadByteCount(shadowMaterialTypedBytes);
     const u64 swMaterialContextHash = ComputeShadowMaterialContextHash(
         instanceMaterials,
         shadowInstanceData,

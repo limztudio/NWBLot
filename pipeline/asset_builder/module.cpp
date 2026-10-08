@@ -44,9 +44,8 @@ static bool AddRoot(const NWB::Path& path, NWB::Pipeline::AssetBuilder::AssetBui
 
 static bool ResolveRoots(const PipelineOptions& parsed, NWB::Pipeline::AssetBuilder::AssetBuildOptions& options){
     auto& arena = options.assetRoots.get_allocator().arena();
-    ErrorCode error;
-    const Path repoRoot = AbsolutePath(Path(arena, options.repoRoot.empty() ? AStringView(".") : AStringView(options.repoRoot)), error);
-    if(error){
+    const auto repoRoot = AbsolutePath(Path(arena, options.repoRoot.empty() ? AStringView(".") : AStringView(options.repoRoot)));
+    if(!repoRoot){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to resolve repository root"));
         return false;
     }
@@ -54,15 +53,15 @@ static bool ResolveRoots(const PipelineOptions& parsed, NWB::Pipeline::AssetBuil
     for(const auto& input : sources){
         Path path(arena, input);
         if(!path.isAbsolute())
-            path = repoRoot / path;
+            path = *repoRoot / path;
         path = path.lexicallyNormal();
         if(parsed.assetRoots.empty()){
-            const bool directory = IsDirectory(path, error);
-            if(error){
+            const auto directory = IsDirectory(path);
+            if(!directory){
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to inspect input '{}'"), StringConvert(input));
                 return false;
             }
-            if(!directory)
+            if(!*directory)
                 path = path.parentPath();
             Path ancestor = path;
             while(!ancestor.empty()){
@@ -100,9 +99,8 @@ static bool ResolveRoots(const PipelineOptions& parsed, NWB::Pipeline::AssetBuil
 
 int RunPipelineTool(const int argc, char** argv){
     NWB::Core::Assets::AssetArena arena(__hidden_asset_builder::s_AssetBuilderArena);
-    PipelineOptions parsed(arena);
     PipelineCommandLine commandLine(PipelineTool::AssetBuilder);
-    return commandLine.run(argc, argv, parsed, [&](PipelineOptions& options){
+    return commandLine.run(argc, argv, arena, [&](PipelineOptions& options){
         const u32 cores = QueryCpuCoreCount(CpuAffinity::Any);
         NWB::Core::CpuTaskScheduler cpuScheduler(cores > __hidden_asset_builder::s_MinParallelCoreCount ? cores - __hidden_asset_builder::s_MinParallelCoreCount : 0u);
         NWB::Pipeline::AssetBuilder::AssetBuildOptions buildOptions(arena, cpuScheduler);

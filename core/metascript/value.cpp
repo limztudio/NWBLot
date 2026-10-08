@@ -233,11 +233,10 @@ Value& Value::operator+=(const Value& rhs){
                 return *this;
             }
             const usize listSize = m_data.m_list->size();
-            usize rhsIndex = 0u;
-            const bool rhsInList = ::ContainerDetail::SourceAliasesDestination(*m_data.m_list, &rhs, 1u, rhsIndex);
+            const auto rhsIndex = ::ContainerDetail::SourceAliasesDestination(*m_data.m_list, &rhs, 1u);
             const usize requiredListCapacity = listSize + 1u;
             ::ContainerDetail::ReserveGrowingCapacity(*m_data.m_list, requiredListCapacity);
-            appendListCopy(rhsInList ? (*m_data.m_list)[rhsIndex] : rhs);
+            appendListCopy(rhsIndex ? (*m_data.m_list)[*rhsIndex] : rhs);
         }
         return *this;
     }
@@ -450,13 +449,12 @@ void Value::append(Value&& val){
         return;
     }
 
-    usize valIndex = 0u;
-    const bool valInList = ::ContainerDetail::SourceAliasesDestination(*m_data.m_list, &val, 1u, valIndex);
-    if(valInList){
+    const auto valIndex = ::ContainerDetail::SourceAliasesDestination(*m_data.m_list, &val, 1u);
+    if(valIndex){
         const usize requiredListCapacity = listSize + 1u;
         ::ContainerDetail::ReserveGrowingCapacity(*m_data.m_list, requiredListCapacity);
-        appendListCopy((*m_data.m_list)[valIndex]);
-        (*m_data.m_list)[valIndex].destroy();
+        appendListCopy((*m_data.m_list)[*valIndex]);
+        (*m_data.m_list)[*valIndex].destroy();
         return;
     }
 

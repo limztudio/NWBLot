@@ -28,12 +28,11 @@ namespace __hidden_assets_skeleton_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseSkeletonDocument(
+static Expected<SkeletonCookEntry> ParseSkeletonDocument(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    SkeletonCookEntry& outEntry,
     Core::Assets::CookEntryParseContext& context
 ){
     return ParseSkeletonCookMetadata(
@@ -41,23 +40,22 @@ static bool ParseSkeletonDocument(
         virtualRoot,
         nwbFilePath,
         doc,
-        outEntry,
+        context.cookArena,
         context.scratchArena
     );
 }
 
-static bool ParseSkeletonValue(
+static Expected<SkeletonCookEntry> ParseSkeletonValue(
     const Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    SkeletonCookEntry& outEntry,
-    Core::Assets::CookEntryParseContext&
+    Core::Assets::CookEntryParseContext& context
 ){
     return ParseSkeletonCookMetadata(
         virtualPath,
         nwbFilePath,
         asset,
-        outEntry
+        context.cookArena
     );
 }
 
@@ -67,7 +65,7 @@ static bool RegisterSkeletonCookEntry(Core::Assets::CookEntryRegistry& registry)
         NWB_TEXT("skeleton"),
         &ParseSkeletonDocument,
         &ParseSkeletonValue,
-        [](SkeletonCookEntry& entry, Skeleton& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildSkeletonAsset); }
+        [](SkeletonCookEntry& entry, Core::Assets::AssetArena& arena){ return Core::Assets::ForwardCookBuild(entry, arena, &BuildSkeletonAsset); }
     );
 }
 

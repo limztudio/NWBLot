@@ -37,8 +37,8 @@ public:
 
 public:
     [[nodiscard]] bool validate();
-    [[nodiscard]] bool permanentTextureState(Texture* texture, ResourceStates::Mask& outState)const noexcept;
-    [[nodiscard]] bool permanentBufferState(Buffer* buffer, ResourceStates::Mask& outState)const noexcept;
+    [[nodiscard]] Expected<ResourceStates::Mask> permanentTextureState(Texture* texture)const noexcept;
+    [[nodiscard]] Expected<ResourceStates::Mask> permanentBufferState(Buffer* buffer)const noexcept;
 
 
 private:

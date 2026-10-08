@@ -29,16 +29,15 @@ namespace RendererTaskGraphDetail{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool GatherPreparedMaterialGeometryUses(
+[[nodiscard]] inline Expected<Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>> GatherPreparedMaterialGeometryUses(
     Core::GpuTaskGraph& graph,
     const MaterialPassDrawItems* const* const drawItemSets,
     const usize drawItemSetCount,
-    Core::Alloc::ScratchArena& scratchArena,
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena>& outResourceUses
+    Core::Alloc::ScratchArena& scratchArena
 ){
-    outResourceUses.clear();
+    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses(scratchArena);
     if(drawItemSetCount != 0u && !drawItemSets)
-        return false;
+        return MakeUnexpected(Failure{});
 
     // Indexed raster reads its decoded cache; only mesh/compute stages and cache producers consume source streams.
     constexpr usize s_MaxDrawItemCount = Limit<usize>::s_Max / NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT;
@@ -46,15 +45,15 @@ namespace RendererTaskGraphDetail{
     for(usize drawItemSetIndex = 0u; drawItemSetIndex < drawItemSetCount; ++drawItemSetIndex){
         const MaterialPassDrawItems* const drawItems = drawItemSets[drawItemSetIndex];
         if(!drawItems)
-            return false;
+            return MakeUnexpected(Failure{});
         for(const usize count : { drawItems->meshDrawItems.size(), drawItems->computeDrawItems.size() }){
             if(count > s_MaxDrawItemCount - drawItemCount)
-                return false;
+                return MakeUnexpected(Failure{});
             drawItemCount += count;
         }
     }
     if(drawItemCount == 0u)
-        return true;
+        return resourceUses;
 
     using MeshSourceRef = NotNull<const MaterialPassMeshResourceSnapshot*>;
     Vector<MeshSourceRef, Core::Alloc::ScratchArena> uniqueMeshes{ scratchArena };
@@ -101,17 +100,17 @@ namespace RendererTaskGraphDetail{
             const MaterialPassDrawItems* const drawItems = drawItemSets[drawItemSetIndex];
             for(const MaterialPassDrawItem& drawItem : drawItems->meshDrawItems){
                 if(!appendDrawItem(drawItem))
-                    return false;
+                    return MakeUnexpected(Failure{});
             }
             for(const MaterialPassDrawItem& drawItem : drawItems->computeDrawItems){
                 if(!appendDrawItem(drawItem))
-                    return false;
+                    return MakeUnexpected(Failure{});
             }
         }
     }
 
     const usize sourceBufferCapacity = uniqueMeshes.size() * NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT;
-    outResourceUses.reserve(sourceBufferCapacity);
+    resourceUses.reserve(sourceBufferCapacity);
     Vector<Core::BufferHandle, Core::Alloc::ScratchArena> sourceBuffers{ scratchArena };
     sourceBuffers.reserve(sourceBufferCapacity);
     {
@@ -126,134 +125,122 @@ namespace RendererTaskGraphDetail{
         }
     }
 
-    outResourceUses.resize(sourceBuffers.size());
+    resourceUses.resize(sourceBuffers.size());
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         if(!declarations.valid()){
-            outResourceUses.clear();
-            return false;
+            return MakeUnexpected(Failure{});
         }
         for(usize bufferIndex = 0u; bufferIndex < sourceBuffers.size(); ++bufferIndex)
-            outResourceUses[bufferIndex].resource = declarations.findImportedBuffer(sourceBuffers[bufferIndex]);
+            resourceUses[bufferIndex].resource = declarations.findImportedBuffer(sourceBuffers[bufferIndex]);
     }
     for(usize bufferIndex = 0u; bufferIndex < sourceBuffers.size(); ++bufferIndex){
         const Core::BufferHandle& buffer = sourceBuffers[bufferIndex];
-        Core::GpuGraphResourceId resource = outResourceUses[bufferIndex].resource;
+        Core::GpuGraphResourceId resource = resourceUses[bufferIndex].resource;
         if(!resource.valid()){
             const Name identity = buffer->getCreationDescription().debugName;
             if(!identity){
-                outResourceUses.clear();
-                return false;
+                return MakeUnexpected(Failure{});
             }
             resource = graph.importBuffer(buffer, BufferResourceDesc(identity, "Prepared Material Geometry"));
         }
         if(!resource.valid()){
-            outResourceUses.clear();
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        outResourceUses[bufferIndex] = ReadUse(resource, Core::ResourceStates::ShaderResource);
+        resourceUses[bufferIndex] = ReadUse(resource, Core::ResourceStates::ShaderResource);
     }
-    return true;
+    return resourceUses;
 }
 
 // Material geometry enumerates from the frozen snapshot; give the graph one immutable collection.
-[[nodiscard]] inline bool GatherPreparedMaterialGeometryResourceSet(
+[[nodiscard]] inline Expected<Core::GpuGraphResourceSetId> GatherPreparedMaterialGeometryResourceSet(
     Core::GpuTaskGraph& graph,
     const MaterialPassDrawItems* const* const drawItemSets,
     const usize drawItemSetCount,
     Core::Alloc::ScratchArena& scratchArena,
     const Name& identity,
-    const AStringView label,
-    Core::GpuGraphResourceSetId& outResourceSet
+    const AStringView label
 ){
-    outResourceSet = {};
-    Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> resourceUses{ scratchArena };
-    if(!GatherPreparedMaterialGeometryUses(
-        graph,
-        drawItemSets,
-        drawItemSetCount,
-        scratchArena,
-        resourceUses
-    ))
-        return false;
+    Core::GpuGraphResourceSetId resource{};
+    const auto resourceUses = GatherPreparedMaterialGeometryUses(graph, drawItemSets, drawItemSetCount, scratchArena);
+    if(!resourceUses)
+        return MakeUnexpected(Failure{});
 
     Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> members{ scratchArena };
-    members.reserve(resourceUses.size());
-    for(const Core::GpuTaskResourceUse& use : resourceUses)
+    members.reserve(resourceUses->size());
+    for(const Core::GpuTaskResourceUse& use : *resourceUses)
         members.push_back(use.resource);
 
-    outResourceSet = graph.importResourceSet(
+    resource = graph.importResourceSet(
         Core::GpuGraphResourceSetDesc{}
             .setIdentity(identity)
             .setMarkerLabel(label)
             .setMembers(members.data(), members.size())
     );
-    return outResourceSet.valid();
+    if(!resource.valid())
+        return MakeUnexpected(Failure{});
+    return resource;
 }
 
 
-[[nodiscard]] inline bool GatherRegularSharedComputeEmulationResource(
+[[nodiscard]] inline Expected<Core::GpuGraphResourceId> GatherRegularSharedComputeEmulationResource(
     Core::GpuTaskGraph& graph,
     const ECSRenderDetail::RegularSharedComputeEmulationGraphPlan& plan,
-    const AStringView label,
-    Core::GpuGraphResourceId& outResource
+    const AStringView label
 ){
-    outResource = {};
+    Core::GpuGraphResourceId resource{};
     if(!plan.captured || !plan.outputBuffer)
-        return false;
+        return MakeUnexpected(Failure{});
 
     {
         const Core::GpuTaskGraph::DeclarationReadView declarations(graph);
         if(!declarations.valid())
-            return false;
-        outResource = declarations.findImportedBuffer(plan.outputBuffer);
+            return MakeUnexpected(Failure{});
+        resource = declarations.findImportedBuffer(plan.outputBuffer);
     }
-    if(!outResource.valid()){
+    if(!resource.valid()){
         const Name identity = plan.outputBuffer->getCreationDescription().debugName;
         if(!identity)
-            return false;
-        outResource = graph.importBuffer(plan.outputBuffer, BufferResourceDesc(identity, label));
+            return MakeUnexpected(Failure{});
+        resource = graph.importBuffer(plan.outputBuffer, BufferResourceDesc(identity, label));
     }
-    return outResource.valid();
+    if(!resource.valid())
+        return MakeUnexpected(Failure{});
+    return resource;
 }
 
 
-[[nodiscard]] inline bool GatherPreparedMaterialSampledTextureResourceSet(
+[[nodiscard]] inline Expected<Core::GpuGraphResourceSetId> GatherPreparedMaterialSampledTextureResourceSet(
     RendererMaterialSystem& materialSystem,
     Core::GpuTaskGraph& graph,
     const MaterialPassDrawItems* const* const drawItemSets,
     const usize drawItemSetCount,
     Core::Alloc::ScratchArena& scratchArena,
     const Name& identity,
-    const AStringView label,
-    Core::GpuGraphResourceSetId& outResourceSet
+    const AStringView label
 ){
-    outResourceSet = {};
-    Vector<Core::TextureHandle, Core::Alloc::ScratchArena> sampledTextures{ scratchArena };
-    if(!materialSystem.gatherPreparedMaterialPassSampledTextures(
-        drawItemSets,
-        drawItemSetCount,
-        sampledTextures,
-        scratchArena
-    ))
-        return false;
+    Core::GpuGraphResourceSetId resource{};
+    const auto sampledTextures = materialSystem.gatherPreparedMaterialPassSampledTextures(drawItemSets, drawItemSetCount, scratchArena);
+    if(!sampledTextures)
+        return MakeUnexpected(Failure{});
 
-    Vector<Core::GpuGraphResourceId, Core::Alloc::ScratchArena> members{ scratchArena };
-    members.reserve(sampledTextures.size());
-    if(ImportMaterialSampledTextureResources(
-        graph, sampledTextures.data(), sampledTextures.size(), "Prepared Material Sampled Texture", members
-    ) != SampledTextureImportResult::Success)
-        return false;
-    if(members.empty())
-        return true;
+    const auto members = ImportMaterialSampledTextureResources(
+        graph, sampledTextures->data(), sampledTextures->size(), "Prepared Material Sampled Texture", scratchArena
+    );
+    if(!members)
+        return MakeUnexpected(Failure{});
+    if(members->empty())
+        return resource;
 
-    outResourceSet = graph.importResourceSet(
+    resource = graph.importResourceSet(
         Core::GpuGraphResourceSetDesc{}
             .setIdentity(identity)
             .setMarkerLabel(label)
-            .setMembers(members.data(), members.size())
+            .setMembers(members->data(), members->size())
     );
-    return outResourceSet.valid();
+    if(!resource.valid())
+        return MakeUnexpected(Failure{});
+    return resource;
 }
 
 

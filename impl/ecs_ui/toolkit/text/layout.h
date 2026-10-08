@@ -88,7 +88,7 @@ public:
     [[nodiscard]] const PaintVector<TextCluster>& clusters()const noexcept{ return m_clusters; }
     [[nodiscard]] const PaintVector<TextLine>& lines()const noexcept{ return m_lines; }
     [[nodiscard]] TextHit hitTest(Point point)const noexcept;
-    [[nodiscard]] bool caretRect(u32 byteOffset, TextCaretEdge::Enum edge, Rect& output)const noexcept;
+    [[nodiscard]] Expected<Rect> caretRect(u32 byteOffset, TextCaretEdge::Enum edge)const noexcept;
 
 
 private:
@@ -108,14 +108,13 @@ public:
 
 
 public:
-    // Failure leaves output unchanged. Line breaks are LF/CRLF; there is no automatic wrap or paragraph bidi.
-    [[nodiscard]] TextLayoutStatus::Enum layout(const ShapeRequest& request, TextLayout& output);
+    // Line breaks are LF/CRLF; there is no automatic wrap or paragraph bidi.
+    [[nodiscard]] Expected<TextLayout, TextLayoutStatus::Enum> layout(const ShapeRequest& request);
 
 
 private:
     Core::Alloc::GlobalArena& m_arena;
     ITextShaper& m_shaper;
-    ShapedRun m_run;
 };
 
 

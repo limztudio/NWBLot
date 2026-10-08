@@ -163,50 +163,37 @@ template<
     const bool skinRequired,
     FailureHandlerT onFailure
 ){
-    usize encodedPositionBytes = 0u;
-    usize encodedAttributeBytes = 0u;
+    const auto encodedPositionBytes = MeshletEncodedPositionRefByteCount(meshlet, skinRequired);
+    const auto encodedAttributeBytes = MeshletEncodedAttributeRefByteCount(meshlet);
     if(
-        !MeshletEncodedPositionRefByteCount(meshlet, skinRequired, encodedPositionBytes)
-        || !MeshletEncodedAttributeRefByteCount(meshlet, encodedAttributeBytes)
+        !encodedPositionBytes
+        || !encodedAttributeBytes
     )
         return onFailure(meshletIndex, NWB_TEXT("encoded ref width is invalid"));
     if(
         meshlet.positionRefOffset > positionDeltas.size()
-        || encodedPositionBytes != positionDeltas.size() - meshlet.positionRefOffset
+        || *encodedPositionBytes != positionDeltas.size() - meshlet.positionRefOffset
         || meshlet.attributeRefOffset > attributeDeltas.size()
-        || encodedAttributeBytes != attributeDeltas.size() - meshlet.attributeRefOffset
+        || *encodedAttributeBytes != attributeDeltas.size() - meshlet.attributeRefOffset
     )
         return onFailure(meshletIndex, NWB_TEXT("encoded ref byte count mismatch"));
 
     for(u32 localPositionIndex = 0u; localPositionIndex < MeshletPositionCount(meshlet); ++localPositionIndex){
         const MeshletPositionStreamRef& sourceRef = positionRefs[sourcePositionRefOffset + localPositionIndex];
-        MeshletPositionStreamRef decodedRef;
+        const auto decodedRef = DecodeMeshletPositionRef(positionDeltas.data(), positionDeltas.size(), meshlet, localPositionIndex, skinRequired);
         if(
-            !DecodeMeshletPositionRef(
-                positionDeltas.data(),
-                positionDeltas.size(),
-                meshlet,
-                localPositionIndex,
-                skinRequired,
-                decodedRef
-            )
-            || !MeshletDecodedPositionRefMatches(decodedRef, sourceRef, skinRequired)
+            !decodedRef
+            || !MeshletDecodedPositionRefMatches(*decodedRef, sourceRef, skinRequired)
         )
             return onFailure(meshletIndex, NWB_TEXT("encoded position ref decode mismatch"));
     }
 
     for(u32 localAttributeIndex = 0u; localAttributeIndex < MeshletAttributeCount(meshlet); ++localAttributeIndex){
         const MeshletAttributeStreamRef& sourceRef = attributeRefs[sourceAttributeRefOffset + localAttributeIndex];
-        MeshletAttributeStreamRef decodedRef;
+        const auto decodedRef = DecodeMeshletAttributeRef(attributeDeltas.data(), attributeDeltas.size(), meshlet, localAttributeIndex);
         if(
-            !DecodeMeshletAttributeRef(
-                attributeDeltas.data(),
-                attributeDeltas.size(),
-                meshlet,
-                localAttributeIndex,
-                decodedRef
-            )
-            || !MeshletDecodedAttributeRefMatches(decodedRef, sourceRef)
+            !decodedRef
+            || !MeshletDecodedAttributeRefMatches(*decodedRef, sourceRef)
         )
             return onFailure(meshletIndex, NWB_TEXT("encoded attribute ref decode mismatch"));
     }

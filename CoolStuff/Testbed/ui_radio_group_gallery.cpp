@@ -24,18 +24,19 @@ u64 UiRadioGroupSource::rowCount()const noexcept{ return 3u; }
 
 u64 UiRadioGroupSource::key(const u64 index)const noexcept{ return index < 3u ? index + 1u : 0u; }
 
-bool UiRadioGroupSource::indexOf(const u64 keyValue, u64& index)const noexcept{
+Expected<u64> UiRadioGroupSource::indexOf(const u64 keyValue)const noexcept{
     if(keyValue == 0u || keyValue > 3u)
-        return false;
-    index = keyValue - 1u;
-    return true;
+        return MakeUnexpected(Failure{});
+    return keyValue - 1u;
 }
 
-bool UiRadioGroupSource::findEnabled(const u64 start, const bool reverse, u64& index)const noexcept{
+Expected<u64> UiRadioGroupSource::findEnabled(const u64 start, const bool reverse)const noexcept{
     if(start >= 3u)
-        return false;
-    index = start == 2u ? (reverse ? 1u : 3u) : start;
-    return index < 3u;
+        return MakeUnexpected(Failure{});
+    const u64 index = start == 2u ? (reverse ? 1u : 3u) : start;
+    if(index >= 3u)
+        return MakeUnexpected(Failure{});
+    return index;
 }
 
 StringView UiRadioGroupSource::text(const u64 index)const noexcept{

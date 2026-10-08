@@ -164,16 +164,14 @@ public:
 
 
 public:
-    bool parseShaderMeta(
+    [[nodiscard]] Expected<ShaderEntry> parseShaderMeta(
         const Path& nwbFilePath,
         const Core::Metascript::Document& doc,
-        ShaderEntry& outEntry,
         Core::Alloc::ScratchArena& scratchArena
     );
-    bool parseIncludeMeta(
+    [[nodiscard]] Expected<IncludeEntry> parseIncludeMeta(
         const Path& nwbFilePath,
         const Core::Metascript::Document& doc,
-        IncludeEntry& outEntry,
         Core::Alloc::ScratchArena& scratchArena
     );
 
@@ -205,11 +203,14 @@ public:
         Core::Alloc::ScratchArena& scratchArena
     );
 
-    bool computeDependencyChecksum(
+    struct DependencyChecksum{
+        u64 checksum = 0u;
+        bool compilerInputsHaveBom = false;
+    };
+
+    [[nodiscard]] Expected<DependencyChecksum> computeDependencyChecksum(
         const CookVector<Path>& dependencies,
         InitializerList<DependencyRootAlias> dependencyRootAliases,
-        u64& outChecksum,
-        bool& outCompilerInputsHaveBom,
         Core::Alloc::ScratchArena& scratchArena
     );
     [[nodiscard]] u64 computeSourceChecksum(

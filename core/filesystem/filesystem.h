@@ -8,6 +8,7 @@
 #include "volume_types.h"
 
 #include <global/compile.h>
+#include <global/expected.h>
 #include <global/limit.h>
 #include <core/common/log.h>
 
@@ -58,8 +59,8 @@ public:
 
 
 public:
-    // Successful reads may stop at EOF. Failure resets outBytesRead to zero.
-    virtual bool readFile(const Name& virtualPath, u64 offset, void* data, usize bytes, usize& outBytesRead)const = 0;
+    // Successful reads may stop at EOF and return the number of bytes copied.
+    [[nodiscard]] virtual Expected<usize> readFile(const Name& virtualPath, u64 offset, void* data, usize bytes)const = 0;
     virtual bool seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const = 0;
     // Writes replace the complete file and copy the supplied bytes before returning.
     virtual bool writeFile(const Name& virtualPath, const void* data, usize bytes) = 0;
@@ -67,15 +68,15 @@ public:
     virtual bool flush() = 0;
     virtual bool removeFile(const Name& virtualPath) = 0;
     [[nodiscard]] virtual bool fileExists(const Name& virtualPath)const = 0;
-    virtual bool fileSize(const Name& virtualPath, u64& outSize)const = 0;
+    [[nodiscard]] virtual Expected<u64> fileSize(const Name& virtualPath)const = 0;
     [[nodiscard]] virtual u64 fileCount()const = 0;
     virtual void reserveFileCapacity(usize fileCount) = 0;
     virtual Vector<Name, VolumeArena> listFiles()const = 0;
 
 
 public:
-    bool openFile(const Name& virtualPath, FileCursor& outCursor)const;
-    bool readFile(FileCursor& cursor, void* data, usize bytes, usize& outBytesRead)const;
+    [[nodiscard]] Expected<FileCursor> openFile(const Name& virtualPath)const;
+    [[nodiscard]] Expected<usize> readFile(FileCursor& cursor, void* data, usize bytes)const;
     void closeFile(FileCursor& cursor)const noexcept;
 
     template<typename ByteContainer>
@@ -103,17 +104,17 @@ bool IFilesystem::readFile(const Name& virtualPath, ByteContainer& outData)const
     static_assert(sizeof(typename ByteContainer::value_type) == s_ByteElementSize, "Filesystem buffers must contain bytes");
     outData.clear();
 
-    u64 size = 0;
-    if(!fileSize(virtualPath, size))
+    const auto size = fileSize(virtualPath);
+    if(!size)
         return false;
-    if(size > static_cast<u64>(Limit<usize>::s_Max)){
+    if(*size > static_cast<u64>(Limit<usize>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("Filesystem: file exceeds the runtime buffer limit"));
         return false;
     }
 
-    outData.resize(static_cast<usize>(size));
-    usize bytesRead = 0;
-    if(!readFile(virtualPath, 0, outData.empty() ? nullptr : outData.data(), outData.size(), bytesRead) || bytesRead != outData.size()){
+    outData.resize(static_cast<usize>(*size));
+    const auto bytesRead = readFile(virtualPath, 0, outData.empty() ? nullptr : outData.data(), outData.size());
+    if(!bytesRead || *bytesRead != outData.size()){
         outData.clear();
         return false;
     }

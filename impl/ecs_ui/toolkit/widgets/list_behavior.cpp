@@ -22,17 +22,20 @@ namespace __hidden_ui_list_behavior{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ResolveKey(const IListDataSource& source, const u64 count, const u64 key,
-    u64& index, bool& present
-){
-    present = false;
-    index = 0u;
-    if(key == 0u || count == 0u || !source.indexOf(key, index))
-        return true;
-    if(index >= count || source.key(index) != key)
-        return false;
-    present = source.enabled(index);
-    return true;
+struct KeyResolution{
+    u64 index = 0u;
+    bool present = false;
+};
+
+[[nodiscard]] static Expected<KeyResolution> ResolveKey(const IListDataSource& source, const u64 count, const u64 key){
+    if(key == 0u || count == 0u)
+        return KeyResolution{};
+    const auto index = source.indexOf(key);
+    if(!index)
+        return KeyResolution{};
+    if(*index >= count || source.key(*index) != key)
+        return MakeUnexpected(Failure{});
+    return KeyResolution{ *index, source.enabled(*index) };
 }
 
 [[nodiscard]] static bool SourceMatches(const IListDataSource& source, const u64 generation, const u64 revision){
@@ -50,48 +53,47 @@ namespace __hidden_ui_list_behavior{
     return kind == ControlActionKind::Up || kind == ControlActionKind::PageUp || kind == ControlActionKind::End;
 }
 
-[[nodiscard]] static bool FindCursor(const IListDataSource& source, const u64 count, const u64 cursor,
-    const ControlAction& action, u64& candidate
+[[nodiscard]] static Expected<u64> FindCursor(const IListDataSource& source, const u64 count, const u64 cursor,
+    const ControlAction& action
 ){
-    candidate = 0u;
     if(count == 0u)
-        return true;
-    u64 current = 0u;
-    bool hasCurrent = false;
-    if(!ResolveKey(source, count, cursor, current, hasCurrent))
-        return false;
+        return 0u;
+    const auto current = ResolveKey(source, count, cursor);
+    if(!current)
+        return MakeUnexpected(current.error());
     const bool reverse = IsReverse(action.kind);
     u64 start = reverse ? count - 1u : 0u;
     if(action.kind == ControlActionKind::Home)
         start = 0u;
     else if(action.kind == ControlActionKind::End)
         start = count - 1u;
-    else if(hasCurrent){
+    else if(current->present){
         const u64 distance = action.kind == ControlActionKind::PageUp || action.kind == ControlActionKind::PageDown
             ? action.pageRows : 1u;
-        start = reverse ? current - Min(distance, current) : current + Min(distance, count - 1u - current);
+        start = reverse ? current->index - Min(distance, current->index)
+            : current->index + Min(distance, count - 1u - current->index);
     }
-    u64 index = 0u;
-    if(!source.findEnabled(start, reverse, index))
-        return true;
-    if(index >= count || (reverse ? index > start : index < start))
-        return false;
-    const u64 key = source.key(index);
-    u64 resolved = 0u;
-    bool present = false;
-    if(key == 0u || !ResolveKey(source, count, key, resolved, present) || !present || resolved != index)
-        return false;
-    candidate = key;
-    return true;
+    const auto index = source.findEnabled(start, reverse);
+    if(!index)
+        return 0u;
+    if(*index >= count || (reverse ? *index > start : *index < start))
+        return MakeUnexpected(Failure{});
+    const u64 key = source.key(*index);
+    if(key == 0u)
+        return MakeUnexpected(Failure{});
+    const auto resolved = ResolveKey(source, count, key);
+    if(!resolved || !resolved->present || resolved->index != *index)
+        return MakeUnexpected(Failure{});
+    return key;
 }
 
-[[nodiscard]] static bool WheelOffset(const f64 current, const ControlAction& action, f64& candidate)noexcept{
+[[nodiscard]] static Expected<f64> WheelOffset(const f64 current, const ControlAction& action)noexcept{
     if(
         !IsFinite(action.delta) || !IsFinite(action.step) || action.step <= 0.0
         || !IsFinite(action.maximum) || action.maximum < 0.0
     )
-        return false;
-    candidate = Min(current, action.maximum);
+        return MakeUnexpected(Failure{});
+    f64 candidate = Min(current, action.maximum);
     if(action.delta > 0.0)
         candidate = action.delta >= candidate / action.step ? 0.0 : candidate - action.delta * action.step;
     else if(action.delta < 0.0){
@@ -99,7 +101,9 @@ namespace __hidden_ui_list_behavior{
         candidate = -action.delta >= remaining / action.step ? action.maximum : candidate + -action.delta * action.step;
     }
     candidate = Clamp(candidate, 0.0, action.maximum);
-    return IsFinite(candidate);
+    if(!IsFinite(candidate))
+        return MakeUnexpected(Failure{});
+    return candidate;
 }
 
 
@@ -123,14 +127,17 @@ bool ListBehavior::Reconcile(ListState& state, const IListDataSource& source){
     u64 selected = replacement ? 0u : state.m_selected;
     u64 cursor = replacement ? 0u : state.m_cursor;
     const u64 count = source.rowCount();
-    u64 index = 0u;
-    bool selectedPresent = false;
-    if(!ResolveKey(source, count, selected, index, selectedPresent))
+    const auto selectedResolution = ResolveKey(source, count, selected);
+    if(!selectedResolution)
         return false;
-    bool cursorPresent = selectedPresent;
-    if(cursor != selected && !ResolveKey(source, count, cursor, index, cursorPresent))
-        return false;
-    selected = selectedPresent ? selected : 0u;
+    bool cursorPresent = selectedResolution->present;
+    if(cursor != selected){
+        const auto cursorResolution = ResolveKey(source, count, cursor);
+        if(!cursorResolution)
+            return false;
+        cursorPresent = cursorResolution->present;
+    }
+    selected = selectedResolution->present ? selected : 0u;
     cursor = cursorPresent ? cursor : 0u;
     if(!SourceMatches(source, generation, revision) || state.m_inputGeneration != inputGeneration)
         return false;
@@ -159,10 +166,9 @@ bool ListBehavior::Apply(ListState& state, const IListDataSource& source, const 
     )
         return false;
     if(action.kind == ControlActionKind::Wheel){
-        f64 offset = 0.0;
+        const auto offset = WheelOffset(state.m_scroll.offset(), action);
         if(
-            !WheelOffset(state.m_scroll.offset(), action, offset) || state.m_inputGeneration != inputGeneration
-            || !state.m_scroll.setOffset(offset)
+            !offset || state.m_inputGeneration != inputGeneration || !state.m_scroll.setOffset(*offset)
         )
             return false;
         state.m_ensureCursor = false;
@@ -174,18 +180,21 @@ bool ListBehavior::Apply(ListState& state, const IListDataSource& source, const 
     const bool activate = action.kind == ControlActionKind::Activate || action.kind == ControlActionKind::Submit;
     if(activate){
         candidate = action.kind == ControlActionKind::Activate ? action.value : state.m_cursor;
-        u64 index = 0u;
-        bool present = false;
-        if(!ResolveKey(source, count, candidate, index, present))
+        const auto resolved = ResolveKey(source, count, candidate);
+        if(!resolved)
             return false;
-        if(!present){
+        if(!resolved->present){
             if(action.kind == ControlActionKind::Activate)
                 return false;
             candidate = 0u;
         }
     }
-    else if(!FindCursor(source, count, state.m_cursor, action, candidate))
-        return false;
+    else{
+        const auto cursor = FindCursor(source, count, state.m_cursor, action);
+        if(!cursor)
+            return false;
+        candidate = *cursor;
+    }
     if(!SourceMatches(source, token.contentGeneration, token.contentRevision) || state.m_inputGeneration != inputGeneration)
         return false;
     if(candidate != 0u){
@@ -218,11 +227,10 @@ bool ListBehavior::EnsureCursor(ListState& state, const IListDataSource& source,
         state.m_ensureCursor = false;
         return true;
     }
-    u64 index = 0u;
-    bool present = false;
-    if(!ResolveKey(source, source.rowCount(), state.m_cursor, index, present) || !present)
+    const auto resolved = ResolveKey(source, source.rowCount(), state.m_cursor);
+    if(!resolved || !resolved->present)
         return false;
-    const f64 start = static_cast<f64>(index) * rowHeight;
+    const f64 start = static_cast<f64>(resolved->index) * rowHeight;
     const f64 end = start + rowHeight;
     if(
         !IsFinite(start) || !IsFinite(end) || end <= start

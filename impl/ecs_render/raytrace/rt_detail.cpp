@@ -5,6 +5,8 @@
 #include <impl/ecs_render/raytrace/rt_private.h>
 #include <impl/ecs_render/raytrace/renderer_raytracing_state.h>
 
+#include <global/scope_exit.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -34,39 +36,35 @@ void InflateSwShadowSceneBounds(SIMDVector& boundsMin, SIMDVector& boundsMax)noe
     boundsMax = VectorAdd(boundsMax, paddingVector);
 }
 
-RenderableMeshResolution::Enum ResolveRenderableMeshResources(
+Expected<RenderableRayTracingMeshResources, RenderableMeshResolution::Enum> ResolveRenderableMeshResources(
     MeshSystem& meshSystem,
     RendererMeshSystem& rendererMeshSystem,
-    const Core::ECS::EntityID entity,
-    RenderableMeshDesc& outResolvedMesh,
-    ECSRenderDetail::MeshRayTracingResourceSnapshot& outMesh
+    const Core::ECS::EntityID entity
 ){
-    outMesh = {};
-    const RenderableMeshResolution::Enum resolution = meshSystem.resolveRenderableMeshStatus(entity, outResolvedMesh);
-    if(resolution != RenderableMeshResolution::Ready)
-        return resolution;
-
-    return rendererMeshSystem.findRenderableRayTracingResourceSnapshot(outResolvedMesh, outMesh)
-        ? RenderableMeshResolution::Ready : RenderableMeshResolution::Unavailable
-    ;
+    auto resolvedMesh = meshSystem.resolveRenderableMeshStatus(entity);
+    if(!resolvedMesh)
+        return MakeUnexpected(resolvedMesh.error());
+    auto mesh = rendererMeshSystem.findRenderableRayTracingResourceSnapshot(*resolvedMesh);
+    if(!mesh)
+        return MakeUnexpected(RenderableMeshResolution::Unavailable);
+    return RenderableRayTracingMeshResources{ Move(*resolvedMesh), Move(*mesh) };
 }
 
 [[nodiscard]] bool IsHeapHandle(const Core::GpuDescriptorHandle handle, const Core::GpuDescriptorClass::Enum descriptorClass){
     return handle.valid() && handle.descriptorClass() == descriptorClass;
 }
 
-[[nodiscard]] bool RegisterHeapBuffer(
+[[nodiscard]] Expected<Core::GpuDescriptorHandle> RegisterHeapBuffer(
     Core::GpuDescriptorHeap& heap,
     Core::Buffer& buffer,
     const Core::GpuDescriptorClass::Enum descriptorClass,
-    const bool writable,
-    Core::GpuDescriptorHandle& outHandle
+    const bool writable
 ){
-    outHandle = Core::GpuDescriptorHandle::Invalid();
-
     const Core::GpuDescriptorHandle handle = heap.allocate(descriptorClass);
     if(!handle.valid())
-        return false;
+        return MakeUnexpected(Failure{});
+
+    ScopeExit retireUnpublished([&]()noexcept{ heap.free(handle); });
 
     const Core::DescriptorWriteItem item = descriptorClass == Core::GpuDescriptorClass::UniformBuffer
         ? Core::DescriptorWriteItem::ConstantBuffer(0u, &buffer)
@@ -76,11 +74,10 @@ RenderableMeshResolution::Enum ResolveRenderableMeshResources(
         )
     ;
     if(!heap.write(handle, item)){
-        heap.free(handle);
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outHandle = handle;
-    return true;
+    retireUnpublished.release();
+    return handle;
 }
 
 [[nodiscard]] bool EnsureHeapBuffer(
@@ -93,10 +90,10 @@ RenderableMeshResolution::Enum ResolveRenderableMeshResources(
     if(inOutHandle.valid())
         return IsHeapHandle(inOutHandle, descriptorClass);
 
-    Core::GpuDescriptorHandle acquired;
-    if(!RegisterHeapBuffer(heap, buffer, descriptorClass, writable, acquired))
+    const auto acquired = RegisterHeapBuffer(heap, buffer, descriptorClass, writable);
+    if(!acquired)
         return false;
-    inOutHandle = acquired;
+    inOutHandle = *acquired;
     return true;
 }
 
@@ -107,12 +104,12 @@ RenderableMeshResolution::Enum ResolveRenderableMeshResources(
     const bool writable,
     Core::GpuDescriptorHandle& inOutHandle
 ){
-    Core::GpuDescriptorHandle acquired;
-    if(!RegisterHeapBuffer(heap, buffer, descriptorClass, writable, acquired))
+    const auto acquired = RegisterHeapBuffer(heap, buffer, descriptorClass, writable);
+    if(!acquired)
         return false;
     if(inOutHandle.valid())
         heap.free(inOutHandle);
-    inOutHandle = acquired;
+    inOutHandle = *acquired;
     return true;
 }
 

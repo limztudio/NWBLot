@@ -53,17 +53,17 @@ void X11ClipboardService::receiveSelection(const XSelectionEvent& event){
         finishOperation(ClipboardStatus::NativeFailure);
         return;
     }
-    X11Property property;
-    if(!ReadX11Property(m_display, m_operationWindow, m_propertyAtom, false, s_ClipboardMaxTextBytes, property)){
+    const auto property = ReadX11Property(m_display, m_operationWindow, m_propertyAtom, false, s_ClipboardMaxTextBytes);
+    if(!property){
         finishOperation(ClipboardStatus::NativeFailure);
         return;
     }
-    if(property.type == m_incrementalAtom){
-        if(property.format != 32 || property.count != 1u || property.remaining || !property.bytes){
+    if(property->type == m_incrementalAtom){
+        if(property->format != 32 || property->count != 1u || property->remaining || !property->bytes){
             finishOperation(ClipboardStatus::InvalidText);
             return;
         }
-        const unsigned long lowerBound = *reinterpret_cast<const unsigned long*>(property.bytes);
+        const unsigned long lowerBound = *reinterpret_cast<const unsigned long*>(property->bytes);
         if(lowerBound > s_ClipboardMaxTextBytes){
             finishOperation(ClipboardStatus::TooLarge);
             return;
@@ -73,15 +73,15 @@ void X11ClipboardService::receiveSelection(const XSelectionEvent& event){
         XFlush(&m_display);
         return;
     }
-    if(property.type != m_operationTarget || property.format != 8){
+    if(property->type != m_operationTarget || property->format != 8){
         finishOperation(ClipboardStatus::InvalidText);
         return;
     }
-    if(property.remaining){
+    if(property->remaining){
         finishOperation(ClipboardStatus::TooLarge);
         return;
     }
-    const AStringView bytes = property.count ? AStringView(reinterpret_cast<const char*>(property.bytes), property.count) : AStringView{};
+    const AStringView bytes = property->count ? AStringView(reinterpret_cast<const char*>(property->bytes), property->count) : AStringView{};
     const ClipboardStatus::Enum status = m_received.appendBytes(bytes);
     if(status != ClipboardStatus::Success)
         finishOperation(status);
@@ -90,24 +90,24 @@ void X11ClipboardService::receiveSelection(const XSelectionEvent& event){
 }
 
 void X11ClipboardService::receiveChunk(){
-    X11Property property;
-    if(!ReadX11Property(m_display, m_operationWindow, m_propertyAtom, true, s_ClipboardMaxTextBytes, property)){
+    const auto property = ReadX11Property(m_display, m_operationWindow, m_propertyAtom, true, s_ClipboardMaxTextBytes);
+    if(!property){
         finishOperation(ClipboardStatus::NativeFailure);
         return;
     }
-    if(property.type != m_operationTarget || property.format != 8){
+    if(property->type != m_operationTarget || property->format != 8){
         finishOperation(ClipboardStatus::InvalidText);
         return;
     }
-    if(property.remaining){
+    if(property->remaining){
         finishOperation(ClipboardStatus::TooLarge);
         return;
     }
-    if(property.count == 0u){
+    if(property->count == 0u){
         finishRead();
         return;
     }
-    const ClipboardStatus::Enum status = m_received.appendBytes(AStringView(reinterpret_cast<const char*>(property.bytes), property.count));
+    const ClipboardStatus::Enum status = m_received.appendBytes(AStringView(reinterpret_cast<const char*>(property->bytes), property->count));
     if(status != ClipboardStatus::Success)
         finishOperation(status);
     else

@@ -19,10 +19,20 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool OpenClipboardPipe(int& readFd, int& writeFd)noexcept;
+struct ClipboardPipe{
+    int readFd = -1;
+    int writeFd = -1;
+};
+
+struct ClipboardPipeReadFailure{
+    ClipboardStatus::Enum status = ClipboardStatus::NativeFailure;
+    bool finished = false;
+};
+
+[[nodiscard]] Expected<ClipboardPipe> OpenClipboardPipe()noexcept;
 [[nodiscard]] bool ConfigureClipboardPipe(int fd)noexcept;
 void CloseClipboardPipe(int& fd)noexcept;
-[[nodiscard]] ClipboardStatus::Enum ReadClipboardPipe(int fd, ClipboardTextAccumulator& text, bool& finished);
+[[nodiscard]] Expected<bool, ClipboardPipeReadFailure> ReadClipboardPipe(int fd, ClipboardTextAccumulator& text);
 
 
 class ClipboardPipeWriter final : private NoCopy{

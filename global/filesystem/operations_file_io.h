@@ -12,24 +12,16 @@
 
 
 template<typename ArenaT>
-[[nodiscard]] inline u64 FileSize(const Path<ArenaT>& path, ErrorCode& outError)noexcept{
+[[nodiscard]] inline Expected<u64, ErrorCode> FileSize(const Path<ArenaT>& path)noexcept{
 #if defined(NWB_PLATFORM_WINDOWS)
     WIN32_FILE_ATTRIBUTE_DATA data = {};
-    if(!GetFileAttributesEx(path.c_str(), GetFileExInfoStandard, &data)){
-        GlobalFilesystemDetail::SetLastSystemError(outError);
-        return 0u;
-    }
-
-    GlobalFilesystemDetail::ClearError(outError);
+    if(!GetFileAttributesEx(path.c_str(), GetFileExInfoStandard, &data))
+        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
     return (static_cast<u64>(data.nFileSizeHigh) << GlobalFilesystemDetail::s_FileSizeHighPartShiftBits) | static_cast<u64>(data.nFileSizeLow);
 #else
-    struct stat pathStat;
-    if(stat(path.c_str(), &pathStat) != 0){
-        GlobalFilesystemDetail::SetLastSystemError(outError);
-        return 0u;
-    }
-
-    GlobalFilesystemDetail::ClearError(outError);
+    struct stat pathStat = {};
+    if(stat(path.c_str(), &pathStat) != 0)
+        return MakeUnexpected(GlobalFilesystemDetail::LastSystemError());
     return static_cast<u64>(pathStat.st_size);
 #endif
 }
@@ -39,25 +31,20 @@ template<typename ArenaT>
 
 
 template<typename ArenaT>
-[[nodiscard]] inline bool ResolveAbsolutePath(
+[[nodiscard]] inline Expected<Path<ArenaT>, ErrorCode> ResolveAbsolutePath(
+    ArenaT& arena,
     const Path<ArenaT>& baseDirectory,
-    const AStringView relativeOrAbsolute,
-    Path<ArenaT>& outPath,
-    ErrorCode& outError
+    const AStringView relativeOrAbsolute
 ){
     if(relativeOrAbsolute.empty())
-        return false;
-
-    Path<ArenaT> candidate(outPath.arena(), relativeOrAbsolute);
+        return MakeUnexpected(std::make_error_code(std::errc::invalid_argument));
+    Path<ArenaT> candidate(arena, relativeOrAbsolute);
     if(!candidate.isAbsolute())
         candidate = baseDirectory / candidate;
-
-    const Path<ArenaT> absolutePath = AbsolutePath(candidate, outError);
-    if(outError)
-        return false;
-
-    outPath = LexicallyNormal(absolutePath);
-    return true;
+    const auto absolutePath = AbsolutePath(candidate);
+    if(!absolutePath)
+        return MakeUnexpected(absolutePath.error());
+    return LexicallyNormal(*absolutePath);
 }
 
 
@@ -76,49 +63,32 @@ template<typename Container>
 }
 
 template<typename ArenaT, typename Container>
-[[nodiscard]] inline bool ReadWholeBinaryFile(const Path<ArenaT>& path, Container& outData, ErrorCode& outError){
-    outData.clear();
-
-    ClearError(outError);
+[[nodiscard]] inline Expected<void, ErrorCode> ReadWholeBinaryFile(const Path<ArenaT>& path, Container& inOutData){
+    inOutData.clear();
     InputFileStream stream(path, InputFileStream::binary | InputFileStream::ate);
     if(!stream.is_open()){
-        if(FileSize(path, outError) == 0u && outError)
-            return false;
-        SetIOError(outError);
-        return false;
+        const auto size = FileSize(path);
+        if(!size)
+            return MakeUnexpected(size.error());
+        return MakeUnexpected(std::make_error_code(std::errc::io_error));
     }
-
     const StreamOffset fileSizeAtEnd = stream.tellg();
-    if(fileSizeAtEnd < 0){
-        SetIOError(outError);
-        return false;
-    }
+    if(fileSizeAtEnd < 0)
+        return MakeUnexpected(std::make_error_code(std::errc::io_error));
     const u64 fileSize = static_cast<u64>(fileSizeAtEnd);
-    if(fileSize > static_cast<u64>(Limit<usize>::s_Max) || !CanRepresentStreamSize(fileSize)){
-        SetValueTooLargeError(outError);
-        return false;
-    }
-
+    if(fileSize > static_cast<u64>(Limit<usize>::s_Max) || !CanRepresentStreamSize(fileSize))
+        return MakeUnexpected(std::make_error_code(std::errc::value_too_large));
     stream.seekg(0, InputFileStream::beg);
-    if(!stream.good()){
-        SetIOError(outError);
-        return false;
-    }
-
-    outData.resize(static_cast<usize>(fileSize));
-    if(fileSize == 0)
-        return true;
-
-    stream.read(MutableReadBuffer(outData), static_cast<StreamSize>(fileSize));
-    if(stream.good())
-        return true;
-
-    if(stream.eof() && stream.gcount() == static_cast<StreamSize>(fileSize))
-        return true;
-
-    outData.clear();
-    SetIOError(outError);
-    return false;
+    if(!stream.good())
+        return MakeUnexpected(std::make_error_code(std::errc::io_error));
+    inOutData.resize(static_cast<usize>(fileSize));
+    if(fileSize == 0u)
+        return {};
+    stream.read(MutableReadBuffer(inOutData), static_cast<StreamSize>(fileSize));
+    if(stream.good() || (stream.eof() && stream.gcount() == static_cast<StreamSize>(fileSize)))
+        return {};
+    inOutData.clear();
+    return MakeUnexpected(std::make_error_code(std::errc::io_error));
 }
 
 
@@ -132,11 +102,10 @@ template<typename ArenaT, typename Container>
 
 
 template<typename ArenaT, typename StringT>
-[[nodiscard]] inline bool ReadTextFile(const Path<ArenaT>& path, StringT& outText)
+[[nodiscard]] inline Expected<void, ErrorCode> ReadTextFile(const Path<ArenaT>& path, StringT& inOutText)
     requires requires(StringT& text, usize size){ text.resize(size); text.data(); text.clear(); }
 {
-    ErrorCode errorCode;
-    return GlobalFilesystemDetail::ReadWholeBinaryFile(path, outText, errorCode);
+    return GlobalFilesystemDetail::ReadWholeBinaryFile(path, inOutText);
 }
 
 template<typename ArenaT>
@@ -162,8 +131,8 @@ template<typename ArenaT>
 
 
 template<typename ArenaT, typename Container>
-[[nodiscard]] inline bool ReadBinaryFile(const Path<ArenaT>& path, Container& outBytes, ErrorCode& outError){
-    return GlobalFilesystemDetail::ReadWholeBinaryFile(path, outBytes, outError);
+[[nodiscard]] inline Expected<void, ErrorCode> ReadBinaryFile(const Path<ArenaT>& path, Container& inOutBytes){
+    return GlobalFilesystemDetail::ReadWholeBinaryFile(path, inOutBytes);
 }
 
 template<typename ArenaT, typename Container>

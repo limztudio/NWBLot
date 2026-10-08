@@ -17,9 +17,9 @@ NWB_LOG_BEGIN
 
 
 Path CrashDefaultRootDirectory(LogArena& arena){
-    Path executableDirectory(arena);
-    if(GetExecutableDirectory(executableDirectory))
-        return executableDirectory / Core::Crash::PackageNames::s_DefaultRootDirectoryName;
+    const auto executableDirectory = GetExecutableDirectory(arena);
+    if(executableDirectory)
+        return *executableDirectory / Core::Crash::PackageNames::s_DefaultRootDirectoryName;
 
     return Path(arena, Core::Crash::PackageNames::s_DefaultRootDirectoryName);
 }

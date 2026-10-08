@@ -31,6 +31,11 @@ struct AmdBreadcrumbRingLayout{
     u16 deviceGeneration = 0u;
 };
 
+struct AmdBreadcrumbRingSlot{
+    usize flatSlot = 0u;
+    VkDeviceSize byteOffset = 0u;
+};
+
 struct AmdBreadcrumbReservation{
     u64 serial = 0u;
     usize localSlot = 0u;
@@ -47,22 +52,18 @@ void CollectUniquePhysicalQueueFamilyIndices(
     const GpuPhysicalQueueTopology& topology,
     Vector<u32, Alloc::ScratchArena>& familyIndices
 );
-[[nodiscard]] bool TryBuildAmdBreadcrumbRingLayout(
+[[nodiscard]] Expected<AmdBreadcrumbRingLayout> TryBuildAmdBreadcrumbRingLayout(
     const GpuPhysicalQueueTopology& topology,
-    usize slotsPerQueue,
-    AmdBreadcrumbRingLayout& layout
+    usize slotsPerQueue
 )noexcept;
-[[nodiscard]] bool TryResolveAmdBreadcrumbRingSlot(
+[[nodiscard]] Expected<AmdBreadcrumbRingSlot> TryResolveAmdBreadcrumbRingSlot(
     const AmdBreadcrumbRingLayout& layout,
     const GpuPhysicalQueueId& queue,
-    usize localSlot,
-    usize& flatSlot,
-    VkDeviceSize& byteOffset
+    usize localSlot
 )noexcept;
-[[nodiscard]] bool TryBuildNextAmdBreadcrumbReservation(
+[[nodiscard]] Expected<AmdBreadcrumbReservation> TryBuildNextAmdBreadcrumbReservation(
     u64 currentSerial,
-    usize slotsPerQueue,
-    AmdBreadcrumbReservation& reservation
+    usize slotsPerQueue
 )noexcept;
 [[nodiscard]] bool MatchesAmdBreadcrumbObservation(u32 observedMarker, u32 reservedMarker)noexcept;
 

@@ -89,36 +89,34 @@ bool ValidateMeshGeometry(const SourceMeshStreams& mesh, const AStringView conte
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InvertJointMatrix(const SIMDMatrix& matrix, SIMDMatrix& outInverse){
+Expected<SIMDMatrix> InvertJointMatrix(const SIMDMatrix& matrix)noexcept{
     SIMDVector determinant;
-    outInverse = MatrixInverse(&determinant, matrix);
-
-    return VectorIsFinite(determinant, VectorComponentMask::s_XYZW)
-        && Vector4Greater(VectorAbs(determinant), VectorReplicate(s_InvertibleJointDeterminantEpsilon))
-        && !MatrixIsNaN(outInverse)
-        && !MatrixIsInfinite(outInverse)
-    ;
+    const SIMDMatrix inverse = MatrixInverse(&determinant, matrix);
+    if(
+        !VectorIsFinite(determinant, VectorComponentMask::s_XYZW)
+        || !Vector4Greater(VectorAbs(determinant), VectorReplicate(s_InvertibleJointDeterminantEpsilon))
+        || MatrixIsNaN(inverse)
+        || MatrixIsInfinite(inverse)
+    )
+        return MakeUnexpected(Failure{});
+    return inverse;
 }
 
-bool BuildLocalBindPoseMatrix(
+Expected<SIMDMatrix> BuildLocalBindPoseMatrix(
     const SIMDMatrix& globalBindPose,
-    const SIMDMatrix* parentGlobalBindPose,
-    SIMDMatrix& outLocalBindPose
-){
-    if(!parentGlobalBindPose){
-        outLocalBindPose = globalBindPose;
-        return true;
-    }
+    const SIMDMatrix* parentGlobalBindPose
+)noexcept{
+    if(!parentGlobalBindPose)
+        return globalBindPose;
 
-    SIMDMatrix parentInverse;
-    if(!InvertJointMatrix(*parentGlobalBindPose, parentInverse))
-        return false;
+    const auto parentInverse = InvertJointMatrix(*parentGlobalBindPose);
+    if(!parentInverse)
+        return MakeUnexpected(Failure{});
 
-    outLocalBindPose = MatrixMultiply(parentInverse, globalBindPose);
-    if(MatrixIsNaN(outLocalBindPose) || MatrixIsInfinite(outLocalBindPose))
-        return false;
-
-    return true;
+    const SIMDMatrix localBindPose = MatrixMultiply(*parentInverse, globalBindPose);
+    if(MatrixIsNaN(localBindPose) || MatrixIsInfinite(localBindPose))
+        return MakeUnexpected(Failure{});
+    return localBindPose;
 }
 
 
@@ -163,25 +161,24 @@ AString NodeName(const ufbx_node* node, const usize fallbackIndex){
     return out.str();
 }
 
-bool BuildSkeletonOutputData(
+Expected<SkeletonOutputData> BuildSkeletonOutputData(
     const UtilityVector<ufbx_node*>& joints,
     const UtilityVector<JointMatrix>& bindPoseMatrices,
-    const UtilityVector<JointMatrix>& inverseBindMatrices,
-    SkeletonOutputData& outData
+    const UtilityVector<JointMatrix>& inverseBindMatrices
 ){
-    outData = {};
+    SkeletonOutputData outData;
 
     if(joints.size() != bindPoseMatrices.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: joint count must match bind-pose matrix count"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(!inverseBindMatrices.empty() && inverseBindMatrices.size() != joints.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: joint count must match inverse bind matrix count"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(joints.size() > s_MaxSkeletonJointCount){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton has more than {} joints"), s_MaxSkeletonJointCount);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     HashMap<const ufbx_node*, usize> sourceJointLookup;
@@ -192,11 +189,11 @@ bool BuildSkeletonOutputData(
         ufbx_node* joint = joints[jointIndex];
         if(!joint){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton joint {} is null"), jointIndex);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(sourceJointLookup.find(joint) != sourceJointLookup.end()){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton contains duplicate joint node at index {}"), jointIndex);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         sourceJointLookup.emplace(joint, jointIndex);
         sortNames.push_back(NodeName(joint, jointIndex));
@@ -222,7 +219,7 @@ bool BuildSkeletonOutputData(
         for(usize guard = 0u; parentIndex != s_MissingSourceStreamIndex; ++guard){
             if(guard >= joints.size()){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: skeleton hierarchy contains a cycle"));
-                return false;
+                return MakeUnexpected(Failure{});
             }
             ++depth;
             parentIndex = parentIndices[parentIndex];
@@ -266,13 +263,13 @@ bool BuildSkeletonOutputData(
             parentGlobalBindPoseMatrixPtr = &parentGlobalBindPoseMatrix;
         }
 
-        SIMDMatrix localBindPoseMatrix;
-        if(!BuildLocalBindPoseMatrix(globalBindPoseMatrix, parentGlobalBindPoseMatrixPtr, localBindPoseMatrix)){
+        const auto localBindPoseMatrix = BuildLocalBindPoseMatrix(globalBindPoseMatrix, parentGlobalBindPoseMatrixPtr);
+        if(!localBindPoseMatrix){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB skeleton: failed to build local bind pose for joint '{}'"), StringConvert(sortNames[oldJointIndex]));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         JointMatrix localBindPose{};
-        StoreFloat(localBindPoseMatrix, localBindPose);
+        StoreFloat(*localBindPoseMatrix, localBindPose);
 
         outData.oldToNewJointIndices[oldJointIndex] = static_cast<u16>(outData.joints.size());
         outData.joints.push_back(joints[oldJointIndex]);
@@ -281,7 +278,7 @@ bool BuildSkeletonOutputData(
             outData.inverseBindMatrices.push_back(inverseBindMatrices[oldJointIndex]);
     }
 
-    return true;
+    return outData;
 }
 
 bool RemapSkinInfluences(
@@ -305,16 +302,15 @@ u64 PositionSkinKey(const u32 position, const u32 skin)noexcept{
     return (static_cast<u64>(position) << s_PositionSkinKeySkinShiftBits) | static_cast<u64>(skin);
 }
 
-bool BuildPositionAlignedSkinnedMesh(
-    const SourceMeshStreams& sourceMesh,
-    SourceMeshStreams& outMesh,
-    UtilityVector<MeshSkinInfluence>& outPositionSkin
+Expected<PositionAlignedSkinnedMesh> BuildPositionAlignedSkinnedMesh(
+    const SourceMeshStreams& sourceMesh
 ){
-    outMesh = SourceMeshStreams{};
-    outPositionSkin.clear();
+    PositionAlignedSkinnedMesh result;
+    SourceMeshStreams& outMesh = result.mesh;
+    UtilityVector<MeshSkinInfluence>& outPositionSkin = result.skin;
 
     if(!ValidateSkinnedModelSourceMesh(sourceMesh))
-        return false;
+        return MakeUnexpected(Failure{});
 
     outMesh.normals = sourceMesh.normals;
     outMesh.tangents = sourceMesh.tangents;
@@ -337,7 +333,7 @@ bool BuildPositionAlignedSkinnedMesh(
         else{
             if(outMesh.positions.size() > static_cast<usize>(Limit<u32>::s_Max)){
                 NWB_LOGGER_ERROR(NWB_TEXT("Failed to write NWB model: split skinned mesh has too many positions"));
-                return false;
+                return MakeUnexpected(Failure{});
             }
 
             positionIndex = static_cast<u32>(outMesh.positions.size());
@@ -352,7 +348,7 @@ bool BuildPositionAlignedSkinnedMesh(
         outMesh.vertexRefs.push_back(ref);
     }
 
-    return true;
+    return result;
 }
 
 bool ValidateSkinnedModelSourceMesh(const SourceMeshStreams& mesh){

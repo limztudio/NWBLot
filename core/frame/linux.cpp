@@ -63,9 +63,8 @@ static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[s_Lin
     Alloc::GlobalArena arena(FrameArenaScope::s_LinuxEnvironmentArena);
     usize count = 0;
 
-    AString<Alloc::GlobalArena> requestedBackend(arena);
-    if(ReadEnvironmentVariable(s_LinuxBackendEnvName, requestedBackend)){
-        if(requestedBackend == s_X11BackendRequest){
+    if(const auto requestedBackend = ReadEnvironmentVariable(arena, s_LinuxBackendEnvName)){
+        if(*requestedBackend == s_X11BackendRequest){
             AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);
 #if defined(NWB_WITH_WAYLAND)
             AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
@@ -74,14 +73,14 @@ static usize BuildBackendOrder(Common::LinuxFrameBackend::Enum (&outOrder)[s_Lin
         }
 
 #if defined(NWB_WITH_WAYLAND)
-        if(requestedBackend == s_WaylandBackendRequest){
+        if(*requestedBackend == s_WaylandBackendRequest){
             AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::Wayland);
             AppendBackend(outOrder, count, Common::LinuxFrameBackend::Enum::X11);
             return count;
         }
 #endif
 
-        NWB_LOGGER_WARNING(NWB_TEXT("Frame: Ignoring unsupported NWB_LINUX_BACKEND='{}'."), StringConvert(requestedBackend));
+        NWB_LOGGER_WARNING(NWB_TEXT("Frame: Ignoring unsupported NWB_LINUX_BACKEND='{}'."), StringConvert(*requestedBackend));
     }
 
 #if defined(NWB_WITH_WAYLAND)

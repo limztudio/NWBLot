@@ -23,9 +23,9 @@ NWB_FILESYSTEM_BEGIN
 
 
 bool RemoveStagedDirectoryIfPresent(const Path& directoryPath, const AStringView operationName, const AStringView label){
-    ErrorCode errorCode;
 
-    if(!RemoveAllIfExists(directoryPath, errorCode)){
+    if(const auto operation = RemoveAllIfExists(directoryPath); !operation){
+        const ErrorCode errorCode = operation.error();
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to remove {} '{}': {}")
             , StringConvert(operationName)
             , StringConvert(label)
@@ -39,9 +39,9 @@ bool RemoveStagedDirectoryIfPresent(const Path& directoryPath, const AStringView
 }
 
 void CleanupStagedDirectoryBestEffort(const Path& directoryPath, const AStringView operationName, const AStringView label){
-    ErrorCode errorCode;
 
-    if(!RemoveAllIfExists(directoryPath, errorCode) && errorCode){
+    if(const auto operation = RemoveAllIfExists(directoryPath); !operation){
+        const ErrorCode errorCode = operation.error();
         NWB_LOGGER_WARNING(NWB_TEXT("{}: failed to remove {} '{}': {}")
             , StringConvert(operationName)
             , StringConvert(label)
@@ -52,9 +52,9 @@ void CleanupStagedDirectoryBestEffort(const Path& directoryPath, const AStringVi
 }
 
 bool EnsureEmptyStagedDirectory(const Path& directoryPath, const AStringView operationName, const AStringView label){
-    ErrorCode errorCode;
 
-    if(!::EnsureEmptyDirectory(directoryPath, errorCode)){
+    if(const auto operation = ::EnsureEmptyDirectory(directoryPath); !operation){
+        const ErrorCode errorCode = operation.error();
         NWB_LOGGER_ERROR(NWB_TEXT("{}: failed to create {} '{}': {}")
             , StringConvert(operationName)
             , StringConvert(label)
@@ -132,39 +132,43 @@ StagedVolumePaths BuildStagedVolumePaths(const Path& outputDirectory, const AStr
     return BuildStagedDirectoryPaths(scratchArena, outputDirectory, stageToken);
 }
 
-template<typename FileNameVector>
-static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const AStringView volumeName, FileNameVector& outMovedFileNames){
-    ErrorCode errorCode;
-
-    outMovedFileNames.clear();
+static Expected<Vector<Path, Core::Alloc::ScratchArena>> MoveExistingVolumeSegments(
+    Core::Alloc::ScratchArena& scratchArena,
+    const Path& fromDirectory,
+    const Path& toDirectory,
+    const AStringView volumeName
+){
+    Vector<Path, Core::Alloc::ScratchArena> movedFileNames{scratchArena};
 
     const auto rollbackMovedFiles = [&]() -> void {
-        if(outMovedFileNames.empty())
+        if(movedFileNames.empty())
             return;
 
-        if(!RestoreVolumeSegments(toDirectory, fromDirectory, outMovedFileNames)){
+        if(!RestoreVolumeSegments(toDirectory, fromDirectory, movedFileNames)){
             NWB_LOGGER_WARNING(NWB_TEXT("Filesystem volume publish: failed to roll back existing output volume after backup failure"));
             return;
         }
 
         CleanupStagedDirectoryBestEffort(toDirectory, s_VolumePublishLogPrefix, "backup directory");
-        outMovedFileNames.clear();
+        movedFileNames.clear();
     };
 
-    const bool sourceExists = FileExists(fromDirectory, errorCode);
-    if(errorCode){
+    const auto sourceExists = FileExists(fromDirectory);
+    if(!sourceExists){
+        const ErrorCode& errorCode = sourceExists.error();
         NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to query output directory '{}': {}")
             , PathToString<tchar>(fromDirectory)
             , StringConvert(errorCode.message())
         );
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    if(!sourceExists)
-        return true;
+    if(!*sourceExists)
+        return movedFileNames;
 
-    errorCode.clear();
-    if(!IsDirectory(fromDirectory, errorCode)){
-        if(errorCode){
+    const auto directory = IsDirectory(fromDirectory);
+    if(!directory || !*directory){
+        if(!directory){
+            const ErrorCode& errorCode = directory.error();
             NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to inspect output directory '{}': {}")
                 , PathToString<tchar>(fromDirectory)
                 , StringConvert(errorCode.message())
@@ -175,7 +179,7 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
                 , PathToString<tchar>(fromDirectory)
             );
         }
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     bool destinationCreated = false;
@@ -183,7 +187,8 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
         if(destinationCreated)
             return true;
 
-        if(!EnsureDirectories(toDirectory, errorCode)){
+        if(const auto operation = EnsureDirectories(toDirectory); !operation){
+            const ErrorCode errorCode = operation.error();
             NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to create backup directory '{}': {}")
                 , PathToString<tchar>(toDirectory)
                 , StringConvert(errorCode.message())
@@ -198,7 +203,8 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
     const auto moveSegmentToBackup = [&](const Path& currentPath) -> bool{
         if(!ensureDestination())
             return false;
-        if(!RenamePath(currentPath, toDirectory / currentPath.filename(), errorCode)){
+        if(const auto operation = RenamePath(currentPath, toDirectory / currentPath.filename()); !operation){
+            const ErrorCode errorCode = operation.error();
             NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to move existing segment '{}' to backup: {}")
                 , PathToString<tchar>(currentPath)
                 , StringConvert(errorCode.message())
@@ -207,44 +213,45 @@ static bool MoveExistingVolumeSegments(const Path& fromDirectory, const Path& to
             return false;
         }
 
-        outMovedFileNames.push_back(currentPath.filename());
+        movedFileNames.push_back(currentPath.filename());
         return true;
     };
 
     for(usize segmentIndex = 0u;; ++segmentIndex){
         const Path currentPath = ::MakeVolumeSegmentPath(fromDirectory, volumeName, segmentIndex);
-        const bool exists = FileExists(currentPath, errorCode);
-        if(errorCode){
+        const auto exists = FileExists(currentPath);
+        if(!exists){
+            const ErrorCode& errorCode = exists.error();
             NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to query volume segment '{}': {}")
                 , PathToString<tchar>(currentPath)
                 , StringConvert(errorCode.message())
             );
             rollbackMovedFiles();
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        if(!exists)
+        if(!*exists)
             break;
 
         if(!moveSegmentToBackup(currentPath))
-            return false;
+            return MakeUnexpected(Failure{});
 
         if(segmentIndex == Limit<usize>::s_Max){
             NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: segment index overflow while backing up existing volume"));
             rollbackMovedFiles();
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
-    return true;
+    return movedFileNames;
 }
 
 template<typename FileNameVector>
 static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const FileNameVector& fileNames){
-    ErrorCode errorCode;
 
     if(fileNames.empty())
         return true;
-    if(!EnsureDirectories(toDirectory, errorCode)){
+    if(const auto operation = EnsureDirectories(toDirectory); !operation){
+        const ErrorCode errorCode = operation.error();
         NWB_LOGGER_WARNING(NWB_TEXT("Filesystem volume publish: failed to recreate output directory '{}' during rollback: {}")
             , PathToString<tchar>(toDirectory)
             , StringConvert(errorCode.message())
@@ -255,7 +262,8 @@ static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirec
     for(const Path& fileName : fileNames){
         const Path sourcePath = fromDirectory / fileName;
         const Path destinationPath = toDirectory / fileName;
-        if(!RenamePath(sourcePath, destinationPath, errorCode)){
+        if(const auto operation = RenamePath(sourcePath, destinationPath); !operation){
+            const ErrorCode errorCode = operation.error();
             NWB_LOGGER_WARNING(NWB_TEXT("Filesystem volume publish: failed to restore backup segment '{}' during rollback: {}")
                 , PathToString<tchar>(sourcePath)
                 , StringConvert(errorCode.message())
@@ -267,48 +275,57 @@ static bool RestoreVolumeSegments(const Path& fromDirectory, const Path& toDirec
     return true;
 }
 
-static bool MoveStagedVolumeSegments(const Path& fromDirectory, const Path& toDirectory, const AStringView volumeName, const usize segmentCount, usize& outMovedCount){
-    ErrorCode errorCode;
+struct VolumePromotionFailure{
+    usize movedCount = 0u;
+};
 
-    outMovedCount = 0;
+static Expected<void, VolumePromotionFailure> MoveStagedVolumeSegments(
+    const Path& fromDirectory,
+    const Path& toDirectory,
+    const AStringView volumeName,
+    const usize segmentCount
+){
+
+    usize movedCount = 0u;
 
     if(segmentCount == 0){
         NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: staged volume '{}' did not produce any segments"), StringConvert(volumeName));
-        return false;
+        return MakeUnexpected(VolumePromotionFailure{ .movedCount = movedCount });
     }
-    if(!EnsureDirectories(toDirectory, errorCode)){
+    if(const auto operation = EnsureDirectories(toDirectory); !operation){
+        const ErrorCode errorCode = operation.error();
         NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to create output directory '{}': {}")
             , PathToString<tchar>(toDirectory)
             , StringConvert(errorCode.message())
         );
-        return false;
+        return MakeUnexpected(VolumePromotionFailure{ .movedCount = movedCount });
     }
 
     for(usize segmentIndex = 0u; segmentIndex < segmentCount; ++segmentIndex){
         const Path sourcePath = ::MakeVolumeSegmentPath(fromDirectory, volumeName, segmentIndex);
         const Path destinationPath = ::MakeVolumeSegmentPath(toDirectory, volumeName, segmentIndex);
-        if(!RenamePath(sourcePath, destinationPath, errorCode)){
+        if(const auto operation = RenamePath(sourcePath, destinationPath); !operation){
+            const ErrorCode errorCode = operation.error();
             NWB_LOGGER_ERROR(NWB_TEXT("Filesystem volume publish: failed to promote staged segment '{}' to '{}': {}")
                 , PathToString<tchar>(sourcePath)
                 , PathToString<tchar>(destinationPath)
                 , StringConvert(errorCode.message())
             );
-            return false;
+            return MakeUnexpected(VolumePromotionFailure{ .movedCount = movedCount });
         }
 
-        ++outMovedCount;
+        ++movedCount;
     }
 
-    return true;
+    return {};
 }
 
 static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
-    ErrorCode errorCode;
 
     for(usize segmentIndex = 0u; segmentIndex < segmentCount; ++segmentIndex){
         const Path segmentPath = ::MakeVolumeSegmentPath(outputDirectory, volumeName, segmentIndex);
-        errorCode.clear();
-        if(!RemoveFile(segmentPath, errorCode)){
+        if(const auto operation = RemoveFile(segmentPath); !operation || !*operation){
+            const ErrorCode errorCode = operation ? ErrorCode{} : operation.error();
             NWB_LOGGER_WARNING(NWB_TEXT("Filesystem volume publish: failed to remove promoted segment '{}' after failed promotion: {}")
                 , PathToString<tchar>(segmentPath)
                 , StringConvert(FilesystemMutationFailureDetail(errorCode, "segment was not present"))
@@ -319,14 +336,14 @@ static void RemovePromotedVolumeSegmentsBestEffort(const Path& outputDirectory, 
 
 bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outputDirectory, const AStringView volumeName, const usize segmentCount){
     Core::Alloc::ScratchArena scratchArena(FilesystemArenaScope::s_PromoteStagedVolumeScratch);
-    Vector<Path, Core::Alloc::ScratchArena> movedBackupFiles{scratchArena};
-    if(!MoveExistingVolumeSegments(outputDirectory, stagedPaths.backupDirectory, volumeName, movedBackupFiles))
+    const auto movedBackupFiles = MoveExistingVolumeSegments(scratchArena, outputDirectory, stagedPaths.backupDirectory, volumeName);
+    if(!movedBackupFiles)
         return false;
 
-    usize movedStageSegmentCount = 0;
-    if(!MoveStagedVolumeSegments(stagedPaths.stageDirectory, outputDirectory, volumeName, segmentCount, movedStageSegmentCount)){
-        RemovePromotedVolumeSegmentsBestEffort(outputDirectory, volumeName, movedStageSegmentCount);
-        if(RestoreVolumeSegments(stagedPaths.backupDirectory, outputDirectory, movedBackupFiles)){
+    const auto promoted = MoveStagedVolumeSegments(stagedPaths.stageDirectory, outputDirectory, volumeName, segmentCount);
+    if(!promoted){
+        RemovePromotedVolumeSegmentsBestEffort(outputDirectory, volumeName, promoted.error().movedCount);
+        if(RestoreVolumeSegments(stagedPaths.backupDirectory, outputDirectory, *movedBackupFiles)){
             CleanupStagedDirectoryBestEffort(stagedPaths.backupDirectory, s_VolumePublishLogPrefix, "backup directory");
             CleanupStagedDirectoryBestEffort(stagedPaths.stageDirectory, s_VolumePublishLogPrefix, "stage directory");
         }
@@ -340,22 +357,23 @@ bool PromoteStagedVolume(const StagedVolumePaths& stagedPaths, const Path& outpu
 }
 
 bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView volumeName){
-    ErrorCode errorCode;
 
-    const bool outputExists = FileExists(outputDirectory, errorCode);
-    if(errorCode){
+    const auto outputExists = FileExists(outputDirectory);
+    if(!outputExists){
+        const ErrorCode& errorCode = outputExists.error();
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to query output directory '{}' : {}")
             , PathToString<tchar>(outputDirectory)
             , StringConvert(errorCode.message())
         );
         return false;
     }
-    if(!outputExists)
+    if(!*outputExists)
         return true;
 
-    errorCode.clear();
-    if(!IsDirectory(outputDirectory, errorCode)){
-        if(errorCode){
+    const auto directory = IsDirectory(outputDirectory);
+    if(!directory || !*directory){
+        if(!directory){
+            const ErrorCode& errorCode = directory.error();
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to inspect output directory '{}' : {}")
                 , PathToString<tchar>(outputDirectory)
                 , StringConvert(errorCode.message())
@@ -372,18 +390,20 @@ bool RemoveExistingVolumeSegments(const Path& outputDirectory, const AStringView
     for(usize segmentIndex = 0u;; ++segmentIndex){
         const Path hashedPath = ::MakeVolumeSegmentPath(outputDirectory, volumeName, segmentIndex);
 
-        const bool exists = FileExists(hashedPath, errorCode);
-        if(errorCode){
+        const auto exists = FileExists(hashedPath);
+        if(!exists){
+            const ErrorCode& errorCode = exists.error();
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to query hashed segment '{}' : {}")
                 , PathToString<tchar>(hashedPath)
                 , StringConvert(errorCode.message())
             );
             return false;
         }
-        if(!exists)
+        if(!*exists)
             break;
 
-        if(!RemoveFile(hashedPath, errorCode)){
+        if(const auto operation = RemoveFile(hashedPath); !operation || !*operation){
+            const ErrorCode errorCode = operation ? ErrorCode{} : operation.error();
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to remove old hashed segment '{}' : {}")
                 , PathToString<tchar>(hashedPath)
                 , StringConvert(FilesystemMutationFailureDetail(errorCode, "segment was not present"))

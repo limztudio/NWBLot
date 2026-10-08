@@ -168,12 +168,12 @@ Name ShaderArchive::BuildVirtualPathName(const Name& shaderName, const AStringVi
     return Name(derivedHash);
 }
 
-bool ShaderArchive::SerializeIndex(const GraphicsVector<Record>& records, GraphicsBytes& outBinary){
-    outBinary.clear();
+Expected<GraphicsBytes> ShaderArchive::SerializeIndex(GraphicsArena& arena, const GraphicsVector<Record>& records){
+    GraphicsBytes binary(arena);
 
     if(records.size() > Limit<u32>::s_Max){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::SerializeIndex failed: record count exceeds u32 range"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     Alloc::ScratchArena scratchArena(__hidden_shader_archive::s_SerializeIndexArena);
@@ -187,19 +187,19 @@ bool ShaderArchive::SerializeIndex(const GraphicsVector<Record>& records, Graphi
     for(usize i = 0u; i < sortedRecords.size(); ++i){
         const Record& record = *sortedRecords[i];
         if(!__hidden_shader_archive::ValidateRecord(record))
-            return false;
+            return MakeUnexpected(Failure{});
         if(record.variantName.size() > Limit<u32>::s_Max){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::SerializeIndex failed: variant name exceeds u32 range"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(record.variantName.size() > Limit<usize>::s_Max - sizeof(u32)){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::SerializeIndex failed: variant name size overflows"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         const usize variantRecordBytes = sizeof(u32) + record.variantName.size();
         if(variantTextBinaryBytes > Limit<usize>::s_Max - variantRecordBytes){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::SerializeIndex failed: variant text size overflows"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         variantTextBinaryBytes += variantRecordBytes;
 
@@ -212,13 +212,13 @@ bool ShaderArchive::SerializeIndex(const GraphicsVector<Record>& records, Graphi
                 , StringConvert(AStringView(record.variantName))
                 , StringConvert(record.stage.resolvedText())
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
     if(sortedRecords.size() > (Limit<usize>::s_Max - sizeof(__hidden_shader_archive::IndexHeaderDisk)) / sizeof(__hidden_shader_archive::RecordHeaderDisk)){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::SerializeIndex failed: output binary size overflow"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     __hidden_shader_archive::IndexHeaderDisk header;
@@ -228,11 +228,11 @@ bool ShaderArchive::SerializeIndex(const GraphicsVector<Record>& records, Graphi
     const usize headerAndRecordBytes = sizeof(header) + sortedRecords.size() * sizeof(__hidden_shader_archive::RecordHeaderDisk);
     if(headerAndRecordBytes > Limit<usize>::s_Max - variantTextBinaryBytes){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::SerializeIndex failed: output binary size overflow"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outBinary.reserve(headerAndRecordBytes + variantTextBinaryBytes);
-    AppendPOD(outBinary, header);
+    binary.reserve(headerAndRecordBytes + variantTextBinaryBytes);
+    AppendPOD(binary, header);
 
     for(const Record* sortedRecord : sortedRecords){
         const Record& record = *sortedRecord;
@@ -243,72 +243,75 @@ bool ShaderArchive::SerializeIndex(const GraphicsVector<Record>& records, Graphi
         recordHeader.sourceChecksum = record.sourceChecksum;
         recordHeader.bytecodeChecksum = record.bytecodeChecksum;
 
-        AppendPOD(outBinary, recordHeader);
-        if(!AppendString(outBinary, AStringView(record.variantName))){
+        AppendPOD(binary, recordHeader);
+        if(!AppendString(binary, AStringView(record.variantName))){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::SerializeIndex failed: variant name append failed"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
-    return true;
+    return binary;
 }
 
-bool ShaderArchive::DeserializeIndex(const GraphicsBytes& binary, GraphicsVector<Record>& outRecords){
-    outRecords.clear();
+Expected<GraphicsVector<ShaderArchive::Record>> ShaderArchive::DeserializeIndex(GraphicsArena& arena, const GraphicsBytes& binary){
 
     usize cursor = 0;
 
-    __hidden_shader_archive::IndexHeaderDisk header{};
-    if(!ReadPOD(binary, cursor, header)){
+    const auto decodedHeader = ReadPOD<__hidden_shader_archive::IndexHeaderDisk>(binary, cursor);
+    if(!decodedHeader){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::DeserializeIndex failed: missing header"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
+    const auto& header = *decodedHeader;
     if(NWB_MEMCMP(header.magic, __hidden_shader_archive::s_IndexMagic, sizeof(header.magic)) != 0){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::DeserializeIndex failed: invalid magic"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     if(header.recordCount > (binary.size() - cursor) / sizeof(__hidden_shader_archive::RecordHeaderDisk)){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::DeserializeIndex failed: record count {} exceeds available data"), header.recordCount);
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    GraphicsVector<Record> parsedRecords(outRecords.get_allocator());
+    GraphicsVector<Record> parsedRecords(arena);
     parsedRecords.reserve(header.recordCount);
     const Record* previousRecord = nullptr;
     for(u32 i = 0u; i < header.recordCount; ++i){
-        __hidden_shader_archive::RecordHeaderDisk recordHeader{};
-        if(!ReadPOD(binary, cursor, recordHeader)){
+        const auto decodedRecordHeader = ReadPOD<__hidden_shader_archive::RecordHeaderDisk>(binary, cursor);
+        if(!decodedRecordHeader){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::DeserializeIndex failed: missing record header at index {}"), i);
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
-        Record record(outRecords.get_allocator().arena());
+        const auto& recordHeader = *decodedRecordHeader;
+        Record record(arena);
         record.shaderName = Name(recordHeader.shaderName);
         record.stage = Name(recordHeader.stage);
         record.virtualPathHash = recordHeader.virtualPathHash;
         record.sourceChecksum = recordHeader.sourceChecksum;
         record.bytecodeChecksum = recordHeader.bytecodeChecksum;
-        if(!ReadString(binary, cursor, record.variantName)){
+        const auto variantName = ReadString(binary, cursor);
+        if(!variantName){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::DeserializeIndex failed: missing variant name at record {}"), i);
-            return false;
+            return MakeUnexpected(Failure{});
         }
+        record.variantName.assign(variantName->data(), variantName->size());
         if(record.variantName.empty()){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::DeserializeIndex failed: empty variant name at record {}"), i);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(record.virtualPathHash == NameHash{}){
             NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::DeserializeIndex failed: empty virtual path hash at record {}"), i);
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(previousRecord){
             if(__hidden_shader_archive::LessRecord(record, *previousRecord)){
                 NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::DeserializeIndex failed: records are out of order at index {}"), i);
-                return false;
+                return MakeUnexpected(Failure{});
             }
             if(__hidden_shader_archive::SameShaderVariantStage(*previousRecord, record)){
                 NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::DeserializeIndex failed: duplicate shader+variant+stage key at record {}"), i);
-                return false;
+                return MakeUnexpected(Failure{});
             }
         }
 
@@ -318,25 +321,20 @@ bool ShaderArchive::DeserializeIndex(const GraphicsBytes& binary, GraphicsVector
 
     if(cursor != binary.size()){
         NWB_LOGGER_ERROR(NWB_TEXT("ShaderArchive::DeserializeIndex failed: trailing bytes detected"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outRecords = Move(parsedRecords);
-    return true;
+    return parsedRecords;
 }
 
-bool ShaderArchive::FindVirtualPath(const GraphicsVector<Record>& records, const Name& shaderName, const AStringView variantName, const Name& stageName, Name& outVirtualPath){
-    outVirtualPath = s_NameNone;
-
+Expected<Name> ShaderArchive::FindVirtualPath(const GraphicsVector<Record>& records, const Name& shaderName, const AStringView variantName, const Name& stageName){
     if(!shaderName || variantName.empty() || !stageName)
-        return false;
+        return MakeUnexpected(Failure{});
 
-    if(const Record* record = __hidden_shader_archive::FindRecord(records, shaderName, variantName, stageName)){
-        outVirtualPath = Name(record->virtualPathHash);
-        return true;
-    }
+    if(const Record* record = __hidden_shader_archive::FindRecord(records, shaderName, variantName, stageName))
+        return Name(record->virtualPathHash);
 
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 

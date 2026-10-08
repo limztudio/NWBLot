@@ -97,67 +97,66 @@ private:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuTimingRecorder::beginScope(
+Expected<GpuTimingScope> GpuTimingRecorder::beginScope(
     const Name& scopeName,
     Device& device,
     CommandList& commandList,
     const GpuTimingSampleAttribution attribution,
-    const bool requiresComparableTimestamps,
-    GpuTimingScope& outScope
+    const bool requiresComparableTimestamps
 ){
-    outScope = {};
+    GpuTimingScope scope;
     GpuTimingSubmissionTicket* ticket = nullptr;
     QueueSubmissionToken resetSubmission;
     {
         ScopedLock lock(m_mutex);
         syncActiveState();
         if(!scopeName)
-            return true;
+            return scope;
         ++m_statistics.scopeAttemptCount;
         if(
             !m_performanceCollectionActive
             && (!attribution.valid() || !feedbackScopeDemandedLocked(scopeName))
         ){
             noteSkippedScope(GpuTimingScopeSkipReason::CollectionInactive);
-            return true;
+            return scope;
         }
         if(&commandList.getDevice() != &device){
             ++m_statistics.beginFailureCount;
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         const CommandListParameters commandListDescription = commandList.getResolvedDescription();
         const GpuPhysicalQueueInfo* const queueInfo = device.getPhysicalQueueInfo(commandListDescription.physicalQueue);
         if(!queueInfo){
             ++m_statistics.beginFailureCount;
-            return false;
+            return MakeUnexpected(Failure{});
         }
         if(queueInfo->timestampValidBits == 0u){
             noteSkippedScope(GpuTimingScopeSkipReason::QueueTimestampsUnsupported);
-            return true;
+            return scope;
         }
         if(requiresComparableTimestamps && !device.supportsComparableGpuTimestamps(queueInfo->id)){
             noteSkippedScope(GpuTimingScopeSkipReason::ComparableTimestampsUnsupported);
-            return true;
+            return scope;
         }
 
         ticket = activeSubmissionTicket();
         NWB_ASSERT_MSG(ticket, NWB_TEXT("GPU timing scopes must be recorded inside a submission ticket"));
         if(!ticket){
             ++m_statistics.beginFailureCount;
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         const auto found = m_accumulators.find(scopeName);
         if(found == m_accumulators.end()){
             noteSkippedScope(GpuTimingScopeSkipReason::ScopeNotPrepared);
-            return true;
+            return scope;
         }
 
         const usize publicationIndex = ticket->reserveScopePublication();
         if(publicationIndex == Limit<usize>::s_Max){
             ++m_statistics.beginFailureCount;
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         GpuTimingAccumulator& accumulator = *found.value();
@@ -165,63 +164,63 @@ bool GpuTimingRecorder::beginScope(
             *this,
             *ticket,
             accumulator,
-            outScope,
+            scope,
             publicationIndex
         );
-        const bool began = accumulator.beginQuery(
+        const auto began = accumulator.beginQuery(
             commandList,
             m_currentFrameIndex,
             m_epoch,
             m_performanceCaptureEpoch,
-            attribution,
-            outScope,
-            resetSubmission
+            attribution
         );
         if(!began)
-            return false;
-        if(!outScope.valid()){
+            return MakeUnexpected(Failure{});
+        scope = began->scope;
+        resetSubmission = began->resetSubmission;
+        if(!scope.valid()){
             ticket->cancelScopePublication(publicationIndex);
             publicationUnwind.release();
-            return true;
+            return scope;
         }
 
-        outScope.submissionTicket = ticket;
-        outScope.submissionPublicationIndex = publicationIndex;
-        if(!ticket->bindScopePublication(publicationIndex, outScope, commandList))
-            return false;
+        scope.submissionTicket = ticket;
+        scope.submissionPublicationIndex = publicationIndex;
+        if(!ticket->bindScopePublication(publicationIndex, scope, commandList))
+            return MakeUnexpected(Failure{});
         publicationUnwind.release();
     }
 
-    if(outScope.valid() && resetSubmission.valid()){
-        PrerequisiteTrackingUnwindScope prerequisiteUnwind(*this, outScope);
+    if(scope.valid() && resetSubmission.valid()){
+        PrerequisiteTrackingUnwindScope prerequisiteUnwind(*this, scope);
         const bool prerequisiteTracked = ticket->trackSubmissionPrerequisite(resetSubmission);
         prerequisiteUnwind.release();
         if(!prerequisiteTracked){
-            abandonScopeWithoutCallbacks(outScope);
+            abandonScopeWithoutCallbacks(scope);
             ScopedLock lock(m_mutex);
             ++m_statistics.beginFailureCount;
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
-    return true;
+    return scope;
 }
 
-bool GpuTimingRecorder::beginDeferredScope(
+Expected<GpuTimingScope> GpuTimingRecorder::beginDeferredScope(
     const Name& scopeName,
     Device& device,
     CommandList& commandList,
-    const GpuTimingSampleAttribution attribution,
-    GpuTimingScope& outScope
+    const GpuTimingSampleAttribution attribution
 ){
-    if(!beginScope(scopeName, device, commandList, attribution, false, outScope))
-        return false;
+    auto scope = beginScope(scopeName, device, commandList, attribution, false);
+    if(!scope)
+        return MakeUnexpected(Failure{});
     // The frame transaction owns this reservation until the accepted end packet. The begin ticket has no rollback
     // handle: a recovery endpoint may be needed after that begin already executed on the device timeline.
-    if(outScope.submissionTicket)
-        outScope.submissionTicket->cancelScopePublication(outScope.submissionPublicationIndex);
-    outScope.submissionTicket = nullptr;
-    outScope.submissionPublicationIndex = Limit<usize>::s_Max;
-    return true;
+    if(scope->submissionTicket)
+        scope->submissionTicket->cancelScopePublication(scope->submissionPublicationIndex);
+    scope->submissionTicket = nullptr;
+    scope->submissionPublicationIndex = Limit<usize>::s_Max;
+    return *scope;
 }
 
 

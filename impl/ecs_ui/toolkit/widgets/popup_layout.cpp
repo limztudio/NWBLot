@@ -77,10 +77,10 @@ namespace __hidden_ui_popup_layout{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool PopupLayout::Place(const PopupOptions& options, const DisplayMetrics& display, PopupPlacement& placement)noexcept{
+Expected<PopupPlacement> PopupLayout::Place(const PopupOptions& options, const DisplayMetrics& display)noexcept{
     using namespace __hidden_ui_popup_layout;
     if(!ValidOptions(options, display))
-        return false;
+        return MakeUnexpected(Failure{});
     const f32 width = Min(options.size.x, display.logicalWidth);
     const f32 height = Min(options.size.y, display.logicalHeight);
     PopupPlacementSide::Enum side = options.side;
@@ -121,9 +121,8 @@ bool PopupLayout::Place(const PopupOptions& options, const DisplayMetrics& displ
     candidate.viewport = { 0.0f, 0.0f, display.logicalWidth, display.logicalHeight };
     candidate.side = side;
     if(!IsFinite(candidate.bounds.x + width) || !IsFinite(candidate.bounds.y + height))
-        return false;
-    placement = candidate;
-    return true;
+        return MakeUnexpected(Failure{});
+    return candidate;
 }
 
 

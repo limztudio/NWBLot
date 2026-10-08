@@ -78,18 +78,15 @@ f32 CsgDeformCutterField::CapsuleSignedDistance(SIMDVector shapePosition, SIMDVe
     return VectorGetX(CsgDeformCutterField::CapsuleSignedDistanceVec(shapePosition, parameter0));
 }
 
-bool CsgDeformCutterField::ShapeDistances(
+Expected<void, CsgDeformViabilityReason::Enum> CsgDeformCutterField::ShapeDistances(
     const CsgDeformShape& shape,
     const CsgDeformVertexVector<ScratchArena>& vertices,
     const f32 epsilon,
-    Vector<f32, ScratchArena>& outDistances,
-    CsgDeformViabilityReason::Enum& outReason
+    Vector<f32, ScratchArena>& outDistances
 ){
-    outReason = CsgDeformViabilityReason::Ok;
     const CsgDeformShapeKind::Enum shapeKind = CsgDeformCutterField::ClassifyDeformShape(shape.shapeType);
     if(shapeKind == CsgDeformShapeKind::Invalid){
-        outReason = CsgDeformViabilityReason::InvalidCutter;
-        return false;
+        return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
     }
     const usize vertexCount = vertices.size();
     outDistances.clear();
@@ -116,22 +113,20 @@ bool CsgDeformCutterField::ShapeDistances(
         break;
     }
     if(!distanceFunc){
-        outReason = CsgDeformViabilityReason::InvalidCutter;
-        return false;
+        return MakeUnexpected(CsgDeformViabilityReason::InvalidCutter);
     }
     for(usize vertexIndex = 0u; vertexIndex < vertexCount; ++vertexIndex){
         const CsgDeformVertex& vertex = vertices[vertexIndex];
         const SIMDVector shapePosition = Vector4Transform(VectorSetW(LoadFloat(vertex.position), s_AffineW), worldToShape);
         f32 distance = VectorGetX(distanceFunc(shapePosition, parameter0));
         if(!CsgDeformValidator::FiniteFloat(distance)){
-            outReason = CsgDeformViabilityReason::NonFiniteInput;
-            return false;
+            return MakeUnexpected(CsgDeformViabilityReason::NonFiniteInput);
         }
         if(Abs(distance) <= epsilon)
             distance = s_KeepDistanceZero;
         outDistances[vertexIndex] = distance;
     }
-    return true;
+    return {};
 }
 
 

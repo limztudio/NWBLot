@@ -43,7 +43,7 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
+Expected<u64> RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     DeferredFrameTargets& deferredTargets,
     ObjectGeometryCacheGraph& objectGeometry,
     const Core::GpuTaskId shadowPrepareTask,
@@ -92,8 +92,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     Optional<Core::GpuTimingMeasure>& opaqueRegularSharedComputeEmulationTiming,
     Optional<Core::GpuTimingMeasure>& opaqueCsgIntervalSampleComputeEmulationTiming,
     Core::GpuTimingSubmissionTicket** const timingTickets,
-    const bool* const asyncPrefixTimingSpansOnePacket,
-    u64& outSceneLightingContentHash
+    const bool* const asyncPrefixTimingSpansOnePacket
 ){
     using namespace RendererTaskGraphDetail;
     namespace PrefixTimingSlotNs = ECSRenderDetail::DeferredGraphicsPrefixTimingSlot;
@@ -146,10 +145,10 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         || !deferredClearTimingState.rebindableTimingTicket
         || (shadowTraceGeometryResourceCount != 0u && !shadowTraceGeometryResources)
     )
-        return false;
+        return MakeUnexpected(Failure{});
     for(usize timingSlot = 0u; timingSlot < static_cast<usize>(PrefixTimingSlotNs::kCount); ++timingSlot){
         if(!timingTickets[timingSlot])
-            return false;
+            return MakeUnexpected(Failure{});
     }
     const auto timingTicketSlot = [timingTickets](const PrefixTimingSlot slot){
         return &timingTickets[static_cast<usize>(slot)];
@@ -189,8 +188,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         m_meshSystem,
         m_graphics
     );
-    PrefixSceneUploadResult prefixSceneUploadResult;
-    if(!prefixSceneUploadBuilder.declare(
+    auto prefixSceneUploadResult = prefixSceneUploadBuilder.declare(
         PrefixSceneUploadInputs{
             .rayTracingLightingInput = rayTracingLightingInput,
             .meshViewState = &meshViewState,
@@ -207,26 +205,25 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             .shadowVisibilityTask = &m_deferredShadowVisibilityTask,
             .meshViewSetupReady = &m_graphicsPrefixMeshViewSetupReady,
             .sceneShadingSetupReady = &m_graphicsPrefixSceneShadingSetupReady,
-            .outSceneLightingContentHash = &outSceneLightingContentHash,
-        },
-        prefixSceneUploadResult
-    )){
+        }
+    );
+    if(!prefixSceneUploadResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare graphics-prefix scene uploads"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    m_graphicsPrefixMeshViewSetupTask = prefixSceneUploadResult.meshViewSetupTask;
-    m_graphicsPrefixSceneShadingSetupTask = prefixSceneUploadResult.sceneShadingSetupTask;
+    m_graphicsPrefixMeshViewSetupTask = prefixSceneUploadResult->meshViewSetupTask;
+    m_graphicsPrefixSceneShadingSetupTask = prefixSceneUploadResult->sceneShadingSetupTask;
     const RayTracingLightingClassification rayTracingLightingClassification =
-        prefixSceneUploadResult.lightingClassification
+        prefixSceneUploadResult->lightingClassification
     ;
     ECSRenderDetail::SceneLightGpuData sceneLightData[NWB_SCENE_MAX_LIGHTS] = {};
     NWB_MEMCPY(
         sceneLightData,
         sizeof(sceneLightData),
-        prefixSceneUploadResult.lightData,
-        sizeof(prefixSceneUploadResult.lightData)
+        prefixSceneUploadResult->lightData,
+        sizeof(prefixSceneUploadResult->lightData)
     );
-    const u32 sceneLightCount = prefixSceneUploadResult.lightCount;
+    const u32 sceneLightCount = prefixSceneUploadResult->lightCount;
     Core::GpuTaskSchedulingHint immutableUploadScheduling;
     immutableUploadScheduling.cost = Core::GpuTaskCostHint::Tiny;
     immutableUploadScheduling.forceSubmissionBoundary = false;
@@ -266,7 +263,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     );
     if(!m_graphicsPrefixDeferredClearTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred-clear task"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     // Freeze the opaque packet's draw ordering before recording.  The two copied blobs below are the exact source
@@ -317,8 +314,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         m_materialSystem,
         m_csgSystem
     );
-    OpaqueUploadChainResult opaqueUploadChainResult;
-    if(!opaqueUploadChainBuilder.declare(
+    auto opaqueUploadChainResult = opaqueUploadChainBuilder.declare(
         OpaqueUploadChainInputs{
             .targets = &deferredTargets,
             .frameBindings = &frameBindings,
@@ -337,16 +333,16 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             .csgClipContextSlots = csgClipContextSlots,
             .csgIntervalSampleState = csgIntervalSampleState,
             .dependencyTask = m_graphicsPrefixDeferredClearTask,
-        },
-        opaqueUploadChainResult
-    )){
+        }
+    );
+    if(!opaqueUploadChainResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque upload chain"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    const Core::GpuTaskId csgFrameUploadTask = opaqueUploadChainResult.csgUploadTask;
-    const bool hasCsgFrameGpuWork = opaqueUploadChainResult.hasCsgFrameGpuWork;
-    gbufferPayload.materialDrawBuffersUploaded = opaqueUploadChainResult.materialDrawBuffersUploaded;
-    gbufferPayload.csgFrameBuffersUploaded = opaqueUploadChainResult.csgFrameBuffersUploaded;
+    const Core::GpuTaskId csgFrameUploadTask = opaqueUploadChainResult->csgUploadTask;
+    const bool hasCsgFrameGpuWork = opaqueUploadChainResult->hasCsgFrameGpuWork;
+    gbufferPayload.materialDrawBuffersUploaded = opaqueUploadChainResult->materialDrawBuffersUploaded;
+    gbufferPayload.csgFrameBuffersUploaded = opaqueUploadChainResult->csgFrameBuffersUploaded;
 
     gbufferPayload.opaqueDrawSnapshot.capture(
         opaqueDrawItems,
@@ -446,8 +442,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     OpaqueCsgIntervalClearBuilder opaqueCsgIntervalClearBuilder(
         m_deferredLightingTaskGraph
     );
-    OpaqueCsgIntervalClearResult opaqueCsgIntervalClearResult;
-    if(!opaqueCsgIntervalClearBuilder.declare(
+    auto opaqueCsgIntervalClearResult = opaqueCsgIntervalClearBuilder.declare(
         OpaqueCsgIntervalClearInputs{
             .targets = &deferredTargets,
             .csgFrameData = &csgFrameData,
@@ -458,15 +453,15 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             .dependencyTask = csgFrameUploadTask,
             .hasOpaqueCsgFrameWork = hasOpaqueCsgFrameWork,
         },
-        csgIntervalClearTimingState,
-        opaqueCsgIntervalClearResult
-    )){
+        csgIntervalClearTimingState
+    );
+    if(!opaqueCsgIntervalClearResult){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG interval clears"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    m_graphicsPrefixCsgIntervalClearFirstTask = opaqueCsgIntervalClearResult.clearFirstTask;
-    m_graphicsPrefixCsgIntervalClearTask = opaqueCsgIntervalClearResult.clearTask;
-    const Core::GpuTaskId csgIntervalClearTask = hasOpaqueCsgFrameWork ? opaqueCsgIntervalClearResult.clearTask : csgFrameUploadTask;
+    m_graphicsPrefixCsgIntervalClearFirstTask = opaqueCsgIntervalClearResult->clearFirstTask;
+    m_graphicsPrefixCsgIntervalClearTask = opaqueCsgIntervalClearResult->clearTask;
+    const Core::GpuTaskId csgIntervalClearTask = hasOpaqueCsgFrameWork ? opaqueCsgIntervalClearResult->clearTask : csgFrameUploadTask;
 
     // Capacity grows independently of each frozen draw stream. Synchronize only the bytes uploaded for this pass.
     const Core::BufferRange materialInstanceRange(0u, instanceData.size() * sizeof(InstanceGpuData));
@@ -504,37 +499,43 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         !opaqueDrawItems.regular.empty()
         || !opaqueDrawItems.csgReceiverSurface.empty()
     ;
-    gbufferPayload.materialGeometryStatesGraphOwned = gbufferUsesMaterialGeometry
-        && GatherPreparedMaterialGeometryResourceSet(
-            m_deferredLightingTaskGraph,
-            gbufferMaterialGeometryDrawSets,
-            LengthOf(gbufferMaterialGeometryDrawSets),
-            gbufferResourceScratch,
-            Name("render.graphics_prefix.gbuffer.material_geometry"),
-            "Opaque Material Geometry",
-            gbufferMaterialGeometrySet
-        )
-    ;
+    gbufferPayload.materialGeometryStatesGraphOwned = false;
+    if(gbufferUsesMaterialGeometry){
+        const auto gbufferMaterialGeometrySetResult = GatherPreparedMaterialGeometryResourceSet(
+                m_deferredLightingTaskGraph,
+                gbufferMaterialGeometryDrawSets,
+                LengthOf(gbufferMaterialGeometryDrawSets),
+                gbufferResourceScratch,
+                Name("render.graphics_prefix.gbuffer.material_geometry"),
+                "Opaque Material Geometry"
+            );
+        gbufferPayload.materialGeometryStatesGraphOwned = gbufferMaterialGeometrySetResult.has_value();
+        if(gbufferMaterialGeometrySetResult)
+            gbufferMaterialGeometrySet = *gbufferMaterialGeometrySetResult;
+    }
     if(gbufferUsesMaterialGeometry && !gbufferPayload.materialGeometryStatesGraphOwned){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque material geometry states"));
         // Frozen heap slots require a complete graph declaration before this material callback can record.
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    const bool gbufferMaterialSampledTexturesCollected = gbufferUsesMaterialGeometry
-        && GatherPreparedMaterialSampledTextureResourceSet(
-            m_materialSystem,
-            m_deferredLightingTaskGraph,
-            gbufferMaterialGeometryDrawSets,
-            LengthOf(gbufferMaterialGeometryDrawSets),
-            gbufferResourceScratch,
-            Name("render.graphics_prefix.gbuffer.material_sampled_textures"),
-            "Opaque Material Sampled Textures",
-            gbufferMaterialSampledTextureSet
-        )
-    ;
+    bool gbufferMaterialSampledTexturesCollected = false;
+    if(gbufferUsesMaterialGeometry){
+        const auto gbufferMaterialSampledTextureSetResult = GatherPreparedMaterialSampledTextureResourceSet(
+                m_materialSystem,
+                m_deferredLightingTaskGraph,
+                gbufferMaterialGeometryDrawSets,
+                LengthOf(gbufferMaterialGeometryDrawSets),
+                gbufferResourceScratch,
+                Name("render.graphics_prefix.gbuffer.material_sampled_textures"),
+                "Opaque Material Sampled Textures"
+            );
+        gbufferMaterialSampledTexturesCollected = gbufferMaterialSampledTextureSetResult.has_value();
+        if(gbufferMaterialSampledTextureSetResult)
+            gbufferMaterialSampledTextureSet = *gbufferMaterialSampledTextureSetResult;
+    }
     if(gbufferUsesMaterialGeometry && !gbufferMaterialSampledTexturesCollected){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque material sampled textures"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
 
@@ -555,16 +556,19 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         && gbufferMaterialSampledTexturesCollected
         && opaqueComputeEmulationPayload.plan.capture(opaqueDrawItems.regular, gbufferResourceScratch)
     ;
-    const bool opaqueComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationPlanCaptured
-        && GatherImportedOutputBufferResourceSet(
-            m_deferredLightingTaskGraph,
-            opaqueComputeEmulationPayload.plan,
-            gbufferResourceScratch,
-            Name("render.graphics_prefix.opaque_compute_emulation.outputs"),
-            "Opaque Compute Emulation Outputs",
-            opaqueComputeEmulationOutputSet
-        )
-    ;
+    bool opaqueComputeEmulationOutputStatesGraphOwned = false;
+    if(opaqueComputeEmulationPlanCaptured){
+        const auto opaqueComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
+                m_deferredLightingTaskGraph,
+                opaqueComputeEmulationPayload.plan,
+                gbufferResourceScratch,
+                Name("render.graphics_prefix.opaque_compute_emulation.outputs"),
+                "Opaque Compute Emulation Outputs"
+            );
+        opaqueComputeEmulationOutputStatesGraphOwned = opaqueComputeEmulationOutputSetResult.has_value();
+        if(opaqueComputeEmulationOutputSetResult)
+            opaqueComputeEmulationOutputSet = *opaqueComputeEmulationOutputSetResult;
+    }
     if(opaqueComputeEmulationPlanCaptured && !opaqueComputeEmulationOutputStatesGraphOwned){
         NWB_LOGGER_WARNING(NWB_TEXT(
             "RendererSystem: could not declare graph-owned opaque compute-emulation output states"
@@ -587,15 +591,17 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             ECSRenderDetail::s_SharedComputeEmulationMaximumDrawCount
         )
     ;
-    const bool opaqueSharedComputeEmulationOutputStatesGraphOwned =
-        opaqueSharedComputeEmulationPlanCaptured
-        && GatherRegularSharedComputeEmulationResource(
-            m_deferredLightingTaskGraph,
-            opaqueSharedComputeEmulationPlan,
-            "Opaque Shared Compute Emulation Output",
-            opaqueSharedComputeEmulationOutput
-        )
-    ;
+    bool opaqueSharedComputeEmulationOutputStatesGraphOwned = false;
+    if(opaqueSharedComputeEmulationPlanCaptured){
+        const auto opaqueSharedComputeEmulationOutputResult = GatherRegularSharedComputeEmulationResource(
+                m_deferredLightingTaskGraph,
+                opaqueSharedComputeEmulationPlan,
+                "Opaque Shared Compute Emulation Output"
+            );
+        opaqueSharedComputeEmulationOutputStatesGraphOwned = opaqueSharedComputeEmulationOutputResult.has_value();
+        if(opaqueSharedComputeEmulationOutputResult)
+            opaqueSharedComputeEmulationOutput = *opaqueSharedComputeEmulationOutputResult;
+    }
     if(
         opaqueSharedComputeEmulationPlanCaptured
         && !opaqueSharedComputeEmulationOutputStatesGraphOwned
@@ -633,17 +639,19 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             gbufferResourceScratch
         )
     ;
-    const bool opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned =
-        opaqueCsgReceiverComputeEmulationPlanCaptured
-        && GatherImportedOutputBufferResourceSet(
-            m_deferredLightingTaskGraph,
-            opaqueCsgReceiverComputeEmulationPayload.plan,
-            gbufferResourceScratch,
-            Name("render.graphics_prefix.opaque_csg_receiver_compute_emulation.outputs"),
-            "Opaque CSG Receiver Compute Emulation Outputs",
-            opaqueCsgReceiverComputeEmulationOutputSet
-        )
-    ;
+    bool opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned = false;
+    if(opaqueCsgReceiverComputeEmulationPlanCaptured){
+        const auto opaqueCsgReceiverComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
+                m_deferredLightingTaskGraph,
+                opaqueCsgReceiverComputeEmulationPayload.plan,
+                gbufferResourceScratch,
+                Name("render.graphics_prefix.opaque_csg_receiver_compute_emulation.outputs"),
+                "Opaque CSG Receiver Compute Emulation Outputs"
+            );
+        opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned = opaqueCsgReceiverComputeEmulationOutputSetResult.has_value();
+        if(opaqueCsgReceiverComputeEmulationOutputSetResult)
+            opaqueCsgReceiverComputeEmulationOutputSet = *opaqueCsgReceiverComputeEmulationOutputSetResult;
+    }
     if(
         opaqueCsgReceiverComputeEmulationPlanCaptured
         && !opaqueCsgReceiverComputeEmulationOutputStatesGraphOwned
@@ -839,13 +847,13 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         frameBindings, deferredTargets, gbufferDependency, objectGeometryReads, gbufferResourceScratch,
         nullptr, timingTicketSlot(PrefixTimingSlotNs::Gbuffer)
     ))
-        return false;
+        return MakeUnexpected(Failure{});
     if(gbufferPayload.materialDrawBuffersUploaded && !objectGeometry.prepare(
         opaqueDrawItems.csgReceiverSurface.indexedDrawItems.data(), opaqueDrawItems.csgReceiverSurface.indexedDrawItems.size(),
         frameBindings, deferredTargets, gbufferDependency, objectGeometryReads, gbufferResourceScratch,
         nullptr, timingTicketSlot(PrefixTimingSlotNs::Gbuffer)
     ))
-        return false;
+        return MakeUnexpected(Failure{});
     gbufferResourceUses.insert(gbufferResourceUses.end(), objectGeometryReads.begin(), objectGeometryReads.end());
 
     if(opaqueComputeEmulationOutputStatesGraphOwned){
@@ -900,7 +908,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         );
         if(!m_graphicsPrefixOpaqueComputeEmulationTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque compute-emulation producer"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         gbufferDependency = m_graphicsPrefixOpaqueComputeEmulationTask;
     }
@@ -989,7 +997,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         );
         if(!m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG receiver compute-emulation producer"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         gbufferDependency = m_graphicsPrefixOpaqueCsgReceiverComputeEmulationTask;
     }
@@ -1030,7 +1038,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     );
     if(!m_graphicsPrefixGbufferTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque G-buffer task"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     Core::GpuTaskId gbufferCompletionTask = m_graphicsPrefixGbufferTask;
@@ -1186,7 +1194,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             ECSRenderDetail::SharedComputeEmulationPhaseCountForDrawCount(opaqueSharedComputeEmulationPlan.drawCount);
         if(!ECSRenderDetail::IsSupportedSharedComputeEmulationPhaseCount(opaqueSharedComputeEmulationPhaseCount)){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: invalid shared opaque compute-emulation phase count"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         Core::GpuTaskId opaqueSharedComputeEmulationDependency = m_graphicsPrefixGbufferTask;
         for(usize phaseIndex = 0u;
@@ -1212,7 +1220,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             ;
             if(!m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex].valid()){
                 NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare shared opaque compute-emulation phase"));
-                return false;
+                return MakeUnexpected(Failure{});
             }
             opaqueSharedComputeEmulationDependency = m_graphicsPrefixOpaqueSharedComputeEmulationTasks[phaseIndex];
         }
@@ -1241,7 +1249,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         );
         if(!m_graphicsPrefixCsgReceiverSpanTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG receiver-span task"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         Core::GpuTaskSchedulingHint csgIntervalCombineScheduling;
@@ -1265,7 +1273,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         );
         if(!m_graphicsPrefixCsgIntervalCombineTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG interval-combine task"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         Core::Alloc::ScratchArena csgIntervalSampleResourceScratch(RendererArenaScope::s_TaskGraphArena);
@@ -1278,36 +1286,42 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         Core::GpuGraphResourceSetId csgIntervalSampleMaterialSampledTextureSet;
         const MaterialPassDrawItems* const csgIntervalSampleMaterialGeometryDrawSets[] = { &opaqueDrawItems.csg };
         const bool csgIntervalSampleUsesMaterialGeometry = !opaqueDrawItems.csg.empty();
-        csgIntervalSamplePayload.materialGeometryStatesGraphOwned = csgIntervalSampleUsesMaterialGeometry
-            && GatherPreparedMaterialGeometryResourceSet(
-                m_deferredLightingTaskGraph,
-                csgIntervalSampleMaterialGeometryDrawSets,
-                LengthOf(csgIntervalSampleMaterialGeometryDrawSets),
-                csgIntervalSampleResourceScratch,
-                Name("render.graphics_prefix.csg_interval_sample.material_geometry"),
-                "Opaque CSG Material Geometry",
-                csgIntervalSampleMaterialGeometrySet
-            )
-        ;
+        csgIntervalSamplePayload.materialGeometryStatesGraphOwned = false;
+        if(csgIntervalSampleUsesMaterialGeometry){
+            const auto csgIntervalSampleMaterialGeometrySetResult = GatherPreparedMaterialGeometryResourceSet(
+                    m_deferredLightingTaskGraph,
+                    csgIntervalSampleMaterialGeometryDrawSets,
+                    LengthOf(csgIntervalSampleMaterialGeometryDrawSets),
+                    csgIntervalSampleResourceScratch,
+                    Name("render.graphics_prefix.csg_interval_sample.material_geometry"),
+                    "Opaque CSG Material Geometry"
+                );
+            csgIntervalSamplePayload.materialGeometryStatesGraphOwned = csgIntervalSampleMaterialGeometrySetResult.has_value();
+            if(csgIntervalSampleMaterialGeometrySetResult)
+                csgIntervalSampleMaterialGeometrySet = *csgIntervalSampleMaterialGeometrySetResult;
+        }
         if(csgIntervalSampleUsesMaterialGeometry && !csgIntervalSamplePayload.materialGeometryStatesGraphOwned){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque CSG material geometry states"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
-        const bool csgIntervalSampleMaterialSampledTexturesCollected = csgIntervalSampleUsesMaterialGeometry
-            && GatherPreparedMaterialSampledTextureResourceSet(
-                m_materialSystem,
-                m_deferredLightingTaskGraph,
-                csgIntervalSampleMaterialGeometryDrawSets,
-                LengthOf(csgIntervalSampleMaterialGeometryDrawSets),
-                csgIntervalSampleResourceScratch,
-                Name("render.graphics_prefix.csg_interval_sample.material_sampled_textures"),
-                "Opaque CSG Material Sampled Textures",
-                csgIntervalSampleMaterialSampledTextureSet
-            )
-        ;
+        bool csgIntervalSampleMaterialSampledTexturesCollected = false;
+        if(csgIntervalSampleUsesMaterialGeometry){
+            const auto csgIntervalSampleMaterialSampledTextureSetResult = GatherPreparedMaterialSampledTextureResourceSet(
+                    m_materialSystem,
+                    m_deferredLightingTaskGraph,
+                    csgIntervalSampleMaterialGeometryDrawSets,
+                    LengthOf(csgIntervalSampleMaterialGeometryDrawSets),
+                    csgIntervalSampleResourceScratch,
+                    Name("render.graphics_prefix.csg_interval_sample.material_sampled_textures"),
+                    "Opaque CSG Material Sampled Textures"
+                );
+            csgIntervalSampleMaterialSampledTexturesCollected = csgIntervalSampleMaterialSampledTextureSetResult.has_value();
+            if(csgIntervalSampleMaterialSampledTextureSetResult)
+                csgIntervalSampleMaterialSampledTextureSet = *csgIntervalSampleMaterialSampledTextureSetResult;
+        }
         if(csgIntervalSampleUsesMaterialGeometry && !csgIntervalSampleMaterialSampledTexturesCollected){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare prepared opaque CSG material sampled textures"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
 
         // The CSG interval-sample material stream has a different placement from both regular opaque and receiver
@@ -1323,17 +1337,19 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
                 csgIntervalSampleResourceScratch
             )
         ;
-        const bool opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned =
-            opaqueCsgIntervalSampleComputeEmulationPlanCaptured
-            && GatherImportedOutputBufferResourceSet(
-                m_deferredLightingTaskGraph,
-                opaqueCsgIntervalSampleComputeEmulationPayload.plan,
-                csgIntervalSampleResourceScratch,
-                Name("render.graphics_prefix.opaque_csg_interval_sample_compute_emulation.outputs"),
-                "Opaque CSG Interval-Sample Compute Emulation Outputs",
-                opaqueCsgIntervalSampleComputeEmulationOutputSet
-            )
-        ;
+        bool opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned = false;
+        if(opaqueCsgIntervalSampleComputeEmulationPlanCaptured){
+            const auto opaqueCsgIntervalSampleComputeEmulationOutputSetResult = GatherImportedOutputBufferResourceSet(
+                    m_deferredLightingTaskGraph,
+                    opaqueCsgIntervalSampleComputeEmulationPayload.plan,
+                    csgIntervalSampleResourceScratch,
+                    Name("render.graphics_prefix.opaque_csg_interval_sample_compute_emulation.outputs"),
+                    "Opaque CSG Interval-Sample Compute Emulation Outputs"
+                );
+            opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned = opaqueCsgIntervalSampleComputeEmulationOutputSetResult.has_value();
+            if(opaqueCsgIntervalSampleComputeEmulationOutputSetResult)
+                opaqueCsgIntervalSampleComputeEmulationOutputSet = *opaqueCsgIntervalSampleComputeEmulationOutputSetResult;
+        }
         if(
             opaqueCsgIntervalSampleComputeEmulationPlanCaptured
             && !opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned
@@ -1438,7 +1454,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
             frameBindings, deferredTargets, csgIntervalSampleDependency, csgIntervalSampleResourceUses,
             csgIntervalSampleResourceScratch, nullptr, timingTicketSlot(PrefixTimingSlotNs::CsgIntervalSample)
         ))
-            return false;
+            return MakeUnexpected(Failure{});
         if(opaqueCsgIntervalSampleComputeEmulationOutputStatesGraphOwned){
             opaqueCsgIntervalSampleComputeEmulationPayload.csgResources = csgResources;
             // Producer and sample share one CSG interval-sample ticket, spanning compute through the raster half.
@@ -1548,7 +1564,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
                 NWB_LOGGER_WARNING(NWB_TEXT(
                     "RendererSystem: could not declare opaque CSG interval-sample compute-emulation producer"
                 ));
-                return false;
+                return MakeUnexpected(Failure{});
             }
             csgIntervalSampleDependency = m_graphicsPrefixOpaqueCsgIntervalSampleComputeEmulationTask;
         }
@@ -1582,7 +1598,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         );
         if(!m_graphicsPrefixCsgIntervalSampleTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare opaque CSG interval-sample task"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         gbufferCompletionTask = m_graphicsPrefixCsgIntervalSampleTask;
     }
@@ -1603,7 +1619,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     for(usize resourceIndex = 0u; resourceIndex < shadowTraceGeometryResourceCount; ++resourceIndex){
         const Core::GpuGraphResourceId resource = shadowTraceGeometryResources[resourceIndex];
         if(!resource.valid())
-            return false;
+            return MakeUnexpected(Failure{});
         if(!shadowTraceGeometryStatesGraphOwned)
             normalizeResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
     }
@@ -1641,7 +1657,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
     );
     if(!m_graphicsPrefixTask.valid()){
         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare post-G-buffer normalization task"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
     // Publish only after every prefix task accepts declaration. The caller freezes dependent ray-tracing routes
     // immediately after this successful return.
@@ -1650,7 +1666,7 @@ bool RendererFramePipeline::declareDeferredGraphicsPrefixTasks(
         sceneLightData,
         sceneLightCount
     );
-    return true;
+    return prefixSceneUploadResult->sceneLightingContentHash;
 }
 
 

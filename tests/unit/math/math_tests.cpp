@@ -103,6 +103,22 @@ TEST(Math, NormalizeOrUsesFallbackForZeroAndNonfiniteInput){
     EXPECT_TRUE(NearlyEqual4(Vector4NormalizeOr(VectorSet(infinity, 0.0f, 0.0f, 0.0f), fallback, 0.0f), 0.0f, 1.0f, 0.0f, 1.0f));
 }
 
+TEST(Math, TransformedBoundsRejectInvalidAndOverflowingInputs){
+    const SIMDVector minimum = VectorSet(-1.0f, -2.0f, -3.0f, 0.0f);
+    const SIMDVector maximum = VectorSet(1.0f, 2.0f, 3.0f, 0.0f);
+    EXPECT_FALSE(AabbTests::Transform(MatrixIdentity(), maximum, minimum));
+    SIMDMatrix invalid = MatrixIdentity();
+    invalid.v[0] = VectorSet(Limit<f32>::s_Infinity, 0.0f, 0.0f, 0.0f);
+    EXPECT_FALSE(AabbTests::Transform(invalid, minimum, maximum));
+    const SIMDMatrix overflow = MatrixScaling(Limit<f32>::s_Max, Limit<f32>::s_Max, Limit<f32>::s_Max);
+    EXPECT_FALSE(AabbTests::Transform(overflow, minimum, maximum));
+    const auto point = AabbTests::Transform(MatrixIdentity(), VectorZero(), VectorZero());
+    ASSERT_TRUE(point);
+    EXPECT_TRUE(AabbTests::Valid(point->minBounds, point->maxBounds));
+    EXPECT_TRUE(NearlyEqual3(point->minBounds, 0.0f, 0.0f, 0.0f));
+    EXPECT_TRUE(NearlyEqual3(point->maxBounds, 0.0f, 0.0f, 0.0f));
+}
+
 TEST(Math, BoxNormalHandlesCornerAndEqualDistanceTie){
     const SIMDVector boxHalfExtents = VectorSet(1.0f, 1.0f, 1.0f, 0.0f);
 

@@ -65,21 +65,15 @@ static void AppendCsgShapeCookEntry(
     return NWB::Impl::s_InvalidCsgShapeTypeId;
 }
 
-static bool CsgCookTestBounds(
+Expected<NWB::Impl::CsgShapeBounds> CsgCookTestBounds(
     const SIMDMatrix& shapeToWorld,
     const u8* parameterBytes,
-    const usize parameterByteSize,
-    SIMDVector& outMinBounds,
-    SIMDVector& outMaxBounds,
-    bool& outFiniteBounds
-){
+    const usize parameterByteSize
+)noexcept{
     static_cast<void>(shapeToWorld);
     static_cast<void>(parameterBytes);
     static_cast<void>(parameterByteSize);
-    outMinBounds = VectorSet(-1.0f, -1.0f, -1.0f, 0.0f);
-    outMaxBounds = VectorSet(1.0f, 1.0f, 1.0f, 0.0f);
-    outFiniteBounds = true;
-    return true;
+    return NWB::Impl::CsgShapeBounds{ VectorSet(-1.0f, -1.0f, -1.0f, 0.0f), VectorSet(1.0f, 1.0f, 1.0f, 0.0f), true };
 }
 
 [[nodiscard]] static NWB::Impl::CsgShapeTypeDesc CsgCookTestShapeDesc(
@@ -100,8 +94,10 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
     const Core::Common::LoggerRegistrationGuard loggerGuard(logger, Core::Common::LoggerBreakPolicy::BreakOnFatal);
     TestArena testArena;
     Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
-    Path root(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "evaluator_dependency_plan", root));
+    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "evaluator_dependency_plan");
+    ASSERT_TRUE(rootResult);
+    Path root = Move(*rootResult);
+
     const Path bindRoot = root / "bind";
     const Path csgRoot = root / "csg";
     ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(bindRoot / "unused.slangi", "// Empty bind root.\n"));
@@ -135,7 +131,7 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
     addIncludeMetadata(csgRoot / "first.slangi", "MODULE_OPTION", { "0", "1" });
     addIncludeMetadata(csgRoot / "second.slangi", "MODULE_OPTION", { "2" });
     ShaderCook::CookVector<Impl::MaterialCookEntry> materials(testArena.arena);
-    const auto prepare = [&](const u32 mode, Plan::PreparedShaderPlan& plan){
+    const auto prepare = [&](const u32 mode){
         Plan::ShaderEntryVector entries(testArena.arena);
         ShaderCook::ShaderEntry entry(testArena.arena);
         entry.name = "project/shaders/dependency_plan";
@@ -160,15 +156,15 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
             includeMetadata,
             entries,
             materials,
-            plan,
             scratchArena
         );
     };
 
     for(u32 mode = 0u; mode < 3u; ++mode){
         SCOPED_TRACE(mode);
-        Plan::PreparedShaderPlan plan(testArena.arena);
-        ASSERT_TRUE(prepare(mode, plan));
+        auto planResult = prepare(mode);
+        ASSERT_TRUE(planResult);
+        const Plan::PreparedShaderPlan& plan = *planResult;
         ASSERT_EQ(plan.preparedEntries.size(), 1u);
         const auto& prepared = plan.preparedEntries.front();
         ASSERT_EQ(prepared.dependencies.size(), mode == 2u ? 4u : 2u);
@@ -189,16 +185,15 @@ TEST(AssetsGraphics, ShaderPlanMergesEvaluatorDependenciesOnceAndKeepsInheritedD
             EXPECT_EQ(inherited.value().values[0], "0");
             EXPECT_EQ(inherited.value().values[1], "1");
             ASSERT_TRUE(AssetsGraphicsFixture::WriteTextFile(csgRoot / "second.slangi", "#include \"../common.slangi\"\n// Changed module.\n"));
-            Plan::PreparedShaderPlan changedPlan(testArena.arena);
-            ASSERT_TRUE(prepare(mode, changedPlan));
-            ASSERT_EQ(changedPlan.preparedEntries.size(), 1u);
-            EXPECT_NE(changedPlan.preparedEntries.front().dependencyChecksum, prepared.dependencyChecksum);
-            EXPECT_EQ(changedPlan.preparedEntries.front().variantCount, prepared.variantCount);
+            const auto changedPlan = prepare(mode);
+            ASSERT_TRUE(changedPlan);
+            ASSERT_EQ(changedPlan->preparedEntries.size(), 1u);
+            EXPECT_NE(changedPlan->preparedEntries.front().dependencyChecksum, prepared.dependencyChecksum);
+            EXPECT_EQ(changedPlan->preparedEntries.front().variantCount, prepared.variantCount);
         }
     }
     EXPECT_EQ(logger.errorCount(), 0u);
-    ErrorCode error;
-    EXPECT_TRUE(RemoveAllIfExists(root, error));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
 TEST(AssetsGraphics, CsgShapeCookAndRuntimeUseCanonicalIdsRegardlessOfRegistrationOrder){
@@ -225,12 +220,12 @@ TEST(AssetsGraphics, CsgShapeCookAndRuntimeUseCanonicalIdsRegardlessOfRegistrati
     EXPECT_NE(cookedAlphaId, cookedZebraId);
 
     NWB::Impl::CsgShapeRegistry registry(testArena.arena);
-    NWB::Impl::CsgShapeTypeId runtimeZebraId = NWB::Impl::s_InvalidCsgShapeTypeId;
-    NWB::Impl::CsgShapeTypeId runtimeAlphaId = NWB::Impl::s_InvalidCsgShapeTypeId;
-    ASSERT_TRUE(registry.registerShapeType(CsgCookTestShapeDesc(zebraShape, zebraModule, zebraInclude), runtimeZebraId));
-    ASSERT_TRUE(registry.registerShapeType(CsgCookTestShapeDesc(alphaShape, alphaModule, alphaInclude), runtimeAlphaId));
-    EXPECT_EQ(runtimeAlphaId, cookedAlphaId);
-    EXPECT_EQ(runtimeZebraId, cookedZebraId);
+    const auto runtimeZebraId = registry.registerShapeType(CsgCookTestShapeDesc(zebraShape, zebraModule, zebraInclude));
+    ASSERT_TRUE(runtimeZebraId);
+    const auto runtimeAlphaId = registry.registerShapeType(CsgCookTestShapeDesc(alphaShape, alphaModule, alphaInclude));
+    ASSERT_TRUE(runtimeAlphaId);
+    EXPECT_EQ(*runtimeAlphaId, cookedAlphaId);
+    EXPECT_EQ(*runtimeZebraId, cookedZebraId);
 }
 
 #if defined(NWB_FINAL)
@@ -257,22 +252,21 @@ TEST(AssetsGraphics, CsgShapeCookRejectsGeneratedModuleIncludeCollisions){
         "project/csg/generated/SHARED.slangi"
     );
 
-    Path root(testArena.arena);
-    ASSERT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "csg_module_include_collision", root));
+    auto rootResult = AssetsGraphicsFixture::PrepareAssetsGraphicsCaseRoot(testArena, "csg_module_include_collision");
+    ASSERT_TRUE(rootResult);
+    Path root = Move(*rootResult);
 
-    Path includeRoot(testArena.arena);
+
     NWB::Core::Alloc::ScratchArena scratchArena(AssetsGraphicsFixture::s_ShaderScratchArena);
     EXPECT_FALSE(EmitCsgShapeModuleIncludes(
         root / "cache",
         "tests",
         entries,
-        includeRoot,
         scratchArena
     ));
     EXPECT_TRUE(logger.sawErrorContaining(NWB_TEXT("generated include")));
 
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 #endif
 

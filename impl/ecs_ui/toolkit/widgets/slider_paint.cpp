@@ -23,20 +23,18 @@ bool Builder::paintSlider(const Item& item, const LayoutBox& box){
     SliderFrame& frame = *m_scope->m_sliders[item.slider];
     if(!sliderMatches(frame))
         return false;
-    f64 normalized = 0.0;
-    SliderPlacement placement;
+    auto normalized = SliderBehavior::Normalize(frame.m_options.minimum, frame.m_options.maximum, frame.m_state.value());
+    if(!normalized)
+        return false;
     const Rect clip = visibleClip(box.clip);
-    if(
-        !SliderBehavior::Normalize(frame.m_options.minimum, frame.m_options.maximum, frame.m_state.value(), normalized)
-        || !SliderLayout::Place(box.rectangle, clip, frame.m_metrics, normalized, placement)
-        || !SliderBehavior::Admit(frame.m_state, frame.m_options, placement)
-    )
+    auto placement = SliderLayout::Place(box.rectangle, clip, frame.m_metrics, *normalized);
+    if(!placement || !SliderBehavior::Admit(frame.m_state, frame.m_options, *placement))
         return false;
     frame.m_snapshot = frame.m_state.snapshot();
     frame.m_token = frame.m_state.controlToken();
     const bool interactive = frame.m_options.enabled && frame.m_options.minimum != frame.m_options.maximum
-        && placement.centerTravel.width > 0.0f && placement.thumb.width > 0.0f && placement.thumb.height > 0.0f
-        && placement.clip.width > 0.0f && placement.clip.height > 0.0f;
+        && placement->centerTravel.width > 0.0f && placement->thumb.width > 0.0f && placement->thumb.height > 0.0f
+        && placement->clip.width > 0.0f && placement->clip.height > 0.0f;
     InputRouter& input = m_context.input();
     const bool previouslyFocused = input.focus() == item.state.id;
     // Prospective geometry and policy fence the displayed lifetime before any copied intention changes the value.
@@ -45,11 +43,13 @@ bool Builder::paintSlider(const Item& item, const LayoutBox& box){
         input.invalidateTarget(item.state.id);
     frame.m_focusOnCommit = interactive && previouslyFocused && input.focus() != item.state.id;
     frame.m_interactive = interactive;
-    if(
-        !applySliderInput(frame, placement, interactive)
-        || !SliderBehavior::Normalize(frame.m_options.minimum, frame.m_options.maximum, frame.m_state.value(), normalized)
-        || !SliderLayout::Place(box.rectangle, clip, frame.m_metrics, normalized, placement)
-    )
+    if(!applySliderInput(frame, *placement, interactive))
+        return false;
+    normalized = SliderBehavior::Normalize(frame.m_options.minimum, frame.m_options.maximum, frame.m_state.value());
+    if(!normalized)
+        return false;
+    placement = SliderLayout::Place(box.rectangle, clip, frame.m_metrics, *normalized);
+    if(!placement)
         return false;
     const WidgetId trackId = MakeWidgetId(item.state.id, "track");
     const WidgetId thumbId = MakeWidgetId(item.state.id, "thumb");
@@ -64,18 +64,18 @@ bool Builder::paintSlider(const Item& item, const LayoutBox& box){
         return false;
     const Color tint = !interactive ? frame.m_style.disabledTint : pressed ? frame.m_style.pressedTint
         : hover ? frame.m_style.hoverTint : Color{};
-    m_paint.pushClip(placement.clip);
-    bool painted = m_paint.drawRegion(track->name, placement.track, interactive ? Color{} : frame.m_style.disabledTint);
+    m_paint.pushClip(placement->clip);
+    bool painted = m_paint.drawRegion(track->name, placement->track, interactive ? Color{} : frame.m_style.disabledTint);
     if(painted)
-        painted = m_paint.drawRegion(thumb->name, placement.thumb, tint);
+        painted = m_paint.drawRegion(thumb->name, placement->thumb, tint);
     if(painted && interactive && input.focus() == item.state.id && m_skin->findRegion(frame.m_style.focus))
-        painted = m_paint.drawRegion(frame.m_style.focus, placement.bounds);
+        painted = m_paint.drawRegion(frame.m_style.focus, placement->bounds);
     const bool popped = m_paint.popClip();
     if(!painted || !popped || !sliderMatches(frame))
         return false;
     HitTarget host;
-    host.rectangle = placement.bounds;
-    host.clip = placement.clip;
+    host.rectangle = placement->bounds;
+    host.clip = placement->clip;
     host.enabled = interactive;
     host.focusable = interactive;
     host.navigable = interactive;
@@ -87,18 +87,18 @@ bool Builder::paintSlider(const Item& item, const LayoutBox& box){
         return false;
     if(interactive){
         HitTarget trackTarget;
-        trackTarget.rectangle = placement.track;
-        trackTarget.clip = placement.clip;
+        trackTarget.rectangle = placement->track;
+        trackTarget.clip = placement->clip;
         trackTarget.pointerGesture = true;
-        trackTarget.gestureReference = placement.centerTravel;
+        trackTarget.gestureReference = placement->centerTravel;
         trackTarget.control = frame.m_token;
         if(!m_context.addPartTarget(item.state, trackId, trackTarget))
             return false;
         HitTarget thumbTarget;
-        thumbTarget.rectangle = placement.thumb;
-        thumbTarget.clip = placement.clip;
+        thumbTarget.rectangle = placement->thumb;
+        thumbTarget.clip = placement->clip;
         thumbTarget.pointerGesture = true;
-        thumbTarget.gestureReference = placement.travelBounds;
+        thumbTarget.gestureReference = placement->travelBounds;
         thumbTarget.control = frame.m_token;
         thumbTarget.value = BitCast<u64>(frame.m_state.value());
         if(!m_context.addPartTarget(item.state, thumbId, thumbTarget))
@@ -106,7 +106,7 @@ bool Builder::paintSlider(const Item& item, const LayoutBox& box){
     }
     if(!sliderMatches(frame))
         return false;
-    frame.m_state.m_placement = placement;
+    frame.m_state.m_placement = *placement;
     frame.m_result.valid = true;
     return true;
 }

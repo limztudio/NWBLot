@@ -362,14 +362,9 @@ bool GpuTaskGraphCompiler::analyze(
 
     const Timer dependencyAnalysisBegin = TimerNow();
     Vector<GpuTaskDependencyEdge, Alloc::ScratchArena> resourceVersionDependencyEdges(scratchArena);
-    GpuTaskGraphAnalysisDiagnostic resourceVersionDiagnostic;
-    if(!BuildResourceVersionDependencyEdges(
-        graph,
-        resourceVersionDependencyEdges,
-        resourceVersionDiagnostic,
-        scratchArena
-    )){
-        outAnalysis.m_diagnostic = resourceVersionDiagnostic;
+    const auto resourceVersions = BuildResourceVersionDependencyEdges(graph, resourceVersionDependencyEdges, scratchArena);
+    if(!resourceVersions){
+        outAnalysis.m_diagnostic = resourceVersions.error();
         return false;
     }
     struct DependencyPairIndices{
@@ -536,15 +531,15 @@ bool GpuTaskGraphCompiler::analyze(
         for(usize useIndex = 0u; useIndex < task.resourceUseCount; ++useIndex){
             const GpuTaskResourceUse& use = task.resourceUses[useIndex];
             const GpuTaskGraphResourceView resource = graph.resourceAt(use.resource.index);
-            GpuTaskResourceRange plannedRange = use.range;
+            Expected<GpuTaskResourceRange> plannedRange = use.range;
             if(
                 resource.type == GpuGraphResourceType::Buffer
-                && !ResolveResourceRangeForPlanning(graph, resource, use.range, plannedRange)
+                && !(plannedRange = ResolveResourceRangeForPlanning(graph, resource, use.range))
             )
                 return fail(GpuTaskGraphAnalysisStatus::InvalidResourceUse, task.id, {}, use.resource);
             TrackedResourceAccessLists& accesses = resourceAccesses[use.resource.index];
             const auto overlaps = [&](const TrackedResourceAccess& access){
-                return access.task != task.id && RangesOverlap(resource, access.range, plannedRange);
+                return access.task != task.id && RangesOverlap(resource, access.range, (*plannedRange));
             };
 
             if(IsReadAccess(use.access)){
@@ -586,21 +581,21 @@ bool GpuTaskGraphCompiler::analyze(
                         .hazard = GpuTaskHazardType::WriteAfterRead,
                     });
                 }
-                accesses.writers.retireCovered(writers, resource, plannedRange);
-                accesses.readers.retireCovered(readers, resource, plannedRange);
-                accesses.writers.append(writers, task.id, plannedRange);
+                accesses.writers.retireCovered(writers, resource, (*plannedRange));
+                accesses.readers.retireCovered(readers, resource, (*plannedRange));
+                accesses.writers.append(writers, task.id, (*plannedRange));
             }
             else if(IsReadAccess(use.access)){
                 bool alreadyWrittenByTask = false;
                 for(usize index = accesses.writers.first; index != s_InvalidAccess; index = writers[index].next){
                     const TrackedResourceAccess& writer = writers[index];
-                    if(writer.task == task.id && RangeContains(resource, writer.range, plannedRange)){
+                    if(writer.task == task.id && RangeContains(resource, writer.range, (*plannedRange))){
                         alreadyWrittenByTask = true;
                         break;
                     }
                 }
                 if(!alreadyWrittenByTask)
-                    accesses.readers.append(readers, task.id, plannedRange);
+                    accesses.readers.append(readers, task.id, (*plannedRange));
             }
         }
     }

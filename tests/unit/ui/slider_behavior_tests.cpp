@@ -43,12 +43,17 @@ protected:
     }
 
     [[nodiscard]] bool refresh(){
-        SliderMetrics metrics;
-        f64 normalized = 0.0;
-        return SliderLayout::Measure(m_options, {}, metrics)
-            && SliderBehavior::Normalize(m_options.minimum, m_options.maximum, m_state.value(), normalized)
-            && SliderLayout::Place(m_bounds, m_bounds, metrics, normalized, m_placement)
-            && SliderBehavior::Admit(m_state, m_options, m_placement);
+        const auto metrics = SliderLayout::Measure(m_options, {});
+        if(!metrics)
+            return false;
+        const auto normalized = SliderBehavior::Normalize(m_options.minimum, m_options.maximum, m_state.value());
+        if(!normalized)
+            return false;
+        const auto placement = SliderLayout::Place(m_bounds, m_bounds, *metrics, *normalized);
+        if(!placement)
+            return false;
+        m_placement = *placement;
+        return SliderBehavior::Admit(m_state, m_options, m_placement);
     }
 
     [[nodiscard]] bool set(const f64 value){
@@ -90,27 +95,34 @@ protected:
 
 
 TEST(UiSliderMathTests, OutOfRangeAndConstantSpansClampNormalization){
-    f64 normalized = -1.0;
-    ASSERT_TRUE(SliderBehavior::Normalize(10.0, 30.0, -100.0, normalized));
-    EXPECT_EQ(normalized, 0.0);
-    ASSERT_TRUE(SliderBehavior::Normalize(10.0, 30.0, 100.0, normalized));
-    EXPECT_EQ(normalized, 1.0);
-    ASSERT_TRUE(SliderBehavior::Normalize(10.0, 10.0, 100.0, normalized));
-    EXPECT_EQ(normalized, 0.0);
+    Expected<f64> normalized = MakeUnexpected(Failure{});
+    normalized = SliderBehavior::Normalize(10.0, 30.0, -100.0);
+    ASSERT_TRUE(normalized);
+    EXPECT_EQ(*normalized, 0.0);
+    normalized = SliderBehavior::Normalize(10.0, 30.0, 100.0);
+    ASSERT_TRUE(normalized);
+    EXPECT_EQ(*normalized, 1.0);
+    normalized = SliderBehavior::Normalize(10.0, 10.0, 100.0);
+    ASSERT_TRUE(normalized);
+    EXPECT_EQ(*normalized, 0.0);
 }
 
 TEST(UiSliderMathTests, OppositeExtremeBoundsNormalizeAndInterpolateWithoutAnOverflowingSpan){
     const f64 maximum = Limit<f64>::s_Max;
-    f64 value = 7.0;
-    ASSERT_TRUE(SliderBehavior::Normalize(-maximum, maximum, 0.0, value));
-    EXPECT_DOUBLE_EQ(value, 0.5);
-    ASSERT_TRUE(SliderBehavior::Normalize(-maximum, maximum, maximum * 0.5, value));
-    EXPECT_DOUBLE_EQ(value, 0.75);
-    ASSERT_TRUE(SliderBehavior::Interpolate(-maximum, maximum, 0.25, value));
-    EXPECT_TRUE(IsFinite(value));
-    EXPECT_DOUBLE_EQ(value / maximum, -0.5);
-    ASSERT_TRUE(SliderBehavior::Interpolate(-maximum, maximum, 0.75, value));
-    EXPECT_DOUBLE_EQ(value / maximum, 0.5);
+    Expected<f64> value = MakeUnexpected(Failure{});
+    value = SliderBehavior::Normalize(-maximum, maximum, 0.0);
+    ASSERT_TRUE(value);
+    EXPECT_DOUBLE_EQ(*value, 0.5);
+    value = SliderBehavior::Normalize(-maximum, maximum, maximum * 0.5);
+    ASSERT_TRUE(value);
+    EXPECT_DOUBLE_EQ(*value, 0.75);
+    value = SliderBehavior::Interpolate(-maximum, maximum, 0.25);
+    ASSERT_TRUE(value);
+    EXPECT_TRUE(IsFinite(*value));
+    EXPECT_DOUBLE_EQ(*value / maximum, -0.5);
+    value = SliderBehavior::Interpolate(-maximum, maximum, 0.75);
+    ASSERT_TRUE(value);
+    EXPECT_DOUBLE_EQ(*value / maximum, 0.5);
 }
 
 TEST(UiSliderMathTests, SameSignExtremeBoundsUseABoundedDifference){
@@ -118,47 +130,56 @@ TEST(UiSliderMathTests, SameSignExtremeBoundsUseABoundedDifference){
     for(const bool negative : { false, true }){
         const f64 minimum = negative ? -maximum : maximum * 0.75;
         const f64 upper = negative ? -maximum * 0.75 : maximum;
-        f64 value = 0.0;
-        ASSERT_TRUE(SliderBehavior::Interpolate(minimum, upper, 0.5, value));
-        EXPECT_TRUE(IsFinite(value));
-        EXPECT_GE(value, minimum);
-        EXPECT_LE(value, upper);
-        f64 normalized = 0.0;
-        ASSERT_TRUE(SliderBehavior::Normalize(minimum, upper, value, normalized));
-        EXPECT_NEAR(normalized, 0.5, 1.0e-15);
+        Expected<f64> value = MakeUnexpected(Failure{});
+        value = SliderBehavior::Interpolate(minimum, upper, 0.5);
+        ASSERT_TRUE(value);
+        EXPECT_TRUE(IsFinite(*value));
+        EXPECT_GE(*value, minimum);
+        EXPECT_LE(*value, upper);
+        Expected<f64> normalized = MakeUnexpected(Failure{});
+        normalized = SliderBehavior::Normalize(minimum, upper, *value);
+        ASSERT_TRUE(normalized);
+        EXPECT_NEAR(*normalized, 0.5, 1.0e-15);
     }
 }
 
 TEST(UiSliderMathTests, TinyAndAdjacentSpansStayInTheOrdinaryNormalizationPath){
     const f64 tiny = BitCast<f64>(1ull);
-    f64 normalized = 7.0;
-    ASSERT_TRUE(SliderBehavior::Normalize(-tiny, tiny, 0.0, normalized));
-    EXPECT_DOUBLE_EQ(normalized, 0.5);
-    ASSERT_TRUE(SliderBehavior::Normalize(tiny, BitCast<f64>(2ull), tiny, normalized));
-    EXPECT_DOUBLE_EQ(normalized, 0.0);
+    Expected<f64> normalized = MakeUnexpected(Failure{});
+    normalized = SliderBehavior::Normalize(-tiny, tiny, 0.0);
+    ASSERT_TRUE(normalized);
+    EXPECT_DOUBLE_EQ(*normalized, 0.5);
+    normalized = SliderBehavior::Normalize(tiny, BitCast<f64>(2ull), tiny);
+    ASSERT_TRUE(normalized);
+    EXPECT_DOUBLE_EQ(*normalized, 0.0);
     const f64 lower = BitCast<f64>(0x3ff0000000000000ull);
     const f64 upper = BitCast<f64>(0x3ff0000000000001ull);
-    ASSERT_TRUE(SliderBehavior::Normalize(lower, upper, upper, normalized));
-    EXPECT_DOUBLE_EQ(normalized, 1.0);
-    f64 value = 0.0;
-    ASSERT_TRUE(SliderBehavior::Interpolate(lower, upper, 1.0, value));
-    EXPECT_EQ(BitCast<u64>(value), BitCast<u64>(upper));
+    normalized = SliderBehavior::Normalize(lower, upper, upper);
+    ASSERT_TRUE(normalized);
+    EXPECT_DOUBLE_EQ(*normalized, 1.0);
+    Expected<f64> value = MakeUnexpected(Failure{});
+    value = SliderBehavior::Interpolate(lower, upper, 1.0);
+    ASSERT_TRUE(value);
+    EXPECT_EQ(BitCast<u64>(*value), BitCast<u64>(upper));
 }
 
 TEST(UiSliderMathTests, InterpolationPreservesExactEndpointAndSignedZeroBits){
-    f64 value = 7.0;
-    ASSERT_TRUE(SliderBehavior::Interpolate(-0.0, 1.0, 0.0, value));
-    EXPECT_EQ(BitCast<u64>(value), 0x8000000000000000ull);
-    ASSERT_TRUE(SliderBehavior::Interpolate(-1.0, 0.0, 1.0, value));
-    EXPECT_EQ(BitCast<u64>(value), 0u);
-    ASSERT_TRUE(SliderBehavior::Interpolate(-0.0, 0.0, 0.0, value));
-    EXPECT_EQ(BitCast<u64>(value), 0x8000000000000000ull);
-    ASSERT_TRUE(SliderBehavior::Interpolate(-0.0, 0.0, 1.0, value));
-    EXPECT_EQ(BitCast<u64>(value), 0u);
+    Expected<f64> value = MakeUnexpected(Failure{});
+    value = SliderBehavior::Interpolate(-0.0, 1.0, 0.0);
+    ASSERT_TRUE(value);
+    EXPECT_EQ(BitCast<u64>(*value), 0x8000000000000000ull);
+    value = SliderBehavior::Interpolate(-1.0, 0.0, 1.0);
+    ASSERT_TRUE(value);
+    EXPECT_EQ(BitCast<u64>(*value), 0u);
+    value = SliderBehavior::Interpolate(-0.0, 0.0, 0.0);
+    ASSERT_TRUE(value);
+    EXPECT_EQ(BitCast<u64>(*value), 0x8000000000000000ull);
+    value = SliderBehavior::Interpolate(-0.0, 0.0, 1.0);
+    ASSERT_TRUE(value);
+    EXPECT_EQ(BitCast<u64>(*value), 0u);
 }
 
-TEST(UiSliderMathTests, InvalidRangeValueOrNormalizedInputPreservesThePreviousOutput){
-    f64 value = -0.0;
+TEST(UiSliderMathTests, InvalidRangeValueOrNormalizedInputRejectsTheQuery){
     for(u32 field = 0u; field < 7u; ++field){
         f64 minimum = 0.0;
         f64 maximum = 1.0;
@@ -173,11 +194,9 @@ TEST(UiSliderMathTests, InvalidRangeValueOrNormalizedInputPreservesThePreviousOu
         default: query = 1.1; break;
         }
         if(field < 5u){
-            EXPECT_FALSE(SliderBehavior::Normalize(minimum, maximum, query, value));
-            EXPECT_EQ(BitCast<u64>(value), 0x8000000000000000ull);
+            EXPECT_FALSE(SliderBehavior::Normalize(minimum, maximum, query));
         }
-        EXPECT_FALSE(SliderBehavior::Interpolate(minimum, maximum, query, value));
-        EXPECT_EQ(BitCast<u64>(value), 0x8000000000000000ull);
+        EXPECT_FALSE(SliderBehavior::Interpolate(minimum, maximum, query));
     }
 }
 

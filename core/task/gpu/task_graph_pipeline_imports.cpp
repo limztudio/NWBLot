@@ -315,8 +315,11 @@ GpuGraphPipelineId GpuTaskGraph::appendPipeline(const GpuGraphPipelineDesc& desc
         while(m_markerText.size() > markerCount)
             m_markerText.pop_back();
     });
-    if(!appendMarkerLabel(desc.markerLabel, pipeline.markerLabelOffset, pipeline.markerLabelSize))
+    const auto markerLabelRange = appendMarkerLabel(desc.markerLabel);
+    if(!markerLabelRange)
         return {};
+    pipeline.markerLabelOffset = markerLabelRange->offset;
+    pipeline.markerLabelSize = markerLabelRange->size;
 
     const u32 index = static_cast<u32>(m_pipelines.size());
     m_pipelines.push_back(Move(pipeline));

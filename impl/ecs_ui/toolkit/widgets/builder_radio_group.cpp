@@ -102,10 +102,12 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
     frame->m_style = m_radioGroupStyle;
     frame->m_widgetStyle = m_style;
     // Reject options and style before invoking application callbacks or changing reconciliation state.
-    if(!RadioGroupLayout::Measure(0u, {}, options, frame->m_style, frame->m_metrics)){
+    const auto metrics = RadioGroupLayout::Measure(0u, {}, options, frame->m_style);
+    if(!metrics){
         m_context.fail();
         return result;
     }
+    frame->m_metrics = *metrics;
     const bool previouslyFocused = m_context.input().focus() == widget->id;
     __hidden_builder_radio_group::ReconcileGuard guard(m_context);
     for(const BuilderScopeFrame* scope = m_scope.get(); scope; scope = scope->m_parent){
@@ -114,7 +116,10 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
             return result;
         }
     }
-    const bool reconciled = RadioGroupBehavior::Reconcile(state, source, frame->m_choices, result, &guard);
+    const auto choices = RadioGroupBehavior::Reconcile(state, source, result, &guard);
+    const bool reconciled = choices.has_value();
+    if(choices)
+        frame->m_choices = *choices;
     if(m_context.failed()){
         result.valid = false;
         return result;
@@ -138,9 +143,8 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
     interactive = interactive && options.enabled;
     if(!interactive)
         m_context.input().invalidateTarget(widget->id);
-    ControlAction action;
-    while(m_context.takeControlAction(*widget, interactive, frame->m_token, action)){
-        if(!RadioGroupBehavior::Apply(state, frame->m_choices, options, action, result)){
+    while(auto action = m_context.takeControlAction(*widget, interactive, frame->m_token)){
+        if(!RadioGroupBehavior::Apply(state, frame->m_choices, options, *action, result)){
             result.valid = false;
             m_context.fail();
             return result;
@@ -161,11 +165,13 @@ RadioGroupResult Builder::radioGroup(const AStringView stableKey, const IListDat
     LayoutNodeDesc description;
     description.width = options.width;
     description.intrinsicSize = frame->m_metrics.contentSize;
-    if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, item.node)){
+    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
+    if(!admittedNode){
         result.valid = false;
         m_context.fail();
         return result;
     }
+    item.node = *admittedNode;
     m_scope->m_radioGroups.push_back(Move(frame));
     m_scope->m_items.push_back(Move(item));
     result.valid = true;
@@ -180,17 +186,16 @@ bool Builder::prepareRadioGroup(RadioGroupFrame& frame){
     for(u32 index = 0u; index < frame.m_choices.count; ++index){
         if(!radioGroupStateMatches(frame))
             return false;
-        TextLayout label(m_arena);
         const StringView text = frame.m_source.text(index);
         // Do not call any further source method until the temporary label has been shaped and copied.
-        if(!radioGroupStateMatches(frame)
-            || m_text.layout(textShapeRequest(text, frame.m_widgetStyle.fontSize), label) != TextLayoutStatus::Success)
+        if(!radioGroupStateMatches(frame))
             return false;
-        if(!radioGroupMatches(frame))
+        auto label = m_text.layout(textShapeRequest(text, frame.m_widgetStyle.fontSize));
+        if(!label || !radioGroupMatches(frame))
             return false;
-        maximumLabel.x = Max(maximumLabel.x, label.measure().x);
-        maximumLabel.y = Max(maximumLabel.y, label.measure().y);
-        frame.m_labels.push_back(Move(label));
+        maximumLabel.x = Max(maximumLabel.x, label->measure().x);
+        maximumLabel.y = Max(maximumLabel.y, label->measure().y);
+        frame.m_labels.push_back(Move(*label));
     }
     const UiSkinRegion* normal = region(frame.m_style.normal, frame.m_style.fallback);
     const UiSkinRegion* checked = region(frame.m_style.checked, frame.m_style.checkedFallback);
@@ -210,10 +215,11 @@ bool Builder::prepareRadioGroup(RadioGroupFrame& frame){
             Max(Max(skinRegion->minimumWidth, skinRegion->minimumHeight), Max(horizontal, vertical))
         );
     }
-    return
-        RadioGroupLayout::Measure(frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style, frame.m_metrics)
-        && radioGroupMatches(frame)
-    ;
+    const auto metrics = RadioGroupLayout::Measure(frame.m_choices.count, maximumLabel, frame.m_options, frame.m_style);
+    if(!metrics)
+        return false;
+    frame.m_metrics = *metrics;
+    return radioGroupMatches(frame);
 }
 
 

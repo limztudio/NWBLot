@@ -66,27 +66,25 @@ static CacheReadStatus::Enum TryReadCachedBytecode(
     const Path& bytecodePath,
     Core::GraphicsBytes& outBytecode
 ){
-    ErrorCode errorCode;
-    if(ReadBinaryFile(bytecodePath, outBytecode, errorCode)){
+    const auto read = ReadBinaryFile(bytecodePath, outBytecode);
+    if(read){
         const Core::ShaderType::Enum shaderType = Core::ShaderStageNames::ShaderTypeFromArchiveStageName(ToName(entry.stage.view()));
-        AStringView validatedEntryPoint;
         if(Core::ResolveSpirvEntryPointName(
             BinaryByteView{ outBytecode.data(), outBytecode.size() },
             AStringView(entry.entryPoint),
-            Core::ShaderType::ToMask(shaderType),
-            validatedEntryPoint
-        ) == Core::SpirvEntryPointLookupResult::Found)
+            Core::ShaderType::ToMask(shaderType)
+        ))
             return CacheReadStatus::Hit;
 
         outBytecode.clear();
         return CacheReadStatus::Miss;
     }
 
-    if(errorCode && !IsMissingPathError(errorCode)){
+    if(!IsMissingPathError(read.error())){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to read bytecode cache '{}' for entry '{}': {}")
             , PathToString<tchar>(bytecodePath)
             , StringConvert(entry.name)
-            , StringConvert(errorCode.message())
+            , StringConvert(read.error().message())
         );
         return CacheReadStatus::Error;
     }
@@ -111,7 +109,6 @@ static bool GetVariantBytecode(
     Core::GraphicsBytes& outBytecode,
     ScratchArena& scratchArena
 ){
-    ErrorCode errorCode;
 
     outBytecode.clear();
 
@@ -153,11 +150,11 @@ static bool GetVariantBytecode(
         return lhs.name < rhs.name;
     });
 
-    errorCode.clear();
-    if(!EnsureDirectories(bytecodeCachePath.parentPath(), errorCode)){
+    auto ensureDirectoriesResult = EnsureDirectories(bytecodeCachePath.parentPath());
+    if(!ensureDirectoriesResult){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to create cache directory '{}': {}")
             , PathToString<tchar>(bytecodeCachePath.parentPath())
-            , StringConvert(errorCode.message())
+            , StringConvert(ensureDirectoriesResult.error().message())
         );
         return false;
     }
@@ -182,30 +179,27 @@ static bool GetVariantBytecode(
 }
 
 
-static bool ReserveShaderIndexRecords(
+static Expected<usize> ReserveShaderIndexRecords(
     const PreparedShaderVector& preparedEntries,
-    Core::GraphicsVector<Core::ShaderArchive::Record>& outShaderIndexRecords,
-    usize& outShaderRecordCount
+    Core::GraphicsVector<Core::ShaderArchive::Record>& inOutShaderIndexRecords
 ){
-    outShaderRecordCount = 0u;
-
     u64 shaderRecordCount = 0;
     for(const PreparedShaderEntry& preparedEntry : preparedEntries){
         if(shaderRecordCount > Limit<u64>::s_Max - preparedEntry.variantCount){
             NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: shader record count overflow"));
-            return false;
+            return MakeUnexpected(Failure{});
         }
         shaderRecordCount += preparedEntry.variantCount;
     }
     if(shaderRecordCount > static_cast<u64>(Limit<usize>::s_Max)){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: shader record count exceeds container capacity"));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outShaderIndexRecords.clear();
-    outShaderRecordCount = static_cast<usize>(shaderRecordCount);
-    outShaderIndexRecords.reserve(outShaderRecordCount);
-    return true;
+    inOutShaderIndexRecords.clear();
+    const usize count = static_cast<usize>(shaderRecordCount);
+    inOutShaderIndexRecords.reserve(count);
+    return count;
 }
 
 static bool AppendShaderIndexToManifest(
@@ -222,12 +216,12 @@ static bool AppendShaderIndexToManifest(
         return false;
     }
 
-    Core::GraphicsBytes indexBinary{cookArena};
-    if(!Core::ShaderArchive::SerializeIndex(shaderIndexRecords, indexBinary)){
+    const auto indexBinary = Core::ShaderArchive::SerializeIndex(cookArena, shaderIndexRecords);
+    if(!indexBinary){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to serialize shader index"));
         return false;
     }
-    if(Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, shaderIndexVirtualPath, indexBinary))
+    if(Core::Assets::AssetsVolumeCookDetail::AppendPayloadBytesToManifest(manifest, shaderIndexVirtualPath, *indexBinary))
         return true;
 
     NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: failed to append shader index to manifest"));
@@ -275,13 +269,17 @@ bool AppendPreparedShadersToManifest(
     ScratchArena& scratchArena
 ){
     Core::GraphicsVector<Core::ShaderArchive::Record> shaderIndexRecords{cookArena};
-    usize shaderRecordCount = 0u;
-    if(!__hidden_shader_volume_writer::ReserveShaderIndexRecords(preparedEntries, shaderIndexRecords, shaderRecordCount))
+    const auto shaderRecordCount = __hidden_shader_volume_writer::ReserveShaderIndexRecords(preparedEntries, shaderIndexRecords);
+    if(!shaderRecordCount)
         return false;
 
     u64 compilerFingerprint = 0u;
-    if(!preparedEntries.empty() && !SlangShaderCompiler::ComputeCompilerFingerprint(cacheDirectory, compilerFingerprint, scratchArena))
-        return false;
+    if(!preparedEntries.empty()){
+        const auto fingerprint = SlangShaderCompiler::ComputeCompilerFingerprint(cacheDirectory, scratchArena);
+        if(!fingerprint)
+            return false;
+        compilerFingerprint = *fingerprint;
+    }
 
     Core::GraphicsBytes cookedBytecode{cookArena};
     Core::GraphicsBytes shaderAssetPayload{cookArena};
@@ -383,7 +381,7 @@ bool AppendPreparedShadersToManifest(
             record.sourceChecksum = sourceChecksum;
             record.bytecodeChecksum = bytecodeChecksum;
             record.virtualPathHash = virtualPathHash;
-            if(shaderIndexRecords.size() >= shaderRecordCount){
+            if(shaderIndexRecords.size() >= *shaderRecordCount){
                 NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: shader record count exceeded prepared capacity"));
                 return false;
             }
@@ -405,17 +403,17 @@ bool AppendPreparedShadersToManifest(
                 return false;
 
             if(preparedEntry.supportsCsgClipVariant || preparedEntry.supportsAvboitCsgClipVariant){
-                ShaderCook::DefineCombo csgDefineCombo{0, Hasher<CookString>(), EqualTo<CookString>(), cookArena};
-                if(!AssetsGraphicsCsgShaderVariants::BuildClipDefineCombo(cookArena, AStringView(entry.name), defineCombo, csgDefineCombo))
+                const auto csgDefineCombo = AssetsGraphicsCsgShaderVariants::BuildClipDefineCombo(cookArena, AStringView(entry.name), defineCombo);
+                if(!csgDefineCombo)
                     return false;
 
-                if(!appendShaderVariant(csgDefineCombo))
+                if(!appendShaderVariant(*csgDefineCombo))
                     return false;
             }
         }
     }
 
-    if(shaderIndexRecords.size() != shaderRecordCount){
+    if(shaderIndexRecords.size() != *shaderRecordCount){
         NWB_LOGGER_ERROR(NWB_TEXT("AssetBuilder: shader record count mismatch after cook"));
         return false;
     }

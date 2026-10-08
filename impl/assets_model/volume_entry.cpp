@@ -29,12 +29,11 @@ namespace __hidden_assets_model_volume_entry{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseModelDocument(
+static Expected<ModelCookEntry> ParseModelDocument(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    ModelCookEntry& outEntry,
     Core::Assets::CookEntryParseContext& context
 ){
     return ParseModelCookMetadata(
@@ -42,30 +41,29 @@ static bool ParseModelDocument(
         virtualRoot,
         nwbFilePath,
         doc,
-        outEntry,
+        context.cookArena,
         context.scratchArena
     );
 }
 
-static bool ParseModelValue(
+static Expected<ModelCookEntry> ParseModelValue(
     const Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    ModelCookEntry& outEntry,
     Core::Assets::CookEntryParseContext& context
 ){
     return ParseModelCookMetadata(
         virtualPath,
         nwbFilePath,
         asset,
-        outEntry,
+        context.cookArena,
         context.scratchArena
     );
 }
 
-static bool BuildModelCookedAsset(ModelCookEntry& entry, Model& outAsset){
+static Expected<Model> BuildModelCookedAsset(ModelCookEntry& entry, Core::Assets::AssetArena& arena){
     Core::Alloc::ScratchArena scratchArena(AssetsModelArenaScope::s_BuildAssetArena);
-    return Core::Assets::ForwardCookBuildWithScratch(entry, outAsset, scratchArena, &BuildModelAsset);
+    return Core::Assets::ForwardCookBuildWithScratch(entry, arena, scratchArena, &BuildModelAsset);
 }
 
 static bool RegisterModelCookEntry(Core::Assets::CookEntryRegistry& registry){

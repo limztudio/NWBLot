@@ -384,21 +384,22 @@ void GpuTimingRecorder::reservePendingAttributionSamplesLocked(SampleDispatchVec
     outSamples.reserve(requiredCapacity);
 }
 
-bool GpuTimingRecorder::retireMarkedPendingAttributionLocked(SampleDispatch& outDispatch)noexcept{
+Expected<GpuTimingRecorder::SampleDispatch> GpuTimingRecorder::retireMarkedPendingAttributionLocked()noexcept{
     for(auto it = m_accumulators.begin(); it != m_accumulators.end(); ++it){
-        if(it.value()->retireMarkedAttribution(outDispatch))
-            return true;
+        const auto dispatch = it.value()->retireMarkedAttribution();
+        if(dispatch)
+            return *dispatch;
     }
     m_pendingAttributionRetirements = false;
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 void GpuTimingRecorder::retireMarkedPendingAttributionsLocked(SampleDispatchVector& outSamples){
     for(;;){
-        SampleDispatch dispatch;
-        if(!retireMarkedPendingAttributionLocked(dispatch))
+        const auto dispatch = retireMarkedPendingAttributionLocked();
+        if(!dispatch)
             return;
-        outSamples.push_back(dispatch);
+        outSamples.push_back(*dispatch);
     }
 }
 

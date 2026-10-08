@@ -23,20 +23,19 @@ namespace __hidden_builder_slider{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool MinimumSize(const UiSkinRegion& region, const f32 density, Point& out)noexcept{
+[[nodiscard]] static Expected<Point> MinimumSize(const UiSkinRegion& region, const f32 density)noexcept{
     if(
         !IsFinite(region.minimumWidth) || region.minimumWidth < 0.0f
         || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f
     )
-        return false;
+        return MakeUnexpected(Failure{});
     const f64 horizontal = static_cast<f64>(static_cast<u64>(region.sliceInsets.left) + region.sliceInsets.right) / density;
     const f64 vertical = static_cast<f64>(static_cast<u64>(region.sliceInsets.top) + region.sliceInsets.bottom) / density;
     const f64 width = Max(static_cast<f64>(region.minimumWidth), horizontal);
     const f64 height = Max(static_cast<f64>(region.minimumHeight), vertical);
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
-        return false;
-    out = { static_cast<f32>(width), static_cast<f32>(height) };
-    return true;
+        return MakeUnexpected(Failure{});
+    return Point{ static_cast<f32>(width), static_cast<f32>(height) };
 }
 
 
@@ -71,10 +70,17 @@ bool Builder::slider(const AStringView stableKey, SliderState& state, const Slid
     frame->m_style = m_sliderStyle;
     frame->m_snapshot = state.snapshot();
     frame->m_widget = *widget;
-    if(
-        !SliderBehavior::Validate(options) || !SliderLayout::Measure(options, frame->m_style, frame->m_metrics)
-        || !prepareSlider(*frame)
-    ){
+    if(!SliderBehavior::Validate(options)){
+        m_context.fail();
+        return false;
+    }
+    const auto metrics = SliderLayout::Measure(options, frame->m_style);
+    if(!metrics){
+        m_context.fail();
+        return false;
+    }
+    frame->m_metrics = *metrics;
+    if(!prepareSlider(*frame)){
         m_context.fail();
         return false;
     }
@@ -85,10 +91,12 @@ bool Builder::slider(const AStringView stableKey, SliderState& state, const Slid
     LayoutNodeDesc description;
     description.width = options.width;
     description.intrinsicSize = frame->m_metrics.contentSize;
-    if(!m_scope->m_layout.addNode(m_scope->m_stack.back(), description, item.node)){
+    const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
+    if(!admittedNode){
         m_context.fail();
         return false;
     }
+    item.node = *admittedNode;
     m_scope->m_sliders.push_back(Move(frame));
     m_scope->m_items.push_back(Move(item));
     return true;
@@ -101,25 +109,27 @@ bool Builder::prepareSlider(SliderFrame& frame){
     const UiSkinRegion* normal = region(frame.m_style.normal, frame.m_style.thumbFallback);
     if(!track || !normal)
         return false;
-    Point trackMinimum;
-    if(!__hidden_builder_slider::MinimumSize(*track, m_skin->referenceDensity(), trackMinimum))
+    const auto trackMinimum = __hidden_builder_slider::MinimumSize(*track, m_skin->referenceDensity());
+    if(!trackMinimum)
         return false;
-    frame.m_style.trackHeight = Max(frame.m_style.trackHeight, trackMinimum.y);
+    frame.m_style.trackHeight = Max(frame.m_style.trackHeight, trackMinimum->y);
     const UiSkinRegion* thumbs[]{ normal, m_skin->findRegion(frame.m_style.hover),
         m_skin->findRegion(frame.m_style.pressed), m_skin->findRegion(frame.m_style.disabled) };
     for(const UiSkinRegion* thumb : thumbs){
         if(!thumb)
             continue;
-        Point minimum;
-        if(!__hidden_builder_slider::MinimumSize(*thumb, m_skin->referenceDensity(), minimum))
+        const auto minimum = __hidden_builder_slider::MinimumSize(*thumb, m_skin->referenceDensity());
+        if(!minimum)
             return false;
-        frame.m_style.thumbExtent.x = Max(frame.m_style.thumbExtent.x, minimum.x);
-        frame.m_style.thumbExtent.y = Max(frame.m_style.thumbExtent.y, minimum.y);
+        frame.m_style.thumbExtent.x = Max(frame.m_style.thumbExtent.x, minimum->x);
+        frame.m_style.thumbExtent.y = Max(frame.m_style.thumbExtent.y, minimum->y);
     }
-    if(!SliderLayout::Measure(frame.m_options, frame.m_style, frame.m_metrics))
+    const auto metrics = SliderLayout::Measure(frame.m_options, frame.m_style);
+    if(!metrics)
         return false;
+    frame.m_metrics = *metrics;
     const f64 width = static_cast<f64>(frame.m_metrics.padding.left) + frame.m_metrics.padding.right
-        + frame.m_metrics.thumbExtent.x + trackMinimum.x;
+        + frame.m_metrics.thumbExtent.x + trackMinimum->x;
     if(!IsFinite(width) || width > Limit<f32>::s_Max)
         return false;
     frame.m_metrics.contentSize.x = Max(frame.m_metrics.contentSize.x, static_cast<f32>(width));

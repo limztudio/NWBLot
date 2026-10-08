@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "../expected.h"
 #include "matrix.h"
 #include "collision_types.h"
 
@@ -281,12 +282,11 @@ inline void FastIntersectPointsPlane(
     outInside = VectorGreaterOrEqual(minDistance, VectorZero());
 }
 
-[[nodiscard]] inline bool RayIntersectsMinMax(
+[[nodiscard]] inline Expected<f32> RayIntersectsMinMax(
     const SIMDVector origin,
     const SIMDVector direction,
     const SIMDVector minBounds,
-    const SIMDVector maxBounds,
-    f32& outDistance
+    const SIMDVector maxBounds
 )noexcept{
     const SIMDVector center = VectorScale(VectorAdd(minBounds, maxBounds), s_Half);
     const SIMDVector extents = VectorScale(VectorSubtract(maxBounds, minBounds), s_Half);
@@ -310,12 +310,10 @@ inline void FastIntersectPointsPlane(
     noIntersection = VectorOrInt(noIntersection, VectorAndCInt(isParallel, VectorInBounds(axisOrigin, extents)));
 
     if(Vector3AnyTrue(noIntersection)){
-        outDistance = 0.0f;
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    outDistance = VectorGetX(tMin);
-    return true;
+    return VectorGetX(tMin);
 }
 
 [[nodiscard]] inline SIMDVector ClosestPointOnTriangle(
@@ -369,13 +367,12 @@ inline void FastIntersectPointsPlane(
     );
 }
 
-[[nodiscard]] inline bool RayIntersectsTriangle(
+[[nodiscard]] inline Expected<f32> RayIntersectsTriangle(
     const SIMDVector origin,
     const SIMDVector direction,
     const SIMDVector v0,
     const SIMDVector v1,
-    const SIMDVector v2,
-    f32& outDistance
+    const SIMDVector v2
 )noexcept{
     const SIMDVector edge1 = VectorSubtract(v1, v0);
     const SIMDVector edge2 = VectorSubtract(v2, v0);
@@ -383,25 +380,24 @@ inline void FastIntersectPointsPlane(
     const SIMDVector determinant = Vector3Dot(edge1, p);
     const SIMDVector zero = VectorZero();
     if(Vector4LessOrEqual(VectorAbs(determinant), VectorReplicate(s_RayEpsilon)))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const SIMDVector inverseDeterminant = VectorReciprocal(determinant);
     const SIMDVector s = VectorSubtract(origin, v0);
     const SIMDVector u = VectorMultiply(Vector3Dot(s, p), inverseDeterminant);
     if(Vector4Less(u, zero) || Vector4Greater(u, s_SIMDOne))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const SIMDVector q = Vector3Cross(s, edge1);
     const SIMDVector v = VectorMultiply(Vector3Dot(direction, q), inverseDeterminant);
     if(Vector4Less(v, zero) || Vector4Greater(VectorAdd(u, v), s_SIMDOne))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const SIMDVector t = VectorMultiply(Vector3Dot(edge2, q), inverseDeterminant);
     if(Vector4Less(t, zero))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outDistance = VectorGetX(t);
-    return true;
+    return VectorGetX(t);
 }
 
 NWB_INLINE void ObbAxes(

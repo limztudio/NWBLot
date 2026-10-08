@@ -65,18 +65,18 @@ static ssize_t WriteWithoutSigpipe(const int fd, const AStringView bytes)noexcep
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool OpenClipboardPipe(int& readFd, int& writeFd)noexcept{
+Expected<ClipboardPipe> OpenClipboardPipe()noexcept{
     int descriptors[2]{ -1, -1 };
     if(pipe(descriptors) != 0)
-        return false;
-    readFd = descriptors[0];
-    writeFd = descriptors[1];
+        return MakeUnexpected(Failure{});
+    int readFd = descriptors[0];
+    int writeFd = descriptors[1];
     const int writeFlags = fcntl(writeFd, F_GETFD);
     if(ConfigureClipboardPipe(readFd) && writeFlags >= 0 && fcntl(writeFd, F_SETFD, writeFlags | FD_CLOEXEC) == 0)
-        return true;
+        return ClipboardPipe{ .readFd = readFd, .writeFd = writeFd };
     CloseClipboardPipe(readFd);
     CloseClipboardPipe(writeFd);
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 bool ConfigureClipboardPipe(const int fd)noexcept{
@@ -97,8 +97,7 @@ void CloseClipboardPipe(int& fd)noexcept{
         TerminateInvariant();
 }
 
-ClipboardStatus::Enum ReadClipboardPipe(const int fd, ClipboardTextAccumulator& text, bool& finished){
-    finished = false;
+Expected<bool, ClipboardPipeReadFailure> ReadClipboardPipe(const int fd, ClipboardTextAccumulator& text){
     Array<char, 4096u> bytes{};
     usize consumed = 0u;
     usize calls = 0u;
@@ -108,19 +107,21 @@ ClipboardStatus::Enum ReadClipboardPipe(const int fd, ClipboardTextAccumulator& 
         if(count > 0){
             const ClipboardStatus::Enum status = text.appendBytes(AStringView(bytes.data(), static_cast<usize>(count)));
             if(status != ClipboardStatus::Success)
-                return status;
+                return MakeUnexpected(ClipboardPipeReadFailure{ .status = status });
             consumed += static_cast<usize>(count);
         }
         else if(count == 0){
-            finished = true;
-            return ValidateClipboardUtf8Text(text.text());
+            const auto status = ValidateClipboardUtf8Text(text.text());
+            if(status != ClipboardStatus::Success)
+                return MakeUnexpected(ClipboardPipeReadFailure{ .status = status, .finished = true });
+            return true;
         }
         else if(errno == EAGAIN || errno == EWOULDBLOCK)
-            return ClipboardStatus::Success;
+            return false;
         else if(errno != EINTR)
-            return ClipboardStatus::NativeFailure;
+            return MakeUnexpected(ClipboardPipeReadFailure{});
     }
-    return ClipboardStatus::Success;
+    return false;
 }
 
 

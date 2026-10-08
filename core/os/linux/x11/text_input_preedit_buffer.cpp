@@ -22,25 +22,22 @@ namespace __hidden_x11_preedit{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static bool ByteOffset(const AStringView text, const usize character, usize& offset)noexcept{
+[[nodiscard]] static Expected<usize> ByteOffset(const AStringView text, const usize character)noexcept{
     usize position = 0u;
     usize index = 0u;
     while(position < text.size()){
         if(index == character){
-            offset = position;
-            return true;
+            return position;
         }
-        u32 codePoint = 0u;
-        const i32 bytes = DecodeUtf8CodePoint(text.substr(position), codePoint);
-        if(bytes <= 0 || codePoint == 0u || (codePoint >= 0xD800u && codePoint <= 0xDFFFu))
-            return false;
-        position += static_cast<usize>(bytes);
+        const auto decoded = DecodeUtf8CodePoint(text.substr(position));
+        if(!decoded || decoded->codePoint == 0u || (decoded->codePoint >= 0xD800u && decoded->codePoint <= 0xDFFFu))
+            return MakeUnexpected(Failure{});
+        position += static_cast<usize>(decoded->byteCount);
         ++index;
     }
     if(index != character)
-        return false;
-    offset = position;
-    return true;
+        return MakeUnexpected(Failure{});
+    return position;
 }
 
 [[nodiscard]] static bool ValidUtf8(const AStringView text)noexcept{
@@ -48,11 +45,10 @@ namespace __hidden_x11_preedit{
         return false;
     usize position = 0u;
     while(position < text.size()){
-        u32 codePoint = 0u;
-        const i32 bytes = DecodeUtf8CodePoint(text.substr(position), codePoint);
-        if(bytes <= 0 || codePoint == 0u || (codePoint >= 0xD800u && codePoint <= 0xDFFFu))
+        const auto decoded = DecodeUtf8CodePoint(text.substr(position));
+        if(!decoded || decoded->codePoint == 0u || (decoded->codePoint >= 0xD800u && decoded->codePoint <= 0xDFFFu))
             return false;
-        position += static_cast<usize>(bytes);
+        position += static_cast<usize>(decoded->byteCount);
     }
     return true;
 }
@@ -80,35 +76,37 @@ bool X11PreeditBuffer::replace(
     const usize caretCharacter
 ){
     using namespace __hidden_x11_preedit;
-    usize firstByte = 0u;
-    usize lastByte = 0u;
     if(characterCount > s_MaxBytes || firstCharacter > s_MaxBytes - characterCount)
         return false;
-    if(!ValidUtf8(insertion) || !ByteOffset(m_text, firstCharacter, firstByte))
+    if(!ValidUtf8(insertion))
         return false;
-    if(!ByteOffset(m_text, firstCharacter + characterCount, lastByte))
+    const auto firstByte = ByteOffset(m_text, firstCharacter);
+    if(!firstByte)
         return false;
-    const usize remainingBytes = m_text.size() - (lastByte - firstByte);
+    const auto lastByte = ByteOffset(m_text, firstCharacter + characterCount);
+    if(!lastByte)
+        return false;
+    const usize remainingBytes = m_text.size() - (*lastByte - *firstByte);
     if(insertion.size() > s_MaxBytes - remainingBytes)
         return false;
     m_candidate.clear();
-    m_candidate.append(m_text.data(), firstByte);
+    m_candidate.append(m_text.data(), *firstByte);
     if(!insertion.empty())
         m_candidate.append(insertion.data(), insertion.size());
-    m_candidate.append(m_text.data() + lastByte, m_text.size() - lastByte);
-    usize caretByte = 0u;
-    if(!ByteOffset(m_candidate, caretCharacter, caretByte))
+    m_candidate.append(m_text.data() + *lastByte, m_text.size() - *lastByte);
+    const auto caretByte = ByteOffset(m_candidate, caretCharacter);
+    if(!caretByte)
         return false;
     m_text.swap(m_candidate);
-    m_caretByte = caretByte;
+    m_caretByte = *caretByte;
     return true;
 }
 
 bool X11PreeditBuffer::moveCaret(const usize caretCharacter)noexcept{
-    usize caretByte = 0u;
-    if(!__hidden_x11_preedit::ByteOffset(m_text, caretCharacter, caretByte))
+    const auto caretByte = __hidden_x11_preedit::ByteOffset(m_text, caretCharacter);
+    if(!caretByte)
         return false;
-    m_caretByte = caretByte;
+    m_caretByte = *caretByte;
     return true;
 }
 

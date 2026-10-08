@@ -328,15 +328,14 @@ Array<u64, 29u> UiNestedPopupSmokeScene::values()const{
 Impl::Ui::Rect UiNestedPopupSmokeScene::rowBounds(const Impl::Ui::ListState& state,
     const Impl::Ui::IListDataSource& source, const u64 key, const f32 rowHeight
 )const{
-    Impl::Ui::Rect result;
-    u64 index = 0u;
     const auto& placement = state.placement();
-    if(
-        !source.indexOf(key, index) || index < placement.firstRow || index >= placement.endRow
-        || !Impl::Ui::ScrollLayout::RowBounds(index, placement, rowHeight, result)
-    )
+    const auto index = source.indexOf(key);
+    if(!index || *index < placement.firstRow || *index >= placement.endRow)
         return {};
-    return result;
+    const auto result = Impl::Ui::ScrollLayout::RowBounds(*index, placement, rowHeight);
+    if(!result)
+        return {};
+    return *result;
 }
 
 

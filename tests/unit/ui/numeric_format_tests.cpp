@@ -33,9 +33,9 @@ TEST(UiNumericFormatTests, IntegerCanonicalTextRoundtripsExtremaWithoutFloatingP
         char buffer[s_NumericEditMaxBytes];
         const AStringView text = FormatI64(value, buffer);
         ASSERT_FALSE(text.empty());
-        i64 parsed = 0;
-        ASSERT_EQ(ParseIntegerDraft(text, parsed), NumericParseStatus::Complete);
-        EXPECT_EQ(parsed, value);
+        const auto parsed = ParseIntegerDraft(text);
+        ASSERT_TRUE(parsed);
+        EXPECT_EQ(*parsed, value);
         if(value == 9007199254740993ll)
             EXPECT_EQ(text, "9007199254740993");
         if(value == Limit<i64>::s_Min)
@@ -54,9 +54,9 @@ TEST(UiNumericFormatTests, ExtremeSubnormalSignedZeroAndAdjacentUlpValuesRoundtr
         char buffer[s_NumericEditMaxBytes];
         const AStringView text = FormatF64(BitCast<f64>(bits), buffer);
         ASSERT_FALSE(text.empty());
-        f64 parsed = 1.0;
-        ASSERT_EQ(ParseFloatDraft(text, parsed), NumericParseStatus::Complete);
-        EXPECT_EQ(BitCast<u64>(parsed), bits);
+        const auto parsed = ParseFloatDraft(text);
+        ASSERT_TRUE(parsed);
+        EXPECT_EQ(BitCast<u64>(*parsed), bits);
     }
 }
 

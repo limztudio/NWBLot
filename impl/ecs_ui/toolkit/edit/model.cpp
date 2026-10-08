@@ -71,15 +71,15 @@ EditModel::EditModel(Core::Alloc::GlobalArena& arena, const EditLimits& limits, 
 bool EditModel::setText(const AStringView value){
     if(value.size() > m_limits.maxBytes)
         return false;
-    EditBoundaryVector boundaries(m_arena);
-    if(!buildBoundaries(value, boundaries))
+    auto boundaries = buildBoundaries(value);
+    if(!boundaries)
         return false;
     AString<Core::Alloc::GlobalArena> candidate(m_arena);
     if(!value.empty())
         candidate.assign(value.data(), value.size());
     const bool changed = value != text();
     m_text = Move(candidate);
-    m_boundaries = Move(boundaries);
+    m_boundaries = Move(*boundaries);
     m_anchor = m_text.size();
     m_caret = m_anchor;
     advanceSelectionGeneration();
@@ -143,12 +143,12 @@ bool EditModel::replaceRange(const usize begin, const usize end, const AStringVi
     if(!replacement.empty())
         candidate.append(replacement.data(), replacement.size());
     candidate.append(m_text.data() + end, m_text.size() - end);
-    EditBoundaryVector boundaries(m_arena);
-    if(!buildBoundaries({ candidate.data(), candidate.size() }, boundaries))
+    auto boundaries = buildBoundaries({ candidate.data(), candidate.size() });
+    if(!boundaries)
         return false;
     // Inserted combining marks and neighboring emoji may merge clusters; keep the caret at a valid following edge.
     usize caret = begin + replacement.size();
-    for(const usize boundary : boundaries){
+    for(const usize boundary : *boundaries){
         if(boundary >= caret){
             caret = boundary;
             break;
@@ -159,7 +159,7 @@ bool EditModel::replaceRange(const usize begin, const usize end, const AStringVi
     if(changed)
         recordHistory(text(), m_anchor, m_caret, after, caret, caret);
     m_text = Move(candidate);
-    m_boundaries = Move(boundaries);
+    m_boundaries = Move(*boundaries);
     m_anchor = caret;
     m_caret = caret;
     advanceSelectionGeneration();
@@ -173,10 +173,10 @@ bool EditModel::validateText(const AStringView value)const{
     return m_textMode == EditTextMode::SingleLine ? GraphemeSegmentation::Validate(value, true) : ValidateMultilineText(value);
 }
 
-bool EditModel::buildBoundaries(const AStringView value, Vector<usize, Core::Alloc::GlobalArena>& output)const{
+Expected<Vector<usize, Core::Alloc::GlobalArena>> EditModel::buildBoundaries(const AStringView value)const{
     if(m_textMode == EditTextMode::Multiline && !ValidateMultilineText(value))
-        return false;
-    return GraphemeSegmentation::Build(value, output, m_textMode == EditTextMode::SingleLine);
+        return MakeUnexpected(Failure{});
+    return GraphemeSegmentation::Build(m_arena, value, m_textMode == EditTextMode::SingleLine);
 }
 
 void EditModel::advanceRevision()noexcept{

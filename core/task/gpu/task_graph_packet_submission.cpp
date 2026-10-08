@@ -23,14 +23,14 @@ bool GpuTaskGraph::packetReadyForSubmission(
     const GpuSubmissionPacketId packet,
     const u64 recordingAttemptGeneration
 )const noexcept{
-    GpuCompiledPacketView packetView;
+    Expected<GpuCompiledPacketView> packetView = MakeUnexpected(Failure{});
     if(
-        !ResolvePacketView(compiledGraph, planAccess, packet, packetView)
+        !(packetView = ResolvePacketView(compiledGraph, planAccess, packet))
         || recordingAttemptGeneration == 0u
     )
         return false;
-    const GpuSubmissionPacket& packetPlan = *packetView.plan;
-    const GpuTaskId* const tasks = packetView.tasks;
+    const GpuSubmissionPacket& packetPlan = *packetView->plan;
+    const GpuTaskId* const tasks = packetView->tasks;
 
     NothrowScopedLock lock(m_lifecycleMutex);
     if(
@@ -65,16 +65,16 @@ bool GpuTaskGraph::beginPacketSubmission(
     const GpuGraphSubmissionBinding& submissionBinding,
     PacketSubmissionLease& outLease
 )const noexcept{
-    GpuCompiledPacketView packetView;
+    Expected<GpuCompiledPacketView> packetView = MakeUnexpected(Failure{});
     if(
-        !ResolvePacketView(compiledGraph, planAccess, packet, packetView)
+        !(packetView = ResolvePacketView(compiledGraph, planAccess, packet))
         || recordingAttemptGeneration == 0u
         || !submissionBinding.valid()
         || outLease.valid()
     )
         return false;
-    const GpuSubmissionPacket& packetPlan = *packetView.plan;
-    const GpuTaskId* const tasks = packetView.tasks;
+    const GpuSubmissionPacket& packetPlan = *packetView->plan;
+    const GpuTaskId* const tasks = packetView->tasks;
 
     NothrowScopedLock lock(m_lifecycleMutex);
     if(
@@ -334,16 +334,16 @@ bool GpuTaskGraph::abandonPacketSubmissionWithoutCallbacks(
     const GpuSubmissionPacketId packet,
     PacketSubmissionLease& lease
 )const noexcept{
-    GpuCompiledPacketView packetView;
+    Expected<GpuCompiledPacketView> packetView = MakeUnexpected(Failure{});
     if(
-        !ResolvePacketView(compiledGraph, planAccess, packet, packetView)
+        !(packetView = ResolvePacketView(compiledGraph, planAccess, packet))
         || !lease.valid()
         || lease.m_packet != packet
         || lease.m_planGeneration != planAccess.planGeneration()
     )
         return false;
-    const GpuSubmissionPacket& packetPlan = *packetView.plan;
-    const GpuTaskId* const tasks = packetView.tasks;
+    const GpuSubmissionPacket& packetPlan = *packetView->plan;
+    const GpuTaskId* const tasks = packetView->tasks;
 
     NothrowScopedLock lock(m_lifecycleMutex);
     if(

@@ -365,21 +365,20 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
         )
     )
         return {};
-    GraphicsBackend::TextureClearValueKind::Enum valueKind;
-    GraphicsBackend::TextureClearContract clearContract;
+    const auto valueKind = GpuTaskGraphClearDetail::TryMapTextureClearValueKind(clearDesc.valueType);
+    Expected<GraphicsBackend::TextureClearContract> clearContract = MakeUnexpected(Failure{});
     if(
-        !GpuTaskGraphClearDetail::TryMapTextureClearValueKind(clearDesc.valueType, valueKind)
-        || !GraphicsBackend::ResolveTextureClearContract(
+        !valueKind
+        || !(clearContract = GraphicsBackend::ResolveTextureClearContract(
             destinationResource.texture->getCreationDescription(),
             clearDesc.subresources,
-            valueKind,
+            *valueKind,
             clearDesc.clearDepth,
-            clearDesc.clearStencil,
-            clearContract
-        )
+            clearDesc.clearStencil
+        ))
     )
         return {};
-    const TextureSubresourceSet resolvedSubresources = clearContract.subresources;
+    const TextureSubresourceSet resolvedSubresources = clearContract->subresources;
 
     using ClearTask = __hidden_gpu_task_graph_builtin_clears::ClearTextureTask;
     ClearTask::Payload* const payloadObject = NewArenaObject<ClearTask::Payload>(m_arena);
@@ -403,7 +402,7 @@ GpuTaskId GpuTaskGraph::addClearTextureTask(const GpuTaskDesc& desc, const GpuCl
     };
     GpuTaskDesc resolvedDesc = desc;
     GpuTaskCommandRequirements commands = __hidden_gpu_task_graph_builtin_clears::TextureClearCommandRequirements(
-        clearContract.queueRequirement
+        clearContract->queueRequirement
     );
     if(!__hidden_gpu_task_graph_builtin_clears::IncludeHookCommandRequirements(
         commands,
@@ -447,17 +446,16 @@ GpuTaskId GpuTaskGraph::addClearTextureRectUIntTask(
         )
     )
         return {};
-    GraphicsBackend::TextureClearContract clearContract;
-    if(!GraphicsBackend::ResolveTextureClearContract(
+    Expected<GraphicsBackend::TextureClearContract> clearContract = MakeUnexpected(Failure{});
+    if(!(clearContract = GraphicsBackend::ResolveTextureClearContract(
         destinationResource.texture->getCreationDescription(),
         clearDesc.subresources,
         GraphicsBackend::TextureClearValueKind::UInt,
         false,
-        false,
-        clearContract
-    ))
+        false
+    )))
         return {};
-    const TextureSubresourceSet resolvedSubresources = clearContract.subresources;
+    const TextureSubresourceSet resolvedSubresources = clearContract->subresources;
 
     using ClearTask = __hidden_gpu_task_graph_builtin_clears::ClearTextureRectUIntTask;
     ClearTask::Payload* const payloadObject = NewArenaObject<ClearTask::Payload>(m_arena);

@@ -97,15 +97,14 @@ void ShaderSourceDependencies::MaskSourceComments(AString<Alloc::ScratchArena>& 
     }
 }
 
-bool ShaderSourceDependencies::ExtractIncludeDirective(const AStringView line, AStringView& outIncludeName, ShaderSourceDependencies::IncludeKind::Enum& outKind)noexcept{
-    outIncludeName = {};
-    outKind = ShaderSourceDependencies::IncludeKind::Relative;
+Expected<ShaderSourceDependencies::IncludeDirective> ShaderSourceDependencies::ExtractIncludeDirective(const AStringView line)noexcept{
+    IncludeDirective include;
 
     usize cursor = 0u;
     while(cursor < line.size() && IsAsciiSpace(line[cursor]))
         ++cursor;
     if(cursor >= line.size() || line[cursor] != '#')
-        return false;
+        return MakeUnexpected(Failure{});
     ++cursor;
     while(cursor < line.size() && IsAsciiSpace(line[cursor]))
         ++cursor;
@@ -114,81 +113,78 @@ bool ShaderSourceDependencies::ExtractIncludeDirective(const AStringView line, A
         ++cursor;
     const AStringView directive = line.substr(directiveBegin, cursor - directiveBegin);
     if(directive == "include_next" || directive == "import"){
-        outKind = ShaderSourceDependencies::IncludeKind::Unsupported;
-        outIncludeName = TrimView(line.substr(cursor));
-        return true;
+        include.kind = ShaderSourceDependencies::IncludeKind::Unsupported;
+        include.name = TrimView(line.substr(cursor));
+        return include;
     }
     if(directive != AStringView("include"))
-        return false;
+        return MakeUnexpected(Failure{});
     while(cursor < line.size() && IsAsciiSpace(line[cursor]))
         ++cursor;
     if(cursor >= line.size()){
-        outKind = ShaderSourceDependencies::IncludeKind::Unsupported;
-        return true;
+        include.kind = ShaderSourceDependencies::IncludeKind::Unsupported;
+        return include;
     }
 
     char closingDelimiter = '"';
     if(line[cursor] == '"')
-        outKind = ShaderSourceDependencies::IncludeKind::Relative;
+        include.kind = ShaderSourceDependencies::IncludeKind::Relative;
     else if(line[cursor] == '<'){
-        outKind = ShaderSourceDependencies::IncludeKind::Standard;
+        include.kind = ShaderSourceDependencies::IncludeKind::Standard;
         closingDelimiter = '>';
     }
     else{
-        outKind = ShaderSourceDependencies::IncludeKind::Macro;
-        outIncludeName = TrimView(line.substr(cursor));
-        return true;
+        include.kind = ShaderSourceDependencies::IncludeKind::Macro;
+        include.name = TrimView(line.substr(cursor));
+        return include;
     }
     ++cursor;
     const usize closingDelimiterPos = line.find(closingDelimiter, cursor);
     if(closingDelimiterPos == AStringView::npos || closingDelimiterPos <= cursor){
-        outKind = ShaderSourceDependencies::IncludeKind::Unsupported;
-        return true;
+        include.kind = ShaderSourceDependencies::IncludeKind::Unsupported;
+        return include;
     }
-    outIncludeName = line.substr(cursor, closingDelimiterPos - cursor);
-    return true;
+    include.name = line.substr(cursor, closingDelimiterPos - cursor);
+    return include;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool ShaderSourceDependencies::ResolveIncludeFile(const AStringView includeName, const ShaderSourceDependencies::IncludeKind::Enum kind, const Path& sourceDirectory, const ShaderCook::CookVector<Path>& includeDirectories, Path& outPath){
-    ErrorCode errorCode;
+Expected<Path> ShaderSourceDependencies::ResolveIncludeFile(const AStringView includeName, const ShaderSourceDependencies::IncludeKind::Enum kind, const Path& sourceDirectory, const ShaderCook::CookVector<Path>& includeDirectories){
 
     if(kind == ShaderSourceDependencies::IncludeKind::Relative){
         const Path localCandidate = (sourceDirectory / includeName).lexicallyNormal();
-        errorCode.clear();
-        if(IsRegularFile(localCandidate, errorCode)){
-            outPath = localCandidate;
-            return true;
+        const auto localCandidateQueryResult = IsRegularFile(localCandidate);
+        if(localCandidateQueryResult && *localCandidateQueryResult){
+            return localCandidate;
         }
-        if(errorCode && !IsMissingPathError(errorCode)){
+        if(!localCandidateQueryResult && !IsMissingPathError(localCandidateQueryResult.error())){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to query include candidate '{}': {}")
                 , PathToString<tchar>(localCandidate)
-                , StringConvert(errorCode.message())
+                , StringConvert(localCandidateQueryResult.error().message())
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
     for(const Path& includeDirectory : includeDirectories){
         const Path includeCandidate = (includeDirectory / includeName).lexicallyNormal();
-        errorCode.clear();
-        if(IsRegularFile(includeCandidate, errorCode)){
-            outPath = includeCandidate;
-            return true;
+        const auto includeCandidateQueryResult = IsRegularFile(includeCandidate);
+        if(includeCandidateQueryResult && *includeCandidateQueryResult){
+            return includeCandidate;
         }
-        if(errorCode && !IsMissingPathError(errorCode)){
+        if(!includeCandidateQueryResult && !IsMissingPathError(includeCandidateQueryResult.error())){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to query include candidate '{}': {}")
                 , PathToString<tchar>(includeCandidate)
-                , StringConvert(errorCode.message())
+                , StringConvert(includeCandidateQueryResult.error().message())
             );
-            return false;
+            return MakeUnexpected(Failure{});
         }
     }
 
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 

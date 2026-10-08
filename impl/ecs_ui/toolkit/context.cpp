@@ -186,17 +186,17 @@ bool Context::takeActivation(const WidgetState& state, const bool enabled){
     return !m_failed && m_input.consumeActivation(state.id);
 }
 
-bool Context::takePointerGesture(const WidgetState& state, const bool enabled, PointerGesture& gesture){
+Expected<PointerGesture> Context::takePointerGesture(const WidgetState& state, const bool enabled){
     if(m_failed || !currentDeclaration(state))
-        return false;
+        return MakeUnexpected(Failure{});
     if(!enabled){
         m_input.invalidateTarget(state.id);
-        return false;
+        return MakeUnexpected(Failure{});
     }
     const HitTarget* target = m_input.findTarget(state.id);
     if(target && target->popup != m_currentPopup)
-        return false;
-    return m_input.consumePointerGesture(state.id, state.declarationGeneration, gesture);
+        return MakeUnexpected(Failure{});
+    return m_input.consumePointerGesture(state.id, state.declarationGeneration);
 }
 
 bool Context::finishFrame(){

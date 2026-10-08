@@ -184,8 +184,13 @@ void CommandList::GraphRecordingOwnership::detachCapability()noexcept{
 
 CommandList::GraphSubmissionOwnership::GraphSubmissionOwnership(CommandList& commandList)noexcept
     : m_commandList(commandList)
-    , m_acquired(commandList.beginGraphSubmissionOwnership(m_recordingLeaseSerial))
-{}
+{
+    const auto recordingLeaseSerial = commandList.beginGraphSubmissionOwnership();
+    if(recordingLeaseSerial){
+        m_recordingLeaseSerial = *recordingLeaseSerial;
+        m_acquired = true;
+    }
+}
 CommandList::GraphSubmissionOwnership::~GraphSubmissionOwnership()noexcept{
     release();
 }

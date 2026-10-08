@@ -67,12 +67,12 @@ static constexpr AStringView s_SkinRowSuffixText = "] },\n";
     return leftOk && rightOk;
 }
 
-[[nodiscard]] bool FindListAssignmentRange(
+[[nodiscard]] Expected<TextReplacement> FindListAssignmentRange(
     const AStringView source,
     const AStringView variableName,
-    const AStringView fieldName,
-    TextReplacement& outRange
+    const AStringView fieldName
 ){
+    TextReplacement outRange;
     AString pattern;
     pattern.reserve(variableName.size() + fieldName.size() + 1u);
     pattern.append(variableName.data(), variableName.size());
@@ -134,18 +134,18 @@ static constexpr AStringView s_SkinRowSuffixText = "] },\n";
                 continue;
 
             if(depth == 0u)
-                return false;
+                return MakeUnexpected(Failure{});
             --depth;
             if(depth == 0u){
                 outRange.begin = listBegin;
                 outRange.end = cursor + 1u;
-                return true;
+                return outRange;
             }
         }
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 template<typename Value, typename WriteValue>
@@ -221,8 +221,8 @@ template<typename Value, typename WriteValue>
     const AStringView fieldName,
     AString&& replacementText
 ){
-    TextReplacement replacement;
-    if(!FindListAssignmentRange(source, variableName, fieldName, replacement)){
+    auto replacementResult = FindListAssignmentRange(source, variableName, fieldName);
+    if(!replacementResult){
         NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: missing '{}.{}' assignment")
             , StringConvert(variableName)
             , StringConvert(fieldName)
@@ -230,6 +230,7 @@ template<typename Value, typename WriteValue>
         return false;
     }
 
+    TextReplacement& replacement = *replacementResult;
     replacement.text = Move(replacementText);
     replacements.push_back(Move(replacement));
     return true;
@@ -298,13 +299,11 @@ template<typename Value, typename WriteValue>
     return false;
 }
 
-[[nodiscard]] const Core::Metascript::Value* FindSkinForMesh(
+[[nodiscard]] Expected<SkinReference> FindSkinForMesh(
     const Core::Metascript::Document& doc,
-    const AStringView meshVariableName,
-    AStringView& outSkinVariableName
+    const AStringView meshVariableName
 ){
-    const Core::Metascript::Value* result = nullptr;
-    outSkinVariableName = {};
+    SkinReference result;
 
     for(const Core::Metascript::Document::Declaration& declaration : doc.declarations()){
         if(!IsSameText(Core::Metascript::MStringView(declaration.type.data(), declaration.type.size()), s_SkinAssetTypeText))
@@ -319,13 +318,13 @@ template<typename Value, typename WriteValue>
         if(!meshField || !IsReferenceTo(*meshField, meshVariableName))
             continue;
 
-        if(result){
+        if(result.value){
             NWB_LOGGER_ERROR(NWB_TEXT("Failed to refresh NWB mesh: mesh '{}' has multiple skin assets"), StringConvert(meshVariableName));
-            return nullptr;
+            return MakeUnexpected(Failure{});
         }
 
-        result = skinAsset;
-        outSkinVariableName = skinVariable;
+        result.value = skinAsset;
+        result.variableName = skinVariable;
     }
 
     return result;

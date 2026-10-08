@@ -117,10 +117,9 @@ public:
 class RadioGroupBehavior final{
 public:
     // Copy the complete bounded source before atomically committing reconciliation; callbacks cannot reenter this state.
-    [[nodiscard]] static bool Reconcile(
+    [[nodiscard]] static Expected<RadioGroupChoices> Reconcile(
         RadioGroupState& state,
         const IListDataSource& source,
-        RadioGroupChoices& choices,
         RadioGroupResult& result,
         const IRadioGroupReconcileGuard* guard = nullptr
     );

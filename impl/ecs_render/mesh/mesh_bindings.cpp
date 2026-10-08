@@ -91,12 +91,11 @@ bool RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
     if(mesh.emulationVertexHeapHandle.valid())
         return true;
     if(!mesh.emulationVertexBuffer){
-        ECSRenderDetail::ComputeEmulationLayout layout;
-        if(!ECSRenderDetail::ResolveComputeEmulationLayout(
+        const auto layout = ECSRenderDetail::ResolveComputeEmulationLayout(
             mesh.meshletLocalVertexRefBuffer->getDescription().byteSize,
-            mesh.meshletPrimitiveIndexCount,
-            layout
-        )){
+            mesh.meshletPrimitiveIndexCount
+        );
+        if(!layout){
             NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: generated geometry layout exceeds the index byte-address range for mesh '{}'")
                 , StringConvert(mesh.meshName.resolvedText())
             );
@@ -112,7 +111,7 @@ bool RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
 
         Core::BufferDesc emulationVertexBufferDesc;
         emulationVertexBufferDesc
-            .setByteSize(layout.bufferByteSize)
+            .setByteSize(layout->bufferByteSize)
             .setStructStride(ECSRenderDetail::s_EmulatedVertexStride)
             .setCanHaveRawViews(true)
             .setCanHaveUAVs(true)
@@ -128,7 +127,7 @@ bool RendererMeshSystem::prepareComputeEmulationResources(MeshResources& mesh){
             );
             return false;
         }
-        mesh.emulationIndexByteOffset = layout.indexByteOffset;
+        mesh.emulationIndexByteOffset = layout->indexByteOffset;
     }
 
     auto& device = m_graphics.getDevice();

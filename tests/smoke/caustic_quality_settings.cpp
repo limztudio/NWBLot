@@ -25,12 +25,12 @@ bool ApplyCausticQualitySmokeSettings(
     const Impl::CausticQualitySettings& baseSettings
 ){
     Impl::CausticQualitySettings settings = baseSettings;
-    SmokeEnvironmentString value(arena);
-    if(ReadSmokeEnvironmentText("NWB_CAUSTIC_PHOTON_GRID_DIVISOR", value)){
-        u64 parsed = 0u;
-        if(!ParseU64FromChars(AStringView(value.data(), value.size()), parsed) || parsed > Limit<u32>::s_Max)
+    const auto value = ReadSmokeEnvironmentText(arena, "NWB_CAUSTIC_PHOTON_GRID_DIVISOR");
+    if(value){
+        const auto parsed = ParseU64FromChars(AStringView(value->data(), value->size()));
+        if(!parsed || *parsed > Limit<u32>::s_Max)
             return false;
-        settings.photonGridDivisor = static_cast<u32>(parsed);
+        settings.photonGridDivisor = static_cast<u32>(*parsed);
     }
     if(!renderer.setCausticQualitySettings(settings))
         return false;

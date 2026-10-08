@@ -31,12 +31,11 @@ namespace __hidden_assets_mesh_volume_entries{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseMeshDocument(
+static Expected<MeshCookEntry> ParseMeshDocument(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    MeshCookEntry& outEntry,
     Core::Assets::CookEntryParseContext& context
 ){
     return ParseMeshCookMetadata(
@@ -44,24 +43,23 @@ static bool ParseMeshDocument(
         virtualRoot,
         nwbFilePath,
         doc,
-        outEntry,
+        context.cookArena,
         context.cpuScheduler,
         context.scratchArena
     );
 }
 
-static bool ParseMeshValue(
+static Expected<MeshCookEntry> ParseMeshValue(
     const Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    MeshCookEntry& outEntry,
     Core::Assets::CookEntryParseContext& context
 ){
     return ParseMeshCookMetadata(
         virtualPath,
         nwbFilePath,
         asset,
-        outEntry,
+        context.cookArena,
         context.cpuScheduler,
         context.scratchArena
     );
@@ -73,12 +71,11 @@ static bool RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry);
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-static bool ParseSkinDocument(
+static Expected<SkinCookEntry> ParseSkinDocument(
     const Path& assetRoot,
     const AStringView virtualRoot,
     const Path& nwbFilePath,
     const Core::Metascript::Document& doc,
-    SkinCookEntry& outEntry,
     Core::Assets::CookEntryParseContext& context
 ){
     return ParseSkinCookMetadata(
@@ -86,23 +83,22 @@ static bool ParseSkinDocument(
         virtualRoot,
         nwbFilePath,
         doc,
-        outEntry,
+        context.cookArena,
         context.scratchArena
     );
 }
 
-static bool ParseSkinValue(
+static Expected<SkinCookEntry> ParseSkinValue(
     const Name virtualPath,
     const Path& nwbFilePath,
     const Core::Metascript::Value& asset,
-    SkinCookEntry& outEntry,
-    Core::Assets::CookEntryParseContext&
+    Core::Assets::CookEntryParseContext& context
 ){
     return ParseSkinCookMetadata(
         virtualPath,
         nwbFilePath,
         asset,
-        outEntry
+        context.cookArena
     );
 }
 
@@ -112,14 +108,14 @@ static bool RegisterMeshCookEntries(Core::Assets::CookEntryRegistry& registry){
         MeshBinaryPayload::s_MeshAssetKindLabel,
         &ParseMeshDocument,
         &ParseMeshValue,
-        [](MeshCookEntry& entry, Mesh& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildMeshAsset); }
+        [](MeshCookEntry& entry, Core::Assets::AssetArena& arena){ return Core::Assets::ForwardCookBuild(entry, arena, &BuildMeshAsset); }
     )
         && Core::Assets::RegisterDocumentValueCookEntry<SkinCookEntry, Skin, SkinAssetCodec>(
             registry,
             SkinBinaryPayload::s_SkinAssetKindLabel,
             &ParseSkinDocument,
             &ParseSkinValue,
-            [](SkinCookEntry& entry, Skin& outAsset){ return Core::Assets::ForwardCookBuild(entry, outAsset, &BuildSkinAsset); }
+            [](SkinCookEntry& entry, Core::Assets::AssetArena& arena){ return Core::Assets::ForwardCookBuild(entry, arena, &BuildSkinAsset); }
         )
     ;
 }

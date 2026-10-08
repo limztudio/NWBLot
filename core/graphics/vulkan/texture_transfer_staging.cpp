@@ -23,7 +23,7 @@ namespace __hidden_texture_transfer_staging{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool BuildStagingTextureCopyRegion(
+[[nodiscard]] inline Expected<VkBufferImageCopy> BuildStagingTextureCopyRegion(
     const TextureSlice& stagingSlice,
     const TextureSlice& imageSlice,
     const VkImageAspectFlags aspectMask,
@@ -31,43 +31,41 @@ namespace __hidden_texture_transfer_staging{
     const VulkanDetail::TextureFormatBlockLayout& stagingFormatLayout,
     const u64 stagingArrayByteSize,
     const u64 stagingTotalByteSize,
-    const u32 requiredOffsetAlignment,
-    VkBufferImageCopy& outRegion
+    const u32 requiredOffsetAlignment
 ){
-    VulkanDetail::StagingTextureRange range;
-    if(!VulkanDetail::BuildStagingTextureRange(
+    const auto range = VulkanDetail::BuildStagingTextureRange(
         stagingSlice,
         stagingMipLayout,
         stagingFormatLayout,
         stagingArrayByteSize,
         stagingTotalByteSize,
         requiredOffsetAlignment,
-        false,
-        range
-    ))
-        return false;
+        false
+    );
+    if(!range)
+        return MakeUnexpected(Failure{});
     if(
-        (range.byteOffset % s_BufferAlignmentBytes) != 0u
-        || (range.byteOffset % stagingFormatLayout.bytesPerBlock) != 0u
+        (range->byteOffset % s_BufferAlignmentBytes) != 0u
+        || (range->byteOffset % stagingFormatLayout.bytesPerBlock) != 0u
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outRegion = {};
-    outRegion.bufferOffset = range.byteOffset;
-    outRegion.bufferRowLength = range.bufferRowLength;
-    outRegion.bufferImageHeight = range.bufferImageHeight;
-    outRegion.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(
+    VkBufferImageCopy region{};
+    region.bufferOffset = range->byteOffset;
+    region.bufferRowLength = range->bufferRowLength;
+    region.bufferImageHeight = range->bufferImageHeight;
+    region.imageSubresource = VulkanDetail::BuildImageSubresourceLayers(
         aspectMask,
         imageSlice.mipLevel,
         imageSlice.arraySlice
     );
-    outRegion.imageOffset = {
+    region.imageOffset = {
         static_cast<i32>(imageSlice.x),
         static_cast<i32>(imageSlice.y),
         static_cast<i32>(imageSlice.z),
     };
-    outRegion.imageExtent = { imageSlice.width, imageSlice.height, imageSlice.depth };
-    return true;
+    region.imageExtent = { imageSlice.width, imageSlice.height, imageSlice.depth };
+    return region;
 }
 
 [[nodiscard]] inline bool IsWholeImageSubresourceCopy(
@@ -117,14 +115,13 @@ void CommandList::copyTexture(
     ))
         return;
 
-    VkBufferImageCopy region{};
-    if(!prepareStagingTextureCopy(
+    const auto region = prepareStagingTextureCopy(
         dest,
         destSlice,
         src,
-        srcSlice,
-        region
-    )){
+        srcSlice
+    );
+    if(!region){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination slices violate the copy contract"));
         return;
     }
@@ -135,7 +132,7 @@ void CommandList::copyTexture(
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
             return;
     }
-    else if(!__hidden_texture_transfer_staging::IsWholeImageSubresourceCopy(src.m_creationDesc, region)){
+    else if(!__hidden_texture_transfer_staging::IsWholeImageSubresourceCopy(src.m_creationDesc, *region)){
         if(!recordAndValidateAnyCommandCapability(
             GpuQueueCapability::Compute | GpuQueueCapability::Graphics,
             s_OperationName
@@ -148,7 +145,7 @@ void CommandList::copyTexture(
     endActiveRenderPass();
     setTextureState(
         &src,
-        TextureSubresourceSet(region.imageSubresource.mipLevel, 1u, region.imageSubresource.baseArrayLayer, 1u),
+        TextureSubresourceSet(region->imageSubresource.mipLevel, 1u, region->imageSubresource.baseArrayLayer, 1u),
         ResourceStates::CopySource
     );
     if(m_commandRecordingFailed)
@@ -161,7 +158,7 @@ void CommandList::copyTexture(
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         dest.m_buffer,
         1,
-        &region
+        &*region
     );
 
     retainResource(&src);
@@ -191,14 +188,13 @@ void CommandList::copyTexture(
     ))
         return;
 
-    VkBufferImageCopy region{};
-    if(!prepareStagingTextureCopy(
+    const auto region = prepareStagingTextureCopy(
         src,
         srcSlice,
         dest,
-        destSlice,
-        region
-    )){
+        destSlice
+    );
+    if(!region){
         rejectCommandRecording(s_OperationName, NWB_TEXT("source and destination slices violate the copy contract"));
         return;
     }
@@ -209,7 +205,7 @@ void CommandList::copyTexture(
         if(!recordAndValidateCommandCapability(GpuQueueCapability::Graphics, s_OperationName))
             return;
     }
-    else if(!__hidden_texture_transfer_staging::IsWholeImageSubresourceCopy(dest.m_creationDesc, region)){
+    else if(!__hidden_texture_transfer_staging::IsWholeImageSubresourceCopy(dest.m_creationDesc, *region)){
         if(!recordAndValidateAnyCommandCapability(
             GpuQueueCapability::Compute | GpuQueueCapability::Graphics,
             s_OperationName
@@ -222,7 +218,7 @@ void CommandList::copyTexture(
     endActiveRenderPass();
     setTextureState(
         &dest,
-        TextureSubresourceSet(region.imageSubresource.mipLevel, 1u, region.imageSubresource.baseArrayLayer, 1u),
+        TextureSubresourceSet(region->imageSubresource.mipLevel, 1u, region->imageSubresource.baseArrayLayer, 1u),
         ResourceStates::CopyDest
     );
     if(m_commandRecordingFailed)
@@ -234,7 +230,7 @@ void CommandList::copyTexture(
         dest.m_image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         1,
-        &region
+        &*region
     );
 
     retainResource(&dest);
@@ -292,18 +288,14 @@ bool CommandList::validateStagingTextureCopyResources(
         return false;
     }
 
-    u64 expectedTotalByteSize = 0u;
+    const auto expectedTotalByteSize = TryMultiply<u64>(stagingTexture.m_arrayByteSize, static_cast<u64>(stagingTexture.m_creationDesc.arraySize));
     if(
         stagingTexture.m_creationDesc.arraySize == 0u
         || stagingTexture.m_creationDesc.mipLevels == 0u
         || stagingTexture.m_mipLayouts.size() != stagingTexture.m_creationDesc.mipLevels
         || stagingTexture.m_creationQueueSharing != stagingTexture.m_creationDesc.queueSharing
-        || !TryMultiply<u64>(
-            stagingTexture.m_arrayByteSize,
-            static_cast<u64>(stagingTexture.m_creationDesc.arraySize),
-            expectedTotalByteSize
-        )
-        || expectedTotalByteSize != stagingTexture.m_totalByteSize
+        || !expectedTotalByteSize
+        || *expectedTotalByteSize != stagingTexture.m_totalByteSize
     ){
         rejectCommandRecording(operationName, NWB_TEXT("staging texture has invalid immutable layout provenance"));
         return false;
@@ -358,84 +350,68 @@ bool CommandList::validateStagingTextureCopyResources(
     return true;
 }
 
-bool CommandList::prepareStagingTextureCopy(
+Expected<VkBufferImageCopy> CommandList::prepareStagingTextureCopy(
     StagingTexture& stagingResource,
     const TextureSlice& stagingSlice,
     Texture& textureResource,
-    const TextureSlice& textureSlice,
-    VkBufferImageCopy& outRegion
+    const TextureSlice& textureSlice
 )const{
     const TextureDesc& stagingDesc = stagingResource.m_creationDesc;
     const TextureDesc& textureDesc = textureResource.m_creationDesc;
     if(textureDesc.sampleCount != 1)
-        return false;
+        return MakeUnexpected(Failure{});
     if(textureDesc.format != stagingDesc.format)
-        return false;
+        return MakeUnexpected(Failure{});
     if(!VulkanTextureDetail::IsTextureImageInfoConsistent(textureDesc, textureResource.m_imageInfo))
-        return false;
+        return MakeUnexpected(Failure{});
 
     const FormatInfo& formatInfo = GetFormatInfo(textureDesc.format);
-    VulkanDetail::TextureFormatBlockLayout expectedFormatLayout;
+    const auto expectedFormatLayout = VulkanDetail::GetTextureFormatBlockLayout(formatInfo);
     const VkImageAspectFlags expectedAspectMask = VulkanDetail::GetImageAspectMask(formatInfo);
     if(
-        !VulkanDetail::GetTextureFormatBlockLayout(formatInfo, expectedFormatLayout)
+        !expectedFormatLayout
         || expectedAspectMask == 0u
         || stagingResource.m_aspectMask != expectedAspectMask
         || textureResource.m_aspectMask != expectedAspectMask
-        || stagingResource.m_formatLayout.blockWidth != expectedFormatLayout.blockWidth
-        || stagingResource.m_formatLayout.blockHeight != expectedFormatLayout.blockHeight
-        || stagingResource.m_formatLayout.bytesPerBlock != expectedFormatLayout.bytesPerBlock
+        || stagingResource.m_formatLayout.blockWidth != expectedFormatLayout->blockWidth
+        || stagingResource.m_formatLayout.blockHeight != expectedFormatLayout->blockHeight
+        || stagingResource.m_formatLayout.bytesPerBlock != expectedFormatLayout->bytesPerBlock
         || stagingResource.m_creationQueueSharing != stagingDesc.queueSharing
         || stagingResource.m_totalByteSize == 0u
         || stagingResource.m_arrayByteSize == 0u
         || stagingResource.m_bufferOffsetAlignment == 0u
-        || textureResource.m_formatLayout.blockWidth != expectedFormatLayout.blockWidth
-        || textureResource.m_formatLayout.blockHeight != expectedFormatLayout.blockHeight
-        || textureResource.m_formatLayout.bytesPerBlock != expectedFormatLayout.bytesPerBlock
+        || textureResource.m_formatLayout.blockWidth != expectedFormatLayout->blockWidth
+        || textureResource.m_formatLayout.blockHeight != expectedFormatLayout->blockHeight
+        || textureResource.m_formatLayout.bytesPerBlock != expectedFormatLayout->bytesPerBlock
     )
-        return false;
+        return MakeUnexpected(Failure{});
     if(!VulkanDetail::IsBufferImageCopyAspectMaskSupported(stagingResource.m_aspectMask))
-        return false;
+        return MakeUnexpected(Failure{});
 
-    TextureSlice resolvedStaging;
-    TextureSlice resolvedTexture;
-    if(!VulkanDetail::IsTextureSliceInBounds(
-        stagingDesc,
-        stagingSlice,
-        stagingResource.m_formatLayout,
-        &resolvedStaging
-    ))
-        return false;
-    if(!VulkanDetail::IsTextureSliceInBounds(
-        textureDesc,
-        textureSlice,
-        textureResource.m_formatLayout,
-        &resolvedTexture
-    ))
-        return false;
+    const auto resolvedStaging = VulkanDetail::ResolveTextureSlice(stagingDesc, stagingSlice, stagingResource.m_formatLayout);
+    const auto resolvedTexture = VulkanDetail::ResolveTextureSlice(textureDesc, textureSlice, textureResource.m_formatLayout);
+    if(!resolvedStaging || !resolvedTexture)
+        return MakeUnexpected(Failure{});
 
     if(
-        resolvedStaging.width != resolvedTexture.width
-        || resolvedStaging.height != resolvedTexture.height
-        || resolvedStaging.depth != resolvedTexture.depth
+        resolvedStaging->width != resolvedTexture->width
+        || resolvedStaging->height != resolvedTexture->height
+        || resolvedStaging->depth != resolvedTexture->depth
     )
-        return false;
+        return MakeUnexpected(Failure{});
 
-    if(resolvedStaging.mipLevel >= stagingResource.m_mipLayouts.size())
-        return false;
-    if(!__hidden_texture_transfer_staging::BuildStagingTextureCopyRegion(
-        resolvedStaging,
-        resolvedTexture,
+    if(resolvedStaging->mipLevel >= stagingResource.m_mipLayouts.size())
+        return MakeUnexpected(Failure{});
+    return __hidden_texture_transfer_staging::BuildStagingTextureCopyRegion(
+        *resolvedStaging,
+        *resolvedTexture,
         stagingResource.m_aspectMask,
-        stagingResource.m_mipLayouts[resolvedStaging.mipLevel],
+        stagingResource.m_mipLayouts[resolvedStaging->mipLevel],
         stagingResource.m_formatLayout,
         stagingResource.m_arrayByteSize,
         stagingResource.m_totalByteSize,
-        stagingResource.m_bufferOffsetAlignment,
-        outRegion
-    ))
-        return false;
-    return true;
+        stagingResource.m_bufferOffsetAlignment
+    );
 }
 
 

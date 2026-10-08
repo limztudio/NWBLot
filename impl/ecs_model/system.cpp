@@ -52,8 +52,7 @@ static void ResolveAttachmentJointQueries(
             ++groupEnd;
 
         const SkeletonPoseComponent* const pose = world.tryGetComponent<SkeletonPoseComponent>(parentEntity);
-        u32 skinningMode = SkeletonSkinningMode::LinearBlend;
-        if(pose && SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, jointPalette, skinningMode)){
+        if(pose && SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, jointPalette)){
             for(usize queryIndex = groupBegin; queryIndex < groupEnd; ++queryIndex){
                 AttachmentJointQuery& query = queryAt(queryIndex);
                 if(query.parentJointIndex >= jointPalette.size())
@@ -85,15 +84,13 @@ void StoreObjectWorldTransform(
         : MatrixIdentity()
     ;
 
-    SIMDVector scale;
-    SIMDVector rotation;
-    SIMDVector translation;
-    if(!MatrixDecompose(scale, rotation, translation, MatrixMultiply(ownerMatrix, LoadFloat(localTransform))))
+    const auto decomposition = MatrixDecompose(MatrixMultiply(ownerMatrix, LoadFloat(localTransform)));
+    if(!decomposition)
         return;
 
-    StoreFloat(VectorSetW(translation, 0.0f), transform.position);
-    StoreFloat(rotation, transform.rotation);
-    StoreFloat(VectorSetW(scale, 0.0f), transform.scale);
+    StoreFloat(VectorSetW(decomposition->translation, 0.0f), transform.position);
+    StoreFloat(decomposition->rotation, transform.rotation);
+    StoreFloat(VectorSetW(decomposition->scale, 0.0f), transform.scale);
 }
 
 void TagObject(
@@ -112,33 +109,7 @@ void TagObject(
     objectComponent.kind = kind;
 }
 
-bool LoadSkeleton(
-    Core::Assets::AssetManager& assetManager,
-    const Core::Assets::AssetRef<Skeleton>& skeletonRef,
-    UniquePtr<Core::Assets::IAsset>& outAsset,
-    const Skeleton*& outSkeleton
-){
-    outAsset.reset();
-    outSkeleton = nullptr;
 
-    const Name skeletonName = skeletonRef.name();
-    if(!skeletonName)
-        return false;
-
-    const Skeleton* loadedSkeleton = assetManager.loadTypedSync<Skeleton>(
-        skeletonName,
-        outAsset,
-        NWB_TEXT("ModelSystem"),
-        "skeleton"
-    );
-    if(!loadedSkeleton){
-        outAsset.reset();
-        return false;
-    }
-
-    outSkeleton = loadedSkeleton;
-    return true;
-}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -277,20 +248,14 @@ void ModelSystem::ensureModelRuntime(
 
     clearModelRuntime(entity, scratchArena);
 
-    UniquePtr<Core::Assets::IAsset> loadedAsset;
     const Name modelName = component.model.name();
-    const Model* loadedModel = m_assetManager.loadTypedSync<Model>(
-        modelName,
-        loadedAsset,
-        NWB_TEXT("ModelSystem"),
-        "model"
-    );
+    auto loadedModel = m_assetManager.loadTypedSync<Model>(modelName, NWB_TEXT("ModelSystem"), "model");
     if(!loadedModel){
         runtime = ModelRuntimeComponent{};
         return;
     }
 
-    const Model& model = *loadedModel;
+    const Model& model = **loadedModel;
     if(!expandModel(entity, model, runtime))
         clearModelRuntime(entity, scratchArena);
 }
@@ -354,10 +319,13 @@ bool ModelSystem::expandModel(
 }
 
 bool ModelSystem::spawnSkeletonObject(const Core::ECS::EntityID owner, const ModelSkeletonObject& object){
-    UniquePtr<Core::Assets::IAsset> loadedAsset;
-    const Skeleton* skeleton = nullptr;
-    if(!__hidden_model_system::LoadSkeleton(m_assetManager, object.skeleton, loadedAsset, skeleton))
+    const Name skeletonName = object.skeleton.name();
+    if(!skeletonName)
         return false;
+    auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, NWB_TEXT("ModelSystem"), "skeleton");
+    if(!skeletonAsset)
+        return false;
+    const Skeleton* skeleton = skeletonAsset->get();
 
     Core::ECS::Entity entity = m_world.createEntity();
     __hidden_model_system::TagObject(
@@ -438,10 +406,13 @@ bool ModelSystem::spawnStaticMeshObject(const Core::ECS::EntityID owner, const M
         }
 
         if(object.parentJoint){
-            UniquePtr<Core::Assets::IAsset> loadedAsset;
-            const Skeleton* skeleton = nullptr;
-            if(!__hidden_model_system::LoadSkeleton(m_assetManager, skeletonComponent->skeleton, loadedAsset, skeleton))
+            const Name skeletonName = skeletonComponent->skeleton.name();
+            if(!skeletonName)
                 return false;
+            auto skeletonAsset = m_assetManager.loadTypedSync<Skeleton>(skeletonName, NWB_TEXT("ModelSystem"), "skeleton");
+            if(!skeletonAsset)
+                return false;
+            const Skeleton* skeleton = skeletonAsset->get();
 
             attachment.parentJointIndex = skeleton->findJointIndex(object.parentJoint);
             if(attachment.parentJointIndex == s_SkeletonInvalidJointIndex){
@@ -596,10 +567,9 @@ void ModelSystem::updateStaticMeshAttachments(){
                 }
                 else{
                     const SkeletonPoseComponent* const pose = m_world.tryGetComponent<SkeletonPoseComponent>(attachment.parentEntity);
-                    u32 skinningMode = SkeletonSkinningMode::LinearBlend;
                     if(
                         !pose
-                        || !SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, m_scratchJoints, skinningMode)
+                        || !SkeletonRuntime::BuildStoredJointPaletteFromSkeletonPose(*pose, m_scratchJoints)
                         || attachment.parentJointIndex >= m_scratchJoints.size()
                     )
                         return;
@@ -608,15 +578,13 @@ void ModelSystem::updateStaticMeshAttachments(){
                 worldTransform = MatrixMultiply(MatrixMultiply(parentMatrix, jointMatrix), localMatrix);
             }
 
-            SIMDVector scale;
-            SIMDVector rotation;
-            SIMDVector translation;
-            if(!MatrixDecompose(scale, rotation, translation, worldTransform))
+            const auto decomposition = MatrixDecompose(worldTransform);
+            if(!decomposition)
                 return;
 
-            StoreFloat(VectorSetW(translation, 0.0f), transform.position);
-            StoreFloat(rotation, transform.rotation);
-            StoreFloat(VectorSetW(scale, 0.0f), transform.scale);
+            StoreFloat(VectorSetW(decomposition->translation, 0.0f), transform.position);
+            StoreFloat(decomposition->rotation, transform.rotation);
+            StoreFloat(VectorSetW(decomposition->scale, 0.0f), transform.scale);
         }
     );
 }

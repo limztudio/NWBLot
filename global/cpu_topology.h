@@ -5,6 +5,7 @@
 #pragma once
 
 
+#include "expected.h"
 #include "containers.h"
 #include "type.h"
 
@@ -40,7 +41,7 @@ struct CpuWorkerPlacement{
 
 
 // Query on the worker-creating thread; honors CPU sets; never invents indices.
-[[nodiscard]] bool QueryCpuWorkerPlacements(InteropVector<CpuWorkerPlacement>& outPlacements);
+[[nodiscard]] Expected<InteropVector<CpuWorkerPlacement>> QueryCpuWorkerPlacements();
 // Applies one processor identity, including groups and indices beyond 63.
 [[nodiscard]] bool SetCurrentThreadCpuPlacement(const CpuWorkerPlacement& placement);
 

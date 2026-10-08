@@ -42,11 +42,10 @@ inline constexpr int s_EntryFailure = -1;
 }
 
 [[nodiscard]] static bool ExportPayload(const NWB::Path& directory, const NWB::Impl::FontAtlasPayload& payload){
-    ErrorCode error;
-    if(!EnsureDirectories(directory, error))
+    if(!EnsureDirectories(directory))
         return false;
-    NWB::Core::Assets::AssetBytes binary(payload.glyphs.get_allocator().arena());
-    if(!NWB::Impl::SerializeFontAtlasPayload(payload, binary) || !WriteBinaryFile(directory / "atlas.bin", binary))
+    const auto binary = NWB::Impl::SerializeFontAtlasPayload(payload, payload.glyphs.get_allocator().arena());
+    if(!binary || !WriteBinaryFile(directory / "atlas.bin", *binary))
         return false;
     for(usize index = 0u; index < payload.groups.size(); ++index){
         const auto name = StringFormat(directory.arena(), "group_{}.pixels", index);
@@ -77,29 +76,39 @@ inline constexpr int s_EntryFailure = -1;
     StripUtf8Bom(metadata);
     if(!document.parse(metadata))
         return false;
-    NWB::Core::Assets::ExpandedAssetMetadataVector expanded(scratch);
-    if(!NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunch(
-        sourcePath.parentPath(), "probe", sourcePath, document, expanded, scratch
-    ) || expanded.size() != 2u)
+    auto expanded = NWB::Core::Assets::AssetsBunchCook::ExpandAssetBunch(
+        sourcePath.parentPath(), "probe", sourcePath, document, scratch
+    );
+    if(!expanded || expanded->size() != 2u)
         return false;
 
     NWB::Impl::Font font(arena);
     NWB::Impl::FontAtlas atlas(arena);
     bool foundFont = false;
     bool foundAtlas = false;
-    for(const auto& asset : expanded){
+    for(const auto& asset : *expanded){
         if(asset.assetType == Name("font")){
-            NWB::Impl::FontCookEntry entry(arena);
-            if(foundFont || !NWB::Impl::ParseFontCookMetadataValue(asset.virtualPath, sourcePath, asset.value, entry)
-                || !NWB::Impl::BuildFontAsset(entry, font))
+            if(foundFont)
                 return false;
+            auto entryResult = NWB::Impl::ParseFontCookMetadataValue(asset.virtualPath, sourcePath, asset.value, arena);
+            if(!entryResult)
+                return false;
+            auto assetResult = NWB::Impl::BuildFontAsset(*entryResult, arena);
+            if(!assetResult)
+                return false;
+            font = Move(*assetResult);
             foundFont = true;
         }
         else if(asset.assetType == Name("font_atlas")){
-            NWB::Impl::FontAtlasCookEntry entry(arena);
-            if(foundAtlas || !NWB::Impl::ParseFontAtlasCookMetadataValue(asset.virtualPath, sourcePath, asset.value, entry, scratch)
-                || !NWB::Impl::BuildFontAtlasAsset(entry, atlas))
+            if(foundAtlas)
                 return false;
+            auto entryResult = NWB::Impl::ParseFontAtlasCookMetadataValue(asset.virtualPath, sourcePath, asset.value, arena, scratch);
+            if(!entryResult)
+                return false;
+            auto assetResult = NWB::Impl::BuildFontAtlasAsset(*entryResult, arena);
+            if(!assetResult)
+                return false;
+            atlas = Move(*assetResult);
             foundAtlas = true;
         }
         else

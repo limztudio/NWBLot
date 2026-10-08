@@ -170,13 +170,18 @@ void BenchmarkReport(const u32 packetCount, const u32 ownerCount, const u32 task
         recorder, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, 19u
     ));
     Log::TelemetryReport report(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    auto reportResult1 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    ASSERT_TRUE(reportResult1);
+    report = Move(*reportResult1);
     const ArenaMemoryStats before = HeapBackingMemoryStats();
     usize accepted = 0u;
     const Timer begin = TimerNow();
     for(usize iteration = 0u; iteration < iterations; ++iteration){
-        if(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report))
+        auto generated = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+        if(generated){
+            report = Move(*generated);
             ++accepted;
+        }
     }
     const u64 elapsed = DurationInNS<u64>(TimerNow(), begin);
     const ArenaMemoryStats after = HeapBackingMemoryStats();
@@ -220,7 +225,9 @@ TEST(FrameGraphReport, GroupsSparseOwnersWithoutLeakingStatisticsIntoAdjacentNod
         recorder, 918u, fixture.nodes, fixture.edges, fixture.queues, fixture.packets, 19u
     ));
     Log::TelemetryReport report(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    auto reportResult2 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    ASSERT_TRUE(reportResult2);
+    report = Move(*reportResult2);
     ASSERT_EQ(report.summary.parseFailureCount, 0u);
     ASSERT_EQ(report.summary.frameGraphNodeCount, 7u);
     const AStringView json(report.json.data(), report.json.size());
@@ -271,7 +278,9 @@ TEST(FrameGraphReport, RestartsOwnerRangesForEveryCaptureAndReportRebuild){
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 918u, first.nodes, first.edges, first.queues, first.packets, 19u));
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 919u, second.nodes, second.edges, second.queues, second.packets, 20u));
     Log::TelemetryReport report(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    auto reportResult3 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    ASSERT_TRUE(reportResult3);
+    report = Move(*reportResult3);
     ASSERT_EQ(report.summary.frameGraphFrameCount, s_ExpectedDualCount);
     EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), s_PACKET_INDEX), 5u);
     EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), "runtime_physical_queue_count=2"), s_ExpectedDualCount);
@@ -280,7 +289,9 @@ TEST(FrameGraphReport, RestartsOwnerRangesForEveryCaptureAndReportRebuild){
 
     recorder.clear();
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 920u, second.nodes, second.edges, second.queues, second.packets, 21u));
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    auto reportResult4 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    ASSERT_TRUE(reportResult4);
+    report = Move(*reportResult4);
     ASSERT_EQ(report.summary.frameGraphFrameCount, 1u);
     EXPECT_EQ(CountText(AStringView(report.json.data(), report.json.size()), s_PACKET_INDEX), s_ExpectedDualCount);
     EXPECT_EQ(CountText(AStringView(report.graph.data(), report.graph.size()), s_RUNTIME_PACKET_SUBMISSION_COUNT_2), 1u);
@@ -338,7 +349,9 @@ TEST(FrameGraphReport, RejectsMalformedOwnerTablesBeforeReportingAndRetainsTheNe
     ASSERT_TRUE(recorder.recordBinary(Telemetry::EventKind::FrameGraphFrame, 918u, original.data(), original.size(), 4u));
 
     Log::TelemetryReport report(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    auto reportResult5 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    ASSERT_TRUE(reportResult5);
+    report = Move(*reportResult5);
     EXPECT_EQ(report.summary.eventCount, 4u);
     EXPECT_EQ(report.summary.parseFailureCount, 3u);
     EXPECT_EQ(report.summary.frameGraphFrameCount, 1u);

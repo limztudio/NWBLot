@@ -65,16 +65,16 @@ bool Mesh::loadBinary(const Core::Assets::AssetBytes& binary){
 
     const TStringView loadFailureContext = MeshBinaryPayload::s_MeshLoadBinaryContext;
     usize cursor = 0;
-    MeshBinaryPayload::MeshHeaderBinary header;
-    if(!Core::Assets::ReadMagicHeaderPayload(
+    const auto headerResult = Core::Assets::ReadMagicHeaderPayload<MeshBinaryPayload::MeshHeaderBinary>(
         binary,
         cursor,
-        header,
         MeshBinaryPayload::s_MeshMagic,
         loadFailureContext,
         MeshBinaryPayload::s_MeshAssetKindLabel
-    ))
+    );
+    if(!headerResult)
         return false;
+    const MeshBinaryPayload::MeshHeaderBinary& header = *headerResult;
 
     if(header.meshClass != Core::Mesh::MeshClass::Static){
         NWB_LOGGER_ERROR(NWB_TEXT("Mesh::loadBinary failed: invalid mesh class"));

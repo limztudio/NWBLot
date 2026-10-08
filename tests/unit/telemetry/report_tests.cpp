@@ -79,7 +79,9 @@ TEST(Telemetry, TelemetryReportKeepsCaptureOrderAndCorrelatesTimingByFrame){
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 42u, nodes, edges, 9u));
 
     Log::TelemetryReport report(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    auto reportResult1 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    ASSERT_TRUE(reportResult1);
+    report = Move(*reportResult1);
     EXPECT_EQ(report.summary.frameGraphFrameCount, 3u);
 
     const AStringView json(report.json.data(), report.json.size());
@@ -139,7 +141,9 @@ TEST(Telemetry, TelemetryReportDoesNotAttachAggregatedTimingToOneGraph){
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 44u, nodes, edges, 8u));
 
     Log::TelemetryReport report(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    auto reportResult2 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    ASSERT_TRUE(reportResult2);
+    report = Move(*reportResult2);
     const AStringView dot(report.graph.data(), report.graph.size());
     EXPECT_TRUE(ContainsText(dot, "digraph frame_graph_43_7_0"));
     EXPECT_TRUE(ContainsText(dot, "digraph frame_graph_44_8_1"));
@@ -179,7 +183,9 @@ TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromAbsen
         18u
     ));
     Log::TelemetryReport exactReport(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, exactRecorder.view(), exactReport));
+    auto reportResult3 = Log::BuildTelemetryReport(testArena.arena, exactRecorder.view());
+    ASSERT_TRUE(reportResult3);
+    exactReport = Move(*reportResult3);
     const AStringView exactJson(exactReport.json.data(), exactReport.json.size());
     const AStringView exactDot(exactReport.graph.data(), exactReport.graph.size());
     EXPECT_TRUE(ContainsText(exactJson, "\"packetSubmissions\": []"));
@@ -189,7 +195,9 @@ TEST(Telemetry, TelemetryReportDistinguishesExactEmptyPacketSubmissionsFromAbsen
     absentRecorder.setCaptureOptions(Telemetry::CaptureOptions::All());
     ASSERT_TRUE(Telemetry::RecordFrameGraph(absentRecorder, 59u, nodes, edges, 19u));
     Log::TelemetryReport absentReport(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, absentRecorder.view(), absentReport));
+    auto reportResult4 = Log::BuildTelemetryReport(testArena.arena, absentRecorder.view());
+    ASSERT_TRUE(reportResult4);
+    absentReport = Move(*reportResult4);
     const AStringView absentJson(absentReport.json.data(), absentReport.json.size());
     const AStringView absentDot(absentReport.graph.data(), absentReport.graph.size());
     EXPECT_TRUE(ContainsText(absentJson, "\"packetSubmissions\": null"));
@@ -229,7 +237,9 @@ TEST(Telemetry, TelemetryReportRejectsNonCurrentFrameGraphPayloads){
     }
 
     Log::TelemetryReport report(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    auto reportResult5 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    ASSERT_TRUE(reportResult5);
+    report = Move(*reportResult5);
     EXPECT_EQ(report.summary.eventCount, LengthOf(unsupportedVersions) + 1u);
     EXPECT_EQ(report.summary.parseFailureCount, LengthOf(unsupportedVersions));
     EXPECT_EQ(report.summary.frameGraphFrameCount, 1u);
@@ -249,7 +259,9 @@ TEST(Telemetry, TelemetryReportMarksAbsentRuntimeStatistics){
     ASSERT_TRUE(Telemetry::RecordFrameGraph(recorder, 53u, nodes, edges, 13u));
 
     Log::TelemetryReport report(testArena.arena);
-    ASSERT_TRUE(Log::BuildTelemetryReport(testArena.arena, recorder.view(), report));
+    auto reportResult6 = Log::BuildTelemetryReport(testArena.arena, recorder.view());
+    ASSERT_TRUE(reportResult6);
+    report = Move(*reportResult6);
 
     const AStringView json(report.json.data(), report.json.size());
     const usize firstPassJsonOffset = json.find("\"label\": \"GBuffer Pass\"");

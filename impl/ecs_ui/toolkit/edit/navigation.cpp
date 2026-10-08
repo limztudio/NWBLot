@@ -31,11 +31,11 @@ static bool IsWhitespace(const u32 scalar)noexcept{
         || scalar == 0x2029u || scalar == 0x202Fu || scalar == 0x205Fu || scalar == 0x3000u;
 }
 
-static RunClass::Enum Classify(const AStringView text, const usize offset){
-    u32 scalar = 0u;
-    const i32 decoded = DecodeUtf8CodePoint(text.substr(offset, 4u), scalar);
-    if(decoded <= 0)
+static RunClass::Enum Classify(const AStringView text, const usize offset)noexcept{
+    const auto decoded = DecodeUtf8CodePoint(text.substr(offset, 4u));
+    if(!decoded)
         return RunClass::Text;
+    const u32 scalar = decoded->codePoint;
     if(IsWhitespace(scalar))
         return RunClass::Whitespace;
     if(
@@ -135,17 +135,14 @@ usize EditModel::wordBoundary(usize position, const bool forward)const{
     return position;
 }
 
-bool EditModel::wordRangeAt(const usize position, usize& begin, usize& end)const{
+Expected<EditWordRange> EditModel::wordRangeAt(const usize position)const noexcept{
     using namespace __hidden_ui_edit_navigation;
     if(!isBoundary(position))
-        return false;
-    if(m_text.empty()){
-        begin = 0u;
-        end = 0u;
-        return true;
-    }
+        return MakeUnexpected(Failure{});
+    if(m_text.empty())
+        return EditWordRange{};
     const usize origin = position == m_text.size() ? previousBoundary(position) : position;
-    const auto category = [this](const usize byte){
+    const auto category = [this](const usize byte)noexcept{
         return m_text[byte] == '\n' ? RunClass::LineBreak : Classify(text(), byte);
     };
     const RunClass::Enum run = category(origin);
@@ -155,9 +152,7 @@ bool EditModel::wordRangeAt(const usize position, usize& begin, usize& end)const
         first = previousBoundary(first);
     while(last < m_text.size() && category(last) == run)
         last = nextBoundary(last);
-    begin = first;
-    end = last;
-    return true;
+    return EditWordRange{ first, last };
 }
 
 

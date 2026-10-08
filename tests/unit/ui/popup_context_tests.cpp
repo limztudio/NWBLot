@@ -501,9 +501,11 @@ TEST_F(UiPopupContextTests, FocusLossFencesPreparedOpenBeforeItsFirstAcceptance)
     EXPECT_FALSE(m_context.input().hitTest({ 15.0f, 15.0f }).valid());
     EXPECT_TRUE(m_context.input().actions().empty());
     PopupDismissReason::Enum reason = PopupDismissReason::None;
-    EXPECT_TRUE(m_context.input().consumePopupDismissal(candidate.scope.token, reason));
+    const auto reasonResult = m_context.input().consumePopupDismissal(candidate.scope.token);
+    ASSERT_TRUE(reasonResult);
+    reason = *reasonResult;
     EXPECT_EQ(reason, PopupDismissReason::FocusLost);
-    EXPECT_FALSE(m_context.input().consumePopupDismissal(candidate.scope.token, reason));
+    EXPECT_FALSE(m_context.input().consumePopupDismissal(candidate.scope.token));
 }
 
 TEST_F(UiPopupContextTests, FocusLossFencesPreparedHigherPopupAboveAcceptedLowerScope){
@@ -521,12 +523,16 @@ TEST_F(UiPopupContextTests, FocusLossFencesPreparedHigherPopupAboveAcceptedLower
     EXPECT_TRUE(m_context.input().actions().empty());
     PopupDismissReason::Enum lower = PopupDismissReason::None;
     PopupDismissReason::Enum higher = PopupDismissReason::None;
-    EXPECT_TRUE(m_context.input().consumePopupDismissal(candidate.lower.scope.token, lower));
-    EXPECT_TRUE(m_context.input().consumePopupDismissal(candidate.higher.scope.token, higher));
+    const auto lowerResult = m_context.input().consumePopupDismissal(candidate.lower.scope.token);
+    ASSERT_TRUE(lowerResult);
+    lower = *lowerResult;
+    const auto higherResult = m_context.input().consumePopupDismissal(candidate.higher.scope.token);
+    ASSERT_TRUE(higherResult);
+    higher = *higherResult;
     EXPECT_EQ(lower, PopupDismissReason::FocusLost);
     EXPECT_EQ(higher, PopupDismissReason::FocusLost);
-    EXPECT_FALSE(m_context.input().consumePopupDismissal(candidate.lower.scope.token, lower));
-    EXPECT_FALSE(m_context.input().consumePopupDismissal(candidate.higher.scope.token, higher));
+    EXPECT_FALSE(m_context.input().consumePopupDismissal(candidate.lower.scope.token));
+    EXPECT_FALSE(m_context.input().consumePopupDismissal(candidate.higher.scope.token));
 }
 
 TEST_F(UiPopupContextTests, NativeFocusGainCannotReviveCandidatePreparedBeforeFocusLoss){
@@ -539,7 +545,9 @@ TEST_F(UiPopupContextTests, NativeFocusGainCannotReviveCandidatePreparedBeforeFo
     EXPECT_FALSE(m_context.input().focus().valid());
     EXPECT_FALSE(m_context.input().hitTest({ 115.0f, 55.0f }).valid());
     PopupDismissReason::Enum reason = PopupDismissReason::None;
-    EXPECT_TRUE(m_context.input().consumePopupDismissal(candidate.scope.token, reason));
+    const auto reasonResult = m_context.input().consumePopupDismissal(candidate.scope.token);
+    ASSERT_TRUE(reasonResult);
+    reason = *reasonResult;
     EXPECT_EQ(reason, PopupDismissReason::FocusLost);
     EXPECT_TRUE(m_context.input().actions().empty());
 }
@@ -554,8 +562,7 @@ TEST_F(UiPopupContextTests, FreshPopupPreparedAfterNativeFocusGainMayAutofocus){
     ASSERT_TRUE(m_context.commitFrame(2u));
     EXPECT_EQ(m_context.input().focus(), fresh.child.id);
     EXPECT_EQ(m_context.input().hitTest({ 115.0f, 55.0f }), fresh.child.id);
-    PopupDismissReason::Enum reason = PopupDismissReason::None;
-    EXPECT_FALSE(m_context.input().consumePopupDismissal(fresh.scope.token, reason));
+    EXPECT_FALSE(m_context.input().consumePopupDismissal(fresh.scope.token));
     click({ 115.0f, 55.0f });
     EXPECT_EQ(m_context.input().actions().size(), 1u);
 }
@@ -574,7 +581,9 @@ TEST_F(UiPopupContextTests, NativeFocusGainNeverRestoresAlreadyClosingScopes){
     EXPECT_FALSE(m_context.input().focus().valid());
     EXPECT_FALSE(m_context.input().hitTest({ 115.0f, 55.0f }).valid());
     PopupDismissReason::Enum reason = PopupDismissReason::None;
-    EXPECT_TRUE(m_context.input().consumePopupDismissal(original.scope.token, reason));
+    const auto reasonResult = m_context.input().consumePopupDismissal(original.scope.token);
+    ASSERT_TRUE(reasonResult);
+    reason = *reasonResult;
     EXPECT_EQ(reason, PopupDismissReason::FocusLost);
     const PopupFrame closed = prepare(4u, false, original.scope.bounds, true);
     EXPECT_EQ(closed.base.id, base.base.id);

@@ -43,33 +43,35 @@ public:
         return rawKey(index);
     }
 
-    [[nodiscard]] virtual bool indexOf(const u64 value, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> indexOf(const u64 value)const override{
+        u64 index = 0u;
         ++lookupCalls;
         if(value == 0u || value == removed || value > count + (removed != 0u ? 1u : 0u))
-            return false;
+            return MakeUnexpected(Failure{});
         const u64 forward = value - 1u - (removed != 0u && value > removed ? 1u : 0u);
         index = reverse ? count - 1u - forward : forward;
-        return index < count;
+        return index < count ? Expected<u64>{ index } : MakeUnexpected(Failure{});
     }
 
-    [[nodiscard]] virtual bool findEnabled(const u64 start, const bool backwards, u64& index)const override{
+    [[nodiscard]] virtual Expected<u64> findEnabled(const u64 start, const bool backwards)const override{
+        u64 index = 0u;
         ++searchCalls;
         if(start >= count)
-            return false;
+            return MakeUnexpected(Failure{});
         index = start;
         if(rawKey(index) != disabled)
-            return true;
+            return index;
         if(backwards){
             if(index == 0u)
-                return false;
+                return MakeUnexpected(Failure{});
             --index;
         }
         else{
             if(index + 1u == count)
-                return false;
+                return MakeUnexpected(Failure{});
             ++index;
         }
-        return true;
+        return index;
     }
 
     [[nodiscard]] virtual StringView text(const u64 index)const override{

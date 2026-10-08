@@ -53,28 +53,30 @@ void VerifyMixedRecords(const Graphics::GpuCommandIrCapture& capture, const usiz
     EXPECT_EQ(reader.recordCount(), count);
     EXPECT_EQ(reader.graphGeneration(), count == 0u ? 0u : s_CommandIrTask.generation);
     EXPECT_EQ(reader.planGeneration(), count == 0u ? 0u : s_CommandIrPacket.generation);
-    Graphics::GpuCommandIrBuiltinTaskRecord decoded;
+    Expected<Graphics::GpuCommandIrBuiltinTaskRecord, Graphics::GpuCommandIrStreamReadStatus::Enum> decoded = MakeUnexpected(Graphics::GpuCommandIrStreamReadStatus::End);
     for(usize index = 0u; index < count; ++index){
-        ASSERT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::Record);
-        EXPECT_EQ(decoded.task.generation, s_CommandIrTask.generation);
-        EXPECT_EQ(decoded.packet.generation, s_CommandIrPacket.generation);
-        EXPECT_EQ(decoded.task.index, index);
-        EXPECT_EQ(decoded.packet.index, index / 64u);
-        EXPECT_EQ(decoded.queue, s_CommandIrQueue);
-        EXPECT_EQ(decoded.destination, s_CommandIrDestination);
+        ASSERT_TRUE((decoded = reader.nextBuiltinTask()));
+        EXPECT_EQ(decoded->task.generation, s_CommandIrTask.generation);
+        EXPECT_EQ(decoded->packet.generation, s_CommandIrPacket.generation);
+        EXPECT_EQ(decoded->task.index, index);
+        EXPECT_EQ(decoded->packet.index, index / 64u);
+        EXPECT_EQ(decoded->queue, s_CommandIrQueue);
+        EXPECT_EQ(decoded->destination, s_CommandIrDestination);
         if(index % 2u == 0u){
-            EXPECT_EQ(decoded.opcode, Graphics::GpuCommandIrOpcode::CopyBuffer);
-            EXPECT_EQ(decoded.source, s_CommandIrSource);
-            EXPECT_EQ(decoded.sourceOffsetBytes, index * 16u);
-            EXPECT_EQ(decoded.destinationOffsetBytes, index * 32u);
-            EXPECT_EQ(decoded.dataSizeBytes, 64u);
+            EXPECT_EQ(decoded->opcode, Graphics::GpuCommandIrOpcode::CopyBuffer);
+            EXPECT_EQ(decoded->source, s_CommandIrSource);
+            EXPECT_EQ(decoded->sourceOffsetBytes, index * 16u);
+            EXPECT_EQ(decoded->destinationOffsetBytes, index * 32u);
+            EXPECT_EQ(decoded->dataSizeBytes, 64u);
         }
         else{
-            EXPECT_EQ(decoded.opcode, Graphics::GpuCommandIrOpcode::ClearBuffer);
-            EXPECT_EQ(decoded.uintClearValue.r, index);
+            EXPECT_EQ(decoded->opcode, Graphics::GpuCommandIrOpcode::ClearBuffer);
+            EXPECT_EQ(decoded->uintClearValue.r, index);
         }
     }
-    EXPECT_EQ(reader.next(decoded), Graphics::GpuCommandIrStreamReadStatus::End);
+    const auto terminal1 = reader.nextBuiltinTask();
+    ASSERT_FALSE(terminal1);
+    EXPECT_EQ(terminal1.error(), Graphics::GpuCommandIrStreamReadStatus::End);
     EXPECT_TRUE(reader.validation().valid());
 }
 

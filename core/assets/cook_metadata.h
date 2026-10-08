@@ -148,10 +148,9 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace AssetBunchExpandResult{
+namespace AssetBunchExpandFailure{
     enum Enum : u8{
         Unsupported,
-        Parsed,
         Error
     };
 };
@@ -161,11 +160,10 @@ struct AssetBunchExpandContext{
     AStringView virtualRoot;
     const Path& nwbFilePath;
     const Core::Metascript::Document& doc;
-    ExpandedAssetMetadataVector& outAssets;
     ScratchArena& scratchArena;
 };
 
-using AssetBunchExpandFunction = AssetBunchExpandResult::Enum (*)(AssetBunchExpandContext& context);
+using AssetBunchExpandFunction = Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> (*)(const AssetBunchExpandContext& context);
 
 class AssetBunchExpanderAutoRegistrar final{
 public:
@@ -176,16 +174,16 @@ public:
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] bool DiscoverFilesWithExtension(
+[[nodiscard]] Expected<DiscoveredNwbFileVector> DiscoverFilesWithExtension(
+    CookArena& cookArena,
     const CookVector<ResolvedAssetRoot>& assetRoots,
     AStringView expectedExtension,
-    DiscoveredNwbFileVector& outFiles,
     ScratchArena& scratchArena
 );
 [[nodiscard]] bool AddPlannedFileCount(u64 additionalFileCount, u64& inOutPlannedFileCount);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedDocumentMetadataParsers(AssetDocumentMetadataParseContext& context);
 [[nodiscard]] AssetMetadataParseResult::Enum TryAutoCollectedValueMetadataParsers(AssetValueMetadataParseContext& context);
-[[nodiscard]] AssetBunchExpandResult::Enum TryAutoCollectedAssetBunchExpanders(AssetBunchExpandContext& context);
+[[nodiscard]] Expected<ExpandedAssetMetadataVector, AssetBunchExpandFailure::Enum> TryAutoCollectedAssetBunchExpanders(const AssetBunchExpandContext& context);
 [[nodiscard]] bool ParseAssetMetadata(
     CookArena& cookArena,
     const DiscoveredNwbFileVector& nwbFiles,

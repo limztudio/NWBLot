@@ -36,8 +36,8 @@ private:
         virtual u64 revision()const noexcept override{ return m_source.m_viewRevision; }
         virtual u64 rowCount()const noexcept override{ return m_source.m_count; }
         virtual u64 key(u64 index)const override;
-        virtual bool indexOf(u64 key, u64& index)const override;
-        virtual bool findEnabled(u64 start, bool reverse, u64& index)const override;
+        virtual Expected<u64> indexOf(u64 key)const override;
+        virtual Expected<u64> findEnabled(u64 start, bool reverse)const override;
         virtual StringView text(u64 index)const override;
         virtual bool enabled(u64 index)const override;
 
@@ -56,8 +56,8 @@ public:
     virtual u64 revision()const noexcept override{ return 1u; }
     virtual u64 rowCount()const noexcept override{ return 5u; }
     virtual u64 key(u64 index)const override{ return index < rowCount() ? index + 1u : 0u; }
-    virtual bool indexOf(u64 key, u64& index)const override;
-    virtual bool findEnabled(u64 start, bool reverse, u64& index)const override;
+    virtual Expected<u64> indexOf(u64 key)const override;
+    virtual Expected<u64> findEnabled(u64 start, bool reverse)const override;
     virtual StringView text(u64 index)const override;
     virtual bool enabled(u64 index)const override{ return index < rowCount() && key(index) != 3u; }
     [[nodiscard]] virtual bool filter(AStringView query)override;

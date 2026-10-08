@@ -97,91 +97,86 @@ TEST(AssetsGraphics, DeferredWriteOwnsScratchBytesBeforeCallerMutation){
         }
     }
 
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(root));
 }
 
 using AssetObjectCachePathVector = Vector<Path, NWB::Core::Alloc::GlobalArena>;
 
-static bool FindAssetObjectCachePaths(TestArena& testArena, const Path& cacheDirectory, AssetObjectCachePathVector& outPaths){
-    outPaths.clear();
+[[nodiscard]] static Expected<AssetObjectCachePathVector> FindAssetObjectCachePaths(TestArena& testArena, const Path& cacheDirectory){
+    AssetObjectCachePathVector paths(testArena.arena);
 
-    ErrorCode errorCode;
-    RecursiveDirectoryIterator<Path::Arena> cacheEntries(cacheDirectory, errorCode);
-    EXPECT_FALSE(errorCode);
-    if(errorCode)
-        return false;
+    const auto cacheEntries = RecursiveDirectoryIterator<Path::Arena>::Create(cacheDirectory);
+    EXPECT_TRUE(cacheEntries);
+    if(!cacheEntries)
+        return MakeUnexpected(Failure{});
 
-    for(const auto& entry : cacheEntries){
-        errorCode.clear();
-        const bool isRegularFile = entry.isRegularFile(errorCode);
-        EXPECT_FALSE(errorCode);
-        if(errorCode)
-            return false;
+    for(const auto& entry : *cacheEntries){
+        const auto isRegularFile = entry.isRegularFile();
+        EXPECT_TRUE(isRegularFile);
         if(!isRegularFile)
+            return MakeUnexpected(Failure{});
+        if(!*isRegularFile)
             continue;
 
         const auto extension = PathToString(testArena.arena, entry.path().extension());
         if(extension != ".nwbobj")
             continue;
 
-        outPaths.push_back(entry.path());
+        paths.push_back(entry.path());
     }
 
-    return true;
+    return paths;
 }
 
-static bool FindSingleAssetObjectCachePath(TestArena& testArena, const Path& cacheDirectory, Path& outPath){
-    outPath.clear();
+[[nodiscard]] static Expected<Path> FindSingleAssetObjectCachePath(TestArena& testArena, const Path& cacheDirectory){
+    auto objectPaths = FindAssetObjectCachePaths(testArena, cacheDirectory);
+    if(!objectPaths)
+        return MakeUnexpected(Failure{});
 
-    AssetObjectCachePathVector objectPaths(testArena.arena);
-    if(!FindAssetObjectCachePaths(testArena, cacheDirectory, objectPaths))
-        return false;
+    EXPECT_EQ(objectPaths->size(), 1u);
+    if(objectPaths->size() != 1u)
+        return MakeUnexpected(Failure{});
 
-    EXPECT_EQ(objectPaths.size(), 1u);
-    if(objectPaths.size() != 1u)
-        return false;
-
-    outPath = objectPaths[0u];
-    return true;
+    return Move((*objectPaths)[0u]);
 }
 
-static bool FindNewAssetObjectCachePath(
+[[nodiscard]] static Expected<Path> FindNewAssetObjectCachePath(
     TestArena& testArena,
     const Path& cacheDirectory,
-    const Path& oldPath,
-    Path& outPath
+    const Path& oldPath
 ){
-    outPath.clear();
+    auto objectPaths = FindAssetObjectCachePaths(testArena, cacheDirectory);
+    if(!objectPaths)
+        return MakeUnexpected(Failure{});
 
-    AssetObjectCachePathVector objectPaths(testArena.arena);
-    if(!FindAssetObjectCachePaths(testArena, cacheDirectory, objectPaths))
-        return false;
-
-    EXPECT_EQ(objectPaths.size(), s_ExpectedDualCount);
-    if(objectPaths.size() != s_ExpectedDualCount)
-        return false;
+    EXPECT_EQ(objectPaths->size(), s_ExpectedDualCount);
+    if(objectPaths->size() != s_ExpectedDualCount)
+        return MakeUnexpected(Failure{});
 
     usize newPathCount = 0u;
-    for(const Path& objectPath : objectPaths){
-        if(objectPath == oldPath)
+    usize newPathIndex = 0u;
+    for(usize index = 0u; index < objectPaths->size(); ++index){
+        if((*objectPaths)[index] == oldPath)
             continue;
 
-        outPath = objectPath;
+        newPathIndex = index;
         ++newPathCount;
     }
 
     EXPECT_EQ(newPathCount, 1u);
-    return newPathCount == 1u;
+    if(newPathCount != 1u)
+        return MakeUnexpected(Failure{});
+    return Move((*objectPaths)[newPathIndex]);
 }
 
-static bool ReadAssetObjectCacheBytes(const Path& objectPath, NWB::Core::Assets::AssetBytes& outBytes){
-    ErrorCode errorCode;
-    const bool read = ReadBinaryFile(objectPath, outBytes, errorCode);
+[[nodiscard]] static Expected<NWB::Core::Assets::AssetBytes> ReadAssetObjectCacheBytes(TestArena& testArena, const Path& objectPath){
+    auto bytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
+    const auto read = ReadBinaryFile(objectPath, bytes);
     EXPECT_TRUE(read);
-    EXPECT_FALSE(errorCode);
-    EXPECT_FALSE(outBytes.empty());
-    return read && !errorCode && !outBytes.empty();
+    EXPECT_FALSE(bytes.empty());
+    if(!read || bytes.empty())
+        return MakeUnexpected(Failure{});
+    return bytes;
 }
 
 static bool AssetBytesEqual(const NWB::Core::Assets::AssetBytes& lhs, const NWB::Core::Assets::AssetBytes& rhs)noexcept{
@@ -199,53 +194,53 @@ TEST(AssetsGraphics, AssetBuildWritesRegistryObjectCache){
     NWB::Core::Common::LoggerRegistrationGuard loggerRegistrationGuard(logger);
 
     TestArena testArena;
-    Path root(testArena.arena);
-    Path outputDirectory(testArena.arena);
-    EXPECT_TRUE(AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(
-        testArena,
-        "asset_volume_registry_object_cache",
-        root,
-        outputDirectory
-    ));
+    auto cookCase = AssetsGraphicsFixture::PrepareAssetsGraphicsCookCase(testArena, "asset_volume_registry_object_cache");
+    ASSERT_TRUE(cookCase);
+    Path& root = cookCase->root;
+    Path& outputDirectory = cookCase->outputDirectory;
+
 
     const Path assetRoot = root / "assets";
     const Path metaPath = assetRoot / "meshes" / "minimal_mesh.nwb";
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(metaPath, AssetsGraphicsFixture::s_MinimalMeshMeta));
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
 
-    Path objectPath(testArena.arena);
-    ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / s_CACHE, objectPath));
+    const auto objectPath = FindSingleAssetObjectCachePath(testArena, root / s_CACHE);
+    ASSERT_TRUE(objectPath);
 
-    NWB::Core::Assets::AssetBytes firstObjectBytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
-    ASSERT_TRUE(ReadAssetObjectCacheBytes(objectPath, firstObjectBytes));
+    const auto firstObjectBytes = ReadAssetObjectCacheBytes(testArena, *objectPath);
+    ASSERT_TRUE(firstObjectBytes);
 
     UniquePtr<NWB::Core::Assets::IAsset> loadedAsset;
-    EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMinimalMesh(testArena, outputDirectory, loadedAsset));
+    auto loadedAssetLoadResult = AssetsGraphicsFixture::LoadCookedMinimalMesh(testArena, outputDirectory);
+    ASSERT_TRUE(loadedAssetLoadResult);
+    loadedAsset = Move(*loadedAssetLoadResult);
 
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
-    Path unchangedObjectPath(testArena.arena);
-    ASSERT_TRUE(FindSingleAssetObjectCachePath(testArena, root / s_CACHE, unchangedObjectPath));
-    EXPECT_EQ(unchangedObjectPath, objectPath);
+    const auto unchangedObjectPath = FindSingleAssetObjectCachePath(testArena, root / s_CACHE);
+    ASSERT_TRUE(unchangedObjectPath);
+    EXPECT_EQ(*unchangedObjectPath, *objectPath);
 
-    NWB::Core::Assets::AssetBytes unchangedObjectBytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
-    ASSERT_TRUE(ReadAssetObjectCacheBytes(unchangedObjectPath, unchangedObjectBytes));
-    EXPECT_TRUE(AssetBytesEqual(firstObjectBytes, unchangedObjectBytes));
+    const auto unchangedObjectBytes = ReadAssetObjectCacheBytes(testArena, *unchangedObjectPath);
+    ASSERT_TRUE(unchangedObjectBytes);
+    EXPECT_TRUE(AssetBytesEqual(*firstObjectBytes, *unchangedObjectBytes));
 
     EXPECT_TRUE(AssetsGraphicsFixture::WriteTextFile(metaPath, AssetsGraphicsFixture::s_DefaultColorMeshMeta));
     EXPECT_TRUE(AssetsGraphicsFixture::CookPreparedGraphicsAssetRoots(testArena, root, outputDirectory, { assetRoot }, s_ExpectedDualCount));
-    Path changedObjectPath(testArena.arena);
-    ASSERT_TRUE(FindNewAssetObjectCachePath(testArena, root / s_CACHE, objectPath, changedObjectPath));
-    EXPECT_NE(changedObjectPath, objectPath);
+    const auto changedObjectPath = FindNewAssetObjectCachePath(testArena, root / s_CACHE, *objectPath);
+    ASSERT_TRUE(changedObjectPath);
+    EXPECT_NE(*changedObjectPath, *objectPath);
 
-    NWB::Core::Assets::AssetBytes changedObjectBytes = AssetsGraphicsFixture::MakeAssetBytes(testArena);
-    ASSERT_TRUE(ReadAssetObjectCacheBytes(changedObjectPath, changedObjectBytes));
-    EXPECT_FALSE(AssetBytesEqual(firstObjectBytes, changedObjectBytes));
+    const auto changedObjectBytes = ReadAssetObjectCacheBytes(testArena, *changedObjectPath);
+    ASSERT_TRUE(changedObjectBytes);
+    EXPECT_FALSE(AssetBytesEqual(*firstObjectBytes, *changedObjectBytes));
 
     loadedAsset.reset();
-    EXPECT_TRUE(AssetsGraphicsFixture::LoadCookedMinimalMesh(testArena, outputDirectory, loadedAsset));
+    auto loadedAssetLoadResult2 = AssetsGraphicsFixture::LoadCookedMinimalMesh(testArena, outputDirectory);
+    ASSERT_TRUE(loadedAssetLoadResult2);
+    loadedAsset = Move(*loadedAssetLoadResult2);
 
-    ErrorCode errorCode;
-    EXPECT_TRUE(RemoveAllIfExists(root, errorCode));
+    EXPECT_TRUE(RemoveAllIfExists(root));
     EXPECT_EQ(logger.errorCount(), 0u);
 }
 

@@ -7,6 +7,7 @@
 
 #include "algorithm.h"
 #include "basic_string.h"
+#include "expected.h"
 #include "type.h"
 
 
@@ -114,27 +115,38 @@ inline constexpr u32 s_MaxConstantAlphaUnorm8 = s_OpaqueAlphaUnorm8 - 1u;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ComputeCompleteMipCount(
+struct TexturePayloadBlockLayout{
+    u32 blockWidth;
+    u32 blockHeight;
+    u32 bytesPerBlock;
+};
+
+struct TextureMipPlaneBlockLayout{
+    u32 blocksX;
+    u32 blocksY;
+    u64 planeByteCount;
+};
+
+[[nodiscard]] inline Expected<u32> ComputeCompleteMipCount(
     const TextureDimension::Enum dimension,
     const u32 width,
     const u32 height,
-    const u32 depth,
-    u32& outMipCount
+    const u32 depth
 )noexcept{
-    outMipCount = 0u;
     if(!IsValidTextureDimension(dimension) || width == 0u || height == 0u || depth == 0u)
-        return false;
+        return MakeUnexpected(Failure{});
 
+    u32 mipCount = 0u;
     u32 mipWidth = width;
     u32 mipHeight = height;
     u32 mipDepth = depth;
     for(;;){
-        if(outMipCount == Limit<u32>::s_Max)
-            return false;
-        ++outMipCount;
+        if(mipCount == Limit<u32>::s_Max)
+            return MakeUnexpected(Failure{});
+        ++mipCount;
 
         if(mipWidth == 1u && mipHeight == 1u && (dimension != TextureDimension::Texture3D || mipDepth == 1u))
-            return true;
+            return mipCount;
 
         mipWidth = mipWidth > 1u ? mipWidth >> 1u : 1u;
         mipHeight = mipHeight > 1u ? mipHeight >> 1u : 1u;
@@ -143,85 +155,58 @@ inline constexpr u32 s_MaxConstantAlphaUnorm8 = s_OpaqueAlphaUnorm8 - 1u;
     }
 }
 
-[[nodiscard]] inline bool ComputeMipSliceCount(
-    const TextureDimension::Enum dimension,
-    const u32 mipDepth,
-    u32& outSliceCount
-)noexcept{
+[[nodiscard]] inline Expected<u32> ComputeMipSliceCount(const TextureDimension::Enum dimension, const u32 mipDepth)noexcept{
     switch(dimension){
     case TextureDimension::Texture2D:
-        outSliceCount = 1u;
-        return true;
+        return 1u;
     case TextureDimension::TextureCube:
-        outSliceCount = s_TextureCubeFaceCount;
-        return true;
+        return s_TextureCubeFaceCount;
     case TextureDimension::Texture3D:
-        outSliceCount = mipDepth;
-        return mipDepth > 0u;
+        if(mipDepth > 0u)
+            return mipDepth;
+        break;
     default:
-        outSliceCount = 0u;
-        return false;
+        break;
     }
+    return MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] inline bool GetTexturePayloadBlockLayout(
-    const TexturePayloadFormat::Enum format,
-    u32& outBlockWidth,
-    u32& outBlockHeight,
-    u32& outBytesPerBlock
-)noexcept{
+[[nodiscard]] inline Expected<TexturePayloadBlockLayout> GetTexturePayloadBlockLayout(const TexturePayloadFormat::Enum format)noexcept{
     switch(format){
     case TexturePayloadFormat::UastcLdr4x4:
     case TexturePayloadFormat::UastcHdr4x4:
-        outBlockWidth = s_UastcBlockWidth;
-        outBlockHeight = s_UastcBlockHeight;
-        outBytesPerBlock = s_UastcBytesPerBlock;
-        return true;
+        return TexturePayloadBlockLayout{ s_UastcBlockWidth, s_UastcBlockHeight, s_UastcBytesPerBlock };
     default:
-        outBlockWidth = 0u;
-        outBlockHeight = 0u;
-        outBytesPerBlock = 0u;
-        return false;
+        return MakeUnexpected(Failure{});
     }
 }
 
-[[nodiscard]] inline bool ComputeMipPlaneBlockLayout(
+[[nodiscard]] inline Expected<TextureMipPlaneBlockLayout> ComputeMipPlaneBlockLayout(
     const TexturePayloadFormat::Enum format,
     const u32 width,
-    const u32 height,
-    u32& outBlocksX,
-    u32& outBlocksY,
-    u64& outPlaneByteCount
+    const u32 height
 )noexcept{
-    outBlocksX = 0u;
-    outBlocksY = 0u;
-    outPlaneByteCount = 0u;
+    if(width == 0u || height == 0u)
+        return MakeUnexpected(Failure{});
+    const auto layout = GetTexturePayloadBlockLayout(format);
+    if(!layout)
+        return MakeUnexpected(layout.error());
 
-    u32 blockWidth = 0u;
-    u32 blockHeight = 0u;
-    u32 bytesPerBlock = 0u;
-    if(
-        width == 0u
-        || height == 0u
-        || !GetTexturePayloadBlockLayout(format, blockWidth, blockHeight, bytesPerBlock)
-    )
-        return false;
-
-    const u64 blocksX64 = DivideUp(static_cast<u64>(width), static_cast<u64>(blockWidth));
-    const u64 blocksY64 = DivideUp(static_cast<u64>(height), static_cast<u64>(blockHeight));
+    const u64 blocksX64 = DivideUp(static_cast<u64>(width), static_cast<u64>(layout->blockWidth));
+    const u64 blocksY64 = DivideUp(static_cast<u64>(height), static_cast<u64>(layout->blockHeight));
     if(blocksX64 > Limit<u32>::s_Max || blocksY64 > Limit<u32>::s_Max || blocksX64 > Limit<u64>::s_Max / blocksY64)
-        return false;
+        return MakeUnexpected(Failure{});
 
     const u64 blockCount = blocksX64 * blocksY64;
-    if(blockCount > Limit<u64>::s_Max / bytesPerBlock)
-        return false;
+    if(blockCount > Limit<u64>::s_Max / layout->bytesPerBlock)
+        return MakeUnexpected(Failure{});
 
-    outBlocksX = static_cast<u32>(blocksX64);
-    outBlocksY = static_cast<u32>(blocksY64);
-    outPlaneByteCount = blockCount * bytesPerBlock;
-    return true;
+    return TextureMipPlaneBlockLayout{
+        .blocksX = static_cast<u32>(blocksX64),
+        .blocksY = static_cast<u32>(blocksY64),
+        .planeByteCount = blockCount * layout->bytesPerBlock,
+    };
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

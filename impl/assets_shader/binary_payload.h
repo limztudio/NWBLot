@@ -49,8 +49,8 @@ template<typename BinaryContainer>
         return BytecodeValidationFailure::InvalidSize;
 
     usize cursor = 0u;
-    u32 magic = 0u;
-    if(!ReadPOD(binary, cursor, magic) || magic != s_SpvMagic)
+    const auto magic = ReadPOD<u32>(binary, cursor);
+    if(!magic || *magic != s_SpvMagic)
         return BytecodeValidationFailure::InvalidMagic;
 
     return BytecodeValidationFailure::None;
@@ -96,46 +96,36 @@ template<typename BytecodeContainer, typename PayloadContainer>
 
 namespace AssetPayloadDecodeFailure{
     enum Enum : u8{
-        None,
         InvalidHeader,
         UnsupportedVersion,
         InvalidEntryPoint,
         InvalidBytecode,
-        OutputSizeOverflow,
     };
 };
 
-template<typename PayloadContainer, typename StringT, typename BytecodeContainer>
-[[nodiscard]] inline AssetPayloadDecodeFailure::Enum DecodeAssetPayload(
-    const PayloadContainer& payload,
-    StringT& outEntryPoint,
-    BytecodeContainer& outBytecode
-){
-    outEntryPoint.clear();
-    outBytecode.clear();
+struct AssetPayloadView{
+    AStringView entryPoint;
+    BinaryByteView bytecode;
+};
 
+// The result borrows the serialized payload, which must outlive both views.
+template<typename PayloadContainer>
+[[nodiscard]] inline Expected<AssetPayloadView, AssetPayloadDecodeFailure::Enum> DecodeAssetPayload(const PayloadContainer& payload){
     usize cursor = 0u;
-    u32 magic = 0u;
-    u32 version = 0u;
-    if(!ReadPOD(payload, cursor, magic) || !ReadPOD(payload, cursor, version) || magic != s_AssetPayloadMagic)
-        return AssetPayloadDecodeFailure::InvalidHeader;
-    if(version != s_AssetPayloadVersion)
-        return AssetPayloadDecodeFailure::UnsupportedVersion;
-    if(!ReadString(payload, cursor, outEntryPoint) || outEntryPoint.empty())
-        return AssetPayloadDecodeFailure::InvalidEntryPoint;
+    const auto magic = ReadPOD<u32>(payload, cursor);
+    const auto version = ReadPOD<u32>(payload, cursor);
+    if(!magic || !version || *magic != s_AssetPayloadMagic)
+        return MakeUnexpected(AssetPayloadDecodeFailure::InvalidHeader);
+    if(*version != s_AssetPayloadVersion)
+        return MakeUnexpected(AssetPayloadDecodeFailure::UnsupportedVersion);
+    const auto entryPoint = ReadString(payload, cursor);
+    if(!entryPoint || entryPoint->empty())
+        return MakeUnexpected(AssetPayloadDecodeFailure::InvalidEntryPoint);
 
-    const BinaryByteView bytecode{
-        payload.data() + cursor,
-        payload.size() - cursor
-    };
+    const BinaryByteView bytecode{ payload.data() + cursor, payload.size() - cursor };
     if(ValidateBytecode(bytecode) != BytecodeValidationFailure::None)
-        return AssetPayloadDecodeFailure::InvalidBytecode;
-    if(!BinaryDetail::CanAppendBytes(outBytecode, bytecode.size()))
-        return AssetPayloadDecodeFailure::OutputSizeOverflow;
-
-    BinaryDetail::ReserveAppendBytesIfSupported(outBytecode, bytecode.size());
-    BinaryDetail::AppendBytesNoReserveUnchecked(outBytecode, bytecode.data(), bytecode.size());
-    return AssetPayloadDecodeFailure::None;
+        return MakeUnexpected(AssetPayloadDecodeFailure::InvalidBytecode);
+    return AssetPayloadView{ *entryPoint, bytecode };
 }
 
 

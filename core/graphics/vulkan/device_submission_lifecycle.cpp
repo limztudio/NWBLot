@@ -126,54 +126,48 @@ QueueSubmissionToken Device::consumeAcquiredImageSemaphore(const VkSemaphore sem
         return {};
 
     const Queue::SubmissionWait acquireWait{ semaphore, 0u };
-    bool submissionAccepted = false;
-    const u64 submittedID = queue->submit(
+    const auto submission = queue->submit(
         nullptr,
         0u,
         nullptr,
         &acquireWait,
         1u,
-        &submissionAccepted,
-        nullptr,
         nullptr,
         0u,
         true
     );
-    if(!submissionAccepted)
+    if(!submission || !submission->accepted)
         return {};
 
     return QueueSubmissionToken{
-        .value = submittedID,
+        .value = submission->submittedID,
         .physicalQueueIndex = executionQueue.index,
         .deviceGeneration = executionQueue.deviceGeneration,
         .queue = queue->m_queueID,
     };
 }
 
-bool Device::presentNativeQueue(
+Expected<VkResult> Device::presentNativeQueue(
     const u32 nativeQueueIndex,
-    const VkPresentInfoKHR& presentInfo,
-    VkResult& outResult
+    const VkPresentInfoKHR& presentInfo
 ){
     SubmissionOperationLease submissionOperation(*this);
-    outResult = VK_ERROR_UNKNOWN;
     if(!submissionOperation.valid())
-        return false;
+        return MakeUnexpected(Failure{});
     if(
         nativeQueueIndex >= m_nativeQueueStates.size()
         || !m_nativeQueueStates[nativeQueueIndex]
         || m_nativeQueueStates[nativeQueueIndex]->queue == VK_NULL_HANDLE
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("Vulkan: Presentation references an invalid canonical native queue state."));
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     NativeQueueState& nativeQueue = *m_nativeQueueStates[nativeQueueIndex];
     ScopedLock hostLock(nativeQueue.hostMutex);
     if(submissionsBlocked())
-        return false;
-    outResult = m_context.deviceDispatch.vkQueuePresentKHR(nativeQueue.queue, &presentInfo);
-    return true;
+        return MakeUnexpected(Failure{});
+    return m_context.deviceDispatch.vkQueuePresentKHR(nativeQueue.queue, &presentInfo);
 }
 
 

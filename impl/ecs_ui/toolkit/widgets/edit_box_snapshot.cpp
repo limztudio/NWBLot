@@ -78,11 +78,10 @@ TextLayoutStatus::Enum EditBoxView::shape(TextService& text, ShapeRequest reques
     const TextLayoutStatus::Enum validation = ValidateTextRequest(request, m_textMode == EditTextMode::Multiline);
     if(validation != TextLayoutStatus::Success)
         return validation;
-    TextLayout candidate(*m_arena);
-    const TextLayoutStatus::Enum status = text.layout(request, candidate);
-    if(status != TextLayoutStatus::Success)
-        return status;
-    return adoptLayout(Move(candidate)) ? TextLayoutStatus::Success : TextLayoutStatus::FontFailure;
+    auto candidate = text.layout(request);
+    if(!candidate)
+        return candidate.error();
+    return adoptLayout(Move(*candidate)) ? TextLayoutStatus::Success : TextLayoutStatus::FontFailure;
 }
 
 bool EditBoxView::adoptLayout(TextLayout&& layout){
@@ -91,9 +90,7 @@ bool EditBoxView::adoptLayout(TextLayout&& layout){
     EditCaretGeometry candidate(*m_arena);
     if(!candidate.adoptLayout(Move(layout), displayText(), m_mapping, m_committedBytes, m_textMode))
         return false;
-    Rect caret;
-    Rect anchor;
-    if(!candidate.caretRect(m_caret, caret) || !candidate.caretRect(m_selection.begin, anchor) || !candidate.caretRect(m_selection.end, anchor))
+    if(!candidate.caretRect(m_caret) || !candidate.caretRect(m_selection.begin) || !candidate.caretRect(m_selection.end))
         return false;
     m_geometry = Move(candidate);
     m_ready = true;

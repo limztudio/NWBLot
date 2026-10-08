@@ -44,10 +44,11 @@ TextureHandle GraphicsRuntime::createTexture(const TextureDesc& desc)const{
     return getDevice().createTexture(desc);
 }
 
-bool GraphicsRuntime::backBufferResizing(SwapChainTransitionTicket& outTicket){
-    if(!m_backend->prepareSwapChainTransition(SwapChainTransitionKind::Resize, outTicket)){
+Expected<SwapChainTransitionTicket> GraphicsRuntime::backBufferResizing(){
+    auto ticket = m_backend->prepareSwapChainTransition(SwapChainTransitionKind::Resize);
+    if(!ticket){
         requestDeviceRecreation();
-        return false;
+        return MakeUnexpected(Failure{});
     }
 
     m_lastPresentationReceipt.reset();
@@ -57,7 +58,7 @@ bool GraphicsRuntime::backBufferResizing(SwapChainTransitionTicket& outTicket){
 
     for(auto* renderPass : m_renderPasses)
         renderPass->backBufferResizing();
-    return true;
+    return Move(*ticket);
 }
 
 bool GraphicsRuntime::resizeBackBuffer(
@@ -65,14 +66,14 @@ bool GraphicsRuntime::resizeBackBuffer(
     const u32 height,
     const bool vsyncEnabled
 ){
-    SwapChainTransitionTicket transitionTicket;
-    if(!backBufferResizing(transitionTicket))
+    auto transitionTicket = backBufferResizing();
+    if(!transitionTicket)
         return false;
 
     m_swapChainState.backBufferWidth = width;
     m_swapChainState.backBufferHeight = height;
     m_swapChainState.vsyncEnabled = vsyncEnabled;
-    if(!m_backend->commitSwapChainResize(Move(transitionTicket))){
+    if(!m_backend->commitSwapChainResize(Move(*transitionTicket))){
         requestDeviceRecreation();
         return false;
     }

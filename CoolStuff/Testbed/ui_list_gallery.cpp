@@ -17,19 +17,17 @@ TESTBED_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool UiListSource::indexOf(const u64 keyValue, u64& index)const noexcept{
+Expected<u64> UiListSource::indexOf(const u64 keyValue)const noexcept{
     if(keyValue == 0u || keyValue > rowCount())
-        return false;
-    index = keyValue - 1u;
-    return true;
+        return MakeUnexpected(Failure{});
+    return keyValue - 1u;
 }
 
-bool UiListSource::findEnabled(const u64 start, const bool reverse, u64& index)const noexcept{
+Expected<u64> UiListSource::findEnabled(const u64 start, const bool reverse)const noexcept{
     static_cast<void>(reverse);
     if(start >= rowCount())
-        return false;
-    index = start;
-    return true;
+        return MakeUnexpected(Failure{});
+    return start;
 }
 
 StringView UiListSource::text(const u64 index)const noexcept{

@@ -103,8 +103,7 @@ TEST_F(UiTextControlLifetimeTests, AcceptedAuxiliaryEpochChangeRetiresOwnedPartC
     ASSERT_TRUE(m_router.commitTargets(m_targets.data(), m_targets.size(), 2u));
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
     EXPECT_FALSE(m_router.capture().valid());
-    PointerGesture gesture;
-    EXPECT_FALSE(m_router.consumePointerGesture(m_targets[1u].id, 7u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(m_targets[1u].id, 7u));
 }
 
 TEST_F(UiTextControlLifetimeTests, PrepublicationFencePreservesTextCaptureAndRejectsOldWheelUntilAcceptance){
@@ -128,7 +127,9 @@ TEST_F(UiTextControlLifetimeTests, PrepublicationFencePreservesTextCaptureAndRej
     EXPECT_EQ(m_router.capture(), m_targets[0u].id);
     EXPECT_TRUE(send({ .type = InputEventType::PointerWheel, .position = { 10.0f, 10.0f }, .scrollX = 1.0 }).pointerConsumed);
     ControlAction action;
-    ASSERT_TRUE(m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control, action));
+    const auto actionResult = m_router.consumeControlAction(m_targets[0u].id, 7u, m_targets[0u].control);
+    ASSERT_TRUE(actionResult);
+    action = *actionResult;
     EXPECT_EQ(action.control, m_targets[0u].control);
 }
 
@@ -156,8 +157,7 @@ TEST_F(UiTextControlLifetimeTests, PrepublicationFenceRetiresOwnedPartDragWithou
     m_router.fenceControl(m_targets[0u].id, 7u, m_targets[0u].control);
     EXPECT_EQ(m_router.focus(), m_targets[0u].id);
     EXPECT_FALSE(m_router.capture().valid());
-    PointerGesture gesture;
-    EXPECT_FALSE(m_router.consumePointerGesture(m_targets[1u].id, 7u, gesture));
+    EXPECT_FALSE(m_router.consumePointerGesture(m_targets[1u].id, 7u));
 }
 
 TEST_F(UiTextControlLifetimeTests, DifferentDeclarationFenceStillRetiresTextFocusAndCapture){

@@ -49,15 +49,14 @@ struct FinalizeTask{
     };
 
     [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
-        usize inputBytes = 0u;
-        const void* const inputs = context.declarations.uploadBlobData(payload.inputUpload, inputBytes);
+        const auto inputs = context.declarations.uploadBlobData(payload.inputUpload);
         if(!payload.source || !payload.finalize || !inputs || context.commandIrCapture)
             return false;
         const auto& resources = *payload.finalize;
         if(
             context.queue != resources.queue || !resources.pipeline
             || !resources.inputBuffer || !resources.outputBuffer
-            || inputBytes != resources.inputs.size() * sizeof(RayTracingOpticalRuntimeInputGpu)
+            || inputs->size() != resources.inputs.size() * sizeof(RayTracingOpticalRuntimeInputGpu)
         )
             return false;
         commandList.endRenderPass();
@@ -67,7 +66,7 @@ struct FinalizeTask{
         for(const auto& bounds : resources.boundsBuffers)
             commandList.setBufferState(bounds.get(), Core::ResourceStates::ShaderResource);
         commandList.commitBarriers();
-        if(!commandList.tryWriteBuffer(*resources.inputBuffer, inputs, inputBytes, 0u))
+        if(!commandList.tryWriteBuffer(*resources.inputBuffer, inputs->data(), inputs->size(), 0u))
             return false;
         commandList.setBufferState(resources.inputBuffer.get(), Core::ResourceStates::ShaderResource);
         commandList.commitBarriers();

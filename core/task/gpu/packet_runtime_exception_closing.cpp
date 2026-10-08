@@ -21,19 +21,15 @@ NWB_CORE_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool GpuGraphSubmissionTransaction::beginSubmissionExceptionClosingWithinSubmissionOperation(
+Expected<GpuGraphSubmissionTransaction::SubmissionExceptionClosing> GpuGraphSubmissionTransaction::beginSubmissionExceptionClosingWithinSubmissionOperation(
     GpuTaskGraph& graph,
-    const GpuCompiledGraph& compiledGraph,
-    u64& outRecordingAttemptGeneration,
-    GpuGraphSubmissionBinding& outSubmissionBinding
+    const GpuCompiledGraph& compiledGraph
 )noexcept{
-    outRecordingAttemptGeneration = 0u;
-    outSubmissionBinding = {};
     if(!SubmissionOperation::ActiveFor(*this))
-        return false;
+        return MakeUnexpected(Failure{});
     GpuCompiledGraph::ReadView planAccess(compiledGraph);
     if(!planAccess.valid())
-        return false;
+        return MakeUnexpected(Failure{});
 
     NothrowScopedLock lock(m_mutex);
     if(
@@ -42,16 +38,14 @@ bool GpuGraphSubmissionTransaction::beginSubmissionExceptionClosingWithinSubmiss
         || !m_activeSubmissionBinding.valid()
         || m_submissionBindingResolved
     )
-        return false;
+        return MakeUnexpected(Failure{});
     if(m_submissionExceptionClosing.test(MemoryOrder::acquire)){
         if(
             m_exceptionClosingRecordingAttemptGeneration != m_recordingAttemptGeneration
             || m_exceptionClosingBinding != m_activeSubmissionBinding
         )
             TerminateInvariant();
-        outRecordingAttemptGeneration = m_exceptionClosingRecordingAttemptGeneration;
-        outSubmissionBinding = m_exceptionClosingBinding;
-        return true;
+        return SubmissionExceptionClosing{ m_exceptionClosingRecordingAttemptGeneration, m_exceptionClosingBinding };
     }
 
     m_exceptionClosingRecordingAttemptGeneration = m_recordingAttemptGeneration;
@@ -67,11 +61,9 @@ bool GpuGraphSubmissionTransaction::beginSubmissionExceptionClosingWithinSubmiss
         m_submissionExceptionClosing.notifyAll();
         m_exceptionClosingRecordingAttemptGeneration = 0u;
         m_exceptionClosingBinding = {};
-        return false;
+        return MakeUnexpected(Failure{});
     }
-    outRecordingAttemptGeneration = m_exceptionClosingRecordingAttemptGeneration;
-    outSubmissionBinding = m_exceptionClosingBinding;
-    return true;
+    return SubmissionExceptionClosing{ m_exceptionClosingRecordingAttemptGeneration, m_exceptionClosingBinding };
 }
 
 bool GpuGraphSubmissionTransaction::submissionExceptionClosingResolved(

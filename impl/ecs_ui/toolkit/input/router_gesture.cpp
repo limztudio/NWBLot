@@ -16,10 +16,10 @@ NWB_IMPL_UI_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-bool InputRouter::consumePointerGesture(const WidgetId id, const u64 declarationGeneration, PointerGesture& gesture){
+Expected<PointerGesture> InputRouter::consumePointerGesture(const WidgetId id, const u64 declarationGeneration){
     const HitTarget* target = findTarget(id, declarationGeneration);
     if(declarationGeneration == 0u || target == nullptr || !isInteractive(*target) || !target->pointerGesture)
-        return false;
+        return MakeUnexpected(Failure{});
     for(usize index = 0u; index < m_pointerGestures.size(); ++index){
         auto& record = m_pointerGestures[index];
         if(
@@ -27,14 +27,14 @@ bool InputRouter::consumePointerGesture(const WidgetId id, const u64 declaration
             || !record.pendingUpdate || record.gesture.popup != target->popup || record.gesture.control != target->control
         )
             continue;
-        gesture = record.gesture;
+        const PointerGesture gesture = record.gesture;
         if(record.gesture.state == PointerGestureState::Completed)
             m_pointerGestures.erase(m_pointerGestures.begin() + static_cast<isize>(index));
         else
             record.pendingUpdate = false;
-        return true;
+        return gesture;
     }
-    return false;
+    return MakeUnexpected(Failure{});
 }
 
 void InputRouter::appendPointerGesture(const HitTarget& target, InputRoutingResult& result){

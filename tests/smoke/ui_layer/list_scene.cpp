@@ -132,16 +132,16 @@ Array<u64, 12u> UiListSmokeScene::values()const{
 }
 
 Impl::Ui::Rect UiListSmokeScene::selectedRow()const{
-    Impl::Ui::Rect rectangle;
-    u64 index = 0u;
     const auto& placement = m_state.placement();
-    if(
-        !m_visible || !m_source.indexOf(m_state.selectedKey(), index)
-        || index < placement.firstRow || index >= placement.endRow
-        || !Impl::Ui::ScrollLayout::RowBounds(index, placement, __hidden_ui_list_smoke::s_RowHeight, rectangle)
-    )
+    if(!m_visible)
         return {};
-    return rectangle;
+    const auto index = m_source.indexOf(m_state.selectedKey());
+    if(!index || *index < placement.firstRow || *index >= placement.endRow)
+        return {};
+    const auto rectangle = Impl::Ui::ScrollLayout::RowBounds(*index, placement, __hidden_ui_list_smoke::s_RowHeight);
+    if(!rectangle)
+        return {};
+    return *rectangle;
 }
 
 void UiListSmokeScene::observeState(){

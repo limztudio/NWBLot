@@ -40,59 +40,47 @@ const MeshComponent* MeshSystem::findMesh(const Core::ECS::EntityID entity)const
     return m_world.tryGetComponent<MeshComponent>(entity);
 }
 
-bool MeshSystem::resolveMesh(
-    const Core::ECS::EntityID entity,
-    Core::Assets::AssetRef<Mesh>& outMesh
+Expected<Core::Assets::AssetRef<Mesh>> MeshSystem::resolveMesh(
+    const Core::ECS::EntityID entity
 )const{
-    outMesh = Core::Assets::AssetRef<Mesh>{};
-
     const MeshComponent* mesh = findMesh(entity);
     if(!mesh || !mesh->mesh.valid())
-        return false;
+        return MakeUnexpected(Failure{});
 
-    outMesh = mesh->mesh;
-    return true;
+    return mesh->mesh;
 }
 
-bool MeshSystem::resolveRenderableMesh(
-    const Core::ECS::EntityID entity,
-    RenderableMeshDesc& outMesh
+Expected<RenderableMeshDesc, RenderableMeshResolution::Enum> MeshSystem::resolveRenderableMeshStatus(
+    const Core::ECS::EntityID entity
 )const{
-    return resolveRenderableMeshStatus(entity, outMesh) == RenderableMeshResolution::Ready;
-}
-
-RenderableMeshResolution::Enum MeshSystem::resolveRenderableMeshStatus(
-    const Core::ECS::EntityID entity,
-    RenderableMeshDesc& outMesh
-)const{
-    outMesh = RenderableMeshDesc{};
+    RenderableMeshDesc mesh;
 
     for(IRuntimeMeshProvider* provider : m_runtimeMeshProviders){
         if(!provider)
             continue;
 
-        RuntimeMeshDesc runtimeMesh;
-        if(provider->resolveRuntimeMesh(entity, runtimeMesh) && runtimeMesh.valid()){
-            outMesh.runtimeMesh = runtimeMesh;
-            outMesh.runtime = true;
-            return RenderableMeshResolution::Ready;
+        const auto runtimeMesh = provider->resolveRuntimeMesh(entity);
+        if(runtimeMesh && runtimeMesh->valid()){
+            mesh.runtimeMesh = *runtimeMesh;
+            mesh.runtime = true;
+            return mesh;
         }
     }
 
-    Core::Assets::AssetRef<Mesh> mesh;
-    if(!resolveMesh(entity, mesh)){
+    const auto meshAsset = resolveMesh(entity);
+    if(!meshAsset){
         if(findMesh(entity) || m_world.tryGetComponent<SkinnedMeshBindingComponent>(entity))
-            return RenderableMeshResolution::Unavailable;
+            return MakeUnexpected(RenderableMeshResolution::Unavailable);
         // Only unresolved entities need attachment discovery.
         for(const IRuntimeMeshProvider* provider : m_runtimeMeshProviders){
             if(provider && provider->hasRuntimeMeshBinding(entity))
-                return RenderableMeshResolution::Unavailable;
+                return MakeUnexpected(RenderableMeshResolution::Unavailable);
         }
-        return RenderableMeshResolution::Absent;
+        return MakeUnexpected(RenderableMeshResolution::Absent);
     }
 
-    outMesh.mesh = mesh;
-    return RenderableMeshResolution::Ready;
+    mesh.mesh = *meshAsset;
+    return mesh;
 }
 
 void MeshSystem::markLiveRuntimeMeshes(RuntimeMeshRequestSet& requests)const{

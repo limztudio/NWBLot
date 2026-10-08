@@ -74,11 +74,11 @@ public:
     virtual bool flush()override;
     virtual void reserveFileCapacity(usize fileCount)override;
 
-    virtual bool readFile(const Name& virtualPath, u64 offset, void* data, usize bytes, usize& outBytesRead)const override;
+    [[nodiscard]] virtual Expected<usize> readFile(const Name& virtualPath, u64 offset, void* data, usize bytes)const override;
     virtual bool seekFile(FileCursor& cursor, i64 offset, FileSeekOrigin::Enum origin)const override;
     virtual bool removeFile(const Name& virtualPath)override;
     virtual bool fileExists(const Name& virtualPath)const override;
-    virtual bool fileSize(const Name& virtualPath, u64& outSize)const override;
+    [[nodiscard]] virtual Expected<u64> fileSize(const Name& virtualPath)const override;
     virtual Vector<Name, VolumeArena> listFiles()const override;
     bool compact(bool shrinkSegments = true);
 
@@ -89,13 +89,13 @@ private:
 
     bool createSegmentLocked(usize segmentIndex);
     bool ensureCapacityLocked(u64 requiredBytes);
-    bool computeLogicalCapacityLocked(u64& outCapacityBytes)const noexcept;
+    Expected<u64> computeLogicalCapacityLocked()const noexcept;
 
     bool loadMetadataLocked();
     bool flushMetadataLocked();
     bool canFitMetadataForFileCountLocked(u64 fileCount)const noexcept;
-    bool readFileRecordLocked(const Name& virtualPath, FileRecord& outRecord)const;
-    bool computePhysicalCapacityLocked(u64& outCapacityBytes)const;
+    [[nodiscard]] Expected<FileRecord> readFileRecordLocked(const Name& virtualPath)const;
+    Expected<u64> computePhysicalCapacityLocked()const;
 
     bool readBytesLocked(u64 offset, void* data, u64 byteCount)const;
     bool writeBytesLocked(u64 offset, const void* data, u64 byteCount);

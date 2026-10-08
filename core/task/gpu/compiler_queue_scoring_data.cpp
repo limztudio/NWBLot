@@ -142,14 +142,13 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(
     }
 
     m_costWordsPerGroup = m_taskCosts.empty() ? 0u : (m_taskCosts.size() - 1u) / s_BitsPerWord + 1u;
-    usize wordsPerQueue = 0u;
-    usize wordCount = 0u;
-    if(
-        !TryMultiply<usize>(m_costWordsPerGroup, GpuTaskCostHint::kCount, wordsPerQueue)
-        || !TryMultiply<usize>(AddSize(topology.queueCount, 1u), wordsPerQueue, wordCount)
-    )
+    const auto wordsPerQueue = TryMultiply<usize>(m_costWordsPerGroup, GpuTaskCostHint::kCount);
+    if(!wordsPerQueue)
         throw AllocationSizeException{};
-    m_assignedCostWords.resize(wordCount);
+    const auto wordCount = TryMultiply<usize>(AddSize(topology.queueCount, 1u), *wordsPerQueue);
+    if(!wordCount)
+        throw AllocationSizeException{};
+    m_assignedCostWords.resize(*wordCount);
     for(u64& word : m_assignedCostWords)
         word = 0u;
 
@@ -167,7 +166,7 @@ void GpuTaskQueueScoringData::rebuildAssignmentLoads(
             GpuTaskQueueLoad& load = m_assignedQueueLoads[queueIndex];
             if(load.queue == assignment.queue){
                 load.estimatedCost += cost;
-                m_assignedCostWords[(queueIndex + 1u) * wordsPerQueue + wordIndex] |= mask;
+                m_assignedCostWords[(queueIndex + 1u) * *wordsPerQueue + wordIndex] |= mask;
                 break;
             }
         }

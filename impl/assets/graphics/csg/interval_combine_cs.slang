@@ -23,7 +23,7 @@ struct NwbCsgClippedInterval{
     uint intervalIndex;
 };
 
-// Every input/output texture is a CSG StorageImage heap entry. The local binding numbers remain intentional gaps; the heap-selected CSG context resolves the typed array aliases for this dispatch.
+// The heap-selected CSG context resolves every input/output texture through typed StorageImage array aliases.
 #define g_NwbCsgBackCapNormal (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.x))
 #define g_NwbCsgIntervalDepth (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.y))
 #define g_NwbCsgIntervalId (nwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgPeelSlots.z))

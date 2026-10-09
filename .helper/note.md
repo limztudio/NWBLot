@@ -124,6 +124,8 @@
 
 101. Meshlet bounds are 20-byte raw records with the unchanged FP32 sphere at byte 0 and packed cone word at byte 16. `MeshletBounds`, `NWB_MESHLET_BOUNDS_STRIDE`, cooked admission, static uploads, posed writers, local reduction, and culling share that layout with checked byte arithmetic. Accept only the current mesh binary contract; recook incompatible assets instead of retaining padding, old-record readers, or migrations. Follow `.helper/standard.md` section 15.
 
+102. Retired paths must leave no orphaned helpers, declarations, constants, test support, or build registrations. Trace direct callers, templates/macros, generated shader consumers, and current authored APIs before deletion; preserve deliberate generic contracts even when repository use is sparse. Runtime result enums without serialized consumers need no reserved compatibility entries for removed experiments. Trace Python reexports and module-attribute consumers before removing imports, migrate callers to the owning module, and verify entry-module importability with normal search paths. Follow `.helper/standard.md` section 21.
+
 ## Scheduler Architecture
 
 1. `Frame` owns one `Core::CpuTaskScheduler`, initialized with the configured worker budget before graphics and project work starts. Standalone tools own one scheduler for their process work and pass it to consumers.

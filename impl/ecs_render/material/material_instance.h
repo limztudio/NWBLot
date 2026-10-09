@@ -212,26 +212,6 @@ template<typename TValue>
     );
 }
 
-[[nodiscard]] inline bool SetMaterialMutableFloat(
-    Core::ECS::World& world,
-    const Core::ECS::EntityID entity,
-    const Name& materialInterface,
-    const AStringView parameterName,
-    const f32 value
-){
-    return SetMaterialMutableValue(world, entity, materialInterface, parameterName, value);
-}
-
-[[nodiscard]] inline bool SetMaterialMutableFloat4(
-    Core::ECS::World& world,
-    const Core::ECS::EntityID entity,
-    const Name& materialInterface,
-    const AStringView parameterName,
-    const Float4& value
-){
-    return SetMaterialMutableValue(world, entity, materialInterface, parameterName, value);
-}
-
 [[nodiscard]] inline bool SetMaterialMutableHalf4(
     Core::ECS::World& world,
     const Core::ECS::EntityID entity,

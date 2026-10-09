@@ -14,7 +14,7 @@ struct NwbCsgReceiverSurfaceEvent{
     uint faceSign;
 };
 
-// The event read and span write images share the global StorageImage table. Bindings 5/6/9/10 remain ABI gaps; the heap-selected CSG context resolves the correct typed array views.
+// The heap-selected CSG context resolves event reads and span writes from the shared StorageImage table.
 #define g_NwbCsgReceiverEventData (nwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgPeelSlots.w))
 #define g_NwbCsgReceiverEventCount (nwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgSpanSlots.x))
 #define g_NwbCsgReceiverSpanData (nwbHeapStorageImage2DArrayUint4(g_NwbCsgBindlessResources.csgSpanSlots.y))

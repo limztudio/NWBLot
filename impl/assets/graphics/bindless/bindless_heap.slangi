@@ -57,7 +57,7 @@ TextureCube<float4> g_NwbHeapSampledImageCubes[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 RWTexture2D<float4> g_NwbHeapStorageImages[];
 
-// The caustic accumulator is a 2DArray<uint>, while a few scalar storage passes use 2D uint images. Keep typed aliases at the same StorageImage binding so all writable images share one descriptor class/table.
+// Scalar uint and 3D float writable views share the StorageImage descriptor table through typed aliases.
 #pragma warning(push)
 #pragma warning(disable: 39001) // Deliberate typed aliases of the StorageImage descriptor table.
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_IMAGE, NWB_BINDLESS_HEAP_RESOURCE_SET)]]

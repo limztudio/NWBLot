@@ -47,7 +47,6 @@
 #include <impl/assets_mesh/asset.h>
 #include <impl/assets/graphics/avboit/binding_slots.h>
 #include <impl/assets/graphics/avboit/constants.h>
-#include <impl/assets/graphics/csg/binding_slots.h>
 #include <impl/assets/graphics/csg/constants.h>
 #include <impl/assets/graphics/deferred/binding_slots.h>
 #include <impl/assets/graphics/mesh/runtime_constants.h>

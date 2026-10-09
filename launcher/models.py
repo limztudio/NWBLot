@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 import subprocess
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Optional, Tuple
 
 
 @dataclass(frozen=True)

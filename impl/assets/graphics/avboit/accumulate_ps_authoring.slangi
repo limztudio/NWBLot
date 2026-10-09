@@ -24,9 +24,8 @@
 #define NWB_SCENE_SHADING_HEAP_SLOT g_NwbDeferredBindlessResources.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT g_NwbDeferredBindlessResources.avboitSlots.w
 
-// Transparent fragments bypass opaque-G-buffer shadow/caustic sampling and omit conflicting local bindings.
+// Transparent fragments bypass opaque-G-buffer shadow and caustic sampling.
 #define NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED
-#define NWB_SCENE_GI_SAMPLING_DISABLED
 
 // AVBOIT draw push constants expose the same material context as rasterization.
 #include "../scene/lighting.slangi"

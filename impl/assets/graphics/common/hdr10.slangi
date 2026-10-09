@@ -33,13 +33,6 @@
 #define NWB_HDR10_PQ_C2 18.8515625
 #define NWB_HDR10_PQ_C3 18.6875
 
-// sRGB EOTF constants used for UI colors before HDR10/PQ presentation.
-#define NWB_HDR10_SRGB_LINEAR_DIVISOR 12.92
-#define NWB_HDR10_SRGB_NONLINEAR_OFFSET 0.055
-#define NWB_HDR10_SRGB_NONLINEAR_DIVISOR 1.055
-#define NWB_HDR10_SRGB_NONLINEAR_EXPONENT 2.4
-#define NWB_HDR10_SRGB_LINEAR_THRESHOLD 0.04045
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -74,18 +67,6 @@ float3 nwbHdr10PqEncodeNits(float3 luminanceNits){
     );
 }
 
-float3 nwbHdr10SrgbToLinear(float3 value){
-    const float3 srgb = saturate(value);
-    return lerp(
-        srgb / NWB_HDR10_SRGB_LINEAR_DIVISOR,
-        pow(
-            (srgb + NWB_HDR10_SRGB_NONLINEAR_OFFSET) / NWB_HDR10_SRGB_NONLINEAR_DIVISOR,
-            NWB_HDR10_SRGB_NONLINEAR_EXPONENT
-        ),
-        step(float3(NWB_HDR10_SRGB_LINEAR_THRESHOLD), srgb)
-    );
-}
-
 float3 nwbHdr10SceneToNits(float3 linearRec709){
     // The linear renderer may contain highlights above one. Map its reference white to 203 nits and use a smooth shoulder toward the declared 1,000-nit mastering peak, preserving highlight ordering until presentation.
     const float3 linearRec2020 = max(nwbHdr10Rec709ToRec2020(max(linearRec709, float3(0.0))), float3(0.0));
@@ -105,10 +86,6 @@ float3 nwbHdr10EncodeScene(float3 linearRec709){
 
 float3 nwbHdr10EncodeUiLinear(float3 linearRec709){
     return nwbHdr10PqEncodeNits(nwbHdr10UiLinearToNits(linearRec709));
-}
-
-float3 nwbHdr10EncodeUiSrgb(float3 srgbRec709){
-    return nwbHdr10EncodeUiLinear(nwbHdr10SrgbToLinear(srgbRec709));
 }
 
 // Both inputs are already display-linear; premultiplied UI is never exposed or scene-tone-mapped.

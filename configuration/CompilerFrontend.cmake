@@ -1,7 +1,6 @@
 include_guard(GLOBAL)
 
 macro(nwb_configure_compiler_frontend)
-    set(NWB_COMPILER_ID "${CMAKE_CXX_COMPILER_ID}")
     set(NWB_COMPILER_FRONTEND "${CMAKE_CXX_COMPILER_FRONTEND_VARIANT}")
     if(NOT NWB_COMPILER_FRONTEND)
         set(NWB_COMPILER_FRONTEND "GNU")

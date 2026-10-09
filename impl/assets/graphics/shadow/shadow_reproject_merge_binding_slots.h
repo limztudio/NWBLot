@@ -9,26 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Temporal merge of the soft trace into the resolve; reprojection is gated.
-#define NWB_SHADOW_REPROJECT_MERGE_SET 0
-
-// Raw half-res trace this frame.
-#define NWB_SHADOW_REPROJECT_MERGE_BINDING_SOFT_TRACE       0
-// Previous accumulated visibility.
-#define NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_IN       1
-// Previous moments (.x = m1, .y = m2, .z = n).
-#define NWB_SHADOW_REPROJECT_MERGE_BINDING_MOMENTS_IN       2
-// Current geometry cache.
-#define NWB_SHADOW_REPROJECT_MERGE_BINDING_GEOMETRY_CURR    3
-// Previous geometry cache (disocclusion gate).
-#define NWB_SHADOW_REPROJECT_MERGE_BINDING_GEOMETRY_PREV    4
-// Full-res world positions, projected through prevWorldToClip.
-#define NWB_SHADOW_REPROJECT_MERGE_BINDING_GBUFFER_WORLDPOS 5
-// Accumulated visibility output.
-#define NWB_SHADOW_REPROJECT_MERGE_BINDING_HISTORY_OUT      6
-// Next-frame moments output.
-#define NWB_SHADOW_REPROJECT_MERGE_BINDING_MOMENTS_OUT      7
-
 // 8x8 threads per group, one per half-res pixel.
 #define NWB_SHADOW_REPROJECT_MERGE_GROUP_SIZE NWB_SHADOW_RESOLVE_GROUP_SIZE
 

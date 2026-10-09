@@ -31,7 +31,7 @@ ConstantBuffer<NwbCsgCapFillPushConstants> g_NwbCsgCapFillPushConstants;
 #undef NWB_CSG_CONTEXT_HEAP_SLOT
 
 // CSG caps have no source triangle, but they still evaluate the receiver's COMPLETE cook-generated surface hook.
-// The heap-selected clip context selects typed words and mutable mesh-instance storage; cap-material positions b6/b12 remain intentional ABI gaps.
+// The heap-selected clip context provides typed material words and mutable mesh-instance storage.
 uint nwbMeshFrameMaterialTypedHeapSlot(){
     return g_NwbCsgClipContextSlots.materialTyped;
 }

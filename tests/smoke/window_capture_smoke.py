@@ -404,12 +404,6 @@ def terminate_process(process, name, window_handle=None):
     return exit_code, tail
 
 
-def clamp_relative_point(width, height, relative_x, relative_y):
-    x = min(max(int(width * relative_x), 0), width - 1)
-    y = min(max(int(height * relative_y), 0), height - 1)
-    return x, y
-
-
 def require_positive_arg(parser, name, value):
     if value <= 0.0:
         parser.error(f"{name} must be positive")
@@ -1362,24 +1356,6 @@ class LinuxX11Capture:
             raise SmokeFailure(f"window 0x{window:x} has invalid size {attributes.width}x{attributes.height}")
         return attributes.width, attributes.height
 
-    def _relative_window_point(self, window, relative_x, relative_y):
-        width, height = self._validated_window_size(window)
-        return clamp_relative_point(width, height, relative_x, relative_y)
-
-    def _click_window_point(self, window, x, y, settle_seconds, focus=True):
-        if focus:
-            self.x11.XRaiseWindow(self.display, window)
-            self.x11.XSetInputFocus(self.display, window, self.REVERT_TO_PARENT, self.CURRENT_TIME)
-        self.x11.XWarpPointer(self.display, 0, window, 0, 0, 0, 0, x, y)
-        self.x11.XFlush(self.display)
-        time.sleep(settle_seconds)
-
-        self.send_motion_event(window, x, y)
-        time.sleep(0.05)
-        self.send_button_event(window, self.BUTTON_PRESS, x, y)
-        time.sleep(0.05)
-        self.send_button_event(window, self.BUTTON_RELEASE, x, y)
-
     def _window_root_point(self, window, x, y):
         root_x = ctypes.c_int()
         root_y = ctypes.c_int()
@@ -1570,7 +1546,6 @@ class WindowsCapture:
     DWMWA_WINDOW_CORNER_PREFERENCE = 33
     DWMWCP_DONOTROUND = 1
     HWND_TOPMOST = ctypes.c_void_p(-1)
-    MK_LBUTTON = 0x0001
     SW_SHOW = 5
     SW_RESTORE = 9
     SWP_NOSIZE = 0x0001
@@ -1586,9 +1561,6 @@ class WindowsCapture:
     }
     WM_KEYDOWN = 0x0100
     WM_KEYUP = 0x0101
-    WM_MOUSEMOVE = 0x0200
-    WM_LBUTTONDOWN = 0x0201
-    WM_LBUTTONUP = 0x0202
     RECT = WinRect
     POINT = WinPoint
     BITMAPINFOHEADER = WinBitmapInfoHeader
@@ -1732,20 +1704,6 @@ class WindowsCapture:
         if width <= 0 or height <= 0:
             raise SmokeFailure(f"HWND 0x{hwnd:x} has invalid size {width}x{height}")
         return width, height
-
-    def _relative_lparam(self, hwnd, relative_x, relative_y):
-        width, height = self._window_size(hwnd)
-        x, y = clamp_relative_point(width, height, relative_x, relative_y)
-        return (y << 16) | x
-
-    def _post_click(self, hwnd, lparam, settle_seconds, focus=True):
-        if focus:
-            self.user32.SetForegroundWindow(ctypes.c_void_p(hwnd))
-        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_MOUSEMOVE, 0, lparam)
-        time.sleep(settle_seconds)
-        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONDOWN, self.MK_LBUTTON, lparam)
-        time.sleep(0.05)
-        self.user32.PostMessageW(ctypes.c_void_p(hwnd), self.WM_LBUTTONUP, 0, lparam)
 
     def focus_window(self, hwnd):
         self.user32.SetForegroundWindow(ctypes.c_void_p(hwnd))

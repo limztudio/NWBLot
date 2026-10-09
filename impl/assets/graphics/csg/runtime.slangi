@@ -9,7 +9,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#include "binding_slots.h"
 #include "clip_context.slangi"
 #include "constants.h"
 
@@ -106,7 +105,7 @@ uint nwbCsgContextHeapSlot(){
 #endif
 }
 
-// Local CSG clip SRVs/cbuffer remain ABI gaps. This macro resolves the selected heap context.
+// Resolve the selected persistent CSG context from the uniform-buffer heap.
 #define g_NwbCsgClipContextSlots nwbHeapCsgClipContextSlots(nwbCsgContextHeapSlot())
 #define g_NwbCsgReceiverRanges nwbHeapCsgReceiverRanges(g_NwbCsgClipContextSlots.receiverRanges)
 #define g_NwbCsgCutters nwbHeapCsgCutters(g_NwbCsgClipContextSlots.cutters)

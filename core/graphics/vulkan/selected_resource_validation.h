@@ -52,9 +52,6 @@ inline constexpr u32 s_InvalidQueueOwnershipDomain = Limit<u32>::s_Max;
 
 [[nodiscard]] inline bool BufferRangesOverlap(const u64 firstOffset, const u64 firstSize, const u64 secondOffset, const u64 secondSize)noexcept{ return VulkanDetail::BufferRangesOverlap(firstOffset, firstSize, secondOffset, secondSize); }
 
-// Graph preflight and state lowering have already validated this operation; native recording adds no barriers.
-[[nodiscard]] inline bool RecordPreflightedCopyBuffer(CommandList& commandList, Buffer& destination, const u64 destinationOffset, Buffer& source, const u64 sourceOffset, const u64 size){ return commandList.recordPreflightedCopyBufferDirectVulkan(destination, destinationOffset, source, sourceOffset, size); }
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

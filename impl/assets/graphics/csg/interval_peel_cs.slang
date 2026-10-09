@@ -27,7 +27,7 @@ struct NwbCsgIntervalPeelEntry{
 #include "../bindless/bindless_heap_mesh.slangi"
 #include "../mesh/view_ray.slangi"
 
-// Local bindings 0..2 are ABI gaps. The CSG context selects target-generation Texture2DArray UAVs from the StorageImage heap; the device's required formatless-storage-image support permits the two float formats.
+// The CSG context selects target-generation Texture2DArray UAVs from the StorageImage heap; required formatless-storage-image support permits both float formats.
 #define g_NwbCsgBackCapNormal (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.x))
 #define g_NwbCsgIntervalDepth (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.y))
 #define g_NwbCsgIntervalId (nwbHeapStorageImage2DArrayUint(g_NwbCsgBindlessResources.csgPeelSlots.z))

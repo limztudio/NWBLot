@@ -23,8 +23,6 @@
 #endif
 #define g_NwbShadowVisibility nwbHeapStorageImage2DArrayFloat4(NWB_SHADOW_RQ_VISIBILITY_STORAGE_SLOT)
 
-// (binding 7, the per-instance occluder material table, is intentionally absent here: the hardware opaque fast path commits the first FORCE_OPAQUE hit and loads no per-instance material -- see binding_slots.h.)
-
 // The hardware opaque path commits its first FORCE_OPAQUE hit for a binary blocked/lit result and reads no geometry.
 // Colored software shadows fetch transparent-occluder geometry through the global descriptor heap.
 

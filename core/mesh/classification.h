@@ -63,17 +63,9 @@ inline constexpr MeshClassInfo s_MeshClassInfos[] = {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] inline bool ValidMeshClass(const u32 meshClass)noexcept{
-    return FindMeshClassInfo(meshClass) != nullptr;
-}
-
 [[nodiscard]] inline bool MeshClassUsesSkinning(const u32 meshClass)noexcept{
     const MeshClassInfo* info = FindMeshClassInfo(meshClass);
     return info && info->usesSkinning;
-}
-
-[[nodiscard]] inline bool MeshClassMatchesSkinPayload(const u32 meshClass, const bool hasSkin)noexcept{
-    return MeshClassUsesSkinning(meshClass) == hasSkin;
 }
 
 inline constexpr AStringView s_InvalidMeshClassName = "invalid";

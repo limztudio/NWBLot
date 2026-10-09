@@ -121,20 +121,6 @@ private:
     }
 }
 
-[[nodiscard]] inline constexpr bool SubmissionCommandListMatchesExecutionQueue(
-    const CommandListParameters& commandList,
-    const GpuPhysicalQueueId& executionQueue,
-    const CommandQueue::Enum executionQueueClass
-)noexcept{
-    return
-        executionQueue.valid()
-        && commandList.physicalQueue.valid()
-        && executionQueueClass < CommandQueue::kCount
-        && commandList.queueType == executionQueueClass
-        && commandList.physicalQueue == executionQueue
-    ;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

@@ -92,16 +92,6 @@ template<typename PayloadT>
     return true;
 }
 
-[[nodiscard]] inline bool FailSurfelAsyncRecord(
-    Optional<Core::GpuTimingMeasure>& asyncTiming
-){
-    if(asyncTiming.has_value()){
-        asyncTiming.value().discardTiming();
-        asyncTiming.reset();
-    }
-    return false;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

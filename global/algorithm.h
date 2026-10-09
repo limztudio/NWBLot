@@ -121,10 +121,6 @@ template<typename T>
     return value + addend;
 }
 
-constexpr u32 AlignUpU32(const u32 value, const u32 alignment)noexcept{
-    return AlignUp(value, alignment);
-}
-
 [[nodiscard]] constexpr Expected<u32> AlignUpU32Checked(const u32 value, const u32 alignment)noexcept{
     return AlignUpChecked(value, alignment);
 }

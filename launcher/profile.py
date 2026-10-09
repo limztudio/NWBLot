@@ -7,7 +7,7 @@ import socket
 import subprocess
 import time
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional
 from launcher.models import LaunchSettings, ProfileSession
 from launcher.constants import (
     CWD_PREFIX,

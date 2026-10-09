@@ -16,33 +16,11 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Local SRV slots are ABI gaps.
-#define NWB_SW_SHADOW_SET 0
-
-#define NWB_SW_SHADOW_BINDING_GBUFFER_WORLD_POSITION 0
-#define NWB_SW_SHADOW_BINDING_GBUFFER_NORMAL 1
-#define NWB_SW_SHADOW_BINDING_GBUFFER_DEPTH 2
-#define NWB_SW_SHADOW_BINDING_SCENE_SHADING 3
-#define NWB_SW_SHADOW_BINDING_LIGHT_LIST 4
-#define NWB_SW_SHADOW_BINDING_VISIBILITY_OUTPUT 6
-// Selects scene/mesh records from the heap.
-#define NWB_SW_SHADOW_BINDING_MATERIAL_CONTEXT_SLOTS 8
-// Slots 5, 7, 9-14, and 16 are intentional ABI gaps; do not renumber.
-#define NWB_SW_SHADOW_BINDING_COARSE 15
 // Compacted edge records feed the indirect transparent retrace.
-#define NWB_SW_SHADOW_BINDING_EDGE_COUNTER 17
-#define NWB_SW_SHADOW_BINDING_EDGE_LIST 18
-#define NWB_SW_SHADOW_BINDING_INDIRECT_ARGS 19
 #define NWB_SW_SHADOW_INDIRECT_ARGS_GROUP_COUNT_X 0u
 #define NWB_SW_SHADOW_INDIRECT_ARGS_GROUP_COUNT_Y 1u
 #define NWB_SW_SHADOW_INDIRECT_ARGS_GROUP_COUNT_Z 2u
 #define NWB_SW_SHADOW_INDIRECT_ARGS_WORD_COUNT 3u
-// Half-resolution opaque trace input for the soft resolve.
-#define NWB_SW_SHADOW_BINDING_SOFT_HALF 20
-// Transparent trace input for RGB resolve.
-#define NWB_SW_SHADOW_BINDING_TRANSPARENT_SOFT_HALF 21
-// Frame selector.
-#define NWB_SW_SHADOW_BINDING_BINDLESS_RESOURCES 22
 
 #define NWB_SW_SHADOW_GROUP_SIZE 8
 
@@ -62,7 +40,6 @@
 // Occluder class for traversal passes.
 #define NWB_SW_SHADOW_OCCLUDER_OPAQUE 0
 #define NWB_SW_SHADOW_OCCLUDER_TRANSPARENT 1
-#define NWB_SW_SHADOW_OCCLUDER_ALL 2
 
 #define NWB_SW_SHADOW_BACKGROUND_DEPTH NWB_SCENE_BACKGROUND_DEPTH
 

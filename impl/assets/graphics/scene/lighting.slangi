@@ -34,8 +34,6 @@
 #endif
 #endif
 
-// Dedicated resolve keeps the writable surfel pool off deferred lighting.
-
 // Shadow slots store colored transmittance; absent slots are fully lit.
 half3 nwbBxdfLightTransmittance(int2 pixel, uint lightIndex){
 #ifdef NWB_SCENE_SHADOW_CAUSTIC_SAMPLING_DISABLED

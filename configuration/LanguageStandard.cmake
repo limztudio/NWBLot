@@ -48,7 +48,6 @@ function(nwb_get_latest_cxx_flag out_var)
         )
     endif()
 
-    set(NWB_LATEST_CXX_FLAG "${_selected_flag}" CACHE INTERNAL "Latest supported C++ language mode flag" FORCE)
     set(${out_var} "${_selected_flag}" PARENT_SCOPE)
 endfunction()
 

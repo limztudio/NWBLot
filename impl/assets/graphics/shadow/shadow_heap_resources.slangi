@@ -26,8 +26,6 @@
 ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> g_NwbHeapShadowMaterialContextSlotBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 RWStructuredBuffer<uint, Std430DataLayout> g_NwbHeapShadowWritableUintBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-StructuredBuffer<uint, Std430DataLayout> g_NwbHeapShadowReadOnlyUintBuffers[];
 #pragma warning(pop)
 
 
@@ -37,10 +35,6 @@ ConstantBuffer<NwbRayTraceMaterialContextSlots, Std140DataLayout> nwbHeapShadowM
 
 RWStructuredBuffer<uint, Std430DataLayout> nwbHeapShadowWritableUintBuffer(const uint slot){
     return g_NwbHeapShadowWritableUintBuffers[slot];
-}
-
-StructuredBuffer<uint, Std430DataLayout> nwbHeapShadowReadOnlyUintBuffer(const uint slot){
-    return g_NwbHeapShadowReadOnlyUintBuffers[slot];
 }
 
 

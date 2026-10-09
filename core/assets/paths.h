@@ -524,31 +524,6 @@ template<typename MetadataValue>
 }
 
 template<typename MetadataValue>
-[[nodiscard]] inline Expected<ACompactString> ReadMetadataCompactStringField(
-    const Path& nwbFilePath,
-    const MetadataValue& object,
-    const AStringView diagnosticPrefix,
-    const AStringView fieldName,
-    const bool required
-){
-    const auto text = ReadMetadataStringField(nwbFilePath, object, diagnosticPrefix, fieldName, required);
-    if(!text)
-        return MakeUnexpected(text.error());
-    ACompactString value;
-    if(!text->present)
-        return value;
-    if(!value.assign(text->text)){
-        NWB_LOGGER_ERROR(NWB_TEXT("{} '{}': field '{}' exceeds ACompactString capacity")
-            , StringConvert(diagnosticPrefix)
-            , PathToString<tchar>(nwbFilePath)
-            , StringConvert(fieldName)
-        );
-        return MakeUnexpected(Failure{});
-    }
-    return value;
-}
-
-template<typename MetadataValue>
 [[nodiscard]] inline Expected<Name> ReadMetadataNameField(
     const Path& nwbFilePath,
     const MetadataValue& object,

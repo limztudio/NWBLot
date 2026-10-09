@@ -13,7 +13,6 @@
 
 
 #define NWB_SW_SHADOW_AABB_PADDING 1e-4
-#define NWB_SW_SHADOW_BARYCENTRIC_EPSILON 1e-5
 // Sentinel returned by nwbSwShadowRayAabbEntryT for a box the ray misses: a finite value that sorts AFTER any real entry distance (so a missed box is never picked as the near child in front-to-back traversal) but is safe to compare with plain <= (no inf/NaN hazards).
 #define NWB_SW_SHADOW_AABB_MISS 1.0e30
 

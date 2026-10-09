@@ -68,10 +68,6 @@ inline constexpr usize s_BackupDirectoryNameExtraCharacters = 1u + s_BackupDirec
 #endif
 }
 
-inline void ClearError(ErrorCode& outError)noexcept{
-    outError.clear();
-}
-
 #if defined(NWB_PLATFORM_WINDOWS)
 inline void SetLastSystemError(ErrorCode& outError)noexcept{
     outError = ErrorCode(static_cast<i32>(GetLastError()), std::system_category());
@@ -101,18 +97,6 @@ inline void CaptureDirectoryIterationError(ErrorCode& outError)noexcept{
         SetLastSystemError(outError);
 }
 #endif
-
-inline void SetUnsupportedError(ErrorCode& outError)noexcept{
-    outError = std::make_error_code(std::errc::function_not_supported);
-}
-
-inline void SetValueTooLargeError(ErrorCode& outError)noexcept{
-    outError = std::make_error_code(std::errc::value_too_large);
-}
-
-inline void SetIOError(ErrorCode& outError)noexcept{
-    outError = std::make_error_code(std::errc::io_error);
-}
 
 template<typename ArenaT>
 [[nodiscard]] inline bool IsRootComponent(const Path<ArenaT>& path)noexcept{

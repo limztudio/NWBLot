@@ -37,7 +37,6 @@ inline constexpr TStringView s_CopyBufferOperation = NWB_TEXT("copy buffer");
 inline constexpr TStringView s_ClearTextureBoxOperation = NWB_TEXT("clear texture box");
 inline constexpr TStringView s_ReleaseTextureOwnershipOperation = NWB_TEXT("release texture ownership");
 inline constexpr TStringView s_SetPushConstantsOperation = NWB_TEXT("set push constants");
-inline constexpr TStringView s_DirectCommandIrCopyBufferOperation = NWB_TEXT("direct command-IR copy buffer");
 
 
 class CommandList final : public RefCounter<GraphicsResource>, NoCopy{
@@ -253,16 +252,6 @@ public:
     void writeBuffer(Buffer& buffer, const void* data, usize dataSize, u64 destOffsetBytes = 0);
     void clearBufferUInt(Buffer& buffer, u32 clearValue);
     void copyBuffer(Buffer& dest, u64 destOffsetBytes, Buffer& src, u64 srcOffsetBytes, u64 dataSizeBytes);
-    // Experimental command-IR hook. The caller has already graph-preflighted the operands and lowered the
-    // authoritative CopySource/CopyDest state transitions into this list. This emits only vkCmdCopyBuffer and
-    // retains the resources; it intentionally does not mutate CommandList state tracking or synthesize barriers.
-    [[nodiscard]] bool recordPreflightedCopyBufferDirectVulkan(
-        Buffer& dest,
-        u64 destOffsetBytes,
-        Buffer& src,
-        u64 srcOffsetBytes,
-        u64 dataSizeBytes
-    );
     [[nodiscard]] bool tryWriteTexture(
         Texture& dest,
         u32 arraySlice,

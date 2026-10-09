@@ -10,7 +10,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Optional, Sequence
 from launcher.models import LaunchSettings, ProfileSession
 from launcher import repository_windows_process
 from launcher.constants import (

@@ -5,7 +5,6 @@ import math
 import re
 
 from interaction_smoke import linear_rgb_bytes
-from popup_tools_probe import center
 from window_capture_smoke import SmokeFailure
 
 NUMBER = r"[0-9.eE+-]+"

@@ -11,7 +11,6 @@
 #include <core/graphics/backend_selection.h>
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
-#include <impl/assets/graphics/skinned_mesh/binding_slots.h>
 #include <impl/ecs_mesh/runtime/buffer_upload.h>
 
 

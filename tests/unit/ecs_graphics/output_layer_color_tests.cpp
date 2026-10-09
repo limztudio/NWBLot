@@ -38,10 +38,6 @@ using float3 = ShaderFloat3;
     return { a.x + b.x, a.y + b.y, a.z + b.z };
 }
 
-[[nodiscard]] ShaderFloat3 operator-(const ShaderFloat3 a, const ShaderFloat3 b){
-    return { a.x - b.x, a.y - b.y, a.z - b.z };
-}
-
 [[nodiscard]] ShaderFloat3 operator*(const ShaderFloat3 a, const ShaderFloat3 b){
     return { a.x * b.x, a.y * b.y, a.z * b.z };
 }
@@ -68,14 +64,6 @@ using float3 = ShaderFloat3;
 
 [[nodiscard]] ShaderFloat3 pow(const ShaderFloat3 a, const f64 b){
     return { Pow(a.x, b), Pow(a.y, b), Pow(a.z, b) };
-}
-
-[[nodiscard]] ShaderFloat3 step(const ShaderFloat3 a, const ShaderFloat3 b){
-    return { b.x >= a.x ? 1. : 0., b.y >= a.y ? 1. : 0., b.z >= a.z ? 1. : 0. };
-}
-
-[[nodiscard]] ShaderFloat3 lerp(const ShaderFloat3 a, const ShaderFloat3 b, const ShaderFloat3 t){
-    return a + (b - a) * t;
 }
 
 

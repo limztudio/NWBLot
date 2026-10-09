@@ -8,7 +8,8 @@ import sys
 import time
 
 from nested_popup_native import NestedPopupNativeInput
-from nested_popup_probe import center, observe_nested_popup, snapshot_from_logs
+from nested_popup_probe import observe_nested_popup, snapshot_from_logs
+from popup_tools_probe import center
 from window_smoke import parse_args
 from window_capture_smoke import (
     SKIP_EXIT_CODE, STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,

@@ -9,7 +9,6 @@
 #include <core/graphics/runtime/runtime.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 #include <core/graphics/shader_archive.h>
-#include <impl/assets/graphics/skinned_mesh/binding_slots.h>
 #include <impl/assets/graphics/skinned_mesh/names.h>
 #include <impl/assets_shader/loader.h>
 

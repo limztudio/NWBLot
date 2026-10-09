@@ -7,7 +7,7 @@ import ctypes
 import platform
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Optional
 from launcher.constants import (
     ARCH_AARCH64_ALIAS,
     ARCH_AMD64_ALIAS,

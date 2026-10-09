@@ -5,10 +5,7 @@
 #pragma once
 
 
-#include <impl/global.h>
-
-#include <global/basic_string.h>
-#include <global/name.h>
+#include "../../global.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -20,18 +17,14 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-namespace MaterialShaderStageNames{
+namespace MeshResourceNames{
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr AStringView s_MeshComputeArchiveStageText = "mesh_compute";
-inline constexpr AStringView s_MeshObjectVertexArchiveStageText = "mesh_object_vertex";
-inline constexpr AStringView s_MeshComputeImplicitDefineText = "NWB_MESH_SHADER_EMULATION_COMPUTE";
-
-inline constexpr Name s_MeshComputeArchiveStageName(s_MeshComputeArchiveStageText);
-inline constexpr Name s_MeshObjectVertexArchiveStageName(s_MeshObjectVertexArchiveStageText);
+inline constexpr AStringView s_RtTriangleIndicesBufferName = ":rt_triangle_indices";
+inline constexpr AStringView s_RtTriangleAttributesBufferName = ":rt_triangle_attributes";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

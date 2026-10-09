@@ -1,11 +1,10 @@
-"""Regenerate pinned Unicode 17 grapheme properties and the official conformance fixture."""
+"""Regenerate pinned Unicode 17 grapheme properties."""
 import argparse
 import hashlib
 import json
 from pathlib import Path
 from urllib.request import urlopen
 
-ROOT = Path(__file__).resolve().parents[5]
 HERE = Path(__file__).resolve().parent
 SEP = "/" * 128
 
@@ -111,32 +110,9 @@ NWB_IMPL_UI_END
     write_cpp(HERE / f"{kind}_properties.cpp", output)
 
 
-def generate_cases(data):
-    cases = []
-    for line in data.decode("utf-8").splitlines():
-        tokens = line.split("#", 1)[0].split()
-        if not tokens:
-            continue
-        text, boundaries = bytearray(), []
-        for token in tokens:
-            if token == "\u00F7":
-                boundaries.append(len(text))
-            elif token != "\u00D7":
-                text.extend(chr(int(token, 16)).encode("utf-8"))
-        encoded = "".join(f"\\x{value:02X}" for value in text)
-        positions = ",".join(str(value) for value in boundaries)
-        cases.append(f'    {{ "{encoded}", "{positions}", {len(text)}u }},')
-    for index, start in enumerate(range(0, len(cases), 500)):
-        content = "\n".join(cases[start:start + 500])
-        write_cpp(ROOT / "tests/unit/ui" / f"edit_grapheme_cases_{index}.inc",
-                  f"// limztudio@gmail.com\n{SEP}\n\n\n"
-                  f"// Generated Unicode 17.0.0 GraphemeBreakTest cases; see impl/ecs_ui/toolkit/edit/unicode/LICENSE.txt.\n{content}\n\n\n{SEP}\n\n")
-    return len(cases)
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source-dir", type=Path, help="Use cached gcb/incb/emoji/conformance/license .txt files.")
+    parser.add_argument("--source-dir", type=Path, help="Use cached gcb/incb/emoji/license .txt files.")
     arguments = parser.parse_args()
     manifest = json.loads((HERE / "sources.json").read_text(encoding="utf-8"))
     payloads = {}
@@ -149,7 +125,6 @@ def main():
         ranges = parse_ranges(payloads[kind], kind)
         generate_table(kind, ranges)
         print(f"{kind}: {len(ranges)} ranges")
-    print(f"Conformance: {generate_cases(payloads['conformance'])} cases")
     (HERE / "LICENSE.txt").write_bytes(payloads["license"])
 
 

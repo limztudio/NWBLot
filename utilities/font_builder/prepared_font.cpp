@@ -6,8 +6,10 @@
 #include "source_input.h"
 
 #include <impl/assets_font/prepared_source.h>
+
+#include <core/common/log.h>
+
 #include <global/sha256.h>
-#include <logger/client/module.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

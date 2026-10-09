@@ -18,7 +18,7 @@ target_sources(nwb_font_builder_bake PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/bake.h"
     "${CMAKE_CURRENT_LIST_DIR}/font_source.h"
 )
-target_link_libraries(nwb_font_builder_bake PUBLIC nwb_assets_font_atlas PRIVATE nwb_assets_font nwb::freetype nwb_logclient)
+target_link_libraries(nwb_font_builder_bake PUBLIC nwb_assets_font_atlas PRIVATE nwb_assets_font nwb::freetype nwb_common)
 
 nwb_declare_executable(nwb_font_builder)
 target_sources(nwb_font_builder PRIVATE "${CMAKE_CURRENT_LIST_DIR}/main.cpp" "${CMAKE_CURRENT_LIST_DIR}/command_line.cpp")

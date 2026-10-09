@@ -31,7 +31,7 @@ nwb_target_link_libraries_whole_archive(nwb_asset_builder
     nwb_assets_model_volume_entry
     nwb_assets_graphics_cook
 )
-target_link_libraries(nwb_asset_builder PRIVATE nwb_pipeline_asset_builder nwb_pipeline_command_line nwb::tbb)
+target_link_libraries(nwb_asset_builder PRIVATE nwb_pipeline_asset_builder nwb_pipeline_command_line nwb_logclient nwb::tbb)
 target_compile_definitions(nwb_asset_builder PRIVATE NWB_COOK=1 NWB_PIPELINE_TOOL_NAME="asset_builder"
     __TBB_NO_IMPLICIT_LINKAGE=1 __TBBMALLOC_NO_IMPLICIT_LINKAGE=1)
 

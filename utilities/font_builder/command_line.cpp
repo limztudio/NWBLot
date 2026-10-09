@@ -4,8 +4,9 @@
 
 #include "bake.h"
 
+#include <core/common/log.h>
+
 #include <global/terminal_entry.h>
-#include <logger/client/module.h>
 
 #include <CLI.hpp>
 

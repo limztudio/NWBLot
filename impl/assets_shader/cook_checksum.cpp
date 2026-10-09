@@ -10,8 +10,7 @@
 
 #include "cook.h"
 #include "arena_names.h"
-
-#include <impl/assets_material/shader_stage_names.h>
+#include "slang_compiler.h"
 
 #include <core/assets/paths.h>
 #include <core/common/log.h>
@@ -243,8 +242,8 @@ u64 ShaderCook::computeSourceChecksum(
     appendChecksumLine(entry.stage.view());
     appendChecksumLine(entry.archiveStage.view());
     appendChecksumLine(entry.rayQuery
-        ? MaterialShaderStageNames::s_Spirv15RayQueryTargetProfileText
-        : MaterialShaderStageNames::s_Spirv15TargetProfileText
+        ? SlangShaderCompiler::s_Spirv15RayQueryTargetProfileText
+        : SlangShaderCompiler::s_Spirv15TargetProfileText
     );
     appendChecksumLine(__hidden_cook_checksum::ShaderOptimizationLevelText(entry.optimizationLevel));
     appendChecksumLine(AStringView(entry.entryPoint));

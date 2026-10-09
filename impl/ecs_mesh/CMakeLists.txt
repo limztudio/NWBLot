@@ -2,6 +2,7 @@ nwb_declare_static_library(nwb_ecs_mesh)
 target_sources(nwb_ecs_mesh PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/system.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/runtime/buffer_upload.h"
+    "${CMAKE_CURRENT_LIST_DIR}/runtime/resource_names.h"
     "${CMAKE_CURRENT_LIST_DIR}/runtime/mesh.h"
     "${CMAKE_CURRENT_LIST_DIR}/runtime/mesh_requests.h"
     "${CMAKE_CURRENT_LIST_DIR}/runtime/mesh_requests.cpp"

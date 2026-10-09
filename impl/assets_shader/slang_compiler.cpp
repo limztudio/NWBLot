@@ -10,10 +10,7 @@
 
 #include "slang_compiler.h"
 #include "source_dependencies.h"
-
 #include "arena_names.h"
-
-#include <impl/assets_material/shader_stage_names.h>
 
 #include <core/graphics/shader_stage_names.h>
 #include <core/graphics/spirv_entry_point.h>
@@ -81,7 +78,7 @@ static constexpr AStringView s_CommonCompilerArguments[]{
     "-emit-spirv-directly",
     "-fvk-use-entrypoint-name",
     "-warnings-as-errors", "all",
-    "-profile", MaterialShaderStageNames::s_Spirv15TargetProfileText,
+    "-profile", SlangShaderCompiler::s_Spirv15TargetProfileText,
 };
 static constexpr AStringView s_CapabilityArgument = "-capability";
 static constexpr AStringView s_EntryPointArgument = "-entry";
@@ -494,7 +491,7 @@ Expected<u64> SlangShaderCompiler::ComputeCompilerFingerprint(
         appendText(__hidden_slang_compiler::s_CapabilityArgument);
         appendText(capability);
     }
-    appendText(MaterialShaderStageNames::s_SpvRayQueryCapabilityText);
+    appendText(SlangShaderCompiler::s_SpvRayQueryCapabilityText);
     appendText(__hidden_slang_compiler::s_EntryPointArgument);
     appendText(__hidden_slang_compiler::s_StageArgument);
     appendText(__hidden_slang_compiler::s_IncludeArgument);
@@ -597,7 +594,7 @@ bool SlangShaderCompiler::CompileVariant(const ShaderCook::ShaderCompilerRequest
         arguments.push_back(optimizationArgument);
     if(request.rayQuery){
         arguments.push_back(__hidden_slang_compiler::s_CapabilityArgument);
-        arguments.push_back(MaterialShaderStageNames::s_SpvRayQueryCapabilityText);
+        arguments.push_back(SlangShaderCompiler::s_SpvRayQueryCapabilityText);
     }
     for(const AStringView capability : __hidden_slang_compiler::s_SpirvBaselineCapabilities){
         arguments.push_back(__hidden_slang_compiler::s_CapabilityArgument);

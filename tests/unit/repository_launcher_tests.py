@@ -16,7 +16,15 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 import launcher  # noqa: E402
-from launcher import generate_name_symbols, repository_windows_process  # noqa: E402
+from launcher import repository_windows_process  # noqa: E402
+
+NAME_SYMBOL_CAPTURE_SPEC = importlib.util.spec_from_file_location(
+    "nwb_test_generate_name_symbols", ROOT / "tests" / "name_symbols" / "generate_name_symbols.py"
+)
+if NAME_SYMBOL_CAPTURE_SPEC is None or NAME_SYMBOL_CAPTURE_SPEC.loader is None:
+    raise ImportError("Could not load the test-owned name-symbol capture helper")
+generate_name_symbols = importlib.util.module_from_spec(NAME_SYMBOL_CAPTURE_SPEC)
+NAME_SYMBOL_CAPTURE_SPEC.loader.exec_module(generate_name_symbols)
 
 LIT_OPEN = "open"
 LIT_CLOSE = "close"

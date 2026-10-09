@@ -7,7 +7,7 @@
 #include "local_bounds.h"
 #include "resource_names.h"
 
-#include <impl/ecs_render/kernel/arena_names.h>
+#include <impl/ecs_mesh/runtime/resource_names.h>
 
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
@@ -558,7 +558,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             m_graphics,
             instance,
             instance.triangleIndexBuffer,
-            RendererArenaScope::s_RtTriangleIndicesBufferName,
+            MeshResourceNames::s_RtTriangleIndicesBufferName,
             *triangleIndices,
             false,
             __hidden_runtime_cache_resources::s_RtTriangleIndexLabel,
@@ -596,7 +596,7 @@ bool MeshSkinningRuntimeCache::uploadRuntimeMeshBuffers(MeshSkinningRuntimeInsta
             m_graphics,
             instance,
             instance.attributeBuffer,
-            RendererArenaScope::s_RtTriangleAttributesBufferName,
+            MeshResourceNames::s_RtTriangleAttributesBufferName,
             *triangleAttributes,
             true, // canHaveUavs: the per-frame skinned-normal repack pass writes this buffer as a raw UAV in place
             __hidden_runtime_cache_resources::s_RtTriangleAttributeLabel,

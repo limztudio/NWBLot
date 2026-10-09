@@ -78,8 +78,6 @@ if(NWB_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-# nwb_namesym captures workload Name sidecars for opt/fin log decoding; GUI capture runs on demand.
-nwb_add_name_symbol_target()
 nwb_finalize_string_literals()
 
 message(STATUS "Configured NWBLot for ${CMAKE_SYSTEM_NAME} (${NWB_OUTPUT_ARCH}) with ${NWB_COMPILER_DESCRIPTION}")

@@ -15,6 +15,6 @@ target_sources(nwb_asset_gatherer PRIVATE
 nwb_target_link_libraries_whole_archive(nwb_asset_gatherer
     nwb_assets_graphics_gather
 )
-target_link_libraries(nwb_asset_gatherer PRIVATE nwb_pipeline_command_line nwb_pipeline_asset_gatherer)
+target_link_libraries(nwb_asset_gatherer PRIVATE nwb_pipeline_command_line nwb_pipeline_asset_gatherer nwb_logclient)
 target_compile_definitions(nwb_asset_gatherer PRIVATE NWB_COOK=1 NWB_PIPELINE_TOOL_NAME="asset_gatherer")
 

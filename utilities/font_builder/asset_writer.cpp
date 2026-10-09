@@ -6,8 +6,9 @@
 #include "asset_metadata.h"
 #include "prepared_font.h"
 
+#include <core/common/log.h>
+
 #include <global/blocking_io.h>
-#include <logger/client/module.h>
 
 #if defined(NWB_PLATFORM_LINUX)
 #include <fcntl.h>

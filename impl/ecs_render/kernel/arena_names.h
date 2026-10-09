@@ -31,7 +31,6 @@ inline constexpr Name s_MutableTypedBytesArena("impl/ecs_render/material_instanc
 inline constexpr Name s_RayTracingBuildArena("impl/ecs_render/ray_tracing_build");
 inline constexpr Name s_RayTracingAttributeArena("impl/ecs_render/ray_tracing_attribute");
 
-// Runtime mesh buffer debug names shared by the renderer mesh uploader and the skinning runtime cache.
 inline constexpr AStringView s_PositionsBufferName = ":positions";
 inline constexpr AStringView s_NormalsBufferName = ":normals";
 inline constexpr AStringView s_TangentsBufferName = ":tangents";
@@ -54,8 +53,6 @@ inline constexpr TStringView s_MeshletPositionRefDeltaBufferLabel = NWB_TEXT("me
 inline constexpr TStringView s_MeshletAttributeRefDeltaBufferLabel = NWB_TEXT("meshlet attribute ref delta");
 inline constexpr TStringView s_MeshletLocalVertexRefBufferLabel = NWB_TEXT("meshlet local vertex ref");
 inline constexpr TStringView s_MeshletPrimitiveIndexBufferLabel = NWB_TEXT("meshlet primitive index");
-inline constexpr AStringView s_RtTriangleIndicesBufferName = ":rt_triangle_indices";
-inline constexpr AStringView s_RtTriangleAttributesBufferName = ":rt_triangle_attributes";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -92,12 +92,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const float3 worldPosition = float3(worldPositionSample);
     const float3 worldNormal = float3(nwbSurfelDecodeGbufferNormal(rawNormalSample));
 
-    const float cellSize = g_NwbSurfelConstants.cameraPositionCellSize.w;
+    const float cellSize = g_NwbSurfelConstants.cellSizeRadiusBiasAccum.x;
     const uint cellCount = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.x);
     const uint poolCapacity = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.y);
     const uint frameIndex = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.z);
-    const float defaultRadius = g_NwbSurfelConstants.coverageRadiusBiasHyst.y;
-    const float normalBias = g_NwbSurfelConstants.coverageRadiusBiasHyst.z;
+    const float defaultRadius = g_NwbSurfelConstants.cellSizeRadiusBiasAccum.y;
+    const float normalBias = g_NwbSurfelConstants.cellSizeRadiusBiasAccum.z;
 
     const int3 myCell = nwbSurfelCellCoord(worldPosition, cellSize);
     const uint bucket = nwbSurfelHashCell(myCell, cellCount);

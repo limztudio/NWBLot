@@ -10,7 +10,7 @@
 
 
 #define NWB_REFLECTION_TEMPORAL_GROUP_SIZE 8u
-#define NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES 48u
+#define NWB_REFLECTION_TEMPORAL_PUSH_CONSTANT_BYTES 40u
 
 #define NWB_REFLECTION_TEMPORAL_UINT_FIELDS(FIELD) \
     FIELD(width) \
@@ -22,9 +22,7 @@
     FIELD(maxSampleCount) \
     FIELD(historyValid) \
     FIELD(sampleIndex) \
-    FIELD(samplingSeed) \
-    FIELD(_padding0) \
-    FIELD(_padding1)
+    FIELD(samplingSeed)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

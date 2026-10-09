@@ -5,7 +5,10 @@
 #include <impl/assets_mesh/cook.h>
 #include <impl/assets_mesh/binary_payload.h>
 
+#include <core/assets/binary_payload_io.h>
 #include <tests/common/capturing_logger.h>
+
+#include <global/bit.h>
 
 #include <gtest/gtest.h>
 
@@ -123,6 +126,55 @@ TEST(MeshSolidCodec, TailPaddingAndInconsistentPrimitiveCountsAreRejected){
     EXPECT_FALSE(rejected.loadBinary(wrongCount));
 }
 
+TEST(MeshSolidCodec, AdjacentBoundsPreserveFloatBitsAndRejectATruncatedLastCone){
+    CapturingLogger logger;
+    Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
+    Core::Assets::AssetArena arena(Name("tests/mesh/solid_codec/compact_bounds"));
+    const Array<u32, 10u> words{
+        0x80000000u, 0x00000001u, 0x7f7fffffu, 0x3f800000u, 0xff000001u,
+        0x00000000u, 0x80000001u, 0xff7fffffu, 0x00800000u, 0x80000001u,
+    };
+    Core::Assets::AssetVector<Impl::MeshletBounds> bounds(arena);
+    bounds.resize(2u);
+    for(usize index = 0u; index < bounds.size(); ++index){
+        for(usize component = 0u; component < 4u; ++component)
+            bounds[index].sphere.raw[component] = BitCast<f32>(words[index * 5u + component]);
+        bounds[index].conePacked = words[index * 5u + 4u];
+    }
+    Core::Assets::AssetBytes binary(arena);
+    ASSERT_TRUE(Core::Assets::AppendVectorPayload(binary, bounds, NWB_TEXT("compact bounds"), NWB_TEXT("bounds")));
+    ASSERT_EQ(binary.size(), sizeof(u32) * words.size());
+    usize wordCursor = 0u;
+    for(const u32 word : words){
+        const auto stored = ReadPOD<u32>(binary, wordCursor);
+        ASSERT_TRUE(stored);
+        EXPECT_EQ(*stored, word);
+    }
+    Core::Assets::AssetVector<Impl::MeshletBounds> decoded(arena);
+    usize cursor = 0u;
+    ASSERT_TRUE(Core::Assets::ReadVectorPayload(
+        binary, cursor, bounds.size(), decoded, NWB_TEXT("compact bounds"), NWB_TEXT("bounds")
+    ));
+    ASSERT_EQ(decoded.size(), bounds.size());
+    for(usize index = 0u; index < decoded.size(); ++index){
+        for(usize component = 0u; component < 4u; ++component)
+            EXPECT_EQ(BitCast<u32>(decoded[index].sphere.raw[component]), words[index * 5u + component]);
+        EXPECT_EQ(decoded[index].conePacked, words[index * 5u + 4u]);
+    }
+    for(usize removedBytes = 1u; removedBytes <= sizeof(u32); ++removedBytes){
+        Core::Assets::AssetBytes truncated(binary);
+        truncated.resize(truncated.size() - removedBytes);
+        cursor = 0u;
+        EXPECT_FALSE(Core::Assets::ReadVectorPayload(
+            truncated, cursor, bounds.size(), decoded, NWB_TEXT("compact bounds"), NWB_TEXT("bounds")
+        ))
+            << "missing final cone bytes: " << removedBytes;
+        EXPECT_EQ(cursor, 0u);
+        EXPECT_TRUE(decoded.empty());
+    }
+    EXPECT_EQ(logger.errorCount(), sizeof(u32));
+}
+
 TEST(MeshSolidCodec, PreviousMeshMagicCannotAdmitOtherwiseValidCurrentPayload){
     CapturingLogger logger;
     Core::Common::LoggerRegistrationGuard loggerRegistration(logger, Core::Common::LoggerBreakPolicy::ReportOnly);
@@ -133,7 +185,7 @@ TEST(MeshSolidCodec, PreviousMeshMagicCannotAdmitOtherwiseValidCurrentPayload){
     ASSERT_TRUE(control.loadBinary(*cooked));
 
     Core::Assets::AssetBytes previousEncoding(*cooked);
-    constexpr u32 s_PreviousMeshMagic = 0x4d534835u;
+    constexpr u32 s_PreviousMeshMagic = 0x4d534836u;
     NWB_MEMCPY(previousEncoding.data(), sizeof(s_PreviousMeshMagic), &s_PreviousMeshMagic, sizeof(s_PreviousMeshMagic));
     Impl::Mesh rejected(arena, s_MeshName);
     EXPECT_FALSE(rejected.loadBinary(previousEncoding));

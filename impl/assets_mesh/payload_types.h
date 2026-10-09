@@ -45,14 +45,13 @@ static_assert(sizeof(MeshletDesc) == sizeof(u32) * 12u, "MeshletDesc layout drif
 struct MeshletBounds{
     Float4U sphere;
     u32 conePacked = 0u;
-    u32 padding0 = 0u;
 };
 static_assert(IsStandardLayout_V<MeshletBounds>, "MeshletBounds must stay binary-serializable");
 static_assert(IsTriviallyCopyable_V<MeshletBounds>, "MeshletBounds must stay binary-serializable");
 static_assert(sizeof(MeshletBounds) == NWB_MESHLET_BOUNDS_STRIDE, "MeshletBounds layout drifted");
+static_assert(alignof(MeshletBounds) == alignof(f32), "MeshletBounds raw records must retain four-byte alignment");
 static_assert(offsetof(MeshletBounds, sphere) == NWB_MESHLET_BOUNDS_SPHERE_BYTE_OFFSET, "MeshletBounds sphere offset drifted");
 static_assert(offsetof(MeshletBounds, conePacked) == NWB_MESHLET_BOUNDS_CONE_BYTE_OFFSET, "MeshletBounds cone offset drifted");
-static_assert(offsetof(MeshletBounds, padding0) == NWB_MESHLET_BOUNDS_PADDING_BYTE_OFFSET, "MeshletBounds padding offset drifted");
 
 struct MeshletPositionStreamRef{
     u32 position = s_MeshMissingStreamIndex;

@@ -106,7 +106,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     const bool updateGuide = sampleCount <= NWB_SURFEL_CONVERGED_SAMPLE_COUNT || ((frameIndex / updateDivisor + groupID.x) % NWB_SURFEL_GUIDE_MATURE_UPDATE_INTERVAL == 0u);
 
     if(rayIndex < rayCount){
-        const float normalBias = g_NwbSurfelConstants.coverageRadiusBiasHyst.z;
+        const float normalBias = g_NwbSurfelConstants.cellSizeRadiusBiasAccum.z;
         const float3 n = g_NwbSurfelPool[surfelIndex].normal;
         const float3 up = abs(n.z) < NWB_FRAME_FALLBACK_AXIS_Z_MAX ? float3(0.0, 0.0, 1.0) : float3(1.0, 0.0, 0.0);
         const float3 tangent = normalize(cross(up, n));
@@ -206,7 +206,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         const float4 frameShG = g_surfelShG[0] * projectionScale;
         const float4 frameShB = g_surfelShB[0] * projectionScale;
 
-        const uint accumCap = max(uint(g_NwbSurfelConstants.coverageRadiusBiasHyst.w), 1u);
+        const uint accumCap = max(uint(g_NwbSurfelConstants.cellSizeRadiusBiasAccum.w), 1u);
         const uint n = min(sampleCount, accumCap);
         // The running-mean history blend is a (0, 1) bounded factor, so half arithmetic is sufficient here.
         const half historyWeight = half(float(n) / float(n + 1u));

@@ -13,7 +13,7 @@
 
 // Per-frame skinned-normal repack: GPU mirror of BuildMeshletTriangleAttributes reading the deformed stream, so RT shadow + caustic traces bend on the live pose. uv0 is pose-invariant: only the 8-byte normal half is rewritten.
 struct NwbSkinnedMeshRepackPushConstants{
-    uint4 payload0;
+    uint2 payload0;
 };
 
 [[vk::push_constant]]

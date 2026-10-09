@@ -29,7 +29,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(!nwbSurfelIsAlive(surfel.sampleState))
         return;
 
-    const float cellSize = g_NwbSurfelConstants.cameraPositionCellSize.w;
+    const float cellSize = g_NwbSurfelConstants.cellSizeRadiusBiasAccum.x;
     const uint cellCount = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.x);
     const int3 cell = nwbSurfelCellCoord(surfel.position, cellSize);
     const uint bucket = nwbSurfelHashCell(cell, cellCount);

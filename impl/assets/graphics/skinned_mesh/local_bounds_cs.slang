@@ -11,7 +11,7 @@
 
 
 struct NwbSkinnedMeshLocalBoundsPushConstants{
-    uint4 payload0;
+    uint2 payload0;
 };
 
 [[vk::push_constant]]

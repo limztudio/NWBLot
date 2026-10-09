@@ -142,7 +142,6 @@ bool MeshSkinningSystem::recordGraphOwnedSkinningDeformation(
     pushConstants.skinCount = plan.skinCount;
     pushConstants.jointCount = plan.jointCount;
     pushConstants.skinningMode = plan.skinningMode;
-    pushConstants.attributeCount = plan.attributeCount;
     pushConstants.bindlessResourceSlots = plan.bindlessResourceSlots;
     commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
     {

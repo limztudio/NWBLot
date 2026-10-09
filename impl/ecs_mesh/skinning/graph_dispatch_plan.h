@@ -86,7 +86,6 @@ struct MeshSkinningGraphDispatchPlan{
     u32 skinCount = 0u;
     u32 jointCount = 0u;
     u32 skinningMode = SkeletonSkinningMode::LinearBlend;
-    u32 attributeCount = 0u;
     u32 bindlessResourceSlots = 0u;
     Core::GpuDescriptorHandle bindlessResourceSlotsDescriptor = Core::GpuDescriptorHandle::Invalid();
     MeshSkinningSubmissionCommit submissionCommit;

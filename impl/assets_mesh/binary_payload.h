@@ -23,7 +23,7 @@ namespace MeshBinaryPayload{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-inline constexpr u32 s_MeshMagic = 0x4D534836u; // MSH6
+inline constexpr u32 s_MeshMagic = 0x4D534837u; // MSH7
 inline constexpr TStringView s_MeshLoadBinaryContext = NWB_TEXT("Mesh::loadBinary");
 inline constexpr TStringView s_MeshAssetKindLabel = NWB_TEXT("mesh");
 

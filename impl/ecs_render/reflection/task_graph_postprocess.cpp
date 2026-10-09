@@ -107,7 +107,7 @@ struct TemporalTask{
             payload.width, payload.height, payload.snapshot.current.storageSlot, payload.snapshot.previous.sampledSlot,
             payload.snapshot.opaqueSpecularSlot, outcome.reused ? payload.snapshot.history.previousSampleCount : 0u,
             payload.snapshot.history.settings.temporalMaxSamples, outcome.reused ? 1u : 0u,
-            outcome.sampleIndex, payload.snapshot.history.settings.samplingSeed, 0u, 0u,
+            outcome.sampleIndex, payload.snapshot.history.settings.samplingSeed,
         };
         Core::ComputeState state;
         state.setPipeline(payload.snapshot.temporalPipeline.get());

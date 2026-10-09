@@ -36,7 +36,6 @@ namespace __hidden_skinning_local_bounds{
 struct LocalBoundsPushConstants{
     u32 meshletCount = 0u;
     u32 bindlessResourceSlots = 0u;
-    u32 reserved[2] = {};
 };
 static_assert(sizeof(LocalBoundsPushConstants) == NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE);
 static_assert(offsetof(LocalBoundsPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT);

@@ -11,34 +11,37 @@
 
 
 struct NwbSkinnedMeshPushConstants{
-    uint4 payload0;
-    uint4 payload1;
+    uint meshletCount;
+    uint skinCount;
+    uint jointCount;
+    uint skinningMode;
+    uint bindlessResourceSlots;
 };
 
 [[vk::push_constant]]
 ConstantBuffer<NwbSkinnedMeshPushConstants> g_NwbSkinnedMeshPushConstants;
 
-// All persistent mesh streams, including this per-runtime selector payload, are global heap entries. The selector slot occupies payload1.y (word 5) and is uniform for the entire dispatch.
-#define g_NwbSkinnedMeshBindlessResources nwbSkinnedMeshHeapBindlessResources(g_NwbSkinnedMeshPushConstants.payload1[NWB_SKINNED_MESH_PUSH_BINDLESS_RESOURCES_SLOT - 4u])
+// Persistent mesh streams use global heap entries; the runtime selector is uniform for the dispatch.
+#define g_NwbSkinnedMeshBindlessResources nwbSkinnedMeshHeapBindlessResources(g_NwbSkinnedMeshPushConstants.bindlessResourceSlots)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 uint nwbSkinnedMeshMeshletCount(){
-    return g_NwbSkinnedMeshPushConstants.payload0[NWB_SKINNED_MESH_PUSH_MESHLET_COUNT];
+    return g_NwbSkinnedMeshPushConstants.meshletCount;
 }
 
 uint nwbSkinnedMeshSkinCount(){
-    return g_NwbSkinnedMeshPushConstants.payload0[NWB_SKINNED_MESH_PUSH_SKIN_COUNT];
+    return g_NwbSkinnedMeshPushConstants.skinCount;
 }
 
 uint nwbSkinnedMeshJointCount(){
-    return g_NwbSkinnedMeshPushConstants.payload0[NWB_SKINNED_MESH_PUSH_JOINT_COUNT];
+    return g_NwbSkinnedMeshPushConstants.jointCount;
 }
 
 uint nwbSkinnedMeshSkinningMode(){
-    return g_NwbSkinnedMeshPushConstants.payload0[NWB_SKINNED_MESH_PUSH_SKINNING_MODE];
+    return g_NwbSkinnedMeshPushConstants.skinningMode;
 }
 
 float4x4 nwbSkinnedMeshLoadJointMatrix(const uint jointId){

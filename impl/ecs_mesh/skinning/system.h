@@ -91,26 +91,20 @@ private:
         u32 skinCount = 0;
         u32 jointCount = 0;
         u32 skinningMode = SkeletonSkinningMode::LinearBlend;
-        u32 attributeCount = 0;
         // UniformBuffer heap slot for MeshSkinningBindlessResourceSlots.
         u32 bindlessResourceSlots = 0;
-        u32 padding2 = 0;
-        u32 padding3 = 0;
     };
     static_assert(sizeof(MeshSkinningPushConstants) == NWB_SKINNED_MESH_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning push constants layout must match the shader ABI");
     static_assert(offsetof(MeshSkinningPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_MESHLET_COUNT, "MeshSkinning meshlet-count push offset drifted");
     static_assert(offsetof(MeshSkinningPushConstants, skinCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_SKIN_COUNT, "MeshSkinning skin-count push offset drifted");
     static_assert(offsetof(MeshSkinningPushConstants, jointCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_JOINT_COUNT, "MeshSkinning joint-count push offset drifted");
     static_assert(offsetof(MeshSkinningPushConstants, skinningMode) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_SKINNING_MODE, "MeshSkinning skinning-mode push offset drifted");
-    static_assert(offsetof(MeshSkinningPushConstants, attributeCount) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_ATTRIBUTE_COUNT, "MeshSkinning attribute-count push offset drifted");
     static_assert(offsetof(MeshSkinningPushConstants, bindlessResourceSlots) == sizeof(u32) * NWB_SKINNED_MESH_PUSH_BINDLESS_RESOURCES_SLOT, "MeshSkinning bindless-resource slot push offset drifted");
 
     struct MeshletBoundsPushConstants{
         u32 meshletCount = 0;
         // UniformBuffer heap slot for MeshSkinningBindlessResourceSlots.
         u32 bindlessResourceSlots = 0;
-        u32 padding1 = 0;
-        u32 padding2 = 0;
     };
     static_assert(sizeof(MeshletBoundsPushConstants) == NWB_SKINNED_MESH_BOUNDS_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning bounds push constants layout must match the shader ABI");
     static_assert(offsetof(MeshletBoundsPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_BOUNDS_PUSH_MESHLET_COUNT, "MeshSkinning bounds meshlet-count push offset drifted");
@@ -120,8 +114,6 @@ private:
         u32 meshletCount = 0;
         // UniformBuffer heap slot for MeshSkinningBindlessResourceSlots.
         u32 bindlessResourceSlots = 0;
-        u32 padding1 = 0;
-        u32 padding2 = 0;
     };
     static_assert(sizeof(MeshletRepackPushConstants) == NWB_SKINNED_MESH_REPACK_PUSH_CONSTANT_BYTE_SIZE, "MeshSkinning repack push constants layout must match the shader ABI");
     static_assert(offsetof(MeshletRepackPushConstants, meshletCount) == sizeof(u32) * NWB_SKINNED_MESH_REPACK_PUSH_MESHLET_COUNT, "MeshSkinning repack meshlet-count push offset drifted");

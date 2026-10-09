@@ -510,7 +510,6 @@ bool MeshSkinningSystem::submitFrameSkinningGraph(){
             plan.skinCount = static_cast<u32>(payload.skinInfluenceCount);
             plan.jointCount = static_cast<u32>(payload.jointMatrices.size());
             plan.skinningMode = payload.resolvedSkinningMode;
-            plan.attributeCount = instance->meshletAttributeRefCount;
             plan.bindlessResourceSlots = resources.bindlessHeapHandles.resourceSlots.slot();
             plan.bindlessResourceSlotsBuffer = resources.bindlessResourceSlotsBuffer;
             plan.bindlessResourceSlotsDescriptor = resources.bindlessHeapHandles.resourceSlots;

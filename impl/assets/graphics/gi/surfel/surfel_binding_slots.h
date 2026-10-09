@@ -32,8 +32,8 @@
 #define NWB_SURFEL_UPSAMPLE_WORLD_SIGMA_SCALE 3.0f
 #define NWB_SURFEL_UPSAMPLE_TAP_SIDE 2
 
-// Five float4 lanes.
-#define NWB_SURFEL_CONSTANTS_FLOAT4_COUNT 5u
+// Four float4 lanes.
+#define NWB_SURFEL_CONSTANTS_FLOAT4_COUNT 4u
 
 // One-thread indirect-args build ABI.
 #define NWB_SURFEL_TRACE_BUILD_ARGS_GROUP_SIZE_X 1u

@@ -22,9 +22,8 @@ NWB_IMPL_BEGIN
 
 // CPU/shader ABI mirror for surfel constants.
 struct NwbSurfelConstantsGpu{
-    Float4 cameraPositionCellSize;  // xyz = camera world position, w = hash cell size
     Float4 hashPoolFrameDivisor;    // x = hash cell count, y = pool capacity, z = frame index, w = update divisor
-    Float4 coverageRadiusBiasHyst;  // x = reserved, y = default radius, z = normal bias, w = accumulation cap
+    Float4 cellSizeRadiusBiasAccum;  // x = hash cell size, y = default radius, z = normal bias, w = accumulation cap
     Float4 ageRaysTileScreen;       // x = max age, y = maximum rays/surfel, z = spawn tile (px), w = screen width
     Float4 screenHeightPad;         // x = screen height, y = resolve factor, zw = pad
 };
@@ -43,14 +42,13 @@ template<typename StateT>
     const f32 cellSize = NWB_SURFEL_CELL_SIZE;
 
     NwbSurfelConstantsGpu params;
-    params.cameraPositionCellSize = Float4(0.0f, 0.0f, 0.0f, cellSize);
     params.hashPoolFrameDivisor = Float4(
         static_cast<f32>(state.m_surfelHashCellCount),
         static_cast<f32>(state.m_surfelPoolCapacity),
         static_cast<f32>(state.m_surfelFrameIndex),
         static_cast<f32>(updateDivisor)
     );
-    params.coverageRadiusBiasHyst = Float4(0.0f, NWB_SURFEL_DEFAULT_RADIUS, s_SurfelNormalBias, static_cast<f32>(NWB_SURFEL_MAX_ACCUM));
+    params.cellSizeRadiusBiasAccum = Float4(cellSize, NWB_SURFEL_DEFAULT_RADIUS, s_SurfelNormalBias, static_cast<f32>(NWB_SURFEL_MAX_ACCUM));
     params.ageRaysTileScreen = Float4(
         static_cast<f32>(NWB_SURFEL_MAX_AGE),
         static_cast<f32>(NWB_SURFEL_RAYS_PER_SURFEL),

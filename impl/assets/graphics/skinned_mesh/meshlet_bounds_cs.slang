@@ -19,7 +19,7 @@ static const float NWB_SKINNED_MESH_BOUNDS_RADIUS_INFLATION = 1.25;
 
 
 struct NwbSkinnedMeshBoundsPushConstants{
-    uint4 payload0;
+    uint2 payload0;
 };
 
 [[vk::push_constant]]
@@ -126,7 +126,6 @@ void nwbSkinnedMeshBoundsStore(const uint meshletIndex, const float4 sphere, con
     const uint byteOffset = nwbMeshletBoundsByteOffset(meshletIndex);
     nwbSkinnedMeshHeapWritableRawBuffer(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots3.z).Store4(byteOffset + NWB_MESHLET_BOUNDS_SPHERE_BYTE_OFFSET, asuint(sphere));
     nwbSkinnedMeshHeapWritableRawBuffer(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots3.z).Store(byteOffset + NWB_MESHLET_BOUNDS_CONE_BYTE_OFFSET, conePacked);
-    nwbSkinnedMeshHeapWritableRawBuffer(g_NwbSkinnedMeshBoundsBindlessResources.streamSlots3.z).Store(byteOffset + NWB_MESHLET_BOUNDS_PADDING_BYTE_OFFSET, 0u);
 }
 
 void nwbSkinnedMeshBoundsReduceMinMax(const uint groupThreadIndex){

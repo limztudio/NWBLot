@@ -48,10 +48,10 @@ bool nwbSurfelGatherField(
     outIrradiance = half3(0.0h);
     outCoverage = half(0.0h);
 
-    const float cellSize = NWB_SURFEL_GATHER_FIELD_CONSTANTS.cameraPositionCellSize.w;
+    const float cellSize = NWB_SURFEL_GATHER_FIELD_CONSTANTS.cellSizeRadiusBiasAccum.x;
     const uint cellCount = uint(NWB_SURFEL_GATHER_FIELD_CONSTANTS.hashPoolFrameDivisor.x);
-    const float normalBias = NWB_SURFEL_GATHER_FIELD_CONSTANTS.coverageRadiusBiasHyst.z;
-    const float radius = max(NWB_SURFEL_GATHER_FIELD_CONSTANTS.coverageRadiusBiasHyst.y, NWB_SURFEL_RADIUS_MIN);
+    const float normalBias = NWB_SURFEL_GATHER_FIELD_CONSTANTS.cellSizeRadiusBiasAccum.z;
+    const float radius = max(NWB_SURFEL_GATHER_FIELD_CONSTANTS.cellSizeRadiusBiasAccum.y, NWB_SURFEL_RADIUS_MIN);
     const float3 biasedPosition = worldPosition + normal * normalBias;
 
     half3 irradianceSum = half3(0.0h);

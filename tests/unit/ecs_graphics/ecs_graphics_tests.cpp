@@ -689,7 +689,6 @@ static NWB::Impl::MeshSkinningRuntimeInstance MakeTriangleInstance(){
     instance.meshletBounds.push_back(NWB::Impl::MeshletBounds{
         Float4U(0.0f, 0.0f, 0.0f, 2.0f),
         NWB::Impl::PackMeshletCone(VectorSet(0.0f, 0.0f, 1.0f, 0.0f), 1.0f),
-        0u,
     });
     Vector<NWB::Impl::MeshletPositionStreamRef> meshletPositionStreamRefs;
     Vector<NWB::Impl::MeshletAttributeStreamRef> meshletAttributeStreamRefs;

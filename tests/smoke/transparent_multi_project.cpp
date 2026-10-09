@@ -34,6 +34,7 @@
 
 #include <global/math/frame.h>
 #include <global/math/constant.h>
+#include <global/simdmath.h>
 #include <global/simplemath.h>
 
 
@@ -233,7 +234,8 @@ static void ApplyTransparentSceneTransform(
 
 #if defined(NWB_TRANSPARENT_MULTI_ENABLE_CSG)
 [[nodiscard]] static SIMDVector BuildTransparentCsgRotation(const f32 time){
-    return QuaternionRotationRollPitchYaw(time * 0.32f, time, time * 0.16f);
+    const SIMDVector angles = VectorMultiply(VectorSet(time, time, time, 0.0f), VectorSet(0.32f, 1.0f, 0.16f, 0.0f));
+    return QuaternionRotationRollPitchYawFromVector(angles);
 }
 
 static void ApplyTransparentCsgSceneTransform(

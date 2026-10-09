@@ -10,6 +10,8 @@
 #include <core/common/log.h>
 #include <core/alloc/general.h>
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,8 +29,10 @@ namespace Tests::Smoke{
 
 
 [[nodiscard]] inline Impl::Ui::Color EncodeSmokeColor(const u64 value)noexcept{
-    return { static_cast<f32>(value & 15u) / 15.0f, static_cast<f32>((value >> 4u) & 15u) / 15.0f,
-        static_cast<f32>((value >> 8u) & 15u) / 15.0f, 1.0f };
+    const SIMDVector channels = VectorSet(static_cast<f32>(value & 15u), static_cast<f32>((value >> 4u) & 15u),
+        static_cast<f32>((value >> 8u) & 15u), 15.0f);
+    const SIMDVector color = VectorDivide(channels, VectorReplicate(15.0f));
+    return { VectorGetX(color), VectorGetY(color), VectorGetZ(color), 1.0f };
 }
 
 [[nodiscard]] inline bool SameSmokeRect(const Impl::Ui::Rect& left, const Impl::Ui::Rect& right)noexcept{

@@ -1,0 +1,34 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#pragma once
+
+
+#include "../type.h"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Native FP64 lanes retain binary64 precision and the compiler's arithmetic/contraction policy on supported Clang targets.
+using SIMDVectorDouble = f64 __attribute__((ext_vector_type(2)));
+static_assert(sizeof(SIMDVectorDouble) == sizeof(f64) * 2u);
+using SIMDVectorDouble4 = f64 __attribute__((ext_vector_type(4)));
+static_assert(sizeof(SIMDVectorDouble4) == sizeof(f64) * 4u);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+[[nodiscard]] NWB_INLINE SIMDVectorDouble VectorDoubleFloor(SIMDVectorDouble value)noexcept{
+    return __builtin_elementwise_floor(value);
+}
+
+[[nodiscard]] NWB_INLINE SIMDVectorDouble VectorDoubleCeiling(SIMDVectorDouble value)noexcept{
+    return __builtin_elementwise_ceil(value);
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

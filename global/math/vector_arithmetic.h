@@ -106,6 +106,33 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL VectorNegativeMultiplySubtract(SIMDVector v0
 #endif
 }
 
+// Preserve the compiler's contraction policy for a source multiply-add expression instead of requiring an explicit FMA.
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorMultiplyAddExpression(SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept{
+#if defined(NWB_HAS_SCALAR)
+    return VectorSet(
+        VectorGetX(v0) * VectorGetX(v1) + VectorGetX(v2),
+        VectorGetY(v0) * VectorGetY(v1) + VectorGetY(v2),
+        VectorGetZ(v0) * VectorGetZ(v1) + VectorGetZ(v2),
+        VectorGetW(v0) * VectorGetW(v1) + VectorGetW(v2)
+    );
+#else
+    return v0 * v1 + v2;
+#endif
+}
+
+NWB_INLINE SIMDVector NWB_SIMD_CALL VectorNegativeMultiplySubtractExpression(SIMDVector v0, SIMDVector v1, SIMDVector v2)noexcept{
+#if defined(NWB_HAS_SCALAR)
+    return VectorSet(
+        VectorGetX(v2) - VectorGetX(v0) * VectorGetX(v1),
+        VectorGetY(v2) - VectorGetY(v0) * VectorGetY(v1),
+        VectorGetZ(v2) - VectorGetZ(v0) * VectorGetZ(v1),
+        VectorGetW(v2) - VectorGetW(v0) * VectorGetW(v1)
+    );
+#else
+    return v2 - v0 * v1;
+#endif
+}
+
 NWB_INLINE SIMDVector NWB_SIMD_CALL VectorScale(SIMDVector value, f32 scale)noexcept{
 #if defined(NWB_HAS_SCALAR)
     return SIMDConvertDetail::MakeF32(value.f[0] * scale, value.f[1] * scale, value.f[2] * scale, value.f[3] * scale);

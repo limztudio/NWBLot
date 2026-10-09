@@ -7,6 +7,7 @@
 #include "../smoke_environment.h"
 
 #include <global/simplemath.h>
+#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -39,7 +40,8 @@ static constexpr Impl::Ui::Color s_Backdrop{ 0.07f, 0.13f, 0.2f, 1.0f };
 
 
 [[nodiscard]] static Impl::Ui::Rect TextureUv(const f32 x, const f32 y, const f32 width = 24.0f)noexcept{
-    return { x / 256.0f, y / 256.0f, width / 256.0f, 24.0f / 256.0f };
+    const SIMDVector uv = VectorScale(VectorSet(x, y, width, 24.0f), 1.0f / 256.0f);
+    return { VectorGetX(uv), VectorGetY(uv), VectorGetZ(uv), VectorGetW(uv) };
 }
 
 

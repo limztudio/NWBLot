@@ -6,6 +6,7 @@
 
 #include <impl/ecs_ui/toolkit/layout/validation.h>
 
+#include <global/math/vector_double.h>
 #include <global/simplemath.h>
 
 
@@ -25,10 +26,16 @@ namespace __hidden_ui_scroll_layout{
 
 
 [[nodiscard]] static Rect Intersect(const Rect& lhs, const Rect& rhs)noexcept{
-    const f64 x = Max(static_cast<f64>(lhs.x), static_cast<f64>(rhs.x));
-    const f64 y = Max(static_cast<f64>(lhs.y), static_cast<f64>(rhs.y));
-    const f64 right = Min(static_cast<f64>(lhs.x) + lhs.width, static_cast<f64>(rhs.x) + rhs.width);
-    const f64 bottom = Min(static_cast<f64>(lhs.y) + lhs.height, static_cast<f64>(rhs.y) + rhs.height);
+    const SIMDVectorDouble geometryPair0Operand0 = SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) };
+    const SIMDVectorDouble geometryPair0Operand1 = SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) };
+    const SIMDVectorDouble xYValue = ((geometryPair0Operand0 > geometryPair0Operand1) ? geometryPair0Operand0 : geometryPair0Operand1);
+    const f64 x = xYValue.x;
+    const f64 y = xYValue.y;
+    const SIMDVectorDouble geometryPair1Operand0 = (SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) } + SIMDVectorDouble{ lhs.width, lhs.height });
+    const SIMDVectorDouble geometryPair1Operand1 = (SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) } + SIMDVectorDouble{ rhs.width, rhs.height });
+    const SIMDVectorDouble rightBottomValue = ((geometryPair1Operand0 < geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
+    const f64 right = rightBottomValue.x;
+    const f64 bottom = rightBottomValue.y;
     return { static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(Max(0.0, right - x)),
         static_cast<f32>(Max(0.0, bottom - y)) };
 }
@@ -71,10 +78,16 @@ Expected<ScrollPlacement> ScrollLayout::Calculate(
         || !IsFinite(rowHeight) || rowHeight <= 0.0f || !IsFinite(offset) || offset < 0.0
     )
         return MakeUnexpected(Failure{});
-    const f64 availableWidth = Max(0.0, static_cast<f64>(bounds.width) - padding.left - padding.right);
-    const f64 availableHeight = Max(0.0, static_cast<f64>(bounds.height) - padding.top - padding.bottom);
-    const f64 x = static_cast<f64>(bounds.x) + Min(static_cast<f64>(padding.left), static_cast<f64>(bounds.width));
-    const f64 y = static_cast<f64>(bounds.y) + Min(static_cast<f64>(padding.top), static_cast<f64>(bounds.height));
+    const SIMDVectorDouble geometryPair2Operand0 = SIMDVectorDouble{ 0.0, 0.0 };
+    const SIMDVectorDouble geometryPair2Operand1 = ((SIMDVectorDouble{ static_cast<f64>(bounds.width), static_cast<f64>(bounds.height) } - SIMDVectorDouble{ padding.left, padding.top }) - SIMDVectorDouble{ padding.right, padding.bottom });
+    const SIMDVectorDouble availableWidthAvailableHeightValue = ((geometryPair2Operand0 > geometryPair2Operand1) ? geometryPair2Operand0 : geometryPair2Operand1);
+    const f64 availableWidth = availableWidthAvailableHeightValue.x;
+    const f64 availableHeight = availableWidthAvailableHeightValue.y;
+    const SIMDVectorDouble geometryPair3Operand0 = SIMDVectorDouble{ static_cast<f64>(padding.left), static_cast<f64>(padding.top) };
+    const SIMDVectorDouble geometryPair3Operand1 = SIMDVectorDouble{ static_cast<f64>(bounds.width), static_cast<f64>(bounds.height) };
+    const SIMDVectorDouble xYValue = (SIMDVectorDouble{ static_cast<f64>(bounds.x), static_cast<f64>(bounds.y) } + ((geometryPair3Operand0 < geometryPair3Operand1) ? geometryPair3Operand0 : geometryPair3Operand1));
+    const f64 x = xYValue.x;
+    const f64 y = xYValue.y;
     ScrollPlacement candidate;
     candidate.bounds = bounds;
     candidate.rowCount = rowCount;

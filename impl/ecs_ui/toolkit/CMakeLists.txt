@@ -33,6 +33,7 @@ target_sources(nwb_ui PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/layout/arrange.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/global.h"
     "${CMAKE_CURRENT_LIST_DIR}/paint.h"
+    "${CMAKE_CURRENT_LIST_DIR}/rect_math.h"
     "${CMAKE_CURRENT_LIST_DIR}/paint.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/paint_overlay.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/paint_glyph.cpp"

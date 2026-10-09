@@ -4,6 +4,7 @@
 
 #include "task_graph_test_utils.h"
 
+#include <global/math/vector_double.h>
 #include <global/timer.h>
 
 
@@ -168,13 +169,16 @@ static void CheckTerminalDependencies(
             const Graphics::GpuCompiledGraph::ReadView plan(compiledGraph);
             const auto& statistics = plan.compileStatistics();
             constexpr f64 s_NanosecondsPerSecond = 1'000'000'000.0;
+            const SIMDVectorDouble planningNanoseconds = SIMDVectorDouble{
+                statistics.resourceStatePlanningSeconds, statistics.packetDependencyPlanningSeconds
+            } * s_NanosecondsPerSecond;
             minimumResourcePlanningNanoseconds = Min(
                 minimumResourcePlanningNanoseconds,
-                static_cast<u64>(statistics.resourceStatePlanningSeconds * s_NanosecondsPerSecond)
+                static_cast<u64>(planningNanoseconds.x)
             );
             minimumDependencyPlanningNanoseconds = Min(
                 minimumDependencyPlanningNanoseconds,
-                static_cast<u64>(statistics.packetDependencyPlanningSeconds * s_NanosecondsPerSecond)
+                static_cast<u64>(planningNanoseconds.y)
             );
         }
     }

@@ -4,6 +4,7 @@
 
 #include "builder.h"
 
+#include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 
@@ -213,8 +214,10 @@ Builder::Item* Builder::addItem(
             return nullptr;
         }
         item.padding = m_listStyle.row.padding;
-        measured.x += item.padding.left + item.padding.right;
-        measured.y += item.padding.top + item.padding.bottom;
+        const SIMDVector paddingSize = VectorAdd(VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top),
+            VectorSet(item.padding.right, item.padding.bottom, item.padding.right, item.padding.bottom));
+        const SIMDVector paddedMeasure = VectorAdd(VectorSet(measured.x, measured.y, measured.x, measured.y), paddingSize);
+        measured = { VectorGetX(paddedMeasure), VectorGetY(paddedMeasure) };
         minimum = { skinRegion->minimumWidth, skinRegion->minimumHeight };
     }
     else if(kind == WidgetKind::Button){
@@ -223,8 +226,10 @@ Builder::Item* Builder::addItem(
             return nullptr;
         }
         buttonMetrics(minimum, item.padding);
-        measured.x += item.padding.left + item.padding.right;
-        measured.y += item.padding.top + item.padding.bottom;
+        const SIMDVector paddingSize = VectorAdd(VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top),
+            VectorSet(item.padding.right, item.padding.bottom, item.padding.right, item.padding.bottom));
+        const SIMDVector paddedMeasure = VectorAdd(VectorSet(measured.x, measured.y, measured.x, measured.y), paddingSize);
+        measured = { VectorGetX(paddedMeasure), VectorGetY(paddedMeasure) };
     }
     else if(kind == WidgetKind::Checkbox){
         const Name names[]{ m_style.checkbox, m_style.checkboxHover, m_style.checkboxChecked, m_style.checkboxDisabled };
@@ -243,7 +248,10 @@ Builder::Item* Builder::addItem(
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    description.intrinsicSize = { Max(measured.x, minimum.x), Max(measured.y, minimum.y) };
+    const SIMDVector measuredValue = VectorSet(measured.x, measured.y, measured.x, measured.y);
+    const SIMDVector minimumValue = VectorSet(minimum.x, minimum.y, minimum.x, minimum.y);
+    const SIMDVector intrinsic = VectorSelect(minimumValue, measuredValue, VectorGreater(measuredValue, minimumValue));
+    description.intrinsicSize = { VectorGetX(intrinsic), VectorGetY(intrinsic) };
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode){
         m_context.fail();
@@ -267,12 +275,17 @@ void Builder::buttonMetrics(Point& size, Insets& padding)const{
         const UiSkinRegion* skinRegion = region(name, m_style.button);
         if(!skinRegion)
             continue;
-        size.x = Max(size.x, skinRegion->minimumWidth);
-        size.y = Max(size.y, skinRegion->minimumHeight);
-        padding.left = Max(padding.left, skinRegion->padding.left);
-        padding.top = Max(padding.top, skinRegion->padding.top);
-        padding.right = Max(padding.right, skinRegion->padding.right);
-        padding.bottom = Max(padding.bottom, skinRegion->padding.bottom);
+        const SIMDVector sizeCurrent = VectorSet(size.x, size.y, size.x, size.y);
+        const SIMDVector sizeCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight,
+            skinRegion->minimumWidth, skinRegion->minimumHeight);
+        const SIMDVector sizeMaximum = VectorSelect(sizeCandidate, sizeCurrent,
+            VectorGreater(sizeCurrent, sizeCandidate));
+        size = { VectorGetX(sizeMaximum), VectorGetY(sizeMaximum) };
+        const SIMDVector paddingCurrent = VectorSet(padding.left, padding.top, padding.right, padding.bottom);
+        const SIMDVector paddingCandidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
+        const SIMDVector paddingMaximum = VectorSelect(paddingCandidate, paddingCurrent,
+            VectorGreater(paddingCurrent, paddingCandidate));
+        padding = { VectorGetX(paddingMaximum), VectorGetY(paddingMaximum), VectorGetZ(paddingMaximum), VectorGetW(paddingMaximum) };
     }
 }
 

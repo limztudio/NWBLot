@@ -3,6 +3,7 @@
 
 
 #include "router.h"
+#include "../rect_math.h"
 
 #include <global/simplemath.h>
 
@@ -175,13 +176,12 @@ bool InputRouter::moveFocusForTraversal(const bool reverse){
             : (reverse ? (anchor + m_targets.size() - offset) % m_targets.size()
                 : (anchor + offset) % m_targets.size());
         const HitTarget& target = m_targets[index];
-        if(
-            target.popup != parent || !target.enabled || !target.focusable || target.owner.valid()
-            || Min(target.rectangle.x + target.rectangle.width, target.clip.x + target.clip.width)
-                <= Max(target.rectangle.x, target.clip.x)
-            || Min(target.rectangle.y + target.rectangle.height, target.clip.y + target.clip.height)
-                <= Max(target.rectangle.y, target.clip.y)
-        )
+        if(target.popup != parent || !target.enabled || !target.focusable || target.owner.valid())
+            continue;
+        const SIMDVector visibleBounds = IntersectRectBoundsValue(
+            VectorSet(target.rectangle.x, target.rectangle.y, target.rectangle.width, target.rectangle.height), VectorSet(target.clip.x, target.clip.y, target.clip.width, target.clip.height)
+        );
+        if((VectorMoveMask(VectorLessOrEqual(VectorSwizzle<2, 3, 2, 3>(visibleBounds), VectorSwizzle<0, 1, 0, 1>(visibleBounds))) & VectorComponentMask::s_XY) != 0u)
             continue;
         nextFocus = target.id;
         nextDeclaration = target.declarationGeneration;

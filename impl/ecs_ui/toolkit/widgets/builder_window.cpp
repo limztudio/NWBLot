@@ -4,6 +4,7 @@
 
 #include "../builder.h"
 
+#include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 
@@ -103,11 +104,13 @@ bool Builder::beginWindow(
         ? LayoutSize{ LayoutSizePolicy::Content, 0.0f } : LayoutSize{ LayoutSizePolicy::Fixed, m_scope->m_bounds.height };
     description.padding = m_scope->m_window.metrics.contentPadding;
     description.gap = m_style.gap;
-    description.intrinsicSize = {
-        Max(0.0f, m_scope->m_window.metrics.minimumSize.x - description.padding.left - description.padding.right),
-        Max(0.0f, m_scope->m_window.metrics.minimumSize.y - m_scope->m_window.metrics.titleHeight
-            - description.padding.top - description.padding.bottom)
-    };
+    const SIMDVector minimum = VectorSet(m_scope->m_window.metrics.minimumSize.x,
+        m_scope->m_window.metrics.minimumSize.y - m_scope->m_window.metrics.titleHeight, 0.0f, 0.0f);
+    const SIMDVector paddingStart = VectorSet(description.padding.left, description.padding.top, 0.0f, 0.0f);
+    const SIMDVector paddingEnd = VectorSet(description.padding.right, description.padding.bottom, 0.0f, 0.0f);
+    const SIMDVector extent = VectorSubtract(VectorSubtract(minimum, paddingStart), paddingEnd);
+    const SIMDVector size = VectorSelect(extent, VectorZero(), VectorGreater(VectorZero(), extent));
+    description.intrinsicSize = { VectorGetX(size), VectorGetY(size) };
     u32 node = 0u;
     const auto admittedNode = m_scope->m_layout.addNode(s_LayoutNoParent, description);
     if(!admittedNode){
@@ -133,8 +136,11 @@ bool Builder::endWindow(){
     bool arranged = true;
     if(!state.collapsed){
         const DisplayMetrics& display = m_paint.displayMetrics();
-        const Rect viewport{ m_scope->m_bounds.x, m_scope->m_bounds.y, Max(m_scope->m_bounds.width, display.logicalWidth),
-            Max(m_scope->m_bounds.height, display.logicalHeight) };
+        const SIMDVector boundsSize = VectorSet(m_scope->m_bounds.width, m_scope->m_bounds.height,
+            m_scope->m_bounds.width, m_scope->m_bounds.height);
+        const SIMDVector displaySize = VectorSet(display.logicalWidth, display.logicalHeight, display.logicalWidth, display.logicalHeight);
+        const SIMDVector viewportSize = VectorSelect(displaySize, boundsSize, VectorGreater(boundsSize, displaySize));
+        const Rect viewport{ m_scope->m_bounds.x, m_scope->m_bounds.y, VectorGetX(viewportSize), VectorGetY(viewportSize) };
         arranged = m_scope->m_layout.arrange(viewport);
         const LayoutBox* root = m_scope->m_layout.box(0u);
         if(arranged && root){

@@ -9,6 +9,7 @@
 #include <core/graphics/runtime/runtime.h>
 #include <core/perf/report.h>
 #include <global/math/frame.h>
+#include <global/simdmath.h>
 #include <global/timer.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
@@ -136,7 +137,9 @@ inline constexpr Name s_CsgVisibleReceiverGroups[s_CsgVisibleShapeCount] = {
 }
 
 [[nodiscard]] static SIMDVector BuildCubeRotation(const f32 time, const f32 phase){
-    return QuaternionRotationRollPitchYaw(time * 0.35f, time + phase, time * 0.18f);
+    SIMDVector angles = VectorMultiply(VectorSet(time, 0.0f, time, 0.0f), VectorSet(0.35f, 0.0f, 0.18f, 0.0f));
+    angles = VectorSetY(angles, time + phase);
+    return QuaternionRotationRollPitchYawFromVector(angles);
 }
 
 static void ApplyCubeRotation(

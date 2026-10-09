@@ -3,6 +3,7 @@
 
 
 #include "router.h"
+#include "../rect_math.h"
 
 #include <global/simplemath.h>
 
@@ -31,11 +32,12 @@ namespace __hidden_ui_router_popup{
 }
 
 [[nodiscard]] static bool Focusable(const HitTarget* target)noexcept{
-    return
-        target && target->enabled && target->focusable
-        && Min(target->rectangle.x + target->rectangle.width, target->clip.x + target->clip.width) > Max(target->rectangle.x, target->clip.x)
-        && Min(target->rectangle.y + target->rectangle.height, target->clip.y + target->clip.height) > Max(target->rectangle.y, target->clip.y)
-    ;
+    if(!target || !target->enabled || !target->focusable)
+        return false;
+    const SIMDVector visibleBounds = IntersectRectBoundsValue(
+        VectorSet(target->rectangle.x, target->rectangle.y, target->rectangle.width, target->rectangle.height), VectorSet(target->clip.x, target->clip.y, target->clip.width, target->clip.height)
+    );
+    return (VectorMoveMask(VectorGreater(VectorSwizzle<2, 3, 2, 3>(visibleBounds), VectorSwizzle<0, 1, 0, 1>(visibleBounds))) & VectorComponentMask::s_XY) == VectorComponentMask::s_XY;
 }
 
 

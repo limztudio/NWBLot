@@ -4,6 +4,7 @@
 
 #include "../builder.h"
 
+#include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 
@@ -130,10 +131,11 @@ ContextMenuResult Builder::contextMenu(const AStringView stableKey, const AStrin
         m_context.fail();
         return result;
     }
-    list.padding.left = Max(list.padding.left, background->padding.left);
-    list.padding.top = Max(list.padding.top, background->padding.top);
-    list.padding.right = Max(list.padding.right, background->padding.right);
-    list.padding.bottom = Max(list.padding.bottom, background->padding.bottom);
+    const SIMDVector listpaddingCurrent = VectorSet(list.padding.left, list.padding.top, list.padding.right, list.padding.bottom);
+    const SIMDVector listpaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
+    const SIMDVector listpaddingMaximum = VectorSelect(listpaddingCandidate, listpaddingCurrent,
+        VectorGreater(listpaddingCurrent, listpaddingCandidate));
+    list.padding = { VectorGetX(listpaddingMaximum), VectorGetY(listpaddingMaximum), VectorGetZ(listpaddingMaximum), VectorGetW(listpaddingMaximum) };
     frame.list = static_cast<u32>(m_scope->m_lists.size());
     state.m_popup.bindParent(frame.parentToken);
     if(frame.open && !reserveCompoundPopup(frame.popup, frame.popupToken)){

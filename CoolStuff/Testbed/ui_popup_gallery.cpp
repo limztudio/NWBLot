@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 
+#include <global/math/vector_arithmetic.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -27,7 +29,8 @@ void UiPopupGallery::paint(NWB::Impl::UiPaintContext& context, const f32 x, cons
     using namespace NWB::Impl::Ui;
     Builder& ui = context.ui;
     PopupOptions options;
-    options.anchor = { x + 196.0f, y + 68.0f, 60.0f, 36.0f };
+    const SIMDVector anchorOrigin = VectorAdd(VectorSet(x, y, 0.0f, 0.0f), VectorSet(196.0f, 68.0f, 0.0f, 0.0f));
+    options.anchor = { VectorGetX(anchorOrigin), VectorGetY(anchorOrigin), 60.0f, 36.0f };
     options.size = { 220.0f, 180.0f };
     if(!ui.beginPopup("gallery_menu", m_popup, options))
         return;

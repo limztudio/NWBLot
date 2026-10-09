@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from contextlib import redirect_stderr, redirect_stdout
+import io
 import math
 import os
 import subprocess
@@ -13,9 +15,13 @@ from unittest import mock
 
 SMOKE_DIRECTORY = Path(__file__).resolve().parents[1] / "smoke"
 sys.path.insert(0, str(SMOKE_DIRECTORY))
+sys.path.insert(0, str(SMOKE_DIRECTORY / "ui_layer"))
 
 import window_capture_smoke  # noqa: E402
 import runtime_log_smoke  # noqa: E402
+import csg_gi_temporal_smoke  # noqa: E402
+import text_area_probe  # noqa: E402
+import text_area_smoke  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     ensure_process_running,
     launch_captured_process,
@@ -234,6 +240,72 @@ class ApplicationCaptureConfigurationTests(unittest.TestCase):
 
         self.assertEqual(exit_code, window_capture_smoke.SKIP_EXIT_CODE)
         create_backend.assert_not_called()
+
+
+class TemporalLaggedCapabilityTests(unittest.TestCase):
+    CAPABILITY_MARKER = "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue, target generation 1)"
+    BOOTSTRAP_MARKER = "RendererSystem: frame-lagged async lighting bootstrap accepted"
+    HISTORY_MARKER = "RendererSystem: frame-lagged async lighting active history accepted"
+    CAPTURE_LOG = "\n".join((
+        "CsgVisibleSmokeProject: temporal scene animated=0 view=full minimum_frame=360 warmup_seconds=30 interval=8 samples=32",
+        "CsgVisibleSmokeProject: temporal warmup started graphics frame 360",
+        "CsgVisibleSmokeProject: temporal warmup complete elapsed_seconds=30",
+        "CsgVisibleSmokeProject: temporal series complete samples=32",
+        "CsgVisibleSmokeProject: shutdown",
+        "RendererSystem: dispatched surfel GI resolve",
+        window_capture_smoke.FRAMEBUFFER_CAPTURE_READY_MESSAGE))
+
+    def capture_with_log(self, log_text, *, lagged=True, application_exit=0):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            directory = Path(temp_dir)
+            args = SimpleNamespace(output_directory=directory, overwrite=False, gpu_timing_output=None,
+                view="full", motion="static", frame_interval=8, lagged_lighting=lagged, overlapping=False,
+                executable=Path(sys.executable), working_directory=directory, timeout=1.0,
+                gpu_validation=True, route="natural", logserver_executable=None)
+
+            def run_capture(command, **_kwargs):
+                capture_args = window_capture_smoke.parse_args(command[2:])
+
+                def wait_for_capture(*_args):
+                    rows = [[(255, 255, 255) if (x + y) % 2 else (0, 0, 0) for x in range(8)] for y in range(8)]
+                    window_capture_smoke.write_bmp_24(capture_args.output, 8, 8, rows)
+                    return application_exit, True
+
+                with mock.patch.object(window_capture_smoke, "build_launch_environment", return_value={}), \
+                     mock.patch.object(window_capture_smoke, "launch_logserver", return_value=(object(), 49152, directory, {}, "*.log")), \
+                     mock.patch.object(window_capture_smoke, "launch_testbed", return_value=object()), \
+                     mock.patch.object(window_capture_smoke, "wait_for_application_capture_exit", side_effect=wait_for_capture), \
+                     mock.patch.object(window_capture_smoke, "terminate_process", return_value=(application_exit, "")), \
+                     mock.patch.object(window_capture_smoke, "shutdown_logserver_and_collect", return_value=log_text), \
+                     mock.patch.object(window_capture_smoke, "write_status"), \
+                     redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    return SimpleNamespace(returncode=window_capture_smoke.main(command[2:]))
+
+            with mock.patch.object(csg_gi_temporal_smoke.subprocess, "run", side_effect=run_capture):
+                return csg_gi_temporal_smoke.capture_series(args)
+
+    def test_graphics_alias_is_skipped_only_when_lagged_history_is_requested(self):
+        log_text = self.CAPTURE_LOG + "\n" + self.CAPABILITY_MARKER
+        self.assertEqual(self.capture_with_log(log_text), window_capture_smoke.SKIP_EXIT_CODE)
+        self.assertEqual(self.capture_with_log(log_text, lagged=False), 0)
+
+    def test_supported_route_still_requires_both_history_acceptance_markers(self):
+        for missing in (self.BOOTSTRAP_MARKER, self.HISTORY_MARKER):
+            with self.subTest(missing=missing):
+                log_text = self.CAPTURE_LOG + "\n" + (self.HISTORY_MARKER if missing == self.BOOTSTRAP_MARKER else self.BOOTSTRAP_MARKER)
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "temporal capture failed with exit 1"):
+                    self.capture_with_log(log_text)
+        self.assertEqual(self.capture_with_log(self.CAPTURE_LOG + "\n" + self.BOOTSTRAP_MARKER + "\n" + self.HISTORY_MARKER), 0)
+
+    def test_capability_skip_cannot_hide_strict_runtime_diagnostics(self):
+        for marker in window_capture_smoke.STRICT_LOG_FAILURE_MESSAGES:
+            with self.subTest(marker=marker):
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "temporal capture failed with exit 1"):
+                    self.capture_with_log(self.CAPTURE_LOG + "\n" + self.CAPABILITY_MARKER + "\n" + marker)
+
+    def test_capability_skip_cannot_hide_nonzero_application_exit(self):
+        with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "temporal capture failed with exit 1"):
+            self.capture_with_log(self.CAPTURE_LOG + "\n" + self.CAPABILITY_MARKER, application_exit=9)
 
 
 class TextureSmokeAnalysisTests(unittest.TestCase):
@@ -1090,6 +1162,198 @@ class LinuxCaptureFallbackTests(unittest.TestCase):
 
         self.assertIs(result, white_capture)
         capture._window_root_region.assert_not_called()
+
+
+    def test_flat_direct_capture_keeps_raise_settle_and_root_fallback(self):
+        backend = object.__new__(window_capture_smoke.LinuxX11Capture)
+        backend.display, backend.root = object(), 1
+        backend.x11 = mock.Mock()
+        backend.get_attributes = mock.Mock(return_value=SimpleNamespace(width=100, height=80))
+        backend._window_root_region = mock.Mock(return_value=(10, 20, 100, 80))
+        flat = SimpleNamespace(has_pixel_variation=False, appears_empty_or_white=False)
+        rendered = SimpleNamespace(has_pixel_variation=True, appears_empty_or_white=False)
+        events = []
+        backend.x11.XRaiseWindow.side_effect = lambda *_args: events.append("raise")
+        backend.x11.XFlush.side_effect = lambda *_args: events.append("flush")
+        backend.x11.XSync.side_effect = lambda *_args: events.append("sync")
+
+        def read(drawable, *_args):
+            events.append("root" if drawable == backend.root else "client")
+            return rendered if drawable == backend.root else flat
+
+        backend._capture_drawable_region = mock.Mock(side_effect=read)
+        with mock.patch.object(window_capture_smoke.time, LIT_SLEEP, side_effect=lambda delay: events.append(("settle", delay))), \
+             mock.patch.object(window_capture_smoke, LIT_WRITE_STATUS):
+            result = backend.capture_client_window(42, Path(LIT_CAPTURE_BMP))
+        self.assertIs(result, rendered)
+        self.assertEqual(events, ["raise", "flush", ("settle", 0.2), "sync", "client", "root"])
+        self.assertEqual(backend._capture_drawable_region.call_args_list, [
+            mock.call(42, 42, 0, 0, 100, 80, Path(LIT_CAPTURE_BMP)),
+            mock.call(1, 42, 10, 20, 100, 80, Path(LIT_CAPTURE_BMP))])
+
+
+class LinuxPreparedCaptureTests(unittest.TestCase):
+    def test_prepared_read_preserves_phase_that_ordinary_settle_misses(self):
+        backend = object.__new__(window_capture_smoke.LinuxX11Capture)
+        backend.display, backend.root = object(), 1
+        backend.x11 = mock.Mock()
+        backend.get_attributes = mock.Mock(return_value=SimpleNamespace(width=100, height=80))
+        backend._window_root_region = mock.Mock()
+        clock = SimpleNamespace(now=0.375)
+        caret, background = (249, 252, 255), (18, 26, 37)
+
+        def read(*_args):
+            pixel = caret if clock.now % 1.0 < 0.5 else background
+            clock.now += 0.6  # Conversion follows the already frozen native image.
+            return SimpleNamespace(pixel=pixel, has_pixel_variation=True, appears_empty_or_white=False)
+
+        def sleep(delay):
+            clock.now += delay
+
+        backend._capture_drawable_region = mock.Mock(side_effect=read)
+        with mock.patch.object(window_capture_smoke.time, LIT_SLEEP, side_effect=sleep) as settle:
+            prepared = backend.capture_prepared_raw_client_window(42, Path(LIT_CAPTURE_BMP))
+            self.assertEqual(prepared.pixel, caret)
+            self.assertGreater(clock.now, 0.5)
+            backend._capture_drawable_region.assert_called_once_with(42, 42, 0, 0, 100, 80, Path(LIT_CAPTURE_BMP))
+            backend.x11.XRaiseWindow.assert_not_called()
+            backend.x11.XFlush.assert_not_called()
+            backend.x11.XSync.assert_not_called()
+            backend._window_root_region.assert_not_called()
+            settle.assert_not_called()
+            clock.now = 0.375
+            ordinary = backend.capture_client_window(42, Path(LIT_CAPTURE_BMP))
+            self.assertEqual(ordinary.pixel, background)
+            settle.assert_called_once_with(0.2)
+
+    def test_prepared_read_rejects_unavailable_or_invalid_client_before_capture(self):
+        backend = object.__new__(window_capture_smoke.LinuxX11Capture)
+        backend.get_attributes = mock.Mock()
+        backend._capture_drawable_region = mock.Mock()
+        for attributes in (None, SimpleNamespace(width=0, height=80), SimpleNamespace(width=100, height=-1)):
+            with self.subTest(attributes=attributes), self.assertRaises(window_capture_smoke.SmokeFailure):
+                backend.get_attributes.return_value = attributes
+                backend.capture_prepared_raw_client_window(42, Path(LIT_CAPTURE_BMP))
+        backend._capture_drawable_region.assert_not_called()
+
+
+class TextAreaCaretCaptureTests(unittest.TestCase):
+    @staticmethod
+    def fixture(sequence, caret_on):
+        values = dict.fromkeys(text_area_probe.FIELDS, 0)
+        values.update(text_area_probe.document_fields("", 0, 0), focus=1, enabled=1, coherent=1)
+        rectangles = dict.fromkeys(text_area_probe.RECTANGLES, (0.0, 0.0, 0.0, 0.0))
+        rectangles.update(bounds=(32.0, 140.0, 380.0, 160.0), content=(40.0, 148.0, 364.0, 144.0),
+            clip=(40.0, 148.0, 364.0, 144.0), caret=(40.0, 148.0, 1.0, 21.796875))
+        lines = ["UiTextAreaSmoke: display logical=640x440 scale=1x1", "UiTextAreaSmoke: skin=default",
+            f"UiTextAreaSmoke: state sequence={sequence} values=" + ",".join(str(values[name]) for name in text_area_probe.FIELDS),
+            f"UiTextAreaSmoke: metrics sequence={sequence} scroll=0,0 measure=0,21.796875 line_height=21.796875 selections=0 maximum=0,0"]
+        lines.extend(f"UiTextAreaSmoke: geometry sequence={sequence} {name}=" + ",".join(map(str, rectangle))
+            for name, rectangle in rectangles.items())
+        text = "\n".join(lines)
+        snapshot = text_area_probe.snapshot_from_logs(text)
+        rows = [[(24, 29, 37)] * 640 for _ in range(440)]
+        for y in range(140, 300):
+            rows[y][32:412] = [(18, 26, 37)] * 380
+        marker = 0
+        for value, parts in zip((*snapshot["values"], sequence), text_area_probe.MARKER_PARTS):
+            for part in range(parts):
+                color = text_area_probe.encoded(value >> (part * 12))
+                x = 11 + marker * 8
+                for y in range(426, 429):
+                    rows[y][x - 1:x + 2] = [color] * 3
+                marker += 1
+        if caret_on:
+            for y in range(148, 170):
+                rows[y][40] = (249, 252, 255)
+        return text, snapshot, (640, 440, rows), values
+
+    def checkpoint_with_refresh(self, refreshed_sequence):
+        before, snapshot, off_frame, expected = self.fixture(7, False)
+        _on_text, _on_snapshot, on_frame, _on_expected = self.fixture(7, True)
+        refreshed, _refreshed_snapshot, _frame, _expected = self.fixture(refreshed_sequence, True)
+        clock = SimpleNamespace(now=0.0, visible_until=0.0, samples=0, reads=0, logs=0, frame=None)
+        events, reports = [], []
+        backend = object.__new__(window_capture_smoke.LinuxX11Capture)
+        backend.display, backend.root = object(), 1
+        backend.x11 = mock.Mock()
+        backend.get_attributes = mock.Mock(return_value=SimpleNamespace(width=640, height=440))
+        backend._window_root_region = mock.Mock()
+
+        def sleep(delay):
+            clock.now += delay
+
+        def read(*_args):
+            clock.reads += 1
+            on = clock.now < clock.visible_until
+            events.append(("read", clock.reads, on))
+            clock.frame = on_frame if on else off_frame
+            clock.now += 0.05
+            return SimpleNamespace(has_pixel_variation=True, appears_empty_or_white=False)
+
+        def sample(*_args):
+            clock.samples += 1
+            if clock.samples == 2:
+                clock.visible_until = clock.now + 0.125
+            color = (249, 252, 255) if clock.now < clock.visible_until else (18, 26, 37)
+            return [[color] for _ in range(3)]
+
+        def collect(*_args):
+            clock.logs += 1
+            events.append(("log", clock.logs))
+            if clock.logs > 1:
+                clock.now += 0.25
+            return before if clock.logs == 1 else refreshed
+
+        oracle = text_area_smoke.observe_text_area
+        def observe(*args, **kwargs):
+            report = oracle(*args, **kwargs)
+            reports.append(report)
+            return report
+
+        backend._capture_drawable_region = mock.Mock(side_effect=read)
+        backend.sample_client_pixels = mock.Mock(side_effect=sample)
+        run = object.__new__(text_area_smoke.TextAreaRun)
+        run.args = SimpleNamespace(output_directory=Path("unused"), skin="default")
+        run.backend, run.handle, run.process = backend, 42, SimpleNamespace(poll=lambda: None)
+        run.native = SimpleNamespace(windows=False, maintain_pointer=mock.Mock(), observe_window=lambda: {})
+        run.log_directory, run.log_baseline, run.log_pattern = Path("unused"), {}, "*.log"
+        run.deadline, run.snapshot, run.failure_report, run.stages, run.expected = 1.0, None, None, [], expected
+        run.write_report = mock.Mock()
+        with mock.patch.object(text_area_smoke.time, "monotonic", side_effect=lambda: clock.now), \
+             mock.patch.object(text_area_smoke.time, LIT_SLEEP, side_effect=sleep), \
+             mock.patch.object(text_area_smoke, "collect_log_delta", side_effect=collect), \
+             mock.patch.object(text_area_smoke, "read_bmp_24_rows", side_effect=lambda _path: clock.frame), \
+             mock.patch.object(text_area_smoke, "observe_text_area", side_effect=observe):
+            if refreshed_sequence == 7:
+                run.checkpoint("phase_capture", settle=0.0)
+            else:
+                with self.assertRaisesRegex(window_capture_smoke.SmokeFailure, "displayed-state gate"):
+                    run.checkpoint("phase_capture", settle=0.0)
+        return run, events, reports, backend, clock
+
+    def test_phase_capture_freezes_visible_pixels_before_slow_latest_log_refresh(self):
+        run, events, reports, backend, clock = self.checkpoint_with_refresh(7)
+        self.assertEqual(len(run.stages), 1)
+        self.assertEqual(clock.samples, 2)
+        self.assertEqual(clock.reads, 2)
+        self.assertLess(events.index(("read", 2, True)), events.index(("log", 2)))
+        self.assertTrue(reports[1]["passed"])
+        self.assertEqual(reports[1]["marker_count"], 57)
+        self.assertTrue(next(probe for probe in reports[1]["probes"] if probe["name"] == "caret")["passed"])
+        backend.x11.XRaiseWindow.assert_called_once()
+        backend._window_root_region.assert_not_called()
+
+    def test_newer_post_capture_snapshot_rejects_old_markers_despite_visible_caret(self):
+        run, events, reports, _backend, _clock = self.checkpoint_with_refresh(8)
+        self.assertEqual(run.stages, [])
+        self.assertLess(events.index(("read", 2, True)), events.index(("log", 2)))
+        self.assertEqual(reports[1]["snapshot"]["sequence"], 8)
+        self.assertTrue(reports[1]["model_matches"])
+        self.assertTrue(reports[1]["geometry_matches"])
+        self.assertTrue(next(probe for probe in reports[1]["probes"] if probe["name"] == "caret")["passed"])
+        self.assertEqual([probe["name"] for probe in reports[1]["probes"] if not probe["passed"]], ["model_25_0"])
+        self.assertFalse(reports[1]["passed"])
 
 
 class GracefulTerminationTests(unittest.TestCase):

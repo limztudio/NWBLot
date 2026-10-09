@@ -95,11 +95,16 @@ class TextAreaRun:
                     time.sleep(0.1)
                     continue
                 settled = True
-            def capture_frame():
-                if self.native.windows:
+            def capture_frame(*, prepared=False, refresh_snapshot=False):
+                nonlocal snapshot
+                if self.native.windows or prepared:
                     self.backend.capture_prepared_raw_client_window(self.handle, path)
                 else:
                     self.backend.capture_client_window(self.handle, path)
+                if refresh_snapshot:
+                    refreshed = snapshot_from_logs(collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern))
+                    if refreshed is not None and refreshed["sequence"] >= snapshot["sequence"]:
+                        snapshot = refreshed
                 return observe_text_area(read_bmp_24_rows(path), snapshot, self.expected, skin=self.args.skin,
                     extent=extent, extra=extra, minimum_selection_lines=minimum_selection_lines,
                     allow_offscreen_caret=allow_offscreen_caret)
@@ -120,10 +125,8 @@ class TextAreaRun:
                     # retry a fresh capture instead of failing the gate outright.
                     time.sleep(0.1)
                     continue
-                refreshed = snapshot_from_logs(collect_log_delta(self.log_directory, self.log_baseline, self.log_pattern))
-                if refreshed is not None and refreshed["sequence"] >= snapshot["sequence"]:
-                    snapshot = refreshed
-                report = capture_frame()
+                # Freeze the admitted caret phase before log collection or another native preparation delay.
+                report = capture_frame(prepared=True, refresh_snapshot=True)
             if report["passed"]:
                 self.snapshot = snapshot
                 report.update({"stage": name, "capture": str(path), "native_window": self.native.observe_window()})

@@ -6,6 +6,8 @@
 
 #include <core/common/log.h>
 
+#include <global/math/vector_arithmetic.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -86,10 +88,16 @@ Expected<RasterGlyphs> Rasterize(FontSource& font, const BakeOptions& options){
         glyph.record.drawable = 1u;
         glyph.record.width = bitmap.width;
         glyph.record.height = bitmap.rows;
-        glyph.record.planeLeft = static_cast<f32>(face->glyph->bitmap_left) * designPerPixel;
-        glyph.record.planeTop = static_cast<f32>(-face->glyph->bitmap_top) * designPerPixel;
-        glyph.record.planeRight = glyph.record.planeLeft + static_cast<f32>(bitmap.width) * designPerPixel;
-        glyph.record.planeBottom = glyph.record.planeTop + static_cast<f32>(bitmap.rows) * designPerPixel;
+        const SIMDVector origin = VectorScale(VectorSet(static_cast<f32>(face->glyph->bitmap_left),
+            static_cast<f32>(-face->glyph->bitmap_top), static_cast<f32>(face->glyph->bitmap_left),
+            static_cast<f32>(-face->glyph->bitmap_top)), designPerPixel);
+        const SIMDVector size = VectorSet(static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows),
+            static_cast<f32>(bitmap.width), static_cast<f32>(bitmap.rows));
+        const SIMDVector end = VectorMultiplyAddExpression(size, VectorReplicate(designPerPixel), origin);
+        glyph.record.planeLeft = VectorGetX(origin);
+        glyph.record.planeTop = VectorGetY(origin);
+        glyph.record.planeRight = VectorGetX(end);
+        glyph.record.planeBottom = VectorGetY(end);
         glyphs.push_back(Move(glyph));
     }
     return glyphs;

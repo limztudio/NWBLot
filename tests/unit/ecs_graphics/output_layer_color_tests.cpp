@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include <global/math/vector_double.h>
 #include <global/simplemath.h>
 
 
@@ -16,53 +17,64 @@ namespace __hidden_output_layer_color_tests{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Compile the production shader helper unchanged against a small scalar implementation of its vector intrinsics.
+// Compile the production shader helper unchanged against a binary64 implementation of its vector intrinsics.
 // These tests exercise its actual transfer/mapping functions without duplicating the color equations in C++.
 struct ShaderFloat3{
     f64 x;
     f64 y;
     f64 z;
 
-    ShaderFloat3(const f64 scalar)
+    ShaderFloat3(const f64 scalar)noexcept
         : x(scalar)
         , y(scalar)
         , z(scalar){}
-    ShaderFloat3(const f64 red, const f64 green, const f64 blue)
+    ShaderFloat3(const f64 red, const f64 green, const f64 blue)noexcept
         : x(red)
         , y(green)
         , z(blue){}
 };
 using float3 = ShaderFloat3;
 
-[[nodiscard]] ShaderFloat3 operator+(const ShaderFloat3 a, const ShaderFloat3 b){
-    return { a.x + b.x, a.y + b.y, a.z + b.z };
+[[nodiscard]] ShaderFloat3 operator+(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+    const SIMDVectorDouble4 result = SIMDVectorDouble4{ a.x, a.y, a.z, 0. } + SIMDVectorDouble4{ b.x, b.y, b.z, 0. };
+    return { result.x, result.y, result.z };
 }
 
-[[nodiscard]] ShaderFloat3 operator*(const ShaderFloat3 a, const ShaderFloat3 b){
-    return { a.x * b.x, a.y * b.y, a.z * b.z };
+[[nodiscard]] ShaderFloat3 operator*(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+    const SIMDVectorDouble4 result = SIMDVectorDouble4{ a.x, a.y, a.z, 0. } * SIMDVectorDouble4{ b.x, b.y, b.z, 0. };
+    return { result.x, result.y, result.z };
 }
 
-[[nodiscard]] ShaderFloat3 operator/(const ShaderFloat3 a, const ShaderFloat3 b){
-    return { a.x / b.x, a.y / b.y, a.z / b.z };
+[[nodiscard]] ShaderFloat3 operator/(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+    const SIMDVectorDouble4 result = SIMDVectorDouble4{ a.x, a.y, a.z, 0. } / SIMDVectorDouble4{ b.x, b.y, b.z, 1. };
+    return { result.x, result.y, result.z };
 }
 
-[[nodiscard]] f64 dot(const ShaderFloat3 a, const ShaderFloat3 b){
+[[nodiscard]] f64 dot(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
     return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
-[[nodiscard]] ShaderFloat3 max(const ShaderFloat3 a, const ShaderFloat3 b){
-    return { Max(a.x, b.x), Max(a.y, b.y), Max(a.z, b.z) };
+[[nodiscard]] ShaderFloat3 max(const ShaderFloat3 a, const ShaderFloat3 b)noexcept{
+    const SIMDVectorDouble4 first{ a.x, a.y, a.z, 0. };
+    const SIMDVectorDouble4 second{ b.x, b.y, b.z, 0. };
+    const SIMDVectorDouble4 result = (first > second) ? first : second;
+    return { result.x, result.y, result.z };
 }
 
-[[nodiscard]] f32 saturate(const f32 a){
+[[nodiscard]] f32 saturate(const f32 a)noexcept{
     return Clamp(a, 0.f, 1.f);
 }
 
-[[nodiscard]] ShaderFloat3 saturate(const ShaderFloat3 a){
-    return { Clamp(a.x, 0., 1.), Clamp(a.y, 0., 1.), Clamp(a.z, 0., 1.) };
+[[nodiscard]] ShaderFloat3 saturate(const ShaderFloat3 a)noexcept{
+    const SIMDVectorDouble4 value{ a.x, a.y, a.z, 0. };
+    const SIMDVectorDouble4 zero{ 0., 0., 0., 0. };
+    const SIMDVectorDouble4 one{ 1., 1., 1., 1. };
+    const SIMDVectorDouble4 lower = (value > zero) ? value : zero;
+    const SIMDVectorDouble4 result = (lower > one) ? one : lower;
+    return { result.x, result.y, result.z };
 }
 
-[[nodiscard]] ShaderFloat3 pow(const ShaderFloat3 a, const f64 b){
+[[nodiscard]] ShaderFloat3 pow(const ShaderFloat3 a, const f64 b)noexcept{
     return { Pow(a.x, b), Pow(a.y, b), Pow(a.z, b) };
 }
 

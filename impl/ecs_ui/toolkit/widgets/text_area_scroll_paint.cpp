@@ -4,6 +4,7 @@
 
 #include "../builder.h"
 
+#include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 
 
@@ -63,8 +64,12 @@ bool Builder::paintTextAreaScrollbars(const Item& item, const ScrollViewportPlac
         const f32 thumbStart = horizontal ? bar.thumb.x : bar.thumb.y;
         const f32 trackExtent = horizontal ? bar.track.width : bar.track.height;
         const f32 thumbExtent = horizontal ? bar.thumb.width : bar.thumb.height;
-        const f32 before = Max(0.0f, thumbStart - start);
-        const f32 after = Max(0.0f, start + trackExtent - thumbStart - thumbExtent);
+        const f32 afterStart = start + trackExtent - thumbStart;
+        const SIMDVector extent = VectorSubtract(VectorSet(thumbStart, afterStart, thumbStart, afterStart),
+            VectorSet(start, thumbExtent, start, thumbExtent));
+        const SIMDVector visible = VectorSelect(extent, VectorZero(), VectorGreater(VectorZero(), extent));
+        const f32 before = VectorGetX(visible);
+        const f32 after = VectorGetY(visible);
         HitTarget target;
         target.clip = clip;
         target.control = token;

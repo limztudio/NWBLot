@@ -4,6 +4,9 @@
 
 #include "layout.h"
 
+#include <global/math/vector_double.h>
+#include <global/math/vector_arithmetic.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -29,8 +32,9 @@ namespace __hidden_ui_text_layout{
 }
 
 [[nodiscard]] static Expected<Rect> TranslateInk(const Point& position, const Rect& ink)noexcept{
-    const f64 left = static_cast<f64>(position.x) + ink.x;
-    const f64 top = static_cast<f64>(position.y) + ink.y;
+    const SIMDVectorDouble leftTopValue = (SIMDVectorDouble{ static_cast<f64>(position.x), static_cast<f64>(position.y) } + SIMDVectorDouble{ ink.x, ink.y });
+    const f64 left = leftTopValue.x;
+    const f64 top = leftTopValue.y;
     if(!FitsCoordinate(left) || !FitsCoordinate(top) || !FitsCoordinate(left + ink.width) || !FitsCoordinate(top + ink.height))
         return MakeUnexpected(Failure{});
     const Rect rectangle{ static_cast<f32>(left), static_cast<f32>(top), ink.width, ink.height };
@@ -83,10 +87,16 @@ namespace __hidden_ui_text_layout{
         hasInk = true;
         return true;
     }
-    const f64 left = Min(static_cast<f64>(bounds.x), static_cast<f64>(ink.x));
-    const f64 top = Min(static_cast<f64>(bounds.y), static_cast<f64>(ink.y));
-    const f64 right = Max(static_cast<f64>(bounds.x) + bounds.width, static_cast<f64>(ink.x) + ink.width);
-    const f64 bottom = Max(static_cast<f64>(bounds.y) + bounds.height, static_cast<f64>(ink.y) + ink.height);
+    const SIMDVectorDouble geometryPair1Operand0 = SIMDVectorDouble{ static_cast<f64>(bounds.x), static_cast<f64>(bounds.y) };
+    const SIMDVectorDouble geometryPair1Operand1 = SIMDVectorDouble{ static_cast<f64>(ink.x), static_cast<f64>(ink.y) };
+    const SIMDVectorDouble leftTopValue = ((geometryPair1Operand0 < geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
+    const f64 left = leftTopValue.x;
+    const f64 top = leftTopValue.y;
+    const SIMDVectorDouble geometryPair2Operand0 = (SIMDVectorDouble{ static_cast<f64>(bounds.x), static_cast<f64>(bounds.y) } + SIMDVectorDouble{ bounds.width, bounds.height });
+    const SIMDVectorDouble geometryPair2Operand1 = (SIMDVectorDouble{ static_cast<f64>(ink.x), static_cast<f64>(ink.y) } + SIMDVectorDouble{ ink.width, ink.height });
+    const SIMDVectorDouble rightBottomValue = ((geometryPair2Operand0 > geometryPair2Operand1) ? geometryPair2Operand0 : geometryPair2Operand1);
+    const f64 right = rightBottomValue.x;
+    const f64 bottom = rightBottomValue.y;
     if(!FitsCoordinate(right - left) || !FitsCoordinate(bottom - top))
         return false;
     const Rect combined{ static_cast<f32>(left), static_cast<f32>(top), static_cast<f32>(right - left),
@@ -134,8 +144,11 @@ TextHit TextLayout::hitTest(Point point)const noexcept{
     f32 nearest = Limit<f32>::s_Max;
     for(u32 index = line.firstCluster; index < line.firstCluster + line.clusterCount; ++index){
         const TextCluster& cluster = m_clusters[index];
-        const f32 leadingDistance = Abs(point.x - cluster.leadingX);
-        const f32 trailingDistance = Abs(point.x - cluster.trailingX);
+        const SIMDVector difference = VectorSubtract(VectorReplicate(point.x),
+            VectorSet(cluster.leadingX, cluster.trailingX, cluster.leadingX, cluster.trailingX));
+        const SIMDVector magnitude = VectorSelect(difference, VectorNegate(difference), VectorLess(difference, VectorZero()));
+        const f32 leadingDistance = VectorGetX(magnitude);
+        const f32 trailingDistance = VectorGetY(magnitude);
         if(leadingDistance <= nearest){
             nearest = leadingDistance;
             hit.byteOffset = cluster.byteBegin;
@@ -223,8 +236,9 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
         line.glyphCount = static_cast<u32>(run.glyphs.size());
         line.firstCluster = static_cast<u32>(result.m_clusters.size());
         line.top = result.m_measure.y;
-        const f64 baseline = static_cast<f64>(line.top) + run.metrics.ascender;
-        const f64 height = static_cast<f64>(run.metrics.ascender) + run.metrics.descender + run.metrics.lineGap;
+        const SIMDVectorDouble baselineHeightValue = (SIMDVectorDouble{ static_cast<f64>(line.top), (static_cast<f64>(run.metrics.ascender) + run.metrics.descender) } + SIMDVectorDouble{ run.metrics.ascender, run.metrics.lineGap });
+        const f64 baseline = baselineHeightValue.x;
+        const f64 height = baselineHeightValue.y;
         if(!__hidden_ui_text_layout::FitsCoordinate(baseline) || !__hidden_ui_text_layout::FitsCoordinate(line.top + height))
             return MakeUnexpected(TextLayoutStatus::InvalidParameters);
         line.baseline = static_cast<f32>(baseline);
@@ -239,8 +253,9 @@ Expected<TextLayout, TextLayoutStatus::Enum> TextLayoutBuilder::layout(const Sha
             const u32 firstGlyph = static_cast<u32>(result.m_glyphs.size());
             for(usize index = first; index < end; ++index){
                 const ShapedGlyph& glyph = run.glyphs[index];
-                const f64 x = static_cast<f64>(pen) + glyph.offset.x;
-                const f64 y = static_cast<f64>(line.baseline) + glyph.offset.y;
+                const SIMDVectorDouble xYValue = (SIMDVectorDouble{ static_cast<f64>(pen), static_cast<f64>(line.baseline) } + SIMDVectorDouble{ glyph.offset.x, glyph.offset.y });
+                const f64 x = xYValue.x;
+                const f64 y = xYValue.y;
                 const f64 nextPen = static_cast<f64>(pen) + glyph.advance.x;
                 if(
                     !__hidden_ui_text_layout::FitsCoordinate(x) || !__hidden_ui_text_layout::FitsCoordinate(y)

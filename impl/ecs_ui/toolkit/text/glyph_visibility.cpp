@@ -8,6 +8,7 @@
 
 #include <impl/ecs_ui/toolkit/layout/validation.h>
 
+#include <global/math/vector_double.h>
 #include <global/simplemath.h>
 
 
@@ -137,16 +138,25 @@ TextGlyphIntersection::Enum TextGlyphVisibility::Candidate(
     // Native outline bounds include their design-unit allowance; keep raster rounding and physical-pixel snapping conservative.
     const f64 designMargin = glyph.coverage.known ? 0.0 : static_cast<f64>(fontSize) / glyph.face->unitsPerEm();
     const f64 rasterMargin = Max(1.0, correction) / 64.0 + 2.0 / rasterScale + designMargin;
-    const f64 marginX = rasterMargin + 0.5 / pixelScale.x;
-    const f64 marginY = rasterMargin + 0.5 / pixelScale.y;
-    const f64 inkRight = static_cast<f64>(ink.x) + ink.width;
-    const f64 inkBottom = static_cast<f64>(ink.y) + ink.height;
-    const f64 x = static_cast<f64>(topLeft.x) + glyph.position.x;
-    const f64 y = static_cast<f64>(topLeft.y) + glyph.position.y;
-    const f64 left = x + Min(static_cast<f64>(ink.x), ink.x * correction) - marginX;
-    const f64 top = y + Min(static_cast<f64>(ink.y), ink.y * correction) - marginY;
-    const f64 right = x + Max(inkRight, inkRight * correction) + marginX;
-    const f64 bottom = y + Max(inkBottom, inkBottom * correction) + marginY;
+    const SIMDVectorDouble marginXMarginYValue = (SIMDVectorDouble{ rasterMargin, rasterMargin } + (SIMDVectorDouble{ 0.5, 0.5 } / SIMDVectorDouble{ pixelScale.x, pixelScale.y }));
+    const f64 marginX = marginXMarginYValue.x;
+    const f64 marginY = marginXMarginYValue.y;
+    const SIMDVectorDouble inkRightInkBottomValue = (SIMDVectorDouble{ static_cast<f64>(ink.x), static_cast<f64>(ink.y) } + SIMDVectorDouble{ ink.width, ink.height });
+    const f64 inkRight = inkRightInkBottomValue.x;
+    const f64 inkBottom = inkRightInkBottomValue.y;
+    const SIMDVectorDouble xYValue = (SIMDVectorDouble{ static_cast<f64>(topLeft.x), static_cast<f64>(topLeft.y) } + SIMDVectorDouble{ glyph.position.x, glyph.position.y });
+    const f64 x = xYValue.x;
+    const f64 y = xYValue.y;
+    const SIMDVectorDouble geometryPair3Operand0 = SIMDVectorDouble{ static_cast<f64>(ink.x), static_cast<f64>(ink.y) };
+    const SIMDVectorDouble geometryPair3Operand1 = (SIMDVectorDouble{ ink.x, ink.y } * SIMDVectorDouble{ correction, correction });
+    const SIMDVectorDouble leftTopValue = ((SIMDVectorDouble{ x, y } + ((geometryPair3Operand0 < geometryPair3Operand1) ? geometryPair3Operand0 : geometryPair3Operand1)) - SIMDVectorDouble{ marginX, marginY });
+    const f64 left = leftTopValue.x;
+    const f64 top = leftTopValue.y;
+    const SIMDVectorDouble geometryPair4Operand0 = SIMDVectorDouble{ inkRight, inkBottom };
+    const SIMDVectorDouble geometryPair4Operand1 = (SIMDVectorDouble{ inkRight, inkBottom } * SIMDVectorDouble{ correction, correction });
+    const SIMDVectorDouble rightBottomValue = ((SIMDVectorDouble{ x, y } + ((geometryPair4Operand0 > geometryPair4Operand1) ? geometryPair4Operand0 : geometryPair4Operand1)) + SIMDVectorDouble{ marginX, marginY });
+    const f64 right = rightBottomValue.x;
+    const f64 bottom = rightBottomValue.y;
     return IntersectBounds(left, top, right, bottom, clip);
 }
 
@@ -172,10 +182,12 @@ Expected<Rect> TextGlyphVisibility::AtlasRectangle(
     )
         return MakeUnexpected(Failure{});
     const f64 scale = static_cast<f64>(fontSize) / atlas.unitsPerEm();
-    const f64 x = static_cast<f64>(topLeft.x) + glyph.position.x + record->planeLeft * scale;
-    const f64 y = static_cast<f64>(topLeft.y) + glyph.position.y + record->planeTop * scale;
-    const f64 width = (static_cast<f64>(record->planeRight) - record->planeLeft) * scale;
-    const f64 height = (static_cast<f64>(record->planeBottom) - record->planeTop) * scale;
+    const SIMDVectorDouble xYValue = ((SIMDVectorDouble{ static_cast<f64>(topLeft.x), static_cast<f64>(topLeft.y) } + SIMDVectorDouble{ glyph.position.x, glyph.position.y }) + (SIMDVectorDouble{ record->planeLeft, record->planeTop } * SIMDVectorDouble{ scale, scale }));
+    const f64 x = xYValue.x;
+    const f64 y = xYValue.y;
+    const SIMDVectorDouble widthHeightValue = ((SIMDVectorDouble{ static_cast<f64>(record->planeRight), static_cast<f64>(record->planeBottom) } - SIMDVectorDouble{ record->planeLeft, record->planeTop }) * SIMDVectorDouble{ scale, scale });
+    const f64 width = widthHeightValue.x;
+    const f64 height = widthHeightValue.y;
     return MakeRect(x, y, width, height);
 }
 
@@ -195,30 +207,31 @@ Expected<Rect> TextGlyphVisibility::CoverageRectangle(
     if(record.pageIndex == s_GlyphAtlasNoPage){
         return Rect{};
     }
-    const f64 x = static_cast<f64>(topLeft.x) + glyph.position.x + static_cast<f64>(record.bearingX) / rasterScale;
-    const f64 y = static_cast<f64>(topLeft.y) + glyph.position.y - static_cast<f64>(record.bearingY) / rasterScale;
+    const SIMDVectorDouble origin = SIMDVectorDouble{ topLeft.x, topLeft.y }
+        + SIMDVectorDouble{ glyph.position.x, glyph.position.y };
+    const SIMDVectorDouble bearing = SIMDVectorDouble{ static_cast<f64>(record.bearingX), static_cast<f64>(record.bearingY) }
+        / SIMDVectorDouble{ rasterScale, rasterScale };
+    const SIMDVectorDouble positive = origin + bearing;
+    const SIMDVectorDouble negative = origin - bearing;
+    const f64 x = positive.x;
+    const f64 y = negative.y;
     // FreeType has already rasterized this bitmap on an integer grid; align its texel edges to physical pixels.
-    const f64 alignedX = Floor(x * pixelScale.x + 0.5) / pixelScale.x;
-    const f64 alignedY = Floor(y * pixelScale.y + 0.5) / pixelScale.y;
-    return MakeRect(
-        alignedX,
-        alignedY,
-        record.pixels.width / static_cast<f64>(rasterScale),
-        record.pixels.height / static_cast<f64>(rasterScale)
-    );
+    const SIMDVectorDouble geometryPair5Operand0 = ((SIMDVectorDouble{ x, y } * SIMDVectorDouble{ pixelScale.x, pixelScale.y }) + SIMDVectorDouble{ 0.5, 0.5 });
+    const SIMDVectorDouble alignedXAlignedYValue = (VectorDoubleFloor(geometryPair5Operand0) / SIMDVectorDouble{ pixelScale.x, pixelScale.y });
+    const f64 alignedX = alignedXAlignedYValue.x;
+    const f64 alignedY = alignedXAlignedYValue.y;
+    const SIMDVectorDouble size = SIMDVectorDouble{ record.pixels.width, record.pixels.height }
+        / SIMDVectorDouble{ static_cast<f64>(rasterScale), static_cast<f64>(rasterScale) };
+    return MakeRect(alignedX, alignedY, size.x, size.y);
 }
 
 TextGlyphIntersection::Enum TextGlyphVisibility::Intersect(const Rect& rectangle, const Rect& clip){
     using namespace __hidden_ui_glyph_visibility;
     if(!IsValidUiRect(rectangle) || !IsValidUiRect(clip))
         return TextGlyphIntersection::Invalid;
-    return IntersectBounds(
-        rectangle.x,
-        rectangle.y,
-        static_cast<f64>(rectangle.x) + rectangle.width,
-        static_cast<f64>(rectangle.y) + rectangle.height,
-        clip
-    );
+    const SIMDVectorDouble end = SIMDVectorDouble{ rectangle.x, rectangle.y }
+        + SIMDVectorDouble{ rectangle.width, rectangle.height };
+    return IntersectBounds(rectangle.x, rectangle.y, end.x, end.y, clip);
 }
 
 

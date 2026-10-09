@@ -6,6 +6,7 @@
 
 #include <core/common/log.h>
 #include <global/math/frame.h>
+#include <global/math/vector_double.h>
 #include <core/graphics/runtime/runtime.h>
 #include <global/simplemath.h>
 #include <impl/assets_model/asset.h>
@@ -146,13 +147,15 @@ static void ResolveFlyCameraInput(
     const f32 safeForwardAxis = VectorGetY(sanitizedAxes);
     const f32 safeDelta = VectorGetX(VectorMax(VectorSet(IsFinite(delta) ? delta : 0.0f, 0.0f, 0.0f, 0.0f), VectorZero()));
 
-    yawRadians += safeMouseDeltaX * s_FlyCameraMouseSensitivityRadiansPerPixel;
+    const SIMDVector updatedAngles = VectorMultiplyAddExpression(
+        VectorSet(safeMouseDeltaX, safeMouseDeltaY, 0.0f, 0.0f),
+        VectorReplicate(s_FlyCameraMouseSensitivityRadiansPerPixel),
+        VectorSet(yawRadians, pitchRadians, 0.0f, 0.0f)
+    );
+    yawRadians = VectorGetX(updatedAngles);
     if(!IsFinite(yawRadians))
         yawRadians = 0.0f;
-    pitchRadians = ClampPitch(
-        pitchRadians + safeMouseDeltaY * s_FlyCameraMouseSensitivityRadiansPerPixel,
-        s_FlyCameraPitchLimitRadians
-    );
+    pitchRadians = ClampPitch(VectorGetY(updatedAngles), s_FlyCameraPitchLimitRadians);
 
     outRotation = QuaternionRotationRollPitchYaw(pitchRadians, yawRadians, 0.0f);
     outPosition = Vector3IsFinite(currentPosition) ? currentPosition : VectorZero();
@@ -495,18 +498,16 @@ bool Project::mousePosUpdate(const f64 xpos, const f64 ypos){
         return false;
     }
 
-    const f32 deltaX = static_cast<f32>(xpos - m_lastMouseX);
-    const f32 deltaY = static_cast<f32>(ypos - m_lastMouseY);
-    const f32 pendingDeltaX = m_pendingMouseDeltaX + deltaX;
-    const f32 pendingDeltaY = m_pendingMouseDeltaY + deltaY;
-    if(
-        IsFinite(deltaX)
-        && IsFinite(deltaY)
-        && IsFinite(pendingDeltaX)
-        && IsFinite(pendingDeltaY)
-    ){
-        m_pendingMouseDeltaX = pendingDeltaX;
-        m_pendingMouseDeltaY = pendingDeltaY;
+    const SIMDVectorDouble mousePosition = { xpos, ypos };
+    const SIMDVectorDouble previousMousePosition = { m_lastMouseX, m_lastMouseY };
+    const SIMDVectorDouble deltaPosition = mousePosition - previousMousePosition;
+    const f32 deltaX = static_cast<f32>(deltaPosition.x);
+    const f32 deltaY = static_cast<f32>(deltaPosition.y);
+    const SIMDVector mouseDelta = VectorSet(deltaX, deltaY, 0.0f, 0.0f);
+    const SIMDVector pendingDelta = VectorAdd(VectorSet(m_pendingMouseDeltaX, m_pendingMouseDeltaY, 0.0f, 0.0f), mouseDelta);
+    if(VectorIsFinite(mouseDelta, VectorComponentMask::s_XY) && VectorIsFinite(pendingDelta, VectorComponentMask::s_XY)){
+        m_pendingMouseDeltaX = VectorGetX(pendingDelta);
+        m_pendingMouseDeltaY = VectorGetY(pendingDelta);
     }
     m_lastMouseX = xpos;
     m_lastMouseY = ypos;

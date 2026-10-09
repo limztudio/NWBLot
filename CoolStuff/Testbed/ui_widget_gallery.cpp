@@ -7,7 +7,7 @@
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 
-#include <global/simplemath.h>
+#include <global/math/vector_arithmetic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -59,12 +59,16 @@ static constexpr Array<StringView, Section::kCount> s_SectionNames{
 NWB::Impl::Ui::Rect UiWidgetGallery::LayoutBounds(const NWB::Impl::Ui::DisplayMetrics& display){
     using namespace __hidden_testbed_ui_gallery;
     const f32 height = s_SelectorHeight + s_ContentGap + s_ContentHeight;
-    return {
-        Max(s_Margin, display.logicalWidth - s_SelectorWidth - s_Margin),
-        Max(s_Margin, Min(s_PreferredTop, display.logicalHeight - height - s_Margin)),
-        s_SelectorWidth,
-        height
-    };
+    const SIMDVector available = VectorSubtract(
+        VectorSubtract(VectorSet(display.logicalWidth, display.logicalHeight, 0.0f, 0.0f), VectorSet(s_SelectorWidth, height, 0.0f, 0.0f)),
+        VectorReplicate(s_Margin)
+    );
+    const SIMDVector preferredTop = VectorSet(0.0f, s_PreferredTop, 0.0f, 0.0f);
+    const SIMDVector topLimit = VectorAndInt(VectorLess(preferredTop, available), VectorSelectControl(0u, 1u, 0u, 0u));
+    const SIMDVector capped = VectorSelect(available, preferredTop, topLimit);
+    const SIMDVector margin = VectorReplicate(s_Margin);
+    const SIMDVector origin = VectorSelect(capped, margin, VectorGreater(margin, capped));
+    return { VectorGetX(origin), VectorGetY(origin), s_SelectorWidth, height };
 }
 
 
@@ -122,8 +126,14 @@ void UiWidgetGallery::paint(NWB::Impl::UiPaintContext& context){
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("Testbed: UI gallery section={}"), m_selectedGallery + 1u);
 
     const f32 width = selected == Section::TextArea ? s_SelectorWidth : s_OrdinaryGalleryWidth;
-    const f32 x = bounds.x + (bounds.width - width) * 0.5f;
-    const f32 y = bounds.y + s_SelectorHeight + s_ContentGap;
+    const SIMDVector centeredOrigin = VectorMultiplyAddExpression(
+        VectorSubtract(VectorSet(bounds.width, s_SelectorHeight, 0.0f, 0.0f), VectorSet(width, 0.0f, 0.0f, 0.0f)),
+        VectorSet(0.5f, 1.0f, 0.0f, 0.0f),
+        VectorSet(bounds.x, bounds.y, 0.0f, 0.0f)
+    );
+    const SIMDVector contentOrigin = VectorAdd(centeredOrigin, VectorSet(0.0f, s_ContentGap, 0.0f, 0.0f));
+    const f32 x = VectorGetX(centeredOrigin);
+    const f32 y = VectorGetY(contentOrigin);
     switch(selected){
     case Section::Controls:
         paintControls(context, x, y);

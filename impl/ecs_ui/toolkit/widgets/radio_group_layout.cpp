@@ -9,6 +9,7 @@
 
 #include <impl/ecs_ui/toolkit/layout/validation.h>
 
+#include <global/math/vector_double.h>
 #include <global/simplemath.h>
 
 
@@ -36,10 +37,11 @@ namespace __hidden_ui_radio_group_layout{
         || !IsFinite(metrics.markInset) || metrics.markInset < 0.0f || metrics.markInset > 0.5f
     )
         return false;
-    const f64 height = static_cast<f64>(metrics.padding.top) + metrics.padding.bottom
-        + static_cast<f64>(metrics.count) * metrics.rowHeight
+    const SIMDVectorDouble padding = SIMDVectorDouble{ metrics.padding.left, metrics.padding.top }
+        + SIMDVectorDouble{ metrics.padding.right, metrics.padding.bottom };
+    const f64 height = padding.y + static_cast<f64>(metrics.count) * metrics.rowHeight
         + static_cast<f64>(metrics.count == 0u ? 0u : metrics.count - 1u) * metrics.rowGap;
-    const f64 minimumWidth = static_cast<f64>(metrics.padding.left) + metrics.padding.right
+    const f64 minimumWidth = padding.x
         + (metrics.count == 0u ? 0.0 : static_cast<f64>(metrics.indicatorExtent) + metrics.gap);
     return
         height <= Limit<f32>::s_Max && metrics.contentSize.y == static_cast<f32>(height)
@@ -67,10 +69,16 @@ namespace __hidden_ui_radio_group_layout{
 }
 
 [[nodiscard]] static Expected<Rect> Intersect(const Rect& lhs, const Rect& rhs)noexcept{
-    const f64 left = Max(static_cast<f64>(lhs.x), static_cast<f64>(rhs.x));
-    const f64 top = Max(static_cast<f64>(lhs.y), static_cast<f64>(rhs.y));
-    const f64 right = Min(static_cast<f64>(lhs.x) + lhs.width, static_cast<f64>(rhs.x) + rhs.width);
-    const f64 bottom = Min(static_cast<f64>(lhs.y) + lhs.height, static_cast<f64>(rhs.y) + rhs.height);
+    const SIMDVectorDouble geometryPair0Operand0 = SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) };
+    const SIMDVectorDouble geometryPair0Operand1 = SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) };
+    const SIMDVectorDouble leftTopValue = ((geometryPair0Operand0 > geometryPair0Operand1) ? geometryPair0Operand0 : geometryPair0Operand1);
+    const f64 left = leftTopValue.x;
+    const f64 top = leftTopValue.y;
+    const SIMDVectorDouble geometryPair1Operand0 = (SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) } + SIMDVectorDouble{ lhs.width, lhs.height });
+    const SIMDVectorDouble geometryPair1Operand1 = (SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) } + SIMDVectorDouble{ rhs.width, rhs.height });
+    const SIMDVectorDouble rightBottomValue = ((geometryPair1Operand0 < geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
+    const f64 right = rightBottomValue.x;
+    const f64 bottom = rightBottomValue.y;
     return MakeRect(left, top, Max(0.0, right - left), Max(0.0, bottom - top));
 }
 
@@ -110,10 +118,12 @@ Expected<RadioGroupMetrics> RadioGroupLayout::Measure(
     candidate.markInset = style.markInset;
     candidate.padding = style.padding;
     candidate.count = count;
-    const f64 width = static_cast<f64>(style.padding.left) + style.padding.right
+    const SIMDVectorDouble padding = SIMDVectorDouble{ style.padding.left, style.padding.top }
+        + SIMDVectorDouble{ style.padding.right, style.padding.bottom };
+    const f64 width = padding.x
         + (count == 0u ? 0.0 : static_cast<f64>(style.indicatorExtent) + style.gap + maximumLabel.x);
-    const f64 height = static_cast<f64>(style.padding.top) + style.padding.bottom
-        + static_cast<f64>(count) * candidate.rowHeight + static_cast<f64>(count == 0u ? 0u : count - 1u) * style.rowGap;
+    const f64 height = padding.y + static_cast<f64>(count) * candidate.rowHeight
+        + static_cast<f64>(count == 0u ? 0u : count - 1u) * style.rowGap;
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
     candidate.contentSize = { static_cast<f32>(width), static_cast<f32>(height) };
@@ -138,12 +148,19 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(
     if(!intersection)
         return MakeUnexpected(Failure{});
     candidate.clip = *intersection;
-    const f64 left = Min(static_cast<f64>(metrics.padding.left), static_cast<f64>(bounds.width));
-    const f64 top = Min(static_cast<f64>(metrics.padding.top), static_cast<f64>(bounds.height));
-    const f64 right = Min(static_cast<f64>(metrics.padding.right), static_cast<f64>(bounds.width) - left);
-    const f64 bottom = Min(static_cast<f64>(metrics.padding.bottom), static_cast<f64>(bounds.height) - top);
-    const f64 x = static_cast<f64>(bounds.x) + left;
-    const f64 y = static_cast<f64>(bounds.y) + top;
+    const SIMDVectorDouble geometryPair2Operand0 = SIMDVectorDouble{ static_cast<f64>(metrics.padding.left), static_cast<f64>(metrics.padding.top) };
+    const SIMDVectorDouble geometryPair2Operand1 = SIMDVectorDouble{ static_cast<f64>(bounds.width), static_cast<f64>(bounds.height) };
+    const SIMDVectorDouble leftTopValue = ((geometryPair2Operand0 < geometryPair2Operand1) ? geometryPair2Operand0 : geometryPair2Operand1);
+    const f64 left = leftTopValue.x;
+    const f64 top = leftTopValue.y;
+    const SIMDVectorDouble geometryPair3Operand0 = SIMDVectorDouble{ static_cast<f64>(metrics.padding.right), static_cast<f64>(metrics.padding.bottom) };
+    const SIMDVectorDouble geometryPair3Operand1 = (SIMDVectorDouble{ static_cast<f64>(bounds.width), static_cast<f64>(bounds.height) } - SIMDVectorDouble{ left, top });
+    const SIMDVectorDouble rightBottomValue = ((geometryPair3Operand0 < geometryPair3Operand1) ? geometryPair3Operand0 : geometryPair3Operand1);
+    const f64 right = rightBottomValue.x;
+    const f64 bottom = rightBottomValue.y;
+    const SIMDVectorDouble xYValue = (SIMDVectorDouble{ static_cast<f64>(bounds.x), static_cast<f64>(bounds.y) } + SIMDVectorDouble{ left, top });
+    const f64 x = xYValue.x;
+    const f64 y = xYValue.y;
     const f64 width = static_cast<f64>(bounds.width) - left - right;
     const auto content = MakeRect(x, y, width, static_cast<f64>(bounds.height) - top - bottom);
     if(!content)

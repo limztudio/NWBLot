@@ -346,7 +346,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL QuaternionRotationNormal(SIMDVector normalAx
     const SIMDVector n = VectorSelect(s_SIMDIdentityR3, normalAxis, s_SIMDSelect1110);
     SIMDVector sinAngle{};
     SIMDVector cosAngle{};
-    VectorSinCos(sinAngle, cosAngle, VectorReplicate(SIMDQuaternionDetail::s_QuaternionHalfAngleScale * angle));
+    VectorSinCos(sinAngle, cosAngle, VectorScale(VectorReplicate(angle), SIMDQuaternionDetail::s_QuaternionHalfAngleScale));
     const SIMDVector scale = VectorSelect(cosAngle, sinAngle, s_SIMDSelect1110);
     return VectorMultiply(n, scale);
 #else
@@ -355,7 +355,7 @@ NWB_INLINE SIMDVector NWB_SIMD_CALL QuaternionRotationNormal(SIMDVector normalAx
 
     SIMDVector sinAngle{};
     SIMDVector cosAngle{};
-    VectorSinCos(sinAngle, cosAngle, _mm_set1_ps(SIMDQuaternionDetail::s_QuaternionHalfAngleScale * angle));
+    VectorSinCos(sinAngle, cosAngle, VectorScale(VectorReplicate(angle), SIMDQuaternionDetail::s_QuaternionHalfAngleScale));
 
     sinAngle = _mm_and_ps(sinAngle, s_SIMDMask3);
     cosAngle = _mm_and_ps(cosAngle, s_SIMDMaskW);

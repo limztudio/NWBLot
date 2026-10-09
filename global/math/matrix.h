@@ -434,13 +434,14 @@ struct MatrixDecomposition{
         usize aa{};
         usize bb{};
         usize cc{};
+        const SIMDVector absoluteBasis = VectorAbs(basis[a]);
         SIMDMatrixDetail::RankDecompose(
             aa,
             bb,
             cc,
-            Abs(VectorGetX(basis[a])),
-            Abs(VectorGetY(basis[a])),
-            Abs(VectorGetZ(basis[a]))
+            VectorGetX(absoluteBasis),
+            VectorGetY(absoluteBasis),
+            VectorGetZ(absoluteBasis)
         );
         basis[b] = Vector3Cross(basis[a], canonicalBasis[cc]);
     }
@@ -1092,7 +1093,7 @@ NWB_INLINE SIMDMatrix NWB_SIMD_CALL MatrixPerspectiveFovImpl(
 
     SIMDVector sinFov{};
     SIMDVector cosFov{};
-    VectorSinCos(sinFov, cosFov, VectorReplicate(s_MatrixHalf * fovAngleY));
+    VectorSinCos(sinFov, cosFov, VectorScale(VectorReplicate(fovAngleY), s_MatrixHalf));
     const SIMDVector zero = VectorZero();
     const SIMDVector height = VectorDivide(cosFov, sinFov);
     const SIMDVector width = VectorDivide(height, VectorReplicate(aspectRatio));

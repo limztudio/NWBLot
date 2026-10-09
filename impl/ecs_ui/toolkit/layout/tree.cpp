@@ -3,7 +3,9 @@
 
 
 #include "tree.h"
+#include "../rect_math.h"
 
+#include <global/math/vector_double.h>
 #include <global/simplemath.h>
 
 
@@ -42,19 +44,23 @@ bool LayoutTree::IsValidRectangle(const Rect& rectangle)noexcept{
 }
 
 Rect LayoutTree::Intersect(const Rect& lhs, const Rect& rhs)noexcept{
-    const f32 left = Max(lhs.x, rhs.x);
-    const f32 top = Max(lhs.y, rhs.y);
-    const f32 right = Min(lhs.x + lhs.width, rhs.x + rhs.width);
-    const f32 bottom = Min(lhs.y + lhs.height, rhs.y + rhs.height);
-    return { left, top, Max(0.0f, right - left), Max(0.0f, bottom - top) };
+    const SIMDVector intersection = IntersectRectValue(
+        VectorSet(lhs.x, lhs.y, lhs.width, lhs.height), VectorSet(rhs.x, rhs.y, rhs.width, rhs.height)
+    );
+    return { VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
 }
 
 Rect LayoutTree::Inset(const Rect& rectangle, const Insets& padding)noexcept{
-    const f32 left = Min(padding.left, rectangle.width);
-    const f32 top = Min(padding.top, rectangle.height);
-    const f64 width = static_cast<f64>(rectangle.width) - padding.left - padding.right;
-    const f64 height = static_cast<f64>(rectangle.height) - padding.top - padding.bottom;
-    return { rectangle.x + left, rectangle.y + top, static_cast<f32>(Max(0.0, width)), static_cast<f32>(Max(0.0, height)) };
+    const SIMDVector paddingStart = VectorSet(padding.left, padding.top, padding.left, padding.top);
+    const SIMDVector rectangleSize = VectorSet(rectangle.width, rectangle.height, rectangle.width, rectangle.height);
+    const SIMDVector firstInset = VectorSelect(rectangleSize, paddingStart, VectorLess(paddingStart, rectangleSize));
+    const f32 left = VectorGetX(firstInset);
+    const f32 top = VectorGetY(firstInset);
+    const SIMDVectorDouble widthHeightValue = ((SIMDVectorDouble{ static_cast<f64>(rectangle.width), static_cast<f64>(rectangle.height) } - SIMDVectorDouble{ padding.left, padding.top }) - SIMDVectorDouble{ padding.right, padding.bottom });
+    const f64 width = widthHeightValue.x;
+    const f64 height = widthHeightValue.y;
+    const SIMDVector origin = VectorAdd(VectorSet(rectangle.x, rectangle.y, 0.0f, 0.0f), VectorSet(left, top, 0.0f, 0.0f));
+    return { VectorGetX(origin), VectorGetY(origin), static_cast<f32>(Max(0.0, width)), static_cast<f32>(Max(0.0, height)) };
 }
 
 

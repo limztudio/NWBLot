@@ -11,6 +11,8 @@
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 
+#include <global/simdmath.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -55,11 +57,15 @@ struct Box{
     const SmokeMaterialRef& material,
     const Float4& tint
 ){
+    const SIMDVector minimum = LoadFloat(box.minimum);
+    const SIMDVector maximum = LoadFloat(box.maximum);
+    Float4 center;
+    Float4 extent;
+    StoreFloat(VectorScale(VectorAdd(minimum, maximum), 0.5f), center);
+    StoreFloat(VectorSubtract(maximum, minimum), extent);
     return CreateTintedStaticMeshEntity(
         world, context.objectArena, s_CubeMesh, material, s_MaterialInterface, tint,
-        Float4((box.minimum.x + box.maximum.x) * 0.5f, (box.minimum.y + box.maximum.y) * 0.5f,
-            (box.minimum.z + box.maximum.z) * 0.5f, 0.0f),
-        Float4(box.maximum.x - box.minimum.x, box.maximum.y - box.minimum.y, box.maximum.z - box.minimum.z, 0.0f)
+        center, extent
     );
 }
 
@@ -124,11 +130,11 @@ struct Box{
         component.shapeType = Name("engine/csg/box");
         component.active = arm == "cut";
         Impl::CsgBoxShapeParameters parameters;
-        parameters.halfExtents = Float4((cut.maximum.x - cut.minimum.x) * 0.5f,
-            (cut.maximum.y - cut.minimum.y) * 0.5f, (cut.maximum.z - cut.minimum.z) * 0.5f, 0.0f);
+        const SIMDVector minimum = LoadFloat(cut.minimum);
+        const SIMDVector maximum = LoadFloat(cut.maximum);
+        StoreFloat(VectorScale(VectorSubtract(maximum, minimum), 0.5f), parameters.halfExtents);
         AssignCsgCutterParameters(component, parameters);
-        AssignCsgCutterTransform(component, VectorSet((cut.minimum.x + cut.maximum.x) * 0.5f,
-            (cut.minimum.y + cut.maximum.y) * 0.5f, (cut.minimum.z + cut.maximum.z) * 0.5f, 0.0f), QuaternionIdentity());
+        AssignCsgCutterTransform(component, VectorScale(VectorAdd(minimum, maximum), 0.5f), QuaternionIdentity());
     }
     return true;
 }

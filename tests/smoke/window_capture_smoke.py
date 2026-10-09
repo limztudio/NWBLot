@@ -1421,6 +1421,10 @@ class LinuxX11Capture:
         # portable while Windows explicitly strips the compositor-owned non-client frame below.
         return self.capture_window(window, output_path)
 
+    def capture_prepared_raw_client_window(self, window, output_path):
+        width, height = self._validated_window_size(window)
+        return self._capture_drawable_region(window, window, 0, 0, width, height, output_path)
+
     def sample_client_pixels(self, window, x, y, width, height):
         client_width, client_height = self._validated_window_size(window)
         if x < 0 or y < 0 or width <= 0 or height <= 0 or x + width > client_width or y + height > client_height:

@@ -4,6 +4,7 @@
 
 #include "../builder.h"
 
+#include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 
@@ -80,10 +81,12 @@ bool Builder::beginPopup(const AStringView stableKey, PopupState& state, const P
     description.direction = LayoutDirection::Column;
     description.width = { LayoutSizePolicy::Fixed, m_scope->m_bounds.width };
     description.height = { LayoutSizePolicy::Fixed, m_scope->m_bounds.height };
-    description.padding = { Max(m_scope->m_popupPaintStyle.padding.left, background->padding.left),
-        Max(m_scope->m_popupPaintStyle.padding.top, background->padding.top),
-        Max(m_scope->m_popupPaintStyle.padding.right, background->padding.right),
-        Max(m_scope->m_popupPaintStyle.padding.bottom, background->padding.bottom) };
+    const Insets& stylePadding = m_scope->m_popupPaintStyle.padding;
+    const SIMDVector preferredPadding = VectorSet(stylePadding.left, stylePadding.top, stylePadding.right, stylePadding.bottom);
+    const SIMDVector minimumPadding = VectorSet(background->padding.left, background->padding.top,
+        background->padding.right, background->padding.bottom);
+    const SIMDVector padding = VectorSelect(minimumPadding, preferredPadding, VectorGreater(preferredPadding, minimumPadding));
+    description.padding = { VectorGetX(padding), VectorGetY(padding), VectorGetZ(padding), VectorGetW(padding) };
     description.gap = m_style.gap;
     u32 node = 0u;
     const auto admittedNode = m_scope->m_layout.addNode(s_LayoutNoParent, description);

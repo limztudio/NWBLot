@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <global/simplemath.h>
+#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -28,7 +29,8 @@ using float4 = ShaderFloat4;
 using uint = u32;
 
 [[nodiscard]] ShaderFloat4 operator*(const ShaderFloat4 value, const f32 scale){
-    return { value.x * scale, value.y * scale, value.z * scale, value.w * scale };
+    const SIMDVector scaled = VectorScale(VectorSet(value.x, value.y, value.z, value.w), scale);
+    return { VectorGetX(scaled), VectorGetY(scaled), VectorGetZ(scaled), VectorGetW(scaled) };
 }
 
 [[nodiscard]] f32 saturate(const f32 value){

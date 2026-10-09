@@ -9,6 +9,7 @@
 
 #include <impl/ecs_ui/toolkit/layout/validation.h>
 
+#include <global/math/vector_double.h>
 #include <global/simplemath.h>
 
 
@@ -35,9 +36,12 @@ namespace __hidden_ui_slider_layout{
         || !IsFinite(metrics.contentSize.x) || !IsFinite(metrics.contentSize.y)
     )
         return false;
-    const f64 width = static_cast<f64>(metrics.padding.left) + metrics.padding.right + metrics.thumbExtent.x;
-    const f64 height = static_cast<f64>(metrics.padding.top) + metrics.padding.bottom
-        + Max(static_cast<f64>(metrics.thumbExtent.y), static_cast<f64>(metrics.trackHeight));
+    const SIMDVectorDouble padding = SIMDVectorDouble{ metrics.padding.left, metrics.padding.top }
+        + SIMDVectorDouble{ metrics.padding.right, metrics.padding.bottom };
+    const SIMDVectorDouble size = padding + SIMDVectorDouble{ metrics.thumbExtent.x,
+        Max(static_cast<f64>(metrics.thumbExtent.y), static_cast<f64>(metrics.trackHeight)) };
+    const f64 width = size.x;
+    const f64 height = size.y;
     return
         width <= Limit<f32>::s_Max && height <= Limit<f32>::s_Max
         && metrics.contentSize.x >= static_cast<f32>(width) && metrics.contentSize.y >= static_cast<f32>(height)
@@ -64,10 +68,16 @@ namespace __hidden_ui_slider_layout{
 }
 
 [[nodiscard]] static Expected<Rect> Intersect(const Rect& lhs, const Rect& rhs)noexcept{
-    const f64 left = Max(static_cast<f64>(lhs.x), static_cast<f64>(rhs.x));
-    const f64 top = Max(static_cast<f64>(lhs.y), static_cast<f64>(rhs.y));
-    const f64 right = Min(static_cast<f64>(lhs.x) + lhs.width, static_cast<f64>(rhs.x) + rhs.width);
-    const f64 bottom = Min(static_cast<f64>(lhs.y) + lhs.height, static_cast<f64>(rhs.y) + rhs.height);
+    const SIMDVectorDouble geometryPair0Operand0 = SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) };
+    const SIMDVectorDouble geometryPair0Operand1 = SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) };
+    const SIMDVectorDouble leftTopValue = ((geometryPair0Operand0 > geometryPair0Operand1) ? geometryPair0Operand0 : geometryPair0Operand1);
+    const f64 left = leftTopValue.x;
+    const f64 top = leftTopValue.y;
+    const SIMDVectorDouble geometryPair1Operand0 = (SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) } + SIMDVectorDouble{ lhs.width, lhs.height });
+    const SIMDVectorDouble geometryPair1Operand1 = (SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) } + SIMDVectorDouble{ rhs.width, rhs.height });
+    const SIMDVectorDouble rightBottomValue = ((geometryPair1Operand0 < geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
+    const f64 right = rightBottomValue.x;
+    const f64 bottom = rightBottomValue.y;
     return MakeRect(left, top, Max(0.0, right - left), Max(0.0, bottom - top));
 }
 
@@ -125,15 +135,23 @@ Expected<SliderPlacement> SliderLayout::Place(
         return MakeUnexpected(Failure{});
     candidate.clip = *intersection;
     const f64 leftInset = Min(static_cast<f64>(metrics.padding.left), static_cast<f64>(bounds.width));
-    const f64 rightInset = Min(static_cast<f64>(metrics.padding.right), static_cast<f64>(bounds.width) - leftInset);
-    const f64 topInset = Min(static_cast<f64>(metrics.padding.top), static_cast<f64>(bounds.height));
+    const SIMDVectorDouble geometryPair0Operand0 = SIMDVectorDouble{ static_cast<f64>(metrics.padding.right), static_cast<f64>(metrics.padding.top) };
+    const SIMDVectorDouble geometryPair0Operand1 = SIMDVectorDouble{ (static_cast<f64>(bounds.width) - leftInset), static_cast<f64>(bounds.height) };
+    const SIMDVectorDouble rightInsetTopInsetValue = ((geometryPair0Operand0 < geometryPair0Operand1) ? geometryPair0Operand0 : geometryPair0Operand1);
+    const f64 rightInset = rightInsetTopInsetValue.x;
+    const f64 topInset = rightInsetTopInsetValue.y;
     const f64 bottomInset = Min(static_cast<f64>(metrics.padding.bottom), static_cast<f64>(bounds.height) - topInset);
-    const f64 x = static_cast<f64>(bounds.x) + leftInset;
-    const f64 y = static_cast<f64>(bounds.y) + topInset;
-    const f64 width = static_cast<f64>(bounds.width) - leftInset - rightInset;
-    const f64 height = static_cast<f64>(bounds.height) - topInset - bottomInset;
-    const f64 thumbWidth = Min(static_cast<f64>(metrics.thumbExtent.x), width);
-    const f64 thumbHeight = Min(static_cast<f64>(metrics.thumbExtent.y), height);
+    const SIMDVectorDouble xYValue = (SIMDVectorDouble{ static_cast<f64>(bounds.x), static_cast<f64>(bounds.y) } + SIMDVectorDouble{ leftInset, topInset });
+    const f64 x = xYValue.x;
+    const f64 y = xYValue.y;
+    const SIMDVectorDouble widthHeightValue = ((SIMDVectorDouble{ static_cast<f64>(bounds.width), static_cast<f64>(bounds.height) } - SIMDVectorDouble{ leftInset, topInset }) - SIMDVectorDouble{ rightInset, bottomInset });
+    const f64 width = widthHeightValue.x;
+    const f64 height = widthHeightValue.y;
+    const SIMDVectorDouble geometryPair4Operand0 = SIMDVectorDouble{ static_cast<f64>(metrics.thumbExtent.x), static_cast<f64>(metrics.thumbExtent.y) };
+    const SIMDVectorDouble geometryPair4Operand1 = SIMDVectorDouble{ width, height };
+    const SIMDVectorDouble thumbWidthThumbHeightValue = ((geometryPair4Operand0 < geometryPair4Operand1) ? geometryPair4Operand0 : geometryPair4Operand1);
+    const f64 thumbWidth = thumbWidthThumbHeightValue.x;
+    const f64 thumbHeight = thumbWidthThumbHeightValue.y;
     const f64 trackHeight = Min(static_cast<f64>(metrics.trackHeight), height);
     const f64 travel = width - thumbWidth;
     const f64 centerStart = x + thumbWidth * 0.5;

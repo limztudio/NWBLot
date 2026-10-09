@@ -6,6 +6,7 @@
 
 
 #include "../math/vector.h"
+#include "../math/vector_double.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -133,13 +134,12 @@ namespace TriangleAreaDetail{
     const __m256d ac = _mm256_sub_pd(TriangleAreaDetail::MakeVector3F64(c), TriangleAreaDetail::MakeVector3F64(a));
     return TriangleAreaDetail::CrossVector3F64(ab, ac);
 #else
-    const f64 abX = static_cast<f64>(VectorGetX(b)) - static_cast<f64>(VectorGetX(a));
-    const f64 abY = static_cast<f64>(VectorGetY(b)) - static_cast<f64>(VectorGetY(a));
-    const f64 abZ = static_cast<f64>(VectorGetZ(b)) - static_cast<f64>(VectorGetZ(a));
-    const f64 acX = static_cast<f64>(VectorGetX(c)) - static_cast<f64>(VectorGetX(a));
-    const f64 acY = static_cast<f64>(VectorGetY(c)) - static_cast<f64>(VectorGetY(a));
-    const f64 acZ = static_cast<f64>(VectorGetZ(c)) - static_cast<f64>(VectorGetZ(a));
-    return TriangleAreaDetail::BuildTriangleAreaNormal64FromEdges(abX, abY, abZ, acX, acY, acZ);
+    const SIMDVectorDouble origin{ static_cast<f64>(VectorGetX(a)), static_cast<f64>(VectorGetY(a)) };
+    const SIMDVectorDouble ab = SIMDVectorDouble{ static_cast<f64>(VectorGetX(b)), static_cast<f64>(VectorGetY(b)) } - origin;
+    const SIMDVectorDouble ac = SIMDVectorDouble{ static_cast<f64>(VectorGetX(c)), static_cast<f64>(VectorGetY(c)) } - origin;
+    const SIMDVectorDouble z = SIMDVectorDouble{ static_cast<f64>(VectorGetZ(b)), static_cast<f64>(VectorGetZ(c)) }
+        - SIMDVectorDouble{ static_cast<f64>(VectorGetZ(a)), static_cast<f64>(VectorGetZ(a)) };
+    return TriangleAreaDetail::BuildTriangleAreaNormal64FromEdges(ab.x, ab.y, z.x, ac.x, ac.y, z.y);
 #endif
 }
 

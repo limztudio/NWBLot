@@ -68,6 +68,36 @@ TEST_F(UiPaintTests, CurrentClipCopiesTheActiveIntersectionAndRestoresAfterOverl
     ASSERT_TRUE(m_builder.popClip());
 }
 
+TEST_F(UiPaintTests, BoundaryClipsKeepEmptyExtentsAndSecondOperandSignedZeroOrigins){
+    m_builder.pushClip({ 2.0f, 3.0f, 5.0f, 7.0f });
+    for(const Rect boundary : { Rect{ 8.0f, 11.0f, 2.0f, 2.0f }, Rect{ 7.0f, 10.0f, 2.0f, 2.0f } }){
+        m_builder.pushClip(boundary);
+        const Rect clipped = m_builder.currentClip();
+        EXPECT_FLOAT_EQ(clipped.x, boundary.x);
+        EXPECT_FLOAT_EQ(clipped.y, boundary.y);
+        EXPECT_FLOAT_EQ(clipped.width, 0.0f);
+        EXPECT_FLOAT_EQ(clipped.height, 0.0f);
+        ASSERT_TRUE(m_builder.popClip());
+    }
+    ASSERT_TRUE(m_builder.popClip());
+
+    m_builder.pushClip({ -0.0f, -0.0f, 1.0f, 1.0f });
+    m_builder.pushClip({ 0.0f, 0.0f, 1.0f, 1.0f });
+    EXPECT_FALSE(SignBit(m_builder.currentClip().x));
+    EXPECT_FALSE(SignBit(m_builder.currentClip().y));
+    ASSERT_TRUE(m_builder.popClip());
+    EXPECT_TRUE(SignBit(m_builder.currentClip().x));
+    EXPECT_TRUE(SignBit(m_builder.currentClip().y));
+    ASSERT_TRUE(m_builder.popClip());
+
+    m_builder.pushClip({ 0.0f, 0.0f, 1.0f, 1.0f });
+    m_builder.pushClip({ -0.0f, -0.0f, 1.0f, 1.0f });
+    EXPECT_TRUE(SignBit(m_builder.currentClip().x));
+    EXPECT_TRUE(SignBit(m_builder.currentClip().y));
+    EXPECT_FLOAT_EQ(m_builder.currentClip().width, 1.0f);
+    EXPECT_FLOAT_EQ(m_builder.currentClip().height, 1.0f);
+}
+
 TEST_F(UiPaintTests, NestedClipsTrimGeometryAndUvAndRestoreTheirParent){
     EXPECT_FALSE(m_builder.popClip());
     m_builder.pushClip({ 10.0f, 10.0f, 30.0f, 30.0f });

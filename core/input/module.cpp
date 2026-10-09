@@ -5,6 +5,8 @@
 #include "module.h"
 #include "arena_names.h"
 
+#include <global/math/vector_double.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -112,8 +114,10 @@ void InputDispatcher::keyboardCharInput(u32 unicode, i32 mods){
 }
 
 void InputDispatcher::mousePosUpdate(f64 xpos, f64 ypos){
-    xpos /= m_mousePositionScaleX;
-    ypos /= m_mousePositionScaleY;
+    const SIMDVectorDouble position = SIMDVectorDouble{ xpos, ypos }
+        / SIMDVectorDouble{ m_mousePositionScaleX, m_mousePositionScaleY };
+    xpos = position.x;
+    ypos = position.y;
 
     dispatchToHandlers([&](IInputEventHandler& handler){
         return handler.mousePosUpdate(xpos, ypos);

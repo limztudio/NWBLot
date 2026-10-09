@@ -4,6 +4,7 @@
 
 #include "tree.h"
 
+#include <global/math/vector_double.h>
 #include <global/simplemath.h>
 
 
@@ -35,8 +36,11 @@ bool LayoutTree::measure()noexcept{
                 height += measured.y;
             }
             else{
-                width = Max(width, static_cast<f64>(measured.x));
-                height = Max(height, static_cast<f64>(measured.y));
+                const SIMDVectorDouble current = { width, height };
+                const SIMDVectorDouble candidate = { measured.x, measured.y };
+                const SIMDVectorDouble maximum = (current > candidate) ? current : candidate;
+                width = maximum.x;
+                height = maximum.y;
             }
             ++childCount;
         }
@@ -47,8 +51,13 @@ bool LayoutTree::measure()noexcept{
             else if(description.direction == LayoutDirection::Column)
                 height += spacing;
         }
-        width = Max(width, static_cast<f64>(description.intrinsicSize.x)) + description.padding.left + description.padding.right;
-        height = Max(height, static_cast<f64>(description.intrinsicSize.y)) + description.padding.top + description.padding.bottom;
+        const SIMDVectorDouble measured = { width, height };
+        const SIMDVectorDouble intrinsic = { description.intrinsicSize.x, description.intrinsicSize.y };
+        const SIMDVectorDouble maximum = (measured > intrinsic) ? measured : intrinsic;
+        const SIMDVectorDouble padded = maximum + SIMDVectorDouble{ description.padding.left, description.padding.top }
+            + SIMDVectorDouble{ description.padding.right, description.padding.bottom };
+        width = padded.x;
+        height = padded.y;
         if(width > Limit<f32>::s_Max || height > Limit<f32>::s_Max)
             return false;
         const f32 resolvedWidth = description.width.policy == LayoutSizePolicy::Fixed ? description.width.value : static_cast<f32>(width);

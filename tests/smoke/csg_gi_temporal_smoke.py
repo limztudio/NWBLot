@@ -109,7 +109,8 @@ def capture_series(args):
             "--reject-log-message", "RendererSystem: created surfel HW trace compute pipeline"]
     if args.lagged_lighting:
         command += ["--expect-log-message", "RendererSystem: frame-lagged async lighting bootstrap accepted",
-            "--expect-log-message", "RendererSystem: frame-lagged async lighting active history accepted"]
+            "--expect-log-message", "RendererSystem: frame-lagged async lighting active history accepted",
+            "--skip-log-message", "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue"]
     if args.view == "event_data":
         command += ["--expect-log-message", EVENT_DATA_FLAGS_MARKER]
     elif args.view == "event_order":

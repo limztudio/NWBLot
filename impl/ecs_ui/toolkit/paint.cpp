@@ -3,6 +3,7 @@
 
 
 #include "paint.h"
+#include "rect_math.h"
 
 #include <global/simplemath.h>
 
@@ -33,11 +34,10 @@ bool HasArea(const Rect& rectangle)noexcept{
 Rect Intersect(const Rect& lhs, const Rect& rhs)noexcept{
     if(!HasArea(lhs) || !HasArea(rhs))
         return {};
-    const f32 left = Max(lhs.x, rhs.x);
-    const f32 top = Max(lhs.y, rhs.y);
-    const f32 right = Min(lhs.x + lhs.width, rhs.x + rhs.width);
-    const f32 bottom = Min(lhs.y + lhs.height, rhs.y + rhs.height);
-    return { left, top, Max(0.0f, right - left), Max(0.0f, bottom - top) };
+    const SIMDVector intersection = IntersectRectValue(
+        VectorSet(lhs.x, lhs.y, lhs.width, lhs.height), VectorSet(rhs.x, rhs.y, rhs.width, rhs.height)
+    );
+    return { VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
 }
 
 bool EqualClip(const Rect& lhs, const Rect& rhs)noexcept{
@@ -152,8 +152,9 @@ bool PaintBuilder::drawRegion(const Name& regionName, const Rect& rectangle, con
         const f32 atlasWidth = static_cast<f32>(m_snapshot.m_skinBinding.atlasWidth);
         const f32 atlasHeight = static_cast<f32>(m_snapshot.m_skinBinding.atlasHeight);
         const auto& pixels = region->rectangle;
-        const Rect uv{ static_cast<f32>(pixels.x) / atlasWidth, static_cast<f32>(pixels.y) / atlasHeight,
-            static_cast<f32>(pixels.width) / atlasWidth, static_cast<f32>(pixels.height) / atlasHeight };
+        const SIMDVector normalized = VectorDivide(VectorSet(static_cast<f32>(pixels.x), static_cast<f32>(pixels.y),
+            static_cast<f32>(pixels.width), static_cast<f32>(pixels.height)), VectorSet(atlasWidth, atlasHeight, atlasWidth, atlasHeight));
+        const Rect uv{ VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), VectorGetW(normalized) };
         emitQuad(rectangle, uv, tint, PaintMaterial::Skin);
     }
     return true;
@@ -195,15 +196,24 @@ void PaintBuilder::emitQuad(
         NWB_ASSERT(false);
         return;
     }
-    const f32 left = uv.x + (visible.x - rectangle.x) / rectangle.width * uv.width;
-    const f32 top = uv.y + (visible.y - rectangle.y) / rectangle.height * uv.height;
-    const f32 right = uv.x + (visible.x + visible.width - rectangle.x) / rectangle.width * uv.width;
-    const f32 bottom = uv.y + (visible.y + visible.height - rectangle.y) / rectangle.height * uv.height;
-    const Color premultiplied{ color.r * color.a, color.g * color.a, color.b * color.a, color.a };
+    const SIMDVector visibleOrigin = VectorSet(visible.x, visible.y, visible.x, visible.y);
+    const SIMDVector visibleEnd = VectorAdd(visibleOrigin, VectorSet(visible.width, visible.height, visible.width, visible.height));
+    const SIMDVector coordinates = VectorPermute<0, 1, 6, 7>(visibleOrigin, visibleEnd);
+    const SIMDVector delta = VectorSubtract(coordinates, VectorSet(rectangle.x, rectangle.y, rectangle.x, rectangle.y));
+    const SIMDVector fraction = VectorDivide(delta, VectorSet(rectangle.width, rectangle.height, rectangle.width, rectangle.height));
+    const SIMDVector textureScale = VectorSet(uv.width, uv.height, uv.width, uv.height);
+    const SIMDVector textureOrigin = VectorSet(uv.x, uv.y, uv.x, uv.y);
+    const SIMDVector textureCoordinates = VectorMultiplyAddExpression(fraction, textureScale, textureOrigin);
+    const f32 left = VectorGetX(textureCoordinates);
+    const f32 top = VectorGetY(textureCoordinates);
+    const f32 right = VectorGetZ(textureCoordinates);
+    const f32 bottom = VectorGetW(textureCoordinates);
+    const SIMDVector rgb = VectorScale(VectorSet(color.r, color.g, color.b, color.b), color.a);
+    const Color premultiplied{ VectorGetX(rgb), VectorGetY(rgb), VectorGetZ(rgb), color.a };
     const u32 vertexBase = static_cast<u32>(m_snapshot.m_vertices.size());
     const u32 firstIndex = static_cast<u32>(m_snapshot.m_indices.size());
-    const f32 visibleRight = visible.x + visible.width;
-    const f32 visibleBottom = visible.y + visible.height;
+    const f32 visibleRight = VectorGetX(visibleEnd);
+    const f32 visibleBottom = VectorGetY(visibleEnd);
     m_snapshot.m_vertices.push_back({ { visible.x, visible.y }, { left, top }, premultiplied });
     m_snapshot.m_vertices.push_back({ { visibleRight, visible.y }, { right, top }, premultiplied });
     m_snapshot.m_vertices.push_back({ { visibleRight, visibleBottom }, { right, bottom }, premultiplied });
@@ -233,10 +243,12 @@ void PaintBuilder::emitNineSlice(const UiSkinRegion& region, const Rect& rectang
     const auto& binding = m_snapshot.m_skinBinding;
     const auto& pixels = region.rectangle;
     const auto& borders = region.sliceInsets;
-    const f32 left = static_cast<f32>(borders.left) / binding.referenceDensity;
-    const f32 right = static_cast<f32>(borders.right) / binding.referenceDensity;
-    const f32 top = static_cast<f32>(borders.top) / binding.referenceDensity;
-    const f32 bottom = static_cast<f32>(borders.bottom) / binding.referenceDensity;
+    const SIMDVector borderSize = VectorDivide(VectorSet(static_cast<f32>(borders.left), static_cast<f32>(borders.right),
+        static_cast<f32>(borders.top), static_cast<f32>(borders.bottom)), VectorReplicate(binding.referenceDensity));
+    const f32 left = VectorGetX(borderSize);
+    const f32 right = VectorGetY(borderSize);
+    const f32 top = VectorGetZ(borderSize);
+    const f32 bottom = VectorGetW(borderSize);
     const bool shrinkX = rectangle.width < left + right;
     const bool shrinkY = rectangle.height < top + bottom;
     const f32 x1 = rectangle.x + (shrinkX ? rectangle.width * (left / (left + right)) : left);
@@ -251,9 +263,14 @@ void PaintBuilder::emitNineSlice(const UiSkinRegion& region, const Rect& rectang
     const f32 atlasHeight = static_cast<f32>(binding.atlasHeight);
     for(u32 row = 0u; row < 3u; ++row){
         for(u32 column = 0u; column < 3u; ++column){
-            const Rect target{ x[column], y[row], x[column + 1u] - x[column], y[row + 1u] - y[row] };
-            const Rect uv{ u[column] / atlasWidth, v[row] / atlasHeight,
-                (u[column + 1u] - u[column]) / atlasWidth, (v[row + 1u] - v[row]) / atlasHeight };
+            const SIMDVector targetSize = VectorSubtract(VectorSet(x[column + 1u], y[row + 1u], x[column + 1u], y[row + 1u]),
+                VectorSet(x[column], y[row], x[column], y[row]));
+            const Rect target{ x[column], y[row], VectorGetX(targetSize), VectorGetY(targetSize) };
+            const SIMDVector textureSize = VectorSubtract(VectorSet(u[column + 1u], v[row + 1u], u[column + 1u], v[row + 1u]),
+                VectorSet(u[column], v[row], u[column], v[row]));
+            const SIMDVector textureCoordinates = VectorPermute<0, 1, 4, 5>(VectorSet(u[column], v[row], 0.0f, 0.0f), textureSize);
+            const SIMDVector normalized = VectorDivide(textureCoordinates, VectorSet(atlasWidth, atlasHeight, atlasWidth, atlasHeight));
+            const Rect uv{ VectorGetX(normalized), VectorGetY(normalized), VectorGetZ(normalized), VectorGetW(normalized) };
             emitQuad(target, uv, tint, PaintMaterial::Skin);
         }
     }

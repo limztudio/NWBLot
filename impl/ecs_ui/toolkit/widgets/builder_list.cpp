@@ -4,6 +4,8 @@
 
 #include "../builder.h"
 
+#include <global/math/vector_double.h>
+#include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 
@@ -93,10 +95,11 @@ ListResult Builder::virtualList(
         result.valid = false;
         return result;
     }
-    frame.padding.left = Max(frame.padding.left, background->padding.left);
-    frame.padding.top = Max(frame.padding.top, background->padding.top);
-    frame.padding.right = Max(frame.padding.right, background->padding.right);
-    frame.padding.bottom = Max(frame.padding.bottom, background->padding.bottom);
+    const SIMDVector framepaddingCurrent = VectorSet(frame.padding.left, frame.padding.top, frame.padding.right, frame.padding.bottom);
+    const SIMDVector framepaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
+    const SIMDVector framepaddingMaximum = VectorSelect(framepaddingCandidate, framepaddingCurrent,
+        VectorGreater(framepaddingCurrent, framepaddingCandidate));
+    frame.padding = { VectorGetX(framepaddingMaximum), VectorGetY(framepaddingMaximum), VectorGetZ(framepaddingMaximum), VectorGetW(framepaddingMaximum) };
     Item item(m_arena);
     item.state = *widget;
     item.enabled = options.enabled;
@@ -104,8 +107,10 @@ ListResult Builder::virtualList(
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    description.intrinsicSize = { Max(120.0f, background->minimumWidth),
-        Max(options.rowHeight + frame.padding.top + frame.padding.bottom, background->minimumHeight) };
+    const SIMDVector preferredSize = VectorSet(120.0f, options.rowHeight + frame.padding.top + frame.padding.bottom, 0.0f, 0.0f);
+    const SIMDVector minimumSize = VectorSet(background->minimumWidth, background->minimumHeight, 0.0f, 0.0f);
+    const SIMDVector intrinsic = VectorSelect(minimumSize, preferredSize, VectorGreater(preferredSize, minimumSize));
+    description.intrinsicSize = { VectorGetX(intrinsic), VectorGetY(intrinsic) };
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode){
         m_context.fail();
@@ -122,8 +127,9 @@ bool Builder::applyListGesture(ListState& state, const PointerGesture& gesture)n
     const f64 travel = static_cast<f64>(gesture.referenceRectangle.height) - static_cast<f64>(gesture.targetRectangle.height);
     if(!IsFinite(travel) || travel <= 0.0 || !IsFinite(gesture.maximum) || gesture.maximum < 0.0)
         return false;
-    const f64 start = static_cast<f64>(gesture.targetRectangle.y) - static_cast<f64>(gesture.referenceRectangle.y);
-    const f64 delta = static_cast<f64>(gesture.position.y) - static_cast<f64>(gesture.origin.y);
+    const SIMDVectorDouble startDeltaValue = (SIMDVectorDouble{ static_cast<f64>(gesture.targetRectangle.y), static_cast<f64>(gesture.position.y) } - SIMDVectorDouble{ static_cast<f64>(gesture.referenceRectangle.y), static_cast<f64>(gesture.origin.y) });
+    const f64 start = startDeltaValue.x;
+    const f64 delta = startDeltaValue.y;
     const f64 fraction = Clamp((start + delta) / travel, 0.0, 1.0);
     state.m_ensureCursor = false;
     return state.m_scroll.setOffset(fraction * gesture.maximum);

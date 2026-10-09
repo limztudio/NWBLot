@@ -6,6 +6,9 @@
 
 #include <core/common/log.h>
 
+#include <global/math/vector_double.h>
+#include <global/math/vector_arithmetic.h>
+
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include FT_MODULE_H
@@ -208,10 +211,12 @@ private:
         FT_Outline_Get_CBox(&slot->outline, &box);
         // Native outline bounds include CFF font/subfont transforms; leave HarfBuzz ink and placement unchanged.
         const f64 scale = static_cast<f64>(fontSize) / m_face->units_per_EM;
-        const f64 left = (static_cast<f64>(box.xMin) - 1.0) * scale;
-        const f64 top = (-static_cast<f64>(box.yMax) - 1.0) * scale;
-        const f64 width = (static_cast<f64>(box.xMax) - box.xMin + 2.0) * scale;
-        const f64 height = (static_cast<f64>(box.yMax) - box.yMin + 2.0) * scale;
+        const SIMDVectorDouble leftTopValue = ((SIMDVectorDouble{ static_cast<f64>(box.xMin), -static_cast<f64>(box.yMax) } - SIMDVectorDouble{ 1.0, 1.0 }) * SIMDVectorDouble{ scale, scale });
+        const f64 left = leftTopValue.x;
+        const f64 top = leftTopValue.y;
+        const SIMDVectorDouble widthHeightValue = (((SIMDVectorDouble{ static_cast<f64>(box.xMax), static_cast<f64>(box.yMax) } - SIMDVectorDouble{ static_cast<f64>(box.xMin), static_cast<f64>(box.yMin) }) + SIMDVectorDouble{ 2.0, 2.0 }) * SIMDVectorDouble{ scale, scale });
+        const f64 width = widthHeightValue.x;
+        const f64 height = widthHeightValue.y;
         const f64 limit = Limit<f32>::s_Max;
         if(
             !IsFinite(left) || !IsFinite(top) || !IsFinite(width) || !IsFinite(height)
@@ -272,9 +277,12 @@ Expected<FontMetrics> FontFace::metrics(f32 fontSize)const{
     hb_font_extents_t extents{};
     if(!scaled.valid() || !hb_font_get_h_extents(&scaled.get(), &extents))
         return MakeUnexpected(Failure{});
-    metrics.ascender = Max(0.0f, static_cast<f32>(extents.ascender) / 64.0f);
-    metrics.descender = Max(0.0f, -static_cast<f32>(extents.descender) / 64.0f);
-    metrics.lineGap = Max(0.0f, static_cast<f32>(extents.line_gap) / 64.0f);
+    const SIMDVector scaledExtents = VectorScale(VectorSet(static_cast<f32>(extents.ascender),
+        -static_cast<f32>(extents.descender), static_cast<f32>(extents.line_gap), 0.0f), 1.0f / 64.0f);
+    const SIMDVector positiveExtents = VectorSelect(scaledExtents, VectorZero(), VectorGreater(VectorZero(), scaledExtents));
+    metrics.ascender = VectorGetX(positiveExtents);
+    metrics.descender = VectorGetY(positiveExtents);
+    metrics.lineGap = VectorGetZ(positiveExtents);
     if(!(metrics.ascender + metrics.descender > 0.0f))
         return MakeUnexpected(Failure{});
     return metrics;
@@ -346,15 +354,24 @@ bool FontFace::shape(
             hb_glyph_extents_t extents{};
             Rect ink;
             if(hb_font_get_glyph_extents(&scaled.get(), infos[index].codepoint, &extents)){
-                const f32 x0 = static_cast<f32>(extents.x_bearing) / 64.0f;
-                const f32 y0 = -static_cast<f32>(extents.y_bearing) / 64.0f;
-                const f32 x1 = x0 + static_cast<f32>(extents.width) / 64.0f;
-                const f32 y1 = y0 - static_cast<f32>(extents.height) / 64.0f;
-                ink = { Min(x0, x1), Min(y0, y1), Abs(x1 - x0), Abs(y1 - y0) };
+                const SIMDVector origin = VectorScale(VectorSet(static_cast<f32>(extents.x_bearing),
+                    -static_cast<f32>(extents.y_bearing), static_cast<f32>(extents.x_bearing),
+                    -static_cast<f32>(extents.y_bearing)), 1.0f / 64.0f);
+                const SIMDVector width = VectorReplicate(static_cast<f32>(extents.width));
+                const SIMDVector height = VectorReplicate(static_cast<f32>(extents.height));
+                const SIMDVector scale = VectorReplicate(1.0f / 64.0f);
+                const SIMDVector end = VectorPermute<0, 5, 2, 7>(VectorMultiplyAddExpression(width, scale, origin),
+                    VectorNegativeMultiplySubtractExpression(height, scale, origin));
+                const SIMDVector minimum = VectorSelect(end, origin, VectorLess(origin, end));
+                const SIMDVector delta = VectorSubtract(end, origin);
+                const SIMDVector size = VectorSelect(delta, VectorNegate(delta), VectorLess(delta, VectorZero()));
+                ink = { VectorGetX(minimum), VectorGetY(minimum), VectorGetX(size), VectorGetY(size) };
             }
+            const SIMDVector position = VectorScale(VectorSet(static_cast<f32>(positions[index].x_offset),
+                -static_cast<f32>(positions[index].y_offset), static_cast<f32>(positions[index].x_advance),
+                -static_cast<f32>(positions[index].y_advance)), 1.0f / 64.0f);
             output.push_back({ infos[index].codepoint, clusterBegin, clusterEnd,
-                { static_cast<f32>(positions[index].x_offset) / 64.0f, -static_cast<f32>(positions[index].y_offset) / 64.0f },
-                { static_cast<f32>(positions[index].x_advance) / 64.0f, -static_cast<f32>(positions[index].y_advance) / 64.0f },
+                { VectorGetX(position), VectorGetY(position) }, { VectorGetZ(position), VectorGetW(position) },
                 ink, m_state->coverageBounds(infos[index].codepoint, request.fontSize) });
         }
         previousBegin = clusterBegin;

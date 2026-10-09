@@ -9,6 +9,7 @@
 #include <core/common/log.h>
 #include <core/graphics/runtime/runtime.h>
 
+#include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 
 
@@ -165,7 +166,11 @@ void UiLayerSystem::displayScaleChanged(const f32 scaleX, const f32 scaleY){
     m_context.abandonFrame();
     m_editHost.reset();
     m_ui.reset();
-    m_display = { static_cast<f32>(m_width) / scaleX, static_cast<f32>(m_height) / scaleY, scaleX, scaleY };
+    const SIMDVector logicalSize = VectorDivide(
+        VectorSet(static_cast<f32>(m_width), static_cast<f32>(m_height), static_cast<f32>(m_width), static_cast<f32>(m_height)),
+        VectorSet(scaleX, scaleY, scaleX, scaleY)
+    );
+    m_display = { VectorGetX(logicalSize), VectorGetY(logicalSize), scaleX, scaleY };
 }
 
 

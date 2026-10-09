@@ -3,6 +3,7 @@
 
 
 #include "../builder.h"
+#include "../rect_math.h"
 
 #include <global/simplemath.h>
 
@@ -63,9 +64,12 @@ bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
             m_context.fail();
         return false;
     }
-    const Insets padding{ Max(frame.popupStyle.padding.left, background->padding.left),
-        Max(frame.popupStyle.padding.top, background->padding.top), Max(frame.popupStyle.padding.right, background->padding.right),
-        Max(frame.popupStyle.padding.bottom, background->padding.bottom) };
+    const SIMDVector firstPadding = VectorSet(frame.popupStyle.padding.left, frame.popupStyle.padding.top,
+        frame.popupStyle.padding.right, frame.popupStyle.padding.bottom);
+    const SIMDVector secondPadding = VectorSet(background->padding.left, background->padding.top,
+        background->padding.right, background->padding.bottom);
+    const SIMDVector paddingValue = VectorSelect(secondPadding, firstPadding, VectorGreater(firstPadding, secondPadding));
+    const Insets padding{ VectorGetX(paddingValue), VectorGetY(paddingValue), VectorGetZ(paddingValue), VectorGetW(paddingValue) };
     m_paint.pushClip(placement->bounds);
     const bool backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
     const bool popped = m_paint.popClip();
@@ -78,9 +82,11 @@ bool Builder::paintContextMenuPopup(ContextMenuFrame& frame){
         item.state = frame.rows;
         item.list = frame.list;
         LayoutBox box;
-        box.rectangle = { placement->bounds.x + padding.left, placement->bounds.y + padding.top,
-            Max(0.0f, placement->bounds.width - padding.left - padding.right),
-            Max(0.0f, placement->bounds.height - padding.top - padding.bottom) };
+        const SIMDVector inset = InsetRectValue(
+            VectorSet(placement->bounds.x, placement->bounds.y, placement->bounds.width, placement->bounds.height),
+            VectorSet(padding.left, padding.top, padding.right, padding.bottom)
+        );
+        box.rectangle = { VectorGetX(inset), VectorGetY(inset), VectorGetZ(inset), VectorGetW(inset) };
         box.clip = placement->bounds;
         painted = paintList(item, box) && contextMenuMatches(frame);
     }

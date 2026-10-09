@@ -4,6 +4,7 @@
 
 #include "../builder.h"
 
+#include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 
@@ -158,12 +159,17 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
             m_context.fail();
             return {};
         }
-        minimum.x = Max(minimum.x, skinRegion->minimumWidth);
-        minimum.y = Max(minimum.y, skinRegion->minimumHeight);
-        item.padding.left = Max(item.padding.left, skinRegion->padding.left);
-        item.padding.top = Max(item.padding.top, skinRegion->padding.top);
-        item.padding.right = Max(item.padding.right, skinRegion->padding.right);
-        item.padding.bottom = Max(item.padding.bottom, skinRegion->padding.bottom);
+        const SIMDVector minimumCurrent = VectorSet(minimum.x, minimum.y, minimum.x, minimum.y);
+        const SIMDVector minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight,
+            skinRegion->minimumWidth, skinRegion->minimumHeight);
+        const SIMDVector minimumMaximum = VectorSelect(minimumCandidate, minimumCurrent,
+            VectorGreater(minimumCurrent, minimumCandidate));
+        minimum = { VectorGetX(minimumMaximum), VectorGetY(minimumMaximum) };
+        const SIMDVector itempaddingCurrent = VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom);
+        const SIMDVector itempaddingCandidate = VectorSet(skinRegion->padding.left, skinRegion->padding.top, skinRegion->padding.right, skinRegion->padding.bottom);
+        const SIMDVector itempaddingMaximum = VectorSelect(itempaddingCandidate, itempaddingCurrent,
+            VectorGreater(itempaddingCurrent, itempaddingCandidate));
+        item.padding = { VectorGetX(itempaddingMaximum), VectorGetY(itempaddingMaximum), VectorGetZ(itempaddingMaximum), VectorGetW(itempaddingMaximum) };
     }
     const UiSkinRegion* arrow = region(frame.style.arrow, frame.style.arrowFallback);
     if(!arrow){
@@ -213,17 +219,22 @@ ComboResult Builder::declareCombo(AStringView stableKey, const IListDataSource& 
         m_context.fail();
         return {};
     }
-    list.padding.left = Max(list.padding.left, background->padding.left);
-    list.padding.top = Max(list.padding.top, background->padding.top);
-    list.padding.right = Max(list.padding.right, background->padding.right);
-    list.padding.bottom = Max(list.padding.bottom, background->padding.bottom);
+    const SIMDVector listpaddingCurrent = VectorSet(list.padding.left, list.padding.top, list.padding.right, list.padding.bottom);
+    const SIMDVector listpaddingCandidate = VectorSet(background->padding.left, background->padding.top, background->padding.right, background->padding.bottom);
+    const SIMDVector listpaddingMaximum = VectorSelect(listpaddingCandidate, listpaddingCurrent,
+        VectorGreater(listpaddingCurrent, listpaddingCandidate));
+    list.padding = { VectorGetX(listpaddingMaximum), VectorGetY(listpaddingMaximum), VectorGetZ(listpaddingMaximum), VectorGetW(listpaddingMaximum) };
     const Point measured = item.text.measure();
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
-    description.intrinsicSize = { Max(minimum.x, measured.x + frame.arrowExtent + frame.style.arrowGap
-        + item.padding.left + item.padding.right), Max(minimum.y, Max(measured.y, frame.arrowExtent)
-        + item.padding.top + item.padding.bottom) };
+    const SIMDVector contentSize = VectorSet(measured.x + frame.arrowExtent + frame.style.arrowGap,
+        Max(measured.y, frame.arrowExtent), 0.0f, 0.0f);
+    const SIMDVector paddedSize = VectorAdd(VectorAdd(contentSize, VectorSet(item.padding.left, item.padding.top, 0.0f, 0.0f)),
+        VectorSet(item.padding.right, item.padding.bottom, 0.0f, 0.0f));
+    const SIMDVector minimumSize = VectorSet(minimum.x, minimum.y, 0.0f, 0.0f);
+    const SIMDVector intrinsicSize = VectorSelect(paddedSize, minimumSize, VectorGreater(minimumSize, paddedSize));
+    description.intrinsicSize = { VectorGetX(intrinsicSize), VectorGetY(intrinsicSize) };
     const auto admittedNode = m_scope->m_layout.addNode(m_scope->m_stack.back(), description);
     if(!admittedNode){
         m_context.fail();

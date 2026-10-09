@@ -4,6 +4,7 @@
 
 #include "edit_click_tracker.h"
 
+#include <global/math/vector_double.h>
 #include <global/simplemath.h>
 
 
@@ -23,8 +24,9 @@ UiEditClickKind::Enum UiEditClickTracker::press(const UiTextEditOwner& owner, co
         cancel();
         return UiEditClickKind::Caret;
     }
-    const f64 dx = static_cast<f64>(position.x) - static_cast<f64>(m_position.x);
-    const f64 dy = static_cast<f64>(position.y) - static_cast<f64>(m_position.y);
+    const SIMDVectorDouble dxDyValue = (SIMDVectorDouble{ static_cast<f64>(position.x), static_cast<f64>(position.y) } - SIMDVectorDouble{ static_cast<f64>(m_position.x), static_cast<f64>(m_position.y) });
+    const f64 dx = dxDyValue.x;
+    const f64 dy = dxDyValue.y;
     const bool second = m_released && m_clickCount == 1u && owner == m_owner && popup == m_popup
         && revision == m_revision && externalRevision == m_externalRevision
         && timestampMs >= m_pressTimestampMs && timestampMs - m_pressTimestampMs <= 500u
@@ -48,8 +50,9 @@ void UiEditClickTracker::move(const Ui::Point position)noexcept{
         cancel();
         return;
     }
-    const f64 dx = static_cast<f64>(position.x) - static_cast<f64>(m_position.x);
-    const f64 dy = static_cast<f64>(position.y) - static_cast<f64>(m_position.y);
+    const SIMDVectorDouble dxDyValue = (SIMDVectorDouble{ static_cast<f64>(position.x), static_cast<f64>(position.y) } - SIMDVectorDouble{ static_cast<f64>(m_position.x), static_cast<f64>(m_position.y) });
+    const f64 dx = dxDyValue.x;
+    const f64 dy = dxDyValue.y;
     if(dx * dx + dy * dy > 16.0)
         cancel();
 }

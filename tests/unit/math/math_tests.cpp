@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include <global/simdmath.h>
+#include <global/math/vector_double.h>
 #include <global/compile.h>
 #include <global/limit.h>
 #include <global/simplemath.h>
@@ -27,8 +28,109 @@ using NWB::Tests::NearlyEqual3;
 using NWB::Tests::NearlyEqual4;
 
 
+NWB_NOINLINE f32 LegacyMultiplyAddExpression(const f32 first, const f32 second, const f32 addend)noexcept{
+    return first * second + addend;
+}
+
+NWB_NOINLINE f32 LegacyNegativeMultiplySubtractExpression(const f32 first, const f32 second, const f32 addend)noexcept{
+    return addend - first * second;
+}
+
+NWB_NOINLINE f64 LegacyDoubleMultiplyAddExpression(const f64 first, const f64 second, const f64 addend)noexcept{
+    return first * second + addend;
+}
+
+NWB_NOINLINE f64 LegacyDoubleMultiplyThenAdd(const f64 first, const f64 second, const f64 addend)noexcept{
+    const f64 product = first * second;
+    return product + addend;
+}
+
+NWB_NOINLINE SIMDVectorDouble DoubleMultiplyAddExpression(const SIMDVectorDouble first,
+    const SIMDVectorDouble second, const SIMDVectorDouble addend
+)noexcept{
+    return first * second + addend;
+}
+
+NWB_NOINLINE SIMDVectorDouble DoubleMultiplyThenAdd(const SIMDVectorDouble first,
+    const SIMDVectorDouble second, const SIMDVectorDouble addend
+)noexcept{
+    const SIMDVectorDouble product = first * second;
+    return product + addend;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+TEST(Math, MultiplyExpressionsPreserveCompilerRoundingPolicyAndSignedZero){
+    // The first two products lose a 2^-26 residual when rounded separately; contraction retains it.
+    const f32 first[]{ 0x1.0008p+0f, -0x1.0008p+0f, 0.0f, -0.0f };
+    const f32 second[]{ 0x1.fffp-1f, 0x1.fffp-1f, -0.0f, 1.0f };
+    const f32 addend[]{ -1.0f, 1.0f, -0.0f, -0.0f };
+    const f32 difference[]{ 1.0f, -1.0f, -0.0f, 0.0f };
+    const SIMDVector lhs = VectorSet(first[0], first[1], first[2], first[3]);
+    const SIMDVector rhs = VectorSet(second[0], second[1], second[2], second[3]);
+    const SIMDVector sum = VectorMultiplyAddExpression(lhs, rhs, VectorSet(addend[0], addend[1], addend[2], addend[3]));
+    const SIMDVector subtraction = VectorNegativeMultiplySubtractExpression(lhs, rhs,
+        VectorSet(difference[0], difference[1], difference[2], difference[3]));
+    for(usize lane = 0u; lane < 4u; ++lane){
+        EXPECT_EQ(BitCast<u32>(VectorGetByIndex(sum, lane)),
+            BitCast<u32>(LegacyMultiplyAddExpression(first[lane], second[lane], addend[lane]))) << lane;
+        EXPECT_EQ(BitCast<u32>(VectorGetByIndex(subtraction, lane)),
+            BitCast<u32>(LegacyNegativeMultiplySubtractExpression(first[lane], second[lane], difference[lane]))) << lane;
+    }
+}
+
+TEST(Math, DoubleVectorRetainsPrecisionCancellationSubnormalsAndSignedZero){
+    const SIMDVectorDouble precision = SIMDVectorDouble{ 0x1p+40, 0x1p-40 } + SIMDVectorDouble{ 1., 0x1p-80 };
+    EXPECT_EQ(precision.x, 0x1.0000000001p+40);
+    EXPECT_EQ(precision.y, 0x1.0000000001p-40);
+
+    // Separately rounded products lose the 2^-54 residual; expression contraction follows the scalar compiler policy.
+    const SIMDVectorDouble first{ 0x1.0000002p+0, -0x1.0000002p+0 };
+    const SIMDVectorDouble second{ 0x1.ffffffcp-1, 0x1.ffffffcp-1 };
+    const SIMDVectorDouble addend{ -1., 1. };
+    const SIMDVectorDouble expression = DoubleMultiplyAddExpression(first, second, addend);
+    const SIMDVectorDouble separate = DoubleMultiplyThenAdd(first, second, addend);
+    for(usize lane = 0u; lane < 2u; ++lane){
+        EXPECT_EQ(BitCast<u64>(expression[lane]),
+            BitCast<u64>(LegacyDoubleMultiplyAddExpression(first[lane], second[lane], addend[lane]))) << lane;
+        EXPECT_EQ(BitCast<u64>(separate[lane]),
+            BitCast<u64>(LegacyDoubleMultiplyThenAdd(first[lane], second[lane], addend[lane]))) << lane;
+    }
+
+    const SIMDVectorDouble subnormal = SIMDVectorDouble{ BitCast<f64>(u64{ 1u }), BitCast<f64>(u64{ 3u }) }
+        * SIMDVectorDouble{ 2., 0.5 };
+    EXPECT_EQ(BitCast<u64>(subnormal.x), 2u);
+    EXPECT_EQ(BitCast<u64>(subnormal.y), 2u);
+    const SIMDVectorDouble signedZero = SIMDVectorDouble{ -0., 0. } * SIMDVectorDouble{ 1., -1. };
+    EXPECT_TRUE(SignBit(signedZero.x));
+    EXPECT_TRUE(SignBit(signedZero.y));
+}
+
+TEST(Math, DoubleVectorFloorAndCeilingPreserveBinary64BoundaryValues){
+    const SIMDVectorDouble inputs[]{
+        { 0.0, -0.0 },
+        { BitCast<f64>(u64{ 1u }), -BitCast<f64>(u64{ 1u }) },
+        { 0x1.fffffffffffffp-1, 0x1.0000000000001p+0 },
+        { 0x1p+53, -0x1p+53 },
+        { Limit<f64>::s_Infinity, -Limit<f64>::s_Infinity },
+        { Limit<f64>::s_QuietNaN, -Limit<f64>::s_QuietNaN },
+    };
+    for(const SIMDVectorDouble input : inputs){
+        const SIMDVectorDouble floor = VectorDoubleFloor(input);
+        const SIMDVectorDouble ceiling = VectorDoubleCeiling(input);
+        for(usize lane = 0u; lane < 2u; ++lane){
+            if(IsNaN(input[lane])){
+                EXPECT_TRUE(IsNaN(floor[lane]));
+                EXPECT_TRUE(IsNaN(ceiling[lane]));
+                continue;
+            }
+            EXPECT_EQ(BitCast<u64>(floor[lane]), BitCast<u64>(Floor(input[lane]))) << lane;
+            EXPECT_EQ(BitCast<u64>(ceiling[lane]), BitCast<u64>(Ceil(input[lane]))) << lane;
+        }
+    }
+}
 
 TEST(Math, CenteredOrthographicProjectionPreservesNegativeZeroTranslation){
     const SIMDMatrix projection = MatrixOrthographicOffCenterLH(-1.0f, 1.0f, -1.0f, 1.0f, 1.0f, 11.0f);
@@ -157,6 +259,35 @@ TEST(Math, MergingContainedSpherePreservesLargerBounds){
     const BoundingSphere larger(Float3U(0.0f, 0.0f, 0.0f), 3.0f);
     BoundingSphere::CreateMerged(contained, larger, BoundingSphere(Float3U(1.0f, 0.0f, 0.0f), 1.0f));
     EXPECT_TRUE(NearlyEqual4(LoadFloat(contained.centerRadius), 0.0f, 0.0f, 0.0f, 3.0f));
+}
+
+TEST(Math, MatrixDecompositionReconstructsCollapsedAxesWithNegativeBasisTies){
+    const SIMDMatrix matrices[]{
+        MatrixSet(-1.0f, 0.0f, 0.0f, 3.0f, -1.0f, 0.0f, 0.0f, -2.0f, -1.0f, 0.0f, 0.0f, 7.0f, 0.0f, 0.0f, 0.0f, 1.0f),
+        MatrixSet(0.0f, -1.0f, 0.0f, 3.0f, 0.0f, -1.0f, 0.0f, -2.0f, 0.0f, -1.0f, 0.0f, 7.0f, 0.0f, 0.0f, 0.0f, 1.0f),
+        MatrixSet(0.0f, 0.0f, -1.0f, 3.0f, 0.0f, 0.0f, -1.0f, -2.0f, 0.0f, 0.0f, -1.0f, 7.0f, 0.0f, 0.0f, 0.0f, 1.0f),
+        MatrixSet(0.0f, 0.0f, 0.0f, 3.0f, 0.0f, 0.0f, 0.0f, -2.0f, 0.0f, 0.0f, 0.0f, 7.0f, 0.0f, 0.0f, 0.0f, 1.0f),
+    };
+    for(usize index = 0u; index < LengthOf(matrices); ++index){
+        SCOPED_TRACE(index);
+        const auto decomposition = MatrixDecompose(matrices[index]);
+        ASSERT_TRUE(decomposition);
+        EXPECT_FALSE(Vector4IsNaN(decomposition->rotation));
+        EXPECT_FALSE(Vector4IsInfinite(decomposition->rotation));
+        const SIMDMatrix reconstructed = MatrixAffineTransformation(
+            decomposition->scale, VectorZero(), decomposition->rotation, decomposition->translation
+        );
+        for(usize row = 0u; row < 4u; ++row){
+            EXPECT_TRUE(NearlyEqual4(reconstructed.v[row],
+                VectorGetX(matrices[index].v[row]), VectorGetY(matrices[index].v[row]),
+                VectorGetZ(matrices[index].v[row]), VectorGetW(matrices[index].v[row]))) << row;
+        }
+    }
+
+    const SIMDMatrix shear = MatrixSet(
+        1.0f, 1.0f, 0.0f, 3.0f, 0.0f, 1.0f, 0.0f, -2.0f, 0.0f, 0.0f, 1.0f, 7.0f, 0.0f, 0.0f, 0.0f, 1.0f
+    );
+    EXPECT_FALSE(MatrixDecompose(shear));
 }
 
 TEST(Math, HalfFloatScalarPreservesSignedZeroLimitsSubnormalsAndTies){

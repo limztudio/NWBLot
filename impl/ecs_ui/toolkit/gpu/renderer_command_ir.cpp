@@ -9,6 +9,7 @@
 #include <core/task/gpu/compiled_graph.h>
 
 #include <global/algorithm.h>
+#include <global/math/vector_arithmetic.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -134,7 +135,12 @@ bool RecordRasterCommandIr(
     const Core::TextureDesc& target = frame->m_target->m_color->getDescription();
     const DisplayMetrics& display = frame->m_snapshot.displayMetrics();
     GpuPaintPushConstants push;
-    push.scale = { 2.0f * display.pixelScaleX / static_cast<f32>(target.width), -2.0f * display.pixelScaleY / static_cast<f32>(target.height) };
+    const SIMDVector pixelScale = VectorSet(display.pixelScaleX, display.pixelScaleY, display.pixelScaleX, display.pixelScaleY);
+    const SIMDVector projection = VectorMultiply(VectorSet(2.0f, -2.0f, 2.0f, -2.0f), pixelScale);
+    const SIMDVector targetSize = VectorSet(static_cast<f32>(target.width), static_cast<f32>(target.height),
+        static_cast<f32>(target.width), static_cast<f32>(target.height));
+    const SIMDVector projectionScale = VectorDivide(projection, targetSize);
+    push.scale = { VectorGetX(projectionScale), VectorGetY(projectionScale) };
     push.translate = { -1.0f, 1.0f };
     push.samplerSlot = frame->m_resources->m_samplerDescriptor.slot();
     if(!IsFinite(push.scale.x) || !IsFinite(push.scale.y))
@@ -144,10 +150,19 @@ bool RecordRasterCommandIr(
     bool hasRasterState = false;
     bool hasDraw = false;
     for(const DrawCommand& draw : frame->m_snapshot.commands()){
-        const f32 minX = Max(0.0f, Floor(draw.clip.x * display.pixelScaleX));
-        const f32 minY = Max(0.0f, Floor(draw.clip.y * display.pixelScaleY));
-        const f32 maxX = Min(static_cast<f32>(target.width), Ceil((draw.clip.x + draw.clip.width) * display.pixelScaleX));
-        const f32 maxY = Min(static_cast<f32>(target.height), Ceil((draw.clip.y + draw.clip.height) * display.pixelScaleY));
+        const SIMDVector clip = VectorSet(draw.clip.x, draw.clip.y, draw.clip.x, draw.clip.y);
+        const SIMDVector extent = VectorSet(0.0f, 0.0f, draw.clip.width, draw.clip.height);
+        const SIMDVector ends = VectorAdd(clip, extent);
+        const SIMDVector coordinates = VectorPermute<0, 1, 6, 7>(clip, ends);
+        const SIMDVector physicalClip = VectorMultiply(coordinates, pixelScale);
+        const SIMDVector first = VectorFloor(VectorSwizzle<0, 1, 0, 1>(physicalClip));
+        const SIMDVector last = VectorCeiling(VectorSwizzle<2, 3, 2, 3>(physicalClip));
+        const SIMDVector minimum = VectorSelect(first, VectorZero(), VectorGreater(VectorZero(), first));
+        const SIMDVector maximum = VectorSelect(last, targetSize, VectorLess(targetSize, last));
+        const f32 minX = VectorGetX(minimum);
+        const f32 minY = VectorGetY(minimum);
+        const f32 maxX = VectorGetX(maximum);
+        const f32 maxY = VectorGetY(maximum);
         if(maxX <= minX || maxY <= minY || draw.indexCount == 0u)
             continue;
         const Core::Rect scissor(

@@ -4,6 +4,8 @@
 
 #include "shaper.h"
 
+#include <global/math/vector_arithmetic.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -132,9 +134,12 @@ Expected<ShapedRun, TextLayoutStatus::Enum> TextShaper::shape(const ShapeRequest
             const auto metrics = face->metrics(request.fontSize);
             if(!metrics)
                 return MakeUnexpected(TextLayoutStatus::FontFailure);
-            run.metrics.ascender = Max(run.metrics.ascender, metrics->ascender);
-            run.metrics.descender = Max(run.metrics.descender, metrics->descender);
-            run.metrics.lineGap = Max(run.metrics.lineGap, metrics->lineGap);
+            const SIMDVector currentMetrics = VectorSet(run.metrics.ascender, run.metrics.descender, run.metrics.lineGap, 0.0f);
+            const SIMDVector candidateMetrics = VectorSet(metrics->ascender, metrics->descender, metrics->lineGap, 0.0f);
+            const SIMDVector maximumMetrics = VectorSelect(candidateMetrics, currentMetrics, VectorGreater(currentMetrics, candidateMetrics));
+            run.metrics.ascender = VectorGetX(maximumMetrics);
+            run.metrics.descender = VectorGetY(maximumMetrics);
+            run.metrics.lineGap = VectorGetZ(maximumMetrics);
             __hidden_ui_text_shaper::Append(run, face, m_fallback, 0u, m_fallback.size());
         }
     }

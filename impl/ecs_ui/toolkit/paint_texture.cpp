@@ -4,6 +4,7 @@
 
 #include "paint.h"
 
+#include "rect_math.h"
 #include <global/simplemath.h>
 
 
@@ -40,10 +41,13 @@ bool PaintBuilder::drawImage(
     )
         return false;
     const Rect clip = m_clips.back();
-    const f32 visibleLeft = Max(rectangle.x, clip.x);
-    const f32 visibleTop = Max(rectangle.y, clip.y);
-    const f32 visibleRight = Min(rectangle.x + rectangle.width, clip.x + clip.width);
-    const f32 visibleBottom = Min(rectangle.y + rectangle.height, clip.y + clip.height);
+    const SIMDVector visibleBounds = IntersectRectBoundsValue(
+        VectorSet(rectangle.x, rectangle.y, rectangle.width, rectangle.height), VectorSet(clip.x, clip.y, clip.width, clip.height)
+    );
+    const f32 visibleLeft = VectorGetX(visibleBounds);
+    const f32 visibleTop = VectorGetY(visibleBounds);
+    const f32 visibleRight = VectorGetZ(visibleBounds);
+    const f32 visibleBottom = VectorGetW(visibleBounds);
     if(
         rectangle.width == 0.0f || rectangle.height == 0.0f || clip.width <= 0.0f || clip.height <= 0.0f
         || tint.a == 0.0f || visibleRight <= visibleLeft || visibleBottom <= visibleTop

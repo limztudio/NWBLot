@@ -4,6 +4,7 @@
 
 #include "../builder.h"
 
+#include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 
@@ -193,8 +194,11 @@ bool Builder::prepareRadioGroup(RadioGroupFrame& frame){
         auto label = m_text.layout(textShapeRequest(text, frame.m_widgetStyle.fontSize));
         if(!label || !radioGroupMatches(frame))
             return false;
-        maximumLabel.x = Max(maximumLabel.x, label->measure().x);
-        maximumLabel.y = Max(maximumLabel.y, label->measure().y);
+        const Point measured = label->measure();
+        const SIMDVector currentSize = VectorSet(maximumLabel.x, maximumLabel.y, maximumLabel.x, maximumLabel.y);
+        const SIMDVector labelSize = VectorSet(measured.x, measured.y, measured.x, measured.y);
+        const SIMDVector maximumSize = VectorSelect(labelSize, currentSize, VectorGreater(currentSize, labelSize));
+        maximumLabel = { VectorGetX(maximumSize), VectorGetY(maximumSize) };
         frame.m_labels.push_back(Move(*label));
     }
     const UiSkinRegion* normal = region(frame.m_style.normal, frame.m_style.fallback);

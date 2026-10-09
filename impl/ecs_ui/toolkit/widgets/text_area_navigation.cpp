@@ -4,6 +4,7 @@
 
 #include "text_area_navigation.h"
 
+#include <global/math/vector_double.h>
 #include <global/simplemath.h>
 
 
@@ -87,8 +88,9 @@ private:
     const f64 target = center + (down ? displacement : -displacement);
     const EditCaretLine& first = lines.front();
     const EditCaretLine& last = lines.back();
-    const f64 minimum = static_cast<f64>(first.top) + static_cast<f64>(first.height) * 0.5;
-    const f64 maximum = static_cast<f64>(last.top) + static_cast<f64>(last.height) * 0.5;
+    const SIMDVectorDouble minimumMaximumValue = (SIMDVectorDouble{ static_cast<f64>(first.top), static_cast<f64>(last.top) } + (SIMDVectorDouble{ static_cast<f64>(first.height), static_cast<f64>(last.height) } * SIMDVectorDouble{ 0.5, 0.5 }));
+    const f64 minimum = minimumMaximumValue.x;
+    const f64 maximum = minimumMaximumValue.y;
     if(!IsFinite(target) || !IsFinite(minimum) || !IsFinite(maximum) || minimum > maximum)
         return MakeUnexpected(Failure{});
     const Point point{ preferredX, static_cast<f32>(Clamp(target, minimum, maximum)) };

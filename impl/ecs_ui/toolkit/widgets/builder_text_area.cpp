@@ -5,6 +5,7 @@
 #include "../builder.h"
 #include "text_area_navigation.h"
 
+#include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 
@@ -154,8 +155,12 @@ EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, T
     for(const auto& name : names){
         const UiSkinRegion* skinRegion = region(name, m_editStyle.fallback);
         if(skinRegion){
-            minimum.x = Max(minimum.x, skinRegion->minimumWidth);
-            minimum.y = Max(minimum.y, skinRegion->minimumHeight);
+            const SIMDVector minimumCurrent = VectorSet(minimum.x, minimum.y, minimum.x, minimum.y);
+            const SIMDVector minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight,
+                skinRegion->minimumWidth, skinRegion->minimumHeight);
+            const SIMDVector minimumMaximum = VectorSelect(minimumCandidate, minimumCurrent,
+                VectorGreater(minimumCurrent, minimumCandidate));
+            minimum = { VectorGetX(minimumMaximum), VectorGetY(minimumMaximum) };
         }
     }
     LayoutNodeDesc description;

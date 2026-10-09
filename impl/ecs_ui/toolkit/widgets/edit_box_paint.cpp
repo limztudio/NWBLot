@@ -4,6 +4,7 @@
 
 #include "edit_box.h"
 
+#include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 
 
@@ -97,8 +98,11 @@ bool EditBoxView::paint(TextService& text, PaintBuilder& paint, const UiSkin& sk
             }
             if(segment->width > 0.0f){
                 const f32 thickness = Min(placement.caret.width, segment->height);
-                segment->x += placement.textOrigin.x;
-                segment->y += placement.textOrigin.y + Max(0.0f, segment->height - thickness);
+                const f32 verticalOffset = placement.textOrigin.y + Max(0.0f, segment->height - thickness);
+                const SIMDVector underlineOrigin = VectorAdd(VectorSet(segment->x, segment->y, segment->x, segment->y),
+                    VectorSet(placement.textOrigin.x, verticalOffset, placement.textOrigin.x, verticalOffset));
+                segment->x = VectorGetX(underlineOrigin);
+                segment->y = VectorGetY(underlineOrigin);
                 segment->height = thickness;
                 paint.fillRect(*segment, style.preedit);
             }

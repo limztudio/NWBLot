@@ -4,6 +4,8 @@
 
 #include "../builder.h"
 
+#include <global/math/vector_double.h>
+#include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 #include <global/scope_exit.h>
 
@@ -29,10 +31,14 @@ namespace __hidden_builder_slider{
         || !IsFinite(region.minimumHeight) || region.minimumHeight < 0.0f
     )
         return MakeUnexpected(Failure{});
-    const f64 horizontal = static_cast<f64>(static_cast<u64>(region.sliceInsets.left) + region.sliceInsets.right) / density;
-    const f64 vertical = static_cast<f64>(static_cast<u64>(region.sliceInsets.top) + region.sliceInsets.bottom) / density;
-    const f64 width = Max(static_cast<f64>(region.minimumWidth), horizontal);
-    const f64 height = Max(static_cast<f64>(region.minimumHeight), vertical);
+    const SIMDVectorDouble horizontalVerticalValue = (SIMDVectorDouble{ static_cast<f64>(static_cast<u64>(region.sliceInsets.left) + region.sliceInsets.right), static_cast<f64>(static_cast<u64>(region.sliceInsets.top) + region.sliceInsets.bottom) } / SIMDVectorDouble{ density, density });
+    const f64 horizontal = horizontalVerticalValue.x;
+    const f64 vertical = horizontalVerticalValue.y;
+    const SIMDVectorDouble geometryPair1Operand0 = SIMDVectorDouble{ static_cast<f64>(region.minimumWidth), static_cast<f64>(region.minimumHeight) };
+    const SIMDVectorDouble geometryPair1Operand1 = SIMDVectorDouble{ horizontal, vertical };
+    const SIMDVectorDouble widthHeightValue = ((geometryPair1Operand0 > geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
+    const f64 width = widthHeightValue.x;
+    const f64 height = widthHeightValue.y;
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
     return Point{ static_cast<f32>(width), static_cast<f32>(height) };
@@ -121,8 +127,11 @@ bool Builder::prepareSlider(SliderFrame& frame){
         const auto minimum = __hidden_builder_slider::MinimumSize(*thumb, m_skin->referenceDensity());
         if(!minimum)
             return false;
-        frame.m_style.thumbExtent.x = Max(frame.m_style.thumbExtent.x, minimum->x);
-        frame.m_style.thumbExtent.y = Max(frame.m_style.thumbExtent.y, minimum->y);
+        const SIMDVector currentSize = VectorSet(frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y,
+            frame.m_style.thumbExtent.x, frame.m_style.thumbExtent.y);
+        const SIMDVector minimumSize = VectorSet(minimum->x, minimum->y, minimum->x, minimum->y);
+        const SIMDVector maximumSize = VectorSelect(minimumSize, currentSize, VectorGreater(currentSize, minimumSize));
+        frame.m_style.thumbExtent = { VectorGetX(maximumSize), VectorGetY(maximumSize) };
     }
     const auto metrics = SliderLayout::Measure(frame.m_options, frame.m_style);
     if(!metrics)

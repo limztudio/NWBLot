@@ -4,6 +4,8 @@
 
 #include "popup.h"
 
+#include <global/math/vector_double.h>
+#include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 
 
@@ -81,8 +83,11 @@ Expected<PopupPlacement> PopupLayout::Place(const PopupOptions& options, const D
     using namespace __hidden_ui_popup_layout;
     if(!ValidOptions(options, display))
         return MakeUnexpected(Failure{});
-    const f32 width = Min(options.size.x, display.logicalWidth);
-    const f32 height = Min(options.size.y, display.logicalHeight);
+    const SIMDVector requestedSize = VectorSet(options.size.x, options.size.y, options.size.x, options.size.y);
+    const SIMDVector displaySize = VectorSet(display.logicalWidth, display.logicalHeight, display.logicalWidth, display.logicalHeight);
+    const SIMDVector boundedSize = VectorSelect(displaySize, requestedSize, VectorLess(requestedSize, displaySize));
+    const f32 width = VectorGetX(boundedSize);
+    const f32 height = VectorGetY(boundedSize);
     PopupPlacementSide::Enum side = options.side;
     if(side != PopupPlacementSide::Center){
         const f64 required = side == PopupPlacementSide::Below || side == PopupPlacementSide::Above ? height : width;
@@ -109,13 +114,21 @@ Expected<PopupPlacement> PopupLayout::Place(const PopupOptions& options, const D
     case PopupPlacementSide::Left:
         x -= static_cast<f64>(options.gap) + width;
         break;
-    case PopupPlacementSide::Center:
-        x = (static_cast<f64>(display.logicalWidth) - width) * 0.5;
-        y = (static_cast<f64>(display.logicalHeight) - height) * 0.5;
+    case PopupPlacementSide::Center:{
+        const SIMDVectorDouble centered = (SIMDVectorDouble{ display.logicalWidth, display.logicalHeight }
+            - SIMDVectorDouble{ width, height }) * SIMDVectorDouble{ 0.5, 0.5 };
+        x = centered.x;
+        y = centered.y;
         break;
     }
-    x = Clamp(x, 0.0, static_cast<f64>(display.logicalWidth) - width);
-    y = Clamp(y, 0.0, static_cast<f64>(display.logicalHeight) - height);
+    }
+    const SIMDVectorDouble origin = SIMDVectorDouble{ x, y };
+    const SIMDVectorDouble maximum = SIMDVectorDouble{ display.logicalWidth, display.logicalHeight }
+        - SIMDVectorDouble{ width, height };
+    const SIMDVectorDouble zero = { 0.0, 0.0 };
+    const SIMDVectorDouble constrained = (origin > zero) ? ((origin > maximum) ? maximum : origin) : zero;
+    x = constrained.x;
+    y = constrained.y;
     PopupPlacement candidate;
     candidate.bounds = { static_cast<f32>(x), static_cast<f32>(y), width, height };
     candidate.viewport = { 0.0f, 0.0f, display.logicalWidth, display.logicalHeight };

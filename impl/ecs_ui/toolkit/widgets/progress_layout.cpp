@@ -9,6 +9,7 @@
 
 #include <impl/ecs_ui/toolkit/layout/validation.h>
 
+#include <global/math/vector_double.h>
 #include <global/simplemath.h>
 
 
@@ -39,8 +40,9 @@ namespace __hidden_ui_progress_layout{
 [[nodiscard]] static bool ValidMetrics(const ProgressMetrics& metrics)noexcept{
     if(!ValidPadding(metrics.padding) || !IsValidUiExtent(metrics.fillMinimum) || !IsValidUiExtent(metrics.contentSize))
         return false;
-    const f64 width = static_cast<f64>(metrics.padding.left) + metrics.padding.right + metrics.fillMinimum.x;
-    const f64 height = static_cast<f64>(metrics.padding.top) + metrics.padding.bottom + metrics.fillMinimum.y;
+    const SIMDVectorDouble widthHeightValue = ((SIMDVectorDouble{ static_cast<f64>(metrics.padding.left), static_cast<f64>(metrics.padding.top) } + SIMDVectorDouble{ metrics.padding.right, metrics.padding.bottom }) + SIMDVectorDouble{ metrics.fillMinimum.x, metrics.fillMinimum.y });
+    const f64 width = widthHeightValue.x;
+    const f64 height = widthHeightValue.y;
     return
         width <= Limit<f32>::s_Max && height <= Limit<f32>::s_Max
         && metrics.contentSize.x >= static_cast<f32>(width) && metrics.contentSize.y >= static_cast<f32>(height)
@@ -67,8 +69,11 @@ namespace __hidden_ui_progress_layout{
     }
     else
         return MakeUnexpected(Failure{});
-    const f64 width = Max(static_cast<f64>(region.minimumWidth), static_cast<f64>(horizontalSlices) / density);
-    const f64 height = Max(static_cast<f64>(region.minimumHeight), static_cast<f64>(verticalSlices) / density);
+    const SIMDVectorDouble geometryPair1Operand0 = SIMDVectorDouble{ static_cast<f64>(region.minimumWidth), static_cast<f64>(region.minimumHeight) };
+    const SIMDVectorDouble geometryPair1Operand1 = (SIMDVectorDouble{ static_cast<f64>(horizontalSlices), static_cast<f64>(verticalSlices) } / SIMDVectorDouble{ density, density });
+    const SIMDVectorDouble widthHeightValue = ((geometryPair1Operand0 > geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
+    const f64 width = widthHeightValue.x;
+    const f64 height = widthHeightValue.y;
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
     return Point{ static_cast<f32>(width), static_cast<f32>(height) };
@@ -96,10 +101,16 @@ namespace __hidden_ui_progress_layout{
 }
 
 [[nodiscard]] static Expected<Rect> Intersect(const Rect& lhs, const Rect& rhs)noexcept{
-    const f64 left = Max(static_cast<f64>(lhs.x), static_cast<f64>(rhs.x));
-    const f64 top = Max(static_cast<f64>(lhs.y), static_cast<f64>(rhs.y));
-    const f64 right = Min(static_cast<f64>(lhs.x) + lhs.width, static_cast<f64>(rhs.x) + rhs.width);
-    const f64 bottom = Min(static_cast<f64>(lhs.y) + lhs.height, static_cast<f64>(rhs.y) + rhs.height);
+    const SIMDVectorDouble geometryPair2Operand0 = SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) };
+    const SIMDVectorDouble geometryPair2Operand1 = SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) };
+    const SIMDVectorDouble leftTopValue = ((geometryPair2Operand0 > geometryPair2Operand1) ? geometryPair2Operand0 : geometryPair2Operand1);
+    const f64 left = leftTopValue.x;
+    const f64 top = leftTopValue.y;
+    const SIMDVectorDouble geometryPair3Operand0 = (SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) } + SIMDVectorDouble{ lhs.width, lhs.height });
+    const SIMDVectorDouble geometryPair3Operand1 = (SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) } + SIMDVectorDouble{ rhs.width, rhs.height });
+    const SIMDVectorDouble rightBottomValue = ((geometryPair3Operand0 < geometryPair3Operand1) ? geometryPair3Operand0 : geometryPair3Operand1);
+    const f64 right = rightBottomValue.x;
+    const f64 bottom = rightBottomValue.y;
     return MakeRect(left, top, Max(0.0, right - left), Max(0.0, bottom - top));
 }
 
@@ -142,10 +153,14 @@ Expected<ProgressMetrics> ProgressLayout::Measure(
         Max(style.padding.bottom, track.padding.bottom)
     };
     candidate.fillMinimum = *fillMinimum;
-    const f64 innerWidth = static_cast<f64>(candidate.padding.left) + candidate.padding.right + fillMinimum->x;
-    const f64 innerHeight = static_cast<f64>(candidate.padding.top) + candidate.padding.bottom + fillMinimum->y;
-    const f64 width = Max(static_cast<f64>(trackMinimum->x), innerWidth);
-    const f64 height = Max(static_cast<f64>(options.height), Max(static_cast<f64>(trackMinimum->y), innerHeight));
+    const SIMDVectorDouble innerWidthInnerHeightValue = ((SIMDVectorDouble{ static_cast<f64>(candidate.padding.left), static_cast<f64>(candidate.padding.top) } + SIMDVectorDouble{ candidate.padding.right, candidate.padding.bottom }) + SIMDVectorDouble{ fillMinimum->x, fillMinimum->y });
+    const f64 innerWidth = innerWidthInnerHeightValue.x;
+    const f64 innerHeight = innerWidthInnerHeightValue.y;
+    const SIMDVectorDouble geometryPair5Operand0 = SIMDVectorDouble{ static_cast<f64>(trackMinimum->x), static_cast<f64>(options.height) };
+    const SIMDVectorDouble geometryPair5Operand1 = SIMDVectorDouble{ innerWidth, Max(static_cast<f64>(trackMinimum->y), innerHeight) };
+    const SIMDVectorDouble widthHeightValue = ((geometryPair5Operand0 > geometryPair5Operand1) ? geometryPair5Operand0 : geometryPair5Operand1);
+    const f64 width = widthHeightValue.x;
+    const f64 height = widthHeightValue.y;
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
     candidate.contentSize = { static_cast<f32>(width), static_cast<f32>(height) };
@@ -170,8 +185,11 @@ Expected<ProgressPlacement> ProgressLayout::Place(
         return MakeUnexpected(Failure{});
     candidate.clip = *intersection;
     const f64 leftInset = Min(static_cast<f64>(metrics.padding.left), static_cast<f64>(bounds.width));
-    const f64 rightInset = Min(static_cast<f64>(metrics.padding.right), static_cast<f64>(bounds.width) - leftInset);
-    const f64 topInset = Min(static_cast<f64>(metrics.padding.top), static_cast<f64>(bounds.height));
+    const SIMDVectorDouble geometryPair0Operand0 = SIMDVectorDouble{ static_cast<f64>(metrics.padding.right), static_cast<f64>(metrics.padding.top) };
+    const SIMDVectorDouble geometryPair0Operand1 = SIMDVectorDouble{ (static_cast<f64>(bounds.width) - leftInset), static_cast<f64>(bounds.height) };
+    const SIMDVectorDouble rightInsetTopInsetValue = ((geometryPair0Operand0 < geometryPair0Operand1) ? geometryPair0Operand0 : geometryPair0Operand1);
+    const f64 rightInset = rightInsetTopInsetValue.x;
+    const f64 topInset = rightInsetTopInsetValue.y;
     const f64 bottomInset = Min(static_cast<f64>(metrics.padding.bottom), static_cast<f64>(bounds.height) - topInset);
     const auto content = MakeRect(
         static_cast<f64>(bounds.x) + leftInset,

@@ -12,6 +12,7 @@
 #include <core/alloc/scratch.h>
 #include <core/common/log.h>
 #include <core/task/cpu/scheduler.h>
+#include <global/math/vector_double.h>
 #include <global/math/frame.h>
 
 
@@ -499,10 +500,12 @@ void MeshCookMeshlets::LogMeshletCookMetrics(
 
     const f64 invMeshletCount = 1.0 / static_cast<f64>(metrics.meshletCount);
     const f64 primitiveCountAverage = static_cast<f64>(metrics.primitiveCountSum) * invMeshletCount;
-    const f64 vertexCountAverage = static_cast<f64>(metrics.vertexCountSum) * invMeshletCount;
-    const f64 positionCountAverage = static_cast<f64>(metrics.positionCountSum) * invMeshletCount;
-    const f64 attributeCountAverage = static_cast<f64>(metrics.attributeCountSum) * invMeshletCount;
-    const f64 radiusAverage = metrics.radiusSum * invMeshletCount;
+    const SIMDVectorDouble vertexCountAveragePositionCountAverageValue = (SIMDVectorDouble{ static_cast<f64>(metrics.vertexCountSum), static_cast<f64>(metrics.positionCountSum) } * SIMDVectorDouble{ invMeshletCount, invMeshletCount });
+    const f64 vertexCountAverage = vertexCountAveragePositionCountAverageValue.x;
+    const f64 positionCountAverage = vertexCountAveragePositionCountAverageValue.y;
+    const SIMDVectorDouble attributeCountAverageRadiusAverageValue = (SIMDVectorDouble{ static_cast<f64>(metrics.attributeCountSum), metrics.radiusSum } * SIMDVectorDouble{ invMeshletCount, invMeshletCount });
+    const f64 attributeCountAverage = attributeCountAverageRadiusAverageValue.x;
+    const f64 radiusAverage = attributeCountAverageRadiusAverageValue.y;
     const f64 coneDisabledPercentage = static_cast<f64>(metrics.coneDisabledCount) * s_MeshletPercentScale * invMeshletCount;
     const f64 coneCutoffAverage = metrics.coneEnabledCount != 0u
         ? metrics.coneCutoffSum / static_cast<f64>(metrics.coneEnabledCount)

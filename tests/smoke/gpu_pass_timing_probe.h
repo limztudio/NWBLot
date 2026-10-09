@@ -13,6 +13,7 @@
 #include <global/containers.h>
 #include <global/filesystem.h>
 #include <global/name.h>
+#include <global/math/vector_double.h>
 #include <global/simplemath.h>
 #include <global/type.h>
 
@@ -152,25 +153,28 @@ private:
                 continue;
 
             const Name scopeName = gpuTiming.scopeNameAt(i);
-            const f64 averageMs = (accum.sumSeconds / static_cast<f64>(accum.frames)) * s_MillisecondsPerSecond;
+            const SIMDVectorDouble totalsMs = SIMDVectorDouble{
+                accum.sumSeconds / static_cast<f64>(accum.frames), accum.sumSeconds
+            } * s_MillisecondsPerSecond;
+            const SIMDVectorDouble rangeMs = SIMDVectorDouble{ accum.minSeconds, accum.maxSeconds } * s_MillisecondsPerSecond;
             NWB_LOGGER_ESSENTIAL_INFO(
                 NWB_TEXT("  {}: gpu_window_ms avg={} min={} max={} published_windows={}")
                 , StringConvert(scopeName.resolvedText())
-                , averageMs
-                , accum.minSeconds * s_MillisecondsPerSecond
-                , accum.maxSeconds * s_MillisecondsPerSecond
+                , totalsMs.x
+                , rangeMs.x
+                , rangeMs.y
                 , accum.frames
             );
             if(timingFile.is_open()){
                 timingFile
                     << "  " << scopeName.resolvedText()
-                    << ": window_avg_ms=" << averageMs
-                    << " window_min_ms=" << accum.minSeconds * s_MillisecondsPerSecond
-                    << " window_max_ms=" << accum.maxSeconds * s_MillisecondsPerSecond
+                    << ": window_avg_ms=" << totalsMs.x
+                    << " window_min_ms=" << rangeMs.x
+                    << " window_max_ms=" << rangeMs.y
                     << " published_windows=" << static_cast<unsigned>(accum.frames)
-                    << " total_ms=" << accum.sumSeconds * s_MillisecondsPerSecond
+                    << " total_ms=" << totalsMs.y
                     << " gpu_samples=" << accum.samples
-                    << " sample_avg_ms=" << accum.sumSeconds * s_MillisecondsPerSecond / static_cast<f64>(accum.samples)
+                    << " sample_avg_ms=" << totalsMs.y / static_cast<f64>(accum.samples)
                     << '\n'
                 ;
             }

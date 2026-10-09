@@ -6,6 +6,7 @@
 
 
 #include <core/common/log.h>
+#include <global/math/vector_double.h>
 #include <global/simplemath.h>
 #include <global/type.h>
 
@@ -54,13 +55,14 @@ public:
 
         const f64 averageFrameSeconds = m_intervalSeconds / static_cast<f64>(m_intervalFrames);
         const f64 averageFps = 1.0 / averageFrameSeconds;
+        const SIMDVectorDouble rangeMs = SIMDVectorDouble{ m_minFrameSeconds, m_maxFrameSeconds } * s_MillisecondsPerSecond;
         NWB_LOGGER_ESSENTIAL_INFO(
             NWB_TEXT("{}: fps avg={} frame_ms avg={} min={} max={} frames={} seconds={}")
             , m_label
             , averageFps
             , averageFrameSeconds * s_MillisecondsPerSecond
-            , m_minFrameSeconds * s_MillisecondsPerSecond
-            , m_maxFrameSeconds * s_MillisecondsPerSecond
+            , rangeMs.x
+            , rangeMs.y
             , m_intervalFrames
             , m_intervalSeconds
         );

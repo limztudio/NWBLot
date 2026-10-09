@@ -8,6 +8,7 @@
 
 #include <impl/ecs_ui/toolkit/layout/validation.h>
 
+#include <global/math/vector_double.h>
 #include <global/simplemath.h>
 
 
@@ -68,10 +69,16 @@ Expected<ImageMetrics> ImageLayout::Measure(
     }
     else
         return MakeUnexpected(Failure{});
-    const f64 pixelWidth = Max(static_cast<f64>(region.rectangle.width), static_cast<f64>(horizontalSlices));
-    const f64 pixelHeight = Max(static_cast<f64>(region.rectangle.height), static_cast<f64>(verticalSlices));
-    const f64 width = Max(static_cast<f64>(region.minimumWidth), pixelWidth / density);
-    const f64 height = Max(static_cast<f64>(region.minimumHeight), pixelHeight / density);
+    const SIMDVectorDouble geometryPair0Operand0 = SIMDVectorDouble{ static_cast<f64>(region.rectangle.width), static_cast<f64>(region.rectangle.height) };
+    const SIMDVectorDouble geometryPair0Operand1 = SIMDVectorDouble{ static_cast<f64>(horizontalSlices), static_cast<f64>(verticalSlices) };
+    const SIMDVectorDouble pixelWidthPixelHeightValue = ((geometryPair0Operand0 > geometryPair0Operand1) ? geometryPair0Operand0 : geometryPair0Operand1);
+    const f64 pixelWidth = pixelWidthPixelHeightValue.x;
+    const f64 pixelHeight = pixelWidthPixelHeightValue.y;
+    const SIMDVectorDouble geometryPair1Operand0 = SIMDVectorDouble{ static_cast<f64>(region.minimumWidth), static_cast<f64>(region.minimumHeight) };
+    const SIMDVectorDouble geometryPair1Operand1 = (SIMDVectorDouble{ pixelWidth, pixelHeight } / SIMDVectorDouble{ density, density });
+    const SIMDVectorDouble widthHeightValue = ((geometryPair1Operand0 > geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
+    const f64 width = widthHeightValue.x;
+    const f64 height = widthHeightValue.y;
     if(!IsFinite(width) || width > Limit<f32>::s_Max || !IsFinite(height) || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
     const ImageMetrics candidate{ { static_cast<f32>(width), static_cast<f32>(height) } };
@@ -92,12 +99,21 @@ Expected<ImagePlacement> ImageLayout::Place(const Rect& bounds, const Rect& clip
     using namespace __hidden_ui_image_layout;
     if(!IsBoundedUiRect(bounds) || !IsBoundedUiRect(clip))
         return MakeUnexpected(Failure{});
-    const f64 left = Max(static_cast<f64>(bounds.x), static_cast<f64>(clip.x));
-    const f64 top = Max(static_cast<f64>(bounds.y), static_cast<f64>(clip.y));
-    const f64 right = Min(static_cast<f64>(bounds.x) + bounds.width, static_cast<f64>(clip.x) + clip.width);
-    const f64 bottom = Min(static_cast<f64>(bounds.y) + bounds.height, static_cast<f64>(clip.y) + clip.height);
-    const f64 width = Max(0.0, right - left);
-    const f64 height = Max(0.0, bottom - top);
+    const SIMDVectorDouble geometryPair2Operand0 = SIMDVectorDouble{ static_cast<f64>(bounds.x), static_cast<f64>(bounds.y) };
+    const SIMDVectorDouble geometryPair2Operand1 = SIMDVectorDouble{ static_cast<f64>(clip.x), static_cast<f64>(clip.y) };
+    const SIMDVectorDouble leftTopValue = ((geometryPair2Operand0 > geometryPair2Operand1) ? geometryPair2Operand0 : geometryPair2Operand1);
+    const f64 left = leftTopValue.x;
+    const f64 top = leftTopValue.y;
+    const SIMDVectorDouble geometryPair3Operand0 = (SIMDVectorDouble{ static_cast<f64>(bounds.x), static_cast<f64>(bounds.y) } + SIMDVectorDouble{ bounds.width, bounds.height });
+    const SIMDVectorDouble geometryPair3Operand1 = (SIMDVectorDouble{ static_cast<f64>(clip.x), static_cast<f64>(clip.y) } + SIMDVectorDouble{ clip.width, clip.height });
+    const SIMDVectorDouble rightBottomValue = ((geometryPair3Operand0 < geometryPair3Operand1) ? geometryPair3Operand0 : geometryPair3Operand1);
+    const f64 right = rightBottomValue.x;
+    const f64 bottom = rightBottomValue.y;
+    const SIMDVectorDouble geometryPair4Operand0 = SIMDVectorDouble{ 0.0, 0.0 };
+    const SIMDVectorDouble geometryPair4Operand1 = (SIMDVectorDouble{ right, bottom } - SIMDVectorDouble{ left, top });
+    const SIMDVectorDouble widthHeightValue = ((geometryPair4Operand0 > geometryPair4Operand1) ? geometryPair4Operand0 : geometryPair4Operand1);
+    const f64 width = widthHeightValue.x;
+    const f64 height = widthHeightValue.y;
     if(width > Limit<f32>::s_Max || height > Limit<f32>::s_Max)
         return MakeUnexpected(Failure{});
     ImagePlacement candidate;

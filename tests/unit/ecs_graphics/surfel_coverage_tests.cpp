@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <global/simplemath.h>
+#include <global/simdmath.h>
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -38,7 +39,8 @@ using float3 = ShaderFloat3;
 using float4 = ShaderFloat4;
 
 ShaderFloat3 operator/(ShaderFloat3 value, float divisor){
-    return ShaderFloat3(value.x / divisor, value.y / divisor, value.z / divisor);
+    const SIMDVector quotient = VectorDivide(VectorSet(value.x, value.y, value.z, 0.0f), VectorReplicate(divisor));
+    return ShaderFloat3(VectorGetX(quotient), VectorGetY(quotient), VectorGetZ(quotient));
 }
 
 // Provide the Slang `exp` builtin for the C++ compilation through the project math wrapper.

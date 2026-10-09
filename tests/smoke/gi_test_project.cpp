@@ -10,6 +10,7 @@
 #include <global/math/frame.h>
 #include <global/math/constant.h>
 #include <global/math/quaternion.h>
+#include <global/simdmath.h>
 #include <impl/assets_material/asset.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_mesh/module.h>
@@ -471,10 +472,14 @@ private:
             const f32 bAngle = b.yawDegrees * (s_PI / 180.0f);
             const f32 aCos = absolute(Cos(aAngle)), aSin = absolute(Sin(aAngle));
             const f32 bCos = absolute(Cos(bAngle)), bSin = absolute(Sin(bAngle));
-            const f32 aHalfX = (aCos * a.scale.x + aSin * a.scale.z) * 0.5f;
-            const f32 aHalfZ = (aSin * a.scale.x + aCos * a.scale.z) * 0.5f;
-            const f32 bHalfX = (bCos * b.scale.x + bSin * b.scale.z) * 0.5f;
-            const f32 bHalfZ = (bSin * b.scale.x + bCos * b.scale.z) * 0.5f;
+            const SIMDVector halfExtents = VectorScale(VectorMultiplyAddExpression(
+                VectorSet(aCos, aSin, bCos, bSin), VectorSet(a.scale.x, a.scale.x, b.scale.x, b.scale.x),
+                VectorMultiply(VectorSet(aSin, aCos, bSin, bCos), VectorSet(a.scale.z, a.scale.z, b.scale.z, b.scale.z))
+            ), 0.5f);
+            const f32 aHalfX = VectorGetX(halfExtents);
+            const f32 aHalfZ = VectorGetY(halfExtents);
+            const f32 bHalfX = VectorGetZ(halfExtents);
+            const f32 bHalfZ = VectorGetW(halfExtents);
             return absolute(a.position.x - b.position.x) < aHalfX + bHalfX + 0.06f &&
                    absolute(a.position.z - b.position.z) < aHalfZ + bHalfZ + 0.06f;
         };

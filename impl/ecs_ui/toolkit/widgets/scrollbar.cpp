@@ -6,6 +6,7 @@
 
 #include <impl/ecs_ui/toolkit/layout/validation.h>
 
+#include <global/math/vector_double.h>
 #include <global/simplemath.h>
 
 
@@ -39,10 +40,16 @@ namespace __hidden_ui_scrollbar{
 }
 
 [[nodiscard]] static Expected<Rect> Intersect(const Rect& lhs, const Rect& rhs)noexcept{
-    const f64 x = Max(static_cast<f64>(lhs.x), static_cast<f64>(rhs.x));
-    const f64 y = Max(static_cast<f64>(lhs.y), static_cast<f64>(rhs.y));
-    const f64 right = Min(static_cast<f64>(lhs.x) + lhs.width, static_cast<f64>(rhs.x) + rhs.width);
-    const f64 bottom = Min(static_cast<f64>(lhs.y) + lhs.height, static_cast<f64>(rhs.y) + rhs.height);
+    const SIMDVectorDouble geometryPair0Operand0 = SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) };
+    const SIMDVectorDouble geometryPair0Operand1 = SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) };
+    const SIMDVectorDouble xYValue = ((geometryPair0Operand0 > geometryPair0Operand1) ? geometryPair0Operand0 : geometryPair0Operand1);
+    const f64 x = xYValue.x;
+    const f64 y = xYValue.y;
+    const SIMDVectorDouble geometryPair1Operand0 = (SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) } + SIMDVectorDouble{ lhs.width, lhs.height });
+    const SIMDVectorDouble geometryPair1Operand1 = (SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) } + SIMDVectorDouble{ rhs.width, rhs.height });
+    const SIMDVectorDouble rightBottomValue = ((geometryPair1Operand0 < geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
+    const f64 right = rightBottomValue.x;
+    const f64 bottom = rightBottomValue.y;
     return MakeRect(x, y, Max(0.0, right - x), Max(0.0, bottom - y));
 }
 
@@ -161,17 +168,26 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(
         || !IsFinite(thickness) || thickness < 0.0f || !IsFinite(minThumb) || minThumb < 0.0f
     )
         return MakeUnexpected(Failure{});
-    const f64 x = static_cast<f64>(bounds.x) + Min(static_cast<f64>(padding.left), static_cast<f64>(bounds.width));
-    const f64 y = static_cast<f64>(bounds.y) + Min(static_cast<f64>(padding.top), static_cast<f64>(bounds.height));
-    const f64 width = Max(0.0, static_cast<f64>(bounds.width) - padding.left - padding.right);
-    const f64 height = Max(0.0, static_cast<f64>(bounds.height) - padding.top - padding.bottom);
+    const SIMDVectorDouble geometryPair2Operand0 = SIMDVectorDouble{ static_cast<f64>(padding.left), static_cast<f64>(padding.top) };
+    const SIMDVectorDouble geometryPair2Operand1 = SIMDVectorDouble{ static_cast<f64>(bounds.width), static_cast<f64>(bounds.height) };
+    const SIMDVectorDouble xYValue = (SIMDVectorDouble{ static_cast<f64>(bounds.x), static_cast<f64>(bounds.y) } + ((geometryPair2Operand0 < geometryPair2Operand1) ? geometryPair2Operand0 : geometryPair2Operand1));
+    const f64 x = xYValue.x;
+    const f64 y = xYValue.y;
+    const SIMDVectorDouble geometryPair3Operand0 = SIMDVectorDouble{ 0.0, 0.0 };
+    const SIMDVectorDouble geometryPair3Operand1 = ((SIMDVectorDouble{ static_cast<f64>(bounds.width), static_cast<f64>(bounds.height) } - SIMDVectorDouble{ padding.left, padding.top }) - SIMDVectorDouble{ padding.right, padding.bottom });
+    const SIMDVectorDouble widthHeightValue = ((geometryPair3Operand0 > geometryPair3Operand1) ? geometryPair3Operand0 : geometryPair3Operand1);
+    const f64 width = widthHeightValue.x;
+    const f64 height = widthHeightValue.y;
     const auto padded = MakeRect(x, y, width, height);
     if(!padded)
         return MakeUnexpected(Failure{});
     const f64 availableWidth = padded->width;
     const f64 availableHeight = padded->height;
-    const f64 verticalWidth = Min(static_cast<f64>(thickness), availableWidth);
-    const f64 horizontalHeight = Min(static_cast<f64>(thickness), availableHeight);
+    const SIMDVectorDouble geometryPair4Operand0 = SIMDVectorDouble{ static_cast<f64>(thickness), static_cast<f64>(thickness) };
+    const SIMDVectorDouble geometryPair4Operand1 = SIMDVectorDouble{ availableWidth, availableHeight };
+    const SIMDVectorDouble verticalWidthHorizontalHeightValue = ((geometryPair4Operand0 < geometryPair4Operand1) ? geometryPair4Operand0 : geometryPair4Operand1);
+    const f64 verticalWidth = verticalWidthHorizontalHeightValue.x;
+    const f64 horizontalHeight = verticalWidthHorizontalHeightValue.y;
     const f64 contentWidth = static_cast<f64>(contentMeasure.x) + caretWidth;
     const f64 contentHeight = contentMeasure.y;
     if(!IsFinite(contentWidth))

@@ -187,12 +187,12 @@ static void BuildAnimatedJointMatrix(
     const f32 angleJitter = staticPreview ? 0.025f : 0.0025f;
     const f32 rollBase = staticPreview ? 0.045f : 0.006f;
     const f32 rollJitter = staticPreview ? 0.008f : 0.0015f;
-    const SIMDVector waves = VectorSin(VectorSet(
-        timeSeconds * primarySpeed + phase,
-        timeSeconds * secondarySpeed + phase + 0.5f,
-        0.0f,
-        0.0f
-    ));
+    SIMDVector wavePhases = VectorMultiplyAddExpression(
+        VectorSet(timeSeconds, timeSeconds, 0.0f, 0.0f), VectorSet(primarySpeed, secondarySpeed, 0.0f, 0.0f),
+        VectorSet(phase, phase, 0.0f, 0.0f)
+    );
+    wavePhases = VectorAdd(wavePhases, VectorSet(0.0f, 0.5f, 0.0f, 0.0f));
+    const SIMDVector waves = VectorSin(wavePhases);
     const SIMDVector angle = VectorScale(
         VectorSplatX(waves),
         baseAngle + static_cast<f32>((seed >> 16u) % 5u) * angleJitter

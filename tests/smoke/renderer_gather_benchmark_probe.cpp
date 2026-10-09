@@ -4,6 +4,8 @@
 
 #include "renderer_gather_benchmark_probe.h"
 
+#include <global/math/vector_double.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -50,8 +52,16 @@ bool RendererGatherBenchmarkProbe::poll(const Core::Perf::SessionReport& report,
             || timing.firstSampleFrameIndex != sample.sourceFrame || timing.lastSampleFrameIndex != sample.sourceFrame
         )
             return false;
-        sample.milliseconds[scope] = timing.seconds * 1000.0;
+        sample.milliseconds[scope] = timing.seconds;
     }
+    u32 scope = 0u;
+    for(; scope + 1u < s_CpuScopeCount; scope += 2u){
+        const SIMDVectorDouble milliseconds = SIMDVectorDouble{ sample.milliseconds[scope], sample.milliseconds[scope + 1u] } * 1000.0;
+        sample.milliseconds[scope] = milliseconds.x;
+        sample.milliseconds[scope + 1u] = milliseconds.y;
+    }
+    if(scope < s_CpuScopeCount)
+        sample.milliseconds[scope] *= 1000.0;
     if(memoryEnabled){
         for(u32 scope = 0u; scope < s_ArenaScopeCount; ++scope){
             const auto& snapshot = report.memory.snapshot(Name(s_ArenaNames[scope]), Core::Perf::MemorySource::Arena);
@@ -120,13 +130,20 @@ bool RendererGatherBenchmarkProbe::write(const AStringView path, const AStringVi
         }
         output << "}\n";
     }
-    for(const GpuSample& sample : m_gpu){
-        output << "{\"type\":\"gpu\",\"scope\":\"" << s_GpuNames[sample.scope]
-            << "\",\"publish_frame\":" << sample.timing.publishFrameIndex
-            << ",\"first_source_frame\":" << sample.timing.firstSampleFrameIndex
-            << ",\"last_source_frame\":" << sample.timing.lastSampleFrameIndex
-            << ",\"total_ms\":" << sample.timing.seconds * 1000.0
-            << ",\"samples\":" << sample.timing.sampleCount << "}\n";
+    for(usize index = 0u; index < m_gpu.size(); index += 2u){
+        const usize count = Min(usize{ 2u }, m_gpu.size() - index);
+        const SIMDVectorDouble milliseconds = SIMDVectorDouble{
+            m_gpu[index].timing.seconds, count > 1u ? m_gpu[index + 1u].timing.seconds : 0.0
+        } * 1000.0;
+        for(usize lane = 0u; lane < count; ++lane){
+            const GpuSample& sample = m_gpu[index + lane];
+            output << "{\"type\":\"gpu\",\"scope\":\"" << s_GpuNames[sample.scope]
+                << "\",\"publish_frame\":" << sample.timing.publishFrameIndex
+                << ",\"first_source_frame\":" << sample.timing.firstSampleFrameIndex
+                << ",\"last_source_frame\":" << sample.timing.lastSampleFrameIndex
+                << ",\"total_ms\":" << milliseconds[lane]
+                << ",\"samples\":" << sample.timing.sampleCount << "}\n";
+        }
     }
     if(complete)
         output << "{\"type\":\"complete\"}\n";

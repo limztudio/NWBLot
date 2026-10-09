@@ -7,6 +7,7 @@
 
 #include <core/common/log.h>
 
+#include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 
 
@@ -50,18 +51,29 @@ static constexpr StringView s_KoreanText = "\xED\x95\x9C\xEA\xB8\x80 \xEC\xA1\xB
 
 
 [[nodiscard]] static bool DrawSkinGallery(PaintBuilder& paint, const f32 x, const f32 y){
+    const SIMDVector origin = VectorSet(x, y, 0.0f, 0.0f);
+    const SIMDVector buttonNormal = VectorAdd(origin, VectorSet(12.0f, 12.0f, 0.0f, 0.0f));
+    const SIMDVector buttonHover = VectorAdd(origin, VectorSet(146.0f, 12.0f, 0.0f, 0.0f));
+    const SIMDVector buttonPressed = VectorAdd(origin, VectorSet(12.0f, 50.0f, 0.0f, 0.0f));
+    const SIMDVector buttonDisabled = VectorAdd(origin, VectorSet(146.0f, 50.0f, 0.0f, 0.0f));
+    const SIMDVector editFocused = VectorAdd(origin, VectorSet(12.0f, 88.0f, 0.0f, 0.0f));
+    const SIMDVector comboArrow = VectorAdd(origin, VectorSet(204.0f, 96.0f, 0.0f, 0.0f));
+    const SIMDVector checkbox = VectorAdd(origin, VectorSet(242.0f, 90.0f, 0.0f, 0.0f));
+    const SIMDVector checkboxMark = VectorAdd(origin, VectorSet(247.0f, 95.0f, 0.0f, 0.0f));
+    const SIMDVector progressTrack = VectorAdd(origin, VectorSet(12.0f, 132.0f, 0.0f, 0.0f));
+    const SIMDVector progressFill = VectorAdd(origin, VectorSet(14.0f, 134.0f, 0.0f, 0.0f));
     return
         paint.drawRegion(s_Panel, { x, y, s_PanelWidth, s_PanelHeight })
-        && paint.drawRegion(s_ButtonNormal, { x + 12.0f, y + 12.0f, 122.0f, 30.0f })
-        && paint.drawRegion(s_ButtonHover, { x + 146.0f, y + 12.0f, 122.0f, 30.0f })
-        && paint.drawRegion(s_ButtonPressed, { x + 12.0f, y + 50.0f, 122.0f, 30.0f })
-        && paint.drawRegion(s_ButtonDisabled, { x + 146.0f, y + 50.0f, 122.0f, 30.0f })
-        && paint.drawRegion(s_EditFocused, { x + 12.0f, y + 88.0f, 218.0f, 32.0f })
-        && paint.drawRegion(s_ComboArrow, { x + 204.0f, y + 96.0f, 16.0f, 16.0f })
-        && paint.drawRegion(s_Checkbox, { x + 242.0f, y + 90.0f, 26.0f, 26.0f })
-        && paint.drawRegion(s_CheckboxMark, { x + 247.0f, y + 95.0f, 16.0f, 16.0f })
-        && paint.drawRegion(s_ProgressTrack, { x + 12.0f, y + 132.0f, 256.0f, 16.0f })
-        && paint.drawRegion(s_ProgressFill, { x + 14.0f, y + 134.0f, 168.0f, 12.0f })
+        && paint.drawRegion(s_ButtonNormal, { VectorGetX(buttonNormal), VectorGetY(buttonNormal), 122.0f, 30.0f })
+        && paint.drawRegion(s_ButtonHover, { VectorGetX(buttonHover), VectorGetY(buttonHover), 122.0f, 30.0f })
+        && paint.drawRegion(s_ButtonPressed, { VectorGetX(buttonPressed), VectorGetY(buttonPressed), 122.0f, 30.0f })
+        && paint.drawRegion(s_ButtonDisabled, { VectorGetX(buttonDisabled), VectorGetY(buttonDisabled), 122.0f, 30.0f })
+        && paint.drawRegion(s_EditFocused, { VectorGetX(editFocused), VectorGetY(editFocused), 218.0f, 32.0f })
+        && paint.drawRegion(s_ComboArrow, { VectorGetX(comboArrow), VectorGetY(comboArrow), 16.0f, 16.0f })
+        && paint.drawRegion(s_Checkbox, { VectorGetX(checkbox), VectorGetY(checkbox), 26.0f, 26.0f })
+        && paint.drawRegion(s_CheckboxMark, { VectorGetX(checkboxMark), VectorGetY(checkboxMark), 16.0f, 16.0f })
+        && paint.drawRegion(s_ProgressTrack, { VectorGetX(progressTrack), VectorGetY(progressTrack), 256.0f, 16.0f })
+        && paint.drawRegion(s_ProgressFill, { VectorGetX(progressFill), VectorGetY(progressFill), 168.0f, 12.0f })
     ;
 }
 
@@ -116,11 +128,32 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
         return;
     }
 
-    context.paint.pushClip({ x + 12.0f, y + 160.0f, 256.0f, 42.0f });
-    context.paint.fillRect({ x + 2.0f, y + 160.0f, 184.0f, 34.0f }, { 0.12f, 0.48f, 1.0f, 0.65f });
-    context.paint.fillRect({ x + 100.0f, y + 176.0f, 184.0f, 34.0f }, { 1.0f, 0.18f, 0.08f, 0.6f });
-    const bool captionPainted = m_caption.paint(context.text, context.paint, { x + 18.0f, y + 160.0f })
-        && m_korean.paint(context.text, context.paint, { x + 18.0f, y + 181.0f });
+    const SIMDVector origin = VectorSet(x, y, 0.0f, 0.0f);
+    const SIMDVector clipOrigin = VectorAdd(origin, VectorSet(12.0f, 160.0f, 0.0f, 0.0f));
+    const SIMDVector firstFillOrigin = VectorAdd(origin, VectorSet(2.0f, 160.0f, 0.0f, 0.0f));
+    const SIMDVector secondFillOrigin = VectorAdd(origin, VectorSet(100.0f, 176.0f, 0.0f, 0.0f));
+    const SIMDVector captionOrigin = VectorAdd(origin, VectorSet(18.0f, 160.0f, 0.0f, 0.0f));
+    const SIMDVector koreanOrigin = VectorAdd(origin, VectorSet(18.0f, 181.0f, 0.0f, 0.0f));
+    const SIMDVector normalOrigin = VectorAdd(origin, VectorSet(20.0f, 17.0f, 0.0f, 0.0f));
+    const SIMDVector hoverOrigin = VectorAdd(origin, VectorSet(154.0f, 17.0f, 0.0f, 0.0f));
+    const SIMDVector pressedOrigin = VectorAdd(origin, VectorSet(20.0f, 55.0f, 0.0f, 0.0f));
+    const SIMDVector disabledOrigin = VectorAdd(origin, VectorSet(154.0f, 55.0f, 0.0f, 0.0f));
+    const SIMDVector editOrigin = VectorAdd(origin, VectorSet(20.0f, 94.0f, 0.0f, 0.0f));
+    context.paint.pushClip({ VectorGetX(clipOrigin), VectorGetY(clipOrigin), 256.0f, 42.0f });
+    context.paint.fillRect(
+        { VectorGetX(firstFillOrigin), VectorGetY(firstFillOrigin), 184.0f, 34.0f },
+        { 0.12f, 0.48f, 1.0f, 0.65f }
+    );
+    context.paint.fillRect(
+        { VectorGetX(secondFillOrigin), VectorGetY(secondFillOrigin), 184.0f, 34.0f },
+        { 1.0f, 0.18f, 0.08f, 0.6f }
+    );
+    const bool captionPainted = m_caption.paint(
+        context.text,
+        context.paint,
+        { VectorGetX(captionOrigin), VectorGetY(captionOrigin) }
+    )
+        && m_korean.paint(context.text, context.paint, { VectorGetX(koreanOrigin), VectorGetY(koreanOrigin) });
     const bool clipRestored = context.paint.popClip();
     NWB_FATAL_ASSERT(clipRestored);
     if(!captionPainted){
@@ -129,11 +162,16 @@ void UiSkinPreview::paint(NWB::Impl::UiPaintContext& context){
     }
     const NWB::Impl::Ui::Color textColor{ 0.92f, 0.96f, 1.0f, 1.0f };
     if(
-        !m_normal.paint(context.text, context.paint, { x + 20.0f, y + 17.0f }, textColor)
-        || !m_hover.paint(context.text, context.paint, { x + 154.0f, y + 17.0f }, textColor)
-        || !m_pressed.paint(context.text, context.paint, { x + 20.0f, y + 55.0f }, textColor)
-        || !m_disabled.paint(context.text, context.paint, { x + 154.0f, y + 55.0f }, { 0.38f, 0.42f, 0.48f, 1.0f })
-        || !m_edit.paint(context.text, context.paint, { x + 20.0f, y + 94.0f }, textColor)
+        !m_normal.paint(context.text, context.paint, { VectorGetX(normalOrigin), VectorGetY(normalOrigin) }, textColor)
+        || !m_hover.paint(context.text, context.paint, { VectorGetX(hoverOrigin), VectorGetY(hoverOrigin) }, textColor)
+        || !m_pressed.paint(context.text, context.paint, { VectorGetX(pressedOrigin), VectorGetY(pressedOrigin) }, textColor)
+        || !m_disabled.paint(
+            context.text,
+            context.paint,
+            { VectorGetX(disabledOrigin), VectorGetY(disabledOrigin) },
+            { 0.38f, 0.42f, 0.48f, 1.0f }
+        )
+        || !m_edit.paint(context.text, context.paint, { VectorGetX(editOrigin), VectorGetY(editOrigin) }, textColor)
     )
         NWB_LOGGER_ERROR(NWB_TEXT("Testbed: custom UI label shaping or rasterization failed"));
 }

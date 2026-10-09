@@ -4,6 +4,8 @@
 
 #include "window.h"
 
+#include <global/math/vector_double.h>
+#include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 
 
@@ -46,10 +48,9 @@ struct PointerDisplacement{
         || gesture.referenceRectangle.height <= 0.0f || gesture.state > PointerGestureState::Completed
     )
         return MakeUnexpected(Failure{});
-    return PointerDisplacement{
-        static_cast<f64>(gesture.position.x) - gesture.origin.x,
-        static_cast<f64>(gesture.position.y) - gesture.origin.y
-    };
+    const SIMDVectorDouble displacement = SIMDVectorDouble{ gesture.position.x, gesture.position.y }
+        - SIMDVectorDouble{ gesture.origin.x, gesture.origin.y };
+    return PointerDisplacement{ displacement.x, displacement.y };
 }
 
 
@@ -80,8 +81,11 @@ bool WindowBehavior::Initialize(WindowState& state, const WindowOptions& options
     }
     if(!__hidden_ui_window_behavior::ValidBounds(candidate.bounds))
         return false;
-    candidate.bounds.width = Max(candidate.bounds.width, metrics.minimumSize.x);
-    candidate.bounds.height = Max(candidate.bounds.height, metrics.minimumSize.y);
+    const SIMDVector size = VectorSet(candidate.bounds.width, candidate.bounds.height, candidate.bounds.width, candidate.bounds.height);
+    const SIMDVector minimum = VectorSet(metrics.minimumSize.x, metrics.minimumSize.y, metrics.minimumSize.x, metrics.minimumSize.y);
+    const SIMDVector constrained = VectorSelect(minimum, size, VectorGreater(size, minimum));
+    candidate.bounds.width = VectorGetX(constrained);
+    candidate.bounds.height = VectorGetY(constrained);
     candidate.initialized = true;
     if(!__hidden_ui_window_behavior::ValidBounds(candidate.bounds))
         return false;
@@ -98,8 +102,9 @@ bool WindowBehavior::ApplyMove(WindowState& state, const PointerGesture& gesture
         movement.id = gesture.id;
         movement.initialBounds = gesture.referenceRectangle;
     }
-    const f64 left = static_cast<f64>(movement.initialBounds.x) + displacement->x;
-    const f64 top = static_cast<f64>(movement.initialBounds.y) + displacement->y;
+    const SIMDVectorDouble leftTopValue = (SIMDVectorDouble{ static_cast<f64>(movement.initialBounds.x), static_cast<f64>(movement.initialBounds.y) } + SIMDVectorDouble{ displacement->x, displacement->y });
+    const f64 left = leftTopValue.x;
+    const f64 top = leftTopValue.y;
     if(Abs(left) > Limit<f32>::s_Max || Abs(top) > Limit<f32>::s_Max)
         return false;
     Rect candidate = state.bounds;
@@ -125,8 +130,11 @@ bool WindowBehavior::ApplyResize(WindowState& state, const PointerGesture& gestu
         resizing.id = gesture.id;
         resizing.initialBounds = gesture.referenceRectangle;
     }
-    const f64 width = Max(static_cast<f64>(minimumSize.x), static_cast<f64>(resizing.initialBounds.width) + displacement->x);
-    const f64 height = Max(static_cast<f64>(minimumSize.y), static_cast<f64>(resizing.initialBounds.height) + displacement->y);
+    const SIMDVectorDouble geometryPair1Operand0 = SIMDVectorDouble{ static_cast<f64>(minimumSize.x), static_cast<f64>(minimumSize.y) };
+    const SIMDVectorDouble geometryPair1Operand1 = (SIMDVectorDouble{ static_cast<f64>(resizing.initialBounds.width), static_cast<f64>(resizing.initialBounds.height) } + SIMDVectorDouble{ displacement->x, displacement->y });
+    const SIMDVectorDouble widthHeightValue = ((geometryPair1Operand0 > geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
+    const f64 width = widthHeightValue.x;
+    const f64 height = widthHeightValue.y;
     if(width > Limit<f32>::s_Max || height > Limit<f32>::s_Max)
         return false;
     Rect candidate = state.bounds;
@@ -148,8 +156,16 @@ bool WindowBehavior::Constrain(WindowState& state, const DisplayMetrics& display
     )
         return false;
     const f32 height = state.collapsed ? titleHeight : state.bounds.height;
-    state.bounds.x = Clamp(state.bounds.x, 0.0f, Max(0.0f, display.logicalWidth - state.bounds.width));
-    state.bounds.y = Clamp(state.bounds.y, 0.0f, Max(0.0f, display.logicalHeight - height));
+    const SIMDVector remaining = VectorSubtract(
+        VectorSet(display.logicalWidth, display.logicalHeight, display.logicalWidth, display.logicalHeight),
+        VectorSet(state.bounds.width, height, state.bounds.width, height)
+    );
+    const SIMDVector maximum = VectorSelect(remaining, VectorZero(), VectorGreater(VectorZero(), remaining));
+    const SIMDVector origin = VectorSet(state.bounds.x, state.bounds.y, state.bounds.x, state.bounds.y);
+    const SIMDVector positive = VectorSelect(VectorZero(), origin, VectorGreater(origin, VectorZero()));
+    const SIMDVector constrained = VectorSelect(positive, maximum, VectorGreater(positive, maximum));
+    state.bounds.x = VectorGetX(constrained);
+    state.bounds.y = VectorGetY(constrained);
     return true;
 }
 

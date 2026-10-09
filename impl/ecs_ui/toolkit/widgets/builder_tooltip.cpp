@@ -3,6 +3,7 @@
 
 
 #include "../builder.h"
+#include "../rect_math.h"
 
 #include <global/simplemath.h>
 
@@ -81,10 +82,13 @@ bool Builder::paintTooltips(){
             continue;
         const Rect clip = visibleClip(box->clip);
         const Point& pointer = m_context.input().pointerPosition();
-        const f32 left = Max(box->rectangle.x, clip.x);
-        const f32 top = Max(box->rectangle.y, clip.y);
-        const f32 right = Min(box->rectangle.x + box->rectangle.width, clip.x + clip.width);
-        const f32 bottom = Min(box->rectangle.y + box->rectangle.height, clip.y + clip.height);
+        const SIMDVector visibleBounds = IntersectRectBoundsValue(
+            VectorSet(box->rectangle.x, box->rectangle.y, box->rectangle.width, box->rectangle.height), VectorSet(clip.x, clip.y, clip.width, clip.height)
+        );
+        const f32 left = VectorGetX(visibleBounds);
+        const f32 top = VectorGetY(visibleBounds);
+        const f32 right = VectorGetZ(visibleBounds);
+        const f32 bottom = VectorGetW(visibleBounds);
         const InputRouter& input = m_context.input();
         if(
             !anchor.enabled || !input.pointerKnown() || !input.windowFocused() || m_pointerBusy
@@ -102,14 +106,23 @@ bool Builder::paintTooltips(){
         const UiSkinRegion* background = region(frame.style.background, frame.style.fallback);
         if(!background)
             return false;
-        const Insets padding{ Max(background->padding.left, frame.style.padding.left),
-            Max(background->padding.top, frame.style.padding.top), Max(background->padding.right, frame.style.padding.right),
-            Max(background->padding.bottom, frame.style.padding.bottom) };
+        const SIMDVector firstPadding = VectorSet(background->padding.left, background->padding.top,
+            background->padding.right, background->padding.bottom);
+        const SIMDVector secondPadding = VectorSet(frame.style.padding.left, frame.style.padding.top,
+            frame.style.padding.right, frame.style.padding.bottom);
+        const SIMDVector paddingValue = VectorSelect(secondPadding, firstPadding, VectorGreater(firstPadding, secondPadding));
+        const Insets padding{ VectorGetX(paddingValue), VectorGetY(paddingValue), VectorGetZ(paddingValue), VectorGetW(paddingValue) };
         const Point measured = frame.text.measure();
         PopupOptions options;
         options.anchor = box->rectangle;
-        options.size = { Min(frame.options.maximumWidth, Max(background->minimumWidth, measured.x + padding.left + padding.right)),
-            Max(background->minimumHeight, measured.y + padding.top + padding.bottom) };
+        const SIMDVector paddedSize = VectorAdd(
+            VectorAdd(VectorSet(measured.x, measured.y, measured.x, measured.y), VectorSwizzle<0, 1, 0, 1>(paddingValue)),
+            VectorSwizzle<2, 3, 2, 3>(paddingValue)
+        );
+        const SIMDVector minimumSize = VectorSet(background->minimumWidth, background->minimumHeight,
+            background->minimumWidth, background->minimumHeight);
+        const SIMDVector size = VectorSelect(paddedSize, minimumSize, VectorGreater(minimumSize, paddedSize));
+        options.size = { Min(frame.options.maximumWidth, VectorGetX(size)), VectorGetY(size) };
         options.gap = frame.options.gap;
         options.side = frame.options.side;
             const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
@@ -120,9 +133,11 @@ bool Builder::paintTooltips(){
             return false;
         m_paint.pushClip(placement->bounds);
         const bool backgroundPainted = m_paint.drawRegion(background->name, placement->bounds);
-        const Rect content{ placement->bounds.x + padding.left, placement->bounds.y + padding.top,
-            Max(0.0f, placement->bounds.width - padding.left - padding.right),
-            Max(0.0f, placement->bounds.height - padding.top - padding.bottom) };
+        const SIMDVector inset = InsetRectValue(
+            VectorSet(placement->bounds.x, placement->bounds.y, placement->bounds.width, placement->bounds.height),
+            VectorSet(padding.left, padding.top, padding.right, padding.bottom)
+        );
+        const Rect content{ VectorGetX(inset), VectorGetY(inset), VectorGetZ(inset), VectorGetW(inset) };
         m_paint.pushClip(content);
         const bool painted = backgroundPainted
             && m_text.paint(m_paint, frame.text, { content.x, content.y }, frame.style.text);

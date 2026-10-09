@@ -3,6 +3,7 @@
 
 
 #include "../builder.h"
+#include "../rect_math.h"
 
 #include <global/simplemath.h>
 
@@ -93,10 +94,14 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
             : captured && hover ? item.style.buttonPressed : hover ? item.style.buttonHover : item.style.button;
         const UiSkinRegion* skinRegion = region(preferred, item.style.button);
         painted = skinRegion && m_paint.drawRegion(skinRegion->name, box.rectangle);
-        const f32 contentWidth = Max(0.0f, box.rectangle.width - item.padding.left - item.padding.right);
-        const f32 contentHeight = Max(0.0f, box.rectangle.height - item.padding.top - item.padding.bottom);
-        origin.x += item.padding.left + Max(0.0f, (contentWidth - measured.x) * 0.5f);
-        origin.y += item.padding.top + Max(0.0f, (contentHeight - measured.y) * 0.5f);
+        const SIMDVector content = InsetRectValue(VectorSet(0.0f, 0.0f, box.rectangle.width, box.rectangle.height),
+            VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom));
+        const SIMDVector remaining = VectorScale(VectorSubtract(VectorSwizzle<2, 3, 2, 3>(content),
+            VectorSet(measured.x, measured.y, 0.0f, 0.0f)), 0.5f);
+        const SIMDVector centered = VectorSelect(remaining, VectorZero(), VectorGreater(VectorZero(), remaining));
+        const SIMDVector offset = VectorAdd(VectorSet(item.padding.left, item.padding.top, 0.0f, 0.0f), centered);
+        const SIMDVector textOrigin = VectorAdd(VectorSet(origin.x, origin.y, 0.0f, 0.0f), offset);
+        origin = { VectorGetX(textOrigin), VectorGetY(textOrigin) };
     }
     else if(item.state.kind == WidgetKind::Checkbox){
         const Name& preferred = !item.enabled ? item.style.checkboxDisabled
@@ -108,12 +113,19 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
         if(painted && item.checked && m_skin->findRegion(item.style.checkboxMark)){
             const f32 inset = item.checkboxExtent * 0.2f;
             const Color tint = item.enabled ? Color{} : Color{ 1.0f, 1.0f, 1.0f, 0.5f };
+            const SIMDVector markOrigin = VectorAdd(VectorSet(square.x, square.y, 0.0f, 0.0f), VectorReplicate(inset));
+            const SIMDVector markSize = VectorNegativeMultiplySubtractExpression(VectorReplicate(2.0f), VectorReplicate(inset),
+                VectorSet(square.width, square.height, square.width, square.height));
+            const SIMDVector mark = VectorPermute<0, 1, 4, 5>(markOrigin, markSize);
             painted = m_paint.drawRegion(item.style.checkboxMark,
-                { square.x + inset, square.y + inset, square.width - 2.0f * inset, square.height - 2.0f * inset }, tint
+                { VectorGetX(mark), VectorGetY(mark), VectorGetZ(mark), VectorGetW(mark) }, tint
             );
         }
-        origin.x += item.checkboxExtent + item.style.gap;
-        origin.y += Max(0.0f, (box.rectangle.height - measured.y) * 0.5f);
+        const f32 horizontalOffset = item.checkboxExtent + item.style.gap;
+        const f32 verticalOffset = Max(0.0f, (box.rectangle.height - measured.y) * 0.5f);
+        const SIMDVector textOrigin = VectorAdd(VectorSet(origin.x, origin.y, origin.x, origin.y),
+            VectorSet(horizontalOffset, verticalOffset, horizontalOffset, verticalOffset));
+        origin = { VectorGetX(textOrigin), VectorGetY(textOrigin) };
     }
     if(painted && focused && item.enabled && interactive && m_skin->findRegion(item.style.focus))
         painted = m_paint.drawRegion(item.style.focus, box.rectangle);
@@ -138,11 +150,9 @@ bool Builder::paintItem(const Item& item, const LayoutBox& box){
 
 Rect Builder::visibleClip(const Rect& clip)const noexcept{
     const DisplayMetrics& display = m_paint.displayMetrics();
-    const f32 left = Max(0.0f, clip.x);
-    const f32 top = Max(0.0f, clip.y);
-    const f32 right = Min(display.logicalWidth, clip.x + clip.width);
-    const f32 bottom = Min(display.logicalHeight, clip.y + clip.height);
-    return { left, top, Max(0.0f, right - left), Max(0.0f, bottom - top) };
+    const SIMDVector intersection = IntersectRectValue(VectorSet(0.0f, 0.0f, display.logicalWidth, display.logicalHeight),
+        VectorSet(clip.x, clip.y, clip.width, clip.height));
+    return { VectorGetX(intersection), VectorGetY(intersection), VectorGetZ(intersection), VectorGetW(intersection) };
 }
 
 

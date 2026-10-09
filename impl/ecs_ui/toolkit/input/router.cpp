@@ -4,6 +4,7 @@
 
 #include "router.h"
 
+#include "../rect_math.h"
 #include <global/simplemath.h>
 #include <global/termination.h>
 
@@ -320,10 +321,13 @@ const HitTarget* InputRouter::findHitTarget(const Point& position)const{
 }
 
 bool InputRouter::isInteractive(const HitTarget& target)const{
-    const f32 left = Max(target.rectangle.x, target.clip.x);
-    const f32 top = Max(target.rectangle.y, target.clip.y);
-    const f32 right = Min(target.rectangle.x + target.rectangle.width, target.clip.x + target.clip.width);
-    const f32 bottom = Min(target.rectangle.y + target.rectangle.height, target.clip.y + target.clip.height);
+    const SIMDVector visibleBounds = IntersectRectBoundsValue(
+        VectorSet(target.rectangle.x, target.rectangle.y, target.rectangle.width, target.rectangle.height), VectorSet(target.clip.x, target.clip.y, target.clip.width, target.clip.height)
+    );
+    const f32 left = VectorGetX(visibleBounds);
+    const f32 top = VectorGetY(visibleBounds);
+    const f32 right = VectorGetZ(visibleBounds);
+    const f32 bottom = VectorGetW(visibleBounds);
     return
         target.enabled && right > left && bottom > top && allowedByPopup(target)
         && (!target.owner.valid() || controlHost(target) != nullptr)

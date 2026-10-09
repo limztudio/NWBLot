@@ -8,6 +8,7 @@
 #include <core/ecs/module.h>
 #include <core/graphics/runtime/runtime.h>
 #include <global/math/frame.h>
+#include <global/simdmath.h>
 #include <impl/ecs_csg/module.h>
 #include <impl/ecs_scene/module.h>
 #include <impl/ecs_render/module.h>
@@ -123,12 +124,16 @@ private:
     }
 
     EntityID createBox(const Box& box, const bool transparent){
+        const SIMDVector minimum = LoadFloat(box.minimum);
+        const SIMDVector maximum = LoadFloat(box.maximum);
+        Float4 center;
+        Float4 extent;
+        StoreFloat(VectorScale(VectorAdd(minimum, maximum), 0.5f), center);
+        StoreFloat(VectorSubtract(maximum, minimum), extent);
         const auto entity = CreateTintedStaticMeshEntity(
             *m_world, m_context.objectArena, s_CubeMesh, transparent ? s_GlassMaterial : s_OpaqueMaterial,
             s_MaterialInterface, Float4(1.0f, 1.0f, 1.0f, 1.0f),
-            Float4((box.minimum.x + box.maximum.x) * 0.5f, (box.minimum.y + box.maximum.y) * 0.5f,
-                (box.minimum.z + box.maximum.z) * 0.5f, 0.0f),
-            Float4(box.maximum.x - box.minimum.x, box.maximum.y - box.minimum.y, box.maximum.z - box.minimum.z, 0.0f)
+            center, extent
         );
         NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("CsgShadowSmokeProject: box creation failed"));
         return entity;
@@ -171,11 +176,12 @@ private:
         cutter.shapeType = Name("engine/csg/box");
         cutter.active = m_arm != Arm::Uncut;
         NWB::Impl::CsgBoxShapeParameters parameters;
-        parameters.halfExtents = Float4((cutterBox.maximum.x - cutterBox.minimum.x) * 0.5f,
-            (cutterBox.maximum.y - cutterBox.minimum.y) * 0.5f, (cutterBox.maximum.z - cutterBox.minimum.z) * 0.5f, 0.0f);
+        const SIMDVector minimum = LoadFloat(cutterBox.minimum);
+        const SIMDVector maximum = LoadFloat(cutterBox.maximum);
+        StoreFloat(VectorScale(VectorSubtract(maximum, minimum), 0.5f), parameters.halfExtents);
         AssignCsgCutterParameters(cutter, parameters);
-        const Float4 finalCenter((cutterBox.minimum.x + cutterBox.maximum.x) * 0.5f,
-            (cutterBox.minimum.y + cutterBox.maximum.y) * 0.5f, (cutterBox.minimum.z + cutterBox.maximum.z) * 0.5f, 0.0f);
+        Float4 finalCenter;
+        StoreFloat(VectorScale(VectorAdd(minimum, maximum), 0.5f), finalCenter);
         Float4 initialCenter = finalCenter;
         if(moving && m_arm == Arm::Moved)
             initialCenter.x -= 0.6f * (m_pointLight ? 0.5f : 1.0f);

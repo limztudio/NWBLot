@@ -6,6 +6,7 @@
 
 #include <core/task/gpu/compiler_internal.h>
 
+#include <global/math/vector_double.h>
 #include <global/timer.h>
 
 
@@ -197,9 +198,10 @@ void BenchmarkRangePlanning(const Workload::Enum workload, const usize count){
         }
     }
 
+    const SIMDVectorDouble compileNanoseconds = SIMDVectorDouble{ compileSeconds, resourceStatePlanningSeconds } * 1'000'000'000.0;
     RecordUnsignedTestProperty("elapsed_ns", elapsedNanoseconds);
-    RecordUnsignedTestProperty("compile_ns", static_cast<u64>(compileSeconds * 1'000'000'000.0));
-    RecordUnsignedTestProperty("resource_state_planning_ns", static_cast<u64>(resourceStatePlanningSeconds * 1'000'000'000.0));
+    RecordUnsignedTestProperty("compile_ns", static_cast<u64>(compileNanoseconds.x));
+    RecordUnsignedTestProperty("resource_state_planning_ns", static_cast<u64>(compileNanoseconds.y));
     RecordUnsignedTestProperty("scratch_peak_bytes", scratchPeakBytes);
     RecordUnsignedTestProperty("scratch_retained_bytes", scratchRetainedBytes);
     RecordUnsignedTestProperty("scratch_allocations_per_compile", scratchAllocationCount);

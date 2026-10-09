@@ -10,6 +10,7 @@
 
 #include "cook_topology.h"
 
+#include <global/math/vector_double.h>
 #include <global/algorithm.h>
 
 
@@ -60,12 +61,15 @@ static void JoinComponents(
 }
 
 [[nodiscard]] static bool DegenerateTriangle(const Float3U& a, const Float3U& b, const Float3U& c)noexcept{
-    const f64 abX = static_cast<f64>(b.x) - a.x;
-    const f64 abY = static_cast<f64>(b.y) - a.y;
-    const f64 abZ = static_cast<f64>(b.z) - a.z;
-    const f64 acX = static_cast<f64>(c.x) - a.x;
-    const f64 acY = static_cast<f64>(c.y) - a.y;
-    const f64 acZ = static_cast<f64>(c.z) - a.z;
+    const SIMDVectorDouble abXAbYValue = (SIMDVectorDouble{ static_cast<f64>(b.x), static_cast<f64>(b.y) } - SIMDVectorDouble{ a.x, a.y });
+    const f64 abX = abXAbYValue.x;
+    const f64 abY = abXAbYValue.y;
+    const SIMDVectorDouble abZAcXValue = (SIMDVectorDouble{ static_cast<f64>(b.z), static_cast<f64>(c.x) } - SIMDVectorDouble{ a.z, a.x });
+    const f64 abZ = abZAcXValue.x;
+    const f64 acX = abZAcXValue.y;
+    const SIMDVectorDouble acYAcZValue = (SIMDVectorDouble{ static_cast<f64>(c.y), static_cast<f64>(c.z) } - SIMDVectorDouble{ a.y, a.z });
+    const f64 acY = acYAcZValue.x;
+    const f64 acZ = acYAcZValue.y;
     return abY * acZ == abZ * acY && abZ * acX == abX * acZ && abX * acY == abY * acX;
 }
 
@@ -75,14 +79,18 @@ static void JoinComponents(
     const Float3U& c,
     const Float3U& origin
 )noexcept{
-    const f64 aX = static_cast<f64>(a.x) - origin.x;
-    const f64 aY = static_cast<f64>(a.y) - origin.y;
-    const f64 aZ = static_cast<f64>(a.z) - origin.z;
-    const f64 bX = static_cast<f64>(b.x) - origin.x;
-    const f64 bY = static_cast<f64>(b.y) - origin.y;
-    const f64 bZ = static_cast<f64>(b.z) - origin.z;
-    const f64 cX = static_cast<f64>(c.x) - origin.x;
-    const f64 cY = static_cast<f64>(c.y) - origin.y;
+    const SIMDVectorDouble aXAYValue = (SIMDVectorDouble{ static_cast<f64>(a.x), static_cast<f64>(a.y) } - SIMDVectorDouble{ origin.x, origin.y });
+    const f64 aX = aXAYValue.x;
+    const f64 aY = aXAYValue.y;
+    const SIMDVectorDouble aZBXValue = (SIMDVectorDouble{ static_cast<f64>(a.z), static_cast<f64>(b.x) } - SIMDVectorDouble{ origin.z, origin.x });
+    const f64 aZ = aZBXValue.x;
+    const f64 bX = aZBXValue.y;
+    const SIMDVectorDouble bYBZValue = (SIMDVectorDouble{ static_cast<f64>(b.y), static_cast<f64>(b.z) } - SIMDVectorDouble{ origin.y, origin.z });
+    const f64 bY = bYBZValue.x;
+    const f64 bZ = bYBZValue.y;
+    const SIMDVectorDouble cXCYValue = (SIMDVectorDouble{ static_cast<f64>(c.x), static_cast<f64>(c.y) } - SIMDVectorDouble{ origin.x, origin.y });
+    const f64 cX = cXCYValue.x;
+    const f64 cY = cXCYValue.y;
     const f64 cZ = static_cast<f64>(c.z) - origin.z;
     return aX * (bY * cZ - bZ * cY) + aY * (bZ * cX - bX * cZ) + aZ * (bX * cY - bY * cX);
 }

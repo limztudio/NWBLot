@@ -4,6 +4,7 @@
 
 #include "../builder.h"
 
+#include <global/math/vector_arithmetic.h>
 #include <global/simplemath.h>
 
 
@@ -32,7 +33,9 @@ bool Builder::paintTextArea(const Item& item, const LayoutBox& box){
     if(!viewport)
         return false;
     const f32 lineHeight = item.editView.layout().lines().empty() ? item.editView.layout().fontSize() : item.editView.layout().lines().front().height;
-    const Point step{ item.editView.layout().fontSize() * frame.wheelLines, lineHeight * frame.wheelLines };
+    const SIMDVector wheelStep = VectorScale(VectorSet(item.editView.layout().fontSize(), lineHeight,
+        item.editView.layout().fontSize(), lineHeight), frame.wheelLines);
+    const Point step{ VectorGetX(wheelStep), VectorGetY(wheelStep) };
     if(!IsFinite(step.x) || !IsFinite(step.y) || step.x <= 0.0f || step.y <= 0.0f)
         return false;
     const ControlToken token = state.m_scrollInput.prepare(

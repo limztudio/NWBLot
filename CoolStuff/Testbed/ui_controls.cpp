@@ -4,6 +4,8 @@
 
 #include "project.h"
 
+#include <global/math/vector2.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,7 +32,11 @@ void Project::drawUiControls(NWB::Impl::UiPaintContext& context){
     options.contentHeightFirstUse = true;
     const auto gallery = UiWidgetGallery::LayoutBounds(context.display);
     const auto& overview = options.initialBounds;
-    if(gallery.x < overview.x + overview.width && gallery.y < overview.y + overview.height)
+    const SIMDVector overviewEnd = VectorAdd(
+        VectorSet(overview.x, overview.y, 0.0f, 0.0f),
+        VectorSet(overview.width, overview.height, 0.0f, 0.0f)
+    );
+    if(Vector2Less(VectorSet(gallery.x, gallery.y, 0.0f, 0.0f), overviewEnd))
         return;
     NWB::Impl::Ui::SeparatorOptions separator;
     separator.thickness = 1.0f;

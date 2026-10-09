@@ -3,6 +3,7 @@
 
 
 #include "../builder.h"
+#include "../rect_math.h"
 
 #include <global/simplemath.h>
 
@@ -34,14 +35,17 @@ bool Builder::paintCombo(const Item& item, const LayoutBox& box){
     const Rect clip = visibleClip(box.clip);
     m_paint.pushClip(clip);
     const bool fieldPainted = m_paint.drawRegion(field->name, box.rectangle);
-    const f32 contentHeight = Max(0.0f, box.rectangle.height - item.padding.top - item.padding.bottom);
-    const f32 extent = Min(frame.arrowExtent, Min(contentHeight,
-        Max(0.0f, box.rectangle.width - item.padding.left - item.padding.right)));
+    const SIMDVector content = InsetRectValue(VectorSet(0.0f, 0.0f, box.rectangle.width, box.rectangle.height),
+        VectorSet(item.padding.left, item.padding.top, item.padding.right, item.padding.bottom));
+    const f32 contentHeight = VectorGetW(content);
+    const f32 extent = Min(frame.arrowExtent, Min(contentHeight, VectorGetZ(content)));
     const Rect icon{ box.rectangle.x + box.rectangle.width - item.padding.right - extent,
         box.rectangle.y + item.padding.top + Max(0.0f, (contentHeight - extent) * 0.5f), extent, extent };
     const bool arrowPainted = fieldPainted && m_paint.drawRegion(arrow->name, icon,
         item.enabled ? Color{} : Color{ 1.0f, 1.0f, 1.0f, 0.5f });
-    const Rect textClip{ box.rectangle.x + item.padding.left, box.rectangle.y + item.padding.top,
+    const SIMDVector textOrigin = VectorAdd(VectorSet(box.rectangle.x, box.rectangle.y, box.rectangle.x, box.rectangle.y),
+        VectorSet(item.padding.left, item.padding.top, item.padding.left, item.padding.top));
+    const Rect textClip{ VectorGetX(textOrigin), VectorGetY(textOrigin),
         Max(0.0f, icon.x - frame.style.arrowGap - box.rectangle.x - item.padding.left), contentHeight };
     m_paint.pushClip(textClip);
     const Point origin{ textClip.x, textClip.y + Max(0.0f, (contentHeight - item.text.measure().y) * 0.5f) };
@@ -66,10 +70,9 @@ bool Builder::paintCombo(const Item& item, const LayoutBox& box){
     if(!m_context.addTarget(item.state, target))
         return false;
     frame.state->m_bounds = box.rectangle;
-    const f32 left = Max(box.rectangle.x, clip.x);
-    const f32 top = Max(box.rectangle.y, clip.y);
-    frame.visibleField = { left, top, Max(0.0f, Min(box.rectangle.x + box.rectangle.width, clip.x + clip.width) - left),
-        Max(0.0f, Min(box.rectangle.y + box.rectangle.height, clip.y + clip.height) - top) };
+    const SIMDVector visible = IntersectRectValue(VectorSet(box.rectangle.x, box.rectangle.y, box.rectangle.width, box.rectangle.height),
+        VectorSet(clip.x, clip.y, clip.width, clip.height));
+    frame.visibleField = { VectorGetX(visible), VectorGetY(visible), VectorGetZ(visible), VectorGetW(visible) };
     return true;
 }
 
@@ -107,9 +110,12 @@ bool Builder::paintComboPopup(ComboFrame& frame){
     const auto placement = PopupLayout::Place(options, m_paint.displayMetrics());
     if(!placement)
         return false;
-    const Insets padding{ Max(frame.popupStyle.padding.left, background->padding.left),
-        Max(frame.popupStyle.padding.top, background->padding.top), Max(frame.popupStyle.padding.right, background->padding.right),
-        Max(frame.popupStyle.padding.bottom, background->padding.bottom) };
+    const SIMDVector firstPadding = VectorSet(frame.popupStyle.padding.left, frame.popupStyle.padding.top,
+        frame.popupStyle.padding.right, frame.popupStyle.padding.bottom);
+    const SIMDVector secondPadding = VectorSet(background->padding.left, background->padding.top,
+        background->padding.right, background->padding.bottom);
+    const SIMDVector paddingValue = VectorSelect(secondPadding, firstPadding, VectorGreater(firstPadding, secondPadding));
+    const Insets padding{ VectorGetX(paddingValue), VectorGetY(paddingValue), VectorGetZ(paddingValue), VectorGetW(paddingValue) };
     PopupScope scope;
     scope.token = frame.popupToken;
     scope.parent = frame.parentToken;
@@ -138,9 +144,11 @@ bool Builder::paintComboPopup(ComboFrame& frame){
         listItem.state = frame.rows;
         listItem.list = frame.list;
         LayoutBox box;
-        box.rectangle = { placement->bounds.x + padding.left, placement->bounds.y + padding.top,
-            Max(0.0f, placement->bounds.width - padding.left - padding.right),
-            Max(0.0f, placement->bounds.height - padding.top - padding.bottom) };
+        const SIMDVector inset = InsetRectValue(
+            VectorSet(placement->bounds.x, placement->bounds.y, placement->bounds.width, placement->bounds.height),
+            VectorSet(padding.left, padding.top, padding.right, padding.bottom)
+        );
+        box.rectangle = { VectorGetX(inset), VectorGetY(inset), VectorGetZ(inset), VectorGetW(inset) };
         box.clip = placement->bounds;
         painted = (!frame.search || paintComboQuery(frame, box)) && paintList(listItem, box) && comboMatches(frame);
     }

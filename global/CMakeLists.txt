@@ -29,6 +29,7 @@ target_sources(global_foundation PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/cpu_topology.h"
     "${CMAKE_CURRENT_LIST_DIR}/inplace_function.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/tangent_frame_rebuild.h"
+    "${CMAKE_CURRENT_LIST_DIR}/math/vector_double.h"
     "${CMAKE_CURRENT_LIST_DIR}/mesh/triangle_area.h"
     "${CMAKE_CURRENT_LIST_DIR}/scope_exit.h"
     "${CMAKE_CURRENT_LIST_DIR}/span.h"

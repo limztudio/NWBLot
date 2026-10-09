@@ -342,8 +342,7 @@ bool RendererRayTracingSystem::ensureCausticRtPipeline(){
 
     Core::RayTracingPipelineDesc pipelineDesc(m_arena);
     // The iterative bounce loop needs no shader recursion.
-    constexpr u32 s_HwCausticPayloadFloatCount = 16u;
-    pipelineDesc.setMaxPayloadSize(static_cast<u32>(sizeof(f32) * s_HwCausticPayloadFloatCount));
+    pipelineDesc.setMaxPayloadSize(NWB_CAUSTIC_HW_MAX_PAYLOAD_BYTES);
     pipelineDesc.setMaxRecursionDepth(1u);
     pipelineDesc.addBindingLayout(m_rayTracingState.m_hwCausticBindingLayout);
     // Preserve global resource, sampler, and TLAS heap sets.

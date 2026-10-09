@@ -1,0 +1,104 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CSG_RAY_COLLECT_HW_SLANGI
+#define NWB_GRAPHICS_CSG_RAY_COLLECT_HW_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "ray_geometry.slangi"
+#include "../raytrace/constants.h"
+
+#ifndef NWB_CSG_RAY_RETAINED_POSE
+#define NWB_CSG_RAY_RETAINED_POSE 0
+#endif
+
+#if NWB_CSG_RAY_RETAINED_POSE
+bool nwbCsgRayPrepareHardwareRay(
+    const uint contextSlot,
+    const uint instanceIndex,
+    const float3 worldOrigin,
+    const float3 worldDirection,
+    out float3 queryOrigin,
+    out float3 queryDirection
+);
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+uint nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
+    const uint contextSlot,
+    const uint materialSlot,
+    const uint instanceIndex,
+    const uint membershipOffset,
+    const float3 worldOrigin,
+    const float3 worldDirection,
+    const float minimum,
+    const float maximum,
+    __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS],
+    const uint cutCount,
+    __ref NwbCsgRayCrossing crossings[NWB_CSG_RAY_CROSSING_CAPACITY],
+    inout uint crossingCount,
+    inout T openVisitor
+){
+    const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
+    const float3x4 worldToObject = nwbCsgRayWorldToObject(instance);
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
+    RayDesc ray;
+#if NWB_CSG_RAY_RETAINED_POSE
+    // Keep the direction unnormalized so the retained ray's parameter survives mapping through the current TLAS pose.
+    if(!nwbCsgRayPrepareHardwareRay(contextSlot, instanceIndex, worldOrigin, worldDirection, ray.Origin, ray.Direction))
+        return NWB_CSG_RAY_FAILURE_TOPOLOGY;
+#else
+    ray.Origin = worldOrigin;
+    ray.Direction = worldDirection;
+#endif
+    ray.TMin = 0.0;
+    ray.TMax = asfloat(0x7f7fffffu);
+    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
+    query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_CSG_INSTANCE_MASK, ray);
+    while(query.Proceed()){
+        if(query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE || query.CandidateInstanceID() != instanceIndex)
+            continue;
+        if(query.CandidateTriangleRayT() == 0.0)
+            continue;
+        const uint primitive = query.CandidatePrimitiveIndex();
+        if(!nwbCsgRayPrimitiveClosed(contextSlot, membershipOffset, primitive)){
+            const uint failure = openVisitor.visit(
+                primitive, query.CandidateTriangleRayT(), query.CandidateTriangleBarycentrics(), minimum, maximum, cuts, cutCount
+            );
+            if(failure != 0u)
+                return failure;
+            continue;
+        }
+        // Physical inverse-transpose normals preserve oriented volume membership under reflected instance transforms.
+        const float3 normal = nwbRayTraceTriangleGeometricNormal(material, primitive, worldToObject);
+        const float facing = dot(normal, worldDirection);
+        if(!isfinite(facing) || facing == 0.0)
+            return NWB_CSG_RAY_FAILURE_TOPOLOGY;
+        NwbCsgRayCrossing crossing;
+        crossing.distance = query.CandidateTriangleRayT();
+        crossing.primitive = primitive;
+        crossing.barycentrics = query.CandidateTriangleBarycentrics();
+        crossing.windingDelta = facing < 0.0 ? 1 : -1;
+        const uint failure = nwbCsgRayInsertCrossing(materialSlot, instanceIndex, crossing, crossings, crossingCount);
+        if(failure != 0u)
+            return failure;
+    }
+    return 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

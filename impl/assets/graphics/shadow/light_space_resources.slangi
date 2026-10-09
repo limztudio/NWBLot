@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -45,6 +47,8 @@ struct NwbLightSpacePushConstants{
     uint meshletDescSlot;
     uint meshletBoundsSlot;
     uint meshletCount;
+    uint receiverViewSlot;
+    uint receiverCsgSampleStateSlot;
 };
 [[vk::push_constant]] ConstantBuffer<NwbLightSpacePushConstants> g_NwbLightSpacePush;
 

@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -24,25 +26,10 @@
 #define NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED 0
 #endif
 
-struct NwbCsgIntervalSampleState{
-    uint4 workRect;
-    // x = global UniformBuffer heap slot for the shared mesh view. yzw remain reserved so this stays a std140 lane.
-    uint4 resourceSlots;
-};
-
-// The sample-state payload is another typed view of the global UniformBuffer heap.  runtime.slangi supplies the CSG context selector before this header is included, and that context supplies this payload's descriptor slot.
 #ifndef NWB_GRAPHICS_CSG_RUNTIME_SLANGI
 #error "CSG interval sampling requires runtime.slangi before interval_sample.slangi"
 #endif
-#pragma warning(push)
-#pragma warning(disable: 39001)
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbCsgIntervalSampleState, Std140DataLayout> g_NwbHeapCsgIntervalSampleStates[];
-#pragma warning(pop)
-
-ConstantBuffer<NwbCsgIntervalSampleState, Std140DataLayout> nwbHeapCsgIntervalSampleState(const uint slot){
-    return g_NwbHeapCsgIntervalSampleStates[slot];
-}
+#include "interval_sample_state.slangi"
 
 #define g_NwbCsgIntervalSampleState nwbHeapCsgIntervalSampleState(g_NwbCsgClipContextSlots.intervalSampleState)
 
@@ -51,6 +38,8 @@ ConstantBuffer<NwbCsgIntervalSampleState, Std140DataLayout> nwbHeapCsgIntervalSa
 #include "../bindless/bindless_heap_mesh.slangi"
 
 #include "bindless_resources.slangi"
+#include "removed_cap_sample.slangi"
+#include "../mesh/view_ray.slangi"
 
 #if NWB_CSG_RECEIVER_EVENTS_WRITABLE
 // Event data layout: .x = receiverIndex, .y = faceSign, .z = asuint(linear depth), .w = unused. Bindings 5/6 are heap-selected through the shared cbuffer at binding 17.
@@ -132,17 +121,6 @@ void nwbCsgMarkReceiverSurfaceEvent(
 }
 #endif
 
-float nwbCsgIntervalSampleSafeHomogeneousW(const float w){
-    if(abs(w) >= NWB_CSG_HOMOGENEOUS_W_EPSILON)
-        return w;
-    return w < 0.0 ? -NWB_CSG_HOMOGENEOUS_W_EPSILON : NWB_CSG_HOMOGENEOUS_W_EPSILON;
-}
-
-float3 nwbCsgIntervalSampleClipToWorldPosition(const float4 clipPosition){
-    const float4 worldPosition = mul(g_NwbMeshClipToWorld, clipPosition);
-    return worldPosition.xyz / nwbCsgIntervalSampleSafeHomogeneousW(worldPosition.w);
-}
-
 uint2 nwbCsgIntervalSampleFrameExtent(){
     uint width = 1u;
     uint height = 1u;
@@ -153,18 +131,6 @@ uint2 nwbCsgIntervalSampleFrameExtent(){
     g_NwbCsgReceiverEventData.GetDimensions(width, height, layerCount);
 #endif
     return uint2(width, height);
-}
-
-float2 nwbCsgIntervalSampleFrameSize(){
-    const uint2 frameExtent = nwbCsgIntervalSampleFrameExtent();
-    return float2(frameExtent);
-}
-
-float3 nwbCsgIntervalSamplePixelDepthToWorldPosition(const uint2 pixel, const float depth){
-    const float2 frameSize = nwbCsgIntervalSampleFrameSize();
-    const float2 uv = (float2(pixel) + 0.5) / max(frameSize, float2(1.0, 1.0));
-    const float2 ndc = float2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
-    return nwbCsgIntervalSampleClipToWorldPosition(float4(ndc, depth, 1.0));
 }
 
 float3 nwbCsgIntervalSampleNormalizeOr(const float3 value, const float3 fallback){
@@ -200,70 +166,6 @@ bool nwbCsgIntervalSamplePixelInWorkRect(const int2 pixel){
         && uint(pixel.y) < workRect.w
     ;
 }
-
-void nwbCsgSelectNearestIntervalCap(inout NwbCsgIntervalCapPixel result, const NwbCsgIntervalCapPixel candidate){
-    if(!candidate.visible || candidate.depth >= result.depth)
-        return;
-
-    result = candidate;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#if NWB_CSG_REMOVED_INTERVAL_SAMPLE_ENABLED
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-NwbCsgIntervalCapPixel nwbCsgSampleNearestRemovedIntervalCapAtPixel(const uint2 outputPixel, const uint2 intervalPixel){
-    NwbCsgIntervalCapPixel result;
-    result.visible = false;
-    result.depth = NWB_CSG_INVALID_DISTANCE;
-    result.normal = float3(0.0, 0.0, 1.0);
-    result.worldPosition = float3(0.0, 0.0, 0.0);
-    result.receiverIndex = 0u;
-    if(!nwbCsgIntervalSamplePixelInWorkRect(int2(intervalPixel)))
-        return result;
-
-    const uint removedIntervalLayerCount = nwbCsgRemovedIntervalLayerCount();
-    const uint rawIntervalCount = g_NwbCsgRemovedIntervalCount.Load(int3(int2(intervalPixel), 0)).x;
-    const uint intervalCount = min(rawIntervalCount, removedIntervalLayerCount);
-    [unroll]
-    for(uint layerIndex = 0u; layerIndex < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++layerIndex){
-        if(layerIndex >= intervalCount)
-            break;
-
-        const int3 texel = int3(int2(intervalPixel), int(layerIndex));
-        const uint4 intervalData = g_NwbCsgRemovedIntervalData.Load(texel);
-        if((intervalData.y & NWB_CSG_REMOVED_INTERVAL_BACK_CAP_VISIBLE_FLAG) == 0u)
-            continue;
-
-        const float4 intervalDepth = g_NwbCsgRemovedIntervalDepth.Load(texel);
-        const float capDepth = intervalDepth.y;
-        if(!isfinite(capDepth) || capDepth >= result.depth)
-            continue;
-
-        const float3 capWorldPosition = nwbCsgIntervalSamplePixelDepthToWorldPosition(outputPixel, capDepth);
-        result.visible = true;
-        result.depth = capDepth;
-        // The removed-cap normal attachment is RGBA16F. Its normalization and facing test remain FP32, but the fetch itself should retain the attachment's native half payload.
-        const half3 capNormalSample = half3(g_NwbCsgRemovedIntervalCapNormal.Load(texel).xyz);
-        result.normal = nwbCsgIntervalSampleVisibleCapNormal(float3(capNormalSample), capWorldPosition);
-        result.worldPosition = capWorldPosition;
-        result.receiverIndex = intervalData.x;
-    }
-
-    return result;
-}
-
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -381,41 +283,22 @@ bool nwbCsgReceiverIntervalPixelDiscard(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-void nwbCsgSampleNearestRemovedIntervalCapNeighborhood(inout NwbCsgIntervalCapPixel result, const uint2 outputPixel){
-    [unroll]
-    for(
-        int offsetY = -NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS;
-        offsetY <= NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS;
-        ++offsetY
-    ){
-        [unroll]
-        for(
-            int offsetX = -NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS;
-            offsetX <= NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS;
-            ++offsetX
-        ){
-            if(offsetX == 0 && offsetY == 0)
-                continue;
-
-            const int2 neighborPixel = int2(outputPixel) + int2(offsetX, offsetY);
-            if(!nwbCsgIntervalSamplePixelInWorkRect(neighborPixel))
-                continue;
-
-            nwbCsgSelectNearestIntervalCap(
-                result,
-                nwbCsgSampleNearestRemovedIntervalCapAtPixel(outputPixel, uint2(neighborPixel))
-            );
-        }
-    }
-}
-
 NwbCsgIntervalCapPixel nwbCsgSampleNearestIntervalCap(const float4 rasterPosition){
     const uint2 pixel = uint2(rasterPosition.xy);
-    NwbCsgIntervalCapPixel result = nwbCsgSampleNearestRemovedIntervalCapAtPixel(pixel, pixel);
-    if(result.visible)
+    const uint3 slots = uint3(g_NwbCsgBindlessResources.csgSpanSlots.w, g_NwbCsgBindlessResources.csgRemovedSlots.yz);
+    const NwbCsgRemovedCapSample sample = nwbCsgSampleNearestRemovedCap(pixel, g_NwbCsgIntervalSampleState.workRect, slots);
+    NwbCsgIntervalCapPixel result = (NwbCsgIntervalCapPixel)0;
+    result.depth = sample.depth;
+    if(!sample.visible || !isfinite(sample.linearDepth) || sample.linearDepth <= 0.0)
         return result;
-
-    nwbCsgSampleNearestRemovedIntervalCapNeighborhood(result, pixel);
+    // Keep projected depth for raster ordering; the retained radial distance reconstructs the physical wall without D32 loss.
+    result.worldPosition = nwbMeshViewRadialPosition(pixel, sample.pixel, nwbCsgIntervalSampleFrameExtent(), sample.linearDepth);
+    if(!all(isfinite(result.worldPosition)))
+        return result;
+    const half3 normal = half3(g_NwbCsgRemovedIntervalCapNormal.Load(int3(sample.pixel, sample.layerIndex)).xyz);
+    result.normal = nwbCsgIntervalSampleVisibleCapNormal(float3(normal), result.worldPosition);
+    result.receiverIndex = sample.receiverIndex;
+    result.visible = true;
     return result;
 }
 

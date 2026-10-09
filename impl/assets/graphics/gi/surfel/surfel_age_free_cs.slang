@@ -27,15 +27,15 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
 
     NwbSurfel surfel = g_NwbSurfelPool[surfelIndex];
-    if(surfel.alive == 0u)
+    if(!nwbSurfelIsAlive(surfel.sampleState))
         return;
 
     const uint frameIndex = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.z);
     const uint maxAge = uint(g_NwbSurfelConstants.ageRaysTileScreen.x);
 
-    // Unsigned age is exact (lastSeen <= frame). Unseen past maxAge: mark dead, push once (alive early-out stops re-push); free-list stays duplicate-free.
+    // Unsigned age preserves frame wrap. Dead records stop here on later passes, keeping the free-list duplicate-free.
     if(frameIndex - surfel.lastSeenFrame > maxAge){
-        g_NwbSurfelPool[surfelIndex].alive = 0u;
+        g_NwbSurfelPool[surfelIndex].sampleState = 0u;
         uint destination = 0u;
         InterlockedAdd(g_NwbSurfelCounter[NWB_SURFEL_COUNTER_FREE_TOP], 1u, destination);
         g_NwbSurfelFreeList[destination] = surfelIndex;

@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -17,6 +19,9 @@
 #define g_NwbSwShadowPush g_NwbLightSpacePush
 #define g_NwbSwShadowMaterialContextSlots nwbHeapShadowMaterialContextSlots(g_NwbLightSpacePush.materialContextSlot)
 #define NWB_LIGHT_SPACE_DEFERRED nwbHeapDeferredBindlessResources(g_NwbLightSpacePush.deferredResourcesSlot)
+#if NWB_LIGHT_SPACE_CSG_ENABLED
+#include "light_space_receiver.slangi"
+#endif
 #define NWB_SCENE_SHADING_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.w
 #include "../scene/buffer.slangi"
@@ -46,8 +51,22 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         const uint3 outputPixel = uint3(pixel, uint(light.params.z));
         if(nwbHeapStorageImage2DArrayFloat4(g_NwbLightSpacePush.outputSlot)[outputPixel].a != 0.0)
             continue;
+#if NWB_LIGHT_SPACE_CSG_ENABLED
+        const uint2 receiverPixel = min(pixel * g_NwbLightSpacePush.receiverFactor, fullExtent - 1u);
+        const int3 texel = int3(receiverPixel, 0);
+        const float depth = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.w).Load(texel).r;
+        float3 position;
+        float3 positionError;
+        if(!nwbLightSpaceReceiverPosition(receiverPixel, depth, position, positionError)){
+            half3 visibility = half3(0.0h);
+            visibility = nwbCsgShadowRayFailure(NWB_CSG_RAY_FAILURE_UNSUPPORTED);
+            nwbHeapStorageImage2DArrayFloat4(g_NwbLightSpacePush.outputSlot)[outputPixel] = float4(visibility, 1.0);
+            continue;
+        }
+#else
         const int3 texel = int3(min(pixel * g_NwbLightSpacePush.receiverFactor, fullExtent - 1u), 0);
         const float3 position = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.z).Load(texel).xyz;
+#endif
         const float3 normal = normalize(nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.y).Load(texel).xyz * 2.0 - 1.0);
         const uint sampleCount = clamp(g_NwbLightSpacePush.sampleCount, 1u, NWB_SW_SHADOW_TRANSPARENT_SPP);
         half3 result = half3(0.0h);
@@ -66,8 +85,12 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
             float maximum;
             if(nwbShadowBuildLightRay(position, normal, light, jitter, direction, minimum, maximum)){
                 const float3 origin = position + normal * minimum;
-                visibility = nwbCsgShadowBoundsVisibility(origin, direction, minimum, maximum);
-                if(any(visibility > half3(0.0h))){
+                visibility = nwbCsgShadowRayVisibility(origin, direction, minimum, maximum);
+                bool ordinaryRequired = any(visibility > half3(0.0h));
+#if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_TRANSPARENT
+                ordinaryRequired = ordinaryRequired && (g_NwbLightSpacePush.csgFlags & NWB_CSG_SHADOW_FLAG_NO_ORDINARY_TRANSPARENT) == 0u;
+#endif
+                if(ordinaryRequired){
                     NwbShadowVisibilityAccumulator accumulator = nwbShadowVisibilityBegin();
                     nwbSwShadowOccluded(origin, direction, minimum, maximum, accumulator);
                     visibility = nwbShadowFinalizeVisibility(accumulator) * visibility;

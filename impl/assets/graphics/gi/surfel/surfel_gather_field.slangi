@@ -51,6 +51,7 @@ bool nwbSurfelGatherField(
     const float cellSize = NWB_SURFEL_GATHER_FIELD_CONSTANTS.cameraPositionCellSize.w;
     const uint cellCount = uint(NWB_SURFEL_GATHER_FIELD_CONSTANTS.hashPoolFrameDivisor.x);
     const float normalBias = NWB_SURFEL_GATHER_FIELD_CONSTANTS.coverageRadiusBiasHyst.z;
+    const float radius = max(NWB_SURFEL_GATHER_FIELD_CONSTANTS.coverageRadiusBiasHyst.y, NWB_SURFEL_RADIUS_MIN);
     const float3 biasedPosition = worldPosition + normal * normalBias;
 
     half3 irradianceSum = half3(0.0h);
@@ -67,19 +68,22 @@ bool nwbSurfelGatherField(
             rowHeads[dx + NWB_SURFEL_GATHER_CELL_EXTENT] = NWB_SURFEL_GATHER_FIELD_CELL_HEAD[bucket];
         }
         for(int dx = -NWB_SURFEL_GATHER_CELL_EXTENT; dx <= NWB_SURFEL_GATHER_CELL_EXTENT; ++dx){
+            const int3 cell = baseCell + int3(dx, dy, dz);
             uint id = rowHeads[dx + NWB_SURFEL_GATHER_CELL_EXTENT];
             uint walk = 0u;
             [loop]
             while(NWB_SURFEL_GATHER_FIELD_INDEX_VALID(id, poolCapacity) && walk < NWB_SURFEL_MAX_WALK){
                 const uint nextInCell = NWB_SURFEL_GATHER_FIELD_POOL[id].nextInCell;
-                const uint sampleCount = NWB_SURFEL_GATHER_FIELD_POOL[id].sampleCount;
-                if(NWB_SURFEL_GATHER_FIELD_POOL[id].alive != 0u && sampleCount != 0u){
+                const uint sampleState = NWB_SURFEL_GATHER_FIELD_POOL[id].sampleState;
+                const uint sampleCount = nwbSurfelSampleCount(sampleState);
+                if(nwbSurfelIsAlive(sampleState) && sampleCount != 0u){
                     const half normalWeight = half(saturate(dot(normal, NWB_SURFEL_GATHER_FIELD_POOL[id].normal)));
                     half weight = half(0.0h);
-                    // Perpendicular and opposite-facing records have zero weight regardless of distance. Reject them before fetching position/radius or evaluating the distance falloff; retain rounded half weights.
-                    if(normalWeight > half(0.0h)){
-                        const float dist = length(biasedPosition - NWB_SURFEL_GATHER_FIELD_POOL[id].position);
-                        const half distanceWeight = half(saturate(1.0 - dist / max(NWB_SURFEL_GATHER_FIELD_POOL[id].radius, NWB_SURFEL_RADIUS_MIN)));
+                    // Reject zero-weight orientations and foreign collision residents before position/falloff work; retain rounded half weights.
+                    if(normalWeight > half(0.0h) && nwbSurfelSameCell(NWB_SURFEL_GATHER_FIELD_POOL[id].cell, cell)){
+                        const float3 position = NWB_SURFEL_GATHER_FIELD_POOL[id].position;
+                        const float dist = length(biasedPosition - position);
+                        const half distanceWeight = half(saturate(1.0 - dist / radius));
                         const half confidence = half(saturate(float(sampleCount) / NWB_SURFEL_GATHER_FULL_CONFIDENCE_SAMPLE_COUNT));
                         weight = normalWeight * distanceWeight * confidence;
                         // Keep SH loads and reconstruction conditional on an actual contribution.

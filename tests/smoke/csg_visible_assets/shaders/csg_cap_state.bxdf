@@ -1,0 +1,42 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifdef NWB_GRAPHICS_DEFERRED_LIGHTING_FRAMEWORK_SLANGI
+#include "csg/removed_cap_sample.slangi"
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
+#ifdef NWB_GRAPHICS_DEFERRED_LIGHTING_FRAMEWORK_SLANGI
+    const uint3 slots = uint3(
+        g_NwbDeferredBindlessResources.csgSpanSlots.w,
+        g_NwbDeferredBindlessResources.csgRemovedSlots.yz
+    );
+    uint width;
+    uint height;
+    uint layers;
+    nwbHeapStorageImage2DArrayFloat4(slots.x).GetDimensions(width, height, layers);
+    const uint2 samplePixel = uint2(pixel);
+    if(any(pixel < 0) || any(samplePixel >= uint2(width, height)))
+        return half3(0.0h);
+    const uint rawCount = nwbHeapStorageImage2DArrayUint2(slots.z).Load(int3(pixel, 0)).x;
+    const NwbCsgRemovedCapSample cap = nwbCsgSampleNearestRemovedCap(samplePixel, uint4(0u, 0u, width, height), slots);
+    const float depth = nwbHeapSampledImage2D(g_NwbDeferredBindlessResources.gbufferSlots.w).Load(int3(pixel, 0)).r;
+    // RGB separates interval production, radius-one cap selection, and completed G-buffer depth ownership.
+    return half3(
+        rawCount > 0u ? 1.0h : 0.0h,
+        cap.visible ? 1.0h : 0.0h,
+        cap.visible && cap.depth == depth ? 1.0h : 0.0h
+    );
+#else
+    return half3(0.0h);
+#endif
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

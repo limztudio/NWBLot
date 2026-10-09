@@ -25,11 +25,8 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     ray.TMax = tMax;
 
     NwbCausticHwPayload p;
-    p.worldPos = float3(0.0, 0.0, 0.0);
-    p.shadingNormal = float3(0.0, 0.0, 1.0);
-    p.transmission = float3(1.0, 1.0, 1.0);
-    p.t = tMax;
-    p.ior = 1.0;
+    p.normalAndDistance = float4(0.0, 0.0, 1.0, tMax);
+    p.transmissionAndIor = float4(1.0);
     p.hit = 0u;
     p.isRefractive = 0u;
 
@@ -38,11 +35,11 @@ NwbCausticHit nwbCausticTraceClosest(float3 origin, float3 direction, float tMin
     NwbCausticHit hit;
     hit.hit = (p.hit != 0u);
     hit.isRefractive = (p.isRefractive != 0u);
-    hit.t = p.t;
-    hit.ior = p.ior;
-    hit.worldPos = p.worldPos;
-    hit.shadingNormal = p.shadingNormal;
-    hit.transmission = half3(p.transmission);
+    hit.t = p.normalAndDistance.w;
+    hit.ior = p.transmissionAndIor.w;
+    hit.worldPos = hit.hit ? ray.Origin + p.normalAndDistance.w * ray.Direction : float3(0.0);
+    hit.shadingNormal = p.normalAndDistance.xyz;
+    hit.transmission = half3(p.transmissionAndIor.xyz);
     return hit;
 }
 

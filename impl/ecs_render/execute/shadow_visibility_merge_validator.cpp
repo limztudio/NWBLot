@@ -24,7 +24,7 @@ bool PreparedShadowVisibilityTasksSharePacket(
     if(tasks.combinedWavelet && (!tasks.combinedUpsample || !tasks.transparentTemporalMerge.valid()))
         return false;
     if(!tasks.opaque.valid())
-        return !tasks.combinedUpsample && !tasks.combinedWavelet && !tasks.combinedTemporal;
+        return !tasks.combinedUpsample && !tasks.combinedWavelet && !tasks.combinedTemporal && !tasks.diagnostics.valid();
     if(tasks.combinedUpsample ? tasks.opaqueResolve.valid() : !tasks.opaqueResolve.valid())
         return false;
     const Core::GpuTaskId required[] = {
@@ -37,6 +37,8 @@ bool PreparedShadowVisibilityTasksSharePacket(
     if(!tasks.combinedTemporal && (!tasks.opaqueFirstWavelet.valid() || !compiledPlan.tasksSharePacket(tasks.terminal, tasks.opaqueFirstWavelet)))
         return false;
     if(tasks.opaqueResolve.valid() && !compiledPlan.tasksSharePacket(tasks.terminal, tasks.opaqueResolve))
+        return false;
+    if(tasks.diagnostics.valid() && !compiledPlan.tasksSharePacket(tasks.terminal, tasks.diagnostics))
         return false;
     return !tasks.transparentTemporalMerge.valid() || compiledPlan.tasksSharePacket(tasks.terminal, tasks.transparentTemporalMerge);
 }
@@ -69,6 +71,7 @@ void ShadowVisibilityMergeValidator::validate(
             .transparentTrace = pipeline.m_deferredShadowVisibilityTransparentTraceTask,
             .transparentTemporalMerge = pipeline.m_deferredShadowVisibilityTransparentTemporalMergeTask,
             .transparentFirstWavelet = pipeline.m_deferredShadowVisibilityTransparentFirstWaveletTask,
+            .diagnostics = pipeline.m_deferredShadowVisibilityDiagnosticsTask,
             .combinedUpsample = pipeline.m_deferredShadowCombinedUpsample,
             .combinedWavelet = pipeline.m_deferredShadowCombinedWavelet,
             .combinedTemporal = pipeline.m_deferredShadowCombinedTemporal,

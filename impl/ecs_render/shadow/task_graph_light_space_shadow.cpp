@@ -5,6 +5,7 @@
 #include "task_graph_light_space_shadow.h"
 
 #include <impl/ecs_render/kernel/task_graph_resource_utils.h>
+#include <impl/ecs_render/kernel/task_graph_scheduling.h>
 #include <impl/ecs_render/kernel/timing_names.h>
 
 #include <core/graphics/runtime/runtime.h>
@@ -127,6 +128,41 @@ struct ShadeTask{
     }
 };
 
+struct DiagnosticTask{
+    static constexpr Core::GpuTaskCommandRequirements s_CommandRequirements = {
+        Core::GpuQueueCapability::Compute | Core::GpuQueueCapability::Transfer,
+    };
+
+    struct Payload{
+        const bool& shadowPrepared;
+        Core::BufferHandle context;
+        Core::BufferHandle readback;
+        LightSpaceShadowDiagnostics* diagnostics;
+        u32 frameIndex;
+    };
+
+    [[nodiscard]] static bool Record(const Payload& payload, Core::CommandList& commandList, const Core::GpuTaskRecordContext& context){
+        if(context.commandIrCapture)
+            return false;
+        if(!payload.shadowPrepared)
+            return true;
+        // The task's public state stays UAV; only this bounded copy temporarily reads the accumulated diagnostic word.
+        commandList.setBufferState(payload.context.get(), Core::ResourceStates::CopySource);
+        commandList.commitBarriers();
+        commandList.copyBuffer(*payload.readback, 0u, *payload.context, NWB_CSG_SHADOW_RAY_FAILURE_OFFSET, sizeof(u32));
+        commandList.setBufferState(payload.context.get(), Core::ResourceStates::UnorderedAccess);
+        commandList.commitBarriers();
+        return true;
+    }
+
+    static void Accepted(Payload& payload, const Core::QueueSubmissionToken& token)noexcept{
+        if(payload.shadowPrepared && payload.diagnostics && payload.diagnostics->readback == payload.readback){
+            payload.diagnostics->submission = token;
+            payload.diagnostics->acceptedFrame = payload.frameIndex;
+        }
+    }
+};
+
 struct CasterPayload{
     Core::GraphicsRuntime& graphics;
     const bool& shadowPrepared;
@@ -212,6 +248,49 @@ struct CaptureTask{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+Core::GpuTaskId DeclareLightSpaceShadowDiagnostics(
+    Core::GpuTaskGraph& graph,
+    const LightSpaceShadowGraphInputs& inputs,
+    const Core::GpuGraphResourceId context
+){
+    using namespace RendererTaskGraphDetail;
+    const auto& snapshot = inputs.snapshot;
+    if(!snapshot.ready || !snapshot.diagnostics || !snapshot.diagnosticReadback || !inputs.dependency.valid() || !context.valid())
+        return {};
+    const Core::GpuGraphResourceId readback = graph.importBuffer(snapshot.diagnosticReadback,
+        BufferResourceDesc(Name("render.light_space_shadow.diagnostics"), "CSG Shadow Diagnostics")
+            .setInitialState(Core::ResourceStates::CopyDest).setExternalFinalState(Core::ResourceStates::CopyDest));
+    if(!readback.valid())
+        return {};
+    const Core::GpuTaskResourceUse uses[]{
+        ReadWriteUse(context, Core::ResourceStates::UnorderedAccess),
+        WriteUse(readback, Core::ResourceStates::CopyDest),
+    };
+    Core::GpuTaskSchedulingHint scheduling;
+    scheduling.cost = Core::GpuTaskCostHint::Tiny;
+    scheduling.allowPacketMerge = true;
+    scheduling.mergeWithPrevious = true;
+    scheduling.allowMergeAcrossConsumerFrontier = true;
+    EnableSameFamilyComputeEffectRouting(scheduling);
+    EnableCrossFamilyComputeEffectRouting(scheduling);
+    Core::GpuTaskDesc desc;
+    desc
+        .setIdentity(Name("render.light_space_shadow.diagnostics"))
+        .setMarkerLabel("CSG Shadow Diagnostics")
+        .setScheduling(scheduling).setDependencies(&inputs.dependency, 1u)
+        .setExternalStateSources(inputs.stateSources, inputs.stateSourceCount)
+        .setResourceUses(uses, LengthOf(uses))
+    ;
+    return graph.addTask<__hidden_task_graph_light_space_shadow::DiagnosticTask>(desc,
+        __hidden_task_graph_light_space_shadow::DiagnosticTask::Payload{
+            inputs.shadowPrepared, snapshot.csgContext, snapshot.diagnosticReadback, snapshot.diagnostics, snapshot.diagnosticFrame,
+        });
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, const LightSpaceShadowGraphInputs& inputs){
     using namespace RendererTaskGraphDetail;
     const auto& snapshot = inputs.snapshot;
@@ -267,15 +346,37 @@ LightSpaceShadowGraph DeclareLightSpaceShadowMaps(Core::GpuTaskGraph& graph, con
     ;
     Core::GpuTaskId csgUpload;
     if(csg){
-        const Core::GpuUploadBlobId csgBytes = graph.copyUploadData(snapshot.csgContextBytes, snapshot.csgContextByteCount, alignof(u32));
+        if(!snapshot.diagnostics || snapshot.csgContextByteCount < NWB_CSG_RAY_CONTEXT_BYTES)
+            return {};
+        const bool initialize = !snapshot.diagnostics->contextInitialized.valid();
+        const usize prefixBytes = initialize ? snapshot.csgContextByteCount : NWB_CSG_SHADOW_RAY_FAILURE_OFFSET;
+        const Core::GpuUploadBlobId csgBytes = graph.copyUploadData(snapshot.csgContextBytes, prefixBytes, alignof(u32));
         if(!csgBytes.valid())
             return {};
         uploadDesc.setIdentity(Name("render.light_space_shadow.csg_upload")).setMarkerLabel("CSG Shadow Context Upload");
         csgUpload = graph.addUploadBufferTask(uploadDesc, Core::GpuUploadBufferTaskDesc{
             .source = csgBytes, .destination = result.csgContext, .finalState = Core::ResourceStates::Common,
+            .acceptedToken = initialize ? &snapshot.diagnostics->contextInitialized : nullptr,
         });
         if(!csgUpload.valid())
             return {};
+        if(!initialize){
+            // Retain accumulated failures across new captures until the bounded asynchronous readback observes them.
+            constexpr u32 s_PayloadOffset = NWB_CSG_SHADOW_RAY_FAILURE_OFFSET + sizeof(u32);
+            const Core::GpuUploadBlobId payload = graph.copyUploadData(
+                snapshot.csgContextBytes + s_PayloadOffset, snapshot.csgContextByteCount - s_PayloadOffset, alignof(u32)
+            );
+            if(!payload.valid())
+                return {};
+            uploadDesc.setIdentity(Name("render.light_space_shadow.csg_payload_upload")).setMarkerLabel("CSG Shadow Payload Upload")
+                .setDependencies(&csgUpload, 1u);
+            csgUpload = graph.addUploadBufferTask(uploadDesc, Core::GpuUploadBufferTaskDesc{
+                .source = payload, .destination = result.csgContext, .destinationOffsetBytes = s_PayloadOffset,
+                .finalState = Core::ResourceStates::Common,
+            });
+            if(!csgUpload.valid())
+                return {};
+        }
         uploadDesc.setIdentity(Name("render.light_space_shadow.view_upload")).setMarkerLabel("Light-Space View Upload")
             .setDependencies(&csgUpload, 1u);
     }

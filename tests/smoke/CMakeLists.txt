@@ -751,11 +751,14 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         endif()
 
         set(_nwb_csg_visible_runtime_root "${CMAKE_BINARY_DIR}/Testing/csg_visible_smoke_runtime/$<CONFIG>")
+        set(_nwb_csg_visible_generated_root "${CMAKE_BINARY_DIR}/Testing/csg_visible_generated/$<CONFIG>")
 
         nwb_declare_executable(nwb_csg_visible_smoke)
         target_sources(nwb_csg_visible_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/csg_visible_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/framebuffer_capture.cpp"
         )
+        target_compile_definitions(nwb_csg_visible_smoke PRIVATE NWB_SMOKE_ENABLE_SWAP_CHAIN_READBACK=1)
         nwb_configure_runtime_smoke_target(
             nwb_csg_visible_smoke
             "${_nwb_csg_visible_runtime_root}"
@@ -767,17 +770,22 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             LIST_DIRECTORIES false
             "${PROJECT_SOURCE_DIR}/impl/assets/*"
             "${CMAKE_CURRENT_LIST_DIR}/assets/*"
+            "${CMAKE_CURRENT_LIST_DIR}/csg_visible_assets/*"
         )
 
         set(_nwb_csg_visible_asset_stamp "${_nwb_csg_visible_runtime_root}/res/.nwb_csg_visible_assets_$<CONFIG>.stamp")
         add_custom_command(
             OUTPUT "${_nwb_csg_visible_asset_stamp}"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "${_nwb_csg_visible_runtime_root}/res"
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/prepare_fixture_asset_root.py"
+                --output-root "${_nwb_csg_visible_generated_root}"
+                --source-root "${CMAKE_CURRENT_LIST_DIR}/assets"
+                --source-root "${CMAKE_CURRENT_LIST_DIR}/csg_visible_assets"
             COMMAND "${Python3_EXECUTABLE}" "${PROJECT_SOURCE_DIR}/pipeline/launch.py" --skip-build
                 --tool-directory "$<TARGET_FILE_DIR:nwb_asset_builder>"
                 --repo-root "${PROJECT_SOURCE_DIR}"
                 --asset-root "impl/assets"
-                --asset-root "tests/smoke/assets"
+                --asset-root "${_nwb_csg_visible_generated_root}"
                 --output-directory "${_nwb_csg_visible_runtime_root}/res"
                 --cache-directory "${_nwb_smoke_asset_cache_directory}"
                 --configuration "$<CONFIG>"
@@ -785,6 +793,7 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             DEPENDS
                 nwb_dependency_computer nwb_asset_builder nwb_asset_gatherer
                 "${PROJECT_SOURCE_DIR}/pipeline/launch.py"
+                "${CMAKE_CURRENT_LIST_DIR}/prepare_fixture_asset_root.py"
                 ${_nwb_csg_visible_asset_inputs}
             WORKING_DIRECTORY "${NWB_OUTPUT_ROOT}"
             COMMENT "Cooking NWB CSG visible smoke assets for $<CONFIG>..."
@@ -828,8 +837,54 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "--reject-log-message" "failed to resolve shader"
         )
 
+        function(nwb_add_csg_temporal_smoke TEST_SUFFIX VIEW MOTION ROUTE FRAME_INTERVAL)
+            set(_nwb_csg_temporal_check "--check-quality")
+            if(VIEW MATCHES "^(normal|position)$")
+                set(_nwb_csg_temporal_check "--check-geometry")
+            elseif(VIEW STREQUAL "cap_state")
+                set(_nwb_csg_temporal_check "--check-cap-state")
+            elseif(VIEW STREQUAL "span_state")
+                set(_nwb_csg_temporal_check "--check-spans")
+            endif()
+            set(_nwb_csg_temporal_logserver_args)
+            if(TARGET nwb_logserver)
+                set(_nwb_csg_temporal_logserver_args "--logserver-executable" "$<TARGET_FILE:nwb_logserver>")
+            endif()
+            set(_nwb_csg_temporal_test "nwb_csg_gi_${TEST_SUFFIX}_smoke")
+            add_test(NAME "${_nwb_csg_temporal_test}"
+                COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_gi_temporal_smoke.py"
+                    "--executable" "$<TARGET_FILE:nwb_csg_visible_smoke>"
+                    "--working-directory" "${_nwb_csg_visible_runtime_root}"
+                    "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_gi_${TEST_SUFFIX}"
+                    "--view" "${VIEW}" "--motion" "${MOTION}" "--route" "${ROUTE}"
+                    "--frame-interval" "${FRAME_INTERVAL}" "${_nwb_csg_temporal_check}" "--overwrite" "--gpu-validation"
+                    ${_nwb_csg_temporal_logserver_args} ${ARGN}
+            )
+            set_tests_properties("${_nwb_csg_temporal_test}" PROPERTIES
+                RESOURCE_LOCK nwb_display
+                SKIP_RETURN_CODE 77
+                TIMEOUT 180
+            )
+        endfunction()
+
+        nwb_add_csg_temporal_smoke(temporal_full full static natural 8)
+        nwb_add_csg_temporal_smoke(consecutive_full full static natural 1)
+        nwb_add_csg_temporal_smoke(consecutive_direct direct static natural 1)
+        nwb_add_csg_temporal_smoke(consecutive_indirect indirect static natural 1)
+        nwb_add_csg_temporal_smoke(consecutive_software full static software 1)
+        nwb_add_csg_temporal_smoke(animated full animated natural 8)
+        nwb_add_csg_temporal_smoke(animated_software full animated software 8)
+        nwb_add_csg_temporal_smoke(temporal_lagged full static natural 8 "--lagged-lighting")
+        nwb_add_csg_temporal_smoke(geometry_normal normal static natural 8)
+        nwb_add_csg_temporal_smoke(geometry_position position static natural 8)
+        nwb_add_csg_temporal_smoke(cap_state cap_state static natural 8)
+        nwb_add_csg_temporal_smoke(cap_state_software cap_state static software 8)
+        nwb_add_csg_temporal_smoke(overlapping_spans span_state static natural 8 "--overlapping")
+        nwb_add_csg_temporal_smoke(overlapping_spans_software span_state static software 8 "--overlapping")
+
         unset(_nwb_csg_visible_asset_stamp)
         unset(_nwb_csg_visible_runtime_root)
+        unset(_nwb_csg_visible_generated_root)
         unset(_nwb_csg_visible_asset_inputs)
 
         set(_nwb_csg_skinned_visible_runtime_root "${CMAKE_BINARY_DIR}/Testing/csg_skinned_visible_smoke_runtime/$<CONFIG>")

@@ -61,7 +61,12 @@ struct ReflectionFrameParameters{
     NWB_REFLECTION_FRAME_FLOAT_FIELDS(NWB_REFLECTION_CPU_FLOAT_FIELD)
 #undef NWB_REFLECTION_CPU_FLOAT_FIELD
 };
-static_assert(sizeof(ReflectionFrameParameters) == 192u);
+static_assert(sizeof(ReflectionFrameParameters) == 176u);
+static_assert(offsetof(ReflectionFrameParameters, opaqueSpecularSlot) == 16u);
+static_assert(offsetof(ReflectionFrameParameters, maxRayDistance) == 128u);
+static_assert(offsetof(ReflectionFrameParameters, environmentTopR) == 140u);
+static_assert(offsetof(ReflectionFrameParameters, environmentBottomR) == 152u);
+static_assert(offsetof(ReflectionFrameParameters, screenThickness) == 164u);
 
 struct ReflectionDepthPyramidMip{
     Name taskIdentity = s_NameNone;

@@ -15,18 +15,16 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-#define NWB_UI_OUTPUT_PUSH_CONSTANTS_BYTE_SIZE 16u
+#define NWB_UI_OUTPUT_PUSH_CONSTANTS_BYTE_SIZE 12u
 #define NWB_UI_OUTPUT_PUSH_CONSTANTS_TEXTURE_SLOT_BYTE_OFFSET 0u
 #define NWB_UI_OUTPUT_PUSH_CONSTANTS_SAMPLER_SLOT_BYTE_OFFSET 4u
 #define NWB_UI_OUTPUT_PUSH_CONSTANTS_PRESENTATION_MODE_BYTE_OFFSET 8u
-#define NWB_UI_OUTPUT_PUSH_CONSTANTS_RESERVED_BYTE_OFFSET 12u
 
 // Sample the premultiplied linear UI layer over black, then apply the selected output transfer once.
 #define NWB_UI_OUTPUT_PUSH_CONSTANTS_FIELDS(UINT_FIELD) \
     UINT_FIELD(textureSlot, 0xffffffffu) \
     UINT_FIELD(samplerSlot, 0xffffffffu) \
-    UINT_FIELD(presentationMode, NWB_UI_PRESENTATION_SDR) \
-    UINT_FIELD(reserved, 0u)
+    UINT_FIELD(presentationMode, NWB_UI_PRESENTATION_SDR)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

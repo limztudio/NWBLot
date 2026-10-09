@@ -64,14 +64,10 @@ uint nwbMeshFrameViewHeapSlot(){
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Closest-hit payload mirrors NwbCausticHit (tint float3 + bools-as-uint for stable packing; 52 bytes -> MaxPayload 64).
-// Hit fills all fields, miss clears `hit`; raygen converts back.
+// Keep full-precision transport in two vector lanes; raygen reconstructs world position from the ray and returned distance.
 struct NwbCausticHwPayload{
-    float3 worldPos;
-    float3 shadingNormal;
-    float3 transmission;
-    float t;
-    float ior;
+    float4 normalAndDistance;
+    float4 transmissionAndIor;
     uint hit;
     uint isRefractive;
 };

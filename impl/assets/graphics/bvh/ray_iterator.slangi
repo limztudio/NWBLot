@@ -1,0 +1,99 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_BVH_RAY_ITERATOR_SLANGI
+#define NWB_GRAPHICS_BVH_RAY_ITERATOR_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "ray_intersect.slangi"
+#include "../bindless/bindless_heap_bvh.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbBvhRayIterator<let capacity : uint>{
+    float3 origin;
+    float3 direction;
+    float3 inverseDirection;
+    float minimum;
+    float maximum;
+    uint nodeSlot;
+    uint stack[capacity];
+    uint stackPointer;
+    bool overflow;
+};
+
+NwbBvhRayIterator<capacity> nwbBvhRayBeginWalk<let capacity : uint>(
+    const uint nodeSlot,
+    const float3 origin,
+    const float3 direction,
+    const float minimum,
+    const float maximum
+){
+    NwbBvhRayIterator<capacity> iterator;
+    iterator.origin = origin;
+    iterator.direction = direction;
+    iterator.inverseDirection = nwbBvhSafeInvDir(direction);
+    iterator.minimum = minimum;
+    iterator.maximum = maximum;
+    iterator.nodeSlot = nodeSlot;
+    iterator.stack[0u] = 0u;
+    iterator.stackPointer = 1u;
+    iterator.overflow = false;
+    return iterator;
+}
+
+bool nwbBvhRayNextLeaf<let capacity : uint>(__ref NwbBvhRayIterator<capacity> iterator, out uint primitive){
+    primitive = 0u;
+    [loop]
+    while(iterator.stackPointer > 0u){
+        --iterator.stackPointer;
+        NwbBvhNode node = nwbHeapBvhNodes(iterator.nodeSlot)[iterator.stack[iterator.stackPointer]];
+        if(!nwbBvhRayAabb(iterator.origin, iterator.inverseDirection, iterator.minimum, iterator.maximum, node.aabbMin, node.aabbMax, 0.0))
+            continue;
+        [loop]
+        while(true){
+            if(nwbBvhNodeIsLeaf(node)){
+                primitive = nwbBvhLeafPrimitive(node);
+                return true;
+            }
+            const NwbBvhNode leftNode = nwbHeapBvhNodes(iterator.nodeSlot)[node.leftChild];
+            const uint right = nwbBvhNodeRightChildIndex(node);
+            const NwbBvhNode rightNode = nwbHeapBvhNodes(iterator.nodeSlot)[right];
+            NwbBvhNode descendNode;
+            uint farChild;
+            bool bothHit;
+            if(!nwbBvhPickNearChild(
+                iterator.origin, iterator.inverseDirection, iterator.minimum, iterator.maximum,
+                node, leftNode, right, rightNode, descendNode, farChild, bothHit
+            ))
+                break;
+            if(bothHit){
+                if(iterator.stackPointer == capacity){
+                    iterator.overflow = true;
+                    iterator.stackPointer = 0u;
+                    return false;
+                }
+                iterator.stack[iterator.stackPointer] = farChild;
+                ++iterator.stackPointer;
+            }
+            node = descendNode;
+        }
+    }
+    return false;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

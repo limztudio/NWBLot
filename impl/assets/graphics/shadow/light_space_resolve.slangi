@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -22,6 +24,7 @@
 #define g_NwbSwShadowPush g_NwbLightSpacePush
 #define g_NwbSwShadowMaterialContextSlots nwbHeapShadowMaterialContextSlots(g_NwbLightSpacePush.materialContextSlot)
 #define NWB_LIGHT_SPACE_DEFERRED nwbHeapDeferredBindlessResources(g_NwbLightSpacePush.deferredResourcesSlot)
+#include "light_space_receiver.slangi"
 #define NWB_SCENE_SHADING_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.z
 #define NWB_SCENE_LIGHT_LIST_HEAP_SLOT NWB_LIGHT_SPACE_DEFERRED.avboitSlots.w
 #include "../scene/buffer.slangi"
@@ -113,6 +116,10 @@ float nwbLightSpaceOpaqueDepth(const NwbLightSpaceView view, const uint2 pixel){
 
 bool nwbLightSpaceNearestBlocker(const NwbLightSpaceView view, const uint2 pixel, const float receiverDepth, out float blocker){
     blocker = asfloat(0x7f7fffffu);
+#if NWB_LIGHT_SPACE_CSG_ENABLED
+    if(nwbCsgShadowEnabled() && nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(nwbLightSpacePixelIndex(view, pixel) * 4u) == NWB_CSG_SHADOW_CONSERVATIVE_COUNT)
+        return false;
+#endif
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
     float depth = asfloat(0x7f7fffffu);
     if(!nwbCsgShadowHardwareCompose())
@@ -124,10 +131,6 @@ bool nwbLightSpaceNearestBlocker(const NwbLightSpaceView view, const uint2 pixel
 #else
     const uint pixelIndex = nwbLightSpacePixelIndex(view, pixel);
     const uint count = nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * 4u);
-    if(nwbCsgShadowEnabled() && count == NWB_CSG_SHADOW_CONSERVATIVE_COUNT){
-        blocker = 0.0;
-        return true;
-    }
     if(count > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL)
         return false;
     for(uint index = 0u; index < count; ++index){
@@ -217,6 +220,10 @@ void nwbLightSpaceIntegrateInstance(
 
 bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const float receiverDepth, const float projectedDepth, out half3 visibility){
     visibility = half3(1.0h);
+#if NWB_LIGHT_SPACE_CSG_ENABLED
+    if(nwbCsgShadowEnabled() && nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(nwbLightSpacePixelIndex(view, pixel) * 4u) == NWB_CSG_SHADOW_CONSERVATIVE_COUNT)
+        return false;
+#endif
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
     float depth = 1.0;
     if(!nwbCsgShadowHardwareCompose())
@@ -229,10 +236,6 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
 #else
     const uint pixelIndex = nwbLightSpacePixelIndex(view, pixel);
     const uint count = nwbHeapRawBuffer(g_NwbLightSpacePush.countsSlot).Load(pixelIndex * 4u);
-    if(nwbCsgShadowEnabled() && count == NWB_CSG_SHADOW_CONSERVATIVE_COUNT){
-        visibility = half3(0.0h);
-        return true;
-    }
     if(count > NWB_LIGHT_SPACE_EVENTS_PER_TEXEL)
         return false;
     // The shade producer sorts every completed texel by instance ASC, depth DESC, primitive ASC.
@@ -267,7 +270,15 @@ bool nwbLightSpaceSample(const NwbLightSpaceView view, const uint2 pixel, const 
 }
 
 // A finite blocker search estimates the footprint of the real light source.
-bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, const float3 receiverNormal, const NwbSceneLight light, const NwbLightSpaceView centerView, out float distance){
+bool nwbLightSpaceBlockerDistance(
+    const uint lightIndex,
+    const float3 origin,
+    const float3 receiverNormal,
+    const float3 receiverPositionError,
+    const NwbSceneLight light,
+    const NwbLightSpaceView centerView,
+    out float distance
+){
     distance = 0.0;
     const float receiverDepth = nwbLightSpaceLinearDepth(centerView, origin);
     const bool point = (centerView.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u;
@@ -282,7 +293,7 @@ bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, co
             return false;
         float comparisonDepth = receiverDepth;
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
-        if(!nwbLightSpaceReceiverDepth(centerView, pixel, origin, receiverNormal, depth, comparisonDepth))
+        if(!nwbLightSpaceReceiverDepth(centerView, pixel, origin, receiverNormal, receiverPositionError, depth, comparisonDepth))
             return false;
 #endif
         float blocker;
@@ -335,7 +346,7 @@ bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, co
                 if(!nwbLightSpaceReceiverEstimateDepth(view, pixel, origin, receiverNormal, comparisonDepth))
                     continue;
             }
-            else if(!nwbLightSpaceReceiverDepth(view, pixel, origin, receiverNormal, depth, comparisonDepth))
+            else if(!nwbLightSpaceReceiverDepth(view, pixel, origin, receiverNormal, receiverPositionError, depth, comparisonDepth))
                 return false;
 #endif
             float blocker;
@@ -364,7 +375,15 @@ bool nwbLightSpaceBlockerDistance(const uint lightIndex, const float3 origin, co
     return isfinite(distance);
 }
 
-bool nwbLightSpaceEvaluate(const uint lightIndex, const float3 origin, const float3 receiverNormal, const float3 direction, const float blockerDistance, out half3 visibility){
+bool nwbLightSpaceEvaluate(
+    const uint lightIndex,
+    const float3 origin,
+    const float3 receiverNormal,
+    const float3 receiverPositionError,
+    const float3 direction,
+    const float blockerDistance,
+    out half3 visibility
+){
     visibility = half3(1.0h);
     const float3 samplePosition = origin + direction * blockerDistance;
     NwbLightSpaceView view;
@@ -379,7 +398,7 @@ bool nwbLightSpaceEvaluate(const uint lightIndex, const float3 origin, const flo
         return false;
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
     float receiverDepth;
-    if(!nwbLightSpaceReceiverDepth(view, pixel, origin, receiverNormal, projectedDepth, receiverDepth))
+    if(!nwbLightSpaceReceiverDepth(view, pixel, origin, receiverNormal, receiverPositionError, projectedDepth, receiverDepth))
         return false;
     return nwbLightSpaceSample(view, pixel, receiverDepth, projectedDepth, visibility);
 #else

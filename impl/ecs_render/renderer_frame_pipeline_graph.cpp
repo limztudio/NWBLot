@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -549,9 +551,20 @@ void RendererFramePipeline::buildDeferredLightingTaskGraph(
     reflectionContentStamp.lighting = *graphicsPrefixResult;
 
     // Freeze shadow routing after prefix handoff so transparent folding never sees the prior mask.
-    const RayTracingShadowVisibilityGraphPlanSnapshot rayTracingShadowVisibilityPlan =
+    RayTracingShadowVisibilityGraphPlanSnapshot rayTracingShadowVisibilityPlan =
         m_raytracingSystem.snapshotShadowVisibilityGraphPlan(declaresHardwareCaustics)
     ;
+    if(rayTracingShadowVisibilityPlan.lightSpace.ready && hasOpaqueCsgFrameWork){
+        if(!csgResources.bindingValid() || !frameBindings.meshView.bindingValid()){
+            NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not bind the current direct-shadow receiver cap state"));
+            return;
+        }
+        rayTracingShadowVisibilityPlan.lightSpace.push.csgFlags |= NWB_CSG_SHADOW_FLAG_CURRENT_RECEIVER_CAPS;
+        rayTracingShadowVisibilityPlan.lightSpace.receiverView = frameBindings.meshView.buffer;
+        rayTracingShadowVisibilityPlan.lightSpace.push.receiverViewSlot = frameBindings.meshView.heapHandle.slot();
+        rayTracingShadowVisibilityPlan.lightSpace.push.receiverCsgSampleStateSlot = csgResources.intervalSampleStateHeapHandle.slot();
+        rayTracingShadowVisibilityPlan.lightSpace.receiverCsgSampleState = csgResources.intervalSampleState;
+    }
     const RayTracingSceneGraphResources sceneResources = m_raytracingSystem.snapshotSceneGraphResources();
     RayTracingSceneGraphReads sceneReads;
     if(rayTracingShadowVisibilityPlan.hardwareTransparentTrace){

@@ -1,0 +1,128 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_CSG_SHADOW_RAY_OPTICS_SLANGI
+#define NWB_GRAPHICS_SHADOW_CSG_SHADOW_RAY_OPTICS_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../bvh/ray_vertex_attrib.slangi"
+#include "shadow_surface.slangi"
+#include "shadow/generated/surface_dispatch.slangi"
+#include "shadow_integrate.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+bool nwbCsgShadowRayBoundaryOptics(
+    const uint contextSlot,
+    const uint materialSlot,
+    const uint instanceIndex,
+    const NwbCsgRayBoundary boundary,
+    const float3 origin,
+    const float3 direction,
+    out half3 absorption,
+    out half transmission
+){
+    absorption = half3(0.0h);
+    transmission = half(1.0h);
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
+    NwbShadowHit hit = (NwbShadowHit)0;
+    hit.meshInstanceIndex = material.meshInstanceIndex;
+    hit.surfaceDispatchId = material.surfaceDispatchId;
+    hit.materialConstantByteOffset = material.materialConstantByteOffset;
+    hit.worldPosition = origin + direction * boundary.distance;
+    hit.rayDirection = direction;
+    half cosine;
+    if(boundary.cutter != NWB_CSG_RAY_INVALID_INDEX){
+        if(!nwbCsgRayBoundaryNormal(contextSlot, boundary, hit.worldPosition, hit.worldNormal))
+            return false;
+        cosine = nwbShadowCosineToRay(hit.worldNormal, direction);
+    }
+    else{
+        const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
+        if(boundary.primitive >= instance.primitiveCount)
+            return false;
+        const uint base = boundary.primitive * NWB_RAYTRACE_TRIANGLE_CORNER_COUNT;
+        const NwbRayTraceVertexAttrib a0 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4(base * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+        const NwbRayTraceVertexAttrib a1 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4((base + 1u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+        const NwbRayTraceVertexAttrib a2 = nwbRayTraceDecodeVertexAttrib(nwbHeapRawBuffer(material.attributeSlot).Load4((base + 2u) * NWB_RAYTRACE_VERTEX_ATTRIBUTE_STRIDE_BYTES));
+        const float3 weights = float3(1.0 - boundary.barycentrics.x - boundary.barycentrics.y, boundary.barycentrics);
+        hit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
+        const float3 shadingNormal = float3(a0.normal) * weights.x + float3(a1.normal) * weights.y + float3(a2.normal) * weights.z;
+        hit.worldNormal = nwbRayTraceNormalizeGeometryVector(nwbSwBvhTransformNormal(instance, shadingNormal));
+        const float3 geometricNormal = nwbRayTraceTriangleGeometricNormal(material, boundary.primitive, nwbCsgRayWorldToObject(instance));
+        if(dot(hit.worldNormal, hit.worldNormal) == 0.0 || dot(geometricNormal, geometricNormal) == 0.0)
+            return false;
+        cosine = lerp(nwbShadowCosineToRay(geometricNormal, direction), nwbShadowCosineToRay(hit.worldNormal, direction),
+            nwbShadowSmoothNormalWeight(float3(a0.normal), float3(a1.normal), float3(a2.normal)));
+    }
+    if(!all(isfinite(hit.worldPosition)) || !all(isfinite(hit.worldNormal)) || !all(isfinite(hit.uv0)))
+        return false;
+    const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, hit);
+    absorption = nwbShadowAbsorptionCoefficient(surface.shadowAbsorptionTint);
+    transmission = nwbShadowFresnelTransmittedFraction(surface.refractionIor, cosine);
+    return all(isfinite(float3(absorption))) && isfinite(float(transmission));
+}
+
+struct NwbCsgShadowRayOpenVisitor : NwbCsgRayOpenVisitor{
+    uint contextSlot;
+    uint materialSlot;
+    uint instanceIndex;
+    float3 origin;
+    float3 direction;
+    NwbShadowInstanceOptics optics;
+    bool hasAbsorption;
+
+    [mutating] uint visit(
+        const uint primitive,
+        const float distance,
+        const float2 barycentrics,
+        const float minimum,
+        const float maximum,
+        __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS],
+        const uint cutCount
+    ){
+        if(!nwbCsgRayOpenBoundaryVisible(distance, minimum, maximum, cuts, cutCount))
+            return 0u;
+        NwbCsgRayBoundary boundary = (NwbCsgRayBoundary)0;
+        boundary.primitive = primitive;
+        boundary.cutter = NWB_CSG_RAY_INVALID_INDEX;
+        boundary.distance = distance;
+        boundary.barycentrics = barycentrics;
+        half3 absorption;
+        half transmission;
+        if(!nwbCsgShadowRayBoundaryOptics(contextSlot, materialSlot, instanceIndex, boundary, origin, direction, absorption, transmission))
+            return NWB_CSG_RAY_FAILURE_TOPOLOGY;
+        for(uint index = 0u; index < optics.crossingCount; ++index){
+            if(nwbShadowCrossingMatchesEndpoint(distance, optics.crossingT[index]))
+                return 0u;
+        }
+        if(optics.crossingCount == (uint)NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER)
+            return NWB_CSG_RAY_FAILURE_CAPACITY;
+        if(!hasAbsorption){
+            optics.absorptionCoeff = float3(absorption);
+            hasAbsorption = true;
+        }
+        optics.interfaceTransmittance *= transmission;
+        optics.tMin = optics.crossingCount == 0u ? distance : min(optics.tMin, distance);
+        optics.tMax = optics.crossingCount == 0u ? distance : max(optics.tMax, distance);
+        optics.crossingT[optics.crossingCount] = distance;
+        ++optics.crossingCount;
+        return 0u;
+    }
+};
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

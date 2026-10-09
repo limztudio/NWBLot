@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -23,6 +25,7 @@ struct NwbCsgIntervalPeelEntry{
 // The standalone peel dispatch has no mesh draw constants. Its view UniformBuffer slot therefore rides in its own push payload, while b13 remains an intentional local-layout gap.
 #define NWB_MESH_VIEW_BUFFER_HEAP_SLOT (g_NwbCsgIntervalDispatchPushConstants.resourceSlots[NWB_CSG_INTERVAL_DISPATCH_PUSH_RESOURCE_SLOT_VIEW])
 #include "../bindless/bindless_heap_mesh.slangi"
+#include "../mesh/view_ray.slangi"
 
 // Local bindings 0..2 are ABI gaps. The CSG context selects target-generation Texture2DArray UAVs from the StorageImage heap; the device's required formatless-storage-image support permits the two float formats.
 #define g_NwbCsgBackCapNormal (nwbHeapStorageImage2DArrayFloat4(g_NwbCsgBindlessResources.csgPeelSlots.x))
@@ -63,22 +66,21 @@ float nwbCsgSafeHomogeneousW(const float w){
     return w < 0.0 ? -NWB_CSG_HOMOGENEOUS_W_EPSILON : NWB_CSG_HOMOGENEOUS_W_EPSILON;
 }
 
-float3 nwbCsgClipToWorldPosition(const float4 clipPosition){
-    const float4 worldPosition = mul(g_NwbMeshClipToWorld, clipPosition);
-    return worldPosition.xyz / nwbCsgSafeHomogeneousW(worldPosition.w);
-}
-
 float nwbCsgWorldToDepth(const float3 worldPosition){
     const float4 clipPosition = mul(g_NwbMeshWorldToClip, float4(worldPosition, 1.0));
     return clipPosition.z / nwbCsgSafeHomogeneousW(clipPosition.w);
 }
 
 void nwbCsgBuildPixelRay(const uint2 pixel, out float3 outRayBegin, out float3 outRayEnd){
-    const float2 frameSize = float2(nwbCsgIntervalPeelFrameWidth(), nwbCsgIntervalPeelFrameHeight());
-    const float2 uv = (float2(pixel) + 0.5) / frameSize;
-    const float2 ndc = float2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
-    outRayBegin = nwbCsgClipToWorldPosition(float4(ndc, 0.0, 1.0));
-    outRayEnd = nwbCsgClipToWorldPosition(float4(ndc, 1.0, 1.0));
+    const uint2 extent = uint2(nwbCsgIntervalPeelFrameWidth(), nwbCsgIntervalPeelFrameHeight());
+    const float3 direction = nwbMeshViewRayDirection(nwbMeshViewPixelNdc(pixel, extent));
+    const float4 camera = float4(g_NwbMeshCameraPosition.xyz, 1.0);
+    const float4 nearPlane = g_NwbMeshFrustumPlanes[4];
+    const float4 farPlane = g_NwbMeshFrustumPlanes[5];
+    const float nearDistance = -dot(nearPlane, camera) / dot(nearPlane.xyz, direction);
+    const float farDistance = -dot(farPlane, camera) / dot(farPlane.xyz, direction);
+    outRayBegin = camera.xyz + direction * nearDistance;
+    outRayEnd = camera.xyz + direction * farDistance;
 }
 
 uint nwbCsgPackIntervalId(const uint receiverIndex){

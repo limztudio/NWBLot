@@ -20,7 +20,6 @@ struct NwbCausticGeometryDownsamplePushConstants{
     uint worldPositionSlot;
     uint depthSlot;
     uint outputStorageSlot;
-    uint pad1;
 };
 
 [[vk::push_constant]]

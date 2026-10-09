@@ -35,6 +35,7 @@ struct PreparedShadowVisibilityTasks{
     Core::GpuTaskId transparentTrace;
     Core::GpuTaskId transparentTemporalMerge;
     Core::GpuTaskId transparentFirstWavelet;
+    Core::GpuTaskId diagnostics;
     bool combinedUpsample = false;
     bool combinedWavelet = false;
     bool combinedTemporal = false;

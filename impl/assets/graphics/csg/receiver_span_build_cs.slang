@@ -77,21 +77,21 @@ NwbCsgReceiverSurfaceEvent nwbCsgReceiverSpanBuildLoadEvent(const uint2 pixel, c
 }
 
 void nwbCsgReceiverSpanBuildSortEvents(
-    inout NwbCsgReceiverSurfaceEvent events[NWB_CSG_RECEIVER_EVENT_LAYER_COUNT],
+    __ref uint3 events[NWB_CSG_RECEIVER_EVENT_LAYER_COUNT],
     const uint eventCount
 ){
-    [unroll]
-    for(uint eventIndex = 1u; eventIndex < NWB_CSG_RECEIVER_EVENT_LAYER_COUNT; ++eventIndex){
-        if(eventIndex >= eventCount)
-            return;
-
-        const NwbCsgReceiverSurfaceEvent candidate = events[eventIndex];
-        int insertIndex = int(eventIndex) - 1;
-        while(insertIndex >= 0 && candidate.depth < events[uint(insertIndex)].depth){
-            events[uint(insertIndex) + 1u] = events[uint(insertIndex)];
-            --insertIndex;
+    [loop]
+    for(uint eventIndex = 1u; eventIndex < eventCount; ++eventIndex){
+        const uint3 candidate = events[eventIndex];
+        uint destination = eventIndex;
+        while(destination > 0u){
+            const uint3 predecessor = events[destination - 1u];
+            if(!(candidate.x < predecessor.x || (candidate.x == predecessor.x && asfloat(candidate.z) < asfloat(predecessor.z))))
+                break;
+            events[destination] = predecessor;
+            --destination;
         }
-        events[uint(insertIndex + 1)] = candidate;
+        events[destination] = candidate;
     }
 }
 
@@ -119,37 +119,36 @@ void nwbCsgReceiverSpanBuildWriteSpan(
 void nwbCsgReceiverSpanBuildPairEvents(
     const uint2 pixel,
     const uint spanLayerCount,
-    const NwbCsgReceiverSurfaceEvent events[NWB_CSG_RECEIVER_EVENT_LAYER_COUNT],
+    __constref uint3 events[NWB_CSG_RECEIVER_EVENT_LAYER_COUNT],
     const uint eventCount,
     inout uint inOutSpanCount,
     inout uint inOutFlags
 ){
-    // Winding/parity walk over depth-sorted events (not front-back pairing): inside wherever fronts exceed backs.
-    // Merges nested layers into the enclosing span; interleaved foreign events skipped, unmatched backs flagged ambiguous.
+    // Each receiver has an independent winding walk; nested shells merge only within that receiver.
     uint winding = 0u;
     float spanEnterDepth = 0.0;
     uint spanReceiverIndex = 0u;
     [loop]
-    for(uint eventIndex = 0u; eventIndex < NWB_CSG_RECEIVER_EVENT_LAYER_COUNT; ++eventIndex){
-        if(eventIndex >= eventCount)
-            break;
-
-        const NwbCsgReceiverSurfaceEvent surfaceEvent = events[eventIndex];
-        const bool isFrontFace = surfaceEvent.faceSign == NWB_CSG_RECEIVER_EVENT_FACE_FRONT;
+    for(uint eventIndex = 0u; eventIndex < eventCount; ++eventIndex){
+        const uint3 surfaceEvent = events[eventIndex];
+        if(eventIndex == 0u || surfaceEvent.x != spanReceiverIndex){
+            if(winding != 0u)
+                inOutFlags |= NWB_CSG_RECEIVER_SPAN_AMBIGUOUS_FLAG;
+            winding = 0u;
+            spanReceiverIndex = surfaceEvent.x;
+        }
+        const float depth = asfloat(surfaceEvent.z);
+        const bool isFrontFace = surfaceEvent.y == NWB_CSG_RECEIVER_EVENT_FACE_FRONT;
 
         if(winding == 0u){
             if(isFrontFace){
-                spanEnterDepth = surfaceEvent.depth;
-                spanReceiverIndex = surfaceEvent.receiverIndex;
+                spanEnterDepth = depth;
                 winding = 1u;
             }
             else
                 inOutFlags |= NWB_CSG_RECEIVER_SPAN_AMBIGUOUS_FLAG;
             continue;
         }
-
-        if(surfaceEvent.receiverIndex != spanReceiverIndex)
-            continue;
 
         if(isFrontFace){
             ++winding;
@@ -160,13 +159,13 @@ void nwbCsgReceiverSpanBuildPairEvents(
         if(winding != 0u)
             continue;
 
-        if(surfaceEvent.depth > spanEnterDepth)
+        if(depth > spanEnterDepth)
             nwbCsgReceiverSpanBuildWriteSpan(
                 pixel,
                 spanLayerCount,
                 spanReceiverIndex,
                 spanEnterDepth,
-                surfaceEvent.depth,
+                depth,
                 inOutSpanCount,
                 inOutFlags
             );
@@ -176,6 +175,44 @@ void nwbCsgReceiverSpanBuildPairEvents(
 
     if(winding != 0u)
         inOutFlags |= NWB_CSG_RECEIVER_SPAN_AMBIGUOUS_FLAG;
+}
+
+bool nwbCsgReceiverSpanBuildPairSingleReceiver(
+    const uint2 pixel,
+    const uint spanLayerCount,
+    inout uint inOutSpanCount,
+    inout uint inOutFlags
+){
+    const NwbCsgReceiverSurfaceEvent first = nwbCsgReceiverSpanBuildLoadEvent(pixel, 0u);
+    const NwbCsgReceiverSurfaceEvent second = nwbCsgReceiverSpanBuildLoadEvent(pixel, 1u);
+    if(
+        first.receiverIndex != second.receiverIndex
+        || first.faceSign > NWB_CSG_RECEIVER_EVENT_FACE_FRONT
+        || second.faceSign > NWB_CSG_RECEIVER_EVENT_FACE_FRONT
+    )
+        return false;
+
+    // A closed receiver's two events need no local array or sort, regardless of raster arrival order.
+    if(first.faceSign == second.faceSign){
+        inOutFlags |= NWB_CSG_RECEIVER_SPAN_AMBIGUOUS_FLAG;
+        return true;
+    }
+    const bool firstFront = first.faceSign == NWB_CSG_RECEIVER_EVENT_FACE_FRONT;
+    const float enterDepth = firstFront ? first.depth : second.depth;
+    const float exitDepth = firstFront ? second.depth : first.depth;
+    if(exitDepth > enterDepth)
+        nwbCsgReceiverSpanBuildWriteSpan(
+            pixel,
+            spanLayerCount,
+            first.receiverIndex,
+            enterDepth,
+            exitDepth,
+            inOutSpanCount,
+            inOutFlags
+        );
+    else
+        inOutFlags |= NWB_CSG_RECEIVER_SPAN_AMBIGUOUS_FLAG;
+    return true;
 }
 
 
@@ -198,16 +235,20 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     const uint spanLayerCount = nwbCsgReceiverSpanBuildSpanLayerCount();
     const uint eventCount = nwbCsgReceiverSpanBuildLoadEventCount(pixel, eventLayerCount, flags);
 
-    NwbCsgReceiverSurfaceEvent events[NWB_CSG_RECEIVER_EVENT_LAYER_COUNT];
-    [unroll]
-    for(uint eventIndex = 0u; eventIndex < NWB_CSG_RECEIVER_EVENT_LAYER_COUNT; ++eventIndex){
-        if(eventIndex < eventCount)
-            events[eventIndex] = nwbCsgReceiverSpanBuildLoadEvent(pixel, eventIndex);
+    uint spanCount = 0u;
+    if(eventCount == 2u && nwbCsgReceiverSpanBuildPairSingleReceiver(pixel, spanLayerCount, spanCount, flags)){
+        g_NwbCsgReceiverSpanCount[uint3(pixel, 0u)] = uint2(spanCount, flags);
+        return;
     }
+
+    // Preserve all receiver/face bits and FP32 depth bits without aggregate-array copies.
+    uint3 events[NWB_CSG_RECEIVER_EVENT_LAYER_COUNT];
+    [loop]
+    for(uint eventIndex = 0u; eventIndex < eventCount; ++eventIndex)
+        events[eventIndex] = g_NwbCsgReceiverEventData.Load(int3(int2(pixel), int(eventIndex))).xyz;
 
     nwbCsgReceiverSpanBuildSortEvents(events, eventCount);
 
-    uint spanCount = 0u;
     nwbCsgReceiverSpanBuildPairEvents(pixel, spanLayerCount, events, eventCount, spanCount, flags);
 
     g_NwbCsgReceiverSpanCount[uint3(pixel, 0u)] = uint2(spanCount, flags);

@@ -37,7 +37,6 @@ struct NwbCausticResolvePushConstants{
     float causticIntensity;
     uint stepWidth;
     uint stage;
-    uint pad;
     uint worldPositionSlot;
     uint depthSlot;
     uint inputColorSlot;

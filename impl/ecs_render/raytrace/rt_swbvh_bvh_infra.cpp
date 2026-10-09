@@ -595,8 +595,8 @@ bool RendererRayTracingSystem::buildMeshSwBvhPrepared(
     pushConstants.nodeHeapSlot = nodeHeapHandle.slot();
     pushConstants.parentHeapSlot = parentHeapHandle.slot();
     pushConstants.visitCounterHeapSlot = m_rayTracingState.m_bvhVisitCounterHeapHandle.slot();
-    StoreFloat(VectorSetW(aabbMin, 0.0f), pushConstants.aabbMin);
-    StoreFloat(VectorSetW(aabbMax, 0.0f), pushConstants.aabbMax);
+    StoreFloat(aabbMin, pushConstants.aabbMin);
+    StoreFloat(aabbMax, pushConstants.aabbMax);
 
     commandList.setEnableUavBarriersForBuffer(keysBuffer, true);
     commandList.setEnableUavBarriersForBuffer(payloadBuffer, true);

@@ -26,16 +26,18 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
         return;
 
     const NwbSurfel surfel = g_NwbSurfelPool[surfelIndex];
-    if(surfel.alive == 0u)
+    if(!nwbSurfelIsAlive(surfel.sampleState))
         return;
 
     const float cellSize = g_NwbSurfelConstants.cameraPositionCellSize.w;
     const uint cellCount = uint(g_NwbSurfelConstants.hashPoolFrameDivisor.x);
-    const uint bucket = nwbSurfelHashCell(nwbSurfelCellCoord(surfel.position, cellSize), cellCount);
+    const int3 cell = nwbSurfelCellCoord(surfel.position, cellSize);
+    const uint bucket = nwbSurfelHashCell(cell, cellCount);
 
-    // Push onto the cell's linked list: this surfel becomes the new head; its next is the previous head. Each slot is written by exactly one thread (surfelIndex), so the single-field nextInCell store is race-free.
+    // Each surfel-index thread owns its exact cell and list link; the following pass observes both after the pool UAV barrier.
     uint previousHead = NWB_SURFEL_CELL_INVALID;
     InterlockedExchange(g_NwbSurfelCellHead[bucket], surfelIndex, previousHead);
+    g_NwbSurfelPool[surfelIndex].cell = cell;
     g_NwbSurfelPool[surfelIndex].nextInCell = previousHead;
 }
 

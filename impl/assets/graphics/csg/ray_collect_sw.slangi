@@ -1,0 +1,77 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CSG_RAY_COLLECT_SW_SLANGI
+#define NWB_GRAPHICS_CSG_RAY_COLLECT_SW_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "ray_geometry.slangi"
+#include "../bvh/ray_iterator.slangi"
+
+#ifndef NWB_CSG_RAY_SW_STACK_SIZE
+#error "The software CSG collector requires an explicit mesh traversal stack capacity"
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+uint nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
+    const uint contextSlot,
+    const uint materialSlot,
+    const uint instanceIndex,
+    const uint membershipOffset,
+    const float3 worldOrigin,
+    const float3 worldDirection,
+    const float minimum,
+    const float maximum,
+    __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS],
+    const uint cutCount,
+    __ref NwbCsgRayCrossing crossings[NWB_CSG_RAY_CROSSING_CAPACITY],
+    inout uint crossingCount,
+    inout T openVisitor
+){
+    const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
+    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
+    NwbBvhRayIterator<NWB_CSG_RAY_SW_STACK_SIZE> iterator = nwbBvhRayBeginWalk<NWB_CSG_RAY_SW_STACK_SIZE>(
+        material.nodeSlot, nwbSwBvhTransformPoint(instance, worldOrigin), nwbSwBvhTransformVector(instance, worldDirection),
+        0.0, asfloat(0x7f7fffffu)
+    );
+    uint primitive;
+    while(nwbBvhRayNextLeaf(iterator, primitive)){
+        const bool closed = nwbCsgRayPrimitiveClosed(contextSlot, membershipOffset, primitive);
+        const NwbCsgRayTriangleHit triangle = nwbCsgRayIntersectTriangle(
+            material, primitive, closed, iterator.origin, iterator.direction
+        );
+        if(triangle.failure != 0u)
+            return triangle.failure;
+        if(!triangle.hit)
+            continue;
+        if(!closed){
+            const uint failure = openVisitor.visit(
+                primitive, triangle.crossing.distance, triangle.crossing.barycentrics, minimum, maximum, cuts, cutCount
+            );
+            if(failure != 0u)
+                return failure;
+            continue;
+        }
+        const uint failure = nwbCsgRayInsertCrossing(materialSlot, instanceIndex, triangle.crossing, crossings, crossingCount);
+        if(failure != 0u)
+            return failure;
+    }
+    return iterator.overflow ? NWB_CSG_RAY_FAILURE_CAPACITY : 0u;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

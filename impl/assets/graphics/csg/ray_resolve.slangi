@@ -1,0 +1,85 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CSG_RAY_RESOLVE_SLANGI
+#define NWB_GRAPHICS_CSG_RAY_RESOLVE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Closed crossings extend to the receiver's far exit; open surfaces compete only inside the caller's hit range.
+NwbCsgRayBoundary nwbCsgRayResolveBoundary(
+    const uint contextSlot,
+    const uint materialSlot,
+    const uint instanceIndex,
+    const float3 origin,
+    const float3 direction,
+    const float minimum,
+    const float maximum
+){
+    NwbCsgRayBoundary result = (NwbCsgRayBoundary)0;
+    const uint4 range = nwbCsgRayReceiverRange(contextSlot, instanceIndex);
+    result.failure = nwbCsgRayValidateReceiverRange(contextSlot, range);
+    if(result.failure != 0u)
+        return result;
+    const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
+    const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instanceIndex, instance);
+    const float3 localOrigin = nwbSwBvhTransformPoint(instance, origin);
+    result.failure = nwbCsgRayValidateReceiverOrigin(localOrigin, root);
+    if(result.failure != 0u)
+        return result;
+    NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS];
+    uint cutCount;
+    if(!nwbCsgRayLoadCutUnion(contextSlot, range, origin, direction, cuts, cutCount)){
+        result.failure = NWB_CSG_RAY_FAILURE_UNSUPPORTED;
+        return result;
+    }
+    float2 receiverSegment;
+    if(nwbCsgRayReceiverSegment(instance, root, origin, direction, minimum, maximum, receiverSegment)){
+        const float cutoffMargin = 32.0 * 1.1920928955078125e-7 * (length(origin) + max(abs(receiverSegment.x), abs(receiverSegment.y)) + 1.0);
+        for(uint index = 0u; index < cutCount; ++index){
+            if(nwbCsgRayCutCoversSegment(cuts[index].distance, receiverSegment, cutoffMargin)){
+                result.primitive = NWB_CSG_RAY_INVALID_INDEX;
+                result.cutter = NWB_CSG_RAY_INVALID_INDEX;
+                result.distance = maximum;
+                return result;
+            }
+        }
+    }
+    NwbCsgRayCrossing crossings[NWB_CSG_RAY_CROSSING_CAPACITY];
+    uint crossingCount = 0u;
+    NwbCsgRayNearestOpenVisitor openVisitor = (NwbCsgRayNearestOpenVisitor)0;
+    openVisitor.boundary.distance = maximum;
+    openVisitor.boundary.primitive = NWB_CSG_RAY_INVALID_INDEX;
+    openVisitor.boundary.cutter = NWB_CSG_RAY_INVALID_INDEX;
+    result.failure = nwbCsgRayCollectCrossings(
+        contextSlot, materialSlot, instanceIndex, range.w, origin, direction, minimum, maximum,
+        cuts, cutCount, crossings, crossingCount, openVisitor
+    );
+    if(result.failure != 0u)
+        return result;
+    NwbCsgRaySolidIterator iterator;
+    result.failure = nwbCsgRayBeginSolidWalk(crossings, crossingCount, localOrigin, root, iterator);
+    if(result.failure != 0u)
+        return result;
+    const float boundaryMaximum = openVisitor.boundary.hit ? openVisitor.boundary.distance : maximum;
+    NwbCsgRayBoundary nearBoundary;
+    NwbCsgRayBoundary farBoundary;
+    while(nwbCsgRayNextSolidSpan(crossings, crossingCount, iterator, nearBoundary, farBoundary)){
+        if(nwbCsgRaySubtractSpan(nearBoundary, farBoundary, cuts, cutCount, minimum, boundaryMaximum, result))
+            return result;
+    }
+    return openVisitor.boundary;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

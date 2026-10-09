@@ -585,11 +585,15 @@ Two banks of 8x8 tile/surface-class entries occupy 172,832 bytes at 960x720,
 including their 16-byte headers, about 168.8 KiB. The 953x713 NPOT fixture has the
 same rounded tile extent. Existing classification and argument-building tasks
 write disjoint entry/header ranges; feedback adds no separate GPU dispatch.
-The shared parameter block is 192 bytes and diagnostic counters are 96 bytes.
+The shared parameter block is 176 bytes and diagnostic counters are 96 bytes.
+The parameter block omits unused fields; its CPU mirror, shader declaration,
+upload size, and offset checks use the same current layout. Payload size is a
+layout fact; timing qualification remains separate.
 
 The leading parameter lane is an explicit `uint4` containing width, height,
-trace mode and hardware-enabled state, preserving the 192-byte ABI. GPU probes
-isolated incorrect leading-field reads in the production classification path:
+trace mode and hardware-enabled state. The remaining fields occupy tightly packed
+scalar lanes, for a 176-byte ABI. GPU probes isolated incorrect leading-field
+reads in the production classification path:
 the CPU upload and a minimal GPU reader agreed, while that path observed
 incorrect mode/width values and performed no reflection work. The explicit lane
 restores the contract. Offset checks cover all four fields. This evidence does

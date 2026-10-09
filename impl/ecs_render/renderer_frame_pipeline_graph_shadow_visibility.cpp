@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -63,6 +65,9 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     using namespace RendererTaskGraphDetail;
 
     const bool hardwareTransparentTrace = rayTracingPlan.hardwareTransparentTrace;
+    const bool csgShadow = rayTracingPlan.lightSpace.ready
+        && (rayTracingPlan.lightSpace.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u;
+    const bool hardwareCsgShadow = hardwareShadowSupported && csgShadow;
 
     m_deferredShadowVisibilityOpaqueTask = {};
     m_deferredShadowVisibilityOpaqueFirstWaveletTask = {};
@@ -73,6 +78,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     m_deferredShadowVisibilityTransparentTraceTask = {};
     m_deferredShadowVisibilityTransparentTemporalMergeTask = {};
     m_deferredShadowVisibilityTransparentFirstWaveletTask = {};
+    m_deferredShadowVisibilityDiagnosticsTask = {};
     m_deferredShadowVisibilityAdaptiveCounterClearTask = {};
     m_deferredShadowVisibilityAllLitClearTask = {};
     m_deferredShadowVisibilityTask = {};
@@ -611,6 +617,16 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         if(hardwareShadowSupported){
             if(sceneTlas.valid())
                 opaqueResourceUses.push_back(ReadUse(sceneTlas, Core::ResourceStates::AccelStructRead));
+            if(hardwareCsgShadow){
+                opaqueResourceUses.push_back(ReadUse(shadowInstanceMaterials, Core::ResourceStates::ShaderResource));
+                opaqueResourceUses.push_back(ReadUse(shadowTypedMaterials, Core::ResourceStates::ShaderResource));
+                opaqueResourceUses.push_back(ReadUse(shadowInstances, Core::ResourceStates::ShaderResource));
+                opaqueResourceUses.push_back(ReadUse(materialContextSlots, Core::ResourceStates::ConstantBuffer));
+                if(!traceGeometryStatesGraphOwned){
+                    for(usize resourceIndex = 0u; resourceIndex < traceGeometryResourceCount; ++resourceIndex)
+                        opaqueResourceUses.push_back(ReadUse(traceGeometryResources[resourceIndex], Core::ResourceStates::ShaderResource));
+                }
+            }
         }else{
             opaqueResourceUses.push_back(ReadUse(sceneBvhNodes, Core::ResourceStates::ShaderResource));
             opaqueResourceUses.push_back(ReadUse(sceneInstances, Core::ResourceStates::ShaderResource));
@@ -807,7 +823,32 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
     }
 
     Core::GpuTaskId shadowTraceDependency = prefixTask;
+    Core::GpuGraphResourceId csgShadowContext;
     if(splitSoftTransparentFold && rayTracingPlan.lightSpace.ready){
+        if((rayTracingPlan.lightSpace.push.csgFlags & NWB_CSG_SHADOW_FLAG_CURRENT_RECEIVER_CAPS) != 0u){
+            const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
+            const Core::GpuGraphResourceId receiverView = declarations.findImportedBuffer(rayTracingPlan.lightSpace.receiverView);
+            const Core::GpuGraphResourceId receiverCapState = declarations.findImportedBuffer(rayTracingPlan.lightSpace.receiverCsgSampleState);
+            const Core::GpuGraphResourceId receiverCapDepth = declarations.findImportedTexture(deferredTargets.csgRemovedIntervalDepth);
+            const Core::GpuGraphResourceId receiverCapData = declarations.findImportedTexture(deferredTargets.csgRemovedIntervalData);
+            const Core::GpuGraphResourceId receiverCapCount = declarations.findImportedTexture(deferredTargets.csgRemovedIntervalCount);
+            if(!receiverView.valid() || !receiverCapState.valid() || !receiverCapDepth.valid() || !receiverCapData.valid() || !receiverCapCount.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not find the current light-space shadow receiver cap resources"));
+                return false;
+            }
+            const Core::TextureSubresourceSet layers(0u, 1u, 0u, deferredTargets.csgRemovedIntervalLayerCount);
+            const Core::GpuTaskResourceUse receiverReads[]{
+                ReadUse(receiverView, Core::ResourceStates::ConstantBuffer),
+                ReadUse(receiverCapState, Core::ResourceStates::ConstantBuffer),
+                ReadTextureUse(receiverCapDepth, layers, Core::ResourceStates::UnorderedAccess),
+                ReadTextureUse(receiverCapData, layers, Core::ResourceStates::UnorderedAccess),
+                ReadTextureUse(receiverCapCount, Core::TextureSubresourceSet(0u, 1u, 0u, 1u), Core::ResourceStates::UnorderedAccess),
+            };
+            for(const auto& use : receiverReads){
+                opaqueResourceUses.push_back(use);
+                transparentTraceResourceUses.push_back(use);
+            }
+        }
         Vector<Core::GpuTaskResourceUse, Core::Alloc::ScratchArena> lightSpaceReads{ scratchArena };
         constexpr usize s_LightSpaceReadCapacity = 9u;
         lightSpaceReads.reserve(s_LightSpaceReadCapacity + rayTracingPlan.lightSpace.csgDynamicBoundsCount
@@ -873,8 +914,9 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             transparentTraceResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
         }
         if(maps.csgContext.valid()){
-            opaqueResourceUses.push_back(ReadUse(maps.csgContext, Core::ResourceStates::ShaderResource));
-            transparentTraceResourceUses.push_back(ReadUse(maps.csgContext, Core::ResourceStates::ShaderResource));
+            csgShadowContext = maps.csgContext;
+            opaqueResourceUses.push_back(ReadWriteUse(maps.csgContext, Core::ResourceStates::UnorderedAccess));
+            transparentTraceResourceUses.push_back(ReadWriteUse(maps.csgContext, Core::ResourceStates::UnorderedAccess));
             opaqueResourceUses.push_back(ReadUse(maps.csgOpaqueDepth, Core::ResourceStates::ShaderResource));
             transparentTraceResourceUses.push_back(ReadUse(maps.csgOpaqueDepth, Core::ResourceStates::ShaderResource));
         }
@@ -905,8 +947,9 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
             .setExternalStateSources(shadowVisibilityStateSourceData, shadowVisibilityStateSourceCount)
             .setResourceUses(opaqueResourceUses.data(), opaqueResourceUses.size())
             .setResourceSetUses(
-                !hardwareShadowSupported && traceGeometryStatesGraphOwned ? &traceGeometrySetUse : nullptr,
-                !hardwareShadowSupported && traceGeometryStatesGraphOwned ? 1u : 0u
+                hardwareCsgShadow ? traceResourceSetUses
+                    : (!hardwareShadowSupported && traceGeometryStatesGraphOwned ? &traceGeometrySetUse : nullptr),
+                hardwareCsgShadow ? traceResourceSetUseCount : (!hardwareShadowSupported && traceGeometryStatesGraphOwned ? 1u : 0u)
             )
         ;
         m_deferredShadowVisibilityOpaqueTask = m_raytracingSystem.declareShadowVisibilityOpaqueTask(
@@ -934,6 +977,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         tailScheduling.forceSubmissionBoundary = false;
         tailScheduling.allowPacketMerge = true;
         tailScheduling.mergeWithPrevious = true;
+        tailScheduling.allowMergeAcrossConsumerFrontier = csgShadow;
         EnableSameFamilyComputeEffectRouting(tailScheduling);
         EnableCrossFamilyComputeEffectRouting(tailScheduling);
         if(!combinedSoftTemporal){
@@ -1036,7 +1080,7 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         Core::GpuTaskId transparentFirstWaveletDependency = m_deferredShadowVisibilityTransparentTraceTask;
         if(graphOwnsTransparentTemporalMergeEntryStates){
             const Core::GpuTaskId transparentTemporalMergeDependencies[] = {
-                m_deferredShadowVisibilityTransparentTraceTask,
+                transparentFirstWaveletDependency,
             };
             Core::GpuTaskDesc transparentTemporalMergeDesc;
             transparentTemporalMergeDesc
@@ -1130,6 +1174,22 @@ bool RendererFramePipeline::declareDeferredShadowVisibilityTask(
         if(!m_deferredShadowVisibilityTask.valid()){
             NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare deferred soft-transparent shadow-fold graph task"));
             return false;
+        }
+        if(rayTracingPlan.lightSpace.diagnosticReadback){
+            m_deferredShadowVisibilityDiagnosticsTask = DeclareLightSpaceShadowDiagnostics(m_deferredLightingTaskGraph, LightSpaceShadowGraphInputs{
+                .graphics = m_graphics,
+                .arena = m_arena,
+                .scratchArena = scratchArena,
+                .shadowPrepared = m_shadowPreparationOutcome.ready,
+                .snapshot = rayTracingPlan.lightSpace,
+                .dependency = m_deferredShadowVisibilityTask,
+                .stateSources = shadowVisibilityStateSourceData,
+                .stateSourceCount = shadowVisibilityStateSourceCount,
+            }, csgShadowContext);
+            if(!m_deferredShadowVisibilityDiagnosticsTask.valid()){
+                NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: could not declare CSG shadow diagnostics readback"));
+                return false;
+            }
         }
         return true;
     }

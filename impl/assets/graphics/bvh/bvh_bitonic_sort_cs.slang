@@ -20,7 +20,6 @@ struct NwbBvhBitonicSortPushConstants{
     uint mode;               // NWB_BVH_SORT_MODE_*
     uint keysHeapSlot;
     uint payloadHeapSlot;
-    uint2 pad;
 };
 
 [[vk::push_constant]]

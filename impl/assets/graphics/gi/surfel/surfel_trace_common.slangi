@@ -89,10 +89,11 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
     if(surfelIndex >= poolCapacity)
         return;
 
-    // The workgroup is 64 lanes even after a surfel converges to twelve rays. Load only the two group-wide fields here; pulling a whole NwbSurfel into every lane would fetch SH history in lanes that never trace a ray.
-    if(g_NwbSurfelPool[surfelIndex].alive == 0u)
+    // The workgroup is 64 lanes even after a surfel converges to twelve rays; load only the shared sample state until a lane traces.
+    const uint sampleState = g_NwbSurfelPool[surfelIndex].sampleState;
+    if(!nwbSurfelIsAlive(sampleState))
         return;
-    const uint sampleCount = g_NwbSurfelPool[surfelIndex].sampleCount;
+    const uint sampleCount = nwbSurfelSampleCount(sampleState);
 
     // Fresh surfels train all 16 directional cells with 64 rays. Mature surfels keep four uniform rays for exploration and use up to eight guided rays. Counts are group-uniform and need not be powers of two.
     uint rayCount = maximumRayCount;
@@ -212,7 +213,7 @@ void main(uint3 groupID : SV_GroupID, uint3 groupThreadID : SV_GroupThreadID){
         g_NwbSurfelPool[surfelIndex].shR = lerp(frameShR, g_NwbSurfelPool[surfelIndex].shR, float(historyWeight));
         g_NwbSurfelPool[surfelIndex].shG = lerp(frameShG, g_NwbSurfelPool[surfelIndex].shG, float(historyWeight));
         g_NwbSurfelPool[surfelIndex].shB = lerp(frameShB, g_NwbSurfelPool[surfelIndex].shB, float(historyWeight));
-        g_NwbSurfelPool[surfelIndex].sampleCount = min(sampleCount + 1u, 0xFFFFu);
+        g_NwbSurfelPool[surfelIndex].sampleState = nwbSurfelLiveSampleState(min(sampleCount + 1u, NWB_SURFEL_SAMPLE_COUNT_MAX));
         if(updateGuide){
             [unroll]
             for(uint guideLane = 0u; guideLane < NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL; ++guideLane){

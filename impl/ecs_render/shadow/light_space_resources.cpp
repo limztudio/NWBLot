@@ -48,6 +48,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
     auto& state = m_lightSpaceShadow;
     auto& snapshot = state.m_snapshot;
     const bool csg = state.m_csg.snapshot.hasCsg;
+    const bool hardwareCsg = csg && m_shadowVisibilityHardwareSupported;
     if(state.m_pipelineFailed)
         return false;
     if(
@@ -55,14 +56,17 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         && snapshot.opaqueFallback && snapshot.transparentFallback && snapshot.shadePipeline
         && snapshot.opaqueCapture && snapshot.transparentCapture
         && (!csg || (snapshot.csgShadePipeline && snapshot.csgOpaqueResolve && snapshot.csgTransparentResolve
-            && snapshot.csgOpaqueFallback && snapshot.csgTransparentFallback))
+            && (hardwareCsg || (snapshot.csgOpaqueFallback && snapshot.csgTransparentFallback))))
     )
         return true;
     auto& device = m_graphics.getDevice();
     auto& heap = device.getDescriptorHeap();
     // Fragment stores/atomics are mandatory baseline device features, independently of ray-query support.
     constexpr auto depthSupport = Core::FormatSupport::Texture | Core::FormatSupport::DepthStencil | Core::FormatSupport::ShaderLoad;
-    if(!heap.isInitialized() || (device.queryFormatSupport(Core::Format::D32) & depthSupport) != depthSupport)
+    if(
+        !heap.isInitialized() || (hardwareCsg && !heap.hasAccelStructLayout())
+        || (device.queryFormatSupport(Core::Format::D32) & depthSupport) != depthSupport
+    )
         return false;
     if(!snapshot.layout){
         Core::BindingLayoutDesc desc(m_arena);
@@ -75,8 +79,10 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
         AssetsGraphicsShadow::s_LightSpaceCapturePixelShaderName, AssetsGraphicsShadow::s_LightSpaceResolveShaderName,
         AssetsGraphicsShadow::s_LightSpaceResolveShaderName, AssetsGraphicsShadow::s_LightSpaceFallbackShaderName,
         AssetsGraphicsShadow::s_LightSpaceFallbackShaderName, AssetsGraphicsShadow::s_LightSpaceShadeShaderName,
-        AssetsGraphicsShadow::s_LightSpaceShadeShaderName, AssetsGraphicsShadow::s_LightSpaceResolveShaderName,
-        AssetsGraphicsShadow::s_LightSpaceResolveShaderName, AssetsGraphicsShadow::s_LightSpaceFallbackShaderName,
+        AssetsGraphicsShadow::s_LightSpaceShadeShaderName,
+        hardwareCsg ? AssetsGraphicsShadow::s_LightSpaceResolveHwShaderName : AssetsGraphicsShadow::s_LightSpaceResolveShaderName,
+        hardwareCsg ? AssetsGraphicsShadow::s_LightSpaceResolveHwShaderName : AssetsGraphicsShadow::s_LightSpaceResolveShaderName,
+        AssetsGraphicsShadow::s_LightSpaceFallbackShaderName,
         AssetsGraphicsShadow::s_LightSpaceFallbackShaderName, AssetsGraphicsShadow::s_LightSpaceCullShaderName };
     const Core::ShaderType::Mask stages[] = { Core::ShaderType::Compute, Core::ShaderType::Vertex, Core::ShaderType::Pixel,
         Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute, Core::ShaderType::Compute,
@@ -95,6 +101,8 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
     for(u32 index = 0u; index < LengthOf(state.m_shaders); ++index){
         if(!csg && index >= 8u && index <= 12u)
             continue;
+        if(hardwareCsg && index >= 11u && index <= 12u)
+            continue;
         if(
             !state.m_shaders[index] && !m_shaderSystem.loadShaderForStage(state.m_shaders[index], names[index], variants[index], stages[index],
             Name("ECSRender_LightSpaceShadow"))
@@ -110,6 +118,8 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
     for(u32 index = 0u; index < LengthOf(outputs); ++index){
         if(!csg && index >= 6u && index <= 10u)
             continue;
+        if(hardwareCsg && index >= 9u && index <= 10u)
+            continue;
         if(*outputs[index])
             continue;
         Core::ComputePipelineDesc desc;
@@ -117,6 +127,8 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowPipelines(){
             .setComputeShader(state.m_shaders[shaderIndices[index]]).addBindingLayout(snapshot.layout)
             .addBindingLayout(heap.getResourceLayout()).addBindingLayout(heap.getSamplerLayout())
         ;
+        if(hardwareCsg && index >= 7u && index <= 8u)
+            desc.addBindingLayout(heap.getAccelStructLayout());
         *outputs[index] = device.createComputePipeline(desc);
         if(!*outputs[index])
             return false;
@@ -156,6 +168,19 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
             return false;
     }
     if(m_lightSpaceShadow.m_csg.snapshot.hasCsg){
+        auto& diagnostics = m_lightSpaceShadow.m_diagnostics;
+        if(!diagnostics.readback){
+            Core::BufferDesc desc;
+            desc
+                .setByteSize(sizeof(u32)).setCpuAccess(Core::CpuAccessMode::Read)
+                .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute)
+                .setDebugName(Name("light_space_csg_diagnostic_readback"))
+                .enableAutomaticStateTracking(Core::ResourceStates::CopyDest)
+            ;
+            diagnostics.readback = m_graphics.createBuffer(desc);
+            if(!diagnostics.readback)
+                return false;
+        }
         const u64 contextSize = m_lightSpaceShadow.m_csg.bytes.size();
         if(contextSize == 0u || contextSize > maximumRange || contextSize > Limit<u32>::s_Max)
             return false;
@@ -172,7 +197,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
             for(u32 index = 0u; index < 2u; ++index){
                 Core::BufferDesc desc;
                 desc
-                    .setByteSize(csgSizes[index]).setStructStride(sizeof(u32)).setCanHaveRawViews(true).setCanHaveUAVs(index == 1u)
+                    .setByteSize(csgSizes[index]).setStructStride(sizeof(u32)).setCanHaveRawViews(true).setCanHaveUAVs(true)
                     .setQueueSharing(Core::ResourceQueueSharing::GraphicsAndAsyncCompute).setDebugName(csgNames[index])
                     .enableAutomaticStateTracking(Core::ResourceStates::Common)
                 ;
@@ -180,7 +205,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
                 if(!csgBuffers[index])
                     return false;
                 const auto descriptor = RayTracingDetail::RegisterHeapBuffer(
-                    heap, *csgBuffers[index], Core::GpuDescriptorClass::StorageBuffer, index == 1u
+                    heap, *csgBuffers[index], Core::GpuDescriptorClass::StorageBuffer, true
                 );
                 if(!descriptor)
                     return false;
@@ -189,6 +214,7 @@ bool RendererRayTracingSystem::ensureLightSpaceShadowStorage(const LightSpacePla
             RayTracingDetail::RetireHeapHandle(heap, snapshot.csgContextDescriptor);
             RayTracingDetail::RetireHeapHandle(heap, snapshot.csgOpaqueDepthDescriptor);
             snapshot.csgContext = Move(csgBuffers[0]);
+            diagnostics.contextInitialized = {};
             snapshot.csgOpaqueDepth = Move(csgBuffers[1]);
             snapshot.csgContextDescriptor = csgDescriptors[0];
             snapshot.csgOpaqueDepthDescriptor = csgDescriptors[1];
@@ -293,6 +319,7 @@ void RendererRayTracingSystem::releaseLightSpaceShadowResources(){
         RayTracingDetail::RetireHeapHandle(heap, state.m_snapshot.csgOpaqueDepthDescriptor);
     }
     state.m_captureHistory.invalidate();
+    state.m_diagnostics = {};
     state.m_captureSceneTrusted = false;
     state.m_captureReuseLogged = false;
     state.m_sceneBuffers.clear();

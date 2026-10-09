@@ -1,0 +1,62 @@
+// limztudio@gmail.com
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_SHADOW_LIGHT_SPACE_RECEIVER_SLANGI
+#define NWB_GRAPHICS_SHADOW_LIGHT_SPACE_RECEIVER_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#if NWB_LIGHT_SPACE_CSG_ENABLED
+#define NWB_MESH_VIEW_BUFFER_HEAP_SLOT g_NwbLightSpacePush.receiverViewSlot
+#include "../mesh/view_ray.slangi"
+#include "../csg/interval_sample_state.slangi"
+#include "../csg/removed_cap_sample.slangi"
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+// Image stores may truncate; preserve a full binary16 spacing for ordinary receivers.
+float3 nwbLightSpacePositionQuantization(const float3 position){
+    const uint3 exponent = (asuint(abs(position)) >> 23u) & 0xffu;
+    return asfloat((max(exponent, uint3(113u)) - 10u) << 23u);
+}
+
+#if NWB_LIGHT_SPACE_CSG_ENABLED
+bool nwbLightSpaceReceiverPosition(const uint2 pixel, const float depth, out float3 position, out float3 positionError){
+    position = nwbHeapSampledImage2D(NWB_LIGHT_SPACE_DEFERRED.gbufferSlots.z).Load(int3(pixel, 0)).xyz;
+    positionError = nwbLightSpacePositionQuantization(position);
+    if((g_NwbLightSpacePush.csgFlags & NWB_CSG_SHADOW_FLAG_CURRENT_RECEIVER_CAPS) != 0u){
+        const uint4 workRect = nwbHeapCsgIntervalSampleState(g_NwbLightSpacePush.receiverCsgSampleStateSlot).workRect;
+        const uint3 slots = uint3(NWB_LIGHT_SPACE_DEFERRED.csgSpanSlots.w, NWB_LIGHT_SPACE_DEFERRED.csgRemovedSlots.yz);
+        const NwbCsgRemovedCapSample cap = nwbCsgSampleNearestRemovedCap(pixel, workRect, slots);
+        // Cap fill draws last with LessOrEqual. Exact stored-depth equality excludes ordinary foreground occlusion.
+        if(cap.visible && cap.depth == depth){
+            if(!isfinite(cap.linearDepth) || cap.linearDepth <= 0.0)
+                return false;
+            const uint2 extent = uint2(g_NwbLightSpacePush.width, g_NwbLightSpacePush.height);
+            position = nwbMeshViewRadialPosition(pixel, cap.pixel, extent, cap.linearDepth);
+            // FP32 ray construction, radial storage and reconstruction stay bounded before the unchanged plane proof.
+            const float roundoff = 64.0 * 1.1920928955078125e-7;
+            positionError = (abs(g_NwbMeshCameraPosition.xyz) + abs(position - g_NwbMeshCameraPosition.xyz) + cap.linearDepth) * roundoff;
+        }
+    }
+    return all(isfinite(position)) && all(isfinite(positionError));
+}
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

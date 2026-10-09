@@ -51,7 +51,7 @@
 #define NWB_REFLECTION_COUNTER_EXTERIOR_ELIGIBLE_RAYS 92u
 #define NWB_REFLECTION_COUNTER_SIZE 96u
 
-// Twelve std140 lanes: targets own descriptors; this frame payload only borrows selectors.
+// Eleven std140 lanes: targets own descriptors; this frame payload only borrows selectors.
 #define NWB_REFLECTION_FRAME_ROUTE_UINT_FIELDS(FIELD) \
     FIELD(width, 0u) \
     FIELD(height, 0u) \
@@ -96,19 +96,15 @@
     FIELD(maxRayDistance, 100.f) \
     FIELD(distanceFadeStart, 80.f) \
     FIELD(roughnessCutoff, 0.8f) \
-    FIELD(_limitsPad, 0.f) \
     FIELD(environmentTopR, 0.15f) \
     FIELD(environmentTopG, 0.2f) \
     FIELD(environmentTopB, 0.3f) \
-    FIELD(_topPad, 0.f) \
     FIELD(environmentBottomR, 0.04f) \
     FIELD(environmentBottomG, 0.04f) \
     FIELD(environmentBottomB, 0.04f) \
-    FIELD(_bottomPad, 0.f) \
     FIELD(screenThickness, 0.03f) \
     FIELD(screenConfidenceThreshold, 0.8f) \
-    FIELD(screenEdgeFade, 0.05f) \
-    FIELD(_screenFloatPad, 0.f)
+    FIELD(screenEdgeFade, 0.05f)
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

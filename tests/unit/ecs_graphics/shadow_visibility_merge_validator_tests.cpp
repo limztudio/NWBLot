@@ -44,22 +44,29 @@ struct ShadowPacketPlan{
         , compiledGraph(testArena.arena){
     }
 
-    [[nodiscard]] bool build(const bool combinedUpsample, const bool temporalMerge, const u32 splitStage = Limit<u32>::s_Max, const bool combinedWavelet = false, const bool combinedTemporal = false){
+    [[nodiscard]] bool build(
+        const bool combinedUpsample,
+        const bool temporalMerge,
+        const u32 splitStage = Limit<u32>::s_Max,
+        const bool combinedWavelet = false,
+        const bool combinedTemporal = false,
+        const bool diagnostics = false
+    ){
         const Name identities[] = {
             Name("tests/shadow_packet/opaque"), Name("tests/shadow_packet/opaque_wavelet"),
             Name("tests/shadow_packet/opaque_upsample"), Name("tests/shadow_packet/transparent_trace"),
             Name("tests/shadow_packet/transparent_temporal"), Name("tests/shadow_packet/transparent_wavelet"),
-            Name("tests/shadow_packet/terminal")
+            Name("tests/shadow_packet/terminal"), Name("tests/shadow_packet/diagnostics")
         };
         constexpr AStringView s_Labels[] = {
             "Shadow Opaque", "Shadow Opaque Wavelet", "Shadow Opaque Upsample", "Shadow Transparent Trace",
-            "Shadow Transparent Temporal", "Shadow Transparent Wavelet", "Shadow Terminal"
+            "Shadow Transparent Temporal", "Shadow Transparent Wavelet", "Shadow Terminal", "Shadow Diagnostics"
         };
         static_assert(LengthOf(s_Labels) == LengthOf(identities));
         Core::GpuTaskId stages[LengthOf(identities)]{};
         Core::GpuTaskId previous;
         for(u32 index = 0u; index < LengthOf(identities); ++index){
-            if((index == 1u && combinedTemporal) || (index == 2u && combinedUpsample) || (index == 4u && !temporalMerge))
+            if((index == 1u && combinedTemporal) || (index == 2u && combinedUpsample) || (index == 4u && !temporalMerge) || (index == 7u && !diagnostics))
                 continue;
             Core::GpuTaskSchedulingHint scheduling;
             scheduling.mergeWithPrevious = previous.valid();
@@ -81,6 +88,7 @@ struct ShadowPacketPlan{
         tasks = {
             .terminal = stages[6], .opaque = stages[0], .opaqueFirstWavelet = stages[1], .opaqueResolve = stages[2],
             .transparentTrace = stages[3], .transparentTemporalMerge = stages[4], .transparentFirstWavelet = stages[5],
+            .diagnostics = stages[7],
             .combinedUpsample = combinedUpsample,
             .combinedWavelet = combinedWavelet,
             .combinedTemporal = combinedTemporal,
@@ -188,6 +196,29 @@ TEST(ShadowVisibilityMergeValidator, EverySeparateSubmissionBoundaryRejectsThePr
     }
 }
 
+
+TEST(ShadowVisibilityMergeValidator, TrailingDiagnosticsCannotExportScratchStateFromAnotherAcceptancePacket){
+    for(const bool combined : { false, true }){
+        {
+            ShadowPacketPlan fixture;
+            ASSERT_TRUE(fixture.build(combined, true, 7u, false, false, true));
+            const Core::GpuCompiledGraph::ReadView plan(fixture.compiledGraph);
+            Impl::PreparedShadowVisibilityTasks withoutDiagnostics = fixture.tasks;
+            withoutDiagnostics.diagnostics = {};
+            ASSERT_TRUE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, withoutDiagnostics));
+            EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, fixture.tasks));
+        }
+        ShadowPacketPlan merged;
+        ShadowPacketPlan foreign;
+        ASSERT_TRUE(merged.build(combined, true, Limit<u32>::s_Max, false, false, true));
+        ASSERT_TRUE(foreign.build(combined, true, Limit<u32>::s_Max, false, false, true));
+        const Core::GpuCompiledGraph::ReadView plan(merged.compiledGraph);
+        ASSERT_TRUE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, merged.tasks));
+        Impl::PreparedShadowVisibilityTasks stale = merged.tasks;
+        stale.diagnostics = foreign.tasks.diagnostics;
+        EXPECT_FALSE(Impl::PreparedShadowVisibilityTasksSharePacket(plan, stale));
+    }
+}
 
 TEST(ShadowVisibilityMergeValidator, CombinedWaveletRequiresBothTemporalPhasesAndCombinedTerminal){
     ShadowPacketPlan fixture;

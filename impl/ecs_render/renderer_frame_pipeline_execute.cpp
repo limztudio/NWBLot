@@ -810,6 +810,30 @@ void RendererFramePipeline::render(Core::Framebuffer* framebuffer){
         || terminalPresentationQueue->queueClass != Core::CommandQueue::Graphics
         || deferredFrameRecoveryQueue->queueClass != Core::CommandQueue::Graphics
     ){
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: rejected graph shadow packets opaque={} opaqueWavelet={} opaqueResolve={} transparent={} temporal={} wavelet={} terminal={}")
+            , deferredCompiledPlan.packetForTask(m_deferredShadowVisibilityOpaqueTask).index
+            , deferredCompiledPlan.packetForTask(m_deferredShadowVisibilityOpaqueFirstWaveletTask).index
+            , deferredCompiledPlan.packetForTask(m_deferredShadowVisibilityOpaqueResolveTask).index
+            , deferredCompiledPlan.packetForTask(m_deferredShadowVisibilityTransparentTraceTask).index
+            , deferredCompiledPlan.packetForTask(m_deferredShadowVisibilityTransparentTemporalMergeTask).index
+            , deferredCompiledPlan.packetForTask(m_deferredShadowVisibilityTransparentFirstWaveletTask).index
+            , deferredCompiledPlan.packetForTask(m_deferredShadowVisibilityTask).index
+        );
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: rejected graph lighting merges shadow={} allLit={} adaptive={} surfelClear={} surfelPrefix={} surfelInit={} causticPhoton={} causticGeometry={}")
+            , shadowVisibilityPreparedTasksMerged, shadowVisibilityAllLitClearMerged, shadowVisibilityAdaptivePrimitivesMerged
+            , surfelGiOutputClearMergedIntoGiPacket, surfelGiPreparedPrefixMergedIntoGiPacket
+            , surfelGiInitializationLifecycleMergedIntoPreparationPacket, causticPhotonMergedIntoCausticsPacket
+            , causticGeometryMergedIntoCausticsPacket
+        );
+        NWB_LOGGER_INFO(NWB_TEXT("RendererSystem: rejected graph shadow merge decisions opaque={} transparent={} temporal={} wavelet={} terminal={} diagnostic={} diagnosticPacket={}")
+            , static_cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(m_deferredShadowVisibilityOpaqueTask))
+            , static_cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(m_deferredShadowVisibilityTransparentTraceTask))
+            , static_cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(m_deferredShadowVisibilityTransparentTemporalMergeTask))
+            , static_cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(m_deferredShadowVisibilityTransparentFirstWaveletTask))
+            , static_cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(m_deferredShadowVisibilityTask))
+            , static_cast<u32>(deferredCompiledPlan.packetizationDecisionForTask(m_deferredShadowVisibilityDiagnosticsTask))
+            , deferredCompiledPlan.packetForTask(m_deferredShadowVisibilityDiagnosticsTask).index
+        );
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: compiled deferred graph topology was unavailable (declared={} scheduled={})")
             , m_deferredLightingTaskGraphDeclared, deferredGraphScheduled
         );

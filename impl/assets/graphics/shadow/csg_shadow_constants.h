@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -15,8 +17,10 @@
 #define NWB_CSG_SHADOW_FLAG_ENABLED 1u
 #define NWB_CSG_SHADOW_FLAG_HW_COMPOSE 2u
 #define NWB_CSG_SHADOW_FLAG_NO_ORDINARY_TRANSPARENT 4u
+#define NWB_CSG_SHADOW_FLAG_CURRENT_RECEIVER_CAPS 8u
 #define NWB_CSG_SHADOW_CONSERVATIVE_COUNT 0xfffffffeu
 #define NWB_CSG_SHADOW_CAP_PRIMITIVE 0xffffffffu
+#define NWB_CSG_SHADOW_RAY_FAILURE_OFFSET 28u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

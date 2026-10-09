@@ -1,0 +1,102 @@
+// limztudio@gmail.com
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_CSG_REMOVED_CAP_SAMPLE_SLANGI
+#define NWB_GRAPHICS_CSG_REMOVED_CAP_SAMPLE_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "constants.h"
+#include "../bindless/bindless_heap.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbCsgRemovedCapSample{
+    float depth;
+    float linearDepth;
+    uint receiverIndex;
+    uint layerIndex;
+    uint2 pixel;
+    bool visible;
+};
+
+NwbCsgRemovedCapSample nwbCsgSampleRemovedCapAtPixel(const uint2 pixel, const uint4 workRect, const uint3 slots){
+    NwbCsgRemovedCapSample result = (NwbCsgRemovedCapSample)0;
+    result.depth = NWB_CSG_INVALID_DISTANCE;
+    if(any(pixel < workRect.xy) || any(pixel >= workRect.zw))
+        return result;
+    uint width;
+    uint height;
+    uint layers;
+    nwbHeapStorageImage2DArrayFloat4(slots.x).GetDimensions(width, height, layers);
+    if(any(pixel >= uint2(width, height)))
+        return result;
+    const uint rawCount = nwbHeapStorageImage2DArrayUint2(slots.z).Load(int3(pixel, 0)).x;
+    const uint count = min(rawCount, min(layers, NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT));
+    [unroll]
+    for(uint index = 0u; index < NWB_CSG_REMOVED_INTERVAL_LAYER_COUNT; ++index){
+        if(index >= count)
+            break;
+        const int3 texel = int3(pixel, index);
+        const uint4 data = nwbHeapStorageImage2DArrayUint4(slots.y).Load(texel);
+        if((data.y & NWB_CSG_REMOVED_INTERVAL_BACK_CAP_VISIBLE_FLAG) == 0u)
+            continue;
+        const float4 depth = nwbHeapStorageImage2DArrayFloat4(slots.x).Load(texel);
+        if(!isfinite(depth.y) || depth.y >= result.depth)
+            continue;
+        result.visible = true;
+        result.depth = depth.y;
+        result.linearDepth = depth.w;
+        result.receiverIndex = data.x;
+        result.layerIndex = index;
+        result.pixel = pixel;
+    }
+    return result;
+}
+
+NwbCsgRemovedCapSample nwbCsgSampleNearestRemovedCap(const uint2 pixel, const uint4 workRect, const uint3 slots){
+    NwbCsgRemovedCapSample unavailable = (NwbCsgRemovedCapSample)0;
+    unavailable.depth = NWB_CSG_INVALID_DISTANCE;
+    if(any(workRect.xy >= workRect.zw))
+        return unavailable;
+    // Only pixels within the existing repair radius can receive a cap from the work rectangle.
+    const uint2 nearest = clamp(pixel, workRect.xy, workRect.zw - 1u);
+    const uint2 distance = max(pixel, nearest) - min(pixel, nearest);
+    if(any(distance > uint2(NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS)))
+        return unavailable;
+    NwbCsgRemovedCapSample result = nwbCsgSampleRemovedCapAtPixel(pixel, workRect, slots);
+    if(result.visible)
+        return result;
+    [unroll]
+    for(int y = -NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS; y <= NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS; ++y){
+        [unroll]
+        for(int x = -NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS; x <= NWB_CSG_REMOVED_INTERVAL_CAP_NEIGHBOR_RADIUS; ++x){
+            if(x == 0 && y == 0)
+                continue;
+            const int2 neighbor = int2(pixel) + int2(x, y);
+            if(any(neighbor < 0))
+                continue;
+            const NwbCsgRemovedCapSample candidate = nwbCsgSampleRemovedCapAtPixel(uint2(neighbor), workRect, slots);
+            if(candidate.visible && candidate.depth < result.depth)
+                result = candidate;
+        }
+    }
+    return result;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

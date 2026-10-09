@@ -55,13 +55,10 @@ static_assert(offsetof(GpuPaintPushConstants, material) == NWB_UI_PUSH_CONSTANTS
 static_assert(offsetof(GpuPaintPushConstants, sdfChannel) == NWB_UI_PUSH_CONSTANTS_SDF_CHANNEL_BYTE_OFFSET);
 static_assert(offsetof(GpuPaintPushConstants, sdfSpreadPixels) == NWB_UI_PUSH_CONSTANTS_SDF_SPREAD_BYTE_OFFSET);
 static_assert(offsetof(GpuPaintPushConstants, sdfDistanceEncoding) == NWB_UI_PUSH_CONSTANTS_SDF_ENCODING_BYTE_OFFSET);
-static_assert(offsetof(GpuPaintPushConstants, reserved) == NWB_UI_PUSH_CONSTANTS_RESERVED_BYTE_OFFSET);
-static_assert(offsetof(GpuPaintPushConstants, reserved1) == NWB_UI_PUSH_CONSTANTS_RESERVED1_BYTE_OFFSET);
 static_assert(sizeof(GpuOutputPushConstants) == NWB_UI_OUTPUT_PUSH_CONSTANTS_BYTE_SIZE);
 static_assert(offsetof(GpuOutputPushConstants, textureSlot) == NWB_UI_OUTPUT_PUSH_CONSTANTS_TEXTURE_SLOT_BYTE_OFFSET);
 static_assert(offsetof(GpuOutputPushConstants, samplerSlot) == NWB_UI_OUTPUT_PUSH_CONSTANTS_SAMPLER_SLOT_BYTE_OFFSET);
 static_assert(offsetof(GpuOutputPushConstants, presentationMode) == NWB_UI_OUTPUT_PUSH_CONSTANTS_PRESENTATION_MODE_BYTE_OFFSET);
-static_assert(offsetof(GpuOutputPushConstants, reserved) == NWB_UI_OUTPUT_PUSH_CONSTANTS_RESERVED_BYTE_OFFSET);
 static_assert(static_cast<u32>(PaintMaterial::Solid) == NWB_UI_MATERIAL_SOLID);
 static_assert(static_cast<u32>(PaintMaterial::Skin) == NWB_UI_MATERIAL_SKIN);
 static_assert(static_cast<u32>(PaintMaterial::Glyph) == NWB_UI_MATERIAL_GLYPH);

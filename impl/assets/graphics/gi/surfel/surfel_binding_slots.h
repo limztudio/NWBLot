@@ -77,6 +77,7 @@
 #define NWB_SURFEL_RAYS_PER_SURFEL 64u         // 64 threads per surfel and initial trace.
 // Converged surfels reuse history.
 #define NWB_SURFEL_CONVERGED_SAMPLE_COUNT 8u
+#define NWB_SURFEL_SAMPLE_COUNT_MAX 0xFFFFu
 #define NWB_SURFEL_CONVERGED_RAYS_PER_SURFEL 12u
 #define NWB_SURFEL_CONVERGED_UNIFORM_RAYS_PER_SURFEL 4u
 #define NWB_SURFEL_GUIDE_AZIMUTH_BINS 4u

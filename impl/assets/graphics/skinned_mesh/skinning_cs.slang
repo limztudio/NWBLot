@@ -98,6 +98,8 @@ bool nwbSkinnedMeshApplyLinearSkinPosition(const uint skinIndex, inout float3 po
         return true;
 
     const NwbSkinnedMeshSkinInfluence skin = nwbSkinnedMeshHeapSkinInfluences(g_NwbSkinnedMeshBindlessResources.streamSlots2.z)[skinIndex];
+    const uint4 skinJoints = nwbSkinnedMeshSkinJoints(skin);
+    const float4 skinWeights = nwbSkinnedMeshSkinWeights(skin);
     float3 skinnedPosition = float3(0.0);
     // Skin influence weights are (0, 1) bounded factors; half accumulation is sufficient here.
     half totalWeight = half(0.0h);
@@ -105,8 +107,8 @@ bool nwbSkinnedMeshApplyLinearSkinPosition(const uint skinIndex, inout float3 po
     const float3 influenceValidationNormal = float3(0.0, 0.0, 1.0);
 
     for(uint influenceIndex = 0u; influenceIndex < NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT; ++influenceIndex){
-        const half weight = half(skin.weight[influenceIndex]);
-        const uint jointId = skin.joint[influenceIndex];
+        const half weight = half(skinWeights[influenceIndex]);
+        const uint jointId = skinJoints[influenceIndex];
         if(abs(weight) <= half(NWB_SKINNED_MESH_EPSILON) || jointId >= jointCount)
             continue;
 
@@ -134,14 +136,16 @@ bool nwbSkinnedMeshApplyLinearSkinFrame(const uint skinIndex, inout float3 norma
         return true;
 
     const NwbSkinnedMeshSkinInfluence skin = nwbSkinnedMeshHeapSkinInfluences(g_NwbSkinnedMeshBindlessResources.streamSlots2.z)[skinIndex];
+    const uint4 skinJoints = nwbSkinnedMeshSkinJoints(skin);
+    const float4 skinWeights = nwbSkinnedMeshSkinWeights(skin);
     float3 skinnedNormal = float3(0.0);
     float3 skinnedTangent = float3(0.0);
     // Skin influence weights are (0, 1) bounded factors; half accumulation is sufficient here.
     half totalWeight = half(0.0h);
 
     for(uint influenceIndex = 0u; influenceIndex < NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT; ++influenceIndex){
-        const half weight = half(skin.weight[influenceIndex]);
-        const uint jointId = skin.joint[influenceIndex];
+        const half weight = half(skinWeights[influenceIndex]);
+        const uint jointId = skinJoints[influenceIndex];
         if(abs(weight) <= half(NWB_SKINNED_MESH_EPSILON) || jointId >= jointCount)
             continue;
 
@@ -180,14 +184,16 @@ bool nwbSkinnedMeshBuildDualQuaternionSkin(
         return true;
 
     const NwbSkinnedMeshSkinInfluence skin = nwbSkinnedMeshHeapSkinInfluences(g_NwbSkinnedMeshBindlessResources.streamSlots2.z)[skinIndex];
+    const uint4 skinJoints = nwbSkinnedMeshSkinJoints(skin);
+    const float4 skinWeights = nwbSkinnedMeshSkinWeights(skin);
     float4 referenceReal = float4(0.0);
     bool hasReference = false;
     // Skin influence weights are (0, 1) bounded factors; half accumulation is sufficient here.
     half totalWeight = half(0.0h);
 
     for(uint influenceIndex = 0u; influenceIndex < NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT; ++influenceIndex){
-        const half weight = half(skin.weight[influenceIndex]);
-        const uint jointId = skin.joint[influenceIndex];
+        const half weight = half(skinWeights[influenceIndex]);
+        const uint jointId = skinJoints[influenceIndex];
         if(abs(weight) <= half(NWB_SKINNED_MESH_EPSILON) || jointId >= jointCount)
             continue;
 

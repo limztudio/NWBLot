@@ -138,18 +138,25 @@ bool RecordLightSpaceResolve(
     Core::Texture& outputTexture, const u32 frameIndex, const u32 sampleCount, const u32 outputSlot, const bool transparent
 ){
     const bool csg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_ENABLED) != 0u;
+    const bool hardwareCsg = (snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u;
     const auto& pipeline = csg ? (transparent ? snapshot.csgTransparentResolve : snapshot.csgOpaqueResolve)
         : (transparent ? snapshot.transparentResolve : snapshot.opaqueResolve);
     const auto& fallback = csg ? (transparent ? snapshot.csgTransparentFallback : snapshot.csgOpaqueFallback)
         : (transparent ? snapshot.transparentFallback : snapshot.opaqueFallback);
-    if(!snapshot.ready || !pipeline || !fallback || sampleCount == 0u)
+    if(
+        !snapshot.ready || !pipeline || sampleCount == 0u
+        || (hardwareCsg ? !snapshot.csgTlasDescriptor.valid() : !fallback)
+    )
         return false;
     LightSpaceShadowPush push = snapshot.push;
     push.frameIndex = frameIndex;
     push.sampleCount = sampleCount;
     push.outputSlot = outputSlot;
     commandList.setComputeState(Core::ComputeState{}.setPipeline(pipeline.get()));
-    heap.bindCompute(commandList, *pipeline);
+    if(hardwareCsg)
+        heap.bindCompute(commandList, *pipeline, snapshot.csgTlasDescriptor);
+    else
+        heap.bindCompute(commandList, *pipeline);
     commandList.setPushConstants(&push, sizeof(push));
     const u32 halfWidth = DivideUp(push.width, push.receiverFactor);
     const u32 halfHeight = DivideUp(push.height, push.receiverFactor);
@@ -162,7 +169,7 @@ bool RecordLightSpaceResolve(
 
         commandList.dispatch(groupsX, groupsY, 1u);
     }
-    if((push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u)
+    if(hardwareCsg)
         return true;
     // Alpha is initialized by the map dispatch before the fallback reads it through the same UAV binding.
     commandList.setTextureState(&outputTexture, Core::TextureSubresourceSet{}, Core::ResourceStates::UnorderedAccess, true);

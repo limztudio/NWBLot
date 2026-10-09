@@ -1,0 +1,76 @@
+// limztudio@gmail.com
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifndef NWB_GRAPHICS_MESH_VIEW_RAY_SLANGI
+#define NWB_GRAPHICS_MESH_VIEW_RAY_SLANGI
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#include "../bindless/bindless_heap_mesh_view.slangi"
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+struct NwbMeshViewRayBasis{
+    float3 horizontal;
+    float3 vertical;
+    float3 forward;
+};
+
+float2 nwbMeshViewPixelNdc(const uint2 pixel, const uint2 extent){
+    const float2 uv = (float2(pixel) + 0.5) / float2(extent);
+    return float2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+}
+
+// Derive the perspective basis with the same stored-matrix multiplication convention as rasterization.
+NwbMeshViewRayBasis nwbMeshViewRayBasis(){
+    const float4x4 worldToClip = g_NwbMeshWorldToClip;
+    const float4 clipX = mul(worldToClip, float4(1.0, 0.0, 0.0, 0.0));
+    const float4 clipY = mul(worldToClip, float4(0.0, 1.0, 0.0, 0.0));
+    const float4 clipZ = mul(worldToClip, float4(0.0, 0.0, 1.0, 0.0));
+    NwbMeshViewRayBasis result;
+    result.horizontal = float3(clipX.x, clipY.x, clipZ.x);
+    result.vertical = float3(clipX.y, clipY.y, clipZ.y);
+    result.forward = float3(clipX.w, clipY.w, clipZ.w);
+    return result;
+}
+
+// Frustum-plane intersection remains well conditioned when inverse far-plane homogeneous w approaches zero.
+float3 nwbMeshViewBasisRayDirection(const float2 ndc, const NwbMeshViewRayBasis basis){
+    const float3 xPlane = basis.horizontal - ndc.x * basis.forward;
+    const float3 yPlane = basis.vertical - ndc.y * basis.forward;
+    const float3 direction = cross(xPlane, yPlane);
+    return normalize(dot(direction, basis.forward) < 0.0 ? -direction : direction);
+}
+
+float3 nwbMeshViewRayDirection(const float2 ndc){
+    return nwbMeshViewBasisRayDirection(ndc, nwbMeshViewRayBasis());
+}
+
+float3 nwbMeshViewRadialPosition(const uint2 outputPixel, const uint2 sourcePixel, const uint2 extent, const float distance){
+    const NwbMeshViewRayBasis basis = nwbMeshViewRayBasis();
+    const float3 direction = nwbMeshViewBasisRayDirection(nwbMeshViewPixelNdc(outputPixel, extent), basis);
+    // Neighbor cap repair preserves camera-space z while transferring its FP32 radial depth onto the output pixel ray.
+    float radialDistance = distance;
+    if(any(outputPixel != sourcePixel)){
+        const float3 sourceDirection = nwbMeshViewBasisRayDirection(nwbMeshViewPixelNdc(sourcePixel, extent), basis);
+        radialDistance *= dot(sourceDirection, basis.forward) / dot(direction, basis.forward);
+    }
+    return g_NwbMeshCameraPosition.xyz + direction * radialDistance;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

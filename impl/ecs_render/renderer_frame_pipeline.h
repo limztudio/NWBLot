@@ -502,6 +502,7 @@ private:
     Core::GpuTaskId m_deferredShadowVisibilityTransparentTraceTask;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentTemporalMergeTask;
     Core::GpuTaskId m_deferredShadowVisibilityTransparentFirstWaveletTask;
+    Core::GpuTaskId m_deferredShadowVisibilityDiagnosticsTask;
     // The adaptive append-counter clear shares the monolithic visibility packet so its CopyDest -> UAV handoff stays graph-owned.
     Core::GpuTaskId m_deferredShadowVisibilityAdaptiveCounterClearTask;
     // The retained monolithic route always clears visibility to all-lit immediately before its callback.

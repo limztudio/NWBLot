@@ -115,9 +115,13 @@ struct BvhSortPushConstants{
     u32 mode = NWB_BVH_SORT_MODE_LOCAL_TILE;
     u32 keysHeapSlot = Limit<u32>::s_Max;
     u32 payloadHeapSlot = Limit<u32>::s_Max;
-    u32 pad[2] = {};
 };
 static_assert(sizeof(BvhSortPushConstants) == sizeof(u32) * NWB_BVH_SORT_PUSH_CONSTANT_WORD_COUNT, "BvhSortPushConstants must match the shader NwbBvhBitonicSortPushConstants layout");
+static_assert(offsetof(BvhSortPushConstants, mode) == 12u);
+static_assert(offsetof(BvhSortPushConstants, keysHeapSlot) == 16u);
+static_assert(offsetof(BvhSortPushConstants, payloadHeapSlot) == 20u);
+static_assert(IsStandardLayout_V<BvhSortPushConstants>);
+static_assert(IsTriviallyCopyable_V<BvhSortPushConstants>);
 
 inline constexpr usize s_BvhBuildInitialCapacity = 1024u;
 
@@ -149,23 +153,28 @@ struct SceneBvhNodeCalculation{
 };
 
 // CPU mirror of NwbBvhBuildPushConstants.
-struct BvhBuildPushConstants{
+struct alignas(16) BvhBuildPushConstants{
     u32 primitiveCount = 0u;
     u32 internalCount = 0u;
     u32 refitMode = NWB_BVH_BUILD_MODE_FULL;
-    u32 pad0 = 0u;
     u32 positionHeapSlot = Limit<u32>::s_Max;
     u32 triangleIndexHeapSlot = Limit<u32>::s_Max;
     u32 keysHeapSlot = Limit<u32>::s_Max;
     u32 payloadHeapSlot = Limit<u32>::s_Max;
     u32 nodeHeapSlot = Limit<u32>::s_Max;
+    Float3U aabbMin = Float3U(0.0f, 0.0f, 0.0f);
     u32 parentHeapSlot = Limit<u32>::s_Max;
+    Float3U aabbMax = Float3U(0.0f, 0.0f, 0.0f);
     u32 visitCounterHeapSlot = Limit<u32>::s_Max;
-    u32 pad1 = 0u;
-    Float4 aabbMin = Float4(0.0f, 0.0f, 0.0f, 0.0f);
-    Float4 aabbMax = Float4(0.0f, 0.0f, 0.0f, 0.0f);
 };
-static_assert(sizeof(BvhBuildPushConstants) == sizeof(u32) * 12u + sizeof(Float4) * 2u, "BvhBuildPushConstants must match the shader NwbBvhBuildPushConstants layout");
+static_assert(sizeof(BvhBuildPushConstants) == 64u, "BvhBuildPushConstants must match the shader NwbBvhBuildPushConstants layout");
+static_assert(alignof(BvhBuildPushConstants) == 16u);
+static_assert(offsetof(BvhBuildPushConstants, aabbMin) == 32u);
+static_assert(offsetof(BvhBuildPushConstants, parentHeapSlot) == 44u);
+static_assert(offsetof(BvhBuildPushConstants, aabbMax) == 48u);
+static_assert(offsetof(BvhBuildPushConstants, visitCounterHeapSlot) == 60u);
+static_assert(IsStandardLayout_V<BvhBuildPushConstants>);
+static_assert(IsTriviallyCopyable_V<BvhBuildPushConstants>);
 
 // Shader-mirrored BVH child encoding.
 namespace BvhNodeIndex{
@@ -207,8 +216,8 @@ static_assert(sizeof(NwbCausticEmissionTargetGpu) == sizeof(Float4) * 2u, "NwbCa
 static constexpr usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsSlotOffset = 88u;
 static constexpr usize s_ShadowCombinedWaveletPushConstantsOpaqueMomentsValidOffset = 92u;
 static constexpr usize s_ShadowCombinedWaveletPushConstantsOpaqueOutputStorageSlotOffset = 96u;
-static constexpr usize s_CausticResolvePushConstantsActivityInputSlotOffset = 56u;
-static constexpr usize s_CausticResolvePushConstantsActivityOutputSlotOffset = 60u;
+static constexpr usize s_CausticResolvePushConstantsActivityInputSlotOffset = 52u;
+static constexpr usize s_CausticResolvePushConstantsActivityOutputSlotOffset = 56u;
 inline constexpr usize s_ShadowInstanceMaterialInitialCapacity = 128u;
 
 // CPU mirror of the heap-only software-shadow selector block.
@@ -371,7 +380,6 @@ struct CausticResolvePushConstants{
     f32 causticIntensity = 0.f;
     u32 stepWidth = 1u;
     u32 stage = NWB_CAUSTIC_RESOLVE_STAGE_PREPARE_DOWNSAMPLE;
-    u32 pad = 0u;
     u32 worldPositionSlot = 0u;
     u32 depthSlot = 0u;
     u32 inputColorSlot = 0u;
@@ -381,7 +389,7 @@ struct CausticResolvePushConstants{
     u32 activityInputSlot = NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT;
     u32 activityOutputSlot = NWB_CAUSTIC_RESOLVE_ACTIVITY_INVALID_SLOT;
 };
-static constexpr usize s_CausticResolvePushConstantsByteSize = 64u;
+static constexpr usize s_CausticResolvePushConstantsByteSize = 60u;
 static_assert(sizeof(CausticResolvePushConstants) == s_CausticResolvePushConstantsByteSize, "CausticResolvePushConstants must match the shader push-constant layout");
 static_assert(offsetof(CausticResolvePushConstants, activityInputSlot) == s_CausticResolvePushConstantsActivityInputSlotOffset);
 static_assert(offsetof(CausticResolvePushConstants, activityOutputSlot) == s_CausticResolvePushConstantsActivityOutputSlotOffset);
@@ -430,9 +438,8 @@ struct CausticGeometryDownsamplePushConstants{
     u32 worldPositionSlot = 0u;
     u32 depthSlot = 0u;
     u32 outputStorageSlot = 0u;
-    u32 pad1 = 0u;
 };
-static_assert(sizeof(CausticGeometryDownsamplePushConstants) == sizeof(u32) * 8u, "CausticGeometryDownsamplePushConstants must match the shader push-constant layout");
+static_assert(sizeof(CausticGeometryDownsamplePushConstants) == sizeof(u32) * 7u, "CausticGeometryDownsamplePushConstants must match the shader push-constant layout");
 
 // CPU mirror of caustic accumulator-decay push constants.
 struct CausticAccumulatorDecayPushConstants{

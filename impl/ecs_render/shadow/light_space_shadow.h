@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -11,6 +13,7 @@
 
 #include <core/alloc/global.h>
 #include <core/graphics/rhi/pipeline.h>
+#include <core/graphics/rhi/command.h>
 #include <core/graphics/rhi/gpu_descriptor_heap.h>
 
 
@@ -67,6 +70,8 @@ struct LightSpaceShadowPush{
     u32 meshletDescSlot = 0u;
     u32 meshletBoundsSlot = 0u;
     u32 meshletCount = 0u;
+    u32 receiverViewSlot = 0u;
+    u32 receiverCsgSampleStateSlot = 0u;
 };
 static_assert(sizeof(LightSpaceShadowPush) == NWB_LIGHT_SPACE_PUSH_BYTES);
 static_assert(offsetof(LightSpaceShadowPush, receiverFactor) == 76u);
@@ -75,6 +80,8 @@ static_assert(offsetof(LightSpaceShadowPush, casterDrawOffset) == 84u);
 static_assert(offsetof(LightSpaceShadowPush, meshletDescSlot) == 88u);
 static_assert(offsetof(LightSpaceShadowPush, meshletBoundsSlot) == 92u);
 static_assert(offsetof(LightSpaceShadowPush, meshletCount) == 96u);
+static_assert(offsetof(LightSpaceShadowPush, receiverViewSlot) == 100u);
+static_assert(offsetof(LightSpaceShadowPush, receiverCsgSampleStateSlot) == 104u);
 
 struct LightSpaceShadowStorageCapacity{
     u64 countBytes = 0u;
@@ -102,6 +109,15 @@ struct LightSpaceShadowCaster{
 
 [[nodiscard]] u32 LightSpaceShadowDrawCount(const LightSpaceShadowCaster* casters, usize casterCount)noexcept;
 
+struct LightSpaceShadowDiagnostics{
+    Core::BufferHandle readback;
+    Core::QueueSubmissionToken submission;
+    Core::QueueSubmissionToken contextInitialized;
+    u32 frameIndex = 0u;
+    u32 acceptedFrame = 0u;
+    u32 reportedFailures = 0u;
+};
+
 // Resource handles freeze one allocation generation. Graph tasks must copy the caster span into their arena.
 struct LightSpaceShadowSnapshot{
     LightSpacePlan plan;
@@ -111,6 +127,8 @@ struct LightSpaceShadowSnapshot{
     Core::BufferHandle drawArguments;
     Core::BufferHandle csgContext;
     Core::BufferHandle csgOpaqueDepth;
+    Core::BufferHandle receiverView;
+    Core::BufferHandle receiverCsgSampleState;
     Core::TextureHandle depth;
     Core::GpuDescriptorHandle countsDescriptor;
     Core::GpuDescriptorHandle eventsDescriptor;
@@ -119,6 +137,7 @@ struct LightSpaceShadowSnapshot{
     Core::GpuDescriptorHandle csgContextDescriptor;
     Core::GpuDescriptorHandle csgOpaqueDepthDescriptor;
     Core::GpuDescriptorHandle depthDescriptor;
+    Core::GpuDescriptorHandle csgTlasDescriptor;
     Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * 6u> opaqueFramebuffers;
     Array<Core::FramebufferHandle, NWB_SCENE_SHADOW_SLOT_COUNT * 6u> transparentFramebuffers;
     Core::BindingLayoutHandle layout;
@@ -141,6 +160,9 @@ struct LightSpaceShadowSnapshot{
     usize casterCount = 0u;
     LightSpaceCaptureTicket captureTicket;
     LightSpaceCaptureHistory* captureHistory = nullptr;
+    LightSpaceShadowDiagnostics* diagnostics = nullptr;
+    Core::BufferHandle diagnosticReadback;
+    u32 diagnosticFrame = 0u;
     const u8* csgContextBytes = nullptr;
     usize csgContextByteCount = 0u;
     const Core::BufferHandle* csgDynamicBounds = nullptr;
@@ -157,6 +179,7 @@ public:
     LightSpaceCsgState m_csg;
     LightSpaceShadowSnapshot m_snapshot;
     LightSpaceCaptureHistory m_captureHistory;
+    LightSpaceShadowDiagnostics m_diagnostics;
     u64 m_captureSceneIdentity = 0u;
     bool m_captureSceneTrusted = false;
     bool m_captureReuseLogged = false;

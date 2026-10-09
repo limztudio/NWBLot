@@ -1,0 +1,19 @@
+material asset;
+
+asset.interface = "project/shaders/smoke_surface.bind";
+asset.surface = "project/shaders/smoke_surface.surface";
+asset.bxdf = "project/shaders/csg_event_state.bxdf";
+asset.transparent = 0;
+asset.two_sided = 0;
+asset.refractive = 0;
+asset.shader_variant = "default";
+asset.parameters = {
+    "surface": {
+        "base_color_map": "project/textures/smoke_checker",
+        "base_color_sampler": "engine/samplers/linear_clamp",
+        "base_color": "half4(1.0h, 1.0h, 1.0h, 1.0h)",
+    },
+    "runtime": {
+        "color_tint": "half4(1.0h, 1.0h, 1.0h, 1.0h)",
+    },
+};

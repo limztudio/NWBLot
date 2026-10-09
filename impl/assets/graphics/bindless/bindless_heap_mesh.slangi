@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -20,7 +22,7 @@
 #include "bindless_heap.slangi"
 #include "../mesh/meshlet_payload.slangi"
 #include "../mesh/material_typed_bindings.slangi"
-#include "../mesh/view_buffer.slangi"
+#include "bindless_heap_mesh_view.slangi"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -42,8 +44,6 @@ StructuredBuffer<NwbMeshletLocalVertexRef, Std430DataLayout> g_NwbHeapMeshletLoc
 StructuredBuffer<uint, Std430DataLayout> g_NwbHeapMeshMaterialTypedBuffers[];
 [[vk::binding(NWB_BINDLESS_HEAP_BINDING_STORAGE_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
 StructuredBuffer<NwbMeshInstanceData, Std430DataLayout> g_NwbHeapMeshInstanceBuffers[];
-[[vk::binding(NWB_BINDLESS_HEAP_BINDING_UNIFORM_BUFFER, NWB_BINDLESS_HEAP_RESOURCE_SET)]]
-ConstantBuffer<NwbMeshViewBuffer, Std140DataLayout> g_NwbHeapMeshViewBuffers[];
 #pragma warning(pop)
 
 
@@ -76,10 +76,6 @@ StructuredBuffer<uint, Std430DataLayout> nwbHeapMeshMaterialTypedWords(const uin
 
 StructuredBuffer<NwbMeshInstanceData, Std430DataLayout> nwbHeapMeshInstances(const uint slot){
     return g_NwbHeapMeshInstanceBuffers[slot];
-}
-
-ConstantBuffer<NwbMeshViewBuffer, Std140DataLayout> nwbHeapMeshViewBuffer(const uint slot){
-    return g_NwbHeapMeshViewBuffers[slot];
 }
 
 

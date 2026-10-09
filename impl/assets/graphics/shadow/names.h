@@ -47,6 +47,7 @@ inline constexpr Name s_LightSpaceCullShaderName("engine/graphics/shadow/light_s
 inline constexpr Name s_LightSpaceCaptureVertexShaderName("engine/graphics/shadow/light_space_capture_vs");
 inline constexpr Name s_LightSpaceCapturePixelShaderName("engine/graphics/shadow/light_space_capture_ps");
 inline constexpr Name s_LightSpaceResolveShaderName("engine/graphics/shadow/light_space_resolve_cs");
+inline constexpr Name s_LightSpaceResolveHwShaderName("engine/graphics/shadow/light_space_resolve_hw_cs");
 inline constexpr Name s_LightSpaceFallbackShaderName("engine/graphics/shadow/light_space_fallback_cs");
 inline constexpr Name s_LightSpaceShadeShaderName("engine/graphics/shadow/light_space_shade_cs");
 // Denoises half-res visibility into full-res visibility.

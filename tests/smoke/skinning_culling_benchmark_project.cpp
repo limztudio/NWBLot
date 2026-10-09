@@ -24,6 +24,7 @@
 
 #include "smoke_project_helpers.h"
 #include "smoke_skinned_scene_helpers.h"
+#include "gpu_pass_timing_probe.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,6 +96,7 @@ static constexpr BenchmarkModelRef s_BenchmarkModel{"project/characters/body/mod
 static constexpr BenchmarkMaterialRef s_SkinningBenchmarkMaterial{"project/smoke/skinning_culling_benchmark/materials/solid"};
 static constexpr StringView s_StaticPreviewEnv = "NWB_SKINNING_CULLING_STATIC_PREVIEW";
 static constexpr StringView s_FastSmokeEnv = "NWB_SKINNING_CULLING_FAST_SMOKE";
+static constexpr StringView s_GpuTimingEnv = "NWB_SKINNING_CULLING_GPU_TIMING";
 static constexpr Name s_ModelSkeletonObject("skeleton");
 
 static constexpr BenchmarkCase s_BenchmarkCases[] = {
@@ -525,6 +527,8 @@ public:
     virtual bool onStartup()override{
         if(!m_staticPreview)
             m_context.setTelemetryCapture(NWB::Core::Telemetry::CaptureOptions::PerfOnly());
+        if(m_gpuTimingEnabled)
+            m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
 
         if(!loadSkeletonBindJoints()){
             NWB_LOGGER_ERROR(NWB_TEXT("SkinningCullingBenchmark: benchmark mesh has no skeleton joints"));
@@ -618,6 +622,9 @@ public:
     }
 
     virtual bool onUpdate(const f32 delta)override{
+        const f32 safeDelta = IsFinite(delta) && delta > 0.0f ? delta : 1.0f / 60.0f;
+        if(m_gpuTimingEnabled)
+            m_gpuPassTimingProbe.recordFrame(safeDelta, m_context.gpuTimingView());
         if(m_finished){
             if(m_finishDrainFrames > 0u){
                 --m_finishDrainFrames;
@@ -628,7 +635,6 @@ public:
             return true;
         }
 
-        const f32 safeDelta = IsFinite(delta) && delta > 0.0f ? delta : 1.0f / 60.0f;
         if(m_staticPreview){
             m_totalTimeSeconds += static_cast<f64>(safeDelta);
             animatePoses();
@@ -655,6 +661,8 @@ private:
     BenchmarkRuntimeMeshProvider m_runtimeMeshProvider;
     Vector<NWB::Core::ECS::EntityID, NWB::Core::Alloc::GlobalArena> m_entities;
     Vector<NWB::Impl::SkeletonJointMatrix, NWB::Core::Alloc::GlobalArena> m_bindJoints;
+    const bool m_gpuTimingEnabled = EnvironmentFlagEnabled(s_GpuTimingEnv);
+    NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("SkinningCullingBenchmark") };
     f64 m_totalTimeSeconds = 0.0;
     usize m_caseIndex = 0u;
     NWB::Core::ECS::EntityID m_cameraEntity = NWB::Core::ECS::s_InvalidEntityId;

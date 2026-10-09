@@ -32,7 +32,7 @@ uint nwbSurfelFindSpawnCoverage(
     uint id,
     const uint poolCapacity,
     const int3 cell,
-    const float cellSize,
+    const float radius,
     const float3 worldPosition,
     const float3 worldNormal,
     const float normalBias,
@@ -46,12 +46,12 @@ uint nwbSurfelFindSpawnCoverage(
         const float3 normal = g_NwbSurfelPool[id].normal;
         const float3 delta = worldPosition - position;
         const float planeDistance = max(abs(dot(delta, normal)), abs(dot(delta, worldNormal)));
-        if(g_NwbSurfelPool[id].alive != 0u && nwbSurfelSpawnCoversCandidate(
-            all(nwbSurfelCellCoord(position, cellSize) == cell),
+        if(nwbSurfelIsAlive(g_NwbSurfelPool[id].sampleState) && nwbSurfelSpawnCoversCandidate(
+            nwbSurfelSameCell(g_NwbSurfelPool[id].cell, cell),
             dot(worldNormal, normal),
             dot(delta, delta),
             planeDistance,
-            g_NwbSurfelPool[id].radius,
+            radius,
             normalBias
         ))
             return id;
@@ -110,7 +110,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     // Covered candidates stop contending, allowing other faces in the same bucket to acquire a later frame's claim.
     DeviceMemoryBarrier();
     uint walk;
-    uint covered = nwbSurfelFindSpawnCoverage(oldHead, poolCapacity, myCell, cellSize, worldPosition, worldNormal, normalBias, walk);
+    uint covered = nwbSurfelFindSpawnCoverage(oldHead, poolCapacity, myCell, defaultRadius, worldPosition, worldNormal, normalBias, walk);
     if(covered != NWB_SURFEL_CELL_INVALID){
         InterlockedExchange(g_NwbSurfelPool[covered].lastSeenFrame, frameIndex);
         return;
@@ -122,7 +122,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     if(previous != oldHead)
         return;
     DeviceMemoryBarrier();
-    covered = nwbSurfelFindSpawnCoverage(oldHead, poolCapacity, myCell, cellSize, worldPosition, worldNormal, normalBias, walk);
+    covered = nwbSurfelFindSpawnCoverage(oldHead, poolCapacity, myCell, defaultRadius, worldPosition, worldNormal, normalBias, walk);
     if(covered != NWB_SURFEL_CELL_INVALID){
         InterlockedExchange(g_NwbSurfelPool[covered].lastSeenFrame, frameIndex);
         nwbSurfelPublishSpawnHead(bucket, oldHead);
@@ -177,17 +177,23 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
     for(int dz = -NWB_SURFEL_SEED_CELL_EXTENT; dz <= NWB_SURFEL_SEED_CELL_EXTENT; ++dz)
     for(int dy = -NWB_SURFEL_SEED_CELL_EXTENT; dy <= NWB_SURFEL_SEED_CELL_EXTENT; ++dy)
     for(int dx = -NWB_SURFEL_SEED_CELL_EXTENT; dx <= NWB_SURFEL_SEED_CELL_EXTENT; ++dx){
-        const uint seedBucket = nwbSurfelHashCell(myCell + int3(dx, dy, dz), cellCount);
+        const int3 seedCell = myCell + int3(dx, dy, dz);
+        const uint seedBucket = nwbSurfelHashCell(seedCell, cellCount);
         uint seedId = g_NwbSurfelSeedCellHead[seedBucket];
         uint seedWalk = 0u;
         [loop]
         while(seedId < poolCapacity && seedWalk < NWB_SURFEL_MAX_WALK){
             const NwbSurfel neighbour = g_NwbSurfelSeedPool[seedId];
-            if(neighbour.alive != 0u && neighbour.sampleCount >= NWB_SURFEL_SEED_NEIGHBOR_MIN_SAMPLE_COUNT && frameIndex - neighbour.lastSeenFrame <= uint(g_NwbSurfelConstants.ageRaysTileScreen.x)){
+            if(
+                nwbSurfelIsAlive(neighbour.sampleState)
+                && nwbSurfelSampleCount(neighbour.sampleState) >= NWB_SURFEL_SEED_NEIGHBOR_MIN_SAMPLE_COUNT
+                && frameIndex - neighbour.lastSeenFrame <= uint(g_NwbSurfelConstants.ageRaysTileScreen.x)
+                && nwbSurfelSameCell(neighbour.cell, seedCell)
+            ){
                 const float dist = length(worldPosition - neighbour.position);
                 // Seed weights are (0, 1) bounded factors, so half arithmetic is sufficient here.
                 const half normalWeight = half(saturate(dot(worldNormal, neighbour.normal)));
-                const half distanceWeight = half(saturate(1.0 - dist / max(neighbour.radius, NWB_SURFEL_RADIUS_MIN)));
+                const half distanceWeight = half(saturate(1.0 - dist / max(defaultRadius, NWB_SURFEL_RADIUS_MIN)));
                 const half weight = normalWeight * distanceWeight;
                 seedShR += half4(neighbour.shR) * weight;
                 seedShG += half4(neighbour.shG) * weight;
@@ -203,16 +209,14 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID){
 
     NwbSurfel surfel;
     surfel.position = worldPosition;
-    surfel.radius = defaultRadius;
-    surfel.normal = worldNormal;
     surfel.nextInCell = oldHead;
+    surfel.normal = worldNormal;
+    surfel.sampleState = nwbSurfelLiveSampleState(seeded ? 1u : 0u);
     surfel.shR = float4(seedShR * seedNorm);
     surfel.shG = float4(seedShG * seedNorm);
     surfel.shB = float4(seedShB * seedNorm);
-    surfel.sampleCount = seeded ? 1u : 0u;
+    surfel.cell = myCell;
     surfel.lastSeenFrame = frameIndex;
-    surfel.alive = 1u;
-    surfel.pad0 = 0u;
     // A recycled slot must forget its old directions. Initialize its guide before publishing the new core slot.
     [unroll]
     for(uint guideLane = 0u; guideLane < NWB_SURFEL_GUIDE_FLOAT4S_PER_SURFEL; ++guideLane)

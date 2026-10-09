@@ -23,17 +23,22 @@ NWB_IMPL_BEGIN
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct alignas(Float4) MeshSkinningInfluenceGpu{
-    u32 joint[s_SkinInfluenceJointCount] = {};
-    Float4 weight = Float4(0.0f, 0.0f, 0.0f, 0.0f);
+struct alignas(NWB_SKINNED_MESH_SKIN_INFLUENCE_ALIGNMENT) MeshSkinningInfluenceGpu{
+    u32 packedJoint[NWB_SKINNED_MESH_SKIN_JOINT_WORD_COUNT] = {};
+    Float4U weight{};
 };
 static_assert(
-    sizeof(MeshSkinningInfluenceGpu) == sizeof(f32) * NWB_SKINNED_MESH_SKIN_INFLUENCE_FLOAT_COUNT,
+    sizeof(MeshSkinningInfluenceGpu) == NWB_SKINNED_MESH_SKIN_INFLUENCE_BYTE_SIZE,
     "MeshSkinning influence GPU layout drifted"
 );
 static_assert(
-    alignof(MeshSkinningInfluenceGpu) >= alignof(Float4),
-    "MeshSkinning influence GPU layout must stay SIMD-aligned"
+    alignof(MeshSkinningInfluenceGpu) == NWB_SKINNED_MESH_SKIN_INFLUENCE_ALIGNMENT,
+    "MeshSkinning influence GPU alignment must match the packed uint2"
+);
+static_assert(offsetof(MeshSkinningInfluenceGpu, packedJoint) == 0u, "MeshSkinning packed joints must lead each GPU record");
+static_assert(
+    offsetof(MeshSkinningInfluenceGpu, weight) == NWB_SKINNED_MESH_SKIN_WEIGHT_BYTE_OFFSET,
+    "MeshSkinning FP32 weights must follow the packed joints"
 );
 
 // Preparation and graph declaration resolve the pose independently; graph copies joints only.
@@ -96,9 +101,13 @@ namespace MeshSkinningPayload{
         }
 
         MeshSkinningInfluenceGpu gpuSkin;
-        for(u32 influenceIndex = 0u; influenceIndex < s_SkinInfluenceJointCount; ++influenceIndex)
-            gpuSkin.joint[influenceIndex] = static_cast<u32>(sourceSkin.joint[influenceIndex]);
-        StoreFloat(weights, gpuSkin.weight);
+        for(u32 wordIndex = 0u; wordIndex < NWB_SKINNED_MESH_SKIN_JOINT_WORD_COUNT; ++wordIndex){
+            const u32 influenceIndex = wordIndex * 2u;
+            gpuSkin.packedJoint[wordIndex] = static_cast<u32>(sourceSkin.joint[influenceIndex])
+                | (static_cast<u32>(sourceSkin.joint[influenceIndex + 1u]) << NWB_SKINNED_MESH_SKIN_JOINT_BITS)
+            ;
+        }
+        gpuSkin.weight = sourceSkin.weight;
         influences.push_back(gpuSkin);
     }
     return influences;

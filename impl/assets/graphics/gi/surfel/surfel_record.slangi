@@ -6,24 +6,40 @@
 #define NWB_GRAPHICS_GI_SURFEL_RECORD_SLANGI
 
 
+#include "surfel_binding_slots.h"
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 // Single-writer visible-surface surfel with 2-band RGB SH. The live and snapshot core pools use a 96-byte stride.
 // Four float4 guide entries live in a separate buffer at surfelIndex * 4 + guideLane.
+// Radius is dispatch-uniform for the pool's lifetime; exact cached cells replace repeated position quantization during gather.
 struct NwbSurfel{
     float3 position;
-    float radius;
-    float3 normal;
     uint nextInCell;
+    float3 normal;
+    uint sampleState;
     float4 shR;
     float4 shG;
     float4 shB;
-    uint sampleCount;
+    int3 cell;
     uint lastSeenFrame;
-    uint alive;
-    uint pad0;
 };
+
+
+// Zero is dead; live records store sampleCount + 1, preserving every count through NWB_SURFEL_SAMPLE_COUNT_MAX.
+bool nwbSurfelIsAlive(const uint sampleState){
+    return sampleState != 0u;
+}
+
+uint nwbSurfelSampleCount(const uint sampleState){
+    return sampleState != 0u ? sampleState - 1u : 0u;
+}
+
+uint nwbSurfelLiveSampleState(const uint sampleCount){
+    return sampleCount + 1u;
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

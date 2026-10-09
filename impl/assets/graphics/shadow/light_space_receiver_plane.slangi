@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -9,19 +11,25 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Image stores may truncate, so use a full binary16 spacing rather than a half-ULP round-to-nearest assumption.
-float3 nwbLightSpacePositionQuantization(const float3 position){
-    const uint3 exponent = (asuint(abs(position)) >> 23u) & 0xffu;
-    return asfloat((max(exponent, uint3(113u)) - 10u) << 23u);
-}
-
 // Reconstruct the captured texel-center ray, then intersect the receiver's local plane along that ray.
 // Both projection types use the actual stored view basis; framebuffer Y increases opposite projected Y.
-bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel, const float3 origin, const float3 receiverNormal, out float projectedDepth, out float linearDepth){
+bool nwbLightSpaceReceiverDepth(
+    const NwbLightSpaceView view,
+    const uint2 pixel,
+    const float3 origin,
+    const float3 receiverNormal,
+    const float3 receiverPositionError,
+    out float projectedDepth,
+    out float linearDepth
+){
     projectedDepth = 0.0;
     linearDepth = 0.0;
     if(!all(isfinite(origin)) || !all(isfinite(receiverNormal)) || any(view.map.xy == 0u))
         return false;
+#if NWB_LIGHT_SPACE_CSG_ENABLED
+    if(!all(isfinite(receiverPositionError)))
+        return false;
+#endif
     const float2 ndc = float2((float(pixel.x) + 0.5) * 2.0 / float(view.map.x) - 1.0, 1.0 - (float(pixel.y) + 0.5) * 2.0 / float(view.map.y));
     const bool point = (view.light.w & NWB_LIGHT_SPACE_FLAG_POINT) != 0u;
     float3 direction;
@@ -58,8 +66,12 @@ bool nwbLightSpaceReceiverDepth(const NwbLightSpaceView view, const uint2 pixel,
         return false;
     if(point)
         footprint = 2.0 * distance / float(max(view.map.x, view.map.y));
+#if NWB_LIGHT_SPACE_CSG_ENABLED
+    const float3 positionError = receiverPositionError + abs(origin) * roundoff + normalError * NWB_SHADOW_RAY_MIN_DISTANCE;
+#else
     const float3 storedPosition = origin - receiverNormal * NWB_SHADOW_RAY_MIN_DISTANCE;
     const float3 positionError = nwbLightSpacePositionQuantization(storedPosition) + abs(origin) * roundoff + normalError * NWB_SHADOW_RAY_MIN_DISTANCE;
+#endif
     const float planeError = dot(abs(receiverNormal), positionError) + normalError * length(relativeHit) + roundoff * (length(relativeAnchor) + abs(distance));
     const float depthError = planeError / (abs(denominator) - denominatorError);
     // Never convert an unstable plane into an unbounded depth bias. A sub-texel uncertainty is the map's limit.

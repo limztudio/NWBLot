@@ -17,15 +17,30 @@
 
 #include "../bindless/bindless_heap.slangi"
 #include "../mesh/meshlet_payload.slangi"
+#include "constants.h"
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 struct NwbSkinnedMeshSkinInfluence{
-    uint4 joint;
-    float4 weight;
+    uint2 packedJoint;
+    float2 weight01;
+    float2 weight23;
 };
+
+uint4 nwbSkinnedMeshSkinJoints(const NwbSkinnedMeshSkinInfluence skin){
+    return uint4(
+        skin.packedJoint.x & NWB_SKINNED_MESH_SKIN_JOINT_MASK,
+        skin.packedJoint.x >> NWB_SKINNED_MESH_SKIN_JOINT_BITS,
+        skin.packedJoint.y & NWB_SKINNED_MESH_SKIN_JOINT_MASK,
+        skin.packedJoint.y >> NWB_SKINNED_MESH_SKIN_JOINT_BITS
+    );
+}
+
+float4 nwbSkinnedMeshSkinWeights(const NwbSkinnedMeshSkinInfluence skin){
+    return float4(skin.weight01, skin.weight23);
+}
 
 struct NwbSkinnedMeshJointMatrix{
     float4 row0;

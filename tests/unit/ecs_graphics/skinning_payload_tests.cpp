@@ -8,6 +8,7 @@
 #include <tests/common/test_context.h>
 #include <gtest/gtest.h>
 
+#include <global/bit.h>
 #include <global/timer.h>
 
 
@@ -161,6 +162,28 @@ TEST(SkinningPayload, EmptySkinProducesEmptyInfluencePayload){
     influences = NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
     ASSERT_TRUE(influences);
     EXPECT_TRUE(influences->empty());
+}
+
+TEST(SkinningPayload, GpuInfluencesPreserveUpperU16JointBitsAndFp32WeightBits){
+    auto& arena = NWB::Tests::TestDetail::Arena();
+    NWB::Impl::MeshSkinningRuntimeInstance instance(arena);
+    instance.skeletonJointCount = static_cast<u32>(Limit<u16>::s_Max) + 1u;
+    NWB::Impl::SkinInfluence4 skin{};
+    skin.joint[1] = Limit<u16>::s_Max;
+    skin.joint[2] = 0x8000u;
+    skin.joint[3] = 0xfffeu;
+    skin.weight = Float4U(BitCast<f32>(0x3e000001u), BitCast<f32>(0x3ebfffffu), 0.5f, -0.0f);
+    instance.skin.push_back(skin);
+
+    NWB::Core::Alloc::ScratchArena scratchArena(s_ScratchArena);
+    const auto influences = NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
+    ASSERT_TRUE(influences);
+    ASSERT_EQ(influences->size(), 1u);
+    const auto& gpuSkin = influences->front();
+    EXPECT_EQ(gpuSkin.packedJoint[0], 0xffff0000u);
+    EXPECT_EQ(gpuSkin.packedJoint[1], 0xfffe8000u);
+    for(u32 influenceIndex = 0u; influenceIndex < NWB_SKINNED_MESH_MAX_INFLUENCE_COUNT; ++influenceIndex)
+        EXPECT_EQ(BitCast<u32>(gpuSkin.weight.raw[influenceIndex]), BitCast<u32>(skin.weight.raw[influenceIndex]));
 }
 
 TEST(SkinningPayload, PaletteCanExceedSkeletonWithoutInverseBindMatrices){
@@ -398,7 +421,7 @@ TEST(SkinningPayload, StaticInfluenceEncodingRejectsInvalidMeshEditsAndRecovers)
     influences = NWB::Impl::MeshSkinningPayload::BuildSkinInfluences(instance, scratchArena);
     ASSERT_TRUE(influences);
     ASSERT_EQ(influences->size(), s_ExpectedDualCount);
-    EXPECT_EQ((*influences)[1].joint[0], 1u);
+    EXPECT_EQ((*influences)[1].packedJoint[0] & NWB_SKINNED_MESH_SKIN_JOINT_MASK, 1u);
     EXPECT_FLOAT_EQ((*influences)[1].weight.x, 1.0f);
     EXPECT_EQ(logger.errorCount(), 6u);
 }

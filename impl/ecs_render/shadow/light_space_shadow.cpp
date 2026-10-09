@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -131,9 +133,9 @@ Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(
     SoftwareShadowSettings settings = state.m_settings;
     if(state.m_csg.snapshot.hasCsg){
         settings.backend = SoftwareShadowBackend::Automatic;
-        if(settings.memoryBudgetBytes <= state.m_csg.bytes.size())
+        if(settings.memoryBudgetBytes <= state.m_csg.bytes.size() + sizeof(u32))
             return MakeUnexpected(Failure{});
-        settings.memoryBudgetBytes -= state.m_csg.bytes.size();
+        settings.memoryBudgetBytes -= state.m_csg.bytes.size() + sizeof(u32);
     }
     auto plan = BuildLightSpacePlan(
         settings, requests.data(), requestCount, m_graphics.getDevice().getMaxStorageBufferRange(),
@@ -146,6 +148,31 @@ Expected<LightSpacePlan> RendererRayTracingSystem::buildLightSpaceShadowPlan(
 
 void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
     auto& state = m_lightSpaceShadow;
+    auto& diagnostics = state.m_diagnostics;
+    if(state.m_csg.snapshot.hasCsg || diagnostics.submission.valid()){
+        ++diagnostics.frameIndex;
+        const Core::QueueSubmissionToken submission = diagnostics.submission;
+        if(submission.valid() && submission.hasPhysicalQueueIdentity()){
+            auto& device = m_graphics.getDevice();
+            const Core::GpuPhysicalQueueId queue{ submission.physicalQueueIndex, submission.deviceGeneration };
+            if(device.queueGetCompletedInstance(queue) >= submission.value){
+                const u32* failures = static_cast<const u32*>(device.mapBuffer(*diagnostics.readback, Core::CpuAccessMode::Read));
+                if(failures){
+                    const u32 failureFlags = *failures;
+                    device.unmapBuffer(*diagnostics.readback);
+                    const u32 newFailures = failureFlags & ~diagnostics.reportedFailures;
+                    diagnostics.reportedFailures |= failureFlags;
+                    if((newFailures & NWB_CSG_RAY_FAILURE_UNSUPPORTED) != 0u)
+                        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG direct-shadow traversal rejected unsupported receiver or cutter geometry; conservative occlusion retained"));
+                    if((newFailures & NWB_CSG_RAY_FAILURE_CAPACITY) != 0u)
+                        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG direct-shadow traversal exceeded crossing or BVH stack capacity; conservative occlusion retained"));
+                    if((newFailures & NWB_CSG_RAY_FAILURE_TOPOLOGY) != 0u)
+                        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG direct-shadow traversal rejected incomplete or invalid solid topology; conservative occlusion retained"));
+                    diagnostics.submission = {};
+                }
+            }
+        }
+    }
     state.m_resourcesPrepared = false;
     state.m_csgRequired = false;
     if(!state.m_csg.snapshot.hasCsg && (m_shadowVisibilityHardwareSupported || state.m_settings.backend == SoftwareShadowBackend::SoftwareTrace
@@ -169,6 +196,8 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
     auto& state = m_lightSpaceShadow;
     auto& snapshot = state.m_snapshot;
     snapshot.ready = false;
+    snapshot.diagnostics = nullptr;
+    snapshot.diagnosticReadback = nullptr;
     if(
         !state.m_resourcesPrepared || !snapshot.layout || !snapshot.viewPipeline || !snapshot.cullPipeline || !snapshot.opaqueResolve
         || !snapshot.transparentResolve || !snapshot.opaqueFallback || !snapshot.transparentFallback || !snapshot.shadePipeline
@@ -239,7 +268,9 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
     snapshot.push.sceneRootSlot = m_shadowVisibilityHardwareSupported ? 0u : m_preparedSceneBvhNodeHeapHandle.slot();
     snapshot.push.csgFlags = state.m_csg.snapshot.hasCsg ? NWB_CSG_SHADOW_FLAG_ENABLED
         | (m_shadowVisibilityHardwareSupported ? NWB_CSG_SHADOW_FLAG_HW_COMPOSE : 0u) : 0u;
-    if((snapshot.push.csgFlags & NWB_CSG_SHADOW_FLAG_HW_COMPOSE) != 0u){
+    snapshot.csgTlasDescriptor = m_shadowVisibilityHardwareSupported
+        ? m_rayTracingState.m_tlasHeapHandle : Core::GpuDescriptorHandle::Invalid();
+    if(state.m_csg.snapshot.hasCsg){
         bool hasOrdinaryTransparent = false;
         for(const LightSpaceShadowCaster& caster : state.m_casters)
             hasOrdinaryTransparent = hasOrdinaryTransparent || (caster.transparent && !caster.csg);
@@ -249,6 +280,14 @@ void RendererRayTracingSystem::prepareLightSpaceShadows(const ECSRenderDetail::S
     if(state.m_csg.snapshot.hasCsg){
         snapshot.push.csgContextSlot = snapshot.csgContextDescriptor.slot();
         snapshot.push.csgOpaqueDepthSlot = snapshot.csgOpaqueDepthDescriptor.slot();
+    }
+    auto& diagnostics = state.m_diagnostics;
+    snapshot.diagnostics = state.m_csg.snapshot.hasCsg ? &diagnostics : nullptr;
+    constexpr u32 s_DiagnosticInterval = 60u;
+    if(state.m_csg.snapshot.hasCsg && diagnostics.readback && !diagnostics.submission.valid()
+        && (diagnostics.acceptedFrame == 0u || diagnostics.frameIndex - diagnostics.acceptedFrame >= s_DiagnosticInterval)){
+        snapshot.diagnosticReadback = diagnostics.readback;
+        snapshot.diagnosticFrame = diagnostics.frameIndex;
     }
     snapshot.push.viewCount = plan.viewCount;
     snapshot.push.outputSlot = snapshot.drawArgumentsDescriptor.slot();

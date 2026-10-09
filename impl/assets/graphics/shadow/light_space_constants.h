@@ -1,4 +1,6 @@
 // limztudio@gmail.com
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -17,7 +19,7 @@
 #define NWB_LIGHT_SPACE_COUNT_INVALID 0xffffffffu
 #define NWB_LIGHT_SPACE_VIEW_BYTES 128u
 #define NWB_LIGHT_SPACE_DRAW_ARGUMENT_BYTES 20u
-#define NWB_LIGHT_SPACE_PUSH_BYTES 100u
+#define NWB_LIGHT_SPACE_PUSH_BYTES 108u
 #define NWB_LIGHT_SPACE_FLAG_POINT (1u << 0u)
 #define NWB_LIGHT_SPACE_FLAG_ELIGIBLE (1u << 1u)
 #define NWB_LIGHT_SPACE_FLAG_FITTED_COVERAGE (1u << 2u)

@@ -55,10 +55,14 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "shadow/generated/surface_dispatch.slangi"
 
 // The shared trace body: NwbGiTraceHit + nwbGiShadeHit + the scene/light bindings + the nwbGiTraceClosest seam decl.
+#if NWB_GI_CSG_ENABLED
+#define NWB_CSG_RAY_HARDWARE 0
+#define NWB_CSG_RAY_SW_STACK_SIZE NWB_GI_SW_MESH_STACK_SIZE
+#endif
 #include "gi_geometry.slangi"
 // SW-only: the CPU-built scene/instance/per-mesh BVH node type.
 #include "../bvh/bvh_common.slangi"
-#include "../bvh/ray_intersect.slangi"
+#include "../bvh/ray_iterator.slangi"
 #include "../bvh/sw_instance.slangi"
 #include "../bvh/ray_vertex_attrib.slangi"
 
@@ -88,78 +92,6 @@ StructuredBuffer<NwbSwBvhInstance, Std430DataLayout> nwbHeapGiSwInstances(const 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-struct NwbGiSwBvhIterator<let capacity : uint>{
-    float3 origin;
-    float3 direction;
-    float3 inverseDirection;
-    float minimum;
-    float maximum;
-    uint nodeSlot;
-    uint stack[capacity];
-    uint stackPointer;
-    bool overflow;
-};
-
-NwbGiSwBvhIterator<capacity> nwbGiSwBeginWalk<let capacity : uint>(
-    const uint nodeSlot,
-    const float3 origin,
-    const float3 direction,
-    const float minimum,
-    const float maximum
-){
-    NwbGiSwBvhIterator<capacity> iterator;
-    iterator.origin = origin;
-    iterator.direction = direction;
-    iterator.inverseDirection = nwbBvhSafeInvDir(direction);
-    iterator.minimum = minimum;
-    iterator.maximum = maximum;
-    iterator.nodeSlot = nodeSlot;
-    iterator.stack[0u] = 0u;
-    iterator.stackPointer = 1u;
-    iterator.overflow = false;
-    return iterator;
-}
-
-bool nwbGiSwNextLeaf<let capacity : uint>(inout NwbGiSwBvhIterator<capacity> iterator, out uint primitive){
-    primitive = 0u;
-    [loop]
-    while(iterator.stackPointer > 0u){
-        --iterator.stackPointer;
-        NwbBvhNode node = nwbHeapBvhNodes(iterator.nodeSlot)[iterator.stack[iterator.stackPointer]];
-        if(!nwbBvhRayAabb(iterator.origin, iterator.inverseDirection, iterator.minimum, iterator.maximum, node.aabbMin, node.aabbMax, 0.0))
-            continue;
-        [loop]
-        while(true){
-            if(nwbBvhNodeIsLeaf(node)){
-                primitive = nwbBvhLeafPrimitive(node);
-                return true;
-            }
-            const NwbBvhNode leftNode = nwbHeapBvhNodes(iterator.nodeSlot)[node.leftChild];
-            const uint right = nwbBvhNodeRightChildIndex(node);
-            const NwbBvhNode rightNode = nwbHeapBvhNodes(iterator.nodeSlot)[right];
-            NwbBvhNode descendNode;
-            uint farChild;
-            bool bothHit;
-            if(!nwbBvhPickNearChild(
-                iterator.origin, iterator.inverseDirection, iterator.minimum, iterator.maximum,
-                node, leftNode, right, rightNode, descendNode, farChild, bothHit
-            ))
-                break;
-            if(bothHit){
-                if(iterator.stackPointer == capacity){
-                    iterator.overflow = true;
-                    iterator.stackPointer = 0u;
-                    return false;
-                }
-                iterator.stack[iterator.stackPointer] = farChild;
-                ++iterator.stackPointer;
-            }
-            node = descendNode;
-        }
-    }
-    return false;
-}
-
 NwbRayTriangleHit nwbGiSwTriangleHit(
     const NwbRtInstanceMaterial material,
     const uint primitive,
@@ -174,56 +106,6 @@ NwbRayTriangleHit nwbGiSwTriangleHit(
     const float3 v2 = asfloat(nwbHeapRawBuffer(material.positionSlot).Load3(indices.z * NWB_RAYTRACE_POSITION_STRIDE_BYTES));
     return nwbRayTriangleMollerTrumbore(origin, direction, minimum, maximum, v0, v1, v2);
 }
-
-#if NWB_GI_CSG_ENABLED
-uint nwbCsgRayCollectCrossings(
-    const uint contextSlot,
-    const uint materialSlot,
-    const uint instanceIndex,
-    const uint membershipOffset,
-    const float3 worldOrigin,
-    const float3 worldDirection,
-    const float minimum,
-    const float maximum,
-    const NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS],
-    const uint cutCount,
-    inout NwbCsgRayCrossing crossings[NWB_CSG_RAY_CROSSING_CAPACITY],
-    inout uint crossingCount,
-    out NwbCsgRayBoundary openBoundary
-){
-    openBoundary = (NwbCsgRayBoundary)0;
-    openBoundary.distance = maximum;
-    openBoundary.primitive = NWB_CSG_RAY_INVALID_INDEX;
-    openBoundary.cutter = NWB_CSG_RAY_INVALID_INDEX;
-    const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
-    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
-    NwbGiSwBvhIterator<NWB_GI_SW_MESH_STACK_SIZE> iterator = nwbGiSwBeginWalk<NWB_GI_SW_MESH_STACK_SIZE>(
-        material.nodeSlot, nwbSwBvhTransformPoint(instance, worldOrigin), nwbSwBvhTransformVector(instance, worldDirection),
-        0.0, asfloat(0x7f7fffffu)
-    );
-    uint primitive;
-    while(nwbGiSwNextLeaf(iterator, primitive)){
-        const bool closed = nwbCsgRayPrimitiveClosed(contextSlot, membershipOffset, primitive);
-        const NwbCsgRayTriangleHit triangle = nwbCsgRayIntersectTriangle(
-            material, primitive, closed, iterator.origin, iterator.direction
-        );
-        if(triangle.failure != 0u)
-            return triangle.failure;
-        if(!triangle.hit)
-            continue;
-        if(!closed){
-            nwbCsgRaySelectOpenBoundary(
-                primitive, triangle.crossing.distance, triangle.crossing.barycentrics, minimum, cuts, cutCount, openBoundary
-            );
-            continue;
-        }
-        const uint failure = nwbCsgRayInsertCrossing(materialSlot, instanceIndex, triangle.crossing, crossings, crossingCount);
-        if(failure != 0u)
-            return failure;
-    }
-    return iterator.overflow ? NWB_CSG_RAY_FAILURE_CAPACITY : 0u;
-}
-#endif
 
 void nwbGiSwInstanceClosest(
     const uint instanceIndex,
@@ -245,12 +127,12 @@ void nwbGiSwInstanceClosest(
     }
 #endif
     const NwbSwBvhInstance instance = nwbHeapGiSwInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
-    NwbGiSwBvhIterator<NWB_GI_SW_MESH_STACK_SIZE> iterator = nwbGiSwBeginWalk<NWB_GI_SW_MESH_STACK_SIZE>(
+    NwbBvhRayIterator<NWB_GI_SW_MESH_STACK_SIZE> iterator = nwbBvhRayBeginWalk<NWB_GI_SW_MESH_STACK_SIZE>(
         material.nodeSlot, nwbSwBvhTransformPoint(instance, worldOrigin), nwbSwBvhTransformVector(instance, worldDirection),
         minimum, closest.distance
     );
     uint primitive;
-    while(nwbGiSwNextLeaf(iterator, primitive)){
+    while(nwbBvhRayNextLeaf(iterator, primitive)){
         const NwbRayTriangleHit triangle = nwbGiSwTriangleHit(material, primitive, iterator.origin, iterator.direction, iterator.minimum, iterator.maximum);
         if(!triangle.hit)
             continue;
@@ -277,11 +159,11 @@ void nwbGiSwInstanceClosest(
 
 NwbGiTraceHit nwbGiTraceClosest(float3 origin, float3 direction, float tMin, float tMax){
     NwbGiGeometryHit closest = nwbGiEmptyGeometryHit(tMax);
-    NwbGiSwBvhIterator<NWB_GI_SW_SCENE_STACK_SIZE> iterator = nwbGiSwBeginWalk<NWB_GI_SW_SCENE_STACK_SIZE>(
+    NwbBvhRayIterator<NWB_GI_SW_SCENE_STACK_SIZE> iterator = nwbBvhRayBeginWalk<NWB_GI_SW_SCENE_STACK_SIZE>(
         g_NwbGiSwMaterialContextSlots.sceneSlots.x, origin, direction, tMin, tMax
     );
     uint instanceIndex;
-    while(nwbGiSwNextLeaf(iterator, instanceIndex)){
+    while(nwbBvhRayNextLeaf(iterator, instanceIndex)){
         nwbGiSwInstanceClosest(instanceIndex, origin, direction, tMin, closest);
         iterator.maximum = closest.distance;
     }
@@ -319,12 +201,12 @@ bool nwbGiSwInstanceOccluded(
     }
 #endif
     const NwbSwBvhInstance instance = nwbHeapGiSwInstances(g_NwbGiSwMaterialContextSlots.sceneSlots.y)[instanceIndex];
-    NwbGiSwBvhIterator<NWB_GI_SW_MESH_STACK_SIZE> iterator = nwbGiSwBeginWalk<NWB_GI_SW_MESH_STACK_SIZE>(
+    NwbBvhRayIterator<NWB_GI_SW_MESH_STACK_SIZE> iterator = nwbBvhRayBeginWalk<NWB_GI_SW_MESH_STACK_SIZE>(
         material.nodeSlot, nwbSwBvhTransformPoint(instance, worldOrigin), nwbSwBvhTransformVector(instance, worldDirection),
         minimum, maximum
     );
     uint primitive;
-    while(nwbGiSwNextLeaf(iterator, primitive)){
+    while(nwbBvhRayNextLeaf(iterator, primitive)){
         if(nwbGiSwTriangleHit(material, primitive, iterator.origin, iterator.direction, iterator.minimum, iterator.maximum).hit)
             return true;
     }
@@ -336,11 +218,11 @@ bool nwbGiSwInstanceOccluded(
 }
 
 bool nwbGiTraceOccluded(float3 origin, float3 direction, float tMin, float tMax){
-    NwbGiSwBvhIterator<NWB_GI_SW_SCENE_STACK_SIZE> iterator = nwbGiSwBeginWalk<NWB_GI_SW_SCENE_STACK_SIZE>(
+    NwbBvhRayIterator<NWB_GI_SW_SCENE_STACK_SIZE> iterator = nwbBvhRayBeginWalk<NWB_GI_SW_SCENE_STACK_SIZE>(
         g_NwbGiSwMaterialContextSlots.sceneSlots.x, origin, direction, tMin, tMax
     );
     uint instanceIndex;
-    while(nwbGiSwNextLeaf(iterator, instanceIndex)){
+    while(nwbBvhRayNextLeaf(iterator, instanceIndex)){
         if(nwbGiSwInstanceOccluded(instanceIndex, origin, direction, tMin, tMax))
             return true;
     }

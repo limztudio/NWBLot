@@ -20,12 +20,9 @@ void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttri
     const NwbRtInstanceMaterial material = nwbCausticHwInstanceMaterials()[InstanceID()];
 
     payload.hit = 1u;
-    payload.t = RayTCurrent();
-    payload.worldPos = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
-    payload.shadingNormal = float3(0.0, 0.0, 1.0); // filled with the real interpolated normal for a refractive hit below
+    payload.normalAndDistance = float4(0.0, 0.0, 1.0, RayTCurrent());
     payload.isRefractive = ((material.flags & NWB_RT_INSTANCE_MATERIAL_FLAG_REFRACTIVE) != 0u) ? 1u : 0u;
-    payload.ior = 1.0;
-    payload.transmission = float3(1.0, 1.0, 1.0);
+    payload.transmissionAndIor = float4(1.0);
 
     if(payload.isRefractive != 0u){
         // Hit barycentrics: BuiltInTriangleIntersectionAttributes carries (u, v) = weights of v1, v2; v0's weight is w = 1 - u - v, so an attribute interpolates as a0*w + a1*u + a2*v -- matching the SW trace exactly.
@@ -42,7 +39,7 @@ void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttri
 
         // The interpolated SHADING normal in world space (inverse-transpose of object->world == mul(n, (float3x3)WorldToObject3x4()) == the SW nwbSwBvhTransformNormal). The bend normal AND the surface dispatch normal.
         const float3 worldShadingNormal = nwbSafeNormalize(mul(objectShadingNormal, (float3x3)WorldToObject3x4()), float3(0.0, 0.0, 1.0));
-        payload.shadingNormal = worldShadingNormal;
+        payload.normalAndDistance.xyz = worldShadingNormal;
 
         NwbShadowHit hit;
         hit.meshInstanceIndex = material.meshInstanceIndex;
@@ -50,12 +47,11 @@ void main(inout NwbCausticHwPayload payload, in BuiltInTriangleIntersectionAttri
         hit.materialConstantByteOffset = material.materialConstantByteOffset;
         hit.uv0 = a0.uv0 * weights.x + a1.uv0 * weights.y + a2.uv0 * weights.z;
         hit.worldNormal = worldShadingNormal;
-        hit.worldPosition = payload.worldPos;
+        hit.worldPosition = WorldRayOrigin() + RayTCurrent() * WorldRayDirection();
         hit.rayDirection = WorldRayDirection();
 
         const NwbMeshSurface surface = nwbShadowDispatchSurface(material.surfaceDispatchId, hit);
-        payload.ior = surface.refractionIor;
-        payload.transmission = surface.shadowAbsorptionTint;
+        payload.transmissionAndIor = float4(surface.shadowAbsorptionTint, surface.refractionIor);
     }
 }
 

@@ -15,6 +15,9 @@
 // Shares the SW producer push-constant layout.
 #include "sw_binding_slots.h"
 
+// Two float4 lanes and two uint flags, rounded to the vector alignment.
+#define NWB_CAUSTIC_HW_MAX_PAYLOAD_BYTES 48u
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 

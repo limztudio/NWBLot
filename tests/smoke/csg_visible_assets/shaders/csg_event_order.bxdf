@@ -1,0 +1,71 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifdef NWB_GRAPHICS_DEFERRED_LIGHTING_FRAMEWORK_SLANGI
+#include "csg/constants.h"
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
+#ifdef NWB_GRAPHICS_DEFERRED_LIGHTING_FRAMEWORK_SLANGI
+    const uint eventDataSlot = g_NwbDeferredBindlessResources.csgPeelSlots.w;
+    uint width;
+    uint height;
+    uint eventLayers;
+    nwbHeapStorageImage2DArrayUint4(eventDataSlot).GetDimensions(width, height, eventLayers);
+    if(any(pixel < 0) || any(uint2(pixel) >= uint2(width, height)))
+        return half3(0.0h);
+    const uint spanCountSlot = g_NwbDeferredBindlessResources.csgSpanSlots.z;
+    const uint2 spanCounts = nwbHeapStorageImage2DArrayUint2(spanCountSlot).Load(int3(pixel, 0));
+    const float spanState = spanCounts.x > 0u ? 1.0 : float(spanCounts.y) / 33.0;
+    const uint eventCountSlot = g_NwbDeferredBindlessResources.csgSpanSlots.x;
+    const uint eventCount = nwbHeapStorageImage2DArrayUint(eventCountSlot).Load(int3(pixel, 0));
+    if(eventCount != 2u || eventLayers < 2u)
+        return half3(half(spanState), 0.0h, 0.0h);
+    const uint peelIdSlot = g_NwbDeferredBindlessResources.csgPeelSlots.z;
+    uint peelWidth;
+    uint peelHeight;
+    uint peelLayers;
+    nwbHeapStorageImage2DArrayUint(peelIdSlot).GetDimensions(peelWidth, peelHeight, peelLayers);
+    if(any(uint2(pixel) >= uint2(peelWidth, peelHeight)))
+        return half3(half(spanState), 0.0h, 0.0h);
+    uint selectedPeelId = 0u;
+    [unroll]
+    for(uint layer = 0u; layer < NWB_CSG_PEEL_LAYER_COUNT; ++layer){
+        if(layer >= peelLayers)
+            break;
+        selectedPeelId = nwbHeapStorageImage2DArrayUint(peelIdSlot).Load(int3(pixel, int(layer)));
+        if(selectedPeelId != 0u)
+            break;
+    }
+    const uint receiverBits = selectedPeelId & NWB_CSG_RECEIVER_INDEX_MASK;
+    if(receiverBits == 0u)
+        return half3(half(spanState), 0.0h, 0.0h);
+    const uint receiverIndex = receiverBits - 1u;
+    const uint4 firstEvent = nwbHeapStorageImage2DArrayUint4(eventDataSlot).Load(int3(pixel, 0));
+    const uint4 secondEvent = nwbHeapStorageImage2DArrayUint4(eventDataSlot).Load(int3(pixel, 1));
+    const bool firstFront = firstEvent.y == NWB_CSG_RECEIVER_EVENT_FACE_FRONT;
+    const bool firstBack = firstEvent.y == NWB_CSG_RECEIVER_EVENT_FACE_BACK;
+    const bool secondFront = secondEvent.y == NWB_CSG_RECEIVER_EVENT_FACE_FRONT;
+    const bool secondBack = secondEvent.y == NWB_CSG_RECEIVER_EVENT_FACE_BACK;
+    const bool matchingPair = firstEvent.x == receiverIndex && secondEvent.x == receiverIndex
+        && ((firstFront && secondBack) || (firstBack && secondFront));
+    const float frontDepth = asfloat(firstFront ? firstEvent.z : secondEvent.z);
+    const float backDepth = asfloat(firstFront ? secondEvent.z : firstEvent.z);
+    const bool validatedPair = matchingPair && isfinite(frontDepth) && isfinite(backDepth) && backDepth > frontDepth;
+    // Arrival order is exposed only after the same-frame pair passes every receiver, face, and depth check.
+    const half firstFace = validatedPair ? (firstFront ? 1.0h : 0.5h) : 0.0h;
+    const half secondFace = validatedPair ? (secondFront ? 1.0h : 0.5h) : 0.0h;
+    return half3(half(spanState), firstFace, secondFace);
+#else
+    return half3(0.0h);
+#endif
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

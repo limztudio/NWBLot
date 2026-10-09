@@ -55,6 +55,9 @@ uint nwbMeshFrameViewHeapSlot(){
 #include "../shadow/shadow_surface.slangi"
 #include "shadow/generated/surface_dispatch.slangi"
 
+#if NWB_GI_CSG_ENABLED
+#define NWB_CSG_RAY_HARDWARE 1
+#endif
 #include "gi_geometry.slangi"
 
 // bindless_heap_rt.slangi above also brings the raw geometry accessor.
@@ -65,65 +68,6 @@ uint nwbMeshFrameViewHeapSlot(){
 
 
 #if NWB_GI_CSG_ENABLED
-uint nwbCsgRayCollectCrossings(
-    const uint contextSlot,
-    const uint materialSlot,
-    const uint instanceIndex,
-    const uint membershipOffset,
-    const float3 worldOrigin,
-    const float3 worldDirection,
-    const float minimum,
-    const float maximum,
-    const NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS],
-    const uint cutCount,
-    inout NwbCsgRayCrossing crossings[NWB_CSG_RAY_CROSSING_CAPACITY],
-    inout uint crossingCount,
-    out NwbCsgRayBoundary openBoundary
-){
-    openBoundary = (NwbCsgRayBoundary)0;
-    openBoundary.distance = maximum;
-    openBoundary.primitive = NWB_CSG_RAY_INVALID_INDEX;
-    openBoundary.cutter = NWB_CSG_RAY_INVALID_INDEX;
-    const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
-    const float3x4 worldToObject = nwbCsgRayWorldToObject(instance);
-    const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
-    RayDesc ray;
-    ray.Origin = worldOrigin;
-    ray.Direction = worldDirection;
-    ray.TMin = 0.0;
-    ray.TMax = asfloat(0x7f7fffffu);
-    RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
-    query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_CSG_INSTANCE_MASK, ray);
-    while(query.Proceed()){
-        if(query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE || query.CandidateInstanceID() != instanceIndex)
-            continue;
-        if(query.CandidateTriangleRayT() == 0.0)
-            continue;
-        const uint primitive = query.CandidatePrimitiveIndex();
-        if(!nwbCsgRayPrimitiveClosed(contextSlot, membershipOffset, primitive)){
-            nwbCsgRaySelectOpenBoundary(
-                primitive, query.CandidateTriangleRayT(), query.CandidateTriangleBarycentrics(),
-                minimum, cuts, cutCount, openBoundary
-            );
-            continue;
-        }
-        // Physical inverse-transpose normals preserve oriented volume membership under reflected instance transforms.
-        const float3 normal = nwbRayTraceTriangleGeometricNormal(material, primitive, worldToObject);
-        const float facing = dot(normal, worldDirection);
-        if(!isfinite(facing) || facing == 0.0)
-            return NWB_CSG_RAY_FAILURE_TOPOLOGY;
-        NwbCsgRayCrossing crossing;
-        crossing.distance = query.CandidateTriangleRayT();
-        crossing.primitive = primitive;
-        crossing.barycentrics = query.CandidateTriangleBarycentrics();
-        crossing.windingDelta = facing < 0.0 ? 1 : -1;
-        const uint failure = nwbCsgRayInsertCrossing(materialSlot, instanceIndex, crossing, crossings, crossingCount);
-        if(failure != 0u)
-            return failure;
-    }
-    return 0u;
-}
-
 void nwbGiHwCsgClosest(
     const float3 origin,
     const float3 direction,

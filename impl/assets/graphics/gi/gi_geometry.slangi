@@ -12,7 +12,7 @@
 #include "gi_trace_common.slangi"
 #include "../bvh/ray_vertex_attrib.slangi"
 #if NWB_GI_CSG_ENABLED
-#include "../csg/ray_geometry.slangi"
+#include "../csg/ray_collect.slangi"
 #endif
 
 

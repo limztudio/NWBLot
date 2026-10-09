@@ -1,0 +1,48 @@
+// limztudio@gmail.com
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+#ifdef NWB_GRAPHICS_DEFERRED_LIGHTING_FRAMEWORK_SLANGI
+#include "csg/constants.h"
+#endif
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+half3 NWB_DEFERRED_BXDF_FUNCTION(NwbBxdfSurface surface, int2 pixel){
+#ifdef NWB_GRAPHICS_DEFERRED_LIGHTING_FRAMEWORK_SLANGI
+    const uint peelIdSlot = g_NwbDeferredBindlessResources.csgPeelSlots.z;
+    uint width;
+    uint height;
+    uint layers;
+    nwbHeapStorageImage2DArrayUint(peelIdSlot).GetDimensions(width, height, layers);
+    if(any(pixel < 0) || any(uint2(pixel) >= uint2(width, height)))
+        return half3(0.0h);
+    const uint spanCountSlot = g_NwbDeferredBindlessResources.csgSpanSlots.z;
+    const uint spanCount = nwbHeapStorageImage2DArrayUint2(spanCountSlot).Load(int3(pixel, 0)).x;
+    bool hasPeel = false;
+    bool hasPeelCap = false;
+    [unroll]
+    for(uint layer = 0u; layer < NWB_CSG_PEEL_LAYER_COUNT; ++layer){
+        if(layer >= layers)
+            break;
+        const int3 texel = int3(pixel, int(layer));
+        const uint peelId = nwbHeapStorageImage2DArrayUint(peelIdSlot).Load(texel);
+        if(peelId == 0u)
+            continue;
+        hasPeel = true;
+        const uint backCapSlot = g_NwbDeferredBindlessResources.csgPeelSlots.x;
+        const float capCoverage = nwbHeapStorageImage2DArrayFloat4(backCapSlot).Load(texel).w;
+        hasPeelCap = hasPeelCap || capCoverage > 0.0;
+    }
+    // RGB separates receiver-span production, cutter peeling, and peeled back-cap coverage.
+    return half3(spanCount > 0u ? 1.0h : 0.0h, hasPeel ? 1.0h : 0.0h, hasPeelCap ? 1.0h : 0.0h);
+#else
+    return half3(0.0h);
+#endif
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+

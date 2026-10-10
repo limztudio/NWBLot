@@ -6,6 +6,7 @@
 
 
 #include "instance_material.h"
+#include "caustic_photon_parameters.h"
 
 #include <impl/ecs_render/raytrace/raytracing_system.h>
 #include <global/compile.h>
@@ -28,7 +29,6 @@
 #include <impl/assets/graphics/shadow/names.h>
 #include <impl/assets/graphics/caustic/sw_binding_slots.h>
 #include <impl/assets/graphics/caustic/hw_binding_slots.h>
-#include <impl/assets/graphics/caustic/photon_push_constants.h>
 #include <impl/assets/graphics/caustic/resolve_binding_slots.h>
 #include <impl/assets/graphics/caustic/names.h>
 #include <impl/assets/graphics/raytrace/constants.h>
@@ -361,14 +361,6 @@ struct ShadowReprojectMergePushConstants{
 };
 static_assert(sizeof(ShadowReprojectMergePushConstants) == sizeof(f32) * 16u + sizeof(u32) * 16u, "ShadowReprojectMergePushConstants must match the shader push-constant layout");
 static_assert(offsetof(ShadowReprojectMergePushConstants, receiverFactor) == 124u);
-
-// Shared CPU mirror of SW/HW caustic photon push constants.
-struct CausticPhotonPushConstants{
-#define NWB_CAUSTIC_PHOTON_PUSH_CONSTANT_FIELD(name, defaultValue) u32 name = defaultValue;
-    NWB_CAUSTIC_PHOTON_PUSH_CONSTANTS_FIELDS(NWB_CAUSTIC_PHOTON_PUSH_CONSTANT_FIELD)
-#undef NWB_CAUSTIC_PHOTON_PUSH_CONSTANT_FIELD
-};
-static_assert(sizeof(CausticPhotonPushConstants) == sizeof(u32) * 15u, "CausticPhotonPushConstants must match the shader push-constant layout");
 
 // CPU mirror of caustic resolve push constants.
 struct CausticResolvePushConstants{

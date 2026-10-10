@@ -99,19 +99,7 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& mo
         item.integerEdit = static_cast<u32>(m_scope->m_integerEdits.size());
     if(floatFrame)
         item.floatEdit = static_cast<u32>(m_scope->m_floatEdits.size());
-    Point minimum{ 120.0f, 0.0f };
-    const Name names[]{ m_editStyle.normal, m_editStyle.hover, m_editStyle.focused, m_editStyle.disabled };
-    for(const auto& name : names){
-        const UiSkinRegion* skinRegion = region(name, m_editStyle.fallback);
-        if(skinRegion){
-            const SIMDVector minimumCurrent = VectorSet(minimum.x, minimum.y, minimum.x, minimum.y);
-            const SIMDVector minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight,
-                skinRegion->minimumWidth, skinRegion->minimumHeight);
-            const SIMDVector minimumMaximum = VectorSelect(minimumCandidate, minimumCurrent,
-                VectorGreater(minimumCurrent, minimumCandidate));
-            minimum = { VectorGetX(minimumMaximum), VectorGetY(minimumMaximum) };
-        }
-    }
+    const Point minimum = editMinimumSize();
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;
@@ -125,6 +113,23 @@ EditBoxResult Builder::declareEditBox(const AStringView stableKey, EditModel& mo
     item.node = *admittedNode;
     m_scope->m_items.push_back(Move(item));
     return result;
+}
+
+Point Builder::editMinimumSize()const noexcept{
+    Point minimum{ 120.0f, 0.0f };
+    const Name names[]{ m_editStyle.normal, m_editStyle.hover, m_editStyle.focused, m_editStyle.disabled };
+    for(const auto& name : names){
+        const UiSkinRegion* skinRegion = region(name, m_editStyle.fallback);
+        if(skinRegion){
+            const SIMDVector minimumCurrent = VectorSet(minimum.x, minimum.y, minimum.x, minimum.y);
+            const SIMDVector minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight,
+                skinRegion->minimumWidth, skinRegion->minimumHeight);
+            const SIMDVector minimumMaximum = VectorSelect(minimumCandidate, minimumCurrent,
+                VectorGreater(minimumCurrent, minimumCandidate));
+            minimum = { VectorGetX(minimumMaximum), VectorGetY(minimumMaximum) };
+        }
+    }
+    return minimum;
 }
 
 bool Builder::prepareEditBox(Item& item, EditModel& model, EditBoxState& state, const EditBoxResult& result){

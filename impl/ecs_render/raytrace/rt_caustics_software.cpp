@@ -196,36 +196,7 @@ bool RendererRayTracingSystem::prepareGpuBvhCausticResources(DeferredFrameTarget
     )
         return true;
     const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
-    if(
-        !targets.causticAccumulator
-        || !targets.causticIrradiance
-        || !meshView.buffer
-        || !meshView.heapHandle.valid()
-        || !m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
-    )
-        return true;
-    if(
-        meshView.heapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
-        || m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic photon heap input has an unexpected descriptor class"));
-        return false;
-    }
-    if(!targets.bindless.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: software caustics require complete deferred bindless frame resources"));
-        return false;
-    }
-
-    const bool producerReady = ensureRayTraceMaterialContextSlotsHeapHandle() && ensureSwCausticPipeline();
-    const bool resolveReady =
-        ensureCausticGeometryDownsamplePipeline()
-        && ensureCausticResolvePipeline()
-    ;
-    const bool temporalReady =
-        causticTemporalDecay() <= 0.f
-        || ensureCausticAccumulatorDecayPipeline()
-    ;
-    return producerReady && resolveReady && temporalReady;
+    return prepareCausticResources(meshView, targets, false);
 }
 
 

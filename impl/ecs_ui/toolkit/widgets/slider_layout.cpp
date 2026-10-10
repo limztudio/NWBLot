@@ -7,7 +7,7 @@
 #include "slider.h"
 #include "slider_style.h"
 
-#include <impl/ecs_ui/toolkit/layout/validation.h>
+#include <impl/ecs_ui/toolkit/layout/rectangle.h>
 
 #include <global/math/vector_double.h>
 #include <global/simplemath.h>
@@ -46,39 +46,6 @@ namespace __hidden_ui_slider_layout{
         width <= Limit<f32>::s_Max && height <= Limit<f32>::s_Max
         && metrics.contentSize.x >= static_cast<f32>(width) && metrics.contentSize.y >= static_cast<f32>(height)
     ;
-}
-
-[[nodiscard]] static Expected<Rect> MakeRect(const f64 x, const f64 y, const f64 width, const f64 height)noexcept{
-    if(
-        !IsFinite(x) || x < -Limit<f32>::s_Max || x > Limit<f32>::s_Max
-        || !IsFinite(y) || y < -Limit<f32>::s_Max || y > Limit<f32>::s_Max
-        || !IsFinite(width) || width < 0.0 || width > Limit<f32>::s_Max
-        || !IsFinite(height) || height < 0.0 || height > Limit<f32>::s_Max
-        || x + width < -Limit<f32>::s_Max || x + width > Limit<f32>::s_Max
-        || y + height < -Limit<f32>::s_Max || y + height > Limit<f32>::s_Max
-    )
-        return MakeUnexpected(Failure{});
-    const Rect candidate{ static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(width), static_cast<f32>(height) };
-    if(
-        !IsPreciseUiRect(candidate) || (width > 0.0 && candidate.x + candidate.width <= candidate.x)
-        || (height > 0.0 && candidate.y + candidate.height <= candidate.y)
-    )
-        return MakeUnexpected(Failure{});
-    return candidate;
-}
-
-[[nodiscard]] static Expected<Rect> Intersect(const Rect& lhs, const Rect& rhs)noexcept{
-    const SIMDVectorDouble geometryPair0Operand0 = SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) };
-    const SIMDVectorDouble geometryPair0Operand1 = SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) };
-    const SIMDVectorDouble leftTopValue = ((geometryPair0Operand0 > geometryPair0Operand1) ? geometryPair0Operand0 : geometryPair0Operand1);
-    const f64 left = leftTopValue.x;
-    const f64 top = leftTopValue.y;
-    const SIMDVectorDouble geometryPair1Operand0 = (SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) } + SIMDVectorDouble{ lhs.width, lhs.height });
-    const SIMDVectorDouble geometryPair1Operand1 = (SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) } + SIMDVectorDouble{ rhs.width, rhs.height });
-    const SIMDVectorDouble rightBottomValue = ((geometryPair1Operand0 < geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
-    const f64 right = rightBottomValue.x;
-    const f64 bottom = rightBottomValue.y;
-    return MakeRect(left, top, Max(0.0, right - left), Max(0.0, bottom - top));
 }
 
 
@@ -130,7 +97,7 @@ Expected<SliderPlacement> SliderLayout::Place(
         return MakeUnexpected(Failure{});
     SliderPlacement candidate;
     candidate.bounds = bounds;
-    const auto intersection = Intersect(bounds, clip);
+    const auto intersection = IntersectUiRects<UiRectPrecision::PreciseExtents>(bounds, clip);
     if(!intersection)
         return MakeUnexpected(Failure{});
     candidate.clip = *intersection;
@@ -156,16 +123,16 @@ Expected<SliderPlacement> SliderLayout::Place(
     const f64 travel = width - thumbWidth;
     const f64 centerStart = x + thumbWidth * 0.5;
     const f64 thumbX = normalized == 0.0 ? x : normalized == 1.0 ? x + travel : x + travel * normalized;
-    const auto travelBounds = MakeRect(x, y, width, height);
+    const auto travelBounds = MakeUiRect<UiRectPrecision::PreciseExtents>(x, y, width, height);
     if(!travelBounds)
         return MakeUnexpected(Failure{});
-    const auto centerTravel = MakeRect(centerStart, y, travel, height);
+    const auto centerTravel = MakeUiRect<UiRectPrecision::PreciseExtents>(centerStart, y, travel, height);
     if(!centerTravel)
         return MakeUnexpected(Failure{});
-    const auto track = MakeRect(centerStart, y + (height - trackHeight) * 0.5, travel, trackHeight);
+    const auto track = MakeUiRect<UiRectPrecision::PreciseExtents>(centerStart, y + (height - trackHeight) * 0.5, travel, trackHeight);
     if(!track)
         return MakeUnexpected(Failure{});
-    const auto thumb = MakeRect(thumbX, y + (height - thumbHeight) * 0.5, thumbWidth, thumbHeight);
+    const auto thumb = MakeUiRect<UiRectPrecision::PreciseExtents>(thumbX, y + (height - thumbHeight) * 0.5, thumbWidth, thumbHeight);
     if(!thumb)
         return MakeUnexpected(Failure{});
     candidate.travelBounds = *travelBounds;

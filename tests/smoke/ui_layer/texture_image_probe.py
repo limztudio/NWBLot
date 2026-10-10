@@ -4,10 +4,8 @@ from __future__ import annotations
 import math
 import re
 
-from interaction_smoke import linear_rgb_bytes
-from radio_group_probe import authored_texel
-from slider_probe import compose, encoded, sampled_region
 from window_capture_smoke import SmokeFailure
+from probe_reference import compose, encoded_marker, linear_rgb_bytes, sampled_region, sampled_tile
 
 
 NUMBER = r"[0-9.eE+-]+"
@@ -67,23 +65,6 @@ def center(rectangle):
     return rectangle[0] + rectangle[2] / 2.0, rectangle[1] + rectangle[3] / 2.0
 
 
-def sampled_texture(kind, rectangle, pixel, scale, fill, border, crop=(0.0, 0.0, 24.0, 24.0)):
-    """Bilinear SampleLevel(0) of a raw tile UV rectangle, including partial-tile cropping."""
-    x, y, width, height = rectangle
-    sx = ((pixel[0] + 0.5) / scale[0] - x) / width * crop[2] + crop[0] - 0.5
-    sy = ((pixel[1] + 0.5) / scale[1] - y) / height * crop[3] + crop[1] - 0.5
-    x0, y0 = math.floor(sx), math.floor(sy)
-    tx, ty = sx - x0, sy - y0
-    channels, alpha = [0.0, 0.0, 0.0], 0.0
-    for dx, dy, weight in ((0, 0, (1.0 - tx) * (1.0 - ty)), (1, 0, tx * (1.0 - ty)),
-            (0, 1, (1.0 - tx) * ty), (1, 1, tx * ty)):
-        rgb, coverage = authored_texel(kind, x0 + dx, y0 + dy, fill, border)
-        alpha += coverage * weight
-        for channel in range(3):
-            channels[channel] += rgb[channel] * weight
-    return tuple(channels), alpha
-
-
 def observe_texture_image(frame, snapshot, expected, *, extent=None, skin="default", extra=None):
     width, height, rows = frame
     scale, rectangles = snapshot["scale"], snapshot["rectangles"]
@@ -110,7 +91,7 @@ def observe_texture_image(frame, snapshot, expected, *, extent=None, skin="defau
         for part in range(2):
             marker = index * 2 + part
             record(f"model_{marker}", pixel((16.0 + 12.0 * marker, snapshot["logical_extent"][1] - 14.0)),
-                encoded(value >> (12 * part)), 5)
+                encoded_marker(value >> (12 * part)), 5)
     logical_width = snapshot["logical_extent"][0]
     main_width = max(300.0, logical_width * 0.5 - 40.0)
     right = 24.0 + main_width + 32.0
@@ -160,7 +141,7 @@ def observe_texture_image(frame, snapshot, expected, *, extent=None, skin="defau
             if constraint is not None and not inside(constraint, position):
                 color = SENTINEL
             else:
-                source, alpha = sampled_texture(kind, bounds, position, scale, *palette, crop=crop)
+                source, alpha = sampled_tile(kind, bounds, position, scale, *palette, crop=crop)
                 color = compose(source, alpha, tint, backdrop)
             record(f"{name}_{label}", position, color)
         if constraint is not None:
@@ -195,7 +176,7 @@ def observe_texture_image(frame, snapshot, expected, *, extent=None, skin="defau
             position = pixel((bx + tx / 256.0 * bw, by + ty / 256.0 * bh))
             if not inside(bounds, position) or (name != "child_image" and obscured(position, name != "parent_image")):
                 continue
-            source, alpha = sampled_texture(kind, bounds, position, scale, *palette,
+            source, alpha = sampled_tile(kind, bounds, position, scale, *palette,
                 crop=(-origin[0], -origin[1], 256.0, 256.0))
             record(f"{name}_full_atlas_{index}", position, compose(source, alpha, tint, backdrop))
 

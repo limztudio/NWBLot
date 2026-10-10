@@ -4,8 +4,8 @@ from __future__ import annotations
 import math
 import re
 
-from interaction_smoke import linear_rgb_bytes
 from window_capture_smoke import SmokeFailure
+from probe_reference import encoded_marker
 
 NUMBER = r"[0-9.eE+-]+"
 DISPLAY = re.compile(rf"UiListSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
@@ -42,10 +42,6 @@ def center(rectangle):
     return x + width / 2.0, y + height / 2.0
 
 
-def encoded(value):
-    return linear_rgb_bytes(tuple(((value >> shift) & 15) / 15.0 for shift in (0, 4, 8)))
-
-
 def observe_list(frame, snapshot, expected, *, extent=None, skin="default", row_height=24.0, extra=None):
     width, height, rows = frame
     scale_x, scale_y = snapshot["scale"]
@@ -66,7 +62,7 @@ def observe_list(frame, snapshot, expected, *, extent=None, skin="default", row_
         for part in range(2):
             marker = index * 2 + part
             probe(f"model_{index}_{part}", (19.0 + marker * 20.0, height / scale_y - 14.0),
-                encoded(value >> (part * 12)))
+                encoded_marker(value >> (part * 12)))
     first, past = snapshot["first"], snapshot["past"]
     viewport = snapshot["rectangles"]["viewport"]
     bounded = first <= past <= snapshot["count"] and snapshot["label_reads"] <= max(0, past - first) + 2

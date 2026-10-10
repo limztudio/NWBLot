@@ -160,6 +160,7 @@ private:
     [[nodiscard]] bool floatEditMatches(const FloatEditFrame& frame)const;
     [[nodiscard]] bool numericEditMatches(const Item& item)const;
     [[nodiscard]] bool numericStateAvailable(const EditBoxState& state)const noexcept;
+    [[nodiscard]] Point editMinimumSize()const noexcept;
     [[nodiscard]] bool prepareEditBox(Item& item, EditModel& model, EditBoxState& state, const EditBoxResult& result);
     [[nodiscard]] bool paintEditBox(const Item& item, const LayoutBox& box, const HitTarget* navigation = nullptr);
     [[nodiscard]] bool paintSelectable(const Item& item, const LayoutBox& box);

@@ -28,6 +28,7 @@ target_sources(nwb_ui PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/input/router_popup_events.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/layout/tree.h"
     "${CMAKE_CURRENT_LIST_DIR}/layout/validation.h"
+    "${CMAKE_CURRENT_LIST_DIR}/layout/rectangle.h"
     "${CMAKE_CURRENT_LIST_DIR}/layout/tree.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/layout/measure.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/layout/arrange.cpp"

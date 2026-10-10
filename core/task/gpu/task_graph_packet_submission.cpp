@@ -34,10 +34,7 @@ bool GpuTaskGraph::packetReadyForSubmission(
 
     NothrowScopedLock lock(m_lifecycleMutex);
     if(
-        m_teardownInProgress
-        || m_activeCompiledGraph != &compiledGraph
-        || m_activeRecordingPlanGeneration != planAccess.planGeneration()
-        || m_activeRecordingAttemptGeneration != recordingAttemptGeneration
+        !matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), recordingAttemptGeneration)
         || m_activeRecordingPreparationSerial != 0u
         || m_submissionBindingState == SubmissionBindingState::ExceptionClosing
     )
@@ -78,10 +75,7 @@ bool GpuTaskGraph::beginPacketSubmission(
 
     NothrowScopedLock lock(m_lifecycleMutex);
     if(
-        m_teardownInProgress
-        || m_activeCompiledGraph != &compiledGraph
-        || m_activeRecordingPlanGeneration != planAccess.planGeneration()
-        || m_activeRecordingAttemptGeneration != recordingAttemptGeneration
+        !matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), recordingAttemptGeneration)
         || m_activeRecordingPreparationSerial != 0u
         || m_activeSubmissionBinding != submissionBinding
         || m_submissionBindingState == SubmissionBindingState::ExceptionClosing
@@ -147,12 +141,11 @@ void GpuTaskGraph::beginPacketSubmissionAcceptance(
     const GpuTaskId* const tasks = packetView.tasks;
 
     NothrowScopedLock lock(m_lifecycleMutex);
-    const bool bindingValid = !m_teardownInProgress
-        && m_activeCompiledGraph == &compiledGraph
-        && m_activeRecordingPlanGeneration == planAccess.planGeneration()
-        && m_activeRecordingAttemptGeneration == lease.m_recordingAttemptGeneration
-        && m_activeSubmissionBinding == lease.m_submissionBinding
-    ;
+    const bool bindingValid = matchesPacketAttemptWithinLock(
+        compiledGraph,
+        planAccess.planGeneration(),
+        lease.m_recordingAttemptGeneration
+    ) && m_activeSubmissionBinding == lease.m_submissionBinding;
     NWB_FATAL_ASSERT_MSG(bindingValid, "native-accepted packet must retain its graph submission binding");
     if(!bindingValid)
         TerminateInvariant();
@@ -229,12 +222,11 @@ void GpuTaskGraph::completePacketSubmissionAcceptance(
     const GpuTaskId* const tasks = packetView.tasks;
 
     NothrowScopedLock lock(m_lifecycleMutex);
-    const bool bindingValid = !m_teardownInProgress
-        && m_activeCompiledGraph == &compiledGraph
-        && m_activeRecordingPlanGeneration == planAccess.planGeneration()
-        && m_activeRecordingAttemptGeneration == lease.m_recordingAttemptGeneration
-        && m_activeSubmissionBinding == lease.m_submissionBinding
-    ;
+    const bool bindingValid = matchesPacketAttemptWithinLock(
+        compiledGraph,
+        planAccess.planGeneration(),
+        lease.m_recordingAttemptGeneration
+    ) && m_activeSubmissionBinding == lease.m_submissionBinding;
     NWB_FATAL_ASSERT_MSG(bindingValid, "native-accepted completion must retain its graph submission binding");
     if(!bindingValid)
         TerminateInvariant();
@@ -285,10 +277,7 @@ void GpuTaskGraph::abortPacketSubmission(
     {
         ScopedLock lock(m_lifecycleMutex);
         if(
-            m_teardownInProgress
-            || m_activeCompiledGraph != &compiledGraph
-            || m_activeRecordingPlanGeneration != planAccess.planGeneration()
-            || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
+            !matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), lease.m_recordingAttemptGeneration)
             || m_activeSubmissionBinding != lease.m_submissionBinding
         )
             return;
@@ -347,10 +336,7 @@ bool GpuTaskGraph::abandonPacketSubmissionWithoutCallbacks(
 
     NothrowScopedLock lock(m_lifecycleMutex);
     if(
-        m_teardownInProgress
-        || m_activeCompiledGraph != &compiledGraph
-        || m_activeRecordingPlanGeneration != planAccess.planGeneration()
-        || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
+        !matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), lease.m_recordingAttemptGeneration)
         || m_activeSubmissionBinding != lease.m_submissionBinding
     )
         return false;

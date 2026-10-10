@@ -4,9 +4,9 @@ from __future__ import annotations
 import math
 import re
 
-from interaction_smoke import linear_rgb_bytes
-from numeric_edit_probe import center, encoded, ink_coverage, linear_channels, text_hash
+from numeric_edit_probe import center, ink_coverage, text_hash
 from window_capture_smoke import SmokeFailure
+from probe_reference import encoded_marker, linear_channels, linear_rgb_bytes
 
 
 NUMBER = r"[0-9.eE+-]+"
@@ -78,7 +78,7 @@ def observe_text_area(frame, snapshot, expected, *, skin="default", extent=None,
     for index, (value, parts) in enumerate(zip((*snapshot["values"], snapshot["sequence"]), MARKER_PARTS)):
         for part in range(parts):
             probe(f"model_{index}_{part}", (11.0 + marker * 8.0, snapshot["logical_extent"][1] - 13.0),
-                encoded(value >> (part * 12)))
+                encoded_marker(value >> (part * 12)))
             marker += 1
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
     probe("panel_atlas", (28.0, 394.0), panel, 8)

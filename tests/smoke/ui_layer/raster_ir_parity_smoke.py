@@ -15,18 +15,9 @@ sys.path.insert(0, str(SMOKE_DIRECTORY))
 
 from raster_ir_parity_probe import compare_frames, observe_scene  # noqa: E402
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows  # noqa: E402
+from fixture_environment import build_fixture_environment
 
 
-FIXTURE_FLAGS = (
-    "INTERACTIVE", "WINDOW", "EDIT", "POPUP", "POPUP_TOOLS", "NESTED_POPUP",
-    "LIST", "COMBO", "SEARCH_COMBO", "NUMERIC_EDIT", "TEXT_AREA", "RADIO_GROUP",
-    "SLIDER", "PROGRESS", "IMAGE", "TEXTURE_IMAGE",
-)
-CAPTURE_ENVIRONMENT = (
-    "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT",
-    "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS",
-    "NWB_GPU_TIMING_FILE",
-)
 SCENES = ("startup", "paint", "texture_image")
 MODES = ("direct", "replay")
 
@@ -92,18 +83,10 @@ def capture_command(args, scene, mode, path, log_path=None, *, resize=False):
 
 
 def capture_environment(args, scene, mode):
-    environment = dict(os.environ)
-    for flag in FIXTURE_FLAGS:
-        environment[f"NWB_UI_LAYER_{flag}"] = "0"
-        environment[f"NWB_UI_LAYER_{flag}_SKIN"] = "0"
-    if scene == "texture_image":
-        environment["NWB_UI_LAYER_TEXTURE_IMAGE"] = "1"
-        environment["NWB_UI_LAYER_TEXTURE_IMAGE_SKIN"] = "1"
+    fixture = "TEXTURE_IMAGE" if scene == "texture_image" else None
+    environment = build_fixture_environment(os.environ, fixture,
+        skin="alternate" if fixture else "default", force_x11=True)
     environment[args.mode_environment] = "1" if mode == "replay" else "0"
-    for variable in CAPTURE_ENVIRONMENT:
-        environment.pop(variable, None)
-    if sys.platform.startswith("linux"):
-        environment["NWB_LINUX_BACKEND"] = "x11"
     return environment
 
 

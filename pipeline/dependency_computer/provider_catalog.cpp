@@ -4,6 +4,7 @@
 
 #include "provider_catalog.h"
 
+#include <core/assets/cook_paths.h>
 #include <core/common/log.h>
 
 
@@ -19,78 +20,11 @@ namespace __hidden_dependency_provider_catalog{
 using namespace NWB;
 namespace Assets = Core::Assets;
 
-inline constexpr AStringView s_ImplDirectoryName = "impl";
 inline constexpr AStringView s_DiagnosticPrefix = "DependencyComputer";
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-static void AddRoot(const NWB::Path& path, Assets::CookVector<Assets::ResolvedAssetRoot>& roots,
-    Assets::ScratchArena& scratchArena
-){
-    Assets::ScratchString pathText = PathToString(scratchArena, path.lexicallyNormal());
-#if defined(NWB_PLATFORM_WINDOWS)
-    CanonicalizeTextInPlace(pathText);
-#endif
-    for(const auto& root : roots){
-        Assets::ScratchString existing = PathToString(scratchArena, root.path);
-#if defined(NWB_PLATFORM_WINDOWS)
-        CanonicalizeTextInPlace(existing);
-#endif
-        if(existing == pathText)
-            return;
-    }
-    Assets::ScratchString parentName = PathToString(scratchArena, path.parentPath().filename());
-    CanonicalizeTextInPlace(parentName);
-    const AStringView rootName = parentName == s_ImplDirectoryName ? Assets::s_EngineVirtualRoot : Assets::s_ProjectVirtualRoot;
-    const ACompactString virtualRoot(rootName);
-    roots.emplace_back(NWB::Path(path), virtualRoot);
-}
-
-[[nodiscard]] static Expected<Assets::CookVector<Assets::ResolvedAssetRoot>> ResolveRoots(const PipelineOptions& options, const NWB::Path& repoRoot,
-    Assets::ScratchArena& scratchArena
-){
-    Assets::CookVector<Assets::ResolvedAssetRoot> roots(repoRoot.arena());
-    const auto& sources = options.assetRoots.empty() ? options.inputs : options.assetRoots;
-    roots.reserve(sources.size());
-    for(const auto& source : sources){
-        auto resolved = ResolveAbsolutePath(repoRoot.arena(), repoRoot, AStringView(source));
-        if(!resolved){
-            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve asset root from '{}'"), StringConvert(source));
-            return MakeUnexpected(Failure{});
-        }
-        NWB::Path path = Move(*resolved);
-        if(options.assetRoots.empty()){
-            const auto directory = IsDirectory(path);
-            if(!directory){
-                NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to inspect input '{}'"), PathToString<tchar>(path));
-                return MakeUnexpected(Failure{});
-            }
-            if(!*directory)
-                path = path.parentPath();
-            NWB::Path ancestor = path;
-            while(!ancestor.empty()){
-                Assets::ScratchString name = PathToString(scratchArena, ancestor.filename());
-                CanonicalizeTextInPlace(name);
-                if(name == Assets::s_AssetsDirectoryName){
-                    path = ancestor;
-                    break;
-                }
-                const NWB::Path parent = ancestor.parentPath();
-                if(parent == ancestor)
-                    break;
-                ancestor = parent;
-            }
-        }
-        AddRoot(path, roots, scratchArena);
-    }
-    if(roots.empty()){
-        NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no asset roots available for skin dependencies"));
-        return MakeUnexpected(Failure{});
-    }
-    return roots;
-}
 
 [[nodiscard]] static bool SelectInput(const NWB::Path& path, const bool directory,
     const Assets::DiscoveredNwbFileVector& files, Vector<u8, Assets::ScratchArena>& selected,
@@ -153,9 +87,28 @@ bool DependencyProviderCatalog::discover(const PipelineOptions& options, NWB::Co
         return false;
     }
     NWB::Path repoRoot = absoluteRoot->lexicallyNormal();
-    auto roots = ResolveRoots(options, repoRoot, scratchArena);
-    if(!roots)
+    const auto& sources = options.assetRoots.empty() ? options.inputs : options.assetRoots;
+    auto roots = Assets::ResolveAssetRoots(
+        repoRoot,
+        sources,
+        options.assetRoots.empty(),
+        Assets::AssetRootDuplicatePolicy::HostFilesystem,
+        scratchArena
+    );
+    if(!roots){
+        const auto& error = roots.error();
+        if(error.reason == Assets::AssetRootResolutionFailure::InspectInput)
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to inspect input '{}'"), PathToString<tchar>(error.inputPath));
+        else
+            NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: failed to resolve asset root from '{}'")
+                , StringConvert(sources[error.sourceIndex])
+            );
         return false;
+    }
+    if(roots->empty()){
+        NWB_LOGGER_ERROR(NWB_TEXT("DependencyComputer: no asset roots available for skin dependencies"));
+        return false;
+    }
     auto files = Assets::DiscoverFilesWithExtension(m_arena, *roots, Assets::s_NwbExtension, scratchArena);
     if(!files)
         return false;

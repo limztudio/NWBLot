@@ -44,26 +44,15 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
     const u32 photonCount = photonBudget.photonsPerFrame;
 
     const auto recordPhotons = [&](){
-        CausticPhotonPushConstants pushConstants;
-        pushConstants.width = targets.width;
-        pushConstants.height = targets.height;
-        pushConstants.instanceCount = m_rayTracingState.m_sceneBvhInstanceCount;
-        // Temporal sampling phases retain the full-domain flux.
-        pushConstants.photonCount = photonCount;
-        pushConstants.emissionTargetCount = m_rayTracingState.m_causticRefractiveInstanceCount;
-        pushConstants.gridSide = photonBudget.gridSide;
-        // The photon temporal phase rides the graphics frame index, not the dispatch count: early-frame
-        // producer skips (pipeline warmup) would otherwise shift every later phase and make captures
-        // run-varying. The graphics frame is capture-anchored, so identical frames emit identical photons.
-        pushConstants.frameIndex = static_cast<u32>(m_graphics.getFrameIndex());
-        pushConstants.depthSlot = targets.bindless.gbufferDepth.slot();
-        pushConstants.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
-        pushConstants.emissionTargetSlot = m_rayTracingState.m_causticEmissionTargetHeapHandle.slot();
-        pushConstants.viewSlot = meshView.heapHandle.slot();
-        pushConstants.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-        pushConstants.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
-        pushConstants.accumulatorStorageSlot = targets.bindless.causticAccumulatorStorage.slot();
-        pushConstants.temporalPhaseCount = temporalPhaseCount;
+        const CausticPhotonPushConstants pushConstants = BuildCausticPhotonPushConstants(
+            targets,
+            meshView,
+            m_rayTracingState,
+            photonBudget,
+            m_rayTracingState.m_sceneBvhInstanceCount,
+            static_cast<u32>(m_graphics.getFrameIndex()),
+            temporalPhaseCount
+        );
 
         Core::ComputeState computeState;
         computeState.setPipeline(pipeline.get());

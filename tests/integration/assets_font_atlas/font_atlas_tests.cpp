@@ -2,6 +2,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+#include <impl/assets_font/source_directory.h>
 #include <impl/assets_font_atlas/asset.h>
 #include <impl/assets_font_atlas/binary_payload.h>
 
@@ -396,26 +397,27 @@ TEST(AssetsFontAtlas, OriginalSourcePositioningSetAndBytesMustMatchTheShapingFon
     payload.fontSha256 = ComputeSha256({ font.fontBytes().data(), font.fontBytes().size() });
     payload.positioningTables.clear();
     const Core::Assets::AssetBytes& source = font.fontBytes();
-    const u32 tableCount = (static_cast<u32>(source[4u]) << 8u) | source[5u];
-    const auto bigU32 = [](const u8* input){
-        return
-            (static_cast<u32>(input[0u]) << 24u) | (static_cast<u32>(input[1u]) << 16u)
-            | (static_cast<u32>(input[2u]) << 8u) | static_cast<u32>(input[3u])
-        ;
-    };
-    for(u32 index = 0u; index < tableCount; ++index){
-        const u8* record = source.data() + 12u + static_cast<usize>(index) * 16u;
-        const u32 tag = bigU32(record);
-        const u32 offset = bigU32(record + 8u);
-        const u32 length = bigU32(record + 12u);
-        if(tag == 0x68656164u)
-            payload.unitsPerEm = (static_cast<u32>(source[offset + 18u]) << 8u) | source[offset + 19u];
-        if(tag == 0x6d617870u)
-            payload.sourceGlyphCount = (static_cast<u32>(source[offset + 4u]) << 8u) | source[offset + 5u];
-        if(tag == s_FontAtlasKernTag || tag == s_FontAtlasGposTag || tag == s_FontAtlasGdefTag){
+    const auto directoryResult = FontSfntDirectory::Read({ source.data(), source.size() });
+    ASSERT_TRUE(directoryResult);
+    const FontSfntDirectory& directory = *directoryResult;
+    for(u16 index = 0u; index < directory.tableCount(); ++index){
+        const auto sourceTableResult = directory.table(index);
+        ASSERT_TRUE(sourceTableResult);
+        const FontSfntTable& sourceTable = *sourceTableResult;
+        if(sourceTable.tag == s_FontSfntHeadTag){
+            const auto unitsPerEmResult = ReadFontSfntU16(sourceTable.bytes, 18u);
+            ASSERT_TRUE(unitsPerEmResult);
+            payload.unitsPerEm = *unitsPerEmResult;
+        }
+        if(sourceTable.tag == s_FontSfntMaxpTag){
+            const auto glyphCountResult = ReadFontSfntU16(sourceTable.bytes, 4u);
+            ASSERT_TRUE(glyphCountResult);
+            payload.sourceGlyphCount = *glyphCountResult;
+        }
+        if(sourceTable.tag == s_FontAtlasKernTag || sourceTable.tag == s_FontAtlasGposTag || sourceTable.tag == s_FontAtlasGdefTag){
             FontAtlasPositioningTable table(testArena.arena);
-            table.tag = tag;
-            table.bytes.assign(source.begin() + offset, source.begin() + offset + length);
+            table.tag = sourceTable.tag;
+            table.bytes.assign(sourceTable.bytes.begin(), sourceTable.bytes.end());
             table.sha256 = ComputeSha256({ table.bytes.data(), table.bytes.size() });
             payload.positioningTables.push_back(Move(table));
         }

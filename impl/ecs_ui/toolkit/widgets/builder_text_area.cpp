@@ -150,19 +150,7 @@ EditBoxResult Builder::textArea(const AStringView stableKey, EditModel& model, T
     }
     state.m_compositionGeneration = model.compositionGeneration();
     item.textArea = static_cast<u32>(m_scope->m_textAreas.size());
-    Point minimum{ 120.0f, 0.0f };
-    const Name names[]{ m_editStyle.normal, m_editStyle.hover, m_editStyle.focused, m_editStyle.disabled };
-    for(const auto& name : names){
-        const UiSkinRegion* skinRegion = region(name, m_editStyle.fallback);
-        if(skinRegion){
-            const SIMDVector minimumCurrent = VectorSet(minimum.x, minimum.y, minimum.x, minimum.y);
-            const SIMDVector minimumCandidate = VectorSet(skinRegion->minimumWidth, skinRegion->minimumHeight,
-                skinRegion->minimumWidth, skinRegion->minimumHeight);
-            const SIMDVector minimumMaximum = VectorSelect(minimumCandidate, minimumCurrent,
-                VectorGreater(minimumCurrent, minimumCandidate));
-            minimum = { VectorGetX(minimumMaximum), VectorGetY(minimumMaximum) };
-        }
-    }
+    const Point minimum = editMinimumSize();
     LayoutNodeDesc description;
     description.width = options.width;
     description.height = options.height;

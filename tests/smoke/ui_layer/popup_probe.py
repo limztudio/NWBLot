@@ -4,8 +4,8 @@ from __future__ import annotations
 import math
 import re
 
-from interaction_smoke import linear_rgb_bytes
 from window_capture_smoke import SmokeFailure
+from probe_reference import encoded_marker, linear_rgb_bytes
 
 NUMBER = r"[0-9.eE+-]+"
 DISPLAY = re.compile(rf"UiPopupSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
@@ -44,11 +44,6 @@ def center(rectangle):
     return x + width / 2.0, y + height / 2.0
 
 
-def encoded(value, dimmed):
-    factor = 0.6 if dimmed else 1.0
-    return linear_rgb_bytes(tuple(((value >> shift) & 15) / 15.0 * factor for shift in (0, 4, 8)))
-
-
 def expected_placement(snapshot):
     width, height = snapshot["logical_extent"]
     if snapshot["edge"]:
@@ -74,7 +69,7 @@ def observe_popup(frame, snapshot, expected, *, extent=None, skin="default"):
             "error": error, "passed": error <= tolerance})
 
     for index, value in enumerate((*snapshot["values"], snapshot["sequence"])):
-        probe(f"model_{index}", (19.0 + index * 20.0, height / scale_y - 14.0), encoded(value, dimmed))
+        probe(f"model_{index}", (19.0 + index * 20.0, height / scale_y - 14.0), encoded_marker(value, 0.6 if dimmed else 1.0))
     logical_width = snapshot["logical_extent"][0]
     probe("late_root_modal_sentinel", (logical_width - 32.0, 32.0),
         linear_rgb_bytes(tuple(value * (0.6 if dimmed else 1.0) for value in SENTINEL_COLOR)))

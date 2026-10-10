@@ -16,6 +16,7 @@ SMOKE_DIRECTORY = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SMOKE_DIRECTORY))
 
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows  # noqa: E402
+from fixture_environment import build_fixture_environment
 
 
 def parse_args(argv):
@@ -69,18 +70,7 @@ def run(args):
     args.output_directory = args.output_directory.resolve()
     args.output_directory.mkdir(parents=True, exist_ok=True)
     output = args.output_directory / "ui_layer.bmp"
-    environment = dict(os.environ)
-    environment["NWB_UI_LAYER_INTERACTIVE"] = "0"
-    environment["NWB_UI_LAYER_WINDOW"] = "0"
-    environment["NWB_UI_LAYER_WINDOW_SKIN"] = "0"
-    environment["NWB_UI_LAYER_EDIT"] = "0"
-    environment["NWB_UI_LAYER_POPUP"] = "0"
-    environment["NWB_UI_LAYER_POPUP_SKIN"] = "0"
-    environment["NWB_UI_LAYER_LIST"] = "0"
-    environment["NWB_UI_LAYER_LIST_SKIN"] = "0"
-    for variable in ("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT",
-        "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS", "NWB_GPU_TIMING_FILE"):
-        environment.pop(variable, None)
+    environment = build_fixture_environment(os.environ)
     result = subprocess.run(capture_command(args, output), env=environment, check=False, timeout=args.timeout + 45.0)
     if result.returncode == SKIP_EXIT_CODE:
         return SKIP_EXIT_CODE

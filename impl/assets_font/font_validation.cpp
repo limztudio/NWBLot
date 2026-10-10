@@ -3,6 +3,7 @@
 
 
 #include "font_validation.h"
+#include "source_directory.h"
 
 #include <core/common/log.h>
 
@@ -28,35 +29,18 @@ namespace __hidden_font_validation{
 
 static constexpr u32 s_TrueTypeSignature = 0x00010000u;
 static constexpr u32 s_CffSignature = 0x4f54544fu; // OTTO
-static constexpr usize s_SfntHeaderBytes = 12u;
-static constexpr usize s_TableRecordBytes = 16u;
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-[[nodiscard]] static u16 ReadBigU16(const u8* data)noexcept{
-    return static_cast<u16>((static_cast<u16>(data[0u]) << 8u) | data[1u]);
-}
-
-[[nodiscard]] static u32 ReadBigU32(const u8* data)noexcept{
-    return
-        (static_cast<u32>(data[0u]) << 24u)
-        | (static_cast<u32>(data[1u]) << 16u)
-        | (static_cast<u32>(data[2u]) << 8u)
-        | static_cast<u32>(data[3u])
-    ;
-}
-
-[[nodiscard]] static bool ValidateSfntDirectory(const Core::Assets::AssetBytes& bytes){
-    if(bytes.size() < s_SfntHeaderBytes)
+[[nodiscard]] static bool ValidateSfntDirectory(const Core::Assets::AssetBytes& bytes)noexcept{
+    const auto directoryResult = FontSfntDirectory::Read({ bytes.data(), bytes.size() });
+    if(!directoryResult)
         return false;
-    const u32 signature = ReadBigU32(bytes.data());
+    const FontSfntDirectory& directory = *directoryResult;
+    const u32 signature = directory.signature();
     if(signature != s_TrueTypeSignature && signature != s_CffSignature)
-        return false;
-    const u16 tableCount = ReadBigU16(bytes.data() + 4u);
-    const usize directoryBytes = s_SfntHeaderBytes + static_cast<usize>(tableCount) * s_TableRecordBytes;
-    if(tableCount == 0u || tableCount > s_FontMaxTableCount || directoryBytes > bytes.size())
         return false;
 
     bool hasHead = false;
@@ -67,24 +51,23 @@ static constexpr usize s_TableRecordBytes = 16u;
     bool hasGlyf = false;
     bool hasLoca = false;
     bool hasCff = false;
-    for(u16 index = 0u; index < tableCount; ++index){
-        const u8* record = bytes.data() + s_SfntHeaderBytes + static_cast<usize>(index) * s_TableRecordBytes;
-        const u32 tag = ReadBigU32(record);
-        const u32 offset = ReadBigU32(record + 8u);
-        const u32 length = ReadBigU32(record + 12u);
-        if(offset < directoryBytes || static_cast<u64>(offset) + length > bytes.size())
+    for(u16 index = 0u; index < directory.tableCount(); ++index){
+        const auto tableResult = directory.table(index);
+        if(!tableResult || tableResult->offset < directory.directoryBytes())
             return false;
+        const u32 tag = tableResult->tag;
+        const usize length = tableResult->bytes.size();
         if(tag == 0x66766172u || tag == 0x43464632u) // fvar, CFF2
             return false;
         for(u16 previous = 0u; previous < index; ++previous){
-            const u8* previousRecord = bytes.data() + s_SfntHeaderBytes + static_cast<usize>(previous) * s_TableRecordBytes;
-            if(ReadBigU32(previousRecord) == tag)
+            const auto previousTagResult = directory.tableTag(previous);
+            if(!previousTagResult || *previousTagResult == tag)
                 return false;
         }
         switch(tag){
-        case 0x68656164u: hasHead = length >= 54u; break;
+        case s_FontSfntHeadTag: hasHead = length >= 54u; break;
         case 0x636d6170u: hasCmap = length >= 4u; break;
-        case 0x6d617870u: hasMaxp = length >= 6u; break;
+        case s_FontSfntMaxpTag: hasMaxp = length >= 6u; break;
         case 0x68686561u: hasHhea = length >= 36u; break;
         case 0x686d7478u: hasHmtx = length >= 4u; break;
         case 0x676c7966u: hasGlyf = length > 0u; break;

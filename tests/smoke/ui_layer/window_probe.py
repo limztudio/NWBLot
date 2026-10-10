@@ -4,8 +4,8 @@ from __future__ import annotations
 import math
 import re
 
-from interaction_smoke import linear_rgb_bytes
 from window_capture_smoke import SmokeFailure
+from probe_reference import encoded_marker, linear_rgb_bytes
 
 NUMBER = r"[0-9.eE+-]+"
 DISPLAY = re.compile(rf"UiWindowSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
@@ -59,11 +59,6 @@ def center(rectangle):
     return x + width / 2.0, y + height / 2.0
 
 
-def encoded(value):
-    integer = math.floor(max(0.0, value) + 0.5)
-    return linear_rgb_bytes(tuple(((integer >> shift) & 15) / 15.0 for shift in (0, 4, 8)))
-
-
 def observe_window(frame, snapshot, expected_bounds, count, collapsed, locked, *, extent=None, skin="default"):
     width, height, rows = frame
     scale_x, scale_y = snapshot["scale"]
@@ -84,7 +79,7 @@ def observe_window(frame, snapshot, expected_bounds, count, collapsed, locked, *
     values = (*snapshot["bounds"], snapshot["count"], int(snapshot["collapsed"]), int(snapshot["locked"]), snapshot["sequence"])
     logical_height = height / scale_y
     for index, value in enumerate(values):
-        probe(f"model_{index}", (19.0 + index * 20.0, logical_height - 14.0), encoded(value))
+        probe(f"model_{index}", (19.0 + index * 20.0, logical_height - 14.0), encoded_marker(math.floor(max(0.0, value) + 0.5)))
     x, y, window_width, window_height = expected_bounds
     title_height = snapshot["rectangles"]["title"][3]
     visible_height = title_height if collapsed else window_height

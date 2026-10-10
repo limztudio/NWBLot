@@ -16,6 +16,7 @@ from window_capture_smoke import (
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,
     validate_expected_log_text, wait_for_log_message,
 )
+from fixture_environment import build_fixture_environment
 
 
 class ImageRun:
@@ -126,18 +127,7 @@ def run(args):
     if not args.executable.is_file():
         raise SmokeFailure(f"executable does not exist: {args.executable}")
     args.output_directory.mkdir(parents=True, exist_ok=True)
-    environment = build_launch_environment(args)
-    for fixture in ("WINDOW", "POPUP", "POPUP_TOOLS", "NESTED_POPUP", "LIST", "COMBO", "SEARCH_COMBO",
-            "NUMERIC_EDIT", "TEXT_AREA", "RADIO_GROUP", "SLIDER", "PROGRESS"):
-        environment[f"NWB_UI_LAYER_{fixture}"] = "0"
-        environment[f"NWB_UI_LAYER_{fixture}_SKIN"] = "0"
-    environment.update({"NWB_UI_LAYER_IMAGE": "1", "NWB_UI_LAYER_IMAGE_SKIN": "1" if args.skin == "alternate" else "0",
-        "NWB_UI_LAYER_EDIT": "0", "NWB_UI_LAYER_INTERACTIVE": "0"})
-    if platform.system() == "Linux":
-        environment["NWB_LINUX_BACKEND"] = "x11"
-    for variable in ("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT",
-            "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS", "NWB_GPU_TIMING_FILE"):
-        environment.pop(variable, None)
+    environment = build_fixture_environment(build_launch_environment(args), "IMAGE", skin=args.skin, force_x11=True)
     backend = create_capture_backend()
     logserver = application = image_run = None
     handle = None

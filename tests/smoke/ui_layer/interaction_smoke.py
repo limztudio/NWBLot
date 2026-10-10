@@ -27,6 +27,8 @@ from window_capture_smoke import (  # noqa: E402
     shutdown_logserver_and_collect, terminate_process, validate_expected_log_text,
     wait_for_log_message,
 )
+from fixture_environment import build_fixture_environment
+from probe_reference import linear_rgb_bytes
 
 DISPLAY_PATTERN = re.compile(
     r"UiInteractiveSmoke: display logical=([0-9.eE+-]+)x([0-9.eE+-]+) scale=([0-9.eE+-]+)x([0-9.eE+-]+)"
@@ -95,13 +97,6 @@ def parse_args(argv, *, description=__doc__):
     if args.gpu_validation:
         args.application_arg = ["--gpudbg", *args.application_arg]
     return args
-
-
-def linear_rgb_bytes(color):
-    def convert(channel):
-        srgb = channel * 12.92 if channel <= 0.0031308 else 1.055 * channel ** (1.0 / 2.4) - 0.055
-        return int(round(srgb * 255.0))
-    return tuple(convert(channel) for channel in color)
 
 
 def observe_markers(frame, scale_x, scale_y, expected_count, enabled):
@@ -337,20 +332,7 @@ def run(args):
     if not args.executable.is_file():
         raise SmokeFailure(f"executable does not exist: {args.executable}")
     args.output_directory.mkdir(parents=True, exist_ok=True)
-    environment = build_launch_environment(args)
-    environment["NWB_UI_LAYER_INTERACTIVE"] = "1"
-    environment["NWB_UI_LAYER_WINDOW"] = "0"
-    environment["NWB_UI_LAYER_WINDOW_SKIN"] = "0"
-    environment["NWB_UI_LAYER_EDIT"] = "0"
-    environment["NWB_UI_LAYER_POPUP"] = "0"
-    environment["NWB_UI_LAYER_POPUP_SKIN"] = "0"
-    environment["NWB_UI_LAYER_LIST"] = "0"
-    environment["NWB_UI_LAYER_LIST_SKIN"] = "0"
-    if platform.system() == "Linux":
-        environment["NWB_LINUX_BACKEND"] = "x11"
-    for variable in ("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT",
-        "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS", "NWB_GPU_TIMING_FILE"):
-        environment.pop(variable, None)
+    environment = build_fixture_environment(build_launch_environment(args), "INTERACTIVE", force_x11=True)
     backend = create_capture_backend()
     logserver = application = interaction = None
     handle = None

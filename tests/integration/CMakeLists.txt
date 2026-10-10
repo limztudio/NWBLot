@@ -16,6 +16,9 @@ endif()
 add_subdirectory(logger_server)
 
 if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Python3_Interpreter_FOUND)
+    add_test(NAME nwb_ui_smoke_tooling_analysis_unit
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/ui_smoke_tooling_tests.py"
+    )
     add_test(NAME nwb_gpu_timing_parse_analysis_unit
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/gpu_timing_parse_tests.py"
     )

@@ -39,10 +39,7 @@ bool GpuTaskGraph::discardUnacceptedPacket(
     {
         ScopedLock lock(m_lifecycleMutex);
         if(
-            m_teardownInProgress
-            || m_activeCompiledGraph != &compiledGraph
-            || m_activeRecordingPlanGeneration != planAccess.planGeneration()
-            || m_activeRecordingAttemptGeneration != recordingAttemptGeneration
+            !matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), recordingAttemptGeneration)
             || m_activeSubmissionBinding != submissionBinding
             || m_submissionBindingState == SubmissionBindingState::ExceptionClosing
         )
@@ -116,10 +113,7 @@ bool GpuTaskGraph::abandonUnacceptedPacketWithoutCallbacks(
 
     NothrowScopedLock lock(m_lifecycleMutex);
     if(
-        m_teardownInProgress
-        || m_activeCompiledGraph != &compiledGraph
-        || m_activeRecordingPlanGeneration != planAccess.planGeneration()
-        || m_activeRecordingAttemptGeneration != recordingAttemptGeneration
+        !matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), recordingAttemptGeneration)
         || m_activeSubmissionBinding != submissionBinding
     )
         return false;

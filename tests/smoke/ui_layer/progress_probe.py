@@ -4,9 +4,9 @@ from __future__ import annotations
 import math
 import re
 
-from interaction_smoke import linear_rgb_bytes
-from slider_probe import bits_value, compose, encoded, sampled_region, value_bits
+from slider_probe import bits_value, value_bits
 from window_capture_smoke import SmokeFailure
+from probe_reference import compose, encoded_marker, linear_rgb_bytes, sampled_region
 
 
 NUMBER = r"[0-9.eE+-]+"
@@ -83,7 +83,7 @@ def observe_progress(frame, snapshot, expected, *, extent=None, skin="default", 
             (snapshot["sequence"], 2)):
         for part in range(parts):
             record(f"model_{marker}", pixel((16.0 + 12.0 * marker, snapshot["logical_extent"][1] - 14.0)),
-                encoded(value >> (12 * part)), 5)
+                encoded_marker(value >> (12 * part)), 5)
             marker += 1
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
     logical_width = snapshot["logical_extent"][0]

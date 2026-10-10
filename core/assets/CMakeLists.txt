@@ -24,6 +24,7 @@ if(NWB_BUILD_PIPELINE)
         "${CMAKE_CURRENT_LIST_DIR}/input_list.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook_entry_registry.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook_entry_registry.h"
+        "${CMAKE_CURRENT_LIST_DIR}/cook_paths.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook_paths.h"
         "${CMAKE_CURRENT_LIST_DIR}/cook_metadata.cpp"
         "${CMAKE_CURRENT_LIST_DIR}/cook_metadata.h"

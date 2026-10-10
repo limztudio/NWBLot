@@ -13,6 +13,9 @@
 
 #include "cook_metadata.h"
 
+#include <global/expected.h>
+#include <global/span.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -22,6 +25,27 @@ NWB_ASSETS_BEGIN
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+namespace AssetRootDuplicatePolicy{
+    enum Enum : u8{
+        ExactText,
+        HostFilesystem
+    };
+};
+
+namespace AssetRootResolutionFailure{
+    enum Enum : u8{
+        ResolvePath,
+        InspectInput
+    };
+};
+
+struct AssetRootResolutionError{
+    Path inputPath;
+    usize sourceIndex;
+    AssetRootResolutionFailure::Enum reason;
+    ErrorCode error;
+};
 
 struct ResolvedCookPaths{
     Path repoRoot;
@@ -41,6 +65,14 @@ struct ResolvedCookPaths{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Retains first-occurrence order and original path spelling; callers select their duplicate identity contract.
+[[nodiscard]] Expected<CookVector<ResolvedAssetRoot>, AssetRootResolutionError> ResolveAssetRoots(
+    const Path& repoRoot,
+    Span<const CookString> sources,
+    bool inferFromInputs,
+    AssetRootDuplicatePolicy::Enum duplicatePolicy,
+    ScratchArena& scratchArena
+);
 [[nodiscard]] inline bool PrepareGeneratedIncludeRoot(const Path& includeRoot, const AStringView generatorName){
     const auto removed = RemoveAllIfExists(includeRoot);
     if(!removed){

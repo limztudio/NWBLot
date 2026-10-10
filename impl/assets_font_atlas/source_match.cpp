@@ -4,6 +4,8 @@
 
 #include "model.h"
 
+#include <impl/assets_font/source_directory.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -18,35 +20,37 @@ bool ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& f
     const Core::Assets::AssetBytes& source = font.fontBytes();
     if(
         payload.font.name() != font.virtualPath() || payload.faceIndex != font.faceIndex()
-        || ComputeSha256({ source.data(), source.size() }) != payload.fontSha256 || source.size() < 12u
+        || ComputeSha256({ source.data(), source.size() }) != payload.fontSha256 || source.size() < s_FontSfntHeaderBytes
     ){
         NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas source match failed: font identity, source hash, or face index differs"));
         return false;
     }
-    const u32 tableCount = (static_cast<u32>(source[4u]) << 8u) | source[5u];
-    if(tableCount == 0u || tableCount > s_FontMaxTableCount || static_cast<u64>(tableCount) * 16u > source.size() - 12u)
+    const auto directoryResult = FontSfntDirectory::Read({ source.data(), source.size() });
+    if(!directoryResult)
         return false;
+    const FontSfntDirectory& directory = *directoryResult;
     usize matched = 0u;
     bool hasHead = false;
     bool hasMaxp = false;
-    for(u32 index = 0u; index < tableCount; ++index){
-        const u8* record = source.data() + 12u + static_cast<usize>(index) * 16u;
-        const u32 tag = ReadFontAtlasBigU32(record);
-        const u32 offset = ReadFontAtlasBigU32(record + 8u);
-        const u32 length = ReadFontAtlasBigU32(record + 12u);
-        if(offset > source.size() || length > source.size() - offset)
+    for(u16 index = 0u; index < directory.tableCount(); ++index){
+        const auto sourceTableResult = directory.table(index);
+        if(!sourceTableResult)
             return false;
-        if(tag == 0x68656164u){
+        const FontSfntTable& sourceTable = *sourceTableResult;
+        const u32 tag = sourceTable.tag;
+        if(tag == s_FontSfntHeadTag){
             hasHead = true;
-            if(length < 20u || ((static_cast<u32>(source[offset + 18u]) << 8u) | source[offset + 19u]) != payload.unitsPerEm)
+            const auto unitsPerEmResult = ReadFontSfntU16(sourceTable.bytes, 18u);
+            if(!unitsPerEmResult || *unitsPerEmResult != payload.unitsPerEm)
                 return false;
         }
-        else if(tag == 0x6d617870u){
+        else if(tag == s_FontSfntMaxpTag){
             hasMaxp = true;
-            if(length < 6u || ((static_cast<u32>(source[offset + 4u]) << 8u) | source[offset + 5u]) != payload.sourceGlyphCount)
+            const auto glyphCountResult = ReadFontSfntU16(sourceTable.bytes, 4u);
+            if(!glyphCountResult || *glyphCountResult != payload.sourceGlyphCount)
                 return false;
         }
-        if((tag != s_FontAtlasKernTag && tag != s_FontAtlasGposTag && tag != s_FontAtlasGdefTag) || length == 0u)
+        if((tag != s_FontAtlasKernTag && tag != s_FontAtlasGposTag && tag != s_FontAtlasGdefTag) || sourceTable.bytes.empty())
             continue;
         const FontAtlasPositioningTable* exported = nullptr;
         for(const FontAtlasPositioningTable& table : payload.positioningTables){
@@ -55,7 +59,10 @@ bool ValidateFontAtlasSourceMatch(const FontAtlasPayload& payload, const Font& f
                 break;
             }
         }
-        if(!exported || exported->bytes.size() != length || NWB_MEMCMP(exported->bytes.data(), source.data() + offset, length) != 0){
+        if(
+            !exported || exported->bytes.size() != sourceTable.bytes.size()
+            || NWB_MEMCMP(exported->bytes.data(), sourceTable.bytes.data(), sourceTable.bytes.size()) != 0
+        ){
             NWB_LOGGER_ERROR(NWB_TEXT("FontAtlas source match failed: original positioning tables differ or are missing"));
             return false;
         }

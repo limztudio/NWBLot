@@ -65,6 +65,14 @@ NWB_IMPL_UI_BEGIN
     ;
 }
 
+[[nodiscard]] inline bool IsBoundedUiPadding(const Insets& padding)noexcept{
+    return
+        IsValidUiPadding(padding)
+        && static_cast<f64>(padding.left) + padding.right <= Limit<f32>::s_Max
+        && static_cast<f64>(padding.top) + padding.bottom <= Limit<f32>::s_Max
+    ;
+}
+
 [[nodiscard]] inline bool IsValidUiColor(const Color& color)noexcept{
     return
         IsFinite(color.r) && color.r >= 0.0f && IsFinite(color.g) && color.g >= 0.0f

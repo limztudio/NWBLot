@@ -4,7 +4,7 @@
 
 #include "scrollbar.h"
 
-#include <impl/ecs_ui/toolkit/layout/validation.h>
+#include <impl/ecs_ui/toolkit/layout/rectangle.h>
 
 #include <global/math/vector_double.h>
 #include <global/simplemath.h>
@@ -24,34 +24,6 @@ namespace __hidden_ui_scrollbar{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-[[nodiscard]] static Expected<Rect> MakeRect(const f64 x, const f64 y, const f64 width, const f64 height)noexcept{
-    if(
-        !IsFinite(x) || x < -Limit<f32>::s_Max || x > Limit<f32>::s_Max
-        || !IsFinite(y) || y < -Limit<f32>::s_Max || y > Limit<f32>::s_Max
-        || !IsFinite(width) || width < 0.0 || width > Limit<f32>::s_Max
-        || !IsFinite(height) || height < 0.0 || height > Limit<f32>::s_Max
-    )
-        return MakeUnexpected(Failure{});
-    const Rect candidate{ static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(width), static_cast<f32>(height) };
-    if(!IsValidUiRect(candidate))
-        return MakeUnexpected(Failure{});
-    return candidate;
-}
-
-[[nodiscard]] static Expected<Rect> Intersect(const Rect& lhs, const Rect& rhs)noexcept{
-    const SIMDVectorDouble geometryPair0Operand0 = SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) };
-    const SIMDVectorDouble geometryPair0Operand1 = SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) };
-    const SIMDVectorDouble xYValue = ((geometryPair0Operand0 > geometryPair0Operand1) ? geometryPair0Operand0 : geometryPair0Operand1);
-    const f64 x = xYValue.x;
-    const f64 y = xYValue.y;
-    const SIMDVectorDouble geometryPair1Operand0 = (SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) } + SIMDVectorDouble{ lhs.width, lhs.height });
-    const SIMDVectorDouble geometryPair1Operand1 = (SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) } + SIMDVectorDouble{ rhs.width, rhs.height });
-    const SIMDVectorDouble rightBottomValue = ((geometryPair1Operand0 < geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
-    const f64 right = rightBottomValue.x;
-    const f64 bottom = rightBottomValue.y;
-    return MakeRect(x, y, Max(0.0, right - x), Max(0.0, bottom - y));
-}
 
 [[nodiscard]] static bool ValidBar(const ScrollbarPlacement& bar, const ScrollAxis::Enum axis)noexcept{
     if(
@@ -178,7 +150,7 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(
     const SIMDVectorDouble widthHeightValue = ((geometryPair3Operand0 > geometryPair3Operand1) ? geometryPair3Operand0 : geometryPair3Operand1);
     const f64 width = widthHeightValue.x;
     const f64 height = widthHeightValue.y;
-    const auto padded = MakeRect(x, y, width, height);
+    const auto padded = MakeUiRect<UiRectPrecision::RoundedEndpoints>(x, y, width, height);
     if(!padded)
         return MakeUnexpected(Failure{});
     const f64 availableWidth = padded->width;
@@ -208,13 +180,13 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(
     const f64 barWidth = vertical ? verticalWidth : 0.0;
     const f64 barHeight = horizontal ? horizontalHeight : 0.0;
     ScrollViewportPlacement candidate;
-    const auto viewport = MakeRect(padded->x, padded->y, availableWidth - barWidth, availableHeight - barHeight);
+    const auto viewport = MakeUiRect<UiRectPrecision::RoundedEndpoints>(padded->x, padded->y, availableWidth - barWidth, availableHeight - barHeight);
     if(!viewport)
         return MakeUnexpected(Failure{});
     candidate.viewport = *viewport;
     if((barWidth > 0.0 && candidate.viewport.width >= padded->width) || (barHeight > 0.0 && candidate.viewport.height >= padded->height))
         return MakeUnexpected(Failure{});
-    const auto contentClip = Intersect(candidate.viewport, clip);
+    const auto contentClip = IntersectUiRects<UiRectPrecision::RoundedEndpoints>(candidate.viewport, clip);
     if(!contentClip)
         return MakeUnexpected(Failure{});
     candidate.contentClip = *contentClip;
@@ -223,19 +195,19 @@ Expected<ScrollViewportPlacement> ScrollbarLayout::Calculate(
     Rect horizontalTrack;
     Rect verticalTrack;
     if(horizontal && viewportWidth > 0.0 && barHeight > 0.0){
-        const auto track = MakeRect(padded->x, static_cast<f64>(padded->y) + viewportHeight, viewportWidth, barHeight);
+        const auto track = MakeUiRect<UiRectPrecision::RoundedEndpoints>(padded->x, static_cast<f64>(padded->y) + viewportHeight, viewportWidth, barHeight);
         if(!track)
             return MakeUnexpected(Failure{});
         horizontalTrack = *track;
     }
     if(vertical && viewportHeight > 0.0 && barWidth > 0.0){
-        const auto track = MakeRect(static_cast<f64>(padded->x) + viewportWidth, padded->y, barWidth, viewportHeight);
+        const auto track = MakeUiRect<UiRectPrecision::RoundedEndpoints>(static_cast<f64>(padded->x) + viewportWidth, padded->y, barWidth, viewportHeight);
         if(!track)
             return MakeUnexpected(Failure{});
         verticalTrack = *track;
     }
     if(barWidth > 0.0 && barHeight > 0.0){
-        const auto corner = MakeRect(
+        const auto corner = MakeUiRect<UiRectPrecision::RoundedEndpoints>(
             static_cast<f64>(padded->x) + viewportWidth, static_cast<f64>(padded->y) + viewportHeight, barWidth, barHeight
         );
         if(!corner)

@@ -4,8 +4,8 @@ from __future__ import annotations
 import math
 import re
 
-from interaction_smoke import linear_rgb_bytes
 from window_capture_smoke import SmokeFailure
+from probe_reference import encoded_marker, linear_channels, linear_rgb_bytes
 
 NUMBER = r"[0-9.eE+-]+"
 DISPLAY = re.compile(rf"UiPopupToolsSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
@@ -43,16 +43,8 @@ def center(rectangle):
     return x + width / 2.0, y + height / 2.0
 
 
-def encoded(value):
-    return linear_rgb_bytes(tuple(((value >> shift) & 15) / 15.0 for shift in (0, 4, 8)))
-
-
 def tooltip_ink_coverage(observed, background, foreground):
-    def linear(color):
-        return tuple(channel / 255.0 / 12.92 if channel <= 10 else
-            ((channel / 255.0 + 0.055) / 1.055) ** 2.4 for channel in color)
-
-    actual, backdrop = linear(observed), linear(background)
+    actual, backdrop = linear_channels(observed), linear_channels(background)
     direction = tuple(target - base for target, base in zip(foreground, backdrop))
     coverage = sum((value - base) * component for value, base, component in zip(actual, backdrop, direction))
     coverage /= sum(component * component for component in direction)
@@ -79,7 +71,7 @@ def observe_popup_tools(frame, snapshot, expected, *, extent=None, skin="default
     for index, value in enumerate((*snapshot["values"], snapshot["sequence"])):
         for part in range(2):
             marker = index * 2 + part
-            probe(f"model_{index}_{part}", (18.0 + marker * 16.0, height / scale_y - 14.0), encoded(value >> (part * 12)))
+            probe(f"model_{index}_{part}", (18.0 + marker * 16.0, height / scale_y - 14.0), encoded_marker(value >> (part * 12)))
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
     probe("anchor_panel_gutter", (28.0, 200.0), panel, 8)
     geometry_matches = True

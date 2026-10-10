@@ -4,8 +4,8 @@ from __future__ import annotations
 import math
 import re
 
-from interaction_smoke import linear_rgb_bytes
 from window_capture_smoke import SmokeFailure
+from probe_reference import compose, encoded_marker, linear_channels, sampled_tile
 
 
 NUMBER = r"[0-9.eE+-]+"
@@ -55,60 +55,6 @@ def center(rectangle):
     return x + width / 2.0, y + height / 2.0
 
 
-def encoded(value):
-    return linear_rgb_bytes(tuple(((value >> shift) & 15) / 15.0 for shift in (0, 4, 8)))
-
-
-def linear_channels(color):
-    return tuple(channel / 255.0 / 12.92 if channel <= 10 else
-        ((channel / 255.0 + 0.055) / 1.055) ** 2.4 for channel in color)
-
-
-def compose(source, alpha, tint, backdrop):
-    background = linear_channels(backdrop)
-    opacity = alpha * tint[3]
-    return linear_rgb_bytes(tuple(channel * tint[index] * opacity + background[index] * (1.0 - opacity)
-        for index, channel in enumerate(source)))
-
-
-def authored_texel(kind, x, y, fill, border):
-    """Match the authored four-by-four straight-alpha tile, before UASTC compression."""
-    if not 0 <= x < 24 or not 0 <= y < 24:
-        return (0.0, 0.0, 0.0), 0.0
-    samples = []
-    for sy in range(4):
-        for sx in range(4):
-            px, py = x + (sx + 0.5) / 4.0, y + (sy + 0.5) / 4.0
-            if kind == "dot":
-                if math.hypot(px - 12.0, py - 12.0) <= 5.0:
-                    samples.append(MARK)
-            else:
-                dx, dy = abs(px - 12.0) - 7.0, abs(py - 12.0) - 7.0
-                distance = math.hypot(max(dx, 0.0), max(dy, 0.0)) + min(max(dx, dy), 0.0) - 5.0
-                if distance <= 0.0:
-                    samples.append(border if distance >= -1.5 else fill)
-    if not samples:
-        return (0.0, 0.0, 0.0), 0.0
-    rgb = tuple(round(sum(sample[channel] for sample in samples) / len(samples)) for channel in range(3))
-    return linear_channels(rgb), round(len(samples) * 255.0 / 16.0) / 255.0
-
-
-def sampled_tile(kind, rectangle, pixel, scale, fill, border):
-    x, y, width, height = rectangle
-    sx = ((pixel[0] + 0.5) / scale[0] - x) / width * 24.0 - 0.5
-    sy = ((pixel[1] + 0.5) / scale[1] - y) / height * 24.0 - 0.5
-    x0, y0 = math.floor(sx), math.floor(sy)
-    tx, ty = sx - x0, sy - y0
-    channels, alpha = [0.0, 0.0, 0.0], 0.0
-    for dx, dy, weight in ((0, 0, (1.0 - tx) * (1.0 - ty)), (1, 0, tx * (1.0 - ty)),
-            (0, 1, (1.0 - tx) * ty), (1, 1, tx * ty)):
-        rgb, coverage = authored_texel(kind, x0 + dx, y0 + dy, fill, border)
-        alpha += coverage * weight
-        for channel in range(3):
-            channels[channel] += rgb[channel] * weight
-    return tuple(channels), alpha
-
-
 def observe_radio_group(frame, snapshot, expected, *, extent=None, skin="default", extra=None, pressed=None):
     width, height, rows = frame
     scale = snapshot["scale"]
@@ -133,7 +79,7 @@ def observe_radio_group(frame, snapshot, expected, *, extent=None, skin="default
     for index, value in enumerate((*snapshot["values"], snapshot["sequence"])):
         for part in range(2):
             probe(f"model_{index}_{part}", (16.0 + 12.0 * (index * 2 + part), snapshot["logical_extent"][1] - 14.0),
-                encoded(value >> (part * 12)), MARKER_TOLERANCE)
+                encoded_marker(value >> (part * 12)), MARKER_TOLERANCE)
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
     gx, gy, gw, gh = rectangles["group"]
     probe("replacement_panel_gutter", (gx + gw - 8.0, gy + gh + 2.0), panel)

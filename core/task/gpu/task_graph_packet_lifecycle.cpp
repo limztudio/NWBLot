@@ -215,10 +215,7 @@ bool GpuTaskGraph::PacketRecordingLease::validFor(
 
     NothrowScopedLock lock(graph.m_lifecycleMutex);
     if(
-        graph.m_teardownInProgress
-        || graph.m_activeCompiledGraph != &compiledGraph
-        || graph.m_activeRecordingPlanGeneration != m_planGeneration
-        || graph.m_activeRecordingAttemptGeneration != m_recordingAttemptGeneration
+        !graph.matchesPacketAttemptWithinLock(compiledGraph, m_planGeneration, m_recordingAttemptGeneration)
         || graph.m_activeRecordingPreparationSerial != 0u
     )
         return false;
@@ -393,10 +390,7 @@ bool GpuTaskGraph::beginPacketRecording(
 
     NothrowScopedLock lock(m_lifecycleMutex);
     if(
-        m_teardownInProgress
-        || m_activeCompiledGraph != &compiledGraph
-        || m_activeRecordingPlanGeneration != planAccess.planGeneration()
-        || m_activeRecordingAttemptGeneration != recordingAttemptGeneration
+        !matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), recordingAttemptGeneration)
         || m_activeRecordingPreparationSerial != 0u
         || m_submissionBindingState == SubmissionBindingState::ExceptionClosing
     )
@@ -448,12 +442,7 @@ bool GpuTaskGraph::completePacketRecording(
     const GpuTaskId* const tasks = packetView->tasks;
 
     NothrowScopedLock lock(m_lifecycleMutex);
-    if(
-        m_teardownInProgress
-        || m_activeCompiledGraph != &compiledGraph
-        || m_activeRecordingPlanGeneration != planAccess.planGeneration()
-        || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
-    )
+    if(!matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), lease.m_recordingAttemptGeneration))
         return false;
 
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
@@ -528,12 +517,7 @@ bool GpuTaskGraph::completePacketRecordingAbort(
     const u64 notificationGeneration = AllocateGeneration();
     {
         ScopedLock lock(m_lifecycleMutex);
-        if(
-            m_teardownInProgress
-            || m_activeCompiledGraph != &compiledGraph
-            || m_activeRecordingPlanGeneration != planAccess.planGeneration()
-            || m_activeRecordingAttemptGeneration != abort.m_recordingAttemptGeneration
-        )
+        if(!matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), abort.m_recordingAttemptGeneration))
             return false;
         for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
             if(!validTask(tasks[taskIndex]))

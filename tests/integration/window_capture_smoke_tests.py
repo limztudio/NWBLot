@@ -22,6 +22,7 @@ import runtime_log_smoke  # noqa: E402
 import csg_gi_temporal_smoke  # noqa: E402
 import text_area_probe  # noqa: E402
 import text_area_smoke  # noqa: E402
+from probe_reference import encoded_marker  # noqa: E402
 from window_capture_smoke import (  # noqa: E402
     ensure_process_running,
     launch_captured_process,
@@ -1258,7 +1259,7 @@ class TextAreaCaretCaptureTests(unittest.TestCase):
         marker = 0
         for value, parts in zip((*snapshot["values"], sequence), text_area_probe.MARKER_PARTS):
             for part in range(parts):
-                color = text_area_probe.encoded(value >> (part * 12))
+                color = encoded_marker(value >> (part * 12))
                 x = 11 + marker * 8
                 for y in range(426, 429):
                     rows[y][x - 1:x + 2] = [color] * 3

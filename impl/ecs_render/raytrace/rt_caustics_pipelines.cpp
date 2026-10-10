@@ -434,36 +434,7 @@ bool RendererRayTracingSystem::prepareHwCausticResources(DeferredFrameTargets& t
     )
         return true;
     const ECSRenderDetail::MeshViewBufferSnapshot meshView = m_meshSystem.meshViewBufferSnapshot();
-    if(
-        !targets.causticAccumulator
-        || !targets.causticIrradiance
-        || !meshView.buffer
-        || !meshView.heapHandle.valid()
-        || !m_rayTracingState.m_causticEmissionTargetHeapHandle.valid()
-    )
-        return true;
-    if(
-        meshView.heapHandle.descriptorClass() != Core::GpuDescriptorClass::UniformBuffer
-        || m_rayTracingState.m_causticEmissionTargetHeapHandle.descriptorClass() != Core::GpuDescriptorClass::StorageBuffer
-    ){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: caustic photon heap input has an unexpected descriptor class"));
-        return false;
-    }
-    if(!targets.bindless.valid()){
-        NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: hardware caustics require complete deferred bindless frame resources"));
-        return false;
-    }
-
-    const bool producerReady = ensureRayTraceMaterialContextSlotsHeapHandle() && ensureCausticRtPipeline();
-    const bool resolveReady =
-        ensureCausticGeometryDownsamplePipeline()
-        && ensureCausticResolvePipeline()
-    ;
-    const bool temporalReady =
-        causticTemporalDecay() <= 0.f
-        || ensureCausticAccumulatorDecayPipeline()
-    ;
-    return producerReady && resolveReady && temporalReady;
+    return prepareCausticResources(meshView, targets, true);
 }
 
 bool RendererRayTracingSystem::renderHwCaustics(
@@ -500,25 +471,15 @@ bool RendererRayTracingSystem::renderHwCaustics(
     const u32 photonCount = photonBudget.photonsPerFrame;
 
     const auto recordPhotons = [&](){
-        // Hardware and software producers use matching photon parameters.
-        CausticPhotonPushConstants pushConstants;
-        pushConstants.width = targets.width;
-        pushConstants.height = targets.height;
-        pushConstants.instanceCount = m_rayTracingState.m_tlasInstanceCount;
-        pushConstants.photonCount = photonCount;
-        pushConstants.emissionTargetCount = m_rayTracingState.m_causticRefractiveInstanceCount;
-        pushConstants.gridSide = photonBudget.gridSide;
-        // Same deterministic phase clock as the software producer above: the graphics frame index is
-        // capture-anchored, while the dispatch count shifts with pipeline-warmup skips.
-        pushConstants.frameIndex = static_cast<u32>(m_graphics.getFrameIndex());
-        pushConstants.depthSlot = targets.bindless.gbufferDepth.slot();
-        pushConstants.worldPositionSlot = targets.bindless.gbufferWorldPosition.slot();
-        pushConstants.emissionTargetSlot = m_rayTracingState.m_causticEmissionTargetHeapHandle.slot();
-        pushConstants.viewSlot = meshView.heapHandle.slot();
-        pushConstants.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-        pushConstants.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
-        pushConstants.accumulatorStorageSlot = targets.bindless.causticAccumulatorStorage.slot();
-        pushConstants.temporalPhaseCount = temporalPhaseCount;
+        const CausticPhotonPushConstants pushConstants = BuildCausticPhotonPushConstants(
+            targets,
+            meshView,
+            m_rayTracingState,
+            photonBudget,
+            m_rayTracingState.m_tlasInstanceCount,
+            static_cast<u32>(m_graphics.getFrameIndex()),
+            temporalPhaseCount
+        );
 
         Core::RayTracingState rayTracingPassState;
         rayTracingPassState.setShaderTable(shaderTable.get());

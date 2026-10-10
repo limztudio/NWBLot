@@ -249,7 +249,7 @@ TEST(UiProgressLayoutTests, InvalidOptionsPaddingAndTintsRejectMetrics){
 
 TEST(UiProgressLayoutTests, InvalidRegionMetricsSlicesModesAndDensityRejectMetrics){
     const UiSkinRegion valid = NineSlice();
-    for(u32 field = 0u; field < 15u; ++field){
+    for(u32 field = 0u; field < 17u; ++field){
         UiSkinRegion track = valid;
         UiSkinRegion fill = valid;
         f32 density = 1.0f;
@@ -268,6 +268,14 @@ TEST(UiProgressLayoutTests, InvalidRegionMetricsSlicesModesAndDensityRejectMetri
         case 11u: fill.sliceInsets.bottom = 25u; break;
         case 12u: track.drawMode = static_cast<UiSkinDrawMode::Enum>(2u); break;
         case 13u: fill.drawMode = UiSkinDrawMode::Sprite; break;
+        case 14u:
+            fill.padding.left = Limit<f32>::s_Max;
+            fill.padding.right = Limit<f32>::s_Max;
+            break;
+        case 15u:
+            fill.padding.top = Limit<f32>::s_Max;
+            fill.padding.bottom = Limit<f32>::s_Max;
+            break;
         default: fill.minimumWidth = Limit<f32>::s_Infinity; break;
         }
         EXPECT_FALSE(ProgressLayout::Measure({}, {}, track, fill, density));

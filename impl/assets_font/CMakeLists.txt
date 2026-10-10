@@ -1,10 +1,12 @@
 set(_nwb_font_runtime_sources
     "${CMAKE_CURRENT_LIST_DIR}/runtime.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/font_validation.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/source_directory.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/prepared_source.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/asset.h"
     "${CMAKE_CURRENT_LIST_DIR}/binary_payload.h"
     "${CMAKE_CURRENT_LIST_DIR}/font_validation.h"
+    "${CMAKE_CURRENT_LIST_DIR}/source_directory.h"
     "${CMAKE_CURRENT_LIST_DIR}/prepared_source.h"
 )
 

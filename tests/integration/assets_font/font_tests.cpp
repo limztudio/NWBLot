@@ -5,6 +5,7 @@
 #include <impl/assets_font/asset.h>
 #include <impl/assets_font/binary_payload.h>
 #include <impl/assets_font/font_validation.h>
+#include <impl/assets_font/source_directory.h>
 
 #include <tests/common/capturing_logger.h>
 #include <tests/common/font_fixture.h>
@@ -101,6 +102,103 @@ static void WriteBigU32(u8* bytes, const u32 value)noexcept{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+TEST(AssetsFont, SfntDirectoryRejectsTruncatedRecordsAndUnsupportedTableCounts){
+    u8 bytes[28u] = {};
+    WriteBigU32(bytes, 0x00010000u);
+    bytes[5u] = 1u;
+    for(usize size = 0u; size < sizeof(bytes); ++size)
+        EXPECT_FALSE(FontSfntDirectory::Read({ bytes, size })) << size;
+    ASSERT_TRUE(FontSfntDirectory::Read({ bytes, sizeof(bytes) }));
+    bytes[5u] = 0u;
+    EXPECT_FALSE(FontSfntDirectory::Read({ bytes, sizeof(bytes) }));
+    bytes[4u] = 1u;
+    bytes[5u] = 1u;
+    EXPECT_FALSE(FontSfntDirectory::Read({ bytes, sizeof(bytes) }));
+    bytes[5u] = 0u;
+    EXPECT_FALSE(FontSfntDirectory::Read({ bytes, sizeof(bytes) }));
+    u8 maximumDirectory[s_FontSfntHeaderBytes + s_FontMaxTableCount * 16u] = {};
+    maximumDirectory[4u] = 1u;
+    const auto maximumResult = FontSfntDirectory::Read({ maximumDirectory, sizeof(maximumDirectory) });
+    ASSERT_TRUE(maximumResult);
+    EXPECT_EQ(maximumResult->tableCount(), s_FontMaxTableCount);
+}
+
+TEST(AssetsFont, SfntTableViewsCheckBoundsWithoutCopyingOrScanningOtherRecords){
+    u8 bytes[48u] = {};
+    WriteBigU32(bytes, 0x00010000u);
+    bytes[5u] = 2u;
+    WriteBigU32(bytes + 12u, s_FontSfntHeadTag);
+    WriteBigU32(bytes + 20u, 44u);
+    WriteBigU32(bytes + 24u, 4u);
+    WriteBigU32(bytes + 28u, s_FontSfntMaxpTag);
+    WriteBigU32(bytes + 36u, Limit<u32>::s_Max);
+    WriteBigU32(bytes + 40u, 2u);
+    WriteBigU32(bytes + 44u, 0x12345678u);
+    const auto directoryResult = FontSfntDirectory::Read({ bytes, sizeof(bytes) });
+    ASSERT_TRUE(directoryResult);
+    const FontSfntDirectory& directory = *directoryResult;
+    EXPECT_EQ(directory.signature(), 0x00010000u);
+    EXPECT_EQ(directory.directoryBytes(), 44u);
+    EXPECT_EQ(directory.tableCount(), 2u);
+    const auto tableResult = directory.table(0u);
+    ASSERT_TRUE(tableResult);
+    EXPECT_EQ(tableResult->tag, s_FontSfntHeadTag);
+    EXPECT_EQ(tableResult->offset, 44u);
+    EXPECT_EQ(tableResult->bytes.data(), bytes + 44u);
+    EXPECT_EQ(tableResult->bytes.size(), 4u);
+    const auto valueResult = ReadFontSfntU16(tableResult->bytes, 0u);
+    ASSERT_TRUE(valueResult);
+    EXPECT_EQ(*valueResult, 0x1234u);
+    EXPECT_FALSE(directory.table(1u));
+    const auto secondTagResult = directory.tableTag(1u);
+    ASSERT_TRUE(secondTagResult);
+    EXPECT_EQ(*secondTagResult, s_FontSfntMaxpTag);
+    EXPECT_FALSE(directory.table(2u));
+    EXPECT_FALSE(directory.tableTag(Limit<usize>::s_Max));
+    EXPECT_FALSE(ReadFontSfntU16(tableResult->bytes, 3u));
+    EXPECT_FALSE(ReadFontSfntU16(tableResult->bytes, Limit<usize>::s_Max));
+}
+
+TEST(AssetsFont, SfntTableBoundsHandleOverflowAndEmptyEndSpansWithoutAddingFontPolicy){
+    u8 bytes[32u] = {};
+    WriteBigU32(bytes, 0x74746366u); // Signature admission remains with Font validation.
+    bytes[5u] = 1u;
+    WriteBigU32(bytes + 12u, s_FontSfntHeadTag);
+    WriteBigU32(bytes + 20u, 28u);
+    WriteBigU32(bytes + 24u, Limit<u32>::s_Max);
+    {
+        const auto directoryResult = FontSfntDirectory::Read({ bytes, sizeof(bytes) });
+        ASSERT_TRUE(directoryResult);
+        EXPECT_EQ(directoryResult->signature(), 0x74746366u);
+        EXPECT_FALSE(directoryResult->table(0u));
+    }
+    WriteBigU32(bytes + 24u, 5u);
+    {
+        const auto directoryResult = FontSfntDirectory::Read({ bytes, sizeof(bytes) });
+        ASSERT_TRUE(directoryResult);
+        EXPECT_FALSE(directoryResult->table(0u));
+    }
+    WriteBigU32(bytes + 20u, sizeof(bytes));
+    WriteBigU32(bytes + 24u, 0u);
+    {
+        const auto directoryResult = FontSfntDirectory::Read({ bytes, sizeof(bytes) });
+        ASSERT_TRUE(directoryResult);
+        const auto emptyTableResult = directoryResult->table(0u);
+        ASSERT_TRUE(emptyTableResult);
+        EXPECT_TRUE(emptyTableResult->bytes.empty());
+        EXPECT_EQ(emptyTableResult->bytes.data(), bytes + sizeof(bytes));
+    }
+    WriteBigU32(bytes + 20u, 0u); // Directory-overlap admission remains with Font validation.
+    WriteBigU32(bytes + 24u, 4u);
+    {
+        const auto directoryResult = FontSfntDirectory::Read({ bytes, sizeof(bytes) });
+        ASSERT_TRUE(directoryResult);
+        const auto tableResult = directoryResult->table(0u);
+        ASSERT_TRUE(tableResult);
+        EXPECT_EQ(tableResult->bytes.data(), bytes);
+    }
+}
 
 TEST(AssetsFont, PreparedAtlasPixelsAreExcludedFromCookedFontsAndRejectedByRuntimeImport){
     CapturingLogger logger;

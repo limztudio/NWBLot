@@ -4,8 +4,8 @@ from __future__ import annotations
 import math
 import re
 
-from interaction_smoke import linear_rgb_bytes
 from window_capture_smoke import SmokeFailure
+from probe_reference import encoded_marker
 
 NUMBER = r"[0-9.eE+-]+"
 DISPLAY = re.compile(rf"UiNestedPopupSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
@@ -42,10 +42,6 @@ def snapshot_from_logs(text):
         "logical_extent": display[:2], "scale": display[2:], "rectangles": rectangles}
 
 
-def encoded(value):
-    return linear_rgb_bytes(tuple(((value >> shift) & 15) / 15.0 for shift in (0, 4, 8)))
-
-
 def observe_nested_popup(frame, snapshot, expected, *, extent=None, skin="default", extra=None):
     width, height, rows = frame
     scale_x, scale_y = snapshot["scale"]
@@ -64,7 +60,7 @@ def observe_nested_popup(frame, snapshot, expected, *, extent=None, skin="defaul
     for index, value in enumerate((*snapshot["values"], snapshot["sequence"])):
         for part in range(2):
             marker = index * 2 + part
-            probe(f"model_{index}_{part}", (16.0 + marker * 12.0, height / scale_y - 14.0), encoded(value >> (part * 12)), 5)
+            probe(f"model_{index}_{part}", (16.0 + marker * 12.0, height / scale_y - 14.0), encoded_marker(value >> (part * 12)), 5)
     probe("root_panel_skin", (28.0, 92.0), (39, 63, 34) if skin == "alternate" else (24, 29, 37))
     logical_width, logical_height = snapshot["logical_extent"]
     geometry_matches = True

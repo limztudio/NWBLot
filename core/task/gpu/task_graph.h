@@ -796,6 +796,52 @@ private:
     [[nodiscard]] static ResourcePointerKey MakeResourcePointerKey(const GpuGraphResourceNode& resource)noexcept;
     [[nodiscard]] static PipelinePointerKey MakePipelinePointerKey(const GpuGraphPipelineNode& pipeline)noexcept;
 
+
+private:
+    [[nodiscard]] static Expected<GpuCompiledPacketView> ResolvePacketView(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        const GpuSubmissionPacketId packet
+    )noexcept{
+        if(!planAccess.validFor(compiledGraph) || !planAccess.validPacket(packet))
+            return MakeUnexpected(Failure{});
+        const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
+        if(!packetView.valid())
+            return MakeUnexpected(Failure{});
+        return packetView;
+    }
+
+    [[nodiscard]] static Expected<GpuCompiledPacketView> ResolveLeasedPacketView(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        const GpuSubmissionPacketId packet,
+        const PacketRecordingLease& lease
+    )noexcept{
+        const auto packetView = ResolvePacketView(compiledGraph, planAccess, packet);
+        if(
+            !packetView
+            || !lease.valid()
+            || lease.m_packet != packet
+            || lease.m_planGeneration != planAccess.planGeneration()
+        )
+            return MakeUnexpected(Failure{});
+        return *packetView;
+    }
+
+    [[nodiscard]] static Expected<GpuCompiledPacketView> ResolveAttemptPacketView(
+        const GpuCompiledGraph& compiledGraph,
+        const GpuCompiledGraph::ReadView& planAccess,
+        const GpuSubmissionPacketId packet,
+        const u64 recordingAttemptGeneration,
+        const bool leaseValid
+    )noexcept{
+        const auto packetView = ResolvePacketView(compiledGraph, planAccess, packet);
+        if(!packetView || recordingAttemptGeneration == 0u || leaseValid)
+            return MakeUnexpected(Failure{});
+        return *packetView;
+    }
+
+
 private:
     template<typename TaskT>
     static bool RecordTaskPayload(
@@ -1052,6 +1098,19 @@ private:
     )const noexcept;
 
 private:
+    // Caller holds m_lifecycleMutex; preparation, submission binding and task-state checks remain path-specific.
+    [[nodiscard]] bool matchesPacketAttemptWithinLock(
+        const GpuCompiledGraph& compiledGraph,
+        const u64 planGeneration,
+        const u64 recordingAttemptGeneration
+    )const noexcept{
+        return !m_teardownInProgress
+            && m_activeCompiledGraph == &compiledGraph
+            && m_activeRecordingPlanGeneration == planGeneration
+            && m_activeRecordingAttemptGeneration == recordingAttemptGeneration
+        ;
+    }
+
     [[nodiscard]] bool recordTask(
         const GpuTaskId& task,
         CommandList& commandList,
@@ -1059,49 +1118,6 @@ private:
         const PacketRecordingLease& lease,
         bool& outRecordThunkInvoked
     )const;
-
-    [[nodiscard]] static Expected<GpuCompiledPacketView> ResolvePacketView(
-        const GpuCompiledGraph& compiledGraph,
-        const GpuCompiledGraph::ReadView& planAccess,
-        const GpuSubmissionPacketId packet
-    )noexcept{
-        if(!planAccess.validFor(compiledGraph) || !planAccess.validPacket(packet))
-            return MakeUnexpected(Failure{});
-        const GpuCompiledPacketView packetView = planAccess.packetWithTasks(packet);
-        if(!packetView.valid())
-            return MakeUnexpected(Failure{});
-        return packetView;
-    }
-
-    [[nodiscard]] static Expected<GpuCompiledPacketView> ResolveLeasedPacketView(
-        const GpuCompiledGraph& compiledGraph,
-        const GpuCompiledGraph::ReadView& planAccess,
-        const GpuSubmissionPacketId packet,
-        const PacketRecordingLease& lease
-    )noexcept{
-        const auto packetView = ResolvePacketView(compiledGraph, planAccess, packet);
-        if(
-            !packetView
-            || !lease.valid()
-            || lease.m_packet != packet
-            || lease.m_planGeneration != planAccess.planGeneration()
-        )
-            return MakeUnexpected(Failure{});
-        return *packetView;
-    }
-
-    [[nodiscard]] static Expected<GpuCompiledPacketView> ResolveAttemptPacketView(
-        const GpuCompiledGraph& compiledGraph,
-        const GpuCompiledGraph::ReadView& planAccess,
-        const GpuSubmissionPacketId packet,
-        const u64 recordingAttemptGeneration,
-        const bool leaseValid
-    )noexcept{
-        const auto packetView = ResolvePacketView(compiledGraph, planAccess, packet);
-        if(!packetView || recordingAttemptGeneration == 0u || leaseValid)
-            return MakeUnexpected(Failure{});
-        return *packetView;
-    }
 
     // Caller owns teardown/binding validation, lease reset, and claim release; task mutation holds the lifecycle lock.
     void discardPacketTasksWithinLock(

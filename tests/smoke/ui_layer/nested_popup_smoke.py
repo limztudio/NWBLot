@@ -17,6 +17,7 @@ from window_capture_smoke import (
     read_bmp_24_rows, require_normal_process_exit, shutdown_logserver_and_collect, terminate_process,
     validate_expected_log_text, wait_for_log_message,
 )
+from fixture_environment import build_fixture_environment
 
 
 class NestedPopupRun:
@@ -227,18 +228,7 @@ def run(args):
     if not args.executable.is_file():
         raise SmokeFailure(f"executable does not exist: {args.executable}")
     args.output_directory.mkdir(parents=True, exist_ok=True)
-    environment = build_launch_environment(args)
-    for suffix in ("WINDOW", "POPUP", "POPUP_TOOLS", "LIST", "COMBO", "SEARCH_COMBO"):
-        environment["NWB_UI_LAYER_" + suffix] = "0"
-        environment["NWB_UI_LAYER_" + suffix + "_SKIN"] = "0"
-    environment.update({"NWB_UI_LAYER_NESTED_POPUP": "1",
-        "NWB_UI_LAYER_NESTED_POPUP_SKIN": "1" if args.skin == "alternate" else "0",
-        "NWB_UI_LAYER_EDIT": "0", "NWB_UI_LAYER_INTERACTIVE": "0"})
-    if platform.system() == "Linux":
-        environment["NWB_LINUX_BACKEND"] = "x11"
-    for variable in ("NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH", "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT",
-        "NWB_RENDERER_BASELINE_CAPTURE_FREEZE_FRAME", "NWB_RENDERER_BASELINE_FIXED_DELTA_SECONDS", "NWB_GPU_TIMING_FILE"):
-        environment.pop(variable, None)
+    environment = build_fixture_environment(build_launch_environment(args), "NESTED_POPUP", skin=args.skin, force_x11=True)
     backend = create_capture_backend()
     logserver = application = nested_run = None
     handle = None

@@ -30,12 +30,7 @@ bool GpuTaskGraph::abandonPacketRecordingWithoutCallbacks(
     const GpuTaskId* const tasks = packetView->tasks;
 
     NothrowScopedLock lock(m_lifecycleMutex);
-    if(
-        m_teardownInProgress
-        || m_activeCompiledGraph != &compiledGraph
-        || m_activeRecordingPlanGeneration != planAccess.planGeneration()
-        || m_activeRecordingAttemptGeneration != lease.m_recordingAttemptGeneration
-    )
+    if(!matchesPacketAttemptWithinLock(compiledGraph, planAccess.planGeneration(), lease.m_recordingAttemptGeneration))
         return false;
     for(usize taskIndex = 0u; taskIndex < packetPlan.taskCount; ++taskIndex){
         const GpuTaskNode& task = m_tasks[tasks[taskIndex].index];

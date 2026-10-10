@@ -4,10 +4,8 @@ from __future__ import annotations
 import math
 import re
 
-from interaction_smoke import linear_rgb_bytes
-from radio_group_probe import sampled_tile
-from slider_probe import compose, encoded, sampled_region
 from window_capture_smoke import SmokeFailure
+from probe_reference import compose, encoded_marker, linear_rgb_bytes, sampled_region, sampled_tile
 
 
 NUMBER = r"[0-9.eE+-]+"
@@ -82,7 +80,7 @@ def observe_image(frame, snapshot, expected, *, extent=None, skin="default", ext
         for part in range(2):
             marker = index * 2 + part
             record(f"model_{marker}", pixel((16.0 + 12.0 * marker, snapshot["logical_extent"][1] - 14.0)),
-                encoded(value >> (12 * part)), 5)
+                encoded_marker(value >> (12 * part)), 5)
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
     logical_width = snapshot["logical_extent"][0]
     main_width = max(300.0, logical_width * 0.5 - 40.0)

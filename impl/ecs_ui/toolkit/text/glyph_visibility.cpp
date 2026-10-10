@@ -6,7 +6,7 @@
 
 #include "atlas.h"
 
-#include <impl/ecs_ui/toolkit/layout/validation.h>
+#include <impl/ecs_ui/toolkit/layout/rectangle.h>
 
 #include <global/math/vector_double.h>
 #include <global/simplemath.h>
@@ -33,22 +33,6 @@ namespace __hidden_ui_glyph_visibility{
 
 [[nodiscard]] static bool ValidFontSize(const f32 fontSize)noexcept{
     return IsFinite(fontSize) && fontSize >= 1.0f / 64.0f && fontSize <= 2048.0f;
-}
-
-[[nodiscard]] static Expected<Rect> MakeRect(const f64 x, const f64 y, const f64 width, const f64 height)noexcept{
-    if(
-        !IsFinite(x) || x < -Limit<f32>::s_Max || x > Limit<f32>::s_Max
-        || !IsFinite(y) || y < -Limit<f32>::s_Max || y > Limit<f32>::s_Max
-        || !IsFinite(width) || width < 0.0 || width > Limit<f32>::s_Max
-        || !IsFinite(height) || height < 0.0 || height > Limit<f32>::s_Max
-        || !IsFinite(x + width) || x + width < -Limit<f32>::s_Max || x + width > Limit<f32>::s_Max
-        || !IsFinite(y + height) || y + height < -Limit<f32>::s_Max || y + height > Limit<f32>::s_Max
-    )
-        return MakeUnexpected(Failure{});
-    const Rect candidate{ static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(width), static_cast<f32>(height) };
-    if(!IsValidUiRect(candidate))
-        return MakeUnexpected(Failure{});
-    return candidate;
 }
 
 [[nodiscard]] static TextGlyphIntersection::Enum IntersectBounds(
@@ -188,7 +172,7 @@ Expected<Rect> TextGlyphVisibility::AtlasRectangle(
     const SIMDVectorDouble widthHeightValue = ((SIMDVectorDouble{ static_cast<f64>(record->planeRight), static_cast<f64>(record->planeBottom) } - SIMDVectorDouble{ record->planeLeft, record->planeTop }) * SIMDVectorDouble{ scale, scale });
     const f64 width = widthHeightValue.x;
     const f64 height = widthHeightValue.y;
-    return MakeRect(x, y, width, height);
+    return MakeUiRect<UiRectPrecision::BoundedEndpoints>(x, y, width, height);
 }
 
 Expected<Rect> TextGlyphVisibility::CoverageRectangle(
@@ -222,7 +206,7 @@ Expected<Rect> TextGlyphVisibility::CoverageRectangle(
     const f64 alignedY = alignedXAlignedYValue.y;
     const SIMDVectorDouble size = SIMDVectorDouble{ record.pixels.width, record.pixels.height }
         / SIMDVectorDouble{ static_cast<f64>(rasterScale), static_cast<f64>(rasterScale) };
-    return MakeRect(alignedX, alignedY, size.x, size.y);
+    return MakeUiRect<UiRectPrecision::BoundedEndpoints>(alignedX, alignedY, size.x, size.y);
 }
 
 TextGlyphIntersection::Enum TextGlyphVisibility::Intersect(const Rect& rectangle, const Rect& clip){

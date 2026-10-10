@@ -4,8 +4,8 @@ from __future__ import annotations
 import math
 import re
 
-from interaction_smoke import linear_rgb_bytes
 from window_capture_smoke import SmokeFailure
+from probe_reference import encoded_marker, linear_channels, linear_rgb_bytes
 
 NUMBER = r"[0-9.eE+-]+"
 MARKER_TOLERANCE = 5
@@ -14,10 +14,6 @@ MARKER_TOLERANCE = 5
 def center(rectangle):
     x, y, width, height = rectangle
     return x + width / 2.0, y + height / 2.0
-
-
-def encoded(value):
-    return linear_rgb_bytes(tuple(((value >> shift) & 15) / 15.0 for shift in (0, 4, 8)))
 
 
 class ComboProbe:
@@ -69,7 +65,7 @@ class ComboProbe:
             for part in range(2):
                 marker = index * 2 + part
                 probe(f"model_{index}_{part}", (self.marker_origin + marker * self.marker_stride, height / scale_y - 14.0),
-                    encoded(value >> (part * 12)))
+                    encoded_marker(value >> (part * 12)))
         first, past = snapshot["first"], snapshot["past"]
         viewport = snapshot["rectangles"]["viewport"]
         bounded = snapshot["label_reads"] <= 2
@@ -127,8 +123,7 @@ class ComboProbe:
                 sx, sy, sw, sh = snapshot["rectangles"]["query_selection"]
                 geometry_matches = geometry_matches and sw > 1.0 and sh > 1.0
                 if sw > 1.0 and sh > 1.0:
-                    linear_background = tuple(channel / 255.0 / 12.92 if channel <= 10 else
-                        ((channel / 255.0 + 0.055) / 1.055) ** 2.4 for channel in background)
+                    linear_background = linear_channels(background)
                     color = tuple(foreground * 0.75 + backdrop * 0.25
                         for foreground, backdrop in zip((0.20, 0.40, 0.78), linear_background))
                     probe("search_query_selection", (sx + min(sw / 2.0, 4.0), min(sy + sh, content[1] + content[3]) - 2.0),

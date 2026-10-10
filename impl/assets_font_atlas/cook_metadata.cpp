@@ -12,6 +12,7 @@
 #include "cook_glyph_metadata.h"
 
 #include <impl/assets_font/prepared_source.h>
+#include <impl/assets_font/source_directory.h>
 
 #include <core/assets/paths.h>
 
@@ -58,30 +59,28 @@ static constexpr AStringView s_DiagnosticPrefix = "Font atlas meta";
     return MakeUnexpected(Failure{});
 }
 
-[[nodiscard]] static bool ReadSourceFaceMetrics(const Font& font, FontAtlasPayload& payload){
+[[nodiscard]] static bool ReadSourceFaceMetrics(const Font& font, FontAtlasPayload& payload)noexcept{
     const Core::Assets::AssetBytes& bytes = font.fontBytes();
-    if(bytes.size() < 12u)
+    const auto directoryResult = FontSfntDirectory::Read({ bytes.data(), bytes.size() });
+    if(!directoryResult)
         return false;
-    const u32 tableCount = (static_cast<u32>(bytes[4u]) << 8u) | bytes[5u];
-    if(tableCount == 0u || tableCount > s_FontMaxTableCount || static_cast<u64>(tableCount) * 16u > bytes.size() - 12u)
-        return false;
+    const FontSfntDirectory& directory = *directoryResult;
     payload.faceIndex = font.faceIndex();
-    for(u32 index = 0u; index < tableCount; ++index){
-        const u8* record = bytes.data() + 12u + static_cast<usize>(index) * 16u;
-        const u32 tag = ReadFontAtlasBigU32(record);
-        const u32 offset = ReadFontAtlasBigU32(record + 8u);
-        const u32 length = ReadFontAtlasBigU32(record + 12u);
-        if(offset > bytes.size() || length > bytes.size() - offset)
+    for(u16 index = 0u; index < directory.tableCount(); ++index){
+        const auto tableResult = directory.table(index);
+        if(!tableResult)
             return false;
-        if(tag == 0x68656164u){
-            if(length < 20u)
+        if(tableResult->tag == s_FontSfntHeadTag){
+            const auto unitsPerEmResult = ReadFontSfntU16(tableResult->bytes, 18u);
+            if(!unitsPerEmResult)
                 return false;
-            payload.unitsPerEm = (static_cast<u32>(bytes[offset + 18u]) << 8u) | bytes[offset + 19u];
+            payload.unitsPerEm = *unitsPerEmResult;
         }
-        else if(tag == 0x6d617870u){
-            if(length < 6u)
+        else if(tableResult->tag == s_FontSfntMaxpTag){
+            const auto glyphCountResult = ReadFontSfntU16(tableResult->bytes, 4u);
+            if(!glyphCountResult)
                 return false;
-            payload.sourceGlyphCount = (static_cast<u32>(bytes[offset + 4u]) << 8u) | bytes[offset + 5u];
+            payload.sourceGlyphCount = *glyphCountResult;
         }
     }
     return payload.unitsPerEm >= 16u && payload.unitsPerEm <= 16384u && payload.sourceGlyphCount > 0u;

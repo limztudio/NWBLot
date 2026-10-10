@@ -5,8 +5,8 @@ import math
 import re
 import struct
 
-from interaction_smoke import linear_rgb_bytes
 from window_capture_smoke import SmokeFailure
+from probe_reference import encoded_marker, linear_channels, linear_rgb_bytes
 
 
 NUMBER = r"[0-9.eE+-]+"
@@ -77,16 +77,6 @@ def center(rectangle):
     return x + width / 2.0, y + height / 2.0
 
 
-def encoded(value):
-    return linear_rgb_bytes(tuple(((value >> shift) & 15) / 15.0 for shift in (0, 4, 8)))
-
-
-
-def linear_channels(color):
-    return tuple(channel / 255.0 / 12.92 if channel <= 10 else
-        ((channel / 255.0 + 0.055) / 1.055) ** 2.4 for channel in color)
-
-
 def ink_coverage(observed, background, foreground):
     # Small glyphs can be antialiased throughout. Require ink along the expected color ray,
     # with appreciable coverage, instead of requiring a fully opaque core pixel.
@@ -119,7 +109,7 @@ def observe_numeric_edit(frame, snapshot, expected, *, extent=None, skin="defaul
     for index, (value, parts) in enumerate(zip((*snapshot["values"], snapshot["sequence"]), MARKER_PARTS)):
         for part in range(parts):
             probe(f"model_{index}_{part}", (11.0 + marker * 8.0, snapshot["logical_extent"][1] - 13.0),
-                encoded(value >> (part * 12)))
+                encoded_marker(value >> (part * 12)))
             marker += 1
     panel = (39, 63, 34) if skin == "alternate" else (24, 29, 37)
     probe("panel_gutter", (28.0, 330.0), panel, 8)
@@ -162,8 +152,7 @@ def observe_numeric_edit(frame, snapshot, expected, *, extent=None, skin="defaul
         if focused and anchor != caret:
             geometry_matches = geometry_matches and sw > 1.0 and sh > 1.0
             if sw > 1.0 and sh > 1.0:
-                linear_background = tuple(channel / 255.0 / 12.92 if channel <= 10 else
-                    ((channel / 255.0 + 0.055) / 1.055) ** 2.4 for channel in background)
+                linear_background = linear_channels(background)
                 color = tuple(foreground * 0.75 + backdrop * 0.25
                     for foreground, backdrop in zip((0.20, 0.40, 0.78), linear_background))
                 probe(f"{field}_selection", (sx + min(sw / 2.0, 4.0), min(sy + sh, cy + ch) - 2.0),

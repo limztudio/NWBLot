@@ -4,8 +4,8 @@ from __future__ import annotations
 import math
 import re
 
-from interaction_smoke import linear_rgb_bytes
 from window_capture_smoke import SmokeFailure
+from probe_reference import encoded_marker, linear_channels, linear_rgb_bytes
 
 NUMBER = r"[0-9.eE+-]+"
 DISPLAY = re.compile(rf"UiEditSmoke: display logical=({NUMBER})x({NUMBER}) scale=({NUMBER})x({NUMBER})")
@@ -67,10 +67,6 @@ def center(rectangle):
     return x + width / 2.0, y + height / 2.0
 
 
-def encoded(value):
-    return linear_rgb_bytes(tuple(((value >> shift) & 15) / 15.0 for shift in (0, 4, 8)))
-
-
 def caret_required(field, state, readonly, visible, selection):
     return bool(state[4] and not selection and (field != "primary" or (visible and not readonly)))
 
@@ -110,7 +106,7 @@ def observe_edit(frame, snapshot, primary, secondary, readonly, visible, *, exte
     values = (*snapshot["primary"], *snapshot["secondary"], int(snapshot["readonly"]),
         int(snapshot["visible"]), snapshot["sequence"])
     for index, value in enumerate(values):
-        probe(f"model_{index}", (19.0 + index * 20.0, height / scale_y - 14.0), encoded(value))
+        probe(f"model_{index}", (19.0 + index * 20.0, height / scale_y - 14.0), encoded_marker(value))
 
     geometry_matches = True
     for field, state in (("primary", primary), ("secondary", secondary)):
@@ -137,8 +133,7 @@ def observe_edit(frame, snapshot, primary, secondary, readonly, visible, *, exte
             geometry_matches = geometry_matches and sw > 1.0 and sh > 1.0
             if sw > 1.0 and sh > 1.0:
                 # Selection is painted behind glyphs; the lower line edge avoids the glyph's ink.
-                linear_background = tuple(channel / 255.0 / 12.92 if channel <= 10 else
-                    ((channel / 255.0 + 0.055) / 1.055) ** 2.4 for channel in background)
+                linear_background = linear_channels(background)
                 color = tuple(foreground * 0.75 + backdrop * 0.25
                     for foreground, backdrop in zip((0.20, 0.40, 0.78), linear_background))
                 probe(f"{field}_selection", (sx + min(sw / 2.0, 4.0), min(sy + sh, cy + ch) - 2.0), linear_rgb_bytes(color))

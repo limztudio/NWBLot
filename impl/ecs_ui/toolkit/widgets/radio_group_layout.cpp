@@ -7,7 +7,7 @@
 #include "radio_group.h"
 #include "radio_group_style.h"
 
-#include <impl/ecs_ui/toolkit/layout/validation.h>
+#include <impl/ecs_ui/toolkit/layout/rectangle.h>
 
 #include <global/math/vector_double.h>
 #include <global/simplemath.h>
@@ -47,39 +47,6 @@ namespace __hidden_ui_radio_group_layout{
         height <= Limit<f32>::s_Max && metrics.contentSize.y == static_cast<f32>(height)
         && minimumWidth <= Limit<f32>::s_Max && metrics.contentSize.x >= static_cast<f32>(minimumWidth)
     ;
-}
-
-[[nodiscard]] static Expected<Rect> MakeRect(const f64 x, const f64 y, const f64 width, const f64 height)noexcept{
-    if(
-        !IsFinite(x) || x < -Limit<f32>::s_Max || x > Limit<f32>::s_Max
-        || !IsFinite(y) || y < -Limit<f32>::s_Max || y > Limit<f32>::s_Max
-        || !IsFinite(width) || width < 0.0 || width > Limit<f32>::s_Max
-        || !IsFinite(height) || height < 0.0 || height > Limit<f32>::s_Max
-        || x + width < -Limit<f32>::s_Max || x + width > Limit<f32>::s_Max
-        || y + height < -Limit<f32>::s_Max || y + height > Limit<f32>::s_Max
-    )
-        return MakeUnexpected(Failure{});
-    const Rect candidate{ static_cast<f32>(x), static_cast<f32>(y), static_cast<f32>(width), static_cast<f32>(height) };
-    if(
-        !IsValidUiRect(candidate) || (width > 0.0 && candidate.x + candidate.width <= candidate.x)
-        || (height > 0.0 && candidate.y + candidate.height <= candidate.y)
-    )
-        return MakeUnexpected(Failure{});
-    return candidate;
-}
-
-[[nodiscard]] static Expected<Rect> Intersect(const Rect& lhs, const Rect& rhs)noexcept{
-    const SIMDVectorDouble geometryPair0Operand0 = SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) };
-    const SIMDVectorDouble geometryPair0Operand1 = SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) };
-    const SIMDVectorDouble leftTopValue = ((geometryPair0Operand0 > geometryPair0Operand1) ? geometryPair0Operand0 : geometryPair0Operand1);
-    const f64 left = leftTopValue.x;
-    const f64 top = leftTopValue.y;
-    const SIMDVectorDouble geometryPair1Operand0 = (SIMDVectorDouble{ static_cast<f64>(lhs.x), static_cast<f64>(lhs.y) } + SIMDVectorDouble{ lhs.width, lhs.height });
-    const SIMDVectorDouble geometryPair1Operand1 = (SIMDVectorDouble{ static_cast<f64>(rhs.x), static_cast<f64>(rhs.y) } + SIMDVectorDouble{ rhs.width, rhs.height });
-    const SIMDVectorDouble rightBottomValue = ((geometryPair1Operand0 < geometryPair1Operand1) ? geometryPair1Operand0 : geometryPair1Operand1);
-    const f64 right = rightBottomValue.x;
-    const f64 bottom = rightBottomValue.y;
-    return MakeRect(left, top, Max(0.0, right - left), Max(0.0, bottom - top));
 }
 
 
@@ -144,7 +111,7 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(
     RadioGroupPlacement candidate;
     candidate.bounds = bounds;
     candidate.count = choices.count;
-    const auto intersection = Intersect(bounds, clip);
+    const auto intersection = IntersectUiRects<UiRectPrecision::PreciseExtents>(bounds, clip);
     if(!intersection)
         return MakeUnexpected(Failure{});
     candidate.clip = *intersection;
@@ -162,7 +129,7 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(
     const f64 x = xYValue.x;
     const f64 y = xYValue.y;
     const f64 width = static_cast<f64>(bounds.width) - left - right;
-    const auto content = MakeRect(x, y, width, static_cast<f64>(bounds.height) - top - bottom);
+    const auto content = MakeUiRect<UiRectPrecision::PreciseExtents>(x, y, width, static_cast<f64>(bounds.height) - top - bottom);
     if(!content)
         return MakeUnexpected(Failure{});
     candidate.content = *content;
@@ -181,22 +148,22 @@ Expected<RadioGroupPlacement> RadioGroupLayout::Place(
         row.enabled = choices.rows[index].enabled;
         const f64 rowY = y + static_cast<f64>(index) * (static_cast<f64>(metrics.rowHeight) + metrics.rowGap);
         const f64 indicatorY = rowY + (static_cast<f64>(metrics.rowHeight) - extent) * 0.5;
-        const auto rectangle = MakeRect(x, rowY, width, metrics.rowHeight);
+        const auto rectangle = MakeUiRect<UiRectPrecision::PreciseExtents>(x, rowY, width, metrics.rowHeight);
         if(!rectangle)
             return MakeUnexpected(Failure{});
-        const auto rowClip = Intersect(*rectangle, candidate.clip);
+        const auto rowClip = IntersectUiRects<UiRectPrecision::PreciseExtents>(*rectangle, candidate.clip);
         if(!rowClip)
             return MakeUnexpected(Failure{});
-        const auto indicator = MakeRect(x, indicatorY, extent, extent);
+        const auto indicator = MakeUiRect<UiRectPrecision::PreciseExtents>(x, indicatorY, extent, extent);
         if(!indicator)
             return MakeUnexpected(Failure{});
-        const auto mark = MakeRect(x + markInset, indicatorY + markInset, extent - 2.0 * markInset, extent - 2.0 * markInset);
+        const auto mark = MakeUiRect<UiRectPrecision::PreciseExtents>(x + markInset, indicatorY + markInset, extent - 2.0 * markInset, extent - 2.0 * markInset);
         if(!mark)
             return MakeUnexpected(Failure{});
-        const auto label = MakeRect(x + labelStart, rowY, width - labelStart, metrics.rowHeight);
+        const auto label = MakeUiRect<UiRectPrecision::PreciseExtents>(x + labelStart, rowY, width - labelStart, metrics.rowHeight);
         if(!label)
             return MakeUnexpected(Failure{});
-        const auto textClip = Intersect(*label, *rowClip);
+        const auto textClip = IntersectUiRects<UiRectPrecision::PreciseExtents>(*label, *rowClip);
         if(!textClip)
             return MakeUnexpected(Failure{});
         row.rectangle = *rectangle;

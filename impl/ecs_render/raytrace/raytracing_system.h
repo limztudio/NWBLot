@@ -944,6 +944,11 @@ private:
     [[nodiscard]] u32 transparentShadowSampleCount()const noexcept;
     void reportTransparentShadowSampling(u32 sampleCount);
     void swapSoftShadowTemporalHistory(DeferredFrameTargets& targets);
+    [[nodiscard]] bool prepareCausticResources(
+        const ECSRenderDetail::MeshViewBufferSnapshot& meshView,
+        DeferredFrameTargets& targets,
+        bool hardware
+    );
     [[nodiscard]] bool ensureSwCausticPipeline();
     [[nodiscard]] bool ensureCausticResolvePipeline();
     [[nodiscard]] bool prepareCausticResolveActivity(u32 halfWidth, u32 halfHeight);

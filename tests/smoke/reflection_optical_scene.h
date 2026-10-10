@@ -25,6 +25,15 @@ namespace Tests::Smoke{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+struct ReflectionCsgContextEntities{
+    Core::ECS::EntityID smallReceiver = Core::ECS::s_InvalidEntityId;
+    Core::ECS::EntityID denseReceiver = Core::ECS::s_InvalidEntityId;
+    Core::ECS::EntityID smallCutter = Core::ECS::s_InvalidEntityId;
+    Core::ECS::EntityID denseCutter = Core::ECS::s_InvalidEntityId;
+};
+
+[[nodiscard]] Expected<ReflectionCsgContextEntities> CreateReflectionCsgContextScene(ProjectRuntimeContext& context, Core::ECS::World& world);
+
 [[nodiscard]] bool CreateReflectionOpticalScene(ProjectRuntimeContext& context, Core::ECS::World& world, AStringView caseName);
 
 

@@ -13,7 +13,7 @@ import re
 import subprocess
 import sys
 
-from reflection_optical_reference import decode_radiance, pixel_reference
+from reflection_optical_reference import DENSE_CASES, decode_radiance, pixel_reference
 from reflection_smoke import DEFAULT_RAY_BUDGET, capture_environment, parse_statistics, validate_frame, validate_statistics
 from refraction_gallery_smoke import png_rgb_bytes
 from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
@@ -76,6 +76,8 @@ QUEUE_BOUNDARY_BUDGETS = (0, 1, 63, 64, 65, 8191, 8192, 8193, DEFAULT_RAY_BUDGET
 QUEUE_BOUNDARY_CAPTURES = (OpticalCapture("optical_csg_reference", "optical_csg_reference"),) + tuple(
     OpticalCapture("optical_csg_cap" if budget == DEFAULT_RAY_BUDGET else f"optical_csg_cap_budget_{budget}",
         "optical_csg_cap", ray_budget=budget) for budget in QUEUE_BOUNDARY_BUDGETS)
+DENSE_RECEIVER_CAPTURES = tuple(OpticalCapture(case, case) for case in DENSE_CASES)
+DENSE_RECEIVER_CROSSINGS = 18
 CSG_TRACE_SLICE_RAYS = 8192
 SLICE_PACKET_FIELDS = ("source_frame", "plan_generation", "device_generation", "graphics_queue", "runtime_present",
     "ray_capacity", "expected_slices", "hardware_nodes", "indexed_slices", "compiled_nodes", "unique_packets", "accepted_packets",
@@ -104,7 +106,7 @@ def parse_optics(log_text):
 
 
 def validate_queue_coverage(statistics, spec):
-    if spec.case != "optical_csg_cap":
+    if spec.case not in ("optical_csg_cap", *DENSE_CASES):
         return None
     completed = []
     for sample in statistics:
@@ -197,15 +199,25 @@ def validate_optics(log_text, spec):
         if optical[LIT_TIR_EVENTS] > queries or optical[LIT_BOOTSTRAP_EVENTS] > rays * 32:
             raise SmokeFailure("optical event counters exceed their bounded traversal capacity")
         if sample["frame"] >= 3:
+            if spec.case in DENSE_CASES:
+                expected_queries = rays * (2 if spec.case == "optical_csg_dense" else 1)
+                if (not rays or rays != min(sample["candidates"], sample["effective_budget"])
+                    or sample["hardware_hits"] != rays or sample["opaque_pixels"] != rays
+                    or sample["glass_pixels"] or sample["fallback_pixels"] or queries != expected_queries):
+                    raise SmokeFailure("dense opaque receiver lost an admitted surface hit or replayed its hardware query")
+                if optical[LIT_TRANSPORT_ENABLED] or any(optical[field] for field in (LIT_TRANSPARENT_PATHS,
+                    LIT_BOOTSTRAP_EVENTS, LIT_UNSUPPORTED_PATHS, LIT_LIMITED_PATHS, LIT_AMBIGUOUS_PATHS,
+                    LIT_TIR_EVENTS, LIT_MEDIUM_OVERFLOW_PATHS)):
+                    raise SmokeFailure("dense opaque receiver used optical transport or reported an unresolved path")
             if spec.case in AMBIGUOUS_VOLUME_CASES and optical[LIT_AMBIGUOUS_PATHS] != rays:
                 raise SmokeFailure("negative optical fixture did not report ambiguity for every admitted hardware ray")
             stable.append((sample, optical))
     if not stable:
         raise SmokeFailure("no stable completed optical frame")
     sample, optical = stable[-1]
-    if optical[LIT_TRANSPORT_ENABLED] != int(spec.case != LIT_OPTICAL_REFERENCE and sample["hardware_ready"]):
+    if optical[LIT_TRANSPORT_ENABLED] != int(spec.case not in (LIT_OPTICAL_REFERENCE, *DENSE_CASES) and sample["hardware_ready"]):
         raise SmokeFailure("completed snapshot used the wrong plain/optical hardware kernel")
-    if spec.ray_budget == DEFAULT_RAY_BUDGET and spec.case != LIT_OPTICAL_REFERENCE and spec.case not in AMBIGUOUS_VOLUME_CASES and optical[LIT_TRANSPARENT_PATHS] == 0:
+    if spec.ray_budget == DEFAULT_RAY_BUDGET and spec.case not in (LIT_OPTICAL_REFERENCE, *DENSE_CASES) and spec.case not in AMBIGUOUS_VOLUME_CASES and optical[LIT_TRANSPARENT_PATHS] == 0:
         raise SmokeFailure("authored optical scene produced no transparent reflected paths")
     required = {"optical_unspecified": LIT_UNSUPPORTED_PATHS, "optical_mixed": LIT_AMBIGUOUS_PATHS,
         "optical_overflow": LIT_MEDIUM_OVERFLOW_PATHS, LIT_OPTICAL_QUERY_LIMIT: LIT_LIMITED_PATHS,
@@ -267,6 +279,9 @@ def capture(args, spec):
 
 
 def reference_points(spec):
+    if spec.case in DENSE_CASES:
+        # Central rays remain inside every receiver slab through z=-25, beyond the ordinary chart at z=-14.
+        return ((x, y) for y in range(280, 441, 8) for x in range(352, 609, 8))
     if spec.case == LIT_OPTICAL_TORUS:
         return ((x, y) for y in range(332, 389, 4) for x in range(400, 561, 4))
     if spec.case == LIT_OPTICAL_TIR:
@@ -280,8 +295,13 @@ def analyze_image(frame, spec):
         raise SmokeFailure("optical geometry oracle requires the fixture's 960x720 camera")
     errors, actual_sum, expected_sum, reasons = [], [0.0] * 3, [0.0] * 3, {}
     channel_deviations, stable_points, rejected_edges, transmitted_chart, reentered_chart = [], 0, 0, 0, 0
+    dense_crossings = []
     for x, y in reference_points(spec):
         expected, path = pixel_reference(spec.case, x + 0.5, y + 0.5, max_queries=spec.queries)
+        if spec.case in DENSE_CASES:
+            if path[LIT_REASON] != "opaque_dense" or path[LIT_CROSSINGS] != DENSE_RECEIVER_CROSSINGS or min(expected) <= 0.:
+                raise SmokeFailure("dense receiver oracle lacks eighteen distinct closed crossings and a positive opaque hit")
+            dense_crossings.append(path[LIT_CROSSINGS])
         # Omit a one-pixel neighborhood of an analytic discontinuity; do not blur screenshots or move expected edges.
         neighbors = [pixel_reference(spec.case, x + dx + 0.5, y + dy + 0.5, max_queries=spec.queries)[0]
             for dx, dy in ((-1, 0), (1, 0), (0, -1), (0, 1))]
@@ -328,7 +348,9 @@ def analyze_image(frame, spec):
         "linear_rgb_mae": mae, "linear_rgb_p95_error": percentile,
         "actual_mean_rgb": [value / stable_points for value in actual_sum],
         "expected_mean_rgb": [value / stable_points for value in expected_sum], "reference_termination": reasons,
-        "transmitted_chart_samples": transmitted_chart, "reentered_chart_samples": reentered_chart}
+        "transmitted_chart_samples": transmitted_chart, "reentered_chart_samples": reentered_chart,
+        "dense_receiver_crossings": {"minimum": min(dense_crossings), "maximum": max(dense_crossings),
+            "samples": len(dense_crossings)} if dense_crossings else None}
 
 
 def compare_invariant(first, second):
@@ -357,7 +379,7 @@ def analyze_suite(directory, specs=CAPTURES):
         ("optical_sliver", "optical_csg_sliver"), ("optical_sub_ulp", "optical_csg_sub_ulp"),
         ("optical_group_gap", "optical_csg_group_gap"),
         ("optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp"),
-        ("optical_group_entry", "optical_csg_group_entry")))
+        ("optical_group_entry", "optical_csg_group_entry"), ("optical_dense", "optical_csg_dense")))
     for first, second in pairs:
         if first in available and second in available:
             metrics[first + "_equals_" + second] = compare_invariant(
@@ -389,10 +411,10 @@ def write_report(args, completed, evidence, metrics=None):
     (args.output_directory / "reflection_optical.html").write_text(document, encoding=LIT_UTF_8)
 
 
-def run_suite(args):
+def run_suite(args, specs=CAPTURES):
     completed, evidence = [], {}
     try:
-        for spec in CAPTURES:
+        for spec in specs:
             result = capture(args, spec)
             if result is None:
                 print("SKIP: required reflection hardware or framebuffer readback is unavailable", file=sys.stderr)
@@ -400,7 +422,7 @@ def run_suite(args):
             completed.append(spec)
             evidence[spec.name] = result
         write_report(args, completed, evidence)
-        metrics = analyze_suite(args.output_directory)
+        metrics = analyze_suite(args.output_directory, specs)
         write_report(args, completed, evidence, metrics)
         print("PASS: optical reflected transport geometry, radiometry, query bounds and invariance\n" + json.dumps(metrics, indent=2), flush=True)
         return 0
@@ -443,7 +465,9 @@ def main(argv):
     parser.add_argument("--logserver-executable", type=Path)
     parser.add_argument("--timeout", type=float, default=90)
     parser.add_argument("--application-arg", action="append", default=[])
-    parser.add_argument("--queue-boundaries", action="store_true")
+    focus = parser.add_mutually_exclusive_group()
+    focus.add_argument("--queue-boundaries", action="store_true")
+    focus.add_argument("--dense-receiver", action="store_true", help="capture matched opaque receivers with eighteen closed crossings")
     args = parser.parse_args(argv)
     if not math.isfinite(args.timeout) or args.timeout <= 0:
         parser.error("timeout must be finite and positive")
@@ -452,7 +476,9 @@ def main(argv):
     if args.output_directory.exists() and any(args.output_directory.iterdir()):
         parser.error("output directory must be empty; completed evidence is never overwritten")
     args.output_directory.mkdir(parents=True, exist_ok=True)
-    return run_queue_boundary_suite(args) if args.queue_boundaries else run_suite(args)
+    if args.queue_boundaries:
+        return run_queue_boundary_suite(args)
+    return run_suite(args, DENSE_RECEIVER_CAPTURES if args.dense_receiver else CAPTURES)
 
 
 if __name__ == "__main__":

@@ -49,6 +49,14 @@ def overlapping_boxes():
     return mesh
 
 
+def dense_boxes():
+    # One receiver exceeds the small crossing bound; central rays cross all nine separated closed components.
+    mesh = Mesh()
+    for center_z in (0., -2., -4., -6., -8., -10., -12., -14., -16.):
+        append_box(mesh, center_z - .5, center_z + .5)
+    return mesh
+
+
 def grouped_gap_boxes(first_gap, second_gap):
     assert 0. < first_gap < second_gap
     # The near-coincident exit/entries take winding 1 -> 0 -> 1 -> 2 despite their positive net winding delta.
@@ -82,6 +90,7 @@ def main():
     for filename, mesh, components, euler, bounds in (
         ("reflection_disconnected_boxes.nwb", disconnected_boxes(), 2, 4, ((-12., -9., -1.25), (12., 9., 1.25))),
         ("reflection_overlapping_boxes.nwb", overlapping_boxes(), 2, 4, ((-12., -9., -.4), (12., 9., .4))),
+        ("reflection_dense_boxes.nwb", dense_boxes(), 9, 18, ((-12., -9., -16.5), (12., 9., .5))),
         ("reflection_tir_prism.nwb", tir_prism(), 1, 2, ((-10., -10., -28.), (20., 10., 2.))),
         ("reflection_group_gap.nwb", grouped_gap_boxes(4e-6, 6e-6), 3, 6, ((-12., -9., -1.), (12., 9., 1.))),
         ("reflection_group_gap_sub_ulp.nwb", grouped_gap_boxes(8e-8, 1e-7), 3, 6, ((-12., -9., -1.), (12., 9., 1.))),

@@ -128,6 +128,8 @@ TINTED = tuple(map(half, (0.55, 0.8, 1.0)))
 WARM = tuple(map(half, (1.0, 0.7, 0.45)))
 MIRROR_F0 = half(0.95)
 CHART_RADIANCE = half(0.9)
+DENSE_CASES = ("optical_dense", "optical_csg_dense")
+DENSE_RADIANCE = tuple(map(half, (.9, .2, .05)))
 
 
 def box(name, center_z, thickness, ior=1.5, transmission=TINTED, mode=LIT_NESTED, priority=0, yaw=0.0, tie_order=0, xy_scale=1.0):
@@ -215,7 +217,32 @@ def chart_color(x):
     return (CHART_RADIANCE,) * 3 if stripe == 15 else tuple(CHART_RADIANCE if channel == stripe % 3 else 0.0 for channel in range(3))
 
 
+def dense_receiver_intersections(origin, direction):
+    # Independent world-space slabs: source boxes are translated by -8.5 and each separated component is one unit thick.
+    crossings = []
+    for nearest_z in (-8., -10., -12., -14., -16., -18., -20., -22., -24.):
+        near, far = -math.inf, math.inf
+        for position, component, bounds in zip(origin, direction, ((-12., 12.), (-7.6, 10.4), (nearest_z - 1., nearest_z))):
+            if component == 0.:
+                if not bounds[0] < position < bounds[1]:
+                    near, far = math.inf, -math.inf
+                    break
+            else:
+                first, second = sorted((bound - position) / component for bound in bounds)
+                near, far = max(near, first), min(far, second)
+        if near < far and far > 0.:
+            crossings.extend(parameter for parameter in (near, far) if parameter > 0.)
+    return tuple(sorted(crossings))
+
+
 def trace_transmission(case, origin, direction, max_queries=16):
+    if case in DENSE_CASES:
+        intersections = dense_receiver_intersections(origin, direction)
+        if not intersections:
+            return (0., 0., 0.), {"queries": 1, "reason": "environment", "crossings": 0, "tir_events": 0}
+        return DENSE_RADIANCE, {"queries": 2 if case == "optical_csg_dense" else 1, "reason": "opaque_dense",
+            "crossings": len(intersections), "tir_events": 0, "nearest_distance": intersections[0]}
+
     if case in ("optical_sliver", "optical_csg_sliver", "optical_sub_ulp", "optical_csg_sub_ulp",
         "optical_group_gap", "optical_csg_group_gap", "optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp",
         "optical_group_entry", "optical_csg_group_entry"):

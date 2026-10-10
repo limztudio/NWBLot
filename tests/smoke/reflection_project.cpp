@@ -24,6 +24,7 @@
 #include "framebuffer_capture.h"
 #include "fps_probe.h"
 #include "gpu_pass_timing_probe.h"
+#include "reflection_csg_context_probe.h"
 #include "reflection_feedback_scene.h"
 #include "reflection_optical_scene.h"
 #include "reflection_roughness_scene.h"
@@ -198,6 +199,11 @@ public:
             if(!m_feedbackScene->create(caseName, m_freshFinalState))
                 return false;
         }
+        else if(caseName == "optical_csg_context_transition"){
+            m_csgContextProbe = MakeUnique<ReflectionCsgContextProbe>(m_context, *m_world, m_renderer, m_csgSliceRayCapacity);
+            if(!m_csgContextProbe || !m_csgContextProbe->create())
+                return false;
+        }
         else if(m_opticalCase){
             if(!CreateReflectionOpticalScene(m_context, *m_world, caseName))
                 return false;
@@ -248,6 +254,13 @@ public:
     }
 
     virtual bool onUpdate(const f32 delta)override{
+        // The latest-only diagnostic publication must retain the exact capture source in this synchronized fixture.
+        if(m_csgContextProbe && !m_context.graphics.waitForIdle()){
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: diagnostic frame synchronization failed"));
+            return false;
+        }
+        if(m_csgContextProbe && !m_csgContextProbe->update(m_latestStatistics))
+            return false;
         if(m_framebufferCapture)
             m_framebufferCapture->update();
         if(
@@ -455,99 +468,13 @@ private:
     }
 
     void reportCsgSlicePackets(){
-        if(!m_csgOpticalCase || !m_reflectionSettings.diagnosticsEnabled)
+        if(!m_csgOpticalCase || !m_reflectionSettings.diagnosticsEnabled || m_csgContextProbe)
             return;
         const u64 frame = m_context.graphics.getFrameIndex();
         if(frame < 3u || frame - 1u == m_slicePacketSourceFrame)
             return;
-        const u64 sourceFrame = frame - 1u;
-        m_slicePacketSourceFrame = sourceFrame;
-        NWB::Core::Telemetry::FrameGraphNodeDescs nodes(m_context.objectArena);
-        NWB::Core::Telemetry::FrameGraphEdgeDescs edges(m_context.objectArena);
-        NWB::Core::Telemetry::FrameGraphPendingNameEdges pendingEdges(m_context.objectArena);
-        NWB::Core::Telemetry::FrameGraphPhysicalQueueRuntimeStatisticsRecords queueStatistics(m_context.objectArena);
-        NWB::Core::Telemetry::FrameGraphPacketSubmissionStatisticsRecords packetStatistics(m_context.objectArena);
-        NWB::Core::Telemetry::FrameGraphBuilder builder(
-            nodes, edges, pendingEdges, queueStatistics, packetStatistics, sourceFrame
-        );
-        const bool graphAvailable = m_renderer.appendFrameGraph(builder);
-        const auto primaryGraphics = m_context.graphics.getDevice().getPrimaryPhysicalQueue(NWB::Core::CommandQueue::Graphics);
-        u64 planGeneration = 0u;
-        bool runtimePresent = false;
-        for(const auto& node : nodes){
-            if(node.name == Name("ecs_render/frame") && node.runtimeStatistics.present){
-                // Native packet tables are exported only for the renderer's actual source frame, not the builder's label.
-                runtimePresent = graphAvailable && node.runtimeStatistics.deviceGeneration == primaryGraphics.deviceGeneration;
-                planGeneration = node.runtimeStatistics.planGeneration;
-                break;
-            }
-        }
-        const u32 expectedSlices = (m_csgSliceRayCapacity + NWB_REFLECTION_TRACE_SLICE_RAYS - 1u)
-            / NWB_REFLECTION_TRACE_SLICE_RAYS;
-        Vector<u32, NWB::Core::Telemetry::TelemetryArena> uniquePackets(m_context.objectArena);
-        uniquePackets.reserve(expectedSlices);
-        Vector<Name, NWB::Core::Telemetry::TelemetryArena> sliceIdentities(m_context.objectArena);
-        sliceIdentities.reserve(expectedSlices);
-        for(u32 slice = 0u; slice < expectedSlices; ++slice)
-            sliceIdentities.push_back(NWB::Impl::RendererTaskGraphDetail::ReflectionCsgHardwareSliceIdentity(slice));
-        Vector<u8, NWB::Core::Telemetry::TelemetryArena> observedSlices(m_context.objectArena);
-        observedSlices.resize(expectedSlices, 0u);
-        u32 hardwareNodes = 0u;
-        u32 indexedSlices = 0u;
-        u32 compiledNodes = 0u;
-        u32 acceptedPackets = 0u;
-        u32 singleTaskPackets = 0u;
-        u32 graphicsPackets = 0u;
-        for(const auto& node : nodes){
-            if(node.label != "Reflection Hardware Resolve")
-                continue;
-            ++hardwareNodes;
-            u32 sliceIndex = expectedSlices;
-            for(u32 index = 0u; index < expectedSlices; ++index){
-                if(node.name == sliceIdentities[index]){
-                    sliceIndex = index;
-                    break;
-                }
-            }
-            if(sliceIndex == expectedSlices || observedSlices[sliceIndex] != 0u)
-                continue;
-            observedSlices[sliceIndex] = 1u;
-            ++indexedSlices;
-            if(!runtimePresent || !node.compiledTask.present || node.compiledTask.planGeneration != planGeneration)
-                continue;
-            ++compiledNodes;
-            bool unique = true;
-            for(const u32 packetIndex : uniquePackets){
-                if(packetIndex == node.compiledTask.packetIndex){
-                    unique = false;
-                    break;
-                }
-            }
-            if(unique)
-                uniquePackets.push_back(node.compiledTask.packetIndex);
-            if(!node.queueAssignment.present || !node.queueAssignment.acceptedQueue.valid()
-                || node.queueAssignment.acceptance == NWB::Core::Telemetry::FrameGraphQueueAssignmentAcceptance::NotAccepted)
-                continue;
-            for(const auto& packet : packetStatistics){
-                if(packet.packetIndex != node.compiledTask.packetIndex || packet.packetGeneration != planGeneration
-                    || packet.queue != node.queueAssignment.acceptedQueue || packet.commandListCount == 0u
-                    || packet.recoverySubmission)
-                    continue;
-                ++acceptedPackets;
-                if(packet.taskCount == 1u)
-                    ++singleTaskPackets;
-                if(packet.queue.index == primaryGraphics.index && packet.queue.deviceGeneration == primaryGraphics.deviceGeneration)
-                    ++graphicsPackets;
-                break;
-            }
-        }
-        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeSlicePackets: source_frame={} plan_generation={} device_generation={}")
-            NWB_TEXT(" graphics_queue={} runtime_present={} ray_capacity={} expected_slices={}")
-            NWB_TEXT(" hardware_nodes={} indexed_slices={} compiled_nodes={} unique_packets={} accepted_packets={} single_task_packets={} graphics_packets={}")
-            , sourceFrame, planGeneration, primaryGraphics.deviceGeneration, primaryGraphics.index, runtimePresent ? 1u : 0u
-            , m_csgSliceRayCapacity, expectedSlices, hardwareNodes, indexedSlices, compiledNodes, uniquePackets.size()
-            , acceptedPackets, singleTaskPackets, graphicsPackets
-        );
+        m_slicePacketSourceFrame = frame - 1u;
+        ReportReflectionSlicePackets(m_context, m_renderer, m_csgSliceRayCapacity, m_slicePacketSourceFrame, true);
     }
 
     void reportReflectionStatistics(){
@@ -612,6 +539,8 @@ private:
     }
 
     bool configureFramebufferCapture(){
+        if(m_csgContextProbe)
+            return true;
         FramebufferCaptureOptions options;
         if(m_extendedCase || m_feedbackCapture){
             if(!m_reflectionSettings.diagnosticsEnabled){
@@ -636,6 +565,7 @@ private:
     }
 
     void destroyWorld(){
+        m_csgContextProbe.reset();
         if(m_timingRenderPassRegistered){
             m_context.graphics.removeRenderPass(m_timingRenderPass);
             m_timingRenderPassRegistered = false;
@@ -762,6 +692,7 @@ private:
     UniquePtr<ReflectionRoughnessScene> m_roughnessScene;
     UniquePtr<ReflectionFeedbackScene> m_feedbackScene;
     UniquePtr<ReflectionSpatialOwnerProbe> m_spatialOwnerProbe;
+    UniquePtr<ReflectionCsgContextProbe> m_csgContextProbe;
     u64 m_mutationGraphicsFrame = Limit<u64>::s_Max;
     u32 m_targetSamples = 16u;
     u32 m_postResetSamples = 1u;

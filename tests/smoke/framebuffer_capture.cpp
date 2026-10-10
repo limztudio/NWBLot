@@ -186,8 +186,13 @@ void FramebufferCapture::stop(){
 void FramebufferCapture::update(){
     if(!m_registered)
         return;
-    if(m_captureReady || m_skipped || m_failed){
+    if(m_skipped || m_failed){
         requestTerminalQuit();
+        return;
+    }
+    if(m_captureReady){
+        if(m_options.quitWhenReady)
+            requestTerminalQuit();
         return;
     }
     const Core::QueueSubmissionToken acceptedToken = m_completionState->acceptedToken;

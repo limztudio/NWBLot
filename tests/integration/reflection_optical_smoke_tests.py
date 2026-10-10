@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
 
 import reflection_optical_reference as reference
 import reflection_optical_smoke as smoke
+import reflection_csg_context_smoke as context
 import caustic_optical_smoke as caustic
 import caustic_optical_reference as caustic_reference
 from reflection_roughness_smoke import HISTORY_FIELDS
@@ -59,6 +60,23 @@ LIT_MAIN = "__main__"
 
 
 class ReferenceTests(unittest.TestCase):
+    def test_dense_receiver_closure_includes_eighteen_crossings_beyond_the_ordinary_chart(self):
+        for x, y in ((352.5, 280.5), (608.5, 440.5), (472.5, 352.5)):
+            focal = 720 / (2. * math.tan(math.pi / 6.))
+            origin = ((x - 480) * 6. / focal, 1.4 - (y - 360) * 6. / focal, 0.)
+            direction = reference.normalized((origin[0], origin[1] - 1.4, -6.))
+            crossings = reference.dense_receiver_intersections(origin, direction)
+            self.assertEqual(len(crossings), 18)
+            self.assertTrue(all(second - first >= 1. for first, second in zip(crossings, crossings[1:])))
+            self.assertAlmostEqual(reference.add(origin, reference.scale(direction, crossings[0]))[2], -8.)
+            self.assertAlmostEqual(reference.add(origin, reference.scale(direction, crossings[-1]))[2], -25.)
+            self.assertGreater(crossings[-1], -14. / direction[2])
+            for case in reference.DENSE_CASES:
+                actual, evidence = reference.pixel_reference(case, x, y)
+                self.assertEqual(evidence[LIT_CROSSINGS], 18)
+                self.assertTrue(all(value > 0. for value in actual))
+                self.assertLess(reference.add(origin, reference.scale(direction, crossings[-1]))[0], 11.)
+
     def test_inside_origin_retains_radiance_eta_squared(self):
         actual, details = reference.trace_transmission("optical_inside", (0, 1.4, 0), (0, 0, -1))
         self.assertAlmostEqual(actual[0], reference.CHART_RADIANCE * 0.96 * 1.5 ** 2, places=10)
@@ -149,6 +167,23 @@ class ImageOracleTests(unittest.TestCase):
         with patch.object(smoke, "reference_points", return_value=iter(self.points)):
             return smoke.analyze_image(frame, spec)
 
+    def test_dense_receiver_capacity_loss_cannot_pass_as_black_or_transmitted_chart(self):
+        for case in reference.DENSE_CASES:
+            spec = smoke.OpticalCapture(case, case)
+            self.points = tuple(smoke.reference_points(spec))
+            metrics = self.analyze(self.synthetic_frame(case), spec)
+            self.assertEqual(metrics["dense_receiver_crossings"]["minimum"], 18)
+            for wrong in (self.synthetic_frame(case, channel_scale=0.), self.synthetic_frame(LIT_OPTICAL_CLEAR)):
+                with self.subTest(case=case), self.assertRaises(SmokeFailure):
+                    self.analyze(wrong, spec)
+
+    def test_dense_receiver_cannot_claim_a_shorter_closed_collection(self):
+        frame = self.synthetic_frame("optical_csg_dense")
+        with patch.object(smoke, "pixel_reference", return_value=((.9, .2, .05),
+            {LIT_REASON: "opaque_dense", LIT_CROSSINGS: 16})):
+            with self.assertRaisesRegex(SmokeFailure, "eighteen distinct"):
+                self.analyze(frame, smoke.OpticalCapture("optical_csg_dense", "optical_csg_dense"))
+
     def test_absorption_omission_fails(self):
         with self.assertRaises(SmokeFailure):
             self.analyze(self.synthetic_frame(LIT_OPTICAL_CLEAR), smoke.OpticalCapture(LIT_OPTICAL_TINTED, LIT_OPTICAL_TINTED))
@@ -185,11 +220,35 @@ class StatisticsTests(unittest.TestCase):
         values.update(overrides or {})
         return "ReflectionSmokeOptics: " + " ".join(f"{name}={values[name]}" for name in smoke.OPTICS_FIELDS)
 
-    def validate(self, text, spec=smoke.OpticalCapture(LIT_OPTICAL_CLEAR, LIT_OPTICAL_CLEAR)):
-        statistics = [{LIT_SEQUENCE: 9, "generation": 2, "hardware_rays": 100, "frame": 9, "hardware_ready": 1}]
+    def validate(self, text, spec=smoke.OpticalCapture(LIT_OPTICAL_CLEAR, LIT_OPTICAL_CLEAR), statistics_overrides=None):
+        sample = {LIT_SEQUENCE: 9, "generation": 2, "hardware_rays": 100, "frame": 9, "hardware_ready": 1,
+            "candidates": 100, "effective_budget": smoke.DEFAULT_RAY_BUDGET, "hardware_hits": 100,
+            "opaque_pixels": 100, "glass_pixels": 0, "fallback_pixels": 0}
+        sample.update(statistics_overrides or {})
+        statistics = [sample]
         with patch.object(smoke, "parse_statistics", return_value=statistics), patch.object(smoke, "validate_statistics"), \
             patch.object(smoke, "validate_slice_packets", return_value=None):
             return smoke.validate_optics(text, spec)
+
+    def test_dense_receiver_requires_exact_queries_without_replay_or_missing_hits(self):
+        for case, queries in (("optical_dense", 100), ("optical_csg_dense", 200)):
+            spec = smoke.OpticalCapture(case, case)
+            values = {"transport_enabled": 0, "transparent_paths": 0, LIT_HARDWARE_QUERIES: queries}
+            self.validate(self.log(values), spec)
+            for wrong_queries in (queries - 1, queries + 1, queries * 2):
+                with self.subTest(case=case, queries=wrong_queries), self.assertRaises(SmokeFailure):
+                    self.validate(self.log({**values, LIT_HARDWARE_QUERIES: wrong_queries}), spec)
+            for change in ({"hardware_hits": 99}, {"hardware_rays": 99}, {"fallback_pixels": 1}, {"glass_pixels": 1}):
+                with self.subTest(case=case, change=change), self.assertRaises(SmokeFailure):
+                    self.validate(self.log(values), spec, change)
+
+    def test_dense_opaque_plain_route_cannot_hide_optical_failures(self):
+        values = {"transport_enabled": 0, "transparent_paths": 0, LIT_HARDWARE_QUERIES: 200}
+        spec = smoke.OpticalCapture("optical_csg_dense", "optical_csg_dense")
+        for counter in ("transport_enabled", "transparent_paths", "bootstrap_events", "unsupported_paths",
+            "limited_paths", "ambiguous_paths", "tir_events", "medium_overflow_paths"):
+            with self.subTest(counter=counter), self.assertRaises(SmokeFailure):
+                self.validate(self.log({**values, counter: 1}), spec)
 
     def test_query_cap_violation_fails(self):
         with self.assertRaises(SmokeFailure):
@@ -382,6 +441,69 @@ class SlicePacketTests(unittest.TestCase):
             self.log().replace("compiled_nodes=2", "compiled_nodes=-1"), self.log() + " junk"):
             with self.subTest(text=text), self.assertRaises(SmokeFailure):
                 self.validate(text)
+
+
+class ContextTransitionTests(unittest.TestCase):
+    def log(self):
+        lines = []
+        for phase, (_, case, cut_receiver_primitives, csg) in enumerate(context.PHASES):
+            begin = 8 + phase * 24
+            lines.append(f"ReflectionCsgContext: phase={phase} source_frame={begin} cut_receiver_primitives={cut_receiver_primitives} csg={csg}")
+            for index in range(18):
+                queries = 217668 * (11 if cut_receiver_primitives == 12 else 2 if csg else 1)
+                sample = QueueCoverageTests().log(smoke.DEFAULT_RAY_BUDGET, sequence=begin + index + 1,
+                    queries=queries, transparent=217668 if cut_receiver_primitives == 12 else 0)
+                sample = sample.replace("hardware_hits=0", "hardware_hits=217668").replace("fallback_pixels=217668", "fallback_pixels=0")
+                if cut_receiver_primitives != 12:
+                    sample = sample.replace("transport_enabled=1", "transport_enabled=0")
+                if not csg:
+                    for field in ("expected_slices", "hardware_nodes", "indexed_slices", "compiled_nodes", "unique_packets",
+                        "accepted_packets", "single_task_packets", "graphics_packets"):
+                        sample = sample.replace(field + "=169", field + "=1")
+                lines.append(sample)
+            source = begin + 16
+            lines.append(f"FramebufferCapture: graphics source frame {source}")
+            lines.append(f"ReflectionCsgContext: captured phase={phase} source_frame={source} completed_frames=18")
+        lines.append("ReflectionCsgContext: complete captures=5")
+        return "\n".join(lines)
+
+    def test_current_context_return_cannot_retain_sliced_ordinary_or_short_dense_work(self):
+        evidence = context.analyze_evidence(self.log())
+        self.assertEqual([item["begin"]["cut_receiver_primitives"] for item in evidence], [12, 108, 0, 12, 108])
+        for field, value in (("hardware_nodes", 168), ("indexed_slices", 168), ("accepted_packets", 168)):
+            with self.subTest(field=field), self.assertRaises(SmokeFailure):
+                context.analyze_evidence(self.log().replace(field + "=169", field + "=" + str(value)))
+        ordinary = self.log().replace("expected_slices=1 hardware_nodes=1", "expected_slices=169 hardware_nodes=169")
+        with self.assertRaisesRegex(SmokeFailure, "stale CSG slices"):
+            context.analyze_evidence(ordinary)
+
+    def test_context_capture_cannot_use_frames_from_before_its_live_edit(self):
+        text = self.log().replace("captured phase=1 source_frame=48", "captured phase=1 source_frame=47")
+        text = text.replace("graphics source frame 48", "graphics source frame 47")
+        with self.assertRaisesRegex(SmokeFailure, "sixteen prior"):
+            context.analyze_evidence(text)
+        with self.assertRaises(SmokeFailure):
+            context.analyze_evidence(self.log().replace("phase=3 source_frame=80 cut_receiver_primitives=12", "phase=3 source_frame=105 cut_receiver_primitives=12"))
+
+    def test_context_capture_source_requires_its_own_completed_metadata(self):
+        text = self.log().replace("captured phase=4 source_frame=120", "captured phase=4 source_frame=123")
+        text = text.replace("graphics source frame 120", "graphics source frame 123")
+        with self.assertRaisesRegex(SmokeFailure, "exact captured source"):
+            context.analyze_evidence(text)
+
+    def test_small_phase_query_change_cannot_hide_behind_valid_final_dense_frame(self):
+        with self.assertRaisesRegex(SmokeFailure, "small cap phase"):
+            context.analyze_evidence(self.log().replace("hardware_queries=2394348", "hardware_queries=2394347", 1))
+        with self.assertRaises(SmokeFailure):
+            context.analyze_evidence(self.log().replace("transparent_paths=217668", "transparent_paths=0", 1))
+
+    def test_context_phase_identity_or_completion_count_cannot_be_replayed(self):
+        for old, new in (("phase=3 source_frame=80 cut_receiver_primitives=12 csg=1", "phase=3 source_frame=80 cut_receiver_primitives=108 csg=1"),
+            ("completed_frames=18", "completed_frames=15"), ("complete captures=5", "complete captures=4")):
+            with self.subTest(old=old), self.assertRaises(SmokeFailure):
+                context.analyze_evidence(self.log().replace(old, new, 1))
+        with self.assertRaises(SmokeFailure):
+            context.analyze_evidence(self.log() + "\nFramebufferCapture: graphics source frame 120")
 
 
 class CombinedCausticTests(unittest.TestCase):

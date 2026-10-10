@@ -5,7 +5,7 @@
 #include "arrow_yaw_input_handler.h"
 #include "avboit_timing_render_pass.h"
 #include "gpu_pass_timing_probe.h"
-#include "stress_cpu_timing_probe.h"
+#include "smoke_cpu_gpu_timing_probe.h"
 #if defined(NWB_ASYNC_SHADOW_M4_BENCHMARK)
 #include "stress_frame_graph_snapshot.h"
 #endif
@@ -323,7 +323,7 @@ private:
         m_reflectionStatisticsGeneration = statistics.generation;
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressReflectionStatistics: sequence={} generation={} frame={} graphics_frame={}")
             NWB_TEXT(" hardware_ready={} transport_enabled={} candidates={} hardware_rays={} exterior_eligible_rays={}")
-            NWB_TEXT(" hardware_queries={} bootstrap_events={} transparent_paths={} unsupported_paths={}")
+            NWB_TEXT(" query_budget_units={} physical_queries={} bootstrap_events={} transparent_paths={} unsupported_paths={}")
             NWB_TEXT(" screen_attempts={} screen_hits={} screen_returns={} screen_iterations={} screen_limit_misses={}")
             , statistics.sequence
             , statistics.generation
@@ -334,7 +334,8 @@ private:
             , statistics.candidates
             , statistics.hardwareRays
             , statistics.exteriorEligibleRays
-            , statistics.hardwareQueries
+            , statistics.queryBudgetUnits
+            , statistics.physicalQueries
             , statistics.bootstrapEvents
             , statistics.transparentPaths
             , statistics.unsupportedPaths
@@ -498,7 +499,11 @@ public:
         if(m_reflectionDiagnosticsEnabled)
             NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("StressTestSmokeProject: reflection diagnostics enabled"));
         // GPU durations are sampled diagnostics; FPS comes only from accepted native presentations and steady wall time.
-        if(!m_cpuTimingProbe.initialize(m_cpuDiagnosticsEnabled, m_timingEnabled))
+        const auto cpuTimingPath = NWB::Tests::Smoke::ReadSmokeEnvironmentText(m_context.objectArena, "NWB_STRESS_CPU_TIMING_FILE");
+        if(!m_cpuTimingProbe.initialize(
+            m_cpuDiagnosticsEnabled, m_timingEnabled,
+            cpuTimingPath ? AStringView(cpuTimingPath->data(), cpuTimingPath->size()) : AStringView{}
+        ))
             return false;
         NWB::Core::Perf::CaptureOptions capture = NWB::Core::Perf::CaptureOptions::GpuTimingOnly();
         capture.cpuTiming = m_cpuDiagnosticsEnabled;
@@ -742,7 +747,7 @@ private:
     NWB::Tests::Smoke::PresentationFpsProbe m_fpsProbe{ m_timingEnabled ? 5.0 : 0.25, m_timingEnabled ? 30.0 : 0.0 };
     NWB::Tests::Smoke::PresentationPacingRing m_pacingRing;
     bool m_timingComplete = false;
-    NWB::Tests::Smoke::StressCpuTimingProbe m_cpuTimingProbe{ m_context.objectArena };
+    NWB::Tests::Smoke::SmokeCpuGpuTimingProbe m_cpuTimingProbe{ NWB_TEXT("stress"), m_context.objectArena };
     NWB::Tests::Smoke::GpuPassTimingProbe m_gpuPassTimingProbe{ NWB_TEXT("StressTestSmokeProject") };
     NWB::Tests::Smoke::YawSpinController m_yaw;
     ArrowYawInputHandler m_arrowYawInput;

@@ -147,7 +147,10 @@ void ReflectionStatisticsState::complete(
         m_latest.fallbackPixels = counters[NWB_REFLECTION_COUNTER_FALLBACK_PIXELS / sizeof(u32)];
         m_latest.screenAttempts = counters[NWB_REFLECTION_COUNTER_SCREEN_ATTEMPTS / sizeof(u32)];
         m_latest.screenHits = counters[NWB_REFLECTION_COUNTER_SCREEN_HITS / sizeof(u32)];
-        m_latest.hardwareQueries = counters[NWB_REFLECTION_COUNTER_HARDWARE_QUERIES / sizeof(u32)];
+        m_latest.queryBudgetUnits = counters[NWB_REFLECTION_COUNTER_QUERY_BUDGET_UNITS / sizeof(u32)];
+        m_latest.physicalQueries = slot->metadata.csgHardwareEnabled
+            ? counters[NWB_REFLECTION_COUNTER_PHYSICAL_QUERIES / sizeof(u32)] : m_latest.queryBudgetUnits
+        ;
         m_latest.bootstrapEvents = counters[NWB_REFLECTION_COUNTER_BOOTSTRAP_EVENTS / sizeof(u32)];
         m_latest.transparentPaths = counters[NWB_REFLECTION_COUNTER_TRANSPARENT_PATHS / sizeof(u32)];
         m_latest.unsupportedPaths = counters[NWB_REFLECTION_COUNTER_UNSUPPORTED_PATHS / sizeof(u32)];

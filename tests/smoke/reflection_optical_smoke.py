@@ -29,7 +29,8 @@ LIT_OPTICAL_TIR = "optical_tir"
 LIT_SEQUENCE = "sequence"
 LIT_GENERATION = "generation"
 LIT_MAX_QUERIES = "max_queries"
-LIT_HARDWARE_QUERIES = "hardware_queries"
+LIT_QUERY_BUDGET_UNITS = "query_budget_units"
+LIT_PHYSICAL_QUERIES = "physical_queries"
 LIT_BOOTSTRAP_EVENTS = "bootstrap_events"
 LIT_TRANSPARENT_PATHS = "transparent_paths"
 LIT_UNSUPPORTED_PATHS = "unsupported_paths"
@@ -64,7 +65,7 @@ CASES = ("reference", "clear", "tinted", "tilted", "nested2", "nested3", "priori
     "alpha_before", "alpha_after", LIT_DUPLICATE_IDENTICAL, LIT_DUPLICATE_GROUP, LIT_DUPLICATE_REVERSE, LIT_MIRRORED,
     "disconnected", "same_mesh", "torus", "inside", "inside_nested", "unspecified", "mixed", "overflow", "tir",
     "union_single", "union_same_mesh", "coincident_independent", "priority_tie_a", "priority_tie_b",
-    "csg_reference", "csg_cap", "csg_cavity", "sliver", "csg_sliver", "sub_ulp", "csg_sub_ulp", "group_gap", "csg_group_gap",
+    "csg_reference", "csg_cap", "csg_cavity", "csg_open_tail", "unspecified_reference", "csg_unspecified_cap", "sliver", "csg_sliver", "sub_ulp", "csg_sub_ulp", "group_gap", "csg_group_gap",
     "group_gap_sub_ulp", "csg_group_gap_sub_ulp", "group_entry", "csg_group_entry")
 CAPTURES = tuple(OpticalCapture(LIT_OPTICAL + name, LIT_OPTICAL + name) for name in CASES) + (
     OpticalCapture(LIT_OPTICAL_QUERY_LIMIT, "optical_clear", 1), OpticalCapture(LIT_OPTICAL_TIR_LIMIT, LIT_OPTICAL_TIR, 3))
@@ -77,12 +78,20 @@ QUEUE_BOUNDARY_CAPTURES = (OpticalCapture("optical_csg_reference", "optical_csg_
     OpticalCapture("optical_csg_cap" if budget == DEFAULT_RAY_BUDGET else f"optical_csg_cap_budget_{budget}",
         "optical_csg_cap", ray_budget=budget) for budget in QUEUE_BOUNDARY_BUDGETS)
 DENSE_RECEIVER_CAPTURES = tuple(OpticalCapture(case, case) for case in DENSE_CASES)
+CSG_REUSE_CAPTURES = (
+    OpticalCapture("optical_csg_reference", "optical_csg_reference"),
+    OpticalCapture("optical_csg_cap", "optical_csg_cap"),
+    OpticalCapture("optical_csg_open_tail", "optical_csg_open_tail"),
+    OpticalCapture("optical_csg_cap_query_limit", "optical_csg_cap", 8),
+    OpticalCapture("optical_unspecified_reference", "optical_unspecified_reference"),
+    OpticalCapture("optical_csg_unspecified_cap", "optical_csg_unspecified_cap"),
+)
 DENSE_RECEIVER_CROSSINGS = 18
 CSG_TRACE_SLICE_RAYS = 8192
 SLICE_PACKET_FIELDS = ("source_frame", "plan_generation", "device_generation", "graphics_queue", "runtime_present",
     "ray_capacity", "expected_slices", "hardware_nodes", "indexed_slices", "compiled_nodes", "unique_packets", "accepted_packets",
     "single_task_packets", "graphics_packets")
-OPTICS_FIELDS = (LIT_SEQUENCE, LIT_GENERATION, LIT_MAX_QUERIES, LIT_HARDWARE_QUERIES, LIT_BOOTSTRAP_EVENTS, LIT_TRANSPARENT_PATHS,
+OPTICS_FIELDS = (LIT_SEQUENCE, LIT_GENERATION, LIT_MAX_QUERIES, LIT_QUERY_BUDGET_UNITS, LIT_PHYSICAL_QUERIES, LIT_BOOTSTRAP_EVENTS, LIT_TRANSPARENT_PATHS,
     LIT_UNSUPPORTED_PATHS, LIT_LIMITED_PATHS, LIT_AMBIGUOUS_PATHS, LIT_TIR_EVENTS, LIT_MEDIUM_OVERFLOW_PATHS, LIT_TRANSPORT_ENABLED)
 LIMITATIONS = ("Actual renderer framebuffer pixels; independent float64 plane/box/triangle intersections, exact dielectric Fresnel, "
     "Snell refraction and world-distance Beer absorption predict stripe positions and RGB energy. The model follows one deterministic "
@@ -106,7 +115,7 @@ def parse_optics(log_text):
 
 
 def validate_queue_coverage(statistics, spec):
-    if spec.case not in ("optical_csg_cap", *DENSE_CASES):
+    if spec.case not in ("optical_csg_cap", "optical_csg_open_tail", "optical_unspecified_reference", "optical_csg_unspecified_cap", *DENSE_CASES):
         return None
     completed = []
     for sample in statistics:
@@ -190,9 +199,12 @@ def validate_optics(log_text, spec):
             raise SmokeFailure("optical counters lack matching accepted-token source metadata")
         if optical[LIT_MAX_QUERIES] != spec.queries:
             raise SmokeFailure("optical counters describe a different frozen query budget")
-        rays, queries = sample["hardware_rays"], optical[LIT_HARDWARE_QUERIES]
+        rays, queries = sample["hardware_rays"], optical[LIT_QUERY_BUDGET_UNITS]
         if not rays <= queries <= rays * spec.queries:
-            raise SmokeFailure("actual hardware scene queries violate the per-path query bound")
+            raise SmokeFailure("reserved traversal units violate the per-path query bound")
+        physical_queries = optical[LIT_PHYSICAL_QUERIES]
+        if physical_queries > queries:
+            raise SmokeFailure("physical hardware queries exceed reserved traversal units")
         for field in (LIT_TRANSPARENT_PATHS, LIT_UNSUPPORTED_PATHS, LIT_LIMITED_PATHS, LIT_AMBIGUOUS_PATHS, LIT_MEDIUM_OVERFLOW_PATHS):
             if optical[field] > rays:
                 raise SmokeFailure("optical path counter exceeds admitted primary paths: " + field)
@@ -203,7 +215,8 @@ def validate_optics(log_text, spec):
                 expected_queries = rays * (2 if spec.case == "optical_csg_dense" else 1)
                 if (not rays or rays != min(sample["candidates"], sample["effective_budget"])
                     or sample["hardware_hits"] != rays or sample["opaque_pixels"] != rays
-                    or sample["glass_pixels"] or sample["fallback_pixels"] or queries != expected_queries):
+                    or sample["glass_pixels"] or sample["fallback_pixels"]
+                    or queries != expected_queries or physical_queries != expected_queries):
                     raise SmokeFailure("dense opaque receiver lost an admitted surface hit or replayed its hardware query")
                 if optical[LIT_TRANSPORT_ENABLED] or any(optical[field] for field in (LIT_TRANSPARENT_PATHS,
                     LIT_BOOTSTRAP_EVENTS, LIT_UNSUPPORTED_PATHS, LIT_LIMITED_PATHS, LIT_AMBIGUOUS_PATHS,
@@ -235,6 +248,49 @@ def validate_optics(log_text, spec):
         raise SmokeFailure("prism fixture did not exercise total internal reflection")
     return {LIT_STATISTICS: statistics, "optics": samples, "stable_optics": optical, "queue_coverage": queue_coverage,
         "slice_packets": slice_packets}
+
+
+
+def validate_collection_reuse(evidence, spec):
+    if spec.case == "optical_csg_open_tail":
+        expected_units, expected_physical, limited = 12, 12, False
+    elif spec.case == "optical_csg_cap" and spec.queries == 8:
+        expected_units, expected_physical, limited = 8, 5, True
+    elif spec.case in ("optical_csg_cap", "optical_csg_unspecified_cap") and spec.queries == 16:
+        expected_units, expected_physical, limited = 11, 7, False
+    elif spec.case == "optical_unspecified_reference" and spec.queries == 16:
+        expected_units, expected_physical, limited = 5, 5, False
+    else:
+        raise SmokeFailure("collection reuse evidence requires its declared closed, open or query-limit control")
+    by_key = {(sample[LIT_SEQUENCE], sample[LIT_GENERATION]): sample for sample in evidence["optics"]}
+    completed = []
+    for sample in evidence[LIT_STATISTICS]:
+        if sample["frame"] < 3:
+            continue
+        optical = by_key.get((sample[LIT_SEQUENCE], sample[LIT_GENERATION]))
+        rays = sample["hardware_rays"]
+        if (optical is None or not rays or rays != min(sample["candidates"], sample["effective_budget"])
+            or sample["hardware_hits"] != rays or sample["opaque_pixels"] != rays
+            or sample["glass_pixels"] or sample["fallback_pixels"]):
+            raise SmokeFailure("collection reuse control lost an admitted retained-slab path")
+        if (optical[LIT_MAX_QUERIES] != spec.queries or optical[LIT_TRANSPORT_ENABLED] != 1
+            or optical[LIT_QUERY_BUDGET_UNITS] != expected_units * rays
+            or optical[LIT_PHYSICAL_QUERIES] != expected_physical * rays
+            or optical[LIT_TRANSPARENT_PATHS] != rays
+            or optical[LIT_LIMITED_PATHS] != (rays if limited else 0)
+            or any(optical[field] for field in (LIT_BOOTSTRAP_EVENTS, LIT_UNSUPPORTED_PATHS,
+                LIT_AMBIGUOUS_PATHS, LIT_TIR_EVENTS, LIT_MEDIUM_OVERFLOW_PATHS))):
+            raise SmokeFailure("collection reuse control changed reserved work, physical queries or conservative termination")
+        completed.append({LIT_SEQUENCE: sample[LIT_SEQUENCE], LIT_GENERATION: sample[LIT_GENERATION],
+            "frame": sample["frame"], "hardware_rays": rays, LIT_QUERY_BUDGET_UNITS: optical[LIT_QUERY_BUDGET_UNITS],
+            LIT_PHYSICAL_QUERIES: optical[LIT_PHYSICAL_QUERIES]})
+    if not completed:
+        raise SmokeFailure("collection reuse control lacks a stable completed source frame")
+    return {"reserved_units_per_ray": expected_units, "physical_queries_per_ray": expected_physical,
+        "query_limit_termination": limited, "completed_frames": completed,
+        "contract": "Closed receivers reuse exact tie certificates; a positive open event beyond the nearest chart disables reuse. "
+            "The extended open root also requires one terminal no-hit collection. Query exhaustion preserves reserved work and black residual radiance. "
+            "Valid-air controls author the sole transparent receiver as Unspecified, selecting the normal all-Unspecified optical kernel."}
 
 
 def capture(args, spec):
@@ -275,6 +331,8 @@ def capture(args, spec):
     evidence = validate_optics(log_text, spec)
     evidence["capture_source"] = validate_history(log_text, evidence[LIT_STATISTICS],
         CaptureSpec(spec.name, case=spec.case, roughness=0, samples=16, temporal=False))
+    if spec in CSG_REUSE_CAPTURES[1:]:
+        evidence["collection_reuse"] = validate_collection_reuse(evidence, spec)
     return evidence
 
 
@@ -376,6 +434,8 @@ def analyze_suite(directory, specs=CAPTURES):
     pairs.extend((("optical_union_single", "optical_union_same_mesh"),
         ("optical_priority_a", "optical_priority_tie_a"), ("optical_priority_b", "optical_priority_tie_b"),
         ("optical_csg_reference", "optical_csg_cap"), ("optical_csg_reference", "optical_csg_cavity"),
+        ("optical_csg_cap", "optical_csg_open_tail"),
+        ("optical_unspecified_reference", "optical_csg_unspecified_cap"),
         ("optical_sliver", "optical_csg_sliver"), ("optical_sub_ulp", "optical_csg_sub_ulp"),
         ("optical_group_gap", "optical_csg_group_gap"),
         ("optical_group_gap_sub_ulp", "optical_csg_group_gap_sub_ulp"),
@@ -467,6 +527,7 @@ def main(argv):
     parser.add_argument("--application-arg", action="append", default=[])
     focus = parser.add_mutually_exclusive_group()
     focus.add_argument("--queue-boundaries", action="store_true")
+    focus.add_argument("--csg-reuse", action="store_true", help="validate closed collection reuse, open-tail retrace and unchanged query-budget exhaustion")
     focus.add_argument("--dense-receiver", action="store_true", help="capture matched opaque receivers with eighteen closed crossings")
     args = parser.parse_args(argv)
     if not math.isfinite(args.timeout) or args.timeout <= 0:
@@ -476,6 +537,8 @@ def main(argv):
     if args.output_directory.exists() and any(args.output_directory.iterdir()):
         parser.error("output directory must be empty; completed evidence is never overwritten")
     args.output_directory.mkdir(parents=True, exist_ok=True)
+    if args.csg_reuse:
+        return run_suite(args, CSG_REUSE_CAPTURES)
     if args.queue_boundaries:
         return run_queue_boundary_suite(args)
     return run_suite(args, DENSE_RECEIVER_CAPTURES if args.dense_receiver else CAPTURES)

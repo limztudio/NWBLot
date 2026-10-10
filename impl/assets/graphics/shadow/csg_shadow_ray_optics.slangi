@@ -69,14 +69,37 @@ bool nwbCsgShadowRayBoundaryOptics(
     return all(isfinite(float3(absorption))) && isfinite(float(transmission));
 }
 
+// Open surfaces retain the ordinary endpoint, interface and pairing rules with the CSG collector's bounded capacity.
+struct NwbCsgShadowOpenOptics{
+    float3 absorptionCoeff;
+    half interfaceTransmittance;
+    uint crossingCount;
+    float crossingT[NWB_CSG_RAY_CROSSING_CAPACITY];
+};
+
+void nwbCsgShadowAccumulateOpenOptics(inout NwbShadowVisibilityAccumulator accumulator, __constref NwbCsgShadowOpenOptics optics){
+    const uint count = optics.crossingCount;
+    if(count == 0u)
+        return;
+    float pairedChord = 0.0;
+    for(uint index = 0u; index + 1u < count; index += 2u)
+        pairedChord += max(optics.crossingT[index + 1u] - optics.crossingT[index], 0.0);
+    if(count > 1u && (count & 1u) != 0u)
+        pairedChord = max(pairedChord, max(optics.crossingT[count - 1u] - optics.crossingT[0u], 0.0));
+    const float endpoint = optics.crossingT[0u] + pairedChord;
+    const float chord = max(endpoint - optics.crossingT[0u], 0.0);
+    const half interfaceWeight = half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, chord));
+    accumulator.interfaceTransmittance *= lerp(half(1.0h), optics.interfaceTransmittance, interfaceWeight);
+    accumulator.opticalDepth += half3(optics.absorptionCoeff) * half(chord);
+}
+
 struct NwbCsgShadowRayOpenVisitor : NwbCsgRayOpenVisitor{
     uint contextSlot;
     uint materialSlot;
     uint instanceIndex;
     float3 origin;
     float3 direction;
-    NwbShadowInstanceOptics optics;
-    bool hasAbsorption;
+    NwbCsgShadowOpenOptics optics;
 
     [mutating] uint visit(
         const uint primitive,
@@ -102,16 +125,17 @@ struct NwbCsgShadowRayOpenVisitor : NwbCsgRayOpenVisitor{
             if(nwbShadowCrossingMatchesEndpoint(distance, optics.crossingT[index]))
                 return 0u;
         }
-        if(optics.crossingCount == (uint)NWB_SHADOW_MAX_CROSSINGS_PER_OCCLUDER)
-            return NWB_CSG_RAY_FAILURE_CAPACITY;
-        if(!hasAbsorption){
+        if(optics.crossingCount == NWB_CSG_RAY_CROSSING_CAPACITY)
+            return NWB_CSG_RAY_FAILURE_OPEN_CAPACITY;
+        if(optics.crossingCount == 0u)
             optics.absorptionCoeff = float3(absorption);
-            hasAbsorption = true;
-        }
         optics.interfaceTransmittance *= transmission;
-        optics.tMin = optics.crossingCount == 0u ? distance : min(optics.tMin, distance);
-        optics.tMax = optics.crossingCount == 0u ? distance : max(optics.tMax, distance);
-        optics.crossingT[optics.crossingCount] = distance;
+        uint insertion = optics.crossingCount;
+        while(insertion > 0u && optics.crossingT[insertion - 1u] > distance){
+            optics.crossingT[insertion] = optics.crossingT[insertion - 1u];
+            --insertion;
+        }
+        optics.crossingT[insertion] = distance;
         ++optics.crossingCount;
         return 0u;
     }

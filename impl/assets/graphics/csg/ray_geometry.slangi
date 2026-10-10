@@ -17,6 +17,9 @@
 #include "../bvh/bvh_common.slangi"
 #include "../bindless/bindless_heap_bvh.slangi"
 #include "../mesh/runtime_bounds_constants.h"
+#if NWB_CSG_RAY_OPTICAL_REUSE
+#include "../optics/ray_precision.slangi"
+#endif
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -65,6 +68,28 @@ struct NwbCsgRayBoundary{
     float2 barycentrics;
 #if NWB_CSG_RAY_STRICT_NORMALS
     bool normalAmbiguous;
+#endif
+};
+
+struct NwbCsgRayCollection{
+    uint failure;
+    uint physicalQueries;
+};
+
+#if NWB_CSG_RAY_OPTICAL_REUSE
+struct NwbCsgRayClosedWindows{
+    NwbCsgRayBoundary window;
+    NwbCsgRayBoundary next;
+};
+#endif
+
+struct NwbCsgRayResolution{
+    NwbCsgRayBoundary boundary;
+    uint physicalQueries;
+#if NWB_CSG_RAY_OPTICAL_REUSE
+    bool reusable;
+    NwbCsgRayBoundary window;
+    NwbCsgRayBoundary next;
 #endif
 };
 
@@ -426,6 +451,9 @@ bool nwbCsgRayOpenBoundaryVisible(
 
 struct NwbCsgRayNearestOpenVisitor : NwbCsgRayOpenVisitor{
     NwbCsgRayBoundary boundary;
+#if NWB_CSG_RAY_OPTICAL_REUSE
+    bool hasPositiveOpenEvent;
+#endif
 #if NWB_CSG_RAY_STRICT_NORMALS
     uint materialSlot;
     uint instanceIndex;
@@ -440,6 +468,9 @@ struct NwbCsgRayNearestOpenVisitor : NwbCsgRayOpenVisitor{
         __constref NwbCsgRayCutInterval cuts[NWB_CSG_RAY_MAX_CUTTERS],
         const uint cutCount
     ){
+#if NWB_CSG_RAY_OPTICAL_REUSE
+        hasPositiveOpenEvent = true;
+#endif
 #if NWB_CSG_RAY_STRICT_NORMALS
         if(boundary.hit && nwbCsgRaySameDistance(distance, boundary.distance)
             && nwbCsgRayOpenBoundaryVisible(distance, minimum, maximum, cuts, cutCount)){

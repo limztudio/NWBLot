@@ -99,7 +99,7 @@ LIT_MEASUREMENT = "measurement"
 LIT_SAMPLE_COUNT = "sample_count"
 LIT_SUMS = "sums"
 LIT_UNSUPPORTED_RATIO = "unsupported_ratio"
-LIT_QUERIES_PER_HARDWARE_RAY = "queries_per_hardware_ray"
+LIT_QUERIES_PER_HARDWARE_RAY = "physical_queries_per_hardware_ray"
 LIT_EXTERIOR_ELIGIBLE_RATIO = "exterior_eligible_ratio"
 LIT_RANGES_BY_GENERATION = "ranges_by_generation"
 LIT_GENERATION = "generation"
@@ -107,7 +107,7 @@ LIT_UNSUPPORTED = "unsupported"
 LIT_HARDWARE_READY_SAMPLES = "hardware_ready_samples"
 LIT_UNSUPPORTED_PATHS_10 = " unsupported_paths=10"
 LIT_EXTRA_0 = " extra=0"
-LIT_HARDWARE_QUERIES_0 = "hardware_queries=0"
+LIT_QUERY_BUDGET_UNITS_0 = "query_budget_units=0"
 LIT_REFLECTION_SCREEN_STEPS = "--reflection-screen-steps"
 LIT_NWB_REFLECTION_SCREEN_STEPS = "NWB_REFLECTION_SCREEN_STEPS"
 LIT_SCREEN_WORK_MEASURED = "screen_work_measured"
@@ -206,14 +206,14 @@ def valid_log(characters_per_class=10):
 
 def reflection_record(**changes):
     row = dict(sequence=1, generation=1, frame=10, graphics_frame=10, hardware_ready=1, transport_enabled=1,
-        candidates=10, hardware_rays=10, exterior_eligible_rays=0, hardware_queries=0, bootstrap_events=0,
+        candidates=10, hardware_rays=10, exterior_eligible_rays=0, query_budget_units=0, physical_queries=0, bootstrap_events=0,
         transparent_paths=0, unsupported_paths=10,
         screen_attempts=0, screen_hits=0, screen_returns=0, screen_iterations=0, screen_limit_misses=0)
     row.update(changes)
     return ("StressReflectionStatistics: sequence={sequence} generation={generation} frame={frame} "
         "graphics_frame={graphics_frame} hardware_ready={hardware_ready} transport_enabled={transport_enabled} "
         "candidates={candidates} hardware_rays={hardware_rays} exterior_eligible_rays={exterior_eligible_rays} "
-        "hardware_queries={hardware_queries} bootstrap_events={bootstrap_events} "
+        "query_budget_units={query_budget_units} physical_queries={physical_queries} bootstrap_events={bootstrap_events} "
         "transparent_paths={transparent_paths} unsupported_paths={unsupported_paths} "
         "screen_attempts={screen_attempts} screen_hits={screen_hits} screen_returns={screen_returns} "
         "screen_iterations={screen_iterations} screen_limit_misses={screen_limit_misses}").format(**row)
@@ -499,7 +499,7 @@ class StressReflectionDiagnosticTests(unittest.TestCase):
     def test_partial_unsupported_ratios_are_weighted_by_admitted_rays(self):
         text = reflection_log(reflection_record(candidates=1, hardware_rays=1, unsupported_paths=1),
             reflection_record(sequence=2, frame=11, graphics_frame=11, candidates=9, hardware_rays=9,
-                hardware_queries=18, bootstrap_events=23, transparent_paths=3, exterior_eligible_rays=6,
+                query_budget_units=18, physical_queries=18, bootstrap_events=23, transparent_paths=3, exterior_eligible_rays=6,
                 unsupported_paths=0))
         optical = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)[LIT_OPTICAL_REFLECTION]
         self.assertEqual(optical[LIT_STATUS], LIT_UNSUPPORTED)
@@ -510,11 +510,18 @@ class StressReflectionDiagnosticTests(unittest.TestCase):
     def test_queries_are_observations_not_a_complete_optical_support_claim(self):
         for unsupported, expected in ((0, "queries_observed"), (10, LIT_UNSUPPORTED)):
             with self.subTest(unsupported=unsupported):
-                text = reflection_log(reflection_record(hardware_queries=20, bootstrap_events=4,
+                text = reflection_log(reflection_record(query_budget_units=20, physical_queries=20, bootstrap_events=4,
                     transparent_paths=2, unsupported_paths=unsupported))
                 optical = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)[LIT_OPTICAL_REFLECTION]
                 self.assertEqual(optical[LIT_STATUS], expected)
                 self.assertEqual(optical[LIT_QUERIES_PER_HARDWARE_RAY], 2.)
+
+    def test_budget_reservation_cannot_be_reported_as_a_physical_query(self):
+        text = reflection_log(reflection_record(query_budget_units=10, physical_queries=0))
+        optical = smoke.parse_runtime_log(text, 0, reflection_diagnostics=True)[LIT_OPTICAL_REFLECTION]
+        self.assertEqual(optical[LIT_STATUS], "all_rejected")
+        self.assertEqual(optical["query_budget_units_per_hardware_ray"], 1.)
+        self.assertEqual(optical["physical_queries_per_hardware_ray"], 0.)
 
     def test_zero_ray_samples_do_not_produce_false_support_or_zero_ratios(self):
         text = reflection_log(reflection_record(hardware_ready=0, transport_enabled=0,
@@ -549,11 +556,11 @@ class StressReflectionDiagnosticTests(unittest.TestCase):
 
     def test_numeric_bounds_flags_and_impossible_counter_relationships_are_rejected(self):
         variants = (dict(sequence=0), dict(generation=0), dict(sequence=2 ** 64), dict(frame=2 ** 32),
-            dict(graphics_frame=2 ** 64), dict(hardware_queries=2 ** 32), dict(hardware_ready=2),
+            dict(graphics_frame=2 ** 64), dict(query_budget_units=2 ** 32), dict(physical_queries=2 ** 32), dict(physical_queries=1), dict(hardware_ready=2),
             dict(transport_enabled=2), dict(hardware_ready=0), dict(transport_enabled=0), dict(candidates=9),
-            dict(exterior_eligible_rays=11), dict(transparent_paths=11, hardware_queries=20),
+            dict(exterior_eligible_rays=11), dict(transparent_paths=11, query_budget_units=20),
             dict(unsupported_paths=11), dict(bootstrap_events=1), dict(transparent_paths=1),
-            dict(hardware_rays=0, unsupported_paths=0, hardware_queries=1))
+            dict(hardware_rays=0, unsupported_paths=0, query_budget_units=1))
         for change in variants:
             with self.subTest(change=change), self.assertRaises(smoke.SmokeFailure):
                 smoke.parse_runtime_log(reflection_log(reflection_record(**change)), 0, reflection_diagnostics=True)
@@ -561,8 +568,8 @@ class StressReflectionDiagnosticTests(unittest.TestCase):
     def test_missing_duplicate_extra_and_noninteger_fields_are_rejected(self):
         valid = reflection_record()
         variants = (valid.replace(LIT_UNSUPPORTED_PATHS_10, ""), valid + LIT_UNSUPPORTED_PATHS_10,
-            valid + LIT_EXTRA_0, valid.replace(LIT_HARDWARE_QUERIES_0, "hardware_queries=-1"),
-            valid.replace(LIT_HARDWARE_QUERIES_0, "hardware_queries=nan"))
+            valid + LIT_EXTRA_0, valid.replace(LIT_QUERY_BUDGET_UNITS_0, "query_budget_units=-1"),
+            valid.replace(LIT_QUERY_BUDGET_UNITS_0, "query_budget_units=nan"))
         for record in variants:
             with self.subTest(record=record), self.assertRaises(smoke.SmokeFailure):
                 smoke.parse_runtime_log(reflection_log(record), 0, reflection_diagnostics=True)

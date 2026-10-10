@@ -71,7 +71,8 @@ void BeginLightSpaceCsgGather(LightSpaceCsgState& state, Core::ECS::World& world
 
 void AppendLightSpaceCsgReceiver(
     LightSpaceCsgState& state, const Core::ECS::EntityID entity, const bool transparent,
-    const SIMDMatrix& objectToWorld, const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
+    const SIMDMatrix& objectToWorld, const SIMDMatrix& worldToObject,
+    const ECSRenderDetail::MeshRayTracingResourceSnapshot& mesh
 ){
     if(!state.gathering)
         return;
@@ -118,8 +119,7 @@ void AppendLightSpaceCsgReceiver(
     state.receivers.push_back(receiver);
 
     LightSpaceCsgInstanceGpu instance;
-    SIMDVector determinant;
-    StoreFloat(MatrixInverse(&determinant, objectToWorld), instance.worldToObject);
+    StoreFloat(worldToObject, instance.worldToObject);
     instance.primitiveCount = mesh.meshletPrimitiveIndexCount / 3u;
     if(mesh.runtimeLocalBoundsBuffer && mesh.runtimeLocalBoundsHeapHandle.valid()){
         instance.runtimeBoundsSlot = mesh.runtimeLocalBoundsHeapHandle.slot();

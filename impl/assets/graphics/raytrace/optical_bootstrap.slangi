@@ -49,7 +49,7 @@ bool nwbOpticalBootstrap(
     if(any(origin < boundsMin) || any(origin > boundsMax))
         return true;
     const float3 bootstrapDirection = normalize(float3(0.754877666, 0.569840291, 0.324717957));
-    const float tolerance = 4.0 * max(nwbOpticalPositionUncertainty(boundsMin), nwbOpticalPositionUncertainty(boundsMax));
+    const float tolerance = 4.0 * max(nwbOpticsPositionUncertainty(boundsMin), nwbOpticsPositionUncertainty(boundsMax));
     const float bootstrapDistance = length(boundsMax - boundsMin) + tolerance * 2.0;
     RayDesc ray;
     ray.Origin = origin - bootstrapDirection * bootstrapDistance;
@@ -67,6 +67,9 @@ bool nwbOpticalBootstrap(
     query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK, ray);
 #else
     query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK, ray);
+#endif
+#if NWB_RT_CSG_ENABLED
+    ++result.physicalQueries;
 #endif
 #if NWB_OPTICAL_CLOSED_MEDIA
     NwbOpticalBootstrapEvent events[NWB_OPTICAL_MAX_CANDIDATE_EVENTS];
@@ -163,7 +166,11 @@ bool nwbOpticalBootstrap(
                 return false;
             const NwbRayTraceGeometryHit geometry = nwbRayTraceCsgGeometryHit(
                 contextSlot, config.instanceMaterialHeapSlot, instance, ray.Origin, ray.Direction, minimum, bootstrapDistance
+#if NWB_CSG_RAY_OPTICAL_REUSE
+                , false
+#endif
             );
+            result.physicalQueries += geometry.physicalQueries;
             if(geometry.failure != 0u){
                 result.transparentPath = true;
                 result.termination = (geometry.failure & NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL) != 0u

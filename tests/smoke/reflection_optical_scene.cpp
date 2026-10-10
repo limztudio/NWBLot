@@ -37,6 +37,7 @@ struct OpticalReceiverEntities{
 
 static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
 static constexpr SmokeMeshRef s_Box("project/meshes/cube_hard_edges");
+static constexpr SmokeMeshRef s_CsgOpenTail("project/meshes/reflection_csg_open_tail");
 static constexpr SmokeMeshRef s_Disconnected("project/meshes/reflection_disconnected_boxes");
 static constexpr SmokeMeshRef s_Overlapping("project/meshes/reflection_overlapping_boxes");
 static constexpr SmokeMeshRef s_Dense("project/meshes/reflection_dense_boxes");
@@ -156,9 +157,15 @@ static Expected<OpticalReceiverEntities> CreateDenseReceiver(ProjectRuntimeConte
     return OpticalReceiverEntities{ .receiver = receiver, .cutter = cutterEntity.id() };
 }
 
-static Expected<OpticalReceiverEntities> CreateCsgBoundaryReceiver(ProjectRuntimeContext& context, Core::ECS::World& world, const bool cavity){
+static Expected<OpticalReceiverEntities> CreateCsgBoundaryReceiver(
+    ProjectRuntimeContext& context, Core::ECS::World& world, const SmokeMeshRef& mesh, const bool cavity,
+    const f32 ior, const Float4& transmission, const Impl::OpticalBoundaryMode::Enum mode
+){
     // Both retain [-10,-9]; the cavity case starts the reflected ray inside the removed receiver volume.
-    const auto receiver = CreateBox(context, world, cavity ? -3.f : -9.f, cavity ? 14.f : 2.f, 1.5f, s_Tinted);
+    const auto receiver = CreateBoundary(
+        context, world, mesh, Float4(0.f, 1.4f, cavity ? -3.f : -9.f, 0.f),
+        Float4(24.f, 18.f, cavity ? 14.f : 2.f, 0.f), ior, transmission, mode
+    );
     if(!receiver.valid())
         return MakeUnexpected(Failure{});
     const Name group("smoke/reflection/csg_optics");
@@ -181,6 +188,8 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
         return true;
     if(caseName == "optical_csg_reference")
         return CreateBox(context, world, -9.5f, 1.f, 1.5f, s_Tinted).valid();
+    if(caseName == "optical_unspecified_reference")
+        return CreateBox(context, world, -9.5f, 1.f, 1.f, s_Clear, Impl::OpticalBoundaryMode::Unspecified).valid();
     if(caseName == "optical_group_entry" || caseName == "optical_csg_group_entry"){
         // The cutter replaces the final grouped entry with a cap while the preceding positive thin solid remains retained.
         const bool ordinary = caseName == "optical_group_entry";
@@ -247,8 +256,13 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
         AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
         return true;
     }
-    if(caseName == "optical_csg_cap" || caseName == "optical_csg_cavity")
-        return CreateCsgBoundaryReceiver(context, world, caseName == "optical_csg_cavity").has_value();
+    const bool unspecifiedCap = caseName == "optical_csg_unspecified_cap";
+    if(caseName == "optical_csg_cap" || caseName == "optical_csg_cavity" || caseName == "optical_csg_open_tail" || unspecifiedCap)
+        return CreateCsgBoundaryReceiver(
+            context, world, caseName == "optical_csg_open_tail" ? s_CsgOpenTail : s_Box, caseName == "optical_csg_cavity",
+            unspecifiedCap ? 1.f : 1.5f, unspecifiedCap ? s_Clear : s_Tinted,
+            unspecifiedCap ? Impl::OpticalBoundaryMode::Unspecified : Impl::OpticalBoundaryMode::ClosedNested
+        ).has_value();
     if(caseName == "optical_tir")
         return CreateBoundary(context, world, s_Prism, Float4(0.f, 1.4f, 0.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Clear).valid();
     if(caseName == "optical_inside" || caseName == "optical_inside_nested"){
@@ -393,7 +407,9 @@ Expected<ReflectionCsgContextEntities> CreateReflectionCsgContextScene(ProjectRu
     using namespace __hidden_reflection_optical_scene;
     if(!CreateReflectionOpticalScene(context, world, "optical_reference"))
         return MakeUnexpected(Failure{});
-    const auto small = CreateCsgBoundaryReceiver(context, world, false);
+    const auto small = CreateCsgBoundaryReceiver(
+        context, world, s_Box, false, 1.5f, s_Tinted, Impl::OpticalBoundaryMode::ClosedNested
+    );
     if(!small)
         return MakeUnexpected(small.error());
     const auto dense = CreateDenseReceiver(context, world, true);

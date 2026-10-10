@@ -70,8 +70,9 @@ struct ReflectionStatistics{
     u32 screenAttempts = 0u;
     // Only screen hits meeting the confidence threshold are accepted.
     u32 screenHits = 0u;
-    // Admitted paths and scene queries stay separate; bootstrap consumes query limits.
-    u32 hardwareQueries = 0u;
+    // Reserved traversal units enforce the path limit; physical queries count issued hardware operations.
+    u32 queryBudgetUnits = 0u;
+    u32 physicalQueries = 0u;
     u32 bootstrapEvents = 0u;
     u32 transparentPaths = 0u;
     u32 unsupportedPaths = 0u;
@@ -90,6 +91,7 @@ struct ReflectionStatistics{
     bool hardwareRequested = false;
     bool hardwareAvailable = false;
     bool hardwareReady = false;
+    bool csgHardwareEnabled = false;
     bool opticalTransportEnabled = false;
     bool historyEligible = false;
     bool historyReused = false;

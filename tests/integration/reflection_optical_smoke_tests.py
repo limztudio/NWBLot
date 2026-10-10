@@ -35,7 +35,8 @@ LIT_QUERIES = "queries"
 LIT_OPTICAL_ALPHA_BEFORE = "optical_alpha_before"
 LIT_OPTICAL_TORUS = "optical_torus"
 LIT_SEQUENCE = "sequence"
-LIT_HARDWARE_QUERIES = "hardware_queries"
+LIT_QUERY_BUDGET_UNITS = "query_budget_units"
+LIT_PHYSICAL_QUERIES = "physical_queries"
 LIT_OPTICAL_REFERENCE = "optical_reference"
 LIT_ANALYZE_EXTERIOR_REFLECTION = "analyze_exterior_reflection"
 LIT_REFLECTION_DISABLED = "reflection_disabled"
@@ -184,6 +185,15 @@ class ImageOracleTests(unittest.TestCase):
             with self.assertRaisesRegex(SmokeFailure, "eighteen distinct"):
                 self.analyze(frame, smoke.OpticalCapture("optical_csg_dense", "optical_csg_dense"))
 
+    def test_unspecified_air_controls_cannot_qualify_black_or_misplaced_transport(self):
+        for spec in smoke.CSG_REUSE_CAPTURES[-2:]:
+            with self.subTest(case=spec.case):
+                result = self.analyze(self.synthetic_frame(spec.case), spec)
+                self.assertGreater(result["transmitted_chart_samples"], 150)
+                for wrong in (self.synthetic_frame(spec.case, channel_scale=0.), self.synthetic_frame(spec.case, shift=12)):
+                    with self.assertRaises(SmokeFailure):
+                        self.analyze(wrong, spec)
+
     def test_absorption_omission_fails(self):
         with self.assertRaises(SmokeFailure):
             self.analyze(self.synthetic_frame(LIT_OPTICAL_CLEAR), smoke.OpticalCapture(LIT_OPTICAL_TINTED, LIT_OPTICAL_TINTED))
@@ -216,7 +226,7 @@ class ImageOracleTests(unittest.TestCase):
 
 class StatisticsTests(unittest.TestCase):
     def log(self, overrides=None):
-        values = dict(zip(smoke.OPTICS_FIELDS, (9, 2, 16, 500, 0, 100, 0, 0, 0, 0, 0, 1)))
+        values = dict(zip(smoke.OPTICS_FIELDS, (9, 2, 16, 500, 500, 0, 100, 0, 0, 0, 0, 0, 1)))
         values.update(overrides or {})
         return "ReflectionSmokeOptics: " + " ".join(f"{name}={values[name]}" for name in smoke.OPTICS_FIELDS)
 
@@ -233,17 +243,17 @@ class StatisticsTests(unittest.TestCase):
     def test_dense_receiver_requires_exact_queries_without_replay_or_missing_hits(self):
         for case, queries in (("optical_dense", 100), ("optical_csg_dense", 200)):
             spec = smoke.OpticalCapture(case, case)
-            values = {"transport_enabled": 0, "transparent_paths": 0, LIT_HARDWARE_QUERIES: queries}
+            values = {"transport_enabled": 0, "transparent_paths": 0, LIT_QUERY_BUDGET_UNITS: queries, LIT_PHYSICAL_QUERIES: queries}
             self.validate(self.log(values), spec)
             for wrong_queries in (queries - 1, queries + 1, queries * 2):
                 with self.subTest(case=case, queries=wrong_queries), self.assertRaises(SmokeFailure):
-                    self.validate(self.log({**values, LIT_HARDWARE_QUERIES: wrong_queries}), spec)
+                    self.validate(self.log({**values, LIT_QUERY_BUDGET_UNITS: wrong_queries}), spec)
             for change in ({"hardware_hits": 99}, {"hardware_rays": 99}, {"fallback_pixels": 1}, {"glass_pixels": 1}):
                 with self.subTest(case=case, change=change), self.assertRaises(SmokeFailure):
                     self.validate(self.log(values), spec, change)
 
     def test_dense_opaque_plain_route_cannot_hide_optical_failures(self):
-        values = {"transport_enabled": 0, "transparent_paths": 0, LIT_HARDWARE_QUERIES: 200}
+        values = {"transport_enabled": 0, "transparent_paths": 0, LIT_QUERY_BUDGET_UNITS: 200, LIT_PHYSICAL_QUERIES: 200}
         spec = smoke.OpticalCapture("optical_csg_dense", "optical_csg_dense")
         for counter in ("transport_enabled", "transparent_paths", "bootstrap_events", "unsupported_paths",
             "limited_paths", "ambiguous_paths", "tir_events", "medium_overflow_paths"):
@@ -252,7 +262,23 @@ class StatisticsTests(unittest.TestCase):
 
     def test_query_cap_violation_fails(self):
         with self.assertRaises(SmokeFailure):
-            self.validate(self.log({LIT_HARDWARE_QUERIES: 1601}))
+            self.validate(self.log({LIT_QUERY_BUDGET_UNITS: 1601}))
+
+    def test_physical_queries_cannot_exceed_the_reserved_budget(self):
+        with self.assertRaisesRegex(SmokeFailure, "exceed reserved"):
+            self.validate(self.log({LIT_QUERY_BUDGET_UNITS: 100, LIT_PHYSICAL_QUERIES: 101}))
+
+    def test_receiver_reservation_without_physical_query_preserves_early_topology_rejection(self):
+        result = self.validate(self.log({LIT_QUERY_BUDGET_UNITS: 200, LIT_PHYSICAL_QUERIES: 100,
+            "transparent_paths": 0, "unsupported_paths": 100}),
+            smoke.OpticalCapture(LIT_OPTICAL_UNSPECIFIED, LIT_OPTICAL_UNSPECIFIED, ray_budget=100))
+        self.assertEqual(result["optics"][-1][LIT_PHYSICAL_QUERIES], 100)
+
+    def test_receiver_reservation_without_physical_query_preserves_complete_cut_coverage(self):
+        result = self.validate(self.log({LIT_QUERY_BUDGET_UNITS: 200, LIT_PHYSICAL_QUERIES: 100, "transparent_paths": 0}),
+            smoke.OpticalCapture(LIT_OPTICAL_CLEAR, LIT_OPTICAL_CLEAR, ray_budget=100),
+            statistics_overrides={"hardware_hits": 0, "fallback_pixels": 100})
+        self.assertEqual(result["optics"][-1][LIT_PHYSICAL_QUERIES], 100)
 
     def test_plain_variant_required_for_opaque_only_scene(self):
         with self.assertRaises(SmokeFailure):
@@ -304,7 +330,7 @@ class StatisticsTests(unittest.TestCase):
 
 
 class QueueCoverageTests(unittest.TestCase):
-    def log(self, budget, ray_delta=0, sequence=9, queries=None, transparent=None):
+    def log(self, budget, ray_delta=0, sequence=9, queries=None, physical_queries=None, transparent=None):
         admitted = min(217668, budget)
         rays = admitted + ray_delta
         ready = int(budget > 0)
@@ -314,8 +340,9 @@ class QueueCoverageTests(unittest.TestCase):
             token_queue=0, token_value=sequence + 100, physical_queue=0, device_generation=1,
             candidates=217668 if budget else 0, hardware_rays=rays, hardware_hits=0, opaque_pixels=217668, glass_pixels=0,
             fallback_pixels=217668, screen_attempts=0, screen_hits=0)
-        values = dict(zip(smoke.OPTICS_FIELDS, (sequence, 2, 16, rays if queries is None else queries,
-            0, min(rays, 100) if transparent is None else transparent, 0, 0, 0, 0, 0, ready)))
+        budget_units = rays if queries is None else queries
+        values = dict(zip(smoke.OPTICS_FIELDS, (sequence, 2, 16, budget_units,
+            budget_units if physical_queries is None else physical_queries, 0, min(rays, 100) if transparent is None else transparent, 0, 0, 0, 0, 0, ready)))
         history = dict(zip(HISTORY_FIELDS, (sequence, 2, sequence - 1, 1, 0, 0, sequence - 1, 0, 0, 0, 0, 0)))
         expected = (budget + smoke.CSG_TRACE_SLICE_RAYS - 1) // smoke.CSG_TRACE_SLICE_RAYS
         packets = dict(zip(smoke.SLICE_PACKET_FIELDS, (sequence - 1, 23, 1, 0, 1, budget, expected,
@@ -366,6 +393,99 @@ class QueueCoverageTests(unittest.TestCase):
         for budget in (1, 8193):
             with self.subTest(budget=budget):
                 self.validate(budget, transparent=0)
+
+
+
+class CollectionReuseTests(unittest.TestCase):
+    def evidence(self, spec, units, physical, limited=0, sequence=9):
+        rays = 217668
+        statistics = dict(sequence=sequence, generation=2, frame=sequence, candidates=rays, effective_budget=rays,
+            hardware_rays=rays, hardware_hits=rays, opaque_pixels=rays, glass_pixels=0, fallback_pixels=0)
+        optical = dict(zip(smoke.OPTICS_FIELDS, (sequence, 2, spec.queries, units * rays, physical * rays,
+            0, rays, 0, limited * rays, 0, 0, 0, 1)))
+        return {"statistics": [statistics], "optics": [optical]}
+
+    def test_closed_open_and_exhausted_controls_require_exact_physical_work(self):
+        expected = ((11, 7, 0), (12, 12, 0), (8, 5, 1), (5, 5, 0), (11, 7, 0))
+        self.assertEqual(len(smoke.CSG_REUSE_CAPTURES) - 1, len(expected))
+        for spec, (units, physical, limited) in zip(smoke.CSG_REUSE_CAPTURES[1:], expected):
+            with self.subTest(case=spec.name):
+                result = smoke.validate_collection_reuse(self.evidence(spec, units, physical, limited), spec)
+                self.assertEqual(result["physical_queries_per_ray"], physical)
+                self.assertEqual(result["reserved_units_per_ray"], units)
+                for delta in (-1, 1):
+                    with self.assertRaises(SmokeFailure):
+                        smoke.validate_collection_reuse(self.evidence(spec, units, physical + delta, limited), spec)
+                    with self.assertRaises(SmokeFailure):
+                        smoke.validate_collection_reuse(self.evidence(spec, units + delta, physical, limited), spec)
+
+    def test_geometry_failure_and_fallback_cannot_qualify_query_reduction(self):
+        spec = smoke.CSG_REUSE_CAPTURES[1]
+        for field, value in (("hardware_hits", 217667), ("fallback_pixels", 1), ("glass_pixels", 1), ("hardware_rays", 0)):
+            evidence = self.evidence(spec, 11, 7)
+            evidence["statistics"][0][field] = value
+            with self.subTest(field=field), self.assertRaises(SmokeFailure):
+                smoke.validate_collection_reuse(evidence, spec)
+        for field in ("unsupported_paths", "limited_paths", "ambiguous_paths", "tir_events", "medium_overflow_paths", "bootstrap_events"):
+            evidence = self.evidence(spec, 11, 7)
+            evidence["optics"][0][field] = 1
+            with self.subTest(field=field), self.assertRaises(SmokeFailure):
+                smoke.validate_collection_reuse(evidence, spec)
+
+    def test_exact_completed_source_and_all_stable_frames_are_required(self):
+        spec = smoke.CSG_REUSE_CAPTURES[1]
+        evidence = self.evidence(spec, 11, 7)
+        evidence["optics"][0]["sequence"] += 1
+        with self.assertRaises(SmokeFailure):
+            smoke.validate_collection_reuse(evidence, spec)
+        evidence = self.evidence(spec, 11, 8)
+        final = self.evidence(spec, 11, 7, sequence=10)
+        evidence["statistics"] += final["statistics"]
+        evidence["optics"] += final["optics"]
+        with self.assertRaises(SmokeFailure):
+            smoke.validate_collection_reuse(evidence, spec)
+
+    def test_valid_air_unspecified_controls_keep_positive_transport_and_geometric_checks(self):
+        reference_color, ordinary = reference.trace_transmission("optical_unspecified_reference", (0., 1.4, 0.), (0., 0., -1.))
+        csg_color, retained = reference.trace_transmission("optical_csg_unspecified_cap", (0., 1.4, 0.), (0., 0., -1.))
+        self.assertEqual(reference_color, csg_color)
+        self.assertGreater(min(csg_color), 0.)
+        self.assertEqual((ordinary["queries"], retained["queries"]), (5, 11))
+        for case in ("optical_unspecified_reference", "optical_csg_unspecified_cap"):
+            self.assertEqual(reference.boundaries(case)[0].mode, reference.LIT_UNSPECIFIED)
+            self.assertEqual(reference.boundaries(case)[0].ior, 1.)
+        for details in (ordinary, retained):
+            self.assertEqual((details["crossings"], details["reason"], details["tir_events"]), (2, "chart", 0))
+        for spec, units, physical in ((smoke.CSG_REUSE_CAPTURES[-2], 5, 5), (smoke.CSG_REUSE_CAPTURES[-1], 11, 7)):
+            for field in ("unsupported_paths", "ambiguous_paths", "limited_paths", "bootstrap_events"):
+                evidence = self.evidence(spec, units, physical)
+                evidence["optics"][0][field] = 1
+                with self.subTest(case=spec.case, field=field), self.assertRaises(SmokeFailure):
+                    smoke.validate_collection_reuse(evidence, spec)
+            evidence = self.evidence(spec, units, physical)
+            evidence["statistics"][0]["fallback_pixels"] = 1
+            with self.subTest(case=spec.case), self.assertRaises(SmokeFailure):
+                smoke.validate_collection_reuse(evidence, spec)
+
+    def test_open_tail_is_beyond_chart_and_disconnected_from_closed_solid(self):
+        import generate_reflection_optical_meshes as generator
+        mesh = generator.closed_box_with_open_tail()
+        open_vertices = {mesh.vertex_refs[index][0] for triangle in mesh.indices[12:] for index in triangle}
+        self.assertEqual(open_vertices, {8, 9, 10, 11})
+        self.assertEqual({-9. + 2. * mesh.positions[index][2] for index in open_vertices}, {-16.})
+        closed_vertices = {mesh.vertex_refs[index][0] for triangle in mesh.indices[:12] for index in triangle}
+        self.assertTrue(open_vertices.isdisjoint(closed_vertices))
+        self.assertEqual(len(mesh.indices), 14)
+
+    def test_independent_geometry_and_reservation_oracle_preserve_limit(self):
+        closed, closed_details = reference.trace_transmission("optical_csg_cap", (0., 1.4, 0.), (0., 0., -1.))
+        opened, open_details = reference.trace_transmission("optical_csg_open_tail", (0., 1.4, 0.), (0., 0., -1.))
+        self.assertEqual(closed, opened)
+        self.assertGreater(sum(closed), 0.)
+        self.assertEqual((closed_details["queries"], open_details["queries"]), (11, 12))
+        limited, details = reference.trace_transmission("optical_csg_cap", (0., 1.4, 0.), (0., 0., -1.), 8)
+        self.assertEqual(limited, (0., 0., 0.))
+        self.assertEqual((details["queries"], details["reason"]), (8, "query_limit"))
 
 
 class SlicePacketTests(unittest.TestCase):
@@ -452,7 +572,8 @@ class ContextTransitionTests(unittest.TestCase):
             for index in range(18):
                 queries = 217668 * (11 if cut_receiver_primitives == 12 else 2 if csg else 1)
                 sample = QueueCoverageTests().log(smoke.DEFAULT_RAY_BUDGET, sequence=begin + index + 1,
-                    queries=queries, transparent=217668 if cut_receiver_primitives == 12 else 0)
+                    queries=queries, physical_queries=217668 * (7 if cut_receiver_primitives == 12 else 2 if csg else 1),
+                    transparent=217668 if cut_receiver_primitives == 12 else 0)
                 sample = sample.replace("hardware_hits=0", "hardware_hits=217668").replace("fallback_pixels=217668", "fallback_pixels=0")
                 if cut_receiver_primitives != 12:
                     sample = sample.replace("transport_enabled=1", "transport_enabled=0")
@@ -499,9 +620,14 @@ class ContextTransitionTests(unittest.TestCase):
 
     def test_small_phase_query_change_cannot_hide_behind_valid_final_dense_frame(self):
         with self.assertRaisesRegex(SmokeFailure, "small cap phase"):
-            context.analyze_evidence(self.log().replace("hardware_queries=2394348", "hardware_queries=2394347", 1))
+            context.analyze_evidence(self.log().replace("query_budget_units=2394348", "query_budget_units=2394347", 1))
         with self.assertRaises(SmokeFailure):
             context.analyze_evidence(self.log().replace("transparent_paths=217668", "transparent_paths=0", 1))
+
+    def test_small_phase_physical_replay_cannot_hide_behind_unchanged_budget_units(self):
+        for wrong in (6, 8, 11):
+            with self.subTest(physical_queries_per_ray=wrong), self.assertRaisesRegex(SmokeFailure, "small cap phase"):
+                context.analyze_evidence(self.log().replace("physical_queries=1523676", f"physical_queries={217668 * wrong}", 1))
 
     def test_context_phase_identity_or_completion_count_cannot_be_replayed(self):
         for old, new in (("phase=3 source_frame=80 cut_receiver_primitives=12 csg=1", "phase=3 source_frame=80 cut_receiver_primitives=108 csg=1"),

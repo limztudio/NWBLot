@@ -29,8 +29,8 @@ LIT_LAST_SOURCE_FRAME = "last_source_frame"
 LIT_SINGLE_SOURCE_FRAMES = "single_source_frames"
 LIT_UTF_8 = "utf-8"
 
-ENABLED = "StressCpuTimingProbe: enabled cpu=1 gpu=1 memory=0 diagnostic_only=1"
-COMPLETE = "StressCpuTimingProbe: complete "
+ENABLED = "SmokeCpuGpuTimingProbe: enabled "
+COMPLETE = "SmokeCpuGpuTimingProbe: complete "
 REQUIRED_CPU = {LIT_GRAPHICS_FRAME, LIT_GRAPHICS_PREPARE_RESOURCES, LIT_GRAPHICS_RENDER_PASSES, LIT_GRAPHICS_BEGIN_FRAME, LIT_GRAPHICS_PRESENT}
 # Exact stable producer scope strings; the helper computes global/name.h's canonical eight-lane hash.
 # This is not an externally supplied dictionary. Unrecognized labels retain their original token.
@@ -46,7 +46,9 @@ KNOWN_GPU = ("render.frame", "render.async_prefix", "render.async_shadow", "rend
     "render.shadow.light_space_views", "render.shadow.light_space_opaque_capture",
     "render.shadow.light_space_transparent_capture", "render.shadow.light_space_shade",
     "render.shadow.light_space_map_opaque", "render.shadow.light_space_map_transparent",
-    "render.shadow.light_space_fallback_opaque", "render.shadow.light_space_fallback_transparent")
+    "render.shadow.light_space_fallback_opaque", "render.shadow.light_space_fallback_transparent",
+    "render.surfel_spawn", "render.surfel_age_free", "render.surfel_hash_build", "render.surfel_trace",
+    "render.surfel_resolve", "render.surfel_upsample")
 CHECKED_SYMBOLS = known_name_symbols(KNOWN_CPU + KNOWN_GPU)
 
 
@@ -69,7 +71,7 @@ def _seconds(value):
 
 def parse_publications(text, measurement):
     lines = text.splitlines()
-    if len(lines) < 5 or lines[:2] != ["NWB_STRESS_CPU_GPU_DIAGNOSTIC 1", "capture cpu=1 gpu=1 memory=0 diagnostic_only=1"]:
+    if len(lines) < 5 or lines[:2] != ["NWB_SMOKE_CPU_GPU_DIAGNOSTIC 1", "capture cpu=1 gpu=1 memory=0 diagnostic_only=1"]:
         raise SmokeFailure("CPU diagnostic schema or capture options mismatch")
     window = lines[2].split()
     if len(window) != 6 or window[0] != LIT_WINDOW:
@@ -90,29 +92,29 @@ def parse_publications(text, measurement):
     seen_samples = False
     for line in lines[3:-1]:
         if line.startswith("scope "):
-            parts = line.split(" ", 3)
-            if seen_samples or len(parts) != 4:
+            parts = line.split(" ", 4)
+            if seen_samples or len(parts) != 5:
                 raise SmokeFailure("CPU diagnostic scope declaration misplaced")
-            domain, index = map(_integer, parts[1:3])
-            raw_name = parts[3]
+            domain, index, generation = map(_integer, parts[1:4])
+            raw_name = parts[4]
             name = CHECKED_SYMBOLS.get(raw_name, raw_name)
-            if domain not in (0, 1) or index >= 512 or not name or any(ord(char) < 32 for char in name):
+            if domain not in (0, 1) or index >= 512 or generation == 0 or not name or any(ord(char) < 32 for char in name):
                 raise SmokeFailure("CPU diagnostic scope identity invalid")
             key = (domain, index)
             if key in scopes or any(row[LIT_NAME] == name and prior[0] == domain for prior, row in scopes.items()):
                 raise SmokeFailure("CPU diagnostic duplicate scope identity")
-            scopes[key] = dict(name=name, raw_name=raw_name, decoded_from_hash=name != raw_name, domain=LIT_GPU if domain else LIT_CPU, records=0, samples=0, seconds=0.0,
+            scopes[key] = dict(name=name, generation=generation, raw_name=raw_name, decoded_from_hash=name != raw_name, domain=LIT_GPU if domain else LIT_CPU, records=0, samples=0, seconds=0.0,
                 minimum_sample_seconds=None, maximum_sample_seconds=0.0, first_source_frame=None,
                 last_source_frame=None, single_source_frames=set(), excluded_records=0, excluded_samples=0)
             continue
         parts = line.split()
-        if len(parts) != 13 or parts[0] != "sample":
+        if len(parts) != 14 or parts[0] != "sample":
             raise SmokeFailure("CPU diagnostic sample record malformed")
         seen_samples = True
-        domain, index, observation, presentations, publication, begin, end, count = map(_integer, parts[1:9])
-        total, minimum, maximum, latest = map(_seconds, parts[9:13])
+        domain, index, generation, observation, presentations, publication, begin, end, count = map(_integer, parts[1:10])
+        total, minimum, maximum, latest = map(_seconds, parts[10:14])
         key = (domain, index)
-        if key not in scopes or count == 0 or begin > end or end > observation or publication > observation:
+        if key not in scopes or generation != scopes[key]["generation"] or count == 0 or begin > end or end > observation or publication > observation:
             raise SmokeFailure("CPU diagnostic sample identity or source bounds invalid")
         if observation < last_observation[0] or presentations < last_observation[1]:
             raise SmokeFailure("CPU diagnostic observations regressed")
@@ -129,7 +131,7 @@ def parse_publications(text, measurement):
         last_observation = (observation, presentations)
         row = scopes[key]
         included = begin >= source_first and end < source_end
-        records.append(dict(domain=row[LIT_DOMAIN], scope=row[LIT_NAME], observation_frame=observation,
+        records.append(dict(domain=row[LIT_DOMAIN], scope=row[LIT_NAME], generation=generation, observation_frame=observation,
             presentations=presentations, publication_frame=publication, first_source_frame=begin,
             last_source_frame=end, samples=count, seconds=total, included=included))
         if not included:
@@ -170,18 +172,19 @@ def parse_publications(text, measurement):
         gpu_coverage="Only completed publications observed by the final timestamp are included; no GPU drain or missing-sample imputation.")
 
 
-def verify_capture(log_text, path, measurement, requested):
+def verify_capture(log_text, path, measurement, requested, owner):
     lines = [line.strip() for line in log_text.splitlines()]
-    enabled = [line for line in lines if line.startswith("StressCpuTimingProbe: enabled ")]
-    completed = [line for line in lines if line.startswith(COMPLETE)]
+    enabled = [line for line in lines if line.startswith("SmokeCpuGpuTimingProbe: enabled")]
+    completed = [line for line in lines if line.startswith(COMPLETE.rstrip())]
     if not requested:
         if enabled or completed or path.exists():
             raise SmokeFailure("CPU profiling was recorded without an explicit diagnostic request")
         return dict(requested=False, diagnostic_only=False, performance_qualification=True)
-    if enabled != [ENABLED] or len(completed) != 1 or not path.is_file():
+    expected_enabled = ENABLED + f"owner={owner} cpu=1 gpu=1 memory=0 diagnostic_only=1"
+    if enabled != [expected_enabled] or len(completed) != 1 or not path.is_file():
         raise SmokeFailure("CPU diagnostic producer or completed output is missing")
     result = parse_publications(path.read_text(encoding=LIT_UTF_8), measurement)
-    match = re.fullmatch(re.escape(COMPLETE) + r"records=([0-9]+) first=([0-9]+) last=([0-9]+) first_source=([0-9]+) end_source=([0-9]+)", completed[0])
+    match = re.fullmatch(re.escape(COMPLETE + f"owner={owner} ") + r"records=([0-9]+) first=([0-9]+) last=([0-9]+) first_source=([0-9]+) end_source=([0-9]+)", completed[0])
     window = result[LIT_WINDOW]
     expected = (len(result["publications"]), window["first_presentation"], window["last_presentation"],
         window[LIT_FIRST_SOURCE_FRAME], window["end_source_frame_exclusive"])

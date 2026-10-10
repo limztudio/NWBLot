@@ -324,7 +324,12 @@ bool RendererRayTracingSystem::prepareSceneSwBvhResources(Core::Alloc::ScratchAr
                 m_lightSpaceShadow.m_sceneBuffers.push_back(meshResult->meshResources.swBvhNodeBuffer);
         }
 
-        AppendLightSpaceCsgReceiver(m_lightSpaceShadow.m_csg, entity, bvhPrimitive.transparentOccluder, objectToWorld, meshResult->meshResources);
+        if(m_lightSpaceShadow.m_csg.gathering){
+            AppendLightSpaceCsgReceiver(
+                m_lightSpaceShadow.m_csg, entity, bvhPrimitive.transparentOccluder,
+                objectToWorld, worldToObject, meshResult->meshResources
+            );
+        }
         sceneRefitInputs.push_back({ opticalWorld, instanceMaterial.nodeSlot, {} });
         sceneRefitRoots.push_back(meshResult->meshResources.swBvhNodeBuffer);
         lightSpaceCasters.push_back({

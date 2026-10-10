@@ -22,6 +22,12 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
     add_test(NAME nwb_csg_shadow_analysis_unit
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_smoke_tests.py"
     )
+    add_test(NAME nwb_csg_shadow_open_analysis_unit
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_open_smoke_tests.py"
+    )
+    add_test(NAME nwb_reflection_cpu_timing_analysis_unit
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_cpu_timing_smoke_tests.py"
+    )
     add_test(NAME nwb_csg_gi_analysis_unit
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_gi_smoke_tests.py"
     )
@@ -49,8 +55,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/stress_csg_profile_tests.py"
     )
     add_test(
-        NAME nwb_stress_cpu_timing_analysis_unit
-        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_tests.py"
+        NAME nwb_smoke_cpu_gpu_timing_analysis_unit
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_tests.py"
     )
     add_test(
         NAME nwb_reflection_capture_analysis_unit

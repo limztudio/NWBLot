@@ -430,6 +430,7 @@ ReflectionFrameSnapshot RendererReflectionSystem::snapshotFrameResources(
         metadata.height = parameters.height;
         metadata.requestedHardwareBudget = settings.maxHardwareRaysPerFrame;
         metadata.maxOpticalQueries = settings.maxOpticalQueries;
+        metadata.csgHardwareEnabled = parameters.hardwareEnabled != 0u && static_cast<bool>(scene.csgTraceContextBuffer);
         metadata.opticalTransportEnabled = parameters.hardwareEnabled != 0u && opticalTransport;
         metadata.effectiveHardwareBudget = parameters.maxHardwareRays;
         metadata.queueCapacity = parameters.queueCapacity;

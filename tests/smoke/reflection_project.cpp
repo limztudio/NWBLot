@@ -25,6 +25,7 @@
 #include "fps_probe.h"
 #include "gpu_pass_timing_probe.h"
 #include "reflection_csg_context_probe.h"
+#include "reflection_cpu_timing_probe.h"
 #include "reflection_feedback_scene.h"
 #include "reflection_optical_scene.h"
 #include "reflection_roughness_scene.h"
@@ -162,6 +163,28 @@ public:
         m_glassRoughnessCase = caseName == "rough_glass";
         if(!configureRenderer())
             return false;
+        bool cpuDiagnostics = false;
+        if(!readFlag("NWB_REFLECTION_SMOKE_CPU_DIAGNOSTICS", cpuDiagnostics))
+            return false;
+        const auto cpuTimingPath = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_REFLECTION_CPU_GPU_TIMING_FILE");
+        if(cpuTimingPath.has_value() != cpuDiagnostics){
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCpuTiming: diagnostic request and explicit output path must agree"));
+            return false;
+        }
+        if(cpuDiagnostics){
+            if(
+                m_reflectionSettings.diagnosticsEnabled || m_reflectionSettings.temporalEnabled
+                || m_reflectionSettings.spatialFilterEnabled || m_reflectionSettings.screenFeedbackEnabled
+                || m_reflectionSettings.traceMode != NWB::Impl::ReflectionTraceMode::Hardware
+                || ReadSmokeEnvironmentText(m_context.objectArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_PATH")
+            ){
+                NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCpuTiming: requires raw hardware reflection without capture or path diagnostics"));
+                return false;
+            }
+            m_cpuTimingProbe = MakeUnique<ReflectionCpuTimingProbe>(m_context);
+            if(!m_cpuTimingProbe->initialize(caseName))
+                return false;
+        }
         const auto spatialOwnerSelection = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_REFLECTION_SMOKE_SPATIAL_OWNER");
         if(spatialOwnerSelection){
             if(caseName != "rough" || m_authoredRoughness != 0.4f){
@@ -236,8 +259,10 @@ public:
             NWB_LOGGER_ERROR(NWB_TEXT("ReflectionSpatialOwner: application framebuffer capture is required"));
             return false;
         }
-        if(ReadSmokeEnvironmentFlag("NWB_REFLECTION_SMOKE_TIMING") || m_spatialOwnerProbe){
-            m_context.setPerfCapture(NWB::Core::Perf::CaptureOptions::GpuTimingOnly());
+        if(ReadSmokeEnvironmentFlag("NWB_REFLECTION_SMOKE_TIMING") || m_spatialOwnerProbe || m_cpuTimingProbe){
+            auto captureOptions = NWB::Core::Perf::CaptureOptions::GpuTimingOnly();
+            captureOptions.cpuTiming = m_cpuTimingProbe != nullptr;
+            m_context.setPerfCapture(captureOptions);
             if(!m_timingRenderPass.prepareQueries(extent.width, extent.height))
                 return false;
             m_context.graphics.addRenderPassToBack(m_timingRenderPass);
@@ -249,11 +274,15 @@ public:
     }
 
     virtual void onShutdown()override{
+        if(m_cpuTimingProbe)
+            m_cpuTimingProbe->finish();
         destroyWorld();
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeProject: shutdown"));
     }
 
     virtual bool onUpdate(const f32 delta)override{
+        if(m_cpuTimingProbe && !m_cpuTimingProbe->update())
+            return false;
         if(m_csgContextProbe && !m_csgContextProbe->sampleSynchronizedFrame(m_latestStatistics))
             return false;
         if(m_framebufferCapture)
@@ -266,8 +295,10 @@ public:
         reportCsgSlicePackets();
         updateRoughnessScene();
         updateFeedbackScene();
-        m_fpsProbe.recordFrame(delta);
-        m_gpuPassTimingProbe.recordFrame(delta, m_context.gpuTimingView());
+        if(!m_cpuTimingProbe){
+            m_fpsProbe.recordFrame(delta);
+            m_gpuPassTimingProbe.recordFrame(delta, m_context.gpuTimingView());
+        }
         const f32 fixedDelta = RendererBaselineFixedDelta();
         m_world->tick(fixedDelta > 0.0f ? fixedDelta : delta);
         reportReflectionStatistics();
@@ -504,10 +535,10 @@ private:
             , static_cast<u32>(statistics.historyResetReason)
         );
         {
-            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeOptics: sequence={} generation={} max_queries={} hardware_queries={}")
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionSmokeOptics: sequence={} generation={} max_queries={} query_budget_units={} physical_queries={}")
                 NWB_TEXT(" bootstrap_events={} transparent_paths={} unsupported_paths={} limited_paths={}")
                 NWB_TEXT(" ambiguous_paths={} tir_events={} medium_overflow_paths={} transport_enabled={}")
-                , statistics.sequence, statistics.generation, statistics.maxOpticalQueries, statistics.hardwareQueries
+                , statistics.sequence, statistics.generation, statistics.maxOpticalQueries, statistics.queryBudgetUnits, statistics.physicalQueries
                 , statistics.bootstrapEvents, statistics.transparentPaths, statistics.unsupportedPaths, statistics.limitedPaths
                 , statistics.ambiguousPaths, statistics.tirEvents, statistics.mediumOverflowPaths
                 , statistics.opticalTransportEnabled ? 1u : 0u
@@ -688,6 +719,7 @@ private:
     UniquePtr<ReflectionFeedbackScene> m_feedbackScene;
     UniquePtr<ReflectionSpatialOwnerProbe> m_spatialOwnerProbe;
     UniquePtr<ReflectionCsgContextProbe> m_csgContextProbe;
+    UniquePtr<ReflectionCpuTimingProbe> m_cpuTimingProbe;
     u64 m_mutationGraphicsFrame = Limit<u64>::s_Max;
     u32 m_targetSamples = 16u;
     u32 m_postResetSamples = 1u;

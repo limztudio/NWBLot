@@ -43,7 +43,8 @@ NwbRayTraceGeometryHit nwbRayTraceClosestOrdinaryGeometryHit(
     NwbRayTraceGeometryHit hit = (NwbRayTraceGeometryHit)0;
     hit.distance = maxDistance;
 #if NWB_RT_CSG_ENABLED
-    hit.queryCount = 1u;
+    hit.queryBudgetUnits = 1u;
+    hit.physicalQueries = 1u;
     hit.cutter = NWB_CSG_RAY_INVALID_INDEX;
 #endif
     if(query.CommittedStatus() == COMMITTED_TRIANGLE_HIT){

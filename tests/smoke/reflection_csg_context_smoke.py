@@ -127,7 +127,8 @@ def analyze_evidence(log_text):
                 if (not rays or rays != min(sample["candidates"], sample["effective_budget"])
                     or sample["hardware_hits"] != rays or sample["opaque_pixels"] != rays or sample["glass_pixels"]
                     or sample["fallback_pixels"] or optical["transparent_paths"] != rays
-                    or optical["hardware_queries"] != 11 * rays or optical["bootstrap_events"]
+                    or optical["query_budget_units"] != 11 * rays or optical["physical_queries"] != 7 * rays
+                    or optical["bootstrap_events"]
                     or any(optical[field] for field in ("unsupported_paths", "limited_paths", "ambiguous_paths",
                         "tir_events", "medium_overflow_paths"))):
                     raise SmokeFailure("small cap phase lost exact completed rays, interface queries or resolved transport")

@@ -7,13 +7,13 @@ from tempfile import TemporaryDirectory
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "smoke"))
-import stress_cpu_timing as diagnostic
+import smoke_cpu_gpu_timing as diagnostic
 import stress_timing_smoke as smoke
 from window_capture_smoke import SmokeFailure
 
 LIT_WINDOW_80_560_100_580_30 = "window 80 560 100 580 30"
-LIT_SCOPE_1_0_RENDERER_FRAME = "scope 1 0 renderer.frame"
-LIT_SAMPLE_1_0_580_560_579_570_572_3_0_009 = "sample 1 0 580 560 579 570 572 3 0.009 0.003 0.003 0.003"
+LIT_SCOPE_1_0_RENDERER_FRAME = "scope 1 0 1 renderer.frame"
+LIT_SAMPLE_1_0_580_560_579_570_572_3_0_009 = "sample 1 0 1 580 560 579 570 572 3 0.009 0.003 0.003 0.003"
 LIT_N = "\n"
 LIT_RENDERER_FRAME = "renderer.frame"
 LIT_DECODED_FROM_HASH = "decoded_from_hash"
@@ -42,22 +42,22 @@ NAMES = sorted(diagnostic.REQUIRED_CPU)
 
 
 def publication_text(extra_rows=()):
-    lines = ["NWB_STRESS_CPU_GPU_DIAGNOSTIC 1", "capture cpu=1 gpu=1 memory=0 diagnostic_only=1", LIT_WINDOW_80_560_100_580_30]
-    lines.extend(f"scope 0 {index} {name}" for index, name in enumerate(NAMES))
+    lines = ["NWB_SMOKE_CPU_GPU_DIAGNOSTIC 1", "capture cpu=1 gpu=1 memory=0 diagnostic_only=1", LIT_WINDOW_80_560_100_580_30]
+    lines.extend(f"scope 0 {index} 1 {name}" for index, name in enumerate(NAMES))
     lines.append(LIT_SCOPE_1_0_RENDERER_FRAME)
-    rows = [f"sample 0 {index} 101 81 100 100 100 1 0.002 0.002 0.002 0.002" for index in range(len(NAMES))]
-    rows.append("sample 1 0 101 81 100 97 99 3 0.006 0.002 0.002 0.002")
-    rows.extend(f"sample 0 {index} 580 560 579 579 579 1 0.004 0.004 0.004 0.004" for index in range(len(NAMES)))
+    rows = [f"sample 0 {index} 1 101 81 100 100 100 1 0.002 0.002 0.002 0.002" for index in range(len(NAMES))]
+    rows.append("sample 1 0 1 101 81 100 97 99 3 0.006 0.002 0.002 0.002")
+    rows.extend(f"sample 0 {index} 1 580 560 579 579 579 1 0.004 0.004 0.004 0.004" for index in range(len(NAMES)))
     rows.append(LIT_SAMPLE_1_0_580_560_579_570_572_3_0_009)
     rows.extend(extra_rows)
     return LIT_N.join(lines + rows + [f"complete {len(rows)} {len(NAMES)+1}"]) + LIT_N
 
 
 def complete_log(records=12):
-    return diagnostic.ENABLED + LIT_N + diagnostic.COMPLETE + f"records={records} first=80 last=560 first_source=100 end_source=580\n"
+    return diagnostic.ENABLED + "owner=stress cpu=1 gpu=1 memory=0 diagnostic_only=1" + LIT_N + diagnostic.COMPLETE + f"owner=stress records={records} first=80 last=560 first_source=100 end_source=580\n"
 
 
-class StressCpuTimingTests(unittest.TestCase):
+class SmokeCpuGpuTimingTests(unittest.TestCase):
 
     def test_unrecognized_or_tampered_hash_does_not_satisfy_required_phase(self):
         from name_symbols import debug_name_hash_token
@@ -92,12 +92,12 @@ class StressCpuTimingTests(unittest.TestCase):
         self.assertFalse(result["publications"][5]["included"])
 
     def test_duplicate_publication_is_rejected_even_when_observed_later(self):
-        text = publication_text(["sample 1 0 580 560 579 573 575 3 0.009 0.003 0.003 0.003"])
+        text = publication_text(["sample 1 0 1 580 560 579 573 575 3 0.009 0.003 0.003 0.003"])
         with self.assertRaisesRegex(SmokeFailure, "publication repeated"):
             diagnostic.parse_publications(text, MEASUREMENT)
 
     def test_late_old_source_does_not_move_window_or_double_count(self):
-        text = publication_text(["sample 1 0 580 560 580 98 99 2 0.004 0.002 0.002 0.002"])
+        text = publication_text(["sample 1 0 1 580 560 580 98 99 2 0.004 0.002 0.002 0.002"])
         result = diagnostic.parse_publications(text, MEASUREMENT)
         gpu = next(row for row in result[LIT_SCOPES] if row[LIT_DOMAIN] == LIT_GPU)
         self.assertEqual(gpu[LIT_SAMPLES], 3)
@@ -112,7 +112,7 @@ class StressCpuTimingTests(unittest.TestCase):
 
     def test_invalid_duration_and_source_provenance_fail(self):
         target = LIT_SAMPLE_1_0_580_560_579_570_572_3_0_009
-        mutations = ("sample 1 0 580 560 579 570 581 3 0.009 0.003 0.003 0.003",
+        mutations = ("sample 1 0 1 580 560 579 570 581 3 0.009 0.003 0.003 0.003",
             target.replace(LIT_N_0_009, "nan"), target.replace(LIT_N_0_009, "0.9"),
             target.replace("570 572 3", "570 572 0"), target.replace("580 560", "99 80"))
         for replacement in mutations:
@@ -128,7 +128,7 @@ class StressCpuTimingTests(unittest.TestCase):
 
     def test_scope_identity_and_footer_count_fail(self):
         text = publication_text()
-        for candidate in (text.replace(LIT_SCOPE_1_0_RENDERER_FRAME, "scope 0 0 renderer.frame"),
+        for candidate in (text.replace(LIT_SCOPE_1_0_RENDERER_FRAME, "scope 0 0 1 renderer.frame"),
                 text.replace(LIT_COMPLETE_12_6, "complete 11 6")):
             with self.assertRaises(SmokeFailure):
                 diagnostic.parse_publications(candidate, MEASUREMENT)
@@ -136,16 +136,31 @@ class StressCpuTimingTests(unittest.TestCase):
     def test_explicit_request_and_matching_application_markers_required(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / LIT_CPU_GPU_TIMING_TXT
-            self.assertFalse(diagnostic.verify_capture("", path, MEASUREMENT, False)[LIT_REQUESTED])
+            self.assertFalse(diagnostic.verify_capture("", path, MEASUREMENT, False, "stress")[LIT_REQUESTED])
             with self.assertRaises(SmokeFailure):
-                diagnostic.verify_capture(complete_log(), path, MEASUREMENT, True)
+                diagnostic.verify_capture(complete_log(), path, MEASUREMENT, True, "stress")
             path.write_text(publication_text(), encoding=LIT_UTF_8)
-            result = diagnostic.verify_capture(complete_log(), path, MEASUREMENT, True)
+            result = diagnostic.verify_capture(complete_log(), path, MEASUREMENT, True, "stress")
             self.assertTrue(result[LIT_REQUESTED])
             for log, requested in (("", True), (complete_log(13), True), (complete_log(), False),
                     (complete_log() + diagnostic.ENABLED, True)):
                 with self.subTest(log=log, requested=requested), self.assertRaises(SmokeFailure):
-                    diagnostic.verify_capture(log, path, MEASUREMENT, requested)
+                    diagnostic.verify_capture(log, path, MEASUREMENT, requested, "stress")
+
+    def test_stale_sample_generation_and_zero_scope_generation_fail(self):
+        for candidate in (publication_text().replace("sample 1 0 1 ", "sample 1 0 2 "),
+                publication_text().replace("scope 1 0 1 ", "scope 1 0 0 ")):
+            with self.subTest(candidate=candidate[-100:]), self.assertRaises(SmokeFailure):
+                diagnostic.parse_publications(candidate, MEASUREMENT)
+
+    def test_foreign_or_missing_owner_and_malformed_markers_fail(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / LIT_CPU_GPU_TIMING_TXT
+            path.write_text(publication_text(), encoding=LIT_UTF_8)
+            for log in (complete_log().replace("owner=stress", "owner=reflection"),
+                    complete_log().replace("owner=stress ", ""), complete_log() + diagnostic.COMPLETE.rstrip()):
+                with self.subTest(log=log), self.assertRaises(SmokeFailure):
+                    diagnostic.verify_capture(log, path, MEASUREMENT, True, "stress")
 
     def test_inherited_environment_cannot_inject_capture(self):
         with TemporaryDirectory() as directory:

@@ -157,12 +157,13 @@ uint nwbCsgShadowRayInstanceOptics(
     visitor.instanceIndex = instanceIndex;
     visitor.origin = origin;
     visitor.direction = direction;
-    visitor.optics = nwbShadowInstanceOpticsBegin();
-    visitor.hasAbsorption = false;
+    visitor.optics.absorptionCoeff = float3(0.0);
+    visitor.optics.interfaceTransmittance = half(1.0h);
+    visitor.optics.crossingCount = 0u;
     failure = nwbCsgRayCollectCrossings(
         contextSlot, materialSlot, instanceIndex, range.w, origin, direction, minimum, maximum,
         cuts, cutCount, crossings, crossingCount, visitor
-    );
+    ).failure;
     if(failure != 0u)
         return failure;
     NwbCsgRaySolidIterator solid;
@@ -187,8 +188,7 @@ uint nwbCsgShadowRayInstanceOptics(
     accumulator.opticalDepth += optics.absorption * half(optics.chord);
     accumulator.interfaceTransmittance *= lerp(half(1.0h), optics.interfaceTransmission,
         half(smoothstep(0.0, NWB_SHADOW_INTERFACE_FADE_DISTANCE, optics.chord)));
-    if(visitor.hasAbsorption)
-        nwbShadowAccumulateInstance(accumulator, visitor.optics);
+    nwbCsgShadowAccumulateOpenOptics(accumulator, visitor.optics);
     return 0u;
 }
 #endif
@@ -228,7 +228,7 @@ half3 nwbCsgShadowRayVisibility(const float3 origin, const float3 direction, con
         if(!nwbCsgRayBoundsIntersect(instance, root, origin, direction, minimum, maximum))
             continue;
 #if NWB_LIGHT_SPACE_OCCLUDER == NWB_SW_SHADOW_OCCLUDER_OPAQUE
-        const NwbCsgRayBoundary boundary = nwbCsgRayResolveBoundary(contextSlot, materialSlot, instanceIndex, origin, direction, minimum, maximum);
+        const NwbCsgRayBoundary boundary = nwbCsgRayResolveBoundary(contextSlot, materialSlot, instanceIndex, origin, direction, minimum, maximum).boundary;
         if(boundary.failure != 0u)
             return nwbCsgShadowRayFailure(boundary.failure);
         if(boundary.hit)

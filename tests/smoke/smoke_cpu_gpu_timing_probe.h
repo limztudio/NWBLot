@@ -27,7 +27,7 @@ namespace Tests::Smoke{
 
 
 // Smoke-only buffered CPU/GPU publication evidence. Overlapping scopes are not additive wall-time components.
-class StressCpuTimingProbe final{
+class SmokeCpuGpuTimingProbe final{
 private:
     static constexpr usize s_MaxScopesPerDomain = 512u;
     static constexpr usize s_MaxRecords = 262144u;
@@ -35,6 +35,7 @@ private:
     struct Scope{
         Name name = s_NameNone;
         u64 lastPublication = 0u;
+        u64 eligibleSamples = 0u;
         u32 generation = 0u;
         bool recorded = false;
     };
@@ -44,22 +45,24 @@ private:
         u64 observationFrame = 0u;
         u64 presentations = 0u;
         u32 scope = 0u;
+        u32 generation = 0u;
         bool gpu = false;
     };
 
 
 public:
-    explicit StressCpuTimingProbe(Core::Alloc::GlobalArena& arena);
+    explicit SmokeCpuGpuTimingProbe(TStringView owner, Core::Alloc::GlobalArena& arena);
 
 
 public:
-    [[nodiscard]] bool initialize(bool requested, bool presentationTimingEnabled);
+    [[nodiscard]] bool initialize(bool requested, bool presentationTimingEnabled, AStringView outputPath);
     [[nodiscard]] bool observe(
         const Core::Perf::Session& session,
         const PresentationFpsProbe& presentation,
         u64 successfulPresentations,
         bool complete
     );
+    [[nodiscard]] bool hasCompletedGpuSamples(const Name& scope, u64 minimumSamples)const noexcept;
 
 
 private:
@@ -68,6 +71,7 @@ private:
 
 
 private:
+    TStringView m_owner;
     SmokeEnvironmentString m_outputPath;
     Vector<Record, Core::Alloc::GlobalArena> m_records;
     Scope m_scopes[2u][s_MaxScopesPerDomain] = {};

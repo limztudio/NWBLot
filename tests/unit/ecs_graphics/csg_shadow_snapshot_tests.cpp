@@ -305,7 +305,7 @@ TEST(CsgShadowSnapshot, HardwareRootExclusionAndDisabledReceiversClearCapturedSt
     mesh.csgLocalBounds.minBounds = Float3Int(-2.f, -2.f, -2.f, s_CsgBoundsValidFlag | s_CsgBoundsFiniteFlag);
     mesh.csgLocalBounds.maxBounds = Float3Int(2.f, 2.f, 2.f, 0);
     BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
-    AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), mesh);
+    AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), mesh);
     ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
     ASSERT_TRUE(state.snapshot.hasCsg);
     const usize rangeMembershipOffset = NWB_CSG_RAY_CONTEXT_BYTES + offsetof(CsgShadowReceiverRangeGpu, solidTriangleWordOffset);
@@ -319,11 +319,11 @@ TEST(CsgShadowSnapshot, HardwareRootExclusionAndDisabledReceiversClearCapturedSt
     constexpr u32 s_SoftwareRootSlot = 17u;
     mesh.swBvhNodeHeapHandle = Core::GpuDescriptorHandle::Make(Core::GpuDescriptorClass::StorageBuffer, s_SoftwareRootSlot);
     BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, true);
-    AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), mesh);
+    AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), mesh);
     ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
     EXPECT_EQ(state.instances[0].meshRootSlot, Limit<u32>::s_Max);
     BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
-    AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), mesh);
+    AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), mesh);
     ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
     EXPECT_EQ(state.instances[0].meshRootSlot, s_SoftwareRootSlot);
 
@@ -331,7 +331,7 @@ TEST(CsgShadowSnapshot, HardwareRootExclusionAndDisabledReceiversClearCapturedSt
     ASSERT_NE(cutterComponent, nullptr);
     cutterComponent->active = false;
     BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
-    AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), mesh);
+    AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), mesh);
     ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
     EXPECT_FALSE(state.snapshot.hasCsg);
     EXPECT_EQ(state.snapshot.identity, 0u);
@@ -352,7 +352,7 @@ TEST(CsgShadowSnapshot, MissingSolidMembershipCannotPublishAnActiveRayContext){
     for(const Span<const u32> words : {Span<const u32>{}, Span<const u32>(extraWords)}){
         mesh.solidTriangleWords = words;
         BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
-        AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), mesh);
+        AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), mesh);
         EXPECT_FALSE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
         EXPECT_TRUE(state.bytes.empty());
     }
@@ -396,7 +396,9 @@ TEST(CsgShadowSnapshot, BoundedCaptureReuseAllowsOnlyTransformLagAndRefreshesWit
             instance.translation.x = x;
             StoreFloat(QuaternionRotationRollPitchYaw(0.f, x, 0.f), instance.rotation);
             BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, true);
-            AppendLightSpaceCsgReceiver(state, receiver, false, MatrixTranslation(x, 0.f, 0.f), mesh);
+            AppendLightSpaceCsgReceiver(
+                state, receiver, false, MatrixTranslation(x, 0.f, 0.f), MatrixTranslation(-x, 0.f, 0.f), mesh
+            );
             ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
             ASSERT_TRUE(state.snapshot.hasCsg);
             ASSERT_TRUE(state.captureGeometryTrusted);
@@ -438,7 +440,7 @@ TEST(CsgShadowSnapshot, CaptureReuseRefreshesForContentTopologyMembershipAndBind
     const auto build = [&](){
         BeginLightSpaceCsgGather(state, context.testWorld.world, LengthOf(receivers), false);
         for(const auto receiver : receivers)
-            AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), mesh);
+            AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), mesh);
         return FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch);
     };
     const auto identity = [&](){
@@ -506,7 +508,7 @@ TEST(CsgShadowSnapshot, UnknownOrPendingRuntimePoseCannotReuseAnAcceptedCapture)
         for(const u64 revision : { 7ull, 0ull, 0ull, 8ull }){
             mesh.runtimeGeometryContentRevision = revision;
             BeginLightSpaceCsgGather(state, context.testWorld.world, 1u, false);
-            AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), mesh);
+            AppendLightSpaceCsgReceiver(state, receiver, false, MatrixIdentity(), MatrixIdentity(), mesh);
             ASSERT_TRUE(FinishLightSpaceCsgGather(state, context.testWorld.world, context.registry, context.scratch));
             EXPECT_EQ(state.captureGeometryTrusted, revision != 0u);
             const LightSpaceCaptureIdentity identity{

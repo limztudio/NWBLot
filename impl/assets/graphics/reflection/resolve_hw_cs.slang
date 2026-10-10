@@ -7,6 +7,11 @@
 #endif
 #define NWB_BINDLESS_TLAS 1
 
+// Reuse is confined to the selected CSG optical reflection kernel.
+#if NWB_RT_CSG_ENABLED && NWB_REFLECTION_OPTICAL_TRANSPORT
+#define NWB_CSG_RAY_OPTICAL_REUSE 1
+#endif
+
 // Variant 2 retains optical tracing for an exact all-Unspecified scene without closed-medium private storage.
 #if NWB_REFLECTION_OPTICAL_TRANSPORT == 2
 #define NWB_OPTICAL_CLOSED_MEDIA 0
@@ -63,7 +68,10 @@ half3 nwbOpticalEnvironmentRadiance(const float3 direction){
 }
 
 void nwbReflectionRecordOpticalDiagnostics(const NwbOpticalTraceResult result){
-    nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_HARDWARE_QUERIES, result.queryCount);
+    nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_QUERY_BUDGET_UNITS, result.queryBudgetUnits);
+#if NWB_RT_CSG_ENABLED
+    nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_PHYSICAL_QUERIES, result.physicalQueries);
+#endif
     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_BOOTSTRAP_EVENTS, result.bootstrapEventCount);
     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_TRANSPARENT_PATHS, result.transparentPath ? 1u : 0u);
     nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_TIR_EVENTS, result.tirCount);
@@ -150,9 +158,10 @@ void main(uint3 groupId : SV_GroupID, uint3 groupThreadId : SV_GroupThreadID){
         surface.direction, surface.bias, g_NwbReflectionParameters.maxRayDistance
     );
 #if NWB_RT_CSG_ENABLED
-    nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_HARDWARE_QUERIES, hit.queryCount);
+    nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_QUERY_BUDGET_UNITS, hit.queryBudgetUnits);
+    nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_PHYSICAL_QUERIES, hit.physicalQueries);
 #else
-    nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_HARDWARE_QUERIES, 1u);
+    nwbReflectionRecordDiagnostic(NWB_REFLECTION_COUNTER_QUERY_BUDGET_UNITS, 1u);
 #endif
     half3 radiance = nwbReflectionEnvironment(surface.direction);
     if(hit.hit

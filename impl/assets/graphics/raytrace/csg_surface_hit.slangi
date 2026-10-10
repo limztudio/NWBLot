@@ -36,20 +36,18 @@ bool nwbRayTraceCsgCutterNormalUnique(const NwbCsgRayCutter cutter, const float3
 }
 #endif
 
-// Optical bootstrap, tie checks and continuations share one collection body instead of duplicating its bounded crossing arrays at every call site.
-[noinline]
-NwbRayTraceGeometryHit nwbRayTraceCsgGeometryHit(
+NwbRayTraceGeometryHit nwbRayTraceCsgBoundaryGeometry(
     const uint contextSlot,
     const uint materialSlot,
     const uint instanceIndex,
     const float3 origin,
     const float3 direction,
     const float minimum,
-    const float maximum
+    const float maximum,
+    const NwbCsgRayBoundary boundary
 ){
-    const NwbCsgRayBoundary boundary = nwbCsgRayResolveBoundary(contextSlot, materialSlot, instanceIndex, origin, direction, minimum, maximum);
     NwbRayTraceGeometryHit geometry = (NwbRayTraceGeometryHit)0;
-    geometry.queryCount = 1u;
+    geometry.queryBudgetUnits = 1u;
     geometry.distance = maximum;
     geometry.instance = instanceIndex;
     geometry.cutter = NWB_CSG_RAY_INVALID_INDEX;
@@ -127,6 +125,59 @@ NwbRayTraceGeometryHit nwbRayTraceCsgGeometryHit(
     return geometry;
 }
 
+#if NWB_CSG_RAY_OPTICAL_REUSE
+NwbRayTraceCsgBoundaryCheck nwbRayTraceCsgCheckedBoundary(const NwbRayTraceGeometryHit geometry){
+    NwbRayTraceCsgBoundaryCheck check;
+    check.hit = geometry.hit;
+    check.failure = geometry.failure;
+    check.primitive = geometry.primitive;
+    check.cutter = geometry.cutter;
+    check.distance = geometry.distance;
+    return check;
+}
+#endif
+
+// Optical bootstrap, tie checks and continuations share one collection body instead of duplicating its bounded crossing arrays at every call site.
+[noinline]
+NwbRayTraceGeometryHit nwbRayTraceCsgGeometryHit(
+    const uint contextSlot,
+    const uint materialSlot,
+    const uint instanceIndex,
+    const float3 origin,
+    const float3 direction,
+    const float minimum,
+    const float maximum
+#if NWB_CSG_RAY_OPTICAL_REUSE
+    , const bool requestCertificate
+#endif
+){
+    const NwbCsgRayResolution resolution = nwbCsgRayResolveBoundary(
+        contextSlot, materialSlot, instanceIndex, origin, direction, minimum, maximum
+#if NWB_CSG_RAY_OPTICAL_REUSE
+        , requestCertificate
+#endif
+    );
+    NwbRayTraceGeometryHit geometry = nwbRayTraceCsgBoundaryGeometry(contextSlot, materialSlot, instanceIndex, origin, direction, minimum, maximum, resolution.boundary);
+    geometry.physicalQueries = resolution.physicalQueries;
+#if NWB_CSG_RAY_OPTICAL_REUSE
+    if(resolution.reusable && geometry.failure == 0u){
+        const float3 position = origin + direction * geometry.distance;
+        const float tolerance = 4.0 * max(nwbOpticsPositionUncertainty(origin), nwbOpticsPositionUncertainty(position));
+        const float windowMinimum = max(0.0, geometry.distance - tolerance);
+        const float windowMaximum = geometry.distance + tolerance;
+        // Replayed boundaries still require the same generated-cap and coincident-cutter normal audits as a fresh collection.
+        const NwbRayTraceGeometryHit window = nwbRayTraceCsgBoundaryGeometry(contextSlot, materialSlot, instanceIndex, origin, direction, windowMinimum, windowMaximum, resolution.window);
+        geometry.certificate.reusable = true;
+        geometry.certificate.window = nwbRayTraceCsgCheckedBoundary(window);
+        if(window.hit && window.failure == 0u){
+            const NwbRayTraceGeometryHit next = nwbRayTraceCsgBoundaryGeometry(contextSlot, materialSlot, instanceIndex, origin, direction, window.distance, windowMaximum, resolution.next);
+            geometry.certificate.next = nwbRayTraceCsgCheckedBoundary(next);
+        }
+    }
+#endif
+    return geometry;
+}
+
 void nwbRayTraceCsgClosestGeometryHit(
     const uint contextSlot,
     const uint materialSlot,
@@ -143,11 +194,18 @@ void nwbRayTraceCsgClosestGeometryHit(
         const NwbBvhNode root = nwbCsgRayReceiverRoot(contextSlot, instanceIndex, instance);
         if(!nwbCsgRayBoundsIntersect(instance, root, origin, direction, minimum, closest.distance))
             continue;
-        const NwbRayTraceGeometryHit geometry = nwbRayTraceCsgGeometryHit(contextSlot, materialSlot, instanceIndex, origin, direction, minimum, closest.distance);
-        const uint queries = closest.queryCount + geometry.queryCount;
+        const NwbRayTraceGeometryHit geometry = nwbRayTraceCsgGeometryHit(
+            contextSlot, materialSlot, instanceIndex, origin, direction, minimum, closest.distance
+#if NWB_CSG_RAY_OPTICAL_REUSE
+            , false
+#endif
+        );
+        const uint queryBudgetUnits = closest.queryBudgetUnits + geometry.queryBudgetUnits;
+        const uint physicalQueries = closest.physicalQueries + geometry.physicalQueries;
         if(geometry.hit)
             closest = geometry;
-        closest.queryCount = queries;
+        closest.queryBudgetUnits = queryBudgetUnits;
+        closest.physicalQueries = physicalQueries;
         if(closest.failure != 0u)
             return;
     }

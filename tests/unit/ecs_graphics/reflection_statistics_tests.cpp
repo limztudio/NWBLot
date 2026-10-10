@@ -116,29 +116,35 @@ TEST(ReflectionStatistics, DiscardedReservationCanBeReusedWithoutStaleCallbackMu
 }
 
 TEST(ReflectionStatistics, PublishesFrozenMetadataAndNonzeroCountersOnlyAtCompletion){
-    StatisticsContext context;
-    ReflectionStatistics metadata = Metadata();
-    const auto key = context.control->reserve(metadata);
-    metadata.frameIndex = 500u;
-    metadata.width = 1u;
-    context.control->accept(key, Token(), true);
-    context.control->discard(key);
-    Expected<ReflectionStatistics> statistics;
-    EXPECT_FALSE(context.control->tryGetLatestStatistics());
-    const u32 counters[] = {
-        100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, s_ExpectedDualCount, 1u, 3u, 4u, 5u,
-        123u, 25u, 70u, s_ExpectedDualCount, 17u, 3u, 6u, 19u,
-    };
-    static_assert(sizeof(counters) == NWB_REFLECTION_COUNTER_SIZE);
-    context.control->complete(key, Token(), counters);
-    statistics = context.control->tryGetLatestStatistics();
-    ASSERT_TRUE(statistics);
+    const bool variants[] = {false, true};
+    for(const bool csgHardwareEnabled : variants){
+        StatisticsContext context;
+        ReflectionStatistics metadata = Metadata();
+        metadata.csgHardwareEnabled = csgHardwareEnabled;
+        const auto key = context.control->reserve(metadata);
+        metadata.frameIndex = 500u;
+        metadata.width = 1u;
+        metadata.csgHardwareEnabled = !csgHardwareEnabled;
+        context.control->accept(key, Token(), true);
+        context.control->discard(key);
+        Expected<ReflectionStatistics> statistics;
+        EXPECT_FALSE(context.control->tryGetLatestStatistics());
+        const u32 counters[] = {
+            100u, 64u, 30u, 80u, 20u, 50u, 90u, 20u, 98u, 42u, 12u, s_ExpectedDualCount, 1u, 3u, 4u, 5u,
+            123u, 25u, 70u, s_ExpectedDualCount, 17u, 3u, 6u, 19u, 31u,
+        };
+        static_assert(sizeof(counters) == NWB_REFLECTION_COUNTER_SIZE);
+        context.control->complete(key, Token(), counters);
+        statistics = context.control->tryGetLatestStatistics();
+        ASSERT_TRUE(statistics);
 
-    EXPECT_EQ(statistics->frameIndex, 9u);
-    EXPECT_EQ(statistics->width, 320u);
-
-    EXPECT_EQ(statistics->candidates, 100u);
-
+        EXPECT_EQ(statistics->frameIndex, 9u);
+        EXPECT_EQ(statistics->width, 320u);
+        EXPECT_EQ(statistics->csgHardwareEnabled, csgHardwareEnabled);
+        EXPECT_EQ(statistics->queryBudgetUnits, 98u);
+        EXPECT_EQ(statistics->physicalQueries, csgHardwareEnabled ? 31u : 98u);
+        EXPECT_EQ(statistics->candidates, 100u);
+    }
 }
 
 TEST(ReflectionStatistics, FeedbackEpochSurvivesAcceptedInputMutation){

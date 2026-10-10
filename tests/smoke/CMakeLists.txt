@@ -278,6 +278,18 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES
                 RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 240 LABELS "csg_shadow;${_nwb_csg_route}_raytracing"
             )
+            set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_open_smoke")
+            add_test(NAME "${_nwb_csg_shadow_test}"
+                COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/csg_shadow_open_smoke.py"
+                    "$<IF:$<CONFIG:fin>,--no-gpu-validation,--gpu-validation>"
+                    --executable "$<TARGET_FILE:nwb_csg_shadow_smoke>"
+                    --working-directory "${_nwb_transparent_multi_runtime_root}"
+                    --output-directory "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_shadow_${_nwb_csg_route}_open"
+                    --route "${_nwb_csg_route}"
+            )
+            set_tests_properties("${_nwb_csg_shadow_test}" PROPERTIES
+                RESOURCE_LOCK nwb_display SKIP_RETURN_CODE 77 TIMEOUT 900 LABELS "csg_shadow;${_nwb_csg_route}_raytracing"
+            )
         endforeach()
         foreach(_nwb_csg_route IN ITEMS hardware software)
             set(_nwb_csg_shadow_test "nwb_csg_shadow_${_nwb_csg_route}_approximate_smoke")
@@ -358,6 +370,12 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
         nwb_declare_executable(nwb_reflection_smoke)
         target_sources(nwb_reflection_smoke PRIVATE
             "${CMAKE_CURRENT_LIST_DIR}/reflection_project.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/reflection_cpu_timing_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/reflection_cpu_timing_probe.h"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.h"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/reflection_csg_context_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/reflection_csg_context_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/reflection_spatial_owner_probe.cpp"
@@ -466,6 +484,22 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             RESOURCE_LOCK nwb_display
             SKIP_RETURN_CODE 77
             TIMEOUT 600
+        )
+
+        add_test(
+            NAME nwb_csg_reflection_collection_reuse_capture_smoke
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/reflection_optical_smoke.py"
+                "--csg-reuse"
+                "--executable" "$<TARGET_FILE:nwb_reflection_smoke>"
+                "--working-directory" "${_nwb_transparent_multi_runtime_root}"
+                "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/csg_reflection_collection_reuse"
+                "--timeout" "180"
+                ${_nwb_reflection_logserver_args}
+        )
+        set_tests_properties(nwb_csg_reflection_collection_reuse_capture_smoke PROPERTIES
+            RESOURCE_LOCK nwb_display
+            SKIP_RETURN_CODE 77
+            TIMEOUT 1200
         )
 
         add_test(
@@ -1329,8 +1363,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.h"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
@@ -1377,8 +1411,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.h"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
@@ -1478,8 +1512,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.h"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"
@@ -1505,8 +1539,8 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             "${CMAKE_CURRENT_LIST_DIR}/stress_test_project.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/stress_csg_scene.h"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.cpp"
-            "${CMAKE_CURRENT_LIST_DIR}/stress_cpu_timing_probe.h"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.cpp"
+            "${CMAKE_CURRENT_LIST_DIR}/smoke_cpu_gpu_timing_probe.h"
             "${CMAKE_CURRENT_LIST_DIR}/avboit_timing_render_pass.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.cpp"
             "${CMAKE_CURRENT_LIST_DIR}/presentation_fps_probe.h"

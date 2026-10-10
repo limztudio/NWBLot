@@ -31,7 +31,7 @@ bool nwbCsgRayPrepareHardwareRay(
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-uint nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
+NwbCsgRayCollection nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
     const uint contextSlot,
     const uint materialSlot,
     const uint instanceIndex,
@@ -46,14 +46,17 @@ uint nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
     inout uint crossingCount,
     inout T openVisitor
 ){
+    NwbCsgRayCollection result = (NwbCsgRayCollection)0;
     const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
     const float3x4 worldToObject = nwbCsgRayWorldToObject(instance);
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
     RayDesc ray;
 #if NWB_CSG_RAY_RETAINED_POSE
     // Keep the direction unnormalized so the retained ray's parameter survives mapping through the current TLAS pose.
-    if(!nwbCsgRayPrepareHardwareRay(contextSlot, instanceIndex, worldOrigin, worldDirection, ray.Origin, ray.Direction))
-        return NWB_CSG_RAY_FAILURE_TOPOLOGY;
+    if(!nwbCsgRayPrepareHardwareRay(contextSlot, instanceIndex, worldOrigin, worldDirection, ray.Origin, ray.Direction)){
+        result.failure = NWB_CSG_RAY_FAILURE_TOPOLOGY;
+        return result;
+    }
 #else
     ray.Origin = worldOrigin;
     ray.Direction = worldDirection;
@@ -62,6 +65,7 @@ uint nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
     ray.TMax = asfloat(0x7f7fffffu);
     RayQuery<RAY_FLAG_FORCE_NON_OPAQUE> query;
     query.TraceRayInline(nwbHeapAccelStruct(), RAY_FLAG_FORCE_NON_OPAQUE, NWB_RT_CSG_INSTANCE_MASK, ray);
+    ++result.physicalQueries;
     while(query.Proceed()){
         if(query.CandidateType() != CANDIDATE_NON_OPAQUE_TRIANGLE || query.CandidateInstanceID() != instanceIndex)
             continue;
@@ -72,15 +76,19 @@ uint nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
             const uint failure = openVisitor.visit(
                 primitive, query.CandidateTriangleRayT(), query.CandidateTriangleBarycentrics(), minimum, maximum, cuts, cutCount
             );
-            if(failure != 0u)
-                return failure;
+            if(failure != 0u){
+                result.failure = failure;
+                return result;
+            }
             continue;
         }
         // Physical inverse-transpose normals preserve oriented volume membership under reflected instance transforms.
         const float3 normal = nwbRayTraceTriangleGeometricNormal(material, primitive, worldToObject);
         const float facing = dot(normal, worldDirection);
-        if(!isfinite(facing) || facing == 0.0)
-            return NWB_CSG_RAY_FAILURE_TOPOLOGY;
+        if(!isfinite(facing) || facing == 0.0){
+            result.failure = NWB_CSG_RAY_FAILURE_TOPOLOGY;
+            return result;
+        }
         NwbCsgRayCrossing crossing;
         crossing.distance = query.CandidateTriangleRayT();
         crossing.primitive = primitive;
@@ -90,10 +98,12 @@ uint nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
         crossing.normalAmbiguous = false;
 #endif
         const uint failure = nwbCsgRayInsertCrossing(materialSlot, instanceIndex, crossing, crossings, crossingCount);
-        if(failure != 0u)
-            return failure;
+        if(failure != 0u){
+            result.failure = failure;
+            return result;
+        }
     }
-    return 0u;
+    return result;
 }
 
 

@@ -5,6 +5,13 @@
 #ifndef NWB_GRAPHICS_CSG_RAY_CONSTANTS_H
 #define NWB_GRAPHICS_CSG_RAY_CONSTANTS_H
 
+#ifndef NWB_CSG_RAY_OPTICAL_REUSE
+#define NWB_CSG_RAY_OPTICAL_REUSE 0
+#endif
+#if NWB_CSG_RAY_OPTICAL_REUSE != 0 && NWB_CSG_RAY_OPTICAL_REUSE != 1
+#error NWB_CSG_RAY_OPTICAL_REUSE must be zero or one
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -30,6 +37,7 @@
 #define NWB_CSG_RAY_FAILURE_CAPACITY 2u
 #define NWB_CSG_RAY_FAILURE_TOPOLOGY 4u
 #define NWB_CSG_RAY_FAILURE_AMBIGUOUS_NORMAL 8u
+#define NWB_CSG_RAY_FAILURE_OPEN_CAPACITY 16u
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

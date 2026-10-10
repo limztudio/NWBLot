@@ -211,7 +211,12 @@ bool RendererRayTracingSystem::prepareSceneTlasResources(Core::Alloc::ScratchAre
         instanceDesc.setInstanceMask(NWB_RT_OPTICAL_BASE_INSTANCE_MASK | NWB_RT_SHADOW_BASE_INSTANCE_MASK
             | (transparent ? NWB_RT_OPTICAL_TRANSPARENT_INSTANCE_MASK | NWB_RT_SHADOW_TRANSPARENT_INSTANCE_MASK : 0u));
         if(m_lightSpaceShadow.m_csg.gathering){
-            AppendLightSpaceCsgReceiver(m_lightSpaceShadow.m_csg, entity, transparent, LoadFloat(instanceDesc.transform), meshResult->meshResources);
+            const SIMDMatrix objectToWorld = LoadFloat(instanceDesc.transform);
+            SIMDVector determinant;
+            const SIMDMatrix worldToObject = MatrixInverse(&determinant, objectToWorld);
+            AppendLightSpaceCsgReceiver(
+                m_lightSpaceShadow.m_csg, entity, transparent, objectToWorld, worldToObject, meshResult->meshResources
+            );
             m_lightSpaceShadow.m_casters.push_back({
                 .triangleIndexBuffer = meshResult->meshResources.triangleIndexBuffer,
                 .meshletDescBuffer = meshResult->meshResources.meshletDescBuffer,

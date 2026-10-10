@@ -20,7 +20,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-uint nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
+NwbCsgRayCollection nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
     const uint contextSlot,
     const uint materialSlot,
     const uint instanceIndex,
@@ -35,6 +35,7 @@ uint nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
     inout uint crossingCount,
     inout T openVisitor
 ){
+    NwbCsgRayCollection result = (NwbCsgRayCollection)0;
     const NwbSwBvhInstance instance = nwbCsgRayLoadInstance(contextSlot, instanceIndex);
     const NwbRtInstanceMaterial material = nwbHeapRtInstanceMaterials(materialSlot)[instanceIndex];
     NwbBvhRayIterator<NWB_CSG_RAY_SW_STACK_SIZE> iterator = nwbBvhRayBeginWalk<NWB_CSG_RAY_SW_STACK_SIZE>(
@@ -47,23 +48,30 @@ uint nwbCsgRayCollectCrossings<T : NwbCsgRayOpenVisitor>(
         const NwbCsgRayTriangleHit triangle = nwbCsgRayIntersectTriangle(
             material, primitive, closed, iterator.origin, iterator.direction
         );
-        if(triangle.failure != 0u)
-            return triangle.failure;
+        if(triangle.failure != 0u){
+            result.failure = triangle.failure;
+            return result;
+        }
         if(!triangle.hit)
             continue;
         if(!closed){
             const uint failure = openVisitor.visit(
                 primitive, triangle.crossing.distance, triangle.crossing.barycentrics, minimum, maximum, cuts, cutCount
             );
-            if(failure != 0u)
-                return failure;
+            if(failure != 0u){
+                result.failure = failure;
+                return result;
+            }
             continue;
         }
         const uint failure = nwbCsgRayInsertCrossing(materialSlot, instanceIndex, triangle.crossing, crossings, crossingCount);
-        if(failure != 0u)
-            return failure;
+        if(failure != 0u){
+            result.failure = failure;
+            return result;
+        }
     }
-    return iterator.overflow ? NWB_CSG_RAY_FAILURE_CAPACITY : 0u;
+    result.failure = iterator.overflow ? NWB_CSG_RAY_FAILURE_CAPACITY : 0u;
+    return result;
 }
 
 

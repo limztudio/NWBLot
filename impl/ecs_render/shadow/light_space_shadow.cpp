@@ -165,9 +165,11 @@ void RendererRayTracingSystem::preflightLightSpaceShadowResources(){
                     if((newFailures & NWB_CSG_RAY_FAILURE_UNSUPPORTED) != 0u)
                         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG direct-shadow traversal rejected unsupported receiver or cutter geometry; conservative occlusion retained"));
                     if((newFailures & NWB_CSG_RAY_FAILURE_CAPACITY) != 0u)
-                        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG direct-shadow traversal exceeded crossing or BVH stack capacity; conservative occlusion retained"));
+                        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG direct-shadow traversal exceeded closed-crossing or BVH stack capacity (flags=2); conservative occlusion retained"));
                     if((newFailures & NWB_CSG_RAY_FAILURE_TOPOLOGY) != 0u)
                         NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG direct-shadow traversal rejected incomplete or invalid solid topology; conservative occlusion retained"));
+                    if((newFailures & NWB_CSG_RAY_FAILURE_OPEN_CAPACITY) != 0u)
+                        NWB_LOGGER_WARNING(NWB_TEXT("RendererSystem: CSG direct-shadow traversal exceeded open-surface capacity (flags=16); conservative occlusion retained"));
                     diagnostics.submission = {};
                 }
             }

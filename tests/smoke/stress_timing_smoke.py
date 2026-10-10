@@ -16,7 +16,7 @@ import renderer_ab_benchmark as ab
 from smoke_volume_identity import file_identity
 import caustic_quality_smoke
 import surfel_gi_quality_smoke
-import stress_cpu_timing
+import smoke_cpu_gpu_timing
 from window_capture_smoke import (
     STRICT_LOG_FAILURE_MESSAGES, SmokeFailure, SmokeSkip, build_launch_environment,
     launch_logserver, launch_testbed, require_normal_process_exit,
@@ -52,7 +52,8 @@ LIT_TRANSPORT_ENABLED = "transport_enabled"
 LIT_CANDIDATES = "candidates"
 LIT_HARDWARE_RAYS = "hardware_rays"
 LIT_EXTERIOR_ELIGIBLE_RAYS = "exterior_eligible_rays"
-LIT_HARDWARE_QUERIES = "hardware_queries"
+LIT_QUERY_BUDGET_UNITS = "query_budget_units"
+LIT_PHYSICAL_QUERIES = "physical_queries"
 LIT_BOOTSTRAP_EVENTS = "bootstrap_events"
 LIT_TRANSPARENT_PATHS = "transparent_paths"
 LIT_UNSUPPORTED_PATHS = "unsupported_paths"
@@ -193,7 +194,7 @@ def parse_workload(lines, characters_per_class):
 REFLECTION_ENABLED = "StressTestSmokeProject: reflection diagnostics enabled"
 REFLECTION_SAMPLE = "StressReflectionStatistics: "
 REFLECTION_FIELDS = (LIT_SEQUENCE, LIT_GENERATION, LIT_FRAME, LIT_GRAPHICS_FRAME, LIT_HARDWARE_READY, LIT_TRANSPORT_ENABLED,
-    LIT_CANDIDATES, LIT_HARDWARE_RAYS, LIT_EXTERIOR_ELIGIBLE_RAYS, LIT_HARDWARE_QUERIES, LIT_BOOTSTRAP_EVENTS,
+    LIT_CANDIDATES, LIT_HARDWARE_RAYS, LIT_EXTERIOR_ELIGIBLE_RAYS, LIT_QUERY_BUDGET_UNITS, LIT_PHYSICAL_QUERIES, LIT_BOOTSTRAP_EVENTS,
     LIT_TRANSPARENT_PATHS, LIT_UNSUPPORTED_PATHS)
 REFLECTION_COUNTERS = REFLECTION_FIELDS[6:]
 REFLECTION_SCREEN_FIELDS = (LIT_SCREEN_ATTEMPTS, LIT_SCREEN_HITS, LIT_SCREEN_RETURNS, LIT_SCREEN_ITERATIONS, LIT_SCREEN_LIMIT_MISSES)
@@ -255,9 +256,11 @@ def parse_reflection_diagnostics(lines, requested):
         if not row[LIT_TRANSPORT_ENABLED] and any(row[field] for field in
                 (LIT_EXTERIOR_ELIGIBLE_RAYS, LIT_BOOTSTRAP_EVENTS, LIT_TRANSPARENT_PATHS, LIT_UNSUPPORTED_PATHS)):
             raise SmokeFailure("optical-only counters require optical transport")
-        if (rays == 0 and row[LIT_HARDWARE_QUERIES] != 0) or (row[LIT_HARDWARE_QUERIES] == 0
+        if row[LIT_PHYSICAL_QUERIES] > row[LIT_QUERY_BUDGET_UNITS]:
+            raise SmokeFailure("physical reflection queries exceed reserved traversal units")
+        if (rays == 0 and row[LIT_QUERY_BUDGET_UNITS] != 0) or (row[LIT_QUERY_BUDGET_UNITS] == 0
                 and (row[LIT_BOOTSTRAP_EVENTS] != 0 or row[LIT_TRANSPARENT_PATHS] != 0)):
-            raise SmokeFailure("reflection query-dependent counters require admitted rays and actual queries")
+            raise SmokeFailure("reflection query-dependent counters require admitted rays and reserved traversal units")
         key = row[LIT_GENERATION], row[LIT_SEQUENCE]
         if key in seen:
             raise SmokeFailure("duplicate accepted reflection diagnostic sample")
@@ -280,11 +283,11 @@ def parse_reflection_diagnostics(lines, requested):
         transport_enabled_samples += row[LIT_TRANSPORT_ENABLED]
         previous = row
     rays = sums[LIT_HARDWARE_RAYS]
-    if rays > 0 and sums[LIT_UNSUPPORTED_PATHS] == rays and sums[LIT_HARDWARE_QUERIES] == 0:
+    if rays > 0 and sums[LIT_UNSUPPORTED_PATHS] == rays and sums[LIT_PHYSICAL_QUERIES] == 0:
         status = "all_rejected"
     elif sums[LIT_UNSUPPORTED_PATHS] > 0:
         status = "unsupported"
-    elif sums[LIT_HARDWARE_QUERIES] > 0:
+    elif sums[LIT_PHYSICAL_QUERIES] > 0:
         status = "queries_observed"
     else:
         status = "no_queries"
@@ -294,7 +297,8 @@ def parse_reflection_diagnostics(lines, requested):
         "transport_enabled_samples": transport_enabled_samples, LIT_SUMS: sums,
         "unsupported_ratio": sums[LIT_UNSUPPORTED_PATHS] / rays if rays else None,
         "exterior_eligible_ratio": sums[LIT_EXTERIOR_ELIGIBLE_RAYS] / rays if rays else None,
-        "queries_per_hardware_ray": sums[LIT_HARDWARE_QUERIES] / rays if rays else None,
+        "query_budget_units_per_hardware_ray": sums[LIT_QUERY_BUDGET_UNITS] / rays if rays else None,
+        "physical_queries_per_hardware_ray": sums[LIT_PHYSICAL_QUERIES] / rays if rays else None,
         LIT_SCREEN: {LIT_SAMPLE_COUNT: len(records), LIT_SUMS: screen_sums,
             LIT_MAXIMUM_FRAME_AVERAGE_ITERATIONS: maximum_frame_average_iterations,
             "iterations_per_attempt": screen_sums[LIT_SCREEN_ITERATIONS] / screen_sums[LIT_SCREEN_ATTEMPTS] if screen_sums[LIT_SCREEN_ATTEMPTS] else None,
@@ -634,8 +638,8 @@ def acquire(args, output):
         collected = True
         (output / LIT_RUNTIME_LOG).write_text(text, encoding=LIT_UTF_8)
         result = parse_runtime_log(text, code, args.application_arg, args.reflection_diagnostics, args.characters_per_class)
-        result[LIT_CPU_DIAGNOSTICS] = stress_cpu_timing.verify_capture(
-            text, output / LIT_CPU_GPU_TIMING_TXT, result[LIT_MEASUREMENT], getattr(args, LIT_CPU_DIAGNOSTICS, False))
+        result[LIT_CPU_DIAGNOSTICS] = smoke_cpu_gpu_timing.verify_capture(
+            text, output / LIT_CPU_GPU_TIMING_TXT, result[LIT_MEASUREMENT], getattr(args, LIT_CPU_DIAGNOSTICS, False), "stress")
         result[LIT_DIAGNOSTIC_ONLY] = getattr(args, LIT_CPU_DIAGNOSTICS, False) or args.reflection_diagnostics
         result["performance_qualification"] = not result[LIT_DIAGNOSTIC_ONLY]
         if getattr(args, LIT_CPU_DIAGNOSTICS, False):

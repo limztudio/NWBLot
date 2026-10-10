@@ -162,7 +162,9 @@ def authored_torus_triangles():
 def boundaries(case):
     if case == "optical_reference":
         return ()
-    if case in ("optical_csg_reference", "optical_csg_cap", "optical_csg_cavity"):
+    if case in ("optical_unspecified_reference", "optical_csg_unspecified_cap"):
+        return (box("retained_air", -9.5, 1, 1., CLEAR, LIT_UNSPECIFIED),)
+    if case in ("optical_csg_reference", "optical_csg_cap", "optical_csg_cavity", "optical_csg_open_tail"):
         return (box("retained", -9.5, 1),)
     if case == LIT_OPTICAL_TIR:
         inverse_root_two = math.sqrt(0.5)
@@ -235,6 +237,22 @@ def dense_receiver_intersections(origin, direction):
     return tuple(sorted(crossings))
 
 
+
+def csg_receiver_intersects(case, origin, direction, maximum):
+    # The open quad extends the same source receiver behind the chart; even a no-hit collection reserves a traversal unit.
+    minimum_z = -16. if case == "optical_csg_open_tail" else -10.
+    maximum_z = 4. if case == "optical_csg_cavity" else -8.
+    near, far = 0., maximum
+    for position, component, bounds in zip(origin, direction, ((-12., 12.), (-7.6, 10.4), (minimum_z, maximum_z))):
+        if component == 0.:
+            if not bounds[0] <= position <= bounds[1]:
+                return False
+        else:
+            first, second = sorted((bound - position) / component for bound in bounds)
+            near, far = max(near, first), min(far, second)
+    return near < far
+
+
 def trace_transmission(case, origin, direction, max_queries=16):
     if case in DENSE_CASES:
         intersections = dense_receiver_intersections(origin, direction)
@@ -249,6 +267,7 @@ def trace_transmission(case, origin, direction, max_queries=16):
         # Unresolved thin spans or gaps retain conservative rejection even when grouped endpoints leave the same nonzero membership.
         return (0.0, 0.0, 0.0), {"queries": 0, "reason": LIT_AMBIGUOUS, "crossings": 0, "tir_events": 0}
     objects = boundaries(case)
+    csg_receiver = case in ("optical_csg_cap", "optical_csg_cavity", "optical_csg_open_tail", "optical_csg_unspecified_cap")
     active = [item for item in objects if item.contains(origin)]
     # At an interior start, ascending entry distance along the opposite direction reconstructs outer->inner membership.
     active.sort(key=lambda item: item.intersect(origin, scale(direction, -1))[0], reverse=True)
@@ -275,6 +294,12 @@ def trace_transmission(case, origin, direction, max_queries=16):
                 pane_distance = ((-7.0 if case == LIT_OPTICAL_ALPHA_BEFORE else -11.0) - origin[2]) / direction[2]
                 if pane_distance > 1e-6:
                     events.append((pane_distance, LIT_ALPHA, None, None))
+        closest_distance = min((event[0] for event in events), default=1000.)
+        if csg_receiver and csg_receiver_intersects(case, origin, direction, closest_distance):
+            if used_queries >= max_queries:
+                reason = LIT_QUERY_LIMIT
+                break
+            used_queries += 1
         if not events:
             if active:
                 reason = "invalid_exit"
@@ -294,15 +319,19 @@ def trace_transmission(case, origin, direction, max_queries=16):
             radiance = [value + weight * color for value, weight, color in zip(radiance, throughput, chart_color(hit_point[0]))]
             reason = LIT_CHART
             break
-        if kind == LIT_BOUNDARY and item.mode == LIT_UNSPECIFIED:
+        if kind == LIT_BOUNDARY and item.mode == LIT_UNSPECIFIED and item.ior != 1.:
             crossings += 1
             reason = "unsupported"
             break
-        # A transparent interface also performs a bounded coincidence query before any interface physics.
-        if used_queries >= max_queries:
-            reason = LIT_QUERY_LIMIT
+        # A retained CSG interface reserves its ordinary tie query plus two receiver checks even when closed crossings are reused.
+        boundary_checks = 3 if csg_receiver and kind == LIT_BOUNDARY else 1
+        for _ in range(boundary_checks):
+            if used_queries >= max_queries:
+                reason = LIT_QUERY_LIMIT
+                break
+            used_queries += 1
+        if reason == LIT_QUERY_LIMIT:
             break
-        used_queries += 1
         if sum(event[1] == LIT_BOUNDARY and abs(event[0] - distance) < 1e-9 for event in events) > 1:
             reason = LIT_AMBIGUOUS
             break
@@ -315,6 +344,9 @@ def trace_transmission(case, origin, direction, max_queries=16):
             if coverage == 1.0:
                 reason = "opaque_alpha"
                 break
+        elif item.mode == LIT_UNSPECIFIED:
+            # Authored air interfaces have zero render coverage; both geometric crossings still require tie checks without medium membership.
+            crossings += 1
         else:
             crossings += 1
             entering = dot(direction, outward) < 0.0

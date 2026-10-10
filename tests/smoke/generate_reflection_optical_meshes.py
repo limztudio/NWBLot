@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Author closed planar optical smoke meshes; --check verifies their exact checked-in data."""
+"""Author planar optical smoke meshes; --check verifies their exact checked-in data."""
 
 import argparse
 from pathlib import Path
@@ -57,6 +57,21 @@ def dense_boxes():
     return mesh
 
 
+def closed_box_with_open_tail():
+    # The same receiver has an open event behind the nearest opaque chart; range clipping must not certify a closed-only collection.
+    mesh = Mesh()
+    append_box(mesh, -.5, .5)
+    mesh.positions = [(x / 24., y / 18., z) for x, y, z in mesh.positions]
+    validate(mesh, 1, 2, ((-.5, -.5, -.5), (.5, .5, .5)))
+    mesh.positions.extend((x, y, -3.5) for x, y in ((-.5, -.5), (.5, -.5), (.5, .5), (-.5, .5)))
+    mesh.flat_polygon([8, 9, 10, 11], [(0., 0.), (1., 0.), (1., 1.), (0., 1.)])
+    assert len(mesh.indices) == 14 and len(mesh.positions) == 12
+    open_triangles = [tuple(mesh.vertex_refs[index][0] for index in triangle) for triangle in mesh.indices[12:]]
+    assert set(index for triangle in open_triangles for index in triangle) == {8, 9, 10, 11}
+    assert all(mesh.positions[index][2] == -3.5 for triangle in open_triangles for index in triangle)
+    return mesh
+
+
 def refraction_crossing_overflow():
     # Sixty-six distinct closed crossings exceed the shared collector capacity of sixty-four.
     mesh = Mesh()
@@ -99,6 +114,7 @@ def main():
         ("reflection_disconnected_boxes.nwb", disconnected_boxes(), 2, 4, ((-12., -9., -1.25), (12., 9., 1.25))),
         ("reflection_overlapping_boxes.nwb", overlapping_boxes(), 2, 4, ((-12., -9., -.4), (12., 9., .4))),
         ("reflection_dense_boxes.nwb", dense_boxes(), 9, 18, ((-12., -9., -16.5), (12., 9., .5))),
+        ("reflection_csg_open_tail.nwb", closed_box_with_open_tail(), None, None, ((-.5, -.5, -3.5), (.5, .5, .5))),
         ("refraction_crossing_overflow.nwb", refraction_crossing_overflow(), 33, 66, ((-12., -9., 0.), (12., 9., 32.5))),
         ("reflection_tir_prism.nwb", tir_prism(), 1, 2, ((-10., -10., -28.), (20., 10., 2.))),
         ("reflection_group_gap.nwb", grouped_gap_boxes(4e-6, 6e-6), 3, 6, ((-12., -9., -1.), (12., 9., 1.))),
@@ -106,7 +122,8 @@ def main():
         ("reflection_group_entry.nwb", grouped_entry_boxes(12e-6), 2, 4, ((-12., -9., -1.), (12., 9., 2e-6))),
         ("reflection_csg_group_entry.nwb", grouped_entry_boxes(6e-6), 2, 4, ((-12., -9., -1.), (12., 9., 2e-6))),
     ):
-        validate(mesh, components, euler, bounds)
+        if components is not None:
+            validate(mesh, components, euler, bounds)
         content = serialize(mesh).replace("generate_refraction_gallery_meshes.py", "generate_reflection_optical_meshes.py")
         encoded = content.replace("\n", "\r\n").encode(LIT_UTF_8)
         path = ROOT / filename
@@ -115,7 +132,8 @@ def main():
                 raise AssertionError(f"stale generated optical mesh: {path}")
         else:
             path.write_bytes(encoded)
-        print(f"{filename}: {len(mesh.indices)} triangles, {components} closed outward components")
+        topology = f"{components} closed outward components" if components is not None else "1 closed outward component and 1 open quad"
+        print(f"{filename}: {len(mesh.indices)} triangles, {topology}")
 
 
 if __name__ == LIT_MAIN:

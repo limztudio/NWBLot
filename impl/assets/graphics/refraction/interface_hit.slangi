@@ -24,11 +24,11 @@ NwbRayTraceSurfaceHit nwbRefractionClosestEntryInterface(
     const float maxDistance
 ){
     const NwbRayTraceGeometryHit geometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
-    if(!geometry.hit || !geometry.frontFace
 #if NWB_RT_CSG_ENABLED
-        || geometry.failure != 0u
+    if(geometry.failure != 0u)
+        return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
 #endif
-    )
+    if(!geometry.hit || !geometry.frontFace)
         return (NwbRayTraceSurfaceHit)0;
     return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
 }
@@ -42,11 +42,11 @@ NwbRayTraceSurfaceHit nwbRefractionClosestExitInterface(
     const uint primaryInstance
 ){
     const NwbRayTraceGeometryHit geometry = nwbRayTraceClosestGeometryHit(origin, direction, minDistance, maxDistance);
-    if(!geometry.hit || geometry.instance != primaryInstance || geometry.frontFace
 #if NWB_RT_CSG_ENABLED
-        || geometry.failure != 0u
+    if(geometry.failure != 0u)
+        return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
 #endif
-    )
+    if(!geometry.hit || geometry.instance != primaryInstance || geometry.frontFace)
         return (NwbRayTraceSurfaceHit)0;
     return nwbRayTraceReconstructSurfaceHit(instanceMaterialHeapSlot, origin, direction, geometry);
 }

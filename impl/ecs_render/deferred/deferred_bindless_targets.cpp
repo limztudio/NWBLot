@@ -281,7 +281,7 @@ bool RendererDeferredSystem::createDeferredBindlessFrameResources(
             heap,
             Core::GpuDescriptorClass::SampledImage,
             targets.avboit.refractionInstance.get(),
-            Core::Format::R32_FLOAT,
+            Core::Format::RG32_FLOAT,
             ECSRenderDetail::s_FramebufferSubresources,
             Core::TextureDimension::Texture2D
         ); descriptor)

@@ -585,6 +585,19 @@ if((TARGET testbed OR (TARGET nwb_loader AND TARGET nwb_asset_builder)) AND Pyth
             SKIP_RETURN_CODE 77
             TIMEOUT 600
         )
+        add_test(
+            NAME nwb_refraction_identity_capture_smoke
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_LIST_DIR}/refraction_identity_smoke.py"
+                "--executable" "$<TARGET_FILE:nwb_refraction_smoke>"
+                "--working-directory" "${_nwb_transparent_multi_runtime_root}"
+                "--output-directory" "${CMAKE_BINARY_DIR}/Testing/smoke/$<CONFIG>/refraction_identity"
+                ${_nwb_refraction_logserver_args}
+        )
+        set_tests_properties(nwb_refraction_identity_capture_smoke PROPERTIES
+            RESOURCE_LOCK nwb_display
+            SKIP_RETURN_CODE 77
+            TIMEOUT 1200
+        )
         unset(_nwb_refraction_logserver_args)
 
         nwb_declare_executable(nwb_transparent_csg_smoke)

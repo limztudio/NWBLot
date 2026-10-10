@@ -414,25 +414,13 @@ bool RendererFramePipeline::declareDeferredSurfelGiTask(
         traceResourceUses.push_back(ReadUse(shadowMaterialTyped, Core::ResourceStates::ShaderResource));
         traceResourceUses.push_back(ReadUse(shadowInstances, Core::ResourceStates::ShaderResource));
         if(csgTraceContext.valid()){
-            traceResourceUses.push_back(ReadUse(csgTraceContext, Core::ResourceStates::ShaderResource));
-            traceResourceUses.push_back(ReadWriteUse(surfelCounter, Core::ResourceStates::UnorderedAccess));
-            if(rayTracingResources.csgTraceBoundsBufferCount != 0u && !rayTracingResources.csgTraceBoundsBuffers)
+            if(!RendererFramePipelineDetail::AppendCurrentCsgRayGeometry(
+                m_deferredLightingTaskGraph, rayTracingResources.csgTraceContextBuffer,
+                rayTracingResources.csgTraceBoundsBuffers, rayTracingResources.csgTraceBoundsBufferCount,
+                [&](const Core::GpuGraphResourceId resource){ traceResourceUses.push_back(ReadUse(resource)); }
+            ))
                 return false;
-            for(usize index = 0u; index < rayTracingResources.csgTraceBoundsBufferCount; ++index){
-                const auto& buffer = rayTracingResources.csgTraceBoundsBuffers[index];
-                if(!buffer)
-                    return false;
-                Core::GpuGraphResourceId resource;
-                {
-                    const Core::GpuTaskGraph::DeclarationReadView declarations(m_deferredLightingTaskGraph);
-                    resource = declarations.findImportedBuffer(buffer);
-                }
-                if(!resource.valid())
-                    resource = importBuffer(buffer, buffer->getCreationDescription().debugName, "Current CSG Receiver Bounds");
-                if(!resource.valid())
-                    return false;
-                traceResourceUses.push_back(ReadUse(resource, Core::ResourceStates::ShaderResource));
-            }
+            traceResourceUses.push_back(ReadWriteUse(surfelCounter, Core::ResourceStates::UnorderedAccess));
         }
         traceResourceUses.push_back(ReadUse(surfelConstants, Core::ResourceStates::ConstantBuffer));
         traceResourceUses.push_back(ReadWriteUse(surfelPool, Core::ResourceStates::UnorderedAccess));

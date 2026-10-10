@@ -107,7 +107,7 @@ def capture_variant(args, name, enabled, hardware, expected_dispatch):
     command = [
         sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")),
         LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
-        "--output", str(path), "--application-capture",
+        "--output", str(path), "--log-output", str(path.with_suffix(".log")), "--application-capture",
         "--application-capture-frame-count", str(args.frames), LIT_TIMEOUT, str(args.timeout),
         LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: zero-coverage clear sphere + opaque stripes + foreground/background AVBOIT panels created",
         LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: refraction " + ("enabled" if enabled else LIT_DISABLED),

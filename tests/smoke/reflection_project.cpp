@@ -254,12 +254,7 @@ public:
     }
 
     virtual bool onUpdate(const f32 delta)override{
-        // The latest-only diagnostic publication must retain the exact capture source in this synchronized fixture.
-        if(m_csgContextProbe && !m_context.graphics.waitForIdle()){
-            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: diagnostic frame synchronization failed"));
-            return false;
-        }
-        if(m_csgContextProbe && !m_csgContextProbe->update(m_latestStatistics))
+        if(m_csgContextProbe && !m_csgContextProbe->sampleSynchronizedFrame(m_latestStatistics))
             return false;
         if(m_framebufferCapture)
             m_framebufferCapture->update();

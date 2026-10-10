@@ -82,7 +82,14 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
         g_NwbRefractionMaterialContext.sceneSlots.z, camera, entry.incident,
         max(entryDistance - associationTolerance, entry.bias), entryDistance + associationTolerance
     );
-    if(!entryHit.hit || float(entryHit.surface.refractionIor) <= 1.001 || abs(float(entryHit.surface.refractionIor) - float(entry.ior)) > 0.02)
+#if NWB_RT_CSG_ENABLED
+    if(entryHit.failure != 0u)
+        return float4(0.0, 0.0, 0.0, 1.0);
+#endif
+    if(!entryHit.hit || !nwbRefractionIorEligible(float(entryHit.surface.refractionIor)))
+        return nwbRefractionResolveScreen(pixel, entry);
+    const uint meshInstanceIndex = nwbHeapRtInstanceMaterials(g_NwbRefractionMaterialContext.sceneSlots.z)[entryHit.instance].meshInstanceIndex;
+    if(g_NwbMeshInstances[meshInstanceIndex].entityId != entry.primaryEntityId)
         return nwbRefractionResolveScreen(pixel, entry);
 
     float3 internalDirection = refract(entry.incident, entry.normal, 1.0 / float(entry.ior));
@@ -100,6 +107,10 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
             g_NwbRefractionMaterialContext.sceneSlots.z, internalOrigin + internalDirection * entry.bias,
             internalDirection, entry.bias, NWB_REFRACTION_MAX_DISTANCE, entryHit.instance
         );
+#if NWB_RT_CSG_ENABLED
+        if(exitHit.failure != 0u)
+            return float4(0.0, 0.0, 0.0, 1.0);
+#endif
         // A different closest instance may be a nested volume or geometry inside the primary. Do not ignore it and pretend the next same-instance intersection was the nearest interface. Open meshes take the sheet fallback.
         if(!exitHit.hit)
             return nwbRefractionResolveScreen(pixel, entry);
@@ -133,7 +144,7 @@ float4 nwbRefractionResolveHardware(const uint2 pixel, const NwbRefractionEntry 
         if(background.failure != 0u)
             return float4(0.0, 0.0, 0.0, 1.0);
 #endif
-        if(float(background.surface.refractionIor) > 1.001)
+        if(nwbRefractionIorEligible(float(background.surface.refractionIor)))
             break;
         const half coverage = half(saturate(float(background.surface.renderCoverage)));
         if(coverage >= half(0.999h)){

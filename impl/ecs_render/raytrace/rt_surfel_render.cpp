@@ -128,7 +128,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelFreeListHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelPoolSnapshotHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
         || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle, Core::GpuDescriptorClass::StorageBuffer)
-        || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_surfelMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
+        || !RayTracingDetail::IsHeapHandle(m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle, Core::GpuDescriptorClass::UniformBuffer)
         || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
         || !RayTracingDetail::IsHeapHandle(targets.bindless.gbufferWorldPosition, Core::GpuDescriptorClass::SampledImage)
         || !RayTracingDetail::IsHeapHandle(targets.bindless.gbufferNormal, Core::GpuDescriptorClass::SampledImage)
@@ -154,7 +154,7 @@ bool RendererRayTracingSystem::renderSurfelGiPhases(
     surfelPush.snapshotCellHeadHeapSlot = m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle.slot();
     surfelPush.traceIndirectArgsHeapSlot = m_rayTracingState.m_surfelTraceIndirectArgsHeapHandle.slot();
     surfelPush.deferredResourcesHeapSlot = targets.bindless.slotsBufferDescriptor.slot();
-    surfelPush.materialContextSlotsHeapSlot = m_rayTracingState.m_surfelMaterialContextSlotsHeapHandle.slot();
+    surfelPush.materialContextSlotsHeapSlot = m_rayTracingState.m_rayTraceMaterialContextSlotsHeapHandle.slot();
 
     // Order every in-place field update, including prior-frame spawn writes.
     commandList.setEnableUavBarriersForBuffer(m_rayTracingState.m_surfelPoolBuffer.get(), true);

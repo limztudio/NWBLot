@@ -5,6 +5,7 @@ import argparse
 import json
 import math
 import os
+import re
 from pathlib import Path
 import statistics
 import subprocess
@@ -15,6 +16,8 @@ from window_capture_smoke import SKIP_EXIT_CODE, SmokeFailure, read_bmp_24_rows
 
 ARMS = ("reference", "cut", "uncut")
 EXPECTED_EXTENT = (1280, 900)
+MIN_WARMUP_PRESENTATIONS = 360
+MIN_LIVE_WARMUP_SECONDS = 30.0
 NO_DEDICATED_ASYNC_COMPUTE = (
     "RendererSystem: frame-lagged async lighting Graphics queue route accepted (no dedicated Compute queue"
 )
@@ -29,6 +32,55 @@ def build_environment(arm, lagged_lighting):
     environment["NWB_GI_CSG_ARM"] = arm
     environment["NWB_GI_CSG_LAGGED_LIGHTING"] = "1" if lagged_lighting else "0"
     return environment
+
+
+def validate_capture_evidence(log, required_presentations):
+    if required_presentations < MIN_WARMUP_PRESENTATIONS:
+        raise SmokeFailure("CSG GI requires at least 360 successful warmup presentations")
+    patterns = {
+        "start": r"GiTestSmokeProject: CSG GI live warmup start source_frame=(\d+) presentations=(\d+) required_presentations=(\d+) required_seconds=(\S+)",
+        "end": r"GiTestSmokeProject: CSG GI live warmup end source_frame=(\d+) presentations=(\d+) elapsed_seconds=(\S+)",
+        "capture": r"GiTestSmokeProject: CSG GI capture source_frame=(\d+)",
+        "readback": r"FramebufferCapture: graphics source frame (\d+)",
+    }
+    matches = {}
+    for name, pattern in patterns.items():
+        records = list(re.finditer(pattern, log))
+        if len(records) != 1:
+            raise SmokeFailure(f"CSG GI needs exactly one {name} evidence record, found {len(records)}")
+        matches[name] = records[0]
+    start_frame, start_presentations, declared_presentations = map(int, matches["start"].groups()[:3])
+    end_frame, end_presentations = map(int, matches["end"].groups()[:2])
+    capture_frame = int(matches["capture"].group(1))
+    readback_frame = int(matches["readback"].group(1))
+    numeric_pattern = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|[+-]?(?:inf|nan)"
+    for value in (matches["start"].group(4), matches["end"].group(3)):
+        if not re.fullmatch(numeric_pattern, value, flags=re.IGNORECASE):
+            raise SmokeFailure("CSG GI live warmup has malformed numeric evidence")
+    required_seconds = float(matches["start"].group(4))
+    elapsed_seconds = float(matches["end"].group(3))
+    if declared_presentations != required_presentations or start_presentations < required_presentations:
+        raise SmokeFailure("CSG GI live warmup began before its required successful presentations")
+    if not math.isfinite(required_seconds) or required_seconds != MIN_LIVE_WARMUP_SECONDS:
+        raise SmokeFailure("CSG GI live warmup must require 30 steady-clock seconds")
+    if not math.isfinite(elapsed_seconds) or elapsed_seconds < MIN_LIVE_WARMUP_SECONDS:
+        raise SmokeFailure("CSG GI has no completed 30-second live warmup after its frame warmup")
+    if end_frame <= start_frame or end_presentations <= start_presentations:
+        raise SmokeFailure("CSG GI live warmup has no later rendered presentation progress")
+    if capture_frame != readback_frame or capture_frame < end_frame or capture_frame >= 2**64 - 1:
+        raise SmokeFailure("CSG GI capture source does not match its completed readback and live warmup")
+    if not (matches["start"].start() < matches["end"].start() < matches["readback"].start() < matches["capture"].start()):
+        raise SmokeFailure("CSG GI live warmup and capture evidence is out of order")
+    return {
+        "start_source_frame": start_frame,
+        "start_successful_presentations": start_presentations,
+        "required_presentations": required_presentations,
+        "required_live_seconds": required_seconds,
+        "end_source_frame": end_frame,
+        "end_successful_presentations": end_presentations,
+        "elapsed_live_seconds": elapsed_seconds,
+        "capture_source_frame": capture_frame,
+    }
 
 
 def capture_arm(args, arm):
@@ -61,10 +113,11 @@ def capture_arm(args, arm):
         return None
     if result.returncode:
         raise SmokeFailure(f"CSG GI {arm} capture failed: {result.returncode}")
+    evidence = validate_capture_evidence(output.with_suffix(".log").read_text(encoding="utf-8"), args.frames)
     frame = read_bmp_24_rows(output)
     if frame[:2] != EXPECTED_EXTENT:
         raise SmokeFailure("CSG GI requires the actual 1280x900 framebuffer")
-    return frame
+    return frame, evidence
 
 
 def project_point(x, y, z):
@@ -216,8 +269,8 @@ def parse_args(argv):
     parser.add_argument("--timeout", type=float, default=240.0)
     parser.add_argument("--gpu-validation", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args(argv)
-    if args.frames < 120 or not math.isfinite(args.timeout) or args.timeout <= 0.0:
-        parser.error("frames must be at least 120, and timeout must be finite and positive")
+    if args.frames < MIN_WARMUP_PRESENTATIONS or not math.isfinite(args.timeout) or args.timeout <= 0.0:
+        parser.error("frames must be at least 360, and timeout must be finite and positive")
     args.executable = args.executable.resolve()
     args.working_directory = args.working_directory.resolve()
     args.output_directory = args.output_directory.resolve()
@@ -228,12 +281,14 @@ def main(argv):
     args = parse_args(argv)
     args.output_directory.mkdir(parents=True, exist_ok=True)
     metrics = {"route": args.route, "lagged_lighting": args.lagged_lighting,
-        "accepted_presentations": args.frames, "regions": {}}
+        "accepted_presentations": args.frames, "live_warmup": {}, "regions": {}}
     try:
         for arm in ARMS:
-            frame = capture_arm(args, arm)
-            if frame is None:
+            captured = capture_arm(args, arm)
+            if captured is None:
                 return SKIP_EXIT_CODE
+            frame, evidence = captured
+            metrics["live_warmup"][arm] = evidence
             metrics["regions"][arm] = measure_frame(frame)
         validate_metrics(metrics["regions"])
         metrics["passed"] = True

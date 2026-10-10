@@ -31,7 +31,7 @@ class Mesh;
 struct InstanceGpuData{
     Float4 rotation = Float4(0.f, 0.f, 0.f, 1.f);
     Float3UInt translation = Float3UInt(0.f, 0.f, 0.f, 0u);
-    Float4 scale = Float4(1.f, 1.f, 1.f, 0.f);
+    Float3UInt scale = Float3UInt(1.f, 1.f, 1.f, Limit<u32>::s_Max);
     u32 geometryHeapSlots[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT] = {};
 };
 static_assert(offsetof(InstanceGpuData, rotation) == sizeof(f32) * NWB_MESH_INSTANCE_ROTATION_FLOAT_OFFSET, "InstanceGpuData rotation must be first");
@@ -41,6 +41,10 @@ static_assert(
     "InstanceGpuData mutable offset must pack into translation.w"
 );
 static_assert(offsetof(InstanceGpuData, scale) == sizeof(f32) * NWB_MESH_INSTANCE_SCALE_FLOAT_OFFSET, "InstanceGpuData scale must follow translation payload");
+static_assert(
+    offsetof(InstanceGpuData, scale) + offsetof(Float3UInt, w) == sizeof(u32) * NWB_MESH_INSTANCE_ENTITY_ID_WORD_OFFSET,
+    "InstanceGpuData full entity identity must follow scale.xyz"
+);
 static_assert(
     offsetof(InstanceGpuData, geometryHeapSlots) == sizeof(f32) * NWB_MESH_INSTANCE_GEOMETRY_SLOT_FLOAT_OFFSET,
     "InstanceGpuData geometry heap slots must follow the transform payload"

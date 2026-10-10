@@ -37,7 +37,7 @@ namespace Tests::Smoke{
 void ReportReflectionSlicePackets(ProjectRuntimeContext& context, Impl::RendererSystem& renderer,
     u32 rayCapacity, u64 sourceFrame, bool csg);
 
-// Fixture-owned live context admission changes; captures and packet receipts are tied to actual source frames.
+// Synchronized diagnostic fixture; captures and packet receipts retain exact source-frame evidence.
 class ReflectionCsgContextProbe final{
 private:
     [[nodiscard]] static bool ShouldCapture(void* owner, u64 sourceFrame)noexcept;
@@ -50,7 +50,7 @@ public:
 
 public:
     [[nodiscard]] bool create();
-    [[nodiscard]] bool update(const Impl::ReflectionStatistics& statistics);
+    [[nodiscard]] bool sampleSynchronizedFrame(const Impl::ReflectionStatistics& statistics);
 
 
 private:

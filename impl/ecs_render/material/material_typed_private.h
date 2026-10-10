@@ -213,9 +213,10 @@ template<typename DestinationByteVector, typename SourceByteVector, typename Mat
 }
 
 inline InstanceGpuData BuildInstanceGpuData(
+    const Core::ECS::EntityID entity,
     const NWB::Impl::Scene::TransformComponent* transform,
     const MaterialTypedInstanceRanges& materialTypedRanges
-){
+)noexcept{
     NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(materialTypedRanges.constantRange));
     NWB_ASSERT(MaterialTypedByteRangeEmptyOffsetValid(materialTypedRanges.mutableRange));
 
@@ -228,10 +229,12 @@ inline InstanceGpuData BuildInstanceGpuData(
             transform->position.z,
             materialTypedRanges.mutableRange.byteOffset
         );
-        data.scale = transform->scale;
+        data.scale = Float3UInt(transform->scale.x, transform->scale.y, transform->scale.z, entity.id);
     }
-    else
+    else{
         data.translation.w = materialTypedRanges.mutableRange.byteOffset;
+        data.scale.w = entity.id;
+    }
     return data;
 }
 

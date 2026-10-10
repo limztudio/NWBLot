@@ -76,8 +76,6 @@ struct RayTracingFrameCpuStateSnapshot{
 
     u32 softShadowFrameIndex = 0u;
     u32 causticTemporalReuseFrameCount = 0u;
-    u32 swCausticFrameIndex = 0u;
-    u32 hwCausticFrameIndex = 0u;
     u32 surfelFrameIndex = 0u;
     u32 surfelCountReadbackFrame = 0u;
     u32 softShadowSlotMask = 0u;

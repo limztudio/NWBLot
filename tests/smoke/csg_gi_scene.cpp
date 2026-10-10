@@ -29,6 +29,7 @@ namespace __hidden_csg_gi_scene{
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+static constexpr f64 s_LiveWarmupSeconds = 30.0;
 static constexpr SmokeMeshRef s_CubeMesh{"project/meshes/cube_hard_edges"};
 static constexpr SmokeMeshRef s_MixedMesh{"project/meshes/gi_csg_mixed"};
 static constexpr SmokeMeshRef s_OpenQuadMesh{"project/meshes/gi_csg_open_quad"};
@@ -188,7 +189,7 @@ struct Box{
 
 bool CsgGiScene::ShouldCapture(void* context, const u64)noexcept{
     const auto& scene = *static_cast<CsgGiScene*>(context);
-    return scene.m_context.graphics.getSuccessfulPresentationCount() >= scene.m_requiredPresentations;
+    return scene.m_liveWarmupComplete && scene.m_context.graphics.getSuccessfulPresentationCount() >= scene.m_requiredPresentations;
 }
 
 
@@ -211,8 +212,10 @@ Expected<bool> CsgGiScene::start(){
     }
     if(const auto value = ReadSmokeEnvironmentText(m_context.objectArena, "NWB_SMOKE_FRAMEBUFFER_CAPTURE_FRAME_COUNT")){
         const auto count = ParseU64(AStringView(value->data(), value->size()));
-        if(!count || *count == 0u || *count > Limit<u32>::s_Max)
+        if(!count || *count < 360u || *count > Limit<u32>::s_Max){
+            NWB_LOGGER_ERROR(NWB_TEXT("GiTestSmokeProject: CSG GI warmup requires at least 360 successful presentations"));
             return MakeUnexpected(Failure{});
+        }
         m_requiredPresentations = *count;
     }
 
@@ -295,8 +298,38 @@ void CsgGiScene::stop(){
 }
 
 void CsgGiScene::update(){
-    if(m_capture)
-        m_capture->update();
+    if(!m_capture)
+        return;
+
+    const u64 presentations = m_context.graphics.getSuccessfulPresentationCount();
+    if(presentations >= m_requiredPresentations && !m_liveWarmupComplete){
+        const Timer now = TimerNow();
+        const u64 frameIndex = m_context.graphics.getFrameIndex();
+        if(!m_liveWarmupStarted){
+            m_liveWarmupStartTime = now;
+            m_liveWarmupStartPresentations = presentations;
+            m_liveWarmupStarted = true;
+            NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: CSG GI live warmup start source_frame={} presentations={} required_presentations={} required_seconds={}")
+                , frameIndex, presentations, m_requiredPresentations, __hidden_csg_gi_scene::s_LiveWarmupSeconds
+            );
+        }else{
+            const f64 elapsedSeconds = DurationInSeconds<f64>(now, m_liveWarmupStartTime);
+            if(elapsedSeconds >= __hidden_csg_gi_scene::s_LiveWarmupSeconds && presentations > m_liveWarmupStartPresentations){
+                m_liveWarmupComplete = true;
+                NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: CSG GI live warmup end source_frame={} presentations={} elapsed_seconds={:.6f}")
+                    , frameIndex, presentations, elapsedSeconds
+                );
+            }
+        }
+    }
+
+    m_capture->update();
+    if(m_capture->captureReady() && !m_captureReceiptLogged){
+        m_captureReceiptLogged = true;
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("GiTestSmokeProject: CSG GI capture source_frame={}")
+            , m_capture->capturedGraphicsFrameIndex()
+        );
+    }
 }
 
 

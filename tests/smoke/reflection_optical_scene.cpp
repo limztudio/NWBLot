@@ -29,6 +29,12 @@ namespace __hidden_reflection_optical_scene{
 
 
 using namespace Tests::Smoke;
+
+struct OpticalReceiverEntities{
+    Core::ECS::EntityID receiver = Core::ECS::s_InvalidEntityId;
+    Core::ECS::EntityID cutter = Core::ECS::s_InvalidEntityId;
+};
+
 static constexpr SmokeMeshRef s_Plane("project/meshes/shadow_plane");
 static constexpr SmokeMeshRef s_Box("project/meshes/cube_hard_edges");
 static constexpr SmokeMeshRef s_Disconnected("project/meshes/reflection_disconnected_boxes");
@@ -47,6 +53,10 @@ static constexpr AStringView s_SurfaceInterface = "project/shaders/smoke_surface
 static constexpr AStringView s_OpticalInterface = "project/shaders/reflection_optical";
 static constexpr Float4 s_Clear(1.f, 1.f, 1.f, 0.f);
 static constexpr Float4 s_Tinted(0.55f, 0.8f, 1.f, 0.f);
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 static Core::ECS::EntityID CreatePanel(ProjectRuntimeContext& context, Core::ECS::World& world,
     const Float4& color, const Float4& position, const Float4& scale, const f32 f0 = 0.f
@@ -111,41 +121,62 @@ static Core::ECS::EntityID CreateBox(ProjectRuntimeContext& context, Core::ECS::
     );
 }
 
+static Expected<OpticalReceiverEntities> CreateDenseReceiver(ProjectRuntimeContext& context, Core::ECS::World& world, const bool csg){
+    // One opaque receiver has eighteen distinct closed crossings; an admitted cutter leaves its nearest surface intact.
+    const auto receiver = CreateTintedStaticMeshEntity(
+        world, context.objectArena, s_Dense, s_Opaque, s_SurfaceInterface, Float4(0.9f, 0.2f, 0.05f, 1.f),
+        Float4(0.f, 1.4f, -8.5f, 0.f), Float4(1.f, 1.f, 1.f, 0.f)
+    );
+    if(!receiver.valid())
+        return MakeUnexpected(Failure{});
+    const Half4U packedF0 = MakeHalf4U(0.f, 0.f, 0.f, 0.f);
+    const Half packedRoughness = ConvertFloatToHalf(1.f);
+    if(!Impl::SetMaterialMutableParameter(
+        world, receiver, Name(s_SurfaceInterface), "runtime.specular_f0", Impl::MaterialLayoutFieldType::Half3,
+        Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)
+    ))
+        return MakeUnexpected(Failure{});
+    if(!Impl::SetMaterialMutableParameter(
+        world, receiver, Name(s_SurfaceInterface), "runtime.perceptual_roughness", Impl::MaterialLayoutFieldType::Half,
+        Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))
+    ))
+        return MakeUnexpected(Failure{});
+    if(!csg)
+        return OpticalReceiverEntities{ .receiver = receiver };
+    const Name group("smoke/reflection/csg_dense");
+    AddStaticCsgMeshReceiver(world, receiver, group, true, false);
+    auto cutterEntity = world.createEntity();
+    auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(context.objectArena);
+    cutter.receiverGroup = group;
+    cutter.shapeType = Name("engine/csg/plane");
+    Impl::CsgPlaneShapeParameters parameters;
+    parameters.normalDistance = Float4(-1.f, 0.f, 0.f, 11.f);
+    AssignCsgCutterParameters(cutter, parameters);
+    AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
+    return OpticalReceiverEntities{ .receiver = receiver, .cutter = cutterEntity.id() };
+}
+
+static Expected<OpticalReceiverEntities> CreateCsgBoundaryReceiver(ProjectRuntimeContext& context, Core::ECS::World& world, const bool cavity){
+    // Both retain [-10,-9]; the cavity case starts the reflected ray inside the removed receiver volume.
+    const auto receiver = CreateBox(context, world, cavity ? -3.f : -9.f, cavity ? 14.f : 2.f, 1.5f, s_Tinted);
+    if(!receiver.valid())
+        return MakeUnexpected(Failure{});
+    const Name group("smoke/reflection/csg_optics");
+    AddStaticCsgMeshReceiver(world, receiver, group, false, true);
+    auto cutterEntity = world.createEntity();
+    auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(context.objectArena);
+    cutter.receiverGroup = group;
+    cutter.shapeType = Name("engine/csg/plane");
+    Impl::CsgPlaneShapeParameters parameters;
+    parameters.normalDistance = Float4(0.f, 0.f, -1.f, -9.f);
+    AssignCsgCutterParameters(cutter, parameters);
+    AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
+    return OpticalReceiverEntities{ .receiver = receiver, .cutter = cutterEntity.id() };
+}
+
 static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::World& world, const AStringView caseName){
-    if(caseName == "optical_dense" || caseName == "optical_csg_dense"){
-        // One opaque receiver has eighteen distinct closed crossings; an admitted cutter leaves its nearest surface intact.
-        const auto receiver = CreateTintedStaticMeshEntity(
-            world, context.objectArena, s_Dense, s_Opaque, s_SurfaceInterface, Float4(0.9f, 0.2f, 0.05f, 1.f),
-            Float4(0.f, 1.4f, -8.5f, 0.f), Float4(1.f, 1.f, 1.f, 0.f)
-        );
-        if(!receiver.valid())
-            return false;
-        const Half4U packedF0 = MakeHalf4U(0.f, 0.f, 0.f, 0.f);
-        const Half packedRoughness = ConvertFloatToHalf(1.f);
-        if(!Impl::SetMaterialMutableParameter(
-            world, receiver, Name(s_SurfaceInterface), "runtime.specular_f0", Impl::MaterialLayoutFieldType::Half3,
-            Impl::PackMaterialInstanceBytes(packedF0.raw, sizeof(Half) * 3u)
-        ))
-            return false;
-        if(!Impl::SetMaterialMutableParameter(
-            world, receiver, Name(s_SurfaceInterface), "runtime.perceptual_roughness", Impl::MaterialLayoutFieldType::Half,
-            Impl::PackMaterialInstanceBytes(&packedRoughness, sizeof(packedRoughness))
-        ))
-            return false;
-        if(caseName == "optical_dense")
-            return true;
-        const Name group("smoke/reflection/csg_dense");
-        AddStaticCsgMeshReceiver(world, receiver, group, true, false);
-        auto cutterEntity = world.createEntity();
-        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(context.objectArena);
-        cutter.receiverGroup = group;
-        cutter.shapeType = Name("engine/csg/plane");
-        Impl::CsgPlaneShapeParameters parameters;
-        parameters.normalDistance = Float4(-1.f, 0.f, 0.f, 11.f);
-        AssignCsgCutterParameters(cutter, parameters);
-        AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
-        return true;
-    }
+    if(caseName == "optical_dense" || caseName == "optical_csg_dense")
+        return CreateDenseReceiver(context, world, caseName == "optical_csg_dense").has_value();
     if(caseName == "optical_reference")
         return true;
     if(caseName == "optical_csg_reference")
@@ -216,24 +247,8 @@ static bool CreateOpticalObjects(ProjectRuntimeContext& context, Core::ECS::Worl
         AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
         return true;
     }
-    if(caseName == "optical_csg_cap" || caseName == "optical_csg_cavity"){
-        // Both retain [-10,-9]; the cavity case starts the reflected ray inside the removed receiver volume.
-        const bool cavity = caseName == "optical_csg_cavity";
-        const auto receiver = CreateBox(context, world, cavity ? -3.f : -9.f, cavity ? 14.f : 2.f, 1.5f, s_Tinted);
-        if(!receiver.valid())
-            return false;
-        const Name group("smoke/reflection/csg_optics");
-        AddStaticCsgMeshReceiver(world, receiver, group, false, true);
-        auto cutterEntity = world.createEntity();
-        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(context.objectArena);
-        cutter.receiverGroup = group;
-        cutter.shapeType = Name("engine/csg/plane");
-        Impl::CsgPlaneShapeParameters parameters;
-        parameters.normalDistance = Float4(0.f, 0.f, -1.f, -9.f);
-        AssignCsgCutterParameters(cutter, parameters);
-        AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
-        return true;
-    }
+    if(caseName == "optical_csg_cap" || caseName == "optical_csg_cavity")
+        return CreateCsgBoundaryReceiver(context, world, caseName == "optical_csg_cavity").has_value();
     if(caseName == "optical_tir")
         return CreateBoundary(context, world, s_Prism, Float4(0.f, 1.4f, 0.f, 0.f), Float4(1.f, 1.f, 1.f, 0.f), 1.5f, s_Clear).valid();
     if(caseName == "optical_inside" || caseName == "optical_inside_nested"){
@@ -376,28 +391,20 @@ namespace Tests::Smoke{
 
 Expected<ReflectionCsgContextEntities> CreateReflectionCsgContextScene(ProjectRuntimeContext& context, Core::ECS::World& world){
     using namespace __hidden_reflection_optical_scene;
-    if(!CreateReflectionOpticalScene(context, world, "optical_reference")
-        || !CreateOpticalObjects(context, world, "optical_csg_cap")
-        || !CreateOpticalObjects(context, world, "optical_csg_dense"))
+    if(!CreateReflectionOpticalScene(context, world, "optical_reference"))
         return MakeUnexpected(Failure{});
-    ReflectionCsgContextEntities result;
-    auto receivers = world.view<Impl::StaticCsgMeshComponent>();
-    for(auto&& [entity, receiver] : receivers){
-        if(receiver.receiverGroup == Name("smoke/reflection/csg_optics"))
-            result.smallReceiver = entity;
-        else if(receiver.receiverGroup == Name("smoke/reflection/csg_dense"))
-            result.denseReceiver = entity;
-    }
-    auto cutters = world.view<Impl::CsgCutterComponent>();
-    for(auto&& [entity, cutter] : cutters){
-        if(cutter.receiverGroup == Name("smoke/reflection/csg_optics"))
-            result.smallCutter = entity;
-        else if(cutter.receiverGroup == Name("smoke/reflection/csg_dense"))
-            result.denseCutter = entity;
-    }
-    if(!result.smallReceiver.valid() || !result.denseReceiver.valid() || !result.smallCutter.valid() || !result.denseCutter.valid())
-        return MakeUnexpected(Failure{});
-    return result;
+    const auto small = CreateCsgBoundaryReceiver(context, world, false);
+    if(!small)
+        return MakeUnexpected(small.error());
+    const auto dense = CreateDenseReceiver(context, world, true);
+    if(!dense)
+        return MakeUnexpected(dense.error());
+    return ReflectionCsgContextEntities{
+        .smallReceiver = small->receiver,
+        .denseReceiver = dense->receiver,
+        .smallCutter = small->cutter,
+        .denseCutter = dense->cutter,
+    };
 }
 
 bool CreateReflectionOpticalScene(ProjectRuntimeContext& context, Core::ECS::World& world, const AStringView caseName){

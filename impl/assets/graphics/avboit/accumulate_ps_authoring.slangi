@@ -15,6 +15,7 @@
 #include "binding_slots.h"
 #include "../scene/binding_slots.h"
 #include "../mesh/runtime_constants.h"
+#include "../refraction/ior.slangi"
 
 #define NWB_MESH_MATERIAL_CONTEXT_PROVIDED
 #include "common.slangi"
@@ -93,8 +94,10 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
         if(input.position.z > opaqueDepth)
             discard;
     }
-    else if(nwbAvboitPrimaryRefractionInstance(nwbAvboitFullUvFromFragCoord(input.position.xy), nwbMeshInstanceIndex()))
-        discard;
+    else if(nwbAvboitRefractionEnabled()){
+        if(nwbAvboitPrimaryRefractionEntity(nwbAvboitFullUvFromFragCoord(input.position.xy), nwbMeshLoadInstance().entityId))
+            discard;
+    }
 
     NwbMeshSurfaceInputs surfaceInputs;
     surfaceInputs.color = half4(input.color);
@@ -116,14 +119,14 @@ NwbAvboitAccumulatePixelOutput main(NwbAvboitAccumulatePixelInput input){
 
     if(refractionCapture){
         const float ior = float(surface.refractionIor);
-        if(!isfinite(ior) || ior <= 1.0001)
+        if(!nwbRefractionIorEligible(ior))
             discard;
 
         NwbAvboitAccumulatePixelOutput capture;
         capture.accumColor = float4(nwbSafeNormalize(surface.normal, float3(0.0, 0.0, 1.0)), ior);
         // Shadow absorption tint is a (0, 1) color factor, so half math is sufficient; widen only for the float4 store.
         capture.accumExtinction = float4(float3(half3(clamp(half3(surface.shadowAbsorptionTint), half3(0.0h), half3(1.0h)))), float(alpha));
-        capture.foregroundColor = float4(float(nwbMeshInstanceIndex()) + 1.0, 0.0, 0.0, 0.0);
+        capture.foregroundColor = float4(nwbAvboitPackRefractionEntityId(g_NwbMeshInstances[nwbMeshInstanceIndex()].entityId), 0.0, 0.0);
         // The capture framebuffer binds persistent F0/roughness at the shared PS's fourth output location.
         capture.foregroundExtinction = nwbPackMeshSurfaceReflection(surface.specularF0, surface.perceptualRoughness);
         return capture;

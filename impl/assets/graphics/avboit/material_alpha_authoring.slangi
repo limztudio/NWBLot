@@ -27,8 +27,10 @@ bool nwbAvboitLoadAcceptedMaterialAlpha(
 
     // The selected optical object's entry and exit surfaces are resolved together by bounded refraction.
     // Removing that complete instance here keeps full-coverage glass from extinguishing its own background.
-    if(nwbAvboitPrimaryRefractionInstance(nwbAvboitFullUvFromLowFragCoord(position.xy), nwbMeshInstanceIndex()))
-        return false;
+    if(nwbAvboitRefractionEnabled()){
+        if(nwbAvboitPrimaryRefractionEntity(nwbAvboitFullUvFromLowFragCoord(position.xy), nwbMeshLoadInstance().entityId))
+            return false;
+    }
 
     NwbMeshSurfaceInputs surfaceInputs;
     surfaceInputs.color = color;

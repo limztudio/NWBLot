@@ -10,6 +10,7 @@
 
 
 #include "constants.h"
+#include "refraction_identity.slangi"
 #include "../scene/binding_slots.h"
 
 
@@ -158,12 +159,16 @@ float2 nwbAvboitFullUvFromLowFragCoord(float2 fragCoord){
     return clamp(fragCoord / lowSize, float2(0.0), float2(1.0));
 }
 
-bool nwbAvboitPrimaryRefractionInstance(float2 fullUv, uint instanceIndex){
+bool nwbAvboitPrimaryRefractionEntity(float2 fullUv, uint entityId){
     if(!nwbAvboitRefractionEnabled())
         return false;
-    // All transparent passes gather the same instance ordering. Zero denotes no selected refractor
-    const float encodedInstance = nwbHeapSampledImage2D(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.refractionSlots1.w).SampleLevel(nwbHeapSampler(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.lightingSlots.w), fullUv, 0.0).r;
-    return encodedInstance >= 0.5 && uint(encodedInstance + 0.5) == instanceIndex + 1u;
+    const uint2 fullSize = uint2(nwbAvboitFullWidth(), nwbAvboitFullHeight());
+    const uint2 fullPixel = min(uint2(fullUv * float2(fullSize)), fullSize - 1u);
+    const int3 texel = int3(fullPixel, 0);
+    if(nwbHeapSampledImage2D(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.refractionSlots0.x).Load(texel).r >= NWB_SCENE_BACKGROUND_DEPTH)
+        return false;
+    const uint primaryEntityId = nwbAvboitUnpackRefractionEntityId(nwbHeapSampledImage2D(NWB_AVBOIT_DEFERRED_BINDLESS_RESOURCES.refractionSlots1.w).Load(texel).rg);
+    return primaryEntityId == entityId;
 }
 
 float nwbAvboitPrimaryRefractionDepth(float2 fragCoord){

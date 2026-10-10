@@ -236,7 +236,7 @@ bool RendererAvboitSystem::createAvboitFrameTargets(DeferredFrameTargets& create
         m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT,
         "engine/avboit/refraction_tint_coverage", transparentBlack, true);
     avboitTargets.refractionInstance = __hidden_avboit_targets::CreateRenderTarget(
-        m_graphics, createdTargets.width, createdTargets.height, Core::Format::R32_FLOAT,
+        m_graphics, createdTargets.width, createdTargets.height, Core::Format::RG32_FLOAT,
         "engine/avboit/refraction_instance", transparentBlack, true);
     avboitTargets.refractionSpecularRoughness = __hidden_avboit_targets::CreateRenderTarget(
         m_graphics, createdTargets.width, createdTargets.height, Core::Format::RGBA16_FLOAT,

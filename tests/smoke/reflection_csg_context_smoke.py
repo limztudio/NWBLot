@@ -59,6 +59,8 @@ def validate_ordinary_packets(log_text, statistics, history):
         if any(observation[name] != 1 for name in ("expected_slices", "hardware_nodes", "indexed_slices",
             "compiled_nodes", "unique_packets", "accepted_packets")):
             raise SmokeFailure("ordinary phase must execute one accepted hardware task without stale CSG slices")
+        if observation["graphics_packets"] != 1:
+            raise SmokeFailure("ordinary matched control must retain its accepted primary Graphics hardware packet")
         completed.append(observation)
     return completed
 
@@ -190,7 +192,7 @@ def main(argv):
         manifest = {"frame_source": "actual application framebuffer readback", "size": [960, 720],
             "environment_overrides": {name: environment[name] for name in environment if name.startswith("NWB_")},
             "completed_phase_evidence": evidence, "metrics": None,
-            "diagnostic_sampling": "Public graphics waitForIdle before every fixture update retains exact-source latest-only statistics.",
+            "diagnostic_sampling": "The owning probe samples each fixture frame after public graphics waitForIdle, retaining exact-source latest-only statistics.",
             "limitations": "Five live context transitions qualify HW reflection semantics and accepted packet coverage with synchronized frames; no asynchronous-overlap, performance or GI claim."}
         report = directory / "manifest.json"
         report.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

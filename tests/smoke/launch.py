@@ -327,6 +327,7 @@ def add_smoke_options(parser: argparse.ArgumentParser) -> None:
         "coincident_reversed", "coincident_tinted_reversed", "coincident_priority_swap", "coincident_tinted_priority_swap",
         "coincident_identical", "coincident_tinted_identical", "near_coincident", "coincident_preserved",
         "csg_reference", "csg_cap", "csg_middle", "csg_uncut",
+        "identity_reference", "identity_same_ior", "identity_different_ior", "crossing_overflow", "near_air_ordinary", "near_air_csg",
     ), help="Select a visual refraction case; omit to run the original regression scene.")
     parser.add_argument("--refraction-geometry", action=ACTION_STORE_TRUE,
         help="Show the selected case with colored, nonrefractive translucent surfaces.")

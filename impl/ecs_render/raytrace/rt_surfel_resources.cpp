@@ -74,7 +74,6 @@ void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
         RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelFreeListHeapHandle);
         RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelPoolSnapshotHeapHandle);
         RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle);
-        RayTracingDetail::RetireHeapHandle(heap, m_rayTracingState.m_surfelMaterialContextSlotsHeapHandle);
         return;
     }
 
@@ -87,7 +86,6 @@ void RendererRayTracingSystem::releaseSurfelGiHeapHandles(){
     m_rayTracingState.m_surfelFreeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_rayTracingState.m_surfelPoolSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
     m_rayTracingState.m_surfelCellHeadSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    m_rayTracingState.m_surfelMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
 }
 
 bool RendererRayTracingSystem::hasSurfelWork()const noexcept{
@@ -119,21 +117,12 @@ bool RendererRayTracingSystem::prepareSurfelResources(DeferredFrameTargets& targ
     if(!ensureSurfelResources())
         return false;
 
-    // Register the remaining heap-selected trace context.
-    Core::GpuDescriptorHeap& heap = m_graphics.getDevice().getDescriptorHeap();
+    // GI consumes the same selector descriptor as the other current ray effects.
     if(
         !targets.bindless.valid()
         || !RayTracingDetail::IsHeapHandle(targets.bindless.slotsBufferDescriptor, Core::GpuDescriptorClass::UniformBuffer)
-        || !m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer
-        || !RayTracingDetail::EnsureHeapBuffer(
-            heap,
-            *m_rayTracingState.m_rayTraceMaterialContextSlotsBuffer.get(),
-            Core::GpuDescriptorClass::UniformBuffer,
-            false,
-            m_rayTracingState.m_surfelMaterialContextSlotsHeapHandle
-        )
-    )
-    {
+        || !ensureRayTraceMaterialContextSlotsHeapHandle()
+    ){
         NWB_LOGGER_ERROR(NWB_TEXT("RendererSystem: surfel GI trace heap context is incomplete"));
         return false;
     }

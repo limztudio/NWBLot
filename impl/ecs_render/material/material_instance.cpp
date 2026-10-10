@@ -278,7 +278,7 @@ Expected<ShadowOccluderMaterialContext> RendererMaterialSystem::appendShadowOccl
         return MakeUnexpected(Failure{});
 
     const ECSRenderDetail::MaterialTypedInstanceRanges typedRanges{ *constantRange, *mutableRange };
-    return ShadowOccluderMaterialContext{ ECSRenderDetail::BuildInstanceGpuData(transform, typedRanges), constantRange->byteOffset };
+    return ShadowOccluderMaterialContext{ ECSRenderDetail::BuildInstanceGpuData(entity, transform, typedRanges), constantRange->byteOffset };
 }
 
 void RendererMaterialSystem::pruneMaterialInstanceMutableCache(){

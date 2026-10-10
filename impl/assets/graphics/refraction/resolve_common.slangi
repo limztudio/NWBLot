@@ -10,8 +10,10 @@
 
 
 #include "push_constants.h"
+#include "ior.slangi"
 #include "../deferred/bindless_resources.slangi"
 #include "../avboit/constants.h"
+#include "../avboit/refraction_identity.slangi"
 #include "../common/math.slangi"
 
 
@@ -107,7 +109,7 @@ half3 nwbRefractionAttenuation(const half3 tint, const float thickness, const ha
 }
 
 struct NwbRefractionEntry{
-    uint primaryRasterInstance;
+    uint primaryEntityId;
     float depth;
     float3 position;
     float3 incident;
@@ -124,8 +126,10 @@ bool nwbRefractionLoadEntry(const uint2 pixel, out NwbRefractionEntry entry){
     entry.depth = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.x).Load(int3(pixel, 0)).r;
     if(entry.depth >= 1.0)
         return false;
-    entry.primaryRasterInstance = uint(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(int3(pixel, 0)).r);
+    entry.primaryEntityId = nwbAvboitUnpackRefractionEntityId(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(int3(pixel, 0)).rg);
     const float4 normalIor = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.y).Load(int3(pixel, 0));
+    if(!nwbRefractionIorEligible(normalIor.w))
+        return false;
     const float4 tintCoverage = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.z).Load(int3(pixel, 0));
     entry.position = nwbRefractionReconstruct(pixel, entry.depth);
     const float3 cameraRay = entry.position - g_NwbRefractionView.cameraPosition.xyz;
@@ -142,9 +146,11 @@ bool nwbRefractionLoadEntry(const uint2 pixel, out NwbRefractionEntry entry){
 }
 
 half3 nwbRefractionBackgroundForEntry(const uint2 pixel, const NwbRefractionEntry entry){
-    const uint samplePrimary = uint(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(int3(pixel, 0)).r);
+    const int3 texel = int3(pixel, 0);
+    const float primaryDepth = nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots0.x).Load(texel).r;
+    const uint samplePrimary = nwbAvboitUnpackRefractionEntityId(nwbHeapSampledImage2D(g_NwbRefractionResources.refractionSlots1.w).Load(texel).rg);
     // A displaced pixel outside this primary's silhouette has a different AVBOIT depth partition. Reusing its transparent accumulation could pull a camera-foreground object behind the glass. Only the opaque cache is reusable there; the hardware path can still evaluate transparent geometry actually intersected by its ray.
-    return samplePrimary == entry.primaryRasterInstance ? nwbRefractionBackground(pixel) : nwbRefractionOpaqueBackground(pixel);
+    return primaryDepth < 1.0 && samplePrimary == entry.primaryEntityId ? nwbRefractionBackground(pixel) : nwbRefractionOpaqueBackground(pixel);
 }
 
 half3 nwbRefractionStraightFallback(const uint2 pixel, const NwbRefractionEntry entry){

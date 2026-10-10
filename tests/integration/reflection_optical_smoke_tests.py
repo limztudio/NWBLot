@@ -477,6 +477,12 @@ class ContextTransitionTests(unittest.TestCase):
         with self.assertRaisesRegex(SmokeFailure, "stale CSG slices"):
             context.analyze_evidence(ordinary)
 
+    def test_ordinary_matched_control_cannot_use_a_different_hardware_queue(self):
+        text = self.log().replace("single_task_packets=1 graphics_packets=1", "single_task_packets=1 graphics_packets=0", 1)
+        self.assertNotEqual(text, self.log())
+        with self.assertRaisesRegex(SmokeFailure, "ordinary matched control"):
+            context.analyze_evidence(text)
+
     def test_context_capture_cannot_use_frames_from_before_its_live_edit(self):
         text = self.log().replace("captured phase=1 source_frame=48", "captured phase=1 source_frame=47")
         text = text.replace("graphics source frame 48", "graphics source frame 47")

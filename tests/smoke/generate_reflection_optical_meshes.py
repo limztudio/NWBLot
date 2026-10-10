@@ -50,10 +50,18 @@ def overlapping_boxes():
 
 
 def dense_boxes():
-    # One receiver exceeds the small crossing bound; central rays cross all nine separated closed components.
+    # Central rays cross eighteen distinct boundaries from nine separated closed components.
     mesh = Mesh()
     for center_z in (0., -2., -4., -6., -8., -10., -12., -14., -16.):
         append_box(mesh, center_z - .5, center_z + .5)
+    return mesh
+
+
+def refraction_crossing_overflow():
+    # Sixty-six distinct closed crossings exceed the shared collector capacity of sixty-four.
+    mesh = Mesh()
+    for component in range(33):
+        append_box(mesh, float(component), float(component) + .5)
     return mesh
 
 
@@ -91,6 +99,7 @@ def main():
         ("reflection_disconnected_boxes.nwb", disconnected_boxes(), 2, 4, ((-12., -9., -1.25), (12., 9., 1.25))),
         ("reflection_overlapping_boxes.nwb", overlapping_boxes(), 2, 4, ((-12., -9., -.4), (12., 9., .4))),
         ("reflection_dense_boxes.nwb", dense_boxes(), 9, 18, ((-12., -9., -16.5), (12., 9., .5))),
+        ("refraction_crossing_overflow.nwb", refraction_crossing_overflow(), 33, 66, ((-12., -9., 0.), (12., 9., 32.5))),
         ("reflection_tir_prism.nwb", tir_prism(), 1, 2, ((-10., -10., -28.), (20., 10., 2.))),
         ("reflection_group_gap.nwb", grouped_gap_boxes(4e-6, 6e-6), 3, 6, ((-12., -9., -1.), (12., 9., 1.))),
         ("reflection_group_gap_sub_ulp.nwb", grouped_gap_boxes(8e-8, 1e-7), 3, 6, ((-12., -9., -1.), (12., 9., 1.))),

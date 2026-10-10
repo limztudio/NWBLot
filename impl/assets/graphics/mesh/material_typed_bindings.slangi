@@ -21,7 +21,8 @@ struct NwbMeshInstanceData{
     float4 rotation;
     float3 translation;
     uint materialMutableByteOffset;
-    float4 scale;
+    float3 scale;
+    uint entityId;
     // Indexed by NWB_MESH_BINDING_* ABI position. Binding 6 stores CSG's UniformBuffer context selector while typed material words use the frame heap lane; preserve these positions to avoid renumbering source streams.
     uint geometryHeapSlots[NWB_MESH_INSTANCE_GEOMETRY_SLOT_COUNT];
 };

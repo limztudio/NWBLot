@@ -531,8 +531,6 @@ bool RendererRayTracingSystem::renderHwCaustics(
         Core::RayTracingDispatchRaysArguments dispatchArgs;
         dispatchArgs.setDimensions(photonBudget.gridSide, photonBudget.gridSide / temporalPhaseCount, 1u);
         commandList.dispatchRays(dispatchArgs);
-        // Advance temporal phase only after recording a producer dispatch.
-        m_rayTracingState.m_hwCausticFrameIndex = m_rayTracingState.m_hwCausticFrameIndex + 1u;
         advanceCausticTemporalReuse();
     };
     if(causticPhotonTiming && causticPhotonTiming->has_value()){

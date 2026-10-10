@@ -516,7 +516,7 @@ void RendererMaterialSystem::gatherMaterialPassDrawItems(
             const ECSRenderDetail::MaterialTypedInstanceRanges typedRanges{ *constantRange, *mutableRange };
 
             const u32 instanceIndex = static_cast<u32>(instanceData.size());
-            InstanceGpuData instance = ECSRenderDetail::BuildInstanceGpuData(transform, typedRanges);
+            InstanceGpuData instance = ECSRenderDetail::BuildInstanceGpuData(entity, transform, typedRanges);
             m_meshSystem.populateMeshGeometryHeapSlots(instance, mesh);
             instanceData.push_back(Move(instance));
             if(csgReceiverLookupPtr)

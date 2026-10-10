@@ -4,6 +4,8 @@
 
 #include "cap_surface.slangi"
 #include "../avboit/binding_slots.h"
+#include "../avboit/refraction_identity.slangi"
+#include "../refraction/ior.slangi"
 #include "../deferred/bindless_resources.slangi"
 
 
@@ -37,14 +39,13 @@ NwbCsgRefractionCapFillPixelOutput main(const NwbCsgCapFillPixelInput input){
     const float3 incidentDirection = nwbCsgIntervalSampleNormalizeOr(cap.worldPosition - g_NwbMeshCameraPosition.xyz, -cap.normal);
     const NwbMeshSurface surface = nwbCsgCapSurface(cap, receiver, incidentDirection);
     const float ior = float(surface.refractionIor);
-    if(!isfinite(ior) || ior <= 1.0001)
+    if(!nwbRefractionIorEligible(ior))
         discard;
 
     NwbCsgRefractionCapFillPixelOutput output;
     output.normalIor = float4(nwbCsgIntervalSampleNormalizeOr(surface.normal, float3(0.0, 0.0, 1.0)), ior);
     output.tintCoverage = float4(float3(half3(clamp(half3(surface.shadowAbsorptionTint), half3(0.0h), half3(1.0h)))), clamp(float(surface.renderCoverage), 0.0, 1.0));
-    // The capture pass owns its raster instance order; ray-scene instance indices can differ.
-    output.instance = float4(float(receiver.materialContext.z) + 1.0, 0.0, 0.0, 0.0);
+    output.instance = float4(nwbAvboitPackRefractionEntityId(g_NwbMeshInstances[receiver.materialContext.z].entityId), 0.0, 0.0);
     output.specularRoughness = nwbPackMeshSurfaceReflection(surface.specularF0, surface.perceptualRoughness);
     output.depth = cap.depth;
     return output;

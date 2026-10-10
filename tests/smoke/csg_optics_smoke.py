@@ -47,7 +47,7 @@ def refraction_difference(reference, candidate):
 def require_refraction_match(reference, candidate):
     metrics = refraction_difference(reference, candidate)
     if metrics["mean_absolute_rgb_error"] > MAXIMUM_MEAN_ERROR or metrics["changed_fraction"] > MAXIMUM_CHANGED_FRACTION:
-        raise SmokeFailure("generated CSG entry/exit does not match the retained slab: " + json.dumps(metrics))
+        raise SmokeFailure("refraction control images disagree in the retained volume comparison region: " + json.dumps(metrics))
     return metrics
 
 

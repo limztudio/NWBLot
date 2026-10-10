@@ -308,8 +308,6 @@ struct RtCausticState{
     f32 m_causticTemporalDecay = ECSRenderDetail::s_DefaultCausticTemporalDecay;
     // Accepted updates select bootstrap then converged phases; rollback restores this counter.
     u32 m_causticTemporalReuseFrameCount = 0u;
-    u32 m_swCausticFrameIndex = 0u;
-    u32 m_hwCausticFrameIndex = 0u;
 
     bool m_causticEmissionGateLogged = false;
     bool m_causticGeometryDownsamplePipelineFailed = false;
@@ -378,8 +376,6 @@ struct RtSurfelGiState{
     Core::GpuDescriptorHandle m_surfelFreeListHeapHandle = Core::GpuDescriptorHandle::Invalid();
     Core::GpuDescriptorHandle m_surfelPoolSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
     Core::GpuDescriptorHandle m_surfelCellHeadSnapshotHeapHandle = Core::GpuDescriptorHandle::Invalid();
-    // Surfel owns its shared material-context heap view.
-    Core::GpuDescriptorHandle m_surfelMaterialContextSlotsHeapHandle = Core::GpuDescriptorHandle::Invalid();
 
     Core::QueueSubmissionToken m_surfelCountReadbackSubmissionToken;
     u32 m_surfelCountReadbackFrame = 0u;

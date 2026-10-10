@@ -181,7 +181,12 @@ bool ReflectionCsgContextProbe::startCapture(){
     return m_capture && m_capture->start();
 }
 
-bool ReflectionCsgContextProbe::update(const Impl::ReflectionStatistics& statistics){
+bool ReflectionCsgContextProbe::sampleSynchronizedFrame(const Impl::ReflectionStatistics& statistics){
+    // Wait before advancing the fixture/world; a later wait cannot recover skipped latest-only diagnostic rows.
+    if(!m_context.graphics.waitForIdle()){
+        NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: diagnostic frame synchronization failed"));
+        return false;
+    }
     if(m_done)
         return true;
     const u64 frame = m_context.graphics.getFrameIndex();
@@ -204,6 +209,12 @@ bool ReflectionCsgContextProbe::update(const Impl::ReflectionStatistics& statist
         }
         if(statistics.graphicsFrameIndex < source)
             return true;
+        if(statistics.graphicsFrameIndex != source){
+            NWB_LOGGER_ERROR(NWB_TEXT("ReflectionCsgContext: captured source={} skipped by completed source={} sequence={} generation={}")
+                , source, statistics.graphicsFrameIndex, statistics.sequence, statistics.generation
+            );
+            return false;
+        }
         NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("ReflectionCsgContext: captured phase={} source_frame={} completed_frames={}")
             , m_phase, source, m_completed
         );

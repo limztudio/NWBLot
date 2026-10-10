@@ -73,8 +73,6 @@ bool RendererRayTracingSystem::renderGpuBvhCaustics(
         heap.bindCompute(commandList, *pipeline.get());
         commandList.setPushConstants(&pushConstants, sizeof(pushConstants));
         commandList.dispatch(DivideUp(photonCount, static_cast<u32>(NWB_CAUSTIC_SW_GROUP_SIZE)), 1u, 1u);
-        // Advance temporal phase only after recording a producer dispatch.
-        m_rayTracingState.m_swCausticFrameIndex = m_rayTracingState.m_swCausticFrameIndex + 1u;
         advanceCausticTemporalReuse();
     };
     if(causticPhotonTiming && causticPhotonTiming->has_value()){

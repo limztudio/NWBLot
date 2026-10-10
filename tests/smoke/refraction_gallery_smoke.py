@@ -48,6 +48,18 @@ LIT_APPEND = "append"
 
 
 CASES = {
+    "identity_reference": ("Exact entity reference", "A tinted retained CSG slab at z=0 through z=1 uses a recycled entity generation beyond float32 integer precision.",
+        "The camera near plane lies just before its raw front face; the screen control establishes the captured primary without a competing receiver."),
+    "identity_same_ior": ("Same-IOR neighbor", "A thin neighboring glass volume shares IOR 1.5 with the primary, but its entry is clipped from raster capture by the camera near plane.",
+        "The retained slab front is nearer than the neighbor backface and owns capture; the clipped foreign entry remains inside the hardware association band and must fail exact entity association."),
+    "identity_different_ior": ("Different-IOR control", "The same material and pipeline use typed mutable IOR 3.8 on the raster-clipped thin neighbor.",
+        "This distinguishes identity association from the retired IOR-similarity heuristic; the selected primary and screen result remain the same."),
+    "crossing_overflow": ("Diagnosed crossing overflow", "One narrow CSG receiver contains 33 disconnected closed boxes, producing 66 central crossings.",
+        "Hardware must preserve the explicit capacity failure and return conservative black; screen refraction remains a separate transmitting approximation."),
+    "near_air_ordinary": ("Near-air closed volume", "A three-unit tinted box at z=-0.25 through z=2.75 uses the first half-precision IOR above one (1.0009765625).",
+        "Negligible bending still requires the measured Beer path; the transmitting screen control deliberately uses one-unit thickness."),
+    "near_air_csg": ("Near-air CSG volume", "The same three-unit near-air box at z=-0.25 through z=2.75 has a plane cutter outside its retained silhouette.",
+        "Current CSG context must preserve the ordinary volume's entry, exit and attenuation, including this valid IOR just above air."),
     "csg_reference": ("Retained slab reference", "An ordinary glass slab occupies z=0 through z=1.",
         "Its entry, exit and material match the retained solid in the CSG cap case."),
     "csg_cap": ("Generated glass entry", "A plane removes the front half of a glass box, leaving z=0 through z=1.",
@@ -201,7 +213,7 @@ def capture(args, case, variant):
     command = [
         sys.executable, str(Path(__file__).with_name("window_capture_smoke.py")),
         LIT_EXECUTABLE, str(args.executable), LIT_WORKING_DIRECTORY, str(args.working_directory),
-        "--output", str(output), "--application-capture",
+        "--output", str(output), "--log-output", str(output.with_suffix(".log")), "--application-capture",
         "--application-capture-frame-count", str(args.frames), LIT_TIMEOUT, str(args.timeout),
         LIT_EXPECT_LOG_MESSAGE, f"RefractionSmokeProject: gallery case {case} created",
         LIT_EXPECT_LOG_MESSAGE, "RefractionSmokeProject: shutdown",

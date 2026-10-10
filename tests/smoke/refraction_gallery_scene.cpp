@@ -7,7 +7,9 @@
 #include "smoke_project_helpers.h"
 #include "csg_smoke_helpers.h"
 
+#include <global/expected.h>
 #include <global/math/constant.h>
+#include <global/math/convert.h>
 #include <global/math/frame.h>
 #include <impl/ecs_csg/shape_registry.h>
 
@@ -39,11 +41,17 @@ constexpr SmokeMeshRef s_Torus{"project/meshes/refraction_torus"};
 constexpr SmokeMeshRef s_Shells{"project/meshes/refraction_two_shells"};
 constexpr SmokeMeshRef s_Prism{"project/meshes/refraction_prism"};
 constexpr SmokeMaterialRef s_Glass{"project/smoke/refraction/materials/gallery_glass"};
+constexpr SmokeMaterialRef s_OpticalVolume{"project/smoke/reflection/materials/optical_volume"};
 constexpr SmokeMaterialRef s_Preview{"project/smoke/refraction/materials/gallery_preview"};
 constexpr SmokeMaterialRef s_Opaque{"project/smoke/refraction/materials/opaque"};
 constexpr SmokeMaterialRef s_Transparent{"project/smoke/refraction/materials/transparent"};
 constexpr AStringView s_Interface = "project/shaders/smoke_surface";
+constexpr AStringView s_OpticalInterface = "project/shaders/reflection_optical";
 constexpr Name s_DuplicateOpticalGroup("project/smoke/refraction/gallery_duplicate_volume");
+constexpr f32 s_GalleryCameraDistance = 6.f;
+constexpr f32 s_IdentityForeignFront = -0.0005f;
+// The near plane lies strictly between the foreign entry and the primary z=0 entry; ray queries still start at the camera.
+constexpr f32 s_IdentityNearPlane = s_GalleryCameraDistance - 0.00025f;
 
 
 class GalleryBuilder final{
@@ -103,22 +111,45 @@ public:
         );
     }
 
-    void csgSlab(const AStringView caseName){
+    Expected<void> opticalParameters(const Core::ECS::EntityID entity, const f32 ior, const Float4& transmission){
+        if(m_preview)
+            return {};
+        const Half packedIor = ConvertFloatToHalf(ior);
+        const Half4U packedTransmission = MakeHalf4U(transmission.x, transmission.y, transmission.z, 0.f);
+        if(!Impl::SetMaterialMutableParameter(
+            m_world, entity, Name(s_OpticalInterface), "runtime.ior", Impl::MaterialLayoutFieldType::Half,
+            Impl::PackMaterialInstanceBytes(&packedIor, sizeof(packedIor))
+        ))
+            return MakeUnexpected(Failure{});
+        if(!Impl::SetMaterialMutableParameter(
+            m_world, entity, Name(s_OpticalInterface), "runtime.unit_transmission", Impl::MaterialLayoutFieldType::Half3,
+            Impl::PackMaterialInstanceBytes(packedTransmission.raw, sizeof(Half) * 3u)
+        ))
+            return MakeUnexpected(Failure{});
+        return {};
+    }
+
+    Expected<Core::ECS::EntityID> csgSlab(
+        const AStringView caseName, const Float4& tint, const SmokeMaterialRef& material, const AStringView surfaceInterface
+    ){
         const bool reference = caseName == "csg_reference";
         const bool middle = caseName == "csg_middle";
         const auto entity = CreateTintedStaticMeshEntity(
             m_world, m_context.objectArena, SmokeMeshRef("project/meshes/cube_hard_edges"),
-            m_preview ? s_Preview : s_Glass, s_Interface, Float4(0.9f, 0.98f, 1.f, m_preview ? 0.48f : 0.f),
+            m_preview ? s_Preview : material, m_preview ? s_Interface : surfaceInterface, tint,
             Float4(0.f, 1.4f, reference || middle ? 0.5f : 0.f, 0.f), Float4(2.6f, 2.6f, reference ? 1.f : (middle ? 3.f : 2.f), 0.f)
         );
-        NWB_FATAL_ASSERT_MSG(entity.valid(), NWB_TEXT("RefractionSmokeProject: CSG slab creation failed"));
+        if(!entity.valid())
+            return MakeUnexpected(Failure{});
         if(caseName != "csg_cap" && !middle)
-            return;
+            return entity;
         const Name group("smoke/refraction/csg_optics");
         AddStaticCsgMeshReceiver(m_world, entity, group, false, true);
         // The middle slab has no camera-facing receiver triangle: both its entry and exit are generated walls.
         for(u32 index = 0u; index < (middle ? 2u : 1u); ++index){
             auto cutterEntity = m_world.createEntity();
+            if(!cutterEntity.id().valid())
+                return MakeUnexpected(Failure{});
             auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(m_context.objectArena);
             cutter.receiverGroup = group;
             cutter.shapeType = Name("engine/csg/plane");
@@ -127,6 +158,107 @@ public:
             AssignCsgCutterParameters(cutter, parameters);
             AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
         }
+        return entity;
+    }
+
+    bool identitySlab(const AStringView caseName){
+        if(caseName != "identity_reference"){
+            // Raster clips this distinct entry, while its ray distance stays inside the primary hardware association band.
+            constexpr f32 s_ForeignExit = 0.25f;
+            const auto foreign = CreateTintedStaticMeshEntity(
+                m_world, m_context.objectArena, SmokeMeshRef("project/meshes/cube_hard_edges"),
+                m_preview ? s_Preview : s_OpticalVolume, m_preview ? s_Interface : s_OpticalInterface,
+                Float4(0.45f, 0.8f, 0.95f, m_preview ? 0.48f : 0.f),
+                Float4(0.f, 1.4f, (s_ForeignExit + s_IdentityForeignFront) * 0.5f, 0.f),
+                Float4(2.6f, 2.6f, s_ForeignExit - s_IdentityForeignFront, 0.f)
+            );
+            if(!foreign.valid())
+                return false;
+            if(!opticalParameters(
+                foreign, caseName == "identity_different_ior" ? 3.8f : 1.5f, Float4(0.45f, 0.8f, 0.95f, 0.f)
+            ))
+                return false;
+        }
+        // Reusing an actual ECS slot exercises generation bits beyond float32's exact integer range.
+        for(u32 generation = 0u; generation < 32u; ++generation){
+            const auto recycled = m_world.createEntity();
+            if(!recycled.id().valid())
+                return false;
+            m_world.destroyEntity(recycled.id());
+        }
+        const auto primary = csgSlab(
+            "csg_reference", Float4(0.45f, 0.8f, 0.95f, m_preview ? 0.48f : 0.f), s_OpticalVolume, s_OpticalInterface
+        );
+        if(!primary || primary->id <= (1u << 24u))
+            return false;
+        if(!opticalParameters(*primary, 1.5f, Float4(0.45f, 0.8f, 0.95f, 0.f)))
+            return false;
+        const Name group("smoke/refraction/identity");
+        AddStaticCsgMeshReceiver(m_world, *primary, group, false, true);
+        auto cutterEntity = m_world.createEntity();
+        if(!cutterEntity.id().valid())
+            return false;
+        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(m_context.objectArena);
+        cutter.receiverGroup = group;
+        cutter.shapeType = Name("engine/csg/plane");
+        Impl::CsgPlaneShapeParameters parameters;
+        parameters.normalDistance = Float4(-1.f, 0.f, 0.f, 10.f);
+        AssignCsgCutterParameters(cutter, parameters);
+        AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
+        NWB_LOGGER_ESSENTIAL_INFO(NWB_TEXT("RefractionSmokeProject: full primary entity identity {}"), primary->id);
+        return true;
+    }
+
+    bool crossingOverflow(){
+        const auto entity = CreateTintedStaticMeshEntity(
+            m_world, m_context.objectArena, SmokeMeshRef("project/meshes/refraction_crossing_overflow"),
+            m_preview ? s_Preview : s_Glass, s_Interface, Float4(0.45f, 0.8f, 0.95f, m_preview ? 0.48f : 0.f),
+            Float4(0.f, 1.4f, 0.f, 0.f), Float4(0.1f, 0.1f, 1.f, 0.f)
+        );
+        if(!entity.valid())
+            return false;
+        const Name group("smoke/refraction/csg_crossing_overflow");
+        AddStaticCsgMeshReceiver(m_world, entity, group, false, true);
+        auto cutterEntity = m_world.createEntity();
+        if(!cutterEntity.id().valid())
+            return false;
+        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(m_context.objectArena);
+        cutter.receiverGroup = group;
+        cutter.shapeType = Name("engine/csg/plane");
+        Impl::CsgPlaneShapeParameters parameters;
+        parameters.normalDistance = Float4(-1.f, 0.f, 0.f, 10.f);
+        AssignCsgCutterParameters(cutter, parameters);
+        AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
+        return true;
+    }
+
+    bool nearAirSlab(const bool csg){
+        const auto entity = CreateTintedStaticMeshEntity(
+            m_world, m_context.objectArena, SmokeMeshRef("project/meshes/cube_hard_edges"),
+            m_preview ? s_Preview : s_OpticalVolume, m_preview ? s_Interface : s_OpticalInterface,
+            Float4(1.f, 1.f, 1.f, m_preview ? 0.48f : 0.f),
+            Float4(0.f, 1.4f, 1.25f, 0.f), Float4(2.6f, 2.6f, 3.f, 0.f)
+        );
+        if(!entity.valid())
+            return false;
+        // The first half IOR above air still has a three-unit Beer path, even with negligible bending.
+        if(!opticalParameters(entity, 1.f + 0x1p-10f, Float4(0.55f, 0.8f, 1.f, 0.f)))
+            return false;
+        if(!csg)
+            return true;
+        const Name group("smoke/refraction/near_air");
+        AddStaticCsgMeshReceiver(m_world, entity, group, false, true);
+        auto cutterEntity = m_world.createEntity();
+        if(!cutterEntity.id().valid())
+            return false;
+        auto& cutter = cutterEntity.addComponent<Impl::CsgCutterComponent>(m_context.objectArena);
+        cutter.receiverGroup = group;
+        cutter.shapeType = Name("engine/csg/plane");
+        Impl::CsgPlaneShapeParameters parameters;
+        parameters.normalDistance = Float4(-1.f, 0.f, 0.f, 10.f);
+        AssignCsgCutterParameters(cutter, parameters);
+        AssignCsgCutterTransform(cutter, VectorZero(), QuaternionIdentity());
+        return true;
     }
 
     void panel(
@@ -193,17 +325,38 @@ bool CreateRefractionGalleryScene(
     const AStringView caseName,
     const bool geometryPreview
 ){
-    const auto camera = CreateSmokeCamera(world, 1.4f, 6.0f, 0.0f);
+    const auto camera = CreateSmokeCamera(world, 1.4f, __hidden_refraction_gallery_scene::s_GalleryCameraDistance, 0.0f);
     const auto light = Impl::Scene::CreateDirectionalLightEntity(
         world, 0.6f, 0.4f, 0.0f, Float4(1.0f, 1.0f, 1.0f, 1.0f), 1.0f
     );
     if(!camera.valid() || !light.valid())
         return false;
     // Tighter framing exposes overlap artifacts while preserving the same camera for every variant.
-    world.tryGetComponent<Impl::Scene::CameraComponent>(camera)->setVerticalFovRadians(s_PI * (40.0f / 180.0f));
+    auto& cameraComponent = world.entity(camera).getComponent<Impl::Scene::CameraComponent>();
+    cameraComponent.setVerticalFovRadians(s_PI * (40.0f / 180.0f));
+    if(caseName == "identity_reference" || caseName == "identity_same_ior" || caseName == "identity_different_ior")
+        cameraComponent.setNearPlane(__hidden_refraction_gallery_scene::s_IdentityNearPlane);
     __hidden_refraction_gallery_scene::GalleryBuilder scene(context, world, geometryPreview);
-    if(caseName == "csg_reference" || caseName == "csg_cap" || caseName == "csg_middle" || caseName == "csg_uncut")
-        scene.csgSlab(caseName);
+    if(caseName == "csg_reference" || caseName == "csg_cap" || caseName == "csg_middle" || caseName == "csg_uncut"){
+        const auto slab = scene.csgSlab(
+            caseName, Float4(0.9f, 0.98f, 1.f, geometryPreview ? 0.48f : 0.f),
+            __hidden_refraction_gallery_scene::s_Glass, __hidden_refraction_gallery_scene::s_Interface
+        );
+        if(!slab)
+            return false;
+    }
+    else if(caseName == "identity_reference" || caseName == "identity_same_ior" || caseName == "identity_different_ior"){
+        if(!scene.identitySlab(caseName))
+            return false;
+    }
+    else if(caseName == "crossing_overflow"){
+        if(!scene.crossingOverflow())
+            return false;
+    }
+    else if(caseName == "near_air_ordinary" || caseName == "near_air_csg"){
+        if(!scene.nearAirSlab(caseName == "near_air_csg"))
+            return false;
+    }
     else if(caseName == "single")
         scene.sphere(0.0f, 0.0f, 1.15f);
     else if(caseName == "separate"){

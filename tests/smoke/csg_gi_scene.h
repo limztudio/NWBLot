@@ -9,6 +9,8 @@
 
 #include <core/ecs/world.h>
 
+#include <global/timer.h>
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -39,7 +41,12 @@ private:
     ProjectRuntimeContext& m_context;
     Core::ECS::World& m_world;
     UniquePtr<FramebufferCapture> m_capture;
+    Timer m_liveWarmupStartTime = {};
     u64 m_requiredPresentations = 360u;
+    u64 m_liveWarmupStartPresentations = 0u;
+    bool m_liveWarmupStarted = false;
+    bool m_liveWarmupComplete = false;
+    bool m_captureReceiptLogged = false;
     bool m_active = false;
 };
 
